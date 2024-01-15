@@ -202,13 +202,11 @@ class AX_EXPORT AXTree {
   }
 
   // Return a multi-line indented string representation, for logging.
-  std::string ToString() const;
+  std::string ToString(bool verbose = true) const;
 
   // A string describing the error from an unsuccessful Unserialize,
   // for testing and debugging.
   const std::string& error() const { return error_; }
-
-  void DisallowFailFastForFuzzing() { disallow_fail_fast_ = true; }
 
   int size() { return static_cast<int>(id_map_.size()); }
 
@@ -257,6 +255,8 @@ class AX_EXPORT AXTree {
   // same tree.
   void NotifyTreeManagerWillBeRemoved(AXTreeID previous_tree_id);
 
+  void NotifyChildTreeConnectionChanged(AXNode* node, AXTree* child_tree);
+
  private:
   friend class ScopedTreeUpdateInProgressStateSetter;
   friend class AXTableInfoTest;
@@ -267,9 +267,10 @@ class AX_EXPORT AXTree {
 
   // Accumulate errors as there can be more than one before Chrome is crashed
   // via AccessibilityFatalError();
-  // In an AX_FAIL_FAST_BUILD, will assert/crash immediately.
+  // In an AX_FAIL_FAST_BUILD or if |is_fatal|, will assert/crash immediately.
   void RecordError(const AXTreeUpdateState& update_state,
-                   std::string new_error);
+                   std::string new_error,
+                   bool is_fatal = false);
 
   AXNode* CreateNode(AXNode* parent,
                      AXNodeID id,
@@ -324,15 +325,25 @@ class AX_EXPORT AXTree {
   // Notify the delegate that `node` will change its data attributes, including
   // its ignored state.
   void NotifyNodeAttributesWillChange(AXNode* node,
+                                      AXTreeUpdateState& update_state,
                                       const AXTreeData* optional_old_tree_data,
                                       const AXNodeData& old_data,
                                       const AXTreeData* new_tree_data,
                                       const AXNodeData& new_data);
 
+  // Notify the delegate that `node` will change its its ignored state.
+  void NotifyNodeIgnoredStateWillChange(
+      AXNode* node,
+      const AXTreeData* optional_old_tree_data,
+      const AXNodeData& old_data,
+      const AXTreeData* new_tree_data,
+      const AXNodeData& new_data);
+
   // Notify the delegate that `node` has changed its data attributes, including
   // its ignored state.
   void NotifyNodeAttributesHaveBeenChanged(
       AXNode* node,
+      AXTreeUpdateState& update_state,
       const AXTreeData* optional_old_tree_data,
       const AXNodeData& old_data,
       const AXTreeData* new_tree_data,
@@ -380,10 +391,11 @@ class AX_EXPORT AXTree {
   // if they exist, and creating otherwise. Reparenting is disallowed, so
   // if the id already exists as the child of another node, that's an
   // error. Returns true on success, false on fatal error.
-  bool CreateNewChildVector(AXNode* node,
-                            const std::vector<AXNodeID>& new_child_ids,
-                            std::vector<AXNode*>* new_children,
-                            AXTreeUpdateState* update_state);
+  bool CreateNewChildVector(
+      AXNode* node,
+      const std::vector<AXNodeID>& new_child_ids,
+      std::vector<raw_ptr<AXNode, VectorExperimental>>* new_children,
+      AXTreeUpdateState* update_state);
 
   // Returns the lowest unignored ancestor of the node with the given ID. If the
   // node is not ignored, it returns the node.
@@ -402,7 +414,6 @@ class AX_EXPORT AXTree {
   raw_ptr<AXNode> root_ = nullptr;
   std::unordered_map<AXNodeID, std::unique_ptr<AXNode>> id_map_;
   std::string error_;
-  bool disallow_fail_fast_ = false;
   AXTreeData data_;
 
   // Map from an int attribute (if IsNodeIdIntAttribute is true) to

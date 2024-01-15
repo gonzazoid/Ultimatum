@@ -20,11 +20,6 @@
 
 namespace content_settings {
 
-void RecordPluginsAction(PluginsAction action) {
-  UMA_HISTOGRAM_ENUMERATION("ContentSettings.Plugins", action,
-                            PLUGINS_ACTION_COUNT);
-}
-
 void RecordPopupsAction(PopupsAction action) {
   UMA_HISTOGRAM_ENUMERATION("ContentSettings.Popups", action,
                             POPUPS_ACTION_COUNT);
@@ -32,7 +27,7 @@ void RecordPopupsAction(PopupsAction action) {
 
 void UpdateLocationBarUiForWebContents(content::WebContents* web_contents) {
 #if !BUILDFLAG(IS_ANDROID)
-  Browser* browser = chrome::FindBrowserWithWebContents(web_contents);
+  Browser* browser = chrome::FindBrowserWithTab(web_contents);
   if (!browser)
     return;
 
@@ -43,8 +38,6 @@ void UpdateLocationBarUiForWebContents(content::WebContents* web_contents) {
   if (location_bar)
     location_bar->UpdateContentSettingsIcons();
 
-// TODO(https://crbug.com/1346734): Enable this on all platforms.
-#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
   // The document PiP window does not have a location bar, but has some content
   // setting views that need to be updated too.
   if (browser->is_type_picture_in_picture()) {
@@ -53,8 +46,6 @@ void UpdateLocationBarUiForWebContents(content::WebContents* web_contents) {
         browser_view->frame()->GetFrameView());
     frame_view->UpdateContentSettingsIcons();
   }
-#endif
-
 #endif
 }
 

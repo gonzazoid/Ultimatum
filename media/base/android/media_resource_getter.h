@@ -9,7 +9,7 @@
 
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/time/time.h"
 #include "media/base/media_export.h"
 #include "url/gurl.h"
@@ -49,6 +49,7 @@ class MEDIA_EXPORT MediaResourceGetter {
   virtual void GetCookies(const GURL& url,
                           const net::SiteForCookies& site_for_cookies,
                           const url::Origin& top_frame_origin,
+                          bool has_storage_access,
                           GetCookieCB callback) = 0;
 };
 

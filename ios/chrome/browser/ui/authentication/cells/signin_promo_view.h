@@ -28,7 +28,6 @@
 @property(nonatomic, weak) id<SigninPromoViewDelegate> delegate;
 @property(nonatomic, assign) SigninPromoViewMode mode;
 @property(nonatomic, strong, readonly) UIImageView* imageView;
-@property(nonatomic, strong, readonly) UILabel* titleLabel;
 @property(nonatomic, strong, readonly) UILabel* textLabel;
 @property(nonatomic, strong, readonly) UIButton* primaryButton;
 @property(nonatomic, strong, readonly) UIButton* secondaryButton;
@@ -52,13 +51,22 @@
 // cropped first). Must only be called in the "Warm State" mode.
 - (void)setProfileImage:(UIImage*)image;
 
-// Sets the image in `imageView`. This image will be used as an alternative to
-// the chromium icon in "Cold State" mode. This image will not use
-// CircularImageFromImage(), instead it will be shown as is.
+// Sets the image in `imageView`. This image will be used as an
+// alternative to the chromium icon in "Cold State" mode. This image
+// will not use CircularImageFromImage(), instead it will be shown
+// as is.
 - (void)setNonProfileImage:(UIImage*)image;
 
 // Resets the view to be reused.
 - (void)prepareForReuse;
+
+// Starts the spinner on top of the primary button, and disables all buttons.
+- (void)startSignInSpinner;
+// Stops the spinner on top of the primary button, and enables all buttons.
+- (void)stopSignInSpinner;
+
+// Configures primary button using UIButtonConfiguration.
+- (void)configurePrimaryButtonWithTitle:(NSString*)title;
 
 @end
 

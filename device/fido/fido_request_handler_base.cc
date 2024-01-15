@@ -6,14 +6,14 @@
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
 #include "base/containers/cxx20_erase.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/strings/string_piece.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "components/device_event_log/device_event_log.h"
@@ -23,9 +23,11 @@
 #include "device/fido/features.h"
 #include "device/fido/fido_authenticator.h"
 #include "device/fido/fido_discovery_factory.h"
+#include "device/fido/mac/icloud_keychain.h"
 
 #if BUILDFLAG(IS_WIN)
 #include "device/fido/win/authenticator.h"
+#include "device/fido/win/webauthn_api.h"
 #endif
 
 #if BUILDFLAG(IS_MAC)
@@ -46,20 +48,31 @@ struct TransportAvailabilityCallbackReadiness {
   // callback is pending BLE status information.
   bool ble_information_pending = false;
 
-  // platform_credential_check_pending is true if the
+  // num_platform_credential_checks_pending is true if the
   // |OnTransportAvailabilityEnumerated| callback is pending
   // |OnHasRecognizedPlatformCredentialFilled| being called after the platform
   // authenticator has decided if it has credentials that are responsive to the
   // request.
-  bool platform_credential_check_pending = false;
+  unsigned num_platform_credential_checks_pending = 0;
+
+  // win_is_uvpaa_check_pending is true if |OnTransportAvailabilityEnumerated|
+  // callback is pending |OnIsUvpaa| being called.
+  bool win_is_uvpaa_check_pending = false;
 
   // num_discoveries_pending is the number of discoveries that are still yet to
   // signal that they have started.
   unsigned num_discoveries_pending = 0;
 
+  // This separately counts for platform discoveries in order to track whether
+  // at least one discovery succeeded, for situations where there is more than
+  // one platform authenticator available.
+  unsigned num_platform_discoveries_pending = 0;
+  bool platform_discovery_succeeded = false;
+
   bool CanMakeCallback() const {
     return !callback_made && !ble_information_pending &&
-           !platform_credential_check_pending && num_discoveries_pending == 0;
+           num_platform_credential_checks_pending == 0 &&
+           !win_is_uvpaa_check_pending && num_discoveries_pending == 0;
   }
 };
 
@@ -123,16 +136,20 @@ void FidoRequestHandlerBase::InitDiscoveries(
     // The Windows WebAuthn API is available. On this platform, communicating
     // with authenticator devices directly is blocked by the OS, so we need to
     // go through the native API instead. No device discoveries may be
-    // instantiated.
+    // instantiated. The embedder will be responsible for dispatch of the
+    // authenticator and whether they display any UI in addition to the one
+    // provided by the OS.
     win_discovery->set_observer(this);
     discoveries_.push_back(std::move(win_discovery));
 
-    //  Setting |has_win_native_api_authenticator| ensures
-    //  NotifyObserverTransportAvailability() will not be invoked before
-    //  Windows Authenticator has been added. The embedder will be
-    //  responsible for dispatch of the authenticator and whether they
-    //  display any UI in addition to the one provided by the OS.
     transport_availability_info_.has_win_native_api_authenticator = true;
+    transport_availability_callback_readiness_->win_is_uvpaa_check_pending =
+        true;
+    WinWebAuthnApiAuthenticator::IsUserVerifyingPlatformAuthenticatorAvailable(
+        transport_availability_info_.is_off_the_record_context,
+        device::WinWebAuthnApi::GetDefault(),
+        base::BindOnce(&FidoRequestHandlerBase::OnWinIsUvpaa,
+                       weak_factory_.GetWeakPtr()));
 
     // Allow caBLE as a potential additional transport if requested by
     // the implementing class because it is not subject to the OS'
@@ -162,6 +179,12 @@ void FidoRequestHandlerBase::InitDiscoveries(
     }
   }
 
+  for (auto& discovery : discoveries_) {
+    if (discovery->transport() == FidoTransportProtocol::kInternal) {
+      transport_availability_callback_readiness_
+          ->num_platform_discoveries_pending++;
+    }
+  }
   transport_availability_callback_readiness_->num_discoveries_pending =
       discoveries_.size();
 
@@ -199,7 +222,7 @@ void FidoRequestHandlerBase::InitDiscoveries(
       base::Contains(transport_availability_info_.available_transports,
                      FidoTransportProtocol::kHybrid)) {
     transport_availability_callback_readiness_->ble_information_pending = true;
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(&FidoRequestHandlerBase::ConstructBleAdapterPowerManager,
                        weak_factory_.GetWeakPtr()));
@@ -218,7 +241,7 @@ void FidoRequestHandlerBase::StartAuthenticatorRequest(
 }
 
 void FidoRequestHandlerBase::CancelActiveAuthenticators(
-    base::StringPiece exclude_device_id) {
+    std::string_view exclude_device_id) {
   for (auto task_it = active_authenticators_.begin();
        task_it != active_authenticators_.end();) {
     DCHECK(!task_it->first.empty());
@@ -309,9 +332,24 @@ void FidoRequestHandlerBase::DiscoveryStarted(
     std::vector<FidoAuthenticator*> authenticators) {
   transport_availability_callback_readiness_->num_discoveries_pending--;
 
+  bool is_platform_discovery =
+      discovery->transport() == FidoTransportProtocol::kInternal;
+  if (is_platform_discovery) {
+    CHECK(transport_availability_callback_readiness_
+              ->num_platform_discoveries_pending > 0);
+    transport_availability_callback_readiness_
+        ->num_platform_discoveries_pending--;
+  }
+
   if (!success) {
-    transport_availability_info_.available_transports.erase(
-        discovery->transport());
+    if (!is_platform_discovery ||
+        (transport_availability_callback_readiness_
+                 ->num_platform_discoveries_pending == 0 &&
+         !transport_availability_callback_readiness_
+              ->platform_discovery_succeeded)) {
+      transport_availability_info_.available_transports.erase(
+          discovery->transport());
+    }
   } else {
     for (auto* authenticator : authenticators) {
       AuthenticatorAdded(discovery, authenticator);
@@ -320,16 +358,21 @@ void FidoRequestHandlerBase::DiscoveryStarted(
     // Allow GetAssertionRequestHandler to asynchronously check for known
     // platform credentials and defer |OnTransportAvailabilityEnumerated| until
     // that check is done.
-    if (discovery->transport() == FidoTransportProtocol::kInternal &&
-        // |authenticators| can be empty in tests.
-        !authenticators.empty()) {
-      DCHECK(!internal_authenticator_found_);
-      internal_authenticator_found_ = true;
-
-      DCHECK_EQ(authenticators.size(), 1u);
-      transport_availability_callback_readiness_
-          ->platform_credential_check_pending = true;
-      GetPlatformCredentialStatus(authenticators[0]);
+    // |authenticators| can be empty in tests.
+    if (is_platform_discovery && !authenticators.empty()) {
+      transport_availability_callback_readiness_->platform_discovery_succeeded =
+          true;
+      for (FidoAuthenticator* platform_authenticator : authenticators) {
+        if (platform_authenticator->GetType() == AuthenticatorType::kEnclave) {
+          continue;
+        }
+        transport_availability_info_.has_icloud_keychain |=
+            platform_authenticator->GetType() ==
+            AuthenticatorType::kICloudKeychain;
+        transport_availability_callback_readiness_
+            ->num_platform_credential_checks_pending++;
+        GetPlatformCredentialStatus(platform_authenticator);
+      }
     }
   }
 
@@ -366,7 +409,7 @@ void FidoRequestHandlerBase::AuthenticatorAdded(
     // request callback.
     VLOG(2)
         << "Request handler dispatching request to authenticator immediately.";
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(
             &FidoRequestHandlerBase::InitializeAuthenticatorAndDispatchRequest,
@@ -376,10 +419,8 @@ void FidoRequestHandlerBase::AuthenticatorAdded(
   }
 
 #if BUILDFLAG(IS_WIN)
-  if (authenticator->GetType() == FidoAuthenticator::Type::kWinNative) {
+  if (authenticator->GetType() == AuthenticatorType::kWinNative) {
     DCHECK(transport_availability_info_.has_win_native_api_authenticator);
-    transport_availability_info_.win_native_api_authenticator_id =
-        authenticator->GetId();
     transport_availability_info_
         .win_native_ui_shows_resident_credential_notice =
         static_cast<WinWebAuthnApiAuthenticator*>(authenticator)
@@ -395,30 +436,41 @@ void FidoRequestHandlerBase::BleDenied() {
 void FidoRequestHandlerBase::GetPlatformCredentialStatus(
     FidoAuthenticator* platform_authenticator) {
   transport_availability_callback_readiness_
-      ->platform_credential_check_pending = false;
+      ->num_platform_credential_checks_pending--;
 }
 
 void FidoRequestHandlerBase::OnHavePlatformCredentialStatus(
+    AuthenticatorType authenticator_type,
     std::vector<DiscoverableCredentialMetadata> creds,
-    bool have_credential) {
-  DCHECK_EQ(transport_availability_info_.has_platform_authenticator_credential,
-            RecognizedCredential::kUnknown);
-  if (base::FeatureList::IsEnabled(
-          device::kWebAuthnNewDiscoverableCredentialsUi) &&
-      !have_credential) {
-    transport_availability_info_.has_platform_authenticator_credential =
-        RecognizedCredential::kNoRecognizedCredential;
-    transport_availability_info_.available_transports.erase(
-        FidoTransportProtocol::kInternal);
+    RecognizedCredential has_credentials) {
+  if (authenticator_type == AuthenticatorType::kICloudKeychain) {
+    // iCloud Keychain is the second platform authenticator on the system and
+    // its status is reported via a different field.
+    DCHECK_EQ(transport_availability_info_.has_icloud_keychain_credential,
+              RecognizedCredential::kNoRecognizedCredential);
+    transport_availability_info_.has_icloud_keychain_credential =
+        has_credentials;
   } else {
+    DCHECK_EQ(
+        transport_availability_info_.has_platform_authenticator_credential,
+        RecognizedCredential::kNoRecognizedCredential);
     transport_availability_info_.has_platform_authenticator_credential =
-        have_credential ? RecognizedCredential::kHasRecognizedCredential
-                        : RecognizedCredential::kNoRecognizedCredential;
-    transport_availability_info_.recognized_platform_authenticator_credentials =
-        std::move(creds);
+        has_credentials;
+    if (has_credentials == RecognizedCredential::kNoRecognizedCredential) {
+      transport_availability_info_.available_transports.erase(
+          FidoTransportProtocol::kInternal);
+    }
   }
+
+  auto& out_creds = transport_availability_info_.recognized_credentials;
+  if (out_creds.empty()) {
+    out_creds = std::move(creds);
+  } else if (!creds.empty()) {
+    out_creds.insert(out_creds.end(), creds.begin(), creds.end());
+  }
+
   transport_availability_callback_readiness_
-      ->platform_credential_check_pending = false;
+      ->num_platform_credential_checks_pending--;
   MaybeSignalTransportsEnumerated();
 }
 
@@ -453,9 +505,16 @@ void FidoRequestHandlerBase::ConstructBleAdapterPowerManager() {
   bluetooth_adapter_manager_ = std::make_unique<BleAdapterManager>(this);
 }
 
+void FidoRequestHandlerBase::OnWinIsUvpaa(bool is_uvpaa) {
+  transport_availability_info_.win_is_uvpaa = is_uvpaa;
+  transport_availability_callback_readiness_->win_is_uvpaa_check_pending =
+      false;
+  MaybeSignalTransportsEnumerated();
+}
+
 void FidoRequestHandlerBase::StopDiscoveries() {
   for (const auto& discovery : discoveries_) {
-    discovery->MaybeStop();
+    discovery->Stop();
   }
 }
 

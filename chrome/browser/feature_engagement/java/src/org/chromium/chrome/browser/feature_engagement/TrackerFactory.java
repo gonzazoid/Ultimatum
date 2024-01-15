@@ -5,17 +5,16 @@
 package org.chromium.chrome.browser.feature_engagement;
 
 import androidx.annotation.Nullable;
-import androidx.annotation.VisibleForTesting;
 
-import org.chromium.base.annotations.NativeMethods;
+import org.jni_zero.NativeMethods;
+
+import org.chromium.base.ResettersForTesting;
 import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.components.feature_engagement.Tracker;
 
-/**
- * This factory creates Tracker for the given {@link Profile}.
- */
+/** This factory creates Tracker for the given {@link Profile}. */
 public final class TrackerFactory {
-    private static Tracker sTestTracker;
+    private static Tracker sTrackerForTesting;
 
     // Don't instantiate me.
     private TrackerFactory() {}
@@ -28,7 +27,7 @@ public final class TrackerFactory {
      * @return The {@link Tracker} for the given profile object.
      */
     public static Tracker getTrackerForProfile(Profile profile) {
-        if (sTestTracker != null) return sTestTracker;
+        if (sTrackerForTesting != null) return sTrackerForTesting;
         if (profile == null) {
             throw new IllegalArgumentException("Profile is required for retrieving tracker.");
         }
@@ -47,20 +46,21 @@ public final class TrackerFactory {
     }
 
     /**
-     * Set a {@Tracker} to use for testing. All calls to {@link #getTrackerForProfile(Profile)}
+     * Set a {@Tracker} to use for testing. All calls to {@link #getTrackerForProfile( Profile )}
      * will return the test tracker rather than the real tracker.
      *
      * @param testTracker The {@Tracker} to use for testing, or null if the real tracker should be
      *                    used.
      */
-    @VisibleForTesting
     public static void setTrackerForTests(@Nullable Tracker testTracker) {
-        sTestTracker = testTracker;
+        sTrackerForTesting = testTracker;
+        ResettersForTesting.register(() -> sTrackerForTesting = null);
     }
 
     @NativeMethods
     interface Natives {
         Tracker getTrackerForProfile(Profile profile);
+
         void setTestingFactory(Profile profile, Tracker testTracker);
     }
 }

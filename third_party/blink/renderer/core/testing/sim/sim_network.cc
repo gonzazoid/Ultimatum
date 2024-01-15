@@ -7,14 +7,14 @@
 #include <memory>
 #include <utility>
 #include "third_party/blink/public/platform/web_url_error.h"
-#include "third_party/blink/public/platform/web_url_loader.h"
-#include "third_party/blink/public/platform/web_url_loader_client.h"
-#include "third_party/blink/public/platform/web_url_loader_mock_factory.h"
 #include "third_party/blink/public/platform/web_url_response.h"
 #include "third_party/blink/public/web/web_navigation_params.h"
 #include "third_party/blink/renderer/core/loader/document_loader.h"
 #include "third_party/blink/renderer/core/testing/sim/sim_request.h"
+#include "third_party/blink/renderer/platform/loader/fetch/url_loader/url_loader.h"
+#include "third_party/blink/renderer/platform/loader/fetch/url_loader/url_loader_client.h"
 #include "third_party/blink/renderer/platform/loader/static_data_navigation_body_loader.h"
+#include "third_party/blink/renderer/platform/testing/url_loader_mock_factory.h"
 #include "third_party/blink/renderer/platform/testing/url_test_helpers.h"
 
 namespace blink {
@@ -46,11 +46,13 @@ void SimNetwork::ServePendingRequests() {
   url_test_helpers::ServeAsynchronousRequests();
 }
 
-void SimNetwork::DidReceiveResponse(WebURLLoaderClient* client,
+void SimNetwork::DidReceiveResponse(URLLoaderClient* client,
                                     const WebURLResponse& response) {
   auto it = requests_.find(response.CurrentRequestUrl().GetString());
   if (it == requests_.end()) {
-    client->DidReceiveResponse(response);
+    client->DidReceiveResponse(response,
+                               /*body=*/mojo::ScopedDataPipeConsumerHandle(),
+                               /*cached_metadata=*/absl::nullopt);
     return;
   }
   DCHECK(it->value);
@@ -58,14 +60,14 @@ void SimNetwork::DidReceiveResponse(WebURLLoaderClient* client,
   current_request_->DidReceiveResponse(client, response);
 }
 
-void SimNetwork::DidReceiveData(WebURLLoaderClient* client,
+void SimNetwork::DidReceiveData(URLLoaderClient* client,
                                 const char* data,
-                                int data_length) {
+                                size_t data_length) {
   if (!current_request_)
     client->DidReceiveData(data, data_length);
 }
 
-void SimNetwork::DidFail(WebURLLoaderClient* client,
+void SimNetwork::DidFail(URLLoaderClient* client,
                          const WebURLError& error,
                          int64_t total_encoded_data_length,
                          int64_t total_encoded_body_length,
@@ -78,7 +80,7 @@ void SimNetwork::DidFail(WebURLLoaderClient* client,
   current_request_->DidFail(error);
 }
 
-void SimNetwork::DidFinishLoading(WebURLLoaderClient* client,
+void SimNetwork::DidFinishLoading(URLLoaderClient* client,
                                   base::TimeTicks finish_time,
                                   int64_t total_encoded_data_length,
                                   int64_t total_encoded_body_length,
@@ -86,7 +88,7 @@ void SimNetwork::DidFinishLoading(WebURLLoaderClient* client,
   if (!current_request_) {
     client->DidFinishLoading(finish_time, total_encoded_data_length,
                              total_encoded_body_length,
-                             total_decoded_body_length, false);
+                             total_decoded_body_length);
     return;
   }
   current_request_ = nullptr;

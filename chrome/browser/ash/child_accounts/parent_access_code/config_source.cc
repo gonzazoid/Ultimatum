@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/values.h"
 #include "chrome/browser/browser_process.h"
@@ -51,38 +51,35 @@ void ConfigSource::LoadConfigForUser(const user_manager::User* user) {
   // Clear old authenticators for that user.
   config_map_[user->GetAccountId()].clear();
 
-  const base::Value* future_config_value = dictionary->FindKeyOfType(
-      kFutureConfigDictKey, base::Value::Type::DICTIONARY);
+  const base::Value::Dict* future_config_value =
+      dictionary->GetDict().FindDict(kFutureConfigDictKey);
   if (future_config_value) {
     AddAuthenticator(*future_config_value, user);
   } else {
     LOG(WARNING) << "No future config for parent access code in the policy";
   }
 
-  const base::Value* current_config_value = dictionary->FindKeyOfType(
-      kCurrentConfigDictKey, base::Value::Type::DICTIONARY);
+  const base::Value::Dict* current_config_value =
+      dictionary->GetDict().FindDict(kCurrentConfigDictKey);
   if (current_config_value) {
     AddAuthenticator(*current_config_value, user);
   } else {
     LOG(WARNING) << "No current config for parent access code in the policy";
   }
 
-  const base::Value* old_configs_value =
-      dictionary->FindKeyOfType(kOldConfigsDictKey, base::Value::Type::LIST);
+  const base::Value::List* old_configs_value =
+      dictionary->GetDict().FindList(kOldConfigsDictKey);
   if (old_configs_value) {
-    for (const auto& config_value : old_configs_value->GetList())
-      AddAuthenticator(config_value, user);
+    for (const auto& config_value : *old_configs_value) {
+      AddAuthenticator(config_value.GetDict(), user);
+    }
   }
 }
 
-void ConfigSource::AddAuthenticator(const base::Value& dict,
+void ConfigSource::AddAuthenticator(const base::Value::Dict& dict,
                                     const user_manager::User* user) {
-  if (!dict.is_dict())
-    return;
-
-  absl::optional<AccessCodeConfig> code_config =
-      AccessCodeConfig::FromDictionary(
-          static_cast<const base::DictionaryValue&>(dict));
+  std::optional<AccessCodeConfig> code_config =
+      AccessCodeConfig::FromDictionary(dict);
   if (code_config) {
     config_map_[user->GetAccountId()].push_back(
         std::make_unique<Authenticator>(std::move(code_config.value())));

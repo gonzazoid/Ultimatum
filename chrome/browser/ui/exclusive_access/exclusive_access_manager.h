@@ -55,6 +55,12 @@ class ExclusiveAccessManager {
 
   GURL GetExclusiveAccessBubbleURL() const;
 
+  // Records the keyboard/pointer lock state in a histogram. These should be
+  // called when the user enters fullscreen through the Fullscreen API or the
+  // browesr UI, respectively.
+  void RecordLockStateOnEnteringApiFullscreen() const;
+  void RecordLockStateOnEnteringBrowserFullscreen() const;
+
   // Callbacks ////////////////////////////////////////////////////////////////
 
   // Called by Browser::TabDeactivated.
@@ -74,10 +80,12 @@ class ExclusiveAccessManager {
 
   // Called by platform ExclusiveAccessExitBubble.
   void ExitExclusiveAccess();
-  void RecordBubbleReshownUMA(ExclusiveAccessBubbleType type);
 
  private:
-  const raw_ptr<ExclusiveAccessContext> exclusive_access_context_;
+  void RecordLockStateOnEnteringFullscreen(const char histogram_name[]) const;
+
+  const raw_ptr<ExclusiveAccessContext, DanglingUntriaged>
+      exclusive_access_context_;
   FullscreenController fullscreen_controller_;
   KeyboardLockController keyboard_lock_controller_;
   MouseLockController mouse_lock_controller_;

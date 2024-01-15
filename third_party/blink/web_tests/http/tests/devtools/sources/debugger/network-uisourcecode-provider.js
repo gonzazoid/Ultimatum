@@ -2,9 +2,14 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {TestRunner} from 'test_runner';
+import {SourcesTestRunner} from 'sources_test_runner';
+
+import * as Common from 'devtools/core/common/common.js';
+import * as Workspace from 'devtools/models/workspace/workspace.js';
+
 (async function() {
   TestRunner.addResult(`Tests NetworkUISourceCodeProvider class.\n`);
-  await TestRunner.loadLegacyModule('sources'); await TestRunner.loadTestModule('sources_test_runner');
   await TestRunner.showPanel('sources');
   await TestRunner.evaluateInPagePromise(`
       function removeStyleSheet()
@@ -23,12 +28,12 @@
 
   function dumpUISourceCode(uiSourceCode, callback) {
     TestRunner.addResult('UISourceCode: ' + uiSourceCodeURL(uiSourceCode));
-    if (uiSourceCode.contentType() === Common.resourceTypes.Script ||
-        uiSourceCode.contentType() === Common.resourceTypes.Document)
+    if (uiSourceCode.contentType() === Common.ResourceType.resourceTypes.Script ||
+        uiSourceCode.contentType() === Common.ResourceType.resourceTypes.Document)
       TestRunner.addResult(
           'UISourceCode is content script: ' +
           (uiSourceCode.project().type() ===
-           Workspace.projectTypes.ContentScripts));
+           Workspace.Workspace.projectTypes.ContentScripts));
     uiSourceCode.requestContent().then(didRequestContent);
 
     function didRequestContent({ content, error, isEncoded }) {
@@ -54,7 +59,7 @@
       TestRunner.addResult('Creating script.');
       TestRunner.evaluateInPageAnonymously(
           'var foo=1;\n//# sourceURL=foo.js\n');
-      TestRunner.waitForUISourceCode('foo.js', Workspace.projectTypes.Network).then(uiSourceCodeAdded);
+      TestRunner.waitForUISourceCode('foo.js', Workspace.Workspace.projectTypes.Network).then(uiSourceCodeAdded);
 
       function uiSourceCodeAdded(uiSourceCode) {
         dumpUISourceCode(uiSourceCode, next);
@@ -63,7 +68,7 @@
 
     function testScriptResource(next) {
       TestRunner.addResult('Creating script resource.');
-      TestRunner.waitForUISourceCode('script1.js', Workspace.projectTypes.Network).then(uiSourceCodeAdded);
+      TestRunner.waitForUISourceCode('script1.js', Workspace.Workspace.projectTypes.Network).then(uiSourceCodeAdded);
       TestRunner.addScriptTag('resources/script1.js');
 
       function uiSourceCodeAdded(uiSourceCode) {

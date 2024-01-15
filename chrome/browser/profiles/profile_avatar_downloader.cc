@@ -7,8 +7,8 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/net/system_network_context_manager.h"
 #include "chrome/browser/profiles/profile.h"
@@ -67,7 +67,7 @@ void ProfileAvatarDownloader::Start() {
   if (loader_factory) {
     fetcher_->Init(
         net::ReferrerPolicy::REDUCE_GRANULARITY_ON_TRANSITION_CROSS_ORIGIN,
-        network::mojom::CredentialsMode::kInclude);
+        network::mojom::CredentialsMode::kOmit);
     fetcher_->Start(loader_factory);
   }
 }

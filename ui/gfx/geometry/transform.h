@@ -16,13 +16,13 @@
 
 namespace gfx {
 
-class AxisTransform2d;
 class BoxF;
 class Rect;
 class RectF;
 class Point;
 class PointF;
 class Point3F;
+class QuadF;
 class Quaternion;
 class Vector2dF;
 class Vector3dF;
@@ -44,38 +44,18 @@ struct DecomposedTransform;
 //
 class GEOMETRY_SKIA_EXPORT Transform {
  public:
-  Transform();
-  ~Transform();
+  constexpr Transform() : axis_2d_() {}
 
-  // TODO(crbug.com/1359528): This is same as Transform(). Remove this.
-  enum SkipInitialization { kSkipInitialization };
-  explicit Transform(SkipInitialization);
-
-  Transform(const Transform& rhs);
-  Transform& operator=(const Transform& rhs);
-  Transform(Transform&&);
-  Transform& operator=(Transform&&);
-
-  explicit Transform(const AxisTransform2d& axis_2d);
+  explicit Transform(const AxisTransform2d& axis_2d) : axis_2d_(axis_2d) {}
 
   // Creates a transform from explicit 16 matrix elements in row-major order.
   // Always creates a double precision 4x4 matrix.
-  static Transform RowMajor(double r0c0,
-                            double r0c1,
-                            double r0c2,
-                            double r0c3,
-                            double r1c0,
-                            double r1c1,
-                            double r1c2,
-                            double r1c3,
-                            double r2c0,
-                            double r2c1,
-                            double r2c2,
-                            double r2c3,
-                            double r3c0,
-                            double r3c1,
-                            double r3c2,
-                            double r3c3) {
+  // clang-format off
+  static constexpr Transform RowMajor(
+      double r0c0, double r0c1, double r0c2, double r0c3,
+      double r1c0, double r1c1, double r1c2, double r1c3,
+      double r2c0, double r2c1, double r2c2, double r2c3,
+      double r3c0, double r3c1, double r3c2, double r3c3) {
     return Transform(r0c0, r1c0, r2c0, r3c0,   // col 0
                      r0c1, r1c1, r2c1, r3c1,   // col 1
                      r0c2, r1c2, r2c2, r3c2,   // col 2
@@ -85,39 +65,29 @@ class GEOMETRY_SKIA_EXPORT Transform {
   // Creates a transform from explicit 16 matrix elements in col-major order.
   // Always creates a double precision 4x4 matrix.
   // See also ColMajor(double[]) and ColMajorF(float[]).
-  static Transform ColMajor(double r0c0,
-                            double r1c0,
-                            double r2c0,
-                            double r3c0,
-                            double r0c1,
-                            double r1c1,
-                            double r2c1,
-                            double r3c1,
-                            double r0c2,
-                            double r1c2,
-                            double r2c2,
-                            double r3c2,
-                            double r0c3,
-                            double r1c3,
-                            double r2c3,
-                            double r3c3) {
+  static constexpr Transform ColMajor(
+      double r0c0, double r1c0, double r2c0, double r3c0,
+      double r0c1, double r1c1, double r2c1, double r3c1,
+      double r0c2, double r1c2, double r2c2, double r3c2,
+      double r0c3, double r1c3, double r2c3, double r3c3) {
     return Transform(r0c0, r1c0, r2c0, r3c0,   // col 0
                      r0c1, r1c1, r2c1, r3c1,   // col 1
                      r0c2, r1c2, r2c2, r3c2,   // col 2
                      r0c3, r1c3, r2c3, r3c3);  // col 3
   }
+  // clang-format on
 
   // Creates a transform from explicit 2d elements. All other matrix elements
   // remain the same as the corresponding elements of an identity matrix.
   // Always creates a double precision 4x4 matrix.
   // TODO(crbug.com/1359528): Revisit the above statement. Evaluate performance
   // and precision requirements of SVG and CSS transform:matrix().
-  static Transform Affine(double a,    // a.k.a. r0c0 or scale_x
-                          double b,    // a.k.a. r1c0 or tan(skew_y)
-                          double c,    // a.k.a. r0c1 or tan(skew_x)
-                          double d,    // a.k.a  r1c1 or scale_y
-                          double e,    // a.k.a  r0c3 or translation_x
-                          double f) {  // a.k.a  r1c3 or translaiton_y
+  static constexpr Transform Affine(double a,    // a.k.a. r0c0 or scale_x
+                                    double b,    // a.k.a. r1c0 or tan(skew_y)
+                                    double c,    // a.k.a. r0c1 or tan(skew_x)
+                                    double d,    // a.k.a  r1c1 or scale_y
+                                    double e,    // a.k.a  r0c3 or translation_x
+                                    double f) {  // a.k.a  r1c3 or translaiton_y
     return ColMajor(a, b, 0, 0, c, d, 0, 0, 0, 0, 1, 0, e, f, 0, 1);
   }
 
@@ -125,49 +95,57 @@ class GEOMETRY_SKIA_EXPORT Transform {
   explicit Transform(const Quaternion& q);
 
   // Creates a transform as a 2d translation.
-  static Transform MakeTranslation(float tx, float ty) {
+  static constexpr Transform MakeTranslation(float tx, float ty) {
     return Transform(1, 1, tx, ty);
   }
+  static Transform MakeTranslation(const Vector2dF& v) {
+    return MakeTranslation(v.x(), v.y());
+  }
+
   // Creates a transform as a 2d scale.
-  static Transform MakeScale(float scale) { return MakeScale(scale, scale); }
-  static Transform MakeScale(float sx, float sy) {
+  static constexpr Transform MakeScale(float scale) {
+    return MakeScale(scale, scale);
+  }
+  static constexpr Transform MakeScale(float sx, float sy) {
     return Transform(sx, sy, 0, 0);
   }
-  // Accurately rotate by 90, 180 or 270 degrees about the z axis.
-  static Transform Make90degRotation() { return Affine(0, 1, -1, 0, 0, 0); }
-  static Transform Make180degRotation() { return MakeScale(-1); }
-  static Transform Make270degRotation() { return Affine(0, -1, 1, 0, 0, 0); }
 
-  // Returns a const reference to an identity transform. If you just need an
-  // identity transform as a value, the default constructor is better.
-  static const Transform& Identity();
+  // Accurately rotate by 90, 180 or 270 degrees about the z axis.
+  static constexpr Transform Make90degRotation() {
+    return Affine(0, 1, -1, 0, 0, 0);
+  }
+  static constexpr Transform Make180degRotation() { return MakeScale(-1); }
+  static constexpr Transform Make270degRotation() {
+    return Affine(0, -1, 1, 0, 0, 0);
+  }
 
   // Resets this transform to the identity transform.
-  // TODO(crbug.com/1359528): Rename this to SetIdentity or remove it.
   void MakeIdentity() {
-    matrix_ = nullptr;
+    full_matrix_ = false;
     axis_2d_ = AxisTransform2d();
   }
 
   bool operator==(const Transform& rhs) const {
-    if (LIKELY(!matrix_ && !rhs.matrix_))
+    if (LIKELY(!full_matrix_ && !rhs.full_matrix_))
       return axis_2d_ == rhs.axis_2d_;
+    if (full_matrix_ && rhs.full_matrix_)
+      return matrix_ == rhs.matrix_;
     return GetFullMatrix() == rhs.GetFullMatrix();
   }
   bool operator!=(const Transform& rhs) const { return !(*this == rhs); }
 
   // Gets a value at |row|, |col| from the matrix.
-  double rc(int row, int col) const {
+  constexpr double rc(int row, int col) const {
     DCHECK_LE(static_cast<unsigned>(row), 3u);
     DCHECK_LE(static_cast<unsigned>(col), 3u);
-    if (LIKELY(!matrix_)) {
+    if (LIKELY(!full_matrix_)) {
       float m[4][4] = {{axis_2d_.scale().x(), 0, 0, axis_2d_.translation().x()},
                        {0, axis_2d_.scale().y(), 0, axis_2d_.translation().y()},
                        {0, 0, 1, 0},
                        {0, 0, 0, 1}};
       return m[row][col];
     }
-    return matrix_->rc(row, col);
+    return matrix_.rc(row, col);
   }
 
   // Sets a value in the matrix at |row|, |col|. It forces full double precision
@@ -267,22 +245,21 @@ class GEOMETRY_SKIA_EXPORT Transform {
   // Returns true if this is the identity matrix.
   // This function modifies a mutable variable in |matrix_|.
   bool IsIdentity() const {
-    return LIKELY(!matrix_) ? axis_2d_ == AxisTransform2d()
-                            : matrix_->IsIdentity();
+    return LIKELY(!full_matrix_) ? axis_2d_ == AxisTransform2d()
+                                 : matrix_.IsIdentity();
   }
 
   // Returns true if the matrix is either identity or pure translation.
   bool IsIdentityOrTranslation() const {
-    return LIKELY(!matrix_) ? axis_2d_.scale() == Vector2dF(1, 1)
-                            : matrix_->IsIdentityOrTranslation();
+    return LIKELY(!full_matrix_) ? axis_2d_.scale() == Vector2dF(1, 1)
+                                 : matrix_.IsIdentityOrTranslation();
   }
 
   // Returns true if the matrix is either the identity or a 2d translation.
-  // TODO(crbug.com/1359528): Rename "2D" to "2d".
-  bool IsIdentityOr2DTranslation() const {
-    return LIKELY(!matrix_)
+  bool IsIdentityOr2dTranslation() const {
+    return LIKELY(!full_matrix_)
                ? axis_2d_.scale() == Vector2dF(1, 1)
-               : matrix_->IsIdentityOrTranslation() && matrix_->rc(2, 3) == 0;
+               : matrix_.IsIdentityOrTranslation() && matrix_.rc(2, 3) == 0;
   }
 
   // Returns true if the matrix is either identity or pure translation,
@@ -292,32 +269,42 @@ class GEOMETRY_SKIA_EXPORT Transform {
 
   // Returns true if the matrix is either a positive scale and/or a translation.
   bool IsPositiveScaleOrTranslation() const {
-    if (LIKELY(!matrix_))
+    if (LIKELY(!full_matrix_))
       return axis_2d_.scale().x() > 0.0 && axis_2d_.scale().y() > 0.0;
 
-    if (!matrix_->IsScaleOrTranslation())
+    if (!matrix_.IsScaleOrTranslation())
       return false;
-    return matrix_->rc(0, 0) > 0.0 && matrix_->rc(1, 1) > 0.0 &&
-           matrix_->rc(2, 2) > 0.0;
+    return matrix_.rc(0, 0) > 0.0 && matrix_.rc(1, 1) > 0.0 &&
+           matrix_.rc(2, 2) > 0.0;
   }
+
+  // Returns true if the matrix is 2d scale or translation, and if it has scale,
+  // the scale proportionally scales up in x and y directions. This function
+  // allows rare false-negatives.
+  bool Is2dProportionalUpscaleAndOr2dTranslation() const;
 
   // Returns true if the matrix is identity or, if the matrix consists only
   // of a translation whose components can be represented as integers. Returns
   // false if the translation contains a fractional component or is too large to
   // fit in an integer.
   bool IsIdentityOrIntegerTranslation() const;
+  bool IsIdentityOrInteger2dTranslation() const;
+
+  // Returns whether this matrix can transform a z=0 plane to something
+  // containing points where z != 0. This is primarily intended for metrics.
+  bool Creates3d() const;
 
   // Returns true if the matrix has only x and y scaling components, including
   // identity.
   bool IsScale2d() const {
-    return LIKELY(!matrix_) ? axis_2d_.translation().IsZero()
-                            : matrix_->IsScale() && matrix_->rc(2, 2) == 1;
+    return LIKELY(!full_matrix_) ? axis_2d_.translation().IsZero()
+                                 : matrix_.IsScale() && matrix_.rc(2, 2) == 1;
   }
 
   // Returns true if the matrix is has only scaling and translation components,
   // including identity.
   bool IsScaleOrTranslation() const {
-    return LIKELY(!matrix_) || matrix_->IsScaleOrTranslation();
+    return LIKELY(!full_matrix_) || matrix_.IsScaleOrTranslation();
   }
 
   // Returns true if axis-aligned 2d rects will remain axis-aligned after being
@@ -333,24 +320,44 @@ class GEOMETRY_SKIA_EXPORT Transform {
   // Returns true if the matrix has any perspective component that would
   // change the w-component of a homogeneous point.
   bool HasPerspective() const {
-    return UNLIKELY(matrix_) && matrix_->HasPerspective();
+    return UNLIKELY(full_matrix_) && matrix_.HasPerspective();
   }
 
   // Returns true if this transform is non-singular.
   bool IsInvertible() const {
-    return LIKELY(!matrix_) ? axis_2d_.IsInvertible() : matrix_->IsInvertible();
+    return LIKELY(!full_matrix_) ? axis_2d_.IsInvertible()
+                                 : matrix_.IsInvertible();
   }
+
+  // If |this| is invertible, inverts |this| and stores the result in
+  // |*transform|, and returns true. Otherwise sets |*transform| to identity
+  // and returns false.
+  [[nodiscard]] bool GetInverse(Transform* transform) const;
+
+  // Same as above except that it assumes success, otherwise DCHECK fails.
+  // This is suitable when the transform is known to be invertible.
+  [[nodiscard]] Transform GetCheckedInverse() const;
+
+  // Same as GetInverse() except that it returns the the inverse of |this| or
+  // identity, instead of a bool. This is suitable when it's good to fallback
+  // to identity silently.
+  [[nodiscard]] Transform InverseOrIdentity() const;
 
   // Returns true if a layer with a forward-facing normal of (0, 0, 1) would
   // have its back side facing frontwards after applying the transform.
   bool IsBackFaceVisible() const;
 
-  // Inverts the transform which is passed in. Returns true if successful, or
-  // sets |transform| to the identify matrix on failure.
-  [[nodiscard]] bool GetInverse(Transform* transform) const;
-
   // Transposes this transform in place.
   void Transpose();
+
+  // Changes the transform to apply as if the origin were at (x, y, z).
+  void ApplyTransformOrigin(float x, float y, float z);
+
+  // Changes the transform to:
+  //     scale3d(z, z, z) * mat * scale3d(1/z, 1/z, 1/z)
+  // Useful for mapping zoomed points to their zoomed transformed result:
+  //     new_mat * (scale3d(z, z, z) * x) == scale3d(z, z, z) * (mat * x)
+  void Zoom(float zoom_factor);
 
   // Set 3rd row and 3rd column to (0, 0, 1, 0). Note that this flattening
   // operation is not quite the same as an orthographic projection and is
@@ -366,7 +373,7 @@ class GEOMETRY_SKIA_EXPORT Transform {
   //    preserves the effect that any subsequent (multiplied from the right)
   //    transforms would have on z values.
   //
-  void FlattenTo2d();
+  void Flatten();
 
   // Returns true if the 3rd row and 3rd column are both (0, 0, 1, 0).
   bool IsFlat() const;
@@ -378,6 +385,10 @@ class GEOMETRY_SKIA_EXPORT Transform {
   // ClampFloatGeometry().
   Vector2dF To2dTranslation() const;
 
+  // Returns the x, y and z translation components of the matrix, clampe with
+  // ClampFloatGeometry().
+  Vector3dF To3dTranslation() const;
+
   // Returns the x and y scale components of the matrix, clamped with
   // ClampFloatGeometry().
   Vector2dF To2dScale() const;
@@ -385,6 +396,7 @@ class GEOMETRY_SKIA_EXPORT Transform {
   // Returns the point with the transformation applied to |point|, clamped
   // with ClampFloatGeometry().
   [[nodiscard]] Point3F MapPoint(const Point3F& point) const;
+  // Maps [point.x(), point.y(), 0] to [result.x(), result.y(), discarded_z].
   [[nodiscard]] PointF MapPoint(const PointF& point) const;
   [[nodiscard]] Point MapPoint(const Point& point) const;
 
@@ -427,6 +439,36 @@ class GEOMETRY_SKIA_EXPORT Transform {
   // transformed box, clamped with ClampFloatGeometry().
   [[nodiscard]] BoxF MapBox(const BoxF& box) const;
 
+  // Applies transformation on the given quad by applying the transformation
+  // on each point of the quad.
+  [[nodiscard]] QuadF MapQuad(const QuadF& quad) const;
+
+  // Maps a point on the z=0 plane into a point on the plane with which the
+  // transform applied, by extending a ray perpendicular to the source plane and
+  // computing the local x,y position of the point where that ray intersects
+  // with the destination plane. If such a point exists, sets |*clamped| (if
+  // provided) to false and returns the point. Otherwise sets |*clamped| (if
+  // provided) to true and:
+  // - If the ray is parallel with the destination plane, returns PointF().
+  // - If the opposite ray intersects with the destination plane, returns
+  //   a point containing signed big values (simulating infinities).
+  //
+  // See https://bit.ly/perspective-projection-clamping for an illustration of
+  // clamping with perspective.
+  //
+  // When |this| is invertible and the result |*clamped| is false, this
+  // function is equivalent to:
+  //   inverse(flatten(inverse(this))).MapPoint(point)
+  // and
+  //   MapPoint(Point3F(point.x(), point.y(), unknown_z)) to
+  //   Point3F(result.x(), result.y(), 0).
+  [[nodiscard]] PointF ProjectPoint(const PointF& point,
+                                    bool* clamped = nullptr) const;
+
+  // Projects the four corners of the quad with ProjectPoint(). Returns an
+  // empty quad if all of the vertices are clamped.
+  [[nodiscard]] QuadF ProjectQuad(const QuadF& quad) const;
+
   // Decomposes |this| into |decomp|. Returns nullopt if |this| can't be
   // decomposed. |decomp| must be identity on input.
   //
@@ -448,8 +490,9 @@ class GEOMETRY_SKIA_EXPORT Transform {
   static Transform Compose(const DecomposedTransform& decomp);
 
   // Decomposes |this| and |from|, interpolates the decomposed values, and
-  // sets |this| to the reconstituted result. Returns false if either matrix
-  // can't be decomposed. Uses routines described in this spec:
+  // sets |this| to the reconstituted result. Returns false and leaves |this|
+  // unchanged if either matrix can't be decomposed.
+  // Uses routines described in this spec:
   // https://www.w3.org/TR/css-transforms-2/#matrix-interpolation
   //
   // Note: this call is expensive for complex transforms since we need to
@@ -458,6 +501,17 @@ class GEOMETRY_SKIA_EXPORT Transform {
   // using Decompose() and reuse your DecomposedTransform with
   // BlendDecomposedTransforms() (see transform_util.h).
   bool Blend(const Transform& from, double progress);
+
+  // Decomposes |this| and |from|, accumulates the decomposed values, and
+  // sets |this| to the reconstituted result. Returns false and leaves |this|
+  // unchanged if either matrix can't be decomposed.
+  // Uses routines described in this spec:
+  // https://www.w3.org/TR/css-transforms-2/#combining-transform-lists.
+  //
+  // Note: this function has the same performance characteristics as Blend().
+  // When possible, you should also reuse DecomposedTransform with
+  // AccumulateDecomposedTransforms() (see transform_util.h).
+  bool Accumulate(const Transform& other);
 
   double Determinant() const;
 
@@ -470,11 +524,7 @@ class GEOMETRY_SKIA_EXPORT Transform {
   void RoundToIdentityOrIntegerTranslation();
 
   // Returns |this| * |other|.
-  Transform operator*(const Transform& other) const {
-    Transform t = *this;
-    t.PreConcat(other);
-    return t;
-  }
+  Transform operator*(const Transform& other) const;
 
   // Sets |this| = |this| * |other|
   Transform& operator*=(const Transform& other) {
@@ -482,41 +532,79 @@ class GEOMETRY_SKIA_EXPORT Transform {
     return *this;
   }
 
-  bool ApproximatelyEqual(const gfx::Transform& transform) const;
+  // Checks whether `this` approximately equals `transform`.
+  // Returns true if all following conditions are met:
+  // - For (x, y) in all translation components of (this, transform):
+  //   abs(x - y) <= abs_translation_tolerance
+  // - For (x, y) in all other components of (this, transform):
+  //   abs(x - y) <= abs_other_tolerance
+  // - If rel_scale_tolerance is not zero, for (x, y) in all scale components:
+  //   abs(x - y) <= (abs(x) + abs(y)) * rel_scale_tolerance.
+  bool ApproximatelyEqual(const gfx::Transform& transform,
+                          float abs_translation_tolerance,
+                          float abs_other_tolerance,
+                          float rel_scale_tolerance) const;
+  // Checks approximate equality with one tolerance for all components.
+  bool ApproximatelyEqual(const gfx::Transform& transform,
+                          float abs_tolerance) const {
+    return ApproximatelyEqual(transform, abs_tolerance, abs_tolerance, 0.0f);
+  }
+  // Checks approximate equality with default tolerances. Note that the
+  // tolerance for translation is big to tolerate scroll components due to
+  // snapping (floating point error might round the other way).
+  bool ApproximatelyEqual(const gfx::Transform& transform) const {
+    return ApproximatelyEqual(transform, 1.0f, 0.1f, 0.0f);
+  }
 
   void EnsureFullMatrixForTesting() { EnsureFullMatrix(); }
 
+  // Returns a string in the format of "[ row0\n, row1\n, row2\n, row3 ]\n".
   std::string ToString() const;
+
+  // Returns a string containing decomposed components.
+  std::string ToDecomposedString() const;
 
  private:
   // Used internally to construct Transform with parameters in col-major order.
-  Transform(double r0c0,
-            double r1c0,
-            double r2c0,
-            double r3c0,
-            double r0c1,
-            double r1c1,
-            double r2c1,
-            double r3c1,
-            double r0c2,
-            double r1c2,
-            double r2c2,
-            double r3c2,
-            double r0c3,
-            double r1c3,
-            double r2c3,
-            double r3c3);
-  Transform(float scale_x, float scale_y, float trans_x, float trans_y);
+  // clang-format off
+  constexpr Transform(double r0c0, double r1c0, double r2c0, double r3c0,
+                      double r0c1, double r1c1, double r2c1, double r3c1,
+                      double r0c2, double r1c2, double r2c2, double r3c2,
+                      double r0c3, double r1c3, double r2c3, double r3c3)
+      : full_matrix_(true),
+        matrix_(r0c0, r1c0, r2c0, r3c0,
+                r0c1, r1c1, r2c1, r3c1,
+                r0c2, r1c2, r2c2, r3c2,
+                r0c3, r1c3, r2c3, r3c3) {}
+  // clang-format on
 
-  Point3F MapPointInternal(const Matrix44& xform, const Point3F& point) const;
+  constexpr Transform(float scale_x,
+                      float scale_y,
+                      float trans_x,
+                      float trans_y)
+      : axis_2d_(AxisTransform2d::FromScaleAndTranslation(
+            Vector2dF(scale_x, scale_y),
+            Vector2dF(trans_x, trans_y))) {}
+
+  // Used internally to construct a Transform with uninitialized full matrix.
+  explicit Transform(Matrix44::UninitializedTag tag)
+      : full_matrix_(true), matrix_(tag) {}
+
+  PointF MapPointInternal(const Matrix44& matrix, const PointF& point) const;
+  Point3F MapPointInternal(const Matrix44& matrix, const Point3F& point) const;
 
   Matrix44 GetFullMatrix() const;
   Matrix44& EnsureFullMatrix();
 
-  // axis_2d_ is used if matrix_is nullptr, otherwise *matrix_ is used.
+  // axis_2d_ is used if full_matrix_ is false, otherwise matrix_ is used.
   // See the class documentation for more details about how we use them.
-  AxisTransform2d axis_2d_;
-  std::unique_ptr<Matrix44> matrix_;
+  bool full_matrix_ = false;
+  union {
+    // Each constructor must explicitly initialize one of the following,
+    // according to the value of full_matrix_.
+    AxisTransform2d axis_2d_;
+    Matrix44 matrix_;
+  };
 };
 
 // This is declared here for use in gtest-based unit tests but is defined in

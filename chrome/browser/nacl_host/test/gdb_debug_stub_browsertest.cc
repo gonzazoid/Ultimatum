@@ -2,9 +2,9 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/environment.h"
+#include "base/functional/bind.h"
 #include "base/path_service.h"
 #include "base/process/kill.h"
 #include "base/process/launch.h"
@@ -42,7 +42,7 @@ void NaClGdbDebugStubTest::StartTestScript(base::Process* test_process,
                                            const std::string& test_name,
                                            int debug_stub_port) {
   // We call python script to reuse GDB RSP protocol implementation.
-  base::CommandLine cmd(base::FilePath(FILE_PATH_LITERAL("python")));
+  base::CommandLine cmd(base::FilePath(FILE_PATH_LITERAL("python3")));
   base::FilePath script;
   base::PathService::Get(chrome::DIR_TEST_DATA, &script);
   script = script.AppendASCII("nacl/debug_stub_browser_tests.py");

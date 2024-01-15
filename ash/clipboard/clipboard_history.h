@@ -17,7 +17,6 @@
 #include "ui/base/clipboard/clipboard_observer.h"
 
 namespace ash {
-
 class ScopedClipboardHistoryPauseImpl;
 
 namespace clipboard_history_util {
@@ -29,7 +28,8 @@ class ASH_EXPORT ClipboardHistory : public ui::ClipboardObserver {
  public:
   class ASH_EXPORT Observer : public base::CheckedObserver {
    public:
-    // Called when a ClipboardHistoryItem has been added.
+    // Called when a `ClipboardHistoryItem` has been added. `is_duplicate` is
+    // true if `item` is already in clipboard history when adding.
     virtual void OnClipboardHistoryItemAdded(const ClipboardHistoryItem& item,
                                              bool is_duplicate) {}
 
@@ -55,8 +55,11 @@ class ASH_EXPORT ClipboardHistory : public ui::ClipboardObserver {
   // Returns the list of most recent items. The returned list is sorted by
   // recency.
   const std::list<ClipboardHistoryItem>& GetItems() const;
+  std::list<ClipboardHistoryItem>& GetItems();
 
-  // Deletes clipboard history. Does not modify content stored in the clipboard.
+  // Deletes every item in the clipboard history. The clipboard is cleared as
+  // well to ensure that its contents stay in sync with the first item in the
+  // clipboard history.
   void Clear();
 
   // Returns whether the clipboard history of the active account is empty.
@@ -73,8 +76,9 @@ class ASH_EXPORT ClipboardHistory : public ui::ClipboardObserver {
   base::WeakPtr<ClipboardHistory> GetWeakPtr();
 
  private:
-  // Friended to allow ScopedClipboardHistoryPauseImpl to `Pause()` and
+  // Friended to allow `ScopedClipboardHistoryPauseImpl` to `Pause()` and
   // `Resume()`.
+  // TODO(b/269470292): Use a `PassKey` for this.
   friend class ScopedClipboardHistoryPauseImpl;
 
   // Ensures that the clipboard buffer contains the same data as the item at the

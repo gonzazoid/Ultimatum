@@ -4,7 +4,8 @@
 
 #include "media/gpu/v4l2/test/av1_decoder.h"
 
-#include <linux/media/av1-ctrls.h>
+#include <linux/v4l2-controls.h>
+#include <linux/videodev2.h>
 
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
@@ -12,7 +13,7 @@
 #include "media/base/video_types.h"
 #include "media/filters/ivf_parser.h"
 #include "media/gpu/macros.h"
-#include "media/gpu/v4l2/test/av1_pix_fmt.h"
+#include "media/gpu/v4l2/test/upstream_pix_fmt.h"
 #include "third_party/libgav1/src/src/warp_prediction.h"
 
 namespace media {
@@ -20,6 +21,7 @@ namespace media {
 namespace v4l2_test {
 
 namespace {
+constexpr uint32_t kDriverCodecFourcc = V4L2_PIX_FMT_AV1_FRAME;
 
 constexpr uint32_t kNumberOfBuffersInCaptureQueue = 10;
 
@@ -162,7 +164,6 @@ void FillSequenceParams(
 // Section 5.9.11. Loop filter params syntax.
 // Note that |update_ref_delta| and |update_mode_delta| flags in the spec
 // are not needed for V4L2 AV1 API.
-// TODO(stevecho): sanity check data structures in libgav1 against the AV1 spec.
 void FillLoopFilterParams(struct v4l2_av1_loop_filter* v4l2_lf,
                           const libgav1::LoopFilter& lf) {
   conditionally_set_flags(&v4l2_lf->flags, lf.delta_enabled,
@@ -290,9 +291,7 @@ void FillSegmentationParams(struct v4l2_av1_segmentation* v4l2_seg,
 void FillCdefParams(struct v4l2_av1_cdef* v4l2_cdef,
                     const libgav1::Cdef& cdef,
                     uint8_t color_bitdepth) {
-  // Damping value parsed in libgav1 is from the spec + (bitdepth - 8).
-  // All the strength values parsed in libgav1 are from the spec and left
-  // shifted by (bitdepth - 8).
+  // Damping value parsed in libgav1 is from the spec + (|color_bitdepth| - 8).
   CHECK_GE(color_bitdepth, 8u);
   const uint8_t coeff_shift = color_bitdepth - 8u;
 
@@ -321,6 +320,16 @@ void FillCdefParams(struct v4l2_av1_cdef* v4l2_cdef,
   SafeArrayMemcpy(v4l2_cdef->y_sec_strength, cdef.y_secondary_strength);
   SafeArrayMemcpy(v4l2_cdef->uv_pri_strength, cdef.uv_primary_strength);
   SafeArrayMemcpy(v4l2_cdef->uv_sec_strength, cdef.uv_secondary_strength);
+
+  // All the strength values parsed in libgav1 are from the AV1 spec and left
+  // shifted by (|color_bitdepth| - 8). So these values need to be right shifted
+  // by (|color_bitdepth| - 8) before passing to a driver.
+  for (size_t i = 0; i < libgav1::kMaxCdefStrengths; i++) {
+    v4l2_cdef->y_pri_strength[i] >>= coeff_shift;
+    v4l2_cdef->y_sec_strength[i] >>= coeff_shift;
+    v4l2_cdef->uv_pri_strength[i] >>= coeff_shift;
+    v4l2_cdef->uv_sec_strength[i] >>= coeff_shift;
+  }
 }
 
 // 5.9.20. Loop restoration params syntax
@@ -368,9 +377,11 @@ void FillLoopRestorationParams(v4l2_av1_loop_restoration* v4l2_lr,
   v4l2_lr->lr_unit_shift = lr.unit_size_log2[0] - 6;
   v4l2_lr->lr_uv_shift = lr.unit_size_log2[0] - lr.unit_size_log2[1];
 
+  constexpr uint32_t kAv1RestorationTileSizeMax = 256;
+
   // AV1 spec (p.52) uses this formula with hard coded value 2.
   v4l2_lr->loop_restoration_size[0] =
-      V4L2_AV1_RESTORATION_TILESIZE_MAX >> (2 - v4l2_lr->lr_unit_shift);
+      kAv1RestorationTileSizeMax >> (2 - v4l2_lr->lr_unit_shift);
   v4l2_lr->loop_restoration_size[1] =
       v4l2_lr->loop_restoration_size[0] >> v4l2_lr->lr_uv_shift;
   v4l2_lr->loop_restoration_size[2] =
@@ -475,14 +486,12 @@ void FillGlobalMotionParams(
     constexpr auto kNumGlobalMotionParams = std::size(decltype(gm.params){});
 
     for (size_t j = 0; j < kNumGlobalMotionParams; ++j) {
-      // TODO(b/247611513): Remove separate handling when gm.params[j] < 0 if
-      // V4L2 AV1 uAPI decides to make an update to make this param consistent
-      // with definition in libgav1 parser
-      if (gm.params[j] < 0) {
-        v4l2_gm->params[i][j] =
-            base::checked_cast<uint32_t>(UINT32_MAX + gm.params[j] + 1);
-      } else
-        v4l2_gm->params[i][j] = base::checked_cast<uint32_t>(gm.params[j]);
+      static_assert(
+          std::is_same<decltype(v4l2_gm->params[0][0]), int32_t&>::value,
+          "|v4l2_av1_global_motion::params|'s data type must be int32_t "
+          "starting from AV1 uAPI v4");
+
+      v4l2_gm->params[i][j] = gm.params[j];
     }
 
     conditionally_set_flags(&v4l2_gm->invalid, !libgav1::SetupShear(&gm),
@@ -530,11 +539,8 @@ void FillTileGroupParams(
 
 Av1Decoder::Av1Decoder(std::unique_ptr<IvfParser> ivf_parser,
                        std::unique_ptr<V4L2IoctlShim> v4l2_ioctl,
-                       std::unique_ptr<V4L2Queue> OUTPUT_queue,
-                       std::unique_ptr<V4L2Queue> CAPTURE_queue)
-    : VideoDecoder::VideoDecoder(std::move(v4l2_ioctl),
-                                 std::move(OUTPUT_queue),
-                                 std::move(CAPTURE_queue)),
+                       gfx::Size display_resolution)
+    : VideoDecoder::VideoDecoder(std::move(v4l2_ioctl), display_resolution),
       ivf_parser_(std::move(ivf_parser)),
       buffer_pool_(std::make_unique<libgav1::BufferPool>(
           /*on_frame_buffer_size_changed=*/nullptr,
@@ -554,8 +560,6 @@ Av1Decoder::~Av1Decoder() {
 // static
 std::unique_ptr<Av1Decoder> Av1Decoder::Create(
     const base::MemoryMappedFile& stream) {
-  constexpr uint32_t kDriverCodecFourcc = V4L2_PIX_FMT_AV1_FRAME;
-
   VLOG(2) << "Attempting to create decoder with codec "
           << media::FourccToString(kDriverCodecFourcc);
 
@@ -578,41 +582,12 @@ std::unique_ptr<Av1Decoder> Av1Decoder::Create(
     return nullptr;
   }
 
-  auto v4l2_ioctl = std::make_unique<V4L2IoctlShim>();
-
-  // MM21 is an uncompressed opaque format that is produced by MediaTek
-  // video decoders.
-  constexpr uint32_t kUncompressedFourcc = v4l2_fourcc('M', 'M', '2', '1');
-
-  // TODO(stevecho): this might need some driver patches to support AV1F
-  if (!v4l2_ioctl->VerifyCapabilities(kDriverCodecFourcc,
-                                      kUncompressedFourcc)) {
-    LOG(ERROR) << "Device doesn't support the provided FourCCs.";
-    return nullptr;
-  }
+  auto v4l2_ioctl = std::make_unique<V4L2IoctlShim>(kDriverCodecFourcc);
 
   const gfx::Size bitstream_coded_size = GetResolutionFromBitstream(stream);
 
-  // TODO(stevecho): might need to consider using more than 1 file descriptor
-  // (fd) & buffer with the output queue for 4K60 requirement.
-  // https://buganizer.corp.google.com/issues/202214561#comment31
-  auto OUTPUT_queue = std::make_unique<V4L2Queue>(
-      V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE, kDriverCodecFourcc,
-      bitstream_coded_size,
-      /*num_planes=*/1, V4L2_MEMORY_MMAP, /*num_buffers=*/1);
-
-  // TODO(stevecho): enable V4L2_MEMORY_DMABUF memory for CAPTURE queue.
-  // |num_planes| represents separate memory buffers, not planes for Y, U, V.
-  // https://www.kernel.org/doc/html/v5.16/userspace-api/media/v4l/pixfmt-v4l2-mplane.html#c.V4L.v4l2_plane_pix_format
-  auto CAPTURE_queue = std::make_unique<V4L2Queue>(
-      V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE, kUncompressedFourcc,
-      bitstream_coded_size,
-      /*num_planes=*/2, V4L2_MEMORY_MMAP,
-      /*num_buffers=*/kNumberOfBuffersInCaptureQueue);
-
-  return base::WrapUnique(
-      new Av1Decoder(std::move(ivf_parser), std::move(v4l2_ioctl),
-                     std::move(OUTPUT_queue), std::move(CAPTURE_queue)));
+  return base::WrapUnique(new Av1Decoder(
+      std::move(ivf_parser), std::move(v4l2_ioctl), bitstream_coded_size));
 }
 
 Av1Decoder::ParsingResult Av1Decoder::ReadNextFrame(
@@ -649,10 +624,10 @@ void Av1Decoder::CopyFrameData(const libgav1::ObuFrameHeader& frame_hdr,
   CHECK_EQ(queue->num_planes(), 1u)
       << "Number of planes is expected to be 1 for OUTPUT queue.";
 
-  scoped_refptr<MmapedBuffer> buffer = queue->GetBuffer(0);
+  scoped_refptr<MmappedBuffer> buffer = queue->GetBuffer(0);
 
-  buffer->mmaped_planes()[0].CopyIn(ivf_frame_data_,
-                                    ivf_frame_header_.frame_size);
+  buffer->mmapped_planes()[0].CopyIn(ivf_frame_data_,
+                                     ivf_frame_header_.frame_size);
 }
 
 // 5.9.2. Uncompressed header syntax
@@ -723,9 +698,6 @@ void Av1Decoder::SetupFrameParams(
   conditionally_set_u32_flags(&v4l2_frame_params->flags,
                               !frm_header.enable_frame_end_update_cdf,
                               V4L2_AV1_FRAME_FLAG_DISABLE_FRAME_END_UPDATE_CDF);
-  conditionally_set_u32_flags(&v4l2_frame_params->flags,
-                              frm_header.tile_info.uniform_spacing,
-                              V4L2_AV1_FRAME_FLAG_UNIFORM_TILE_SPACING);
   conditionally_set_u32_flags(&v4l2_frame_params->flags,
                               frm_header.allow_warped_motion,
                               V4L2_AV1_FRAME_FLAG_ALLOW_WARPED_MOTION);
@@ -824,25 +796,22 @@ void Av1Decoder::SetupFrameParams(
                   frm_header.buffer_removal_time);
   v4l2_frame_params->refresh_frame_flags = frm_header.refresh_frame_flags;
 
+  if (frm_header.frame_type == libgav1::kFrameKey && frm_header.show_frame) {
+    for (size_t i = 0; i < libgav1::kNumReferenceFrameTypes; i++)
+      ref_order_hint_[i] = 0;
+  }
+
   // The first slot in |order_hints| is reserved for intra frame, so it is not
   // used and will always be 0.
   static_assert(std::size(decltype(v4l2_frame_params->order_hints){}) ==
-                    libgav1::kNumReferenceFrameTypes,
+                    libgav1::kNumInterReferenceFrameTypes + 1,
                 "Invalid size of |order_hints| array");
-  if (frm_header.frame_type != libgav1::kFrameKey) {
+  if (!libgav1::IsIntraFrame(frm_header.frame_type)) {
     for (size_t i = 0; i < libgav1::kNumInterReferenceFrameTypes; i++) {
       v4l2_frame_params->order_hints[i + 1] =
           ref_order_hint_[frm_header.reference_frame_index[i]];
     }
   }
-
-  // These params looks duplicated with |ref_frame_idx|, but they are required
-  // and used when |frame_refs_short_signaling| is set according to the AV1
-  // spec. https://aomediacodec.github.io/av1-spec/#uncompressed-header-syntax
-  v4l2_frame_params->last_frame_idx =
-      frm_header.reference_frame_index[libgav1::kReferenceFrameLast];
-  v4l2_frame_params->gold_frame_idx =
-      frm_header.reference_frame_index[libgav1::kReferenceFrameGolden];
 
   // TODO(b/230891887): use uint64_t when v4l2_timeval_to_ns() function is used.
   constexpr uint32_t kInvalidSurface = std::numeric_limits<uint32_t>::max();
@@ -862,9 +831,14 @@ void Av1Decoder::SetupFrameParams(
   static_assert(std::size(decltype(v4l2_frame_params->ref_frame_idx){}) ==
                     libgav1::kNumInterReferenceFrameTypes,
                 "Invalid size of |ref_frame_idx| array");
-  for (size_t i = 0; i < libgav1::kNumInterReferenceFrameTypes; i++)
-    v4l2_frame_params->ref_frame_idx[i] =
-        base::checked_cast<__u8>(frm_header.reference_frame_index[i]);
+  for (size_t i = 0; i < libgav1::kNumInterReferenceFrameTypes; i++) {
+    static_assert(std::is_same<decltype(v4l2_frame_params->ref_frame_idx[0]),
+                               int8_t&>::value,
+                  "|v4l2_ctrl_av1_frame::ref_frame_idx|'s data type must be "
+                  "int8_t starting from AV1 uAPI v4");
+
+    v4l2_frame_params->ref_frame_idx[i] = frm_header.reference_frame_index[i];
+  }
 
   v4l2_frame_params->skip_mode_frame[0] =
       base::checked_cast<__u8>(frm_header.skip_mode_frame[0]);
@@ -873,32 +847,32 @@ void Av1Decoder::SetupFrameParams(
 }
 
 std::set<int> Av1Decoder::RefreshReferenceSlots(
-    const uint8_t refresh_frame_flags,
+    const libgav1::ObuFrameHeader& frame_hdr,
     const libgav1::RefCountedBufferPtr current_frame,
-    const scoped_refptr<MmapedBuffer> buffer,
-    const uint32_t last_queued_buffer_index,
-    const uint8_t order_hint) {
-  state_->UpdateReferenceFrames(current_frame,
-                                base::strict_cast<int>(refresh_frame_flags));
+    const scoped_refptr<MmappedBuffer> buffer,
+    const uint32_t last_queued_buffer_id) {
+  state_->UpdateReferenceFrames(
+      current_frame, base::strict_cast<int>(frame_hdr.refresh_frame_flags));
 
   static_assert(
-      kAv1NumRefFrames == sizeof(refresh_frame_flags) * CHAR_BIT,
+      kAv1NumRefFrames == sizeof(frame_hdr.refresh_frame_flags) * CHAR_BIT,
       "|refresh_frame_flags| size must be equal to |kAv1NumRefFrames|");
 
-  const std::bitset<kAv1NumRefFrames> refresh_frame_slots(refresh_frame_flags);
+  const std::bitset<kAv1NumRefFrames> refresh_frame_slots(
+      frame_hdr.refresh_frame_flags);
 
   std::set<int> reusable_buffer_ids;
 
-  constexpr uint8_t kRefreshFrameFlagsNone = 0;
-  if (refresh_frame_flags == kRefreshFrameFlagsNone) {
-    // Indicates to reuse currently decoded CAPTURE buffer.
-    reusable_buffer_ids.insert(buffer->buffer_id());
-
-    return reusable_buffer_ids;
-  }
-
   constexpr uint8_t kRefreshFrameFlagsAll = 0xFF;
-  if (refresh_frame_flags == kRefreshFrameFlagsAll) {
+  // If |show_existing_frame| = 1 and the frame to show is a key frame, the
+  // reference frame loading process as specified in section 7.21 of the AV1
+  // spec is invoked.
+  const bool is_show_existing_key_frame =
+      (frame_hdr.show_existing_frame &&
+       (state_->reference_frame[frame_hdr.frame_to_show]->frame_type() ==
+        libgav1::kFrameKey));
+  if (frame_hdr.refresh_frame_flags == kRefreshFrameFlagsAll ||
+      is_show_existing_key_frame) {
     // After decoding a key frame, all CAPTURE buffers can be reused except the
     // CAPTURE buffer corresponding to the key frame.
     for (size_t i = 0; i < kNumberOfBuffersInCaptureQueue; i++)
@@ -908,14 +882,24 @@ std::set<int> Av1Decoder::RefreshReferenceSlots(
 
     // Note that the CAPTURE buffer for previous frame can be used as well,
     // but it is already queued again at this point.
-    reusable_buffer_ids.erase(last_queued_buffer_index);
+    reusable_buffer_ids.erase(last_queued_buffer_id);
 
     // Updates to assign current key frame as a reference frame for all
     // reference frame slots in the reference frames list.
     ref_frames_.fill(buffer);
 
-    // TODO(b/249104479): Update |ref_order_hint_| as needed for all reference
-    // frame slots after finding relevant test vector
+    if (is_show_existing_key_frame) {
+      for (size_t i = 0; i < libgav1::kNumReferenceFrameTypes; i++)
+        ref_order_hint_[i] = ref_order_hint_[frame_hdr.frame_to_show];
+    }
+
+    return reusable_buffer_ids;
+  }
+
+  constexpr uint8_t kRefreshFrameFlagsNone = 0;
+  if (frame_hdr.refresh_frame_flags == kRefreshFrameFlagsNone) {
+    // Indicates to reuse currently decoded CAPTURE buffer.
+    reusable_buffer_ids.insert(buffer->buffer_id());
 
     return reusable_buffer_ids;
   }
@@ -947,17 +931,29 @@ std::set<int> Av1Decoder::RefreshReferenceSlots(
       }
     }
     ref_frames_[i] = buffer;
-    ref_order_hint_[i] = order_hint;
+    ref_order_hint_[i] = frame_hdr.order_hint;
   }
 
   return reusable_buffer_ids;
 }
 
-VideoDecoder::Result Av1Decoder::DecodeNextFrame(std::vector<char>& y_plane,
-                                                 std::vector<char>& u_plane,
-                                                 std::vector<char>& v_plane,
-                                                 gfx::Size& size,
-                                                 const int frame_number) {
+void Av1Decoder::QueueReusableBuffersInCaptureQueue(
+    const std::set<int> reusable_buffer_ids,
+    const bool is_inter_frame) {
+  for (const auto reusable_buffer_id : reusable_buffer_ids) {
+    if (!v4l2_ioctl_->QBuf(CAPTURE_queue_, reusable_buffer_id))
+      LOG(ERROR) << "VIDIOC_QBUF failed for CAPTURE queue.";
+
+    if (is_inter_frame)
+      CAPTURE_queue_->set_last_queued_buffer_id(reusable_buffer_id);
+  }
+}
+
+VideoDecoder::Result Av1Decoder::DecodeNextFrame(const int frame_number,
+                                                 std::vector<uint8_t>& y_plane,
+                                                 std::vector<uint8_t>& u_plane,
+                                                 std::vector<uint8_t>& v_plane,
+                                                 gfx::Size& size) {
   libgav1::RefCountedBufferPtr current_frame;
   const ParsingResult parser_res = ReadNextFrame(current_frame);
 
@@ -965,6 +961,11 @@ VideoDecoder::Result Av1Decoder::DecodeNextFrame(std::vector<char>& y_plane,
     LOG_ASSERT(parser_res == ParsingResult::kEOStream)
         << "Failed to parse next frame.";
     return VideoDecoder::kEOStream;
+  }
+
+  const bool is_OUTPUT_queue_new = !OUTPUT_queue_;
+  if (!OUTPUT_queue_) {
+    CreateOUTPUTQueue(kDriverCodecFourcc);
   }
 
   libgav1::ObuFrameHeader current_frame_header = obu_parser_->frame_header();
@@ -992,16 +993,28 @@ VideoDecoder::Result Av1Decoder::DecodeNextFrame(std::vector<char>& y_plane,
   }
 
   if (current_frame_header.show_existing_frame) {
-    scoped_refptr<MmapedBuffer> repeated_frame_buffer =
+    scoped_refptr<MmappedBuffer> repeated_frame_buffer =
         ref_frames_[current_frame_header.frame_to_show];
 
-    size = CAPTURE_queue_->display_size();
-    ConvertMM21ToYUV(y_plane, u_plane, v_plane, size,
-                     static_cast<char*>(
-                         repeated_frame_buffer->mmaped_planes()[0].start_addr),
-                     static_cast<char*>(
-                         repeated_frame_buffer->mmaped_planes()[1].start_addr),
-                     CAPTURE_queue_->coded_size());
+    ConvertToYUV(y_plane, u_plane, v_plane, OUTPUT_queue_->resolution(),
+                 repeated_frame_buffer->mmapped_planes(),
+                 CAPTURE_queue_->resolution(), CAPTURE_queue_->fourcc());
+
+    // Repeated frames normally don't need to update reference frames. But in
+    // this special case when the repeated frame is pointing to a key frame, all
+    // the reference frames have to be updated to the key frame pointed by the
+    // repeated frame.
+    if (state_->reference_frame[current_frame_header.frame_to_show]
+            ->frame_type() == libgav1::kFrameKey) {
+      const std::set<int> reusable_buffer_ids =
+          RefreshReferenceSlots(current_frame_header, current_frame,
+                                ref_frames_[current_frame_header.frame_to_show],
+                                CAPTURE_queue_->last_queued_buffer_id());
+
+      QueueReusableBuffersInCaptureQueue(
+          reusable_buffer_ids,
+          !libgav1::IsIntraFrame(current_frame_header.frame_type));
+    }
 
     return VideoDecoder::kOk;
   }
@@ -1052,47 +1065,37 @@ VideoDecoder::Result Av1Decoder::DecodeNextFrame(std::vector<char>& y_plane,
   struct v4l2_ext_controls ext_ctrls = {.count = base::checked_cast<__u32>(ext_ctrl_vectors.size()),
                                         .controls = &ext_ctrl_vectors[0]};
 
-  if (!v4l2_ioctl_->SetExtCtrls(OUTPUT_queue_, &ext_ctrls))
-    LOG(FATAL) << "VIDIOC_S_EXT_CTRLS failed.";
+  // Before the CAPTURE queue is set up the first frame must be parsed by the
+  // driver. This is done so that when VIDIOC_G_FMT is called the frame
+  // dimensions and format will be ready. Specifying V4L2_CTRL_WHICH_CUR_VAL
+  // when VIDIOC_S_EXT_CTRLS processes the request immediately so that the frame
+  // is parsed by the driver and the state is readied.
+  v4l2_ioctl_->SetExtCtrls(OUTPUT_queue_, &ext_ctrls, is_OUTPUT_queue_new);
+  v4l2_ioctl_->MediaRequestIocQueue(OUTPUT_queue_);
 
-  if (!v4l2_ioctl_->MediaRequestIocQueue(OUTPUT_queue_))
-    LOG(FATAL) << "MEDIA_REQUEST_IOC_QUEUE failed.";
-
-  uint32_t index;
-
-  if (!v4l2_ioctl_->DQBuf(CAPTURE_queue_, &index))
-    LOG(FATAL) << "VIDIOC_DQBUF failed for CAPTURE queue.";
-
-  scoped_refptr<MmapedBuffer> buffer = CAPTURE_queue_->GetBuffer(index);
-  CHECK_EQ(buffer->mmaped_planes().size(), 2u)
-      << "MM21 should have exactly 2 planes but CAPTURE queue does not.";
-
-  CHECK_EQ(CAPTURE_queue_->fourcc(), v4l2_fourcc('M', 'M', '2', '1'));
-  size = CAPTURE_queue_->display_size();
-  ConvertMM21ToYUV(y_plane, u_plane, v_plane, size,
-                   static_cast<char*>(buffer->mmaped_planes()[0].start_addr),
-                   static_cast<char*>(buffer->mmaped_planes()[1].start_addr),
-                   CAPTURE_queue_->coded_size());
-
-  const std::set<int> reusable_buffer_ids =
-      RefreshReferenceSlots(current_frame_header.refresh_frame_flags,
-                            current_frame, CAPTURE_queue_->GetBuffer(index),
-                            CAPTURE_queue_->last_queued_buffer_index(),
-                            current_frame_header.order_hint);
-
-  for (const auto reusable_buffer_id : reusable_buffer_ids) {
-    if (!v4l2_ioctl_->QBuf(CAPTURE_queue_, reusable_buffer_id))
-      LOG(ERROR) << "VIDIOC_QBUF failed for CAPTURE queue.";
-
-    if (!libgav1::IsIntraFrame(current_frame_header.frame_type))
-      CAPTURE_queue_->set_last_queued_buffer_index(reusable_buffer_id);
+  if (!CAPTURE_queue_) {
+    CreateCAPTUREQueue(kNumberOfBuffersInCaptureQueue);
   }
 
-  if (!v4l2_ioctl_->DQBuf(OUTPUT_queue_, &index))
-    LOG(FATAL) << "VIDIOC_DQBUF failed for OUTPUT queue.";
+  uint32_t buffer_id;
+  v4l2_ioctl_->DQBuf(CAPTURE_queue_, &buffer_id);
 
-  if (!v4l2_ioctl_->MediaRequestIocReinit(OUTPUT_queue_))
-    LOG(FATAL) << "MEDIA_REQUEST_IOC_REINIT failed.";
+  scoped_refptr<MmappedBuffer> buffer = CAPTURE_queue_->GetBuffer(buffer_id);
+  ConvertToYUV(y_plane, u_plane, v_plane, OUTPUT_queue_->resolution(),
+               buffer->mmapped_planes(), CAPTURE_queue_->resolution(),
+               CAPTURE_queue_->fourcc());
+
+  const std::set<int> reusable_buffer_ids = RefreshReferenceSlots(
+      current_frame_header, current_frame, CAPTURE_queue_->GetBuffer(buffer_id),
+      CAPTURE_queue_->last_queued_buffer_id());
+
+  QueueReusableBuffersInCaptureQueue(
+      reusable_buffer_ids,
+      !libgav1::IsIntraFrame(current_frame_header.frame_type));
+
+  v4l2_ioctl_->DQBuf(OUTPUT_queue_, &buffer_id);
+
+  v4l2_ioctl_->MediaRequestIocReinit(OUTPUT_queue_);
 
   return VideoDecoder::kOk;
 }

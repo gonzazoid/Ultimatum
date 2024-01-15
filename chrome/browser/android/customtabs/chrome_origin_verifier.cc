@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 #include "base/android/jni_android.h"
 #include "chrome/browser/android/browserservices/verification/jni_headers/ChromeOriginVerifier_jni.h"
 #include "chrome/browser/browser_process.h"
-#include "components/digital_asset_links/origin_verifier.h"
+#include "components/content_relationship_verification/origin_verifier.h"
 
 namespace customtabs {
 

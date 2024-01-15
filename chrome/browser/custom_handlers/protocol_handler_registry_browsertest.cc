@@ -4,9 +4,11 @@
 
 #include <memory>
 #include <string>
+#include <vector>
 
 #include "base/scoped_observation.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/time/time.h"
 #include "build/build_config.h"
 #include "chrome/app/chrome_command_ids.h"
 #include "chrome/browser/content_settings/page_specific_content_settings_delegate.h"
@@ -15,6 +17,8 @@
 #include "chrome/browser/renderer_context_menu/render_view_context_menu_test_util.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
+#include "chrome/browser/ui/web_applications/test/isolated_web_app_test_utils.h"
+#include "chrome/browser/web_applications/isolated_web_apps/isolated_web_app_url_info.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "chrome/test/base/ui_test_utils.h"
 #include "components/custom_handlers/protocol_handler.h"
@@ -28,6 +32,7 @@
 #include "content/public/test/fenced_frame_test_util.h"
 #include "net/test/embedded_test_server/embedded_test_server.h"
 #include "third_party/blink/public/mojom/context_menu/context_menu.mojom.h"
+#include "url/url_util.h"
 
 #if BUILDFLAG(IS_MAC)
 #include "chrome/test/base/launchservices_utils_mac.h"
@@ -38,6 +43,13 @@ using custom_handlers::ProtocolHandler;
 using custom_handlers::ProtocolHandlerRegistry;
 
 namespace {
+
+std::string EncodeUrl(const std::string& not_encoded) {
+  url::RawCanonOutputT<char> encoded;
+  url::EncodeURIComponent(not_encoded, &encoded);
+
+  return {encoded.data(), encoded.length()};
+}
 
 class ProtocolHandlerChangeWaiter : public ProtocolHandlerRegistry::Observer {
  public:
@@ -74,7 +86,7 @@ class ChromeRegisterProtocolHandlerBrowserTest : public InProcessBrowserTest {
     // We might define browser tests for other embedders, so the test's data
     // files will be shared via //componennts
     embedded_test_server()->ServeFilesFromSourceDirectory(
-        "components/test/data/");
+        "components/test/data/custom_handlers/");
   }
 
   TestRenderViewContextMenu* CreateContextMenu(GURL url) {
@@ -222,10 +234,10 @@ IN_PROC_BROWSER_TEST_F(ChromeRegisterProtocolHandlerBrowserTest,
   ASSERT_TRUE(content_settings->pending_protocol_handler().IsEmpty());
 
   // Attempt to add an entry.
-  ASSERT_TRUE(content::ExecuteScriptWithoutUserGesture(
-      web_contents,
-      "navigator.registerProtocolHandler('web+"
-      "search', 'test.html?%s', 'test');"));
+  ASSERT_TRUE(content::ExecJs(web_contents,
+                              "navigator.registerProtocolHandler('web+"
+                              "search', 'test.html?%s', 'test');",
+                              content::EXECUTE_SCRIPT_NO_USER_GESTURE));
 
   // Verify the registration is ignored if no user gesture involved.
   ASSERT_EQ(0u, registry->GetHandlersFor(url.scheme()).size());
@@ -259,9 +271,9 @@ IN_PROC_BROWSER_TEST_F(ChromeRegisterProtocolHandlerBrowserTest, FencedFrame) {
 
   // Attempt to add an entry.
   ProtocolHandlerChangeWaiter waiter(registry);
-  ASSERT_TRUE(content::ExecuteScript(fenced_frame_host,
-                                     "navigator.registerProtocolHandler('web+"
-                                     "search', 'test.html?%s', 'test');"));
+  ASSERT_TRUE(content::ExecJs(fenced_frame_host,
+                              "navigator.registerProtocolHandler('web+"
+                              "search', 'test.html?%s', 'test');"));
   waiter.Wait();
 
   // Ensure the registry is still empty.
@@ -294,7 +306,7 @@ IN_PROC_BROWSER_TEST_F(RegisterProtocolHandlerExtensionBrowserTest, Basic) {
             browser()->profile());
     ProtocolHandlerChangeWaiter waiter(registry);
     ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), GURL(handler_url)));
-    ASSERT_TRUE(content::ExecuteScript(
+    ASSERT_TRUE(content::ExecJs(
         browser()->tab_strip_model()->GetActiveWebContents(),
         "navigator.registerProtocolHandler('geo', 'test.html?%s', 'test');"));
     waiter.Wait();
@@ -315,7 +327,7 @@ class ChromeRegisterProtocolHandlerAndServiceWorkerInterceptor
     // We might define browser tests for other embedders, so the test's data
     // files will be shared via //componennts
     embedded_test_server()->ServeFilesFromSourceDirectory(
-        "components/test/data/");
+        "components/test/data/custom_handlers/");
 
     ASSERT_TRUE(embedded_test_server()->Start());
 
@@ -358,4 +370,115 @@ IN_PROC_BROWSER_TEST_F(ChromeRegisterProtocolHandlerAndServiceWorkerInterceptor,
   EXPECT_EQ(true,
             content::EvalJs(web_contents,
                             "pageWithCustomSchemeHandledByServiceWorker();"));
+}
+
+class ChromeRegisterProtocolHandlerIsolatedWebAppsTest
+    : public web_app::IsolatedWebAppBrowserTestHarness {
+ protected:
+  web_app::IsolatedWebAppUrlInfo InstallIsolatedWebApp() {
+    server_ =
+        CreateAndStartServer(FILE_PATH_LITERAL("web_apps/simple_isolated_app"));
+    web_app::IsolatedWebAppUrlInfo url_info =
+        InstallDevModeProxyIsolatedWebApp(server_->GetOrigin());
+    return url_info;
+  }
+
+ private:
+  std::unique_ptr<net::EmbeddedTestServer> server_;
+};
+
+IN_PROC_BROWSER_TEST_F(ChromeRegisterProtocolHandlerIsolatedWebAppsTest,
+                       Basic) {
+  auto url_info = InstallIsolatedWebApp();
+  Browser* browser = LaunchWebAppBrowserAndWait(url_info.app_id());
+  content::WebContents* web_contents =
+      browser->tab_strip_model()->GetActiveWebContents();
+
+  permissions::PermissionRequestManager::FromWebContents(web_contents)
+      ->set_auto_response_for_test(
+          permissions::PermissionRequestManager::ACCEPT_ALL);
+
+  GURL app_url = url_info.origin().GetURL();
+
+  struct TestCase {
+    std::string scheme;
+    std::string url;
+    bool result;
+  };
+
+  std::vector<TestCase> test_cases = {
+      // non-custom scheme, relative URL (same origin)
+      {"geo", "/protocol_handler=", true},
+      // non-custom scheme, full URL (same origin)
+      {"geo", app_url.spec() + "protocol_handler=", true},
+      // non-custom scheme, IWA URL (cross origin)
+      {"geo",
+       "isolated-app://"
+       "aerugqztij5biqquuk3mfwpsaibuegaqcitgfchwuosuofdjabzqaaic/"
+       "protocol_handler=",
+       false},
+      // non-custom scheme, HTTPS URL (cross origin)
+      {"geo", "https://www.google.com/search?q=", false},
+      //
+      // custom scheme (web+), relative URL (same origin)
+      {"web+foo", "/protocol_handler=", true},
+      // custom scheme (web+), full URL (same origin)
+      {"web+foo", app_url.spec() + "protocol_handler=", true},
+      // custom scheme (web+), IWA URL (cross origin)
+      {"web+foo",
+       "isolated-app://"
+       "aerugqztij5biqquuk3mfwpsaibuegaqcitgfchwuosuofdjabzqaaic/"
+       "protocol_handler=",
+       false},
+      // custom scheme (web+), HTTPS URL (cross origin)
+      {"web+foo", "https://www.google.com/search?q=", false},
+      //
+      // custom scheme (ext+), relative URL (same origin)
+      {"ext+foo", "/protocol_handler=", false},
+      // custom scheme (ext+), full URL (same origin)
+      {"ext+foo", app_url.spec() + "protocol_handler=", false},
+      // custom scheme (ext+), IWA URL (cross origin)
+      {"ext+foo",
+       "isolated-app://"
+       "aerugqztij5biqquuk3mfwpsaibuegaqcitgfchwuosuofdjabzqaaic/"
+       "protocol_handler=",
+       false},
+      // custom scheme (ext+), HTTPS URL (cross origin)
+      {"ext+foo3", "https://www.google.com/search?q=", false},
+  };
+
+  ProtocolHandlerRegistry* registry =
+      ProtocolHandlerRegistryFactory::GetForBrowserContext(profile());
+
+  for (const auto& test_case : test_cases) {
+    auto js = content::JsReplace("navigator.registerProtocolHandler($1, $2);",
+                                 test_case.scheme, test_case.url + "%s");
+    SCOPED_TRACE(testing::Message()
+                 << "Registering protocol handler w/ " << js);
+    registry->ClearUserDefinedHandlers(base::Time(), base::Time::Max());
+    ProtocolHandlerChangeWaiter waiter(registry);
+
+    auto result = content::ExecJs(web_contents->GetPrimaryMainFrame(), js);
+    EXPECT_EQ(result, test_case.result);
+
+    if (result) {
+      // Wait for the registration to complete and test the handler.
+      waiter.Wait();
+
+      EXPECT_TRUE(ui_test_utils::NavigateToURL(
+          this->browser(), GURL(test_case.scheme + ":test")));
+
+      std::string expected_url_string =
+          test_case.url + EncodeUrl(test_case.scheme + ":test");
+      GURL expected_url(expected_url_string);
+      // If `expected_url_string` is a relative URL, it will be resolved with
+      // `app_url` as the base URL. If `expected_url_string` is an absolute URL,
+      // it'll be returned as is.
+      expected_url = app_url.Resolve(expected_url_string);
+      EXPECT_EQ(expected_url, this->browser()
+                                  ->tab_strip_model()
+                                  ->GetActiveWebContents()
+                                  ->GetLastCommittedURL());
+    }
+  }
 }

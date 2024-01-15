@@ -13,7 +13,7 @@
 #include "remoting/protocol/desktop_capturer.h"
 
 #if defined(WEBRTC_USE_GIO)
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "third_party/webrtc/modules/desktop_capture/desktop_capture_metadata.h"
 #endif
 
@@ -52,6 +52,8 @@ class DesktopCapturerProxy : public DesktopCapturer {
   void CaptureFrame() override;
   bool GetSourceList(SourceList* sources) override;
   bool SelectSource(SourceId id) override;
+  bool SupportsFrameCallbacks() override;
+  void SetMaxFrameRate(uint32_t max_frame_rate) override;
 #if defined(WEBRTC_USE_GIO)
   void GetMetadataAsync(base::OnceCallback<void(webrtc::DesktopCaptureMetadata)>
                             callback) override;
@@ -60,6 +62,7 @@ class DesktopCapturerProxy : public DesktopCapturer {
  private:
   class Core;
 
+  void OnFrameCaptureStarting();
   void OnFrameCaptured(webrtc::DesktopCapturer::Result result,
                        std::unique_ptr<webrtc::DesktopFrame> frame);
 

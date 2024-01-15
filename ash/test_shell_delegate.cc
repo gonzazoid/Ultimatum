@@ -7,12 +7,18 @@
 #include <memory>
 #include <string>
 
+#include "ash/accelerators/test_accelerator_prefs_delegate.h"
 #include "ash/accessibility/default_accessibility_delegate.h"
+#include "ash/api/tasks/tasks_delegate.h"
+#include "ash/api/tasks/test_tasks_delegate.h"
 #include "ash/capture_mode/test_capture_mode_delegate.h"
-#include "ash/glanceables/test_glanceables_delegate.h"
-#include "ash/public/cpp/test/test_desks_templates_delegate.h"
+#include "ash/clipboard/test_support/test_clipboard_history_controller_delegate_impl.h"
+#include "ash/game_dashboard/test_game_dashboard_delegate.h"
 #include "ash/public/cpp/test/test_nearby_share_delegate.h"
+#include "ash/public/cpp/test/test_saved_desk_delegate.h"
 #include "ash/system/geolocation/test_geolocation_url_loader_factory.h"
+#include "ash/system/test_system_sounds_delegate.h"
+#include "ash/user_education/user_education_delegate.h"
 #include "ash/wm/gestures/back_gesture/test_back_gesture_contextual_nudge_delegate.h"
 #include "url/gurl.h"
 
@@ -31,10 +37,19 @@ TestShellDelegate::CreateCaptureModeDelegate() const {
   return std::make_unique<TestCaptureModeDelegate>();
 }
 
-std::unique_ptr<GlanceablesDelegate>
-TestShellDelegate::CreateGlanceablesDelegate(
-    GlanceablesController* controller) const {
-  return std::make_unique<TestGlanceablesDelegate>();
+std::unique_ptr<ClipboardHistoryControllerDelegate>
+TestShellDelegate::CreateClipboardHistoryControllerDelegate() const {
+  return std::make_unique<TestClipboardHistoryControllerDelegateImpl>();
+}
+
+std::unique_ptr<GameDashboardDelegate>
+TestShellDelegate::CreateGameDashboardDelegate() const {
+  return std::make_unique<TestGameDashboardDelegate>();
+}
+
+std::unique_ptr<AcceleratorPrefsDelegate>
+TestShellDelegate::CreateAcceleratorPrefsDelegate() const {
+  return std::make_unique<TestAcceleratorPrefsDelegate>();
 }
 
 AccessibilityDelegate* TestShellDelegate::CreateAccessibilityDelegate() {
@@ -47,15 +62,37 @@ TestShellDelegate::CreateBackGestureContextualNudgeDelegate(
   return std::make_unique<TestBackGestureContextualNudgeDelegate>(controller);
 }
 
+std::unique_ptr<MediaNotificationProvider>
+TestShellDelegate::CreateMediaNotificationProvider() {
+  return nullptr;
+}
+
 std::unique_ptr<NearbyShareDelegate>
 TestShellDelegate::CreateNearbyShareDelegate(
     NearbyShareController* controller) const {
   return std::make_unique<TestNearbyShareDelegate>();
 }
 
-std::unique_ptr<DesksTemplatesDelegate>
-TestShellDelegate::CreateDesksTemplatesDelegate() const {
-  return std::make_unique<TestDesksTemplatesDelegate>();
+std::unique_ptr<SavedDeskDelegate> TestShellDelegate::CreateSavedDeskDelegate()
+    const {
+  return std::make_unique<TestSavedDeskDelegate>();
+}
+
+std::unique_ptr<SystemSoundsDelegate>
+TestShellDelegate::CreateSystemSoundsDelegate() const {
+  return std::make_unique<TestSystemSoundsDelegate>();
+}
+
+std::unique_ptr<api::TasksDelegate> TestShellDelegate::CreateTasksDelegate()
+    const {
+  return std::make_unique<api::TestTasksDelegate>();
+}
+
+std::unique_ptr<UserEducationDelegate>
+TestShellDelegate::CreateUserEducationDelegate() const {
+  return user_education_delegate_factory_
+             ? user_education_delegate_factory_.Run()
+             : nullptr;
 }
 
 scoped_refptr<network::SharedURLLoaderFactory>

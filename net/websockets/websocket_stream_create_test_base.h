@@ -10,9 +10,12 @@
 #include <utility>
 #include <vector>
 
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/timer/timer.h"
+#include "net/base/auth.h"
+#include "net/base/net_errors.h"
 #include "net/socket/socket_test_util.h"
 #include "net/ssl/ssl_info.h"
 #include "net/test/test_with_task_environment.h"
@@ -22,11 +25,20 @@
 
 class GURL;
 
+namespace base {
+class OneShotTimer;
+}  // namespace base
+
+namespace url {
+class Origin;
+}  // namespace url
+
 namespace net {
 
 class HttpRequestHeaders;
 class HttpResponseHeaders;
 class IsolationInfo;
+class SiteForCookies;
 class URLRequest;
 class WebSocketStream;
 class WebSocketStreamRequest;
@@ -51,6 +63,7 @@ class WebSocketStreamCreateTestBase : public WithTaskEnvironment {
                               const std::vector<std::string>& sub_protocols,
                               const url::Origin& origin,
                               const SiteForCookies& site_for_cookies,
+                              bool has_storage_access,
                               const IsolationInfo& isolation_info,
                               const HttpRequestHeaders& additional_headers,
                               std::unique_ptr<base::OneShotTimer> timer);
@@ -90,7 +103,7 @@ class WebSocketStreamCreateTestBase : public WithTaskEnvironment {
       ssl_error_callbacks_;
   SSLInfo ssl_info_;
   bool ssl_fatal_ = false;
-  raw_ptr<URLRequest> url_request_ = nullptr;
+  raw_ptr<URLRequest, AcrossTasksDanglingUntriaged> url_request_ = nullptr;
   AuthChallengeInfo auth_challenge_info_;
   base::OnceCallback<void(const AuthCredentials*)> on_auth_required_callback_;
 

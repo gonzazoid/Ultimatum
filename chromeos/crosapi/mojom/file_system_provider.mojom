@@ -6,6 +6,7 @@ module crosapi.mojom;
 
 import "mojo/public/mojom/base/file_path.mojom";
 import "mojo/public/mojom/base/values.mojom";
+import "ui/gfx/image/mojom/image.mojom";
 
 // A file system is uniquely identified by an opaque string (consisting of at
 // least the extension id + profile unique identifier) and a file_system_id.
@@ -119,11 +120,18 @@ enum FSPOperationResponse {
   kGenericFailure,
 };
 
+[Stable, Extensible]
+enum FSPForwardResult {
+  [Default] kUnknown,
+  kSuccess,
+  kInternalError,
+  kNoListener,
+};
+
 // Implemented by Lacros.
 [Stable, Uuid="8cbcf151-c189-4fe9-90ff-892c7f5637a9"]
 interface FileSystemProvider {
-  // Allows Ash file system to forward an operation to Lacros extension
-  // providers.
+  // Allows Ash to forward requests to Lacros extension providers.
   // We use mojo_base.mojom.Value as the type because:
   //   * The extension API is stable.
   //   * Both the supplier and consumer of this information uses a type
@@ -149,6 +157,23 @@ interface FileSystemProvider {
   ForwardOperation@2(
       string provider, int32 histogram_value, string event_name,
       mojo_base.mojom.ListValue args) => (bool delivery_failure);
+  // Same as ForwardOperation, but exposes request metadata uniquely identifying
+  // a request. A request is uniquely identified by a tuple of:
+  // - |provider|, |file_system_id|, |request_id|: for requests addressed to a
+  //   specific file system instance.
+  // - |provider|, |request_id|: for requests addressed to a provider in general
+  //   (e.g. a request to mount a new filesystem). In this case,
+  //   |file_system_id| will be null.
+  [MinVersion=4]
+  ForwardRequest@3(
+      string provider, string? file_system_id, int64 request_id,
+      int32 histogram_value, string event_name,
+      mojo_base.mojom.ListValue args) => (FSPForwardResult result);
+  // Signal to Lacros that Ash cancelled a request uniquely identified by
+  // given parameters.
+  [MinVersion=4]
+  CancelRequest@4(
+      string provider, string? file_system_id, int64 request_id);
 };
 
 // Implemented by Ash. Extensions in Lacros can register themselves as file
@@ -210,10 +235,29 @@ interface FileSystemProviderService {
       FileSystemId file_system_id, int64 request_id,
       mojo_base.mojom.ListValue args) => (string error);
 
+  // The following function represents responses from the Extension after
+  // handling a mount request. As opposed to `OperationFinished`, these
+  // requests are handled per-provider instead of per provided file system
+  // (no `FileSystemId).
+  // |request_id| corresponds to ids passed in via methods on interface
+  // FileSystemProvider.
+  [MinVersion=4]
+  MountFinished@10(string extension_id, int64 request_id,
+      mojo_base.mojom.ListValue args) => (string error);
+
   // Called by Lacros when a filesystem providing extension is loaded.
   [MinVersion=2]
-  ExtensionLoaded@7(bool configurable, bool watchable, bool multiple_mounts,
+  ExtensionLoadedDeprecated@7(
+      bool configurable, bool watchable, bool multiple_mounts,
       FileSystemSource source, string extension_name, string extension_id);
+
+  // Called by Lacros when a filesystem providing extension is loaded. This
+  // version passes the extension's icons to use in the file browser.
+  [MinVersion=5]
+  ExtensionLoaded@11(
+      bool configurable, bool watchable, bool multiple_mounts,
+      FileSystemSource source, string extension_name, string extension_id,
+      gfx.mojom.ImageSkia? icon16x16, gfx.mojom.ImageSkia? icon32x32);
 
   // Called by Lacros when a filesystem providing extension is unloaded.
   [MinVersion=2]

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors
+// Copyright 2023 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,23 +25,16 @@ import org.chromium.base.ActivityState;
 import org.chromium.base.ApplicationStatus;
 import org.chromium.base.test.BaseRobolectricTestRunner;
 
-/**
- *  Tests for JankActivityTracker.
- */
+/** Tests for JankActivityTracker. */
 @RunWith(BaseRobolectricTestRunner.class)
 public class JankActivityTrackerTest {
+    @Mock private Activity mActivity;
 
-    @Mock
-    private Activity mActivity;
+    @Mock private Window mWindow;
 
-    @Mock
-    private Window mWindow;
+    @Mock private FrameMetricsListener mFrameMetricsListener;
 
-    @Mock
-    private FrameMetricsListener mFrameMetricsListener;
-
-    @Mock
-    private JankReportingScheduler mJankReportingScheduler;
+    @Mock private JankReportingScheduler mJankReportingScheduler;
 
     JankActivityTracker createJankActivityTracker(Activity activity) {
         JankActivityTracker tracker =
@@ -118,7 +111,8 @@ public class JankActivityTrackerTest {
 
         // When an activity stops we stop reporting periodic metrics.
         InOrder schedulerOrderVerifier = Mockito.inOrder(mJankReportingScheduler);
-        schedulerOrderVerifier.verify(mJankReportingScheduler, atLeastOnce())
+        schedulerOrderVerifier
+                .verify(mJankReportingScheduler, atLeastOnce())
                 .startReportingPeriodicMetrics();
         schedulerOrderVerifier.verify(mJankReportingScheduler).stopReportingPeriodicMetrics();
     }
@@ -136,7 +130,7 @@ public class JankActivityTrackerTest {
         // Periodic metric reporting should be enabled.
         verify(mJankReportingScheduler).startReportingPeriodicMetrics();
         // Metric recording should be enabled.
-        verify(mFrameMetricsListener).setIsListenerRecording(true);
+        verify(mFrameMetricsListener, atLeastOnce()).setIsListenerRecording(true);
     }
 
     @Test
@@ -152,6 +146,7 @@ public class JankActivityTrackerTest {
         // Reporting task should be running and looping.
         verify(mJankReportingScheduler).startReportingPeriodicMetrics();
         // Metric recording should be enabled.
-        verify(mFrameMetricsListener).setIsListenerRecording(true);
+        verify(mFrameMetricsListener, atLeastOnce()).setIsListenerRecording(true);
+        verify(mFrameMetricsListener, atLeastOnce()).setIsListenerRecording(false);
     }
 }

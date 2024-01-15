@@ -53,6 +53,7 @@ export function createIceCandidateGrid(peerConnectionElement) {
   appendChildWithText(tableHeader, 'th',
       'STUN requests received / responses sent');
   appendChildWithText(tableHeader, 'th', 'RTT');
+  appendChildWithText(tableHeader, 'th', 'Last data sent / received');
   appendChildWithText(tableHeader, 'th', 'Last update');
 
   peerConnectionElement.appendChild(container);
@@ -71,7 +72,7 @@ function findOrCreateGridRow(peerConnectionElementId, statId, type) {
   if (!row) {
     row = document.createElement('tr');
     row.id = elementId;
-    for (let i = 0; i < 11; i++) {
+    for (let i = 0; i < 12; i++) {
       row.appendChild(document.createElement('td'));
     }
     $('grid-' + peerConnectionElementId).appendChild(row);
@@ -109,7 +110,14 @@ function appendRow(peerConnectionElement, active, candidatePair, stats) {
   pairRow.children[9].innerText =
     candidatePair.currentRoundTripTime !== undefined ?
         candidatePair.currentRoundTripTime + 's' : '';
-  pairRow.children[10].innerText = (new Date()).toLocaleTimeString();
+  if (candidatePair.lastPacketSentTimestamp) {
+    pairRow.children[10].innerText =
+      (new Date(candidatePair.lastPacketSentTimestamp))
+        .toLocaleTimeString() + ' / ' +
+      (new Date(candidatePair.lastPacketReceivedTimestamp))
+        .toLocaleTimeString();
+  }
+  pairRow.children[11].innerText = (new Date()).toLocaleTimeString();
 
   // Local candidate.
   const localRow = findOrCreateGridRow(peerConnectionElement.id,
@@ -118,23 +126,38 @@ function appendRow(peerConnectionElement, active, candidatePair, stats) {
   const localCandidate = stats.get(candidatePair.localCandidateId);
   ['id', 'type', 'address', 'port', 'candidateType',
       'priority'].forEach((stat, index) => {
-    // Relay protocol is only set for local relay candidates.
+    // `relayProtocol` is only set for local relay candidates.
     if (stat == 'candidateType' && localCandidate.relayProtocol) {
       localRow.children[index].innerText = localCandidate[stat] +
           '(' + localCandidate.relayProtocol + ')';
+      if (localCandidate.url) {
+        localRow.children[index].innerText += '\n' + localCandidate.url;
+      }
     } else if (stat === 'priority') {
-      localRow.children[index].innerText = '0x' +
-          parseInt(localCandidate[stat], 10).toString(16);
+      const priority = parseInt(localCandidate[stat], 10) & 0xFFFFFFFF;
+      localRow.children[index].innerText = '0x' + priority.toString(16) +
+          // RFC 5245 - 4.1.2.1.
+          // priority = (2^24)*(type preference) +
+          //            (2^8)*(local preference) +
+          //            (2^0)*(256 - component ID)
+          '\n' + (priority >> 24) +
+          ' | ' + ((priority >> 8) & 0xFFFF) +
+          ' | ' + (priority & 0xFF);
+    } else if (stat === 'address') {
+      localRow.children[index].innerText = localCandidate[stat] || '(not set)';
     } else {
       localRow.children[index].innerText = localCandidate[stat];
     }
   });
-  // Network type is only for the local candidate
-  // so put it into the pair row above the address.
+  // `networkType` is only known for the local candidate so put it into the
+  // pair row above the address. Also highlight VPN adapters.
   pairRow.children[2].innerText = localCandidate.networkType;
-  // protocol must always be the same for the pair
+  if (localCandidate['vpn'] === true) {
+    pairRow.children[2].innerText += ' (VPN)';
+  }
+  // `protocol` must always be the same for the pair
   // so put it into the pair row above the candidate type.
-  // Add tcpType for local candidates.
+  // Add `tcpType` for local candidates.
   pairRow.children[4].innerText = localCandidate.protocol;
   if (localCandidate.tcpType) {
     pairRow.children[4].innerText += ' ' + localCandidate.tcpType;
@@ -150,6 +173,9 @@ function appendRow(peerConnectionElement, active, candidatePair, stats) {
     if (stat === 'priority') {
       remoteRow.children[index].innerText = '0x' +
           parseInt(remoteCandidate[stat], 10).toString(16);
+    } else if (stat === 'address') {
+      remoteRow.children[index].innerText = remoteCandidate[stat] ||
+          '(not set)';
     } else {
       remoteRow.children[index].innerText = remoteCandidate[stat];
     }

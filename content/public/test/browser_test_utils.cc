@@ -12,15 +12,15 @@
 #include <tuple>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
 #include "base/containers/contains.h"
 #include "base/files/file_util.h"
-#include "base/guid.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/json/json_reader.h"
 #include "base/no_destructor.h"
 #include "base/process/kill.h"
+#include "base/ranges/algorithm.h"
 #include "base/run_loop.h"
 #include "base/strings/pattern.h"
 #include "base/strings/strcat.h"
@@ -29,12 +29,14 @@
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/synchronization/waitable_event.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/bind.h"
 #include "base/test/test_future.h"
 #include "base/test/test_switches.h"
 #include "base/test/test_timeouts.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/trace_event/typed_macros.h"
+#include "base/types/optional_util.h"
+#include "base/uuid.h"
 #include "base/values.h"
 #include "build/build_config.h"
 #include "cc/test/pixel_test_utils.h"
@@ -45,7 +47,6 @@
 #include "content/browser/file_system_access/file_system_access_manager_impl.h"
 #include "content/browser/renderer_host/cross_process_frame_connector.h"
 #include "content/browser/renderer_host/frame_tree_node.h"
-#include "content/browser/renderer_host/input/synthetic_touchscreen_pinch_gesture.h"
 #include "content/browser/renderer_host/navigation_request.h"
 #include "content/browser/renderer_host/render_frame_host_impl.h"
 #include "content/browser/renderer_host/render_frame_metadata_provider_impl.h"
@@ -59,6 +60,7 @@
 #include "content/browser/web_contents/web_contents_impl.h"
 #include "content/browser/web_contents/web_contents_view.h"
 #include "content/common/frame.mojom.h"
+#include "content/common/input/synthetic_touchscreen_pinch_gesture.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
@@ -68,8 +70,6 @@
 #include "content/public/browser/navigation_handle.h"
 #include "content/public/browser/navigation_throttle.h"
 #include "content/public/browser/network_service_instance.h"
-#include "content/public/browser/notification_service.h"
-#include "content/public/browser/notification_types.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/render_process_host.h"
 #include "content/public/browser/render_view_host.h"
@@ -102,7 +102,6 @@
 #include "net/filter/gzip_header.h"
 #include "net/filter/gzip_source_stream.h"
 #include "net/filter/mock_source_stream.h"
-#include "net/first_party_sets/same_party_context.h"
 #include "net/test/embedded_test_server/embedded_test_server.h"
 #include "net/test/embedded_test_server/http_request.h"
 #include "net/test/embedded_test_server/http_response.h"
@@ -135,7 +134,10 @@
 #include "ui/events/keycodes/dom/keycode_converter.h"
 #include "ui/gfx/geometry/point_f.h"
 #include "ui/latency/latency_info.h"
-#include "ui/resources/grit/webui_generated_resources.h"
+
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+#include "ash/webui/grit/ash_webui_common_resources.h"
+#endif
 
 #if BUILDFLAG(IS_WIN)
 #include <combaseapi.h>
@@ -158,85 +160,6 @@
 namespace content {
 namespace {
 
-// Executes the passed |script| in the frame specified by |render_frame_host|.
-// If |result| is not NULL, stores the value that the evaluation of the script
-// in |result|.  Returns true on success.
-[[nodiscard]] bool ExecuteScriptHelper(RenderFrameHost* render_frame_host,
-                                       const std::string& script,
-                                       bool user_gesture,
-                                       int32_t world_id,
-                                       std::unique_ptr<base::Value>* result) {
-  // TODO(lukasza): Only get messages from the specific |render_frame_host|.
-  DOMMessageQueue dom_message_queue(render_frame_host);
-
-  std::u16string script16 = base::UTF8ToUTF16(script);
-  if (world_id == ISOLATED_WORLD_ID_GLOBAL && user_gesture) {
-    // Prerendering pages will never have user gesture.
-    CHECK(render_frame_host->GetLifecycleState() !=
-          RenderFrameHost::LifecycleState::kPrerendering);
-    render_frame_host->ExecuteJavaScriptWithUserGestureForTests(
-        script16, base::NullCallback(), world_id);
-  } else {
-    // Note that |user_gesture| here is ignored when the world is not main. We
-    // allow a value of |true| because it's the default, but in blink, the
-    // execution will occur with no user gesture.
-    render_frame_host->ExecuteJavaScriptForTests(script16, base::NullCallback(),
-                                                 world_id);
-  }
-
-  std::string json;
-  if (!dom_message_queue.WaitForMessage(&json)) {
-    DLOG(ERROR) << "Cannot communicate with DOMMessageQueue.";
-    return false;
-  }
-
-  // Nothing more to do for callers that ignore the returned JS value.
-  if (!result)
-    return true;
-
-  auto parsed_json = base::JSONReader::ReadAndReturnValueWithError(
-      json, base::JSON_ALLOW_TRAILING_COMMAS);
-  if (!parsed_json.has_value()) {
-    *result = nullptr;
-    DLOG(ERROR) << parsed_json.error().message;
-    return false;
-  }
-  *result = base::Value::ToUniquePtrValue(std::move(*parsed_json));
-
-  return true;
-}
-
-bool ExecuteScriptWithUserGestureControl(RenderFrameHost* frame,
-                                         const std::string& script,
-                                         bool user_gesture) {
-  // TODO(lukasza): ExecuteScript should just call
-  // ExecuteJavaScriptWithUserGestureForTests and avoid modifying the original
-  // script (and at that point we should merge it with and remove
-  // ExecuteScriptAsync).  This is difficult to change, because many tests
-  // depend on the message loop pumping done by ExecuteScriptHelper below (this
-  // is fragile - these tests should wait on a more specific thing instead).
-
-  // TODO(nick): This function can't be replaced with a call to ExecJs(), since
-  // ExecJs calls eval() which might be blocked by the page's CSP.
-  std::string expected_response = "ExecuteScript-" + base::GenerateGUID();
-  std::string new_script = base::StringPrintf(
-      R"( %s;  // Original script.
-          window.domAutomationController.send('%s'); )",
-      script.c_str(), expected_response.c_str());
-
-  std::unique_ptr<base::Value> value;
-  if (!ExecuteScriptHelper(frame, new_script, user_gesture,
-                           ISOLATED_WORLD_ID_GLOBAL, &value) ||
-      !value.get()) {
-    return false;
-  }
-
-  DCHECK_EQ(base::Value::Type::STRING, value->type());
-  if (value->is_string())
-    DCHECK_EQ(expected_response, value->GetString());
-  return true;
-}
-
 void BuildSimpleWebKeyEvent(blink::WebInputEvent::Type type,
                             ui::DomKey key,
                             ui::DomCode code,
@@ -247,7 +170,7 @@ void BuildSimpleWebKeyEvent(blink::WebInputEvent::Type type,
   event->native_key_code = ui::KeycodeConverter::DomCodeToNativeKeycode(code);
   event->windows_key_code = key_code;
   event->is_system_key = false;
-  event->skip_in_browser = true;
+  event->skip_if_unhandled = true;
 
   if (type == blink::WebInputEvent::Type::kChar ||
       type == blink::WebInputEvent::Type::kRawKeyDown) {
@@ -518,13 +441,12 @@ void AppendGzippedResource(const base::RefCountedMemory& encoded,
 // no-video-input-devices otherwise.
 const char kHasVideoInputDeviceOnSystem[] = R"(
     (function() {
-      navigator.mediaDevices.enumerateDevices()
+      return navigator.mediaDevices.enumerateDevices()
       .then(function(devices) {
         if (devices.some((device) => device.kind == 'videoinput')) {
-          window.domAutomationController.send('has-video-input-device');
-        } else {
-          window.domAutomationController.send('no-video-input-devices');
+          return 'has-video-input-device';
         }
+        return 'no-video-input-devices';
       });
     })()
 )";
@@ -714,11 +636,15 @@ bool NavigateToURLFromRendererWithoutUserGesture(
 
 bool BeginNavigateToURLFromRenderer(const ToRenderFrameHost& adapter,
                                     const GURL& url) {
-  return ExecJs(adapter, JsReplace("location = $1", url));
+  ExecuteScriptAsync(adapter, JsReplace("location = $1", url));
+  DidStartNavigationObserver observer(
+      WebContents::FromRenderFrameHost(adapter.render_frame_host()));
+  observer.Wait();
+  return observer.observed();
 }
 
 bool NavigateIframeToURL(WebContents* web_contents,
-                         const std::string& iframe_id,
+                         base::StringPiece iframe_id,
                          const GURL& url) {
   TestNavigationObserver load_observer(web_contents);
   bool result = BeginNavigateIframeToURL(web_contents, iframe_id, url);
@@ -727,14 +653,12 @@ bool NavigateIframeToURL(WebContents* web_contents,
 }
 
 bool BeginNavigateIframeToURL(WebContents* web_contents,
-                              const std::string& iframe_id,
+                              base::StringPiece iframe_id,
                               const GURL& url) {
-  std::string script = base::StringPrintf(
-      "setTimeout(\""
-      "var iframes = document.getElementById('%s');iframes.src='%s';"
-      "\",0)",
-      iframe_id.c_str(), url.spec().c_str());
-  return ExecuteScriptWithoutUserGesture(web_contents, script);
+  std::string script =
+      base::StrCat({"setTimeout(\"var iframes = document.getElementById('",
+                    iframe_id, "');iframes.src='", url.spec(), "';\",0)"});
+  return ExecJs(web_contents, script, EXECUTE_SCRIPT_NO_USER_GESTURE);
 }
 
 void NavigateToURLBlockUntilNavigationsComplete(
@@ -774,7 +698,7 @@ void NavigateToURLBlockUntilNavigationsComplete(
 }
 
 GURL GetFileUrlWithQuery(const base::FilePath& path,
-                         const std::string& query_string) {
+                         base::StringPiece query_string) {
   GURL url = net::FilePathToFileURL(path);
   if (!query_string.empty()) {
     GURL::Replacements replacements;
@@ -853,21 +777,12 @@ void WaitForLoadStopWithoutSuccessCheck(WebContents* web_contents) {
   // In many cases, the load may have finished before we get here.  Only wait if
   // the tab still has a pending navigation.
   if (web_contents->IsLoading()) {
-    WindowedNotificationObserver load_stop_observer(
-        NOTIFICATION_LOAD_STOP,
-        Source<NavigationController>(&web_contents->GetController()));
+    LoadStopObserver load_stop_observer(web_contents);
     load_stop_observer.Wait();
   }
 }
 
-bool WaitForLoadStop(WebContents* web_contents) {
-  TRACE_EVENT0("test", "content::WaitForLoadStop");
-  WebContentsDestroyedWatcher watcher(web_contents);
-  WaitForLoadStopWithoutSuccessCheck(web_contents);
-  if (watcher.IsDestroyed()) {
-    LOG(ERROR) << "WebContents was destroyed during waiting for load stop.";
-    return false;
-  }
+bool IsLastCommittedPageNormal(WebContents* web_contents) {
   bool is_page_normal =
       IsLastCommittedEntryOfPageType(web_contents, PAGE_TYPE_NORMAL);
   if (!is_page_normal) {
@@ -881,6 +796,30 @@ bool WaitForLoadStop(WebContents* web_contents) {
     }
   }
   return is_page_normal;
+}
+
+bool WaitForLoadStop(WebContents* web_contents) {
+  TRACE_EVENT0("test", "content::WaitForLoadStop");
+  WebContentsDestroyedWatcher watcher(web_contents);
+  WaitForLoadStopWithoutSuccessCheck(web_contents);
+  if (watcher.IsDestroyed()) {
+    LOG(ERROR) << "WebContents was destroyed during waiting for load stop.";
+    return false;
+  }
+  return IsLastCommittedPageNormal(web_contents);
+}
+
+bool WaitForNavigationFinished(WebContents* web_contents,
+                               TestNavigationObserver& observer) {
+  TRACE_EVENT0("test", "content::WaitForNavigationFinished");
+  WebContentsDestroyedWatcher watcher(web_contents);
+  observer.WaitForNavigationFinished();
+  if (watcher.IsDestroyed()) {
+    LOG(ERROR)
+        << "WebContents was destroyed during waiting for navigation finished.";
+    return false;
+  }
+  return IsLastCommittedPageNormal(web_contents);
 }
 
 void PrepContentsForBeforeUnloadTest(WebContents* web_contents,
@@ -1009,27 +948,27 @@ void SimulateMouseClickAt(WebContents* web_contents,
 }
 
 gfx::PointF GetCenterCoordinatesOfElementWithId(
-    content::WebContents* web_contents,
-    const std::string& id) {
-  float x = EvalJs(web_contents,
-                   JsReplace("const bounds = "
-                             "document.getElementById($1)."
-                             "getBoundingClientRect();"
-                             "Math.floor(bounds.left + bounds.width / 2)",
-                             id))
-                .ExtractDouble();
-  float y = EvalJs(web_contents,
-                   JsReplace("const bounds = "
-                             "document.getElementById($1)."
-                             "getBoundingClientRect();"
-                             "Math.floor(bounds.top + bounds.height / 2)",
-                             id))
-                .ExtractDouble();
+    const ToRenderFrameHost& adapter,
+    base::StringPiece id) {
+  float x =
+      EvalJs(adapter, JsReplace("const bounds = "
+                                "document.getElementById($1)."
+                                "getBoundingClientRect();"
+                                "Math.floor(bounds.left + bounds.width / 2)",
+                                id))
+          .ExtractDouble();
+  float y =
+      EvalJs(adapter, JsReplace("const bounds = "
+                                "document.getElementById($1)."
+                                "getBoundingClientRect();"
+                                "Math.floor(bounds.top + bounds.height / 2)",
+                                id))
+          .ExtractDouble();
   return gfx::PointF(x, y);
 }
 
 void SimulateMouseClickOrTapElementWithId(content::WebContents* web_contents,
-                                          const std::string& id) {
+                                          base::StringPiece id) {
   gfx::Point point = gfx::ToFlooredPoint(
       GetCenterCoordinatesOfElementWithId(web_contents, id));
 
@@ -1086,7 +1025,7 @@ void SimulateMouseWheelEvent(WebContents* web_contents,
 }
 
 #if !BUILDFLAG(IS_MAC)
-void SimulateMouseWheelCtrlZoomEvent(WebContents* web_contents,
+void SimulateMouseWheelCtrlZoomEvent(RenderWidgetHost* render_widget_host,
                                      const gfx::Point& point,
                                      bool zoom_in,
                                      blink::WebMouseWheelEvent::Phase phase) {
@@ -1100,8 +1039,8 @@ void SimulateMouseWheelCtrlZoomEvent(WebContents* web_contents,
       (zoom_in ? 1.0 : -1.0) * ui::MouseWheelEvent::kWheelDelta;
   wheel_event.wheel_ticks_y = (zoom_in ? 1.0 : -1.0);
   wheel_event.phase = phase;
-  RenderWidgetHostImpl* widget_host = RenderWidgetHostImpl::From(
-      web_contents->GetPrimaryMainFrame()->GetRenderViewHost()->GetWidget());
+  RenderWidgetHostImpl* widget_host =
+      RenderWidgetHostImpl::From(render_widget_host);
   widget_host->ForwardWheelEvent(wheel_event);
 }
 
@@ -1420,10 +1359,8 @@ void ScopedSimulateModifierKeyPress::KeyPressWithoutChar(
 }
 
 bool IsWebcamAvailableOnSystem(WebContents* web_contents) {
-  std::string result;
-  EXPECT_TRUE(ExecuteScriptAndExtractString(
-      web_contents, kHasVideoInputDeviceOnSystem, &result));
-  return result == kHasVideoInputDevice;
+  return EvalJs(web_contents, kHasVideoInputDeviceOnSystem).ExtractString() ==
+         kHasVideoInputDevice;
 }
 
 RenderFrameHost* ConvertToRenderFrameHost(WebContents* web_contents) {
@@ -1434,23 +1371,8 @@ RenderFrameHost* ConvertToRenderFrameHost(RenderFrameHost* render_frame_host) {
   return render_frame_host;
 }
 
-bool ExecuteScript(const ToRenderFrameHost& adapter,
-                   const std::string& script) {
-  // Prerendering pages will never have user gesture.
-  bool user_gesture = adapter.render_frame_host()->GetLifecycleState() !=
-                      RenderFrameHost::LifecycleState::kPrerendering;
-  return ExecuteScriptWithUserGestureControl(adapter.render_frame_host(),
-                                             script, user_gesture);
-}
-
-bool ExecuteScriptWithoutUserGesture(const ToRenderFrameHost& adapter,
-                                     const std::string& script) {
-  return ExecuteScriptWithUserGestureControl(adapter.render_frame_host(),
-                                             script, false);
-}
-
 void ExecuteScriptAsync(const ToRenderFrameHost& adapter,
-                        const std::string& script) {
+                        base::StringPiece script) {
   // Prerendering pages will never have user gesture.
   if (adapter.render_frame_host()->GetLifecycleState() ==
       RenderFrameHost::LifecycleState::kPrerendering) {
@@ -1462,117 +1384,13 @@ void ExecuteScriptAsync(const ToRenderFrameHost& adapter,
 }
 
 void ExecuteScriptAsyncWithoutUserGesture(const ToRenderFrameHost& adapter,
-                                          const std::string& script) {
+                                          base::StringPiece script) {
   adapter.render_frame_host()->ExecuteJavaScriptForTests(
       base::UTF8ToUTF16(script), base::NullCallback());
 }
 
-bool ExecuteScriptAndExtractDouble(const ToRenderFrameHost& adapter,
-                                   const std::string& script, double* result) {
-  DCHECK(result);
-  std::unique_ptr<base::Value> value;
-  // Prerendering pages will never have user gesture.
-  bool user_gesture = adapter.render_frame_host()->GetLifecycleState() !=
-                      RenderFrameHost::LifecycleState::kPrerendering;
-  if (!ExecuteScriptHelper(adapter.render_frame_host(), script, user_gesture,
-                           ISOLATED_WORLD_ID_GLOBAL, &value))
-    return false;
-  if (!value)
-    return false;
-  absl::optional<double> maybe_value = value->GetIfDouble();
-  if (!maybe_value.has_value())
-    return false;
-
-  *result = maybe_value.value();
-  return true;
-}
-
-bool ExecuteScriptAndExtractInt(const ToRenderFrameHost& adapter,
-                                const std::string& script, int* result) {
-  DCHECK(result);
-  std::unique_ptr<base::Value> value;
-  // Prerendering pages will never have user gesture.
-  bool user_gesture = adapter.render_frame_host()->GetLifecycleState() !=
-                      RenderFrameHost::LifecycleState::kPrerendering;
-  if (ExecuteScriptHelper(adapter.render_frame_host(), script, user_gesture,
-                          ISOLATED_WORLD_ID_GLOBAL, &value) &&
-      value && value->is_int() && result) {
-    *result = value->GetInt();
-    return true;
-  }
-  return false;
-}
-
-bool ExecuteScriptAndExtractBool(const ToRenderFrameHost& adapter,
-                                 const std::string& script, bool* result) {
-  DCHECK(result);
-  std::unique_ptr<base::Value> value;
-  // Prerendering pages will never have user gesture.
-  bool user_gesture = adapter.render_frame_host()->GetLifecycleState() !=
-                      RenderFrameHost::LifecycleState::kPrerendering;
-  if (ExecuteScriptHelper(adapter.render_frame_host(), script, user_gesture,
-                          ISOLATED_WORLD_ID_GLOBAL, &value) &&
-      value && value->is_bool()) {
-    *result = value->GetBool();
-    return true;
-  }
-  return false;
-}
-
-bool ExecuteScriptAndExtractString(const ToRenderFrameHost& adapter,
-                                   const std::string& script,
-                                   std::string* result) {
-  DCHECK(result);
-  std::unique_ptr<base::Value> value;
-  // Prerendering pages will never have user gesture.
-  bool user_gesture = adapter.render_frame_host()->GetLifecycleState() !=
-                      RenderFrameHost::LifecycleState::kPrerendering;
-  if (!ExecuteScriptHelper(adapter.render_frame_host(), script, user_gesture,
-                           ISOLATED_WORLD_ID_GLOBAL, &value)) {
-    return false;
-  }
-  if (value && value->is_string()) {
-    *result = value->GetString();
-    return true;
-  }
-  return false;
-}
-
-bool ExecuteScriptWithoutUserGestureAndExtractBool(
-    const ToRenderFrameHost& adapter,
-    const std::string& script,
-    bool* result) {
-  DCHECK(result);
-  std::unique_ptr<base::Value> value;
-  if (ExecuteScriptHelper(adapter.render_frame_host(), script, false,
-                          ISOLATED_WORLD_ID_GLOBAL, &value) &&
-      value && value->is_bool()) {
-    *result = value->GetBool();
-    return true;
-  }
-  return false;
-}
-
-bool ExecuteScriptWithoutUserGestureAndExtractString(
-    const ToRenderFrameHost& adapter,
-    const std::string& script,
-    std::string* result) {
-  DCHECK(result);
-  std::unique_ptr<base::Value> value;
-  if (!ExecuteScriptHelper(adapter.render_frame_host(), script, false,
-                           ISOLATED_WORLD_ID_GLOBAL, &value)) {
-    return false;
-  }
-
-  if (value && value->is_string()) {
-    *result = value->GetString();
-    return true;
-  }
-  return false;
-}
-
 // EvalJsResult methods.
-EvalJsResult::EvalJsResult(base::Value value, const std::string& error)
+EvalJsResult::EvalJsResult(base::Value value, base::StringPiece error)
     : value(error.empty() ? std::move(value) : base::Value()), error(error) {}
 
 EvalJsResult::EvalJsResult(const EvalJsResult& other)
@@ -1638,7 +1456,7 @@ namespace {
 // Parse a JS stack trace out of |js_error|, detect frames that match
 // |source_name|, and interleave the appropriate lines of source code from
 // |source| into the error report. This is meant to be useful for scripts that
-// are passed to ExecuteScript functions, and hence dynamically generated.
+// are passed to ExecJs/EvalJs functions, and hence dynamically generated.
 //
 // An adjustment of |column_adjustment_for_line_one| characters is subtracted
 // when mapping positions from line 1 of |source|. This is to offset the effect
@@ -1646,9 +1464,9 @@ namespace {
 //
 // TODO(nick): Elide snippets to 80 chars, since it is common for sources to not
 // include newlines.
-std::string AnnotateAndAdjustJsStackTraces(const std::string& js_error,
+std::string AnnotateAndAdjustJsStackTraces(base::StringPiece js_error,
                                            std::string source_name,
-                                           const std::string& source,
+                                           base::StringPiece source,
                                            int column_adjustment_for_line_one) {
   // Escape wildcards in |source_name| for use in MatchPattern.
   base::ReplaceChars(source_name, "\\", "\\\\", &source_name);
@@ -1770,21 +1588,21 @@ class ExecuteJavaScriptForTestsWaiter : public WebContentsObserver {
         status == base::TERMINATION_STATUS_STILL_RUNNING) {
       return;
     }
-    RendererTerminated();
+    UpdateAfterScriptFailed("Renderer terminated.");
   }
   void RenderFrameDeleted(RenderFrameHost* render_frame_host) override {
     if (render_frame_host_ != render_frame_host)
       return;
-    RendererTerminated();
+    UpdateAfterScriptFailed("RenderFrame deleted.");
   }
 
  private:
-  void RendererTerminated() {
+  void UpdateAfterScriptFailed(const std::string& msg) {
     render_frame_host_ = nullptr;
     if (has_value_)
       return;
     SetValue(blink::mojom::JavaScriptExecutionResultType::kException,
-             base::Value("Renderer terminated"));
+             base::Value(msg));
   }
 
   void SetValue(blink::mojom::JavaScriptExecutionResultType type,
@@ -1806,8 +1624,8 @@ class ExecuteJavaScriptForTestsWaiter : public WebContentsObserver {
 };
 
 EvalJsResult EvalJsRunner(const ToRenderFrameHost& execution_target,
-                          const std::string& script,
-                          const std::string& source_url,
+                          base::StringPiece script,
+                          base::StringPiece source_url,
                           int options,
                           int32_t world_id) {
   RenderFrameHostImpl* rfh =
@@ -1823,7 +1641,6 @@ EvalJsResult EvalJsRunner(const ToRenderFrameHost& execution_target,
                       !(options & EXECUTE_SCRIPT_NO_USER_GESTURE) &&
                       world_id == ISOLATED_WORLD_ID_GLOBAL;
 
-  DOMMessageQueue dom_message_queue(rfh);
   ExecuteJavaScriptForTestsWaiter waiter(rfh);
   rfh->ExecuteJavaScriptForTests(base::UTF8ToUTF16(script), user_gesture,
                                  resolve_promises, world_id,
@@ -1845,32 +1662,9 @@ EvalJsResult EvalJsRunner(const ToRenderFrameHost& execution_target,
     CHECK(result_value.is_string() && !result_value.GetString().empty());
     std::string error_text =
         "a JavaScript error: \"" + result_value.GetString() + "\"";
-    return EvalJsResult(base::Value(), AnnotateAndAdjustJsStackTraces(
-                                           error_text, source_url, script, 0));
-  } else if (options & EXECUTE_SCRIPT_USE_MANUAL_REPLY) {
-    // Callers that set EXECUTE_SCRIPT_USE_MANUAL_REPLY expect this function to
-    // block until their JS calls `window.domAutomationController.send`. To
-    // support this, wait for a message from DOMMessageQueue and parse it as
-    // JSON.
-    std::string json;
-    if (!dom_message_queue.WaitForMessage(&json)) {
-      return EvalJsResult(base::Value(),
-                          "Cannot communicate with DOMMessageQueue.");
-    }
-
-    auto parsed_json = base::JSONReader::ReadAndReturnValueWithError(
-        json, base::JSON_ALLOW_TRAILING_COMMAS);
-    if (!parsed_json.has_value())
-      return EvalJsResult(base::Value(), parsed_json.error().message);
-    result_type = JavaScriptExecutionResultType::kSuccess;
-    return EvalJsResult(parsed_json->Clone(), std::string());
-  } else if (dom_message_queue.HasMessages()) {
     return EvalJsResult(base::Value(),
-                        "Calling domAutomationController.send is only allowed "
-                        "when using EXECUTE_SCRIPT_USE_MANUAL_REPLY. When "
-                        "using EvalJs(), the completion value is the value of "
-                        "the last executed statement. When using ExecJs(), "
-                        "there is no result value.");
+                        AnnotateAndAdjustJsStackTraces(
+                            error_text, std::string(source_url), script, 0));
   }
 
   return EvalJsResult(result_value.Clone(), std::string());
@@ -1879,12 +1673,9 @@ EvalJsResult EvalJsRunner(const ToRenderFrameHost& execution_target,
 }  // namespace
 
 ::testing::AssertionResult ExecJs(const ToRenderFrameHost& execution_target,
-                                  const std::string& script,
+                                  base::StringPiece script,
                                   int options,
                                   int32_t world_id) {
-  CHECK(!(options & EXECUTE_SCRIPT_USE_MANUAL_REPLY))
-      << "USE_MANUAL_REPLY does not make sense with ExecJs.";
-
   // TODO(nick): Do we care enough about folks shooting themselves in the foot
   // here with e.g. ASSERT_TRUE(ExecJs("window == window.top")) -- when they
   // mean EvalJs -- to fail a CHECK() when eval_result.value.is_bool()?
@@ -1898,7 +1689,7 @@ EvalJsResult EvalJsRunner(const ToRenderFrameHost& execution_target,
 }
 
 EvalJsResult EvalJs(const ToRenderFrameHost& execution_target,
-                    const std::string& script,
+                    base::StringPiece script,
                     int options,
                     int32_t world_id) {
   TRACE_EVENT1("test", "EvalJs", "script", script);
@@ -1911,8 +1702,8 @@ EvalJsResult EvalJs(const ToRenderFrameHost& execution_target,
   // let/const don't leak outside the code being run, but vars will float to
   // the outer scope.
   const char* kSourceURL = "__const_std::string&_script__";
-  std::string modified_script = base::StringPrintf("{%s\n}\n//# sourceURL=%s",
-                                                   script.c_str(), kSourceURL);
+  std::string modified_script =
+      base::StrCat({"{", script, "\n}\n//# sourceURL=", kSourceURL});
 
   return EvalJsRunner(execution_target, modified_script, kSourceURL, options,
                       world_id);
@@ -1920,8 +1711,8 @@ EvalJsResult EvalJs(const ToRenderFrameHost& execution_target,
 
 EvalJsResult EvalJsAfterLifecycleUpdate(
     const ToRenderFrameHost& execution_target,
-    const std::string& raf_script,
-    const std::string& script,
+    base::StringPiece raf_script,
+    base::StringPiece script,
     int options,
     int32_t world_id) {
   TRACE_EVENT2("test", "EvalJsAfterLifecycleUpdate", "raf_script", raf_script,
@@ -1931,11 +1722,11 @@ EvalJsResult EvalJsAfterLifecycleUpdate(
   const char* kWrapperURL = "__const_std::string&_EvalJsAfterLifecycleUpdate__";
   std::string modified_raf_script;
   if (raf_script.length()) {
-    modified_raf_script = base::StringPrintf("%s;\n//# sourceURL=%s",
-                                             raf_script.c_str(), kSourceURL);
+    modified_raf_script =
+        base::StrCat({raf_script, ";\n//# sourceURL=", kSourceURL});
   }
   std::string modified_script =
-      base::StringPrintf("%s;\n//# sourceURL=%s", script.c_str(), kSourceURL);
+      base::StrCat({script, ";\n//# sourceURL=", kSourceURL});
 
   // This runner_script delays running the argument scripts until just before
   // (|raf_script|) and after (|script|) a rendering update.
@@ -1989,7 +1780,7 @@ RenderFrameHost* FrameMatchingPredicate(
   return rfh;
 }
 
-bool FrameMatchesName(const std::string& name, RenderFrameHost* frame) {
+bool FrameMatchesName(base::StringPiece name, RenderFrameHost* frame) {
   return frame->GetFrameName() == name;
 }
 
@@ -2016,6 +1807,13 @@ bool HasOriginKeyedProcess(RenderFrameHost* frame) {
       .requires_origin_keyed_process();
 }
 
+bool HasSandboxedSiteInstance(RenderFrameHost* frame) {
+  return static_cast<RenderFrameHostImpl*>(frame)
+      ->GetSiteInstance()
+      ->GetSiteInfo()
+      .is_sandboxed();
+}
+
 std::vector<RenderFrameHost*> CollectAllRenderFrameHosts(
     RenderFrameHost* starting_rfh) {
   std::vector<RenderFrameHost*> visited_frames;
@@ -2036,13 +1834,22 @@ std::vector<RenderFrameHost*> CollectAllRenderFrameHosts(
   return visited_frames;
 }
 
+std::vector<WebContents*> GetAllWebContents() {
+  std::vector<WebContentsImpl*> all_wci = WebContentsImpl::GetAllWebContents();
+  std::vector<WebContents*> all_wc;
+  base::ranges::transform(all_wci, std::back_inserter(all_wc),
+                          [](WebContentsImpl* wc) { return wc; });
+
+  return all_wc;
+}
+
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 bool ExecuteWebUIResourceTest(WebContents* web_contents) {
   // Inject WebUI test runner script.
   std::string script;
   scoped_refptr<base::RefCountedMemory> bytes =
       ui::ResourceBundle::GetSharedInstance().LoadDataResourceBytes(
-          IDR_ASH_COMMON_WEBUI_RESOURCE_TEST_JS);
+          IDR_ASH_WEBUI_COMMON_WEBUI_RESOURCE_TEST_JS);
 
   if (HasGzipHeader(*bytes))
     AppendGzippedResource(*bytes, &script);
@@ -2120,48 +1927,25 @@ bool SetCookie(BrowserContext* browser_context,
                const GURL& url,
                const std::string& value,
                net::CookieOptions::SameSiteCookieContext context,
-               net::SamePartyContext::Type party_context) {
+               net::CookiePartitionKey* cookie_partition_key) {
+  if (cookie_partition_key) {
+    DCHECK(base::Contains(base::ToLowerASCII(value), ";partitioned"));
+  }
   mojo::Remote<network::mojom::CookieManager> cookie_manager;
   browser_context->GetDefaultStoragePartition()
       ->GetNetworkContext()
       ->GetCookieManager(cookie_manager.BindNewPipeAndPassReceiver());
   std::unique_ptr<net::CanonicalCookie> cc(net::CanonicalCookie::Create(
-      url, value, base::Time::Now(), absl::nullopt /* server_time */,
-      absl::nullopt /* cookie_partition_key */));
+      url, value, base::Time::Now(), std::nullopt /* server_time */,
+      base::OptionalFromPtr(cookie_partition_key)));
   DCHECK(cc.get());
 
   net::CookieOptions options;
   options.set_include_httponly();
   options.set_same_site_cookie_context(context);
-  options.set_same_party_context(net::SamePartyContext(party_context));
   base::test::TestFuture<net::CookieAccessResult> future;
   cookie_manager->SetCanonicalCookie(*cc.get(), url, options,
                                      future.GetCallback());
-  return future.Get().status.IsInclude();
-}
-
-bool SetPartitionedCookie(BrowserContext* browser_context,
-                          const GURL& url,
-                          const std::string& value,
-                          const net::CookiePartitionKey& cookie_partition_key,
-                          net::CookieOptions::SameSiteCookieContext context,
-                          net::SamePartyContext::Type party_context) {
-  DCHECK(base::Contains(value, ";Partitioned"));
-  mojo::Remote<network::mojom::CookieManager> cookie_manager;
-  browser_context->GetDefaultStoragePartition()
-      ->GetNetworkContext()
-      ->GetCookieManager(cookie_manager.BindNewPipeAndPassReceiver());
-  std::unique_ptr<net::CanonicalCookie> cc(net::CanonicalCookie::Create(
-      url, value, base::Time::Now(), absl::nullopt /* server_time */,
-      cookie_partition_key));
-  DCHECK(cc);
-
-  net::CookieOptions options;
-  options.set_include_httponly();
-  options.set_same_site_cookie_context(context);
-  options.set_same_party_context(net::SamePartyContext(party_context));
-  base::test::TestFuture<net::CookieAccessResult> future;
-  cookie_manager->SetCanonicalCookie(*cc, url, options, future.GetCallback());
   return future.Get().status.IsInclude();
 }
 
@@ -2194,7 +1978,7 @@ void FetchHistogramsFromChildProcesses() {
   base::RunLoop run_loop;
 
   FetchHistogramsAsynchronously(
-      base::ThreadTaskRunnerHandle::Get(), run_loop.QuitClosure(),
+      base::SingleThreadTaskRunner::GetCurrentDefault(), run_loop.QuitClosure(),
       // If this call times out, it means that a child process is not
       // responding, which is something we should not ignore.  The timeout is
       // set to be longer than the normal browser test timeout so that it will
@@ -2220,24 +2004,20 @@ void SetFileSystemAccessPermissionContext(
 bool WaitForRenderFrameReady(RenderFrameHost* rfh) {
   if (!rfh)
     return false;
-  // TODO(nick): This can't switch to EvalJs yet, because of hardcoded
-  // dependencies on 'pageLoadComplete' in some interstitial implementations.
-  std::string result;
-  EXPECT_TRUE(ExecuteScriptWithoutUserGestureAndExtractString(
-      rfh,
-      "(async function() {"
-      "  if (document.readyState != 'complete') {"
-      "    await new Promise((resolve) =>"
-      "      document.addEventListener('readystatechange', event => {"
-      "        if (document.readyState == 'complete') {"
-      "          resolve();"
-      "        }"
-      "      }));"
-      "  }"
-      "})().then(() => {"
-      "  window.domAutomationController.send('pageLoadComplete');"
-      "});",
-      &result));
+  std::string result =
+      EvalJs(rfh,
+             "(async function() {"
+             "  if (document.readyState != 'complete') {"
+             "    await new Promise((resolve) =>"
+             "      document.addEventListener('readystatechange', event => {"
+             "        if (document.readyState == 'complete') {"
+             "          resolve();"
+             "        }"
+             "      }));"
+             "  }"
+             "})().then(() => 'pageLoadComplete');",
+             EXECUTE_SCRIPT_NO_USER_GESTURE)
+          .ExtractString();
   EXPECT_EQ("pageLoadComplete", result);
   return "pageLoadComplete" == result;
 }
@@ -2267,7 +2047,7 @@ ui::AXNodeData GetFocusedAccessibilityNodeInfo(WebContents* web_contents) {
 }
 
 bool AccessibilityTreeContainsNodeWithName(BrowserAccessibility* node,
-                                           const std::string& name) {
+                                           base::StringPiece name) {
   // If an image annotation is set, it plays the same role as a name, so it
   // makes sense to check both in the same test helper.
   if (node->GetStringAttribute(ax::mojom::StringAttribute::kName) == name ||
@@ -2288,7 +2068,7 @@ void WaitForAccessibilityTreeToChange(WebContents* web_contents) {
 }
 
 void WaitForAccessibilityTreeToContainNodeWithName(WebContents* web_contents,
-                                                   const std::string& name) {
+                                                   base::StringPiece name) {
   WebContentsImpl* web_contents_impl = static_cast<WebContentsImpl*>(
       web_contents);
   RenderFrameHostImpl* main_frame = static_cast<RenderFrameHostImpl*>(
@@ -2430,7 +2210,7 @@ RenderWidgetHost* GetMouseLockWidget(WebContents* web_contents) {
 }
 
 bool RequestKeyboardLock(WebContents* web_contents,
-                         absl::optional<base::flat_set<ui::DomCode>> codes) {
+                         std::optional<base::flat_set<ui::DomCode>> codes) {
   DCHECK(!codes.has_value() || !codes.value().empty());
   WebContentsImpl* web_contents_impl =
       static_cast<WebContentsImpl*>(web_contents);
@@ -2584,13 +2364,13 @@ void RenderProcessHostWatcher::RenderProcessHostDestroyed(
 
 RenderProcessHostKillWaiter::RenderProcessHostKillWaiter(
     RenderProcessHost* render_process_host,
-    const std::string& uma_name)
+    base::StringPiece uma_name)
     : exit_watcher_(render_process_host,
                     RenderProcessHostWatcher::WATCH_FOR_PROCESS_EXIT),
       uma_name_(uma_name) {}
 
-absl::optional<int> RenderProcessHostKillWaiter::Wait() {
-  absl::optional<bad_message::BadMessageReason> result;
+std::optional<int> RenderProcessHostKillWaiter::Wait() {
+  std::optional<bad_message::BadMessageReason> result;
 
   // Wait for the renderer kill.
   exit_watcher_.Wait();
@@ -2642,14 +2422,14 @@ RenderProcessHostBadMojoMessageWaiter::
       RenderProcessHostImpl::BadMojoMessageCallbackForTesting());
 }
 
-absl::optional<std::string> RenderProcessHostBadMojoMessageWaiter::Wait() {
-  absl::optional<int> bad_message_reason = kill_waiter_.Wait();
+std::optional<std::string> RenderProcessHostBadMojoMessageWaiter::Wait() {
+  std::optional<int> bad_message_reason = kill_waiter_.Wait();
   if (!bad_message_reason.has_value())
-    return absl::nullopt;
+    return std::nullopt;
   if (bad_message_reason.value() != bad_message::RPH_MOJO_PROCESS_ERROR) {
     LOG(ERROR) << "Unexpected |bad_message_reason|: "
                << bad_message_reason.value();
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   return observed_mojo_error_;
@@ -2687,7 +2467,7 @@ class DOMMessageQueue::MessageObserver : public WebContentsObserver {
     queue_->OnBackingWebContentsDestroyed(this);
   }
 
-  DOMMessageQueue* queue_;
+  raw_ptr<DOMMessageQueue> queue_;
 };
 
 DOMMessageQueue::DOMMessageQueue() {
@@ -2721,8 +2501,9 @@ void DOMMessageQueue::PrimaryMainFrameRenderProcessGone(
       break;
     default:
       renderer_crashed_ = true;
-      if (quit_closure_)
-        std::move(quit_closure_).Run();
+      if (callback_) {
+        std::move(callback_).Run();
+      }
       break;
   }
 }
@@ -2732,8 +2513,9 @@ void DOMMessageQueue::RenderFrameDeleted(RenderFrameHost* render_frame_host) {
     return;
   if (render_frame_host_ != render_frame_host)
     return;
-  if (quit_closure_)
-    std::move(quit_closure_).Run();
+  if (callback_) {
+    std::move(callback_).Run();
+  }
 }
 
 void DOMMessageQueue::ClearQueue() {
@@ -2742,8 +2524,9 @@ void DOMMessageQueue::ClearQueue() {
 
 void DOMMessageQueue::OnDomMessageReceived(const std::string& message) {
   message_queue_.push(message);
-  if (quit_closure_)
-    std::move(quit_closure_).Run();
+  if (callback_) {
+    std::move(callback_).Run();
+  }
 }
 
 void DOMMessageQueue::OnWebContentsCreated(WebContents* contents) {
@@ -2759,12 +2542,23 @@ void DOMMessageQueue::OnBackingWebContentsDestroyed(MessageObserver* observer) {
   }
 }
 
+void DOMMessageQueue::SetOnMessageAvailableCallback(
+    base::OnceClosure callback) {
+  CHECK(!callback_);
+  CHECK(!render_frame_host_);  // Not supported for simplicity.
+  if (!message_queue_.empty() || renderer_crashed_) {
+    std::move(callback).Run();
+  } else {
+    callback_ = std::move(callback);
+  }
+}
+
 bool DOMMessageQueue::WaitForMessage(std::string* message) {
   DCHECK(message);
   if (!renderer_crashed_ && message_queue_.empty()) {
     // This will be quit when a new message comes in.
     base::RunLoop run_loop{base::RunLoop::Type::kNestableTasksAllowed};
-    quit_closure_ = run_loop.QuitClosure();
+    callback_ = run_loop.QuitClosure();
     run_loop.Run();
   }
   return PopMessage(message);
@@ -3012,9 +2806,9 @@ InputMsgWatcher::GetAckStateWaitIfNecessary() {
 
 InputEventAckWaiter::InputEventAckWaiter(RenderWidgetHost* render_widget_host,
                                          InputEventAckPredicate predicate)
-    : render_widget_host_(render_widget_host),
-      predicate_(predicate),
-      event_received_(false) {
+    : render_widget_host_(
+          static_cast<RenderWidgetHostImpl*>(render_widget_host)->GetWeakPtr()),
+      predicate_(predicate) {
   render_widget_host_->AddInputEventObserver(this);
 }
 
@@ -3037,7 +2831,9 @@ InputEventAckWaiter::InputEventAckWaiter(RenderWidgetHost* render_widget_host,
     : InputEventAckWaiter(render_widget_host, EventAckHasType(type)) {}
 
 InputEventAckWaiter::~InputEventAckWaiter() {
-  render_widget_host_->RemoveInputEventObserver(this);
+  if (render_widget_host_) {
+    render_widget_host_->RemoveInputEventObserver(this);
+  }
 }
 
 void InputEventAckWaiter::Wait() {
@@ -3188,15 +2984,20 @@ TestNavigationManager::~TestNavigationManager() {
   ResumeIfPaused();
 }
 
-void TestNavigationManager::WaitForFirstYieldAfterDidStartNavigation() {
+bool TestNavigationManager::WaitForFirstYieldAfterDidStartNavigation() {
   TRACE_EVENT(
       "test",
       "TestNavigationManager::WaitForFirstYieldAfterDidStartNavigation");
   if (current_state_ >= NavigationState::WILL_START)
-    return;
+    return true;
 
   DCHECK_EQ(desired_state_, NavigationState::WILL_START);
-  WaitForDesiredState();
+  // Ignore the result because DidStartNavigation will update |desired_state_|
+  // we check below.
+  (void)WaitForDesiredState();
+  // This returns false if the runloop was terminated by a timeout rather than
+  // reaching the |WILL_START|.
+  return current_state_ >= NavigationState::WILL_START;
 }
 
 bool TestNavigationManager::WaitForRequestStart() {
@@ -3224,10 +3025,10 @@ bool TestNavigationManager::WaitForResponse() {
   return WaitForDesiredState();
 }
 
-void TestNavigationManager::WaitForNavigationFinished() {
+bool TestNavigationManager::WaitForNavigationFinished() {
   TRACE_EVENT("test", "TestNavigationManager::WaitForNavigationFinished");
   desired_state_ = NavigationState::FINISHED;
-  WaitForDesiredState();
+  return WaitForDesiredState();
 }
 
 void TestNavigationManager::DidStartNavigation(NavigationHandle* handle) {
@@ -3515,6 +3316,12 @@ NavigationHandle* TestActivationManager::GetNavigationHandle() {
   return request_;
 }
 
+void TestActivationManager::SetCallbackCalledAfterActivationIsReady(
+    base::OnceClosure callback) {
+  DCHECK(!callback_in_last_condition);
+  callback_in_last_condition = std::move(callback);
+}
+
 CommitDeferringCondition::Result TestActivationManager::FirstConditionCallback(
     CommitDeferringCondition& condition,
     base::OnceClosure resume_callback) {
@@ -3549,6 +3356,10 @@ CommitDeferringCondition::Result TestActivationManager::FirstConditionCallback(
 CommitDeferringCondition::Result TestActivationManager::LastConditionCallback(
     CommitDeferringCondition& condition,
     base::OnceClosure resume_callback) {
+  if (callback_in_last_condition) {
+    std::move(callback_in_last_condition).Run();
+  }
+
   if (request_ != &condition.GetNavigationHandle())
     return CommitDeferringCondition::Result::kProceed;
 
@@ -3656,7 +3467,7 @@ void WebContentsConsoleObserver::OnDidAddMessageToConsole(
     const std::u16string& message_contents,
     int32_t line_no,
     const std::u16string& source_id,
-    const absl::optional<std::u16string>& untrusted_stack_trace) {
+    const std::optional<std::u16string>& untrusted_stack_trace) {
   Message message(
       {source_frame, log_level, message_contents, line_no, source_id});
   if (filter_ && !filter_.Run(message))
@@ -3669,6 +3480,75 @@ void WebContentsConsoleObserver::OnDidAddMessageToConsole(
 
   messages_.push_back(std::move(message));
   waiter_helper_.OnEvent();
+}
+
+namespace {
+static constexpr int kEnableLogMessageId = 0;
+static constexpr char kEnableLogMessage[] = R"({"id":0,"method":"Log.enable"})";
+static constexpr int kDisableLogMessageId = 1;
+static constexpr char kDisableLogMessage[] =
+    R"({"id":1,"method":"Log.disable"})";
+}  // namespace
+
+DevToolsInspectorLogWatcher::DevToolsInspectorLogWatcher(
+    WebContents* web_contents) {
+  host_ = DevToolsAgentHost::GetOrCreateFor(web_contents);
+  host_->AttachClient(this);
+
+  host_->DispatchProtocolMessage(
+      this, base::as_bytes(
+                base::make_span(kEnableLogMessage, strlen(kEnableLogMessage))));
+
+  run_loop_enable_log_.Run();
+}
+
+DevToolsInspectorLogWatcher::~DevToolsInspectorLogWatcher() {
+  host_->DetachClient(this);
+}
+
+void DevToolsInspectorLogWatcher::DispatchProtocolMessage(
+    DevToolsAgentHost* host,
+    base::span<const uint8_t> message) {
+  base::StringPiece message_str(reinterpret_cast<const char*>(message.data()),
+                                message.size());
+  auto parsed_message =
+      std::move(base::JSONReader::Read(message_str)->GetDict());
+  std::optional<int> command_id = parsed_message.FindInt("id");
+  if (command_id.has_value()) {
+    switch (command_id.value()) {
+      case kEnableLogMessageId:
+        run_loop_enable_log_.Quit();
+        break;
+      case kDisableLogMessageId:
+        run_loop_disable_log_.Quit();
+        break;
+      default:
+        NOTREACHED();
+    }
+    return;
+  }
+
+  std::string* notification = parsed_message.FindString("method");
+  if (notification && *notification == "Log.entryAdded") {
+    std::string* text =
+        parsed_message.FindStringByDottedPath("params.entry.text");
+    DCHECK(text);
+    last_message_ = *text;
+    std::string* url =
+        parsed_message.FindStringByDottedPath("params.entry.url");
+    if (url) {
+      last_url_ = GURL(*url);
+    }
+  }
+}
+
+void DevToolsInspectorLogWatcher::AgentHostClosed(DevToolsAgentHost* host) {}
+
+void DevToolsInspectorLogWatcher::FlushAndStopWatching() {
+  host_->DispatchProtocolMessage(
+      this, base::as_bytes(base::make_span(kDisableLogMessage,
+                                           strlen(kDisableLogMessage))));
+  run_loop_disable_log_.Run();
 }
 
 namespace {
@@ -3720,9 +3600,9 @@ void PwnMessageHelper::FileSystemWrite(RenderProcessHost* process,
       &waiter, listener.InitWithNewPipeAndPassReceiver());
   mojo::Remote<blink::mojom::FileSystemCancellableOperation> op;
 
-  file_system_manager->Write(file_path, blob_uuid, position,
-                             op.BindNewPipeAndPassReceiver(),
-                             std::move(listener));
+  file_system_manager->Write(
+      file_path, process->GetBrowserContext()->GetBlobRemote(blob_uuid),
+      position, op.BindNewPipeAndPassReceiver(), std::move(listener));
   waiter.WaitForOperationToFinish();
 }
 
@@ -3800,7 +3680,8 @@ void VerifyStaleContentOnFrameEviction(
   EvictionStateWaiter waiter{delegated_frame_host};
   render_widget_host_view_aura->WasOccluded();
   static_cast<viz::FrameEvictorClient*>(delegated_frame_host)
-      ->EvictDelegatedFrame();
+      ->EvictDelegatedFrame(delegated_frame_host->GetFrameEvictorForTesting()
+                                ->CollectSurfaceIdsForEviction());
   EXPECT_EQ(delegated_frame_host->frame_eviction_state(),
             DelegatedFrameHost::FrameEvictionState::kPendingEvictionRequests);
   // Wait until the stale frame content is copied and set onto the layer, i.e.
@@ -3924,7 +3805,7 @@ void BlobURLStoreInterceptor::Register(
     const GURL& url,
     // TODO(https://crbug.com/1224926): Remove these once experiment is over.
     const base::UnguessableToken& unsafe_agent_cluster_id,
-    const absl::optional<net::SchemefulSite>& unsafe_top_level_site,
+    const std::optional<net::SchemefulSite>& unsafe_top_level_site,
     RegisterCallback callback) {
   GetForwardingInterface()->Register(
       std::move(blob), target_url_, unsafe_agent_cluster_id,
@@ -3941,7 +3822,7 @@ int LoadBasicRequest(
     network::mojom::URLLoaderFactory* url_loader_factory,
     const GURL& url,
     int load_flags,
-    const absl::optional<url::Origin>& request_initiator = absl::nullopt) {
+    const std::optional<url::Origin>& request_initiator = std::nullopt) {
   auto request = std::make_unique<network::ResourceRequest>();
   request->url = url;
   request->load_flags = load_flags;
@@ -3955,7 +3836,7 @@ int LoadBasicRequest(
                                        TRAFFIC_ANNOTATION_FOR_TESTS);
 
   simple_loader->DownloadToStringOfUnboundedSizeUntilCrashAndDie(
-      url_loader_factory, simple_loader_helper.GetCallback());
+      url_loader_factory, simple_loader_helper.GetCallbackDeprecated());
   simple_loader_helper.WaitForCallback();
 
   return simple_loader->NetError();
@@ -3995,13 +3876,13 @@ int LoadBasicRequest(RenderFrameHost* frame, const GURL& url) {
 }
 
 void EnsureCookiesFlushed(BrowserContext* browser_context) {
-  browser_context->ForEachStoragePartition(
-      base::BindRepeating([](StoragePartition* partition) {
+  browser_context->ForEachLoadedStoragePartition(
+      [](StoragePartition* partition) {
         base::RunLoop run_loop;
         partition->GetCookieManagerForBrowserProcess()->FlushCookieStore(
             run_loop.QuitClosure());
         run_loop.Run();
-      }));
+      });
 }
 
 bool TestGuestAutoresize(WebContents* embedder_web_contents,
@@ -4308,23 +4189,36 @@ void DidFinishNavigationObserver::DidFinishNavigation(
   callback_.Run(navigation_handle);
 }
 
+// Since the loading state might be switched more than once due to navigation
+// restart, the following helper methods for history traversal need to call
+// `WaitForNavigationFinished()` to ensure the navigation is finally committed
+// and `WaitForLoadStop()` to ensure the `WebContents` finishes the last
+// loading.
 bool HistoryGoToIndex(WebContents* wc, int index) {
+  TestNavigationObserver observer(wc);
   wc->GetController().GoToIndex(index);
+  WaitForNavigationFinished(wc, observer);
   return WaitForLoadStop(wc);
 }
 
 bool HistoryGoToOffset(WebContents* wc, int offset) {
+  TestNavigationObserver observer(wc);
   wc->GetController().GoToOffset(offset);
+  WaitForNavigationFinished(wc, observer);
   return WaitForLoadStop(wc);
 }
 
 bool HistoryGoBack(WebContents* wc) {
+  TestNavigationObserver observer(wc);
   wc->GetController().GoBack();
+  WaitForNavigationFinished(wc, observer);
   return WaitForLoadStop(wc);
 }
 
 bool HistoryGoForward(WebContents* wc) {
+  TestNavigationObserver observer(wc);
   wc->GetController().GoForward();
+  WaitForNavigationFinished(wc, observer);
   return WaitForLoadStop(wc);
 }
 
@@ -4382,6 +4276,36 @@ WebContents* CreateAndLoadWebContentsObserver::Wait() {
   creation_subscription_ = base::CallbackListSubscription();
 
   return web_contents_;
+}
+
+CookieChangeObserver::CookieChangeObserver(content::WebContents* web_contents,
+                                           int num_expected_calls)
+    : content::WebContentsObserver(web_contents),
+      run_loop_(base::RunLoop::Type::kNestableTasksAllowed),
+      num_expected_calls_(num_expected_calls) {}
+
+CookieChangeObserver::~CookieChangeObserver() = default;
+
+void CookieChangeObserver::Wait() {
+  run_loop_.Run();
+}
+
+void CookieChangeObserver::OnCookiesAccessed(
+    content::RenderFrameHost* render_frame_host,
+    const content::CookieAccessDetails& details) {
+  OnCookieAccessed();
+}
+
+void CookieChangeObserver::OnCookiesAccessed(
+    content::NavigationHandle* navigation,
+    const content::CookieAccessDetails& details) {
+  OnCookieAccessed();
+}
+
+void CookieChangeObserver::OnCookieAccessed() {
+  if (++num_seen_ == num_expected_calls_) {
+    run_loop_.Quit();
+  }
 }
 
 base::CallbackListSubscription RegisterWebContentsCreationCallback(

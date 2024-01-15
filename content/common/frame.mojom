@@ -6,7 +6,6 @@ module content.mojom;
 
 import "cc/mojom/browser_controls_state.mojom";
 import "content/common/frame_messages.mojom";
-import "content/common/native_types.mojom";
 import "content/common/navigation_client.mojom";
 import "content/common/web_ui.mojom";
 import "content/public/common/extra_mojo_js_features.mojom";
@@ -16,8 +15,10 @@ import "mojo/public/mojom/base/file_path.mojom";
 import "mojo/public/mojom/base/time.mojom";
 import "mojo/public/mojom/base/unguessable_token.mojom";
 import "skia/public/mojom/skcolor.mojom";
+import "services/network/public/mojom/attribution.mojom";
 import "services/network/public/mojom/content_security_policy.mojom";
 import "services/network/public/mojom/url_loader.mojom";
+import "services/network/public/mojom/url_loader_completion_status.mojom";
 import "services/network/public/mojom/url_loader_factory.mojom";
 import "services/network/public/mojom/url_request.mojom";
 import "services/network/public/mojom/url_response_head.mojom";
@@ -30,6 +31,7 @@ import "third_party/blink/public/mojom/commit_result/commit_result.mojom";
 import "third_party/blink/public/mojom/conversions/conversions.mojom";
 import "third_party/blink/public/mojom/devtools/console_message.mojom";
 import "third_party/blink/public/mojom/fenced_frame/fenced_frame.mojom";
+import "third_party/blink/public/mojom/fenced_frame/fenced_frame_config.mojom";
 import "third_party/blink/public/mojom/frame/frame_owner_properties.mojom";
 import "third_party/blink/public/mojom/frame/frame_policy.mojom";
 import "third_party/blink/public/mojom/frame/frame_replication_state.mojom";
@@ -43,11 +45,12 @@ import "third_party/blink/public/mojom/loader/resource_load_info.mojom";
 import "third_party/blink/public/mojom/loader/url_loader_factory_bundle.mojom";
 import "third_party/blink/public/mojom/messaging/transferable_message.mojom";
 import "third_party/blink/public/mojom/navigation/navigation_params.mojom";
+import "third_party/blink/public/mojom/navigation/navigation_initiator_activation_and_ad_status.mojom";
+import "third_party/blink/public/mojom/page/browsing_context_group_info.mojom";
 import "third_party/blink/public/mojom/page/page.mojom";
 import "third_party/blink/public/mojom/picture_in_picture_window_options/picture_in_picture_window_options.mojom";
 import "third_party/blink/public/mojom/widget/platform_widget.mojom";
 import "third_party/blink/public/mojom/page/widget.mojom";
-import "third_party/blink/public/mojom/portal/portal.mojom";
 import "third_party/blink/public/mojom/renderer_preferences.mojom";
 import "third_party/blink/public/mojom/service_worker/controller_service_worker.mojom";
 import "third_party/blink/public/mojom/service_worker/service_worker_container.mojom";
@@ -68,8 +71,6 @@ enum ViewWidgetType {
   kTopLevel,
   // A GuestView used to render contents inside a <webview> element.
   kGuestView,
-  // A view used to render contents inside a <portal> element.
-  kPortal,
   // A view used to render contents inside a <fencedframe> element.
   kFencedFrame
 };
@@ -78,15 +79,12 @@ enum ViewWidgetType {
 // frames, this would be the type of the HTMLFrameOwnerElement for the remote
 // child frame in the parent process. Note that only HTMLFrameOwnerElements for
 // which CreateChildFrame is used are included here. Other
-// HTMLFrameOwnerElements such as portals do not use this.
+// HTMLFrameOwnerElements such as fenced frames do not use this.
 enum ChildFrameOwnerElementType {
   kIframe,
   kObject,
   kEmbed,
   kFrame,
-  // Note that only Fenced Frames based on Shadow DOM may create child frames.
-  // See crbug.com/1123606.
-  kFencedframe
 };
 
 struct CreateViewParams {
@@ -144,8 +142,8 @@ struct CreateViewParams {
   // value will always be set to kDefault. Frames embedded in fenced frames
   // will also have this value set to kDefault.
   // Used by fenced frames to determine various security restrictions such as
-  // the URL type and size constraints.
-  blink.mojom.FencedFrameMode fenced_frame_mode;
+  // top-level navigation/popups.
+  blink.mojom.DeprecatedFencedFrameMode fenced_frame_mode;
 
   // If the view is created embedded inside an extension, what the outermost
   // origin is. This is not set for non-extensions to avoid leaking
@@ -158,6 +156,16 @@ struct CreateViewParams {
 
   // Base background color of this view. Only used by a local main frame.
   skia.mojom.SkColor? base_background_color;
+
+  // The ColorProviderColorMaps for this view.
+  blink.mojom.ColorProviderColorMaps color_provider_colors;
+
+  // Indicates which browsing context group the page in this view belongs to.
+  blink.mojom.BrowsingContextGroupInfo browsing_context_group_info;
+
+  // Indicates whether web or OS-level Attribution Reporting is supported. See
+  // https://github.com/WICG/attribution-reporting-api/blob/main/app_to_web.md
+  network.mojom.AttributionSupport attribution_support;
 };
 
 // A union to distinguish between parameters specific to local main frame
@@ -204,6 +212,11 @@ struct CreateLocalMainFrameParams {
 
   // Subresource loader factories to be used by the initial empty document.
   blink.mojom.URLLoaderFactoryBundle subresource_loader_factories;
+
+  // The FrameToken of the previous LocalFrame that this new LocalFrame will
+  // replace. Will only be set when RenderDocument is enabled, for main frame
+  // LocalFrame <-> LocalFrame swap.
+  blink.mojom.FrameToken? previous_frame_token;
 };
 
 // Parameters used for brower-initiated remote main frame creation.
@@ -229,6 +242,10 @@ struct CreateFrameWidgetParams {
 
   // The initial visual properties of the widget.
   blink.mojom.VisualProperties visual_properties;
+
+  // If set, this widget should take the compositor from this frame instead of
+  // creating a new instance.
+  blink.mojom.FrameToken? previous_frame_token_for_compositor_reuse;
 };
 
 // Used for recreating child frames after a crash (does this still happen?) and
@@ -318,6 +335,10 @@ struct CreateFrameParams {
   // request associated interfaces from its corresponding `RenderFrameHostImpl`.
   pending_associated_remote<blink.mojom.AssociatedInterfaceProvider>
       associated_interface_provider_remote;
+
+  // Set if this frame corresponds to the main frame for a non top-level
+  // FrameTree (GuestView, fenced frame etc.).
+  bool is_for_nested_main_frame;
 };
 
 // Provided with each call to Frame::GetSerializedHtmlWithLocalLinks() so that
@@ -336,12 +357,6 @@ interface FrameHTMLSerializerHandler {
 struct SnapshotAccessibilityTreeParams {
   // See ui/accessibility/ax_mode.h for valid values of |ax_mode|.
   uint32 ax_mode;
-
-  // If true, nodes that are entirely offscreen will have their entire
-  // subtree excluded.  Note that this heuristic is imperfect, and
-  // an absolute-positioned node that's visible, but whose ancestors
-  // are entirely offscreen, may get excluded.
-  bool exclude_offscreen;
 
   // The maximum number of nodes to snapshot before exiting early.
   // Note that this is not a hard limit; once this limit is reached a
@@ -382,6 +397,13 @@ interface Frame {
   // could proceed as expected or not. In particular, it might be necessary to
   // restart the navigation if it is no-longer same-document, which can happen
   // if the renderer committed another navigation in the meantime.
+  //
+  // The [SupportsUrgent] attribute enables marking this message as urgent by
+  // calling the method in an UrgentMessageScope. Urgent messages cause the
+  // renderer to prioritize the IPC task queue while there are urgent messages
+  // pending, which increases their priority while maintaining ordering
+  // guarantees. See also mojo/public/tools/bindings/README.md.
+  [SupportsUrgent]
   CommitSameDocumentNavigation(
       blink.mojom.CommonNavigationParams common_params,
       blink.mojom.CommitNavigationParams request_params)
@@ -471,14 +493,6 @@ interface Frame {
       blink.mojom.RemoteFrameInterfacesFromBrowser new_remote_frame_interfaces,
       blink.mojom.RemoteMainFrameInterfaces new_remote_main_frame_interfaces);
 
-  // Causes all new subresource requests to be blocked (not being started) until
-  // ResumeBlockedRequests is called.
-  BlockRequests();
-
-  // Resumes blocked requests.
-  // It is safe to call this without calling BlockRequests.
-  ResumeBlockedRequests();
-
   GetInterfaceProvider(
       pending_receiver<service_manager.mojom.InterfaceProvider> interfaces);
 
@@ -486,11 +500,6 @@ interface Frame {
   // accessibility if it wasn't already enabled.
   SnapshotAccessibilityTree(SnapshotAccessibilityTreeParams params)
       => (ax.mojom.AXTreeUpdate snapshot);
-
-  // Requests a one-time distillation of the accessibility tree without enabling
-  // accessibility if it wasn't already enabled.
-  SnapshotAndDistillAXTree() => (ax.mojom.AXTreeUpdate snapshot,
-                                 array<int32> content_node_ids);
 
   // Get HTML data by serializing the target frame and replacing all resource
   // links with a path to the local copy passed in the message payload. In order
@@ -590,6 +599,10 @@ struct CreateNewWindowParams {
 
   // Additional parameters for creating picture-in-picture windows.
   blink.mojom.PictureInPictureWindowOptions? pip_options;
+
+  // The navigation initiator's user activation and ad status.
+  blink.mojom.NavigationInitiatorActivationAndAdStatus
+      initiator_activation_and_ad_status;
 };
 
 // Operation result when the renderer asks the browser to create a new window.
@@ -657,6 +670,12 @@ struct CreateNewWindowReply {
   // The policy container for the new frame that will be created by Blink in
   // response.
   blink.mojom.PolicyContainer policy_container;
+
+  // Indicates which browsing context group the page in this view belongs to.
+  blink.mojom.BrowsingContextGroupInfo browsing_context_group_info;
+
+  // The ColorProviderColorMaps for this view.
+  blink.mojom.ColorProviderColorMaps color_provider_colors;
 };
 
 // A per-navigation interface passed along with the BeginNavigation call, used
@@ -680,11 +699,11 @@ interface FrameHost {
   [Sync] CreateNewWindow(CreateNewWindowParams params)
       => (CreateNewWindowStatus status, CreateNewWindowReply? reply);
 
-  // Asynchronously creates a child frame. A routing ID must be allocated first
-  // by calling RenderMessageFilter::GenerateFrameRoutingID()
+  // Asynchronously creates a child frame. A blink.mojom.LocalFrameToken must
+  // be allocated first by calling RenderMessageFilter::GenerateFrameRoutingID()
   // Each of these messages will have a corresponding mojom::FrameHost::Detach
   // API sent when the frame is detached from the DOM.
-  CreateChildFrame(int32 child_routing_id,
+  CreateChildFrame(blink.mojom.LocalFrameToken child_frame_token,
                    pending_associated_remote<content.mojom.Frame> frame,
                    pending_receiver<blink.mojom.BrowserInterfaceBroker>
                      browser_interface_broker,
@@ -698,7 +717,8 @@ interface FrameHost {
                    bool is_created_by_script,
                    blink.mojom.FramePolicy frame_policy,
                    blink.mojom.FrameOwnerProperties frame_owner_properties,
-                   ChildFrameOwnerElementType child_frame_owner_element_type);
+                   ChildFrameOwnerElementType child_frame_owner_element_type,
+                   int64 document_ukm_source_id);
 
   // Sent by the renderer when a navigation commits in the frame.
 
@@ -750,8 +770,8 @@ interface FrameHost {
   // issuing this mojo call, there is no need to pass
   // |initiator_policy_container_keep_alive_handle|, since the initiator
   // PolicyContainerHost is kept alive by LocalFrame's PolicyContainer.
-  // TODO(ahemery): |navigation_client| should not be optional. Make it
-  // mandatory.
+  // TODO(https://crbug.com/1467502): |navigation_client| should not be
+  // optional. Make it mandatory.
   // |renderer_cancellation_listener| is a per-navigation interface used to
   // listen to the end of the renderer-initiated navigation cancelation window
   // for this navigation. See comment for NavigationRendererCancellationListener

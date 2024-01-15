@@ -2,7 +2,6 @@
 
 include_rules = [
   "+cc",
-  "+components/power_scheduler",
   "-components/viz/service",
   "+components/viz/service/debugger/viz_debugger.h",
   "+components/viz/service/gl/gpu_service_impl.h",
@@ -14,7 +13,7 @@ include_rules = [
   "+services/viz/public/mojom",
   "+skia/ext",
   "+third_party/skia",
+  "+ui/base/ozone_buildflags.h",
   "+ui/latency",
-  "+ui/ozone/buildflags.h",
   "+ui/ozone/public",
 ]

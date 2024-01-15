@@ -20,12 +20,14 @@
 #include "content/public/test/browser_test.h"
 #include "content/public/test/browser_test_utils.h"
 #include "content/public/test/content_browser_test.h"
+#include "content/public/test/content_browser_test_content_browser_client.h"
 #include "content/public/test/content_browser_test_utils.h"
 #include "content/public/test/scoped_web_ui_controller_factory_registration.h"
 #include "content/public/test/test_frame_navigation_observer.h"
 #include "content/public/test/test_navigation_observer.h"
 #include "content/public/test/web_ui_browsertest_util.h"
 #include "content/shell/browser/shell.h"
+#include "content/shell/common/shell_switches.h"
 #include "content/test/content_browser_test_utils_internal.h"
 #include "ipc/ipc_security_test_util.h"
 #include "net/dns/mock_host_resolver.h"
@@ -41,6 +43,8 @@ const char kAddIframeScript[] =
     "var frame = document.createElement('iframe');\n"
     "frame.src = $1;\n"
     "document.body.appendChild(frame);\n";
+
+const char kAdditionalScheme[] = "test-webui-scheme";
 
 blink::mojom::OpenURLParamsPtr CreateOpenURLParams(const GURL& url) {
   auto params = blink::mojom::OpenURLParams::New();
@@ -109,7 +113,7 @@ class WebUINavigationBrowserTest : public ContentBrowserTest {
           web_url.spec().c_str());
 
       TestNavigationObserver navigation_observer(shell()->web_contents());
-      EXPECT_TRUE(ExecuteScript(shell(), script));
+      EXPECT_TRUE(ExecJs(shell(), script));
       navigation_observer.Wait();
 
       EXPECT_EQ(1U, root->child_count());
@@ -680,7 +684,7 @@ IN_PROC_BROWSER_TEST_F(WebUINavigationBrowserTest,
   TestUntrustedDataSourceHeaders headers;
   std::vector<std::string> frame_ancestors({"chrome://web-ui"});
   headers.frame_ancestors =
-      absl::make_optional<std::vector<std::string>>(std::move(frame_ancestors));
+      std::make_optional<std::vector<std::string>>(std::move(frame_ancestors));
 
   // Add a DataSource for the chrome-untrusted:// iframe with frame ancestor
   // chrome://web-ui.
@@ -736,8 +740,8 @@ const char kOpenUrlViaClickTargetFunc[] =
 
 // Adds a link with given url and target=_blank, and clicks on it.
 void OpenUrlViaClickTarget(const ToRenderFrameHost& adapter, const GURL& url) {
-  EXPECT_TRUE(ExecuteScript(adapter, std::string(kOpenUrlViaClickTargetFunc) +
-                                         "(\"" + url.spec() + "\");"));
+  EXPECT_TRUE(ExecJs(adapter, std::string(kOpenUrlViaClickTargetFunc) + "(\"" +
+                                  url.spec() + "\");"));
 }
 
 // Verify that two WebUIs with a shared domain have different SiteInstance
@@ -817,8 +821,7 @@ IN_PROC_BROWSER_TEST_F(WebUINavigationBrowserTest,
   // TODO(crbug.com/1044951): Since we swap BrowsingInstances, we shouldn't
   // keep a proxy for the second tab in the first tab's SiteInstance.
   RenderFrameProxyHost* initial_rfph =
-      new_web_contents->GetRenderManagerForTesting()
-          ->current_frame_host()
+      new_web_contents->GetPrimaryMainFrame()
           ->browsing_context_state()
           ->GetRenderFrameProxyHost(
               static_cast<SiteInstanceImpl*>(site_instance1)->group());
@@ -983,7 +986,7 @@ IN_PROC_BROWSER_TEST_F(WebUINavigationBrowserTest, WebUIMainFrameToWebAllowed) {
       base::StringPrintf("location.href = '%s';", web_url.spec().c_str());
 
   TestNavigationObserver navigation_observer(shell()->web_contents());
-  EXPECT_TRUE(ExecuteScript(shell(), script));
+  EXPECT_TRUE(ExecJs(shell(), script));
   navigation_observer.Wait();
 
   EXPECT_TRUE(navigation_observer.last_navigation_succeeded());
@@ -1160,6 +1163,64 @@ IN_PROC_BROWSER_TEST_F(WebUINavigationBrowserTest,
     EXPECT_TRUE(root->current_frame_host()->web_ui());
     EXPECT_EQ(success_url, observer.last_committed_url());
   }
+}
+
+class AdditionalSchemesWebUINavigationBrowserTest : public ContentBrowserTest {
+ public:
+  AdditionalSchemesWebUINavigationBrowserTest() {
+    url::AddStandardScheme(kAdditionalScheme,
+                           url::SchemeType::SCHEME_WITH_HOST);
+  }
+
+  void SetUpOnMainThread() override {
+    test_content_browser_client_ = std::make_unique<TestContentBrowserClient>();
+    factory_.SetSupportedScheme(kAdditionalScheme);
+  }
+
+  void TearDownOnMainThread() override { test_content_browser_client_.reset(); }
+
+
+  void SetUpCommandLine(base::CommandLine* command_line) override {
+    ContentBrowserTest::SetUpCommandLine(command_line);
+    command_line->AppendSwitchASCII(switches::kTestRegisterStandardScheme,
+                                    kAdditionalScheme);
+  }
+
+ private:
+  class TestContentBrowserClient
+      : public ContentBrowserTestContentBrowserClient {
+   public:
+    TestContentBrowserClient() = default;
+    TestContentBrowserClient(const TestContentBrowserClient&) = delete;
+    TestContentBrowserClient& operator=(const TestContentBrowserClient&) =
+        delete;
+    ~TestContentBrowserClient() override = default;
+
+    void GetAdditionalWebUISchemes(
+        std::vector<std::string>* additional_schemes) override {
+      additional_schemes->emplace_back(kAdditionalScheme);
+    }
+  };
+
+ private:
+  std::unique_ptr<TestContentBrowserClient> test_content_browser_client_;
+  url::ScopedSchemeRegistryForTests scheme_registry_;
+  TestWebUIControllerFactory factory_;
+  ScopedWebUIControllerFactoryRegistration factory_registration_{&factory_};
+};
+
+// Verify that WebUIDataSource can support non-default schemes.
+IN_PROC_BROWSER_TEST_F(AdditionalSchemesWebUINavigationBrowserTest,
+                       AdditionalSchemesWebUINavigation) {
+  GURL start_url(base::StrCat({kAdditionalScheme, url::kStandardSchemeSeparator,
+                               "web-ui/title1.html"}));
+  EXPECT_FALSE(NavigateToURL(shell(), start_url));
+
+  GURL success_url(base::StrCat(
+      {kAdditionalScheme, url::kStandardSchemeSeparator,
+       "web-ui/title2.html?supported_scheme=", kAdditionalScheme}));
+  EXPECT_TRUE(NavigateToURL(shell(), success_url));
+  EXPECT_EQ(success_url, shell()->web_contents()->GetLastCommittedURL());
 }
 
 }  // namespace content

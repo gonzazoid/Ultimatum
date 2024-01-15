@@ -18,8 +18,6 @@
 #include "gpu/gpu_gles2_export.h"
 
 namespace gpu {
-class GLTextureImageRepresentation;
-class SkiaImageRepresentation;
 struct Mailbox;
 
 // Implementation of SharedImageBacking that renders MediaCodec buffers to a
@@ -46,7 +44,7 @@ class GPU_GLES2_EXPORT VideoSurfaceTextureImageBacking
       const VideoSurfaceTextureImageBacking&) = delete;
 
   // SharedImageBacking implementation.
-  size_t EstimatedSizeForMemTracking() const override;
+  size_t GetEstimatedSizeForMemoryDump() const override;
 
   // SharedContextState::ContextLostObserver implementation.
   void OnContextLost() override;
@@ -60,7 +58,7 @@ class GPU_GLES2_EXPORT VideoSurfaceTextureImageBacking
   ProduceGLTexturePassthrough(SharedImageManager* manager,
                               MemoryTypeTracker* tracker) override;
 
-  std::unique_ptr<SkiaImageRepresentation> ProduceSkia(
+  std::unique_ptr<SkiaGaneshImageRepresentation> ProduceSkiaGanesh(
       SharedImageManager* manager,
       MemoryTypeTracker* tracker,
       scoped_refptr<SharedContextState> context_state) override;

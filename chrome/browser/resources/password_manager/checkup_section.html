@@ -6,16 +6,14 @@
   #checkupStatus {
     align-items: center;
     display: flex;
-    height: 52px;
-  }
-
-  #checkupStatus[check-successful] {
-    height: 72px;
+    min-height: 72px;
   }
 
   #illustartion {
     align-items: center;
     background-color: var(--google-grey-50);
+    border-top-left-radius: inherit;
+    border-top-right-radius: inherit;
     display: flex;
     height: 120px;
     justify-content: center;
@@ -53,44 +51,67 @@
     margin-inline-end: 20px;
   }
 
+  cr-link-row[non-clickable]::part(icon) {
+    display: none;
+  }
+
   cr-link-row {
     --cr-link-row-start-icon-color: var(--google-green-700);
     --cr-link-row-icon-width: 16px;
   }
 
-  cr-link-row[has-issues] {
+  cr-link-row[show-yellow-icon] {
     --cr-link-row-start-icon-color: var(--google-yellow-700);
   }
 
-  cr-link-row[compromised] {
+  cr-link-row[show-red-icon] {
     --cr-link-row-start-icon-color: var(--google-red-600);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    cr-link-row {
+      --cr-link-row-start-icon-color: var(--google-green-300);
+    }
+
+    cr-link-row[show-yellow-icon] {
+      --cr-link-row-start-icon-color: var(--google-yellow-300);
+    }
+
+    cr-link-row[show-red-icon] {
+      --cr-link-row-start-icon-color: var(--google-red-300);
+    }
+  }
+
+  #checkupResult,
+  #weakRow {
+    border-bottom-left-radius: inherit;
+    border-bottom-right-radius: inherit;
   }
 </style>
 <h2 class="page-title">$i18n{checkupTitle}</h2>
 <div id="checkupContent" class="card">
   <div id="illustartion" role="presentation">
     <picture>
-      <source class="banner"
-          srcset="./images/[[getBannerImageFileName_(status_)]]_dark.svg"
+      <source class="banner" srcset="./images/[[bannerImage_]]_dark.svg"
           media="(prefers-color-scheme: dark)">
       <img id="bannerImage" class="banner" alt=""
-          src="./images/[[getBannerImageFileName_(status_)]].svg">
+          src="./images/[[bannerImage_]].svg">
     </picture>
   </div>
-  <div class="hr" id="checkupStatus" check-successful$="[[isCheckSuccessful_]]">
+  <div class="hr" id="checkupStatus">
     <paper-spinner-lite id="spinner" active hidden="[[!isCheckRunning_]]">
     </paper-spinner-lite>
     <div id="labelWrapper">
       <div id="checkupStatusLabel" class="title">[[checkedPasswordsText_]]</div>
-      <div id="lastCheckupTime" class="cr-secondary-text label"
-          hidden="[[!isCheckSuccessful_]]">
-        <span id="sub-label-text">$i18n{justNow}</span>
+      <div id="checkupStatusSubLabel" class="cr-secondary-text label">
+        [[getCheckupSublabelValue_(status_)]]
       </div>
     </div>
     <div id="checkupButtons" hidden="[[!showCheckButton_(status_)]]">
       <cr-icon-button id="refreshButton" class="icon-refresh"
           disabled="[[isCheckRunning_]]" hidden="[[showRetryButton_(status_)]]"
-          on-click="onPasswordCheckButtonClick_">
+          on-click="onPasswordCheckButtonClick_" title="$i18n{reload}"
+          aria-label="$i18n{runCheckupAriaDescription}">
       </cr-icon-button>
       <cr-button id="retryButton" hidden="[[!showRetryButton_(status_)]]"
           class="action-button" on-click="onPasswordCheckButtonClick_">
@@ -98,18 +119,32 @@
       </cr-button>
     </div>
   </div>
-  <div id="checkupResult" hidden="[[isCheckRunning_]]">
-    <cr-link-row id="compromisedRow" start-icon="cr:error"
-        label="[[compromisedPasswordsText_]]" class="hr"
-        sub-label="$i18n{compromisedPasswordsTitle}" compromised>
+  <div id="checkupResult" hidden="[[!showCheckupResult_(status_)]]">
+    <cr-link-row id="compromisedRow" class="hr"
+        start-icon="[[getIcon_(compromisedPasswords_, 'true', status_)]]"
+        label="[[getCompromisedSectionLabel_(status_, compromisedPasswordsText_)]]"
+        sub-label="[[getCompromisedSectionSublabel_(status_, compromisedPasswords_)]]"
+        show-yellow-icon$="[[didCompromiseCheckFail_(status_)]]"
+        show-red-icon$="[[hasIssues_(compromisedPasswords_)]]"
+        non-clickable$="[[!hasIssues_(compromisedPasswords_)]]"
+        on-click="onCompromisedClick_" role-description="button"
+        aria-show-label aria-show-sublabel>
     </cr-link-row>
-    <cr-link-row id="weakRow" start-icon="cr:check-circle"
+    <cr-link-row id="reusedRow" start-icon="[[getIcon_(reusedPasswords_)]]"
         label="[[reusedPasswordsText_]]" class="hr"
-        sub-label="$i18n{reusedPasswordsEmpty}">
+        sub-label="[[getReusedSectionSublabel_(reusedPasswords_)]]"
+        show-yellow-icon$="[[hasIssues_(reusedPasswords_)]]"
+        non-clickable$="[[!hasIssues_(reusedPasswords_)]]"
+        on-click="onReusedClick_" role-description="button"
+        aria-show-label aria-show-sublabel>
     </cr-link-row>
-    <cr-link-row id="reusedRow" start-icon="cr:error"
+    <cr-link-row id="weakRow" start-icon="[[getIcon_(weakPasswords_)]]"
         label="[[weakPasswordsText_]]" class="hr"
-        sub-label="$i18n{weakPasswordsTitle}" has-issues>
+        sub-label="[[getWeakSectionSublabel_(weakPasswords_)]]"
+        show-yellow-icon$="[[hasIssues_(weakPasswords_)]]"
+        non-clickable$="[[!hasIssues_(weakPasswords_)]]"
+        on-click="onWeakClick_" role-description="button"
+        aria-show-label aria-show-sublabel>
     </cr-link-row>
   </div>
 </div>

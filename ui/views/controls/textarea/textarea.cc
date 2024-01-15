@@ -19,6 +19,7 @@ Textarea::Textarea() {
   GetRenderText()->SetMultiline(true);
   GetRenderText()->SetVerticalAlignment(gfx::ALIGN_TOP);
   GetRenderText()->SetWordWrapBehavior(gfx::WRAP_LONG_WORDS);
+  SetTextInputType(ui::TextInputType::TEXT_INPUT_TYPE_TEXT_AREA);
 }
 
 size_t Textarea::GetNumLines() {
@@ -29,6 +30,7 @@ bool Textarea::OnMouseWheel(const ui::MouseWheelEvent& event) {
   GetRenderText()->SetDisplayOffset(GetRenderText()->GetUpdatedDisplayOffset() +
                                     gfx::Vector2d(0, event.y_offset()));
   UpdateCursorViewPosition();
+  UpdateCursorVisibility();
   SchedulePaint();
   return true;
 }
@@ -111,7 +113,7 @@ ui::TextEditCommand Textarea::GetCommandForKeyEvent(const ui::KeyEvent& event) {
   }
 }
 
-BEGIN_METADATA(Textarea, Textfield)
+BEGIN_METADATA(Textarea)
 END_METADATA
 
 }  // namespace views

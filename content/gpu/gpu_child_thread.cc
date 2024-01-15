@@ -10,17 +10,17 @@
 #include <utility>
 
 #include "base/allocator/allocator_extension.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
 #include "base/debug/dump_without_crashing.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/weak_ptr.h"
 #include "base/power_monitor/power_monitor.h"
 #include "base/power_monitor/power_monitor_device_source.h"
 #include "base/run_loop.h"
 #include "base/task/sequenced_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_checker.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "content/child/child_process.h"
@@ -30,7 +30,7 @@
 #include "content/public/common/content_client.h"
 #include "content/public/common/content_switches.h"
 #include "content/public/gpu/content_gpu_client.h"
-#include "gpu/command_buffer/common/activity_flags.h"
+#include "gpu/command_buffer/common/shm_count.h"
 #include "gpu/ipc/service/gpu_channel_manager.h"
 #include "gpu/ipc/service/gpu_init.h"
 #include "gpu/ipc/service/gpu_watchdog_thread.h"
@@ -57,6 +57,10 @@
 #include "components/services/font/public/mojom/font_service.mojom.h"  // nogncheck
 #include "third_party/skia/include/core/SkRefCnt.h"
 #include "third_party/skia/include/ports/SkFontConfigInterface.h"
+#endif
+
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
+#include "content/child/sandboxed_process_thread_type_handler.h"
 #endif
 
 namespace content {
@@ -97,11 +101,9 @@ viz::VizMainImpl::ExternalDependencies CreateVizMainDependencies() {
   deps.shutdown_event = process->GetShutDownEvent();
   deps.io_thread_task_runner = process->io_task_runner();
 
-  mojo::PendingRemote<ukm::mojom::UkmRecorderInterface> ukm_recorder;
-  ChildThread::Get()->BindHostReceiver(
-      ukm_recorder.InitWithNewPipeAndPassReceiver());
-  deps.ukm_recorder =
-      std::make_unique<ukm::MojoUkmRecorder>(std::move(ukm_recorder));
+  mojo::Remote<ukm::mojom::UkmRecorderFactory> factory;
+  ChildThread::Get()->BindHostReceiver(factory.BindNewPipeAndPassReceiver());
+  deps.ukm_recorder = ukm::MojoUkmRecorder::Create(*factory);
   return deps;
 }
 
@@ -141,6 +143,10 @@ void GpuChildThread::Init(const base::TimeTicks& process_start_time) {
 
   viz_main_.gpu_service()->set_start_time(process_start_time);
 
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
+  SandboxedProcessThreadTypeHandler::NotifyMainChildThreadCreated();
+#endif
+
   // When running in in-process mode, this has been set in the browser at
   // ChromeBrowserMainPartsAndroid::PreMainMessageLoopRun().
 #if BUILDFLAG(IS_ANDROID)
@@ -177,7 +183,7 @@ void GpuChildThread::OnGpuServiceConnection(viz::GpuServiceImpl* gpu_service) {
 #if BUILDFLAG(IS_ANDROID)
   overlay_factory_cb =
       base::BindRepeating(&GpuChildThread::CreateAndroidOverlay,
-                          base::ThreadTaskRunnerHandle::Get());
+                          base::SingleThreadTaskRunner::GetCurrentDefault());
   gpu_service->media_gpu_channel_manager()->SetOverlayFactory(
       overlay_factory_cb);
 #endif
@@ -259,7 +265,7 @@ void GpuChildThread::QuitSafelyHelper(
 // before quitting the main message loop. Must be called on the main thread.
 base::RepeatingClosure GpuChildThread::MakeQuitSafelyClosure() {
   return base::BindRepeating(&GpuChildThread::QuitSafelyHelper,
-                             base::ThreadTaskRunnerHandle::Get());
+                             base::SingleThreadTaskRunner::GetCurrentDefault());
 }
 
 #if BUILDFLAG(IS_ANDROID)

@@ -7,6 +7,7 @@
 #include "ash/public/cpp/shell_window_ids.h"
 #include "ash/shell.h"
 #include "ash/wm/window_mirror_view.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/aura/client/aura_constants.h"
 #include "ui/aura/client/screen_position_client.h"
 #include "ui/aura/window.h"
@@ -78,7 +79,7 @@ class DragWindowController::DragWindowDetails {
 
   void Update(aura::Window* original_window,
               bool is_touch_dragging,
-              const absl::optional<gfx::Rect>& shadow_bounds) {
+              const std::optional<gfx::Rect>& shadow_bounds) {
     const float opacity =
         GetDragWindowOpacity(root_window_, original_window, is_touch_dragging);
     if (opacity == 0.f) {
@@ -103,7 +104,7 @@ class DragWindowController::DragWindowDetails {
   friend class DragWindowController;
 
   void CreateDragWindow(aura::Window* original_window,
-                        const absl::optional<gfx::Rect>& shadow_bounds) {
+                        const std::optional<gfx::Rect>& shadow_bounds) {
     DCHECK(!widget_);
     views::Widget::InitParams params;
     params.type = views::Widget::InitParams::TYPE_POPUP;
@@ -120,14 +121,13 @@ class DragWindowController::DragWindowDetails {
     widget_->set_focus_on_creation(false);
     widget_->Init(std::move(params));
 
-    // TODO(crbug.com/1026746): Change this to WindowPreviewView.
+    // TODO(b/252525521): Change this to WindowPreviewView.
     // WindowPreviewView can show transient children, but currently does not
     // show popups due to performance reasons. WindowPreviewView also needs to
     // be modified so that it can optionally be clipped to the main window's
     // bounds.
     widget_->SetContentsView(std::make_unique<WindowMirrorView>(
-        original_window, /*trilinear_filtering_on_init=*/false,
-        /*show_non_client_view=*/true));
+        original_window, /*show_non_client_view=*/true, /*sync_bounds=*/true));
 
     aura::Window* window = widget_->GetNativeWindow();
     window->SetId(kShellWindowId_PhantomWindow);
@@ -150,7 +150,7 @@ class DragWindowController::DragWindowDetails {
   }
 
   // The root window of |widget_|.
-  aura::Window* root_window_;
+  raw_ptr<aura::Window> root_window_;
 
   // Contains a WindowMirrorView which is a copy of the original window.
   std::unique_ptr<views::Widget> widget_;
@@ -162,11 +162,11 @@ class DragWindowController::DragWindowDetails {
 DragWindowController::DragWindowController(
     aura::Window* window,
     bool is_touch_dragging,
-    const absl::optional<gfx::Rect>& shadow_bounds)
+    const std::optional<gfx::Rect>& shadow_bounds)
     : window_(window),
       is_touch_dragging_(is_touch_dragging),
       shadow_bounds_(shadow_bounds),
-      old_opacity_(window->layer()->opacity()) {
+      old_opacity_(window->layer()->GetTargetOpacity()) {
   window->layer()->SetOpacity(1.f);
 
   DCHECK(drag_windows_.empty());
@@ -180,6 +180,9 @@ DragWindowController::DragWindowController(
 }
 
 DragWindowController::~DragWindowController() {
+  LOG_IF(ERROR, old_opacity_ < 1.0f)
+      << "Ended drag and restored window to opacity < 1.0f, which is likely "
+         "not intended.";
   window_->layer()->SetOpacity(old_opacity_);
 }
 
@@ -240,8 +243,9 @@ void DragWindowController::RequestLayerPaintForTest() {
       layers.pop_back();
       if (layer->delegate())
         layer->delegate()->OnPaintLayer(context);
-      for (auto* child : layer->children())
+      for (ui::Layer* child : layer->children()) {
         layers.push_back(child);
+      }
     }
   }
 }

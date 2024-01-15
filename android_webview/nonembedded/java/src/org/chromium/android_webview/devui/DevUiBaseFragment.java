@@ -9,9 +9,7 @@ import androidx.fragment.app.Fragment;
 
 import org.chromium.base.metrics.RecordHistogram;
 
-/**
- * A base class for all fragments in the UI.
- */
+/** A base class for all fragments in the UI. */
 public abstract class DevUiBaseFragment extends Fragment {
     private long mStartOfSession;
 
@@ -42,6 +40,8 @@ public abstract class DevUiBaseFragment extends Fragment {
             suffix = "CrashesListFragment";
         } else if (this instanceof ComponentsListFragment) {
             suffix = "ComponentsListFragment";
+        } else if (this instanceof SafeModeFragment) {
+            suffix = "SafeModeFragment";
         }
         // Note: keep this if-else ladder synchronized with the AndroidWebViewFragments
         // histogram_suffix

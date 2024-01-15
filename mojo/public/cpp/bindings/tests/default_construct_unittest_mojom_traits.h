@@ -5,27 +5,28 @@
 #ifndef MOJO_PUBLIC_CPP_BINDINGS_TESTS_DEFAULT_CONSTRUCT_UNITTEST_MOJOM_TRAITS_H_
 #define MOJO_PUBLIC_CPP_BINDINGS_TESTS_DEFAULT_CONSTRUCT_UNITTEST_MOJOM_TRAITS_H_
 
-#include "mojo/public/cpp/bindings/default_construct_traits.h"
+#include "mojo/public/cpp/bindings/default_construct_tag.h"
 #include "mojo/public/cpp/bindings/struct_traits.h"
 
 namespace mojo {
 
 namespace test::default_construct {
 
-// For convenience, the C++ struct is simply defined in the traits header. This
+// For convenience, the C++ class is simply defined in the traits header. This
 // should never be done in non-test code.
-struct TestStruct {
-  explicit TestStruct(int value) : value(value) {}
+class TestStruct {
+ public:
+  explicit TestStruct(int value) : value_(value) {}
 
   TestStruct(const TestStruct&) = default;
   TestStruct& operator=(const TestStruct&) = default;
 
- public:
-  friend mojo::DefaultConstructTraits;
+  int value() const { return value_; }
 
-  TestStruct() = default;
+  explicit TestStruct(DefaultConstruct::Tag) {}
 
-  int value = 0;
+ private:
+  int value_ = 0;
 };
 
 }  // namespace test::default_construct
@@ -34,12 +35,12 @@ template <>
 struct StructTraits<test::default_construct::mojom::TestStructDataView,
                     test::default_construct::TestStruct> {
   static int value(const test::default_construct::TestStruct& in) {
-    return in.value;
+    return in.value();
   }
 
   static bool Read(test::default_construct::mojom::TestStructDataView in,
                    test::default_construct::TestStruct* out) {
-    out->value = in.value();
+    *out = test::default_construct::TestStruct(in.value());
     return true;
   }
 };

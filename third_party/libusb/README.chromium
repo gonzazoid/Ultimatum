@@ -1,10 +1,11 @@
 Name: libusbx
-URL: http://libusb.org
+URL: https://libusb.info/
 Version: 1.0.17
 CPEPrefix: cpe:/a:libusb:libusb:1.0.17:rc1
 License: LGPL 2.1
 License File: src/COPYING
 Security Critical: yes
+Shipped: yes
 
 Description:
 libusbx provides a platform-agnostic API for accessing the USB subsystem on Mac,
@@ -28,3 +29,4 @@ Local Modifications:
   backporting and simplifying the 10.12 branch of the upstream
   https://android.googlesource.com/platform/external/libusb/+/1e05092aa98d60c717929629ac16590595e08431
   as the 10.12 branch works fine on all previous OSes.
+- cherry-picked upstream 8d7616886e062

@@ -5,41 +5,38 @@
 #include "chrome/browser/ash/login/screens/update_screen.h"
 
 #include <memory>
+#include <optional>
 
 #include "ash/constants/ash_features.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
-#include "base/run_loop.h"
-#include "base/strings/string_util.h"
+#include "base/functional/callback_forward.h"
+#include "base/memory/raw_ptr.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/scoped_mock_time_message_loop_task_runner.h"
 #include "base/test/simple_test_tick_clock.h"
+#include "base/test/test_future.h"
 #include "base/time/time.h"
-#include "chrome/browser/ash/login/login_wizard.h"
 #include "chrome/browser/ash/login/screens/error_screen.h"
 #include "chrome/browser/ash/login/test/js_checker.h"
 #include "chrome/browser/ash/login/test/local_state_mixin.h"
 #include "chrome/browser/ash/login/test/network_portal_detector_mixin.h"
 #include "chrome/browser/ash/login/test/oobe_base_test.h"
 #include "chrome/browser/ash/login/test/oobe_screen_waiter.h"
+#include "chrome/browser/ash/login/test/test_predicate_waiter.h"
 #include "chrome/browser/ash/login/ui/login_display_host.h"
 #include "chrome/browser/ash/login/version_updater/version_updater.h"
 #include "chrome/browser/ash/login/wizard_controller.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/ui/webui/ash/login/error_screen_handler.h"
 #include "chrome/browser/ui/webui/ash/login/oobe_ui.h"
-#include "chrome/browser/ui/webui/chromeos/login/network_screen_handler.h"
-#include "chrome/browser/ui/webui/chromeos/login/update_screen_handler.h"
+#include "chrome/browser/ui/webui/ash/login/update_screen_handler.h"
 #include "chrome/common/pref_names.h"
-#include "chrome/grit/chromium_strings.h"
+#include "chrome/grit/branded_strings.h"
 #include "chrome/grit/generated_resources.h"
-#include "chromeos/ash/components/dbus/dbus_thread_manager.h"
 #include "chromeos/ash/components/dbus/update_engine/fake_update_engine_client.h"
 #include "chromeos/ash/components/network/network_connection_handler.h"
 #include "chromeos/ash/components/network/network_handler.h"
 #include "chromeos/dbus/power/fake_power_manager_client.h"
 #include "content/public/test/browser_test.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/base/l10n/l10n_util.h"
 
 namespace ash {
@@ -55,8 +52,8 @@ const test::UIPath kCellularPermissionBack = {"oobe-update",
 const test::UIPath kLowBatteryWarningMessage = {"oobe-update",
                                                 "battery-warning"};
 const test::UIPath kErrorMessage = {"error-message"};
-const test::UIPath kBetterUpdateCheckingForUpdatesDialog = {
-    "oobe-update", "checking-for-updates-dialog"};
+const test::UIPath kBetterUpdateCheckingForUpdatesDialog = {"oobe-update",
+                                                            "checking-update"};
 const test::UIPath kUpdateInProgressDialog = {"oobe-update",
                                               "update-in-progress-dialog"};
 const test::UIPath kRestartingDialog = {"oobe-update", "restarting-dialog"};
@@ -113,7 +110,7 @@ int GetDownloadingProgress(double progress) {
          static_cast<int>(progress * kDownloadProgressIncrement);
 }
 
-chromeos::OobeUI* GetOobeUI() {
+OobeUI* GetOobeUI() {
   auto* host = LoginDisplayHost::default_host();
   return host ? host->GetOobeUI() : nullptr;
 }
@@ -158,6 +155,12 @@ class UpdateScreenTest : public OobeBaseTest,
     version_updater_->set_tick_clock_for_testing(&tick_clock_);
     update_screen_->set_tick_clock_for_testing(&tick_clock_);
 
+    // Waiting for update screen to be shown might take a long time on some test
+    // build and the timer might be fired already. Increase the delay and call
+    // fire from the test instead.
+    update_screen_->set_delay_for_delayed_timer_for_testing(
+        base::TimeDelta::Max());
+
     LoginDisplayHost::default_host()
         ->GetWizardContextForTesting()
         ->is_branded_build = true;
@@ -191,15 +194,16 @@ class UpdateScreenTest : public OobeBaseTest,
 
  protected:
   void WaitForScreenResult() {
-    if (last_screen_result_.has_value())
+    if (last_screen_result_.has_value()) {
       return;
-
-    base::RunLoop run_loop;
-    screen_result_callback_ = run_loop.QuitClosure();
-    run_loop.Run();
+    }
+    base::test::TestFuture<void> waiter;
+    screen_result_callback_ = waiter.GetCallback();
+    EXPECT_TRUE(waiter.Wait());
   }
 
   void ShowUpdateScreen() {
+    WaitForOobeUI();
     WizardController::default_controller()->AdvanceToScreen(
         UpdateView::kScreenId);
     // When opt out option is not available we try to wait and don't show the
@@ -213,23 +217,60 @@ class UpdateScreenTest : public OobeBaseTest,
     }
   }
 
+  // Preconditions:
+  // - `UpdateScreen` is shown;
+  // - Network is in a portal state.
+  // Postconditions:
+  // - Timer to delay showing the `ErrorScreen` is started.
+  void WaitForDelayedErrorTimerToStart() {
+    LOG(INFO) << "Waiting for delayed error timer to start";
+    // Wait for the delayed timer to start running.
+    auto* delayed_error_timer =
+        update_screen_->GetErrorMessageTimerForTesting();
+    test::TestPredicateWaiter(
+        base::BindRepeating(&base::OneShotTimer::IsRunning,
+                            base::Unretained(delayed_error_timer)))
+        .Wait();
+  }
+
+  // Preconditions:
+  // - `UpdateScreen` is shown;
+  // - Network is in a portal state.
+  // Postconditions:
+  // - Timer to delay showing the `ErrorScreen` is fired;
+  // - `ErrorScreen` is shown.
+  void WaitForDelayedErrorTimerToFire() {
+    auto* delayed_error_timer =
+        update_screen_->GetErrorMessageTimerForTesting();
+    WaitForDelayedErrorTimerToStart();
+    // Fire the timer.
+    delayed_error_timer->FireNow();
+    ASSERT_EQ(UpdateView::kScreenId.AsId(), error_screen_->GetParentScreen());
+    EXPECT_FALSE(delayed_error_timer->IsRunning());
+
+    // Wait for `ErrorScreen` to be shown.
+    OobeScreenWaiter error_screen_waiter(ErrorScreenView::kScreenId);
+    error_screen_waiter.set_assert_next_screen();
+    error_screen_waiter.Wait();
+  }
+
   chromeos::FakePowerManagerClient* power_manager_client() {
     return chromeos::FakePowerManagerClient::Get();
   }
 
   NetworkPortalDetectorMixin network_portal_detector_{&mixin_host_};
 
-  UpdateScreen* update_screen_ = nullptr;
+  raw_ptr<UpdateScreen, DanglingUntriaged> update_screen_ = nullptr;
   // Version updater - owned by `update_screen_`.
-  VersionUpdater* version_updater_ = nullptr;
+  raw_ptr<VersionUpdater, DanglingUntriaged> version_updater_ = nullptr;
   // Error screen - owned by OobeUI.
-  ErrorScreen* error_screen_ = nullptr;
+  raw_ptr<ErrorScreen, DanglingUntriaged> error_screen_ = nullptr;
 
   base::SimpleTestTickClock tick_clock_;
 
   base::HistogramTester histogram_tester_;
 
-  absl::optional<UpdateScreen::Result> last_screen_result_;
+  std::optional<UpdateScreen::Result> last_screen_result_;
 
  private:
   void HandleScreenExit(UpdateScreen::Result result) {
@@ -555,8 +596,8 @@ IN_PROC_BROWSER_TEST_P(UpdateScreenTest, TestTemporaryPortalNetwork) {
 
   // If the network is a captive portal network, error message is shown with a
   // delay.
-  EXPECT_TRUE(update_screen_->GetErrorMessageTimerForTesting()->IsRunning());
-  EXPECT_EQ(ash::OOBE_SCREEN_UNKNOWN.AsId(), error_screen_->GetParentScreen());
+  WaitForDelayedErrorTimerToStart();
+  EXPECT_EQ(OOBE_SCREEN_UNKNOWN.AsId(), error_screen_->GetParentScreen());
 
   // If network goes back online, the error message timer should be canceled.
   network_portal_detector_.SimulateDefaultNetworkState(
@@ -618,17 +659,7 @@ IN_PROC_BROWSER_TEST_P(UpdateScreenTest, TestTwoOfflineNetworks) {
       NetworkPortalDetector::CAPTIVE_PORTAL_STATUS_PORTAL);
   ShowUpdateScreen();
 
-  // Update screen will delay error message about portal state because
-  // ethernet is behind captive portal. Simulate the delay timing out.
-  EXPECT_TRUE(update_screen_->GetErrorMessageTimerForTesting()->IsRunning());
-  update_screen_->GetErrorMessageTimerForTesting()->FireNow();
-  EXPECT_FALSE(update_screen_->GetErrorMessageTimerForTesting()->IsRunning());
-
-  ASSERT_EQ(UpdateView::kScreenId.AsId(), error_screen_->GetParentScreen());
-
-  OobeScreenWaiter error_screen_waiter(ErrorScreenView::kScreenId);
-  error_screen_waiter.set_assert_next_screen();
-  error_screen_waiter.Wait();
+  WaitForDelayedErrorTimerToFire();
 
   test::OobeJS().ExpectVisiblePath(kErrorMessage);
   test::OobeJS().ExpectVisiblePath(
@@ -683,21 +714,13 @@ IN_PROC_BROWSER_TEST_P(UpdateScreenTest, TestAPReselection) {
 
   ShowUpdateScreen();
 
-  // Force timer expiration.
-  EXPECT_TRUE(update_screen_->GetErrorMessageTimerForTesting()->IsRunning());
-  update_screen_->GetErrorMessageTimerForTesting()->FireNow();
-  ASSERT_EQ(UpdateView::kScreenId.AsId(), error_screen_->GetParentScreen());
-  EXPECT_FALSE(update_screen_->GetShowTimerForTesting()->IsRunning());
-
-  OobeScreenWaiter error_screen_waiter(ErrorScreenView::kScreenId);
-  error_screen_waiter.set_assert_next_screen();
-  error_screen_waiter.Wait();
+  WaitForDelayedErrorTimerToFire();
 
   NetworkHandler::Get()->network_connection_handler()->ConnectToNetwork(
       "fake_path", base::DoNothing(), base::DoNothing(),
       false /* check_error_state */, ConnectCallbackMode::ON_COMPLETED);
 
-  ASSERT_EQ(ash::OOBE_SCREEN_UNKNOWN.AsId(), error_screen_->GetParentScreen());
+  ASSERT_EQ(OOBE_SCREEN_UNKNOWN.AsId(), error_screen_->GetParentScreen());
   if (!GetParam().is_eu || !features::IsConsumerAutoUpdateToggleAllowed()) {
     EXPECT_TRUE(update_screen_->GetShowTimerForTesting()->IsRunning());
     update_screen_->GetShowTimerForTesting()->FireNow();
@@ -965,7 +988,7 @@ IN_PROC_BROWSER_TEST_P(UpdateScreenTest,
   ASSERT_EQ(update_engine_client()->reboot_after_update_call_count(), 1);
 
   // Simulate the situation where reboot does not happen in time.
-  ASSERT_TRUE(version_updater_->GetRebootTimerForTesting()->IsRunning());
+  ASSERT_TRUE(version_updater_->get_reboot_timer_for_testing()->IsRunning());
   mocked_task_runner->FastForwardBy(kTimeDefaultWaiting);
 
   test::OobeJS().ExpectHiddenPath(kRestartingDialog);
@@ -1065,7 +1088,7 @@ IN_PROC_BROWSER_TEST_P(UpdateScreenTest, DISABLED_UpdateScreenSteps) {
   ASSERT_EQ(update_engine_client()->reboot_after_update_call_count(), 1);
 
   // Simulate the situation where reboot does not happen in time.
-  ASSERT_TRUE(version_updater_->GetRebootTimerForTesting()->IsRunning());
+  ASSERT_TRUE(version_updater_->get_reboot_timer_for_testing()->IsRunning());
   mocked_task_runner->FastForwardBy(kTimeDefaultWaiting);
 
   test::OobeJS().ExpectHiddenPath(kBetterUpdateCheckingForUpdatesDialog);

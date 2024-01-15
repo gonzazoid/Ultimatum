@@ -6,7 +6,7 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/trace_event/traced_value.h"
 #include "base/types/optional_util.h"
 #include "cc/paint/paint_flags.h"
@@ -97,7 +97,7 @@ void ContentLayerClientImpl::UpdateCcPictureLayer(
     raster_under_invalidation_params.emplace(
         *raster_invalidator_.GetTracking(), gfx::Rect(layer_bounds),
         paint_chunks.GetPaintArtifact().ClientDebugName(
-            paint_chunks.begin()->id.client_id));
+            paint_chunks[0].id.client_id));
   }
 
   // Note: cc::Layer API assumes the layer bounds start at (0, 0), but the
@@ -106,6 +106,9 @@ void ContentLayerClientImpl::UpdateCcPictureLayer(
   // paint chunk to align the bounding box to (0, 0) and we set the layer's
   // offset_to_transform_parent with the origin of the paint chunk here.
   cc_picture_layer_->SetOffsetToTransformParent(layer_offset);
+
+  cc_picture_layer_->SetBounds(layer_bounds);
+  pending_layer.UpdateCcLayerHitTestOpaqueness();
 
   // If nothing changed in the layer, keep the original display item list.
   // Here check layer_bounds because RasterInvalidator doesn't issue raster
@@ -117,13 +120,13 @@ void ContentLayerClientImpl::UpdateCcPictureLayer(
     return;
   }
 
-  cc_display_item_list_ = PaintChunksToCcLayer::Convert(
+  cc_display_item_list_ = base::MakeRefCounted<cc::DisplayItemList>();
+  PaintChunksToCcLayer::ConvertInto(
       paint_chunks, layer_state, layer_offset,
-      cc::DisplayItemList::kTopLevelDisplayItemList,
-      base::OptionalToPtr(raster_under_invalidation_params));
+      base::OptionalToPtr(raster_under_invalidation_params),
+      *cc_display_item_list_);
+  cc_display_item_list_->Finalize();
 
-  cc_picture_layer_->SetBounds(layer_bounds);
-  cc_picture_layer_->SetHitTestable(true);
   cc_picture_layer_->SetIsDrawable(pending_layer.DrawsContent());
 
   cc_picture_layer_->SetBackgroundColor(pending_layer.ComputeBackgroundColor());
@@ -139,6 +142,7 @@ void ContentLayerClientImpl::UpdateCcPictureLayer(
   cc_picture_layer_->SetContentsOpaque(contents_opaque);
   if (!contents_opaque) {
     cc_picture_layer_->SetContentsOpaqueForText(
+        cc_display_item_list_->has_draw_text_ops() &&
         pending_layer.TextKnownToBeOnOpaqueBackground());
   }
 }

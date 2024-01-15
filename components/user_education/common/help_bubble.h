@@ -5,10 +5,11 @@
 #ifndef COMPONENTS_USER_EDUCATION_COMMON_HELP_BUBBLE_H_
 #define COMPONENTS_USER_EDUCATION_COMMON_HELP_BUBBLE_H_
 
-#include "base/callback.h"
 #include "base/callback_list.h"
 #include "base/compiler_specific.h"
+#include "base/functional/callback.h"
 #include "ui/base/interaction/element_identifier.h"
+#include "ui/base/interaction/element_tracker.h"
 #include "ui/base/interaction/framework_specific_implementation.h"
 #include "ui/gfx/geometry/rect.h"
 
@@ -50,16 +51,11 @@ class HelpBubble : public ui::FrameworkSpecificImplementation {
   [[nodiscard]] base::CallbackListSubscription AddOnCloseCallback(
       ClosedCallback callback);
 
-  bool is_open() const { return !is_closed() && !closing_; }
+  bool is_open() const { return !is_closed(); }
 
  protected:
   // Actually close the bubble.
   virtual void CloseBubbleImpl() = 0;
-
-  // Updates internal state to indicate that the bubble has been closed.
-  // Called by Close(), but can also be called if the bubble is closed by user
-  // action, etc.
-  void NotifyBubbleClosed();
 
  private:
   // Closed callbacks are cleared out on close, so this keeps us from having to
@@ -68,7 +64,6 @@ class HelpBubble : public ui::FrameworkSpecificImplementation {
 
   using CallbackList = base::OnceCallbackList<ClosedCallback::RunType>;
   std::unique_ptr<CallbackList> on_close_callbacks_;
-  bool closing_ = false;
 };
 
 }  // namespace user_education

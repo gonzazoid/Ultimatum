@@ -10,6 +10,8 @@
 #include "base/notreached.h"
 #include "ui/events/event_rewriter_continuation.h"
 #include "ui/events/event_source.h"
+#include "ui/events/event_target.h"
+#include "ui/events/platform_event.h"
 
 namespace ui {
 
@@ -40,6 +42,9 @@ EventDispatchDetails EventRewriter::RewriteEvent(
     return continuation->SendEvent(&event);
   }
   CHECK(rewritten_event);
+  if (SupportsNonRootLocation()) {
+    SetEventTarget(*rewritten_event, event.target());
+  }
   EventDispatchDetails details =
       continuation->SendEventFinally(rewritten_event.get());
   while (status == EVENT_REWRITE_DISPATCH_ANOTHER) {
@@ -51,6 +56,9 @@ EventDispatchDetails EventRewriter::RewriteEvent(
       return continuation->DiscardEvent();
     CHECK_NE(EVENT_REWRITE_CONTINUE, status);
     CHECK(new_event);
+    if (SupportsNonRootLocation()) {
+      SetEventTarget(*new_event, event.target());
+    }
     details = continuation->SendEventFinally(new_event.get());
     rewritten_event = std::move(new_event);
   }
@@ -65,6 +73,10 @@ EventRewriteStatus EventRewriter::RewriteEvent(
     std::unique_ptr<Event>* rewritten_event) {
   NOTREACHED();
   return EVENT_REWRITE_DISCARD;
+}
+
+bool EventRewriter::SupportsNonRootLocation() const {
+  return false;
 }
 
 // Temporary default implementation of the old API, so that subclasses'
@@ -100,5 +112,16 @@ EventDispatchDetails EventRewriter::DiscardEvent(
   return continuation ? continuation->DiscardEvent()
                       : DispatcherDestroyed();
 }
+
+void EventRewriter::SetEventTarget(Event& event, EventTarget* target) {
+  Event::DispatcherApi(&event).set_target(target);
+}
+
+#if BUILDFLAG(IS_CHROMEOS)
+void EventRewriter::SetNativeEvent(Event& event,
+                                   const PlatformEvent& native_event) {
+  event.native_event_ = native_event;
+}
+#endif
 
 }  // namespace ui

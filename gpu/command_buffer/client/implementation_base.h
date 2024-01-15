@@ -13,7 +13,7 @@
 #include <utility>
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/trace_event/memory_dump_provider.h"
@@ -105,7 +105,7 @@ class GLES2_IMPL_EXPORT ImplementationBase
   gpu::ContextResult Initialize(const SharedMemoryLimits& limits);
 
   // Waits for all commands to execute.
-  void WaitForCmd();
+  bool WaitForCmd();
 
   // Gets the value of the result.
   template <typename T>

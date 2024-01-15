@@ -13,15 +13,13 @@
 #include <windows.h>
 #include <security.h>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/scoped_generic.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/task/task_runner_util.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/win/wincrypt_shim.h"
 #include "net/cert/x509_util.h"
 #include "net/cert/x509_util_win.h"
@@ -52,8 +50,8 @@ class ClientCertIdentityWin : public ClientCertIdentity {
 
   void AcquirePrivateKey(base::OnceCallback<void(scoped_refptr<SSLPrivateKey>)>
                              private_key_callback) override {
-    base::PostTaskAndReplyWithResult(
-        key_task_runner_.get(), FROM_HERE,
+    key_task_runner_->PostTaskAndReplyWithResult(
+        FROM_HERE,
         base::BindOnce(&FetchClientCertPrivateKey,
                        base::Unretained(certificate()), cert_context_.get()),
         std::move(private_key_callback));
@@ -112,7 +110,7 @@ ClientCertIdentityList GetClientCertsImpl(HCERTSTORE cert_store,
   ClientCertIdentityList selected_identities;
 
   scoped_refptr<base::SingleThreadTaskRunner> current_thread =
-      base::ThreadTaskRunnerHandle::Get();
+      base::SingleThreadTaskRunner::GetCurrentDefault();
 
   const size_t auth_count = request.cert_authorities.size();
   std::vector<CERT_NAME_BLOB> issuers(auth_count);
@@ -227,8 +225,8 @@ ClientCertStoreWin::~ClientCertStoreWin() = default;
 
 void ClientCertStoreWin::GetClientCerts(const SSLCertRequestInfo& request,
                                         ClientCertListCallback callback) {
-  base::PostTaskAndReplyWithResult(
-      GetSSLPlatformKeyTaskRunner().get(), FROM_HERE,
+  GetSSLPlatformKeyTaskRunner()->PostTaskAndReplyWithResult(
+      FROM_HERE,
       // Caller is responsible for keeping the |request| alive
       // until the callback is run, so std::cref is safe.
       base::BindOnce(&ClientCertStoreWin::GetClientCertsWithCertStore,

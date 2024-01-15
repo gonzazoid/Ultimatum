@@ -9,7 +9,6 @@
 #include <string>
 
 #include "base/gtest_prod_util.h"
-#include "base/memory/ref_counted.h"
 #include "extensions/common/mojom/api_permission_id.mojom-shared.h"
 #include "extensions/common/permissions/api_permission.h"
 #include "extensions/common/permissions/api_permission_set.h"
@@ -138,9 +137,6 @@ class PermissionSet {
   // Cleans up any explicit host paths - explicit hosts require the path to be
   // "/*", and we implicitly make this change.
   void CleanExplicitHostPaths();
-
-  // Adds permissions implied independently of other context.
-  void InitImplicitPermissions();
 
   // Initializes the effective host permission based on the data in this set.
   void InitEffectiveHosts();

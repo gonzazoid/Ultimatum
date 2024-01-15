@@ -11,7 +11,7 @@
 #include "ash/constants/ash_pref_names.h"
 #include "ash/constants/ash_switches.h"
 #include "ash/public/cpp/test/shell_test_api.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "chrome/browser/ash/accessibility/accessibility_manager.h"
@@ -23,6 +23,7 @@
 #include "chrome/browser/ash/login/test/oobe_screen_waiter.h"
 #include "chrome/browser/ash/login/wizard_controller.h"
 #include "chrome/browser/profiles/profile_manager.h"
+#include "chrome/browser/ui/webui/ash/login/gesture_navigation_screen_handler.h"
 #include "components/prefs/pref_service.h"
 #include "content/public/test/browser_test.h"
 
@@ -112,7 +113,7 @@ class GestureNavigationScreenTest
     run_loop.Run();
   }
 
-  absl::optional<GestureNavigationScreen::Result> screen_result_;
+  std::optional<GestureNavigationScreen::Result> screen_result_;
   base::HistogramTester histogram_tester_;
 
  private:
@@ -305,6 +306,25 @@ IN_PROC_BROWSER_TEST_P(GestureNavigationScreenTest, PageShownMetricsTest) {
       "OOBE.GestureNavigationScreen.PageShownTime.Back", 1);
   histogram_tester_.ExpectTotalCount(
       "OOBE.StepCompletionTimeByExitReason.Gesture-navigation.Next", 1);
+  histogram_tester_.ExpectTotalCount(
+      "OOBE.StepCompletionTime.Gesture-navigation", 1);
+}
+
+// Ensure the flow is skipped when user click on skip button.
+IN_PROC_BROWSER_TEST_P(GestureNavigationScreenTest, UserSkipScreen) {
+  PerformLogin();
+
+  ShowGestureNavigationScreen();
+
+  test::OobeJS().TapOnPath({"gesture-navigation", "gesture-intro-skip-button"});
+
+  WaitForScreenExit();
+  EXPECT_EQ(screen_result_.value(), GestureNavigationScreen::Result::SKIP);
+
+  histogram_tester_.ExpectTotalCount(
+      "OOBE.StepCompletionTimeByExitReason.Gesture-navigation.Next", 0);
+  histogram_tester_.ExpectTotalCount(
+      "OOBE.StepCompletionTimeByExitReason.Gesture-navigation.Skip", 1);
   histogram_tester_.ExpectTotalCount(
       "OOBE.StepCompletionTime.Gesture-navigation", 1);
 }

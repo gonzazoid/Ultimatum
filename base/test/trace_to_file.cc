@@ -5,13 +5,13 @@
 #include "base/test/trace_to_file.h"
 
 #include "base/base_switches.h"
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/memory/ref_counted_memory.h"
 #include "base/run_loop.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/task_environment.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/trace_event/trace_buffer.h"
 #include "base/trace_event/trace_log.h"
 
@@ -97,7 +97,7 @@ void TraceToFile::EndTracingIfNeeded() {
 
   // In tests we might not have a TaskEnvironment, create one if needed.
   std::unique_ptr<SingleThreadTaskEnvironment> task_environment;
-  if (!ThreadTaskRunnerHandle::IsSet())
+  if (!SingleThreadTaskRunner::HasCurrentDefault())
     task_environment = std::make_unique<SingleThreadTaskEnvironment>();
 
   RunLoop run_loop;

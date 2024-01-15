@@ -8,8 +8,8 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/compiler_specific.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
@@ -86,6 +86,7 @@ class FetchUrlTest : public testing::Test,
   }
 
   void DestroyServerOnIO(base::WaitableEvent* event) {
+    url_loader_factory_ = nullptr;
     url_loader_factory_owner_.reset();
     server_.reset();
     event->Signal();

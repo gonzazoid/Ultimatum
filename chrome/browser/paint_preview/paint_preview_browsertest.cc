@@ -3,10 +3,10 @@
 // found in the LICENSE file.
 
 #include "base/base64.h"
-#include "base/bind.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/unguessable_token.h"
@@ -161,8 +161,10 @@ class PaintPreviewBrowserTest
                                      const gfx::Size& size = gfx::Size(1, 1)) {
     base::ScopedAllowBlockingForTesting scoped_blocking;
 
-    auto it = recording_map->find(base::UnguessableToken::Deserialize(
-        frame_proto.embedding_token_high(), frame_proto.embedding_token_low()));
+    auto it = recording_map->find(
+        base::UnguessableToken::Deserialize(frame_proto.embedding_token_high(),
+                                            frame_proto.embedding_token_low())
+            .value());
     ASSERT_NE(it, recording_map->end());
 
     absl::optional<SkpResult> result = std::move(it->second).Deserialize();

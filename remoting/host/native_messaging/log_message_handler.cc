@@ -4,13 +4,12 @@
 
 #include "remoting/host/native_messaging/log_message_handler.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/lazy_instance.h"
 #include "base/logging.h"
 #include "base/strings/string_util.h"
 #include "base/synchronization/lock.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/values.h"
 
 namespace remoting {
@@ -30,7 +29,7 @@ LogMessageHandler* g_log_message_handler = nullptr;
 LogMessageHandler::LogMessageHandler(const Delegate& delegate)
     : delegate_(delegate),
       suppress_logging_(false),
-      caller_task_runner_(base::ThreadTaskRunnerHandle::Get()) {
+      caller_task_runner_(base::SingleThreadTaskRunner::GetCurrentDefault()) {
   base::AutoLock lock(g_log_message_handler_lock.Get());
   if (g_log_message_handler) {
     LOG(FATAL) << "LogMessageHandler is already registered. Only one instance "
@@ -55,16 +54,15 @@ LogMessageHandler::~LogMessageHandler() {
 const char* LogMessageHandler::kDebugMessageTypeName = "_debug_log";
 
 // static
-bool LogMessageHandler::OnLogMessage(
-    logging::LogSeverity severity,
-    const char* file,
-    int line,
-    size_t message_start,
-    const std::string& str) {
+bool LogMessageHandler::OnLogMessage(logging::LogSeverity severity,
+                                     const char* file,
+                                     int line,
+                                     size_t message_start,
+                                     const std::string& str) {
   base::AutoLock lock(g_log_message_handler_lock.Get());
   if (g_log_message_handler) {
-    g_log_message_handler->PostLogMessageToCorrectThread(
-        severity, file, line, message_start, str);
+    g_log_message_handler->PostLogMessageToCorrectThread(severity, file, line,
+                                                         message_start, str);
   }
   return false;
 }
@@ -102,21 +100,20 @@ void LogMessageHandler::PostLogMessageToCorrectThread(
                                 line, message_start, str));
 }
 
-void LogMessageHandler::SendLogMessageToClient(
-    logging::LogSeverity severity,
-    const char* file,
-    int line,
-    size_t message_start,
-    const std::string& str) {
+void LogMessageHandler::SendLogMessageToClient(logging::LogSeverity severity,
+                                               const char* file,
+                                               int line,
+                                               size_t message_start,
+                                               const std::string& str) {
   suppress_logging_ = true;
 
   std::string severity_string = "log";
   switch (severity) {
-    case logging::LOG_WARNING:
+    case logging::LOGGING_WARNING:
       severity_string = "warn";
       break;
-    case logging::LOG_FATAL:
-    case logging::LOG_ERROR:
+    case logging::LOGGING_ERROR:
+    case logging::LOGGING_FATAL:
       severity_string = "error";
       break;
   }

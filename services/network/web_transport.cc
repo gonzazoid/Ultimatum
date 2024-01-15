@@ -5,11 +5,11 @@
 #include "services/network/web_transport.h"
 
 #include "base/auto_reset.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/notreached.h"
 #include "base/strings/string_util.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
 #include "net/base/io_buffer.h"
 #include "net/third_party/quiche/src/quiche/common/platform/api/quiche_mem_slice.h"
@@ -27,7 +27,6 @@ net::WebTransportParameters CreateParameters(
     const std::vector<mojom::WebTransportCertificateFingerprintPtr>&
         fingerprints) {
   net::WebTransportParameters params;
-  params.enable_quic_transport = false;
   params.enable_web_transport_http3 = true;
 
   for (const auto& fingerprint : fingerprints) {
@@ -36,6 +35,10 @@ net::WebTransportParameters CreateParameters(
                                      .fingerprint = fingerprint->fingerprint});
   }
   return params;
+}
+
+base::TimeDelta ToTimeDelta(absl::Duration duration) {
+  return base::Microseconds(absl::ToInt64Microseconds(duration));
 }
 
 }  // namespace
@@ -71,11 +74,11 @@ class WebTransport::Stream final {
 
     // Visitor implementation:
     void OnCanRead() override {
-      base::SequencedTaskRunnerHandle::Get()->PostTask(
+      base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE, base::BindOnce(&Stream::Receive, stream_));
     }
     void OnCanWrite() override {
-      base::SequencedTaskRunnerHandle::Get()->PostTask(
+      base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE, base::BindOnce(&Stream::Send, stream_));
     }
     void OnResetStreamReceived(quic::WebTransportStreamError error) override {
@@ -177,7 +180,7 @@ class WebTransport::Stream final {
 
   ~Stream() {
     auto* stream = incoming_ ? incoming_.get() : outgoing_.get();
-    if (!stream) {
+    if (!stream || transport_->closing_ || transport_->torn_down_) {
       return;
     }
     stream->MaybeResetDueToStreamObjectGone();
@@ -218,7 +221,7 @@ class WebTransport::Stream final {
 
   void Send() {
     MaySendFin();
-    while (outgoing_ && outgoing_->CanWrite()) {
+    while (readable_ && outgoing_ && outgoing_->CanWrite()) {
       const void* data = nullptr;
       uint32_t available = 0;
       MojoResult result = readable_->BeginReadData(
@@ -251,7 +254,7 @@ class WebTransport::Stream final {
   }
 
   void MaySendFin() {
-    if (!outgoing_) {
+    if (!readable_ || !outgoing_) {
       return;
     }
     if (!has_seen_end_of_pipe_for_readable_ || !has_received_fin_from_client_) {
@@ -287,19 +290,22 @@ class WebTransport::Stream final {
         }
         DCHECK_EQ(result, MOJO_RESULT_OK);
 
-        read_result =
-            incoming_->Read(reinterpret_cast<char*>(buffer), available);
+        read_result = incoming_->Read(
+            absl::Span<char>(reinterpret_cast<char*>(buffer), available));
         writable_->EndWriteData(read_result.bytes_read);
       } else {
         // Even if ReadableBytes() == 0, we may need to read the FIN at the end
         // of the stream.
-        read_result = incoming_->Read(nullptr, 0);
+        read_result = incoming_->Read(absl::Span<char>());
         if (!read_result.fin) {
           return;
         }
       }
       if (read_result.fin) {
-        transport_->client_->OnIncomingStreamClosed(id_, /*fin_received=*/true);
+        if (transport_->client_) {
+          transport_->client_->OnIncomingStreamClosed(id_,
+                                                      /*fin_received=*/true);
+        }
         writable_watcher_.Cancel();
         writable_.reset();
         incoming_ = nullptr;
@@ -350,7 +356,7 @@ class WebTransport::Stream final {
       return;
     }
 
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(&Stream::Dispose, weak_factory_.GetWeakPtr()));
   }
@@ -399,7 +405,10 @@ WebTransport::WebTransport(
   transport_->Connect();
 }
 
-WebTransport::~WebTransport() = default;
+WebTransport::~WebTransport() {
+  // Ensure that we ignore all callbacks while mid-destruction.
+  torn_down_ = true;
+}
 
 void WebTransport::SendDatagram(base::span<const uint8_t> data,
                                 base::OnceCallback<void(bool)> callback) {
@@ -407,11 +416,9 @@ void WebTransport::SendDatagram(base::span<const uint8_t> data,
 
   datagram_callbacks_.emplace(std::move(callback));
 
-  quiche::QuicheBuffer buffer(quiche::SimpleBufferAllocator::Get(),
-                              data.size());
-  memcpy(buffer.data(), data.data(), data.size());
-  quiche::QuicheMemSlice slice(std::move(buffer));
-  transport_->session()->SendOrQueueDatagram(std::move(slice));
+  CHECK(transport_->session());
+  transport_->session()->SendOrQueueDatagram(absl::string_view(
+      reinterpret_cast<const char*>(data.data()), data.size()));
 }
 
 void WebTransport::CreateStream(
@@ -428,6 +435,7 @@ void WebTransport::CreateStream(
   }
 
   quic::WebTransportSession* const session = transport_->session();
+  CHECK(session);
 
   if (writable) {
     // Bidirectional
@@ -509,8 +517,9 @@ void WebTransport::SetOutgoingDatagramExpirationDuration(
     return;
   }
 
+  CHECK(transport_->session());
   transport_->session()->SetDatagramMaxTimeInQueue(
-      quic::QuicTime::Delta::FromMicroseconds(duration.InMicroseconds()));
+      absl::Microseconds(duration.InMicroseconds()));
 }
 
 void WebTransport::Close(mojom::WebTransportCloseInfoPtr close_info) {
@@ -621,6 +630,7 @@ void WebTransport::OnIncomingBidirectionalStreamAvailable() {
   DCHECK(client_);
 
   while (!bidirectional_stream_acceptances_.empty()) {
+    CHECK(transport_->session());
     quic::WebTransportStream* const stream =
         transport_->session()->AcceptIncomingBidirectionalStream();
     if (!stream) {
@@ -667,6 +677,7 @@ void WebTransport::OnIncomingUnidirectionalStreamAvailable() {
   DCHECK(client_);
 
   while (!unidirectional_stream_acceptances_.empty()) {
+    CHECK(transport_->session());
     quic::WebTransportStream* const stream =
         transport_->session()->AcceptIncomingUnidirectionalStream();
 
@@ -696,7 +707,7 @@ void WebTransport::OnIncomingUnidirectionalStreamAvailable() {
   }
 }
 
-void WebTransport::OnDatagramReceived(base::StringPiece datagram) {
+void WebTransport::OnDatagramReceived(std::string_view datagram) {
   if (torn_down_ || closing_) {
     return;
   }
@@ -722,13 +733,33 @@ void WebTransport::OnDatagramProcessed(
   datagram_callbacks_.pop();
 }
 
+void WebTransport::GetStats(GetStatsCallback callback) {
+  webtransport::Session* const session = transport_->session();
+
+  if (torn_down_ || session == nullptr) {
+    std::move(callback).Run(nullptr);
+    return;
+  }
+
+  webtransport::SessionStats stats = session->GetSessionStats();
+  mojom::WebTransportStatsPtr result = mojom::WebTransportStats::New();
+  result->timestamp = base::Time::Now();
+  result->min_rtt = ToTimeDelta(stats.min_rtt);
+  result->smoothed_rtt = ToTimeDelta(stats.smoothed_rtt);
+  result->rtt_variation = ToTimeDelta(stats.rtt_variation);
+  result->estimated_send_rate_bps = stats.estimated_send_rate_bps;
+  result->datagrams_expired_outgoing = stats.datagram_stats.expired_outgoing;
+  result->datagrams_lost_outgoing = stats.datagram_stats.lost_outgoing;
+  std::move(callback).Run(std::move(result));
+}
+
 void WebTransport::TearDown() {
   torn_down_ = true;
   receiver_.reset();
   handshake_client_.reset();
   client_.reset();
 
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&WebTransport::Dispose, weak_factory_.GetWeakPtr()));
 }

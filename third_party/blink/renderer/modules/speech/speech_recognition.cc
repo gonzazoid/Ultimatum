@@ -246,7 +246,8 @@ void SpeechRecognition::StartInternal(ExceptionState* exception_state) {
 }
 
 SpeechRecognition::SpeechRecognition(LocalDOMWindow* window)
-    : ExecutionContextLifecycleObserver(window),
+    : ActiveScriptWrappable<SpeechRecognition>({}),
+      ExecutionContextLifecycleObserver(window),
       PageVisibilityObserver(window->GetFrame() ? window->GetFrame()->GetPage()
                                                 : nullptr),
       grammars_(SpeechGrammarList::Create()),  // FIXME: The spec is not clear
@@ -269,7 +270,7 @@ void SpeechRecognition::Trace(Visitor* visitor) const {
   visitor->Trace(final_results_);
   visitor->Trace(receiver_);
   visitor->Trace(session_);
-  EventTargetWithInlineData::Trace(visitor);
+  EventTarget::Trace(visitor);
   ExecutionContextLifecycleObserver::Trace(visitor);
   PageVisibilityObserver::Trace(visitor);
 }

@@ -2,8 +2,8 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-import("//chrome/browser/resources/tools/build_webui.gni")
 import("//chrome/common/features.gni")
+import("//ui/webui/resources/tools/build_webui.gni")
 
 assert(is_win || is_mac || is_linux || is_fuchsia)
 
@@ -16,13 +16,12 @@ build_webui("build") {
 
   non_web_component_files = [ "web_app_settings.ts" ]
 
-  mojo_files_deps = [ "//ui/webui/resources/cr_components/app_management:mojo_bindings_js__generator" ]
-  mojo_files = [ "$root_gen_dir/mojom-webui/ui/webui/resources/cr_components/app_management/app_management.mojom-webui.js" ]
-
   ts_composite = true
   ts_deps = [
     "//third_party/polymer/v3_0:library",
-    "//ui/webui/resources:library",
     "//ui/webui/resources/cr_components/app_management:build_ts",
+    "//ui/webui/resources/cr_components/localized_link:build_ts",
+    "//ui/webui/resources/cr_elements:build_ts",
+    "//ui/webui/resources/js:build_ts",
   ]
 }

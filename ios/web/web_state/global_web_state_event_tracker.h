@@ -50,12 +50,12 @@ class GlobalWebStateEventTracker : public WebStateObserver {
   GlobalWebStateEventTracker();
   ~GlobalWebStateEventTracker() override;
 
-  // ScopedObserver used to track registration with WebState.
+  // ScopedMultiSourceObservation used to track registration with WebState.
   base::ScopedMultiSourceObservation<WebState, WebStateObserver>
       scoped_observations_{this};
 
   // List of observers currently registered with the tracker.
-  base::ObserverList<GlobalWebStateObserver, true>::Unchecked observer_list_;
+  base::ObserverList<GlobalWebStateObserver, true> observer_list_;
 };
 
 }  // namespace web

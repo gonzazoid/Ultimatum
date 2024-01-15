@@ -10,7 +10,6 @@
 #include "base/environment.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
-#include "base/strings/abseil_string_conversions.h"
 #include "base/strings/stringprintf.h"
 #include "build/build_config.h"
 #include "net/third_party/quiche/src/quiche/quic/platform/api/quic_logging.h"
@@ -18,8 +17,8 @@
 
 namespace quiche {
 
-void QuicheRecordTestOutputToFile(absl::string_view filename,
-                                  absl::string_view data) {
+void QuicheRecordTestOutputToFile(std::string_view filename,
+                                  std::string_view data) {
   std::string output_dir;
   if (!base::Environment::Create()->GetVar("QUIC_TEST_OUTPUT_DIR",
                                            &output_dir) ||
@@ -28,8 +27,7 @@ void QuicheRecordTestOutputToFile(absl::string_view filename,
   }
 
   auto path = base::FilePath::FromUTF8Unsafe(output_dir)
-                  .Append(base::FilePath::FromUTF8Unsafe(
-                      base::StringViewToStringPiece(filename)));
+                  .Append(base::FilePath::FromUTF8Unsafe(filename));
 
   int bytes_written = base::WriteFile(path, data.data(), data.size());
   if (bytes_written < 0) {
@@ -39,12 +37,12 @@ void QuicheRecordTestOutputToFile(absl::string_view filename,
   QUIC_LOG(INFO) << "Recorded test output into " << path;
 }
 
-void QuicheSaveTestOutputImpl(absl::string_view filename,
-                              absl::string_view data) {
+void QuicheSaveTestOutputImpl(std::string_view filename,
+                              std::string_view data) {
   QuicheRecordTestOutputToFile(filename, data);
 }
 
-bool QuicheLoadTestOutputImpl(absl::string_view filename, std::string* data) {
+bool QuicheLoadTestOutputImpl(std::string_view filename, std::string* data) {
   std::string output_dir;
   if (!base::Environment::Create()->GetVar("QUIC_TEST_OUTPUT_DIR",
                                            &output_dir) ||
@@ -55,14 +53,12 @@ bool QuicheLoadTestOutputImpl(absl::string_view filename, std::string* data) {
   }
 
   auto path = base::FilePath::FromUTF8Unsafe(output_dir)
-                  .Append(base::FilePath::FromUTF8Unsafe(
-                      base::StringViewToStringPiece(filename)));
+                  .Append(base::FilePath::FromUTF8Unsafe(filename));
 
   return base::ReadFileToString(path, data);
 }
 
-void QuicheRecordTraceImpl(absl::string_view identifier,
-                           absl::string_view data) {
+void QuicheRecordTraceImpl(std::string_view identifier, std::string_view data) {
   const testing::TestInfo* test_info =
       testing::UnitTest::GetInstance()->current_test_info();
 
@@ -79,7 +75,7 @@ void QuicheRecordTraceImpl(absl::string_view identifier,
   strftime(timestamp, sizeof(timestamp), "%Y%m%d%H%M%S", &now);
 
   std::string filename = base::StringPrintf(
-      "%s.%s.%s.%s.qtr", test_info->name(), test_info->test_case_name(),
+      "%s.%s.%s.%s.qtr", test_info->name(), test_info->test_suite_name(),
       identifier.data(), timestamp);
 
   QuicheRecordTestOutputToFile(filename, data);

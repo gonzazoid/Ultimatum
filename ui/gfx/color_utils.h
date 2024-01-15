@@ -28,6 +28,9 @@ struct BlendResult {
   SkColor color;
 };
 
+// The maximum contrast that can be achieved (i.e. white against black).
+constexpr float kMaximumPossibleContrast = 21.0f;
+
 // The minimum contrast between text and background that is still readable.
 // This value is taken from w3c accessibility guidelines.
 constexpr float kMinimumReadableContrastRatio = 4.5f;
@@ -40,12 +43,14 @@ constexpr float kMinimumVisibleContrastRatio = 3.0f;
 // Determines the contrast ratio of two colors or two relative luminance values
 // (as computed by RelativeLuminance()), calculated according to
 // http://www.w3.org/TR/WCAG20/#contrast-ratiodef .
+GFX_EXPORT float GetContrastRatio(SkColor4f color_a, SkColor4f color_b);
 GFX_EXPORT float GetContrastRatio(SkColor color_a, SkColor color_b);
 GFX_EXPORT float GetContrastRatio(float luminance_a, float luminance_b);
 
 // The relative luminance of |color|, that is, the weighted sum of the
 // linearized RGB components, normalized to 0..1, per BT.709.  See
 // http://www.w3.org/TR/WCAG20/#relativeluminancedef .
+GFX_EXPORT float GetRelativeLuminance4f(SkColor4f color);
 GFX_EXPORT float GetRelativeLuminance(SkColor color);
 
 // The luma of |color|, that is, the weighted sum of the gamma-compressed R'G'B'
@@ -158,21 +163,44 @@ GFX_EXPORT SkColor GetSysSkColor(int which);
 // surface.
 GFX_EXPORT SkColor DeriveDefaultIconColor(SkColor text_color);
 
-// Gets a Google color that matches the hue of `color` and contrasts similarly
-// against `background_color`, subject to being at least `min_contrast`. If
-// `color` isn't very saturated, grey will be used instead.  Even if `color` is
-// saturated, if there are no sufficiently-contrasting colors of a matching hue,
-// will fall back to white/grey 900.
-GFX_EXPORT SkColor PickGoogleColor(SkColor color,
-                                   SkColor background_color,
-                                   float min_contrast);
+// Gets a Google color with a similar hue to `color` and a similar contrast
+// against `background_color`, subject to being at least `min_contrast` and at
+// most `max_contrast`. If `color` isn't very saturated, grey will be used
+// instead.
+//
+// Each of the following constraints takes precedence over the ones below it.
+//   1. Ensure `min_contrast`, if possible, lest the UI become unreadable. If
+//      there are no sufficiently-contrasting colors of the desired hue, falls
+//      back to white/grey 900.
+//   2. Avoid returning a lighter color than the background if the input was
+//      darker, and vice versa. Inverting the relationship between `color` and
+//      `background_color` could look odd.
+//   3. Ensure `max_contrast`, if possible, lest some UI elements stick out too
+//      much.
+//   4. Adjust the relative luminance of the returned color as little as
+//      possible, to minimize distortion of the intended color.
+// Other than prioritizing (1), this order is subjective.
+GFX_EXPORT SkColor
+PickGoogleColor(SkColor color,
+                SkColor background_color,
+                float min_contrast,
+                float max_contrast = kMaximumPossibleContrast);
 
-// Like the version above, but tries to contrast sufficiently with both
-// `background_color_a` and `background_color_b` simultaneously.
-GFX_EXPORT SkColor PickGoogleColor(SkColor color,
-                                   SkColor background_color_a,
-                                   SkColor background_color_b,
-                                   float min_contrast);
+// Like the version above, but the constraints are modified:
+//   1. Ensure `min_contrast`, if possible, with both backgrounds
+//      simultaneously.
+//   2. If the input is lighter than both backgrounds, make it lighter; if it's
+//      darker than both, make it darker; if it's between the two, keep it
+//      between.
+//   3. Ensure `max_contrast_with_nearer` against the lower-contrast ("nearer")
+//      background.
+//   4. Unchanged.
+GFX_EXPORT SkColor PickGoogleColorTwoBackgrounds(
+    SkColor color,
+    SkColor background_color_a,
+    SkColor background_color_b,
+    float min_contrast,
+    float max_contrast_with_nearer = kMaximumPossibleContrast);
 
 // Creates an rgba string for an SkColor. For example: 'rgba(255,0,255,0.5)'.
 GFX_EXPORT std::string SkColorToRgbaString(SkColor color);

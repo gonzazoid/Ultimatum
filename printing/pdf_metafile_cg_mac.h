@@ -5,12 +5,12 @@
 #ifndef PRINTING_PDF_METAFILE_CG_MAC_H_
 #define PRINTING_PDF_METAFILE_CG_MAC_H_
 
-#include <ApplicationServices/ApplicationServices.h>
 #include <CoreFoundation/CoreFoundation.h>
+#include <CoreGraphics/CoreGraphics.h>
 #include <stdint.h>
 
+#include "base/apple/scoped_cftyperef.h"
 #include "base/component_export.h"
-#include "base/mac/scoped_cftyperef.h"
 #include "printing/metafile.h"
 
 namespace printing {
@@ -56,13 +56,13 @@ class COMPONENT_EXPORT(PRINTING_METAFILE) PdfMetafileCg : public Metafile {
   CGPDFDocumentRef GetPDFDocument() const;
 
   // Context for rendering to the pdf.
-  base::ScopedCFTypeRef<CGContextRef> context_;
+  base::apple::ScopedCFTypeRef<CGContextRef> context_;
 
   // PDF backing store.
-  base::ScopedCFTypeRef<CFMutableDataRef> pdf_data_;
+  base::apple::ScopedCFTypeRef<CFMutableDataRef> pdf_data_;
 
   // Lazily-created CGPDFDocument representation of `pdf_data_`.
-  mutable base::ScopedCFTypeRef<CGPDFDocumentRef> pdf_doc_;
+  mutable base::apple::ScopedCFTypeRef<CGPDFDocumentRef> pdf_doc_;
 
   // Whether or not a page is currently open.
   bool page_is_open_ = false;

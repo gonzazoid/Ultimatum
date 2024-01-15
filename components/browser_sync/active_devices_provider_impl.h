@@ -10,9 +10,10 @@
 #include <vector>
 
 #include "base/memory/raw_ptr.h"
+#include "base/scoped_observation.h"
 #include "base/sequence_checker.h"
 #include "base/time/clock.h"
-#include "components/sync/driver/active_devices_provider.h"
+#include "components/sync/service/active_devices_provider.h"
 #include "components/sync_device_info/device_info_tracker.h"
 
 namespace browser_sync {
@@ -39,12 +40,16 @@ class ActiveDevicesProviderImpl : public syncer::ActiveDevicesProvider,
   void OnDeviceInfoChange() override;
 
  private:
-  std::vector<std::unique_ptr<syncer::DeviceInfo>>
-  GetActiveDevicesSortedByUpdateTime() const;
+  std::vector<const syncer::DeviceInfo*> GetActiveDevicesSortedByUpdateTime()
+      const;
 
   const raw_ptr<syncer::DeviceInfoTracker> device_info_tracker_;
   const raw_ptr<const base::Clock> clock_;
   ActiveDevicesChangedCallback callback_;
+
+  base::ScopedObservation<syncer::DeviceInfoTracker,
+                          syncer::DeviceInfoTracker::Observer>
+      device_info_tracker_observation_{this};
 
   SEQUENCE_CHECKER(sequence_checker_);
 };

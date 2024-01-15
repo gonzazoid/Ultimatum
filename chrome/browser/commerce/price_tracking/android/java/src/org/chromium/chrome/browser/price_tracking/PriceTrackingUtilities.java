@@ -7,24 +7,29 @@ package org.chromium.chrome.browser.price_tracking;
 import androidx.annotation.VisibleForTesting;
 
 import org.chromium.base.FeatureList;
+import org.chromium.base.shared_preferences.SharedPreferencesManager;
 import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.preferences.ChromePreferenceKeys;
-import org.chromium.chrome.browser.preferences.SharedPreferencesManager;
-import org.chromium.chrome.browser.tabmodel.TabModel;
+import org.chromium.chrome.browser.preferences.ChromeSharedPreferences;
+import org.chromium.chrome.browser.profiles.Profile;
 
 /** Utility class for price tracking. */
 public class PriceTrackingUtilities {
     public static final String TRACK_PRICES_ON_TABS =
             ChromePreferenceKeys.PRICE_TRACKING_TRACK_PRICES_ON_TABS;
+
     @VisibleForTesting
     public static final String PRICE_WELCOME_MESSAGE_CARD =
             ChromePreferenceKeys.PRICE_TRACKING_PRICE_WELCOME_MESSAGE_CARD;
+
     @VisibleForTesting
     public static final String PRICE_WELCOME_MESSAGE_CARD_SHOW_COUNT =
             ChromePreferenceKeys.PRICE_TRACKING_PRICE_WELCOME_MESSAGE_CARD_SHOW_COUNT;
+
     @VisibleForTesting
     public static final String PRICE_ALERTS_MESSAGE_CARD =
             ChromePreferenceKeys.PRICE_TRACKING_PRICE_ALERTS_MESSAGE_CARD;
+
     @VisibleForTesting
     public static final String PRICE_ALERTS_MESSAGE_CARD_SHOW_COUNT =
             ChromePreferenceKeys.PRICE_TRACKING_PRICE_ALERTS_MESSAGE_CARD_SHOW_COUNT;
@@ -36,19 +41,9 @@ public class PriceTrackingUtilities {
 
     @VisibleForTesting
     public static final SharedPreferencesManager SHARED_PREFERENCES_MANAGER =
-            SharedPreferencesManager.getInstance();
+            ChromeSharedPreferences.getInstance();
 
-    // TODO(crbug.com/1307949): Clean up this api.
-    @Deprecated
-    public static void flipTrackPricesOnTabs() {
-        final boolean enableTrackPricesOnTabs = SHARED_PREFERENCES_MANAGER.readBoolean(
-                TRACK_PRICES_ON_TABS, PriceTrackingFeatures.isPriceTrackingEnabled());
-        SHARED_PREFERENCES_MANAGER.writeBoolean(TRACK_PRICES_ON_TABS, !enableTrackPricesOnTabs);
-    }
-
-    /**
-     * Update SharedPreferences when users turn on/off the feature tracking prices on tabs.
-     */
+    /** Update SharedPreferences when users turn on/off the feature tracking prices on tabs. */
     public static void setTrackPricesOnTabsEnabled(boolean enabled) {
         SHARED_PREFERENCES_MANAGER.writeBoolean(TRACK_PRICES_ON_TABS, enabled);
     }
@@ -56,15 +51,14 @@ public class PriceTrackingUtilities {
     /**
      * @return Whether the track prices on tabs is turned on by users.
      */
-    public static boolean isTrackPricesOnTabsEnabled() {
-        return PriceTrackingFeatures.isPriceTrackingEligible()
+    public static boolean isTrackPricesOnTabsEnabled(Profile profile) {
+        return PriceTrackingFeatures.isPriceTrackingEligible(profile)
                 && SHARED_PREFERENCES_MANAGER.readBoolean(
-                        TRACK_PRICES_ON_TABS, PriceTrackingFeatures.isPriceTrackingEnabled());
+                        TRACK_PRICES_ON_TABS,
+                        PriceTrackingFeatures.isPriceTrackingEnabled(profile));
     }
 
-    /**
-     * Forbid showing the PriceWelcomeMessageCard any more.
-     */
+    /** Forbid showing the PriceWelcomeMessageCard any more. */
     public static void disablePriceWelcomeMessageCard() {
         SHARED_PREFERENCES_MANAGER.writeBoolean(PRICE_WELCOME_MESSAGE_CARD, false);
     }
@@ -72,10 +66,11 @@ public class PriceTrackingUtilities {
     /**
      * @return Whether the PriceWelcomeMessageCard is enabled.
      */
-    public static boolean isPriceWelcomeMessageCardEnabled() {
-        return PriceTrackingFeatures.isPriceTrackingEligible()
+    public static boolean isPriceWelcomeMessageCardEnabled(Profile profile) {
+        return PriceTrackingFeatures.isPriceTrackingEligible(profile)
                 && SHARED_PREFERENCES_MANAGER.readBoolean(
-                        PRICE_WELCOME_MESSAGE_CARD, PriceTrackingFeatures.isPriceTrackingEnabled());
+                        PRICE_WELCOME_MESSAGE_CARD,
+                        PriceTrackingFeatures.isPriceTrackingEnabled(profile));
     }
 
     /**
@@ -93,9 +88,7 @@ public class PriceTrackingUtilities {
         return SHARED_PREFERENCES_MANAGER.readInt(PRICE_WELCOME_MESSAGE_CARD_SHOW_COUNT, 0);
     }
 
-    /**
-     * Forbid showing the PriceAlertsMessageCard any more.
-     */
+    /** Forbid showing the PriceAlertsMessageCard any more. */
     public static void disablePriceAlertsMessageCard() {
         SHARED_PREFERENCES_MANAGER.writeBoolean(PRICE_ALERTS_MESSAGE_CARD, false);
     }
@@ -103,14 +96,14 @@ public class PriceTrackingUtilities {
     // TODO(crbug.com/1326572): Needs to rethink these conditions before starting implicit tracking.
     /**
      * @return Whether the PriceAlertsMessageCard is enabled. We don't show this message card if
-     *         user can already receive price drop notifications, see {@link
-     *         PriceDropNotificationManager#canPostNotification()}.
+     *     user can already receive price drop notifications, see {@link
+     *     PriceDropNotificationManager#canPostNotification()}.
      */
-    public static boolean isPriceAlertsMessageCardEnabled() {
-        return PriceTrackingFeatures.isPriceDropNotificationEligible()
-                && isImplicitSubscriptionsEnabled()
+    public static boolean isPriceAlertsMessageCardEnabled(Profile profile) {
+        return isImplicitSubscriptionsEnabled()
                 && SHARED_PREFERENCES_MANAGER.readBoolean(
-                        PRICE_ALERTS_MESSAGE_CARD, PriceTrackingFeatures.isPriceTrackingEnabled());
+                        PRICE_ALERTS_MESSAGE_CARD,
+                        PriceTrackingFeatures.isPriceTrackingEnabled(profile));
     }
 
     /**
@@ -137,27 +130,11 @@ public class PriceTrackingUtilities {
         return SHARED_PREFERENCES_MANAGER.readInt(PRICE_ALERTS_MESSAGE_CARD_SHOW_COUNT, 0);
     }
 
-    /**
-     * @return if the {@link TabModel} is eligible for price tracking. Not all tab models are - for
-     *         example incognito tabs are not eligible for price tracking.
-     */
-    public static boolean isTabModelPriceTrackingEligible(TabModel tabModel) {
-        // Incognito Tabs are not eligible for price tracking.
-        return !tabModel.getProfile().isOffTheRecord();
-    }
-
-    // TODO(crbug.com/1307949): Clean up price tracking menu.
-    /**
-     * @return whether we should show the PriceTrackingSettings menu item in grid tab switcher.
-     */
-    public static boolean shouldShowPriceTrackingMenu() {
-        return false;
-    }
-
     private static boolean isImplicitSubscriptionsEnabled() {
         if (FeatureList.isInitialized()) {
             return ChromeFeatureList.getFieldTrialParamByFeatureAsBoolean(
-                    ChromeFeatureList.COMMERCE_PRICE_TRACKING, IMPLICIT_SUBSCRIPTIONS_ENABLED_PARAM,
+                    ChromeFeatureList.COMMERCE_PRICE_TRACKING,
+                    IMPLICIT_SUBSCRIPTIONS_ENABLED_PARAM,
                     false);
         }
         return false;

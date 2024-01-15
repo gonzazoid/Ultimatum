@@ -5,15 +5,11 @@
 #ifndef CHROME_BROWSER_PASSWORD_MANAGER_ANDROID_PASSWORD_ACCESSORY_CONTROLLER_IMPL_H_
 #define CHROME_BROWSER_PASSWORD_MANAGER_ANDROID_PASSWORD_ACCESSORY_CONTROLLER_IMPL_H_
 
-#include <map>
 #include <memory>
-#include <utility>
-#include <vector>
 
 #include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
-#include "base/task/cancelable_task_tracker.h"
 #include "chrome/browser/password_manager/android/all_passwords_bottom_sheet_helper.h"
 #include "chrome/browser/password_manager/android/password_accessory_controller.h"
 #include "components/autofill/core/browser/ui/accessory_sheet_data.h"
@@ -21,18 +17,17 @@
 #include "components/autofill/core/common/password_generation_util.h"
 #include "components/password_manager/core/browser/credential_cache.h"
 #include "components/password_manager/core/browser/password_manager_client.h"
+#include "components/password_manager/core/browser/password_manager_metrics_util.h"
 #include "components/security_state/core/security_state.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/web_contents.h"
+#include "content/public/browser/web_contents_observer.h"
 #include "content/public/browser/web_contents_user_data.h"
-#include "url/gurl.h"
-
-namespace password_manager {
-class ContentPasswordManagerDriver;
-}  // namespace password_manager
+#include "ui/gfx/native_widget_types.h"
 
 class ManualFillingController;
 class AllPasswordsBottomSheetController;
+class Profile;
 
 // Use either PasswordAccessoryController::GetOrCreate or
 // PasswordAccessoryController::GetIfExisting to obtain instances of this class.
@@ -40,11 +35,16 @@ class AllPasswordsBottomSheetController;
 // contents of one of its frames. This can cause cross-origin hazards.
 class PasswordAccessoryControllerImpl
     : public PasswordAccessoryController,
+      public content::WebContentsObserver,
       public content::WebContentsUserData<PasswordAccessoryControllerImpl> {
  public:
   using PasswordDriverSupplierForFocusedFrame =
       base::RepeatingCallback<password_manager::PasswordManagerDriver*(
           content::WebContents*)>;
+  using ShowMigrationWarningCallback = base::RepeatingCallback<void(
+      gfx::NativeWindow,
+      Profile*,
+      password_manager::metrics_util::PasswordMigrationWarningTriggers)>;
 
   PasswordAccessoryControllerImpl(const PasswordAccessoryControllerImpl&) =
       delete;
@@ -55,10 +55,11 @@ class PasswordAccessoryControllerImpl
 
   // AccessoryController:
   void RegisterFillingSourceObserver(FillingSourceObserver observer) override;
-  absl::optional<autofill::AccessorySheetData> GetSheetData() const override;
+  std::optional<autofill::AccessorySheetData> GetSheetData() const override;
   void OnFillingTriggered(
       autofill::FieldGlobalId focused_field_id,
       const autofill::AccessorySheetField& selection) override;
+  void OnPasskeySelected(const std::vector<uint8_t>& passkey_id) override;
   void OnOptionSelected(autofill::AccessoryAction selected_action) override;
   void OnToggleChanged(autofill::AccessoryAction toggled_action,
                        bool enabled) override;
@@ -69,6 +70,9 @@ class PasswordAccessoryControllerImpl
       bool is_manual_generation_available) override;
   void OnGenerationRequested(
       autofill::password_generation::PasswordGenerationType type) override;
+  void UpdateCredManReentryUi(
+      autofill::mojom::FocusedFieldType focused_field_type) override;
+  base::WeakPtr<PasswordAccessoryController> AsWeakPtr() override;
 
   // Like |CreateForWebContents|, it creates the controller and attaches it to
   // the given |web_contents|. Upon creation, a |credential_cache| is required
@@ -83,19 +87,10 @@ class PasswordAccessoryControllerImpl
   static void CreateForWebContentsForTesting(
       content::WebContents* web_contents,
       password_manager::CredentialCache* credential_cache,
-      base::WeakPtr<ManualFillingController> mf_controller,
+      base::WeakPtr<ManualFillingController> manual_filling_controller,
       password_manager::PasswordManagerClient* password_client,
-      PasswordDriverSupplierForFocusedFrame driver_supplier);
-
-  // True if the focus event was sent for the current focused frame or if it is
-  // a blur event and no frame is focused. This check avoids reacting to
-  // obsolete events that arrived in an unexpected order.
-  // TODO(crbug.com/968162): Introduce the concept of active frame to the
-  // accessory controller and move this check in the controller.
-  static bool ShouldAcceptFocusEvent(
-      content::WebContents* web_contents,
-      password_manager::ContentPasswordManagerDriver* driver,
-      autofill::mojom::FocusedFieldType focused_field_type);
+      PasswordDriverSupplierForFocusedFrame driver_supplier,
+      ShowMigrationWarningCallback show_migration_warning_callback);
 
   // Returns true if the current site attached to `web_contents_` has a SECURE
   // security level.
@@ -115,9 +110,10 @@ class PasswordAccessoryControllerImpl
   PasswordAccessoryControllerImpl(
       content::WebContents* web_contents,
       password_manager::CredentialCache* credential_cache,
-      base::WeakPtr<ManualFillingController> mf_controller,
+      base::WeakPtr<ManualFillingController> manual_filling_controller,
       password_manager::PasswordManagerClient* password_client,
-      PasswordDriverSupplierForFocusedFrame driver_supplier);
+      PasswordDriverSupplierForFocusedFrame driver_supplier,
+      ShowMigrationWarningCallback show_migration_warning_callback);
 
  private:
   friend class content::WebContentsUserData<PasswordAccessoryControllerImpl>;
@@ -141,6 +137,9 @@ class PasswordAccessoryControllerImpl
     // If true, manual generation will be available for the focused field.
     bool is_manual_generation_available = false;
   };
+
+  // WebContentsObserver:
+  void WebContentsDestroyed() override;
 
   // Enables or disables saving for the focused origin. This involves removing
   // or adding blocklisted entry in the |PasswordStore|.
@@ -185,26 +184,24 @@ class PasswordAccessoryControllerImpl
   content::WebContents& GetWebContents() const;
 
   // Keeps track of credentials which are stored for all origins in this tab.
-  raw_ptr<password_manager::CredentialCache, DanglingUntriaged>
-      credential_cache_ = nullptr;
+  const raw_ptr<password_manager::CredentialCache> credential_cache_;
 
   // The password accessory controller object to forward client requests to.
-  base::WeakPtr<ManualFillingController> mf_controller_;
+  base::WeakPtr<ManualFillingController> manual_filling_controller_;
 
   // The password manager client is used to update the save passwords status
   // for the currently focused origin.
-  raw_ptr<password_manager::PasswordManagerClient, DanglingUntriaged>
-      password_client_ = nullptr;
+  const raw_ptr<password_manager::PasswordManagerClient> password_client_;
 
   // The authenticator used to trigger a biometric re-auth before filling.
   // null, if there is no ongoing authentication.
-  scoped_refptr<device_reauth::BiometricAuthenticator> authenticator_;
+  std::unique_ptr<device_reauth::DeviceAuthenticator> authenticator_;
 
   // Information about the currently focused field. This is the only place
   // allowed to store frame-specific data. If a new field is focused or focus is
-  // lost, this data needs to be reset to absl::nullopt to make sure that data
+  // lost, this data needs to be reset to std::nullopt to make sure that data
   // related to a former frame isn't displayed incorrectly in a different one.
-  absl::optional<LastFocusedFieldInfo> last_focused_field_info_ = absl::nullopt;
+  std::optional<LastFocusedFieldInfo> last_focused_field_info_ = std::nullopt;
 
   // The observer to notify if available suggestions change.
   FillingSourceObserver source_observer_;
@@ -225,6 +222,12 @@ class PasswordAccessoryControllerImpl
   // Security level used for testing only.
   security_state::SecurityLevel security_level_for_testing_ =
       security_state::NONE;
+
+  // Callback attempting to display the migration warning when invoked.
+  // Used to facilitate injecting a mock bridge in tests.
+  ShowMigrationWarningCallback show_migration_warning_callback_;
+
+  base::WeakPtrFactory<PasswordAccessoryControllerImpl> weak_ptr_factory_{this};
 
   WEB_CONTENTS_USER_DATA_KEY_DECL();
 };

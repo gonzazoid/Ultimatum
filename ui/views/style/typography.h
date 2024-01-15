@@ -5,19 +5,7 @@
 #ifndef UI_VIEWS_STYLE_TYPOGRAPHY_H_
 #define UI_VIEWS_STYLE_TYPOGRAPHY_H_
 
-#include "third_party/skia/include/core/SkColor.h"
-#include "ui/base/resource/resource_bundle.h"
-#include "ui/views/views_export.h"
-
-namespace gfx {
-class FontList;
-}
-
-namespace views {
-
-class View;
-
-namespace style {
+namespace views::style {
 
 // Where a piece of text appears in the UI. This influences size and weight, but
 // typically not style or color.
@@ -28,9 +16,15 @@ enum TextContext {
   // "CONTEXT_" represent the actual TextContexts: the rest are markers.
   VIEWS_TEXT_CONTEXT_START = 0,
 
+  // Text that appears on a views::Badge. Always 9pt.
+  CONTEXT_BADGE = VIEWS_TEXT_CONTEXT_START,
+
+  // Text that appears over the slightly shaded background of a bubble footer.
+  CONTEXT_BUBBLE_FOOTER,
+
   // Text that appears on a button control. Usually 12pt. This includes controls
   // with button-like behavior, such as Checkbox.
-  CONTEXT_BUTTON = VIEWS_TEXT_CONTEXT_START,
+  CONTEXT_BUTTON,
 
   // Text that appears on an MD-styled dialog button control. Usually 12pt.
   CONTEXT_BUTTON_MD,
@@ -49,6 +43,9 @@ enum TextContext {
 
   // An editable text field. Usually matches CONTROL_LABEL.
   CONTEXT_TEXTFIELD,
+
+  // Placeholder text in a text field.
+  CONTEXT_TEXTFIELD_PLACEHOLDER,
 
   // Text in a menu.
   CONTEXT_MENU,
@@ -90,6 +87,9 @@ enum TextStyle {
   // Style for the default button on a dialog.
   STYLE_DIALOG_BUTTON_DEFAULT,
 
+  // Style for the tonal button on a dialog.
+  STYLE_DIALOG_BUTTON_TONAL,
+
   // Disabled "greyed out" text.
   STYLE_DISABLED,
 
@@ -101,27 +101,53 @@ enum TextStyle {
   // surrounding STYLE_SECONDARY text.
   STYLE_EMPHASIZED_SECONDARY,
 
+  // Style for invalid text. Can be either primary or solid red color.
+  STYLE_INVALID,
+
   // The style used for links. Usually a solid shade of blue.
   STYLE_LINK,
 
   // Active tab in a tabbed pane.
   STYLE_TAB_ACTIVE,
 
+  // CR2023 typography tokens.
+  // These styles override the style specified by TextContext.
+  STYLE_OVERRIDE_TYPOGRAPHY_START,
+  STYLE_HEADLINE_1,
+  STYLE_HEADLINE_2,
+  STYLE_HEADLINE_3,
+  STYLE_HEADLINE_4,
+  STYLE_HEADLINE_5,
+  STYLE_BODY_1,
+  STYLE_BODY_1_EMPHASIS,
+  STYLE_BODY_1_MEDIUM = STYLE_BODY_1_EMPHASIS,
+  STYLE_BODY_1_BOLD,
+  STYLE_BODY_2,
+  STYLE_BODY_2_EMPHASIS,
+  STYLE_BODY_2_MEDIUM = STYLE_BODY_2_EMPHASIS,
+  STYLE_BODY_2_BOLD,
+  STYLE_BODY_3,
+  STYLE_BODY_3_EMPHASIS,
+  STYLE_BODY_3_MEDIUM = STYLE_BODY_3_EMPHASIS,
+  STYLE_BODY_3_BOLD,
+  STYLE_BODY_4,
+  STYLE_BODY_4_EMPHASIS,
+  STYLE_BODY_4_MEDIUM = STYLE_BODY_4_EMPHASIS,
+  STYLE_BODY_4_BOLD,
+  STYLE_BODY_5,
+  STYLE_BODY_5_EMPHASIS,
+  STYLE_BODY_5_MEDIUM = STYLE_BODY_5_EMPHASIS,
+  STYLE_BODY_5_BOLD,
+  STYLE_CAPTION,
+  STYLE_CAPTION_EMPHASIS,
+  STYLE_CAPTION_MEDIUM = STYLE_CAPTION_EMPHASIS,
+  STYLE_CAPTION_BOLD,
+  STYLE_OVERRIDE_TYPOGRAPHY_END,
+
   // Embedders must start TextStyle enum values from here.
   VIEWS_TEXT_STYLE_END
 };
 
-// Helpers to obtain text properties from the TypographyProvider given by the
-// current LayoutProvider. |view| is the View requesting the property. |context|
-// can be an enum value from TextContext, or a value understood by the
-// embedder's TypographyProvider. Similarly, |style| corresponds to TextStyle.
-VIEWS_EXPORT ui::ResourceBundle::FontDetails GetFontDetails(int context,
-                                                            int style);
-VIEWS_EXPORT const gfx::FontList& GetFont(int context, int style);
-VIEWS_EXPORT SkColor GetColor(const views::View& view, int context, int style);
-VIEWS_EXPORT int GetLineHeight(int context, int style);
-
-}  // namespace style
-}  // namespace views
+}  // namespace views::style
 
 #endif  // UI_VIEWS_STYLE_TYPOGRAPHY_H_

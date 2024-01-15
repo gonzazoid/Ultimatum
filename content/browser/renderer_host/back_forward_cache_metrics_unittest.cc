@@ -2,13 +2,17 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "base/sanitizer_buildflags.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/simple_test_tick_clock.h"
 #include "components/ukm/test_ukm_recorder.h"
 #include "content/browser/renderer_host/back_forward_cache_impl.h"
+#include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/web_contents_delegate.h"
 #include "content/public/browser/web_contents_observer.h"
+#include "content/public/test/back_forward_cache_util.h"
+#include "content/public/test/test_utils.h"
 #include "content/test/navigation_simulator_impl.h"
 #include "content/test/test_render_frame_host.h"
 #include "content/test/test_render_view_host.h"
@@ -20,6 +24,10 @@
 namespace content {
 
 namespace {
+const char kBackForwardCachePageWithFormStorableHistogramName[] =
+    "BackForwardCache.PageWithForm.Storable";
+const char kBackForwardCachePageWithFormRestoreResultHistogramName[] =
+    "BackForwardCache.PageWithForm.RestoreResult";
 
 class BackForwardCacheWebContentsDelegate : public WebContentsDelegate {
  public:
@@ -59,6 +67,7 @@ class BackForwardCacheMetricsTest : public RenderViewHostImplTestHarness,
 
  protected:
   ukm::TestAutoSetUkmRecorder recorder_;
+  base::HistogramTester histogram_tester_;
 
   BackForwardCacheWebContentsDelegate web_contents_delegate_;
 
@@ -182,14 +191,18 @@ TEST_F(BackForwardCacheMetricsTest, TimeRecordedAtStart) {
 }
 
 // TODO(crbug.com/1255492): Flaky under TSan.
-TEST_F(BackForwardCacheMetricsTest, DISABLED_TimeRecordedWhenRendererIsKilled) {
+#if BUILDFLAG(USING_SANITIZER)
+#define MAYBE_TimeRecordedWhenRendererIsKilled DISABLED_TimeRecordedWhenRendererIsKilled
+#else
+#define MAYBE_TimeRecordedWhenRendererIsKilled TimeRecordedWhenRendererIsKilled
+#endif
+TEST_F(BackForwardCacheMetricsTest, MAYBE_TimeRecordedWhenRendererIsKilled) {
   // Need to enable back-forward cache to make sure a page is put into the
   // cache.
   base::test::ScopedFeatureList scoped_feature_list;
   scoped_feature_list.InitWithFeaturesAndParameters(
-      {{features::kBackForwardCache, {}}},
-      // Allow BackForwardCache for all devices regardless of their memory.
-      {features::kBackForwardCacheMemoryControls});
+      GetBasicBackForwardCacheFeatureForTesting(),
+      GetDefaultDisabledBackForwardCacheFeaturesForTesting());
   base::HistogramTester histogram_tester;
 
   const GURL url1("http://foo1");
@@ -226,7 +239,7 @@ TEST_F(BackForwardCacheMetricsTest, DISABLED_TimeRecordedWhenRendererIsKilled) {
 TEST_F(BackForwardCacheMetricsTest, AllFeaturesCovered) {
   // Features that were removed from the enum must have their int value listed
   // here because ::All() will still include them.
-  std::vector<uint64_t> removed_features{
+  std::unordered_set<uint64_t> removed_features{
       /* WebSchedulerTrackedFeature::kPageShowEventListener =*/6,
       /* WebSchedulerTrackedFeature::kPageHideEventListener =*/7,
       /* WebSchedulerTrackedFeature::kBeforeUnloadEventListener =*/8,
@@ -234,37 +247,162 @@ TEST_F(BackForwardCacheMetricsTest, AllFeaturesCovered) {
       /* WebSchedulerTrackedFeature::kFreezeEventListener =*/10,
       /* WebSchedulerTrackedFeature::kResumeEventListener =*/11,
       /* WebSchedulerTrackedFeature::kServiceWorkerControlledPage =*/16,
+      /* WebSchedulerTrackedFeature::kOutstandingIndexedDBTransaction =*/17,
       /* WebSchedulerTrackedFeature::kHasScriptableFramesInMultipleTabs =*/18,
       /* WebSchedulerTrackedFeature::kRequestedGeolocationPermission =*/19,
       /* WebSchedulerTrackedFeature::kRequestedNotificationsPermission =*/20,
-      /* Never existed =*/25,
+      /* WebSchedulerTrackedFeature::kIndexedDBConnection =*/28,
       /* WebSchedulerTrackedFeature::kWebGL =*/29,
       /* WebSchedulerTrackedFeature::kWebVR =*/30,
       /* WebSchedulerTrackedFeature::kWakeLock =*/35,
       /* WebSchedulerTrackedFeature::kWebFileSystem =*/39,
+      /* WebSchedulerTrackedFeature::kAppBanner =*/42,
       /* WebSchedulerTrackedFeature::kMediaSessionImplOnServiceCreated =*/56};
 
-  // Combine the result of |GetDisallowedFeatures()| and |GetAllowedFeatures()|.
-  std::vector<uint64_t> combined_features;
-  auto disallowed_features = BackForwardCacheImpl::GetDisallowedFeatures(
-      BackForwardCacheImpl::RequestedFeatures::kAll);
-  auto allowed_features = BackForwardCacheImpl::GetAllowedFeatures(
-      BackForwardCacheImpl::RequestedFeatures::kAll);
-  EXPECT_TRUE(Intersection(disallowed_features, allowed_features).Empty());
-
-  for (auto feature : Union(disallowed_features, allowed_features)) {
-    combined_features.push_back(static_cast<uint64_t>(feature));
+  for (BackForwardCacheImpl::CacheControlNoStoreContext ccns_context :
+       {BackForwardCacheImpl::kInCCNSContext,
+        BackForwardCacheImpl::kNotInCCNSContext}) {
+    // Combine the result of |GetDisallowedFeatures()| and
+    // |GetAllowedFeatures()|.
+    std::unordered_set<uint64_t> combined_features;
+    auto disallowed_features = BackForwardCacheImpl::GetDisallowedFeatures(
+        BackForwardCacheImpl::RequestedFeatures::kAll, ccns_context);
+    auto allowed_features = BackForwardCacheImpl::GetAllowedFeatures(
+        BackForwardCacheImpl::RequestedFeatures::kAll, ccns_context);
+    ASSERT_TRUE(Intersection(disallowed_features, allowed_features).Empty());
+    for (auto feature : Union(disallowed_features, allowed_features)) {
+      combined_features.emplace(static_cast<uint64_t>(feature));
+    }
+    // Add the removed features to the list.
+    for (auto feature : removed_features) {
+      ASSERT_FALSE(combined_features.contains(feature));
+      combined_features.emplace(feature);
+    }
+    // Make a list of all the WebSchedulerTrackedFeatures indices.
+    std::unordered_set<uint64_t> all_features;
+    for (auto feature : blink::scheduler::WebSchedulerTrackedFeatures::All()) {
+      all_features.emplace(static_cast<uint64_t>(feature));
+    }
+    SCOPED_TRACE(ccns_context == BackForwardCacheImpl::kInCCNSContext
+                     ? "InCCNSContext"
+                     : "NotInCCNSContext");
+    EXPECT_THAT(combined_features,
+                testing::UnorderedElementsAreArray(all_features));
   }
-  // Add the removed features to the list.
-  combined_features.insert(combined_features.begin(), removed_features.begin(),
-                           removed_features.end());
-  // Make a list of all the WebSchedulerTrackedFeatures indices.
-  std::vector<uint64_t> all_features;
-  for (auto feature : blink::scheduler::WebSchedulerTrackedFeatures::All()) {
-    all_features.push_back(static_cast<uint64_t>(feature));
-  }
-  EXPECT_THAT(combined_features, testing::UnorderedElementsAreArray(
-                                     all_features.begin(), all_features.end()));
 }
 
+TEST_F(BackForwardCacheMetricsTest, PageWithFormsMetricsStoredRecorded) {
+  base::test::ScopedFeatureList scoped_feature_list;
+  scoped_feature_list.InitWithFeaturesAndParameters(
+      GetBasicBackForwardCacheFeatureForTesting(),
+      GetDefaultDisabledBackForwardCacheFeaturesForTesting());
+
+  const GURL url_with_form("http://foo1");
+  const GURL url_without_form("http://foo2");
+
+  // Set has form associated for the first URL.
+  NavigationSimulator::NavigateAndCommitFromDocument(url_with_form,
+                                                     main_test_rfh());
+  BackForwardCache::SetHadFormDataAssociated(main_test_rfh()->GetPage());
+
+  // Navigating away from |url_with_form| will put the page into BFCache.
+  RenderFrameHostWrapper old_rfh(main_test_rfh());
+  NavigationSimulator::NavigateAndCommitFromDocument(url_without_form,
+                                                     main_test_rfh());
+  EXPECT_EQ(old_rfh->GetLifecycleState(),
+            RenderFrameHost::LifecycleState::kInBackForwardCache);
+  histogram_tester_.ExpectBucketCount(
+      kBackForwardCachePageWithFormStorableHistogramName,
+      BackForwardCacheMetrics::PageWithFormStorable::kPageSeen, 1);
+  histogram_tester_.ExpectBucketCount(
+      kBackForwardCachePageWithFormStorableHistogramName,
+      BackForwardCacheMetrics::PageWithFormStorable::kPageStored, 1);
+
+  // Navigate back will restore the page from the BFCache.
+  NavigationSimulator::GoBack(contents());
+  EXPECT_EQ(old_rfh->GetLifecycleState(),
+            RenderFrameHost::LifecycleState::kActive);
+  histogram_tester_.ExpectBucketCount(
+      kBackForwardCachePageWithFormRestoreResultHistogramName,
+      BackForwardCacheMetrics::HistoryNavigationOutcome::kRestored, 1);
+}
+
+TEST_F(BackForwardCacheMetricsTest,
+       PageWithFormsMetricsRecordedForSameSiteNavigation) {
+  base::test::ScopedFeatureList scoped_feature_list;
+  scoped_feature_list.InitWithFeaturesAndParameters(
+      GetBasicBackForwardCacheFeatureForTesting(),
+      GetDefaultDisabledBackForwardCacheFeaturesForTesting());
+
+  const GURL url_with_form("http://foo1");
+  const GURL url_with_form_with_handle("http://foo1#title");
+
+  // Set has form associated for the first URL.
+  NavigationSimulator::NavigateAndCommitFromDocument(url_with_form,
+                                                     main_test_rfh());
+  BackForwardCache::SetHadFormDataAssociated(main_test_rfh()->GetPage());
+
+  NavigationSimulator::NavigateAndCommitFromDocument(url_with_form_with_handle,
+                                                     main_test_rfh());
+
+  // Record PageSeen without stored in cache.
+  histogram_tester_.ExpectBucketCount(
+      kBackForwardCachePageWithFormStorableHistogramName,
+      BackForwardCacheMetrics::PageWithFormStorable::kPageSeen, 1);
+  histogram_tester_.ExpectBucketCount(
+      kBackForwardCachePageWithFormStorableHistogramName,
+      BackForwardCacheMetrics::PageWithFormStorable::kPageStored, 0);
+}
+
+TEST_F(BackForwardCacheMetricsTest, PageWithFormsMetricsNotRestoreRecorded) {
+  base::test::ScopedFeatureList scoped_feature_list;
+  scoped_feature_list.InitWithFeaturesAndParameters(
+      GetBasicBackForwardCacheFeatureForTesting(),
+      GetDefaultDisabledBackForwardCacheFeaturesForTesting());
+
+  const GURL url_with_form("http://foo1");
+  const GURL url_without_form("http://foo2");
+
+  // Set has form associated for the first URL.
+  NavigationSimulator::NavigateAndCommitFromDocument(url_with_form,
+                                                     main_test_rfh());
+  BackForwardCache::SetHadFormDataAssociated(main_test_rfh()->GetPage());
+
+  // Navigating into another URL and go back and page can't be restored because
+  // we flush the cache.
+  RenderFrameHostWrapper old_rfh(main_test_rfh());
+  NavigationSimulator::NavigateAndCommitFromDocument(url_without_form,
+                                                     main_test_rfh());
+  contents()->GetController().GetBackForwardCache().Flush();
+  NavigationSimulator::GoBack(contents());
+  EXPECT_TRUE(old_rfh.WaitUntilRenderFrameDeleted());
+  histogram_tester_.ExpectBucketCount(
+      kBackForwardCachePageWithFormRestoreResultHistogramName,
+      BackForwardCacheMetrics::HistoryNavigationOutcome::kNotRestored, 1);
+}
+
+TEST_F(BackForwardCacheMetricsTest, PageWithFormsMetricsNotStore) {
+  DisableBackForwardCacheForTesting(contents(),
+                                    BackForwardCache::TEST_REQUIRES_NO_CACHING);
+
+  const GURL url_with_form("http://foo1");
+  const GURL url_without_form("http://foo2");
+
+  // Set has form associated for the first URL.
+  NavigationSimulator::NavigateAndCommitFromDocument(url_with_form,
+                                                     main_test_rfh());
+  BackForwardCache::SetHadFormDataAssociated(main_test_rfh()->GetPage());
+
+  // Navigating away from |url_with_form| won't put the page into BFCache since
+  // cache is disabled.
+  NavigationSimulator::NavigateAndCommitFromDocument(url_without_form,
+                                                     main_test_rfh());
+
+  histogram_tester_.ExpectBucketCount(
+      kBackForwardCachePageWithFormStorableHistogramName,
+      BackForwardCacheMetrics::PageWithFormStorable::kPageSeen, 1);
+  histogram_tester_.ExpectBucketCount(
+      kBackForwardCachePageWithFormStorableHistogramName,
+      BackForwardCacheMetrics::PageWithFormStorable::kPageStored, 0);
+}
 }  // namespace content

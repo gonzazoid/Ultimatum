@@ -3,19 +3,7 @@
 # found in the LICENSE file.
 
 import("//build/config/arm.gni")
-
-use_cpuinfo =
-    # cpuinfo is not supported on these chips.
-    current_cpu != "ppc64" && current_cpu != "ppc64le" &&
-    current_cpu != "s390" && current_cpu != "s390x" &&
-    # cpuinfo is not supported on fuchsia.
-    !is_fuchsia &&
-    # There's a few arm architectures that are not supported by cpuinfo,
-    # especially amongst ChromeOS devices.
-    # See //third_party/cpuinfo/src/src/arm/linux/cp.h.
-    (!defined(arm_arch) ||
-     (arm_arch != "armv7-a+crc" && arm_arch != "armv8-a+crc" &&
-      arm_arch != "armv8-a+crc+crypto"))
+import("//third_party/cpuinfo/cpuinfo.gni")
 
 config("ruy_include") {
   include_dirs = [ "src" ]
@@ -47,27 +35,23 @@ config("ruy_cpuinfo_config") {
 # eating the binary size for everybody.
 
 # Analogous to cmake's |ruy_8_mavx2_mfma_arch_AVX2|.
+# Note: No MSVC style flags are used since it is not supported by Chrome.
 config("ruy_avx2_flags") {
-  if (current_cpu == "x86_64" || current_cpu == "amd64") {
-    if (is_win) {
-      cflags = [ "/arch:AVX2" ]
-    } else {
-      cflags = [
-        "-mavx2",
-        "-mfma",
-      ]
-    }
+  if (current_cpu == "x86_64" || current_cpu == "x64" ||
+      current_cpu == "amd64") {
+    cflags = [
+      "-mavx2",
+      "-mfma",
+    ]
   }
 }
 
 # Analogous to cmake's |ruy_9_mavx_arch_AVX|.
+# Note: No MSVC style flags are used since it is not supported by Chrome.
 config("ruy_avx_flags") {
-  if (current_cpu == "x86_64" || current_cpu == "amd64") {
-    if (is_win) {
-      cflags = [ "/arch:AVX" ]
-    } else {
-      cflags = [ "-mavx" ]
-    }
+  if (current_cpu == "x86_64" || current_cpu == "x64" ||
+      current_cpu == "amd64") {
+    cflags = [ "-mavx" ]
   }
 }
 

@@ -5,7 +5,9 @@
 #ifndef CHROMEOS_ASH_SERVICES_IME_PUBLIC_MOJOM_MOJOM_TRAITS_H_
 #define CHROMEOS_ASH_SERVICES_IME_PUBLIC_MOJOM_MOJOM_TRAITS_H_
 
+#include "base/metrics/histogram.h"
 #include "chromeos/ash/services/ime/public/cpp/assistive_suggestions.h"
+#include "chromeos/ash/services/ime/public/cpp/autocorrect.h"
 #include "chromeos/ash/services/ime/public/mojom/input_method_host.mojom-shared.h"
 #include "mojo/public/cpp/bindings/enum_traits.h"
 #include "mojo/public/cpp/bindings/struct_traits.h"
@@ -57,6 +59,26 @@ struct StructTraits<ash::ime::mojom::SuggestionCandidateDataView,
 
   static bool Read(SuggestionCandidateDataView input,
                    AssistiveSuggestion* output);
+};
+
+template <>
+struct StructTraits<ash::ime::mojom::SuggestionsTextContextDataView,
+                    ash::ime::SuggestionsTextContext> {
+  using SuggestionsTextContextDataView =
+      ::ash::ime::mojom::SuggestionsTextContextDataView;
+  using SuggestionsTextContext = ::ash::ime::SuggestionsTextContext;
+
+  static const std::string& last_n_chars(
+      const SuggestionsTextContext& context) {
+    return context.last_n_chars;
+  }
+
+  static size_t surrounding_text_length(const SuggestionsTextContext& context) {
+    return context.surrounding_text_length;
+  }
+
+  static bool Read(SuggestionsTextContextDataView input,
+                   SuggestionsTextContext* output);
 };
 
 template <>
@@ -118,6 +140,64 @@ struct StructTraits<ash::ime::mojom::AssistiveWindowDataView,
   }
 
   static bool Read(AssistiveWindowDataView input, AssistiveWindow* output);
+};
+
+template <>
+struct EnumTraits<ash::ime::mojom::AutocorrectSuggestionProvider,
+                  ash::ime::AutocorrectSuggestionProvider> {
+  using AutocorrectSuggestionProviderMojo =
+      ::ash::ime::mojom::AutocorrectSuggestionProvider;
+  using AutocorrectSuggestionProvider =
+      ::ash::ime::AutocorrectSuggestionProvider;
+
+  static AutocorrectSuggestionProviderMojo ToMojom(
+      AutocorrectSuggestionProvider provider);
+  static bool FromMojom(AutocorrectSuggestionProviderMojo input,
+                        AutocorrectSuggestionProvider* output);
+};
+
+template <>
+struct StructTraits<ash::ime::mojom::BucketedHistogramDataView,
+                    base::Histogram*> {
+  static bool IsNull(base::Histogram* histogram) { return !histogram; }
+
+  static void SetToNull(base::Histogram** histogram) { *histogram = nullptr; }
+
+  static base::StringPiece name(base::Histogram* histogram) {
+    return histogram->histogram_name();
+  }
+
+  static ash::ime::mojom::HistogramBucketType bucket_type(
+      base::Histogram* histogram) {
+    switch (histogram->GetHistogramType()) {
+      case base::HISTOGRAM:
+        return ash::ime::mojom::HistogramBucketType::kExponential;
+      case base::LINEAR_HISTOGRAM:
+      case base::BOOLEAN_HISTOGRAM:
+        return ash::ime::mojom::HistogramBucketType::kLinear;
+      case base::CUSTOM_HISTOGRAM:
+      case base::SPARSE_HISTOGRAM:
+      case base::DUMMY_HISTOGRAM:
+        CHECK(false) << "Invalid histogram bucket type: "
+                     << static_cast<int>(histogram->GetHistogramType());
+        return ash::ime::mojom::HistogramBucketType::kExponential;
+    }
+  }
+
+  static uint16_t minimum(base::Histogram* histogram) {
+    return base::checked_cast<uint16_t>(histogram->declared_min());
+  }
+
+  static uint16_t maximum(base::Histogram* histogram) {
+    return base::checked_cast<uint16_t>(histogram->declared_max());
+  }
+
+  static uint16_t bucket_count(base::Histogram* histogram) {
+    return base::checked_cast<uint16_t>(histogram->bucket_count());
+  }
+
+  static bool Read(ash::ime::mojom::BucketedHistogramDataView input,
+                   base::Histogram** output);
 };
 
 }  // namespace mojo

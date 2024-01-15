@@ -5,9 +5,8 @@
 #ifndef ASH_QUICK_PAIR_PAIRING_RETROACTIVE_PAIRING_DETECTOR_IMPL_H_
 #define ASH_QUICK_PAIR_PAIRING_RETROACTIVE_PAIRING_DETECTOR_IMPL_H_
 
+#include <optional>
 #include <string>
-
-#include "ash/quick_pair/pairing/retroactive_pairing_detector.h"
 
 #include "ash/public/cpp/session/session_controller.h"
 #include "ash/public/cpp/session/session_observer.h"
@@ -17,16 +16,18 @@
 #include "ash/quick_pair/message_stream/message_stream.h"
 #include "ash/quick_pair/message_stream/message_stream_lookup.h"
 #include "ash/quick_pair/pairing/pairer_broker.h"
+#include "ash/quick_pair/pairing/retroactive_pairing_detector.h"
 #include "ash/quick_pair/proto/fastpair.pb.h"
-#include "base/callback_forward.h"
 #include "base/containers/flat_map.h"
 #include "base/containers/flat_set.h"
+#include "base/functional/callback_forward.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/scoped_observation.h"
+#include "base/time/time.h"
 #include "base/timer/timer.h"
 #include "device/bluetooth/bluetooth_adapter.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace device {
 class BluetoothDevice;
@@ -35,7 +36,7 @@ class BluetoothDevice;
 namespace ash {
 namespace quick_pair {
 
-struct Device;
+class Device;
 
 class RetroactivePairingDetectorImpl final
     : public RetroactivePairingDetector,
@@ -70,6 +71,7 @@ class RetroactivePairingDetectorImpl final
   struct RetroactivePairingInformation {
     std::string model_id;
     std::string ble_address;
+    base::Time expiry_timestamp;
   };
 
   // SessionObserver:
@@ -82,10 +84,10 @@ class RetroactivePairingDetectorImpl final
 
   // PairerBroker::Observer
   void OnDevicePaired(scoped_refptr<Device> device) override;
+  void OnAccountKeyWrite(scoped_refptr<Device> device,
+                         std::optional<AccountKeyFailure> error) override;
   void OnPairFailure(scoped_refptr<Device> device,
                      PairFailure failure) override;
-  void OnAccountKeyWrite(scoped_refptr<Device> device,
-                         absl::optional<AccountKeyFailure> error) override;
 
   // MessageStreamLookup::Observer
   void OnMessageStreamConnected(const std::string& device_address,
@@ -103,14 +105,28 @@ class RetroactivePairingDetectorImpl final
   // object.
   void OnGetAdapter(scoped_refptr<device::BluetoothAdapter> adapter);
 
-  // Parses MessageStream messages for model id and ble address, and
-  // notifies observers if they exist.
+  // Parses MessageStream messages for model id and BLE address, and
+  // notifies observers if they exist within the |expiry_timeout| time period.
   void GetModelIdAndAddressFromMessageStream(const std::string& device_address,
                                              MessageStream* message_stream);
 
-  // Checks |device_pairing_information_| for a ble address and model id
-  // needed for retroactive pairing, and notifies observers.
+  // Checks |device_pairing_information_| for a BLE address and model id
+  // needed for retroactive pairing, and notifies observers if within the
+  // |expiry_timeout| time period.
   void CheckPairingInformation(const std::string& device_address);
+
+  // Adds |device_pairing_information_| entry for a device at |device_address|
+  // with the |expiry_timeout| field. BLE address and model id are added once
+  // the `MessageStream` is connected.
+  void AddDevicePairingInformation(const std::string& device_address);
+
+  // Checks if the |device_pairing_information_| at |device_address| has
+  // exceeded its expiry timeout. If so, removes all references to device in
+  // |device_pairing_information_|, |potential_retroactive_addresses_|, and
+  // removes an observer for a corresponding MessageStream and from
+  // |message_streams_| if a MessageStream exists for the device, and returns
+  // `true`. Otherwise if the device has not expired, returns `false`.
+  bool CheckAndRemoveIfDeviceExpired(const std::string& device_address);
 
   // FastPairRepository::IsDeviceSavedToAccount callback
   void AttemptRetroactivePairing(const std::string& classic_address,
@@ -132,10 +148,27 @@ class RetroactivePairingDetectorImpl final
                          const std::string& classic_address);
 
   void RemoveDeviceInformation(const std::string& device_address);
+  void RemoveDeviceInformationHelper(const std::string& device_address);
 
-  // The classic pairing addresses of Fast Pair devices that we have already
-  // paired to.
-  base::flat_set<std::string> fast_pair_addresses_;
+  // Iterates over |device_pairing_information_| and if a device's
+  // |expiry_timestamp| has been reached, removes devices from
+  // |device_pairing_information_|, |potential_retroactive_addresses_|, and
+  // removes an observer for a corresponding MessageStream and from
+  // |message_streams_| if a MessageStream exists for the device.
+  void RemoveExpiredDevicesFromStoredDeviceData();
+
+  // Gets or creates a Gatt connection to |device|.
+  void CreateGattConnection(device::BluetoothDevice* device);
+
+  // Internal method called when creating a FastPairGattServiceClient.
+  void OnGattClientInitializedCallback(const std::string& address,
+                                       std::optional<PairFailure> failure);
+
+  // Internal method called to retrieve the model ID of a device.
+  void OnReadModelId(
+      const std::string& address,
+      std::optional<device::BluetoothGattService::GattErrorCode> error_code,
+      const std::vector<uint8_t>& value);
 
   // The classic pairing addresses of potential Retroactive Pair supported
   // devices that are found in the adapter. We have to store them and wait for a
@@ -156,8 +189,8 @@ class RetroactivePairingDetectorImpl final
   // so we can determine if we need to instantiate the objects.
   bool retroactive_pairing_detector_instatiated_ = false;
 
-  PairerBroker* pairer_broker_ = nullptr;
-  MessageStreamLookup* message_stream_lookup_ = nullptr;
+  raw_ptr<PairerBroker> pairer_broker_ = nullptr;
+  raw_ptr<MessageStreamLookup> message_stream_lookup_ = nullptr;
   scoped_refptr<device::BluetoothAdapter> adapter_;
   base::ObserverList<RetroactivePairingDetector::Observer> observers_;
 

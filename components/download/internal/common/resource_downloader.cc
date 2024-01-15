@@ -6,13 +6,15 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/functional/bind.h"
+#include "base/task/single_thread_task_runner.h"
 #include "components/download/public/common/stream_handle_input_stream.h"
+#include "components/download/public/common/url_download_handler.h"
 #include "components/download/public/common/url_loader_factory_provider.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "services/device/public/mojom/wake_lock_provider.mojom.h"
+#include "services/network/public/cpp/record_ontransfersizeupdate_utils.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
 
 namespace download {
@@ -40,7 +42,10 @@ class URLLoaderStatusMonitor : public network::mojom::URLLoaderClient {
   void OnUploadProgress(int64_t current_position,
                         int64_t total_size,
                         OnUploadProgressCallback callback) override {}
-  void OnTransferSizeUpdated(int32_t transfer_size_diff) override {}
+  void OnTransferSizeUpdated(int32_t transfer_size_diff) override {
+    network::RecordOnTransferSizeUpdatedUMA(
+        network::OnTransferSizeUpdatedFrom::kURLLoaderStatusMonitor);
+  }
   void OnComplete(const network::URLLoaderCompletionStatus& status) override;
 
  private:
@@ -112,7 +117,8 @@ void ResourceDownloader::InterceptNavigationResponse(
           &UrlDownloadHandler::Delegate::OnUrlDownloadHandlerCreated, delegate,
           UrlDownloadHandler::UniqueUrlDownloadHandlerPtr(
               std::move(downloader).release(),
-              base::OnTaskRunnerDeleter(base::ThreadTaskRunnerHandle::Get()))));
+              base::OnTaskRunnerDeleter(
+                  base::SingleThreadTaskRunner::GetCurrentDefault()))));
   raw_downloader->InterceptResponse(
       std::move(url_chain), cert_status, std::move(response_head),
       std::move(response_body), std::move(url_loader_client_endpoints));
@@ -250,8 +256,9 @@ void ResourceDownloader::OnResponseStarted(
           std::make_unique<StreamHandleInputStream>(std::move(stream_handle)),
           URLLoaderFactoryProvider::URLLoaderFactoryProviderPtr(
               new URLLoaderFactoryProvider(url_loader_factory_),
-              base::OnTaskRunnerDeleter(base::ThreadTaskRunnerHandle::Get())),
-          this, std::move(callback_)));
+              base::OnTaskRunnerDeleter(
+                  base::SingleThreadTaskRunner::GetCurrentDefault())),
+          reinterpret_cast<UrlDownloadHandlerID>(this), std::move(callback_)));
 }
 
 void ResourceDownloader::OnReceiveRedirect() {
@@ -283,10 +290,11 @@ void ResourceDownloader::OnUploadProgress(uint64_t bytes_uploaded) {
 void ResourceDownloader::Destroy() {
   if (wake_lock_)
     wake_lock_->CancelWakeLock();
+  // TODO(crbug.com/1394491): Use Weak Pointers instead.
   delegate_task_runner_->PostTask(
       FROM_HERE,
       base::BindOnce(&UrlDownloadHandler::Delegate::OnUrlDownloadStopped,
-                     delegate_, base::UnsafeDanglingUntriaged(this)));
+                     delegate_, reinterpret_cast<UrlDownloadHandlerID>(this)));
 }
 
 void ResourceDownloader::RequestWakeLock(

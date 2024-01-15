@@ -17,7 +17,7 @@
               },
               "legacy_chromium_config": {
                 "apply_configs": [
-                  "download_vr_test_apks"
+                  "download_xr_test_apks"
                 ],
                 "config": "android",
                 "target_platform": "android"
@@ -49,7 +49,7 @@
               },
               "legacy_chromium_config": {
                 "apply_configs": [
-                  "download_vr_test_apks"
+                  "download_xr_test_apks"
                 ],
                 "config": "android",
                 "target_platform": "android"
@@ -88,5 +88,8 @@
   },
   "builder_group": "chromium.gpu.fyi",
   "perf_dashboard_machine_group": "ChromiumGPUFYI",
-  "recipe": "chromium"
+  "recipe": "chromium",
+  "sheriff_rotations": [
+    "chromium.gpu"
+  ]
 }

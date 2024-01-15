@@ -10,9 +10,9 @@
 
 #include "base/debug/crash_logging.h"
 #include "base/location.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "content/public/renderer/content_renderer_client.h"
 #include "content/renderer/pepper/message_channel.h"
 #include "content/renderer/pepper/pepper_plugin_instance_impl.h"
@@ -59,7 +59,7 @@ blink::WebTextInputType ConvertTextInputType(ui::TextInputType type) {
 
 struct PepperWebPluginImpl::InitData {
   scoped_refptr<PluginModule> module;
-  RenderFrameImpl* render_frame;
+  raw_ptr<RenderFrameImpl, ExperimentalRenderer> render_frame;
   std::vector<std::string> arg_names;
   std::vector<std::string> arg_values;
   GURL url;
@@ -84,7 +84,7 @@ PepperWebPluginImpl::PepperWebPluginImpl(PluginModule* plugin_module,
   // Set subresource URL for crash reporting.
   static auto* const subresource_url = base::debug::AllocateCrashKeyString(
       "subresource_url", base::debug::CrashKeySize::Size256);
-  base::debug::SetCrashKeyString(subresource_url, init_data_->url.spec());
+  base::debug::SetCrashKeyString(subresource_url, init_data_->url.possibly_invalid_spec());
 }
 
 PepperWebPluginImpl::~PepperWebPluginImpl() {}
@@ -153,7 +153,8 @@ void PepperWebPluginImpl::Destroy() {
     instance_ = nullptr;
   }
 
-  base::ThreadTaskRunnerHandle::Get()->DeleteSoon(FROM_HERE, this);
+  base::SingleThreadTaskRunner::GetCurrentDefault()->DeleteSoon(FROM_HERE,
+                                                                this);
 }
 
 v8::Local<v8::Object> PepperWebPluginImpl::V8ScriptableObject(

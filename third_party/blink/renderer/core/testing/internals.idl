@@ -24,9 +24,7 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-[
-    DoNotCheckConstants
-] interface Internals {
+interface Internals {
     [RaisesException] GCObservation observeGC(any observed);
 
     [RaisesException] DOMString elementLayoutTreeAsText(Element element);
@@ -35,16 +33,20 @@
     boolean isLoading(DOMString url);
     boolean isLoadingFromMemoryCache(DOMString url);
 
-    // Call this function with the URL of a resource that has not yet been
-    // fetched. It returns a promise that resolves with the initial priority
+    // Call this function with the URL of a resource.
+    // It returns a promise that resolves with the initial priority
     // of the request, once it has been made.
     [CallWith=ScriptState] Promise<unsigned long> getInitialResourcePriority(DOMString url, Document document);
+
+    // Similar to getInitialResourcePriority, but doesn't query the priority of
+    // an already loaded resource.
+    [CallWith=ScriptState] Promise<unsigned long> getInitialResourcePriorityOfNewLoad(DOMString url, Document document);
 
     DOMString getResourceHeader(DOMString url, DOMString header, Document document);
 
     boolean doesWindowHaveUrlFragment(Window window);
 
-    CSSStyleDeclaration computedStyleIncludingVisitedInfo(Node node);
+    CSSStyleDeclaration computedStyleIncludingVisitedInfo(Element element);
 
     ShadowRoot createUserAgentShadowRoot(Element host);
 
@@ -105,6 +107,7 @@
     DOMRectReadOnly boundingBox(Element element);
 
     [RaisesException] void setMarker(Document document, Range range, DOMString markerType);
+    [RaisesException] void removeMarker(Document document, Range range, DOMString markerType);
     [RaisesException] unsigned long markerCountForNode(Text text, DOMString markerType);
     unsigned long activeMarkerCountForNode(Text text);
     [RaisesException] Range markerRangeForNode(Text text, DOMString markerType, unsigned long index);
@@ -127,7 +130,6 @@
     [RaisesException] DOMString suggestedValue(Element inputElement);
     [RaisesException] void setSuggestedValue(Element inputElement, DOMString value);
     [RaisesException] void setAutofilledValue(Element inputElement, DOMString value);
-    [RaisesException] void setEditingValue(Element inputElement, DOMString value);
     [RaisesException] void setAutofilled(Element inputElement, boolean enabled);
     [RaisesException] void setSelectionRangeForNumberType(Element inputElement, unsigned long start, unsigned long end);
 
@@ -140,6 +142,7 @@
     [RaisesException] Node touchNodeAdjustedToBestClickableNode(long x, long y, long width, long height, Document document);
     [RaisesException] DOMPoint touchPositionAdjustedToBestContextMenuNode(long x, long y, long width, long height, Document document);
     [RaisesException] Node touchNodeAdjustedToBestContextMenuNode(long x, long y, long width, long height, Document document);
+    [RaisesException] Node touchNodeAdjustedToBestStylusWritableNode(long x, long y, long width, long height, Document document);
 
     [RaisesException] long lastSpellCheckRequestSequence(Document document);
     [RaisesException] long lastSpellCheckProcessedSequence(Document document);
@@ -147,6 +150,8 @@
     [RaisesException] void cancelCurrentSpellCheckRequest(Document document);
     [RaisesException] DOMString idleTimeSpellCheckerState(Document document);
     [RaisesException] void runIdleTimeSpellChecker(Document document);
+
+    [RaisesException] boolean hasLastEditCommand(Document document);
 
     sequence<DOMString> userPreferredLanguages();
     void setUserPreferredLanguages(sequence<DOMString> languages);
@@ -170,7 +175,8 @@
     DOMString svgNamespace();
     sequence<DOMString> svgTags();
 
-    [RaisesException] NodeList nodesFromRect(Document document, long x, long y,
+    [RaisesException, CallWith=ScriptState] NodeList nodesFromRect(
+        Document document, long x, long y,
         unsigned long width, unsigned long height, boolean ignoreClipping,
         boolean allowChildFrameContent);
 
@@ -182,8 +188,6 @@
     void setMockHyphenation(DOMString locale);
 
     unsigned long numberOfScrollableAreas(Document document);
-
-    boolean isPageBoxVisible(Document document, long pageNumber);
 
     readonly attribute InternalSettings settings;
     readonly attribute InternalRuntimeFlags runtimeFlags;
@@ -212,8 +216,6 @@
     sequence<DOMString> allIconURLs(Document document);
     [RaisesException] long numberOfPages(optional double pageWidthInPixels = 800, optional double pageHeightInPixels = 600);
     [RaisesException] DOMString pageProperty(DOMString propertyName, unsigned long pageNumber);
-    [RaisesException] DOMString pageSizeAndMarginsInPixels(unsigned long pageIndex, long width, long height, long marginTop, long marginRight, long marginBottom, long marginLeft);
-
     [RaisesException] float pageScaleFactor();
     [RaisesException] void setPageScaleFactor(float scaleFactor);
     [RaisesException] void setPageScaleFactorLimits(float minScaleFactor, float maxScaleFactor);
@@ -259,6 +261,11 @@
     [RaisesException] DOMRectList draggableRegions(Document document);
     [RaisesException] DOMRectList nonDraggableRegions(Document document);
 
+    // Overrides default behavior to support the app-region CSS property.
+    // Setting to true enables collection of draggable/non-draggable
+    // app regions.
+    void SetSupportsAppRegion(boolean supports_app_regions);
+
     // Returns a string with information about the mouse cursor used at the specified client location.
     DOMString getCurrentCursorInfo();
 
@@ -279,6 +286,8 @@
     boolean selectPopupItemStyleIsRtl(Node select, long itemIndex);
     long selectPopupItemStyleFontHeight(Node select, long itemIndex);
     void resetTypeAheadSession(HTMLSelectElement select);
+
+    void resetSelectListTypeAheadSession(HTMLSelectListElement selectlist);
 
     StaticSelection getDragCaret();
     [RaisesException] StaticSelection getSelectionInFlatTree(Window window);
@@ -313,11 +322,6 @@
     void setFocused(boolean focused);
     void setInitialFocus(boolean reverse);
 
-    // When the FocuslessSpatialNavigation feature is enabled, spatial
-    // navigation moves "interest" around a page, rather than focus. This
-    // attribute returns the currently interested element on the page.
-    readonly attribute Element? interestedElement;
-
     // Returns true if page associated with current internals object is
     // active.
     boolean isActivated();
@@ -326,13 +330,14 @@
     unsigned long canvasFontCacheMaxFonts();
     void forceLoseCanvasContext(HTMLCanvasElement canvas, DOMString contextType);
     void forceLoseCanvasContext(OffscreenCanvas offscreencanvas, DOMString context_type);
+    void disableCanvasAcceleration(HTMLCanvasElement canvas);
 
     DictionaryTest dictionaryTest();
     RecordTest recordTest();
     SequenceTest sequenceTest();
     UnionTypesTest unionTypesTest();
+    InternalsUkmRecorder initializeUKMRecorder();
     CallbackFunctionTest callbackFunctionTest();
-    [RaisesException] void setScrollChain(ScrollState scrollState, sequence<Element> elements);
 
     DOMString selectedHTMLForClipboard();
     DOMString selectedTextForClipboard();
@@ -443,5 +448,11 @@
     void setAllowPerChunkTransferring(ReadableStream stream);
 
     void setBackForwardCacheRestorationBufferSize(long maxSize);
+
+    sequence<DOMString> getCreatorScripts(HTMLImageElement img);
+
+    // Wait until predicted LCP is painted. Never called if prediction is
+    // failed. Returns element_locator format string.
+    [CallWith=ScriptState] Promise<DOMString> LCPPrediction(Document document);
 
 };

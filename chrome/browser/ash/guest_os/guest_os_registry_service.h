@@ -10,19 +10,20 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/values.h"
 #include "chrome/browser/apps/app_service/app_icon/app_icon_factory.h"
 #include "chrome/browser/ash/crostini/crostini_simple_types.h"
 #include "chrome/browser/ash/guest_os/guest_id.h"
+#include "chrome/browser/ash/guest_os/guest_os_external_protocol_handler.h"
 #include "chrome/browser/ash/guest_os/public/types.h"
 #include "chromeos/ash/components/dbus/vm_applications/apps.pb.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "components/services/app_service/public/cpp/icon_types.h"
-#include "components/services/app_service/public/mojom/app_service.mojom.h"
 #include "third_party/skia/include/core/SkColor.h"
 #include "ui/base/resource/resource_scale_factor.h"
 
@@ -47,6 +48,7 @@ class ApplicationList;
 namespace guest_os {
 
 using IconContentCallback = base::OnceCallback<void(std::string)>;
+using CanHandleUrlCallback = base::RepeatingCallback<bool(const GURL&)>;
 
 // The GuestOsRegistryService  stores information about Desktop Entries (apps)
 // in Crostini. We store this in prefs so that it is readily available even when
@@ -96,13 +98,13 @@ class GuestOsRegistryService : public KeyedService {
     std::string ContainerName() const;
 
     std::string Name() const;
-    std::string Comment() const;
     std::string Exec() const;
     std::string ExecutableFileName() const;
     std::set<std::string> Extensions() const;
     std::set<std::string> MimeTypes() const;
     std::set<std::string> Keywords() const;
     bool NoDisplay() const;
+    bool Terminal() const;
 
     std::string PackageId() const;
 
@@ -112,6 +114,11 @@ class GuestOsRegistryService : public KeyedService {
     // Whether this app should scale up when displayed.
     bool IsScaled() const;
     bool CanUninstall() const;
+
+    guest_os::GuestId ToGuestId() const;
+
+    std::string StartupWmClass() const;
+    bool StartupNotify() const;
 
    private:
     std::string GetString(base::StringPiece key) const;
@@ -135,6 +142,12 @@ class GuestOsRegistryService : public KeyedService {
         const std::vector<std::string>& updated_apps,
         const std::vector<std::string>& removed_apps,
         const std::vector<std::string>& inserted_apps) {}
+
+    // Called at the end of AppLaunched().
+    virtual void OnAppLastLaunchTimeUpdated(
+        VmType vm_type,
+        const std::string& app_id,
+        const base::Time& last_launch_time) {}
 
    protected:
     virtual ~Observer() = default;
@@ -162,9 +175,20 @@ class GuestOsRegistryService : public KeyedService {
   std::map<std::string, GuestOsRegistryService::Registration> GetRegisteredApps(
       VmType vm_type) const;
 
-  // Return null if |app_id| is not found in the registry.
+  // Return null if `app_id` is not found in the registry.
   absl::optional<GuestOsRegistryService::Registration> GetRegistration(
       const std::string& app_id) const;
+
+  // Return the preferred handler for the given URL, if any.
+  absl::optional<GuestOsUrlHandler> GetHandler(const GURL& url) const;
+
+  // Register a non-app handler of URLs.
+  // Handlers registered here take priority over apps (since they come from
+  // the OS, rather than VMs), and are not persisted to prefs.
+  // `canHandleCallback` should return true when passed a URL that should be
+  // handled by `handler`.
+  void RegisterTransientUrlHandler(GuestOsUrlHandler handler,
+                                   CanHandleUrlCallback canHandleCallback);
 
   // Constructs path to app icon for specific scale factor.
   base::FilePath GetIconPath(const std::string& app_id,
@@ -233,12 +257,17 @@ class GuestOsRegistryService : public KeyedService {
   void AppLaunched(const std::string& app_id);
 
   // Serializes the current time and stores it in |dictionary|.
-  void SetCurrentTime(base::Value* dictionary, const char* key) const;
+  void SetCurrentTime(base::Value::Dict& dictionary, const char* key) const;
 
   // Set the display scaled setting of the |app_id| to |scaled|.
   void SetAppScaled(const std::string& app_id, bool scaled);
 
   void SetClockForTesting(base::Clock* clock) { clock_ = clock; }
+
+  // Apply a coloured badge to the app icon if Crostini multi-container
+  // feature is enabled.
+  void ApplyContainerBadge(const absl::optional<std::string>& app_id,
+                           gfx::ImageSkia* image_skia);
 
   // Returns the AppId that will be used to refer to the given GuestOs
   // application.
@@ -247,9 +276,6 @@ class GuestOsRegistryService : public KeyedService {
                                    const std::string& container_name);
 
  private:
-  // Run start up tasks for the registry (e.g. recording metrics).
-  void RecordStartupMetrics();
-
   // Construct path to app local data.
   base::FilePath GetAppPath(const std::string& app_id) const;
   // Called to request an icon from the container.
@@ -263,11 +289,16 @@ class GuestOsRegistryService : public KeyedService {
   // Removes all the icons installed for an application.
   void RemoveAppData(const std::string& app_id);
 
-  // Apply container-specific badging to `icon`. This is run after the generic
-  // icon loading code.
-  void ApplyContainerBadge(SkColor badge_color,
-                           apps::LoadIconCallback callback,
-                           apps::IconValuePtr icon);
+  // Apply container-specific badging to `icon_out`. This is used by
+  // ApplyContainerBadge.
+  void ApplyContainerBadgeForImageSkiaIcon(SkColor badge_color,
+                                           gfx::ImageSkia* icon_out);
+
+  // Apply container-specific badging to `icon` before running the callback.
+  // This is run after the generic icon loading code.
+  void ApplyContainerBadgeWithCallback(SkColor badge_color,
+                                       apps::LoadIconCallback callback,
+                                       apps::IconValuePtr icon);
 
   // Call the callbacks |active_icon_requests_| for |app_id|.
   void InvokeActiveIconCallbacks(std::string app_id,
@@ -292,8 +323,8 @@ class GuestOsRegistryService : public KeyedService {
                            std::string png_icon_content);
 
   // Owned by the Profile.
-  Profile* const profile_;
-  PrefService* const prefs_;
+  const raw_ptr<Profile, DanglingUntriaged> profile_;
+  const raw_ptr<PrefService, DanglingUntriaged> prefs_;
 
   // Keeps root folder where Crostini app icons for different scale factors are
   // stored.
@@ -301,7 +332,9 @@ class GuestOsRegistryService : public KeyedService {
 
   base::ObserverList<Observer>::Unchecked observers_;
 
-  const base::Clock* clock_;
+  raw_ptr<const base::Clock> clock_;
+
+  std::vector<std::pair<GuestOsUrlHandler, CanHandleUrlCallback>> url_handlers_;
 
   // Keeps record for icon request to avoid duplication. Each app may contain
   // several requests for different scale factors. Scale factor is defined by

@@ -7,16 +7,16 @@
 
 #include <memory>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
 #include "chrome/browser/web_applications/proto/web_app.pb.h"
 #include "chrome/browser/web_applications/web_app_constants.h"
-#include "chrome/browser/web_applications/web_app_id.h"
 #include "chrome/browser/web_applications/web_app_registrar.h"
 #include "components/sync/model/model_type_store.h"
 #include "components/sync/protocol/web_app_specifics.pb.h"
+#include "components/webapps/common/web_app_id.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace syncer {
@@ -58,7 +58,7 @@ class WebAppDatabase {
   // Exposed for testing.
   static std::unique_ptr<WebAppProto> CreateWebAppProto(const WebApp& web_app);
   // Exposed for testing.
-  static std::unique_ptr<WebApp> ParseWebApp(const AppId& app_id,
+  static std::unique_ptr<WebApp> ParseWebApp(const webapps::AppId& app_id,
                                              const std::string& value);
   // Exposed for testing.
   static std::unique_ptr<WebApp> CreateWebApp(const WebAppProto& local_data);
@@ -84,7 +84,8 @@ class WebAppDatabase {
                      const absl::optional<syncer::ModelError>& error);
 
   std::unique_ptr<syncer::ModelTypeStore> store_;
-  const raw_ptr<AbstractWebAppDatabaseFactory> database_factory_;
+  const raw_ptr<AbstractWebAppDatabaseFactory, DanglingUntriaged>
+      database_factory_;
   ReportErrorCallback error_callback_;
 
   // Database is opened if store is created and all data read.

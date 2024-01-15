@@ -10,9 +10,10 @@
 #include <memory>
 #include <set>
 
+#include "base/memory/raw_ptr.h"
 #include "base/scoped_observation.h"
 #include "base/time/time.h"
-#include "chrome/browser/ui/app_list/arc/arc_app_list_prefs.h"
+#include "chrome/browser/ash/app_list/arc/arc_app_list_prefs.h"
 #include "components/keyed_service/core/keyed_service.h"
 
 namespace content {
@@ -69,6 +70,8 @@ class ArcSurveyService : public KeyedService, public ArcAppListPrefs::Observer {
   const std::set<std::string>* GetAllowedPackagesForTesting();
   void AddAllowedPackageNameForTesting(const std::string package_name);
 
+  static void EnsureFactoryBuilt();
+
  private:
   friend class ArcSurveyServiceTest;
   bool LoadSurveyData(std::string survey_data);
@@ -102,7 +105,7 @@ class ArcSurveyService : public KeyedService, public ArcAppListPrefs::Observer {
   base::TimeDelta elapsed_time_survey_trigger_;
 
   // Unowned pointer.
-  Profile* const profile_;
+  const raw_ptr<Profile> profile_;
 
   scoped_refptr<ash::HatsNotificationController> hats_notification_controller_;
 };

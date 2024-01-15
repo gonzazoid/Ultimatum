@@ -28,7 +28,7 @@ const int kBytesPerSample = 2;
 const int kChannels = 2;
 constexpr auto kFrameDuration = base::Milliseconds(10);
 
-class FakeAudioSink : public webrtc::AudioTrackSinkInterface{
+class FakeAudioSink : public webrtc::AudioTrackSinkInterface {
  public:
   FakeAudioSink() = default;
   ~FakeAudioSink() override = default;
@@ -74,7 +74,7 @@ class WebrtcAudioSourceAdapterTest : public testing::Test {
 
  protected:
   base::test::SingleThreadTaskEnvironment task_environment_;
-  raw_ptr<FakeAudioSource> audio_source_;
+  raw_ptr<FakeAudioSource, AcrossTasksDanglingUntriaged> audio_source_;
   scoped_refptr<WebrtcAudioSourceAdapter> audio_source_adapter_;
   FakeAudioSink sink_;
 };

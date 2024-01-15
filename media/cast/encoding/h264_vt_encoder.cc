@@ -10,17 +10,20 @@
 #include <utility>
 #include <vector>
 
+#include "base/apple/osstatus_logging.h"
 #include "base/big_endian.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "base/power_monitor/power_monitor.h"
+#include "base/strings/strcat.h"
 #include "base/synchronization/lock.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "media/base/mac/video_frame_mac.h"
+#include "media/base/video_encoder_metrics_provider.h"
 #include "media/cast/common/openscreen_conversion_helpers.h"
 #include "media/cast/common/rtp_time.h"
 #include "media/cast/common/sender_encoded_frame.h"
@@ -32,11 +35,7 @@ using Dependency = openscreen::cast::EncodedFrame::Dependency;
 
 namespace media {
 namespace cast {
-
-namespace {
-
-// Container for the associated data of a video frame being processed.
-struct InProgressH264VTFrameEncode {
+struct H264VideoToolboxEncoder::InProgressH264VTFrameEncode {
   const RtpTimeTicks rtp_timestamp;
   const base::TimeTicks reference_time;
   VideoEncoder::FrameEncodedCallback frame_encoded_callback;
@@ -48,8 +47,6 @@ struct InProgressH264VTFrameEncode {
         reference_time(r_time),
         frame_encoded_callback(std::move(callback)) {}
 };
-
-}  // namespace
 
 class H264VideoToolboxEncoder::VideoFrameFactoryImpl final
     : public base::RefCountedThreadSafe<VideoFrameFactoryImpl>,
@@ -96,19 +93,19 @@ class H264VideoToolboxEncoder::VideoFrameFactoryImpl final
     }
 
     // Allocate a pixel buffer from the pool and return a wrapper VideoFrame.
-    base::ScopedCFTypeRef<CVPixelBufferRef> buffer;
-    auto status = CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault, pool_,
-                                                     buffer.InitializeInto());
+    base::apple::ScopedCFTypeRef<CVPixelBufferRef> buffer;
+    auto status = CVPixelBufferPoolCreatePixelBuffer(
+        kCFAllocatorDefault, pool_.get(), buffer.InitializeInto());
     if (status != kCVReturnSuccess) {
       DLOG(ERROR) << "CVPixelBufferPoolCreatePixelBuffer failed: " << status;
       return nullptr;
     }
 
     DCHECK(buffer);
-    return VideoFrame::WrapCVPixelBuffer(buffer, timestamp);
+    return VideoFrame::WrapCVPixelBuffer(buffer.get(), timestamp);
   }
 
-  void Update(const base::ScopedCFTypeRef<CVPixelBufferPoolRef>& pool,
+  void Update(const base::apple::ScopedCFTypeRef<CVPixelBufferPoolRef>& pool,
               const gfx::Size& frame_size) {
     base::AutoLock auto_lock(lock_);
     pool_ = pool;
@@ -120,7 +117,7 @@ class H264VideoToolboxEncoder::VideoFrameFactoryImpl final
   ~VideoFrameFactoryImpl() override {}
 
   base::Lock lock_;
-  base::ScopedCFTypeRef<CVPixelBufferPoolRef> pool_;
+  base::apple::ScopedCFTypeRef<CVPixelBufferPoolRef> pool_;
   gfx::Size pool_frame_size_;
 
   // Weak back reference to the encoder and the cast envrionment so we can
@@ -156,17 +153,19 @@ class H264VideoToolboxEncoder::VideoFrameFactoryImpl::Proxy final
 // static
 bool H264VideoToolboxEncoder::IsSupported(
     const FrameSenderConfig& video_config) {
-  return video_config.codec == CODEC_VIDEO_H264;
+  return video_config.codec == Codec::kVideoH264;
 }
 
 H264VideoToolboxEncoder::H264VideoToolboxEncoder(
     const scoped_refptr<CastEnvironment>& cast_environment,
     const FrameSenderConfig& video_config,
+    std::unique_ptr<VideoEncoderMetricsProvider> metrics_provider,
     StatusChangeCallback status_change_cb)
     : cast_environment_(cast_environment),
       video_config_(video_config),
       average_bitrate_((video_config_.min_bitrate + video_config_.max_bitrate) /
                        2),
+      metrics_provider_(std::move(metrics_provider)),
       status_change_cb_(std::move(status_change_cb)),
       next_frame_id_(FrameId::first()),
       encode_next_frame_as_keyframe_(false),
@@ -222,7 +221,7 @@ void H264VideoToolboxEncoder::ResetCompressionSession() {
 
   // On OS X, allow the hardware encoder. Don't require it, it does not support
   // all configurations (some of which are used for testing).
-  base::ScopedCFTypeRef<CFDictionaryRef> encoder_spec;
+  base::apple::ScopedCFTypeRef<CFDictionaryRef> encoder_spec;
 #if !BUILDFLAG(IS_IOS)
   encoder_spec = video_toolbox::DictionaryWithKeyValue(
       kVTVideoEncoderSpecification_EnableHardwareAcceleratedVideoEncoder,
@@ -246,12 +245,15 @@ void H264VideoToolboxEncoder::ResetCompressionSession() {
       video_toolbox::DictionaryWithKeysAndValues(
           attachments_keys, attachments_values, std::size(attachments_keys))
           .release()};
-  const base::ScopedCFTypeRef<CFDictionaryRef> buffer_attributes =
+  const base::apple::ScopedCFTypeRef<CFDictionaryRef> buffer_attributes =
       video_toolbox::DictionaryWithKeysAndValues(
           buffer_attributes_keys, buffer_attributes_values,
           std::size(buffer_attributes_keys));
   for (auto* v : buffer_attributes_values)
     CFRelease(v);
+
+  metrics_provider_->Initialize(media::H264PROFILE_MAIN, frame_size_,
+                                /*is_hardware_encoder=*/true);
 
   // Create the compression session.
 
@@ -265,12 +267,16 @@ void H264VideoToolboxEncoder::ResetCompressionSession() {
   // are guaranteed that the output callback will not execute again.
   OSStatus status = VTCompressionSessionCreate(
       kCFAllocatorDefault, frame_size_.width(), frame_size_.height(),
-      kCMVideoCodecType_H264, encoder_spec, buffer_attributes,
+      kCMVideoCodecType_H264, encoder_spec.get(), buffer_attributes.get(),
       nullptr /* compressedDataAllocator */,
       &H264VideoToolboxEncoder::CompressionCallback,
       reinterpret_cast<void*>(this), compression_session_.InitializeInto());
   if (status != noErr) {
     DLOG(ERROR) << " VTCompressionSessionCreate failed: " << status;
+    metrics_provider_->SetError(
+        {media::EncoderStatus::Codes::kEncoderInitializationError,
+         base::StrCat({"VTCompressionSessionCreate failed: ",
+                       logging::DescriptionFromOSStatus(status)})});
     // Notify that reinitialization has failed.
     cast_environment_->PostTask(
         CastEnvironment::MAIN, FROM_HERE,
@@ -283,8 +289,8 @@ void H264VideoToolboxEncoder::ResetCompressionSession() {
   ConfigureCompressionSession();
 
   // Update the video frame factory.
-  base::ScopedCFTypeRef<CVPixelBufferPoolRef> pool(
-      VTCompressionSessionGetPixelBufferPool(compression_session_),
+  base::apple::ScopedCFTypeRef<CVPixelBufferPoolRef> pool(
+      VTCompressionSessionGetPixelBufferPool(compression_session_.get()),
       base::scoped_policy::RETAIN);
   video_frame_factory_->Update(pool, frame_size_);
 
@@ -342,8 +348,9 @@ void H264VideoToolboxEncoder::DestroyCompressionSession() {
   // (ex: the dtor).
   if (compression_session_) {
     video_frame_factory_->Update(
-        base::ScopedCFTypeRef<CVPixelBufferPoolRef>(nullptr), frame_size_);
-    VTCompressionSessionInvalidate(compression_session_);
+        base::apple::ScopedCFTypeRef<CVPixelBufferPoolRef>(nullptr),
+        frame_size_);
+    VTCompressionSessionInvalidate(compression_session_.get());
     compression_session_.reset();
   }
 }
@@ -398,7 +405,7 @@ bool H264VideoToolboxEncoder::EncodeVideoFrame(
           reference_time, std::move(frame_encoded_callback)));
 
   // Build a suitable frame properties dictionary for keyframes.
-  base::ScopedCFTypeRef<CFDictionaryRef> frame_props;
+  base::apple::ScopedCFTypeRef<CFDictionaryRef> frame_props;
   if (encode_next_frame_as_keyframe_) {
     frame_props = video_toolbox::DictionaryWithKeyValue(
         kVTEncodeFrameOptionKey_ForceKeyFrame, kCFBooleanTrue);
@@ -408,10 +415,16 @@ bool H264VideoToolboxEncoder::EncodeVideoFrame(
   // Submit the frame to the compression session. The function returns as soon
   // as the frame has been enqueued.
   OSStatus status = VTCompressionSessionEncodeFrame(
-      compression_session_, pixel_buffer, timestamp_cm, CMTime{0, 0, 0, 0},
-      frame_props, reinterpret_cast<void*>(request.release()), nullptr);
+      compression_session_.get(), pixel_buffer.get(), timestamp_cm,
+      CMTime{0, 0, 0, 0}, frame_props.get(),
+      reinterpret_cast<void*>(request.release()), nullptr);
   if (status != noErr) {
     DLOG(ERROR) << " VTCompressionSessionEncodeFrame failed: " << status;
+    metrics_provider_->SetError(
+        {media::EncoderStatus::Codes::kEncoderInitializationError,
+         base::StrCat({"VTCompressionSessionEncodeFrame failed: ",
+                       logging::DescriptionFromOSStatus(status)})});
+
     return false;
   }
 
@@ -466,8 +479,8 @@ void H264VideoToolboxEncoder::EmitFrames() {
   if (!compression_session_)
     return;
 
-  OSStatus status = VTCompressionSessionCompleteFrames(compression_session_,
-                                                       CMTime{0, 0, 0, 0});
+  OSStatus status = VTCompressionSessionCompleteFrames(
+      compression_session_.get(), CMTime{0, 0, 0, 0});
   if (status != noErr) {
     DLOG(ERROR) << " VTCompressionSessionCompleteFrames failed: " << status;
   }
@@ -494,25 +507,18 @@ void H264VideoToolboxEncoder::OnResume() {
   }
 }
 
+// static
 void H264VideoToolboxEncoder::CompressionCallback(void* encoder_opaque,
                                                   void* request_opaque,
                                                   OSStatus status,
                                                   VTEncodeInfoFlags info,
                                                   CMSampleBufferRef sbuf) {
-  auto* encoder = reinterpret_cast<H264VideoToolboxEncoder*>(encoder_opaque);
-  std::unique_ptr<InProgressH264VTFrameEncode> request(
-      reinterpret_cast<InProgressH264VTFrameEncode*>(request_opaque));
+  // This function may be called asynchronously, on a different thread from the
+  // one that calls VTCompressionSessionEncodeFrame().
   bool is_keyframe = false;
-  bool has_frame_data = false;
-
-  if (status != noErr) {
-    DLOG(ERROR) << " encoding failed: " << status;
-    encoder->cast_environment_->PostTask(
-        CastEnvironment::MAIN, FROM_HERE,
-        base::BindOnce(encoder->status_change_cb_, STATUS_CODEC_RUNTIME_ERROR));
-  } else if ((info & kVTEncodeInfo_FrameDropped)) {
-    DVLOG(2) << " frame dropped";
-  } else {
+  std::string data;
+  DVLOG_IF(2, (info & kVTEncodeInfo_FrameDropped)) << " frame dropped";
+  if (status == noErr && !(info & kVTEncodeInfo_FrameDropped)) {
     auto* sample_attachments =
         static_cast<CFDictionaryRef>(CFArrayGetValueAtIndex(
             CMSampleBufferGetSampleAttachmentsArray(sbuf, true), 0));
@@ -522,12 +528,37 @@ void H264VideoToolboxEncoder::CompressionCallback(void* encoder_opaque,
     // alternatively use kCMSampleAttachmentKey_DependsOnOthers == false.
     is_keyframe = !CFDictionaryContainsKey(sample_attachments,
                                            kCMSampleAttachmentKey_NotSync);
-    has_frame_data = true;
+    video_toolbox::CopySampleBufferToAnnexBBuffer(VideoCodec::kH264, sbuf,
+                                                  is_keyframe, &data);
+  }
+  auto* encoder = reinterpret_cast<H264VideoToolboxEncoder*>(encoder_opaque);
+  encoder->cast_environment_->PostTask(
+      CastEnvironment::MAIN, FROM_HERE,
+      base::BindOnce(&H264VideoToolboxEncoder::CompressionCallbackTask,
+                     encoder->weak_factory_.GetWeakPtr(),
+                     base::WrapUnique(static_cast<InProgressH264VTFrameEncode*>(
+                         request_opaque)),
+                     status, is_keyframe, std::move(data)));
+}
+
+void H264VideoToolboxEncoder::CompressionCallbackTask(
+    std::unique_ptr<InProgressH264VTFrameEncode> request,
+    OSStatus status,
+    bool is_keyframe,
+    std::string data) {
+  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
+  if (status != noErr) {
+    DLOG(ERROR) << " encoding failed: " << status;
+    metrics_provider_->SetError(
+        {media::EncoderStatus::Codes::kEncoderInitializationError,
+         base::StrCat(
+             {"encoding failed: ", logging::DescriptionFromOSStatus(status)})});
+    status_change_cb_.Run(STATUS_CODEC_RUNTIME_ERROR);
   }
 
   // Grab the next frame ID and increment |next_frame_id_| for next time.
   // VideoToolbox calls the output callback serially, so this is safe.
-  const FrameId frame_id = encoder->next_frame_id_++;
+  const FrameId frame_id = next_frame_id_++;
 
   std::unique_ptr<SenderEncodedFrame> encoded_frame(new SenderEncodedFrame());
   encoded_frame->frame_id = frame_id;
@@ -550,18 +581,15 @@ void H264VideoToolboxEncoder::CompressionCallback(void* encoder_opaque,
     encoded_frame->referenced_frame_id = frame_id - 1;
   }
 
-  if (has_frame_data) {
-    video_toolbox::CopySampleBufferToAnnexBBuffer(sbuf, is_keyframe,
-                                                  &encoded_frame->data);
+  if (!data.empty()) {
+    encoded_frame->data = std::move(data);
+    metrics_provider_->IncrementEncodedFrameCount();
   }
 
   encoded_frame->encode_completion_time =
-      encoder->cast_environment_->Clock()->NowTicks();
-  encoded_frame->encoder_bitrate = encoder->average_bitrate_;
-  encoder->cast_environment_->GetTaskRunner(CastEnvironment::MAIN)
-      ->PostTask(FROM_HERE,
-                 base::BindOnce(std::move(request->frame_encoded_callback),
-                                std::move(encoded_frame)));
+      cast_environment_->Clock()->NowTicks();
+  encoded_frame->encoder_bitrate = average_bitrate_;
+  std::move(request->frame_encoded_callback).Run(std::move(encoded_frame));
 }
 
 }  // namespace cast

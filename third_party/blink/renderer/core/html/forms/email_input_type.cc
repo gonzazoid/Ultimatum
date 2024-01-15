@@ -54,15 +54,18 @@ const char kEmailPattern[] =
 
 // RFC5321 says the maximum total length of a domain name is 255 octets.
 const int32_t kMaximumDomainNameLength = 255;
+
 // Use the same option as in url/url_canon_icu.cc
+// TODO(crbug.com/694157): Change the options if UseIDNA2008NonTransitional flag
+// is enabled.
 const int32_t kIdnaConversionOption = UIDNA_CHECK_BIDI;
 
 }  // namespace
 
 namespace blink {
 
-ScriptRegexp* EmailInputType::CreateEmailRegexp() {
-  return MakeGarbageCollected<ScriptRegexp>(kEmailPattern,
+ScriptRegexp* EmailInputType::CreateEmailRegexp(v8::Isolate* isolate) {
+  return MakeGarbageCollected<ScriptRegexp>(isolate, kEmailPattern,
                                             kTextCaseUnicodeInsensitive);
 }
 
@@ -179,10 +182,6 @@ void EmailInputType::CountUsage() {
     if (has_max_length)
       CountUsageIfVisible(WebFeature::kInputTypeEmailMultipleMaxLength);
   }
-}
-
-const AtomicString& EmailInputType::FormControlType() const {
-  return input_type_names::kEmail;
 }
 
 // The return value is an invalid email address string if the specified string
@@ -321,6 +320,10 @@ String EmailInputType::VisibleValue() const {
     builder.Append(ConvertEmailAddressToUnicode(addresses[i]));
   }
   return builder.ToString();
+}
+
+void EmailInputType::MultipleAttributeChanged() {
+  GetElement().SetValueFromRenderer(SanitizeValue(GetElement().Value()));
 }
 
 }  // namespace blink

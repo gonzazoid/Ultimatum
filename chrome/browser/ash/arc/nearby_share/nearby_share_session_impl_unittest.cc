@@ -12,16 +12,16 @@
 #include "ash/components/arc/test/arc_util_test_support.h"
 #include "ash/constants/app_types.h"
 #include "ash/public/cpp/shelf_model.h"
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/containers/flat_map.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/test/bind.h"
 #include "base/test/scoped_feature_list.h"
+#include "chrome/browser/ash/app_list/arc/arc_app_test.h"
 #include "chrome/browser/ash/arc/fileapi/arc_file_system_mounter.h"
 #include "chrome/browser/ash/fusebox/fusebox_server.h"
 #include "chrome/browser/nearby_sharing/nearby_sharing_service_factory.h"
-#include "chrome/browser/ui/app_list/arc/arc_app_test.h"
 #include "chrome/browser/ui/ash/shelf/chrome_shelf_controller.h"
 #include "chrome/test/base/testing_profile.h"
 #include "components/exo/shell_surface_util.h"
@@ -42,8 +42,8 @@ class NearbyShareSessionImplTest : public testing::Test {
   // not commence until an ARC window is visible.
   NearbyShareSessionImpl* MakeSession(mojom::ShareIntentInfoPtr share_info) {
     shelf_model_ = std::make_unique<ash::ShelfModel>();
-    shelf_controller_ = std::make_unique<ChromeShelfController>(
-        &profile_, shelf_model_.get(), nullptr);
+    shelf_controller_ =
+        std::make_unique<ChromeShelfController>(&profile_, shelf_model_.get());
     shelf_controller_->Init();
 
     session_ = std::make_unique<NearbyShareSessionImpl>(
@@ -113,6 +113,10 @@ class NearbyShareSessionImplFuseBoxTest : public NearbyShareSessionImplTest {
     arc_service_manager_->set_browser_context(profile());
     EXPECT_TRUE(arc::ArcFileSystemMounter::GetForBrowserContext(profile()));
     fusebox_server_ = std::make_unique<fusebox::Server>(/*delegate=*/nullptr);
+  }
+
+  void TearDown() override {
+    arc_service_manager_->set_browser_context(nullptr);
   }
 
  private:

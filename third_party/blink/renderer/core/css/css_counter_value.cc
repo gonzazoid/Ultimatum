@@ -13,10 +13,11 @@ namespace cssvalue {
 
 String CSSCounterValue::CustomCSSText() const {
   StringBuilder result;
-  if (Separator().empty())
+  if (Separator().empty()) {
     result.Append("counter(");
-  else
+  } else {
     result.Append("counters(");
+  }
 
   result.Append(Identifier());
   if (!Separator().empty()) {
@@ -31,6 +32,15 @@ String CSSCounterValue::CustomCSSText() const {
   result.Append(')');
 
   return result.ReleaseString();
+}
+
+const CSSCounterValue& CSSCounterValue::PopulateWithTreeScope(
+    const TreeScope* tree_scope) const {
+  DCHECK(!IsScopedValue());
+  return *MakeGarbageCollected<CSSCounterValue>(
+      &To<CSSCustomIdentValue>(identifier_->EnsureScopedValue(tree_scope)),
+      &To<CSSCustomIdentValue>(list_style_->EnsureScopedValue(tree_scope)),
+      separator_);
 }
 
 void CSSCounterValue::TraceAfterDispatch(blink::Visitor* visitor) const {

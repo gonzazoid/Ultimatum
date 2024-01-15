@@ -8,8 +8,8 @@
 #include <limits>
 
 #include "base/base_export.h"
-#include "base/callback.h"
 #include "base/dcheck_is_on.h"
+#include "base/functional/callback.h"
 #include "base/location.h"
 #include "base/memory/raw_ptr.h"
 
@@ -206,6 +206,19 @@ CreateJob(const Location& from_here,
           const TaskTraits& traits,
           RepeatingCallback<void(JobDelegate*)> worker_task,
           MaxConcurrencyCallback max_concurrency_callback);
+
+namespace internal {
+
+// Helper which creates a JobTaskSourceNew or JobTaskSourceOld depending on the
+// UseNewJobImplementation feature. Exposed for testing.
+scoped_refptr<JobTaskSource> BASE_EXPORT
+CreateJobTaskSource(const Location& from_here,
+                    const TaskTraits& traits,
+                    RepeatingCallback<void(JobDelegate*)> worker_task,
+                    MaxConcurrencyCallback max_concurrency_callback,
+                    PooledTaskRunnerDelegate* delegate);
+
+}  // namespace internal
 
 }  // namespace base
 

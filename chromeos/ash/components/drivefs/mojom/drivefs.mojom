@@ -4,6 +4,7 @@
 
 module drivefs.mojom;
 
+import "chromeos/components/drivefs/mojom/drivefs_native_messaging.mojom";
 import "mojo/public/mojom/base/file_path.mojom";
 import "mojo/public/mojom/base/time.mojom";
 
@@ -98,7 +99,7 @@ interface DriveFs {
 
   // Establish communication session between extension and DriveFS.
   CreateNativeHostSession(ExtensionConnectionParams params,
-      pending_receiver<NativeMessagingHost> session,
+      pending_receiver<NativeMessagingHost> host,
       pending_remote<NativeMessagingPort> port);
 
   // Find the files corresponding to Drive's item IDs provided.
@@ -119,12 +120,75 @@ interface DriveFs {
   // Retrieves a list of paths being synced.
   GetSyncingPaths() => (FileError error, array<mojo_base.mojom.FilePath> paths);
 
-  // Tells DriveFS to update its cached pin states of hosted files (once).
+  // Tells DriveFS to poll and update the pin state of hosted files.
   PollHostedFilePinStates();
 
   // Returns the total and free space available in the user's Drive and their
   // organization's, if they belong to one.
   GetPooledQuotaUsage() => (FileError error, PooledQuotaUsage quota);
+
+  // Pin or unpin an item by the supplied `stable_id`.
+  SetPinnedByStableId(int64 stable_id, bool pinned) => (FileError error);
+
+  // Get the metadata for the supplied `stable_id`.
+  GetMetadataByStableId(int64 stable_id) => (
+      FileError error, FileMetadata? metadata);
+
+  // Indicates what CelloFS should do after the upload is cancelled.
+  enum CancelUploadMode {
+    kTrashAfterCancellation,
+    kDeleteAfterCancellation,
+  };
+
+  // Attempts to cancel an in progress upload and either trash or delete the
+  // file afterwards, depending on `cancel_mode`. `path` must be made absolute
+  // from the drive mount point.
+  CancelUploadByPath(mojo_base.mojom.FilePath path,
+                      CancelUploadMode cancel_mode);
+
+  // Enable Docs offline explicitly.
+  SetDocsOfflineEnabled(bool enabled) =>
+      (FileError error, DocsOfflineEnableStatus status);
+
+  // Returns the total space used by files that have been pinned.
+  GetOfflineFilesSpaceUsage() => (FileError error, int64 space_used);
+
+  // Unpins all currently pinned items and force evicts them from the cache.
+  // NOTE: Force eviction does not work for hosted documents.
+  ClearOfflineFiles() => (FileError error);
+
+  // Uploads a file by skipping any remaining queue time, if possible.
+  ImmediatelyUpload(mojo_base.mojom.FilePath path) => (FileError error);
+
+  // Forces the server to export any pending paired doc content into a new
+  // revision.
+  UpdateFromPairedDoc(mojo_base.mojom.FilePath path) => (FileError error);
+
+  // Pulls the updated file content from the server into the cache, if a newer
+  // revision is available.
+  GetItemFromCloudStore(mojo_base.mojom.FilePath path) => (FileError error);
+
+  // Gets counts of files in docs offline extension.
+  GetDocsOfflineStats() => (FileError error, DocsOfflineStats counts);
+};
+
+[Extensible]
+enum DocsOfflineEnableStatus {
+  [Default] kUnknown,
+  kSuccess,
+  kAlreadyEnabled,
+  kUnknownError,
+  kDisableUnsupported,
+  kOfflineEligible,
+  kOfflineIneligibleUnknown,
+  kOfflineIneligibleOtherUser,
+  kOfflineIneligibleDbInInvalidState,
+  kOfflineIneligiblePolicyDisallow,
+  kOfflineIneligibleNoExtension,
+  kOfflineIneligibleInsufficientDiskSpace,
+  kNativeMessageHostError,
+  kNativeMessageClientError,
+  kSystemError,
 };
 
 // Implemented by Chrome, used from DriveFS.
@@ -145,7 +209,8 @@ interface DriveFsDelegate {
   // browser should try to mount again after the specified interval.
   OnUnmounted(mojo_base.mojom.TimeDelta? retry_delay);
 
-  // Invoked when the syncing status changes.
+  // Invoked when the syncing status changes for items that are being tracked by
+  // the streaming stack.
   OnSyncingStatusUpdate(SyncingStatus status);
 
   // Invoked when server-side file changes are received.
@@ -167,13 +232,6 @@ interface DriveFsDelegate {
 
   // Invoked from time to time to indicate that drivefs is operational.
   OnHeartbeat();
-
-  [Extensible]
-  enum ExtensionConnectionStatus {
-    kSuccess,
-    kExtensionNotFound,
-    kFeatureNotEnabled,
-  };
 
   // Initiates connection to the extension specified.
   ConnectToExtension(ExtensionConnectionParams params,
@@ -200,9 +258,34 @@ interface DriveFsDelegate {
   // Invoked when the syncing status changes for items that are being tracked by
   // the mirror stack.
   OnMirrorSyncingStatusUpdate(SyncingStatus status);
+
+  // Invoked when the syncing status changes for items that are being tracked by
+  // either the streaming or the mirror stack - with the guarantee that if an
+  // event is dispatched for a given path, then a "completed" event will also
+  // eventually be dispatched for the same path (i.e., paths never linger in an
+  // incompleted state).
+  // For more details, see: b/269694669
+  OnItemProgress(ProgressEvent progress_event);
+
+  // Get an access token for `client_id` and `app_id` with access to `scopes`.
+  // `access_token` is only valid if the `status` is `kSuccess`.
+  GetAccessTokenWithExpiry(string client_id,
+    string app_id,
+    array<string> scopes) => (AccessTokenStatus status,
+                              AccessToken? access_token);
 };
 
-// Next MinVersion: 7
+[Extensible]
+enum CSESupport {
+  // Do not show CSE files in the mounted file system.
+  [Default] kNone,
+
+  // Show CSE files in the mounted file system, but don't allow to read/write
+  // them: any attempt to open such a file will result in an error.
+  kListing,
+};
+
+// Next MinVersion: 8
 struct DriveFsConfiguration {
   string user_email;
 
@@ -227,6 +310,19 @@ struct DriveFsConfiguration {
   // the |drive-fs-chrome-networking| flag.
   [MinVersion=6]
   bool enable_cros_network = false;
+
+  // The level of CSE files support Chrome expects from DriveFS and can handle.
+  // CSE stands for Client-Side Encryption and is an enterprise technology to
+  // encrypt data with a key not accessible by Google.
+  // See more: https://support.google.com/a/answer/10741897
+  [MinVersion=7]
+  CSESupport cse_support = kNone;
+};
+
+// The OAuth token in string form along with the time the token expires.
+struct AccessToken {
+  string token;
+  mojo_base.mojom.Time expiry_time;
 };
 
 enum AccessTokenStatus {
@@ -292,20 +388,31 @@ enum FileError {
   kNoConnection = -16,
   kNoLocalSpace = -17,
   kServiceUnavailable = -18,
+  kOkWithMoreResults = -19,
 };
 
 // Errors received from DriveFS to be forwarded to the file manager UI.
+// Next MinVersion: 3
 struct DriveError {
   [Extensible] enum Type {
     kCantUploadStorageFull,
     kPinningFailedDiskFull,
     kCantUploadStorageFullOrganization,
+    kCantUploadSharedDriveStorageFull,
   };
 
   Type type;
 
   // The path to the file where an error was encountered, if there was one.
   mojo_base.mojom.FilePath path;
+
+  // The stable id of the file where an error was encountered, if there was one.
+  // Note: 0 is an invalid stable id.
+  [MinVersion=1] int64 stable_id = 0;
+
+  // If the error is `kCantUploadSharedDriveStorageFull` this will be populated
+  // with the shared drive name.
+  [MinVersion=2] string? shared_drive;
 };
 
 struct DialogReason {
@@ -319,7 +426,7 @@ struct DialogReason {
   mojo_base.mojom.FilePath path;
 };
 
-// Next MinVersion: 6
+// Next MinVersion: 9
 struct FileMetadata {
   [Extensible] enum Type {
     // A regular file.
@@ -331,6 +438,7 @@ struct FileMetadata {
     // A directory.
     kDirectory,
   };
+
   Type type;
 
   int64 size;
@@ -383,6 +491,37 @@ struct FileMetadata {
   // methods which require the server side file id, such as
   // DriveAPIService::UpdateResource.
   [MinVersion=5] string? item_id;
+
+  // Present if file is part of a shared drive that has a quota limit.
+  [MinVersion=6] SharedDriveQuota? shared_drive_quota;
+
+  // Populated if the item is a shortcut and contains information about the
+  // target of the shortcut.
+  [MinVersion=7] ShortcutDetails? shortcut_details;
+
+  // Whether the item is in the trash bin.
+  [MinVersion=8] bool trashed = false;
+};
+
+// Details relating to the target item that a shortcut refers to.
+// Next MinVersion: 2
+struct ShortcutDetails {
+  int64 target_stable_id = 0;
+
+  [Extensible]
+  enum LookupStatus {
+    [Default] kUnknown,
+    kOk,
+    kNotFound,
+    kPermissionDenied,
+  };
+
+  // In the case the target the shortcut points to can't be found or doesn't
+  // have permission, relay that information back.
+  LookupStatus target_lookup_status;
+
+  // The absolute path on disk of the target this shortcut points to.
+  [MinVersion=1] mojo_base.mojom.FilePath? target_path;
 };
 
 struct ImageMetadata {
@@ -422,6 +561,14 @@ struct QuickAccess {
   double score;
 };
 
+struct SharedDriveQuota {
+  // The number of quota bytes used for the shared drive that this file is in.
+  int64 quota_bytes_used_in_drive;
+
+  // The admin-configured quota limit for the individual shared drive.
+  int64 individual_quota_bytes_total;
+};
+
 // Reason why this event occurred.
 // TODO(crbug.com/896777): Put this inside ItemEvent once the fix for the linked
 // bug is in libchrome.
@@ -433,13 +580,15 @@ enum ItemEventReason {
   kPin,
 };
 
-// Next MinVersion: 2
+// Next MinVersion: 3
 struct ItemEvent {
   enum State {
     kQueued,
     kInProgress,
     kCompleted,
     kFailed,
+    kCancelledAndDeleted,
+    kCancelledAndTrashed,
   };
 
   // The stable ID used by DriveFS.
@@ -458,6 +607,29 @@ struct ItemEvent {
   int64 bytes_to_transfer = -1;
 
   [MinVersion=1] ItemEventReason reason = kTransfer;
+
+  // True if it's a download event, else it's an upload event.
+  [MinVersion=2] bool is_download = false;
+};
+
+// A report of a change in the Sync Progress of a file or folder.
+// Next MinVersion: 1
+struct ProgressEvent {
+  // The stable ID used by DriveFS.
+  int64 stable_id;
+
+  // Absolute path of the file or directory.
+  string path;
+
+  // Progress given by signed byte, ranging from 0 to 100.
+  // * 0 progress is considered "queued";
+  // * 100 progress is considered "completed";
+  // * Anything in between is considered "in progress";
+  // * Other values are not defined.
+  uint8 progress;
+
+  // Absolute path of the file or directory.
+  [MinVersion=1] mojo_base.mojom.FilePath? file_path;
 };
 
 struct SyncingStatus {
@@ -483,12 +655,13 @@ struct FileChange {
 };
 
 // Definition of the search request sent to DriveFS.
-// Next MinVersion: 3
+// Next MinVersion: 6
 struct QueryParameters {
   // Where this request should go to.
   enum QuerySource {
     kLocalOnly = 0,
     kCloudOnly = 1,
+    kLocalAndCloud = 2,
   };
 
   // Which field should be used for sorting the results.
@@ -538,6 +711,35 @@ struct QueryParameters {
   // Note: this field is preferred to "mime_type" field above, when processing
   // the query, the "mime_type" will be merged into this "mime_types" field.
   [MinVersion=2] array<string>? mime_types;
+
+  // Only show results that are in the user's "My drive" directory, or in the
+  // directory specified by `parent_stable_id`.
+  [MinVersion=3] bool my_drive_results_only = false;
+
+  // Possible way of comparing between document dates and dates specified
+  // in this struct.
+  enum DateComparisonOperator {
+    kLessOrEqual,
+    kLessThan,
+    kEqual,
+    kGreaterThan,
+    kGreaterOrEqual,
+  };
+
+  // The operator applied to the modified_time field. Used only if the
+  // modified_time field is not empty. If the document's modified time
+  // is T, we check if
+  //    T modified_time_operator modified_time
+  [MinVersion=4] DateComparisonOperator modified_time_operator;
+
+  // Only show results that, if their modified time is T, it holds true
+  // that T modified_time_operator modified_time. For example, if the
+  // modified_time_operator is kGreaterThan we only show files with
+  // modified time T greater than the one specified in this field.
+  [MinVersion=4] mojo_base.mojom.Time? modified_time;
+
+  // The stable ID of the parent directory to search for.
+  [MinVersion=5] int64 parent_stable_id = 0;
 };
 
 // TODO(crbug.com/896777): Put this inside QueryParameters once linked bug is
@@ -572,30 +774,6 @@ struct FetchChangeLogOptions {
   // ID of the Team Drive to fetch the changelog for. Set to an empty string to
   // fetch the My Drive changelog instead.
   string team_drive_id;
-};
-
-// Implemented in the browser and used from DriveFS.
-// Roughly corresponds to a native messaging port to the extension and allows
-// sending messages from the DriveFS process to the extension.
-interface NativeMessagingPort {
-  // Send a native |message| to the extension. |message| is an
-  // opaque string in an extension-specific format.
-  PostMessageToExtension(string message);
-};
-
-// Implemented in DriveFS and used from the browser.
-// Roughly corresponds to a native messaging host instance and allows
-// processing of requests from the extension by the DriveFS process.
-// It's up to the extension and the host to agree to message ordering.
-interface NativeMessagingHost {
-  // Process |message| from the extension. |message| is an
-  // opaque string in an extension-specific format.
-  HandleMessageFromExtension(string message);
-};
-
-// Configuration of the connection between extension and DriveFS.
-struct ExtensionConnectionParams {
-  string extension_id;
 };
 
 // A single file path resolution result.
@@ -687,9 +865,18 @@ interface HttpDelegate {
   // See |URLLoaderClient::OnStartLoadingResponseBody'
   OnReceiveBody(handle<data_pipe_consumer> response_body);
 
-  // Called once after the URLLoader is done.
-  // NOTE: There may still be data remaining in the data pipe, so destruction
+  // Called once after the |URLLoader| is done.
+  // NOTE: There may still be data remaining in the data pipe, so completion
   // should be deferred until all data is read.
   // See |URLLoaderClient::OnComplete|
   OnRequestComplete(HttpCompletionStatus status);
+};
+
+// Counts of files in docs offline extension.
+struct DocsOfflineStats {
+  // The total number of files. -1 when extension is not available.
+  int32 total;
+
+  // The number of files available offline. -1 when extension is not available.
+  int32 available_offline;
 };

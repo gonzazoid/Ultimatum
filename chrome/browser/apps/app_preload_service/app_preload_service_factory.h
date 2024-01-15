@@ -28,6 +28,11 @@ class AppPreloadServiceFactory : public ProfileKeyedServiceFactory {
 
   static bool IsAvailable(Profile* profile);
 
+  // For testing
+  // Marks whether or not we should skip the api key check, which must be done
+  // during testing for tests to run.
+  static void SkipApiKeyCheckForTesting(bool skip_api_key_check);
+
  private:
   friend base::NoDestructor<AppPreloadServiceFactory>;
 
@@ -35,7 +40,7 @@ class AppPreloadServiceFactory : public ProfileKeyedServiceFactory {
   ~AppPreloadServiceFactory() override;
 
   // ProfileKeyedServiceFactory:
-  KeyedService* BuildServiceInstanceFor(
+  std::unique_ptr<KeyedService> BuildServiceInstanceForBrowserContext(
       content::BrowserContext* context) const override;
   bool ServiceIsCreatedWithBrowserContext() const override;
 };

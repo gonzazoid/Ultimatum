@@ -3,7 +3,7 @@
 // found in the LICENSE file.
 
 #include "base/android/callback_android.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "chrome/android/chrome_jni_headers/DownloadBackgroundTask_jni.h"
 #include "chrome/browser/download/android/download_manager_service.h"
 #include "chrome/browser/download/background_download_service_factory.h"
@@ -45,6 +45,8 @@ void JNI_DownloadBackgroundTask_StartBackgroundTask(
   auto type = static_cast<DownloadTaskType>(task_type);
   switch (type) {
     case DownloadTaskType::DOWNLOAD_AUTO_RESUMPTION_TASK:
+    case DownloadTaskType::DOWNLOAD_AUTO_RESUMPTION_UNMETERED_TASK:
+    case DownloadTaskType::DOWNLOAD_AUTO_RESUMPTION_ANY_NETWORK_TASK:
     case DownloadTaskType::DOWNLOAD_LATER_TASK:
       GetAutoResumptionHandler()->OnStartScheduledTask(
           type, std::move(finish_callback));
@@ -67,6 +69,8 @@ jboolean JNI_DownloadBackgroundTask_StopBackgroundTask(
   switch (type) {
     case DownloadTaskType::DOWNLOAD_AUTO_RESUMPTION_TASK:
     case DownloadTaskType::DOWNLOAD_LATER_TASK:
+    case DownloadTaskType::DOWNLOAD_AUTO_RESUMPTION_UNMETERED_TASK:
+    case DownloadTaskType::DOWNLOAD_AUTO_RESUMPTION_ANY_NETWORK_TASK:
       GetAutoResumptionHandler()->OnStopScheduledTask(type);
       break;
     case DownloadTaskType::DOWNLOAD_TASK:

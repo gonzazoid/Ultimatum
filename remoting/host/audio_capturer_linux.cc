@@ -12,6 +12,7 @@
 #include "base/files/file_path.h"
 #include "base/lazy_instance.h"
 #include "base/memory/ptr_util.h"
+#include "base/task/single_thread_task_runner.h"
 #include "remoting/proto/audio.pb.h"
 
 namespace remoting {
@@ -30,16 +31,15 @@ void AudioCapturerLinux::InitializePipeReader(
     scoped_refptr<base::SingleThreadTaskRunner> task_runner,
     const base::FilePath& pipe_name) {
   scoped_refptr<AudioPipeReader> pipe_reader;
-  if (!pipe_name.empty())
+  if (!pipe_name.empty()) {
     pipe_reader = AudioPipeReader::Create(task_runner, pipe_name);
+  }
   g_pulseaudio_pipe_sink_reader.Get() = pipe_reader;
 }
 
 AudioCapturerLinux::AudioCapturerLinux(
     scoped_refptr<AudioPipeReader> pipe_reader)
-    : pipe_reader_(pipe_reader),
-      silence_detector_(0) {
-}
+    : pipe_reader_(pipe_reader), silence_detector_(0) {}
 
 AudioCapturerLinux::~AudioCapturerLinux() {
   pipe_reader_->RemoveObserver(this);
@@ -77,10 +77,10 @@ bool AudioCapturer::IsSupported() {
 }
 
 std::unique_ptr<AudioCapturer> AudioCapturer::Create() {
-  scoped_refptr<AudioPipeReader> reader =
-      g_pulseaudio_pipe_sink_reader.Get();
-  if (!reader.get())
+  scoped_refptr<AudioPipeReader> reader = g_pulseaudio_pipe_sink_reader.Get();
+  if (!reader.get()) {
     return nullptr;
+  }
   return base::WrapUnique(new AudioCapturerLinux(reader));
 }
 

@@ -8,7 +8,7 @@
 #include "chrome/grit/generated_resources.h"
 #include "components/login/localized_values_builder.h"
 
-namespace chromeos {
+namespace ash {
 
 GestureNavigationScreenHandler::GestureNavigationScreenHandler()
     : BaseScreenHandler(kScreenId) {}
@@ -25,6 +25,8 @@ void GestureNavigationScreenHandler::DeclareLocalizedValues(
                IDS_OOBE_GESTURE_NAVIGATION_INTRO_TITLE);
   builder->Add("gestureNavigationIntroNextButton",
                IDS_OOBE_GESTURE_NAVIGATION_INTRO_NEXT_BUTTON);
+  builder->Add("gestureNavigationIntroSkipButton",
+               IDS_OOBE_GESTURE_NAVIGATION_INTRO_SKIP);
   builder->Add("gestureNavigationIntroGoHomeItem",
                IDS_OOBE_GESTURE_NAVIGATION_INTRO_GO_HOME);
   builder->Add("gestureNavigationIntroSwitchAppItem",
@@ -45,4 +47,4 @@ void GestureNavigationScreenHandler::DeclareLocalizedValues(
                IDS_OOBE_GESTURE_NAVIGATION_OVERVIEW_DESCRIPTION);
 }
 
-}  // namespace chromeos
+}  // namespace ash

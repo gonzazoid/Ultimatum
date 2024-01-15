@@ -10,6 +10,8 @@ assert(enable_extensions)
 
 schema_sources_ = [
   "diagnostics.idl",
+  "events.idl",
+  "management.idl",
   "telemetry.idl",
 ]
 

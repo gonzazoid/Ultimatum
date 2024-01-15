@@ -13,9 +13,9 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/component_export.h"
 #include "base/files/file.h"
+#include "base/functional/callback.h"
 #include "base/memory/ref_counted_memory.h"
 #include "base/observer_list_types.h"
 #include "base/task/task_runner.h"
@@ -30,13 +30,6 @@ class AccountIdentifier;
 }
 
 namespace ash {
-
-// A DbusLibraryError represents an error response received from D-Bus.
-enum DbusLibraryError {
-  kGenericError = -1,  // Catch-all generic error
-  kNoReply = -2,       // debugd did not respond before timeout
-  kTimeout = -3        // Unspecified D-Bus timeout (e.g. socket error)
-};
 
 // DebugDaemonClient is used to communicate with the debug daemon.
 class COMPONENT_EXPORT(DEBUG_DAEMON) DebugDaemonClient
@@ -144,7 +137,7 @@ class COMPONENT_EXPORT(DEBUG_DAEMON) DebugDaemonClient
   // logs for.
   // |requested_logs|: The list of requested logs. All available logs will be
   // requested if left empty.
-  virtual void GetFeedbackLogsV2(
+  virtual void GetFeedbackLogs(
       const cryptohome::AccountIdentifier& id,
       const std::vector<debugd::FeedbackLogType>& requested_logs,
       GetLogsCallback callback) = 0;
@@ -249,25 +242,29 @@ class COMPONENT_EXPORT(DEBUG_DAEMON) DebugDaemonClient
   using CupsAddPrinterCallback = base::OnceCallback<void(int32_t)>;
 
   // Calls CupsAddManuallyConfiguredPrinter.  |name| is the printer
-  // name. |uri| is the device.  |ppd_contents| is the contents of the
-  // PPD file used to drive the device.  |callback| is called with
-  // true if adding the printer to CUPS was successful and false if
-  // there was an error.  |error_callback| will be called if there was
-  // an error in communicating with debugd.
+  // name. |uri| is the device.  |language| is the locale code for the
+  // user's language, e.g., "en-us" or "jp".  |ppd_contents| is the
+  // contents of the PPD file used to drive the device.  |callback| is
+  // called with true if adding the printer to CUPS was successful and
+  // false if there was an error.  |error_callback| will be called if
+  // there was an error in communicating with debugd.
   virtual void CupsAddManuallyConfiguredPrinter(
       const std::string& name,
       const std::string& uri,
+      const std::string& language,
       const std::string& ppd_contents,
       CupsAddPrinterCallback callback) = 0;
 
   // Calls CupsAddAutoConfiguredPrinter.  |name| is the printer
-  // name. |uri| is the device.  |callback| is called with true if
-  // adding the printer to CUPS was successful and false if there was
-  // an error.  |error_callback| will be called if there was an error
+  // name. |uri| is the device.  |language| is the locale code for the
+  // user's language, e.g., "en-us" or "jp".  |callback| is called with
+  // true if adding the printer to CUPS was successful and false if there
+  // was an error.  |error_callback| will be called if there was an error
   // in communicating with debugd.
   virtual void CupsAddAutoConfiguredPrinter(
       const std::string& name,
       const std::string& uri,
+      const std::string& language,
       CupsAddPrinterCallback callback) = 0;
 
   // A callback to handle the result of CupsRemovePrinter.
@@ -332,29 +329,6 @@ class COMPONENT_EXPORT(DEBUG_DAEMON) DebugDaemonClient
   virtual void GetU2fFlags(
       chromeos::DBusMethodCallback<std::set<std::string>> callback) = 0;
 
-  // Set Swap Parameter
-  virtual void SetSwapParameter(
-      const std::string& parameter,
-      int32_t value,
-      chromeos::DBusMethodCallback<std::string> callback) = 0;
-
-  // Zram Writeback Dbus Messages
-  virtual void SwapZramEnableWriteback(
-      uint32_t size_mb,
-      chromeos::DBusMethodCallback<std::string> callback) = 0;
-
-  virtual void SwapZramSetWritebackLimit(
-      uint32_t limit_pages,
-      chromeos::DBusMethodCallback<std::string> callback) = 0;
-
-  virtual void SwapZramMarkIdle(
-      uint32_t age_seconds,
-      chromeos::DBusMethodCallback<std::string> callback) = 0;
-
-  virtual void InitiateSwapZramWriteback(
-      debugd::ZramWritebackMode mode,
-      chromeos::DBusMethodCallback<std::string> callback) = 0;
-
   // Stops the packet capture process identified with |handle|. |handle| is a
   // unique process identifier that is returned from debugd's PacketCaptureStart
   // D-Bus method when the packet capture process is started. Stops all on-going
@@ -377,10 +351,5 @@ class COMPONENT_EXPORT(DEBUG_DAEMON) DebugDaemonClient
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when the migration is finished.
-namespace chromeos {
-using ::ash::DebugDaemonClient;
-}
 
 #endif  // CHROMEOS_ASH_COMPONENTS_DBUS_DEBUG_DAEMON_DEBUG_DAEMON_CLIENT_H_

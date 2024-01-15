@@ -12,6 +12,10 @@ namespace base {
 class CommandLine;
 }
 
+namespace policy {
+enum class IncognitoModeAvailability;
+}
+
 namespace user_prefs {
 class PrefRegistrySyncable;
 }
@@ -19,23 +23,7 @@ class PrefRegistrySyncable;
 // Specifies Incognito mode availability preferences.
 class IncognitoModePrefs {
  public:
-  // Possible values for Incognito mode availability. Please, do not change
-  // the order of entries since numeric values are exposed to users.
-  enum class Availability {
-    // Incognito mode enabled. Users may open pages in both Incognito mode and
-    // normal mode (usually the default behaviour).
-    kEnabled = 0,
-    // Incognito mode disabled. Users may not open pages in Incognito mode.
-    // Only normal mode is available for browsing.
-    kDisabled,
-    // Incognito mode forced. Users may open pages *ONLY* in Incognito mode.
-    // Normal mode is not available for browsing.
-    kForced,
-
-    kNumTypes
-  };
-
-  static constexpr Availability kDefaultAvailability = Availability::kEnabled;
+  static const policy::IncognitoModeAvailability kDefaultAvailability;
 
   IncognitoModePrefs() = delete;
   IncognitoModePrefs(const IncognitoModePrefs&) = delete;
@@ -46,21 +34,29 @@ class IncognitoModePrefs {
 
   // Returns kIncognitoModeAvailability preference value stored
   // in the given pref service.
-  static Availability GetAvailability(const PrefService* prefs);
+  static policy::IncognitoModeAvailability GetAvailability(
+      const PrefService* prefs);
 
   // Sets kIncognitoModeAvailability preference to the specified availability
   // value.
-  static void SetAvailability(PrefService* prefs,
-                              const Availability availability);
+  static void SetAvailability(
+      PrefService* prefs,
+      const policy::IncognitoModeAvailability availability);
 
   // Converts in_value into the corresponding Availability value. Returns true
   // if conversion is successful (in_value is valid). Otherwise, returns false
   // and *out_value is set to ENABLED.
-  static bool IntToAvailability(int in_value, Availability* out_value);
+  static bool IntToAvailability(int in_value,
+                                policy::IncognitoModeAvailability* out_value);
 
-  // Returns true if the browser should start in incognito mode.
+  // Returns true if the initial browser should start in incognito mode.
   static bool ShouldLaunchIncognito(const base::CommandLine& command_line,
                                     const PrefService* prefs);
+
+  // Returns true if subsequent browsers should be opened in incognito mode.
+  static bool ShouldOpenSubsequentBrowsersInIncognito(
+      const base::CommandLine& command_line,
+      const PrefService* prefs);
 
   // Returns true if |profile| can open a new Browser. This checks the incognito
   // availability policies and verifies if the |profile| type is allowed to
@@ -86,8 +82,17 @@ class IncognitoModePrefs {
   // Internal version of GetAvailability() that specifies whether parental
   // controls should be checked (which is expensive and not always necessary
   // to do - such as when checking for FORCED state).
-  static Availability GetAvailabilityInternal(const PrefService* pref_service,
-                                              GetAvailabilityMode mode);
+  static policy::IncognitoModeAvailability GetAvailabilityInternal(
+      const PrefService* pref_service,
+      GetAvailabilityMode mode);
+
+  // Internal version of ShouldLaunchIncognito() and
+  // ShouldOpenSubsequentBrowsersInIncognito() that specifies whether it is for
+  // subsequent browsers or not.
+  static bool ShouldLaunchIncognitoInternal(
+      const base::CommandLine& command_line,
+      const PrefService* prefs,
+      const bool for_subsequent_browsers);
 };
 
 #endif  // CHROME_BROWSER_PREFS_INCOGNITO_MODE_PREFS_H_

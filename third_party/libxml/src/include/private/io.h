@@ -5,13 +5,17 @@
 #include <libxml/tree.h>
 #include <libxml/xmlversion.h>
 
-void __xmlIOErr(int domain, int code, const char *extra);
-void __xmlLoaderErr(void *ctx, const char *msg,
-                    const char *filename) LIBXML_ATTR_FORMAT(2,0);
-int xmlInputReadCallbackNop(void *context, char *buffer, int len);
+XML_HIDDEN void
+__xmlIOErr(int domain, int code, const char *extra);
+XML_HIDDEN void
+__xmlLoaderErr(void *ctx, const char *msg,
+               const char *filename) LIBXML_ATTR_FORMAT(2,0);
+
+xmlParserInputBufferPtr
+xmlParserInputBufferCreateString(const xmlChar *str);
 
 #ifdef LIBXML_OUTPUT_ENABLED
-xmlOutputBufferPtr
+XML_HIDDEN xmlOutputBufferPtr
 xmlAllocOutputBufferInternal(xmlCharEncodingHandlerPtr encoder);
 #endif
 

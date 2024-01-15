@@ -7,7 +7,7 @@
 
 #include <string>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "ui/gtk/gtk_ui_platform.h"
@@ -33,6 +33,7 @@ class GtkUiPlatformWayland : public GtkUiPlatform {
   void ShowGtkWindow(GtkWindow* window) override;
   std::unique_ptr<ui::LinuxInputMethodContext> CreateInputMethodContext(
       ui::LinuxInputMethodContextDelegate* delegate) const override;
+  bool IncludeFontScaleInDeviceScale() const override;
 
  private:
   GdkDisplay* GetDefaultGdkDisplay();

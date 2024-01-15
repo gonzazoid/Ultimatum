@@ -4,11 +4,10 @@
 
 import {fakeCalibrationComponentsWithFails} from 'chrome://shimless-rma/fake_data.js';
 import {FakeShimlessRmaService} from 'chrome://shimless-rma/fake_shimless_rma_service.js';
-import {CalibrationComponentStatus, CalibrationObserverRemote, CalibrationOverallStatus, CalibrationSetupInstruction, CalibrationStatus, ComponentRepairStatus, ComponentType, ErrorObserverRemote, FinalizationError, FinalizationObserverRemote, FinalizationStatus, HardwareVerificationStatusObserverRemote, HardwareWriteProtectionStateObserverRemote, OsUpdateObserverRemote, OsUpdateOperation, PowerCableStateObserverRemote, ProvisioningError, ProvisioningObserverRemote, ProvisioningStatus, RmadErrorCode, ShutdownMethod, State, UpdateErrorCode, UpdateRoFirmwareObserverRemote, UpdateRoFirmwareStatus, WriteProtectDisableCompleteAction} from 'chrome://shimless-rma/shimless_rma_types.js';
+import {CalibrationComponentStatus, CalibrationObserverRemote, CalibrationOverallStatus, CalibrationSetupInstruction, CalibrationStatus, ComponentRepairStatus, ComponentType, ErrorObserverRemote, FinalizationError, FinalizationObserverRemote, FinalizationStatus, HardwareVerificationStatusObserverRemote, HardwareWriteProtectionStateObserverRemote, OsUpdateObserverRemote, OsUpdateOperation, PowerCableStateObserverRemote, ProvisioningError, ProvisioningObserverRemote, ProvisioningStatus, RmadErrorCode, ShutdownMethod, State, UpdateErrorCode, UpdateRoFirmwareObserverRemote, UpdateRoFirmwareStatus, WriteProtectDisableCompleteAction} from 'chrome://shimless-rma/shimless_rma.mojom-webui.js';
+import {assertDeepEquals, assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chromeos/chai_assert.js';
 
-import {assertDeepEquals, assertEquals, assertFalse, assertTrue} from '../../chai_assert.js';
-
-export function fakeShimlessRmaServiceTestSuite() {
+suite('fakeShimlessRmaServiceTestSuite', function() {
   /** @type {?FakeShimlessRmaService} */
   let service = null;
 
@@ -485,18 +484,18 @@ export function fakeShimlessRmaServiceTestSuite() {
     });
   });
 
-  test('GetWhiteLabelListDefaultUndefined', () => {
-    return service.getWhiteLabelList().then((whiteLabels) => {
-      assertEquals(whiteLabels, undefined);
+  test('GetCustomLabelListDefaultUndefined', () => {
+    return service.getCustomLabelList().then((customLabels) => {
+      assertEquals(customLabels, undefined);
     });
   });
 
-  test('SetGetWhiteLabelListResultUpdatesResult', () => {
-    const whiteLabelList =
-        ['White-label 10', 'White-label 0', 'White-label 9999'];
-    service.setGetWhiteLabelListResult(whiteLabelList);
-    return service.getWhiteLabelList().then((whiteLabels) => {
-      assertDeepEquals(whiteLabels.whiteLabels, whiteLabelList);
+  test('SetGetCustomLabelListResultUpdatesResult', () => {
+    const customLabelList =
+        ['Custom-label 10', 'Custom-label 0', 'Custom-label 9999'];
+    service.setGetCustomLabelListResult(customLabelList);
+    return service.getCustomLabelList().then((customLabels) => {
+      assertDeepEquals(customLabels.customLabels, customLabelList);
     });
   });
 
@@ -542,17 +541,17 @@ export function fakeShimlessRmaServiceTestSuite() {
     });
   });
 
-  test('GetOriginalWhiteLabelDefaultUndefined', () => {
-    return service.getOriginalWhiteLabel().then((whiteLabel) => {
-      assertEquals(whiteLabel, undefined);
+  test('GetOriginalCustomLabelDefaultUndefined', () => {
+    return service.getOriginalCustomLabel().then((customLabel) => {
+      assertEquals(customLabel, undefined);
     });
   });
 
-  test('SetGetOriginalWhiteLabelResultUpdatesResult', () => {
-    const expectedWhiteLabel = 1;
-    service.setGetOriginalWhiteLabelResult(expectedWhiteLabel);
-    return service.getOriginalWhiteLabel().then((whiteLabel) => {
-      assertEquals(whiteLabel.whiteLabelIndex, expectedWhiteLabel);
+  test('SetGetOriginalCustomLabelResultUpdatesResult', () => {
+    const expectedCustomLabel = 1;
+    service.setGetOriginalCustomLabelResult(expectedCustomLabel);
+    return service.getOriginalCustomLabel().then((customLabel) => {
+      assertEquals(customLabel.customLabelIndex, expectedCustomLabel);
     });
   });
 
@@ -577,7 +576,8 @@ export function fakeShimlessRmaServiceTestSuite() {
     ];
     service.setStates(states);
 
-    return service.setDeviceInformation('serial number', 1, 2, 3, '123-456-789')
+    return service
+        .setDeviceInformation('serial number', 1, 2, 3, '123-456-789', false, 1)
         .then(({stateResult: {state, error}}) => {
           assertEquals(state, State.kChooseDestination);
           assertEquals(error, RmadErrorCode.kOk);
@@ -924,4 +924,4 @@ export function fakeShimlessRmaServiceTestSuite() {
     return service.triggerFinalizationObserver(
         FinalizationStatus.kInProgress, 0.5, FinalizationError.kUnknown, 0);
   });
-}
+});

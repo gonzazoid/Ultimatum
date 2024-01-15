@@ -14,9 +14,9 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_file.h"
+#include "base/functional/bind.h"
 #include "base/posix/eintr_wrapper.h"
 #include "base/run_loop.h"
 #include "base/time/time.h"
@@ -40,6 +40,24 @@
 namespace {
 
 const char kTestDevicePath[] = "/dev/input/test-device";
+
+constexpr char kXboxGamepadLogDescription[] =
+    R"(class=ui::GamepadEventConverterEvdev id=1
+ supports_rumble=1
+base class=ui::EventConverterEvdev id=1
+ path="/dev/input/test-device"
+member class=ui::InputDevice id=1
+ input_device_type=ui::InputDeviceType::INPUT_DEVICE_USB
+ name="Microsoft X-Box 360 pad"
+ phys=""
+ enabled=0
+ suspected_keyboard_imposter=0
+ suspected_mouse_imposter=0
+ sys_path=""
+ vendor_id=045E
+ product_id=028E
+ version=0114
+)";
 
 class TestGamepadObserver : public ui::GamepadObserver {
  public:
@@ -261,6 +279,16 @@ TEST_F(GamepadEventConverterEvdevTest, XboxGamepadHasKeys) {
 
   // BTN_A should be supported.
   EXPECT_TRUE(EvdevBitUint64IsSet(key_bits.data(), 305));
+}
+
+TEST_F(GamepadEventConverterEvdevTest, DescribeStateForLog) {
+  std::unique_ptr<ui::TestGamepadEventConverterEvdev> dev =
+      CreateDevice(kXboxGamepad);
+
+  std::stringstream output;
+  dev->DescribeForLog(output);
+
+  EXPECT_EQ(output.str(), kXboxGamepadLogDescription);
 }
 
 }  // namespace ui

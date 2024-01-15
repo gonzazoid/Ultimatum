@@ -6,39 +6,17 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/strings/stringprintf.h"
-#include "base/time/time_to_iso8601.h"
 #include "components/history/core/browser/history_service.h"
 #include "components/history_clusters/core/clustering_backend.h"
 #include "components/history_clusters/core/config.h"
 #include "components/history_clusters/core/history_clusters_db_tasks.h"
 #include "components/history_clusters/core/history_clusters_debug_jsons.h"
 #include "components/history_clusters/core/history_clusters_service.h"
-
-namespace {
-
-std::string HistogramNameSlice(
-    history_clusters::HistoryClustersServiceTaskGetMostRecentClusters::Source
-        source) {
-  switch (source) {
-    case history_clusters::HistoryClustersServiceTaskGetMostRecentClusters::
-        Source::kAllKeywordCacheRefresh:
-      return ".AllKeywordCacheRefresh";
-    case history_clusters::HistoryClustersServiceTaskGetMostRecentClusters::
-        Source::kShortKeywordCacheRefresh:
-      return ".ShortKeywordCacheRefresh";
-    case history_clusters::HistoryClustersServiceTaskGetMostRecentClusters::
-        Source::kWebUi:
-      return ".WebUI";
-    default:
-      NOTREACHED();
-  }
-}
-
-}  // namespace
+#include "components/history_clusters/core/history_clusters_util.h"
 
 namespace history_clusters {
 
@@ -52,8 +30,7 @@ HistoryClustersServiceTaskGetMostRecentClusters::
         base::Time begin_time,
         QueryClustersContinuationParams continuation_params,
         bool recluster,
-        QueryClustersCallback callback,
-        Source source)
+        QueryClustersCallback callback)
     : weak_history_clusters_service_(std::move(weak_history_clusters_service)),
       incomplete_visit_context_annotations_(
           incomplete_visit_context_annotations),
@@ -63,15 +40,18 @@ HistoryClustersServiceTaskGetMostRecentClusters::
       begin_time_(begin_time),
       continuation_params_(continuation_params),
       recluster_(recluster),
-      callback_(std::move(callback)),
-      source_(source) {
+      callback_(std::move(callback)) {
   DCHECK(weak_history_clusters_service_);
   DCHECK(history_service_);
   Start();
 }
 
 HistoryClustersServiceTaskGetMostRecentClusters::
-    ~HistoryClustersServiceTaskGetMostRecentClusters() = default;
+    ~HistoryClustersServiceTaskGetMostRecentClusters() {
+  if (!done_) {
+    std::move(callback_).Run({}, continuation_params_);
+  }
+}
 
 void HistoryClustersServiceTaskGetMostRecentClusters::Start() {
   // Shouldn't request more clusters if history has been exhausted.
@@ -131,7 +111,7 @@ void HistoryClustersServiceTaskGetMostRecentClusters::
   base::UmaHistogramTimes(
       "History.Clusters.Backend.GetMostRecentClusters."
       "GetAnnotatedVisitsToClusterLatency" +
-          HistogramNameSlice(source_),
+          GetHistogramNameSliceForRequestSource(clustering_request_source_),
       elapsed_time);
 
   if (weak_history_clusters_service_->ShouldNotifyDebugMessage()) {
@@ -141,9 +121,7 @@ void HistoryClustersServiceTaskGetMostRecentClusters::
         ")");
     weak_history_clusters_service_->NotifyDebugMessage(
         "  continuation_time = " +
-        (continuation_params.continuation_time.is_null()
-             ? "null (i.e. exhausted history)"
-             : base::TimeToISO8601(continuation_params.continuation_time)));
+        GetDebugTime(continuation_params.continuation_time));
     weak_history_clusters_service_->NotifyDebugMessage(
         base::StringPrintf("GET MOST RECENT CLUSTERS TASK - VISITS %zu:",
                            annotated_visits.size()));
@@ -165,7 +143,7 @@ void HistoryClustersServiceTaskGetMostRecentClusters::
         base::BindOnce(&HistoryClustersServiceTaskGetMostRecentClusters::
                            OnGotModelClusters,
                        weak_ptr_factory_.GetWeakPtr(), continuation_params),
-        std::move(annotated_visits));
+        std::move(annotated_visits), /*requires_ui_and_triggerability=*/true);
   }
 }
 
@@ -182,7 +160,7 @@ void HistoryClustersServiceTaskGetMostRecentClusters::OnGotModelClusters(
       elapsed_time);
   base::UmaHistogramTimes(
       "History.Clusters.Backend.GetMostRecentClusters.ComputeClustersLatency" +
-          HistogramNameSlice(source_),
+          GetHistogramNameSliceForRequestSource(clustering_request_source_),
       elapsed_time);
   base::UmaHistogramCounts1000("History.Clusters.Backend.NumClustersReturned",
                                clusters.size());
@@ -209,7 +187,7 @@ void HistoryClustersServiceTaskGetMostRecentClusters::
         base::BindOnce(&HistoryClustersServiceTaskGetMostRecentClusters::
                            OnGotMostRecentPersistedClusters,
                        weak_ptr_factory_.GetWeakPtr()),
-        &task_tracker_);
+        /*include_keywords_and_duplicates=*/true, &task_tracker_);
   } else {
     OnGotMostRecentPersistedClusters({});
   }
@@ -229,7 +207,7 @@ void HistoryClustersServiceTaskGetMostRecentClusters::
   base::UmaHistogramTimes(
       "History.Clusters.Backend.GetMostRecentClusters."
       "GetMostRecentPersistedClustersLatency" +
-          HistogramNameSlice(source_),
+          GetHistogramNameSliceForRequestSource(clustering_request_source_),
       elapsed_time);
 
   if (GetConfig().persist_clusters_in_history_db && !recluster_ &&

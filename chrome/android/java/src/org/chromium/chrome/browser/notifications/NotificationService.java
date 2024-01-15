@@ -16,8 +16,7 @@ import org.chromium.chrome.browser.base.SplitCompatIntentService;
 public class NotificationService extends SplitCompatIntentService {
     private static final String TAG = NotificationService.class.getSimpleName();
 
-    @IdentifierNameString
-    private static String sImplClassName =
+    private static @IdentifierNameString String sImplClassName =
             "org.chromium.chrome.browser.notifications.NotificationServiceImpl";
 
     public NotificationService() {
@@ -31,8 +30,11 @@ public class NotificationService extends SplitCompatIntentService {
     public static class Receiver extends BroadcastReceiver {
         @Override
         public void onReceive(Context context, Intent intent) {
-            BroadcastReceiver receiver = (BroadcastReceiver) BundleUtils.newInstance(context,
-                    "org.chromium.chrome.browser.notifications.NotificationServiceImpl$Receiver");
+            BroadcastReceiver receiver =
+                    (BroadcastReceiver)
+                            BundleUtils.newInstance(
+                                    context,
+                                    "org.chromium.chrome.browser.notifications.NotificationServiceImpl$Receiver");
             receiver.onReceive(context, intent);
         }
     }

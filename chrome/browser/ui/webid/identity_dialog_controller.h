@@ -8,7 +8,7 @@
 #include <memory>
 #include <utility>
 #include <vector>
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "chrome/browser/ui/webid/account_selection_view.h"
 #include "content/public/browser/identity_request_dialog_controller.h"
@@ -19,6 +19,7 @@ using AccountSelectionCallback =
     content::IdentityRequestDialogController::AccountSelectionCallback;
 using DismissCallback =
     content::IdentityRequestDialogController::DismissCallback;
+using TokenError = content::IdentityCredentialTokenError;
 
 // The IdentityDialogController controls the views that are used across
 // browser-mediated federated sign-in flows.
@@ -26,7 +27,7 @@ class IdentityDialogController
     : public content::IdentityRequestDialogController,
       public AccountSelectionView::Delegate {
  public:
-  IdentityDialogController();
+  explicit IdentityDialogController(content::WebContents* rp_web_contents);
 
   IdentityDialogController(const IdentityDialogController&) = delete;
   IdentityDialogController& operator=(const IdentityDialogController&) = delete;
@@ -39,33 +40,55 @@ class IdentityDialogController
 
   // content::IdentityRequestDialogController
   void ShowAccountsDialog(
-      content::WebContents* rp_web_contents,
-      const std::string& rp_for_display,
-      const absl::optional<std::string>& iframe_url_for_display,
+      const std::string& top_frame_for_display,
+      const std::optional<std::string>& iframe_for_display,
       const std::vector<content::IdentityProviderData>& identity_provider_data,
       content::IdentityRequestAccount::SignInMode sign_in_mode,
+      bool show_auto_reauthn_checkbox,
       AccountSelectionCallback on_selected,
+      LoginToIdPCallback on_add_account,
       DismissCallback dismiss_callback) override;
-  void ShowFailureDialog(
-      content::WebContents* rp_web_contents,
-      const std::string& rp_for_display,
-      const std::string& idp_for_display,
-      const absl::optional<std::string>& iframe_url_for_display,
+  void ShowFailureDialog(const std::string& top_frame_for_display,
+                         const std::optional<std::string>& iframe_for_display,
+                         const std::string& idp_for_display,
+                         const blink::mojom::RpContext& rp_context,
+                         const content::IdentityProviderMetadata& idp_metadata,
+                         DismissCallback dismiss_callback,
+                         LoginToIdPCallback login_callback) override;
+  void ShowErrorDialog(const std::string& top_frame_for_display,
+                       const std::optional<std::string>& iframe_for_display,
+                       const std::string& idp_for_display,
+                       const blink::mojom::RpContext& rp_context,
+                       const content::IdentityProviderMetadata& idp_metadata,
+                       const std::optional<TokenError>& error,
+                       DismissCallback dismiss_callback,
+                       MoreDetailsCallback more_details_callback) override;
+  void ShowIdpSigninFailureDialog(base::OnceClosure dismiss_callback) override;
+
+  std::string GetTitle() const override;
+  std::optional<std::string> GetSubtitle() const override;
+
+  // Show a modal dialog that loads content from the IdP in a WebView.
+  content::WebContents* ShowModalDialog(
+      const GURL& url,
       DismissCallback dismiss_callback) override;
+  void CloseModalDialog() override;
 
   // AccountSelectionView::Delegate:
   void OnAccountSelected(const GURL& idp_config_url,
                          const Account& account) override;
   void OnDismiss(DismissReason dismiss_reason) override;
+  void OnLoginToIdP(const GURL& idp_login_url) override;
+  void OnMoreDetails() override;
   gfx::NativeView GetNativeView() override;
   content::WebContents* GetWebContents() override;
 
  private:
-  void OnViewClosed();
-
   std::unique_ptr<AccountSelectionView> account_view_{nullptr};
   AccountSelectionCallback on_account_selection_;
   DismissCallback on_dismiss_;
+  LoginToIdPCallback on_login_;
+  MoreDetailsCallback on_more_details_;
   raw_ptr<content::WebContents> rp_web_contents_;
 };
 

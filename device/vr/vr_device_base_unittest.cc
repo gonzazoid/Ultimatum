@@ -6,8 +6,8 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/run_loop.h"
 #include "base/test/task_environment.h"
 #include "device/vr/public/mojom/vr_service.mojom.h"
@@ -34,6 +34,10 @@ class VRDeviceBaseForTesting : public VRDeviceBase {
   void RequestSession(
       mojom::XRRuntimeSessionOptionsPtr options,
       mojom::XRRuntime::RequestSessionCallback callback) override {}
+  void ShutdownSession(
+      mojom::XRRuntime::ShutdownSessionCallback callback) override {
+    std::move(callback).Run();
+  }
 };
 
 class StubVRDeviceEventListener : public mojom::XRRuntimeEventListener {

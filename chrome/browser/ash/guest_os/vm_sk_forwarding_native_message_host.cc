@@ -2,12 +2,16 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// This file has been duplicated for lacros in
+// //chrome/browser/lacros/guest_os/vm_sk_forwarding_native_message_host.cc and
+// should eventually be removed.
+
 #include "chrome/browser/ash/guest_os/vm_sk_forwarding_native_message_host.h"
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/json/json_reader.h"
 #include "base/json/json_writer.h"
 #include "base/logging.h"
@@ -17,15 +21,15 @@
 #include "base/values.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/extensions/api/messaging/native_message_port.h"
-#include "chrome/browser/profiles/profile_manager.h"
+#include "chrome/browser/profiles/profile.h"
 #include "content/public/browser/browser_context.h"
 #include "extensions/browser/api/messaging/channel_endpoint.h"
 #include "extensions/browser/api/messaging/message_service.h"
 #include "extensions/browser/api/messaging/native_message_host.h"
 #include "extensions/browser/extension_registry.h"
 #include "extensions/common/api/messaging/messaging_endpoint.h"
-#include "extensions/common/api/messaging/serialization_format.h"
 #include "extensions/common/extension.h"
+#include "extensions/common/mojom/message_port.mojom-shared.h"
 #include "url/gurl.h"
 
 namespace ash {
@@ -110,7 +114,7 @@ void VmSKForwardingNativeMessageHost::OnMessage(const std::string& message) {
 
 scoped_refptr<base::SingleThreadTaskRunner>
 VmSKForwardingNativeMessageHost::task_runner() const {
-  return base::ThreadTaskRunnerHandle::Get();
+  return base::SingleThreadTaskRunner::GetCurrentDefault();
 }
 
 void VmSKForwardingNativeMessageHost::DeliverMessageToExtensionByID(
@@ -118,9 +122,9 @@ void VmSKForwardingNativeMessageHost::DeliverMessageToExtensionByID(
     const std::string& extension_id,
     const std::string& json_message,
     base::OnceCallback<void(const std::string& response)> response_callback) {
-  const extensions::PortId port_id(base::UnguessableToken::Create(),
-                                   1 /* port_number */, true /* is_opener */,
-                                   extensions::SerializationFormat::kJson);
+  const extensions::PortId port_id(
+      base::UnguessableToken::Create(), 1 /* port_number */,
+      true /* is_opener */, extensions::mojom::SerializationFormat::kJson);
 
   extensions::MessageService* const message_service =
       extensions::MessageService::Get(profile);
@@ -137,6 +141,7 @@ void VmSKForwardingNativeMessageHost::DeliverMessageToExtensionByID(
       extensions::MessagingEndpoint::ForNativeApp(
           VmSKForwardingNativeMessageHost::kHostName),
       std::move(native_message_port), extension_id, GURL(),
+      extensions::mojom::ChannelType::kNative,
       std::string() /* channel_name */);
 }
 

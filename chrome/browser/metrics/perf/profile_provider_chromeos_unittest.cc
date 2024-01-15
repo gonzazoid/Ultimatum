@@ -12,13 +12,14 @@
 #include <vector>
 
 #include "base/test/bind.h"
+#include "base/test/power_monitor_test.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
 #include "base/time/time.h"
 #include "chrome/browser/metrics/perf/metric_collector.h"
 #include "chrome/browser/metrics/perf/metric_provider.h"
 #include "chrome/browser/metrics/perf/windowed_incognito_observer.h"
-#include "chromeos/login/login_state/login_state.h"
+#include "chromeos/ash/components/login/login_state/login_state.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/test/browser_task_environment.h"
@@ -125,17 +126,25 @@ class TestProfileProvider : public ProfileProvider {
   TestProfileProvider& operator=(const TestProfileProvider&) = delete;
 };
 
-template <SampledProfile_TriggerEvent TRIGGER_TYPE>
 void ExpectTwoStoredPerfProfiles(
-    const std::vector<SampledProfile>& stored_profiles) {
+    const std::vector<SampledProfile>& stored_profiles,
+    SampledProfile_TriggerEvent want_trigger_type,
+    ThermalState want_thermal_state_type,
+    int want_speed_limit) {
   ASSERT_EQ(2U, stored_profiles.size());
   // Both profiles must be of the given type and include perf data.
   const SampledProfile& profile1 = stored_profiles[0];
   const SampledProfile& profile2 = stored_profiles[1];
-  EXPECT_EQ(TRIGGER_TYPE, profile1.trigger_event());
+  EXPECT_EQ(want_trigger_type, profile1.trigger_event());
   ASSERT_TRUE(profile1.has_perf_data());
-  EXPECT_EQ(TRIGGER_TYPE, profile2.trigger_event());
+  EXPECT_EQ(want_trigger_type, profile2.trigger_event());
   ASSERT_TRUE(profile2.has_perf_data());
+  // Both profiles must include the given thermal state,
+  EXPECT_EQ(want_thermal_state_type, profile1.thermal_state());
+  EXPECT_EQ(want_thermal_state_type, profile2.thermal_state());
+  // ... and CPU speed limit.
+  EXPECT_EQ(want_speed_limit, profile1.cpu_speed_limit_percent());
+  EXPECT_EQ(want_speed_limit, profile2.cpu_speed_limit_percent());
 
   // We must have received a profile from each of the collectors.
   EXPECT_EQ(100u, profile1.perf_data().timestamp_sec());
@@ -153,10 +162,12 @@ class ProfileProviderTest : public testing::Test {
   ProfileProviderTest& operator=(const ProfileProviderTest&) = delete;
 
   void SetUp() override {
-    // ProfileProvider requires chromeos::LoginState and
+    // ProfileProvider requires ash::LoginState and
     // chromeos::PowerManagerClient to be initialized.
     chromeos::PowerManagerClient::InitializeFake();
-    chromeos::LoginState::Initialize();
+    ash::LoginState::Initialize();
+    test_power_monitor_source_.GenerateThermalThrottlingEvent(
+        base::PowerThermalObserver::DeviceThermalState::kNominal);
 
     profile_provider_ = std::make_unique<TestProfileProvider>();
     profile_provider_->Init();
@@ -164,7 +175,7 @@ class ProfileProviderTest : public testing::Test {
 
   void TearDown() override {
     profile_provider_.reset();
-    chromeos::LoginState::Shutdown();
+    ash::LoginState::Shutdown();
     chromeos::PowerManagerClient::Shutdown();
   }
 
@@ -173,7 +184,7 @@ class ProfileProviderTest : public testing::Test {
   // any member that cares about tasks) to be initialized first and destroyed
   // last.
   content::BrowserTaskEnvironment task_environment_;
-
+  base::test::ScopedPowerMonitorTestSource test_power_monitor_source_;
   std::unique_ptr<TestProfileProvider> profile_provider_;
 };
 
@@ -196,23 +207,23 @@ TEST_F(ProfileProviderTest, UserLoginLogout) {
 
   // Simulate a user log in, which should activate periodic collection for all
   // collectors.
-  chromeos::LoginState::Get()->SetLoggedInState(
-      chromeos::LoginState::LOGGED_IN_ACTIVE,
-      chromeos::LoginState::LOGGED_IN_USER_REGULAR);
+  ash::LoginState::Get()->SetLoggedInState(
+      ash::LoginState::LOGGED_IN_ACTIVE,
+      ash::LoginState::LOGGED_IN_USER_REGULAR);
 
   // Run all pending tasks. SetLoggedInState has activated timers for periodic
   // collection causing timer based pending tasks.
   task_environment_.FastForwardBy(kPeriodicCollectionInterval);
   // We should find two profiles, one for each collector.
   EXPECT_TRUE(profile_provider_->GetSampledProfiles(&stored_profiles));
-  ExpectTwoStoredPerfProfiles<SampledProfile::PERIODIC_COLLECTION>(
-      stored_profiles);
+  ExpectTwoStoredPerfProfiles(
+      stored_profiles, SampledProfile::PERIODIC_COLLECTION,
+      THERMAL_STATE_NOMINAL, base::PowerThermalObserver::kSpeedLimitMax);
 
   // Periodic collection is deactivated when user logs out. Simulate a user
   // logout event.
-  chromeos::LoginState::Get()->SetLoggedInState(
-      chromeos::LoginState::LOGGED_IN_NONE,
-      chromeos::LoginState::LOGGED_IN_USER_NONE);
+  ash::LoginState::Get()->SetLoggedInState(
+      ash::LoginState::LOGGED_IN_NONE, ash::LoginState::LOGGED_IN_USER_NONE);
   // Run all pending tasks.
   task_environment_.FastForwardBy(kPeriodicCollectionInterval);
   // We should find no new profiles.
@@ -235,9 +246,9 @@ TEST_F(ProfileProviderTest, SuspendDone_NoUserLoggedIn_NoCollection) {
 TEST_F(ProfileProviderTest, CanceledSuspend_NoCollection) {
   // Set user state as logged in. This activates periodic collection, but we can
   // deactivate it for each collector.
-  chromeos::LoginState::Get()->SetLoggedInState(
-      chromeos::LoginState::LOGGED_IN_ACTIVE,
-      chromeos::LoginState::LOGGED_IN_USER_REGULAR);
+  ash::LoginState::Get()->SetLoggedInState(
+      ash::LoginState::LOGGED_IN_ACTIVE,
+      ash::LoginState::LOGGED_IN_USER_REGULAR);
   for (auto& collector : profile_provider_->collectors_) {
     collector->Deactivate();
   }
@@ -256,9 +267,9 @@ TEST_F(ProfileProviderTest, CanceledSuspend_NoCollection) {
 TEST_F(ProfileProviderTest, SuspendDone) {
   // Set user state as logged in. This activates periodic collection, but other
   // triggers like SUSPEND_DONE take precedence.
-  chromeos::LoginState::Get()->SetLoggedInState(
-      chromeos::LoginState::LOGGED_IN_ACTIVE,
-      chromeos::LoginState::LOGGED_IN_USER_REGULAR);
+  ash::LoginState::Get()->SetLoggedInState(
+      ash::LoginState::LOGGED_IN_ACTIVE,
+      ash::LoginState::LOGGED_IN_USER_REGULAR);
 
   // Trigger a resume from suspend.
   profile_provider_->SuspendDone(base::Minutes(10));
@@ -268,8 +279,9 @@ TEST_F(ProfileProviderTest, SuspendDone) {
   // We should find two profiles, one for each collector.
   std::vector<SampledProfile> stored_profiles;
   EXPECT_TRUE(profile_provider_->GetSampledProfiles(&stored_profiles));
-  ExpectTwoStoredPerfProfiles<SampledProfile::RESUME_FROM_SUSPEND>(
-      stored_profiles);
+  ExpectTwoStoredPerfProfiles(
+      stored_profiles, SampledProfile::RESUME_FROM_SUSPEND,
+      THERMAL_STATE_NOMINAL, base::PowerThermalObserver::kSpeedLimitMax);
 }
 
 TEST_F(ProfileProviderTest, OnSessionRestoreDone_NoUserLoggedIn_NoCollection) {
@@ -286,9 +298,9 @@ TEST_F(ProfileProviderTest, OnSessionRestoreDone_NoUserLoggedIn_NoCollection) {
 TEST_F(ProfileProviderTest, OnSessionRestoreDone) {
   // Set user state as logged in. This activates periodic collection, but we can
   // deactivate it for each collector.
-  chromeos::LoginState::Get()->SetLoggedInState(
-      chromeos::LoginState::LOGGED_IN_ACTIVE,
-      chromeos::LoginState::LOGGED_IN_USER_REGULAR);
+  ash::LoginState::Get()->SetLoggedInState(
+      ash::LoginState::LOGGED_IN_ACTIVE,
+      ash::LoginState::LOGGED_IN_USER_REGULAR);
   for (auto& collector : profile_provider_->collectors_) {
     collector->Deactivate();
   }
@@ -301,15 +313,56 @@ TEST_F(ProfileProviderTest, OnSessionRestoreDone) {
   // We should find two profiles, one for each collector.
   std::vector<SampledProfile> stored_profiles;
   EXPECT_TRUE(profile_provider_->GetSampledProfiles(&stored_profiles));
-  ExpectTwoStoredPerfProfiles<SampledProfile::RESTORE_SESSION>(stored_profiles);
+  ExpectTwoStoredPerfProfiles(stored_profiles, SampledProfile::RESTORE_SESSION,
+                              THERMAL_STATE_NOMINAL,
+                              base::PowerThermalObserver::kSpeedLimitMax);
+}
+
+TEST_F(ProfileProviderTest, ThermalStateChangesAreCaptured) {
+  // Simulate a user log in, which should activate periodic collection for all
+  // collectors.
+  ash::LoginState::Get()->SetLoggedInState(
+      ash::LoginState::LOGGED_IN_ACTIVE,
+      ash::LoginState::LOGGED_IN_USER_REGULAR);
+  test_power_monitor_source_.GenerateThermalThrottlingEvent(
+      base::PowerThermalObserver::DeviceThermalState::kCritical);
+
+  // Run all pending tasks. SetLoggedInState has activated timers for periodic
+  // collection causing timer based pending tasks.
+  task_environment_.FastForwardBy(kPeriodicCollectionInterval);
+  // We should find two profiles, one for each collector.
+  std::vector<SampledProfile> stored_profiles;
+  EXPECT_TRUE(profile_provider_->GetSampledProfiles(&stored_profiles));
+  ExpectTwoStoredPerfProfiles(
+      stored_profiles, SampledProfile::PERIODIC_COLLECTION,
+      THERMAL_STATE_CRITICAL, base::PowerThermalObserver::kSpeedLimitMax);
+}
+
+TEST_F(ProfileProviderTest, CpuSpeedChangesAreCaptured) {
+  // Simulate a user log in, which should activate periodic collection for all
+  // collectors.
+  ash::LoginState::Get()->SetLoggedInState(
+      ash::LoginState::LOGGED_IN_ACTIVE,
+      ash::LoginState::LOGGED_IN_USER_REGULAR);
+  test_power_monitor_source_.GenerateSpeedLimitEvent(50);
+
+  // Run all pending tasks. SetLoggedInState has activated timers for periodic
+  // collection causing timer based pending tasks.
+  task_environment_.FastForwardBy(kPeriodicCollectionInterval);
+  // We should find two profiles, one for each collector.
+  std::vector<SampledProfile> stored_profiles;
+  EXPECT_TRUE(profile_provider_->GetSampledProfiles(&stored_profiles));
+  ExpectTwoStoredPerfProfiles(stored_profiles,
+                              SampledProfile::PERIODIC_COLLECTION,
+                              THERMAL_STATE_NOMINAL, 50);
 }
 
 // Test profile collection triggered when a jank starts.
 TEST_F(ProfileProviderTest, JankMonitorCallbacks) {
   // Jankiness collection requires that the user is logged in.
-  chromeos::LoginState::Get()->SetLoggedInState(
-      chromeos::LoginState::LOGGED_IN_ACTIVE,
-      chromeos::LoginState::LOGGED_IN_USER_REGULAR);
+  ash::LoginState::Get()->SetLoggedInState(
+      ash::LoginState::LOGGED_IN_ACTIVE,
+      ash::LoginState::LOGGED_IN_USER_REGULAR);
 
   // Trigger a jankiness collection.
   profile_provider_->OnJankStarted();
@@ -320,16 +373,18 @@ TEST_F(ProfileProviderTest, JankMonitorCallbacks) {
   EXPECT_TRUE(profile_provider_->GetSampledProfiles(&stored_profiles));
 
   EXPECT_EQ(2U, stored_profiles.size());
-  ExpectTwoStoredPerfProfiles<SampledProfile::JANKY_TASK>(stored_profiles);
+  ExpectTwoStoredPerfProfiles(stored_profiles, SampledProfile::JANKY_TASK,
+                              THERMAL_STATE_NOMINAL,
+                              base::PowerThermalObserver::kSpeedLimitMax);
 }
 
 // Test throttling of JANKY_TASK collections: no consecutive collections within
 // jankiness_collection_min_interval().
 TEST_F(ProfileProviderTest, JankinessCollectionThrottled) {
   // Jankiness collection requires that the user is logged in.
-  chromeos::LoginState::Get()->SetLoggedInState(
-      chromeos::LoginState::LOGGED_IN_ACTIVE,
-      chromeos::LoginState::LOGGED_IN_USER_REGULAR);
+  ash::LoginState::Get()->SetLoggedInState(
+      ash::LoginState::LOGGED_IN_ACTIVE,
+      ash::LoginState::LOGGED_IN_USER_REGULAR);
 
   // The first JANKY_TASK collection should succeed.
   profile_provider_->OnJankStarted();
@@ -339,7 +394,9 @@ TEST_F(ProfileProviderTest, JankinessCollectionThrottled) {
 
   EXPECT_TRUE(profile_provider_->GetSampledProfiles(&stored_profiles));
   EXPECT_EQ(2U, stored_profiles.size());
-  ExpectTwoStoredPerfProfiles<SampledProfile::JANKY_TASK>(stored_profiles);
+  ExpectTwoStoredPerfProfiles(stored_profiles, SampledProfile::JANKY_TASK,
+                              THERMAL_STATE_NOMINAL,
+                              base::PowerThermalObserver::kSpeedLimitMax);
 
   stored_profiles.clear();
 
@@ -370,7 +427,9 @@ TEST_F(ProfileProviderTest, JankinessCollectionThrottled) {
 
   EXPECT_TRUE(profile_provider_->GetSampledProfiles(&stored_profiles));
   EXPECT_EQ(2U, stored_profiles.size());
-  ExpectTwoStoredPerfProfiles<SampledProfile::JANKY_TASK>(stored_profiles);
+  ExpectTwoStoredPerfProfiles(stored_profiles, SampledProfile::JANKY_TASK,
+                              THERMAL_STATE_NOMINAL,
+                              base::PowerThermalObserver::kSpeedLimitMax);
 }
 
 // This class enables the jank monitor to test collections triggered by jank
@@ -380,9 +439,9 @@ class ProfileProviderJankinessTest : public ProfileProviderTest {
   void SetUp() override {
     ProfileProviderTest::SetUp();
     // Jankiness collection requires that the user is logged in.
-    chromeos::LoginState::Get()->SetLoggedInState(
-        chromeos::LoginState::LOGGED_IN_ACTIVE,
-        chromeos::LoginState::LOGGED_IN_USER_REGULAR);
+    ash::LoginState::Get()->SetLoggedInState(
+        ash::LoginState::LOGGED_IN_ACTIVE,
+        ash::LoginState::LOGGED_IN_USER_REGULAR);
     // Deactivate each collectors to disable periodic collections.
     for (auto& collector : profile_provider_->collectors_) {
       collector->Deactivate();
@@ -405,7 +464,9 @@ TEST_F(ProfileProviderJankinessTest, JankMonitor_UI) {
   EXPECT_TRUE(profile_provider_->GetSampledProfiles(&stored_profiles));
 
   EXPECT_EQ(2U, stored_profiles.size());
-  ExpectTwoStoredPerfProfiles<SampledProfile::JANKY_TASK>(stored_profiles);
+  ExpectTwoStoredPerfProfiles(stored_profiles, SampledProfile::JANKY_TASK,
+                              THERMAL_STATE_NOMINAL,
+                              base::PowerThermalObserver::kSpeedLimitMax);
 }
 
 // Test profile collection triggered by an IO thread jank.
@@ -423,7 +484,9 @@ TEST_F(ProfileProviderJankinessTest, JankMonitor_IO) {
   EXPECT_TRUE(profile_provider_->GetSampledProfiles(&stored_profiles));
 
   EXPECT_EQ(2U, stored_profiles.size());
-  ExpectTwoStoredPerfProfiles<SampledProfile::JANKY_TASK>(stored_profiles);
+  ExpectTwoStoredPerfProfiles(stored_profiles, SampledProfile::JANKY_TASK,
+                              THERMAL_STATE_NOMINAL,
+                              base::PowerThermalObserver::kSpeedLimitMax);
 }
 
 namespace {
@@ -448,14 +511,14 @@ class ProfileProviderStockTest : public testing::Test {
   ProfileProviderStockTest& operator=(const ProfileProviderStockTest&) = delete;
 
   void SetUp() override {
-    // ProfileProvider requires chromeos::LoginState and
+    // ProfileProvider requires ash::LoginState and
     // chromeos::PowerManagerClient to be initialized.
     chromeos::PowerManagerClient::InitializeFake();
-    chromeos::LoginState::Initialize();
+    ash::LoginState::Initialize();
   }
 
   void TearDown() override {
-    chromeos::LoginState::Shutdown();
+    ash::LoginState::Shutdown();
     chromeos::PowerManagerClient::Shutdown();
   }
 

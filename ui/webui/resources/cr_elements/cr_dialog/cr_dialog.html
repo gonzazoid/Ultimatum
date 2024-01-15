@@ -4,7 +4,7 @@
         --scroll-border: 1px solid var(--scroll-border-color);
         background-color: var(--cr-dialog-background-color, white);
         border: 0;
-        border-radius: 8px;
+        border-radius: var(--cr-dialog-border-radius, 8px);
         bottom: 50%;
         box-shadow: 0 0 16px rgba(0, 0, 0, 0.12),
                     0 16px 16px rgba(0, 0, 0, 0.24);
@@ -79,13 +79,15 @@
         padding-top: var(--cr-dialog-title-slot-padding-top, 20px);
       }
 
+      /* Note that if the padding is non-uniform and the button-container
+       * border is visible, then the buttons will appear off-center. */
       :host ::slotted([slot=button-container]) {
         display: flex;
         justify-content: flex-end;
         padding-bottom: var(--cr-dialog-button-container-padding-bottom, 16px);
         padding-inline-end: var(--cr-dialog-button-container-padding-horizontal, 16px);
         padding-inline-start: var(--cr-dialog-button-container-padding-horizontal, 16px);
-        padding-top: 24px;
+        padding-top: var(--cr-dialog-button-container-padding-top, 16px);
       }
 
       :host ::slotted([slot=footer]) {
@@ -94,6 +96,10 @@
         border-top: 1px solid #dbdbdb;
         margin: 0;
         padding: 16px 20px;
+      }
+
+      :host([hide-backdrop]) dialog::backdrop {
+        opacity: 0;
       }
 
       @media (prefers-color-scheme: dark) {
@@ -139,6 +145,9 @@
       .title-container {
         display: flex;
         flex: 1;
+        font-size: inherit;
+        font-weight: inherit;
+        margin: 0;
         outline: none;
       }
 
@@ -150,14 +159,14 @@
     </style>
     <dialog id="dialog" on-close="onNativeDialogClose_"
         on-cancel="onNativeDialogCancel_" part="dialog"
-        aria-labelledby="title" aria-describedby="container">
+        aria-labelledby="title" aria-description$="[[ariaDescriptionText]]">
     <!-- This wrapper is necessary, such that the "pulse" animation is not
         erroneously played when the user clicks on the outer-most scrollbar. -->
       <div id="content-wrapper" part="wrapper">
         <div class="top-container">
-          <div id="title" class="title-container" tabindex="-1">
+          <h2 id="title" class="title-container" tabindex="-1">
             <slot name="title"></slot>
-          </div>
+          </h2>
           <cr-icon-button id="close" class="icon-clear"
               hidden$="[[!showCloseButton]]" aria-label$="[[closeText]]"
               on-click="cancel" on-keypress="onCloseKeypress_">

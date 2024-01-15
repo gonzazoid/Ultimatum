@@ -28,19 +28,6 @@
 #include "testing/platform_test.h"
 #include "url/gurl.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
-// When C++ exceptions are disabled, the C++ library defines |try| and
-// |catch| so as to allow exception-expecting C++ code to build properly when
-// language support for exceptions is not present.  These macros interfere
-// with the use of |@try| and |@catch| in Objective-C files such as this one.
-// Undefine these macros here, after everything has been #included, since
-// there will be no C++ uses and only Objective-C uses from this point on.
-#undef try
-#undef catch
-
 namespace net {
 namespace {
 

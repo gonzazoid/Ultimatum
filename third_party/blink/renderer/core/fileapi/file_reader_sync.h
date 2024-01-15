@@ -31,6 +31,10 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_FILEAPI_FILE_READER_SYNC_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_FILEAPI_FILE_READER_SYNC_H_
 
+#include "third_party/blink/renderer/core/execution_context/execution_context_lifecycle_observer.h"
+#include "third_party/blink/renderer/core/fileapi/file_reader_client.h"
+#include "third_party/blink/renderer/core/fileapi/file_reader_data.h"
+#include "third_party/blink/renderer/core/typed_arrays/dom_array_buffer.h"
 #include "third_party/blink/renderer/platform/bindings/script_wrappable.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
@@ -45,7 +49,6 @@ class Blob;
 class DOMArrayBuffer;
 class ExceptionState;
 class ExecutionContext;
-class FileReaderLoader;
 
 class FileReaderSync final : public ScriptWrappable {
   DEFINE_WRAPPERTYPEINFO();
@@ -65,8 +68,12 @@ class FileReaderSync final : public ScriptWrappable {
   String readAsText(Blob*, const String& encoding, ExceptionState&);
   String readAsDataURL(Blob*, ExceptionState&);
 
+  void Trace(Visitor* visitor) const override {
+    ScriptWrappable::Trace(visitor);
+  }
+
  private:
-  void StartLoading(FileReaderLoader&, const Blob&, ExceptionState&);
+  absl::optional<FileReaderData> Load(const Blob&, ExceptionState&);
 
   scoped_refptr<base::SingleThreadTaskRunner> task_runner_;
 };

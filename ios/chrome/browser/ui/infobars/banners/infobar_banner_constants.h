@@ -9,9 +9,14 @@
 
 // Accessibility identifier of the Banner View.
 extern NSString* const kInfobarBannerViewIdentifier;
+// Accessibility identifier of the Banner Labels Stack View.
+extern NSString* const kInfobarBannerLabelsStackViewIdentifier;
 // Accessibility identifier of the Banner Accept Button.
 extern NSString* const kInfobarBannerAcceptButtonIdentifier;
 // Accessibility identifier of the Banner Open Modal Button.
 extern NSString* const kInfobarBannerOpenModalButtonIdentifier;
+
+// Banner icon size.
+extern const CGFloat kInfobarBannerIconSize;
 
 #endif  // IOS_CHROME_BROWSER_UI_INFOBARS_BANNERS_INFOBAR_BANNER_CONSTANTS_H_

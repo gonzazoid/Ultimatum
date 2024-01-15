@@ -6,8 +6,8 @@
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
 #include "remoting/proto/video.pb.h"
 
 namespace remoting::protocol {
@@ -22,8 +22,7 @@ MonitoredVideoStub::MonitoredVideoStub(VideoStub* video_stub,
           FROM_HERE,
           connectivity_check_delay,
           this,
-          &MonitoredVideoStub::OnConnectivityCheckTimeout) {
-}
+          &MonitoredVideoStub::OnConnectivityCheckTimeout) {}
 
 MonitoredVideoStub::~MonitoredVideoStub() {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);

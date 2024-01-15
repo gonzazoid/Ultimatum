@@ -24,10 +24,29 @@ enum TabOpeningPostOpeningAction {
   NO_ACTION = 0,
   START_VOICE_SEARCH,
   START_QR_CODE_SCANNER,
-  START_LENS,
+  START_LENS_FROM_HOME_SCREEN_WIDGET,
+  START_LENS_FROM_APP_ICON_LONG_PRESS,
+  START_LENS_FROM_SPOTLIGHT,
   FOCUS_OMNIBOX,
   SHOW_DEFAULT_BROWSER_SETTINGS,
+  SEARCH_PASSWORDS,
+  OPEN_READING_LIST,
+  OPEN_BOOKMARKS,
+  OPEN_RECENT_TABS,
+  OPEN_TAB_GRID,
+  SET_CHROME_DEFAULT_BROWSER,
+  VIEW_HISTORY,
+  OPEN_PAYMENT_METHODS,
+  RUN_SAFETY_CHECK,
+  MANAGE_PASSWORDS,
+  MANAGE_SETTINGS,
+  OPEN_LATEST_TAB,
+  START_LENS_FROM_INTENTS,
+  OPEN_CLEAR_BROWSING_DATA_DIALOG,
   TAB_OPENING_POST_OPENING_ACTION_COUNT,
+  ADD_BOOKMARKS,
+  ADD_READING_LIST_ITEMS,
+  EXTERNAL_ACTION_SHOW_BROWSER_SETTINGS,
 };
 
 class GURL;
@@ -39,7 +58,8 @@ class GURL;
 // The URL that should be opened. This may not always be the same URL as the one
 // that was received. The reason for this is in the case of Universal Link
 // navigation where we may want to open up a fallback URL e.g., the New Tab Page
-// instead of the actual universal link.
+// instead of the actual universal link. If this URL is empty, a new tab page
+// will be created upon app open iff there is no active tab.
 @property(nonatomic, readonly, assign) const GURL& externalURL;
 
 // Original URL that should be opened. May or may not be the same as
@@ -56,15 +76,20 @@ class GURL;
 @property(nonatomic, assign) std::map<std::string, std::string>
     externalURLParams;
 
-// The mode in which the tab must be opened. Defaults to NORMAL, unless the flag
-// `kIOS3PIntentsInIncognito` is enabled, in which case it is UNDETERMINED.
-// TODO(crbug.com/1318750): Change this comment when flag is enabled by default.
+// The list of inputted URLs to process. These URLs aren't automatically opened.
+// Used in the context of Siri shortcuts that allow URL inputs that are not
+// meant to be opened in new tabs automatically.
+@property(nonatomic, readwrite, strong) NSArray<NSURL*>* inputURLs;
+
+// The mode in which the tab must be opened. Defaults to UNDETERMINED.
 @property(nonatomic, assign) ApplicationModeForTabOpening applicationMode;
 // Action to be taken after loading the URL.
 @property(nonatomic, readwrite, assign)
     TabOpeningPostOpeningAction postOpeningAction;
 // Boolean to track if a Payment Request response is requested at startup.
 @property(nonatomic, readwrite, assign) BOOL completePaymentRequest;
+// When this flag is set, attempt to open `externalURL` in an existing tab.
+@property(nonatomic, readwrite, assign) BOOL openExistingTab;
 // Text query that should be executed on startup.
 @property(nonatomic, readwrite, copy) NSString* textQuery;
 // Data for UIImage for image query that should be executed on startup.

@@ -4,23 +4,22 @@
 
 #import "ios/chrome/browser/ui/authentication/cells/table_view_account_item.h"
 
-#import "base/mac/foundation_util.h"
+#import "base/apple/foundation_util.h"
+#import "ios/chrome/browser/shared/ui/symbols/symbols.h"
+#import "ios/chrome/browser/shared/ui/util/uikit_ui_util.h"
 #import "ios/chrome/browser/ui/settings/cells/settings_cells_constants.h"
-#import "ios/chrome/browser/ui/util/uikit_ui_util.h"
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
 #import "ios/chrome/common/ui/table_view/table_view_cells_constants.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ios/chrome/grit/ios_strings.h"
+#import "ui/base/l10n/l10n_util_mac.h"
 
 namespace {
 
 // Padding used between the text and error icon.
-const CGFloat kHorizontalPaddingBetweenTextAndError = 5;
+constexpr CGFloat kHorizontalPaddingBetweenTextAndError = 5;
 
 // Size of the error icon image.
-const CGFloat KErrorIconImageSize = 18;
+constexpr CGFloat KErrorIconImageSize = 22.;
 
 }  // namespace
 
@@ -46,10 +45,9 @@ const CGFloat KErrorIconImageSize = 18;
   cell.textLabel.text = self.text;
   cell.detailTextLabel.text = self.detailText;
   if (self.shouldDisplayError) {
-    cell.errorIcon.image = [[UIImage imageNamed:@"settings_error"]
-        imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
-    cell.errorIcon.tintColor = [UIColor colorNamed:kRedColor];
-    cell.detailTextLabel.textColor = [UIColor colorNamed:kRedColor];
+    cell.errorIcon.image =
+        DefaultSymbolWithPointSize(kErrorCircleFillSymbol, KErrorIconImageSize);
+    cell.errorIcon.tintColor = [UIColor colorNamed:kRed500Color];
   } else {
     cell.errorIcon.image = nil;
     cell.detailTextLabel.textColor = [UIColor colorNamed:kTextSecondaryColor];
@@ -59,14 +57,14 @@ const CGFloat KErrorIconImageSize = 18;
   if (self.mode != TableViewAccountModeDisabled) {
     cell.contentView.alpha = 1;
     UIImageView* accessoryImage =
-        base::mac::ObjCCastStrict<UIImageView>(cell.accessoryView);
+        base::apple::ObjCCastStrict<UIImageView>(cell.accessoryView);
     accessoryImage.tintColor =
         [accessoryImage.tintColor colorWithAlphaComponent:1];
   } else {
     cell.userInteractionEnabled = NO;
     cell.contentView.alpha = 0.5;
     UIImageView* accessoryImage =
-        base::mac::ObjCCastStrict<UIImageView>(cell.accessoryView);
+        base::apple::ObjCCastStrict<UIImageView>(cell.accessoryView);
     accessoryImage.tintColor =
         [accessoryImage.tintColor colorWithAlphaComponent:0.5];
   }
@@ -77,9 +75,6 @@ const CGFloat KErrorIconImageSize = 18;
 @interface TableViewAccountCell () {
   // Constraint used to set padding between image and text when image exists.
   NSLayoutConstraint* _textLeadingAnchorConstraint;
-
-  // Constraint used to set the errorIcon width depending on it's existence.
-  NSLayoutConstraint* _errorIconWidthConstraint;
 }
 @end
 
@@ -116,6 +111,11 @@ const CGFloat KErrorIconImageSize = 18;
 
   _errorIcon = [[UIImageView alloc] init];
   _errorIcon.translatesAutoresizingMaskIntoConstraints = NO;
+  [_errorIcon setContentHuggingPriority:UILayoutPriorityRequired
+                                forAxis:UILayoutConstraintAxisHorizontal];
+  [_errorIcon
+      setContentCompressionResistancePriority:UILayoutPriorityRequired
+                                      forAxis:UILayoutConstraintAxisHorizontal];
   [contentView addSubview:_errorIcon];
 
   _textLabel = [[UILabel alloc] init];
@@ -128,7 +128,7 @@ const CGFloat KErrorIconImageSize = 18;
   _detailTextLabel = [[UILabel alloc] init];
   _detailTextLabel.translatesAutoresizingMaskIntoConstraints = NO;
   _detailTextLabel.font =
-      [UIFont preferredFontForTextStyle:kTableViewSublabelFontStyle];
+      [UIFont preferredFontForTextStyle:UIFontTextStyleFootnote];
   _detailTextLabel.adjustsFontForContentSizeCategory = YES;
   _detailTextLabel.textColor = [UIColor colorNamed:kTextSecondaryColor];
   [contentView addSubview:_detailTextLabel];
@@ -145,8 +145,6 @@ const CGFloat KErrorIconImageSize = 18;
 
   _textLeadingAnchorConstraint = [_textLabel.leadingAnchor
       constraintEqualToAnchor:_imageView.trailingAnchor];
-  _errorIconWidthConstraint =
-      [_errorIcon.widthAnchor constraintEqualToConstant:KErrorIconImageSize];
   [NSLayoutConstraint activateConstraints:@[
     // Set leading anchors.
     [_imageView.leadingAnchor
@@ -159,8 +157,6 @@ const CGFloat KErrorIconImageSize = 18;
     // Update the resize if this changes.
     [_imageView.widthAnchor constraintEqualToConstant:kTableViewIconImageSize],
     [_imageView.heightAnchor constraintEqualToAnchor:_imageView.widthAnchor],
-    _errorIconWidthConstraint,
-    [_errorIcon.heightAnchor constraintEqualToAnchor:_errorIcon.widthAnchor],
 
     // Set vertical anchors.
     [_imageView.centerYAnchor
@@ -193,10 +189,11 @@ const CGFloat KErrorIconImageSize = 18;
     // Set trailing anchors.
     [_errorIcon.trailingAnchor
         constraintEqualToAnchor:contentView.trailingAnchor
-                       constant:-kTableViewTrailingContentPadding],
+                       constant:-kTableViewHorizontalSpacing],
     [_detailTextLabel.trailingAnchor
-        constraintEqualToAnchor:_errorIcon.leadingAnchor
-                       constant:-kHorizontalPaddingBetweenTextAndError],
+        constraintLessThanOrEqualToAnchor:_errorIcon.leadingAnchor
+                                 constant:
+                                     -kHorizontalPaddingBetweenTextAndError],
     _textLeadingAnchorConstraint,
     [_textLabel.trailingAnchor
         constraintLessThanOrEqualToAnchor:_errorIcon.leadingAnchor
@@ -226,12 +223,6 @@ const CGFloat KErrorIconImageSize = 18;
   } else {
     _textLeadingAnchorConstraint.constant = 0;
   }
-
-  if (_errorIcon.image) {
-    _errorIconWidthConstraint.constant = KErrorIconImageSize;
-  } else {
-    _errorIconWidthConstraint.constant = 0;
-  }
 }
 
 #pragma mark - UITableViewCell
@@ -247,7 +238,7 @@ const CGFloat KErrorIconImageSize = 18;
   self.userInteractionEnabled = YES;
   self.contentView.alpha = 1;
   UIImageView* accessoryImage =
-      base::mac::ObjCCastStrict<UIImageView>(self.accessoryView);
+      base::apple::ObjCCastStrict<UIImageView>(self.accessoryView);
   accessoryImage.tintColor =
       [accessoryImage.tintColor colorWithAlphaComponent:1];
 }
@@ -259,6 +250,13 @@ const CGFloat KErrorIconImageSize = 18;
 }
 
 - (NSString*)accessibilityValue {
+  if (self.errorIcon.image != nil) {
+    return
+        [NSString stringWithFormat:
+                      @"%@, %@", self.detailTextLabel.text,
+                      l10n_util::GetNSString(
+                          IDS_IOS_ITEM_ACCOUNT_ERROR_BADGE_ACCESSIBILITY_HINT)];
+  }
   return self.detailTextLabel.text;
 }
 

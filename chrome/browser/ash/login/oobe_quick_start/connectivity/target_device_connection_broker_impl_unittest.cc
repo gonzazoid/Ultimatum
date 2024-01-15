@@ -6,12 +6,24 @@
 
 #include <array>
 
-#include "base/bind.h"
+#include "base/base64.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
+#include "base/test/metrics/histogram_tester.h"
 #include "base/test/task_environment.h"
+#include "base/time/time.h"
+#include "chrome/browser/ash/login/oobe_quick_start/connectivity/advertising_id.h"
+#include "chrome/browser/ash/login/oobe_quick_start/connectivity/fake_connection.h"
 #include "chrome/browser/ash/login/oobe_quick_start/connectivity/fast_pair_advertiser.h"
-#include "chrome/browser/ash/login/oobe_quick_start/connectivity/random_session_id.h"
+#include "chrome/browser/ash/login/oobe_quick_start/connectivity/session_context.h"
+#include "chrome/browser/ash/login/oobe_quick_start/connectivity/target_device_connection_broker.h"
 #include "chrome/browser/ash/login/oobe_quick_start/connectivity/target_device_connection_broker_factory.h"
+#include "chrome/browser/ash/nearby/fake_quick_start_connectivity_service.h"
+#include "chrome/browser/nearby_sharing/fake_nearby_connection.h"
+#include "chrome/browser/nearby_sharing/public/cpp/fake_nearby_connections_manager.h"
+#include "chrome/browser/nearby_sharing/public/cpp/nearby_connections_manager.h"
+#include "chromeos/ash/components/quick_start/fake_quick_start_decoder.h"
 #include "chromeos/constants/devicetype.h"
 #include "device/bluetooth/bluetooth_adapter_factory.h"
 #include "device/bluetooth/test/mock_bluetooth_adapter.h"
@@ -23,11 +35,49 @@ namespace ash::quick_start {
 namespace {
 
 constexpr size_t kMaxEndpointInfoDisplayNameLength = 18;
+// Default verification style 5 = "OUT_OF_BAND", which tells the phone to scan
+// for the QR code.
+constexpr uint8_t kEndpointInfoVerificationStyle = 5u;
+constexpr uint8_t kEndpointInfoDeviceType = 8u;
 
-// 10 random bytes to use as the RandomSessionId. The corresponding display name
-// code is (0x135e % 1000) = 958.
-constexpr std::array<uint8_t, 10> kRandomSessionId = {
-    0x13, 0x5e, 0xfb, 0x0f, 0x3a, 0x20, 0x06, 0xbd, 0xbf, 0x95};
+constexpr size_t kEndpointInfoAdvertisingIdLength = 10;
+
+// 32 random bytes to use as the shared secret.
+constexpr std::array<uint8_t, 32> kSharedSecret = {
+    0x54, 0xbd, 0x40, 0xcf, 0x8a, 0x7c, 0x2f, 0x6a, 0xca, 0x15, 0x59,
+    0xcf, 0xf3, 0xeb, 0x31, 0x08, 0x90, 0x73, 0xef, 0xda, 0x87, 0xd4,
+    0x23, 0xc0, 0x55, 0xd5, 0x83, 0x5b, 0x04, 0x28, 0x49, 0xf2};
+
+// 32 random bytes to use as the secondary shared secret.
+constexpr std::array<uint8_t, 32> kSecondarySharedSecret = {
+    0x50, 0xfe, 0xd7, 0x14, 0x1c, 0x93, 0xf6, 0x92, 0xaf, 0x7b, 0x4d,
+    0xab, 0xa0, 0xe3, 0xfc, 0xd3, 0x5a, 0x04, 0x01, 0x63, 0xf6, 0xf5,
+    0xeb, 0x40, 0x7f, 0x4b, 0xac, 0xe4, 0xd1, 0xbf, 0x20, 0x19};
+
+// random int with 64 bits to use as SessionId.
+constexpr uint64_t kSessionId = 184467440;
+
+// Arbitrary string to use as the endpoint id.
+constexpr char kEndpointId[] = "endpoint_id";
+
+// Arbitrary string to use as the connection's authentication token when
+// deriving PIN.
+constexpr char kAuthenticationToken[] = "auth_token";
+
+// Expected PIN corresponding to |kAuthenticationToken|.
+constexpr char kAuthenticationTokenPin[] = "6229";
+
+constexpr base::TimeDelta kNearbyConnectionsAdvertisementAfterUpdateTimeout =
+    base::Seconds(30);
+
+// Perform base64 decoding with the kForgiving option to allow for missing
+// padding.
+std::vector<uint8_t> Base64DecodeForgiving(base::span<uint8_t> input) {
+  std::string input_str(input.begin(), input.end());
+  std::string output;
+  base::Base64Decode(input_str, &output, base::Base64DecodePolicy::kForgiving);
+  return std::vector<uint8_t>(output.begin(), output.end());
+}
 
 struct EndpointInfoTestCase {
   chromeos::DeviceType device_type;
@@ -35,11 +85,12 @@ struct EndpointInfoTestCase {
 };
 
 const EndpointInfoTestCase kEndpointInfoTestCases[] = {
-    {chromeos::DeviceType::kChromebook, "Chromebook (958)"},
-    {chromeos::DeviceType::kChromebox, "Chromebox (958)"},
-    {chromeos::DeviceType::kChromebit, "Chromebit (958)"},
-    {chromeos::DeviceType::kChromebase, "Chromebase (958)"},
-    {chromeos::DeviceType::kUnknown, "Chrome devic (958)"},
+    {chromeos::DeviceType::kChromebook, "Chromebook"},
+    {chromeos::DeviceType::kChromebox, "Chromebox"},
+    {chromeos::DeviceType::kChromebit, "Chromebit"},
+    {chromeos::DeviceType::kChromebase, "Chromebase"},
+    {chromeos::DeviceType::kUnknown,
+     "Chrome devic"},  // The "e" is truncated to fit within endpoint bytes.
 };
 
 using testing::NiceMock;
@@ -78,8 +129,9 @@ class DeferredBluetoothAdapterFactoryWrapper
     : public TargetDeviceConnectionBrokerImpl::BluetoothAdapterFactoryWrapper {
  public:
   void ReturnAdapter() {
-    if (!adapter_callback_)
+    if (!adapter_callback_) {
       return;
+    }
 
     device::BluetoothAdapterFactory::Get()->GetAdapter(
         std::move(adapter_callback_));
@@ -113,12 +165,14 @@ class FakeFastPairAdvertiser : public FastPairAdvertiser {
 
   void StartAdvertising(base::OnceCallback<void()> callback,
                         base::OnceCallback<void()> error_callback,
-                        const RandomSessionId& random_session_id) override {
+                        const AdvertisingId& advertising_id,
+                        bool use_pin_authentication) override {
     ++start_advertising_call_count_;
-    if (should_succeed_on_start_)
+    if (should_succeed_on_start_) {
       std::move(callback).Run();
-    else
+    } else {
       std::move(error_callback).Run();
+    }
   }
 
   void StopAdvertising(base::OnceCallback<void()> callback) override {
@@ -178,11 +232,43 @@ class FakeFastPairAdvertiserFactory : public FastPairAdvertiser::Factory {
   bool StopAdvertisingCalled() { return stop_advertising_called_; }
 
  private:
-  FakeFastPairAdvertiser* last_fake_fast_pair_advertiser_ = nullptr;
+  raw_ptr<FakeFastPairAdvertiser> last_fake_fast_pair_advertiser_ = nullptr;
   bool should_succeed_on_start_ = false;
   bool stop_advertising_called_ = false;
   bool fast_pair_advertiser_destroyed_ = false;
   base::WeakPtrFactory<FakeFastPairAdvertiserFactory> weak_ptr_factory_{this};
+};
+
+class FakeConnectionLifecycleListener
+    : public TargetDeviceConnectionBroker::ConnectionLifecycleListener {
+ public:
+  void OnPinVerificationRequested(const std::string& pin) override {
+    pin_ = pin;
+  }
+
+  void OnConnectionAuthenticated(
+      base::WeakPtr<TargetDeviceConnectionBroker::AuthenticatedConnection>
+          connection) override {
+    connection_authenticated_ = true;
+    authenticated_connection_ = connection;
+  }
+
+  void OnConnectionRejected() override { connection_rejected_ = true; }
+
+  void OnConnectionClosed(
+      TargetDeviceConnectionBroker::ConnectionClosedReason reason) override {
+    connection_closed_ = true;
+    connection_closed_reason_ = reason;
+  }
+
+  std::optional<std::string> pin_;
+  bool connection_authenticated_ = false;
+  base::WeakPtr<TargetDeviceConnectionBroker::AuthenticatedConnection>
+      authenticated_connection_;
+  bool connection_rejected_ = false;
+  bool connection_closed_ = false;
+  TargetDeviceConnectionBroker::ConnectionClosedReason
+      connection_closed_reason_;
 };
 
 }  // namespace
@@ -211,15 +297,27 @@ class TargetDeviceConnectionBrokerImplTest : public testing::Test {
         set_bluetooth_adapter_factory_wrapper_for_testing(
             &bluetooth_adapter_factory_wrapper_);
 
+    fake_quick_start_connectivity_service_ =
+        std::make_unique<FakeQuickStartConnectivityService>();
+    fake_nearby_connections_manager_ = fake_quick_start_connectivity_service_
+                                           ->GetFakeNearbyConnectionsManager();
+
     CreateConnectionBroker();
     SetFakeFastPairAdvertiserFactory(/*should_succeed_on_start=*/true);
+    fake_nearby_connections_manager_->SetAuthenticationToken(
+        kEndpointId, kAuthenticationToken);
   }
 
-  void CreateConnectionBroker() {
-    RandomSessionId session_id(kRandomSessionId);
-    connection_broker_ =
-        ash::quick_start::TargetDeviceConnectionBrokerFactory::Create(
-            session_id);
+  void CreateConnectionBroker(bool is_resume_after_update = false) {
+    auto connection_factory = std::make_unique<FakeConnection::Factory>();
+    connection_factory_ = connection_factory.get();
+    advertising_id_ = AdvertisingId();
+    auto session_context =
+        SessionContext(kSessionId, advertising_id_, kSharedSecret,
+                       kSecondarySharedSecret, is_resume_after_update);
+    connection_broker_ = std::make_unique<TargetDeviceConnectionBrokerImpl>(
+        session_context, fake_quick_start_connectivity_service_.get(),
+        std::move(connection_factory));
   }
 
   void FinishFetchingBluetoothAdapter() {
@@ -256,11 +354,13 @@ class TargetDeviceConnectionBrokerImplTest : public testing::Test {
         ->GenerateEndpointInfo();
   }
 
-  const RandomSessionId& GetRandomSessionId() {
+  std::string DerivePin() {
     return static_cast<TargetDeviceConnectionBrokerImpl*>(
                connection_broker_.get())
-        ->random_session_id_;
+        ->DerivePin(kAuthenticationToken);
   }
+
+  FakeConnection* connection() { return connection_factory_->instance_.get(); }
 
  protected:
   bool is_bluetooth_powered_ = true;
@@ -268,11 +368,23 @@ class TargetDeviceConnectionBrokerImplTest : public testing::Test {
   bool start_advertising_callback_called_ = false;
   bool start_advertising_callback_success_ = false;
   bool stop_advertising_callback_called_ = false;
+  AdvertisingId advertising_id_;
   scoped_refptr<NiceMock<device::MockBluetoothAdapter>> mock_bluetooth_adapter_;
+  std::unique_ptr<FakeQuickStartConnectivityService>
+      fake_quick_start_connectivity_service_;
+  raw_ptr<FakeNearbyConnectionsManager> fake_nearby_connections_manager_;
+  FakeNearbyConnection fake_nearby_connection_;
   std::unique_ptr<TargetDeviceConnectionBroker> connection_broker_;
   std::unique_ptr<FakeFastPairAdvertiserFactory> fast_pair_advertiser_factory_;
   DeferredBluetoothAdapterFactoryWrapper bluetooth_adapter_factory_wrapper_;
-  base::test::SingleThreadTaskEnvironment task_environment_;
+  base::test::SingleThreadTaskEnvironment task_environment_{
+      base::test::TaskEnvironment::TimeSource::MOCK_TIME};
+  FakeConnectionLifecycleListener connection_lifecycle_listener_;
+  raw_ptr<FakeConnection::Factory> connection_factory_ = nullptr;
+  base::HistogramTester histogram_tester_;
+
+  std::unique_ptr<FakeQuickStartDecoder> fake_quick_start_decoder_ =
+      std::make_unique<FakeQuickStartDecoder>();
   base::WeakPtrFactory<TargetDeviceConnectionBrokerImplTest> weak_ptr_factory_{
       this};
 };
@@ -309,7 +421,7 @@ TEST_F(TargetDeviceConnectionBrokerImplTest, StartFastPairAdvertising) {
   EXPECT_EQ(0u, fast_pair_advertiser_factory_->StartAdvertisingCount());
 
   connection_broker_->StartAdvertising(
-      nullptr,
+      &connection_lifecycle_listener_, /* use_pin_authentication= */ false,
       base::BindOnce(
           &TargetDeviceConnectionBrokerImplTest::StartAdvertisingResultCallback,
           weak_ptr_factory_.GetWeakPtr()));
@@ -323,7 +435,7 @@ TEST_F(TargetDeviceConnectionBrokerImplTest,
   EXPECT_EQ(0u, fast_pair_advertiser_factory_->StartAdvertisingCount());
 
   connection_broker_->StartAdvertising(
-      nullptr,
+      &connection_lifecycle_listener_, /* use_pin_authentication= */ false,
       base::BindOnce(
           &TargetDeviceConnectionBrokerImplTest::StartAdvertisingResultCallback,
           weak_ptr_factory_.GetWeakPtr()));
@@ -343,7 +455,7 @@ TEST_F(TargetDeviceConnectionBrokerImplTest,
   EXPECT_EQ(0u, fast_pair_advertiser_factory_->StartAdvertisingCount());
 
   connection_broker_->StartAdvertising(
-      nullptr,
+      &connection_lifecycle_listener_, /* use_pin_authentication= */ false,
       base::BindOnce(
           &TargetDeviceConnectionBrokerImplTest::StartAdvertisingResultCallback,
           weak_ptr_factory_.GetWeakPtr()));
@@ -359,7 +471,7 @@ TEST_F(TargetDeviceConnectionBrokerImplTest,
   EXPECT_EQ(0u, fast_pair_advertiser_factory_->StartAdvertisingCount());
 
   connection_broker_->StartAdvertising(
-      nullptr,
+      &connection_lifecycle_listener_, /* use_pin_authentication= */ false,
       base::BindOnce(
           &TargetDeviceConnectionBrokerImplTest::StartAdvertisingResultCallback,
           weak_ptr_factory_.GetWeakPtr()));
@@ -375,7 +487,7 @@ TEST_F(TargetDeviceConnectionBrokerImplTest,
   EXPECT_EQ(0u, fast_pair_advertiser_factory_->StartAdvertisingCount());
 
   connection_broker_->StartAdvertising(
-      nullptr,
+      &connection_lifecycle_listener_, /* use_pin_authentication= */ false,
       base::BindOnce(
           &TargetDeviceConnectionBrokerImplTest::StartAdvertisingResultCallback,
           weak_ptr_factory_.GetWeakPtr()));
@@ -401,14 +513,14 @@ TEST_F(TargetDeviceConnectionBrokerImplTest,
 TEST_F(TargetDeviceConnectionBrokerImplTest,
        StopFastPairAdvertising_BeforeBTAdapterInitialized) {
   connection_broker_->StartAdvertising(
-      nullptr,
+      &connection_lifecycle_listener_, /* use_pin_authentication= */ false,
       base::BindOnce(
           &TargetDeviceConnectionBrokerImplTest::StartAdvertisingResultCallback,
           weak_ptr_factory_.GetWeakPtr()));
 
   // If the Bluetooth adapter hasn't finished initializing, then
-  // StartAdvertisings never completed, and StopAdvertising should not propagate
-  // to the fast pair advertiser.
+  // StartAdvertisings never completed, and StopAdvertising should not
+  // propagate to the fast pair advertiser.
   connection_broker_->StopAdvertising(base::BindOnce(
       &TargetDeviceConnectionBrokerImplTest::StopAdvertisingCallback,
       weak_ptr_factory_.GetWeakPtr()));
@@ -421,7 +533,7 @@ TEST_F(TargetDeviceConnectionBrokerImplTest, StopFastPairAdvertising) {
   FinishFetchingBluetoothAdapter();
 
   connection_broker_->StartAdvertising(
-      nullptr,
+      &connection_lifecycle_listener_, /* use_pin_authentication= */ false,
       base::BindOnce(
           &TargetDeviceConnectionBrokerImplTest::StartAdvertisingResultCallback,
           weak_ptr_factory_.GetWeakPtr()));
@@ -466,45 +578,321 @@ TEST_P(TargetDeviceConnectionBrokerImplEndpointInfoTest, GenerateEndpointInfo) {
   // bytes.
   ASSERT_LT(i + j, endpoint_info.size());
   if (j < kMaxEndpointInfoDisplayNameLength) {
-    // Move past the null-terminator if the display name length is less than the
-    // max.
+    // Move past the null-terminator if the display name length is less than
+    // the max.
     ASSERT_EQ(0u, endpoint_info[i + j]);
     j++;
   }
   std::string display_name =
       std::string(display_name_bytes.begin(), display_name_bytes.end());
-  EXPECT_EQ(GetParam().expected_display_name, display_name);
+  std::string expected_display_name = GetParam().expected_display_name + " (" +
+                                      advertising_id_.GetDisplayCode() + ")";
+  EXPECT_EQ(expected_display_name, display_name);
   i += j;
 
-  ASSERT_GT(endpoint_info.size(), i);
-  uint8_t verification_style = endpoint_info[i];
-  EXPECT_EQ(0u, verification_style);
+  // The remaining advertising info fields are base64-encoded. Decode them
+  // before proceeding.
+  std::vector<uint8_t> advertising_info = Base64DecodeForgiving(
+      base::span<uint8_t>(endpoint_info.begin() + i, endpoint_info.end()));
+  ASSERT_EQ(advertising_info.size(), 60u);
+  i = 0;
+
+  uint8_t verification_style = advertising_info[i];
+  EXPECT_EQ(kEndpointInfoVerificationStyle, verification_style);
   i++;
 
-  ASSERT_GT(endpoint_info.size(), i);
-  uint8_t device_type = endpoint_info[i];
-  EXPECT_EQ(0u, device_type);
+  uint8_t device_type = advertising_info[i];
+  EXPECT_EQ(kEndpointInfoDeviceType, device_type);
   i++;
 
-  // Parse the fixed-length RandomSessionId.
-  ASSERT_GE(endpoint_info.size(), i + RandomSessionId::kLength);
-  base::span<const uint8_t, RandomSessionId::kLength> session_id_bytes =
-      GetRandomSessionId().AsBytes();
-  for (size_t k = i; k < i + RandomSessionId::kLength; k++) {
-    EXPECT_EQ(session_id_bytes[k - i], endpoint_info[k]);
+  // Parse the AdvertisingId. The field is fixed-width, but contains a
+  // string that may not occupy the full length, in which case there will be a
+  // null terminator.
+  std::string advertising_id = advertising_id_.ToString();
+  for (size_t k = i; k < i + kEndpointInfoAdvertisingIdLength; k++) {
+    if (advertising_info[k] == 0) {
+      break;
+    }
+    EXPECT_EQ(advertising_id[k - i], advertising_info[k]);
   }
-  i += RandomSessionId::kLength;
+  i += kEndpointInfoAdvertisingIdLength;
 
-  ASSERT_GT(endpoint_info.size(), i);
-  uint8_t is_quick_start = endpoint_info[i];
+  uint8_t is_quick_start = advertising_info[i];
   EXPECT_EQ(1u, is_quick_start);
+  i++;
 
-  // There should be no more endpoint info after the isQuickStart field.
-  EXPECT_EQ(endpoint_info.size(), i + 1);
+  uint8_t prefer_target_user_verification = advertising_info[i];
+  EXPECT_EQ(0u, prefer_target_user_verification);
 }
 
 INSTANTIATE_TEST_SUITE_P(TargetDeviceConnectionBrokerImplTest,
                          TargetDeviceConnectionBrokerImplEndpointInfoTest,
                          testing::ValuesIn(kEndpointInfoTestCases));
+
+TEST_F(TargetDeviceConnectionBrokerImplTest,
+       StartNearbyConnectionsAdvertising) {
+  FinishFetchingBluetoothAdapter();
+  EXPECT_FALSE(fake_nearby_connections_manager_->IsAdvertising());
+
+  connection_broker_->StartAdvertising(
+      &connection_lifecycle_listener_, /* use_pin_authentication= */ false,
+      base::BindOnce(
+          &TargetDeviceConnectionBrokerImplTest::StartAdvertisingResultCallback,
+          weak_ptr_factory_.GetWeakPtr()));
+  EXPECT_TRUE(fake_nearby_connections_manager_->IsAdvertising());
+  EXPECT_EQ(PowerLevel::kHighPower,
+            fake_nearby_connections_manager_->advertising_power_level());
+  EXPECT_TRUE(start_advertising_callback_called_);
+  EXPECT_TRUE(start_advertising_callback_success_);
+}
+
+TEST_F(TargetDeviceConnectionBrokerImplTest,
+       StartNearbyConnectionsAdvertisingError) {
+  FinishFetchingBluetoothAdapter();
+  FakeNearbyConnectionsManager::ConnectionsCallback callback =
+      fake_nearby_connections_manager_->GetStartAdvertisingCallback();
+  EXPECT_FALSE(fake_nearby_connections_manager_->IsAdvertising());
+
+  connection_broker_->StartAdvertising(
+      &connection_lifecycle_listener_, /* use_pin_authentication= */ false,
+      base::BindOnce(
+          &TargetDeviceConnectionBrokerImplTest::StartAdvertisingResultCallback,
+          weak_ptr_factory_.GetWeakPtr()));
+  EXPECT_TRUE(fake_nearby_connections_manager_->IsAdvertising());
+  EXPECT_FALSE(start_advertising_callback_called_);
+
+  std::move(callback).Run(NearbyConnectionsManager::ConnectionsStatus::kError);
+  EXPECT_TRUE(start_advertising_callback_called_);
+  EXPECT_FALSE(start_advertising_callback_success_);
+}
+
+TEST_F(TargetDeviceConnectionBrokerImplTest, DerivePin) {
+  EXPECT_EQ(kAuthenticationTokenPin, DerivePin());
+}
+
+TEST_F(TargetDeviceConnectionBrokerImplTest, Handshake_Success) {
+  FinishFetchingBluetoothAdapter();
+  connection_broker_->StartAdvertising(&connection_lifecycle_listener_,
+                                       /* use_pin_authentication= */ false,
+                                       base::DoNothing());
+  NearbyConnectionsManager::IncomingConnectionListener*
+      incoming_connection_listener =
+          fake_nearby_connections_manager_->GetAdvertisingListener();
+  ASSERT_TRUE(incoming_connection_listener);
+  incoming_connection_listener->OnIncomingConnectionInitiated(
+      kEndpointId, std::vector<uint8_t>());
+  incoming_connection_listener->OnIncomingConnectionAccepted(
+      kEndpointId, std::vector<uint8_t>(), &fake_nearby_connection_);
+
+  ASSERT_TRUE(connection());
+  EXPECT_TRUE(connection()->WasHandshakeInitiated());
+  EXPECT_FALSE(connection_lifecycle_listener_.connection_authenticated_);
+
+  connection()->HandleHandshakeResult(/*success=*/true);
+  EXPECT_TRUE(connection_lifecycle_listener_.connection_authenticated_);
+}
+
+TEST_F(TargetDeviceConnectionBrokerImplTest, Handshake_Failed) {
+  FinishFetchingBluetoothAdapter();
+  connection_broker_->StartAdvertising(&connection_lifecycle_listener_,
+                                       /* use_pin_authentication= */ false,
+                                       base::DoNothing());
+  NearbyConnectionsManager::IncomingConnectionListener*
+      incoming_connection_listener =
+          fake_nearby_connections_manager_->GetAdvertisingListener();
+  ASSERT_TRUE(incoming_connection_listener);
+  incoming_connection_listener->OnIncomingConnectionInitiated(
+      kEndpointId, std::vector<uint8_t>());
+  incoming_connection_listener->OnIncomingConnectionAccepted(
+      kEndpointId, std::vector<uint8_t>(), &fake_nearby_connection_);
+
+  ASSERT_TRUE(connection());
+  EXPECT_TRUE(connection()->WasHandshakeInitiated());
+  EXPECT_FALSE(connection_lifecycle_listener_.connection_authenticated_);
+
+  connection()->HandleHandshakeResult(/*success=*/false);
+  EXPECT_FALSE(connection_lifecycle_listener_.connection_authenticated_);
+}
+
+TEST_F(TargetDeviceConnectionBrokerImplTest,
+       ConnectionIsAuthenticatedWithPinMethod) {
+  FinishFetchingBluetoothAdapter();
+  connection_broker_->StartAdvertising(&connection_lifecycle_listener_,
+                                       /* use_pin_authentication= */ true,
+                                       base::DoNothing());
+  NearbyConnectionsManager::IncomingConnectionListener*
+      incoming_connection_listener =
+          fake_nearby_connections_manager_->GetAdvertisingListener();
+  ASSERT_TRUE(incoming_connection_listener);
+  incoming_connection_listener->OnIncomingConnectionInitiated(
+      kEndpointId, std::vector<uint8_t>());
+  incoming_connection_listener->OnIncomingConnectionAccepted(
+      kEndpointId, std::vector<uint8_t>(), &fake_nearby_connection_);
+
+  ASSERT_TRUE(connection());
+  EXPECT_TRUE(connection_lifecycle_listener_.connection_authenticated_);
+  EXPECT_NE(connection_lifecycle_listener_.authenticated_connection_, nullptr);
+}
+
+TEST_F(TargetDeviceConnectionBrokerImplTest,
+       ConnectionClosedEventIssuesCallback) {
+  FinishFetchingBluetoothAdapter();
+  connection_broker_->StartAdvertising(&connection_lifecycle_listener_,
+                                       /* use_pin_authentication= */ false,
+                                       base::DoNothing());
+  NearbyConnectionsManager::IncomingConnectionListener*
+      incoming_connection_listener =
+          fake_nearby_connections_manager_->GetAdvertisingListener();
+  ASSERT_TRUE(incoming_connection_listener);
+  incoming_connection_listener->OnIncomingConnectionInitiated(
+      kEndpointId, std::vector<uint8_t>());
+  incoming_connection_listener->OnIncomingConnectionAccepted(
+      kEndpointId, std::vector<uint8_t>(), &fake_nearby_connection_);
+
+  ASSERT_TRUE(connection());
+
+  connection()->Close(
+      TargetDeviceConnectionBroker::ConnectionClosedReason::kConnectionLost);
+
+  ASSERT_TRUE(connection_lifecycle_listener_.connection_closed_);
+  ASSERT_EQ(
+      connection_lifecycle_listener_.connection_closed_reason_,
+      TargetDeviceConnectionBroker::ConnectionClosedReason::kConnectionLost);
+}
+
+TEST_F(TargetDeviceConnectionBrokerImplTest,
+       StartAdvertisingWhenResumeAfterUpdate) {
+  CreateConnectionBroker(/*is_resume_after_update=*/true);
+  FinishFetchingBluetoothAdapter();
+  EXPECT_EQ(0u, fast_pair_advertiser_factory_->StartAdvertisingCount());
+  EXPECT_FALSE(fake_nearby_connections_manager_->IsAdvertising());
+
+  connection_broker_->StartAdvertising(
+      &connection_lifecycle_listener_, /* use_pin_authentication= */ false,
+      base::BindOnce(
+          &TargetDeviceConnectionBrokerImplTest::StartAdvertisingResultCallback,
+          weak_ptr_factory_.GetWeakPtr()));
+
+  // When the target device resumes the connection after an update, it should
+  // begin Nearby Connections advertising without ever Fast Pair advertising.
+  EXPECT_EQ(0u, fast_pair_advertiser_factory_->StartAdvertisingCount());
+  EXPECT_TRUE(fake_nearby_connections_manager_->IsAdvertising());
+  EXPECT_EQ(PowerLevel::kHighPower,
+            fake_nearby_connections_manager_->advertising_power_level());
+  EXPECT_TRUE(start_advertising_callback_called_);
+  EXPECT_TRUE(start_advertising_callback_success_);
+}
+
+TEST_F(TargetDeviceConnectionBrokerImplTest,
+       HandshakeInitiatedWhenResumeAfterUpdate_UseQRCodeAuthentication) {
+  CreateConnectionBroker(/*is_resume_after_update=*/true);
+  FinishFetchingBluetoothAdapter();
+  connection_broker_->StartAdvertising(&connection_lifecycle_listener_,
+                                       /* use_pin_authentication= */ false,
+                                       base::DoNothing());
+  NearbyConnectionsManager::IncomingConnectionListener*
+      incoming_connection_listener =
+          fake_nearby_connections_manager_->GetAdvertisingListener();
+  ASSERT_TRUE(incoming_connection_listener);
+  incoming_connection_listener->OnIncomingConnectionInitiated(
+      kEndpointId, std::vector<uint8_t>());
+  // On the first attempt to resume the connection after an update, no QR code
+  // or PIN should be generated on connection initiated.
+  incoming_connection_listener->OnIncomingConnectionAccepted(
+      kEndpointId, std::vector<uint8_t>(), &fake_nearby_connection_);
+
+  ASSERT_TRUE(connection());
+  EXPECT_TRUE(connection()->WasHandshakeInitiated());
+}
+
+TEST_F(TargetDeviceConnectionBrokerImplTest,
+       HandshakeInitiatedWhenResumeAfterUpdate_UsePinAuthentication) {
+  CreateConnectionBroker(/*is_resume_after_update=*/true);
+  FinishFetchingBluetoothAdapter();
+  connection_broker_->StartAdvertising(&connection_lifecycle_listener_,
+                                       /* use_pin_authentication= */ true,
+                                       base::DoNothing());
+  ASSERT_FALSE(connection_lifecycle_listener_.pin_);
+  NearbyConnectionsManager::IncomingConnectionListener*
+      incoming_connection_listener =
+          fake_nearby_connections_manager_->GetAdvertisingListener();
+  ASSERT_TRUE(incoming_connection_listener);
+  incoming_connection_listener->OnIncomingConnectionInitiated(
+      kEndpointId, std::vector<uint8_t>());
+  // On the first attempt to resume the connection after an update, no QR code
+  // or PIN should be generated on connection initiated.
+  EXPECT_FALSE(connection_lifecycle_listener_.pin_);
+  incoming_connection_listener->OnIncomingConnectionAccepted(
+      kEndpointId, std::vector<uint8_t>(), &fake_nearby_connection_);
+
+  ASSERT_TRUE(connection());
+  EXPECT_TRUE(connection()->WasHandshakeInitiated());
+}
+
+TEST_F(TargetDeviceConnectionBrokerImplTest,
+       NearbyConnectionsAdvertisingTimeoutWhenResumeAfterUpdate_Pin) {
+  CreateConnectionBroker(/*is_resume_after_update=*/true);
+  FinishFetchingBluetoothAdapter();
+
+  connection_broker_->StartAdvertising(
+      &connection_lifecycle_listener_, /* use_pin_authentication= */ true,
+      base::BindOnce(
+          &TargetDeviceConnectionBrokerImplTest::StartAdvertisingResultCallback,
+          weak_ptr_factory_.GetWeakPtr()));
+  EXPECT_TRUE(fake_nearby_connections_manager_->IsAdvertising());
+  EXPECT_EQ(0u, fast_pair_advertiser_factory_->StartAdvertisingCount());
+
+  // When Nearby Connections advertising is not successful because it times out,
+  // advertising will begin like the initial connection flow.
+  task_environment_.FastForwardBy(
+      kNearbyConnectionsAdvertisementAfterUpdateTimeout);
+  EXPECT_EQ(1u, fast_pair_advertiser_factory_->StartAdvertisingCount());
+  EXPECT_TRUE(fake_nearby_connections_manager_->IsAdvertising());
+
+  NearbyConnectionsManager::IncomingConnectionListener*
+      incoming_connection_listener =
+          fake_nearby_connections_manager_->GetAdvertisingListener();
+  ASSERT_TRUE(incoming_connection_listener);
+  incoming_connection_listener->OnIncomingConnectionInitiated(
+      kEndpointId, std::vector<uint8_t>());
+  incoming_connection_listener->OnIncomingConnectionAccepted(
+      kEndpointId, std::vector<uint8_t>(), &fake_nearby_connection_);
+
+  ASSERT_TRUE(connection());
+  EXPECT_FALSE(connection()->WasHandshakeInitiated());
+}
+
+TEST_F(TargetDeviceConnectionBrokerImplTest,
+       NearbyConnectionsAdvertisingTimeoutWhenResumeAfterUpdate_QrCode) {
+  CreateConnectionBroker(/*is_resume_after_update=*/true);
+  FinishFetchingBluetoothAdapter();
+
+  connection_broker_->StartAdvertising(
+      &connection_lifecycle_listener_, /* use_pin_authentication= */ false,
+      base::BindOnce(
+          &TargetDeviceConnectionBrokerImplTest::StartAdvertisingResultCallback,
+          weak_ptr_factory_.GetWeakPtr()));
+  EXPECT_TRUE(fake_nearby_connections_manager_->IsAdvertising());
+  EXPECT_EQ(0u, fast_pair_advertiser_factory_->StartAdvertisingCount());
+
+  // When Nearby Connections advertising is not successful because it times out,
+  // advertising will begin like the initial connection flow.
+  task_environment_.FastForwardBy(
+      kNearbyConnectionsAdvertisementAfterUpdateTimeout);
+  EXPECT_EQ(1u, fast_pair_advertiser_factory_->StartAdvertisingCount());
+  EXPECT_TRUE(fake_nearby_connections_manager_->IsAdvertising());
+
+  NearbyConnectionsManager::IncomingConnectionListener*
+      incoming_connection_listener =
+          fake_nearby_connections_manager_->GetAdvertisingListener();
+  ASSERT_TRUE(incoming_connection_listener);
+  incoming_connection_listener->OnIncomingConnectionInitiated(
+      kEndpointId, std::vector<uint8_t>());
+  incoming_connection_listener->OnIncomingConnectionAccepted(
+      kEndpointId, std::vector<uint8_t>(), &fake_nearby_connection_);
+
+  ASSERT_TRUE(connection());
+  EXPECT_TRUE(connection()->WasHandshakeInitiated());
+}
 
 }  // namespace ash::quick_start

@@ -4,9 +4,11 @@
 
 #include "components/variations/service/safe_seed_manager.h"
 
+#include <algorithm>
+
 #include "base/base_switches.h"
 #include "base/command_line.h"
-#include "base/cxx17_backports.h"
+#include "base/logging.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
 #include "components/prefs/pref_registry.h"
@@ -46,14 +48,15 @@ namespace variations {
 // set a threshold that should minimize false-positives.
 // TODO(isherman): Check in with the networking team about their thoughts on how
 // to find a better balance here.
-constexpr int kFetchFailureStreakThreshold = 25;
+constexpr int kFetchFailureStreakSafeSeedThreshold = 25;
+constexpr int kFetchFailureStreakNullSeedThreshold = 50;
 
 SafeSeedManager::SafeSeedManager(PrefService* local_state)
     : local_state_(local_state) {
   int num_failed_fetches =
       local_state_->GetInteger(prefs::kVariationsFailedToFetchSeedStreak);
   base::UmaHistogramSparse("Variations.SafeMode.Streak.FetchFailures",
-                           base::clamp(num_failed_fetches, 0, 100));
+                           std::clamp(num_failed_fetches, 0, 100));
 }
 
 SafeSeedManager::~SafeSeedManager() = default;
@@ -71,32 +74,34 @@ void SafeSeedManager::RegisterPrefs(PrefRegistrySimple* registry) {
   registry->RegisterIntegerPref(prefs::kVariationsFailedToFetchSeedStreak, 0);
 }
 
-bool SafeSeedManager::ShouldRunInSafeMode() const {
+SeedType SafeSeedManager::GetSeedType() const {
   // Ignore any number of failures if the --disable-variations-safe-mode flag is
   // set.
   if (base::CommandLine::ForCurrentProcess()->HasSwitch(
           switches::kDisableVariationsSafeMode)) {
-    return false;
+    return SeedType::kRegularSeed;
   }
   int num_crashes = local_state_->GetInteger(prefs::kVariationsCrashStreak);
   int num_failed_fetches =
       local_state_->GetInteger(prefs::kVariationsFailedToFetchSeedStreak);
-  return num_crashes >= kCrashStreakThreshold ||
-         num_failed_fetches >= kFetchFailureStreakThreshold;
-}
-
-void SafeSeedManager::SetActiveSeedState(
-    const std::string& seed_data,
-    const std::string& base64_seed_signature,
-    int seed_milestone,
-    std::unique_ptr<ClientFilterableState> client_filterable_state,
-    base::Time seed_fetch_time) {
-  DCHECK(!has_set_active_seed_state_);
-  has_set_active_seed_state_ = true;
-
-  active_seed_state_ = std::make_unique<ActiveSeedState>(
-      seed_data, base64_seed_signature, seed_milestone,
-      std::move(client_filterable_state), seed_fetch_time);
+  if (num_crashes >= kCrashStreakNullSeedThreshold ||
+      num_failed_fetches >= kFetchFailureStreakNullSeedThreshold) {
+#if BUILDFLAG(IS_CHROMEOS)
+    // Logging is useful in listnr reports for ChromeOS (http://b/277650823).
+    LOG(ERROR) << "Using finch safe mode null seed: num_crashes=" << num_crashes
+               << ", num_failed_fetches=" << num_failed_fetches;
+#endif  // BUILDFLAG(IS_CHROMEOS)
+    return SeedType::kNullSeed;
+  }
+  if (num_crashes >= kCrashStreakSafeSeedThreshold ||
+      num_failed_fetches >= kFetchFailureStreakSafeSeedThreshold) {
+#if BUILDFLAG(IS_CHROMEOS)
+    LOG(ERROR) << "Using finch safe mode safe seed: num_crashes=" << num_crashes
+               << ", num_failed_fetches=" << num_failed_fetches;
+#endif  // BUILDFLAG(IS_CHROMEOS)
+    return SeedType::kSafeSeed;
+  }
+  return SeedType::kRegularSeed;
 }
 
 void SafeSeedManager::RecordFetchStarted() {
@@ -115,16 +120,17 @@ void SafeSeedManager::RecordSuccessfulFetch(VariationsSeedStore* seed_store) {
   // not change while Chrome is running. Also, note that it's fine to do this
   // even if running in safe mode, as the saved seed in that case will just be
   // the existing safe seed.
-  if (active_seed_state_) {
-    seed_store->StoreSafeSeed(active_seed_state_->seed_data,
-                              active_seed_state_->base64_seed_signature,
-                              active_seed_state_->seed_milestone,
-                              *active_seed_state_->client_filterable_state,
-                              active_seed_state_->seed_fetch_time);
-
+  const std::optional<ActiveSeedState>& active_seed_state =
+      GetActiveSeedState();
+  if (active_seed_state) {
+    seed_store->StoreSafeSeed(active_seed_state->seed_data,
+                              active_seed_state->base64_seed_signature,
+                              active_seed_state->seed_milestone,
+                              *active_seed_state->client_filterable_state,
+                              active_seed_state->seed_fetch_time);
     // The active seed state is only needed for the first time this code path is
     // reached, so free up its memory once the data is no longer needed.
-    active_seed_state_.reset();
+    ClearActiveSeedState();
   }
 
   // Note: It's important to clear the crash streak as well as the fetch
@@ -134,19 +140,5 @@ void SafeSeedManager::RecordSuccessfulFetch(VariationsSeedStore* seed_store) {
   local_state_->SetInteger(prefs::kVariationsCrashStreak, 0);
   local_state_->SetInteger(prefs::kVariationsFailedToFetchSeedStreak, 0);
 }
-
-SafeSeedManager::ActiveSeedState::ActiveSeedState(
-    const std::string& seed_data,
-    const std::string& base64_seed_signature,
-    int seed_milestone,
-    std::unique_ptr<ClientFilterableState> client_filterable_state,
-    base::Time seed_fetch_time)
-    : seed_data(seed_data),
-      base64_seed_signature(base64_seed_signature),
-      seed_milestone(seed_milestone),
-      client_filterable_state(std::move(client_filterable_state)),
-      seed_fetch_time(seed_fetch_time) {}
-
-SafeSeedManager::ActiveSeedState::~ActiveSeedState() = default;
 
 }  // namespace variations

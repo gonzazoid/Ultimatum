@@ -13,14 +13,14 @@ import './icons.html.js';
 import './memory_card.js';
 import './overview_card.js';
 
+import {loadTimeData} from 'chrome://resources/ash/common/load_time_data.m.js';
 import {CrToastElement} from 'chrome://resources/cr_elements/cr_toast/cr_toast.js';
 import {I18nMixin} from 'chrome://resources/cr_elements/i18n_mixin.js';
-import {assert} from 'chrome://resources/js/assert_ts.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
+import {assert} from 'chrome://resources/js/assert.js';
+import {PolymerElementProperties} from 'chrome://resources/polymer/v3_0/polymer/interfaces.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {DiagnosticsBrowserProxyImpl} from './diagnostics_browser_proxy.js';
-import {ShowCautionBannerEvent} from './diagnostics_sticky_banner.js';
 import {getSystemDataProvider} from './mojo_interface_provider.js';
 import {OverviewCardElement} from './overview_card.js';
 import {TestSuiteStatus} from './routine_list_executor.js';
@@ -42,22 +42,22 @@ export interface SystemPageElement {
 const SystemPageElementBase = I18nMixin(PolymerElement);
 
 export class SystemPageElement extends SystemPageElementBase {
-  static get is() {
+  static get is(): string {
     return 'system-page';
   }
 
-  static get template() {
+  static get template(): HTMLTemplateElement {
     return getTemplate();
   }
 
-  static get properties() {
+  static get properties(): PolymerElementProperties {
     return {
-      saveSessionLogEnabled_: {
+      saveSessionLogEnabled: {
         type: Boolean,
         value: true,
       },
 
-      showBatteryStatusCard_: {
+      showBatteryStatusCard: {
         type: Boolean,
         value: false,
       },
@@ -67,34 +67,19 @@ export class SystemPageElement extends SystemPageElementBase {
         value: TestSuiteStatus.NOT_RUNNING,
       },
 
-      systemInfoReceived_: {
+      systemInfoReceived: {
         type: Boolean,
         value: false,
       },
 
-      toastText_: {
+      toastText: {
         type: String,
         value: '',
       },
 
-      isLoggedIn_: {
+      isLoggedIn: {
         type: Boolean,
         value: loadTimeData.getBoolean('isLoggedIn'),
-      },
-
-      bannerMessage: {
-        type: String,
-        value: '',
-      },
-
-      scrollingClass_: {
-        type: String,
-        value: '',
-      },
-
-      scrollTimerId_: {
-        type: Number,
-        value: -1,
       },
 
       isActive: {
@@ -102,107 +87,64 @@ export class SystemPageElement extends SystemPageElementBase {
         value: true,
       },
 
-      isNetworkingEnabled: {
-        type: Boolean,
-        value: loadTimeData.getBoolean('isNetworkingEnabled'),
-      },
-
     };
   }
 
   testSuiteStatus: TestSuiteStatus;
-  bannerMessage: string;
   isActive: boolean;
-  isNetworkingEnabled: boolean;
-  protected systemInfoReceived_: boolean;
-  protected saveSessionLogEnabled_: boolean;
-  private showBatteryStatusCard_: boolean;
-  private toastText_: string;
-  private isLoggedIn_: boolean;
-  private scrollingClass_: string;
-  private scrollTimerId_: number;
-  private systemDataProvider_: SystemDataProviderInterface =
+  protected systemInfoReceived: boolean;
+  protected saveSessionLogEnabled: boolean;
+  private showBatteryStatusCard: boolean;
+  private toastText: string;
+  private isLoggedIn: boolean;
+  private systemDataProvider: SystemDataProviderInterface =
       getSystemDataProvider();
-  private browserProxy_: DiagnosticsBrowserProxyImpl =
+  private browserProxy: DiagnosticsBrowserProxyImpl =
       DiagnosticsBrowserProxyImpl.getInstance();
 
   constructor() {
     super();
-    this.fetchSystemInfo_();
-    this.browserProxy_.initialize();
-
-    // Only use inner banner behavior if system page is in stand-alone mode.
-    if (!this.isNetworkingEnabled) {
-      this.addCautionBannerEventListeners_();
-    }
+    this.fetchSystemInfo();
+    this.browserProxy.initialize();
   }
 
-  private fetchSystemInfo_(): void {
-    this.systemDataProvider_.getSystemInfo().then((result) => {
-      this.onSystemInfoReceived_(result.systemInfo);
+  private fetchSystemInfo(): void {
+    this.systemDataProvider.getSystemInfo().then((result) => {
+      this.onSystemInfoReceived(result.systemInfo);
     });
-    setTimeout(() => this.recordLateSystemInfo_(), 3000);
+    setTimeout(() => this.recordLateSystemInfo(), 3000);
   }
 
-  private onSystemInfoReceived_(systemInfo: SystemInfo): void {
-    this.systemInfoReceived_ = true;
-    this.showBatteryStatusCard_ = systemInfo.deviceCapabilities.hasBattery;
+  private onSystemInfoReceived(systemInfo: SystemInfo): void {
+    this.systemInfoReceived = true;
+    this.showBatteryStatusCard = systemInfo.deviceCapabilities.hasBattery;
   }
 
-  private recordLateSystemInfo_(): void {
-    if (!this.systemInfoReceived_) {
+  private recordLateSystemInfo(): void {
+    if (!this.systemInfoReceived) {
       console.warn('system info not received within three seconds.');
     }
   }
 
-  protected onSessionLogClick_(): void {
+  protected onSessionLogClick(): void {
     // Click already handled then leave early.
-    if (!this.saveSessionLogEnabled_) {
+    if (!this.saveSessionLogEnabled) {
       return;
     }
 
-    this.saveSessionLogEnabled_ = false;
-    this.browserProxy_.saveSessionLog()
+    this.saveSessionLogEnabled = false;
+    this.browserProxy.saveSessionLog()
         .then(
             /* @type {boolean} */ (success) => {
               const result = success ? 'Success' : 'Failure';
-              this.toastText_ =
+              this.toastText =
                   loadTimeData.getString(`sessionLogToastText${result}`);
               this.$.toast.show();
             })
         .catch(() => {/* File selection cancelled */})
         .finally(() => {
-          this.saveSessionLogEnabled_ = true;
+          this.saveSessionLogEnabled = true;
         });
-  }
-
-  private addCautionBannerEventListeners_(): void {
-    window.addEventListener('show-caution-banner', (e) => {
-      const event = e as ShowCautionBannerEvent;
-      assert(event.detail.message);
-      this.bannerMessage = event.detail.message;
-    });
-
-    window.addEventListener('dismiss-caution-banner', () => {
-      this.bannerMessage = '';
-    });
-
-    window.addEventListener('scroll', () => {
-      if (!this.bannerMessage) {
-        return;
-      }
-
-      // Reset timer since we've received another 'scroll' event.
-      if (this.scrollTimerId_ !== -1) {
-        this.scrollingClass_ = 'elevation-2';
-        clearTimeout(this.scrollTimerId_);
-      }
-
-      // Remove box shadow from banner since the user has stopped scrolling
-      // for at least 300ms.
-      this.scrollTimerId_ =
-          window.setTimeout(() => this.scrollingClass_ = '', 300);
-    });
   }
 
   /**
@@ -222,13 +164,8 @@ export class SystemPageElement extends SystemPageElementBase {
       overviewCardContainer.focus();
       // TODO(ashleydp): Remove when a call can be made at a higher component
       // to avoid duplicate code in all navigatable pages.
-      this.browserProxy_.recordNavigation('system');
+      this.browserProxy.recordNavigation('system');
     }
-  }
-
-  protected getCardContainerClass_(): string {
-    const cardContainer = 'diagnostics-cards-container';
-    return `${cardContainer}${this.isNetworkingEnabled ? '-nav' : ''}`;
   }
 }
 

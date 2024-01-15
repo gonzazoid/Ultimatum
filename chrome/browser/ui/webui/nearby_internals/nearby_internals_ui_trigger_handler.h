@@ -6,6 +6,7 @@
 #define CHROME_BROWSER_UI_WEBUI_NEARBY_INTERNALS_NEARBY_INTERNALS_UI_TRIGGER_HANDLER_H_
 
 #include "base/containers/flat_map.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/nearby_sharing/nearby_sharing_service.h"
 #include "chrome/browser/nearby_sharing/share_target_discovered_callback.h"
@@ -104,13 +105,17 @@ class NearbyInternalsUiTriggerHandler : public content::WebUIMessageHandler,
   // the receive surface to be unregistered.
   void UnregisterReceiveSurface(const base::Value::List& args);
 
+  // Message handler callback that calls ShowSuccess in the
+  // NearbySharingService's NearbyNotificationManager.
+  void ShowReceivedNotification(const base::Value::List& args);
+
   // Message handler callback that calls IsScanning, IsTransferring,
   // IsReceivingFile, IsSendingFile, IsConnecting, and IsInHighVisibility in the
   // NearbySharingService and passes booleans to JavaScript to eventually be
   // displayed.
   void GetState(const base::Value::List& args);
 
-  content::BrowserContext* const context_;
+  const raw_ptr<content::BrowserContext> context_;
   base::flat_map<std::string, ShareTarget> id_to_share_target_map_;
   base::WeakPtrFactory<NearbyInternalsUiTriggerHandler> weak_ptr_factory_{this};
 };

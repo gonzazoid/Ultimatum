@@ -8,10 +8,11 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/run_loop.h"
@@ -145,7 +146,7 @@ class UserCloudPolicyManagerAshTest
         profile_(nullptr),
         signin_profile_(nullptr),
         user_manager_(new ash::FakeChromeUserManager()),
-        user_manager_enabler_(base::WrapUnique(user_manager_)),
+        user_manager_enabler_(base::WrapUnique(user_manager_.get())),
         test_signin_shared_loader_factory_(
             base::MakeRefCounted<network::WeakWrapperSharedURLLoaderFactory>(
                 &test_signin_url_loader_factory_)),
@@ -371,8 +372,9 @@ class UserCloudPolicyManagerAshTest
   testing::StrictMock<MockJobCreationHandler> job_creation_handler_;
   FakeDeviceManagementService device_management_service_{
       &job_creation_handler_};
-  MockCloudPolicyStore* store_;                          // Not owned.
-  MockCloudExternalDataManager* external_data_manager_;  // Not owned.
+  raw_ptr<MockCloudPolicyStore, DanglingUntriaged> store_;  // Not owned.
+  raw_ptr<MockCloudExternalDataManager, DanglingUntriaged>
+      external_data_manager_;  // Not owned.
   scoped_refptr<base::TestMockTimeTaskRunner> task_runner_;
   SchemaRegistry schema_registry_;
   std::unique_ptr<UserCloudPolicyManagerAsh> manager_;
@@ -380,13 +382,13 @@ class UserCloudPolicyManagerAshTest
 
   // Required by ProfileHelper to get the signin Profile context.
   std::unique_ptr<TestingProfileManager> profile_manager_;
-  TestingProfile* profile_;
-  TestingProfile* signin_profile_;
+  raw_ptr<TestingProfile> profile_;
+  raw_ptr<TestingProfile> signin_profile_;
   std::unique_ptr<IdentityTestEnvironmentProfileAdaptor>
       identity_test_env_profile_adaptor_;
   user_manager::UserType user_type_ = user_manager::UserType::USER_TYPE_REGULAR;
 
-  ash::FakeChromeUserManager* user_manager_;
+  raw_ptr<ash::FakeChromeUserManager, DanglingUntriaged> user_manager_;
   user_manager::ScopedUserManager user_manager_enabler_;
   // This is automatically checked in TearDown() to ensure that we get a
   // fatal error iff |fatal_error_expected_| is true.
@@ -402,7 +404,8 @@ class UserCloudPolicyManagerAshTest
     manager_ = std::make_unique<UserCloudPolicyManagerAsh>(
         ash::ProfileHelper::Get()->GetProfileByUser(active_user),
         std::move(store),
-        base::WrapUnique<MockCloudExternalDataManager>(external_data_manager_),
+        base::WrapUnique<MockCloudExternalDataManager>(
+            external_data_manager_.get()),
         base::FilePath(), enforcement_type, &prefs_, fetch_timeout,
         base::BindOnce(&UserCloudPolicyManagerAshTest::OnFatalErrorEncountered,
                        base::Unretained(this)),
@@ -417,8 +420,8 @@ class UserCloudPolicyManagerAshTest
 
   void InitAndConnectManager() {
     manager_->Init(&schema_registry_);
-    manager_->Connect(&device_management_service_,
-                      /*system_url_loader_factory=*/nullptr);
+    manager_->ConnectManagementService(&device_management_service_,
+                                       /*system_url_loader_factory=*/nullptr);
     // Create the UserCloudPolicyTokenForwarder, which fetches the access
     // token using the IdentityManager and forwards it to the
     // UserCloudPolicyManagerAsh. This service is automatically created

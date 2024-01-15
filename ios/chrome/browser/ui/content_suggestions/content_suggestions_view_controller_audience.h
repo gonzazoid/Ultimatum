@@ -5,11 +5,15 @@
 #ifndef IOS_CHROME_BROWSER_UI_CONTENT_SUGGESTIONS_CONTENT_SUGGESTIONS_VIEW_CONTROLLER_AUDIENCE_H_
 #define IOS_CHROME_BROWSER_UI_CONTENT_SUGGESTIONS_CONTENT_SUGGESTIONS_VIEW_CONTROLLER_AUDIENCE_H_
 
-// Audience for the ContentSuggestions, getting informations from it.
+enum class ContentSuggestionsModuleType;
+enum class SafetyCheckItemType;
+@class SetUpListItemViewData;
+
+// Audience for the ContentSuggestions, getting information from it.
 @protocol ContentSuggestionsViewControllerAudience
 
-// Notifies the audience of the UIKit viewDidDisappear: callback.
-- (void)viewDidDisappear;
+// Notifies the audience of the UIKit viewWillDisappear: callback.
+- (void)viewWillDisappear;
 
 // Notifies the audience that the Return to Recent Tab tile has been added.
 - (void)returnToRecentTabWasAdded;
@@ -21,6 +25,22 @@
 // TODO:(crbug.com/1285378) Remove this after Content Suggestions header is
 // moved out the Content Suggestions CollectionView.
 - (UIEdgeInsets)safeAreaInsetsForDiscoverFeed;
+
+// Notifies the audience to present the Set Up List Show More Menu.
+- (void)showSetUpListShowMoreMenu;
+
+// Notifies the audience that the module of `type` should be never shown
+// anymore.
+- (void)neverShowModuleType:(ContentSuggestionsModuleType)type;
+
+// Notifies the audience that the Magic Stack edit button was tapped.
+- (void)didTapMagicStackEditButton;
+
+// Notifies the audience to show the list of parcels.
+- (void)showMagicStackParcelList;
+
+// Called when a Safety Check item is selected by the user.
+- (void)didSelectSafetyCheckItem:(SafetyCheckItemType)type;
 
 @end
 

@@ -117,7 +117,7 @@ struct MEDIA_EXPORT XMediaTag {
   // A human-readable description of this rendition.
   ResolvedSourceString name;
 
-  // A stable identifier for URI of this rendition within a multivariant
+  // A stable identifier for the URI of this rendition within a multivariant
   // playlist. All renditions with the same URI SHOULD use the same
   // stable-rendition-id.
   absl::optional<types::StableId> stable_rendition_id;
@@ -190,6 +190,10 @@ struct MEDIA_EXPORT XStreamInfTag {
   // The id of an audio rendition group that should be used when playing this
   // variant.
   absl::optional<ResolvedSourceString> audio;
+
+  // The id of a video rendition group that should be used when playing this
+  // variant.
+  absl::optional<ResolvedSourceString> video;
 };
 
 // Represents the contents of the #EXTINF tag
@@ -378,6 +382,30 @@ struct MEDIA_EXPORT XTargetDurationTag {
   // file, when rounded to the nearest integer, MUST be less than or equal to
   // this duration.
   base::TimeDelta duration;
+};
+
+struct MEDIA_EXPORT XSkipTag {
+  static constexpr auto kName = MediaPlaylistTagName::kXSkip;
+  static ParseStatus::Or<XSkipTag> Parse(
+      TagItem,
+      const VariableDictionary& variable_dict,
+      VariableDictionary::SubstitutionBuffer& sub_buffer);
+
+  XSkipTag();
+  ~XSkipTag();
+  XSkipTag(const XSkipTag&);
+  XSkipTag(XSkipTag&&);
+
+  // The value is a decimal integer specifying the number of Media Segments
+  // replaced by the EXT-X-SKIP tag. This attribute is REQUIRED.
+  types::DecimalInteger skipped_segments;
+
+  // The value is a quoted string consisting of a tab delimited list of
+  // EXT-X-DATERANGE IDs that have been removed from the playlist recently.
+  // This attribute is REQUIRED if the client requested an update that skips
+  // EXT-X-DATERANGE tags. The quoted string MAY be empty.
+  std::optional<std::vector<std::string>> recently_removed_dateranges =
+      std::nullopt;
 };
 
 }  // namespace media::hls

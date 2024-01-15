@@ -68,9 +68,8 @@ class TextFieldInputType : public InputType,
                 TextFieldEventBehavior,
                 TextControlSetValueSelection) override;
   void UpdateView() override;
-  void CustomStyleForLayoutObject(ComputedStyle& style) override;
-  LayoutObject* CreateLayoutObject(const ComputedStyle&,
-                                   LegacyLayout) const override;
+  void AdjustStyle(ComputedStyleBuilder&) override;
+  LayoutObject* CreateLayoutObject(const ComputedStyle&) const override;
   ControlPart AutoAppearance() const override;
 
   virtual bool NeedsContainer() const { return false; }
@@ -89,7 +88,6 @@ class TextFieldInputType : public InputType,
   bool ShouldRespectListAttribute() override;
   void ListAttributeTargetChanged() override;
   void UpdatePlaceholderText(bool is_suggested_value) final;
-  void AppendToFormData(FormData&) const override;
   void SubtreeHasChanged() final;
   void OpenPopupView() override;
 

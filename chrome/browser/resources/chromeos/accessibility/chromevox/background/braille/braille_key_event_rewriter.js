@@ -6,7 +6,7 @@
  * @fileoverview Rewrites a braille key event.
  */
 import {BrailleKeyCommand, BrailleKeyEvent} from '../../common/braille/braille_key_types.js';
-import {QueueMode} from '../../common/tts_interface.js';
+import {QueueMode} from '../../common/tts_types.js';
 import {Output} from '../output/output.js';
 
 /**
@@ -17,6 +17,13 @@ export class BrailleKeyEventRewriter {
   constructor() {
     /** @private {Object} */
     this.incrementalKey_ = null;
+  }
+
+  static init() {
+    if (BrailleKeyEventRewriter.instance) {
+      throw new Error('Cannot create two BrailleKeyEventRewriter instances');
+    }
+    BrailleKeyEventRewriter.instance = new BrailleKeyEventRewriter();
   }
 
   /**
@@ -75,3 +82,6 @@ export class BrailleKeyEventRewriter {
     return false;
   }
 }
+
+/** @type {BrailleKeyEventRewriter} */
+BrailleKeyEventRewriter.instance;

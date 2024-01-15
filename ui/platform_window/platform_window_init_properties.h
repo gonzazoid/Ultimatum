@@ -20,7 +20,7 @@
 #include <fuchsia/element/cpp/fidl.h>
 #include <fuchsia/ui/composition/cpp/fidl.h>
 #include <fuchsia/ui/views/cpp/fidl.h>
-#include <lib/ui/scenic/cpp/view_ref_pair.h>
+#include <ui/platform_window/fuchsia/view_ref_pair.h>
 #endif
 
 namespace gfx {
@@ -91,7 +91,7 @@ struct COMPONENT_EXPORT(PLATFORM_WINDOW) PlatformWindowInitProperties {
   fuchsia::ui::views::ViewToken view_token;
   fuchsia::ui::views::ViewCreationToken view_creation_token;
 
-  scenic::ViewRefPair view_ref_pair;
+  ViewRefPair view_ref_pair;
 
   // Used to coordinate window closure requests with the shell.
   fuchsia::element::ViewControllerPtr view_controller;
@@ -142,9 +142,15 @@ struct COMPONENT_EXPORT(PLATFORM_WINDOW) PlatformWindowInitProperties {
 
   // Specifies the source to get `restore_window_id` from.
   absl::optional<std::string> restore_window_id_source;
+
+  // Specifies whether the associated window is persistable.
+  bool persistable = true;
+
+  // Specifies the id of the target display the window will be created on.
+  absl::optional<int64_t> display_id;
 #endif
 
-#if defined(USE_OZONE)
+#if BUILDFLAG(IS_OZONE)
   // Specifies whether the current window requests key-events that matches
   // system shortcuts.
   bool inhibit_keyboard_shortcuts = false;

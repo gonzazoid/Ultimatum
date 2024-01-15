@@ -8,11 +8,13 @@
 #include <lib/zx/event.h>
 #include <memory>
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
 #include "base/fuchsia/fuchsia_logging.h"
 #include "base/fuchsia/process_context.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
+#include "base/task/single_thread_task_runner.h"
+#include "gpu/vulkan/vulkan_device_queue.h"
 #include "third_party/angle/src/common/fuchsia_egl/fuchsia_egl.h"
 #include "ui/gfx/geometry/skia_conversions.h"
 #include "ui/gfx/native_pixmap.h"
@@ -22,14 +24,12 @@
 #include "ui/ozone/common/gl_ozone_egl.h"
 #include "ui/ozone/platform/flatland/flatland_gpu_service.h"
 #include "ui/ozone/platform/flatland/flatland_surface.h"
+#include "ui/ozone/platform/flatland/flatland_surface_canvas.h"
 #include "ui/ozone/platform/flatland/flatland_sysmem_buffer_collection.h"
 #include "ui/ozone/platform/flatland/flatland_window.h"
 #include "ui/ozone/platform/flatland/flatland_window_manager.h"
-#include "ui/ozone/public/surface_ozone_canvas.h"
-
-#if BUILDFLAG(ENABLE_VULKAN)
 #include "ui/ozone/platform/flatland/vulkan_implementation_flatland.h"
-#endif
+#include "ui/ozone/public/surface_ozone_canvas.h"
 
 namespace ui {
 
@@ -56,8 +56,9 @@ class GLOzoneEGLFlatland : public GLOzoneEGL {
   scoped_refptr<gl::GLSurface> CreateOffscreenGLSurface(
       gl::GLDisplay* display,
       const gfx::Size& size) override {
-    return gl::InitializeGLSurface(base::MakeRefCounted<gl::SurfacelessEGL>(
-        display->GetAs<gl::GLDisplayEGL>(), size));
+    return gl::InitializeGLSurface(
+        base::MakeRefCounted<gl::PbufferGLSurfaceEGL>(
+            display->GetAs<gl::GLDisplayEGL>(), size));
   }
 
   gl::EGLDisplayPlatform GetNativeDisplay() override {
@@ -100,7 +101,7 @@ void FlatlandSurfaceFactory::Initialize(
   base::AutoLock lock(surface_lock_);
   DCHECK(surface_map_.empty());
 
-  main_thread_task_runner_ = base::ThreadTaskRunnerHandle::Get();
+  main_thread_task_runner_ = base::SingleThreadTaskRunner::GetCurrentDefault();
   DCHECK(main_thread_task_runner_);
 
   DCHECK(!gpu_host_);
@@ -123,7 +124,6 @@ std::vector<gl::GLImplementationParts>
 FlatlandSurfaceFactory::GetAllowedGLImplementations() {
   return std::vector<gl::GLImplementationParts>{
       gl::GLImplementationParts(gl::kGLImplementationEGLANGLE),
-      gl::GLImplementationParts(gl::ANGLEImplementation::kSwiftShader),
       gl::GLImplementationParts(gl::kGLImplementationEGLGLES2),
       gl::GLImplementationParts(gl::kGLImplementationStubGL),
   };
@@ -153,34 +153,41 @@ FlatlandSurfaceFactory::CreatePlatformWindowSurface(
 }
 
 std::unique_ptr<SurfaceOzoneCanvas>
-FlatlandSurfaceFactory::CreateCanvasForWidget(gfx::AcceleratedWidget widget) {
-  // TODO(fxbug.dev/93998): Add FlatlandWindowCanvas implementation.
-  NOTREACHED();
-  return nullptr;
+FlatlandSurfaceFactory::CreateCanvasForWidget(gfx::AcceleratedWidget window) {
+  DCHECK_NE(window, gfx::kNullAcceleratedWidget);
+  auto result = std::make_unique<FlatlandSurfaceCanvas>(
+      flatland_sysmem_buffer_manager_.sysmem_allocator(),
+      flatland_sysmem_buffer_manager_.flatland_allocator());
+  main_thread_task_runner_->PostTask(
+      FROM_HERE, base::BindOnce(&FlatlandSurfaceFactory::AttachSurfaceToWindow,
+                                weak_ptr_factory_.GetWeakPtr(), window,
+                                result->CreateView()));
+  return result;
 }
 
 scoped_refptr<gfx::NativePixmap> FlatlandSurfaceFactory::CreateNativePixmap(
     gfx::AcceleratedWidget widget,
-    VkDevice vk_device,
+    gpu::VulkanDeviceQueue* device_queue,
     gfx::Size size,
     gfx::BufferFormat format,
     gfx::BufferUsage usage,
     absl::optional<gfx::Size> framebuffer_size) {
   DCHECK(!framebuffer_size || framebuffer_size == size);
 
+  VkDevice vk_device = device_queue->GetVulkanDevice();
   return flatland_sysmem_buffer_manager_.CreateNativePixmap(vk_device, size,
                                                             format, usage);
 }
 
 void FlatlandSurfaceFactory::CreateNativePixmapAsync(
     gfx::AcceleratedWidget widget,
-    VkDevice vk_device,
+    gpu::VulkanDeviceQueue* device_queue,
     gfx::Size size,
     gfx::BufferFormat format,
     gfx::BufferUsage usage,
     NativePixmapCallback callback) {
   std::move(callback).Run(
-      CreateNativePixmap(widget, vk_device, size, format, usage));
+      CreateNativePixmap(widget, device_queue, size, format, usage));
 }
 
 scoped_refptr<gfx::NativePixmap>
@@ -197,7 +204,6 @@ FlatlandSurfaceFactory::CreateNativePixmapFromHandle(
   return collection->CreateNativePixmap(std::move(handle), size);
 }
 
-#if BUILDFLAG(ENABLE_VULKAN)
 std::unique_ptr<gpu::VulkanImplementation>
 FlatlandSurfaceFactory::CreateVulkanImplementation(
     bool use_swiftshader,
@@ -206,7 +212,19 @@ FlatlandSurfaceFactory::CreateVulkanImplementation(
       this, &flatland_sysmem_buffer_manager_, use_swiftshader,
       allow_protected_memory);
 }
-#endif
+
+std::vector<gfx::BufferFormat>
+FlatlandSurfaceFactory::GetSupportedFormatsForTexturing() const {
+  return {
+      gfx::BufferFormat::R_8,
+      gfx::BufferFormat::RG_88,
+      gfx::BufferFormat::RGBA_8888,
+      gfx::BufferFormat::RGBX_8888,
+      gfx::BufferFormat::BGRA_8888,
+      gfx::BufferFormat::BGRX_8888,
+      gfx::BufferFormat::YUV_420_BIPLANAR,
+  };
+}
 
 void FlatlandSurfaceFactory::AddSurface(gfx::AcceleratedWidget widget,
                                         FlatlandSurface* surface) {

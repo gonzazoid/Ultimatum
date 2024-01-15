@@ -6,9 +6,9 @@
 
 #include "base/containers/contains.h"
 #include "base/no_destructor.h"
+#include "base/strings/string_util.h"
 #include "chrome/browser/web_applications/web_app_id_constants.h"
-#include "chrome/common/chrome_features.h"
-#include "content/public/browser/web_contents.h"
+#include "chromeos/constants/chromeos_features.h"
 
 namespace web_app {
 
@@ -21,32 +21,18 @@ constexpr const char* kMicrosoftOfficeWebAppExperimentScopeExtensions[] = {
 
     // Links to opening Office editors go via this URL shortener origin.
     "https://1drv.ms/",
+
+    // The old branding of the Microsoft 365 web app. Many links within
+    // Microsoft 365 still link to the old www.office.com origin.
+    "https://www.office.com/",
 };
 
-struct FallbackPageThemeColor {
-  const char* page_url_piece;
-  SkColor page_theme_color;
-};
-
-constexpr FallbackPageThemeColor
-    kMicrosoftOfficeWebAppExperimentFallbackPageThemeColors[] = {
-        // Word theme color.
-        {.page_url_piece = "file%2cdocx",
-         .page_theme_color = SkColorSetRGB(0x18, 0x5A, 0xBD)},
-
-        // Excel theme color.
-        {.page_url_piece = "file%2cxlsx",
-         .page_theme_color = SkColorSetRGB(0x10, 0x7C, 0x41)},
-
-        // PowerPoint theme color.
-        {.page_url_piece = "file%2cpptx",
-         .page_theme_color = SkColorSetRGB(0xC4, 0x3E, 0x1C)},
-};
+const char kOneDriveBusinessDomain[] = "sharepoint.com";
 
 bool g_always_enabled_for_testing = false;
 
-bool IsExperimentEnabled(const AppId& app_id) {
-  return g_always_enabled_for_testing || app_id == kMicrosoftOfficeAppId;
+bool IsExperimentEnabled(const webapps::AppId& app_id) {
+  return g_always_enabled_for_testing || app_id == kMicrosoft365AppId;
 }
 
 absl::optional<std::vector<const char* const>>&
@@ -59,9 +45,8 @@ GetScopeExtensionsOverrideForTesting() {
 }  // namespace
 
 base::span<const char* const> ChromeOsWebAppExperiments::GetScopeExtensions(
-    const AppId& app_id) {
-  DCHECK(
-      base::FeatureList::IsEnabled(features::kMicrosoftOfficeWebAppExperiment));
+    const webapps::AppId& app_id) {
+  DCHECK(chromeos::features::IsUploadOfficeToCloudEnabled());
 
   if (!IsExperimentEnabled(app_id))
     return {};
@@ -73,10 +58,9 @@ base::span<const char* const> ChromeOsWebAppExperiments::GetScopeExtensions(
 }
 
 size_t ChromeOsWebAppExperiments::GetExtendedScopeScore(
-    const AppId& app_id,
+    const webapps::AppId& app_id,
     base::StringPiece url_spec) {
-  DCHECK(
-      base::FeatureList::IsEnabled(features::kMicrosoftOfficeWebAppExperiment));
+  DCHECK(chromeos::features::IsUploadOfficeToCloudEnabled());
 
   size_t best_score = 0;
   for (const char* scope : GetScopeExtensions(app_id)) {
@@ -86,32 +70,20 @@ size_t ChromeOsWebAppExperiments::GetExtendedScopeScore(
             : 0;
     best_score = std::max(best_score, score);
   }
+
+  // Check the OneDrive Business domain separately as this has a different URL
+  // format.
+  GURL url = GURL(url_spec);
+  if (url.DomainIs(kOneDriveBusinessDomain)) {
+    best_score = std::max(best_score, strlen(kOneDriveBusinessDomain));
+  }
   return best_score;
 }
 
-absl::optional<SkColor> ChromeOsWebAppExperiments::GetFallbackPageThemeColor(
-    const AppId& app_id,
-    content::WebContents* web_contents) {
-  DCHECK(
-      base::FeatureList::IsEnabled(features::kMicrosoftOfficeWebAppExperiment));
-
-  if (!IsExperimentEnabled(app_id))
-    return absl::nullopt;
-
-  if (!web_contents)
-    return absl::nullopt;
-
-  const GURL& url = web_contents->GetLastCommittedURL();
-  if (!url.is_valid())
-    return absl::nullopt;
-
-  for (const FallbackPageThemeColor& fallback_theme_color :
-       kMicrosoftOfficeWebAppExperimentFallbackPageThemeColors) {
-    if (base::Contains(url.spec(), fallback_theme_color.page_url_piece))
-      return fallback_theme_color.page_theme_color;
-  }
-
-  return absl::nullopt;
+bool ChromeOsWebAppExperiments::IgnoreManifestColor(
+    const webapps::AppId& app_id) {
+  DCHECK(chromeos::features::IsUploadOfficeToCloudEnabled());
+  return IsExperimentEnabled(app_id);
 }
 
 void ChromeOsWebAppExperiments::SetAlwaysEnabledForTesting() {

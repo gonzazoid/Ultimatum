@@ -10,7 +10,7 @@
 
 #include "base/compiler_specific.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/one_shot_event.h"
 #include "extensions/browser/extension_system.h"
@@ -75,14 +75,8 @@ class ShellExtensionSystem : public ExtensionSystem {
   StateStore* rules_store() override;
   StateStore* dynamic_user_scripts_store() override;
   scoped_refptr<value_store::ValueStoreFactory> store_factory() override;
-  InfoMap* info_map() override;
   QuotaService* quota_service() override;
   AppSorting* app_sorting() override;
-  void RegisterExtensionWithRequestContexts(
-      const Extension* extension,
-      base::OnceClosure callback) override;
-  void UnregisterExtensionWithRequestContexts(
-      const std::string& extension_id) override;
   const base::OneShotEvent& ready() const override;
   bool is_ready() const override;
   ContentVerifier* content_verifier() override;
@@ -95,17 +89,12 @@ class ShellExtensionSystem : public ExtensionSystem {
                      InstallUpdateCallback install_update_callback) override;
   void PerformActionBasedOnOmahaAttributes(
       const std::string& extension_id,
-      const base::Value& attributes) override;
+      const base::Value::Dict& attributes) override;
   bool FinishDelayedInstallationIfReady(const std::string& extension_id,
                                         bool install_immediately) override;
 
  private:
-  void OnExtensionRegisteredWithRequestContexts(
-      scoped_refptr<Extension> extension);
   raw_ptr<content::BrowserContext> browser_context_;  // Not owned.
-
-  // Data to be accessed on the IO thread. Must outlive process_manager_.
-  scoped_refptr<InfoMap> info_map_;
 
   std::unique_ptr<ServiceWorkerManager> service_worker_manager_;
   std::unique_ptr<QuotaService> quota_service_;

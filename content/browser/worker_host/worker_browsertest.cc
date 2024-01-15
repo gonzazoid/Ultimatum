@@ -2,9 +2,9 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/path_service.h"
 #include "base/strings/escape.h"
 #include "base/strings/string_util.h"
@@ -198,8 +198,8 @@ class WorkerTest : public ContentBrowserTest,
     GURL cookie_url = ssl_server_.GetURL(host, "/");
     std::unique_ptr<net::CanonicalCookie> cookie = net::CanonicalCookie::Create(
         cookie_url, std::string(kSameSiteCookie) + "; SameSite=Lax; Secure",
-        base::Time::Now(), absl::nullopt /* server_time */,
-        absl::nullopt /* cookie_partition_key */);
+        base::Time::Now(), std::nullopt /* server_time */,
+        std::nullopt /* cookie_partition_key */);
     base::RunLoop run_loop;
     cookie_manager->SetCanonicalCookie(
         *cookie, cookie_url, options,
@@ -247,7 +247,7 @@ class WorkerTest : public ContentBrowserTest,
     auto* service = static_cast<SharedWorkerServiceImpl*>(
         partition->GetSharedWorkerService());
     return service->FindMatchingSharedWorkerHost(
-        url, "", blink::StorageKey(url::Origin::Create(url)));
+        url, "", blink::StorageKey::CreateFirstParty(url::Origin::Create(url)));
   }
 
   net::test_server::EmbeddedTestServer* ssl_server() { return &ssl_server_; }
@@ -379,7 +379,7 @@ IN_PROC_BROWSER_TEST_P(WorkerTest, SharedWorkerInCOEPRequireCorpDocument) {
       ProcessLock::FromSiteInfo(page_rfh->GetSiteInstance()->GetSiteInfo());
   EXPECT_TRUE(page_lock.GetWebExposedIsolationInfo().is_isolated());
   EXPECT_GT(page_rfh->GetWebExposedIsolationLevel(),
-            RenderFrameHost::WebExposedIsolationLevel::kNotIsolated);
+            WebExposedIsolationLevel::kNotIsolated);
 
   // Create a shared worker from the cross-origin-isolated page:
 
@@ -719,13 +719,12 @@ IN_PROC_BROWSER_TEST_P(WorkerTest,
   EXPECT_TRUE(NavigateToURLFromRenderer(root->child_at(0), test_url));
   waiter.Run();
 
-  // Check cookies sent with each request to "a.test". Frame request should not
-  // have SameSite cookies, but SharedWorker could (though eventually this will
-  // need to be changed, to protect against cross-site user tracking).
+  // Check cookies sent with each request to "a.test".
+  // Neither the frame nor the SharedWorker should get SameSite cookies.
   EXPECT_EQ(kNoCookie, GetReceivedCookie(test_url.path()));
-  EXPECT_EQ(kSameSiteCookie, GetReceivedCookie(worker_url.path()));
-  EXPECT_EQ(kSameSiteCookie, GetReceivedCookie(script_url.path()));
-  EXPECT_EQ(kSameSiteCookie, GetReceivedCookie(resource_url.path()));
+  EXPECT_EQ(kNoCookie, GetReceivedCookie(worker_url.path()));
+  EXPECT_EQ(kNoCookie, GetReceivedCookie(script_url.path()));
+  EXPECT_EQ(kNoCookie, GetReceivedCookie(resource_url.path()));
 }
 
 // Test that an "a.test" worker sends "a.test" SameSite cookies, both when
@@ -877,15 +876,15 @@ IN_PROC_BROWSER_TEST_P(WorkerTest,
   EXPECT_EQ(kNoCookie, GetReceivedCookie("/echoheader?Cookie"));
 }
 
-class WorkerFromAnonymousIframeNikBrowserTest : public WorkerTest {
+class WorkerFromCredentiallessIframeNikBrowserTest : public WorkerTest {
  public:
-  WorkerFromAnonymousIframeNikBrowserTest() {
+  WorkerFromCredentiallessIframeNikBrowserTest() {
     scoped_feature_list_.InitAndEnableFeature(
         net::features::kPartitionConnectionsByNetworkIsolationKey);
   }
 
   void SetUpCommandLine(base::CommandLine* command_line) override {
-    // Enable parsing the iframe 'anonymous' attribute.
+    // Enable parsing the iframe 'credentialless' attribute.
     command_line->AppendSwitch(switches::kEnableBlinkTestFeatures);
     WorkerTest::SetUpCommandLine(command_line);
   }
@@ -919,18 +918,18 @@ class WorkerFromAnonymousIframeNikBrowserTest : public WorkerTest {
 };
 
 INSTANTIATE_TEST_SUITE_P(All,
-                         WorkerFromAnonymousIframeNikBrowserTest,
+                         WorkerFromCredentiallessIframeNikBrowserTest,
                          testing::Range(0, 3));
 
-IN_PROC_BROWSER_TEST_P(WorkerFromAnonymousIframeNikBrowserTest,
+IN_PROC_BROWSER_TEST_P(WorkerFromCredentiallessIframeNikBrowserTest,
                        SharedWorkerRequestIsDoneWithPartitionedNetworkState) {
   if (!SupportsSharedWorker())
     return;
 
   GURL main_url = embedded_test_server()->GetURL("/title1.html");
 
-  for (bool anonymous : {false, true}) {
-    SCOPED_TRACE(anonymous ? "anonymous iframe" : "normal iframe");
+  for (bool credentialless : {false, true}) {
+    SCOPED_TRACE(credentialless ? "credentialless iframe" : "normal iframe");
     EXPECT_TRUE(NavigateToURL(shell(), main_url));
 
     RenderFrameHostImpl* main_rfh = static_cast<RenderFrameHostImpl*>(
@@ -940,14 +939,14 @@ IN_PROC_BROWSER_TEST_P(WorkerFromAnonymousIframeNikBrowserTest,
     EXPECT_TRUE(ExecJs(main_rfh,
                        JsReplace("let child = document.createElement('iframe');"
                                  "child.src = $1;"
-                                 "child.anonymous = $2;"
+                                 "child.credentialless = $2;"
                                  "document.body.appendChild(child);",
-                                 main_url, anonymous)));
+                                 main_url, credentialless)));
     WaitForLoadStop(shell()->web_contents());
     EXPECT_EQ(1U, main_rfh->child_count());
     RenderFrameHostImpl* iframe = main_rfh->child_at(0)->current_frame_host();
-    EXPECT_EQ(anonymous, iframe->IsAnonymous());
-    EXPECT_EQ(anonymous, EvalJs(iframe, "window.anonymouslyFramed"));
+    EXPECT_EQ(credentialless, iframe->IsCredentialless());
+    EXPECT_EQ(credentialless, EvalJs(iframe, "window.credentialless"));
     ResetNetworkState();
 
     GURL worker_url = embedded_test_server()->GetURL("/workers/worker.js");
@@ -971,12 +970,12 @@ IN_PROC_BROWSER_TEST_P(WorkerFromAnonymousIframeNikBrowserTest,
     ExecuteScriptAsync(iframe, start_worker);
     connection_tracker_->WaitUntilConnectionRead();
 
-    // The normal iframe should reuse the preconnected socket, the anonymous
-    // iframe should open a new one.
-    if (!anonymous) {
-      EXPECT_EQ(1u, connection_tracker_->GetAcceptedSocketCount());
-    } else {
+    // The normal iframe should reuse the preconnected socket, the
+    // credentialless iframe should open a new one.
+    if (credentialless) {
       EXPECT_EQ(2u, connection_tracker_->GetAcceptedSocketCount());
+    } else {
+      EXPECT_EQ(1u, connection_tracker_->GetAcceptedSocketCount());
     }
     EXPECT_EQ(1u, connection_tracker_->GetReadSocketCount());
   }

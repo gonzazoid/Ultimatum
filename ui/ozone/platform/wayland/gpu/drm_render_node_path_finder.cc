@@ -5,6 +5,7 @@
 #include "ui/ozone/platform/wayland/gpu/drm_render_node_path_finder.h"
 
 #include <fcntl.h>
+#include <gbm.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -12,6 +13,11 @@
 
 #include "base/files/scoped_file.h"
 #include "base/strings/stringprintf.h"
+#include "ui/gfx/linux/scoped_gbm_device.h"  // nogncheck
+
+#if BUILDFLAG(IS_CHROMEOS)
+#include "ui/gfx/linux/gbm_util.h"  // nogncheck
+#endif
 
 namespace ui {
 
@@ -39,6 +45,10 @@ base::FilePath DrmRenderNodePathFinder::GetDrmRenderNodePath() const {
 }
 
 void DrmRenderNodePathFinder::FindDrmRenderNodePath() {
+#if BUILDFLAG(IS_CHROMEOS)
+  CHECK(ui::IntelMediaCompressionEnvVarIsSet());
+#endif
+
   for (uint32_t i = kRenderNodeStart; i < kRenderNodeEnd; i++) {
     /* First,  look in sysfs and skip if this is the vgem render node. */
     std::string node_link(
@@ -55,6 +65,12 @@ void DrmRenderNodePathFinder::FindDrmRenderNodePath() {
     std::string dri_render_node(base::StringPrintf(kDriRenderNodeTemplate, i));
     base::ScopedFD drm_fd(open(dri_render_node.c_str(), O_RDWR));
     if (drm_fd.get() < 0)
+      continue;
+
+    // In case the first node /dev/dri/renderD128 can be opened but fails to
+    // create gbm device on certain driver (E.g. PowerVR). Skip such paths.
+    ScopedGbmDevice device(gbm_create_device(drm_fd.get()));
+    if (!device)
       continue;
 
     drm_render_node_path_ = base::FilePath(dri_render_node);

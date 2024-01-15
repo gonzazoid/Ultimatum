@@ -5,8 +5,10 @@
 #ifndef COMPONENTS_EXO_KEY_STATE_H_
 #define COMPONENTS_EXO_KEY_STATE_H_
 
+#include "ui/events/keycodes/keyboard_codes.h"
+
 namespace ui {
-enum class DomCode;
+enum class DomCode : uint32_t;
 }
 
 namespace exo {
@@ -15,6 +17,7 @@ namespace exo {
 struct KeyState {
   ui::DomCode code;
   bool consumed_by_ime;
+  ui::KeyboardCode key_code;
 };
 
 inline bool operator==(const KeyState& lhs, const KeyState& rhs) {

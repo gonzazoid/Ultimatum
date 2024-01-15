@@ -4,6 +4,8 @@
 
 #include "services/network/trust_tokens/sqlite_trust_token_persister.h"
 
+#include <string_view>
+
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/memory/scoped_refptr.h"
@@ -13,6 +15,7 @@
 #include "services/network/public/mojom/trust_tokens.mojom.h"
 #include "services/network/trust_tokens/proto/storage.pb.h"
 #include "services/network/trust_tokens/trust_token_database_owner.h"
+#include "services/network/trust_tokens/types.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
 #include "url/url_constants.h"
@@ -41,7 +44,7 @@ std::string ToKey(const SuitableTrustTokenOrigin& issuer,
 //
 // The parameters |issuer| and |toplevel| are pointers-to-optionals because
 // SuitableTrustTokenOrigin does not have a default constructor.
-bool FromKey(base::StringPiece key_from_database,
+bool FromKey(std::string_view key_from_database,
              absl::optional<SuitableTrustTokenOrigin>* issuer,
              absl::optional<SuitableTrustTokenOrigin>* toplevel) {
   DCHECK(issuer);
@@ -66,68 +69,6 @@ void OnDatabaseOwnerCreated(
   auto ret =
       std::make_unique<SQLiteTrustTokenPersister>(std::move(database_owner));
   std::move(on_done_initializing).Run(std::move(ret));
-}
-
-template <typename T>
-bool DeleteOriginKeyedKeyValueData(
-    base::RepeatingCallback<bool(const SuitableTrustTokenOrigin&)> matcher,
-    sqlite_proto::KeyValueData<T>* key_value_data) {
-  DCHECK(key_value_data);
-
-  std::vector<std::string> keys_to_delete;
-  bool data_from_filter_was_deleted = false;
-
-  for (const auto& kv : key_value_data->GetAllCached()) {
-    // Creation can fail if the record was corrupted on disk.
-    absl::optional<SuitableTrustTokenOrigin> maybe_key =
-        SuitableTrustTokenOrigin::Create(GURL(kv.first));
-
-    // If the record's key is corrupt, delete the record no matter what, but
-    // don't record the deletion request as having led to data being deleted.
-    if (!maybe_key) {
-      keys_to_delete.push_back(kv.first);
-      continue;
-    }
-
-    if (matcher.Run(*maybe_key)) {
-      keys_to_delete.push_back(kv.first);
-      data_from_filter_was_deleted = true;
-    }
-  }
-
-  key_value_data->DeleteData(keys_to_delete);
-
-  return data_from_filter_was_deleted;
-}
-
-bool DeleteMatchingIssuerToplevelPairData(
-    base::RepeatingCallback<bool(const SuitableTrustTokenOrigin&)> matcher,
-    sqlite_proto::KeyValueData<TrustTokenIssuerToplevelPairConfig>*
-        key_value_data) {
-  std::vector<std::string> keys_to_delete;
-
-  bool data_from_filter_was_deleted = false;
-
-  for (const auto& kv : key_value_data->GetAllCached()) {
-    absl::optional<SuitableTrustTokenOrigin> maybe_issuer;
-    absl::optional<SuitableTrustTokenOrigin> maybe_toplevel;
-
-    // If the record's key is corrupt, delete the record no matter what, but
-    // don't record the deletion request as having led to data being deleted.
-    if (!FromKey(kv.first, &maybe_issuer, &maybe_toplevel)) {
-      keys_to_delete.push_back(kv.first);
-      continue;
-    }
-
-    if (matcher.Run(*maybe_issuer) || matcher.Run(*maybe_toplevel)) {
-      keys_to_delete.push_back(kv.first);
-      data_from_filter_was_deleted = true;
-    }
-  }
-
-  key_value_data->DeleteData(keys_to_delete);
-
-  return data_from_filter_was_deleted;
 }
 
 }  // namespace
@@ -215,6 +156,10 @@ void SQLiteTrustTokenPersister::SetIssuerToplevelPairConfig(
     const SuitableTrustTokenOrigin& issuer,
     const SuitableTrustTokenOrigin& toplevel,
     std::unique_ptr<TrustTokenIssuerToplevelPairConfig> config) {
+  // Both last_redemption and penultimate_redemption should be set. Serializing
+  // config will fail otherwise.
+  CHECK(config->has_last_redemption());
+  CHECK(config->has_penultimate_redemption());
   sqlite_proto::KeyValueData<TrustTokenIssuerToplevelPairConfig>* data =
       database_owner_->IssuerToplevelPairData();
   CHECK(data);
@@ -222,19 +167,143 @@ void SQLiteTrustTokenPersister::SetIssuerToplevelPairConfig(
   data->UpdateData(ToKey(issuer, toplevel), *config);
 }
 
-bool SQLiteTrustTokenPersister::DeleteForOrigins(
-    base::RepeatingCallback<bool(const SuitableTrustTokenOrigin&)> matcher) {
-  bool any_data_was_deleted = false;
-  any_data_was_deleted |=
-      DeleteOriginKeyedKeyValueData(matcher, database_owner_->IssuerData());
+bool SQLiteTrustTokenPersister::DeleteIssuerConfig(
+    PSTKeyMatcher key_matcher,
+    PSTTimeMatcher time_matcher) {
+  sqlite_proto::KeyValueData<TrustTokenIssuerConfig>* issuer_data =
+      database_owner_->IssuerData();
+  DCHECK(issuer_data);
 
-  any_data_was_deleted |=
-      DeleteOriginKeyedKeyValueData(matcher, database_owner_->ToplevelData());
+  std::vector<std::string> keys_to_delete;
+  std::vector<std::pair<std::string, TrustTokenIssuerConfig>>
+      key_value_pairs_to_update;
+  bool data_deleted = false;
 
-  any_data_was_deleted |= DeleteMatchingIssuerToplevelPairData(
-      matcher, database_owner_->IssuerToplevelPairData());
+  for (const auto& kv : issuer_data->GetAllCached()) {
+    // Creation can fail if the record was corrupted on disk.
+    absl::optional<SuitableTrustTokenOrigin> maybe_key =
+        SuitableTrustTokenOrigin::Create(GURL(kv.first));
 
-  return any_data_was_deleted;
+    // If the record's key is corrupt, delete the record no matter what, but
+    // don't record the deletion request as having led to data being deleted.
+    if (!maybe_key) {
+      keys_to_delete.push_back(kv.first);
+      continue;
+    }
+
+    if (!key_matcher.Run(*maybe_key)) {
+      continue;
+    }
+
+    auto new_issuer_config = kv.second;
+    // clear all tokens first, we will add them back if they are not a match
+    new_issuer_config.clear_tokens();
+    for (const auto& token : kv.second.tokens()) {
+      if (token.has_creation_time()) {
+        const base::Time creation_time =
+            internal::TimestampToTime(token.creation_time());
+        if (!time_matcher.Run(creation_time)) {
+          // add token back to new issuer config
+          TrustToken* new_token = new_issuer_config.add_tokens();
+          *new_token = token;
+        }  // else do not add token back to new_issuer_config
+      }    // else token has no creation time, delete to be on the safe side
+    }
+    if (new_issuer_config.tokens().size() == 0) {
+      // all tokens are deleted, or there were no tokens to begin with
+      keys_to_delete.push_back(kv.first);
+      data_deleted = true;
+    } else if (new_issuer_config.tokens().size() != kv.second.tokens().size()) {
+      // some tokens deleted, at least one token remains
+      key_value_pairs_to_update.emplace_back(kv.first,
+                                             std::move(new_issuer_config));
+      data_deleted = true;
+    }
+    // else { no change }
+  }
+
+  issuer_data->DeleteData(keys_to_delete);
+  for (const auto& kv : key_value_pairs_to_update) {
+    issuer_data->UpdateData(kv.first, std::move(kv.second));
+  }
+
+  return data_deleted;
+}
+
+bool SQLiteTrustTokenPersister::DeleteToplevelConfig(
+    PSTKeyMatcher key_matcher) {
+  // what to pass to matcher if there is no creation time?
+  sqlite_proto::KeyValueData<TrustTokenToplevelConfig>* toplevel_data =
+      database_owner_->ToplevelData();
+  DCHECK(toplevel_data);
+  bool data_deleted = false;
+  std::vector<std::string> keys_to_delete;
+  for (const auto& kv : toplevel_data->GetAllCached()) {
+    // Creation can fail if the record was corrupted on disk.
+    absl::optional<SuitableTrustTokenOrigin> maybe_key =
+        SuitableTrustTokenOrigin::Create(GURL(kv.first));
+
+    // If the record's key is corrupt, delete the record no matter what, but
+    // don't record the deletion request as having led to data being deleted.
+    if (!maybe_key) {
+      keys_to_delete.push_back(kv.first);
+      continue;
+    }
+
+    if (key_matcher.Run(*maybe_key)) {
+      keys_to_delete.push_back(kv.first);
+      data_deleted = true;
+    }
+  }
+  toplevel_data->DeleteData(keys_to_delete);
+  return data_deleted;
+}
+
+bool SQLiteTrustTokenPersister::DeleteIssuerToplevelPairConfig(
+    PSTKeyMatcher key_matcher,
+    PSTTimeMatcher time_matcher) {
+  sqlite_proto::KeyValueData<TrustTokenIssuerToplevelPairConfig>* pair_data =
+      database_owner_->IssuerToplevelPairData();
+  DCHECK(pair_data);
+  bool data_deleted = false;
+  std::vector<std::string> keys_to_delete;
+  for (const auto& kv : pair_data->GetAllCached()) {
+    absl::optional<SuitableTrustTokenOrigin> maybe_issuer;
+    absl::optional<SuitableTrustTokenOrigin> maybe_toplevel;
+    // If the record's key is corrupt, delete the record no matter what, but
+    // don't record the deletion request as having led to data being deleted.
+    if (!FromKey(kv.first, &maybe_issuer, &maybe_toplevel)) {
+      keys_to_delete.push_back(kv.first);
+      continue;
+    }
+
+    if (!key_matcher.Run(*maybe_issuer) && !key_matcher.Run(*maybe_toplevel)) {
+      continue;
+    }
+
+    const TrustTokenIssuerToplevelPairConfig& pair_config = kv.second;
+    if (!pair_config.has_redemption_record()) {
+      keys_to_delete.push_back(kv.first);
+      data_deleted = true;
+      continue;
+    }
+
+    auto redemption_record = pair_config.redemption_record();
+    if (redemption_record.has_creation_time()) {
+      const base::Time creation_time =
+          internal::TimestampToTime(redemption_record.creation_time());
+      if (time_matcher.Run(creation_time)) {
+        keys_to_delete.push_back(kv.first);
+        data_deleted = true;
+      }
+    } else {
+      // no creation time for RR, delete to be on the safe side
+      keys_to_delete.push_back(kv.first);
+      data_deleted = true;
+    }
+  }
+  pair_data->DeleteData(keys_to_delete);
+  return data_deleted;
 }
 
 base::flat_map<SuitableTrustTokenOrigin, int>

@@ -4,9 +4,9 @@
 
 #include "chrome/browser/ash/power/ml/smart_dim/download_worker.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/task/task_traits.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "chrome/browser/ash/power/ml/smart_dim/metrics.h"
 #include "chrome/browser/ash/power/ml/smart_dim/ml_agent_util.h"
 #include "chromeos/services/machine_learning/public/cpp/service_connection.h"
@@ -84,6 +84,10 @@ void DownloadWorker::InitializeFromComponent(
                      std::move(model_flatbuffer)));
 }
 
+void DownloadWorker::SetOnReadyForTest(base::OnceClosure on_ready) {
+  on_ready_for_test_ = std::move(on_ready);
+}
+
 void DownloadWorker::OnJsonParsed(
     const std::string& model_flatbuffer,
     const data_decoder::DataDecoder::ValueOrError result) {
@@ -123,6 +127,9 @@ void DownloadWorker::LoadModelAndCreateGraphExecutor(
                      base::Unretained(this)));
   executor_.set_disconnect_handler(base::BindOnce(
       &DownloadWorker::OnConnectionError, base::Unretained(this)));
+  if (on_ready_for_test_) {
+    std::move(on_ready_for_test_).Run();
+  }
 }
 
 }  // namespace ml

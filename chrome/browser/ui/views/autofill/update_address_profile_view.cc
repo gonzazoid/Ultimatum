@@ -4,10 +4,13 @@
 
 #include "chrome/browser/ui/views/autofill/update_address_profile_view.h"
 
+#include <algorithm>
+
 #include "base/ranges/algorithm.h"
 #include "chrome/app/vector_icons/vector_icons.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/ui/autofill/save_update_address_profile_bubble_controller.h"
+#include "chrome/browser/ui/views/autofill/autofill_bubble_utils.h"
 #include "chrome/browser/ui/views/chrome_layout_provider.h"
 #include "chrome/grit/theme_resources.h"
 #include "components/autofill/core/browser/autofill_address_util.h"
@@ -21,6 +24,7 @@
 #include "ui/views/controls/button/image_button.h"
 #include "ui/views/controls/button/image_button_factory.h"
 #include "ui/views/controls/image_view.h"
+#include "ui/views/layout/box_layout_view.h"
 #include "ui/views/layout/flex_layout.h"
 #include "ui/views/layout/table_layout_view.h"
 #include "ui/views/style/typography.h"
@@ -32,7 +36,7 @@ namespace {
 constexpr int kIconSize = 16;
 constexpr int kValuesLabelWidth = 190;
 
-const gfx::VectorIcon& GetVectorIconForType(ServerFieldType type) {
+const gfx::VectorIcon& GetVectorIconForType(FieldType type) {
   switch (type) {
     case NAME_FULL_WITH_HONORIFIC_PREFIX:
       return kAccountCircleIcon;
@@ -43,8 +47,7 @@ const gfx::VectorIcon& GetVectorIconForType(ServerFieldType type) {
     case PHONE_HOME_WHOLE_NUMBER:
       return vector_icons::kCallIcon;
     default:
-      NOTREACHED();
-      return vector_icons::kLocationOnIcon;
+      NOTREACHED_NORETURN();
   }
 }
 
@@ -84,16 +87,27 @@ std::unique_ptr<views::View> CreateValuesView(
             gfx::Insets::VH(0, ChromeLayoutProvider::Get()->GetDistanceMetric(
                                    views::DISTANCE_RELATED_LABEL_HORIZONTAL)));
 
-    auto icon_view = std::make_unique<views::ImageView>();
-    icon_view->SetImage(ui::ImageModel::FromVectorIcon(
-        GetVectorIconForType(diff_entry.type), icon_color, kIconSize));
-
-    value_row->AddChildView(std::move(icon_view));
     auto label_view =
         std::make_unique<views::Label>(value, views::style::CONTEXT_LABEL);
     label_view->SetMultiLine(true);
     label_view->SizeToFit(kValuesLabelWidth);
     label_view->SetHorizontalAlignment(gfx::HorizontalAlignment::ALIGN_LEFT);
+
+    auto icon_view = std::make_unique<views::ImageView>();
+    icon_view->SetImage(ui::ImageModel::FromVectorIcon(
+        GetVectorIconForType(diff_entry.type), icon_color, kIconSize));
+
+    // The container aligns the icon vertically in the middle of the first label
+    // line, the icon size is expected to be smaller than the label height.
+    auto icon_container =
+        views::Builder<views::BoxLayoutView>()
+            .SetPreferredSize(gfx::Size(kIconSize, label_view->GetLineHeight()))
+            .SetCrossAxisAlignment(
+                views::BoxLayout::CrossAxisAlignment::kCenter)
+            .Build();
+
+    icon_container->AddChildView(std::move(icon_view));
+    value_row->AddChildView(std::move(icon_container));
     value_row->AddChildView(std::move(label_view));
   }
   return view;
@@ -122,14 +136,10 @@ void AddValuesRow(views::TableLayoutView* layout_view,
   layout_view->AddChildView(CreateValuesView(diff, are_new_values, icon_color));
   if (are_new_values) {
     std::unique_ptr<views::ImageButton> edit_button =
-        views::CreateVectorImageButtonWithNativeTheme(
-            std::move(edit_button_callback), vector_icons::kEditIcon,
-            kIconSize);
+        CreateEditButton(std::move(edit_button_callback));
 
-    edit_button->SetAccessibleName(l10n_util::GetStringUTF16(
-        IDS_AUTOFILL_SAVE_ADDRESS_PROMPT_EDIT_BUTTON_TOOLTIP));
-    edit_button->SetTooltipText(l10n_util::GetStringUTF16(
-        IDS_AUTOFILL_SAVE_ADDRESS_PROMPT_EDIT_BUTTON_TOOLTIP));
+    edit_button->SetProperty(views::kElementIdentifierKey,
+                             UpdateAddressProfileView::kEditButtonViewId);
     layout_view->AddChildView(std::move(edit_button));
   }
 }
@@ -157,26 +167,24 @@ UpdateAddressProfileView::UpdateAddressProfileView(
     SaveUpdateAddressProfileBubbleController* controller)
     : LocationBarBubbleDelegateView(anchor_view, web_contents),
       controller_(controller) {
-  DCHECK(base::FeatureList::IsEnabled(
-      features::kAutofillAddressProfileSavePrompt));
   // Since this is an update prompt, original profile must be set. Otherwise, it
   // would have been a save prompt.
   DCHECK(controller_->GetOriginalProfile());
 
   auto* layout_provider = views::LayoutProvider::Get();
 
-  set_fixed_width(layout_provider->GetDistanceMetric(
-      views::DISTANCE_BUBBLE_PREFERRED_WIDTH));
-
   SetAcceptCallback(base::BindOnce(
       &SaveUpdateAddressProfileBubbleController::OnUserDecision,
       base::Unretained(controller_),
-      AutofillClient::SaveAddressProfileOfferUserDecision::kAccepted));
+      AutofillClient::SaveAddressProfileOfferUserDecision::kAccepted,
+      std::nullopt));
   SetCancelCallback(base::BindOnce(
       &SaveUpdateAddressProfileBubbleController::OnUserDecision,
       base::Unretained(controller_),
-      AutofillClient::SaveAddressProfileOfferUserDecision::kDeclined));
+      AutofillClient::SaveAddressProfileOfferUserDecision::kDeclined,
+      std::nullopt));
 
+  SetProperty(views::kElementIdentifierKey, kTopViewId);
   SetTitle(controller_->GetWindowTitle());
   SetButtonLabel(ui::DIALOG_BUTTON_OK,
                  l10n_util::GetStringUTF16(
@@ -259,6 +267,23 @@ UpdateAddressProfileView::UpdateAddressProfileView(
     AddValuesRow(main_content_view, profile_diff, /*show_row_label=*/true,
                  /*edit_button_callback=*/{});
   }
+
+  std::u16string footer_message = controller_->GetFooterMessage();
+  if (!footer_message.empty()) {
+    SetFootnoteView(
+        views::Builder<views::Label>()
+            .SetText(footer_message)
+            .SetTextContext(views::style::CONTEXT_BUBBLE_FOOTER)
+            .SetTextStyle(views::style::STYLE_SECONDARY)
+            .SetHorizontalAlignment(gfx::HorizontalAlignment::ALIGN_LEFT)
+            .SetMultiLine(true)
+            .Build());
+  }
+
+  set_fixed_width(std::max(
+      main_content_view->GetPreferredSize().width() + margins().width(),
+      layout_provider->GetDistanceMetric(
+          views::DISTANCE_BUBBLE_PREFERRED_WIDTH)));
 }
 
 bool UpdateAddressProfileView::ShouldShowCloseButton() const {
@@ -292,5 +317,9 @@ void UpdateAddressProfileView::Hide() {
 
   controller_ = nullptr;
 }
+
+DEFINE_CLASS_ELEMENT_IDENTIFIER_VALUE(UpdateAddressProfileView, kTopViewId);
+DEFINE_CLASS_ELEMENT_IDENTIFIER_VALUE(UpdateAddressProfileView,
+                                      kEditButtonViewId);
 
 }  // namespace autofill

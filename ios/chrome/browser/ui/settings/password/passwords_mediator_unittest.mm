@@ -3,60 +3,49 @@
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/ui/settings/password/passwords_mediator.h"
+#import "ios/chrome/browser/ui/settings/password/passwords_mediator+Testing.h"
 
-#import "base/mac/foundation_util.h"
+#import "base/apple/foundation_util.h"
 #import "base/strings/string_piece.h"
 #import "base/strings/string_util.h"
 #import "base/strings/utf_string_conversions.h"
+#import "base/test/bind.h"
 #import "base/test/scoped_feature_list.h"
+#import "components/feature_engagement/public/event_constants.h"
+#import "components/feature_engagement/test/mock_tracker.h"
+#import "components/keyed_service/core/service_access_type.h"
+#import "components/password_manager/core/browser/affiliation/fake_affiliation_service.h"
 #import "components/password_manager/core/browser/password_manager_test_utils.h"
-#import "components/password_manager/core/browser/test_password_store.h"
+#import "components/password_manager/core/browser/password_store/test_password_store.h"
 #import "components/password_manager/core/browser/ui/credential_ui_entry.h"
 #import "components/password_manager/core/common/password_manager_features.h"
-#import "components/password_manager/core/common/password_manager_pref_names.h"
-#import "components/prefs/testing_pref_service.h"
 #import "components/signin/public/identity_manager/objc/identity_manager_observer_bridge.h"
-#import "ios/chrome/browser/browser_state/chrome_browser_state.h"
-#import "ios/chrome/browser/browser_state/test_chrome_browser_state.h"
 #import "ios/chrome/browser/favicon/favicon_loader.h"
 #import "ios/chrome/browser/favicon/ios_chrome_favicon_loader_factory.h"
-#import "ios/chrome/browser/main/test_browser.h"
-#import "ios/chrome/browser/passwords/ios_chrome_password_check_manager.h"
-#import "ios/chrome/browser/passwords/ios_chrome_password_check_manager_factory.h"
-#import "ios/chrome/browser/passwords/ios_chrome_password_store_factory.h"
-#import "ios/chrome/browser/passwords/password_check_observer_bridge.h"
-#import "ios/chrome/browser/sync/sync_observer_bridge.h"
-#import "ios/chrome/browser/sync/sync_setup_service_factory.h"
-#import "ios/chrome/browser/sync/sync_setup_service_mock.h"
+#import "ios/chrome/browser/feature_engagement/model/tracker_factory.h"
+#import "ios/chrome/browser/passwords/model/ios_chrome_affiliation_service_factory.h"
+#import "ios/chrome/browser/passwords/model/ios_chrome_password_check_manager.h"
+#import "ios/chrome/browser/passwords/model/ios_chrome_password_check_manager_factory.h"
+#import "ios/chrome/browser/passwords/model/ios_chrome_profile_password_store_factory.h"
+#import "ios/chrome/browser/passwords/model/password_check_observer_bridge.h"
+#import "ios/chrome/browser/shared/model/browser/test/test_browser.h"
+#import "ios/chrome/browser/shared/model/browser_state/chrome_browser_state.h"
+#import "ios/chrome/browser/shared/model/browser_state/test_chrome_browser_state.h"
+#import "ios/chrome/browser/shared/ui/table_view/legacy_chrome_table_view_controller_test.h"
+#import "ios/chrome/browser/sync/model/sync_observer_bridge.h"
+#import "ios/chrome/browser/sync/model/sync_service_factory.h"
 #import "ios/chrome/browser/ui/settings/password/passwords_consumer.h"
 #import "ios/chrome/browser/ui/settings/utils/password_auto_fill_status_observer.h"
-#import "ios/chrome/browser/ui/table_view/chrome_table_view_controller_test.h"
 #import "ios/web/public/test/web_task_environment.h"
 #import "testing/gmock/include/gmock/gmock.h"
 #import "testing/gtest/include/gtest/gtest.h"
 #import "testing/gtest_mac.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace {
 
 using password_manager::PasswordForm;
 using password_manager::InsecureType;
 using password_manager::TestPasswordStore;
-
-// Sets test password store and returns pointer to it.
-scoped_refptr<TestPasswordStore> BuildTestPasswordStore(
-    ChromeBrowserState* _browserState) {
-  return base::WrapRefCounted(static_cast<password_manager::TestPasswordStore*>(
-      IOSChromePasswordStoreFactory::GetInstance()
-          ->SetTestingFactoryAndUse(
-              _browserState,
-              base::BindRepeating(&password_manager::BuildPasswordStore<
-                                  web::BrowserState, TestPasswordStore>))
-          .get()));
-}
 
 // Creates a saved password form.
 PasswordForm CreatePasswordForm() {
@@ -66,6 +55,12 @@ PasswordForm CreatePasswordForm() {
   form.signon_realm = "http://www.example.com/";
   form.in_store = PasswordForm::Store::kProfileStore;
   return form;
+}
+
+// Create the Feature Engagement Mock Tracker.
+std::unique_ptr<KeyedService> BuildFeatureEngagementMockTracker(
+    web::BrowserState* browser_state) {
+  return std::make_unique<feature_engagement::test::MockTracker>();
 }
 
 }  // namespace
@@ -81,14 +76,16 @@ PasswordForm CreatePasswordForm() {
 // causes the update to occur.
 @property(nonatomic, assign) NSInteger numberOfCallToChangeOnDeviceEncryption;
 
-@property(nonatomic, assign) NSString* detailedText;
+@property(nonatomic, copy) NSString* detailedText;
+
+@property(nonatomic, assign) BOOL shouldShowPasswordManagerWidgetPromoCalled;
 
 @end
 
 @implementation FakePasswordsConsumer
 
 - (void)setPasswordCheckUIState:(PasswordCheckUIState)state
-    unmutedCompromisedPasswordsCount:(NSInteger)count {
+         insecurePasswordsCount:(NSInteger)insecureCount {
 }
 
 - (void)setPasswords:(std::vector<password_manager::CredentialUIEntry>)passwords
@@ -96,6 +93,9 @@ PasswordForm CreatePasswordForm() {
             (std::vector<password_manager::CredentialUIEntry>)blockedSites {
   _passwords = passwords;
   _blockedSites = blockedSites;
+}
+
+- (void)setSavingPasswordsToAccount:(BOOL)savingPasswordsToAccount {
 }
 
 - (void)setAffiliatedGroups:
@@ -108,16 +108,13 @@ PasswordForm CreatePasswordForm() {
   _blockedSites = blockedSites;
 }
 
-- (void)updatePasswordsInOtherAppsDetailedText {
-  _detailedText = @"On";
+- (std::vector<password_manager::AffiliatedGroup>)affiliatedGroups {
+  return _affiliatedGroups;
 }
 
-- (std::vector<password_manager::CredentialUIEntry>)passwords {
-  return _passwords;
-}
-
-- (void)updateOnDeviceEncryptionSessionAndUpdateTableView {
-  self.numberOfCallToChangeOnDeviceEncryption += 1;
+- (void)setShouldShowPasswordManagerWidgetPromo:
+    (BOOL)shouldShowPasswordManagerWidgetPromo {
+  _shouldShowPasswordManagerWidgetPromoCalled = YES;
 }
 
 @end
@@ -127,15 +124,29 @@ class PasswordsMediatorTest : public BlockCleanupTest {
  protected:
   void SetUp() override {
     BlockCleanupTest::SetUp();
-
     TestChromeBrowserState::Builder builder;
     builder.AddTestingFactory(
-        SyncSetupServiceFactory::GetInstance(),
-        base::BindRepeating(&SyncSetupServiceMock::CreateKeyedService));
+        IOSChromeProfilePasswordStoreFactory::GetInstance(),
+        base::BindRepeating(
+            &password_manager::BuildPasswordStore<web::BrowserState,
+                                                  TestPasswordStore>));
+    builder.AddTestingFactory(
+        IOSChromeAffiliationServiceFactory::GetInstance(),
+        base::BindRepeating(base::BindLambdaForTesting([](web::BrowserState*) {
+          return std::unique_ptr<KeyedService>(
+              std::make_unique<password_manager::FakeAffiliationService>());
+        })));
+
+    builder.AddTestingFactory(
+        feature_engagement::TrackerFactory::GetInstance(),
+        base::BindRepeating(&BuildFeatureEngagementMockTracker));
     browser_state_ = builder.Build();
 
-    store_ = BuildTestPasswordStore(browser_state_.get());
-
+    store_ =
+        base::WrapRefCounted(static_cast<password_manager::TestPasswordStore*>(
+            IOSChromeProfilePasswordStoreFactory::GetForBrowserState(
+                browser_state_.get(), ServiceAccessType::EXPLICIT_ACCESS)
+                .get()));
     password_check_ = IOSChromePasswordCheckManagerFactory::GetForBrowserState(
         browser_state_.get());
 
@@ -143,19 +154,17 @@ class PasswordsMediatorTest : public BlockCleanupTest {
 
     mediator_ = [[PasswordsMediator alloc]
         initWithPasswordCheckManager:password_check_
-                    syncSetupService:syncService()
                        faviconLoader:IOSChromeFaviconLoaderFactory::
                                          GetForBrowserState(
                                              browser_state_.get())
-                     identityManager:IdentityManagerFactory::GetForBrowserState(
-                                         browser_state_.get())
                          syncService:SyncServiceFactory::GetForBrowserState(
                                          browser_state_.get())];
-    mediator_.consumer = consumer_;
-  }
 
-  SyncSetupService* syncService() {
-    return SyncSetupServiceFactory::GetForBrowserState(browser_state_.get());
+    mock_tracker_ = static_cast<feature_engagement::test::MockTracker*>(
+        feature_engagement::TrackerFactory::GetForBrowserState(browserState()));
+    mediator_.tracker = mock_tracker_;
+
+    mediator_.consumer = consumer_;
   }
 
   PasswordsMediator* mediator() { return mediator_; }
@@ -166,6 +175,8 @@ class PasswordsMediatorTest : public BlockCleanupTest {
 
   FakePasswordsConsumer* consumer() { return consumer_; }
 
+  feature_engagement::test::MockTracker* mockTracker() { return mock_tracker_; }
+
   void RunUntilIdle() { task_environment_.RunUntilIdle(); }
 
  private:
@@ -175,81 +186,76 @@ class PasswordsMediatorTest : public BlockCleanupTest {
   scoped_refptr<IOSChromePasswordCheckManager> password_check_;
   FakePasswordsConsumer* consumer_;
   PasswordsMediator* mediator_;
+  feature_engagement::test::MockTracker* mock_tracker_;
 };
-
-TEST_F(PasswordsMediatorTest, ElapsedTimeSinceLastCheck) {
-  EXPECT_NSEQ(@"Check never run.",
-              [mediator() formatElapsedTimeSinceLastCheck]);
-
-  base::Time expected1 = base::Time::Now() - base::Seconds(10);
-  browserState()->GetPrefs()->SetDouble(
-      password_manager::prefs::kLastTimePasswordCheckCompleted,
-      expected1.ToDoubleT());
-
-  EXPECT_NSEQ(@"Last checked just now.",
-              [mediator() formatElapsedTimeSinceLastCheck]);
-
-  base::Time expected2 = base::Time::Now() - base::Minutes(5);
-  browserState()->GetPrefs()->SetDouble(
-      password_manager::prefs::kLastTimePasswordCheckCompleted,
-      expected2.ToDoubleT());
-
-  EXPECT_NSEQ(@"Last checked 5 minutes ago.",
-              [mediator() formatElapsedTimeSinceLastCheck]);
-}
 
 // Consumer should be notified when passwords are changed.
 TEST_F(PasswordsMediatorTest, NotifiesConsumerOnPasswordChange) {
   PasswordForm form = CreatePasswordForm();
   store()->AddLogin(form);
   RunUntilIdle();
-  EXPECT_THAT([consumer() passwords],
-              testing::ElementsAre(password_manager::CredentialUIEntry(form)));
-
+  password_manager::CredentialUIEntry credential(form);
+  std::vector<password_manager::AffiliatedGroup> affiliatedGroups =
+      [consumer() affiliatedGroups];
+  EXPECT_EQ(1u, affiliatedGroups.size());
+  EXPECT_THAT(affiliatedGroups[0].GetCredentials(),
+              testing::ElementsAre(credential));
   // Remove form from the store.
   store()->RemoveLogin(form);
   RunUntilIdle();
-  EXPECT_THAT([consumer() passwords], testing::IsEmpty());
+  affiliatedGroups = [consumer() affiliatedGroups];
+  EXPECT_THAT(affiliatedGroups, testing::IsEmpty());
 }
 
-// Duplicates of a form should be removed as well.
-TEST_F(PasswordsMediatorTest, DeleteFormWithDuplicates) {
-  PasswordForm form = CreatePasswordForm();
-  PasswordForm duplicate = form;
-  duplicate.username_element = u"element";
+// Tests that `ShouldTriggerHelpUI` is called on the FET and that the consumer
+// is being notified of whether the Password Manager widget promo should be
+// shown when the mediator's consumer is set.
+TEST_F(PasswordsMediatorTest, NotifiesConsumerToShowPromoOrNot) {
+  // Make sure that `shouldShowPasswordManagerWidgetPromoCalled` isn't already
+  // true.
+  EXPECT_FALSE(consumer().shouldShowPasswordManagerWidgetPromoCalled);
 
-  store()->AddLogin(form);
-  store()->AddLogin(duplicate);
-  RunUntilIdle();
-  ASSERT_THAT([consumer() passwords],
-              testing::ElementsAre(password_manager::CredentialUIEntry(form)));
+  EXPECT_CALL(
+      *mockTracker(),
+      ShouldTriggerHelpUI(testing::Ref(
+          feature_engagement::kIPHiOSPromoPasswordManagerWidgetFeature)))
+      .Times(testing::Exactly(1));
 
-  [mediator() deleteCredential:password_manager::CredentialUIEntry(form)];
-  RunUntilIdle();
-  EXPECT_THAT([consumer() passwords], testing::IsEmpty());
+  [mediator() askFETToShowPasswordManagerWidgetPromo];
+
+  EXPECT_TRUE(consumer().shouldShowPasswordManagerWidgetPromoCalled);
 }
 
-// Mediator should update consumer password autofill state.
-TEST_F(PasswordsMediatorTest, TestPasswordAutoFillDidChangeToStatusMethod) {
-  ASSERT_EQ([consumer() detailedText], nil);
-  [mediator() passwordAutoFillStatusDidChange];
-  EXPECT_NSEQ([consumer() detailedText], @"On");
+// Tests that `Dismissed` is called on the FET on disconnect when the Password
+// Manager widget promo was shown and was not dismissed by the user.
+TEST_F(PasswordsMediatorTest, NotifiesFETToDismissPromoOnDisconnect) {
+  mediator().shouldNotifyFETToDismissPasswordManagerWidgetPromo = YES;
+
+  EXPECT_CALL(
+      *mockTracker(),
+      Dismissed(testing::Ref(
+          feature_engagement::kIPHiOSPromoPasswordManagerWidgetFeature)))
+      .Times(testing::Exactly(1));
+
+  [mediator() disconnect];
 }
 
-TEST_F(PasswordsMediatorTest, SyncChangeTriggersChangeOnDeviceEncryption) {
-  DCHECK([mediator() conformsToProtocol:@protocol(SyncObserverModelBridge)]);
-  PasswordsMediator<SyncObserverModelBridge>* syncObserver =
-      static_cast<PasswordsMediator<SyncObserverModelBridge>*>(mediator());
-  [syncObserver onSyncStateChanged];
-  ASSERT_EQ(1, consumer().numberOfCallToChangeOnDeviceEncryption);
-}
+// Tests that `NotifyEvent` and `Dismissed` is called on the FET when the user
+// taps the close button of the Password Manager widget promo.
+TEST_F(PasswordsMediatorTest, NotifiesFETToDismissPromoOnPromoClosed) {
+  mediator().shouldNotifyFETToDismissPasswordManagerWidgetPromo = YES;
 
-TEST_F(PasswordsMediatorTest, IdentityChangeTriggersChangeOnDeviceEncryption) {
-  DCHECK([mediator() conformsToProtocol:@protocol(SyncObserverModelBridge)]);
-  PasswordsMediator<IdentityManagerObserverBridgeDelegate>* syncObserver =
-      static_cast<PasswordsMediator<IdentityManagerObserverBridgeDelegate>*>(
-          mediator());
-  const signin::PrimaryAccountChangeEvent event;
-  [syncObserver onPrimaryAccountChanged:event];
-  ASSERT_EQ(1, consumer().numberOfCallToChangeOnDeviceEncryption);
+  EXPECT_CALL(
+      *mockTracker(),
+      NotifyEvent(
+          feature_engagement::events::kPasswordManagerWidgetPromoClosed));
+  EXPECT_CALL(
+      *mockTracker(),
+      Dismissed(testing::Ref(
+          feature_engagement::kIPHiOSPromoPasswordManagerWidgetFeature)))
+      .Times(testing::Exactly(1));
+
+  [mediator() notifyFETOfPasswordManagerWidgetPromoDismissal];
+
+  EXPECT_FALSE(mediator().shouldNotifyFETToDismissPasswordManagerWidgetPromo);
 }

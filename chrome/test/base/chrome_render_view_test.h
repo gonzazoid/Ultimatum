@@ -18,7 +18,6 @@ namespace autofill {
 class AutofillAgent;
 class TestPasswordAutofillAgent;
 class PasswordGenerationAgent;
-class AutofillAssistantAgent;
 }  // namespace autofill
 
 // This test fixture emulates a single RenderView within the main test process.
@@ -46,12 +45,9 @@ class ChromeRenderViewTest : public content::RenderViewTest {
   // Use when overriding CreateContentRendererClient.
   void InitChromeContentRendererClient(ChromeContentRendererClient* client);
 
-  void WaitForAutofillDidAssociateFormControl();
-
   raw_ptr<autofill::TestPasswordAutofillAgent> password_autofill_agent_ =
       nullptr;
   raw_ptr<autofill::PasswordGenerationAgent> password_generation_ = nullptr;
-  raw_ptr<autofill::AutofillAssistantAgent> autofill_assistant_agent_ = nullptr;
   raw_ptr<autofill::AutofillAgent> autofill_agent_ = nullptr;
 
   std::unique_ptr<service_manager::BinderRegistry> registry_;

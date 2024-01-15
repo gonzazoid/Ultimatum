@@ -5,7 +5,6 @@
 import './pdf_viewer_wrapper.js';
 
 import {BrowserApi, createBrowserApi} from './browser_api.js';
-import {PdfViewerBaseElement} from './pdf_viewer_wrapper.js';
 
 /**
  * Stores any pending messages received which should be passed to the
@@ -26,7 +25,7 @@ function handleScriptingMessage(message: MessageEvent) {
 function initViewer(browserApi: BrowserApi) {
   // PDFViewer will handle any messages after it is created.
   window.removeEventListener('message', handleScriptingMessage, false);
-  const viewer = document.querySelector<PdfViewerBaseElement>('#viewer')!;
+  const viewer = document.querySelector('pdf-viewer')!;
   viewer.init(browserApi);
   while (pendingMessages.length > 0) {
     viewer.handleScriptingMessage(pendingMessages.shift()!);

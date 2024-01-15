@@ -6,12 +6,16 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
+#include "base/types/expected.h"
 #include "build/build_config.h"
+#include "components/download/public/common/download_url_parameters.h"
 #include "content/browser/devtools/devtools_agent_host_impl.h"
+#include "content/browser/generic_sensor/web_contents_sensor_provider_proxy.h"
 #include "content/browser/idle/idle_manager_impl.h"
 #include "content/browser/renderer_host/input/touch_emulator.h"
 #include "content/browser/renderer_host/render_frame_host_impl.h"
@@ -20,9 +24,11 @@
 #include "content/public/common/content_client.h"
 #include "content/public/common/url_constants.h"
 #include "net/http/http_util.h"
+#include "services/device/public/cpp/generic_sensor/sensor_reading.h"
 #include "services/device/public/cpp/geolocation/geoposition.h"
 #include "services/device/public/mojom/geolocation_context.mojom.h"
 #include "services/device/public/mojom/geoposition.mojom.h"
+#include "services/device/public/mojom/sensor.mojom-shared.h"
 #include "services/network/public/cpp/client_hints.h"
 #include "ui/display/mojom/screen_orientation.mojom.h"
 #include "ui/events/gesture_detection/gesture_provider_config_helper.h"
@@ -34,6 +40,10 @@ namespace {
 
 constexpr char kCommandIsOnlyAvailableAtTopTarget[] =
     "Command can only be executed on top-level targets";
+constexpr char kSensorIsAlreadyOverridden[] =
+    "The specified sensor type is already overridden";
+constexpr char kSensorIsNotOverridden[] =
+    "This sensor type is not being overridden with a virtual sensor";
 
 display::mojom::ScreenOrientation WebScreenOrientationTypeFromString(
     const std::string& type) {
@@ -48,13 +58,25 @@ display::mojom::ScreenOrientation WebScreenOrientationTypeFromString(
   return display::mojom::ScreenOrientation::kUndefined;
 }
 
-absl::optional<content::DisplayFeature::Orientation>
+std::optional<content::DisplayFeature::Orientation>
 DisplayFeatureOrientationTypeFromString(const std::string& type) {
   if (type == Emulation::DisplayFeature::OrientationEnum::Vertical)
     return content::DisplayFeature::Orientation::kVertical;
   if (type == Emulation::DisplayFeature::OrientationEnum::Horizontal)
     return content::DisplayFeature::Orientation::kHorizontal;
-  return absl::nullopt;
+  return std::nullopt;
+}
+
+base::expected<device::mojom::DevicePostureType, protocol::Response>
+DevicePostureTypeFromString(const std::string& type) {
+  if (type == Emulation::DevicePosture::TypeEnum::Continuous) {
+    return device::mojom::DevicePostureType::kContinuous;
+  } else if (type == Emulation::DevicePosture::TypeEnum::Folded) {
+    return device::mojom::DevicePostureType::kFolded;
+  } else {
+    return base::unexpected(
+        protocol::Response::InvalidParams("Invalid posture type"));
+  }
 }
 
 ui::GestureProviderConfigType TouchEmulationConfigurationToType(
@@ -104,6 +126,9 @@ void EmulationHandler::SetRenderer(int process_host_id,
                                    RenderFrameHostImpl* frame_host) {
   if (host_ == frame_host)
     return;
+  if (!frame_host) {
+    sensor_overrides_.clear();
+  }
   host_ = frame_host;
   if (touch_emulation_enabled_)
     UpdateTouchEventEmulationState();
@@ -129,7 +154,252 @@ Response EmulationHandler::Disable() {
     SetFocusEmulationEnabled(false);
   prefers_color_scheme_ = "";
   prefers_reduced_motion_ = "";
+  prefers_reduced_transparency_ = "";
+  sensor_overrides_.clear();
   return Response::Success();
+}
+
+namespace {
+
+Response ConvertSensorType(const Emulation::SensorType& type,
+                           device::mojom::SensorType* out_type) {
+  if (type == Emulation::SensorTypeEnum::AbsoluteOrientation) {
+    *out_type = device::mojom::SensorType::ABSOLUTE_ORIENTATION_QUATERNION;
+  } else if (type == Emulation::SensorTypeEnum::Accelerometer) {
+    *out_type = device::mojom::SensorType::ACCELEROMETER;
+  } else if (type == Emulation::SensorTypeEnum::AmbientLight) {
+    *out_type = device::mojom::SensorType::AMBIENT_LIGHT;
+  } else if (type == Emulation::SensorTypeEnum::Gravity) {
+    *out_type = device::mojom::SensorType::GRAVITY;
+  } else if (type == Emulation::SensorTypeEnum::Gyroscope) {
+    *out_type = device::mojom::SensorType::GYROSCOPE;
+  } else if (type == Emulation::SensorTypeEnum::LinearAcceleration) {
+    *out_type = device::mojom::SensorType::LINEAR_ACCELERATION;
+  } else if (type == Emulation::SensorTypeEnum::Magnetometer) {
+    *out_type = device::mojom::SensorType::MAGNETOMETER;
+  } else if (type == Emulation::SensorTypeEnum::RelativeOrientation) {
+    *out_type = device::mojom::SensorType::RELATIVE_ORIENTATION_QUATERNION;
+  } else {
+    return Response::InvalidParams("Invalid sensor type: " + type);
+  }
+
+  return Response::Success();
+}
+
+Response ConvertSensorReading(device::mojom::SensorType type,
+                              Emulation::SensorReading* const reading,
+                              device::SensorReading* out_reading) {
+  switch (type) {
+    case device::mojom::SensorType::AMBIENT_LIGHT: {
+      if (!reading->HasSingle()) {
+        return Response::InvalidParams(
+            "This sensor type requires a 'single' parameter");
+      }
+      auto* single_value = reading->GetSingle(nullptr);
+      out_reading->als.value = single_value->GetValue();
+      break;
+    }
+    case device::mojom::SensorType::ACCELEROMETER:
+    case device::mojom::SensorType::GRAVITY:
+    case device::mojom::SensorType::GYROSCOPE:
+    case device::mojom::SensorType::LINEAR_ACCELERATION:
+    case device::mojom::SensorType::MAGNETOMETER: {
+      if (!reading->HasXyz()) {
+        return Response::InvalidParams(
+            "This sensor type requires an 'xyz' parameter");
+      }
+      auto* xyz = reading->GetXyz(nullptr);
+      out_reading->accel.x = xyz->GetX();
+      out_reading->accel.y = xyz->GetY();
+      out_reading->accel.z = xyz->GetZ();
+      break;
+    }
+    case device::mojom::SensorType::ABSOLUTE_ORIENTATION_QUATERNION:
+    case device::mojom::SensorType::RELATIVE_ORIENTATION_QUATERNION: {
+      if (!reading->HasQuaternion()) {
+        return Response::InvalidParams(
+            "This sensor type requires a 'quaternion' parameter");
+      }
+      auto* quaternion = reading->GetQuaternion(nullptr);
+      out_reading->orientation_quat.x = quaternion->GetX();
+      out_reading->orientation_quat.y = quaternion->GetY();
+      out_reading->orientation_quat.z = quaternion->GetZ();
+      out_reading->orientation_quat.w = quaternion->GetW();
+      break;
+    }
+    case device::mojom::SensorType::ABSOLUTE_ORIENTATION_EULER_ANGLES:
+    case device::mojom::SensorType::PRESSURE:
+    case device::mojom::SensorType::PROXIMITY:
+    case device::mojom::SensorType::RELATIVE_ORIENTATION_EULER_ANGLES:
+      return Response::InvalidParams("Unsupported sensor type");
+  }
+  out_reading->raw.timestamp =
+      (base::TimeTicks::Now() - base::TimeTicks()).InSecondsF();
+  return Response::Success();
+}
+
+base::expected<device::mojom::VirtualSensorMetadataPtr, Response>
+ParseSensorMetadata(Maybe<Emulation::SensorMetadata>& metadata) {
+  if (!metadata.has_value()) {
+    return device::mojom::VirtualSensorMetadata::New();
+  }
+
+  if (metadata->HasMinimumFrequency() && metadata->HasMaximumFrequency() &&
+      metadata->GetMinimumFrequency(0) > metadata->GetMaximumFrequency(0)) {
+    return base::unexpected(
+        Response::InvalidParams("The specified minimum frequency is higher "
+                                "than the maximum frequency"));
+  }
+
+  auto virtual_sensor_metadata = device::mojom::VirtualSensorMetadata::New();
+  if (metadata->HasAvailable()) {
+    virtual_sensor_metadata->available = metadata->GetAvailable(true);
+  }
+  if (metadata->HasMinimumFrequency()) {
+    virtual_sensor_metadata->minimum_frequency =
+        metadata->GetMinimumFrequency(0);
+  }
+  if (metadata->HasMaximumFrequency()) {
+    virtual_sensor_metadata->maximum_frequency =
+        metadata->GetMaximumFrequency(0);
+  }
+  return virtual_sensor_metadata;
+}
+
+}  // namespace
+
+void EmulationHandler::GetOverriddenSensorInformation(
+    const Emulation::SensorType& type,
+    std::unique_ptr<GetOverriddenSensorInformationCallback> callback) {
+  if (!host_) {
+    callback->sendFailure(Response::InternalError());
+    return;
+  }
+
+  device::mojom::SensorType sensor_type;
+  if (auto response = ConvertSensorType(type, &sensor_type);
+      !response.IsSuccess()) {
+    callback->sendFailure(response);
+    return;
+  }
+
+  auto it = sensor_overrides_.find(sensor_type);
+  if (it == sensor_overrides_.end()) {
+    callback->sendFailure(Response::InvalidParams(kSensorIsNotOverridden));
+    return;
+  }
+
+  it->second->GetVirtualSensorInformation(base::BindOnce(
+      [](std::unique_ptr<GetOverriddenSensorInformationCallback> callback,
+         device::mojom::GetVirtualSensorInformationResultPtr result) {
+        if (result->is_error()) {
+          switch (result->get_error()) {
+            case device::mojom::GetVirtualSensorInformationError::
+                kSensorTypeNotOverridden:
+              callback->sendFailure(
+                  Response::InvalidParams(kSensorIsNotOverridden));
+              return;
+          }
+        }
+        CHECK(result->is_info());
+        callback->sendSuccess(result->get_info()->sampling_frequency);
+      },
+      std::move(callback)));
+}
+
+void EmulationHandler::SetSensorOverrideEnabled(
+    bool enabled,
+    const Emulation::SensorType& type,
+    Maybe<Emulation::SensorMetadata> metadata,
+    std::unique_ptr<SetSensorOverrideEnabledCallback> callback) {
+  if (!host_) {
+    callback->sendFailure(Response::InternalError());
+    return;
+  }
+
+  device::mojom::SensorType sensor_type;
+  if (auto response = ConvertSensorType(type, &sensor_type);
+      !response.IsSuccess()) {
+    callback->sendFailure(response);
+    return;
+  }
+
+  if (enabled) {
+    auto virtual_sensor_metadata = ParseSensorMetadata(metadata);
+    if (!virtual_sensor_metadata.has_value()) {
+      callback->sendFailure(virtual_sensor_metadata.error());
+      return;
+    }
+
+    if (sensor_overrides_.contains(sensor_type)) {
+      callback->sendFailure(
+          Response::InvalidParams(kSensorIsAlreadyOverridden));
+      return;
+    }
+
+    auto virtual_sensor =
+        WebContentsSensorProviderProxy::GetOrCreate(GetWebContents())
+            ->CreateVirtualSensorForDevTools(
+                sensor_type, std::move(virtual_sensor_metadata.value()));
+    if (!virtual_sensor) {
+      callback->sendFailure(
+          Response::InvalidParams(kSensorIsAlreadyOverridden));
+      return;
+    }
+    sensor_overrides_[sensor_type] = std::move(virtual_sensor);
+  } else {
+    sensor_overrides_.erase(sensor_type);
+  }
+  callback->sendSuccess();
+}
+
+void EmulationHandler::SetSensorOverrideReadings(
+    const Emulation::SensorType& type,
+    std::unique_ptr<Emulation::SensorReading> reading,
+    std::unique_ptr<SetSensorOverrideReadingsCallback> callback) {
+  if (!host_) {
+    callback->sendFailure(Response::InternalError());
+    return;
+  }
+
+  device::mojom::SensorType sensor_type;
+  if (auto response = ConvertSensorType(type, &sensor_type);
+      !response.IsSuccess()) {
+    callback->sendFailure(response);
+    return;
+  }
+
+  device::SensorReading device_reading;
+  if (auto response =
+          ConvertSensorReading(sensor_type, reading.get(), &device_reading);
+      !response.IsSuccess()) {
+    callback->sendFailure(response);
+    return;
+  }
+
+  auto it = sensor_overrides_.find(sensor_type);
+  if (it == sensor_overrides_.end()) {
+    callback->sendFailure(Response::InvalidParams(kSensorIsNotOverridden));
+    return;
+  }
+
+  it->second->UpdateVirtualSensor(
+      device_reading,
+      base::BindOnce(
+          [](std::unique_ptr<SetSensorOverrideReadingsCallback> callback,
+             device::mojom::UpdateVirtualSensorResult result) {
+            switch (result) {
+              case device::mojom::UpdateVirtualSensorResult::
+                  kSensorTypeNotOverridden:
+                callback->sendFailure(
+                    Response::InvalidParams(kSensorIsNotOverridden));
+                break;
+              case device::mojom::UpdateVirtualSensorResult::kSuccess:
+                callback->sendSuccess();
+                break;
+            }
+          },
+          std::move(callback)));
 }
 
 Response EmulationHandler::SetIdleOverride(bool is_user_active,
@@ -154,21 +424,25 @@ Response EmulationHandler::SetGeolocationOverride(Maybe<double> latitude,
     return Response::InternalError();
 
   auto* geolocation_context = GetWebContents()->GetGeolocationContext();
-  auto geoposition = device::mojom::Geoposition::New();
-  if (latitude.isJust() && longitude.isJust() && accuracy.isJust()) {
-    geoposition->latitude = latitude.fromJust();
-    geoposition->longitude = longitude.fromJust();
-    geoposition->accuracy = accuracy.fromJust();
-    geoposition->timestamp = base::Time::Now();
-
-    if (!device::ValidateGeoposition(*geoposition))
+  device::mojom::GeopositionResultPtr override_result;
+  if (latitude.has_value() && longitude.has_value() && accuracy.has_value()) {
+    auto position = device::mojom::Geoposition::New();
+    position->latitude = latitude.value();
+    position->longitude = longitude.value();
+    position->accuracy = accuracy.value();
+    position->timestamp = base::Time::Now();
+    if (!device::ValidateGeoposition(*position)) {
       return Response::ServerError("Invalid geolocation");
-
+    }
+    override_result =
+        device::mojom::GeopositionResult::NewPosition(std::move(position));
   } else {
-    geoposition->error_code =
-        device::mojom::Geoposition::ErrorCode::POSITION_UNAVAILABLE;
+    override_result = device::mojom::GeopositionResult::NewError(
+        device::mojom::GeopositionError::New(
+            device::mojom::GeopositionErrorCode::kPositionUnavailable,
+            /*error_message=*/"", /*error_technical=*/""));
   }
-  geolocation_context->SetOverride(std::move(geoposition));
+  geolocation_context->SetOverride(std::move(override_result));
   return Response::Success();
 }
 
@@ -191,7 +465,7 @@ Response EmulationHandler::SetEmitTouchEventsForMouse(
     return Response::ServerError(kCommandIsOnlyAvailableAtTopTarget);
 
   touch_emulation_enabled_ = enabled;
-  touch_emulation_configuration_ = configuration.fromMaybe("");
+  touch_emulation_configuration_ = configuration.value_or("");
   UpdateTouchEventEmulationState();
   return Response::Success();
 }
@@ -223,7 +497,8 @@ Response EmulationHandler::SetDeviceMetricsOverride(
     Maybe<bool> dont_set_visible_size,
     Maybe<Emulation::ScreenOrientation> screen_orientation,
     Maybe<protocol::Page::Viewport> viewport,
-    Maybe<protocol::Emulation::DisplayFeature> displayFeature) {
+    Maybe<protocol::Emulation::DisplayFeature> display_feature,
+    Maybe<protocol::Emulation::DevicePosture> device_posture) {
   const static int max_size = 10000000;
   const static double max_scale = 10;
   const static int max_orientation_angle = 360;
@@ -234,17 +509,17 @@ Response EmulationHandler::SetDeviceMetricsOverride(
   if (host_->GetParentOrOuterDocument())
     return Response::ServerError(kCommandIsOnlyAvailableAtTopTarget);
 
-  if (screen_width.fromMaybe(0) < 0 || screen_height.fromMaybe(0) < 0 ||
-      screen_width.fromMaybe(0) > max_size ||
-      screen_height.fromMaybe(0) > max_size) {
+  if (screen_width.value_or(0) < 0 || screen_height.value_or(0) < 0 ||
+      screen_width.value_or(0) > max_size ||
+      screen_height.value_or(0) > max_size) {
     return Response::InvalidParams(
         "Screen width and height values must be positive, not greater than " +
         base::NumberToString(max_size));
   }
 
-  if (position_x.fromMaybe(0) < 0 || position_y.fromMaybe(0) < 0 ||
-      position_x.fromMaybe(0) > screen_width.fromMaybe(0) ||
-      position_y.fromMaybe(0) > screen_height.fromMaybe(0)) {
+  if (position_x.value_or(0) < 0 || position_y.value_or(0) < 0 ||
+      position_x.value_or(0) > screen_width.value_or(0) ||
+      position_y.value_or(0) > screen_height.value_or(0)) {
     return Response::InvalidParams("View position should be on the screen");
   }
 
@@ -257,7 +532,7 @@ Response EmulationHandler::SetDeviceMetricsOverride(
   if (device_scale_factor < 0)
     return Response::InvalidParams("deviceScaleFactor must be non-negative");
 
-  if (scale.fromMaybe(1) <= 0 || scale.fromMaybe(1) > max_scale) {
+  if (scale.value_or(1) <= 0 || scale.value_or(1) > max_scale) {
     return Response::InvalidParams("scale must be positive, not greater than " +
                                    base::NumberToString(max_scale));
   }
@@ -265,13 +540,12 @@ Response EmulationHandler::SetDeviceMetricsOverride(
   display::mojom::ScreenOrientation orientationType =
       display::mojom::ScreenOrientation::kUndefined;
   int orientationAngle = 0;
-  if (screen_orientation.isJust()) {
-    Emulation::ScreenOrientation* orientation = screen_orientation.fromJust();
-    orientationType =
-        WebScreenOrientationTypeFromString(orientation->GetType());
+  if (screen_orientation.has_value()) {
+    Emulation::ScreenOrientation& orientation = screen_orientation.value();
+    orientationType = WebScreenOrientationTypeFromString(orientation.GetType());
     if (orientationType == display::mojom::ScreenOrientation::kUndefined)
       return Response::InvalidParams("Invalid screen orientation type value");
-    orientationAngle = orientation->GetAngle();
+    orientationAngle = orientation.GetAngle();
     if (orientationAngle < 0 || orientationAngle >= max_orientation_angle) {
       return Response::InvalidParams(
           "Screen orientation angle must be non-negative, less than " +
@@ -279,23 +553,23 @@ Response EmulationHandler::SetDeviceMetricsOverride(
     }
   }
 
-  absl::optional<content::DisplayFeature> display_feature = absl::nullopt;
-  if (displayFeature.isJust()) {
-    protocol::Emulation::DisplayFeature* emu_display_feature =
-        displayFeature.fromJust();
-    absl::optional<content::DisplayFeature::Orientation> disp_orientation =
+  std::optional<content::DisplayFeature> content_display_feature = std::nullopt;
+  if (display_feature.has_value()) {
+    protocol::Emulation::DisplayFeature& emu_display_feature =
+        display_feature.value();
+    std::optional<content::DisplayFeature::Orientation> disp_orientation =
         DisplayFeatureOrientationTypeFromString(
-            emu_display_feature->GetOrientation());
+            emu_display_feature.GetOrientation());
     if (!disp_orientation) {
       return Response::InvalidParams(
           "Invalid display feature orientation type");
     }
     content::DisplayFeature::ParamErrorEnum error;
-    display_feature = content::DisplayFeature::Create(
-        *disp_orientation, emu_display_feature->GetOffset(),
-        emu_display_feature->GetMaskLength(), width, height, &error);
+    content_display_feature = content::DisplayFeature::Create(
+        *disp_orientation, emu_display_feature.GetOffset(),
+        emu_display_feature.GetMaskLength(), width, height, &error);
 
-    if (!display_feature) {
+    if (!content_display_feature) {
       switch (error) {
         case content::DisplayFeature::ParamErrorEnum::
             kDisplayFeatureWithZeroScreenSize:
@@ -318,42 +592,44 @@ Response EmulationHandler::SetDeviceMetricsOverride(
   params.screen_type = mobile ? blink::mojom::EmulatedScreenType::kMobile
                               : blink::mojom::EmulatedScreenType::kDesktop;
   params.screen_size =
-      gfx::Size(screen_width.fromMaybe(0), screen_height.fromMaybe(0));
-  if (position_x.isJust() && position_y.isJust()) {
+      gfx::Size(screen_width.value_or(0), screen_height.value_or(0));
+  if (position_x.has_value() && position_y.has_value()) {
     params.view_position =
-        gfx::Point(position_x.fromMaybe(0), position_y.fromMaybe(0));
+        gfx::Point(position_x.value_or(0), position_y.value_or(0));
   }
   params.device_scale_factor = device_scale_factor;
   params.view_size = gfx::Size(width, height);
-  params.scale = scale.fromMaybe(1);
+  params.scale = scale.value_or(1);
   params.screen_orientation_type = orientationType;
   params.screen_orientation_angle = orientationAngle;
 
-  if (display_feature) {
+  if (content_display_feature) {
     params.window_segments =
-        display_feature->ComputeWindowSegments(params.view_size);
+        content_display_feature->ComputeWindowSegments(params.view_size);
   }
 
-  if (viewport.isJust()) {
-    params.viewport_offset.SetPoint(viewport.fromJust()->GetX(),
-                                    viewport.fromJust()->GetY());
+  if (device_posture.has_value()) {
+    params.device_posture =
+        DevicePostureTypeFromString(device_posture.value().GetType()).value();
+  }
+
+  if (viewport.has_value()) {
+    params.viewport_offset.SetPoint(viewport->GetX(), viewport->GetY());
 
     double dpfactor =
         device_scale_factor
             ? device_scale_factor /
                   host_->GetRenderWidgetHost()->GetDeviceScaleFactor()
             : 1;
-    params.viewport_scale = viewport.fromJust()->GetScale() * dpfactor;
+    params.viewport_scale = viewport->GetScale() * dpfactor;
 
     // Resize the RenderWidgetHostView to the size of the overridden viewport.
-    width = base::ClampRound(viewport.fromJust()->GetWidth() *
-                             params.viewport_scale);
-    height = base::ClampRound(viewport.fromJust()->GetHeight() *
-                              params.viewport_scale);
+    width = base::ClampRound(viewport->GetWidth() * params.viewport_scale);
+    height = base::ClampRound(viewport->GetHeight() * params.viewport_scale);
   }
 
   bool size_changed = false;
-  if (!dont_set_visible_size.fromMaybe(false) && width > 0 && height > 0) {
+  if (!dont_set_visible_size.value_or(false) && width > 0 && height > 0) {
     if (GetWebContents()) {
       size_changed =
           GetWebContents()->SetDeviceEmulationSize(gfx::Size(width, height));
@@ -419,7 +695,7 @@ Response EmulationHandler::SetUserAgentOverride(
     Maybe<Emulation::UserAgentMetadata> ua_metadata_override) {
   if (!user_agent.empty() && !net::HttpUtil::IsValidHeaderValue(user_agent))
     return Response::InvalidParams("Invalid characters found in userAgent");
-  std::string accept_lang = accept_language.fromMaybe(std::string());
+  std::string accept_lang = accept_language.value_or(std::string());
   if (!accept_lang.empty() && !net::HttpUtil::IsValidHeaderValue(accept_lang)) {
     return Response::InvalidParams(
         "Invalid characters found in acceptLanguage");
@@ -428,23 +704,23 @@ Response EmulationHandler::SetUserAgentOverride(
   user_agent_ = user_agent;
   accept_language_ = accept_lang;
 
-  user_agent_metadata_ = absl::nullopt;
-  if (!ua_metadata_override.isJust())
+  user_agent_metadata_ = std::nullopt;
+  if (!ua_metadata_override.has_value()) {
     return Response::FallThrough();
+  }
 
   if (user_agent.empty()) {
     return Response::InvalidParams(
         "Empty userAgent invalid with userAgentMetadata provided");
   }
 
-  std::unique_ptr<Emulation::UserAgentMetadata> ua_metadata =
-      ua_metadata_override.takeJust();
+  Emulation::UserAgentMetadata& ua_metadata = ua_metadata_override.value();
   blink::UserAgentMetadata new_ua_metadata;
   blink::UserAgentMetadata default_ua_metadata =
       GetContentClient()->browser()->GetUserAgentMetadata();
 
-  if (ua_metadata->HasBrands()) {
-    for (const auto& bv : *ua_metadata->GetBrands(nullptr)) {
+  if (ua_metadata.HasBrands()) {
+    for (const auto& bv : *ua_metadata.GetBrands(nullptr)) {
       blink::UserAgentBrandVersion out_bv;
       if (!ValidateClientHintString(bv->GetBrand()))
         return Response::InvalidParams("Invalid brand string");
@@ -461,8 +737,8 @@ Response EmulationHandler::SetUserAgentOverride(
         std::move(default_ua_metadata.brand_version_list);
   }
 
-  if (ua_metadata->HasFullVersionList()) {
-    for (const auto& bv : *ua_metadata->GetFullVersionList(nullptr)) {
+  if (ua_metadata.HasFullVersionList()) {
+    for (const auto& bv : *ua_metadata.GetFullVersionList(nullptr)) {
       blink::UserAgentBrandVersion out_bv;
       if (!ValidateClientHintString(bv->GetBrand()))
         return Response::InvalidParams("Invalid brand string");
@@ -479,8 +755,8 @@ Response EmulationHandler::SetUserAgentOverride(
         std::move(default_ua_metadata.brand_full_version_list);
   }
 
-  if (ua_metadata->HasFullVersion()) {
-    String full_version = ua_metadata->GetFullVersion("");
+  if (ua_metadata.HasFullVersion()) {
+    String full_version = ua_metadata.GetFullVersion("");
     if (!ValidateClientHintString(full_version))
       return Response::InvalidParams("Invalid full version string");
     new_ua_metadata.full_version = full_version;
@@ -488,34 +764,38 @@ Response EmulationHandler::SetUserAgentOverride(
     new_ua_metadata.full_version = std::move(default_ua_metadata.full_version);
   }
 
-  if (!ValidateClientHintString(ua_metadata->GetPlatform()))
+  if (!ValidateClientHintString(ua_metadata.GetPlatform())) {
     return Response::InvalidParams("Invalid platform string");
-  new_ua_metadata.platform = ua_metadata->GetPlatform();
+  }
+  new_ua_metadata.platform = ua_metadata.GetPlatform();
 
-  if (!ValidateClientHintString(ua_metadata->GetPlatformVersion()))
+  if (!ValidateClientHintString(ua_metadata.GetPlatformVersion())) {
     return Response::InvalidParams("Invalid platform version string");
-  new_ua_metadata.platform_version = ua_metadata->GetPlatformVersion();
+  }
+  new_ua_metadata.platform_version = ua_metadata.GetPlatformVersion();
 
-  if (!ValidateClientHintString(ua_metadata->GetArchitecture()))
+  if (!ValidateClientHintString(ua_metadata.GetArchitecture())) {
     return Response::InvalidParams("Invalid architecture string");
-  new_ua_metadata.architecture = ua_metadata->GetArchitecture();
+  }
+  new_ua_metadata.architecture = ua_metadata.GetArchitecture();
 
-  if (!ValidateClientHintString(ua_metadata->GetModel()))
+  if (!ValidateClientHintString(ua_metadata.GetModel())) {
     return Response::InvalidParams("Invalid model string");
+  }
 
-  new_ua_metadata.model = ua_metadata->GetModel();
-  new_ua_metadata.mobile = ua_metadata->GetMobile();
+  new_ua_metadata.model = ua_metadata.GetModel();
+  new_ua_metadata.mobile = ua_metadata.GetMobile();
 
-  if (ua_metadata->HasBitness()) {
-    String bitness = ua_metadata->GetBitness("");
+  if (ua_metadata.HasBitness()) {
+    String bitness = ua_metadata.GetBitness("");
     if (!ValidateClientHintString(bitness))
       return Response::InvalidParams("Invalid bitness string");
     new_ua_metadata.bitness = std::move(bitness);
   } else {
     new_ua_metadata.bitness = std::move(default_ua_metadata.bitness);
   }
-  if (ua_metadata->HasWow64()) {
-    new_ua_metadata.wow64 = ua_metadata->GetWow64(false);
+  if (ua_metadata.HasWow64()) {
+    new_ua_metadata.wow64 = ua_metadata.GetWow64(false);
   } else {
     new_ua_metadata.wow64 = default_ua_metadata.wow64;
   }
@@ -548,15 +828,22 @@ Response EmulationHandler::SetEmulatedMedia(
 
   prefers_color_scheme_ = "";
   prefers_reduced_motion_ = "";
-  if (features.isJust()) {
-    for (auto const& mediaFeature : *features.fromJust()) {
+  prefers_reduced_transparency_ = "";
+  if (features.has_value()) {
+    for (auto const& mediaFeature : features.value()) {
       auto const& name = mediaFeature->GetName();
       auto const& value = mediaFeature->GetValue();
       if (name == "prefers-color-scheme") {
-        prefers_color_scheme_ =
-            (value == "light" || value == "dark") ? value : "";
+        prefers_color_scheme_ = (value == network::kPrefersColorSchemeLight ||
+                                 value == network::kPrefersColorSchemeDark)
+                                    ? value
+                                    : "";
       } else if (name == "prefers-reduced-motion") {
-        prefers_reduced_motion_ = (value == "reduce") ? value : "";
+        prefers_reduced_motion_ =
+            (value == network::kPrefersReducedMotionReduce) ? value : "";
+      } else if (name == "prefers-reduced-transparency") {
+        prefers_reduced_transparency_ =
+            (value == network::kPrefersReducedTransparencyReduce) ? value : "";
       }
     }
   }
@@ -679,16 +966,36 @@ void EmulationHandler::ApplyOverrides(net::HttpRequestHeaders* headers,
                          prefers_reduced_motion_);
     }
   }
+  if (!prefers_reduced_transparency_.empty()) {
+    const auto& prefers_reduced_transparency_client_hint_name =
+        network::GetClientHintToNameMap().at(
+            network::mojom::WebClientHintsType::kPrefersReducedTransparency);
+    if (headers->HasHeader(prefers_reduced_transparency_client_hint_name)) {
+      headers->SetHeader(prefers_reduced_transparency_client_hint_name,
+                         prefers_reduced_transparency_);
+    }
+  }
 }
 
 bool EmulationHandler::ApplyUserAgentMetadataOverrides(
-    absl::optional<blink::UserAgentMetadata>* override_out) {
+    std::optional<blink::UserAgentMetadata>* override_out) {
   // This is conditional on basic user agent override being on; this helps us
   // emulate a device not sending any UA client hints.
   if (user_agent_.empty())
     return false;
   *override_out = user_agent_metadata_;
   return true;
+}
+
+void EmulationHandler::ApplyNetworkOverridesForDownload(
+    download::DownloadUrlParameters* parameters) {
+  net::HttpRequestHeaders headers;
+  bool user_agent_overridden;
+  bool accept_language_overridden;
+  ApplyOverrides(&headers, &user_agent_overridden, &accept_language_overridden);
+  for (net::HttpRequestHeaders::Iterator it(headers); it.GetNext();) {
+    parameters->add_request_header(it.name(), it.value());
+  }
 }
 
 }  // namespace protocol

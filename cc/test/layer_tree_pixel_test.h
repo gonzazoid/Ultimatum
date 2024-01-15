@@ -27,10 +27,6 @@ class ScopedFeatureList;
 }
 }  // namespace base
 
-namespace gfx {
-class ColorSpace;
-}
-
 namespace viz {
 class CopyOutputRequest;
 class CopyOutputResult;
@@ -50,7 +46,7 @@ class LayerTreePixelTest : public LayerTreeTest {
   std::unique_ptr<TestLayerTreeFrameSink> CreateLayerTreeFrameSink(
       const viz::RendererSettings& renderer_settings,
       double refresh_rate,
-      scoped_refptr<viz::ContextProvider> compositor_context_provider,
+      scoped_refptr<viz::RasterContextProvider> compositor_context_provider,
       scoped_refptr<viz::RasterContextProvider> worker_context_provider)
       override;
   std::unique_ptr<viz::DisplayCompositorMemoryAndTaskController>
@@ -103,13 +99,6 @@ class LayerTreePixelTest : public LayerTreeTest {
                                       Layer* target,
                                       base::FilePath file_name);
 
-  SkBitmap CopyMailboxToBitmap(const gfx::Size& size,
-                               const gpu::Mailbox& mailbox,
-                               const gpu::SyncToken& sync_token,
-                               const gfx::ColorSpace& color_space);
-
-  void Finish();
-
   // Allow tests to enlarge the backing texture for a non-root render pass, to
   // simulate reusing a larger texture from a previous frame for a new
   // render pass. This should be called before the output surface is bound.
@@ -147,6 +136,7 @@ class LayerTreePixelTest : public LayerTreeTest {
   std::vector<scoped_refptr<TextureLayer>> texture_layers_;
   int pending_texture_mailbox_callbacks_;
   gfx::Size enlarge_texture_amount_;
+  int max_texture_size_ = 0;
 
   // Used to create SkiaOutputSurfaceImpl.
   std::unique_ptr<base::test::ScopedFeatureList> scoped_feature_list_;

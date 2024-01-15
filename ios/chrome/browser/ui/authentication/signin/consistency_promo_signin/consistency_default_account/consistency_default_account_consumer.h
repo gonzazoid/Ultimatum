@@ -7,16 +7,26 @@
 
 #import <Foundation/Foundation.h>
 
+#import "components/sync/base/user_selectable_type.h"
+
 // Consumer for consistency default account.
 @protocol ConsistencyDefaultAccountConsumer <NSObject>
 
-// Updates the user information.
-- (void)updateWithFullName:(NSString*)fullName
-                 givenName:(NSString*)givenName
-                     email:(NSString*)email;
+// Sets the label text. It's fine to pass nil if there's supposed to be none.
+- (void)setLabelText:(NSString*)text;
 
-// Updates the user avatar.
-- (void)updateUserAvatar:(UIImage*)image;
+// Sets the text in the button that aborts the flow.
+- (void)setSkipButtonText:(NSString*)text;
+
+// Updates the user information, and show the default account.
+- (void)showDefaultAccountWithFullName:(NSString*)fullName
+                             givenName:(NSString*)givenName
+                                 email:(NSString*)email
+                                avatar:(UIImage*)avatar;
+
+// Disable display for the default account button, for when an account isn't
+// available on the device.
+- (void)hideDefaultAccount;
 
 @end
 

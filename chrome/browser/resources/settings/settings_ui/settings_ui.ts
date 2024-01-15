@@ -23,19 +23,19 @@ import '../settings_menu/settings_menu.js';
 import '../settings_shared.css.js';
 import '../settings_vars.css.js';
 
-import {CrContainerShadowMixin, CrContainerShadowMixinInterface} from 'chrome://resources/cr_elements/cr_container_shadow_mixin.js';
+import {SettingsPrefsElement} from 'chrome://resources/cr_components/settings_prefs/prefs.js';
+import {CrContainerShadowMixin} from 'chrome://resources/cr_elements/cr_container_shadow_mixin.js';
 import {CrDrawerElement} from 'chrome://resources/cr_elements/cr_drawer/cr_drawer.js';
 import {CrToolbarElement} from 'chrome://resources/cr_elements/cr_toolbar/cr_toolbar.js';
-import {FindShortcutMixin, FindShortcutMixinInterface} from 'chrome://resources/cr_elements/find_shortcut_mixin.js';
+import {FindShortcutMixin} from 'chrome://resources/cr_elements/find_shortcut_mixin.js';
 import {listenOnce} from 'chrome://resources/js/util.js';
 import {DomIf, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {resetGlobalScrollTargetForTesting, setGlobalScrollTarget} from '../global_scroll_target_mixin.js';
 import {loadTimeData} from '../i18n_setup.js';
 import {PageVisibility, pageVisibility} from '../page_visibility.js';
-import {SettingsPrefsElement} from '../prefs/prefs.js';
 import {routes} from '../route.js';
-import {Route, RouteObserverMixin, RouteObserverMixinInterface, Router} from '../router.js';
+import {Route, RouteObserverMixin, Router} from '../router.js';
 import {SettingsMainElement} from '../settings_main/settings_main.js';
 import {SettingsMenuElement} from '../settings_menu/settings_menu.js';
 
@@ -59,11 +59,8 @@ export interface SettingsUiElement {
   };
 }
 
-const SettingsUiElementBase = RouteObserverMixin(CrContainerShadowMixin(
-                                  FindShortcutMixin(PolymerElement))) as {
-  new (): PolymerElement & RouteObserverMixinInterface &
-      FindShortcutMixinInterface & CrContainerShadowMixinInterface,
-};
+const SettingsUiElementBase = RouteObserverMixin(
+    CrContainerShadowMixin(FindShortcutMixin(PolymerElement)));
 
 export class SettingsUiElement extends SettingsUiElementBase {
   static get is() {
@@ -134,6 +131,11 @@ export class SettingsUiElement extends SettingsUiElementBase {
           loadTimeData.getString('controlledSettingRecommendedMatches'),
       controlledSettingRecommendedDiffers:
           loadTimeData.getString('controlledSettingRecommendedDiffers'),
+      controlledSettingChildRestriction:
+          loadTimeData.getString('controlledSettingChildRestriction'),
+      controlledSettingParent:
+          loadTimeData.getString('controlledSettingParent'),
+
       // <if expr="chromeos_ash">
       controlledSettingShared:
           loadTimeData.getString('controlledSettingShared'),
@@ -141,10 +143,6 @@ export class SettingsUiElement extends SettingsUiElementBase {
           loadTimeData.getString('controlledSettingWithOwner'),
       controlledSettingNoOwner:
           loadTimeData.getString('controlledSettingNoOwner'),
-      controlledSettingParent:
-          loadTimeData.getString('controlledSettingParent'),
-      controlledSettingChildRestriction:
-          loadTimeData.getString('controlledSettingChildRestriction'),
       // </if>
     };
 
@@ -163,12 +161,6 @@ export class SettingsUiElement extends SettingsUiElementBase {
     super.connectedCallback();
 
     document.documentElement.classList.remove('loading');
-
-    setTimeout(function() {
-      chrome.send(
-          'metricsHandler:recordTime',
-          ['Settings.TimeUntilInteractive', window.performance.now()]);
-    });
 
     // Preload bold Roboto so it doesn't load and flicker the first time used.
     // https://github.com/microsoft/TypeScript/issues/13569
@@ -263,7 +255,7 @@ export class SettingsUiElement extends SettingsUiElementBase {
     this.$.drawer.close();
   }
 
-  private onMenuButtonTap_() {
+  private onMenuButtonClick_() {
     this.$.drawer.toggle();
   }
 

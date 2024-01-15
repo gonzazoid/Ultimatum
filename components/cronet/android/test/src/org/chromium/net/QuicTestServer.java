@@ -5,20 +5,16 @@
 package org.chromium.net;
 
 import android.content.Context;
-import android.os.ConditionVariable;
+
+import org.jni_zero.JNINamespace;
+import org.jni_zero.NativeMethods;
 
 import org.chromium.base.ContextUtils;
-import org.chromium.base.Log;
-import org.chromium.base.annotations.CalledByNative;
-import org.chromium.base.annotations.JNINamespace;
 import org.chromium.base.test.util.UrlUtils;
 
-/**
- * Wrapper class to start a Quic test server.
- */
+/** Wrapper class to start a Quic test server. */
 @JNINamespace("cronet")
 public final class QuicTestServer {
-    private static final ConditionVariable sBlock = new ConditionVariable();
     private static final String TAG = QuicTestServer.class.getSimpleName();
 
     private static final String CERT_USED = "quic-chain.pem";
@@ -35,21 +31,19 @@ public final class QuicTestServer {
             throw new IllegalStateException("Quic server is already running");
         }
         TestFilesInstaller.installIfNeeded(context);
-        nativeStartQuicTestServer(
-                TestFilesInstaller.getInstalledPath(context), UrlUtils.getIsolatedTestRoot());
-        sBlock.block();
-        sBlock.close();
+        QuicTestServerJni.get()
+                .startQuicTestServer(
+                        TestFilesInstaller.getInstalledPath(context),
+                        UrlUtils.getIsolatedTestRoot());
         sServerRunning = true;
     }
 
-    /**
-     * Shuts down the server. No-op if the server is already shut down.
-     */
+    /** Shuts down the server. No-op if the server is already shut down. */
     public static void shutdownQuicTestServer() {
         if (!sServerRunning) {
             return;
         }
-        nativeShutdownQuicTestServer();
+        QuicTestServerJni.get().shutdownQuicTestServer();
         sServerRunning = false;
     }
 
@@ -62,7 +56,11 @@ public final class QuicTestServer {
     }
 
     public static int getServerPort() {
-        return nativeGetServerPort();
+        return QuicTestServerJni.get().getServerPort();
+    }
+
+    public static void delayResponse(String path, int delayInSeconds) {
+        QuicTestServerJni.get().delayResponse(path, delayInSeconds);
     }
 
     public static final String getServerCert() {
@@ -78,13 +76,30 @@ public final class QuicTestServer {
         return MockCertVerifier.createMockCertVerifier(CERTS_USED, true);
     }
 
-    @CalledByNative
-    private static void onServerStarted() {
-        Log.i(TAG, "Quic server started.");
-        sBlock.open();
-    }
+    @NativeMethods("cronet_tests")
+    interface Natives {
+        /*
+         * Runs a quic test server synchronously.
+         */
+        void startQuicTestServer(String filePath, String testDataDir);
 
-    private static native void nativeStartQuicTestServer(String filePath, String testDataDir);
-    private static native void nativeShutdownQuicTestServer();
-    private static native int nativeGetServerPort();
+        /*
+         * Shutdowns the quic test-server synchronously.
+         *
+         * Calling this without calling startQuicTestServer first will lead to unexpected
+         * behavior if not compiled in debug mode.
+         */
+        void shutdownQuicTestServer();
+
+        int getServerPort();
+
+        /*
+         * Responses for path will be delayed by delayInSeconds.
+         *
+         * Ideally this wouldn't take a delay. Instead, it should provide a synchronization
+         * mechanism that allows the caller to unblock the request. This would require changes all
+         * the way down to QUICHE though.
+         */
+        void delayResponse(String path, int delayInSeconds);
+    }
 }

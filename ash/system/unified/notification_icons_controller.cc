@@ -4,38 +4,42 @@
 
 #include "ash/system/unified/notification_icons_controller.h"
 
-#include "ash/constants/ash_features.h"
+#include "ash/constants/ash_constants.h"
 #include "ash/public/cpp/vm_camera_mic_constants.h"
 #include "ash/resources/vector_icons/vector_icons.h"
 #include "ash/session/session_controller_impl.h"
+#include "ash/shelf/shelf.h"
 #include "ash/shell.h"
 #include "ash/strings/grit/ash_strings.h"
-#include "ash/system/message_center/ash_message_center_lock_screen_controller.h"
-#include "ash/system/message_center/message_center_utils.h"
+#include "ash/style/ash_color_id.h"
+#include "ash/system/notification_center/ash_message_center_lock_screen_controller.h"
+#include "ash/system/notification_center/message_center_utils.h"
+#include "ash/system/notification_center/notification_center_tray.h"
+#include "ash/system/status_area_animation_controller.h"
 #include "ash/system/tray/tray_constants.h"
 #include "ash/system/tray/tray_container.h"
 #include "ash/system/tray/tray_utils.h"
 #include "ash/system/unified/notification_counter_view.h"
 #include "ash/system/unified/unified_system_tray.h"
-#include "ash/system/unified/unified_system_tray_model.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
+#include "ui/base/models/image_model.h"
 #include "ui/color/color_id.h"
 #include "ui/color/color_provider.h"
 #include "ui/gfx/paint_vector_icon.h"
 #include "ui/message_center/message_center.h"
 #include "ui/message_center/public/cpp/notification.h"
 #include "ui/message_center/vector_icons.h"
-#include "ui/views/border.h"
 #include "ui/views/controls/image_view.h"
-#include "ui/views/controls/separator.h"
 
 namespace ash {
 
 namespace {
 
+constexpr int kIconsViewDisplaySizeThreshold = 768;
+
 // Maximum number of notification icons shown in the system tray button.
 constexpr int kMaxNotificationIconsShown = 2;
-constexpr int kNotificationIconSpacing = 1;
 
 const char kCapsLockNotifierId[] = "ash.caps-lock";
 const char kBatteryNotificationNotifierId[] = "ash.battery";
@@ -57,12 +61,14 @@ bool ShouldShowNotification(message_center::Notification* notification) {
     return false;
   }
 
-  // We don't want to show these notifications since the information is already
-  // indicated by another item in tray.
+  // We don't want to show these notifications since the information is
+  // already indicated by another item in tray.
   if (notifier_id == kVmCameraMicNotifierId ||
       notifier_id == kBatteryNotificationNotifierId ||
-      notifier_id == kUsbNotificationNotifierId)
+      notifier_id == kUsbNotificationNotifierId ||
+      notifier_id == kPrivacyIndicatorsNotifierId) {
     return false;
+  }
 
   // We only show notification icon in the tray if it is either:
   // *   Pinned (generally used for background process such as sharing your
@@ -80,8 +86,6 @@ NotificationIconTrayItemView::NotificationIconTrayItemView(
     NotificationIconsController* controller)
     : TrayItemView(shelf), controller_(controller) {
   CreateImageView();
-  image_view()->SetBorder(
-      views::CreateEmptyBorder(gfx::Insets::VH(0, kNotificationIconSpacing)));
 }
 
 NotificationIconTrayItemView::~NotificationIconTrayItemView() = default;
@@ -89,31 +93,45 @@ NotificationIconTrayItemView::~NotificationIconTrayItemView() = default;
 void NotificationIconTrayItemView::SetNotification(
     message_center::Notification* notification) {
   notification_id_ = notification->id();
+  notification_ = notification->DeepCopy(
+      *notification, GetColorProvider(), /*include_body_image=*/true,
+      /*include_small_image=*/true, /*include_icon_images=*/true);
 
-  if (!GetWidget())
-    return;
-
-  const auto* color_provider = GetColorProvider();
-  gfx::Image masked_small_icon = notification->GenerateMaskedSmallIcon(
-      kUnifiedTrayIconSize,
-      TrayIconColor(Shell::Get()->session_controller()->GetSessionState()),
-      color_provider->GetColor(ui::kColorNotificationIconBackground),
-      color_provider->GetColor(ui::kColorNotificationIconForeground));
-  if (!masked_small_icon.IsEmpty()) {
-    image_view()->SetImage(masked_small_icon.AsImageSkia());
-  } else {
-    image_view()->SetImage(gfx::CreateVectorIcon(
-        message_center::kProductIcon, kUnifiedTrayIconSize,
-        TrayIconColor(Shell::Get()->session_controller()->GetSessionState())));
-  }
-
+  UpdateImageViewColor();
   image_view()->SetTooltipText(notification->title());
+}
+
+void NotificationIconTrayItemView::MaybeReset() {
+  if ((!target_visible() && IsAnimating()) ||
+      shelf()
+          ->status_area_widget()
+          ->animation_controller()
+          ->is_hide_animation_scheduled()) {
+    return;
+  }
+  Reset();
 }
 
 void NotificationIconTrayItemView::Reset() {
   notification_id_ = std::string();
+  notification_.reset();
   image_view()->SetImage(gfx::ImageSkia());
   image_view()->SetTooltipText(std::u16string());
+}
+
+void NotificationIconTrayItemView::ImmediatelyUpdateVisibility() {
+  TrayItemView::ImmediatelyUpdateVisibility();
+  if (!target_visible()) {
+    Reset();
+  }
+}
+
+void NotificationIconTrayItemView::AnimationEnded(
+    const gfx::Animation* animation) {
+  TrayItemView::AnimationEnded(animation);
+  if (!target_visible()) {
+    Reset();
+  }
 }
 
 const std::u16string& NotificationIconTrayItemView::GetAccessibleNameString()
@@ -138,10 +156,47 @@ void NotificationIconTrayItemView::OnThemeChanged() {
   controller_->UpdateNotificationIcons();
 }
 
+void NotificationIconTrayItemView::UpdateLabelOrImageViewColor(bool active) {
+  TrayItemView::UpdateLabelOrImageViewColor(active);
+
+  UpdateImageViewColor();
+}
+
+void NotificationIconTrayItemView::UpdateImageViewColor() {
+  if (!GetWidget() || !notification_) {
+    return;
+  }
+
+  const auto* color_provider = GetColorProvider();
+  ui::ColorId color_id = kColorAshIconColorPrimary;
+  color_id = is_active() ? cros_tokens::kCrosSysSystemOnPrimaryContainer
+                         : cros_tokens::kCrosSysOnSurface;
+  gfx::Image masked_small_icon = notification_->GenerateMaskedSmallIcon(
+      kUnifiedTrayIconSize, color_provider->GetColor(color_id),
+      color_provider->GetColor(ui::kColorNotificationIconBackground),
+      color_provider->GetColor(ui::kColorNotificationIconForeground));
+  if (!masked_small_icon.IsEmpty()) {
+    image_view()->SetImage(masked_small_icon.AsImageSkia());
+  } else {
+    image_view()->SetImage(ui::ImageModel::FromVectorIcon(
+        message_center::kProductIcon, color_id, kUnifiedTrayIconSize));
+  }
+}
+
+BEGIN_METADATA(NotificationIconTrayItemView)
+END_METADATA
+
 NotificationIconsController::NotificationIconsController(
-    UnifiedSystemTray* tray)
-    : tray_(tray) {
-  system_tray_model_observation_.Observe(tray_->model().get());
+    Shelf* shelf,
+    NotificationCenterTray* notification_center_tray)
+    : shelf_(shelf),
+      notification_center_tray_(notification_center_tray) {
+  // `notification_center_tray` should not be null.
+  DCHECK(notification_center_tray);
+
+  // Initialize `icons_view_visible_` according to display size.
+  UpdateIconsViewVisibleForDisplaySize();
+
   message_center::MessageCenter::Get()->AddObserver(this);
   Shell::Get()->session_controller()->AddObserver(this);
 }
@@ -155,20 +210,15 @@ void NotificationIconsController::AddNotificationTrayItems(
     TrayContainer* tray_container) {
   for (int i = 0; i < kMaxNotificationIconsShown; ++i) {
     tray_items_.push_back(tray_container->AddChildView(
-        std::make_unique<NotificationIconTrayItemView>(tray_->shelf(), this)));
+        std::make_unique<NotificationIconTrayItemView>(shelf_,
+                                                       /*controller=*/this)));
   }
 
   notification_counter_view_ = tray_container->AddChildView(
-      std::make_unique<NotificationCounterView>(tray_->shelf(), this));
+      std::make_unique<NotificationCounterView>(shelf_, /*controller=*/this));
 
-  if (!features::IsQsRevampEnabled()) {
-    quiet_mode_view_ = tray_container->AddChildView(
-        std::make_unique<QuietModeView>(tray_->shelf()));
-  }
-  separator_ = tray_container->AddChildView(
-      std::make_unique<SeparatorTrayItemView>(tray_->shelf()));
-
-  OnSystemTrayButtonSizeChanged(tray_->model()->GetSystemTrayButtonSize());
+  quiet_mode_view_ =
+      tray_container->AddChildView(std::make_unique<QuietModeView>(shelf_));
 }
 
 bool NotificationIconsController::TrayItemHasNotification() const {
@@ -197,53 +247,6 @@ std::u16string NotificationIconsController::GetAccessibleNameString() const {
       IDS_ASH_STATUS_TRAY_NOTIFICATIONS_ICONS_ACCESSIBLE_NAME, status, nullptr);
 }
 
-void NotificationIconsController::UpdateNotificationIndicators() {
-  notification_counter_view_->Update();
-  if (!features::IsQsRevampEnabled())
-    quiet_mode_view_->Update();
-}
-
-void NotificationIconsController::OnSystemTrayButtonSizeChanged(
-    UnifiedSystemTrayModel::SystemTrayButtonSize system_tray_size) {
-  icons_view_visible_ =
-      system_tray_size != UnifiedSystemTrayModel::SystemTrayButtonSize::kSmall;
-  UpdateNotificationIcons();
-  UpdateNotificationIndicators();
-}
-
-void NotificationIconsController::OnNotificationAdded(const std::string& id) {
-  message_center::Notification* notification =
-      message_center::MessageCenter::Get()->FindVisibleNotificationById(id);
-  // `notification` is null if it is not visible.
-  if (!notification || !ShouldShowNotification(notification))
-    return;
-
-  // Reset the notification icons if a notification is added since we don't
-  // know the position where its icon should be added.
-  UpdateNotificationIcons();
-}
-
-void NotificationIconsController::OnNotificationRemoved(const std::string& id,
-                                                        bool by_user) {
-  // If the notification removed is displayed in an icon, call update to show
-  // another notification if needed.
-  if (GetNotificationIconShownInTray(id))
-    UpdateNotificationIcons();
-}
-
-void NotificationIconsController::OnNotificationUpdated(const std::string& id) {
-  // A notification update may impact certain notification icon(s) visibility in
-  // the tray, so update all notification icons.
-  UpdateNotificationIcons();
-}
-
-void NotificationIconsController::OnSessionStateChanged(
-    session_manager::SessionState state) {
-  UpdateNotificationIcons();
-  UpdateNotificationIndicators();
-  separator_->UpdateColor(state);
-}
-
 void NotificationIconsController::UpdateNotificationIcons() {
   // Iterates `tray_items_` and notifications in reverse order so new pinned
   // notifications get shown on the left side.
@@ -253,8 +256,10 @@ void NotificationIconsController::UpdateNotificationIcons() {
   auto tray_it = tray_items_.rbegin();
   for (auto notification_it = notifications.rbegin();
        notification_it != notifications.rend(); ++notification_it) {
-    if (tray_it == tray_items_.rend())
+    if (tray_it == tray_items_.rend()) {
       break;
+    }
+
     if (ShouldShowNotification(*notification_it)) {
       (*tray_it)->SetNotification(*notification_it);
       (*tray_it)->SetVisible(icons_view_visible_);
@@ -265,10 +270,102 @@ void NotificationIconsController::UpdateNotificationIcons() {
   first_unused_item_index_ = std::distance(tray_items_.rbegin(), tray_it);
 
   for (; tray_it != tray_items_.rend(); ++tray_it) {
-    (*tray_it)->Reset();
+    // Note: It is important to set the visibility before resetting so that the
+    // icon image does not disappear while the tray item is still visible.
     (*tray_it)->SetVisible(false);
+    (*tray_it)->MaybeReset();
   }
-  separator_->SetVisible(icons_view_visible_ && TrayItemHasNotification());
+}
+
+void NotificationIconsController::UpdateNotificationIndicators() {
+  notification_counter_view_->Update();
+  quiet_mode_view_->Update();
+}
+
+void NotificationIconsController::UpdateIconsViewVisibleForDisplaySize() {
+  aura::Window* window = shelf_->status_area_widget()->GetNativeWindow();
+  auto display = display::Screen::GetScreen()->GetDisplayNearestWindow(window);
+  const int display_size =
+      std::max(display.size().width(), display.size().height());
+  icons_view_visible_ = display_size >= kIconsViewDisplaySizeThreshold;
+}
+
+void NotificationIconsController::OnDisplayMetricsChanged(
+    const display::Display& display,
+    uint32_t changed_metrics) {
+  aura::Window* window = shelf_->status_area_widget()->GetNativeWindow();
+  if (display::Screen::GetScreen()->GetDisplayNearestWindow(window).id() !=
+      display.id()) {
+    return;
+  }
+  auto old_icons_view_visible = icons_view_visible_;
+  UpdateIconsViewVisibleForDisplaySize();
+  if (old_icons_view_visible == icons_view_visible_)
+    return;
+
+  UpdateNotificationIcons();
+  UpdateNotificationIndicators();
+}
+
+void NotificationIconsController::OnNotificationAdded(const std::string& id) {
+  message_center::Notification* notification =
+      message_center::MessageCenter::Get()->FindVisibleNotificationById(id);
+  // `notification` is null if it is not visible.
+  if (notification && ShouldShowNotification(notification)) {
+    // Reset the notification icons if a notification is added since we don't
+    // know the position where its icon should be added.
+    UpdateNotificationIcons();
+  }
+
+  UpdateNotificationIndicators();
+
+  // There are certain sequences of notification updates that can require
+  // explicitly updating the notification center tray even after its tray items
+  // have been updated - for instance, adding an initial notification on the
+  // lock screen. See http://b/297579552.
+  notification_center_tray_->UpdateVisibility();
+}
+
+void NotificationIconsController::OnNotificationRemoved(const std::string& id,
+                                                        bool by_user) {
+  // If the notification removed is displayed in an icon, call update to show
+  // another notification if needed.
+  if (GetNotificationIconShownInTray(id))
+    UpdateNotificationIcons();
+
+  UpdateNotificationIndicators();
+
+  // There are certain sequences of notification updates that can require
+  // explicitly updating the notification center tray even after its tray items
+  // have been updated - for instance, removing a notification group's parent
+  // notification when the only remaining notifications belong to that group.
+  // See http://b/296918234.
+  notification_center_tray_->UpdateVisibility();
+}
+
+void NotificationIconsController::OnNotificationUpdated(const std::string& id) {
+  // A notification update may impact certain notification icon(s) visibility
+  // in the tray, so update all notification icons.
+  UpdateNotificationIcons();
+  UpdateNotificationIndicators();
+}
+
+void NotificationIconsController::OnNotificationDisplayed(
+    const std::string& notification_id,
+    const message_center::DisplaySource source) {
+    UpdateNotificationIcons();
+    UpdateNotificationIndicators();
+}
+
+void NotificationIconsController::OnQuietModeChanged(bool in_quiet_mode) {
+  UpdateNotificationIcons();
+  UpdateNotificationIndicators();
+}
+
+void NotificationIconsController::OnSessionStateChanged(
+    session_manager::SessionState state) {
+  UpdateNotificationIcons();
+  UpdateNotificationIndicators();
 }
 
 NotificationIconTrayItemView*

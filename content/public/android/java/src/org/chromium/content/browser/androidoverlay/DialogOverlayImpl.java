@@ -10,11 +10,13 @@ import android.view.Surface;
 import android.view.View;
 import android.view.ViewTreeObserver;
 
+import org.jni_zero.CalledByNative;
+import org.jni_zero.JNINamespace;
+import org.jni_zero.NativeMethods;
+
 import org.chromium.base.ContextUtils;
 import org.chromium.base.ThreadUtils;
-import org.chromium.base.annotations.CalledByNative;
-import org.chromium.base.annotations.JNINamespace;
-import org.chromium.base.annotations.NativeMethods;
+import org.chromium.content.browser.webcontents.WebContentsImpl;
 import org.chromium.gfx.mojom.Rect;
 import org.chromium.media.mojom.AndroidOverlay;
 import org.chromium.media.mojom.AndroidOverlayClient;
@@ -59,14 +61,23 @@ public class DialogOverlayImpl
     private final AndroidOverlayConfig mConfig;
     private final boolean mAsPanel;
 
+    // The handler will be notified when the surface will be destroyed soon. We'll
+    // notify the client to cleanup tasks on the surface, because the surface may be
+    // destroyed before SurfaceHolder.Callback2.surfaceDestroyed returns.
+    private final Runnable mTearDownDialogOverlaysHandler = this::onOverlayDestroyed;
+    private WebContentsImpl mWebContents;
+
     /**
      * @param client Mojo client interface.
      * @param config initial overlay configuration.
      * @param provider the overlay provider that owns us.
      * @param asPanel the overlay should be a panel, above the compositor.  This is for testing.
      */
-    public DialogOverlayImpl(AndroidOverlayClient client, final AndroidOverlayConfig config,
-            Runnable releasedRunnable, final boolean asPanel) {
+    public DialogOverlayImpl(
+            AndroidOverlayClient client,
+            final AndroidOverlayConfig config,
+            Runnable releasedRunnable,
+            final boolean asPanel) {
         ThreadUtils.assertOnUiThread();
 
         mClient = client;
@@ -77,8 +88,13 @@ public class DialogOverlayImpl
 
         // Register to get token updates.  Note that this may not call us back directly, since
         // |mDialogCore| hasn't been initialized yet.
-        mNativeHandle = DialogOverlayImplJni.get().init(DialogOverlayImpl.this,
-                config.routingToken.high, config.routingToken.low, config.powerEfficient);
+        mNativeHandle =
+                DialogOverlayImplJni.get()
+                        .init(
+                                DialogOverlayImpl.this,
+                                config.routingToken.high,
+                                config.routingToken.low,
+                                config.powerEfficient);
 
         if (mNativeHandle == 0) {
             notifyDestroyed();
@@ -86,8 +102,8 @@ public class DialogOverlayImpl
             return;
         }
 
-        DialogOverlayImplJni.get().getCompositorOffset(
-                mNativeHandle, DialogOverlayImpl.this, config.rect);
+        DialogOverlayImplJni.get()
+                .getCompositorOffset(mNativeHandle, DialogOverlayImpl.this, config.rect);
         DialogOverlayImplJni.get().completeInit(mNativeHandle, DialogOverlayImpl.this);
     }
 
@@ -186,9 +202,7 @@ public class DialogOverlayImpl
         return true;
     }
 
-    /**
-     * Callback from native that the window has changed.
-     */
+    /** Callback from native that the window has changed. */
     @CalledByNative
     public void onWindowAndroid(final WindowAndroid window) {
         ThreadUtils.assertOnUiThread();
@@ -220,9 +234,7 @@ public class DialogOverlayImpl
         }
     }
 
-    /**
-     * Callback from native that we will be getting no additional tokens.
-     */
+    /** Callback from native that we will be getting no additional tokens. */
     @CalledByNative
     public void onDismissed() {
         ThreadUtils.assertOnUiThread();
@@ -236,15 +248,25 @@ public class DialogOverlayImpl
         cleanup();
     }
 
-    /**
-     * Callback from native to tell us that the power-efficient state has changed.
-     */
+    /** Callback from native to tell us that the power-efficient state has changed. */
     @CalledByNative
     private void onPowerEfficientState(boolean isPowerEfficient) {
         ThreadUtils.assertOnUiThread();
         if (mDialogCore == null) return;
         if (mClient == null) return;
         mClient.onPowerEfficientState(isPowerEfficient);
+    }
+
+    /**
+     * Callback from the native to provide the WebContents. It should be called inside completeInit.
+     */
+    @CalledByNative
+    private void onWebContents(WebContentsImpl webContents) {
+        assert mWebContents == null;
+        assert webContents != null;
+
+        mWebContents = webContents;
+        mWebContents.addTearDownDialogOverlaysHandler(mTearDownDialogOverlaysHandler);
     }
 
     /** Initialize |mDialogCore| when the window is available. */
@@ -291,6 +313,11 @@ public class DialogOverlayImpl
 
         // Native should have cleaned up the container view before we reach this.
         assert mContainerViewViewTreeObserver == null;
+
+        if (mWebContents != null) {
+            mWebContents.removeTearDownDialogOverlaysHandler(mTearDownDialogOverlaysHandler);
+            mWebContents = null;
+        }
     }
 
     private void notifyDestroyed() {
@@ -320,9 +347,7 @@ public class DialogOverlayImpl
         DialogOverlayImplJni.get().notifyDestroyedSynchronously(nativeHandle);
     }
 
-    /**
-     * Creates a copy of |rect| and returns it.
-     */
+    /** Creates a copy of |rect| and returns it. */
     private static Rect copyRect(Rect rect) {
         Rect copy = new Rect();
         copy.x = rect.x;
@@ -342,9 +367,8 @@ public class DialogOverlayImpl
         long init(DialogOverlayImpl caller, long high, long low, boolean isPowerEfficient);
 
         void completeInit(long nativeDialogOverlayImpl, DialogOverlayImpl caller);
-        /**
-         * Stops native side and deallocates |handle|.
-         */
+
+        /** Stops native side and deallocates |handle|. */
         void destroy(long nativeDialogOverlayImpl, DialogOverlayImpl caller);
 
         /**

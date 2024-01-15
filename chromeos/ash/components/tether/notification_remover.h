@@ -5,15 +5,16 @@
 #ifndef CHROMEOS_ASH_COMPONENTS_TETHER_NOTIFICATION_REMOVER_H_
 #define CHROMEOS_ASH_COMPONENTS_TETHER_NOTIFICATION_REMOVER_H_
 
+#include "base/memory/raw_ptr.h"
 #include "chromeos/ash/components/network/network_state_handler_observer.h"
 #include "chromeos/ash/components/tether/active_host.h"
 #include "chromeos/ash/components/tether/host_scan_cache.h"
 
 namespace ash {
-
 class NetworkStateHandler;
+}  // namespace ash
 
-namespace tether {
+namespace ash::tether {
 
 class NotificationPresenter;
 
@@ -41,20 +42,22 @@ class NotificationRemover : public HostScanCache::Observer,
 
   // NetworkStateHandlerObserver:
   void NetworkConnectionStateChanged(const NetworkState* network) override;
+  void OnShuttingDown() override;
 
   // ActiveHost::Observer:
   void OnActiveHostChanged(
       const ActiveHost::ActiveHostChangeInfo& active_host_change_info) override;
 
  private:
-  NetworkStateHandler* network_state_handler_;
-  NotificationPresenter* notification_presenter_;
-  HostScanCache* host_scan_cache_;
-  ActiveHost* active_host_;
+  raw_ptr<NetworkStateHandler> network_state_handler_;
+
+  NetworkStateHandlerScopedObservation network_state_handler_observer_{this};
+
+  raw_ptr<NotificationPresenter> notification_presenter_;
+  raw_ptr<HostScanCache> host_scan_cache_;
+  raw_ptr<ActiveHost> active_host_;
 };
 
-}  // namespace tether
-
-}  // namespace ash
+}  // namespace ash::tether
 
 #endif  // CHROMEOS_ASH_COMPONENTS_TETHER_NOTIFICATION_REMOVER_H_

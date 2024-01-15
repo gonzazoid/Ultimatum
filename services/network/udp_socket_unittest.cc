@@ -10,8 +10,9 @@
 
 #include "services/network/udp_socket.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/notreached.h"
 #include "base/run_loop.h"
 #include "base/test/task_environment.h"
@@ -145,7 +146,8 @@ class HangingUDPSocket : public SocketWrapperTestImpl {
     expected_data_ = expected_data;
   }
 
-  const std::vector<net::IOBuffer*>& pending_io_buffers() const {
+  const std::vector<raw_ptr<net::IOBuffer, VectorExperimental>>&
+  pending_io_buffers() const {
     return pending_io_buffers_;
   }
 
@@ -165,7 +167,7 @@ class HangingUDPSocket : public SocketWrapperTestImpl {
  private:
   std::vector<uint8_t> expected_data_;
   bool should_complete_requests_ = false;
-  std::vector<net::IOBuffer*> pending_io_buffers_;
+  std::vector<raw_ptr<net::IOBuffer, VectorExperimental>> pending_io_buffers_;
   std::vector<int> pending_io_buffer_lengths_;
   std::vector<net::CompletionOnceCallback> pending_send_requests_;
 };
@@ -673,15 +675,14 @@ TEST_F(UDPSocketTest, TestReadZeroByte) {
   EXPECT_EQ(std::vector<uint8_t>(), result.data.value());
 }
 
-#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_FUCHSIA)
+#if BUILDFLAG(IS_ANDROID)
 // Some Android devices do not support multicast socket.
 // The ones supporting multicast need WifiManager.MulticastLock to enable it.
 // https://developer.android.com/reference/android/net/wifi/WifiManager.MulticastLock.html
-// TODO(crbug.com/1255191): Fails on Fuchsia running with run-test-component.
 #define MAYBE_JoinMulticastGroup DISABLED_JoinMulticastGroup
 #else
 #define MAYBE_JoinMulticastGroup JoinMulticastGroup
-#endif  // BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_FUCHSIA)
+#endif  // BUILDFLAG(IS_ANDROID)
 TEST_F(UDPSocketTest, MAYBE_JoinMulticastGroup) {
   const char kGroup[] = "237.132.100.17";
 

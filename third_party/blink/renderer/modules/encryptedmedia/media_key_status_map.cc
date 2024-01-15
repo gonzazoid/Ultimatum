@@ -65,17 +65,14 @@ class MediaKeyStatusMap::MapEntry final
 
 // Represents an Iterator that loops through the set of MapEntrys.
 class MapIterationSource final
-    : public PairIterable<Member<V8BufferSource>,
-                          V8BufferSource,
-                          String,
-                          IDLString>::IterationSource {
+    : public PairSyncIterable<MediaKeyStatusMap>::IterationSource {
  public:
   MapIterationSource(MediaKeyStatusMap* map) : map_(map), current_(0) {}
 
-  bool Next(ScriptState* script_state,
-            Member<V8BufferSource>& key,
-            String& value,
-            ExceptionState&) override {
+  bool FetchNextItem(ScriptState* script_state,
+                     V8BufferSource*& key,
+                     V8MediaKeyStatus& value,
+                     ExceptionState&) override {
     // This simply advances an index and returns the next value if any,
     // so if the iterated object is mutated values may be skipped.
     if (current_ >= map_->size())
@@ -89,8 +86,7 @@ class MapIterationSource final
 
   void Trace(Visitor* visitor) const override {
     visitor->Trace(map_);
-    PairIterable<Member<V8BufferSource>, V8BufferSource, String,
-                 IDLString>::IterationSource::Trace(visitor);
+    PairSyncIterable<MediaKeyStatusMap>::IterationSource::Trace(visitor);
   }
 
  private:
@@ -142,14 +138,14 @@ ScriptValue MediaKeyStatusMap::get(ScriptState* script_state,
                                    const V8BufferSource* key_id
 ) {
   uint32_t index = IndexOf(key_id);
+  v8::Isolate* isolate = script_state->GetIsolate();
   if (index >= entries_.size()) {
-    return ScriptValue(script_state->GetIsolate(),
-                       v8::Undefined(script_state->GetIsolate()));
+    return ScriptValue(isolate, v8::Undefined(isolate));
   }
-  return ScriptValue::From(script_state, at(index).Status());
+  return ScriptValue(isolate, V8String(isolate, at(index).Status()));
 }
 
-MediaKeyStatusMap::IterationSource* MediaKeyStatusMap::StartIteration(
+MediaKeyStatusMap::IterationSource* MediaKeyStatusMap::CreateIterationSource(
     ScriptState*,
     ExceptionState&) {
   return MakeGarbageCollected<MapIterationSource>(this);

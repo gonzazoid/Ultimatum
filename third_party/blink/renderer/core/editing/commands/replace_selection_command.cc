@@ -73,6 +73,8 @@
 
 namespace blink {
 
+using mojom::blink::FormControlType;
+
 // --- ReplacementFragment helper class
 
 class ReplacementFragment final {
@@ -188,8 +190,7 @@ ReplacementFragment::ReplacementFragment(Document* document,
       // register an event handler.
       &&
       !(shadow_ancestor_element && shadow_ancestor_element->GetLayoutObject() &&
-        shadow_ancestor_element->GetLayoutObject()
-            ->IsTextControlIncludingNG()) &&
+        shadow_ancestor_element->GetLayoutObject()->IsTextControl()) &&
       IsRichlyEditable(*editable_root)) {
     RemoveInterchangeNodes(fragment_);
     return;
@@ -592,7 +593,7 @@ void ReplaceSelectionCommand::RemoveRedundantStylesAndKeepStyleSpanInline(
         }
       }
 
-      ContainerNode* context = element->parentNode();
+      Element* context = element->parentElement();
 
       // If Mail wraps the fragment with a Paste as Quotation blockquote, or if
       // you're pasting into a quoted region, styles from blockquoteNode are
@@ -948,7 +949,6 @@ void ReplaceSelectionCommand::MergeEndIfNeeded(EditingState* editing_state) {
 
   // Bail to avoid infinite recursion.
   if (moving_paragraph_) {
-    NOTREACHED();
     return;
   }
 
@@ -1722,9 +1722,10 @@ bool ReplaceSelectionCommand::ShouldPerformSmartReplace() const {
   TextControlElement* text_control =
       EnclosingTextControl(PositionAtStartOfInsertedContent().DeepEquivalent());
   auto* html_input_element = DynamicTo<HTMLInputElement>(text_control);
-  if (html_input_element &&
-      html_input_element->type() == input_type_names::kPassword)
+  if (html_input_element && html_input_element->FormControlType() ==
+                                FormControlType::kInputPassword) {
     return false;  // Disable smart replace for password fields.
+  }
 
   return true;
 }
@@ -1757,7 +1758,7 @@ void ReplaceSelectionCommand::AddSpacesForSmartReplace(
   if (needs_trailing_space && end_node) {
     bool collapse_white_space =
         !end_node->GetLayoutObject() ||
-        end_node->GetLayoutObject()->Style()->CollapseWhiteSpace();
+        end_node->GetLayoutObject()->Style()->ShouldCollapseWhiteSpaces();
     end_text_node = DynamicTo<Text>(end_node);
     if (end_text_node) {
       InsertTextIntoNode(end_text_node, end_offset,
@@ -1798,7 +1799,7 @@ void ReplaceSelectionCommand::AddSpacesForSmartReplace(
   if (needs_leading_space && start_node) {
     bool collapse_white_space =
         !start_node->GetLayoutObject() ||
-        start_node->GetLayoutObject()->Style()->CollapseWhiteSpace();
+        start_node->GetLayoutObject()->Style()->ShouldCollapseWhiteSpaces();
     if (auto* start_text_node = DynamicTo<Text>(start_node)) {
       InsertTextIntoNode(start_text_node, start_offset,
                          collapse_white_space ? NonBreakingSpaceString() : " ");

@@ -6,10 +6,12 @@
 
 #include <utility>
 
+#include "cc/paint/color_filter.h"
+
 namespace cc {
 
 DecodedDrawImage::DecodedDrawImage(sk_sp<SkImage> image,
-                                   sk_sp<SkColorFilter> dark_mode_color_filter,
+                                   sk_sp<ColorFilter> dark_mode_color_filter,
                                    const SkSize& src_rect_offset,
                                    const SkSize& scale_adjustment,
                                    PaintFlags::FilterQuality filter_quality,
@@ -30,8 +32,8 @@ DecodedDrawImage::DecodedDrawImage(const gpu::Mailbox& mailbox,
       is_budgeted_(true) {}
 
 DecodedDrawImage::DecodedDrawImage(
-    absl::optional<uint32_t> transfer_cache_entry_id,
-    sk_sp<SkColorFilter> dark_mode_color_filter,
+    std::optional<uint32_t> transfer_cache_entry_id,
+    sk_sp<ColorFilter> dark_mode_color_filter,
     const SkSize& src_rect_offset,
     const SkSize& scale_adjustment,
     PaintFlags::FilterQuality filter_quality,

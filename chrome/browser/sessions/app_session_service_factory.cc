@@ -56,21 +56,30 @@ void AppSessionServiceFactory::ShutdownForProfile(Profile* profile) {
 }
 
 AppSessionServiceFactory* AppSessionServiceFactory::GetInstance() {
-  return base::Singleton<AppSessionServiceFactory>::get();
+  static base::NoDestructor<AppSessionServiceFactory> instance;
+  return instance.get();
 }
 
 AppSessionServiceFactory::AppSessionServiceFactory()
-    : ProfileKeyedServiceFactory("AppSessionService") {
+    : ProfileKeyedServiceFactory(
+          "AppSessionService",
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOriginalOnly)
+              .Build()) {
   // Ensure that session data is cleared before session restore can happen.
   DependsOn(SessionDataServiceFactory::GetInstance());
 }
 
 AppSessionServiceFactory::~AppSessionServiceFactory() = default;
 
-KeyedService* AppSessionServiceFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+AppSessionServiceFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* profile) const {
-  AppSessionService* service = nullptr;
-  service = new AppSessionService(static_cast<Profile*>(profile));
+  std::unique_ptr<AppSessionService> service =
+      std::make_unique<AppSessionService>(static_cast<Profile*>(profile));
   service->ResetFromCurrentBrowsers();
   return service;
 }

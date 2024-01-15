@@ -10,8 +10,8 @@
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ref_counted_memory.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/system/sys_info.h"
@@ -24,7 +24,7 @@
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/signin/identity_manager_factory.h"
 #include "chrome/common/url_constants.h"
-#include "chrome/grit/chromium_strings.h"
+#include "chrome/grit/branded_strings.h"
 #include "components/crash/core/browser/crashes_ui_util.h"
 #include "components/grit/components_scaled_resources.h"
 #include "components/grit/dev_ui_components_resources.h"
@@ -50,9 +50,9 @@ using content::WebUIMessageHandler;
 
 namespace {
 
-content::WebUIDataSource* CreateCrashesUIHTMLSource() {
-  content::WebUIDataSource* source =
-      content::WebUIDataSource::Create(chrome::kChromeUICrashesHost);
+void CreateAndAddCrashesUIHTMLSource(Profile* profile) {
+  content::WebUIDataSource* source = content::WebUIDataSource::CreateAndAdd(
+      profile, chrome::kChromeUICrashesHost);
 
   for (size_t i = 0; i < crash_reporter::kCrashesUILocalizedStringsCount; ++i) {
     source->AddLocalizedString(
@@ -70,7 +70,6 @@ content::WebUIDataSource* CreateCrashesUIHTMLSource() {
   source->AddResourcePath(crash_reporter::kCrashesUISadTabSVG,
                           IDR_CRASH_SADTAB_SVG);
   source->SetDefaultResource(IDR_CRASH_CRASHES_HTML);
-  return source;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -248,8 +247,7 @@ CrashesUI::CrashesUI(content::WebUI* web_ui) : WebUIController(web_ui) {
   web_ui->AddMessageHandler(std::make_unique<CrashesDOMHandler>());
 
   // Set up the chrome://crashes/ source.
-  Profile* profile = Profile::FromWebUI(web_ui);
-  content::WebUIDataSource::Add(profile, CreateCrashesUIHTMLSource());
+  CreateAndAddCrashesUIHTMLSource(Profile::FromWebUI(web_ui));
 }
 
 // static

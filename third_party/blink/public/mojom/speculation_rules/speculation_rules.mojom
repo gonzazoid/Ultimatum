@@ -4,6 +4,7 @@
 
 module blink.mojom;
 
+import "services/network/public/mojom/no_vary_search.mojom";
 import "third_party/blink/public/mojom/loader/referrer.mojom";
 import "url/mojom/url.mojom";
 
@@ -20,8 +21,13 @@ import "url/mojom/url.mojom";
 interface SpeculationHost {
   // Pushes a new set of speculation candidates, which replaces any previously
   // sent.
-  UpdateSpeculationCandidates(
-      array<SpeculationCandidate> candidates);
+  UpdateSpeculationCandidates(array<SpeculationCandidate> candidates);
+  // Enables matching prefetches according to No-Vary-Search response headers.
+  EnableNoVarySearchSupport();
+  // Initiates previewing the given `url`.
+  // TODO(https://b/292184832): Give more hints, such as gfx.mjom.PointF
+  // screen_position.
+  InitiatePreview(url.mojom.Url url);
 };
 
 // The action that is proposed.
@@ -36,6 +42,23 @@ enum SpeculationTargetHint {
   kNoHint,
   kBlank,
   kSelf,
+};
+
+// Shows how eager the developer is to perform the speculation action.
+// NOTE: These values are persisted to logs. Entries should not be renumbered
+// and numeric values should never be reused.
+enum SpeculationEagerness {
+  kConservative = 0,
+  kModerate = 1,
+  kEager = 2,
+};
+
+// Specifies the way in which speculation rules were injected.
+enum SpeculationInjectionType {
+  kNone,                  // Not injected, i.e., statically-inserted script tags.
+  kMainWorldScript,       // Injected by main V8 world's script.
+  kIsolatedWorldScript,   // Injected by an isolated V8 world's script.
+  kAutoSpeculationRules,  // Injected by the browser as part of the auto speculation rules feature.
 };
 
 // A single candidate: a URL, an action, a referrer, and any associated
@@ -60,4 +83,15 @@ struct SpeculationCandidate {
   // The hint to be used to decide a target browsing context where preloaded
   // resource will be used. This is kNoHint for actions other than `kPrerender`.
   SpeculationTargetHint target_browsing_context_name_hint = kNoHint;
+
+  // The eagerness level to be used by link selection heuristics to select the
+  // candidate.
+  SpeculationEagerness eagerness = kConservative;
+
+  // The expected No-Vary-Search header if specified.
+  // Explainer: https://github.com/WICG/nav-speculation/blob/main/no-vary-search.md#a-referrer-hint
+  network.mojom.NoVarySearch? no_vary_search_hint;
+
+  // The way in which the speculation rules were injected.
+  SpeculationInjectionType injection_type = kNone;
 };

@@ -5,8 +5,12 @@
 #ifndef CHROME_BROWSER_ASH_CROSTINI_CROSTINI_UPGRADER_H_
 #define CHROME_BROWSER_ASH_CROSTINI_CROSTINI_UPGRADER_H_
 
-#include "base/callback_forward.h"
+#include <optional>
+
+#include "base/functional/callback_forward.h"
+#include "base/memory/raw_ptr.h"
 #include "base/scoped_observation.h"
+#include "base/task/sequenced_task_runner.h"
 #include "chrome/browser/ash/crostini/crostini_export_import.h"
 #include "chrome/browser/ash/crostini/crostini_export_import_status_tracker.h"
 #include "chrome/browser/ash/crostini/crostini_manager.h"
@@ -14,7 +18,6 @@
 #include "chrome/browser/ash/guest_os/guest_id.h"
 #include "chromeos/dbus/power/power_manager_client.h"
 #include "components/keyed_service/core/keyed_service.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 class Profile;
 
@@ -62,6 +65,8 @@ class CrostiniUpgrader : public KeyedService,
   // Return true if internal state allows starting upgrade.
   bool CanUpgrade();
 
+  static void EnsureFactoryBuilt();
+
  private:
   void CreateNewLogFile();
 
@@ -77,7 +82,7 @@ class CrostiniUpgrader : public KeyedService,
   // is different from if |result|==SUCCESS) the |backup_path| will contain a
   // path to the backup tarball.
   void OnBackup(CrostiniResult result,
-                absl::optional<base::FilePath> backup_path);
+                std::optional<base::FilePath> backup_path);
   void OnCancel(CrostiniResult result);
   void OnBackupProgress(int progress_percent);
   void OnUpgrade(CrostiniResult result);
@@ -111,7 +116,7 @@ class CrostiniUpgrader : public KeyedService,
   };
   friend class StatusTracker;
 
-  Profile* profile_;
+  raw_ptr<Profile> profile_;
   guest_os::GuestId container_id_;
   base::ObserverList<CrostiniUpgraderUIObserver>::Unchecked upgrader_observers_;
 
@@ -121,8 +126,8 @@ class CrostiniUpgrader : public KeyedService,
   // A sequence for writing upgrade logs to the file system.
   scoped_refptr<base::SequencedTaskRunner> log_sequence_;
   // Path to the current log file. Generating the path is a blocking operation,
-  // so we set it to absl::nullopt until we get a response.
-  absl::optional<base::FilePath> current_log_file_;
+  // so we set it to std::nullopt until we get a response.
+  std::optional<base::FilePath> current_log_file_;
   // Buffer for storing log messages that arrive while the log file is being
   // created.
   std::vector<std::string> log_buffer_;
@@ -134,7 +139,7 @@ class CrostiniUpgrader : public KeyedService,
   // When restoring after a failed upgrade, if the user successfully completed a
   // backup, we will auto-restore from that (if the file still exists),
   // otherwise |backup_path_|==nullopt and restore will bring up a file-chooser.
-  absl::optional<base::FilePath> backup_path_;
+  std::optional<base::FilePath> backup_path_;
 
   base::WeakPtrFactory<CrostiniUpgrader> weak_ptr_factory_{this};
 };

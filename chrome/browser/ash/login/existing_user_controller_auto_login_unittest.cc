@@ -9,15 +9,15 @@
 #include "base/values.h"
 #include "chrome/browser/ash/app_mode/arc/arc_kiosk_app_manager.h"
 #include "chrome/browser/ash/login/existing_user_controller.h"
-#include "chrome/browser/ash/login/ui/mock_login_display.h"
 #include "chrome/browser/ash/login/ui/mock_login_display_host.h"
-#include "chrome/browser/ash/login/users/mock_user_manager.h"
+#include "chrome/browser/ash/login/users/fake_chrome_user_manager.h"
 #include "chrome/browser/ash/policy/core/device_local_account.h"
 #include "chrome/browser/ash/settings/cros_settings.h"
 #include "chrome/browser/ash/settings/scoped_cros_settings_test_helper.h"
 #include "chrome/test/base/scoped_testing_local_state.h"
 #include "chrome/test/base/testing_browser_process.h"
 #include "chromeos/ash/components/dbus/session_manager/fake_session_manager_client.h"
+#include "chromeos/ash/components/login/auth/auth_events_recorder.h"
 #include "chromeos/ash/components/settings/cros_settings_names.h"
 #include "components/ownership/mock_owner_key_util.h"
 #include "components/session_manager/core/session_manager.h"
@@ -45,25 +45,19 @@ class ExistingUserControllerAutoLoginTest : public ::testing::Test {
  protected:
   ExistingUserControllerAutoLoginTest()
       : local_state_(TestingBrowserProcess::GetGlobal()),
-        mock_user_manager_(new MockUserManager()),
-        scoped_user_manager_(base::WrapUnique(mock_user_manager_)) {}
+        fake_user_manager_(std::make_unique<FakeChromeUserManager>()) {
+    auth_events_recorder_ = ash::AuthEventsRecorder::CreateForTesting();
+  }
 
   void SetUp() override {
     arc_kiosk_app_manager_ = std::make_unique<ArcKioskAppManager>();
     existing_user_controller_ = std::make_unique<ExistingUserController>();
-    mock_login_display_ = std::make_unique<MockLoginDisplay>();
     mock_login_display_host_ = std::make_unique<MockLoginDisplayHost>();
 
-    ON_CALL(*mock_login_display_host_, GetLoginDisplay())
-        .WillByDefault(Return(mock_login_display_.get()));
     ON_CALL(*mock_login_display_host_, GetExistingUserController())
         .WillByDefault(Return(existing_user_controller_.get()));
 
-    EXPECT_CALL(*mock_user_manager_, Shutdown()).Times(AnyNumber());
-    EXPECT_CALL(*mock_user_manager_, FindUser(_)).WillRepeatedly(ReturnNull());
-    EXPECT_CALL(*mock_user_manager_, FindUser(auto_login_account_id_))
-        .WillRepeatedly(Return(mock_user_manager_->CreatePublicAccountUser(
-            auto_login_account_id_)));
+    fake_user_manager_->AddPublicAccountUser(auto_login_account_id_);
 
     settings_helper_.ReplaceDeviceSettingsProviderWithStub();
 
@@ -141,15 +135,14 @@ class ExistingUserControllerAutoLoginTest : public ::testing::Test {
 
  private:
   std::unique_ptr<MockLoginDisplayHost> mock_login_display_host_;
-  std::unique_ptr<MockLoginDisplay> mock_login_display_;
   content::BrowserTaskEnvironment task_environment_;
   ScopedTestingLocalState local_state_;
 
   // Required by ExistingUserController:
   FakeSessionManagerClient fake_session_manager_client_;
   ScopedCrosSettingsTestHelper settings_helper_;
-  MockUserManager* mock_user_manager_;
-  user_manager::ScopedUserManager scoped_user_manager_;
+  user_manager::TypedScopedUserManager<ash::FakeChromeUserManager>
+      fake_user_manager_;
   std::unique_ptr<ArcKioskAppManager> arc_kiosk_app_manager_;
 
   session_manager::SessionManager session_manager_;
@@ -157,6 +150,7 @@ class ExistingUserControllerAutoLoginTest : public ::testing::Test {
   // `existing_user_controller_` must be destroyed before
   // `device_settings_test_helper_`.
   std::unique_ptr<ExistingUserController> existing_user_controller_;
+  std::unique_ptr<ash::AuthEventsRecorder> auth_events_recorder_;
 };
 
 TEST_F(ExistingUserControllerAutoLoginTest, StartAutoLoginTimer) {
@@ -202,7 +196,7 @@ TEST_F(ExistingUserControllerAutoLoginTest, ResetAutoLoginTimer) {
   EXPECT_FALSE(auto_login_timer());
 
   // When the timer isn't running, nothing should happen.
-  existing_user_controller()->ResetAutoLoginTimer();
+  existing_user_controller()->OnUserActivity(/*event=*/nullptr);
   EXPECT_FALSE(auto_login_timer());
 
   // Start the timer.
@@ -216,7 +210,7 @@ TEST_F(ExistingUserControllerAutoLoginTest, ResetAutoLoginTimer) {
   // User activity should restart the timer, so check to see that the
   // timer delay was modified.
   set_auto_login_delay(kAutoLoginDelay1);
-  existing_user_controller()->ResetAutoLoginTimer();
+  existing_user_controller()->OnUserActivity(/*event=*/nullptr);
   ASSERT_TRUE(auto_login_timer());
   EXPECT_TRUE(auto_login_timer()->IsRunning());
   EXPECT_EQ(auto_login_timer()->GetCurrentDelay().InMilliseconds(),

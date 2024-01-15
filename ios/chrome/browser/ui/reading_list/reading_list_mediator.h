@@ -7,6 +7,7 @@
 
 #import <UIKit/UIKit.h>
 
+#import "base/memory/scoped_refptr.h"
 #import "ios/chrome/browser/ui/reading_list/reading_list_data_source.h"
 
 class FaviconLoader;
@@ -14,6 +15,9 @@ class GURL;
 class ReadingListEntry;
 @class ReadingListListItemFactory;
 class ReadingListModel;
+namespace syncer {
+class SyncService;
+}
 
 // Mediator between the Model and the UI.
 @interface ReadingListMediator : NSObject<ReadingListDataSource>
@@ -21,6 +25,7 @@ class ReadingListModel;
 - (nullable instancetype)init NS_UNAVAILABLE;
 
 - (nullable instancetype)initWithModel:(nonnull ReadingListModel*)model
+                           syncService:(nonnull syncer::SyncService*)syncService
                          faviconLoader:(nonnull FaviconLoader*)faviconLoader
                        listItemFactory:
                            (nonnull ReadingListListItemFactory*)itemFactory
@@ -29,11 +34,14 @@ class ReadingListModel;
 // Returns the entry corresponding to the `item`. The item should be of type
 // ReadingListCollectionViewItem. Returns nullptr if there is no corresponding
 // entry.
-- (nullable const ReadingListEntry*)entryFromItem:
+- (scoped_refptr<const ReadingListEntry>)entryFromItem:
     (nonnull id<ReadingListListItem>)item;
 
 // Marks the entry with `URL` as read.
 - (void)markEntryRead:(const GURL&)URL;
+
+// Disconnects the mediator and clear internal dependencies.
+- (void)disconnect;
 
 @end
 

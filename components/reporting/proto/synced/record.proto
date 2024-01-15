@@ -13,28 +13,59 @@ import "components/reporting/proto/synced/record_constants.proto";
 
 // Record represents the data sent from the Reporting Client.
 message Record {
-  // Record data as enqueued with an ReportingQueue::Enqueue call (required).
+  // Record data as enqueued with an ReportQueue::Enqueue call (required).
   // Data structure requirements are set by the destination. For destinations
   // expecting a proto - the proto will be MessageLite::SerializeToString(), and
   // will be DeserializedFromString() in the destination handler, prior to being
   // forwarded.
-  //
-  // Current expected formats (destination : type):
-  // Destination::UPLOAD_EVENTS : UploadEventsRequest
   optional bytes data = 1;
 
   // The destination associated with this request as set with the
-  // ReportingQueueConfiguration (required).
+  // ReportQueueConfiguration (required).
   optional Destination destination = 2;
 
   // The DMToken associated with this request as set with the
-  // ReportingQueueConfiuguration (required).
+  // ReportQueueConfiuguration (required, if this is user token).
   optional string dm_token = 3;
 
-  // When the record was submitted to ReportingQueue::Enqueue.
+  // When the record was submitted to ReportQueue::Enqueue.
   // Represents UTC time since Unix epoch 1970-01-01T00:00:00Z in microseconds,
   // to match Spanner timestamp format.
   optional int64 timestamp_us = 4;
+
+  // Reserved space specified by ReportQueueConfiguration (unless it is 0).
+  // Note that this field is cleared while enqueuing the event.
+  optional int64 reserved_space = 5;
+
+  // Record is tracking progress of some external activity;
+  // its unencrypted copy needs to be attached to the EncryptedRecord
+  // for uploader to be able to re-enqueue it.
+  // Note that this field is cleared while enqueuing the event.
+  optional bool needs_local_unencrypted_copy = 6;
+
+  // Additional metadata about the source enqueueing the record.
+  optional SourceInfo source_info = 7;
+}
+
+// Source metadata used to identify the source that enqueues a given record.
+// Especially useful when there are multiple sources that can enqueue similar
+// records.
+message SourceInfo {
+  enum Source {
+    SOURCE_UNSPECIFIED = 0;
+
+    // Ash browser.
+    ASH = 1;
+
+    // Lacros browser.
+    LACROS = 2;
+  }
+
+  // Source enqueueing the record (required).
+  optional Source source = 1;
+
+  // Version metadata about the source.
+  optional string source_version = 2;
 }
 
 // A Record with it's digest and the digest of the previous record.
@@ -83,14 +114,23 @@ message SequenceInformation {
   // to do with that is a decision that the caller needs to make).
   optional int64 sequencing_id = 1;
 
-  // Generation ID (required). Unique per device and priority. Generated
-  // randomly anew when previous record digest is not found at startup (e.g.
-  // after powerwash).
+  // Generation ID (required). Generated randomly anew for each user + device +
+  // priority combination when previous record digest is not found at startup
+  // (e.g. after powerwash). A new `generation_id` indicates the server should
+  // expect a `sequencing_id` of 0. Not unique -- the key space of user + device
+  // + priority combinations is too large for 64 bits.
   optional int64 generation_id = 2;
 
   // Priority (required)
   // Generation IDs are per Priority.
   optional Priority priority = 3;
+
+  // Generation GUID (required for unmanaged devices). Unique per combination of
+  // user + device + priority. Behaves the same way as `generation_id` but is
+  // large enough to serve as a GUID across all user + device + priority
+  // combinations. Used as a key on the server to retrieve
+  // `SequenceInformation`.
+  optional string generation_guid = 4;
 }
 
 // Envelope for the |WrappedRecord| and associated metadata as it is stored on
@@ -117,6 +157,13 @@ message EncryptedRecord {
   optional SequenceInformation sequencing_information = 5 [deprecated = true];
 
   optional ERPHealthData erp_health_data = 6;
+
+  // In special cases (e.g. `LOG_UPLOAD` events) this field is an unencrypted
+  // copy of original `Record`. It is only attached to `EncryptedRecord` in
+  // Storage and is eliminated by ERP uploader before sending the records to the
+  // server. Using `record_copy` the uploader is able to post a new event for
+  // the same `Destination` and modify upload tracking part of it.
+  optional Record record_copy = 7;
 }
 
 // Tracking information for what compression is used.
@@ -147,4 +194,10 @@ message SignedEncryptionInfo {
   // Signature of |public_asymmetric_key| (required).
   // Verified by client against a well-known signature.
   optional bytes signature = 3;
+}
+
+// List of blocked destinations delivered from the server, this list is already
+// processed by the browser to check for OS version compliance.
+message ListOfBlockedDestinations {
+  repeated Destination destinations = 1;
 }

@@ -5,8 +5,9 @@
 #ifndef ASH_SYSTEM_PHONEHUB_LOCATE_PHONE_QUICK_ACTION_CONTROLLER_H_
 #define ASH_SYSTEM_PHONEHUB_LOCATE_PHONE_QUICK_ACTION_CONTROLLER_H_
 
-#include "ash/components/phonehub/find_my_device_controller.h"
 #include "ash/system/phonehub/quick_action_controller_base.h"
+#include "base/memory/raw_ptr.h"
+#include "chromeos/ash/components/phonehub/find_my_device_controller.h"
 
 namespace base {
 class OneShotTimer;
@@ -29,6 +30,7 @@ class LocatePhoneQuickActionController
   // QuickActionControllerBase:
   QuickActionItem* CreateItem() override;
   void OnButtonPressed(bool is_now_enabled) override;
+  void UpdateQuickActionItemUi() override;
 
   // phonehub::FindMyDeviceController::Observer:
   void OnPhoneRingingStateChanged() override;
@@ -49,14 +51,15 @@ class LocatePhoneQuickActionController
   // phone. Make changes to item's state if necessary.
   void CheckRequestedState();
 
-  phonehub::FindMyDeviceController* find_my_device_controller_ = nullptr;
-  QuickActionItem* item_ = nullptr;
+  raw_ptr<phonehub::FindMyDeviceController> find_my_device_controller_ =
+      nullptr;
+  raw_ptr<QuickActionItem> item_ = nullptr;
 
   // Keep track the current state of the item.
   ActionState state_ = ActionState::kOff;
 
   // State that user requests when clicking the button.
-  absl::optional<ActionState> requested_state_;
+  std::optional<ActionState> requested_state_;
 
   // Timer that fires to prevent showing wrong state in the item. It will check
   // if the requested state is the same as the current state after the button is

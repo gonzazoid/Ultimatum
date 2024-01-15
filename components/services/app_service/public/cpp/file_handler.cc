@@ -6,6 +6,8 @@
 
 #include <tuple>
 
+#include "base/strings/string_util.h"
+
 namespace apps {
 
 FileHandler::FileHandler() = default;
@@ -18,35 +20,32 @@ FileHandler::AcceptEntry::AcceptEntry(const AcceptEntry& accept_entry) =
     default;
 
 base::Value FileHandler::AcceptEntry::AsDebugValue() const {
-  base::Value root(base::Value::Type::DICTIONARY);
+  base::Value::Dict root;
 
-  root.SetStringKey("mime_type", mime_type);
-  base::Value& file_extensions_json =
-      *root.SetKey("file_extensions", base::Value(base::Value::Type::LIST));
+  root.Set("mime_type", mime_type);
+  base::Value::List& file_extensions_json = *root.EnsureList("file_extensions");
   for (const std::string& file_extension : file_extensions)
     file_extensions_json.Append(file_extension);
 
-  return root;
+  return base::Value(std::move(root));
 }
 
 base::Value FileHandler::AsDebugValue() const {
-  base::Value root(base::Value::Type::DICTIONARY);
+  base::Value::Dict root;
 
-  base::Value& accept_json =
-      *root.SetKey("accept", base::Value(base::Value::Type::LIST));
+  base::Value::List& accept_json = *root.EnsureList("accept");
   for (const AcceptEntry& entry : accept)
     accept_json.Append(entry.AsDebugValue());
-  root.SetStringKey("action", action.spec());
-  base::Value& icons_json =
-      *root.SetKey("downloaded_icons", base::Value(base::Value::Type::LIST));
+  root.Set("action", action.spec());
+  base::Value::List& icons_json = *root.EnsureList("downloaded_icons");
   for (const IconInfo& entry : downloaded_icons)
     icons_json.Append(entry.AsDebugValue());
-  root.SetStringKey("name", display_name);
-  root.SetStringKey("launch_type", launch_type == LaunchType::kSingleClient
-                                       ? "kSingleClient"
-                                       : "kMultipleClients");
+  root.Set("name", display_name);
+  root.Set("launch_type", launch_type == LaunchType::kSingleClient
+                              ? "kSingleClient"
+                              : "kMultipleClients");
 
-  return root;
+  return base::Value(std::move(root));
 }
 
 std::set<std::string> GetMimeTypesFromFileHandlers(
@@ -84,9 +83,11 @@ std::set<std::string> GetFileExtensionsFromFileHandlers(
 std::set<std::string> GetFileExtensionsFromFileHandler(
     const FileHandler& file_handler) {
   std::set<std::string> file_extensions;
-  for (const auto& accept_entry : file_handler.accept)
-    file_extensions.insert(accept_entry.file_extensions.begin(),
-                           accept_entry.file_extensions.end());
+  for (const auto& accept_entry : file_handler.accept) {
+    for (const std::string& extension : accept_entry.file_extensions) {
+      file_extensions.insert(base::ToLowerASCII(extension));
+    }
+  }
   return file_extensions;
 }
 

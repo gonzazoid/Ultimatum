@@ -4,6 +4,7 @@
 
 #include "google_apis/gaia/oauth2_access_token_manager.h"
 
+#include "base/containers/contains.h"
 #include "base/memory/ref_counted.h"
 #include "base/test/bind.h"
 #include "base/test/task_environment.h"
@@ -21,12 +22,12 @@
 
 namespace {
 
-constexpr char kTestAccountId[] = "test_user@gmail.com";
+constexpr char kTestAccountId[] = "test_user_account_id";
 
 class FakeOAuth2AccessTokenManagerDelegate
     : public OAuth2AccessTokenManager::Delegate {
  public:
-  FakeOAuth2AccessTokenManagerDelegate(
+  explicit FakeOAuth2AccessTokenManagerDelegate(
       network::TestURLLoaderFactory* test_url_loader_factory)
       : shared_factory_(
             base::MakeRefCounted<network::WeakWrapperSharedURLLoaderFactory>(
@@ -37,9 +38,9 @@ class FakeOAuth2AccessTokenManagerDelegate
   std::unique_ptr<OAuth2AccessTokenFetcher> CreateAccessTokenFetcher(
       const CoreAccountId& account_id,
       scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
-      OAuth2AccessTokenConsumer* consumer) override {
-    EXPECT_NE(account_ids_to_refresh_tokens_.find(account_id),
-              account_ids_to_refresh_tokens_.end());
+      OAuth2AccessTokenConsumer* consumer,
+      const std::string& token_binding_challenge) override {
+    EXPECT_TRUE(base::Contains(account_ids_to_refresh_tokens_, account_id));
     return GaiaAccessTokenFetcher::
         CreateExchangeRefreshTokenForAccessTokenInstance(
             consumer, url_loader_factory,
@@ -47,8 +48,7 @@ class FakeOAuth2AccessTokenManagerDelegate
   }
 
   bool HasRefreshToken(const CoreAccountId& account_id) const override {
-    return account_ids_to_refresh_tokens_.find(account_id) !=
-           account_ids_to_refresh_tokens_.end();
+    return base::Contains(account_ids_to_refresh_tokens_, account_id);
   }
 
   scoped_refptr<network::SharedURLLoaderFactory> GetURLLoaderFactory()
@@ -274,7 +274,7 @@ class OAuth2AccessTokenManagerTest : public testing::Test {
       : delegate_(&test_url_loader_factory_), token_manager_(&delegate_) {}
 
   void SetUp() override {
-    account_id_ = CoreAccountId(kTestAccountId);
+    account_id_ = CoreAccountId::FromGaiaId(kTestAccountId);
     delegate_.AddAccount(account_id_, "fake_refresh_token");
   }
 
@@ -329,7 +329,7 @@ TEST_F(OAuth2AccessTokenManagerTest, CancelAllRequests) {
   std::unique_ptr<OAuth2AccessTokenManager::Request> request(
       token_manager_.StartRequest(
           account_id_, OAuth2AccessTokenManager::ScopeSet(), &consumer_));
-  const CoreAccountId account_id_2("account_id_2");
+  const CoreAccountId account_id_2 = CoreAccountId::FromGaiaId("account_id_2");
   delegate_.AddAccount(account_id_2, "refreshToken2");
   std::unique_ptr<OAuth2AccessTokenManager::Request> request2(
       token_manager_.StartRequest(
@@ -358,7 +358,7 @@ TEST_F(OAuth2AccessTokenManagerTest, CancelRequestsForAccount) {
   std::unique_ptr<OAuth2AccessTokenManager::Request> request2(
       token_manager_.StartRequest(account_id_, scope_set_2, &consumer_));
 
-  const CoreAccountId account_id_2("account_id_2");
+  const CoreAccountId account_id_2 = CoreAccountId::FromGaiaId("account_id_2");
   delegate_.AddAccount(account_id_2, "refreshToken2");
   std::unique_ptr<OAuth2AccessTokenManager::Request> request3(
       token_manager_.StartRequest(account_id_2, scope_set_1, &consumer_));
@@ -427,7 +427,7 @@ TEST_F(OAuth2AccessTokenManagerTest, ClearCacheForAccount) {
 
   base::RunLoop run_loop2;
   consumer_.SetResponseCompletedClosure(run_loop2.QuitClosure());
-  const CoreAccountId account_id_2("account_id_2");
+  const CoreAccountId account_id_2 = CoreAccountId::FromGaiaId("account_id_2");
   delegate_.AddAccount(account_id_2, "refreshToken2");
   // Makes a request for |account_id_2|.
   std::unique_ptr<OAuth2AccessTokenManager::Request> request2(
@@ -586,7 +586,7 @@ TEST_F(OAuth2AccessTokenManagerTest,
   // |account_id| doesn't have a refresh token, OnFetchAccessTokenComplete
   // should report GoogleServiceAuthError::USER_NOT_SIGNED_UP.
   GoogleServiceAuthError error(GoogleServiceAuthError::USER_NOT_SIGNED_UP);
-  const CoreAccountId account_id("new_account_id");
+  const CoreAccountId account_id = CoreAccountId::FromGaiaId("new_account_id");
   observer.SetOnFetchAccessTokenComplete(account_id, consumer_.id(), scopeset,
                                          error, run_loop.QuitClosure());
   token_manager_.AddDiagnosticsObserver(&observer);
@@ -610,19 +610,19 @@ TEST_F(OAuth2AccessTokenManagerTest, OnAccessTokenRemoved) {
 
   OAuth2AccessTokenManager::ScopeSet scopeset2;
   scopeset2.insert("scope2");
-  CoreAccountId account_id_2("account_id_2");
+  CoreAccountId account_id_2 = CoreAccountId::FromGaiaId("account_id_2");
   delegate_.AddAccount(account_id_2, "refreshToken2");
   CreateRequestAndBlockUntilComplete(account_id_2, scopeset2);
 
   OAuth2AccessTokenManager::ScopeSet scopeset3;
   scopeset3.insert("scope3");
-  CoreAccountId account_id_3("account_id_3");
+  CoreAccountId account_id_3 = CoreAccountId::FromGaiaId("account_id_3");
   delegate_.AddAccount(account_id_3, "refreshToken3");
   CreateRequestAndBlockUntilComplete(account_id_3, scopeset3);
 
   OAuth2AccessTokenManager::ScopeSet scopeset4;
   scopeset4.insert("scope4");
-  CoreAccountId account_id_4("account_id_4");
+  CoreAccountId account_id_4 = CoreAccountId::FromGaiaId("account_id_4");
   delegate_.AddAccount(account_id_4, "refreshToken4");
   CreateRequestAndBlockUntilComplete(account_id_4, scopeset4);
 

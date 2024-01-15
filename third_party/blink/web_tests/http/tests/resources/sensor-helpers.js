@@ -1,5 +1,6 @@
 import {ReportingMode, Sensor, SensorClientRemote, SensorReceiver, SensorRemote, SensorType} from '/gen/services/device/public/mojom/sensor.mojom.m.js';
-import {SensorCreationResult, SensorInitParams_READ_BUFFER_SIZE_FOR_TESTS, SensorProvider, SensorProviderReceiver} from '/gen/services/device/public/mojom/sensor_provider.mojom.m.js';
+import {SensorCreationResult, SensorInitParams_READ_BUFFER_SIZE_FOR_TESTS} from '/gen/services/device/public/mojom/sensor_provider.mojom.m.js';
+import {WebSensorProvider, WebSensorProviderReceiver} from '/gen/third_party/blink/public/mojom/sensor/web_sensor_provider.mojom.m.js';
 
 // Default sensor frequency in default configurations.
 const DEFAULT_FREQUENCY = 5;
@@ -23,6 +24,10 @@ class RingBuffer {
     const value = this.data_[this.bufferPosition_];
     this.bufferPosition_ = (this.bufferPosition_ + 1) % this.data_.length;
     return { done: false, value: value };
+  }
+
+  reset() {
+    this.bufferPosition_ = 0;
   }
 
   [Symbol.iterator]() {
@@ -216,6 +221,10 @@ export function sensorMocks() {
         window.clearInterval(this.sensorReadingTimerId_);
         this.sensorReadingTimerId_ = null;
       }
+      this.buffer_.fill(0);
+      if (this.readingData_ !== null) {
+        this.readingData_.reset();
+      }
     }
 
     getSamplingFrequency() {
@@ -284,8 +293,8 @@ export function sensorMocks() {
     }
   }
 
-  // Class that mocks SensorProvider interface defined in
-  // sensor_provider.mojom
+  // Class that mocks the WebSensorProvider interface defined in
+  // web_sensor_provider.mojom
   class MockSensorProvider {
     constructor() {
       this.readingSizeInBytes_ =
@@ -309,15 +318,15 @@ export function sensorMocks() {
       this.maxFrequency_ = 60;
       this.minFrequency_ = 1;
       this.resetSensorTypeSettings();
-      this.receiver_ = new SensorProviderReceiver(this);
+      this.receiver_ = new WebSensorProviderReceiver(this);
       this.interceptor_ =
-          new MojoInterfaceInterceptor(SensorProvider.$interfaceName);
+          new MojoInterfaceInterceptor(WebSensorProvider.$interfaceName);
       this.interceptor_.oninterfacerequest =
           e => this.receiver_.$.bindHandle(e.handle);
       this.interceptor_.start();
     }
 
-    // device.mojom.SensorProvider implementation
+    // blink.mojom.SensorProvider implementation
     // Mojo functions that return a value must be async and return an object
     // whose keys match the names declared in Mojo.
 

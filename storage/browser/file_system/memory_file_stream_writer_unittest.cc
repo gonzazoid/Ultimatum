@@ -9,10 +9,11 @@
 #include <memory>
 #include <string>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
+#include "base/task/single_thread_task_runner.h"
 #include "net/base/io_buffer.h"
 #include "net/base/net_errors.h"
 #include "storage/browser/file_system/file_stream_test_utils.h"
@@ -53,8 +54,8 @@ class MemoryFileStreamWriterTest : public FileStreamWriterTest {
   std::unique_ptr<FileStreamWriter> CreateWriter(const std::string& name,
                                                  int64_t offset) override {
     return std::make_unique<MemoryFileStreamWriter>(
-        base::ThreadTaskRunnerHandle::Get(), file_util_->GetWeakPtr(),
-        Path(name), offset);
+        base::SingleThreadTaskRunner::GetCurrentDefault(),
+        file_util_->GetWeakPtr(), Path(name), offset);
   }
 
   bool FilePathExists(const std::string& name) override {
@@ -66,8 +67,8 @@ class MemoryFileStreamWriterTest : public FileStreamWriterTest {
     base::File::Info info;
     EXPECT_EQ(base::File::FILE_OK, file_util()->GetFileInfo(path, &info));
 
-    scoped_refptr<net::IOBuffer> content =
-        base::MakeRefCounted<net::IOBuffer>(static_cast<size_t>(info.size));
+    auto content = base::MakeRefCounted<net::IOBufferWithSize>(
+        static_cast<size_t>(info.size));
     EXPECT_EQ(info.size,
               file_util_->ReadFile(path, 0, content.get(), info.size));
 

@@ -5,12 +5,12 @@
 #ifndef CHROMEOS_ASH_COMPONENTS_NETWORK_CELLULAR_ESIM_PROFILE_H_
 #define CHROMEOS_ASH_COMPONENTS_NETWORK_CELLULAR_ESIM_PROFILE_H_
 
+#include <optional>
 #include <string>
 
 #include "base/component_export.h"
 #include "base/values.h"
 #include "dbus/object_path.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace ash {
 
@@ -37,8 +37,8 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) CellularESimProfile {
   // Returns null if the provided value does not have the required dictionary
   // properties. Should be provided a dictionary created via
   // ToDictionaryValue().
-  static absl::optional<CellularESimProfile> FromDictionaryValue(
-      const base::Value& value);
+  static std::optional<CellularESimProfile> FromDictionaryValue(
+      const base::Value::Dict& value);
 
   CellularESimProfile(State state,
                       const dbus::ObjectPath& path,
@@ -61,7 +61,7 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) CellularESimProfile {
   const std::u16string& service_provider() const { return service_provider_; }
   const std::string& activation_code() const { return activation_code_; }
 
-  base::Value ToDictionaryValue() const;
+  base::Value::Dict ToDictionaryValue() const;
 
   bool operator==(const CellularESimProfile& other) const;
   bool operator!=(const CellularESimProfile& other) const;

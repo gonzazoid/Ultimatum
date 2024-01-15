@@ -7,17 +7,17 @@
  */
 
 import '//resources/ash/common/network/network_select.js';
-import './oobe_network_icons.m.js';
+import './oobe_network_icons.html.js';
 
+import {assert} from '//resources/ash/common/assert.js';
 import {MojoInterfaceProviderImpl} from '//resources/ash/common/network/mojo_interface_provider.js';
 import {NetworkList} from '//resources/ash/common/network/network_list_types.js';
 import {OncMojo} from '//resources/ash/common/network/onc_mojo.js';
-import {assert} from '//resources/js/assert.js';
+import {StartConnectResult} from '//resources/mojo/chromeos/services/network_config/public/mojom/cros_network_config.mojom-webui.js';
+import {ConnectionStateType, NetworkType} from '//resources/mojo/chromeos/services/network_config/public/mojom/network_types.mojom-webui.js';
 import {html, PolymerElement} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
-import {StartConnectResult} from 'chrome://resources/mojo/chromeos/services/network_config/public/mojom/cros_network_config.mojom-webui.js';
-import {ConnectionStateType, NetworkType} from 'chrome://resources/mojo/chromeos/services/network_config/public/mojom/network_types.mojom-webui.js';
 
-import {Oobe} from '../cr_ui.m.js';
+import {Oobe} from '../cr_ui.js';
 
 /**
  * Custom data that is stored with network element to trigger action.
@@ -44,6 +44,15 @@ export class NetworkSelectLogin extends PolymerElement {
       isNetworkConnected: {
         type: Boolean,
         notify: true,
+        value: false,
+      },
+
+      /**
+       * True when quick start is enabled.
+       * @private
+       */
+      isQuickStartVisible: {
+        type: Boolean,
         value: false,
       },
 
@@ -128,6 +137,17 @@ export class NetworkSelectLogin extends PolymerElement {
    */
   getNetworkCustomItems_() {
     const items = [];
+    if (this.isQuickStartVisible) {
+      items.push({
+        customItemType: NetworkList.CustomItemType.OOBE,
+        customItemName: 'networkScreenQuickStart',
+        polymerIcon: 'oobe-20:quick-start-android-device',
+        showBeforeNetworksList: true,
+        customData: {
+          onTap: () => this.quickStartClicked_(),
+        },
+      });
+    }
     if (this.isNetworkConnected) {
       items.push({
         customItemType: NetworkList.CustomItemType.OOBE,
@@ -149,6 +169,16 @@ export class NetworkSelectLogin extends PolymerElement {
       },
     });
     return items;
+  }
+
+  /**
+   * Handle Network Setup screen "Quick Setup" button.
+   *
+   * @private
+   */
+  quickStartClicked_() {
+    this.dispatchEvent(new CustomEvent(
+        'quick-start-clicked', {bubbles: true, composed: true}));
   }
 
   /**

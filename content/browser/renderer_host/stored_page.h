@@ -8,6 +8,7 @@
 #include <set>
 #include <unordered_map>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/safe_ref.h"
 #include "content/browser/site_instance_group.h"
 #include "content/public/browser/site_instance.h"
@@ -55,7 +56,7 @@ class StoredPage : public SiteInstanceGroup::Observer {
   StoredPage(std::unique_ptr<RenderFrameHostImpl> rfh,
              RenderFrameProxyHostMap proxy_hosts,
              RenderViewHostImplSafeRefSet render_view_hosts);
-  virtual ~StoredPage();
+  ~StoredPage() override;
 
   void SetDelegate(Delegate* delegate);
 
@@ -92,6 +93,10 @@ class StoredPage : public SiteInstanceGroup::Observer {
   RenderFrameProxyHostMap TakeProxyHosts();
   RenderViewHostImplSafeRefSet TakeRenderViewHosts();
 
+  void SetViewTransitionState(
+      std::optional<blink::ViewTransitionState> view_transition_state);
+  std::optional<blink::ViewTransitionState> TakeViewTransitionState();
+
  private:
   void ClearAllObservers();
 
@@ -122,7 +127,11 @@ class StoredPage : public SiteInstanceGroup::Observer {
   // we're restoring a page from the back-forward cache.
   blink::mojom::PageRestoreParamsPtr page_restore_params_;
 
-  Delegate* delegate_ = nullptr;
+  raw_ptr<Delegate> delegate_ = nullptr;
+
+  // View transition state to use when the page is activated, either via BFCache
+  // activation or prerender activation.
+  std::optional<blink::ViewTransitionState> view_transition_state_;
 };
 
 }  // namespace content

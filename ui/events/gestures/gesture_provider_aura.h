@@ -78,7 +78,7 @@ class EVENTS_EXPORT GestureProviderAura : public GestureProviderClient {
   bool handling_event_;
   std::vector<std::unique_ptr<GestureEvent>> pending_gestures_;
 
-  // |gesture_consumer_| must outlive this object.
+  // The |gesture_consumer_| owns this provider.
   raw_ptr<GestureConsumer> gesture_consumer_;
 };
 

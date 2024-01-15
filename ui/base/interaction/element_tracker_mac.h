@@ -29,7 +29,8 @@ class COMPONENT_EXPORT(UI_BASE) TrackedElementMac : public TrackedElement {
                     const gfx::Rect& screen_bounds);
   ~TrackedElementMac() override;
 
-  gfx::Rect screen_bounds() const { return screen_bounds_; }
+  // TrackedElement:
+  gfx::Rect GetScreenBounds() const override;
 
   DECLARE_FRAMEWORK_SPECIFIC_METADATA()
 
@@ -79,16 +80,13 @@ class COMPONENT_EXPORT(UI_BASE) ElementTrackerMac {
   virtual NSMenu* GetRootMenu(NSMenu* menu) const;
 
   // Used in testing to determine if all data has been properly cleared out.
-  bool is_tracking_any_menus() const { return !root_menu_to_context_.empty(); }
+  bool is_tracking_any_menus() const { return !root_menu_to_data_.empty(); }
 
  private:
   friend class base::NoDestructor<ElementTrackerMac>;
-  class ContextData;
+  class MenuData;
 
-  ElementContext GetContextForMenu(NSMenu* menu) const;
-
-  std::map<NSMenu*, ElementContext> root_menu_to_context_;
-  std::map<ElementContext, std::unique_ptr<ContextData>> context_to_data_;
+  std::map<NSMenu*, MenuData> root_menu_to_data_;
 };
 
 }  // namespace ui

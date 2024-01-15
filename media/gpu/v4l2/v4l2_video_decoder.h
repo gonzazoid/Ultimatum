@@ -12,9 +12,7 @@
 #include <utility>
 #include <vector>
 
-#include "base/callback_forward.h"
-#include "base/containers/lru_cache.h"
-#include "base/containers/queue.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
@@ -69,15 +67,21 @@ class MEDIA_GPU_EXPORT V4L2VideoDecoder
   bool IsPlatformDecoder() const override;
   // VideoDecoderMixin implementation, specific part.
   void ApplyResolutionChange() override;
+  size_t GetMaxOutputFramePoolSize() const override;
+  bool NeedsTranscryption() override;
+  CroStatus AttachSecureBuffer(scoped_refptr<DecoderBuffer>& buffer) override;
+  void ReleaseSecureBuffer(uint64_t secure_handle) override;
 
   // V4L2VideoDecoderBackend::Client implementation
   void OnBackendError() override;
   bool IsDecoding() const override;
   void InitiateFlush() override;
   void CompleteFlush() override;
+  void RestartStream() override;
   void ChangeResolution(gfx::Size pic_size,
                         gfx::Rect visible_rect,
-                        size_t num_output_frames) override;
+                        size_t num_codec_reference_frames,
+                        uint8_t bit_depth) override;
   void OutputFrame(scoped_refptr<VideoFrame> frame,
                    const gfx::Rect& visible_rect,
                    const VideoColorSpace& color_space,
@@ -113,22 +117,11 @@ class MEDIA_GPU_EXPORT V4L2VideoDecoder
     kError,
   };
 
-  class BitstreamIdGenerator {
-   public:
-    BitstreamIdGenerator() { DETACH_FROM_SEQUENCE(sequence_checker_); }
-    int32_t GetNextBitstreamId() {
-      DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-      next_bitstream_buffer_id_ = (next_bitstream_buffer_id_ + 1) & 0x7FFFFFFF;
-      return next_bitstream_buffer_id_;
-    }
-
-   private:
-    int32_t next_bitstream_buffer_id_ = 0;
-    SEQUENCE_CHECKER(sequence_checker_);
-  };
-
   // Setup format for input queue.
-  bool SetupInputFormat(uint32_t input_format_fourcc);
+  bool SetupInputFormat();
+
+  // Allocates the buffers for the input queue.
+  bool AllocateInputBuffers();
 
   // Setup format for output queue. This function sets output format on output
   // queue that is supported by a v4l2 driver, can be allocatable by
@@ -138,7 +131,9 @@ class MEDIA_GPU_EXPORT V4L2VideoDecoder
   // Return CroStatus::Codes::kResetRequired if the setup is aborted.
   // Return CroStatus::Codes::kFailedToChangeResolution if other error occurs.
   CroStatus SetupOutputFormat(const gfx::Size& size,
-                              const gfx::Rect& visible_rect);
+                              const gfx::Rect& visible_rect,
+                              size_t num_codec_reference_frames,
+                              uint8_t bit_depth);
 
   // Start streaming V4L2 input and (if |start_output_queue| is true) output
   // queues. Attempt to start |device_poll_thread_| after streaming starts.
@@ -156,7 +151,8 @@ class MEDIA_GPU_EXPORT V4L2VideoDecoder
   // Return CroStatus::Codes::kFailedToChangeResolution if any error occurs.
   CroStatus ContinueChangeResolution(const gfx::Size& pic_size,
                                      const gfx::Rect& visible_rect,
-                                     const size_t num_output_frames);
+                                     size_t num_codec_reference_frames,
+                                     uint8_t bit_depth);
   void OnChangeResolutionDone(CroStatus status);
 
   // Change the state and check the state transition is valid.
@@ -165,6 +161,18 @@ class MEDIA_GPU_EXPORT V4L2VideoDecoder
   // Continue backend initialization. Decoder will not take a hardware context
   // until InitializeBackend() is called.
   V4L2Status InitializeBackend();
+
+  // Performs allocation of a secure buffer by invoking the Mojo call on the
+  // CdmContext. This will only invoke the passed in callback on a successful
+  // allocation, otherwise this will cause the decoder init to fail.
+  void AllocateSecureBuffer(uint32_t size, SecureBufferAllocatedCB callback);
+
+  // Callback from invoking the Mojo call to allocate a secure buffer. This
+  // validates the FD and also resolves it to a secure handle before invoking
+  // the callback. If there's anything wrong with the passed in arguments or
+  // resolving the handle, this will cause a failure in decoder initialization.
+  void AllocateSecureBufferCB(SecureBufferAllocatedCB callback,
+                              mojo::PlatformHandle secure_buffer);
 
   // Pages with multiple V4L2VideoDecoder instances might run out of memory
   // (e.g. b/170870476) or crash (e.g. crbug.com/1109312). To avoid that and
@@ -189,36 +197,48 @@ class MEDIA_GPU_EXPORT V4L2VideoDecoder
   // State of the instance.
   State state_ = State::kUninitialized;
 
-  // Number of output frames requested to |frame_pool_|.
-  // The default value is only used at the first time of
-  // DmabufVideoFramePool::Initialize() during Initialize().
-  size_t num_output_frames_ = 1;
+  // Aspect ratio from config to use for output frames.
+  VideoAspectRatio aspect_ratio_;
 
-  // Callback passed from Initialize().
+  // Callbacks passed from Initialize().
   OutputCB output_cb_;
 
-  // Initialize()-passed configuration options.
+  // Hold onto profile and color space passed in from Initialize() so that
+  // it is available for InitializeBackend().
   VideoCodecProfile profile_ = VIDEO_CODEC_PROFILE_UNKNOWN;
-  VideoAspectRatio aspect_ratio_;
   VideoColorSpace color_space_;
-  bool low_delay_;
+
+  // Hold onto the current resolution so we can use that to determine the size
+  // of the input(OUTPUT) buffers.
+  gfx::Size current_resolution_;
+
+  // Hold onto the input fourcc format so we can use it if we need to rebuild
+  // the input queue.
+  uint32_t input_format_fourcc_;
 
   // V4L2 input and output queue.
   scoped_refptr<V4L2Queue> input_queue_;
   scoped_refptr<V4L2Queue> output_queue_;
 
-  BitstreamIdGenerator bitstream_id_generator_;
+  // We need to use a CdmContextRef to ensure the lifetime of the CdmContext
+  // backing it while we are alive. This also indicates secure playback mode.
+  std::unique_ptr<CdmContextRef> cdm_context_ref_;
+  uint32_t pending_secure_allocate_callbacks_ = 0;
+  InitCB pending_init_cb_;
+  CroStatus pending_change_resolution_done_status_;
 
   SEQUENCE_CHECKER(decoder_sequence_checker_);
+
+  // Whether or not our V4L2Queues should be requested with
+  // V4L2_MEMORY_FLAG_NON_COHERENT
+  bool incoherent_ = false;
 
   // |weak_this_for_polling_| must be dereferenced and invalidated on
   // |decoder_task_runner_|.
   base::WeakPtr<V4L2VideoDecoder> weak_this_for_polling_;
   base::WeakPtrFactory<V4L2VideoDecoder> weak_this_for_polling_factory_;
 
-  // Whether or not our V4L2Queues should be requested with
-  // V4L2_MEMORY_FLAG_NON_COHERENT
-  bool incoherent_ = false;
+  base::WeakPtrFactory<V4L2VideoDecoder> weak_this_for_callbacks_{this};
 };
 
 }  // namespace media

@@ -12,7 +12,8 @@
 #include "base/android/jni_string.h"
 #include "base/compiler_specific.h"
 #include "base/logging.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "components/gcm_driver/android/jni_headers/GCMDriver_jni.h"
 
 using base::android::AppendJavaStringArrayToStringVector;
@@ -115,13 +116,9 @@ void GCMDriverAndroid::ValidateRegistration(
     const std::string& registration_id,
     ValidateRegistrationCallback callback) {
   // gcm_driver doesn't store registration IDs on Android, so assume it's valid.
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), true /* is_valid */));
 }
-
-void GCMDriverAndroid::OnSignedIn() {}
-
-void GCMDriverAndroid::OnSignedOut() {}
 
 void GCMDriverAndroid::AddAppHandler(const std::string& app_id,
                                      GCMAppHandler* handler) {

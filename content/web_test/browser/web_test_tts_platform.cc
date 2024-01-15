@@ -4,7 +4,9 @@
 
 #include "content/web_test/browser/web_test_tts_platform.h"
 
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/task/sequenced_task_runner.h"
 #include "content/public/browser/tts_controller.h"
 
 // static
@@ -29,12 +31,25 @@ void WebTestTtsPlatform::Speak(
     const std::string& lang,
     const content::VoiceData& voice,
     const content::UtteranceContinuousParameters& params,
-    base::OnceCallback<void(bool)> on_speak_finished) {
-  std::move(on_speak_finished).Run(true);
+    OnSpeakFinishedCallback on_speak_finished) {
   content::TtsController* controller = content::TtsController::GetInstance();
   int len = static_cast<int>(utterance.size());
+  utterance_id_ = utterance_id;
   controller->OnTtsEvent(utterance_id, content::TTS_EVENT_START, 0, len,
                          std::string());
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE, base::BindOnce(&WebTestTtsPlatform::SimulateEndEvent,
+                                base::Unretained(this), utterance_id, len,
+                                std::move(on_speak_finished)));
+}
+
+void WebTestTtsPlatform::SimulateEndEvent(
+    int utterance_id,
+    int len,
+    OnSpeakFinishedCallback on_speak_finished) {
+  utterance_id_ = kInvalidUtteranceId;
+  std::move(on_speak_finished).Run(true);
+  content::TtsController* controller = content::TtsController::GetInstance();
   controller->OnTtsEvent(utterance_id, content::TTS_EVENT_END, len, 0,
                          std::string());
 }
@@ -50,9 +65,17 @@ bool WebTestTtsPlatform::IsSpeaking() {
 void WebTestTtsPlatform::GetVoices(
     std::vector<content::VoiceData>* out_voices) {}
 
-void WebTestTtsPlatform::Pause() {}
+void WebTestTtsPlatform::Pause() {
+  content::TtsController* controller = content::TtsController::GetInstance();
+  controller->OnTtsEvent(utterance_id_, content::TTS_EVENT_PAUSE, 0, 0,
+                         std::string());
+}
 
-void WebTestTtsPlatform::Resume() {}
+void WebTestTtsPlatform::Resume() {
+  content::TtsController* controller = content::TtsController::GetInstance();
+  controller->OnTtsEvent(utterance_id_, content::TTS_EVENT_RESUME, 0, 0,
+                         std::string());
+}
 
 void WebTestTtsPlatform::WillSpeakUtteranceWithVoice(
     content::TtsUtterance* utterance,

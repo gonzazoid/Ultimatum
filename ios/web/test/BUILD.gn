@@ -2,7 +2,7 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-import("//ios/web/public/js_messaging/optimize_js.gni")
+import("//ios/web/public/js_messaging/optimize_ts.gni")
 import("//mojo/public/tools/bindings/mojom.gni")
 import("//tools/grit/grit_rule.gni")
 import("//tools/grit/repack.gni")
@@ -17,7 +17,7 @@ repack("packed_resources") {
   sources = [
     "$root_gen_dir/ios/web/ios_web_resources.pak",
     "$root_gen_dir/ios/web/test/test_resources.pak",
-    "$root_gen_dir/ui/resources/webui_generated_resources.pak",
+    "$root_gen_dir/ui/resources/webui_resources.pak",
   ]
   deps = [
     ":resources",
@@ -40,7 +40,6 @@ grit("resources") {
 }
 
 source_set("test_support") {
-  configs += [ "//build/config/compiler:enable_arc" ]
   testonly = true
 
   # This public_dep is a workaround because there is a circular dependency
@@ -48,7 +47,6 @@ source_set("test_support") {
   public_deps = [ "//testing/gtest" ]
 
   deps = [
-    ":all_frames_web_test_bundle",
     ":java_script_feature_test_inject_once_js",
     ":java_script_feature_test_reinject_js",
     ":test_constants",
@@ -60,6 +58,7 @@ source_set("test_support") {
     "//ios/web:threads",
     "//ios/web/common:uikit",
     "//ios/web/common:web_view_creation_util",
+    "//ios/web/js_messaging:java_script_feature_manager_header",
     "//ios/web/navigation:core",
     "//ios/web/public/test:test_fixture",
     "//ios/web/public/test:util",
@@ -89,7 +88,6 @@ source_set("test_support") {
 }
 
 source_set("js_test_util_internal") {
-  configs += [ "//build/config/compiler:enable_arc" ]
   testonly = true
 
   deps = [ "//base/test:test_support" ]
@@ -108,23 +106,21 @@ source_set("test_constants") {
   ]
 }
 
-optimize_js("all_frames_web_test_bundle") {
+optimize_ts("java_script_feature_test_inject_once_js") {
   testonly = true
 
-  primary_script = "resources/cookie_test.js"
-  sources = [ "resources/cookie_test.js" ]
+  sources = [ "resources/java_script_feature_test_inject_once.ts" ]
+
+  deps = [
+    "//ios/web/public/js_messaging:gcrweb",
+    "//ios/web/public/js_messaging:util_scripts",
+  ]
 }
 
-optimize_js("java_script_feature_test_inject_once_js") {
+optimize_ts("java_script_feature_test_reinject_js") {
   testonly = true
 
-  primary_script = "resources/java_script_feature_test_inject_once.js"
-  sources = [ "resources/java_script_feature_test_inject_once.js" ]
-}
+  sources = [ "resources/java_script_feature_test_reinject.ts" ]
 
-optimize_js("java_script_feature_test_reinject_js") {
-  testonly = true
-
-  primary_script = "resources/java_script_feature_test_reinject.js"
-  sources = [ "resources/java_script_feature_test_reinject.js" ]
+  deps = [ "//ios/web/public/js_messaging:gcrweb" ]
 }

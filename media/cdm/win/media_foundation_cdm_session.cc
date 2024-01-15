@@ -10,8 +10,8 @@
 #include "base/metrics/histogram_functions.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/task/bind_post_task.h"
 #include "base/win/scoped_co_mem.h"
-#include "media/base/bind_to_current_loop.h"
 #include "media/base/cdm_key_information.h"
 #include "media/base/win/mf_helpers.h"
 
@@ -174,13 +174,13 @@ HRESULT MediaFoundationCdmSession::Initialize(
   ComPtr<SessionCallbacks> session_callbacks;
   auto weak_this = weak_factory_.GetWeakPtr();
 
-  // Use BindToCurrentLoop() because the callbacks can be fired on different
-  // threads by |mf_cdm_session_|.
+  // Use base::BindPostTaskToCurrentDefault() because the callbacks can be fired
+  // on different threads by |mf_cdm_session_|.
   RETURN_IF_FAILED(MakeAndInitialize<SessionCallbacks>(
       &session_callbacks,
-      BindToCurrentLoop(base::BindRepeating(
+      base::BindPostTaskToCurrentDefault(base::BindRepeating(
           &MediaFoundationCdmSession::OnSessionMessage, weak_this)),
-      BindToCurrentLoop(base::BindRepeating(
+      base::BindPostTaskToCurrentDefault(base::BindRepeating(
           &MediaFoundationCdmSession::OnSessionKeysChange, weak_this))));
 
   // |mf_cdm_session_| holds a ref count to |session_callbacks|.
@@ -327,7 +327,8 @@ HRESULT MediaFoundationCdmSession::UpdateExpirationIfNeeded() {
   // an instant in time with millisecond accuracy.
   double new_expiration_ms = 0.0;
   RETURN_IF_FAILED(mf_cdm_session_->GetExpiration(&new_expiration_ms));
-  auto new_expiration = base::Time::FromJsTime(new_expiration_ms);
+  auto new_expiration =
+      base::Time::FromMillisecondsSinceUnixEpoch(new_expiration_ms);
 
   if (new_expiration == expiration_)
     return S_OK;

@@ -7,6 +7,8 @@
 
 #include "ash/public/cpp/ime_controller.h"
 #include "ash/public/cpp/ime_info.h"
+#include "base/memory/raw_ptr.h"
+#include "base/scoped_observation.h"
 #include "chrome/browser/ash/input_method/ui/input_method_menu_manager.h"
 #include "ui/base/ime/ash/ime_keyboard.h"
 #include "ui/base/ime/ash/input_method_manager.h"
@@ -42,8 +44,6 @@ class ImeControllerClientImpl
   void SwitchImeById(const std::string& id, bool show_message) override;
   void ActivateImeMenuItem(const std::string& key) override;
   void SetCapsLockEnabled(bool caps_enabled) override;
-  void UpdateMirroringState(bool mirroring_enabled) override;
-  void UpdateCastingState(bool casting_enabled) override;
   void OverrideKeyboardKeyset(ash::input_method::ImeKeyset keyset,
                               OverrideKeyboardKeysetCallback callback) override;
   void ShowModeIndicator() override;
@@ -85,10 +85,14 @@ class ImeControllerClientImpl
   // Sends information about current and available IMEs to ash.
   void RefreshIme();
 
-  ash::input_method::InputMethodManager* const input_method_manager_;
+  const raw_ptr<ash::input_method::InputMethodManager> input_method_manager_;
 
   // ImeController in ash.
-  ash::ImeController* ime_controller_ = nullptr;
+  raw_ptr<ash::ImeController> ime_controller_ = nullptr;
+
+  base::ScopedObservation<ash::input_method::ImeKeyboard,
+                          ash::input_method::ImeKeyboard::Observer>
+      observation_{this};
 };
 
 #endif  // CHROME_BROWSER_UI_ASH_IME_CONTROLLER_CLIENT_IMPL_H_

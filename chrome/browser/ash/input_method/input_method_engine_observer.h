@@ -49,21 +49,15 @@ class InputMethodEngineObserver {
   // `context_id` is a unique ID given to this focus session.
   virtual void OnFocus(const std::string& engine_id,
                        int context_id,
-                       const ui::TextInputMethod::InputContext& context) = 0;
-
-  // Called on a touch within a text field. Allows for features like changing
-  // virtual keyboard layout based on touch type after onfocus (since
-  // subsequent touches within the same input field do not send onfocus),
-  virtual void OnTouch(ui::EventPointerType pointerType) = 0;
+                       const TextInputMethod::InputContext& context) = 0;
 
   // Called when a text field loses focus, and will no longer generate events.
   virtual void OnBlur(const std::string& engine_id, int context_id) = 0;
 
   // Called when the user pressed a key with a text field focused.
-  virtual void OnKeyEvent(
-      const std::string& engine_id,
-      const ui::KeyEvent& event,
-      ui::TextInputMethod::KeyEventDoneCallback key_data) = 0;
+  virtual void OnKeyEvent(const std::string& engine_id,
+                          const ui::KeyEvent& event,
+                          TextInputMethod::KeyEventDoneCallback key_data) = 0;
 
   // Called when Chrome terminates on-going text input session.
   virtual void OnReset(const std::string& engine_id) = 0;
@@ -71,18 +65,13 @@ class InputMethodEngineObserver {
   // Called when the IME is no longer active.
   virtual void OnDeactivated(const std::string& engine_id) = 0;
 
-  // Called when composition bounds are changed.
-  virtual void OnCompositionBoundsChanged(
-      const std::vector<gfx::Rect>& bounds) = 0;
-
   // Called when the caret bounds change.
   virtual void OnCaretBoundsChanged(const gfx::Rect& caret_bounds) = 0;
 
   // Called when a surrounding text is changed.
   virtual void OnSurroundingTextChanged(const std::string& engine_id,
                                         const std::u16string& text,
-                                        int cursor_pos,
-                                        int anchor_pos,
+                                        gfx::Range selection_range,
                                         int offset_pos) = 0;
 
   // Called when the user clicks on an item in the candidate list.

@@ -15,7 +15,6 @@
 #include "base/gtest_prod_util.h"
 #include "components/omnibox/browser/base_search_provider.h"
 #include "components/omnibox/browser/search_provider.h"
-#include "third_party/metrics_proto/omnibox_event.pb.h"
 
 class AutocompleteProviderListener;
 class PrefRegistrySimple;
@@ -42,7 +41,7 @@ class ZeroSuggestProvider : public BaseSearchProvider {
     kNone = 0,
 
     // The remote endpoint is queried for zero-prefix suggestions. The endpoint
-    // is sent the user's authentication state, but not the current papge URL.
+    // is sent the user's authentication state, but not the current page URL.
     kRemoteNoURL = 1,
 
     // The emote endpoint is queried for zero-prefix suggestions. The endpoint
@@ -82,9 +81,6 @@ class ZeroSuggestProvider : public BaseSearchProvider {
   void DeleteMatch(const AutocompleteMatch& match) override;
   void AddProviderInfo(ProvidersInfo* provider_info) const override;
 
-  // Sets |field_trial_triggered_| to false.
-  void ResetSession() override;
-
   // Returns the list of experiment stats corresponding to |matches_|. Will be
   // logged to SearchboxStats as part of a GWS experiment, if any.
   const SearchSuggestionParser::ExperimentStatsV2s& experiment_stats_v2s()
@@ -117,6 +113,7 @@ class ZeroSuggestProvider : public BaseSearchProvider {
   void OnURLLoadComplete(const AutocompleteInput& input,
                          const ResultType result_type,
                          const network::SimpleURLLoader* source,
+                         const int response_code,
                          std::unique_ptr<std::string> response_body);
   // Called when the prefetch network request has completed.
   // `input` and `result_type` are bound to this callback. The former is the
@@ -125,6 +122,7 @@ class ZeroSuggestProvider : public BaseSearchProvider {
   void OnPrefetchURLLoadComplete(const AutocompleteInput& input,
                                  const ResultType result_type,
                                  const network::SimpleURLLoader* source,
+                                 const int response_code,
                                  std::unique_ptr<std::string> response_body);
 
   // Returns an AutocompleteMatch for a navigational suggestion |navigation|.
@@ -150,8 +148,11 @@ class ZeroSuggestProvider : public BaseSearchProvider {
   // Loader used to retrieve results for non-prefetch requests.
   std::unique_ptr<network::SimpleURLLoader> loader_;
 
-  // Loader used to retrieve results for prefetch requests.
-  std::unique_ptr<network::SimpleURLLoader> prefetch_loader_;
+  // Loader used to retrieve results for ZPS prefetch requests on NTP.
+  std::unique_ptr<network::SimpleURLLoader> ntp_prefetch_loader_;
+
+  // Loader used to retrieve results for ZPS prefetch requests on SRP/Web.
+  std::unique_ptr<network::SimpleURLLoader> srp_web_prefetch_loader_;
 
   // The list of experiment stats corresponding to |matches_|.
   SearchSuggestionParser::ExperimentStatsV2s experiment_stats_v2s_;

@@ -8,6 +8,7 @@
 #include <string.h>
 
 #include <ostream>
+#include <string_view>
 #include <tuple>
 
 #include "base/check_op.h"
@@ -15,7 +16,7 @@
 #include "base/notreached.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/strings/string_number_conversions.h"
-#include "base/strings/string_piece.h"
+#include "base/trace_event/memory_usage_estimator.h"
 #include "url/gurl.h"
 #include "url/third_party/mozilla/url_parse.h"
 #include "url/url_canon.h"
@@ -27,7 +28,7 @@ namespace url {
 
 namespace {
 
-bool IsCanonicalHost(const base::StringPiece& host) {
+bool IsCanonicalHost(const std::string_view& host) {
   std::string canon_host;
 
   // Try to canonicalize the host (copy/pasted from net/base. :( ).
@@ -55,8 +56,8 @@ bool IsCanonicalHost(const base::StringPiece& host) {
 // ShouldTreatAsOpaqueOrigin in Blink (there might be existing differences in
 // behavior between these 2 layers, but we should avoid introducing new
 // differences).
-bool IsValidInput(const base::StringPiece& scheme,
-                  const base::StringPiece& host,
+bool IsValidInput(const std::string_view& scheme,
+                  const std::string_view& host,
                   uint16_t port,
                   SchemeHostPort::ConstructPolicy policy) {
   // Empty schemes are never valid.
@@ -158,8 +159,8 @@ SchemeHostPort::SchemeHostPort(std::string scheme,
                     << " Port: " << port;
 }
 
-SchemeHostPort::SchemeHostPort(base::StringPiece scheme,
-                               base::StringPiece host,
+SchemeHostPort::SchemeHostPort(std::string_view scheme,
+                               std::string_view host,
                                uint16_t port)
     : SchemeHostPort(std::string(scheme),
                      std::string(host),
@@ -170,8 +171,8 @@ SchemeHostPort::SchemeHostPort(const GURL& url) {
   if (!url.is_valid())
     return;
 
-  base::StringPiece scheme = url.scheme_piece();
-  base::StringPiece host = url.host_piece();
+  std::string_view scheme = url.scheme_piece();
+  std::string_view host = url.host_piece();
 
   // A valid GURL never returns PORT_INVALID.
   int port = url.EffectiveIntPort();
@@ -227,6 +228,11 @@ GURL SchemeHostPort::GetURL() const {
   parsed.path = Component(serialized.length(), 1);
   serialized.append("/");
   return GURL(std::move(serialized), parsed, true);
+}
+
+size_t SchemeHostPort::EstimateMemoryUsage() const {
+  return base::trace_event::EstimateMemoryUsage(scheme_) +
+         base::trace_event::EstimateMemoryUsage(host_);
 }
 
 bool SchemeHostPort::operator<(const SchemeHostPort& other) const {

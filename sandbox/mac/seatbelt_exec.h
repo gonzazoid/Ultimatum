@@ -5,6 +5,7 @@
 #ifndef SANDBOX_MAC_SEATBELT_EXEC_H_
 #define SANDBOX_MAC_SEATBELT_EXEC_H_
 
+#include <memory>
 #include <string>
 
 #include "sandbox/mac/seatbelt.pb.h"
@@ -37,16 +38,6 @@ class SEATBELT_EXPORT SeatbeltExecClient {
   // inserted. Check the return value, which indicates if the parameter was
   // added successfully.
 
-  // Set a boolean parameter in the sandbox profile.
-  [[nodiscard]] bool SetBooleanParameter(const std::string& key, bool value);
-
-  // Set a string parameter in the sandbox profile.
-  [[nodiscard]] bool SetParameter(const std::string& key,
-                                  const std::string& value);
-
-  // Set the actual sandbox profile, using the scheme-like SBPL.
-  void SetProfile(const std::string& policy);
-
   // This returns the FD used for reading the sandbox profile in the child
   // process. The FD should be mapped into the sandboxed child process.
   // This must be called before SendProfile() or the returned FD will be -1.
@@ -54,18 +45,11 @@ class SEATBELT_EXPORT SeatbeltExecClient {
   int GetReadFD();
 
   // Sends the policy to the SeatbeltExecServer and returns success or failure.
-  bool SendProfile();
-
-  // Returns the underlying protobuf for testing purposes.
-  const mac::SandboxPolicy& GetPolicyForTesting() { return policy_; }
+  bool SendPolicy(const mac::SandboxPolicy& policy);
 
  private:
   // This writes a string (the serialized protobuf) to the |pipe_|.
   bool WriteString(const std::string& str);
-
-  // This is the protobuf which contains the sandbox profile and parameters,
-  // and is serialized and sent to the other process.
-  mac::SandboxPolicy policy_;
 
   // A file descriptor pair used for interprocess communication.
   int pipe_[2];
@@ -110,13 +94,6 @@ class SEATBELT_EXPORT SeatbeltExecServer {
   // succeeds.
   bool ApplySandboxProfile(const mac::SandboxPolicy& sandbox_policy);
 
-  // Set a string parameter in the sandbox profile. This is present in the
-  // server because the process about to initialize a sandbox may need to add
-  // some extra parameters, such as the path to the executable or the current
-  // PID. This must be called before InitializeSandbox().
-  [[nodiscard]] bool SetParameter(const std::string& key,
-                                  const std::string& value);
-
  private:
   // Reads from the |fd_| and stores the data into a string. This does
   // not append a NUL terminator as protobuf does not expect one.
@@ -124,9 +101,6 @@ class SEATBELT_EXPORT SeatbeltExecServer {
 
   // The file descriptor used to communicate with the launcher process.
   int fd_;
-
-  // Extra parameters added by the server process.
-  std::map<std::string, std::string> extra_params_;
 };
 
 }  // namespace sandbox

@@ -297,7 +297,7 @@ static bool MakeTempFile(const base::FilePath& dir,
                          const base::FilePath& file_name,
                          base::FilePath* full_path) {
   *full_path = dir.Append(file_name);
-  return base::WriteFile(*full_path, "", 0) == 0;
+  return base::WriteFile(*full_path, "");
 }
 
 // Returns true if the given URL is a file: URL that matches the given file
@@ -368,15 +368,15 @@ struct FixupCase {
      "http://example.com/s?q=%F0%90%80%A0"},
     // URLs containing Unicode non-characters.
     {"http://example.com/s?q=\xEF\xB7\x90",  // U+FDD0
-     "http://example.com/s?q=%EF%BF%BD"},
+     "http://example.com/s?q=%EF%B7%90"},
     {"http://example.com/s?q=\xEF\xBF\xBE",  // U+FFFE
-     "http://example.com/s?q=%EF%BF%BD"},
+     "http://example.com/s?q=%EF%BF%BE"},
     {"http://example.com/s?q=\xEF\xBF\xBF",  // U+FFFF
-     "http://example.com/s?q=%EF%BF%BD"},
+     "http://example.com/s?q=%EF%BF%BF"},
     {"http://example.com/s?q=\xF4\x8F\xBF\xBE",  // U+10FFFE
-     "http://example.com/s?q=%EF%BF%BD"},
+     "http://example.com/s?q=%F4%8F%BF%BE"},
     {"http://example.com/s?q=\xF4\x8F\xBF\xBF",  // U+10FFFF
-     "http://example.com/s?q=%EF%BF%BD"},
+     "http://example.com/s?q=%F4%8F%BF%BF"},
 
     // URLs containing IPv6 literals.
     {"[2001:db8::2]", "http://[2001:db8::2]/"},
@@ -391,14 +391,14 @@ struct FixupCase {
     {"http;//www.google.com/", "http://www.google.com/"},
     {"about;help", "chrome://help/"},
     // Semicolon in non-standard schemes is not replaced by colon.
-    {"whatsup;//fool", "http://whatsup%3B//fool"},
+    {"whatsup;//fool", "http://whatsup;//fool"},
     // Semicolon left as-is in URL itself.
     {"http://host/port?query;moar", "http://host/port?query;moar"},
     // Fewer slashes than expected.
     {"http;www.google.com/", "http://www.google.com/"},
     {"http;/www.google.com/", "http://www.google.com/"},
     // Semicolon at start.
-    {";http://www.google.com/", "http://%3Bhttp//www.google.com/"},
+    {";http://www.google.com/", "http://;http//www.google.com/"},
     // DevTools scheme.
     {"devtools://bundled/devtools/node.html",
      "devtools://bundled/devtools/node.html"},

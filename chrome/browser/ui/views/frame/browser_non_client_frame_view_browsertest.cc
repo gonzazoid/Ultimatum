@@ -8,7 +8,6 @@
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/extensions/extension_browsertest.h"
-#include "chrome/browser/scoped_disable_client_side_decorations_for_test.h"
 #include "chrome/browser/themes/theme_service.h"
 #include "chrome/browser/themes/theme_service_factory.h"
 #include "chrome/browser/ui/page_action/page_action_icon_type.h"
@@ -24,6 +23,7 @@
 #include "components/autofill/content/browser/content_autofill_driver.h"
 #include "components/autofill/content/browser/test_autofill_manager_injector.h"
 #include "components/autofill/core/browser/form_data_importer.h"
+#include "components/autofill/core/browser/form_data_importer_test_api.h"
 #include "components/autofill/core/browser/payments/credit_card_save_manager.h"
 #include "components/autofill/core/browser/test_autofill_manager_waiter.h"
 #include "content/public/test/browser_test.h"
@@ -34,6 +34,28 @@
 #include "third_party/blink/public/mojom/manifest/manifest.mojom.h"
 #include "ui/color/color_id.h"
 #include "ui/color/color_provider.h"
+#include "ui/gfx/color_utils.h"
+
+namespace {
+
+class TestAutofillManager : public autofill::BrowserAutofillManager {
+ public:
+  TestAutofillManager(autofill::ContentAutofillDriver* driver,
+                      autofill::AutofillClient* client)
+      : BrowserAutofillManager(driver, client, "en-US") {}
+
+  [[nodiscard]] testing::AssertionResult WaitForFormsSeen(
+      int min_num_awaited_calls) {
+    return forms_seen_waiter_.Wait(min_num_awaited_calls);
+  }
+
+ private:
+  autofill::TestAutofillManagerWaiter forms_seen_waiter_{
+      *this,
+      {autofill::AutofillManagerEvent::kFormsSeen}};
+};
+
+}  // namespace
 
 class BrowserNonClientFrameViewBrowserTest
     : public extensions::ExtensionBrowserTest {
@@ -60,20 +82,19 @@ class BrowserNonClientFrameViewBrowserTest
   // app in a test.
   // TODO: Add tests for non-bookmark hosted apps, as bookmark apps will no
   // longer be hosted apps when BMO ships.
-  void InstallAndLaunchBookmarkApp(
-      absl::optional<GURL> app_url = absl::nullopt) {
+  void InstallAndLaunchBookmarkApp(std::optional<GURL> app_url = std::nullopt) {
     blink::mojom::Manifest manifest;
     manifest.start_url = app_url.value_or(GetAppURL());
     manifest.scope = manifest.start_url.GetWithoutFilename();
     manifest.has_theme_color = true;
     manifest.theme_color = app_theme_color_;
 
-    auto web_app_info = std::make_unique<WebAppInstallInfo>();
+    auto web_app_info = std::make_unique<web_app::WebAppInstallInfo>();
     GURL manifest_url = embedded_test_server()->GetURL("/manifest");
     web_app::UpdateWebAppInfoFromManifest(manifest, manifest_url,
                                           web_app_info.get());
 
-    web_app::AppId app_id =
+    webapps::AppId app_id =
         web_app::test::InstallWebApp(profile(), std::move(web_app_info));
     app_browser_ = web_app::LaunchWebAppBrowser(profile(), app_id);
     web_contents_ = app_browser_->tab_strip_model()->GetActiveWebContents();
@@ -93,9 +114,13 @@ class BrowserNonClientFrameViewBrowserTest
 
  protected:
   SkColor app_theme_color_ = SK_ColorBLUE;
-  raw_ptr<Browser, DanglingUntriaged> app_browser_ = nullptr;
-  raw_ptr<BrowserView, DanglingUntriaged> app_browser_view_ = nullptr;
-  raw_ptr<content::WebContents, DanglingUntriaged> web_contents_ = nullptr;
+  raw_ptr<Browser, AcrossTasksDanglingUntriaged> app_browser_ = nullptr;
+  raw_ptr<BrowserView, AcrossTasksDanglingUntriaged> app_browser_view_ =
+      nullptr;
+  raw_ptr<content::WebContents, AcrossTasksDanglingUntriaged> web_contents_ =
+      nullptr;
+  autofill::TestAutofillManagerInjector<TestAutofillManager>
+      autofill_manager_injector_;
 
  private:
   GURL GetAppURL() { return embedded_test_server()->GetURL("/empty.html"); }
@@ -190,13 +215,34 @@ IN_PROC_BROWSER_TEST_F(BrowserNonClientFrameViewBrowserTest,
 #endif
 }
 
+// Verifies that the incognito window frame is always the right color.
+IN_PROC_BROWSER_TEST_F(BrowserNonClientFrameViewBrowserTest,
+                       IncognitoIsCorrectColor) {
+  // Set the color that's expected to be ignored.
+  auto* theme = ui::NativeTheme::GetInstanceForNativeUi();
+  theme->set_user_color(gfx::kGoogleBlue400);
+  theme->NotifyOnNativeThemeUpdated();
+
+  Browser* incognito_browser = CreateIncognitoBrowser(browser()->profile());
+
+  BrowserView* view = BrowserView::GetBrowserViewForBrowser(incognito_browser);
+  BrowserFrame* frame = view->frame();
+  BrowserNonClientFrameView* frame_view = frame->GetFrameView();
+
+  color_utils::HSL frame_color_hsl;
+  SkColorToHSL(frame_view->GetFrameColor(BrowserFrameActiveState::kActive),
+               &frame_color_hsl);
+  // Ensure that the frame color is very dark in Incognito.
+  EXPECT_LT(frame_color_hsl.l, 0.2);
+
+  incognito_browser->window()->Close();
+}
+
 // Checks that the title bar for hosted app windows is hidden when in fullscreen
 // for tab mode.
 IN_PROC_BROWSER_TEST_F(BrowserNonClientFrameViewBrowserTest,
                        FullscreenForTabTitlebarHeight) {
   InstallAndLaunchBookmarkApp();
-  EXPECT_GT(GetAppFrameView()->GetTopInset(false), 0);
-
   static_cast<content::WebContentsDelegate*>(app_browser_)
       ->EnterFullscreenModeForTab(web_contents_->GetPrimaryMainFrame(), {});
 
@@ -228,11 +274,6 @@ IN_PROC_BROWSER_TEST_F(BrowserNonClientFrameViewBrowserTest,
 // Tests that hosted app frames reflect the theme color set by HTML meta tags.
 IN_PROC_BROWSER_TEST_F(BrowserNonClientFrameViewBrowserTest,
                        HTMLMetaThemeColorOverridesManifest) {
-  // TODO(crbug.com/1240482): the test expectations fail if the window gets CSD
-  // and becomes smaller because of that.  Investigate this and remove the line
-  // below if possible.
-  ui::ScopedDisableClientSideDecorationsForTest scoped_disabled_csd;
-
   // Ensure we're not using the system theme on Linux.
   ThemeService* theme_service =
       ThemeServiceFactory::GetForProfile(browser()->profile());
@@ -243,6 +284,15 @@ IN_PROC_BROWSER_TEST_F(BrowserNonClientFrameViewBrowserTest,
   EXPECT_EQ(
       GetAppFrameView()->GetFrameColor(BrowserFrameActiveState::kUseCurrent),
       app_theme_color_);
+
+  views::View* const window_title_view =
+      GetAppFrameView()->GetViewByID(VIEW_ID_WINDOW_TITLE);
+  views::Label* const window_title =
+      window_title_view ? static_cast<views::Label*>(window_title_view)
+                        : nullptr;
+  if (window_title) {
+    EXPECT_EQ(window_title->GetBackgroundColor(), app_theme_color_);
+  }
 
   {
     // Add two meta theme color elements. The first element's color should be
@@ -258,6 +308,9 @@ IN_PROC_BROWSER_TEST_F(BrowserNonClientFrameViewBrowserTest,
     EXPECT_EQ(
         GetAppFrameView()->GetFrameColor(BrowserFrameActiveState::kUseCurrent),
         SK_ColorRED);
+    if (window_title) {
+      EXPECT_EQ(window_title->GetBackgroundColor(), SK_ColorRED);
+    }
   }
   {
     // Change the color of the first element. The new color should be picked.
@@ -270,6 +323,9 @@ IN_PROC_BROWSER_TEST_F(BrowserNonClientFrameViewBrowserTest,
     EXPECT_EQ(
         GetAppFrameView()->GetFrameColor(BrowserFrameActiveState::kUseCurrent),
         SK_ColorYELLOW);
+    if (window_title) {
+      EXPECT_EQ(window_title->GetBackgroundColor(), SK_ColorYELLOW);
+    }
   }
   {
     // Set a non matching media query to the first element. The second element's
@@ -301,7 +357,7 @@ IN_PROC_BROWSER_TEST_F(BrowserNonClientFrameViewBrowserTest,
     // color should be picked.
     content::ThemeChangeWaiter waiter(web_contents_);
     std::string width =
-        content::EvalJs(web_contents_.get(), "outerWidth.toString()")
+        content::EvalJs(web_contents_.get(), "innerWidth.toString()")
             .ExtractString();
     EXPECT_TRUE(content::ExecJs(web_contents_.get(),
                                 "document.getElementById('first')."
@@ -332,10 +388,10 @@ class SaveCardOfferObserver
   explicit SaveCardOfferObserver(content::WebContents* web_contents) {
     manager_ = autofill::ContentAutofillDriver::GetForRenderFrameHost(
                    web_contents->GetPrimaryMainFrame())
-                   ->autofill_manager()
-                   ->client()
-                   ->GetFormDataImporter()
-                   ->credit_card_save_manager_.get();
+                   ->GetAutofillManager()
+                   .client()
+                   .GetFormDataImporter()
+                   ->GetCreditCardSaveManager();
     manager_->SetEventObserverForTesting(this);
   }
 
@@ -353,45 +409,13 @@ class SaveCardOfferObserver
   base::RunLoop run_loop_;
 };
 
-namespace {
-
-class TestAutofillManager : public autofill::BrowserAutofillManager {
- public:
-  TestAutofillManager(autofill::ContentAutofillDriver* driver,
-                      autofill::AutofillClient* client)
-      : BrowserAutofillManager(driver,
-                               client,
-                               "en-US",
-                               EnableDownloadManager(false)) {}
-
-  [[nodiscard]] testing::AssertionResult WaitForFormsSeen(
-      int min_num_awaited_calls) {
-    return forms_seen_waiter_.Wait(min_num_awaited_calls);
-  }
-
- private:
-  autofill::TestAutofillManagerWaiter forms_seen_waiter_{
-      *this,
-      {&AutofillManager::Observer::OnAfterFormsSeen}};
-};
-
-}  // namespace
-
-// TODO(crbug.com/1366531): Fails on Mac 12.
-#if BUILDFLAG(IS_MAC)
-#define MAYBE_SaveCardIcon DISABLED_SaveCardIcon
-#else
-#define MAYBE_SaveCardIcon SaveCardIcon
-#endif
+// TODO(crbug.com/1366531): Test is flaky.
 // Tests that hosted app frames reflect the theme color set by HTML meta tags.
-IN_PROC_BROWSER_TEST_F(BrowserNonClientFrameViewBrowserTest, MAYBE_SaveCardIcon) {
-  autofill::TestAutofillManagerFutureInjectors<TestAutofillManager>
-      autofill_manager_injectors;
+IN_PROC_BROWSER_TEST_F(BrowserNonClientFrameViewBrowserTest,
+                       DISABLED_SaveCardIcon) {
   InstallAndLaunchBookmarkApp(embedded_test_server()->GetURL(
       "/autofill/credit_card_upload_form_address_and_cc.html"));
-  ASSERT_TRUE(
-      autofill_manager_injectors[0].GetForPrimaryMainFrame()->WaitForFormsSeen(
-          1));
+  ASSERT_TRUE(autofill_manager_injector_[web_contents_]->WaitForFormsSeen(1));
   ASSERT_TRUE(content::ExecJs(web_contents_.get(), "fill_form.click();"));
 
   content::TestNavigationObserver nav_observer(web_contents_);

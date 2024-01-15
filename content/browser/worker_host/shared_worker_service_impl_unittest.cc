@@ -8,12 +8,13 @@
 #include <set>
 #include <string>
 
-#include "base/bind.h"
 #include "base/containers/flat_map.h"
 #include "base/containers/queue.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/scoped_observation.h"
+#include "base/task/sequenced_task_runner.h"
 #include "build/build_config.h"
 #include "content/browser/renderer_host/render_process_host_impl.h"
 #include "content/browser/site_instance_impl.h"
@@ -313,8 +314,7 @@ TEST_F(SharedWorkerServiceImplTest, BasicTest) {
 
 // Tests that the shared worker will not be started if the hosting web contents
 // is destroyed while the script is being fetched.
-// TODO(https://crbug.com/1029434): Flaky on at least Fuchsia and Linux.
-TEST_F(SharedWorkerServiceImplTest, DISABLED_WebContentsDestroyed) {
+TEST_F(SharedWorkerServiceImplTest, WebContentsDestroyed) {
   std::unique_ptr<TestWebContents> web_contents =
       CreateWebContents(GURL("http://example.com/"));
   TestRenderFrameHost* render_frame_host = web_contents->GetPrimaryMainFrame();
@@ -334,8 +334,8 @@ TEST_F(SharedWorkerServiceImplTest, DISABLED_WebContentsDestroyed) {
 
   // Now asynchronously destroy |web_contents| so that the startup sequence at
   // least reaches SharedWorkerServiceImpl::StartWorker().
-  base::SequencedTaskRunnerHandle::Get()->DeleteSoon(FROM_HERE,
-                                                     std::move(web_contents));
+  base::SequencedTaskRunner::GetCurrentDefault()->DeleteSoon(
+      FROM_HERE, std::move(web_contents));
 
   base::RunLoop().RunUntilIdle();
 

@@ -12,7 +12,7 @@
 #include "base/android/orderfile/orderfile_buildflags.h"
 #include "base/android/sys_utils.h"
 #include "base/at_exit.h"
-#include "base/base_jni_headers/LibraryLoader_jni.h"
+#include "base/base_jni/LibraryLoader_jni.h"
 #include "base/base_switches.h"
 #include "base/metrics/histogram.h"
 #include "base/metrics/histogram_functions.h"
@@ -30,7 +30,6 @@ namespace {
 base::AtExitManager* g_at_exit_manager = nullptr;
 LibraryLoadedHook* g_registration_callback = nullptr;
 NativeInitializationHook* g_native_initialization_hook = nullptr;
-NonMainDexJniRegistrationHook* g_jni_registration_hook = nullptr;
 LibraryProcessType g_library_process_type = PROCESS_UNINITIALIZED;
 
 }  // namespace
@@ -50,12 +49,6 @@ bool IsUsingOrderfileOptimization() {
 void SetNativeInitializationHook(
     NativeInitializationHook native_initialization_hook) {
   g_native_initialization_hook = native_initialization_hook;
-}
-
-void SetNonMainDexJniRegistrationHook(
-    NonMainDexJniRegistrationHook jni_registration_hook) {
-  DCHECK(!g_jni_registration_hook);
-  g_jni_registration_hook = jni_registration_hook;
 }
 
 void SetLibraryLoadedHook(LibraryLoadedHook* func) {
@@ -93,12 +86,6 @@ static jboolean JNI_LibraryLoader_LibraryLoaded(
     return false;
   }
   return true;
-}
-
-static void JNI_LibraryLoader_RegisterNonMainDexJni(JNIEnv* env) {
-  if (g_jni_registration_hook) {
-    g_jni_registration_hook();
-  }
 }
 
 void LibraryLoaderExitHook() {

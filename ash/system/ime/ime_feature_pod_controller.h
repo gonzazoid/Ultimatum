@@ -9,12 +9,15 @@
 #include "ash/constants/quick_settings_catalogs.h"
 #include "ash/system/ime/ime_observer.h"
 #include "ash/system/unified/feature_pod_controller_base.h"
+#include "base/memory/raw_ptr.h"
+#include "base/memory/weak_ptr.h"
 
 namespace ash {
 
+class FeatureTile;
 class UnifiedSystemTrayController;
 
-// Controller of IME feature pod button.
+// Controller of IME feature tile.
 class ASH_EXPORT IMEFeaturePodController : public FeaturePodControllerBase,
                                            public IMEObserver {
  public:
@@ -27,7 +30,7 @@ class ASH_EXPORT IMEFeaturePodController : public FeaturePodControllerBase,
   ~IMEFeaturePodController() override;
 
   // FeaturePodControllerBase:
-  FeaturePodButton* CreateButton() override;
+  std::unique_ptr<FeatureTile> CreateTile(bool compact = false) override;
   QsFeatureCatalogName GetCatalogName() override;
   void OnIconPressed() override;
 
@@ -38,9 +41,12 @@ class ASH_EXPORT IMEFeaturePodController : public FeaturePodControllerBase,
   void OnIMERefresh() override;
   void OnIMEMenuActivationChanged(bool is_active) override;
 
-  // Unowned.
-  UnifiedSystemTrayController* const tray_controller_;
-  FeaturePodButton* button_ = nullptr;
+  const raw_ptr<UnifiedSystemTrayController> tray_controller_;
+
+  // Owned by the views hierarchy.
+  raw_ptr<FeatureTile, DanglingUntriaged> tile_ = nullptr;
+
+  base::WeakPtrFactory<IMEFeaturePodController> weak_factory_{this};
 };
 
 }  // namespace ash

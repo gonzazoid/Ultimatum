@@ -8,12 +8,10 @@
 #include "ash/shelf/shelf.h"
 #include "ash/system/time/time_view.h"
 #include "ash/test/ash_test_base.h"
-#include "base/test/scoped_feature_list.h"
 
 namespace ash {
 
-class TimeTrayItemViewTest : public AshTestBase,
-                             public testing::WithParamInterface<bool> {
+class TimeTrayItemViewTest : public AshTestBase {
  public:
   TimeTrayItemViewTest() = default;
   ~TimeTrayItemViewTest() override = default;
@@ -21,9 +19,6 @@ class TimeTrayItemViewTest : public AshTestBase,
   // AshTestBase:
   void SetUp() override {
     AshTestBase::SetUp();
-    scoped_feature_list_.InitWithFeatureState(features::kCalendarView,
-                                              IsCalendarViewEnabled());
-
     time_tray_item_view_ = std::make_unique<TimeTrayItemView>(
         GetPrimaryShelf(), TimeView::Type::kTime);
   }
@@ -33,26 +28,18 @@ class TimeTrayItemViewTest : public AshTestBase,
     AshTestBase::TearDown();
   }
 
-  bool IsCalendarViewEnabled() { return GetParam(); }
-
   // Returns true if the time view is in horizontal layout, false if it is in
   // vertical layout.
   bool IsTimeViewInHorizontalLayout() {
-    // Time view is in horizontal layout if its subview is in use (it transfers
-    // the ownership to the views hierarchy and becomes nullptr),
-    return !time_tray_item_view_->time_view_->horizontal_view_;
+    return time_tray_item_view_->time_view_->horizontal_time_label_container_
+        ->GetVisible();
   }
 
  protected:
-  base::test::ScopedFeatureList scoped_feature_list_;
   std::unique_ptr<TimeTrayItemView> time_tray_item_view_;
 };
 
-INSTANTIATE_TEST_SUITE_P(All,
-                         TimeTrayItemViewTest,
-                         testing::Bool() /* IsCalendarViewEnabled() */);
-
-TEST_P(TimeTrayItemViewTest, ShelfAlignment) {
+TEST_F(TimeTrayItemViewTest, ShelfAlignment) {
   // The tray should show time horizontal view when the shelf is bottom.
   GetPrimaryShelf()->SetAlignment(ShelfAlignment::kBottom);
   time_tray_item_view_->UpdateAlignmentForShelf(GetPrimaryShelf());

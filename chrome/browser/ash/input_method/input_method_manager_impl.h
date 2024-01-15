@@ -13,6 +13,8 @@
 #include <vector>
 
 #include "base/containers/flat_set.h"
+#include "base/containers/span.h"
+#include "base/memory/raw_ptr.h"
 #include "base/observer_list.h"
 #include "base/threading/thread_checker.h"
 #include "chrome/browser/ash/input_method/assistive_window_controller.h"
@@ -20,21 +22,17 @@
 #include "chrome/browser/ash/input_method/candidate_window_controller.h"
 #include "chrome/browser/ash/input_method/ime_service_connector.h"
 #include "chrome/browser/profiles/profile.h"
-// TODO(https://crbug.com/1164001): remove and use forward declaration.
-#include "ui/base/ime/ash/component_extension_ime_manager.h"
-#include "ui/base/ime/ash/text_input_method.h"
-// TODO(https://crbug.com/1164001): remove and use forward declaration.
-#include "ui/base/ime/ash/ime_keyboard.h"
-// TODO(https://crbug.com/1164001): remove and use forward declaration.
-#include "ui/base/ime/ash/input_method_delegate.h"
 #include "ui/base/ime/ash/input_method_manager.h"
 #include "ui/base/ime/ash/input_method_util.h"
-
-namespace ui {
-class TextInputMethod;
-}  // namespace ui
+#include "ui/base/ime/ash/text_input_method.h"
 
 namespace ash {
+
+class ComponentExtensionIMEManager;
+class ComponentExtensionIMEManagerDelegate;
+class ImeKeyboard;
+class InputMethodDelegate;
+
 namespace ime {
 struct AssistiveWindow;
 }  // namespace ime
@@ -74,7 +72,7 @@ class InputMethodManagerImpl : public InputMethodManager,
     scoped_refptr<InputMethodManager::State> Clone() const override;
     void AddInputMethodExtension(const std::string& extension_id,
                                  const InputMethodDescriptors& descriptors,
-                                 ui::TextInputMethod* instance) override;
+                                 TextInputMethod* instance) override;
     void RemoveInputMethodExtension(const std::string& extension_id) override;
     void ChangeInputMethod(const std::string& input_method_id,
                            bool show_message) override;
@@ -88,15 +86,14 @@ class InputMethodManagerImpl : public InputMethodManager,
         const std::vector<std::string>& initial_layouts) override;
     void DisableNonLockScreenLayouts() override;
     void GetInputMethodExtensions(InputMethodDescriptors* result) override;
-    std::unique_ptr<InputMethodDescriptors>
-    GetEnabledInputMethodsSortedByLocalizedDisplayNames() const override;
-    std::unique_ptr<InputMethodDescriptors> GetEnabledInputMethods()
+    InputMethodDescriptors GetEnabledInputMethodsSortedByLocalizedDisplayNames()
         const override;
+    InputMethodDescriptors GetEnabledInputMethods() const override;
     const std::vector<std::string>& GetEnabledInputMethodIds() const override;
     const InputMethodDescriptor* GetInputMethodFromId(
         const std::string& input_method_id) const override;
     size_t GetNumEnabledInputMethods() const override;
-    void SetEnabledExtensionImes(std::vector<std::string>* ids) override;
+    void SetEnabledExtensionImes(base::span<const std::string> ids) override;
     void SetInputMethodLoginDefault() override;
     void SetInputMethodLoginDefaultFromVPD(const std::string& locale,
                                            const std::string& layout) override;
@@ -138,9 +135,9 @@ class InputMethodManagerImpl : public InputMethodManager,
     const InputMethodDescriptor* LookupInputMethod(
         const std::string& input_method_id);
 
-    Profile* const profile_;
+    const raw_ptr<Profile, DanglingUntriaged> profile_;
 
-    InputMethodManagerImpl* const manager_;
+    const raw_ptr<InputMethodManagerImpl, DanglingUntriaged> manager_;
 
     std::string last_used_input_method_id_;
 
@@ -183,7 +180,8 @@ class InputMethodManagerImpl : public InputMethodManager,
   InputMethodManagerImpl(std::unique_ptr<InputMethodDelegate> delegate,
                          std::unique_ptr<ComponentExtensionIMEManagerDelegate>
                              component_extension_ime_manager_delegate,
-                         bool enable_extension_loading);
+                         bool enable_extension_loading,
+                         std::unique_ptr<ImeKeyboard> ime_keyboard);
 
   InputMethodManagerImpl(const InputMethodManagerImpl&) = delete;
   InputMethodManagerImpl& operator=(const InputMethodManagerImpl&) = delete;
@@ -193,8 +191,6 @@ class InputMethodManagerImpl : public InputMethodManager,
   // Sets |candidate_window_controller_|.
   void SetCandidateWindowControllerForTesting(
       CandidateWindowController* candidate_window_controller);
-  // Sets |keyboard_|.
-  void SetImeKeyboardForTesting(ImeKeyboard* keyboard);
 
   // InputMethodManager override:
   void AddObserver(InputMethodManager::Observer* observer) override;
@@ -221,7 +217,6 @@ class InputMethodManagerImpl : public InputMethodManager,
   void SetImeMenuFeatureEnabled(ImeMenuFeature feature, bool enabled) override;
   bool GetImeMenuFeatureEnabled(ImeMenuFeature feature) const override;
   void NotifyObserversImeExtraInputStateChange() override;
-  ui::VirtualKeyboardController* GetVirtualKeyboardController() override;
   void NotifyInputMethodExtensionAdded(
       const std::string& extension_id) override;
   void NotifyInputMethodExtensionRemoved(
@@ -230,6 +225,8 @@ class InputMethodManagerImpl : public InputMethodManager,
   InputMethodUtil* GetInputMethodUtil() override;
   ComponentExtensionIMEManager* GetComponentExtensionIMEManager() override;
   bool IsLoginKeyboard(const std::string& layout) const override;
+  std::string GetMigratedInputMethodID(
+      const std::string& input_method_id) override;
   bool MigrateInputMethods(std::vector<std::string>* input_method_ids) override;
   scoped_refptr<InputMethodManager::State> CreateNewState(
       Profile* profile) override;
@@ -319,7 +316,7 @@ class InputMethodManagerImpl : public InputMethodManager,
   uint32_t features_enabled_state_;
 
   // The engine map from extension_id to an engine.
-  using EngineMap = std::map<std::string, ui::TextInputMethod*>;
+  using EngineMap = std::map<std::string, TextInputMethod*>;
   using ProfileEngineMap = std::map<Profile*, EngineMap, ProfileCompare>;
   ProfileEngineMap engine_map_;
 
@@ -334,12 +331,5 @@ class InputMethodManagerImpl : public InputMethodManager,
 
 }  // namespace input_method
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when ChromeOS code migration is done.
-namespace chromeos {
-namespace input_method {
-using ::ash::input_method::InputMethodManagerImpl;
-}  // namespace input_method
-}  // namespace chromeos
 
 #endif  // CHROME_BROWSER_ASH_INPUT_METHOD_INPUT_METHOD_MANAGER_IMPL_H_

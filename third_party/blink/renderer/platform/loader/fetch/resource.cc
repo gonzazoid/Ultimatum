@@ -34,6 +34,7 @@
 #include "base/time/default_clock.h"
 #include "build/build_config.h"
 #include "services/network/public/mojom/fetch_api.mojom-blink.h"
+#include "third_party/blink/public/mojom/fetch/fetch_api_request.mojom-shared.h"
 #include "third_party/blink/public/platform/platform.h"
 #include "third_party/blink/public/platform/web_security_origin.h"
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_vector.h"
@@ -144,7 +145,6 @@ Resource::Resource(const ResourceRequestHead& request,
     : type_(type),
       status_(ResourceStatus::kNotStarted),
       encoded_size_(0),
-      encoded_size_memory_usage_(0),
       decoded_size_(0),
       cache_identifier_(MemoryCache::DefaultCacheIdentifier()),
       link_preload_(false),
@@ -278,7 +278,6 @@ void Resource::SetResourceBuffer(scoped_refptr<SharedBuffer> resource_buffer) {
 
 void Resource::ClearData() {
   data_ = nullptr;
-  encoded_size_memory_usage_ = 0;
 }
 
 void Resource::TriggerNotificationForFinishObservers(
@@ -440,6 +439,17 @@ static base::TimeDelta FreshnessLifetime(const ResourceResponse& response,
   return base::TimeDelta();
 }
 
+base::TimeDelta Resource::FreshnessLifetime() const {
+  base::TimeDelta lifetime =
+      blink::FreshnessLifetime(GetResponse(), response_timestamp_);
+  for (const auto& redirect : redirect_chain_) {
+    base::TimeDelta redirect_lifetime = blink::FreshnessLifetime(
+        redirect.redirect_response_, response_timestamp_);
+    lifetime = std::min(lifetime, redirect_lifetime);
+  }
+  return lifetime;
+}
+
 static bool CanUseResponse(const ResourceResponse& response,
                            bool allow_stale,
                            base::Time response_timestamp) {
@@ -526,10 +536,6 @@ void Resource::ResponseReceived(const ResourceResponse& response) {
 
 void Resource::SetSerializedCachedMetadata(mojo_base::BigBuffer data) {
   DCHECK(!is_revalidating_);
-}
-
-bool Resource::CodeCacheHashRequired() const {
-  return false;
 }
 
 String Resource::ReasonNotDeletable() const {
@@ -684,12 +690,11 @@ void Resource::SetDecodedSize(size_t decoded_size) {
 }
 
 void Resource::SetEncodedSize(size_t encoded_size) {
-  if (encoded_size == encoded_size_ &&
-      encoded_size == encoded_size_memory_usage_)
+  if (encoded_size == encoded_size_) {
     return;
+  }
   size_t old_size = size();
   encoded_size_ = encoded_size;
-  encoded_size_memory_usage_ = encoded_size;
   if (IsMainThread())
     MemoryCache::Get()->Update(this, old_size, size());
 }
@@ -754,14 +759,14 @@ Resource::MatchStatus Resource::CanReuse(const FetchParameters& params) const {
   // Use GetResourceRequest to get the const resource_request_.
   const ResourceRequestHead& current_request = GetResourceRequest();
 
-  // If credentials were sent with the previous request and won't be with this
-  // one, or vice versa, re-fetch the resource.
+  // If credentials mode is defferent from the the previous request, re-fetch
+  // the resource.
   //
   // This helps with the case where the server sends back
   // "Access-Control-Allow-Origin: *" all the time, but some of the client's
   // requests are made without CORS and some with.
-  if (current_request.AllowStoredCredentials() !=
-      new_request.AllowStoredCredentials()) {
+  if (current_request.GetCredentialsMode() !=
+      new_request.GetCredentialsMode()) {
     return MatchStatus::kRequestCredentialsModeDoesNotMatch;
   }
 
@@ -852,11 +857,6 @@ void Resource::OnMemoryDump(WebMemoryDumpLevelOfDetail level_of_detail,
   const String dump_name = GetMemoryDumpName();
   WebMemoryAllocatorDump* dump =
       memory_dump->CreateMemoryAllocatorDump(dump_name);
-  dump->AddScalar("encoded_size", "bytes", encoded_size_memory_usage_);
-  if (HasClientsOrObservers())
-    dump->AddScalar("live_size", "bytes", encoded_size_memory_usage_);
-  else
-    dump->AddScalar("dead_size", "bytes", encoded_size_memory_usage_);
 
   if (data_)
     GetSharedBufferMemoryDump(Data(), dump_name, memory_dump);
@@ -921,7 +921,7 @@ void Resource::SetCachePolicyBypassingCache() {
 }
 
 void Resource::ClearRangeRequestHeader() {
-  resource_request_.ClearHttpHeaderField("range");
+  resource_request_.ClearHttpHeaderField(http_names::kLowerRange);
 }
 
 void Resource::RevalidationSucceeded(
@@ -1113,6 +1113,8 @@ static const char* InitiatorTypeNameToString(
     return "Track";
   if (initiator_type_name == fetch_initiator_type_names::kUacss)
     return "User Agent CSS resource";
+  if (initiator_type_name == fetch_initiator_type_names::kUse)
+    return "SVG Use element resource";
   if (initiator_type_name == fetch_initiator_type_names::kVideo)
     return "Video";
   if (initiator_type_name == fetch_initiator_type_names::kXml)
@@ -1121,7 +1123,7 @@ static const char* InitiatorTypeNameToString(
     return "XMLHttpRequest";
 
   static_assert(
-      fetch_initiator_type_names::kNamesCount == 18,
+      fetch_initiator_type_names::kNamesCount == 19,
       "New FetchInitiatorTypeNames should be handled correctly here.");
 
   return "Resource";
@@ -1159,6 +1161,8 @@ const char* Resource::ResourceTypeToString(
       return "SpeculationRule";
     case ResourceType::kMock:
       return "Mock";
+    case ResourceType::kDictionary:
+      return "Dictionary";
   }
   NOTREACHED();
   return InitiatorTypeNameToString(fetch_initiator_name);
@@ -1183,6 +1187,7 @@ bool Resource::IsLoadEventBlockingResourceType() const {
     case ResourceType::kManifest:
     case ResourceType::kMock:
     case ResourceType::kSpeculationRules:
+    case ResourceType::kDictionary:
       return false;
   }
   NOTREACHED();

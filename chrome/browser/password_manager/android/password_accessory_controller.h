@@ -10,9 +10,7 @@
 #include "components/autofill/core/common/mojom/autofill_types.mojom-forward.h"
 #include "components/autofill/core/common/password_generation_util.h"
 #include "components/password_manager/core/browser/credential_cache.h"
-#include "content/public/browser/web_contents_user_data.h"
-#include "ui/gfx/image/image.h"
-#include "url/gurl.h"
+#include "content/public/browser/web_contents.h"
 
 // Interface for password-specific keyboard accessory controller between the
 // ManualFillingController and PasswordManagerClient.
@@ -21,9 +19,7 @@
 //     PasswordAccessoryController::GetOrCreate(web_contents);
 // On the first call, an instance is attached to |web_contents|, so it can be
 // returned by subsequent calls.
-class PasswordAccessoryController
-    : public base::SupportsWeakPtr<PasswordAccessoryController>,
-      public AccessoryController {
+class PasswordAccessoryController : public AccessoryController {
  public:
   PasswordAccessoryController() = default;
 
@@ -33,14 +29,9 @@ class PasswordAccessoryController
 
   ~PasswordAccessoryController() override = default;
 
-  // Returns true if the accessory controller may exist for |web_contents|.
-  // Otherwise (e.g. if VR is enabled), it returns false.
-  static bool AllowedForWebContents(content::WebContents* web_contents);
-
   // Returns a reference to the unique PasswordAccessoryController associated
   // with |web_contents|. A new instance is created if the first time this
-  // function is called. Only valid to be called if
-  // |PasswordAccessoryController::AllowedForWebContents(web_contents)|.
+  // function is called.
   static PasswordAccessoryController* GetOrCreate(
       content::WebContents* web_contents,
       password_manager::CredentialCache* credential_cache);
@@ -65,6 +56,14 @@ class PasswordAccessoryController
   // the automatically provided button.
   virtual void OnGenerationRequested(
       autofill::password_generation::PasswordGenerationType type) = 0;
+
+  // Asks the controller to update the UI allowing users to continue with the
+  // CredMan conditional UI.
+  virtual void UpdateCredManReentryUi(
+      autofill::mojom::FocusedFieldType focused_field_type) = 0;
+
+  // Returns a WeakPtr to the instance.
+  virtual base::WeakPtr<PasswordAccessoryController> AsWeakPtr() = 0;
 };
 
 #endif  // CHROME_BROWSER_PASSWORD_MANAGER_ANDROID_PASSWORD_ACCESSORY_CONTROLLER_H_

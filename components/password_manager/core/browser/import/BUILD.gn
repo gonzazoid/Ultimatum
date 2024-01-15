@@ -2,15 +2,18 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
+import("//build/config/features.gni")
 import("//testing/libfuzzer/fuzzer_test.gni")
 
 if (is_android) {
   import("//build/config/android/config.gni")
 }
 
-if (!is_ios) {
+if (use_blink) {
   source_set("importer") {
     sources = [
+      "import_results.cc",
+      "import_results.h",
       "password_importer.cc",
       "password_importer.h",
     ]
@@ -21,11 +24,12 @@ if (!is_ios) {
     ]
 
     deps = [
-      "//components/password_manager/core/browser",
-      "//components/password_manager/core/browser:import_results",
+      "//components/password_manager/core/browser/ui",
+      "//components/password_manager/core/common:features",
       "//components/password_manager/services/csv_password:service",
       "//components/sync/base:base",
     ]
+    configs += [ "//build/config/compiler:wexit_time_destructors" ]
   }
 
   source_set("importer_unit_tests") {
@@ -34,8 +38,8 @@ if (!is_ios) {
     deps = [
       ":importer",
       "//base/test:test_support",
-      "//components/password_manager/core/browser:import_results",
       "//components/password_manager/core/browser:test_support",
+      "//components/password_manager/core/browser/affiliation:test_support",
       "//mojo/public/cpp/bindings:bindings",
       "//testing/gmock",
       "//testing/gtest",
@@ -60,10 +64,11 @@ source_set("csv") {
   ]
 
   deps = [
-    "//components/password_manager/core/browser:affiliation",
+    "//components/password_manager/core/browser/affiliation",
     "//components/password_manager/core/browser/form_parsing",
     "//url",
   ]
+  configs += [ "//build/config/compiler:wexit_time_destructors" ]
 }
 
 source_set("csv_unit_tests") {

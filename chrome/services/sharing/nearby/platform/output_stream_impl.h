@@ -21,7 +21,6 @@ namespace base {
 class SequencedTaskRunner;
 }  // namespace base
 
-namespace location {
 namespace nearby {
 namespace chrome {
 
@@ -70,11 +69,10 @@ class OutputStreamImpl : public OutputStream {
   std::unique_ptr<ByteArray> pending_write_buffer_;
   uint32_t pending_write_buffer_pos_ = 0;
   bool write_success_ = false;
-  absl::optional<base::WaitableEvent> write_waitable_event_;
+  base::WaitableEvent write_waitable_event_;
 };
 
 }  // namespace chrome
 }  // namespace nearby
-}  // namespace location
 
 #endif  // CHROME_SERVICES_SHARING_NEARBY_PLATFORM_OUTPUT_STREAM_IMPL_H_

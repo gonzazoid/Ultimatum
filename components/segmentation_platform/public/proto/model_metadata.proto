@@ -8,6 +8,7 @@ option optimize_for = LITE_RUNTIME;
 package segmentation_platform.proto;
 
 import "components/segmentation_platform/public/proto/aggregation.proto";
+import "components/segmentation_platform/public/proto/output_config.proto";
 import "components/segmentation_platform/public/proto/types.proto";
 
 // The version is used to verify if the metadata provided by the server is
@@ -21,7 +22,7 @@ import "components/segmentation_platform/public/proto/types.proto";
 // field.
 // Version 3 supports trigger configurations for training data collection.
 enum CurrentVersion {
-  METADATA_VERSION = 2;
+  METADATA_VERSION = 3;
 }
 
 // Version information for segmentation models.
@@ -37,16 +38,12 @@ message VersionInfo {
   optional int32 metadata_cur_version = 2;
 }
 
-// Used as time unit for rest of this proto.
-enum TimeUnit {
-  UNKNOWN_TIME_UNIT = 0;
-  YEAR = 1;
-  MONTH = 2;
-  WEEK = 3;
-  DAY = 4;
-  HOUR = 5;
-  MINUTE = 6;
-  SECOND = 7;
+// Used to identify the source of the model whether it is a client side or
+// server side model.
+enum ModelSource {
+  UNKNOWN_MODEL_SOURCE = 0;
+  SERVER_MODEL_SOURCE = 1;   // Represents server side model.
+  DEFAULT_MODEL_SOURCE = 2;  // Represents client side model.
 }
 
 message UMAFeature {
@@ -121,8 +118,50 @@ message CustomInput {
     // Output type: ProcessedValue
     // Output length: 1
     // Additional arg:
-    //   `name`: The name of the field to be looked up in input context.
+    //   `name`: Optional. The name of the field to be looked up in input
+    //    context. If missing then the |name| field is used.
     FILL_FROM_INPUT_CONTEXT = 4;
+
+    // Output is a tensor of length 10 consisting of float values denoting
+    // various devices count by type with different form factor and os type.
+    // See `SyncDeviceInfoObserver` for description of each value.
+    // Output type: float
+    // Output length: 10
+    // Additional arg:
+    //   `wait_for_device_info_in_seconds`: Number of seconds to wait for sync
+    //   device info before timeout. If 0, then does not wait for sync and times
+    //   out immediately if device info is not available.
+    // InputContext arg:
+    //   `active_days_limit`: Number of days after which the device is
+    //   considered not active after last sync. Must be INT.
+    FILL_SYNC_DEVICE_INFO = 5;
+
+    // Output is a tensor of length 1 consisting device RAM in MB.
+    // Output type: float
+    // Output length: 1
+    FILL_DEVICE_RAM_MB = 6;
+
+    // Output is a tensor of length 1 describing device OS level.
+    // Output type: float
+    // Output length: 1
+    FILL_DEVICE_OS_VERSION_NUMBER = 7;
+
+    // Output is a tensor of length 1 giving pixels per inch for the current
+    // device used by the user.
+    // Output type: float
+    // Output length: 1
+    FILL_DEVICE_PPI = 8;
+
+    // Fills metrics about a given tab. A `tab_id` and `session_tag` is expected
+    // from input_context.
+    // Output type: float
+    // Output length: `TabSessionSource::kNumInputs`
+    FILL_TAB_METRICS = 9;
+
+    // Fills a random number between [0, 1).
+    // Output type: float
+    // Output length: 1
+    FILL_RANDOM = 10;
   }
 
   // The fill type of the custom input.
@@ -221,6 +260,7 @@ message TrainingOutputs {
   message TriggerConfig {
     // Describes how the training outputs are collected.
     enum DecisionType {
+      // By default considered as PERIODIC type.
       UNKNOWN = 0;
       // The on demand scheduler will trigger training data collection when the
       // client asks for a model execution with input context.
@@ -249,6 +289,23 @@ message TrainingOutputs {
     // List of triggers, whichever is hit first is used to upload the training
     // data.
     repeated ObservationTrigger observation_trigger = 2;
+
+    // Only for PERIODIC trigger. The prediction and observation times can be
+    // exact or flexible. The exact prediction setting forces the prediction
+    // time to be the time at which the segment selection or classification
+    // result was changed. The input features will be collected till the
+    // prediction time. Flexible prediction time setting allows the collector to
+    // pick any point in the past as the prediction time, usually pick the
+    // current time. The training data collection is triggered once a day with a
+    // rolling window whenever Chrome is active. This setting uploads more
+    // training data samples. By default the prediction time is FLEXIBLE. The
+    // exact observation time setting will be used only in case of exact
+    // prediction case and the observation starts exactly after prediction time.
+    // Flexible observation can be used to get most recent user behavior by
+    // setting observation time to the time of upload, which could be later than
+    // end of the observation period. By default the observation time is EXACT.
+    optional bool use_exact_prediction_time = 3;
+    optional bool use_flexible_observation_time = 4;
   }
   optional TriggerConfig trigger_config = 2;
 }
@@ -277,8 +334,11 @@ message UMAOutput {
 
 // Metadata about a segmentation model for a given segment. Contains information
 // on how to use the model such as collecting signals, interpreting results etc.
-// Next tag: 14
+// Next tag: 16
 message SegmentationModelMetadata {
+  // Values for obsolete fields.
+  reserved 15;
+
   // The version information needed to validate segmentation models.
   optional VersionInfo version_info = 9;
 
@@ -345,4 +405,26 @@ message SegmentationModelMetadata {
 
   // Whether the client should upload the input and output tensors through UKM.
   optional bool upload_tensors = 13;
+
+  // Describes the return type of the model score. Used for recording
+  // histograms.
+  enum OutputDescription {
+    UNKNOWN_RETURN_TYPE = 0;
+    // Model returns either 0 or 1.
+    RETURN_TYPE_HEURISTIC = 1;
+    // Model returns an int corresponding to a specific subsegment. Assume
+    // between 0 and 100.
+    RETURN_TYPE_MULTISEGMENT = 2;
+    // Model returns a float between 0 and 1.
+    RETURN_TYPE_PROBABILITY = 3;
+    // Model returns any integer value.
+    RETURN_TYPE_INTEGER = 4;
+  }
+  // TODO(ritikagup@): Deprecate the field.
+  optional OutputDescription return_type = 14;
+
+  // Contains information about the model results. Supplied by the client. It
+  // gives a description of how should the results look like and how to
+  // interpret them.
+  optional OutputConfig output_config = 16;
 }

@@ -5,19 +5,20 @@
 #include <stdint.h>
 
 #include <string>
+#include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/test/bind.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/scoped_feature_list.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "chrome/browser/content_settings/host_content_settings_map_factory.h"
 #include "chrome/browser/gcm/gcm_profile_service_factory.h"
+#include "chrome/browser/history/history_service_factory.h"
 #include "chrome/browser/permissions/permission_manager_factory.h"
 #include "chrome/browser/push_messaging/push_messaging_app_identifier.h"
 #include "chrome/browser/push_messaging/push_messaging_features.h"
@@ -30,6 +31,9 @@
 #include "components/gcm_driver/fake_gcm_client_factory.h"
 #include "components/gcm_driver/fake_gcm_profile_service.h"
 #include "components/gcm_driver/gcm_profile_service.h"
+#include "components/history/core/browser/history_database_params.h"
+#include "components/history/core/browser/history_service.h"
+#include "components/history/core/test/test_history_database.h"
 #include "components/permissions/permission_manager.h"
 #include "content/public/browser/push_messaging_service.h"
 #include "content/public/common/content_features.h"
@@ -38,10 +42,24 @@
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/mojom/push_messaging/push_messaging_status.mojom.h"
 
+#if BUILDFLAG(ENABLE_EXTENSIONS)
+#include "chrome/browser/extensions/chrome_test_extension_loader.h"
+#include "chrome/browser/extensions/extension_browsertest.h"
+#include "chrome/browser/extensions/extension_service_test_with_install.h"
+#include "content/public/browser/permission_result.h"
+#include "content/public/test/mock_permission_controller.h"
+#include "extensions/common/extension.h"
+#include "extensions/test/test_extension_dir.h"
+#endif  // BUILDFLAG(ENABLE_EXTENSIONS)
+
 #if BUILDFLAG(IS_ANDROID)
 #include "components/gcm_driver/instance_id/instance_id_android.h"
 #include "components/gcm_driver/instance_id/scoped_use_fake_instance_id_android.h"
 #include "components/prefs/testing_pref_service.h"
+#include "content/public/browser/permission_controller.h"
+#include "third_party/blink/public/common/permissions/permission_utils.h"
+#include "url/gurl.h"
+#include "url/origin.h"
 #endif  // BUILDFLAG(IS_ANDROID)
 
 namespace {
@@ -94,20 +112,24 @@ std::unique_ptr<KeyedService> BuildFakeGCMProfileService(
   return gcm::FakeGCMProfileService::Build(static_cast<Profile*>(context));
 }
 
-constexpr base::TimeDelta kPushEventHandleTime = base::Seconds(10);
+std::unique_ptr<KeyedService> BuildTestHistoryService(
+    content::BrowserContext* context) {
+  auto service = std::make_unique<history::HistoryService>();
+  service->Init(history::TestHistoryDatabaseParamsForPath(context->GetPath()));
+  return service;
+}
 
 }  // namespace
 
 class PushMessagingServiceTest : public ::testing::Test {
  public:
   PushMessagingServiceTest() {
-#if BUILDFLAG(IS_ANDROID)
-    PushMessagingServiceImpl::RegisterPrefs(prefs_.registry());
-#endif
-
     // Override the GCM Profile service so that we can send fake messages.
     gcm::GCMProfileServiceFactory::GetInstance()->SetTestingFactory(
         &profile_, base::BindRepeating(&BuildFakeGCMProfileService));
+
+    HistoryServiceFactory::GetInstance()->SetTestingFactory(
+        &profile_, base::BindRepeating(&BuildTestHistoryService));
   }
 
   ~PushMessagingServiceTest() override = default;
@@ -230,16 +252,10 @@ class PushMessagingServiceTest : public ::testing::Test {
     return task_environment_;
   }
 
-#if BUILDFLAG(IS_ANDROID)
-  PrefService* get_pref() { return &prefs_; }
-#endif
-
  private:
   content::BrowserTaskEnvironment task_environment_{
       base::test::TaskEnvironment::TimeSource::MOCK_TIME};
-#if BUILDFLAG(IS_ANDROID)
-  TestingPrefServiceSimple prefs_;
-#endif
+
   PushMessagingTestingProfile profile_;
 
 #if BUILDFLAG(IS_ANDROID)
@@ -247,6 +263,60 @@ class PushMessagingServiceTest : public ::testing::Test {
       block_async_;
 #endif  // BUILDFLAG(IS_ANDROID)
 };
+
+TEST_F(PushMessagingServiceTest, RecordsRevocationAndSourceUiNoReporterTest) {
+  base::HistogramTester histograms;
+
+  PushMessagingServiceImpl* push_service = profile()->GetPushMessagingService();
+  ASSERT_TRUE(push_service);
+
+  const GURL origin(kTestOrigin);
+  SetPermission(origin, CONTENT_SETTING_ALLOW);
+
+  ASSERT_EQ(blink::mojom::PermissionStatus::GRANTED,
+            push_service->GetPermissionStatus(origin, true /* user_visible */));
+
+  Subscribe(push_service, origin);
+
+  SetPermission(origin, CONTENT_SETTING_DEFAULT);
+
+  histograms.ExpectUniqueSample(
+      "Permissions.Action.Notifications",
+      static_cast<int>(permissions::PermissionAction::REVOKED), 1);
+  histograms.ExpectUniqueSample(
+      "Permissions.Revocation.Notifications.SourceUI",
+      static_cast<int>(permissions::PermissionSourceUI::UNIDENTIFIED), 1);
+}
+
+TEST_F(PushMessagingServiceTest, RecordsRevocationAndSourceUiWithReporterTest) {
+  base::HistogramTester histograms;
+
+  PushMessagingServiceImpl* push_service = profile()->GetPushMessagingService();
+  ASSERT_TRUE(push_service);
+
+  const GURL origin(kTestOrigin);
+  SetPermission(origin, CONTENT_SETTING_ALLOW);
+
+  ASSERT_EQ(blink::mojom::PermissionStatus::GRANTED,
+            push_service->GetPermissionStatus(origin, true /* user_visible */));
+
+  Subscribe(push_service, origin);
+
+  const auto source_ui = permissions::PermissionSourceUI::SITE_SETTINGS;
+  {
+    permissions::PermissionUmaUtil::ScopedRevocationReporter
+        scoped_revocation_reporter(profile(), origin, origin,
+                                   ContentSettingsType::NOTIFICATIONS,
+                                   source_ui);
+    SetPermission(origin, CONTENT_SETTING_DEFAULT);
+  }
+
+  histograms.ExpectUniqueSample(
+      "Permissions.Action.Notifications",
+      static_cast<int>(permissions::PermissionAction::REVOKED), 1);
+  histograms.ExpectUniqueSample("Permissions.Revocation.Notifications.SourceUI",
+                                static_cast<int>(source_ui), 1);
+}
 
 // Fails too often on Linux TSAN builder: http://crbug.com/1211350.
 #if BUILDFLAG(IS_LINUX) && defined(THREAD_SANITIZER)
@@ -257,13 +327,6 @@ class PushMessagingServiceTest : public ::testing::Test {
 TEST_F(PushMessagingServiceTest, MAYBE_PayloadEncryptionTest) {
   PushMessagingServiceImpl* push_service = profile()->GetPushMessagingService();
   ASSERT_TRUE(push_service);
-
-#if BUILDFLAG(IS_ANDROID)
-  // Without Android app-level Notifications permission a push message will be
-  // ignored.
-  push_service->set_enabled_app_level_notification_permission_for_testing(true);
-  push_service->set_prefs_for_testing(get_pref());
-#endif
 
   const GURL origin(kTestOrigin);
   SetPermission(origin, CONTENT_SETTING_ALLOW);
@@ -405,111 +468,131 @@ TEST_F(PushMessagingServiceTest, MAYBE_RemoveExpiredSubscriptions) {
   EXPECT_TRUE(deleted_identifier.is_null());
 }
 
-TEST_F(PushMessagingServiceTest, TestMultipleIncomingPushMessages) {
-  base::HistogramTester histograms;
+// Tests that extensions are permitted to pass userVisibleOnly true or false
+// when subscribing to push messages.
+#if BUILDFLAG(ENABLE_EXTENSIONS)
+namespace extensions {
 
-  const GURL origin(kTestOrigin);
-  SetPermission(origin, CONTENT_SETTING_ALLOW);
+using ContextType = ExtensionBrowserTest::ContextType;
 
-  PushMessagingServiceImpl* push_service = profile()->GetPushMessagingService();
+class ExtensionsPushMessagingServiceTest
+    : public ExtensionServiceTestWithInstall,
+      public testing::WithParamInterface<ContextType> {
+ public:
+  ExtensionsPushMessagingServiceTest() = default;
+
+  ExtensionsPushMessagingServiceTest(
+      const ExtensionsPushMessagingServiceTest&) = delete;
+  ExtensionsPushMessagingServiceTest& operator=(
+      const ExtensionsPushMessagingServiceTest&) = delete;
+
+  void SetUp() override {
+    ExtensionServiceTestWithInstall::SetUp();
+    InitializeExtensionService(ExtensionServiceInitParams());
+  }
+};
+
+// Tests that extensions with various workers can request userVisible as true
+// or false when subscribing to push notifications. Only worker based extensions
+// are allowed to request userVisible as false.
+TEST_P(ExtensionsPushMessagingServiceTest,
+       GetPermissionStatus_ExtensionNonServiceWorker_UserVisible) {
+  static constexpr char kManifestPersistentBackgroundScript[] =
+      R"({"scripts": ["background.js"], "persistent": true})";
+  static constexpr char kManifestEventPageBackgroundScript[] =
+      R"({"persistent": false,
+          "scripts": ["background.js"]
+         }
+      )";
+  static constexpr char kManifestServiceWorkerBackgroundScript[] =
+      R"({"service_worker": "background.js"})";
+
+  // Load an extension of ContextType.
+  TestExtensionDir test_dir;
+  constexpr char kManifest[] =
+      R"({
+         "name": "Test Extension",
+         "manifest_version": %s,
+         "version": "0.1",
+         "background": %s,
+         "permissions": ["notifications"]
+       })";
+  ContextType extension_context_type = GetParam();
+  bool worker_extension = extension_context_type == ContextType::kServiceWorker;
+  const char* background_script;
+  if (worker_extension) {
+    background_script = kManifestServiceWorkerBackgroundScript;
+  } else if (extension_context_type == ContextType::kEventPage) {
+    background_script = kManifestEventPageBackgroundScript;
+  } else {
+    background_script = kManifestPersistentBackgroundScript;
+  }
+  const char* manifest_version = worker_extension ? "3" : "2";
+  std::string manifest =
+      base::StringPrintf(kManifest, manifest_version, background_script);
+  test_dir.WriteManifest(manifest);
+  test_dir.WriteFile(FILE_PATH_LITERAL("background.js"), "");
+  ChromeTestExtensionLoader loader(profile());
+  scoped_refptr<const Extension> extension =
+      loader.LoadExtension(test_dir.UnpackedPath());
+  ASSERT_TRUE(extension);
+
+  // Ensure that permissions are always granted by default when we are not
+  // applying the exception for worker-based extensions.
+  auto mock_permission_controller =
+      std::make_unique<content::MockPermissionController>();
+  auto permission_mock_return =
+      content::PermissionResult(content::PermissionStatus::GRANTED,
+                                content::PermissionStatusSource::UNSPECIFIED);
+  EXPECT_CALL(*mock_permission_controller,
+              GetPermissionResultForOriginWithoutContext(testing::_, testing::_,
+                                                         testing::_))
+      .WillRepeatedly(testing::Return(permission_mock_return));
+  EXPECT_CALL(
+      *mock_permission_controller,
+      GetPermissionResultForOriginWithoutContext(testing::_, testing::_))
+      .WillRepeatedly(testing::Return(permission_mock_return));
+  browser_context()->SetPermissionControllerForTesting(
+      std::move(mock_permission_controller));
+
+  PushMessagingServiceImpl* push_service =
+      PushMessagingServiceFactory::GetForProfile(profile());
   ASSERT_TRUE(push_service);
+  const GURL extension_origin =
+      Extension::GetBaseURLFromExtensionId(extension->id());
 
-#if BUILDFLAG(IS_ANDROID)
-  // Without Android app-level Notifications permission a push message will be
-  // ignored.
-  push_service->set_enabled_app_level_notification_permission_for_testing(true);
-  push_service->set_prefs_for_testing(get_pref());
-#endif
+  // All workers can always set userVisible to true when subscribing.
+  EXPECT_EQ(
+      blink::mojom::PermissionStatus::GRANTED,
+      push_service->GetPermissionStatus(extension_origin, /*user_visible=*/
+                                        true));
 
-  // Subscribe |origin| to push service.
-  Subscribe(push_service, origin);
-  PushMessagingAppIdentifier app_identifier =
-      PushMessagingAppIdentifier::FindByServiceWorker(profile(), origin,
-                                                      kTestServiceWorkerId);
-  ASSERT_FALSE(app_identifier.is_null());
-
-  // Setup decrypted test message.
-  gcm::IncomingMessage message;
-  message.sender_id = kTestSenderId;
-  message.raw_data = "testdata";
-  message.decrypted = true;
-
-  // Setup callbacks for dispatch and handled push events.
-  auto dispatched_run_loop = std::make_unique<base::RunLoop>();
-  auto handled_run_loop = std::make_unique<base::RunLoop>();
-  PushMessagingServiceImpl::PushEventCallback handle_push_event;
-
-  push_service->SetMessageDispatchedCallbackForTesting(
-      base::BindLambdaForTesting(
-          [&](const std::string& app_id, const GURL& origin,
-              int64_t service_worker_registration_id,
-              absl::optional<std::string> payload,
-              PushMessagingServiceImpl::PushEventCallback callback) {
-            handle_push_event = std::move(callback);
-            dispatched_run_loop->Quit();
-          }));
-
-  push_service->SetMessageCallbackForTesting(
-      base::BindLambdaForTesting([&]() { handled_run_loop->Quit(); }));
-
-  // Simulate two incoming push messages at the same time.
-  push_service->OnMessage(app_identifier.app_id(), message);
-  push_service->OnMessage(app_identifier.app_id(), message);
-
-  // First wait until we dispatched the first push message.
-  dispatched_run_loop->Run();
-  dispatched_run_loop = std::make_unique<base::RunLoop>();
-  auto handled_first = std::move(handle_push_event);
-  handle_push_event = PushMessagingServiceImpl::PushEventCallback();
-
-  histograms.ExpectUniqueTimeSample("PushMessaging.CheckOriginForAbuseTime",
-                                    base::Seconds(0),
-                                    /*expected_bucket_count=*/1);
-  histograms.ExpectUniqueTimeSample("PushMessaging.DeliverQueuedMessageTime",
-                                    base::Seconds(0),
-                                    /*expected_bucket_count=*/1);
-
-  // Run all tasks until idle so we can verify that we don't dispatch the second
-  // push message until the first one is handled.
-  base::RunLoop().RunUntilIdle();
-  EXPECT_FALSE(handle_push_event);
-
-  // Simulate handling the first push event takes some time.
-  task_environment().FastForwardBy(kPushEventHandleTime);
-
-  // Now signal that the first push event has been handled and wait until we
-  // checked for visibility requirements.
-  std::move(handled_first).Run(blink::mojom::PushEventStatus::SUCCESS);
-  handled_run_loop->Run();
-  handled_run_loop = std::make_unique<base::RunLoop>();
-
-  histograms.ExpectUniqueTimeSample("PushMessaging.MessageHandledTime",
-                                    kPushEventHandleTime,
-                                    /*expected_bucket_count=*/1);
-
-  // Simulate handling the second push event takes some time.
-  task_environment().FastForwardBy(kPushEventHandleTime);
-
-  // Now wait until we dispatched the second push message and handle it too.
-  dispatched_run_loop->Run();
-  std::move(handle_push_event).Run(blink::mojom::PushEventStatus::SUCCESS);
-  handled_run_loop->Run();
-
-  // Checking origins for abuse happens immediately on receiving a push message
-  // one at a time. Both messages do that instantly in this test.
-  histograms.ExpectTimeBucketCount("PushMessaging.CheckOriginForAbuseTime",
-                                   base::Seconds(0),
-                                   /*count=*/2);
-  // Delivering messages should be done in series so the second message should
-  // have waited for the first one to be handled.
-  histograms.ExpectTimeBucketCount("PushMessaging.DeliverQueuedMessageTime",
-                                   kPushEventHandleTime,
-                                   /*count=*/1);
-  // The total time from receiving until handling of the second message.
-  histograms.ExpectTimeBucketCount("PushMessaging.MessageHandledTime",
-                                   kPushEventHandleTime * 2,
-                                   /*count=*/1);
+  // Only worker based extensions can set userVisible to false when subscribing.
+  if (worker_extension) {
+    EXPECT_EQ(
+        blink::mojom::PermissionStatus::GRANTED,
+        push_service->GetPermissionStatus(extension_origin, /*user_visible=*/
+                                          false));
+  } else {
+    EXPECT_EQ(
+        blink::mojom::PermissionStatus::DENIED,
+        push_service->GetPermissionStatus(extension_origin, /*user_visible=*/
+                                          false));
+  }
 }
+
+INSTANTIATE_TEST_SUITE_P(
+    NonWorkerExtension,
+    ExtensionsPushMessagingServiceTest,
+    testing::ValuesIn({ContextType::kEventPage,
+                       ContextType::kPersistentBackground}));
+INSTANTIATE_TEST_SUITE_P(WorkerBasedExtension,
+                         ExtensionsPushMessagingServiceTest,
+                         testing::Values(ContextType::kServiceWorker));
+
+}  // namespace extensions
+
+#endif  // BUILDFLAG(ENABLE_EXTENSIONS)
 
 #if BUILDFLAG(IS_ANDROID)
 class FCMRevocationTest : public PushMessagingServiceTest {
@@ -517,322 +600,241 @@ class FCMRevocationTest : public PushMessagingServiceTest {
   FCMRevocationTest() {
     scoped_feature_list_.InitAndEnableFeature(
         features::kRevokeNotificationsPermissionIfDisabledOnAppLevel);
+    PushMessagingServiceImpl::RegisterPrefs(prefs_.registry());
   }
 
   ~FCMRevocationTest() override = default;
 
+  GURL GetUrl() { return origin_; }
+
+  url::Origin GetOrigin() { return url::Origin::Create(origin_); }
+
+  PrefService* pref() { return &prefs_; }
+
+  void SetPermission(const GURL& origin,
+                     ContentSetting value,
+                     TestingProfile* profile) {
+    HostContentSettingsMap* host_content_settings_map =
+        HostContentSettingsMapFactory::GetForProfile(profile);
+    host_content_settings_map->SetContentSettingDefaultScope(
+        origin, origin, ContentSettingsType::NOTIFICATIONS, value);
+  }
+
  private:
   base::test::ScopedFeatureList scoped_feature_list_;
+  GURL origin_ = GURL("https://example.com");
+  TestingPrefServiceSimple prefs_;
 };
 
-// Tests that the grace period preferences will be cleared if app-level
-// permissions are enabled.
-TEST_F(FCMRevocationTest, TestPermissionRevocationClearPreferences) {
-  const GURL origin(kTestOrigin);
-  SetPermission(origin, CONTENT_SETTING_ALLOW);
+TEST_F(FCMRevocationTest, ResetPrefs) {
+  content::PermissionController* permission_controller =
+      profile()->GetPermissionController();
+
+  content::PermissionResult result =
+      permission_controller->GetPermissionResultForOriginWithoutContext(
+          blink::PermissionType::NOTIFICATIONS, GetOrigin());
+  EXPECT_EQ(result.status, blink::mojom::PermissionStatus::ASK);
+
+  SetPermission(GetUrl(), ContentSetting::CONTENT_SETTING_ALLOW, profile());
+
+  result = permission_controller->GetPermissionResultForOriginWithoutContext(
+      blink::PermissionType::NOTIFICATIONS, GetOrigin());
+  EXPECT_EQ(result.status, blink::mojom::PermissionStatus::GRANTED);
 
   const char kNotificationsPermissionRevocationGracePeriodDate[] =
       "notifications_permission_revocation_grace_period";
-
-  PushMessagingServiceImpl* push_service = profile()->GetPushMessagingService();
-  ASSERT_TRUE(push_service);
-
-  // Without Android app-level Notifications permission a push message will be
-  // ignored.
-  push_service->set_enabled_app_level_notification_permission_for_testing(true);
-  push_service->set_prefs_for_testing(get_pref());
 
   // Just random value to make sure it is reset.
   base::Time time = base::Time::FromTimeT(100);
 
-  get_pref()->SetTime(kNotificationsPermissionRevocationGracePeriodDate, time);
+  pref()->SetTime(kNotificationsPermissionRevocationGracePeriodDate, time);
 
-  // (1) Make sure that |kExampleOrigin| has access to use Push Messaging.
-  ASSERT_TRUE(push_service->IsPermissionSet(origin, true /* user_visible */));
+  PushMessagingServiceImpl::RevokePermissionIfPossible(
+      GetUrl(), /*app_level_notifications_enabled=*/true, pref(), profile());
 
-  // (2) Subscribe for Push Messaging, and verify that we've got the required
-  // information in order to be able to create encrypted messages.
-  TestPushSubscription subscription;
-  Subscribe(push_service, origin, &subscription);
-
-  // (3) Encrypt a message using the public key and authentication secret that
-  // are associated with the subscription.
-
-  gcm::IncomingMessage message;
-  message.sender_id = kTestSenderId;
-
-  ASSERT_TRUE(gcm::CreateEncryptedPayloadForTesting(
-      kTestPayload,
-      base::StringPiece(reinterpret_cast<char*>(subscription.p256dh_.data()),
-                        subscription.p256dh_.size()),
-      base::StringPiece(reinterpret_cast<char*>(subscription.auth_.data()),
-                        subscription.auth_.size()),
-      &message));
-
-  ASSERT_GT(message.raw_data.size(), 0u);
-  ASSERT_NE(kTestPayload, message.raw_data);
-  ASSERT_FALSE(message.decrypted);
-
-  // (4) Find the app_id that has been associated with the subscription.
-  PushMessagingAppIdentifier app_identifier =
-      PushMessagingAppIdentifier::FindByServiceWorker(profile(), origin,
-                                                      kTestServiceWorkerId);
-
-  ASSERT_FALSE(app_identifier.is_null());
-
-  std::string app_id;
-  GURL dispatched_origin;
-  int64_t service_worker_registration_id;
-  absl::optional<std::string> payload;
-
-  // (5) Observe message dispatchings from the Push Messaging service, and
-  // then dispatch the |message| on the GCM driver as if it had actually
-  // been received by Google Cloud Messaging.
-  push_service->SetMessageDispatchedCallbackForTesting(base::BindRepeating(
-      &PushMessagingServiceTest::DidDispatchMessage, base::Unretained(this),
-      &app_id, &dispatched_origin, &service_worker_registration_id, &payload));
-
-  gcm::FakeGCMProfileService* fake_profile_service =
-      static_cast<gcm::FakeGCMProfileService*>(
-          gcm::GCMProfileServiceFactory::GetForProfile(profile()));
-
-  fake_profile_service->DispatchMessage(app_identifier.app_id(), message);
-
-  base::RunLoop().RunUntilIdle();
-
-  // (6) Verify that the message, as received by the Push Messaging Service, has
-  // indeed been decrypted by the GCM Driver, and has been forwarded to the
-  // Service Worker that has been associated with the subscription.
-  EXPECT_EQ(app_identifier.app_id(), app_id);
-  EXPECT_EQ(origin, dispatched_origin);
-  EXPECT_EQ(service_worker_registration_id, kTestServiceWorkerId);
-
-  EXPECT_TRUE(payload);
-  EXPECT_EQ(kTestPayload, *payload);
-
+  // Time is reset.
   base::Time grace_period_date =
-      get_pref()->GetTime(kNotificationsPermissionRevocationGracePeriodDate);
+      pref()->GetTime(kNotificationsPermissionRevocationGracePeriodDate);
   EXPECT_EQ(grace_period_date, base::Time());
   EXPECT_NE(grace_period_date, time);
 
-  // (7) |kExampleOrigin| still has access to use Push Messaging.
-  ASSERT_TRUE(push_service->IsPermissionSet(origin, true /* user_visible */));
+  // Permission is not reset.
+  result = permission_controller->GetPermissionResultForOriginWithoutContext(
+      blink::PermissionType::NOTIFICATIONS, GetOrigin());
+  EXPECT_EQ(result.status, blink::mojom::PermissionStatus::GRANTED);
 }
 
-// Tests that the grace period is not enabled, and no app-level permission.
-// Ignore a push message.
-TEST_F(FCMRevocationTest, TestPermissionRevocationNoPermissionFirstMessage) {
-  base::HistogramTester histogram_tester;
-  const GURL origin(kTestOrigin);
-  SetPermission(origin, CONTENT_SETTING_ALLOW);
+// This test verifies that if the grace period is not started, and there is no
+// app-level Notifications permissions, we init the grace period prefs without
+// revoking permissions.
+TEST_F(FCMRevocationTest, NoAppLevelPermissionInitGracePeriodPrefsTest) {
+  content::PermissionController* permission_controller =
+      profile()->GetPermissionController();
+
+  content::PermissionResult result =
+      permission_controller->GetPermissionResultForOriginWithoutContext(
+          blink::PermissionType::NOTIFICATIONS, GetOrigin());
+  EXPECT_EQ(result.status, blink::mojom::PermissionStatus::ASK);
+
+  SetPermission(GetUrl(), ContentSetting::CONTENT_SETTING_ALLOW, profile());
+
+  result = permission_controller->GetPermissionResultForOriginWithoutContext(
+      blink::PermissionType::NOTIFICATIONS, GetOrigin());
+  EXPECT_EQ(result.status, blink::mojom::PermissionStatus::GRANTED);
 
   const char kNotificationsPermissionRevocationGracePeriodDate[] =
       "notifications_permission_revocation_grace_period";
 
-  PushMessagingServiceImpl* push_service = profile()->GetPushMessagingService();
-  ASSERT_TRUE(push_service);
+  // The grace period is not initialized.
+  EXPECT_EQ(pref()->GetTime(kNotificationsPermissionRevocationGracePeriodDate),
+            base::Time());
 
-  // Without Android app-level Notifications permission a push message will be
-  // ignored.
-  push_service->set_enabled_app_level_notification_permission_for_testing(
-      false);
-  push_service->set_prefs_for_testing(get_pref());
+  PushMessagingServiceImpl::RevokePermissionIfPossible(
+      GetUrl(), /*app_level_notifications_enabled=*/false, pref(), profile());
 
-  // (1) Make sure that |kExampleOrigin| has access to use Push Messaging.
-  ASSERT_TRUE(push_service->IsPermissionSet(origin, true /* user_visible */));
+  // The grace period is initialized with non-default time value.
+  EXPECT_NE(pref()->GetTime(kNotificationsPermissionRevocationGracePeriodDate),
+            base::Time());
 
-  // (2) Subscribe for Push Messaging, and verify that we've got the required
-  // information in order to be able to create encrypted messages.
-  TestPushSubscription subscription;
-  Subscribe(push_service, origin, &subscription);
-
-  // (3) Encrypt a message using the public key and authentication secret that
-  // are associated with the subscription.
-  gcm::IncomingMessage message;
-  message.sender_id = kTestSenderId;
-
-  ASSERT_TRUE(gcm::CreateEncryptedPayloadForTesting(
-      kTestPayload,
-      base::StringPiece(reinterpret_cast<char*>(subscription.p256dh_.data()),
-                        subscription.p256dh_.size()),
-      base::StringPiece(reinterpret_cast<char*>(subscription.auth_.data()),
-                        subscription.auth_.size()),
-      &message));
-
-  ASSERT_GT(message.raw_data.size(), 0u);
-  ASSERT_NE(kTestPayload, message.raw_data);
-  ASSERT_FALSE(message.decrypted);
-
-  // (4) Find the app_id that has been associated with the subscription.
-  PushMessagingAppIdentifier app_identifier =
-      PushMessagingAppIdentifier::FindByServiceWorker(profile(), origin,
-                                                      kTestServiceWorkerId);
-
-  ASSERT_FALSE(app_identifier.is_null());
-
-  std::string app_id;
-  GURL dispatched_origin;
-  int64_t service_worker_registration_id;
-  absl::optional<std::string> payload;
-
-  // (5) Observe message dispatchings from the Push Messaging service, and
-  // then dispatch the |message| on the GCM driver as if it had actually
-  // been received by Google Cloud Messaging.
-  push_service->SetMessageDispatchedCallbackForTesting(base::BindRepeating(
-      &PushMessagingServiceTest::DidDispatchMessage, base::Unretained(this),
-      &app_id, &dispatched_origin, &service_worker_registration_id, &payload));
-
-  gcm::FakeGCMProfileService* fake_profile_service =
-      static_cast<gcm::FakeGCMProfileService*>(
-          gcm::GCMProfileServiceFactory::GetForProfile(profile()));
-
-  fake_profile_service->DispatchMessage(app_identifier.app_id(), message);
-
-  base::RunLoop().RunUntilIdle();
-
-  // (6) Verify that the message, as received by the Push Messaging Service, has
-  // not been decrypted by the GCM Driver, and has not been forwarded to the
-  // Service Worker that has been associated with the subscription.
-  EXPECT_NE(app_identifier.app_id(), app_id);
-  EXPECT_NE(origin, dispatched_origin);
-  EXPECT_NE(service_worker_registration_id, kTestServiceWorkerId);
-
-  EXPECT_FALSE(payload);
-
-  // The grace period date has been changed.
-  EXPECT_NE(
-      get_pref()->GetTime(kNotificationsPermissionRevocationGracePeriodDate),
-      base::Time());
-
-  // (7) |kExampleOrigin| still has access to use Push Messaging.
-  ASSERT_TRUE(push_service->IsPermissionSet(origin, true /* user_visible */));
-
-  histogram_tester.ExpectUniqueSample(
-      "PushMessaging.DeliveryStatus",
-      static_cast<int>(
-          blink::mojom::PushEventStatus::NO_APP_LEVEL_PERMISSION_IGNORE),
-      1);
-
-  histogram_tester.ExpectTotalCount("PushMessaging.UnregistrationReason", 0);
+  // Permission is still granted.
+  result = permission_controller->GetPermissionResultForOriginWithoutContext(
+      blink::PermissionType::NOTIFICATIONS, GetOrigin());
+  EXPECT_EQ(result.status, blink::mojom::PermissionStatus::GRANTED);
 }
 
-// Tests that the grace period was enabled more than 3 days ago, and no
-// app-level permission. An incoming push message should be ignored and
-// origin-level Notifications permission should be revoked to prevent further
-// push messages.
-TEST_F(FCMRevocationTest, TestPermissionRevocationGracePeriodIsOver) {
-  base::HistogramTester histogram_tester;
-  const GURL origin(kTestOrigin);
-  SetPermission(origin, CONTENT_SETTING_ALLOW);
+// This test verifies that if the grace period is over and there is no app-level
+// Notifications permissions, site-level Notifications permission will be
+// revoked.
+TEST_F(FCMRevocationTest, NoAppLevelPermissionRevocationTest) {
+  content::PermissionController* permission_controller =
+      profile()->GetPermissionController();
+
+  content::PermissionResult result =
+      permission_controller->GetPermissionResultForOriginWithoutContext(
+          blink::PermissionType::NOTIFICATIONS, GetOrigin());
+  EXPECT_EQ(result.status, blink::mojom::PermissionStatus::ASK);
+
+  SetPermission(GetUrl(), ContentSetting::CONTENT_SETTING_ALLOW, profile());
+
+  result = permission_controller->GetPermissionResultForOriginWithoutContext(
+      blink::PermissionType::NOTIFICATIONS, GetOrigin());
+  EXPECT_EQ(result.status, blink::mojom::PermissionStatus::GRANTED);
 
   const char kNotificationsPermissionRevocationGracePeriodDate[] =
       "notifications_permission_revocation_grace_period";
 
-  PushMessagingServiceImpl* push_service = profile()->GetPushMessagingService();
-  ASSERT_TRUE(push_service);
-
-  // Without Android app-level Notifications permission a push message will be
-  // ignored.
-  push_service->set_enabled_app_level_notification_permission_for_testing(
-      false);
-  push_service->set_prefs_for_testing(get_pref());
+  // The grace period is not initialized.
+  EXPECT_EQ(pref()->GetTime(kNotificationsPermissionRevocationGracePeriodDate),
+            base::Time());
 
   // Init `time` with 4 days old time value.
   const base::Time time = base::Time::FromDeltaSinceWindowsEpoch(
       base::Time::Now() -
       base::Time::FromDeltaSinceWindowsEpoch(base::Days(4)));
+
   // Init the grace period date with a value that is older than 3 days (the
   // default grace period).
-  get_pref()->SetTime(kNotificationsPermissionRevocationGracePeriodDate, time);
+  pref()->SetTime(kNotificationsPermissionRevocationGracePeriodDate, time);
 
-  // (1) Make sure that |kExampleOrigin| has access to use Push Messaging.
-  ASSERT_TRUE(push_service->IsPermissionSet(origin, true /* user_visible */));
+  PushMessagingServiceImpl::RevokePermissionIfPossible(
+      GetUrl(), /*app_level_notifications_enabled=*/false, pref(), profile());
 
-  // (2) Subscribe for Push Messaging, and verify that we've got the required
-  // information in order to be able to create encrypted messages.
-  TestPushSubscription subscription;
-  Subscribe(push_service, origin, &subscription);
+  EXPECT_EQ(pref()->GetTime(kNotificationsPermissionRevocationGracePeriodDate),
+            time);
 
-  // (3) Encrypt a message using the public key and authentication secret that
-  // are associated with the subscription.
-  gcm::IncomingMessage message;
-  message.sender_id = kTestSenderId;
-
-  ASSERT_TRUE(gcm::CreateEncryptedPayloadForTesting(
-      kTestPayload,
-      base::StringPiece(reinterpret_cast<char*>(subscription.p256dh_.data()),
-                        subscription.p256dh_.size()),
-      base::StringPiece(reinterpret_cast<char*>(subscription.auth_.data()),
-                        subscription.auth_.size()),
-      &message));
-
-  ASSERT_GT(message.raw_data.size(), 0u);
-  ASSERT_NE(kTestPayload, message.raw_data);
-  ASSERT_FALSE(message.decrypted);
-
-  // (4) Find the app_id that has been associated with the subscription.
-  PushMessagingAppIdentifier app_identifier =
-      PushMessagingAppIdentifier::FindByServiceWorker(profile(), origin,
-                                                      kTestServiceWorkerId);
-
-  ASSERT_FALSE(app_identifier.is_null());
-
-  std::string app_id;
-  GURL dispatched_origin;
-  int64_t service_worker_registration_id;
-  absl::optional<std::string> payload;
-
-  // (5) Observe message dispatchings from the Push Messaging service, and
-  // then dispatch the |message| on the GCM driver as if it had actually
-  // been received by Google Cloud Messaging.
-  push_service->SetMessageDispatchedCallbackForTesting(base::BindRepeating(
-      &PushMessagingServiceTest::DidDispatchMessage, base::Unretained(this),
-      &app_id, &dispatched_origin, &service_worker_registration_id, &payload));
-
-  gcm::FakeGCMProfileService* fake_profile_service =
-      static_cast<gcm::FakeGCMProfileService*>(
-          gcm::GCMProfileServiceFactory::GetForProfile(profile()));
-
-  fake_profile_service->DispatchMessage(app_identifier.app_id(), message);
-
-  base::RunLoop().RunUntilIdle();
-
-  // (6) Verify that the message, as received by the Push Messaging Service, has
-  // not been decrypted by the GCM Driver, and has not been forwarded to the
-  // Service Worker that has been associated with the subscription.
-  EXPECT_NE(app_identifier.app_id(), app_id);
-  EXPECT_NE(origin, dispatched_origin);
-  EXPECT_NE(service_worker_registration_id, kTestServiceWorkerId);
-
-  EXPECT_FALSE(payload);
-
-  // The grace period date has not been changed.
-  EXPECT_EQ(
-      get_pref()->GetTime(kNotificationsPermissionRevocationGracePeriodDate),
-      time);
-
-  // (7) |kExampleOrigin| has no access to use Push Messaging.
-  EXPECT_FALSE(push_service->IsPermissionSet(origin, true /* user_visible */));
-
-  histogram_tester.ExpectUniqueSample(
-      "PushMessaging.DeliveryStatus",
-      static_cast<int>(
-          blink::mojom::PushEventStatus::NO_APP_LEVEL_PERMISSION_UNSUBSCRIBE),
-      1);
-
-  // 1st event - blink::mojom::PushUnregistrationReason::PERMISSION_REVOKED,
-  // because `PushMessagingServiceImpl::OnContentSettingChanged` will be
-  // notified when Notifications permission is revoked.
-  //
-  // 2nd event -
-  // blink::mojom::PushUnregistrationReason::NO_APP_LEVEL_PERMISSION.
-  histogram_tester.ExpectTotalCount("PushMessaging.UnregistrationReason", 2);
-
-  histogram_tester.ExpectBucketCount(
-      "PushMessaging.UnregistrationReason",
-      blink::mojom::PushUnregistrationReason::PERMISSION_REVOKED, 1);
-  histogram_tester.ExpectBucketCount(
-      "PushMessaging.UnregistrationReason",
-      blink::mojom::PushUnregistrationReason::NO_APP_LEVEL_PERMISSION, 1);
+  // Permission is revoked.
+  result = permission_controller->GetPermissionResultForOriginWithoutContext(
+      blink::PermissionType::NOTIFICATIONS, GetOrigin());
+  EXPECT_EQ(result.status, blink::mojom::PermissionStatus::ASK);
 }
+
+// This test verifies that if the grace period is not over and there is no
+// app-level Notifications permissions, site-level Notifications permission will
+// not be revoked.
+TEST_F(FCMRevocationTest, NoAppLevelPermissionIgnoreTest) {
+  content::PermissionController* permission_controller =
+      profile()->GetPermissionController();
+
+  content::PermissionResult result =
+      permission_controller->GetPermissionResultForOriginWithoutContext(
+          blink::PermissionType::NOTIFICATIONS, GetOrigin());
+  EXPECT_EQ(result.status, blink::mojom::PermissionStatus::ASK);
+
+  SetPermission(GetUrl(), ContentSetting::CONTENT_SETTING_ALLOW, profile());
+
+  result = permission_controller->GetPermissionResultForOriginWithoutContext(
+      blink::PermissionType::NOTIFICATIONS, GetOrigin());
+  EXPECT_EQ(result.status, blink::mojom::PermissionStatus::GRANTED);
+
+  const char kNotificationsPermissionRevocationGracePeriodDate[] =
+      "notifications_permission_revocation_grace_period";
+
+  // The grace period is not initialized.
+  EXPECT_EQ(pref()->GetTime(kNotificationsPermissionRevocationGracePeriodDate),
+            base::Time());
+
+  // Init `time` with 2 days old time value.
+  const base::Time time = base::Time::FromDeltaSinceWindowsEpoch(
+      base::Time::Now() -
+      base::Time::FromDeltaSinceWindowsEpoch(base::Days(2)));
+  // Init the grace period date with a value that is fewer than 3 days (the
+  // default grace period).
+  pref()->SetTime(kNotificationsPermissionRevocationGracePeriodDate, time);
+
+  PushMessagingServiceImpl::RevokePermissionIfPossible(
+      GetUrl(), /*app_level_notifications_enabled=*/false, pref(), profile());
+
+  EXPECT_EQ(pref()->GetTime(kNotificationsPermissionRevocationGracePeriodDate),
+            time);
+
+  // Permission is revoked.
+  result = permission_controller->GetPermissionResultForOriginWithoutContext(
+      blink::PermissionType::NOTIFICATIONS, GetOrigin());
+  EXPECT_EQ(result.status, blink::mojom::PermissionStatus::GRANTED);
+}
+
+// This test verifies that if the grace period is not over and there is
+// app-level Notifications permissions, the grace period reset will be tracked.
+TEST_F(FCMRevocationTest, ResetAndRecordGracePeriodTest) {
+  content::PermissionController* permission_controller =
+      profile()->GetPermissionController();
+
+  content::PermissionResult result =
+      permission_controller->GetPermissionResultForOriginWithoutContext(
+          blink::PermissionType::NOTIFICATIONS, GetOrigin());
+  EXPECT_EQ(result.status, blink::mojom::PermissionStatus::ASK);
+
+  SetPermission(GetUrl(), ContentSetting::CONTENT_SETTING_ALLOW, profile());
+
+  result = permission_controller->GetPermissionResultForOriginWithoutContext(
+      blink::PermissionType::NOTIFICATIONS, GetOrigin());
+  EXPECT_EQ(result.status, blink::mojom::PermissionStatus::GRANTED);
+
+  const char kNotificationsPermissionRevocationGracePeriodDate[] =
+      "notifications_permission_revocation_grace_period";
+
+  // The grace period is not initialized.
+  EXPECT_EQ(pref()->GetTime(kNotificationsPermissionRevocationGracePeriodDate),
+            base::Time());
+
+  // Init `time` with 2 days old time value.
+  const base::Time time = base::Time::FromDeltaSinceWindowsEpoch(
+      base::Time::Now() -
+      base::Time::FromDeltaSinceWindowsEpoch(base::Days(2)));
+  // Init the grace period date with a value that is fewer than 3 days (the
+  // default grace period).
+  pref()->SetTime(kNotificationsPermissionRevocationGracePeriodDate, time);
+
+  PushMessagingServiceImpl::RevokePermissionIfPossible(
+      GetUrl(), /*app_level_notifications_enabled=*/true, pref(), profile());
+
+  EXPECT_EQ(pref()->GetTime(kNotificationsPermissionRevocationGracePeriodDate),
+            base::Time());
+
+  // Permission is revoked.
+  result = permission_controller->GetPermissionResultForOriginWithoutContext(
+      blink::PermissionType::NOTIFICATIONS, GetOrigin());
+  EXPECT_EQ(result.status, blink::mojom::PermissionStatus::GRANTED);
+}
+
 #endif

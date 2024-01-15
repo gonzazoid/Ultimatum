@@ -25,16 +25,6 @@ enum ScreenState {
     OFF_AUTO,
 };
 
-// Ready state for document scanner.
-enum DocumentScannerReadyState {
-  // The library is not supported on the device.
-  NOT_SUPPORTED,
-  // The library is supported but needs to wait for its installation.
-  SUPPORTED_BUT_NOT_READY,
-  // The library is supported and ready.
-  SUPPORTED_AND_READY,
-};
-
 // Interface for monitoring screen state of device. The state is detected from
 // Chrome browser process and is notified to Chrome Camera App in renderer
 // process.
@@ -69,6 +59,9 @@ enum WindowStateType {
 interface WindowStateMonitor {
   // Updates when any of the window states are changed.
   OnWindowStateChanged(array<WindowStateType> states);
+
+  // Updates when the window focus state is changed.
+  OnWindowFocusChanged(bool is_focus);
 };
 
 // The possible result of the file deletion monitor.
@@ -81,6 +74,30 @@ enum FileMonitorResult {
 
   // Fails to monitor the file due to errors.
   ERROR = 2,
+};
+
+enum StorageMonitorStatus {
+  // There are enough storage space to operate CCA functionalities.
+  NORMAL = 0,
+
+  // Storage is getting low, display warning to users.
+  LOW = 1,
+
+  // Storage is almost full. Should stop ongoing recording and don't allow new
+  // recording.
+  CRITICALLY_LOW = 2,
+
+  // Monitoring got canceled since there is another monitor request.
+  CANCELED = 3,
+
+  // Monitoring get errors.
+  ERROR = 4,
+};
+
+// Interface to monitor storage status changes.
+interface StorageMonitor {
+  // Update when storage status is changed.
+  Update(StorageMonitorStatus status);
 };
 
 // Interface for window controlling.
@@ -106,6 +123,14 @@ interface WindowStateController {
 
   // Focus the window.
   Focus() => ();
+};
+
+enum ToteMetricFormat {
+  PHOTO = 0,
+  SCAN_JPG = 1,
+  SCAN_PDF = 2,
+  VIDEO_GIF = 3,
+  VIDEO_MP4 = 4,
 };
 
 enum DocumentOutputFormat {
@@ -167,12 +192,6 @@ interface CameraAppHelper {
   // Opens the given URL in the browser.
   OpenUrlInBrowser(url.mojom.Url url);
 
-  // Sets the monitor to monitor the camera usage ownership changed. If the
-  // window operation is not supported for current instance, return false.
-  SetCameraUsageMonitor(
-      pending_remote<CameraUsageOwnershipMonitor> usage_monitor)
-          => (bool is_success);
-
   // Gets the controller to control and monitor the window state of app.
   GetWindowStateController()
       => (pending_remote<WindowStateController> controller);
@@ -182,14 +201,17 @@ interface CameraAppHelper {
   // will be used to generate the URI for the broadcast.
   SendNewCaptureBroadcast(bool is_video, string name);
 
+  // Notifies Tote client when a photo/pdf/video/gif is captured.
+  NotifyTote(ToteMetricFormat format, string name);
+
   // Monitors the deletion for given file |name| in the camera folder. The
   // function will return when the deletion happens, or when another monitor
   // request is raised, or when the error occurs. We can determine the cases
   // by result.
   MonitorFileDeletion(string name) => (FileMonitorResult result);
 
-  // Returns the ready type of the document scanner on the device.
-  GetDocumentScannerReadyState() => (DocumentScannerReadyState ready_state);
+  // Check if document scanner is supported.
+  IsDocumentScannerSupported() => (bool is_supported);
 
   // Registers a callback which will be resolved once the document scanner is
   // ready or when it fails to load. If the document scanner is not supported on
@@ -226,4 +248,16 @@ interface CameraAppHelper {
   // 2. The user is chosen to take the survey
   // 3. The user hasn't done any survey recently
   MaybeTriggerSurvey();
+
+  // Register a Storage Monitor instance and return initial status. Calling
+  // Update() whenever the state changes.
+  StartStorageMonitor(pending_remote<StorageMonitor> monitor)
+      => (StorageMonitorStatus initial_status);
+
+  // Stop ongoing storage monitor, no-op if there is no current monitoring.
+  StopStorageMonitor();
+
+  // Open "Storage management" page directly. This page is inside Settings app,
+  // under "Device" section.
+  OpenStorageManagement();
 };

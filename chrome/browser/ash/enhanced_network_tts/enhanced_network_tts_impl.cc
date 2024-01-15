@@ -8,7 +8,7 @@
 #include <utility>
 
 #include "base/base64.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/no_destructor.h"
 #include "base/strings/string_util.h"
@@ -31,7 +31,7 @@ BASE_FEATURE(kEnhancedNetworkTtsOverride,
 constexpr base::FeatureParam<std::string> EnhancedNetworkTtsImpl::kApiKey;
 
 const net::NetworkTrafficAnnotationTag traffic_annotation =
-  net::DefineNetworkTrafficAnnotation("enhanced_network_tts", R"(
+    net::DefineNetworkTrafficAnnotation("enhanced_network_tts", R"(
     semantics {
       sender: "Enhanced Network TTS"
       description:
@@ -44,24 +44,30 @@ const net::NetworkTrafficAnnotationTag traffic_annotation =
       trigger: "Turn on Select-to-speak from settings. "
         "Use search +s or hold search and click some text to get it to start. "
         "Accept the dialog about natural voices, and/or go to Select-to-speak to enable them."
+      user_data {
+        type: WEB_CONTENT
+      }
       data: "1. Google API Key."
             "2. Text piece to be converted to speech."
             "3. Voice to be used for the speech."
             "4. Language of the speech."
             "5. Rate of the speech."
       destination: GOOGLE_OWNED_SERVICE
+      internal {
+        contacts {
+          email: "chrome-a11y-core@google.com"
+        }
+      }
+      last_reviewed: "2023-04-05"
     }
     policy {
       cookies_allowed: NO
-      setting: "This feature cannot be disabled in settings."
-      chrome_policy {
-        AudioCaptureAllowed {
-          policy_options {mode: MANDATORY}
-          AudioCaptureAllowed: false
-        }
-      }
-    })"
-  );
+      setting:
+        "Users can disable the text-to-speech with enhanced voices feature on "
+        "the Select-to-Speak subpage of the Accessibility settings. This "
+        "setting is disabled by default."
+      policy_exception_justification: "Not implemented."
+    })");
 
 EnhancedNetworkTtsImpl::ServerRequest::ServerRequest(
     std::unique_ptr<network::SimpleURLLoader> url_loader,
@@ -191,9 +197,10 @@ void EnhancedNetworkTtsImpl::ProcessNextServerRequest() {
   }
 
   const ServerRequestList::iterator first_request_it = server_requests_.begin();
-  network::SimpleURLLoader::BodyAsStringCallback body_as_string_callback =
-      base::BindOnce(&EnhancedNetworkTtsImpl::OnServerResponseReceived,
-                     weak_factory_.GetWeakPtr(), first_request_it);
+  network::SimpleURLLoader::BodyAsStringCallbackDeprecated
+      body_as_string_callback =
+          base::BindOnce(&EnhancedNetworkTtsImpl::OnServerResponseReceived,
+                         weak_factory_.GetWeakPtr(), first_request_it);
   server_requests_.front().url_loader->DownloadToString(
       url_loader_factory_.get(), std::move(body_as_string_callback),
       kEnhancedNetworkTtsMaxResponseSize);

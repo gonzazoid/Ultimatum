@@ -431,6 +431,23 @@ void CheckUiDisplayNameForLocale(const std::string& locale,
   }
 }
 
+TEST_F(L10nUtilTest, GetDisplayNameForLocaleWithoutCountry) {
+  ASSERT_EQ(u"English", l10n_util::GetDisplayNameForLocaleWithoutCountry(
+                            "en-US", "en", false));
+  ASSERT_EQ(u"English", l10n_util::GetDisplayNameForLocaleWithoutCountry(
+                            "en-GB", "en", false));
+  ASSERT_EQ(u"English", l10n_util::GetDisplayNameForLocaleWithoutCountry(
+                            "en-AU", "en", false));
+  ASSERT_EQ(u"English", l10n_util::GetDisplayNameForLocaleWithoutCountry(
+                            "en", "en", false));
+  EXPECT_EQ(u"Spanish", l10n_util::GetDisplayNameForLocaleWithoutCountry(
+                            "es-419", "en", false));
+  EXPECT_EQ(u"Chinese", l10n_util::GetDisplayNameForLocaleWithoutCountry(
+                            "zh-CH", "en", false));
+  EXPECT_EQ(u"Chinese", l10n_util::GetDisplayNameForLocaleWithoutCountry(
+                            "zh-TW", "en", false));
+}
+
 TEST_F(L10nUtilTest, GetDisplayNameForLocale) {
   // TODO(jungshik): Make this test more extensive.
   // Test zh-CN and zh-TW are treated as zh-Hans and zh-Hant.
@@ -502,7 +519,17 @@ TEST_F(L10nUtilTest, GetDisplayNameForLocale) {
               lower_with_null[2] == 0 && lower_with_null[3] == 'b');
 }
 
-TEST_F(L10nUtilTest, GetDisplayNameForCountry) {
+// TODO:(crbug.com/1456465) Re-enable test for iOS
+// In iOS17, NSLocale's internal implementation was modified resulting in
+// redefined behavior for existing functions. As a result,
+// `l10n_util::GetDisplayNameForCountry` no longer produces the same output in
+// iOS17 as previous versions.
+#if BUILDFLAG(IS_IOS)
+#define MAYBE_GetDisplayNameForCountry DISABLED_GetDisplayNameForCountry
+#else
+#define MAYBE_GetDisplayNameForCountry GetDisplayNameForCountry
+#endif
+TEST_F(L10nUtilTest, MAYBE_GetDisplayNameForCountry) {
   std::u16string result = l10n_util::GetDisplayNameForCountry("BR", "en");
   EXPECT_EQ(u"Brazil", result);
 
@@ -651,4 +678,53 @@ TEST_F(L10nUtilTest, PlatformLocalesIsSorted) {
         << " >= " << cur_locale;
     last_locale = cur_locale;
   }
+}
+
+TEST_F(L10nUtilTest, AcceptLocalesIsSorted) {
+  // Accept-Language List should be sorted and have no duplicates.
+  const char* const* locales = l10n_util::GetAcceptLanguageListForTesting();
+  const size_t locales_size = l10n_util::GetAcceptLanguageListSizeForTesting();
+
+  // All 0-length and 1-length lists are sorted.
+  if (locales_size <= 1) {
+    return;
+  }
+
+  const char* last_locale = locales[0];
+  for (size_t i = 1; i < locales_size; i++) {
+    const char* cur_locale = locales[i];
+    EXPECT_LT(strcmp(last_locale, cur_locale), 0)
+        << "Incorrect ordering in kPlatformLocales: " << last_locale
+        << " >= " << cur_locale;
+    last_locale = cur_locale;
+  }
+}
+
+TEST_F(L10nUtilTest, IsLanguageAccepted) {
+  EXPECT_TRUE(l10n_util::IsLanguageAccepted("en", "es-419"));
+  EXPECT_TRUE(l10n_util::IsLanguageAccepted("en", "en-GB"));
+  EXPECT_TRUE(l10n_util::IsLanguageAccepted("es", "fil"));
+  EXPECT_TRUE(l10n_util::IsLanguageAccepted("de", "zu"));
+
+  // The old code for "he" is not supported.
+  EXPECT_FALSE(l10n_util::IsLanguageAccepted("es", "iw"));
+}
+
+TEST_F(L10nUtilTest, FormatStringComputeCorrectOffsetInRTL) {
+  base::i18n::SetICUDefaultLocale("ar");
+  ASSERT_EQ(true, base::i18n::IsRTL());
+  // Use a format string that contains Strong RTL Chars.
+  const std::u16string kFormatString(u"كلمة مرور $1");
+  std::vector<size_t> offsets;
+  std::u16string formatted_string =
+      l10n_util::FormatString(kFormatString, {u"Replacement"}, &offsets);
+  ASSERT_FALSE(offsets.empty());
+  // On Linux, an extra base::i18n::kRightToLeftMark character is appended for
+  // the text rendering engine to render the string correctly. This should be
+  // considered when computing the offsets.
+#if BUILDFLAG(IS_POSIX) && !BUILDFLAG(IS_APPLE) && !BUILDFLAG(IS_ANDROID)
+  EXPECT_EQ(offsets[0], 11u);
+#else
+  EXPECT_EQ(offsets[0], 10u);
+#endif
 }

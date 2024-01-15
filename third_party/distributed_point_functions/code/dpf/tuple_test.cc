@@ -14,9 +14,10 @@
 
 #include "dpf/tuple.h"
 
-#include <gtest/gtest.h>
+#include <tuple>
 
 #include "absl/numeric/int128.h"
+#include "gtest/gtest.h"
 
 namespace distributed_point_functions {
 

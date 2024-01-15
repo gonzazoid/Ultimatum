@@ -8,12 +8,12 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
-#include "components/services/app_service/public/cpp/url_handler_info.h"
 #include "services/network/public/cpp/simple_url_loader.h"
+#include "url/origin.h"
 
 class GURL;
 
@@ -37,7 +37,7 @@ class WebAppOriginAssociationFetcher {
       const WebAppOriginAssociationFetcher&) = delete;
 
   virtual void FetchWebAppOriginAssociationFile(
-      const apps::UrlHandlerInfo& url_handler,
+      const url::Origin& origin,
       scoped_refptr<network::SharedURLLoaderFactory> shared_url_loader_factory,
       FetchFileCallback callback);
 

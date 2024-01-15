@@ -11,7 +11,7 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/supports_user_data.h"
@@ -88,6 +88,7 @@ class AndroidAppCommunication : public base::SupportsUserData::Data {
       const std::string& payment_request_id,
       const base::UnguessableToken& request_token,
       content::WebContents* web_contents,
+      const absl::optional<base::UnguessableToken>& twa_instance_identifier,
       InvokePaymentAppCallback callback) = 0;
 
   // Aborts a payment flow which was previously started with InvokePaymentApp().

@@ -13,7 +13,10 @@
 #include "ash/app_list/views/search_result_base_view.h"
 #include "ash/ash_export.h"
 #include "base/compiler_specific.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
+#include "ui/base/metadata/metadata_header_macros.h"
+#include "ui/views/controls/progress_bar.h"
 
 namespace views {
 class FlexLayoutView;
@@ -36,18 +39,24 @@ class SearchResultPageDialogController;
 
 // Search result view uses `views::FlexLayout` to show results in different
 // configurations.
-// +---------------------------------------------------------------+
-// |`text_container_`                                              |
-// | +----------------------+ +----------------------------------+ |
-// | |`big_title_container_'| |`body_text_container_`            | |
-// | |                      | | +------------------------------+ | |
-// | |                      | | |`title_and_details_container_`| | |
-// | |                      | | +------------------------------+ | |
-// | |                      | | +------------------------------+ | |
-// | |                      | | |`keyboard_shortcut_container_`| | |
-// | |                      | | +------------------------------+ | |
-// | +----------------------+ +----------------------------------+ |
-// +---------------------------------------------------------------+
+// +----------------------------------------------------------------------+
+// |`text_container_`                                                     |
+// | +----------------------+ +-----------------------------------------+ |
+// | |`big_title_container_'| |`body_text_container_`                   | |
+// | |                      | | +------------------------------+        | |
+// | |                      | | |`title_and_details_container_`|        | |
+// | |                      | | +------------------------------+        | |
+// | |                      | | +------------------------------+        | |
+// | |                      | | |`keyboard_shortcut_container_`|        | |
+// | |                      | | +------------------------------+        | |
+// | |                      | | +------------------------------+        | |
+// | |                      | | |`progress_bar_container_`     |        | |
+// | |                      | | +------------------------------+        | |
+// | |                      | | +------------------------------+        | |
+// | |                      | | |`system_details_container_`   |        | |
+// | |                      | | +------------------------------+        | |
+// | +----------------------+ +-----------------------------------------+ |
+// +----------------------------------------------------------------------+
 //
 // +-------------------------------------------------------------------------+
 // |`big_title_container_`                                                   |
@@ -56,7 +65,7 @@ class SearchResultPageDialogController;
 // | +--------------------------------+ +----------------------------------+ |
 // +-------------------------------------------------------------------------+
 //
-// The `title_and_details_container_` has two possible layouts depending on
+// The `title_and_details_container_` has three possible layouts depending on
 // `view_type_` and whether `keyboard_shortcut_container_` has results
 //
 // Layout used when the view_type_ == SearchResultViewType::kDefault OR
@@ -80,6 +89,32 @@ class SearchResultPageDialogController;
 // | |'details_container_'|        |
 // | +--------------------+        |
 // +-------------------------------+
+//
+// Layout used when `is_progress_bar_answer_card_` is true.
+// +-------------------------------+
+// |`title_and_details_container_` |
+// | +---------------------------+ |
+// | | `progress_bar_container_` | |
+// | +-------------------------- + |
+// | +--------------------+        |
+// | |'details_container_'|        |
+// | +--------------------+        |
+// +-------------------------------+
+//
+// Layout used when the result is a System Info Answer Card and the result
+// contains a right hand description.
+// +---------------------------------------------------------------+
+// |`title_and_details_container_`                                 |
+// | +---------------------------+                                 |
+// | | `progress_bar_container_` |                                 |
+// | +-------------------------- +                                 |
+// | +-----------------------------------------------------------+ |
+// | | `system_details_container_`                               | |
+// | | +-------------------------+  +--------------------------+ | |
+// | | |`left_details_container_`|  |`right_details_container_`| | |
+// | | +-------------------------+  +--------------------------+ | |
+// | +-----------------------------------------------------------+ |
+// +---------------------------------------------------------------+
 
 class ASH_EXPORT SearchResultView : public SearchResultBaseView,
                                     public SearchResultActionsViewDelegate {
@@ -96,7 +131,8 @@ class ASH_EXPORT SearchResultView : public SearchResultBaseView,
     SearchResult::Tags GetTags() const { return tags_; }
 
    private:
-    views::Label* label_;  // Owned by views hierarchy.
+    raw_ptr<views::Label, DanglingUntriaged>
+        label_;  // Owned by views hierarchy.
     SearchResult::Tags tags_;
   };
 
@@ -116,9 +152,7 @@ class ASH_EXPORT SearchResultView : public SearchResultBaseView,
     kKeyboardShortcut,
   };
 
-  // Internal class name.
-  static const char kViewClassName[];
-
+  METADATA_HEADER(SearchResultView);
   SearchResultView(SearchResultListView* list_view,
                    AppListViewDelegate* view_delegate,
                    SearchResultPageDialogController* dialog_controller,
@@ -157,11 +191,6 @@ class ASH_EXPORT SearchResultView : public SearchResultBaseView,
       views::FlexLayoutView* title_container,
       views::FlexLayoutView* details_container);
 
- private:
-  friend class test::SearchResultListViewTest;
-  friend class SearchResultListView;
-  friend class SearchResultViewWidgetTest;
-
   void set_multi_line_details_height_for_test(int height) {
     multi_line_details_height_ = height;
   }
@@ -186,6 +215,15 @@ class ASH_EXPORT SearchResultView : public SearchResultBaseView,
     return result_text_separator_label_;
   }
 
+  views::FlexLayoutView* get_progress_bar_container_for_test() {
+    return progress_bar_container_;
+  }
+
+ private:
+  friend class test::SearchResultListViewTest;
+  friend class SearchResultListView;
+  friend class SearchResultViewWidgetTest;
+
   int PreferredHeight() const;
   int PrimaryTextHeight() const;
   int SecondaryTextHeight() const;
@@ -200,14 +238,14 @@ class ASH_EXPORT SearchResultView : public SearchResultBaseView,
   void UpdateBadgeIcon();
   void UpdateBigTitleContainer();
   void UpdateBigTitleSuperscriptContainer();
+  void UpdateIconAndBadgeIcon();
   void UpdateTitleContainer();
   void UpdateDetailsContainer();
   void UpdateKeyboardShortcutContainer();
+  void UpdateProgressBarContainer();
   void UpdateRating();
 
-  void StyleLabel(views::Label* label,
-                  bool is_title_label,
-                  const SearchResult::Tags& tags);
+  void StyleLabel(views::Label* label, const SearchResult::Tags& tags);
   void StyleBigTitleContainer();
   void StyleBigTitleSuperscriptContainer();
   void StyleTitleContainer();
@@ -221,14 +259,12 @@ class ASH_EXPORT SearchResultView : public SearchResultBaseView,
   void OnSelectedResultChanged();
 
   // views::View overrides:
-  const char* GetClassName() const override;
   gfx::Size CalculatePreferredSize() const override;
   void Layout() override;
   bool OnKeyPressed(const ui::KeyEvent& event) override;
   void PaintButtonContents(gfx::Canvas* canvas) override;
   void OnMouseEntered(const ui::MouseEvent& event) override;
   void OnMouseExited(const ui::MouseEvent& event) override;
-  void GetAccessibleNodeData(ui::AXNodeData* node_data) override;
   void VisibilityChanged(View* starting_from, bool is_visible) override;
   void OnThemeChanged() override;
 
@@ -248,46 +284,70 @@ class ASH_EXPORT SearchResultView : public SearchResultBaseView,
   void OnSearchResultActionActivated(size_t index) override;
   bool IsSearchResultHoveredOrSelected() override;
 
+  bool IsInlineSearchResult();
+
+  // Uses icon view bounds to calculate the host badge view bounds.
+  gfx::Rect GetIconBadgeViewBounds(const gfx::Rect& icon_view_bounds) const;
+  gfx::Size CalculateRegularIconImageSize(
+      const gfx::ImageSkia& icon_image) const;
+
   // Parent list view. Owned by views hierarchy.
-  SearchResultListView* const list_view_;
+  const raw_ptr<SearchResultListView> list_view_;
 
-  AppListViewDelegate* const view_delegate_;
+  const raw_ptr<AppListViewDelegate> view_delegate_;
 
-  SearchResultPageDialogController* const dialog_controller_;
+  const raw_ptr<SearchResultPageDialogController, DanglingUntriaged>
+      dialog_controller_;
 
-  MaskedImageView* icon_ = nullptr;         // Owned by views hierarchy.
-  views::ImageView* badge_icon_ = nullptr;  // Owned by views hierarchy.
+  raw_ptr<MaskedImageView> icon_view_ = nullptr;  // Owned by views hierarchy.
+  raw_ptr<views::ImageView> badge_icon_view_ =
+      nullptr;  // Owned by views hierarchy.
 
-  views::FlexLayoutView* text_container_ =
+  raw_ptr<views::FlexLayoutView> text_container_ =
       nullptr;  // Owned by views hierarchy.
-  views::FlexLayoutView* big_title_container_ =
+  raw_ptr<views::FlexLayoutView> big_title_container_ =
       nullptr;  // Owned by views hierarchy.
-  views::FlexLayoutView* big_title_main_text_container_ =
+  raw_ptr<views::FlexLayoutView> big_title_main_text_container_ =
       nullptr;  // Owned by views hierarchy.
-  views::FlexLayoutView* big_title_superscript_container_ =
+  raw_ptr<views::FlexLayoutView> big_title_superscript_container_ =
       nullptr;  // Owned by views hierarchy.
-  views::FlexLayoutView* body_text_container_ =
+  raw_ptr<views::FlexLayoutView> body_text_container_ =
       nullptr;  // Owned by views hierarchy.
-  views::FlexLayoutView* title_and_details_container_ =
+  raw_ptr<views::FlexLayoutView> title_and_details_container_ =
       nullptr;  // Owned by views hierarchy.
-  views::FlexLayoutView* title_container_ =
+  raw_ptr<views::FlexLayoutView> title_container_ =
       nullptr;  // Owned by views hierarchy.
-  views::FlexLayoutView* details_container_ =
+  raw_ptr<views::FlexLayoutView> details_container_ =
       nullptr;  // Owned by views hierarchy.
-  views::FlexLayoutView* keyboard_shortcut_container_ =
-      nullptr;                                     // Owned by views hierarchy.
+  raw_ptr<views::FlexLayoutView> keyboard_shortcut_container_ =
+      nullptr;  // Owned by views hierarchy.
+  raw_ptr<views::FlexLayoutView> progress_bar_container_ =
+      nullptr;  // Owned by views hierarchy.
+  raw_ptr<views::FlexLayoutView> system_details_container_ =
+      nullptr;  // Owned by views hierarchy.
+  raw_ptr<views::FlexLayoutView> left_details_container_ =
+      nullptr;  // Owned by views hierarchy.
+  raw_ptr<views::FlexLayoutView> right_details_container_ =
+      nullptr;  // Owned by views hierarchy.
+
   std::vector<LabelAndTag> big_title_label_tags_;  // Owned by views hierarchy.
   std::vector<LabelAndTag>
       big_title_superscript_label_tags_;         // Owned by views hierarchy.
   std::vector<LabelAndTag> title_label_tags_;    // Owned by views hierarchy.
   std::vector<LabelAndTag> details_label_tags_;  // Owned by views hierarchy.
   std::vector<LabelAndTag>
-      keyboard_shortcut_container_tags_;     // Owned by views hierarchy.
-  views::Label* result_text_separator_label_ =
-      nullptr;                                      // Owned by views hierarchy.
-  views::Label* rating_separator_label_ = nullptr;  // Owned by views hierarchy.
-  views::Label* rating_ = nullptr;           // Owned by views hierarchy.
-  views::ImageView* rating_star_ = nullptr;  // Owned by views hierarchy.
+      keyboard_shortcut_container_tags_;  // Owned by views hierarchy.
+  std::vector<LabelAndTag>
+      right_details_label_tags_;  // Owned by views hierarchy.
+
+  raw_ptr<views::Label> result_text_separator_label_ =
+      nullptr;  // Owned by views hierarchy.
+  raw_ptr<views::Label> rating_separator_label_ =
+      nullptr;                              // Owned by views hierarchy.
+  raw_ptr<views::Label> rating_ = nullptr;  // Owned by views hierarchy.
+  raw_ptr<views::ImageView> rating_star_ =
+      nullptr;  // Owned by views hierarchy.
+  raw_ptr<views::ProgressBar, DanglingUntriaged> progress_bar_ = nullptr;
 
   // Whether the removal confirmation dialog is invoked by long press touch.
   bool confirm_remove_by_long_press_ = false;
@@ -298,6 +358,14 @@ class ASH_EXPORT SearchResultView : public SearchResultBaseView,
   // Used to override `title_and_details_container_` layout when
   // `keyboard_shortcut_container_` is populated.
   bool has_keyboard_shortcut_contents_ = false;
+
+  // Used to insert a `progress_bar_container_` within the
+  // `title_and_details_container_` when the result has a set bar chart.
+  bool is_progress_bar_answer_card_ = false;
+
+  // Whether the app should show icon halo and the mothership host badge (i.e.
+  // an App Shortcut).
+  bool use_webapp_shortcut_style_ = false;
 
   SearchResultViewType view_type_;
 

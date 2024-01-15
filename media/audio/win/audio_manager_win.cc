@@ -15,10 +15,11 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/strings/string_number_conversions.h"
+#include "base/task/bind_post_task.h"
 #include "base/win/windows_version.h"
 #include "media/audio/audio_device_description.h"
 #include "media/audio/audio_io.h"
@@ -29,7 +30,6 @@
 #include "media/audio/win/device_enumeration_win.h"
 #include "media/audio/win/waveout_output_win.h"
 #include "media/base/audio_parameters.h"
-#include "media/base/bind_to_current_loop.h"
 #include "media/base/channel_layout.h"
 #include "media/base/limits.h"
 #include "media/base/media_switches.h"
@@ -66,11 +66,6 @@ constexpr int kWinMaxChannels = 8;
 constexpr int kFallbackBufferSize = 2048;
 
 namespace {
-
-#if BUILDFLAG(ENABLE_PLATFORM_DTS_AUDIO)
-// Passthrough flags as defined in audio_edid_scan_win.h
-uint32_t bitstream_passthrough_bitmask_;
-#endif  // BUILDFLAG(ENABLE_PLATFORM_DTS_AUDIO)
 
 int NumberOfWaveOutBuffers() {
   // Use the user provided buffer count if provided.
@@ -120,6 +115,12 @@ AudioManagerWin::AudioManagerWin(std::unique_ptr<AudioThread> audio_thread,
 AudioManagerWin::~AudioManagerWin() = default;
 
 void AudioManagerWin::ShutdownOnAudioThread() {
+  // Prevent pending callbacks from `output_device_listener_` from being run.
+  // TODO(crbug.com/1458623): Remove this call when kAudioServiceOutOfProcess is
+  // removed on Windows; `weak_factory_on_audio_thread_` will be guaranteed to
+  // be destroyed/invalidated on the right thread then.
+  weak_factory_on_audio_thread_.InvalidateWeakPtrs();
+
   AudioManagerBase::ShutdownOnAudioThread();
 
   // Destroy AudioDeviceListenerWin instance on the audio thread because it
@@ -144,11 +145,22 @@ bool AudioManagerWin::HasAudioInputDevices() {
 void AudioManagerWin::InitializeOnAudioThread() {
   DCHECK(GetTaskRunner()->BelongsToCurrentThread());
 
+  // Initialize should only be called once.
+  CHECK(!output_device_listener_);
+
+  // Create a WeakPtr bound to the Audio thread, which will be invalidated
+  // in ShutdownOnAudioThread().
+  weak_this_on_audio_thread_ = weak_factory_on_audio_thread_.GetWeakPtr();
+
   // AudioDeviceListenerWin must be initialized on a COM thread.
+  // Despite `this` owning `output_device_listener_`, we need to bind the
+  // callback to a WeakPtr: NotifyAllOutputDeviceChangeListeners() will be
+  // posted to the audio thread instead of being run synchronously, since we use
+  // BindPostTaskToCurrentDefault().
   output_device_listener_ = std::make_unique<AudioDeviceListenerWin>(
-      BindToCurrentLoop(base::BindRepeating(
+      base::BindPostTaskToCurrentDefault(base::BindRepeating(
           &AudioManagerWin::NotifyAllOutputDeviceChangeListeners,
-          base::Unretained(this))));
+          weak_this_on_audio_thread_)));
 }
 
 void AudioManagerWin::GetAudioDeviceNamesImpl(bool input,
@@ -410,14 +422,14 @@ AudioParameters AudioManagerWin::GetPreferredOutputStreamParameters(
 
   AudioParameters::HardwareCapabilities hardware_capabilities(min_buffer_size,
                                                               max_buffer_size);
-#if BUILDFLAG(ENABLE_PLATFORM_DTS_AUDIO)
+#if BUILDFLAG(ENABLE_PASSTHROUGH_AUDIO_CODECS)
   hardware_capabilities.bitstream_formats = 0;
   hardware_capabilities.require_encapsulation = false;
   if (WASAPIAudioOutputStream::GetShareMode() == AUDCLNT_SHAREMODE_EXCLUSIVE) {
-    hardware_capabilities.bitstream_formats = bitstream_passthrough_bitmask_;
+    hardware_capabilities.bitstream_formats = GetPassthroughAudioFormats();
     hardware_capabilities.require_encapsulation = true;
   }
-#endif  // BUILDFLAG(ENABLE_PLATFORM_DTS_AUDIO)
+#endif  // BUILDFLAG(ENABLE_PASSTHROUGH_AUDIO_CODECS)
   AudioParameters params(AudioParameters::AUDIO_PCM_LOW_LATENCY,
                          channel_layout_config, sample_rate, buffer_size,
                          hardware_capabilities);
@@ -433,11 +445,5 @@ std::unique_ptr<AudioManager> CreateAudioManager(
   return std::make_unique<AudioManagerWin>(std::move(audio_thread),
                                            audio_log_factory);
 }
-
-#if BUILDFLAG(ENABLE_PLATFORM_DTS_AUDIO)
-void AudioManagerWin::SetBitstreamPassthroughBitmask(uint32_t bitmask) {
-  bitstream_passthrough_bitmask_ = bitmask;
-}
-#endif  // BUILDFLAG(ENABLE_PLATFORM_DTS_AUDIO)
 
 }  // namespace media

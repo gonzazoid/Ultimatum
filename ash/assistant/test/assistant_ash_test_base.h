@@ -141,9 +141,9 @@ class AssistantAshTestBase : public AshTestBase {
   void ClickOnAndWait(const views::View* view,
                       bool check_if_view_can_process_events = true);
 
-  // Return the current interaction. Returns |absl::nullopt| if no interaction
+  // Return the current interaction. Returns |std::nullopt| if no interaction
   // is in progress.
-  absl::optional<ash::assistant::AssistantInteractionMetadata>
+  std::optional<ash::assistant::AssistantInteractionMetadata>
   current_interaction();
 
   // Create a new App window, and activate it.
@@ -204,9 +204,16 @@ class AssistantAshTestBase : public AshTestBase {
 
   TestAssistantService* assistant_service();
 
- private:
+ protected:
+  // Sets up an active user for a test. Note that this function is called in
+  // `SetUp` by default. You can change this behavior by setting
+  // `set_up_active_user_in_test_set_up_`.
   void SetUpActiveUser();
 
+  // This variable must be set before `SetUp` function call.
+  bool set_up_active_user_in_test_set_up_ = true;
+
+ private:
   std::unique_ptr<AssistantTestApi> test_api_;
   std::unique_ptr<TestAssistantSetup> test_setup_;
   std::unique_ptr<TestAshWebViewFactory> test_web_view_factory_;

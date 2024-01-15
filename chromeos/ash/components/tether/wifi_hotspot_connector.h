@@ -5,13 +5,15 @@
 #ifndef CHROMEOS_ASH_COMPONENTS_TETHER_WIFI_HOTSPOT_CONNECTOR_H_
 #define CHROMEOS_ASH_COMPONENTS_TETHER_WIFI_HOTSPOT_CONNECTOR_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/clock.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
 #include "base/values.h"
+#include "chromeos/ash/components/network/network_handler.h"
 #include "chromeos/ash/components/network/network_state_handler_observer.h"
 #include "chromeos/ash/components/tether/active_host.h"
 
@@ -23,14 +25,13 @@ namespace ash {
 
 class NetworkConnect;
 class NetworkState;
-class NetworkStateHandler;
 
 namespace tether {
 
 // Connects to a Wi-Fi hotspot, given an SSID and password.
 class WifiHotspotConnector : public NetworkStateHandlerObserver {
  public:
-  WifiHotspotConnector(NetworkStateHandler* network_state_handler,
+  WifiHotspotConnector(NetworkHandler* network_handler,
                        NetworkConnect* network_connect);
 
   WifiHotspotConnector(const WifiHotspotConnector&) = delete;
@@ -58,6 +59,7 @@ class WifiHotspotConnector : public NetworkStateHandlerObserver {
   void DeviceListChanged() override;
   void NetworkPropertiesUpdated(const NetworkState* network) override;
   void DevicePropertiesUpdated(const DeviceState* device) override;
+  void OnShuttingDown() override;
 
  private:
   friend class WifiHotspotConnectorTest;
@@ -68,25 +70,31 @@ class WifiHotspotConnector : public NetworkStateHandlerObserver {
   void InitiateConnectionToCurrentNetwork();
   void CompleteActiveConnectionAttempt(bool success);
   void CreateWifiConfiguration();
-  base::DictionaryValue CreateWifiPropertyDictionary(
-      const std::string& ssid,
-      const std::string& password);
+  void RequestWifiScan();
+  base::Value::Dict CreateWifiPropertyDictionary(const std::string& ssid,
+                                                 const std::string& password);
   void OnConnectionTimeout();
+
+  void OnWifiConnectionSucceeded();
+  void OnWifiConnectionFailed(const std::string& error_name);
 
   void SetTestDoubles(std::unique_ptr<base::OneShotTimer> test_timer,
                       base::Clock* test_clock,
                       scoped_refptr<base::TaskRunner> test_task_runner);
 
-  NetworkStateHandler* network_state_handler_;
-  NetworkConnect* network_connect_;
+  NetworkStateHandlerScopedObservation network_state_handler_observer_{this};
+
+  raw_ptr<NetworkConnect, DanglingUntriaged> network_connect_;
+  raw_ptr<NetworkHandler> network_handler_;
   std::unique_ptr<base::OneShotTimer> timer_;
-  base::Clock* clock_;
+  raw_ptr<base::Clock> clock_;
 
   std::string ssid_;
   std::string password_;
   std::string tether_network_guid_;
   std::string wifi_network_guid_;
   WifiConnectionCallback callback_;
+  bool has_requested_wifi_scan_ = false;
   bool is_waiting_for_wifi_to_enable_ = false;
   bool has_initiated_connection_to_current_network_ = false;
   base::Time connection_attempt_start_time_;

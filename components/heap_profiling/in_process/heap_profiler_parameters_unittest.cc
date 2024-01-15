@@ -4,9 +4,12 @@
 
 #include "components/heap_profiling/in_process/heap_profiler_parameters.h"
 
+#include "base/command_line.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/time/time.h"
-#include "components/metrics/call_stack_profile_params.h"
+#include "build/build_config.h"
+#include "components/metrics/call_stacks/call_stack_profile_params.h"
+#include "components/variations/variations_switches.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -93,6 +96,25 @@ TEST(HeapProfilerParametersTest, ParseInvalidParameters) {
   HeapProfilerParameters params;
   EXPECT_FALSE(params.UpdateFromJSON(kJSONParams));
   EXPECT_FALSE(params.is_supported);
+}
+
+// Test that heap profiling is not supported for any process type when
+// --enable-benchmarking is specified on the command line.
+TEST(HeapProfilerParametersTest, EnableBenchmarking) {
+  base::CommandLine::ForCurrentProcess()->AppendSwitch(
+      variations::switches::kEnableBenchmarking);
+
+  using Process = metrics::CallStackProfileParams::Process;
+  EXPECT_FALSE(GetDefaultHeapProfilerParameters().is_supported);
+  EXPECT_FALSE(
+      GetHeapProfilerParametersForProcess(Process::kBrowser).is_supported);
+  EXPECT_FALSE(GetHeapProfilerParametersForProcess(Process::kGpu).is_supported);
+  EXPECT_FALSE(
+      GetHeapProfilerParametersForProcess(Process::kRenderer).is_supported);
+  EXPECT_FALSE(
+      GetHeapProfilerParametersForProcess(Process::kUtility).is_supported);
+  EXPECT_FALSE(GetHeapProfilerParametersForProcess(Process::kNetworkService)
+                   .is_supported);
 }
 
 TEST(HeapProfilerParametersTest, ApplyParameters) {
@@ -205,6 +227,46 @@ TEST(HeapProfilerParametersTest, ApplyInvalidParameters) {
   EXPECT_FALSE(GetHeapProfilerParametersForProcess(
                    metrics::CallStackProfileParams::Process::kBrowser)
                    .is_supported);
+}
+
+TEST(HeapProfilerParametersTest, DefaultProcessSpecificParameters) {
+  using Process = metrics::CallStackProfileParams::Process;
+
+  const HeapProfilerParameters default_params =
+      GetDefaultHeapProfilerParameters();
+
+  // Params for a process where the profiler is enabled by default.
+  HeapProfilerParameters enabled_params = default_params;
+  enabled_params.is_supported = true;
+
+  // The browser process is enabled by default.
+  EXPECT_THAT(GetHeapProfilerParametersForProcess(Process::kBrowser),
+              MatchesParameters(enabled_params));
+
+  EXPECT_THAT(GetHeapProfilerParametersForProcess(Process::kRenderer),
+              MatchesParameters(default_params));
+
+  // The GPU process is only enabled by default on Mac.
+  HeapProfilerParameters gpu_params = default_params;
+#if BUILDFLAG(IS_MAC)
+  gpu_params.is_supported = true;
+  gpu_params.sampling_rate_bytes = 5'000'000;
+#endif
+  EXPECT_THAT(GetHeapProfilerParametersForProcess(Process::kGpu),
+              MatchesParameters(gpu_params));
+
+  EXPECT_THAT(GetHeapProfilerParametersForProcess(Process::kUtility),
+              MatchesParameters(default_params));
+
+  // The network process is enabled by default.
+  EXPECT_THAT(GetHeapProfilerParametersForProcess(Process::kNetworkService),
+              MatchesParameters(enabled_params));
+
+  // Must be disabled by default for unsupported process types.
+  EXPECT_FALSE(
+      GetHeapProfilerParametersForProcess(Process::kUnknown).is_supported);
+  EXPECT_FALSE(
+      GetHeapProfilerParametersForProcess(Process::kZygote).is_supported);
 }
 
 }  // namespace

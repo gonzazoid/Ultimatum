@@ -23,13 +23,13 @@ const char kTranslateTimeToBeReady[] = "Translate.Translation.TimeToBeReady";
 const char kTranslateTimeToLoad[] = "Translate.Translation.TimeToLoad";
 const char kTranslateTimeToTranslate[] =
     "Translate.Translation.TimeToTranslate";
-const char kTranslateUserActionDuration[] = "Translate.UserActionDuration";
-const char kTranslatePageScheme[] = "Translate.PageScheme";
-const char kTranslateSimilarLanguageMatch[] = "Translate.SimilarLanguageMatch";
 const char kTranslateLanguageDeterminedDuration[] =
     "Translate.LanguageDeterminedDuration";
 const char kTranslatedLanguageDetectionContentLength[] =
     "Translate.Translation.LanguageDetection.ContentLength";
+
+// Note: These string constants are repeated in TranslateCompactInfoBar.java.
+const char kTranslateCompactInfobarEvent[] = "Translate.CompactInfobar.Event";
 
 }  // namespace metrics_internal
 
@@ -57,26 +57,6 @@ void ReportTimeToTranslate(double time_in_msec) {
       base::Microseconds(static_cast<int64_t>(time_in_msec * 1000.0)));
 }
 
-void ReportUserActionDuration(base::TimeTicks begin, base::TimeTicks end) {
-  UMA_HISTOGRAM_LONG_TIMES(metrics_internal::kTranslateUserActionDuration,
-                           end - begin);
-}
-
-void ReportPageScheme(const std::string& scheme) {
-  SchemeType type = SCHEME_OTHERS;
-  if (scheme == url::kHttpScheme)
-    type = SCHEME_HTTP;
-  else if (scheme == url::kHttpsScheme)
-    type = SCHEME_HTTPS;
-  UMA_HISTOGRAM_ENUMERATION(metrics_internal::kTranslatePageScheme, type,
-                            SCHEME_MAX);
-}
-
-void ReportSimilarLanguageMatch(bool match) {
-  UMA_HISTOGRAM_BOOLEAN(metrics_internal::kTranslateSimilarLanguageMatch,
-                        match);
-}
-
 void ReportLanguageDeterminedDuration(base::TimeTicks begin,
                                       base::TimeTicks end) {
   if (begin.is_null()) {
@@ -95,6 +75,11 @@ void ReportTranslatedLanguageDetectionContentLength(size_t content_length) {
   base::UmaHistogramCounts100000(
       metrics_internal::kTranslatedLanguageDetectionContentLength,
       content_length);
+}
+
+void ReportCompactInfobarEvent(InfobarEvent event) {
+  UMA_HISTOGRAM_ENUMERATION(metrics_internal::kTranslateCompactInfobarEvent,
+                            event);
 }
 
 }  // namespace translate

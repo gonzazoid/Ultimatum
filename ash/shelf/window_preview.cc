@@ -8,7 +8,7 @@
 #include "ash/resources/vector_icons/vector_icons.h"
 #include "ash/wm/window_preview_view.h"
 #include "ash/wm/window_util.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "ui/aura/window.h"
 #include "ui/color/color_id.h"
 #include "ui/color/color_provider.h"
@@ -38,8 +38,7 @@ constexpr int kPreviewBorderRadius = 4;
 
 WindowPreview::WindowPreview(aura::Window* window, Delegate* delegate)
     : delegate_(delegate) {
-  preview_view_ =
-      new WindowPreviewView(window, /*trilinear_filtering_on_init=*/false);
+  preview_view_ = new WindowPreviewView(window);
   preview_container_view_ = new views::View();
   preview_container_view_->SetBackground(views::CreateRoundedRectBackground(
       kPreviewContainerBgColor, kPreviewBorderRadius));
@@ -48,10 +47,10 @@ WindowPreview::WindowPreview(aura::Window* window, Delegate* delegate)
       &WindowPreview::CloseButtonPressed, base::Unretained(this)));
   close_button_->SetFocusBehavior(FocusBehavior::NEVER);
 
-  AddChildView(preview_container_view_);
-  AddChildView(preview_view_);
-  AddChildView(title_);
-  AddChildView(close_button_);
+  AddChildView(preview_container_view_.get());
+  AddChildView(preview_view_.get());
+  AddChildView(title_.get());
+  AddChildView(close_button_.get());
 }
 
 WindowPreview::~WindowPreview() = default;
@@ -146,9 +145,10 @@ void WindowPreview::OnThemeChanged() {
   // The background is not opaque, so we can't do subpixel rendering.
   title_->SetSubpixelRenderingEnabled(false);
 
-  close_button_->SetImage(
+  close_button_->SetImageModel(
       views::Button::STATE_NORMAL,
-      gfx::CreateVectorIcon(kOverviewWindowCloseIcon, kCloseButtonColor));
+      ui::ImageModel::FromVectorIcon(kOverviewWindowCloseIcon,
+                                     kCloseButtonColor));
   close_button_->SetImageHorizontalAlignment(views::ImageButton::ALIGN_CENTER);
   close_button_->SetImageVerticalAlignment(views::ImageButton::ALIGN_MIDDLE);
   close_button_->SetMinimumImageSize(

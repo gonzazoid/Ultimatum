@@ -7,6 +7,7 @@
 
 #include "base/memory/weak_ptr.h"
 #include "base/test/bind.h"
+#include "base/values.h"
 #include "chrome/browser/ash/net/network_diagnostics/network_diagnostics.h"
 #include "chrome/browser/ash/net/network_diagnostics/network_diagnostics_test_helper.h"
 #include "chromeos/ash/components/dbus/debug_daemon/fake_debug_daemon_client.h"
@@ -20,7 +21,6 @@ namespace network_diagnostics {
 
 namespace {
 
-// TODO(https://crbug.com/1164001): remove when migrated to namespace ash.
 namespace mojom = ::chromeos::network_diagnostics::mojom;
 
 // The IP v4 config path specified here must match the IP v4 config path
@@ -44,7 +44,7 @@ class TestDebugDaemonClient : public FakeDebugDaemonClient {
   void TestICMP(const std::string& ip_address,
                 TestICMPCallback callback) override {
     // Invoke the test callback with fake output.
-    std::move(callback).Run(absl::optional<std::string>{icmp_output_});
+    std::move(callback).Run(std::optional<std::string>{icmp_output_});
   }
 
   void set_icmp_output(const std::string& icmp_output) {
@@ -97,21 +97,21 @@ class NetworkDiagnosticsTest : public NetworkDiagnosticsTestHelper {
   void SetUpNameServers(const std::vector<std::string>& name_servers) {
     DCHECK(!wifi_path().empty());
     // Set up the name servers
-    base::ListValue dns_servers;
+    base::Value::List dns_servers;
     for (const std::string& name_server : name_servers) {
       dns_servers.Append(name_server);
     }
 
     // Set up the IP v4 config
-    base::DictionaryValue ip_config_v4_properties;
-    ip_config_v4_properties.SetKey(shill::kNameServersProperty,
-                                   base::Value(dns_servers.Clone()));
+    auto ip_config_v4_properties = base::Value::Dict().Set(
+        shill::kNameServersProperty, std::move(dns_servers));
     helper()->ip_config_test()->AddIPConfig(kIPv4ConfigPath,
-                                            ip_config_v4_properties);
+                                            ip_config_v4_properties.Clone());
     std::string wifi_device_path =
         helper()->device_test()->GetDevicePathForType(shill::kTypeWifi);
     helper()->device_test()->SetDeviceProperty(
-        wifi_device_path, shill::kIPConfigsProperty, ip_config_v4_properties,
+        wifi_device_path, shill::kIPConfigsProperty,
+        base::Value(std::move(ip_config_v4_properties)),
         /*notify_changed=*/true);
     SetServiceProperty(wifi_path(), shill::kIPConfigProperty,
                        base::Value(kIPv4ConfigPath));

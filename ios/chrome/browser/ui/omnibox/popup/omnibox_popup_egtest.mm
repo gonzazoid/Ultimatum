@@ -4,13 +4,18 @@
 
 #import <XCTest/XCTest.h>
 
-#import "base/bind.h"
+#import "base/functional/bind.h"
 #import "base/ios/ios_util.h"
 #import "base/strings/sys_string_conversions.h"
+#import "base/test/ios/wait_util.h"
+#import "components/omnibox/common/omnibox_features.h"
+#import "ios/chrome/browser/shared/public/features/features.h"
 #import "ios/chrome/browser/ui/content_suggestions/ntp_home_constant.h"
+#import "ios/chrome/browser/ui/omnibox/omnibox_app_interface.h"
+#import "ios/chrome/browser/ui/omnibox/omnibox_constants.h"
+#import "ios/chrome/browser/ui/omnibox/omnibox_earl_grey.h"
 #import "ios/chrome/browser/ui/omnibox/omnibox_ui_features.h"
 #import "ios/chrome/browser/ui/omnibox/popup/omnibox_popup_accessibility_identifier_constants.h"
-#import "ios/chrome/browser/ui/ui_feature_flags.h"
 #import "ios/chrome/test/earl_grey/chrome_earl_grey.h"
 #import "ios/chrome/test/earl_grey/chrome_earl_grey_ui.h"
 #import "ios/chrome/test/earl_grey/chrome_matchers.h"
@@ -20,14 +25,11 @@
 #import "net/test/embedded_test_server/embedded_test_server.h"
 #import "net/test/embedded_test_server/http_request.h"
 #import "net/test/embedded_test_server/http_response.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ui/base/l10n/l10n_util_mac.h"
 
 namespace {
 
-// Returns the popup row containing the `url` as suggestion.
+/// Returns the popup row containing the `url` as suggestion.
 id<GREYMatcher> PopupRowWithUrl(GURL url) {
   NSString* urlString = base::SysUTF8ToNSString(url.GetContent());
   id<GREYMatcher> URLMatcher = grey_allOf(
@@ -37,7 +39,7 @@ id<GREYMatcher> PopupRowWithUrl(GURL url) {
   return grey_allOf(chrome_test_util::OmniboxPopupRow(), URLMatcher, nil);
 }
 
-// Returns the switch to open tab element for the `url`.
+/// Returns the switch to open tab element for the `url`.
 id<GREYMatcher> SwitchTabElementForUrl(const GURL& url) {
   return grey_allOf(
       grey_ancestor(PopupRowWithUrl(url)),
@@ -49,6 +51,13 @@ void TapSwitchToTabButton(const GURL& url) {
   [[EarlGrey selectElementWithMatcher:grey_allOf(SwitchTabElementForUrl(url),
                                                  grey_interactable(), nil)]
       performAction:grey_tap()];
+}
+
+id<GREYMatcher> OmniboxWithLeadingImageElement(
+    NSString* const leadingImageIdentifier) {
+  return grey_allOf(
+      grey_ancestor(grey_kindOfClassName(@"OmniboxContainerView")),
+      grey_accessibilityID(leadingImageIdentifier), grey_interactable(), nil);
 }
 
 void ScrollToSwitchToTabElement(const GURL& url) {
@@ -74,7 +83,7 @@ const char kPage3[] = "This is the third page";
 const char kPage3Title[] = "Title 3";
 const char kPage3URL[] = "/page3.html";
 
-// Provides responses for the different pages.
+/// Provides responses for the different pages.
 std::unique_ptr<net::test_server::HttpResponse> StandardResponse(
     const net::test_server::HttpRequest& request) {
   std::unique_ptr<net::test_server::BasicHttpResponse> http_response =
@@ -108,10 +117,13 @@ std::unique_ptr<net::test_server::HttpResponse> StandardResponse(
 }  //  namespace
 
 @interface OmniboxPopupTestCase : ChromeTestCase
-
 @end
 
-@implementation OmniboxPopupTestCase
+@implementation OmniboxPopupTestCase {
+  GURL _URL1;
+  GURL _URL2;
+  GURL _URL3;
+}
 
 - (AppLaunchConfiguration)appConfigurationForTestCase {
   AppLaunchConfiguration config = [super appConfigurationForTestCase];
@@ -137,7 +149,34 @@ std::unique_ptr<net::test_server::HttpResponse> StandardResponse(
       base::BindRepeating(&StandardResponse));
   GREYAssertTrue(self.testServer->Start(), @"Test server failed to start.");
 
+  _URL1 = self.testServer->GetURL(kPage1URL);
+  _URL2 = self.testServer->GetURL(kPage2URL);
+  _URL3 = self.testServer->GetURL(kPage3URL);
+
   [ChromeEarlGrey clearBrowsingHistory];
+}
+
+// Test inline autocomplete of legacy text field implementation.
+// TODO(crbug.com/1445722): Re-enable when fixed.
+- (void)DISABLED_testLegacyInlineAutocompleteSuggestion {
+  // Skip if new text field implementation is enabled.
+  if (base::FeatureList::IsEnabled(kIOSNewOmniboxImplementation)) {
+    return;
+  }
+  [ChromeEarlGrey loadURL:_URL1];
+  [ChromeEarlGrey waitForWebStateContainingText:kPage1];
+
+  // Clears the url and replace it with local url host.
+  [ChromeEarlGreyUI focusOmniboxAndType:base::SysUTF8ToNSString(_URL1.host())];
+
+  // We expect to have an autocomplete for URL1.
+  [[EarlGrey
+      selectElementWithMatcher:chrome_test_util::OmniboxAutocompleteLabel()]
+      assertWithMatcher:grey_sufficientlyVisible()];
+
+  // We expect to have a suggestion autocomplete.
+  [[EarlGrey selectElementWithMatcher:PopupRowWithUrl(_URL1)]
+      assertWithMatcher:grey_sufficientlyVisible()];
 }
 
 // Tests that tapping the switch to open tab button, switch to the open tab,
@@ -175,15 +214,13 @@ std::unique_ptr<net::test_server::HttpResponse> StandardResponse(
 
 // Tests that the switch to open tab button isn't displayed for the current tab.
 - (void)testNotSwitchButtonOnCurrentTab {
-  GURL URL2 = self.testServer->GetURL(kPage2URL);
-
   // Open the first page.
   [ChromeEarlGrey loadURL:self.testServer->GetURL(kPage1URL)];
   [ChromeEarlGrey waitForWebStateContainingText:kPage1];
 
   // Open the second page in another tab.
   [ChromeEarlGreyUI openNewTab];
-  [ChromeEarlGrey loadURL:URL2];
+  [ChromeEarlGrey loadURL:_URL2];
   [ChromeEarlGrey waitForWebStateContainingText:kPage2];
 
   // Type the URL of the first page in the omnibox to trigger it as suggestion.
@@ -192,111 +229,120 @@ std::unique_ptr<net::test_server::HttpResponse> StandardResponse(
   // Check that we have the suggestion for the second page, but not the switch
   // as it is the current page.
 
-  if ([ChromeEarlGrey isNewOmniboxPopupEnabled]) {
-    XCUIApplication* app = [[XCUIApplication alloc] init];
-    NSString* urlString = base::SysUTF8ToNSString(URL2.GetContent());
-    GREYAssert(app.staticTexts[urlString].isHittable, @"The row doesn't exist");
-    GREYAssert(![app.buttons[kOmniboxPopupRowSwitchTabAccessibilityIdentifier]
-                   waitForExistenceWithTimeout:1],
-               @"Switch to tab element found but it shouldn't have appeared");
-  } else {
-    [[EarlGrey selectElementWithMatcher:PopupRowWithUrl(URL2)]
-        assertWithMatcher:grey_sufficientlyVisible()];
-    [[EarlGrey selectElementWithMatcher:SwitchTabElementForUrl(URL2)]
-        assertWithMatcher:grey_not(grey_interactable())];
-  }
+  [[EarlGrey selectElementWithMatcher:PopupRowWithUrl(_URL2)]
+      assertWithMatcher:grey_sufficientlyVisible()];
+  [[EarlGrey selectElementWithMatcher:SwitchTabElementForUrl(_URL2)]
+      assertWithMatcher:grey_not(grey_interactable())];
+}
+
+// Test that swiping left on a historical suggestion and tapping
+// the delete button , removes the suggestions.
+- (void)testDeleteHistoricalSuggestion {
+  [self populateHistory];
+  NSString* omniboxInput = [NSString
+      stringWithFormat:@"%@:%@", base::SysUTF8ToNSString(_URL3.host()),
+                       base::SysUTF8ToNSString(_URL3.port())];
+
+  [ChromeEarlGreyUI focusOmniboxAndType:omniboxInput];
+
+  // Swipe one of the historical suggestions, to the left.
+  [[EarlGrey selectElementWithMatcher:PopupRowWithUrl(_URL1)]
+      performAction:grey_swipeSlowInDirection(kGREYDirectionLeft)];
+
+  // Delete button is displayed.
+  [[EarlGrey selectElementWithMatcher:grey_kindOfClassName(
+                                          @"UISwipeActionStandardButton")]
+      assertWithMatcher:grey_sufficientlyVisible()];
+
+  // Tap on the delete button.
+  [[EarlGrey selectElementWithMatcher:grey_kindOfClassName(
+                                          @"UISwipeActionStandardButton")]
+      performAction:grey_tap()];
+
+  // Historical suggestion with URL1 is now deleted.
+  [[EarlGrey selectElementWithMatcher:PopupRowWithUrl(_URL1)]
+      assertWithMatcher:grey_nil()];
 }
 
 // Tests that the incognito tabs aren't displayed as "opened" tab in the
 // non-incognito suggestions and vice-versa.
 - (void)testIncognitoSeparation {
-  GURL URL1 = self.testServer->GetURL(kPage1URL);
-  GURL URL2 = self.testServer->GetURL(kPage2URL);
-  GURL URL3 = self.testServer->GetURL(kPage3URL);
-
-  // Add all the pages to the history.
-  [ChromeEarlGrey loadURL:URL1];
-  [ChromeEarlGrey waitForWebStateContainingText:kPage1];
-  [ChromeEarlGrey loadURL:URL2];
-  [ChromeEarlGrey waitForWebStateContainingText:kPage2];
-  [ChromeEarlGrey loadURL:URL3];
-  [ChromeEarlGrey waitForWebStateContainingText:kPage3];
+  [self populateHistory];
   [[self class] closeAllTabs];
 
   // Load page 1 in non-incognito and page 2 in incognito.
   [ChromeEarlGrey openNewTab];
-  [ChromeEarlGrey loadURL:URL1];
+  [ChromeEarlGrey loadURL:_URL1];
   [ChromeEarlGrey waitForWebStateContainingText:kPage1];
 
   [ChromeEarlGrey openNewIncognitoTab];
-  [ChromeEarlGrey loadURL:URL2];
+  [ChromeEarlGrey loadURL:_URL2];
   [ChromeEarlGrey waitForWebStateContainingText:kPage2];
 
   // Open page 3 in non-incognito.
   [ChromeEarlGrey openNewTab];
-  [ChromeEarlGrey loadURL:URL3];
+  [ChromeEarlGrey loadURL:_URL3];
   [ChromeEarlGrey waitForWebStateContainingText:kPage3];
 
-  NSString* omniboxInput =
-      [NSString stringWithFormat:@"%@:%@", base::SysUTF8ToNSString(URL3.host()),
-                                 base::SysUTF8ToNSString(URL3.port())];
+  NSString* omniboxInput = [NSString
+      stringWithFormat:@"%@:%@", base::SysUTF8ToNSString(_URL3.host()),
+                       base::SysUTF8ToNSString(_URL3.port())];
   [ChromeEarlGreyUI focusOmniboxAndType:omniboxInput];
 
   // Check that we have the switch button for the first page.
   [[EarlGrey
       selectElementWithMatcher:
-          grey_allOf(grey_ancestor(PopupRowWithUrl(URL1)),
+          grey_allOf(grey_ancestor(PopupRowWithUrl(_URL1)),
                      grey_accessibilityID(
                          kOmniboxPopupRowSwitchTabAccessibilityIdentifier),
                      nil)] assertWithMatcher:grey_sufficientlyVisible()];
 
   // Check that we have the suggestion for the second page, but not the switch.
-  [[EarlGrey selectElementWithMatcher:PopupRowWithUrl(URL2)]
+  [[EarlGrey selectElementWithMatcher:PopupRowWithUrl(_URL2)]
       assertWithMatcher:grey_sufficientlyVisible()];
-  [[EarlGrey selectElementWithMatcher:SwitchTabElementForUrl(URL2)]
+  [[EarlGrey selectElementWithMatcher:SwitchTabElementForUrl(_URL2)]
       assertWithMatcher:grey_nil()];
 
   // Open page 3 in incognito.
   [ChromeEarlGrey openNewIncognitoTab];
-  [ChromeEarlGrey loadURL:URL3];
+  [ChromeEarlGrey loadURL:_URL3];
   [ChromeEarlGrey waitForWebStateContainingText:kPage3];
 
-  [ChromeEarlGreyUI focusOmniboxAndType:base::SysUTF8ToNSString(URL3.host())];
+  [ChromeEarlGreyUI focusOmniboxAndType:base::SysUTF8ToNSString(_URL3.host())];
 
   // Check that we have the switch button for the second page.
   [[EarlGrey
       selectElementWithMatcher:
-          grey_allOf(grey_ancestor(PopupRowWithUrl(URL2)),
+          grey_allOf(grey_ancestor(PopupRowWithUrl(_URL2)),
                      grey_accessibilityID(
                          kOmniboxPopupRowSwitchTabAccessibilityIdentifier),
                      nil)] assertWithMatcher:grey_sufficientlyVisible()];
 
   // Check that we have the suggestion for the first page, but not the switch.
-  [[EarlGrey selectElementWithMatcher:PopupRowWithUrl(URL1)]
+  [[EarlGrey selectElementWithMatcher:PopupRowWithUrl(_URL1)]
       assertWithMatcher:grey_sufficientlyVisible()];
-  [[EarlGrey selectElementWithMatcher:SwitchTabElementForUrl(URL1)]
+  [[EarlGrey selectElementWithMatcher:SwitchTabElementForUrl(_URL1)]
       assertWithMatcher:grey_nil()];
 }
 
 - (void)testCloseNTPWhenSwitching {
   // Open the first page.
-  GURL URL1 = self.testServer->GetURL(kPage1URL);
-  [ChromeEarlGrey loadURL:URL1];
+  [ChromeEarlGrey loadURL:_URL1];
   [ChromeEarlGrey waitForWebStateContainingText:kPage1];
 
   // Open a new tab and switch to the first tab.
   [ChromeEarlGrey openNewTab];
-  NSString* omniboxInput =
-      [NSString stringWithFormat:@"%@:%@", base::SysUTF8ToNSString(URL1.host()),
-                                 base::SysUTF8ToNSString(URL1.port())];
+  NSString* omniboxInput = [NSString
+      stringWithFormat:@"%@:%@", base::SysUTF8ToNSString(_URL1.host()),
+                       base::SysUTF8ToNSString(_URL1.port())];
   [[EarlGrey selectElementWithMatcher:chrome_test_util::FakeOmnibox()]
       performAction:grey_tap()];
   [ChromeEarlGrey
       waitForSufficientlyVisibleElementWithMatcher:chrome_test_util::Omnibox()];
   [[EarlGrey selectElementWithMatcher:chrome_test_util::Omnibox()]
-      performAction:grey_typeText(omniboxInput)];
+      performAction:grey_replaceText(omniboxInput)];
 
-  TapSwitchToTabButton(URL1);
+  TapSwitchToTabButton(_URL1);
   [ChromeEarlGrey waitForWebStateContainingText:kPage1];
 
   // Check that the other tab is closed.
@@ -305,13 +351,12 @@ std::unique_ptr<net::test_server::HttpResponse> StandardResponse(
 
 - (void)testDontCloseNTPWhenSwitchingWithForwardHistory {
   // Open the first page.
-  GURL URL1 = self.testServer->GetURL(kPage1URL);
-  [ChromeEarlGrey loadURL:URL1];
+  [ChromeEarlGrey loadURL:_URL1];
   [ChromeEarlGrey waitForWebStateContainingText:kPage1];
 
   // Open a new tab, navigate to a page and go back to have forward history.
   [ChromeEarlGrey openNewTab];
-  [ChromeEarlGrey loadURL:URL1];
+  [ChromeEarlGrey loadURL:_URL1];
   [ChromeEarlGrey waitForWebStateContainingText:kPage1];
   [ChromeEarlGrey goBack];
 
@@ -321,14 +366,14 @@ std::unique_ptr<net::test_server::HttpResponse> StandardResponse(
   [ChromeEarlGrey
       waitForSufficientlyVisibleElementWithMatcher:chrome_test_util::Omnibox()];
   [[EarlGrey selectElementWithMatcher:chrome_test_util::Omnibox()]
-      performAction:grey_typeText(base::SysUTF8ToNSString(URL1.host()))];
+      performAction:grey_replaceText(base::SysUTF8ToNSString(_URL1.host()))];
 
   // Omnibox can reorder itself in multiple animations, so add an extra wait
   // here.
   [ChromeEarlGrey
       waitForSufficientlyVisibleElementWithMatcher:SwitchTabElementForUrl(
-                                                       URL1)];
-  [[EarlGrey selectElementWithMatcher:SwitchTabElementForUrl(URL1)]
+                                                       _URL1)];
+  [[EarlGrey selectElementWithMatcher:SwitchTabElementForUrl(_URL1)]
       performAction:grey_tap()];
   [ChromeEarlGrey waitForWebStateContainingText:kPage1];
 
@@ -339,10 +384,8 @@ std::unique_ptr<net::test_server::HttpResponse> StandardResponse(
 // Tests that switching to closed tab opens the tab in foreground, except if it
 // is from NTP without history.
 - (void)testSwitchToClosedTab {
-  GURL URL1 = self.testServer->GetURL(kPage1URL);
-
   // Open the first page.
-  [ChromeEarlGrey loadURL:URL1];
+  [ChromeEarlGrey loadURL:_URL1];
   [ChromeEarlGrey waitForWebStateContainingText:kPage1];
 
   // Open a new tab and load another URL.
@@ -355,14 +398,14 @@ std::unique_ptr<net::test_server::HttpResponse> StandardResponse(
 
   // Make sure that the "Switch to Open Tab" element is visible, scrolling the
   // popup if necessary.
-  ScrollToSwitchToTabElement(URL1);
+  ScrollToSwitchToTabElement(_URL1);
 
   // Close the first page.
   [ChromeEarlGrey closeTabAtIndex:0];
   [ChromeEarlGrey waitForMainTabCount:1];
 
   // Try to switch to the first tab.
-  TapSwitchToTabButton(URL1);
+  TapSwitchToTabButton(_URL1);
   [ChromeEarlGrey waitForWebStateContainingText:kPage1];
   [ChromeEarlGreyUI waitForAppToIdle];
 
@@ -375,37 +418,35 @@ std::unique_ptr<net::test_server::HttpResponse> StandardResponse(
 // multiple buttons.
 - (void)testMultiplePageOpened {
   // Open the first page.
-  GURL URL1 = self.testServer->GetURL(kPage1URL);
-  [ChromeEarlGrey loadURL:URL1];
+  [ChromeEarlGrey loadURL:_URL1];
   [ChromeEarlGrey waitForWebStateContainingText:kPage1];
 
   // Open the second page in a new tab.
   [ChromeEarlGrey openNewTab];
-  GURL URL2 = self.testServer->GetURL(kPage2URL);
-  [ChromeEarlGrey loadURL:URL2];
+  [ChromeEarlGrey loadURL:_URL2];
   [ChromeEarlGrey waitForWebStateContainingText:kPage2];
 
   // Start typing url of the two opened pages in a new tab.
   [ChromeEarlGrey openNewTab];
-  NSString* omniboxInput =
-      [NSString stringWithFormat:@"%@:%@", base::SysUTF8ToNSString(URL1.host()),
-                                 base::SysUTF8ToNSString(URL1.port())];
+  NSString* omniboxInput = [NSString
+      stringWithFormat:@"%@:%@", base::SysUTF8ToNSString(_URL1.host()),
+                       base::SysUTF8ToNSString(_URL1.port())];
   [[EarlGrey selectElementWithMatcher:chrome_test_util::FakeOmnibox()]
       performAction:grey_tap()];
   [ChromeEarlGrey
       waitForSufficientlyVisibleElementWithMatcher:chrome_test_util::Omnibox()];
   [[EarlGrey selectElementWithMatcher:chrome_test_util::Omnibox()]
-      performAction:grey_typeText(omniboxInput)];
+      performAction:grey_replaceText(omniboxInput)];
 
   // Check that both elements are displayed.
   // Omnibox can reorder itself in multiple animations, so add an extra wait
   // here.
   [ChromeEarlGrey
       waitForSufficientlyVisibleElementWithMatcher:SwitchTabElementForUrl(
-                                                       URL1)];
+                                                       _URL1)];
   [ChromeEarlGrey
       waitForSufficientlyVisibleElementWithMatcher:SwitchTabElementForUrl(
-                                                       URL2)];
+                                                       _URL2)];
 }
 
 // Test that on iPhones, when the popup is scrolled, the keyboard is dismissed
@@ -421,14 +462,11 @@ std::unique_ptr<net::test_server::HttpResponse> StandardResponse(
   [ChromeEarlGrey
       waitForSufficientlyVisibleElementWithMatcher:chrome_test_util::Omnibox()];
   [[EarlGrey selectElementWithMatcher:chrome_test_util::Omnibox()]
-      performAction:grey_typeText(@"hello")];
+      performAction:grey_replaceText(@"hello")];
 
   // Matcher for a URL-what-you-typed suggestion.
-  id<GREYMatcher> textMatcher =
-      [ChromeEarlGrey isNewOmniboxPopupEnabled]
-          ? grey_descendant(grey_accessibilityLabel(@"hello"))
-          : grey_descendant(
-                chrome_test_util::StaticTextWithAccessibilityLabel(@"hello"));
+  id<GREYMatcher> textMatcher = grey_descendant(
+      chrome_test_util::StaticTextWithAccessibilityLabel(@"hello"));
   id<GREYMatcher> row =
       grey_allOf(chrome_test_util::OmniboxPopupRow(), textMatcher, nil);
 
@@ -443,7 +481,7 @@ std::unique_ptr<net::test_server::HttpResponse> StandardResponse(
   // vertically. This is necessary if the center of the list's accessibility
   // frame is not visible, as it is the default start point.
   [[EarlGrey selectElementWithMatcher:chrome_test_util::OmniboxPopupList()]
-      performAction:grey_swipeFastInDirectionWithStartPoint(kGREYDirectionUp,
+      performAction:grey_swipeFastInDirectionWithStartPoint(kGREYDirectionDown,
                                                             0.5, 0.1)];
   [[EarlGrey selectElementWithMatcher:row]
       assertWithMatcher:grey_interactable()];
@@ -467,23 +505,17 @@ std::unique_ptr<net::test_server::HttpResponse> StandardResponse(
       ensureAppLaunchedWithFeaturesEnabled:{kEnableSuggestionsScrollingOnIPad}
                                   disabled:{}
                             relaunchPolicy:ForceRelaunchByCleanShutdown];
-  if ([ChromeEarlGrey isNewOmniboxPopupEnabled]) {
-    EARL_GREY_TEST_DISABLED(@"Disabled for new popup");
-  }
 
   [[EarlGrey selectElementWithMatcher:chrome_test_util::FakeOmnibox()]
       performAction:grey_tap()];
   [ChromeEarlGrey
       waitForSufficientlyVisibleElementWithMatcher:chrome_test_util::Omnibox()];
   [[EarlGrey selectElementWithMatcher:chrome_test_util::Omnibox()]
-      performAction:grey_typeText(@"hello")];
+      performAction:grey_replaceText(@"hello")];
 
   // Matcher for a URL-what-you-typed suggestion.
-  id<GREYMatcher> textMatcher =
-      [ChromeEarlGrey isNewOmniboxPopupEnabled]
-          ? grey_accessibilityLabel(@"hello")
-          : grey_descendant(
-                chrome_test_util::StaticTextWithAccessibilityLabel(@"hello"));
+  id<GREYMatcher> textMatcher = grey_descendant(
+      chrome_test_util::StaticTextWithAccessibilityLabel(@"hello"));
   id<GREYMatcher> row =
       grey_allOf(chrome_test_util::OmniboxPopupRow(), textMatcher,
                  grey_sufficientlyVisible(), nil);
@@ -499,7 +531,7 @@ std::unique_ptr<net::test_server::HttpResponse> StandardResponse(
   // vertically. This is necessary if the center of the list's accessibility
   // frame is not visible, as it is the default start point.
   [[EarlGrey selectElementWithMatcher:chrome_test_util::OmniboxPopupList()]
-      performAction:grey_swipeFastInDirectionWithStartPoint(kGREYDirectionUp,
+      performAction:grey_swipeFastInDirectionWithStartPoint(kGREYDirectionDown,
                                                             0.5, 0.1)];
 
   [[EarlGrey selectElementWithMatcher:row]
@@ -508,6 +540,206 @@ std::unique_ptr<net::test_server::HttpResponse> StandardResponse(
   // The keyboard should be dismissed.
   GREYAssertFalse([EarlGrey isKeyboardShownWithError:nil],
                   @"Keyboard Should not be Shown");
+}
+
+// Tests that selecting a suggestion in the omnibox and successfully navigating
+// to it adds an entry in the shortcuts database.
+- (void)testShortcutsDatabasePopulation {
+  [[AppLaunchManager sharedManager]
+      ensureAppLaunchedWithFeaturesEnabled:
+          {omnibox::kOmniboxPopulateShortcutsDatabase}
+                                  disabled:{}
+                            relaunchPolicy:NoForceRelaunchAndResetState];
+  [ChromeEarlGrey clearBrowsingHistory];
+  // Ensure the database is initialized and empty.
+  [OmniboxEarlGrey waitForShortcutsBackendInitialization];
+  [OmniboxEarlGrey waitForNumberOfShortcutsInDatabase:0];
+
+  [self populateHistory];
+  NSString* omniboxInput = [NSString
+      stringWithFormat:@"%@:%@", base::SysUTF8ToNSString(_URL3.host()),
+                       base::SysUTF8ToNSString(_URL3.port())];
+
+  [ChromeEarlGreyUI focusOmniboxAndType:omniboxInput];
+
+  [[EarlGrey selectElementWithMatcher:PopupRowWithUrl(_URL1)]
+      performAction:grey_tap()];
+  [ChromeEarlGrey waitForWebStateContainingText:kPage1];
+
+  // Verify that the shortcut database has been populated.
+  [OmniboxEarlGrey waitForNumberOfShortcutsInDatabase:1];
+}
+
+#pragma mark - Helpers
+
+// Populate history by visiting the 3 different pages.
+- (void)populateHistory {
+  // Add all the pages to the history.
+  [ChromeEarlGrey loadURL:_URL1];
+  [ChromeEarlGrey waitForWebStateContainingText:kPage1];
+  [ChromeEarlGrey loadURL:_URL2];
+  [ChromeEarlGrey waitForWebStateContainingText:kPage2];
+  [ChromeEarlGrey loadURL:_URL3];
+  [ChromeEarlGrey waitForWebStateContainingText:kPage3];
+}
+
+@end
+
+@interface OmniboxPopupWithFakeSuggestionTestCase : ChromeTestCase
+@end
+
+@implementation OmniboxPopupWithFakeSuggestionTestCase
+
+- (void)setUp {
+  [super setUp];
+  [ChromeEarlGrey clearBrowsingHistory];
+
+  [OmniboxAppInterface
+      setUpFakeSuggestionsService:@"fake_suggestions_pedal.json"];
+}
+
+- (void)tearDown {
+  [OmniboxAppInterface tearDownFakeSuggestionsService];
+  [super tearDown];
+}
+
+- (void)testTapAppendArrowButton {
+  [ChromeEarlGrey loadURL:GURL("about:blank")];
+
+  // Clears the url and replace it with local url host.
+  [ChromeEarlGreyUI focusOmniboxAndType:@"abc"];
+
+  // Wait for the suggestions to show.
+  [ChromeEarlGrey waitForUIElementToAppearWithMatcher:
+                      chrome_test_util::OmniboxPopupRowWithString(@"abcdef")];
+
+  id<GREYMatcher> appendArrowButtonMatcher = grey_allOf(
+      grey_ancestor(chrome_test_util::OmniboxPopupRowWithString(@"abcdef")),
+      grey_accessibilityID(kOmniboxPopupRowAppendAccessibilityIdentifier), nil);
+
+  // Wait for the append button to show.
+  [ChromeEarlGrey waitForUIElementToAppearWithMatcher:appendArrowButtonMatcher];
+
+  // Tap on the append arrow button.
+  [[EarlGrey selectElementWithMatcher:grey_allOf(appendArrowButtonMatcher,
+                                                 grey_interactable(), nil)]
+      performAction:grey_tap()];
+
+  // Omnibox should now contain the suggestion row string 'abcdef '.
+  [ChromeEarlGrey waitForUIElementToAppearWithMatcher:
+                      chrome_test_util::OmniboxContainingText("abcdef ")];
+
+  // Wait for the new suggestions to show.
+  [ChromeEarlGrey
+      waitForUIElementToAppearWithMatcher:
+          chrome_test_util::OmniboxPopupRowWithString(@"abcdefghi")];
+}
+
+@end
+
+@interface HardwareKeyboardInteractionTestCase : ChromeTestCase
+@end
+
+@implementation HardwareKeyboardInteractionTestCase
+
+- (void)setUp {
+  [super setUp];
+  [ChromeEarlGrey clearBrowsingHistory];
+
+  [OmniboxAppInterface
+      setUpFakeSuggestionsService:@"fake_suggestions_pedal.json"];
+}
+
+- (void)tearDown {
+  [OmniboxAppInterface tearDownFakeSuggestionsService];
+  [super tearDown];
+  // HW keyboard simulation does mess up the SW keyboard simulator state.
+  // Relaunching resets the state.
+  AppLaunchConfiguration config = [super appConfigurationForTestCase];
+  config.relaunch_policy = ForceRelaunchByCleanShutdown;
+  [[AppLaunchManager sharedManager] ensureAppLaunchedWithConfiguration:config];
+}
+
+// Tests up down interaction in omnibox popup using a hardware keyboard.
+- (void)testUpDownArrowAutocomplete {
+  // Focus omnibox from Web.
+  [ChromeEarlGrey loadURL:GURL("about:blank")];
+  [ChromeEarlGreyUI focusOmniboxAndType:@"testupdown"];
+
+  // Matcher for the first autocomplete suggestions.
+  id<GREYMatcher> testupDownAutocomplete1 =
+      chrome_test_util::OmniboxPopupRowWithString(@"testupdownautocomplete1");
+
+  // Wait for the suggestions to show.
+  [ChromeEarlGrey waitForUIElementToAppearWithMatcher:testupDownAutocomplete1];
+
+  [[EarlGrey selectElementWithMatcher:chrome_test_util::Omnibox()]
+      assertWithMatcher:chrome_test_util::OmniboxContainingText("testupdown")];
+
+  // The omnibox popup may update multiple times.  Don't downArrow until this
+  // is done.
+  base::test::ios::SpinRunLoopWithMinDelay(base::Seconds(1));
+
+  // Go down to testautocomplete1 popup row.
+  [ChromeEarlGrey simulatePhysicalKeyboardEvent:@"downArrow" flags:0];
+  [ChromeEarlGrey simulatePhysicalKeyboardEvent:@"downArrow" flags:0];
+
+  [ChromeEarlGrey
+      waitForUIElementToAppearWithMatcher:
+          chrome_test_util::OmniboxContainingText("testupdownautocomplete1")];
+
+  [ChromeEarlGrey simulatePhysicalKeyboardEvent:@"upArrow" flags:0];
+
+  [ChromeEarlGrey waitForUIElementToAppearWithMatcher:
+                      chrome_test_util::OmniboxContainingText("testupdown")];
+}
+
+// Tests that leading image in omnibox changes based on the suggestion
+// highlighted.
+// TODO(crbug.com/1455347): Test is flaky on both device and simulator.
+- (void)DISABLED_testOmniboxLeadingImage {
+  // Start a server to be able to navigate to a web page.
+  self.testServer->RegisterRequestHandler(
+      base::BindRepeating(&StandardResponse));
+  GREYAssertTrue(self.testServer->Start(), @"Test server failed to start.");
+  GURL _URL1 = self.testServer->GetURL(kPage1URL);
+
+  [ChromeEarlGrey loadURL:_URL1];
+  [ChromeEarlGrey waitForWebStateContainingText:kPage1];
+
+  // Focus omnibox from Web.
+  [ChromeEarlGreyUI focusOmnibox];
+
+  // Typing the title of page1.
+  [[EarlGrey selectElementWithMatcher:chrome_test_util::Omnibox()]
+      performAction:grey_replaceText(base::SysUTF8ToNSString(kPage1Title))];
+
+  // Wait for suggestions to show.
+  [ChromeEarlGrey
+      waitForSufficientlyVisibleElementWithMatcher:PopupRowWithUrl(_URL1)];
+
+  // The omnibox popup may update multiple times.  Don't downArrow until this
+  // is done.
+  base::test::ios::SpinRunLoopWithMinDelay(base::Seconds(1));
+  [ChromeEarlGrey simulatePhysicalKeyboardEvent:@"downArrow" flags:0];
+
+  // We expect to have the default leading image.
+  [ChromeEarlGrey
+      waitForUIElementToAppearWithMatcher:
+          grey_allOf(OmniboxWithLeadingImageElement(
+                         kOmniboxLeadingImageDefaultAccessibilityIdentifier),
+                     nil)];
+
+  [ChromeEarlGrey simulatePhysicalKeyboardEvent:@"downArrow" flags:0];
+
+  // The popup row is a url suggestion so we expect to have the leading
+  // suggestion image .
+  [ChromeEarlGrey
+      waitForUIElementToAppearWithMatcher:
+          grey_allOf(
+              OmniboxWithLeadingImageElement(
+                  kOmniboxLeadingImageSuggestionImageAccessibilityIdentifier),
+              nil)];
 }
 
 @end

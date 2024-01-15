@@ -7,9 +7,11 @@
 
 #include "base/time/time.h"
 #include "third_party/skia/include/core/SkColor.h"
+#include "ui/chromeos/styles/cros_tokens_color_mappings.h"
 #include "ui/gfx/color_palette.h"
 #include "ui/gfx/geometry/insets.h"
 #include "ui/gfx/geometry/size.h"
+#include "ui/views/highlight_border.h"
 
 namespace ash::capture_mode {
 
@@ -35,11 +37,8 @@ constexpr SkColor kRegionBorderColor = SK_ColorWHITE;
 
 // Color of the dimming shield layer. It is set to dim the region that is
 // outside of the region will be recorded, either in the capture session or
-// video recording is in progress. This color is set to be the same in both dark
-// and light mode. We will investigate whether to do this kind of change to
-// ShieldLayer globally.
-constexpr SkColor kDimmingShieldColor =
-    SkColorSetA(gfx::kGoogleGrey900, 102);  // 40%
+// video recording is in progress.
+constexpr ui::ColorId kDimmingShieldColor = cros_tokens::kCrosSysScrim;
 
 // The space between the `image_toggle_button_` and `video_toggle_button_`.
 constexpr int kSpaceBetweenCaptureModeTypeButtons = 2;
@@ -90,6 +89,52 @@ constexpr gfx::Size kSettingsIconSize{20, 20};
 
 // Border value used for each section of the settings menu.
 constexpr auto kSettingsMenuBorderSize = gfx::Insets::VH(8, 16);
+
+// The distance between the bottom of the key combo viewer and the bottom of the
+// confined bounds.
+constexpr int kKeyWidgetDistanceFromBottom = 24;
+
+// Border value applied between the right edge of the key combo viewer when it's
+// approaching the right edge of the recording area.
+constexpr int kKeyWidgetBorderPadding = 16;
+
+// The duration to continue showing the key combo view on key up of the
+// non-modifier key with no modifier keys pressed or on key up of the last
+// modifier key up with no non-modifier key that can be displayed independently
+// pressed.
+constexpr base::TimeDelta kRefreshKeyComboWidgetLongDelay =
+    base::Milliseconds(1500);
+
+// The duration to hold on the update of the key combo view on key up.
+constexpr base::TimeDelta kRefreshKeyComboWidgetShortDelay =
+    base::Milliseconds(100);
+
+// The radius of the highlight layer generated on mouse or touch event when the
+// demo tools feature is enabled.
+constexpr int kHighlightLayerRadius = 36;
+
+// The thickness of the highlight border that will be applied to the
+// `PointerHighlightLayer`.
+constexpr float kInnerHightlightBorderThickness =
+    0.5 * views::kHighlightBorderThickness;
+constexpr float kOuterHightlightBorderThickness =
+    1.5 * views::kHighlightBorderThickness;
+
+// Distance from the bottom of the capture bar to the bottom of the anchor
+// bounds of the bar. See `GetBarAnchorBoundsInScreen` for more details of the
+// bar's anchor bounds.
+constexpr int kCaptureBarBottomPadding = 16;
+constexpr int kGameCaptureBarBottomPadding = 24;
+
+// Height of the capture bar.
+constexpr int kCaptureBarHeight = 64;
+
+// The minimum distance from the top of the screen to the top of the settings
+// menu.
+constexpr int kMinDistanceFromSettingsToScreen = 8;
+
+// The minimum height of the settings menu while constrained and scrollable.
+constexpr int kSettingsMenuMinHeight = 50;
 
 }  // namespace ash::capture_mode
 

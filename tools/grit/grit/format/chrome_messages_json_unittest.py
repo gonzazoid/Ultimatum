@@ -6,17 +6,14 @@
 """Unittest for chrome_messages_json.py.
 """
 
-from __future__ import print_function
-
+import io
 import json
 import os
 import sys
-if __name__ == '__main__':
-  sys.path.append(os.path.join(os.path.dirname(__file__), '../..'))
-
 import unittest
 
-from six import StringIO
+if __name__ == '__main__':
+  sys.path.append(os.path.join(os.path.dirname(__file__), '../..'))
 
 from grit import grd_reader
 from grit import util
@@ -29,7 +26,7 @@ class ChromeMessagesJsonFormatUnittest(unittest.TestCase):
   maxDiff = None
 
   def testMessages(self):
-    root = util.ParseGrdForUnittest(u"""
+    root = util.ParseGrdForUnittest("""
     <messages>
       <message name="IDS_SIMPLE_MESSAGE">
               Simple message.
@@ -61,11 +58,11 @@ class ChromeMessagesJsonFormatUnittest(unittest.TestCase):
     </messages>
     """)
 
-    buf = StringIO()
+    buf = io.StringIO()
     build.RcBuilder.ProcessNode(root, DummyOutput('chrome_messages_json', 'en'),
                                 buf)
     output = buf.getvalue()
-    test = u"""
+    test = """
 {
   "SIMPLE_MESSAGE": {
     "message": "Simple message."
@@ -115,11 +112,11 @@ class ChromeMessagesJsonFormatUnittest(unittest.TestCase):
       </messages>
     """)
 
-    buf = StringIO()
+    buf = io.StringIO()
     build.RcBuilder.ProcessNode(root, DummyOutput('chrome_messages_json', 'fr'),
                                 buf)
     output = buf.getvalue()
-    test = u"""
+    test = """
 {
   "ID_HELLO": {
     "message": "H\u00e9P\u00e9ll\u00f4P\u00f4!"
@@ -143,17 +140,17 @@ class ChromeMessagesJsonFormatUnittest(unittest.TestCase):
     </messages>
   </release>
 </grit>"""
-    root = grd_reader.Parse(StringIO(grd), dir=".")
+    root = grd_reader.Parse(io.StringIO(grd), dir=".")
 
-    buf = StringIO()
+    buf = io.StringIO()
     build.RcBuilder.ProcessNode(root, DummyOutput('chrome_messages_json', 'fr'),
                                 buf)
     output = buf.getvalue()
-    test = u'{}'
+    test = '{}'
     self.assertEqual(test, output)
 
   def testVerifyMinification(self):
-    root = util.ParseGrdForUnittest(u"""
+    root = util.ParseGrdForUnittest("""
     <messages>
       <message name="IDS">
         <ph name="BEGIN">$1<ex>a</ex></ph>test<ph name="END">$2<ex>b</ex></ph>
@@ -161,16 +158,16 @@ class ChromeMessagesJsonFormatUnittest(unittest.TestCase):
     </messages>
     """)
 
-    buf = StringIO()
+    buf = io.StringIO()
     build.RcBuilder.ProcessNode(root, DummyOutput('chrome_messages_json', 'en'),
                                 buf)
     output = buf.getvalue()
-    test = (u'{"IDS":{"message":"$1$test$2$","placeholders":'
-            u'{"1":{"content":"$1"},"2":{"content":"$2"}}}}')
+    test = ('{"IDS":{"message":"$1$test$2$","placeholders":'
+            '{"1":{"content":"$1"},"2":{"content":"$2"}}}}')
     self.assertEqual(test, output)
 
 
-class DummyOutput(object):
+class DummyOutput:
 
   def __init__(self, type, language):
     self.type = type

@@ -8,7 +8,6 @@
 
 #include "base/strings/stringprintf.h"
 
-namespace location {
 namespace nearby {
 namespace chrome {
 
@@ -17,15 +16,15 @@ api::LogMessage::Severity g_min_log_severity = api::LogMessage::Severity::kInfo;
 logging::LogSeverity ConvertSeverity(api::LogMessage::Severity severity) {
   switch (severity) {
     case api::LogMessage::Severity::kVerbose:
-      return logging::LOG_VERBOSE;
+      return logging::LOGGING_VERBOSE;
     case api::LogMessage::Severity::kInfo:
-      return logging::LOG_INFO;
+      return logging::LOGGING_INFO;
     case api::LogMessage::Severity::kWarning:
-      return logging::LOG_WARNING;
+      return logging::LOGGING_WARNING;
     case api::LogMessage::Severity::kError:
-      return logging::LOG_ERROR;
+      return logging::LOGGING_ERROR;
     case api::LogMessage::Severity::kFatal:
-      return logging::LOG_FATAL;
+      return logging::LOGGING_FATAL;
   }
 }
 
@@ -61,4 +60,3 @@ bool LogMessage::ShouldCreateLogMessage(Severity severity) {
 
 }  // namespace api
 }  // namespace nearby
-}  // namespace location

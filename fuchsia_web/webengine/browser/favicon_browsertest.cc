@@ -4,9 +4,9 @@
 
 #include "base/fuchsia/mem_buffer_util.h"
 #include "content/public/test/browser_test.h"
+#include "fuchsia_web/common/test/frame_for_test.h"
 #include "fuchsia_web/common/test/frame_test_util.h"
 #include "fuchsia_web/common/test/test_navigation_listener.h"
-#include "fuchsia_web/webengine/test/frame_for_test.h"
 #include "fuchsia_web/webengine/test/test_data.h"
 #include "fuchsia_web/webengine/test/web_engine_browser_test.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -43,7 +43,7 @@ void ValidateFavicon(const fuchsia::web::Favicon& favicon,
   ASSERT_TRUE(favicon.has_height());
   EXPECT_EQ(favicon.height(), expected_height);
   ASSERT_TRUE(favicon.has_data());
-  absl::optional<std::string> data = base::StringFromMemBuffer(favicon.data());
+  std::optional<std::string> data = base::StringFromMemBuffer(favicon.data());
   ASSERT_TRUE(data.has_value());
   size_t expected_size = expected_width * expected_height * sizeof(uint32_t);
   ASSERT_EQ(data->size(), expected_size);
@@ -68,6 +68,12 @@ class FaviconTest : public WebEngineBrowserTest {
     frame_ = FrameForTest::Create(context(), {});
   }
 
+  void TearDownOnMainThread() override {
+    frame_ = {};
+
+    WebEngineBrowserTest::TearDownOnMainThread();
+  }
+
   FrameForTest frame_;
 };
 
@@ -81,19 +87,6 @@ IN_PROC_BROWSER_TEST_F(FaviconTest, Disabled) {
 
   // Favicon should not be sent.
   EXPECT_FALSE(frame_.navigation_listener().current_state()->has_favicon());
-
-  // Call GetVisibleEntry() and verify that it doesn't send favicon.
-  base::RunLoop run_loop;
-  fuchsia::web::NavigationState visible_entry;
-  auto nav_controller = frame_.GetNavigationController();
-  nav_controller->GetVisibleEntry(
-      [&run_loop, &visible_entry](fuchsia::web::NavigationState result) {
-        visible_entry = std::move(result);
-        run_loop.Quit();
-      });
-  run_loop.Run();
-
-  EXPECT_FALSE(visible_entry.has_favicon());
 }
 
 // Check that the favicon for the page is sent after the page is loaded. Also

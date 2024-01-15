@@ -7,11 +7,11 @@
 #include <memory>
 #include <string>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
 #include "base/compiler_specific.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
@@ -103,10 +103,10 @@ static scoped_refptr<extensions::Extension> CreateExtension(
     const std::string& name,
     const std::string& id,
     extensions::mojom::ManifestLocation location) {
-  base::DictionaryValue manifest;
-  manifest.SetStringPath(extensions::manifest_keys::kVersion, "1.0.0.0");
-  manifest.SetIntPath(extensions::manifest_keys::kManifestVersion, 2);
-  manifest.SetStringPath(extensions::manifest_keys::kName, name);
+  base::Value::Dict manifest;
+  manifest.SetByDottedPath(extensions::manifest_keys::kVersion, "1.0.0.0");
+  manifest.SetByDottedPath(extensions::manifest_keys::kManifestVersion, 2);
+  manifest.SetByDottedPath(extensions::manifest_keys::kName, name);
   std::string error;
   scoped_refptr<extensions::Extension> extension =
       extensions::Extension::Create(
@@ -171,8 +171,8 @@ class ProfileSigninConfirmationHelperTest : public testing::Test {
   base::ScopedTempDir profile_dir_;
   content::BrowserTaskEnvironment task_environment_;
   std::unique_ptr<TestingProfile> profile_;
-  raw_ptr<TestingPrefStoreWithCustomReadError> user_prefs_;
-  raw_ptr<BookmarkModel> model_;
+  const raw_ptr<TestingPrefStoreWithCustomReadError> user_prefs_;
+  const raw_ptr<BookmarkModel> model_;
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   ash::ScopedCrosSettingsTestHelper cros_settings_test_helper_;

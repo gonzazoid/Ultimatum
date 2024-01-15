@@ -30,7 +30,7 @@ namespace webcrypto {
 
 namespace {
 
-bool Base64DecodeUrlSafe(const std::string& input, std::string* output) {
+bool Base64DecodeUrlSafe(std::string_view input, std::string* output) {
   // The JSON web signature spec says that padding is omitted.
   // https://tools.ietf.org/html/draft-ietf-jose-json-web-signature-36#section-2
   return base::Base64UrlDecode(
@@ -39,8 +39,9 @@ bool Base64DecodeUrlSafe(const std::string& input, std::string* output) {
 
 absl::optional<base::Value> ReadJsonTestFile(const char* test_file_name) {
   base::FilePath test_data_dir;
-  if (!base::PathService::Get(base::DIR_SOURCE_ROOT, &test_data_dir))
+  if (!base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &test_data_dir)) {
     return absl::nullopt;
+  }
 
   base::FilePath file_path = test_data_dir.AppendASCII("components")
                                  .AppendASCII("test")
@@ -126,7 +127,7 @@ std::vector<uint8_t> Corrupted(const std::vector<uint8_t>& input) {
   return corrupted_data;
 }
 
-std::vector<uint8_t> HexStringToBytes(const std::string& hex) {
+std::vector<uint8_t> HexStringToBytes(std::string_view hex) {
   std::vector<uint8_t> bytes;
 
   // HexStringToBytes() doesn't allow empty inputs, but this wrapper does.
@@ -136,10 +137,6 @@ std::vector<uint8_t> HexStringToBytes(const std::string& hex) {
   bool result = base::HexStringToBytes(hex, &bytes);
   CHECK(result);
   return bytes;
-}
-
-std::vector<uint8_t> MakeJsonVector(const base::DictionaryValue& value) {
-  return MakeJsonVector(base::ValueView(value));
 }
 
 std::vector<uint8_t> MakeJsonVector(const base::ValueView& value) {
@@ -157,14 +154,9 @@ base::Value::List ReadJsonTestFileAsList(const char* test_file_name) {
   return std::move(*result).TakeList();
 }
 
-std::vector<uint8_t> GetBytesFromHexString(const base::Value* dict,
-                                           const std::string& property_name) {
-  if (!dict->is_dict()) {
-    ADD_FAILURE() << "Value is not a dictionary";
-    return std::vector<uint8_t>();
-  }
-
-  const std::string* hex_string = dict->FindStringPath(property_name);
+std::vector<uint8_t> GetBytesFromHexString(const base::Value::Dict& dict,
+                                           std::string_view property_name) {
+  const std::string* hex_string = dict.FindStringByDottedPath(property_name);
   if (!hex_string) {
     ADD_FAILURE() << "Couldn't get string property: " << property_name;
     return std::vector<uint8_t>();
@@ -173,10 +165,10 @@ std::vector<uint8_t> GetBytesFromHexString(const base::Value* dict,
   return HexStringToBytes(*hex_string);
 }
 
-blink::WebCryptoAlgorithm GetDigestAlgorithm(const base::DictionaryValue* dict,
+blink::WebCryptoAlgorithm GetDigestAlgorithm(const base::Value::Dict& dict,
                                              const char* property_name) {
-  std::string algorithm_name;
-  if (!dict->GetString(property_name, &algorithm_name)) {
+  const std::string* algorithm_name = dict.FindString(property_name);
+  if (!algorithm_name) {
     ADD_FAILURE() << "Couldn't get string property: " << property_name;
     return blink::WebCryptoAlgorithm::CreateNull();
   }
@@ -192,7 +184,7 @@ blink::WebCryptoAlgorithm GetDigestAlgorithm(const base::DictionaryValue* dict,
   };
 
   for (auto mapping : kDigestNameToId) {
-    if (mapping.name == algorithm_name)
+    if (mapping.name == *algorithm_name)
       return CreateAlgorithm(mapping.id);
   }
 
@@ -321,19 +313,10 @@ Status ImportKeyJwkFromDict(const base::ValueView& dict,
                    algorithm, extractable, usages, key);
 }
 
-Status ImportKeyJwkFromDict(const base::DictionaryValue& dict,
-                            const blink::WebCryptoAlgorithm& algorithm,
-                            bool extractable,
-                            blink::WebCryptoKeyUsageMask usages,
-                            blink::WebCryptoKey* key) {
-  return ImportKeyJwkFromDict(base::ValueView(dict), algorithm, extractable,
-                              usages, key);
-}
-
 absl::optional<base::Value::Dict> GetJwkDictionary(
     const std::vector<uint8_t>& json) {
-  base::StringPiece json_string(reinterpret_cast<const char*>(json.data()),
-                                json.size());
+  std::string_view json_string(reinterpret_cast<const char*>(json.data()),
+                               json.size());
   absl::optional<base::Value> value = base::JSONReader::Read(json_string);
   EXPECT_TRUE(value.has_value());
   EXPECT_TRUE(value.value().is_dict());
@@ -344,8 +327,8 @@ absl::optional<base::Value::Dict> GetJwkDictionary(
 // required on the fields examined.
 ::testing::AssertionResult VerifyJwk(
     const base::Value::Dict& dict,
-    const std::string& kty_expected,
-    const std::string& alg_expected,
+    std::string_view kty_expected,
+    std::string_view alg_expected,
     blink::WebCryptoKeyUsageMask use_mask_expected) {
   // ---- kty
   const std::string* value_string = dict.FindString("kty");
@@ -393,8 +376,8 @@ absl::optional<base::Value::Dict> GetJwkDictionary(
 
 ::testing::AssertionResult VerifySecretJwk(
     const std::vector<uint8_t>& json,
-    const std::string& alg_expected,
-    const std::string& k_expected_hex,
+    std::string_view alg_expected,
+    std::string_view k_expected_hex,
     blink::WebCryptoKeyUsageMask use_mask_expected) {
   absl::optional<base::Value::Dict> dict = GetJwkDictionary(json);
   if (!dict.has_value() || dict.value().empty())
@@ -409,9 +392,9 @@ absl::optional<base::Value::Dict> GetJwkDictionary(
     return ::testing::AssertionFailure() << "Base64DecodeUrlSafe(k) failed";
   if (!base::EqualsCaseInsensitiveASCII(
           base::HexEncode(k_value.data(), k_value.size()), k_expected_hex)) {
-    return ::testing::AssertionFailure() << "Expected 'k' to be "
-                                         << k_expected_hex
-                                         << " but found something different";
+    return ::testing::AssertionFailure()
+           << "Expected 'k' to be " << k_expected_hex
+           << " but found something different";
   }
 
   return VerifyJwk(dict.value(), "oct", alg_expected, use_mask_expected);
@@ -419,9 +402,9 @@ absl::optional<base::Value::Dict> GetJwkDictionary(
 
 ::testing::AssertionResult VerifyPublicJwk(
     const std::vector<uint8_t>& json,
-    const std::string& alg_expected,
-    const std::string& n_expected_hex,
-    const std::string& e_expected_hex,
+    std::string_view alg_expected,
+    std::string_view n_expected_hex,
+    std::string_view e_expected_hex,
     blink::WebCryptoKeyUsageMask use_mask_expected) {
   absl::optional<base::Value::Dict> dict = GetJwkDictionary(json);
   if (!dict.has_value() || dict.value().empty())
@@ -449,9 +432,9 @@ absl::optional<base::Value::Dict> GetJwkDictionary(
     return ::testing::AssertionFailure() << "Base64DecodeUrlSafe(e) failed";
   if (!base::EqualsCaseInsensitiveASCII(
           base::HexEncode(e_value.data(), e_value.size()), e_expected_hex)) {
-    return ::testing::AssertionFailure() << "Expected 'e' to be "
-                                         << e_expected_hex
-                                         << " but found something different";
+    return ::testing::AssertionFailure()
+           << "Expected 'e' to be " << e_expected_hex
+           << " but found something different";
   }
 
   return VerifyJwk(dict.value(), "RSA", alg_expected, use_mask_expected);
@@ -461,7 +444,7 @@ void ImportExportJwkSymmetricKey(
     int key_len_bits,
     const blink::WebCryptoAlgorithm& import_algorithm,
     blink::WebCryptoKeyUsageMask usages,
-    const std::string& jwk_alg) {
+    std::string_view jwk_alg) {
   std::vector<uint8_t> json;
   std::string key_hex;
 
@@ -550,44 +533,44 @@ Status GenerateKeyPair(const blink::WebCryptoAlgorithm& algorithm,
 }
 
 blink::WebCryptoKeyFormat GetKeyFormatFromJsonTestCase(
-    const base::DictionaryValue* test) {
-  std::string format;
-  EXPECT_TRUE(test->GetString("key_format", &format));
-  if (format == "jwk")
+    const base::Value::Dict& test) {
+  const std::string* format = test.FindString("key_format");
+  CHECK(format);
+  if (*format == "jwk")
     return blink::kWebCryptoKeyFormatJwk;
-  else if (format == "pkcs8")
+  else if (*format == "pkcs8")
     return blink::kWebCryptoKeyFormatPkcs8;
-  else if (format == "spki")
+  else if (*format == "spki")
     return blink::kWebCryptoKeyFormatSpki;
-  else if (format == "raw")
+  else if (*format == "raw")
     return blink::kWebCryptoKeyFormatRaw;
 
-  ADD_FAILURE() << "Unrecognized key format: " << format;
+  ADD_FAILURE() << "Unrecognized key format: " << *format;
   return blink::kWebCryptoKeyFormatRaw;
 }
 
 std::vector<uint8_t> GetKeyDataFromJsonTestCase(
-    const base::DictionaryValue* test,
+    const base::Value::Dict& test,
     blink::WebCryptoKeyFormat key_format) {
   if (key_format == blink::kWebCryptoKeyFormatJwk) {
-    const base::DictionaryValue* json;
-    EXPECT_TRUE(test->GetDictionary("key", &json));
+    const base::Value::Dict* json = test.FindDict("key");
+    EXPECT_TRUE(json);
     return MakeJsonVector(*json);
   }
   return GetBytesFromHexString(test, "key");
 }
 
 blink::WebCryptoNamedCurve GetCurveNameFromDictionary(
-    const base::DictionaryValue* dict) {
-  std::string curve_str;
-  if (!dict->GetString("crv", &curve_str)) {
+    const base::Value::Dict& dict) {
+  const std::string* curve_str = dict.FindString("crv");
+  if (!curve_str) {
     ADD_FAILURE() << "Missing crv parameter";
     return blink::kWebCryptoNamedCurveP384;
   }
-  return CurveNameToCurve(curve_str);
+  return CurveNameToCurve(*curve_str);
 }
 
-blink::WebCryptoNamedCurve CurveNameToCurve(const std::string& name) {
+blink::WebCryptoNamedCurve CurveNameToCurve(std::string_view name) {
   if (name == "P-256")
     return blink::kWebCryptoNamedCurveP256;
   if (name == "P-384")

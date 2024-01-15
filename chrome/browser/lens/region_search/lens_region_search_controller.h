@@ -6,12 +6,12 @@
 #define CHROME_BROWSER_LENS_REGION_SEARCH_LENS_REGION_SEARCH_CONTROLLER_H_
 
 #include "base/memory/raw_ptr.h"
+#include "base/supports_user_data.h"
 #include "chrome/browser/image_editor/screenshot_flow.h"
-#include "chrome/browser/lens/metrics/lens_metrics.h"
+#include "components/lens/lens_metrics.h"
 #include "content/public/browser/web_contents_observer.h"
+#include "ui/gfx/image/image.h"
 #include "ui/views/widget/widget.h"
-
-class Browser;
 
 namespace content {
 class WebContents;
@@ -26,8 +26,7 @@ namespace lens {
 
 class LensRegionSearchController : public content::WebContentsObserver {
  public:
-  explicit LensRegionSearchController(content::WebContents* web_contents,
-                                      Browser* browser);
+  LensRegionSearchController();
   ~LensRegionSearchController() override;
 
   // Creates and runs the drag and capture flow. When run, the user enters into
@@ -35,8 +34,10 @@ class LensRegionSearchController : public content::WebContentsObserver {
   // around the web contents. When finished with selection, the region is
   // converted into a PNG and sent to Lens. If `use_fullscreen_capture` is set
   // to true, the whole screen will automatically be captured.
-  void Start(bool use_fullscreen_capture,
-             bool is_google_default_search_provider);
+  void Start(content::WebContents* web_contents,
+             bool use_fullscreen_capture,
+             bool is_google_default_search_provider,
+             lens::AmbientSearchEntryPoint entry_point);
 
   // Closes the UI overlay and user education bubble if currently being shown.
   // The closed reason for this method is defaulted to the close button being
@@ -71,6 +72,11 @@ class LensRegionSearchController : public content::WebContentsObserver {
   // Returns whether the overlay and instruction bubble are both visible. If
   // either of the UI elements is not visible, returns false.
   bool IsOverlayUIVisibleForTesting();
+  void SetEntryPointForTesting(lens::AmbientSearchEntryPoint entry_point);
+
+  // Sets the web contents for unit tests that do not launch the region search
+  // UI.
+  void SetWebContentsForTesting(content::WebContents* web_contents);
 
  private:
   void RecordCaptureResult(lens::LensRegionSearchCaptureResult result);
@@ -78,24 +84,52 @@ class LensRegionSearchController : public content::WebContentsObserver {
   void RecordRegionSizeRelatedMetrics(gfx::Rect screen_bounds,
                                       gfx::Size region_size);
 
-  gfx::Image ResizeImageIfNecessary(const gfx::Image& image);
-
   // Variable for tracking the default search provider as to launch the image
   // results in correct search engine. This value is set every time the capture
   // mode is started to have an accurate value for the completed capture.
   bool is_google_default_search_provider_ = false;
 
+  // Variable for tracking whether the region search request originated from the
+  // companion.
+  lens::AmbientSearchEntryPoint entry_point_;
+
   bool in_capture_mode_ = false;
 
   std::unique_ptr<image_editor::ScreenshotFlow> screenshot_flow_;
-
-  raw_ptr<Browser> browser_ = nullptr;
 
   raw_ptr<views::Widget> bubble_widget_ = nullptr;
 
   base::WeakPtr<LensRegionSearchController> weak_this_;
 
   base::WeakPtrFactory<LensRegionSearchController> weak_factory_{this};
+};
+
+// Class to associate region search controller data with Profile across
+// navigation. Used to support region search via keyboard shortcut.
+class LensRegionSearchControllerData : public base::SupportsUserData::Data {
+ public:
+  LensRegionSearchControllerData();
+  ~LensRegionSearchControllerData() override;
+  LensRegionSearchControllerData(const LensRegionSearchControllerData&) =
+      delete;
+  LensRegionSearchControllerData& operator=(
+      const LensRegionSearchControllerData&) = delete;
+
+  static constexpr char kDataKey[] = "lens_region_search_controller_data";
+  std::unique_ptr<LensRegionSearchController> lens_region_search_controller;
+};
+
+// Class to associate region search captured data with Profile across
+// navigation. Used to support region search on a static WebUI page.
+class RegionSearchCapturedData : public base::SupportsUserData::Data {
+ public:
+  RegionSearchCapturedData();
+  ~RegionSearchCapturedData() override;
+  RegionSearchCapturedData(const RegionSearchCapturedData&) = delete;
+  RegionSearchCapturedData& operator=(const RegionSearchCapturedData&) = delete;
+
+  static constexpr char kDataKey[] = "region_search_data";
+  gfx::Image image;
 };
 }  // namespace lens
 #endif  // CHROME_BROWSER_LENS_REGION_SEARCH_LENS_REGION_SEARCH_CONTROLLER_H_

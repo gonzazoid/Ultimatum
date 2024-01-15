@@ -7,6 +7,7 @@
 
 #include <map>
 #include <memory>
+#include <set>
 #include <string>
 #include <unordered_set>
 
@@ -100,10 +101,10 @@ class FakeModelTypeSyncBridge : public ModelTypeSyncBridge {
 
   // ModelTypeSyncBridge implementation
   std::unique_ptr<MetadataChangeList> CreateMetadataChangeList() override;
-  absl::optional<ModelError> MergeSyncData(
+  absl::optional<ModelError> MergeFullSyncData(
       std::unique_ptr<MetadataChangeList> metadata_change_list,
       EntityChangeList entity_data) override;
-  absl::optional<ModelError> ApplySyncChanges(
+  absl::optional<ModelError> ApplyIncrementalSyncChanges(
       std::unique_ptr<MetadataChangeList> metadata_change_list,
       EntityChangeList entity_changes) override;
   void GetData(StorageKeyList storage_keys, DataCallback callback) override;
@@ -115,10 +116,9 @@ class FakeModelTypeSyncBridge : public ModelTypeSyncBridge {
   ConflictResolution ResolveConflict(
       const std::string& storage_key,
       const EntityData& remote_data) const override;
-  void ApplyStopSyncChanges(
-      std::unique_ptr<MetadataChangeList> delete_metadata_change_list) override;
-  sync_pb::EntitySpecifics TrimRemoteSpecificsForCaching(
+  sync_pb::EntitySpecifics TrimAllSupportedFieldsFromRemoteSpecifics(
       const sync_pb::EntitySpecifics& entity_specifics) const override;
+  bool IsEntityDataValid(const EntityData& entity_data) const override;
 
   // Stores a resolution for the next call to ResolveConflict. Note that if this
   // is a USE_NEW resolution, the data will only exist for one resolve call.
@@ -158,6 +158,10 @@ class FakeModelTypeSyncBridge : public ModelTypeSyncBridge {
   // if the bridge's ModelType is PREFERENCES.
   void AddPrefValueToIgnore(const std::string& value);
 
+  // Sets the flag to mark entities with client tag hash `client_tag_hash` as
+  // invalid when IsEntityDataValid() is called.
+  void TreatRemoteUpdateAsInvalid(const ClientTagHash& client_tag_hash);
+
   const Store& db() const { return *db_; }
   Store* mutable_db() { return db_.get(); }
   size_t trimmed_specifics_change_count() const {
@@ -188,12 +192,16 @@ class FakeModelTypeSyncBridge : public ModelTypeSyncBridge {
   // The preference values that the bridge will ignore.
   std::unordered_set<std::string> values_to_ignore_;
 
+  // The client tag hashes the bridge will mark as invalid in
+  // calls to IsEntityDataValid().
+  std::set<ClientTagHash> invalid_remote_updates_;
+
   // Whether an error should be produced on the next bridge call.
   bool error_next_ = false;
 
   // Whether the bridge supports call to GetStorageKey. If it doesn't, bridge is
   // responsible for calling UpdateStorageKey when processing new entities in
-  // MergeSyncData/ApplySyncChanges.
+  // MergeFullSyncData/ApplyIncrementalSyncChanges.
   bool supports_get_storage_key_ = true;
 
   // Whether the bridge supports call to GetClientTag. If it doesn't, bridge is

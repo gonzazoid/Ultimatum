@@ -4,7 +4,11 @@
 
 #include "components/history_clusters/core/history_clusters_util.h"
 
+#include "base/ranges/algorithm.h"
 #include "base/strings/stringprintf.h"
+#include "base/test/metrics/histogram_tester.h"
+#include "components/history/core/browser/history_types.h"
+#include "components/history_clusters/core/clustering_test_utils.h"
 #include "components/history_clusters/core/config.h"
 #include "components/history_clusters/core/history_clusters_service_test_api.h"
 #include "testing/gmock/include/gmock/gmock.h"
@@ -12,6 +16,8 @@
 
 namespace history_clusters {
 namespace {
+
+using ::testing::ElementsAre;
 
 TEST(HistoryClustersUtilTest, ComputeURLForDeduping) {
   {
@@ -54,47 +60,6 @@ TEST(HistoryClustersUtilTest, ComputeURLForDeduping) {
   }
 }
 
-TEST(HistoryClustersUtilTest, ComputeURLKeywordForLookup) {
-  {
-    Config config;
-    config.use_host_for_visit_deduping = false;
-    SetConfigForTesting(config);
-
-    EXPECT_EQ(ComputeURLKeywordForLookup(GURL("http://www.google.com/")),
-              "http://google.com/")
-        << "Strip off WWW.";
-    EXPECT_EQ(ComputeURLKeywordForLookup(GURL("https://google.com/")),
-              "http://google.com/")
-        << "Normalizes scheme to http.";
-    EXPECT_EQ(ComputeURLKeywordForLookup(
-                  GURL("http://google.com/path?foo=bar#reftag")),
-              "http://google.com/path")
-        << "Strips ref and query, leaves path.";
-    EXPECT_EQ(ComputeURLKeywordForLookup(
-                  GURL("https://www.google.com/path?foo=bar#reftag")),
-              "http://google.com/path")
-        << "Does all of the above at once.";
-    EXPECT_EQ(ComputeURLKeywordForLookup(GURL("http://google.com/path")),
-              "http://google.com/path")
-        << "Sanity check when no replacements needed.";
-  }
-
-  {
-    Config config;
-    config.use_host_for_visit_deduping = true;
-    SetConfigForTesting(config);
-
-    EXPECT_EQ(ComputeURLKeywordForLookup(GURL("https://google.com/path/")),
-              "http://google.com/")
-        << "Strips path.";
-
-    EXPECT_EQ(ComputeURLKeywordForLookup(
-                  GURL("https://www.google.com/path?foo=bar#reftag")),
-              "http://google.com/")
-        << "Does everything at once.";
-  }
-}
-
 TEST(HistoryClustersUtilTest, FilterClustersMatchingQuery) {
   std::vector<history::Cluster> all_clusters;
   all_clusters.push_back(
@@ -107,10 +72,14 @@ TEST(HistoryClustersUtilTest, FilterClustersMatchingQuery) {
                         {u"Red Oranges", history::ClusterKeywordData()}},
                        /*should_show_on_prominent_ui_surfaces=*/false,
                        /*label=*/u"LabelOne"));
+  auto hidden_google_visit = GetHardcodedClusterVisit(1);
+  hidden_google_visit.interaction_state =
+      history::ClusterVisit::InteractionState::kHidden;
   all_clusters.push_back(
       history::Cluster(2,
                        {
                            GetHardcodedClusterVisit(2),
+                           hidden_google_visit,
                        },
                        {},
                        /*should_show_on_prominent_ui_surfaces=*/true,
@@ -137,7 +106,8 @@ TEST(HistoryClustersUtilTest, FilterClustersMatchingQuery) {
       {"red or", true, false},
       {"red ora", true, false},
       {"red oran", true, false},
-      // Verify that we can search by URL.
+      // Verify that we can search by URL. Also double checks that we don't find
+      // the hidden Google visit in the second cluster.
       {"goog", true, false},
       // Verify we can search by page title, even mismatching case.
       {"code", true, true},
@@ -152,7 +122,10 @@ TEST(HistoryClustersUtilTest, FilterClustersMatchingQuery) {
       {"goog red", false, false},
       // Verify that we can find clusters by label.
       {"labeltwo", false, true},
-  };
+      // Verify that hidden visits are findable.
+      {
+          "HiddenVisitLabel",
+      }};
 
   for (size_t i = 0; i < std::size(test_data); ++i) {
     SCOPED_TRACE(base::StringPrintf("Testing case i=%d, query=%s",
@@ -282,94 +255,114 @@ TEST(HistoryClustersUtilTest, SortClustersWithinBatchForQuery) {
   }
 }
 
-TEST(HistoryClustersUtilTest, HideAndCullLowScoringVisits) {
+TEST(HistoryClustersUtilTest, CullVisitsThatShouldBeHidden) {
   std::vector<history::Cluster> all_clusters;
 
+  auto add_cluster = [&](int64_t cluster_id, std::vector<float> visit_scores) {
+    history::Cluster cluster;
+    cluster.cluster_id = cluster_id;
+    base::ranges::transform(visit_scores, std::back_inserter(cluster.visits),
+                            [&](const auto& visit_score) {
+                              return GetHardcodedClusterVisit(1, visit_score);
+                            });
+    cluster.keyword_to_data_map = {{u"keyword", history::ClusterKeywordData()}};
+    all_clusters.push_back(cluster);
+  };
+
   // High scoring visits should always be above the fold.
-  history::Cluster cluster1;
-  cluster1.cluster_id = 4;
-  cluster1.visits.push_back(GetHardcodedClusterVisit(1, 1));
-  cluster1.visits.push_back(GetHardcodedClusterVisit(1, .8));
-  cluster1.visits.push_back(GetHardcodedClusterVisit(1, .5));
-  cluster1.visits.push_back(GetHardcodedClusterVisit(1, .5));
-  cluster1.visits.push_back(GetHardcodedClusterVisit(1, .5));
-  cluster1.keyword_to_data_map = {{u"keyword", history::ClusterKeywordData()}};
+  add_cluster(0, {1, .8, .5, .5, .5});
 
   // Low scoring visits should be above the fold only if they're one of top 4.
-  history::Cluster cluster2;
-  cluster2.cluster_id = 6;
-  cluster2.visits.push_back(GetHardcodedClusterVisit(1, .4));
-  cluster2.visits.push_back(GetHardcodedClusterVisit(1, .4));
-  cluster2.visits.push_back(GetHardcodedClusterVisit(1, .4));
-  cluster2.visits.push_back(GetHardcodedClusterVisit(1, .4));
-  cluster2.visits.push_back(GetHardcodedClusterVisit(1, .4));
-  cluster2.keyword_to_data_map = {{u"keyword", history::ClusterKeywordData()}};
+  add_cluster(1, {.4, .4, .4, .4, .4});
 
-  // 0 scoring visits should be above the fold only if they're 1st.
-  history::Cluster cluster3;
-  cluster3.cluster_id = 8;
-  cluster3.visits.push_back(GetHardcodedClusterVisit(1, 0.0));
-  cluster3.visits.push_back(GetHardcodedClusterVisit(1, 0.0));
-  cluster3.keyword_to_data_map = {{u"keyword", history::ClusterKeywordData()}};
+  // 0 scoring visits should never be above the fold.
+  add_cluster(2, {0, 0, .8, .8});
 
-  all_clusters.push_back(cluster1);
-  all_clusters.push_back(cluster2);
-  all_clusters.push_back(cluster3);
+  // Clusters with 1 visit after filtering should be removed.
+  add_cluster(3, {.8, 0});
+
+  // Clusters with 0 visits after filtering should be removed.
+  add_cluster(4, {0, 0});
+
+  // Hidden and Done visits can be culled out.
+  add_cluster(5, {1, 1, 1, 1});
+  all_clusters[5].visits[0].interaction_state =
+      history::ClusterVisit::InteractionState::kHidden;
+  all_clusters[5].visits[1].interaction_state =
+      history::ClusterVisit::InteractionState::kDone;
 
   {
-    Config config;
-    config.drop_hidden_visits = true;
-    SetConfigForTesting(config);
+    // Test the zero-query state.
+    base::HistogramTester histogram_tester;
 
     auto clusters = all_clusters;
-    HideAndCullLowScoringVisits(clusters);
+    CullVisitsThatShouldBeHidden(clusters, /*is_zero_query_state=*/true);
+    ASSERT_EQ(clusters.size(), 4u);
 
-    EXPECT_EQ(clusters[0].cluster_id, 4);
-    auto& visits = clusters[0].visits;
-    ASSERT_EQ(visits.size(), 5u);
-    EXPECT_EQ(visits[0].hidden, false);
-    EXPECT_EQ(visits[1].hidden, false);
-    EXPECT_EQ(visits[2].hidden, false);
-    EXPECT_EQ(visits[3].hidden, false);
-    EXPECT_EQ(visits[4].hidden, false);
+    histogram_tester.ExpectTotalCount(
+        "History.Clusters.Backend.NumVisitsBelowFold", 4);
+    histogram_tester.ExpectTotalCount(
+        "History.Clusters.Backend.NumVisitsBelowFoldPercentage", 4);
 
-    EXPECT_EQ(clusters[1].cluster_id, 6);
-    visits = clusters[1].visits;
-    ASSERT_EQ(visits.size(), 4u);
-    EXPECT_EQ(visits[0].hidden, false);
-    EXPECT_EQ(visits[1].hidden, false);
-    EXPECT_EQ(visits[2].hidden, false);
-    EXPECT_EQ(visits[3].hidden, false);
+    // No visits are hidden as they are all high-scoring.
+    EXPECT_EQ(clusters[0].cluster_id, 0);
+    EXPECT_EQ(clusters[0].visits.size(), 5u);
 
-    EXPECT_EQ(clusters[2].cluster_id, 8);
-    ASSERT_EQ(clusters[2].visits.size(), 1u);
-    EXPECT_EQ(clusters[2].visits[0].hidden, false);
+    // 1 visit could have been shown but is below the fold due to score.
+    EXPECT_EQ(clusters[1].cluster_id, 1);
+    EXPECT_EQ(clusters[1].visits.size(), 4u);
+
+    // No visits that should actually be shown are hidden.
+    EXPECT_EQ(clusters[2].cluster_id, 2);
+    EXPECT_EQ(clusters[2].visits.size(), 2u);
+
+    // No visits that should actually be shown are hidden.
+    EXPECT_EQ(clusters[3].cluster_id, 5);
+    EXPECT_EQ(clusters[3].visits.size(), 2u);
+
+    // Clusters index 0, 2, and 3.
+    histogram_tester.ExpectBucketCount(
+        "History.Clusters.Backend.NumVisitsBelowFold", 0, 3);
+    histogram_tester.ExpectBucketCount(
+        "History.Clusters.Backend.NumVisitsBelowFoldPercentage", 0, 3);
+
+    // Cluster index 1.
+    histogram_tester.ExpectBucketCount(
+        "History.Clusters.Backend.NumVisitsBelowFold", 1, 1);
+    histogram_tester.ExpectBucketCount(
+        "History.Clusters.Backend.NumVisitsBelowFoldPercentage", 20, 1);
   }
 
   {
-    Config config;
-    config.drop_hidden_visits = false;
-    SetConfigForTesting(config);
-
+    base::HistogramTester histogram_tester;
+    // Test the queried state with a higher threshold of required visits.
     auto clusters = all_clusters;
-    HideAndCullLowScoringVisits(clusters);
+    CullVisitsThatShouldBeHidden(clusters, /*is_zero_query_state=*/false);
 
-    EXPECT_EQ(clusters[0].cluster_id, 4);
-    EXPECT_EQ(clusters[0].visits.size(), 5u);
+    histogram_tester.ExpectTotalCount(
+        "History.Clusters.Backend.NumVisitsBelowFold", 5);
+    histogram_tester.ExpectTotalCount(
+        "History.Clusters.Backend.NumVisitsBelowFoldPercentage", 5);
 
-    EXPECT_EQ(clusters[1].cluster_id, 6);
-    const auto& visits = clusters[1].visits;
-    ASSERT_EQ(visits.size(), 5u);
-    EXPECT_EQ(visits[0].hidden, false);
-    EXPECT_EQ(visits[1].hidden, false);
-    EXPECT_EQ(visits[2].hidden, false);
-    EXPECT_EQ(visits[3].hidden, false);
-    EXPECT_EQ(visits[4].hidden, true);
+    // Cluster id = 3, with 1 visit after filtering should no longer be removed.
+    ASSERT_EQ(clusters.size(), 5u);
+    EXPECT_EQ(clusters[3].cluster_id, 3);
+    EXPECT_EQ(clusters[3].visits.size(), 1u);
+    // Cluster id = 5, with a Done visit, should have that Done visit visible.
+    EXPECT_EQ(clusters[4].cluster_id, 5);
+    EXPECT_EQ(clusters[4].visits.size(), 3u);
 
-    EXPECT_EQ(clusters[2].cluster_id, 8);
-    ASSERT_EQ(clusters[2].visits.size(), 2u);
-    EXPECT_EQ(clusters[2].visits[0].hidden, false);
-    EXPECT_EQ(clusters[2].visits[1].hidden, true);
+    // Clusters 0, 2, 3, and 4.
+    histogram_tester.ExpectBucketCount(
+        "History.Clusters.Backend.NumVisitsBelowFold", 0, 4);
+    histogram_tester.ExpectBucketCount(
+        "History.Clusters.Backend.NumVisitsBelowFoldPercentage", 0, 4);
+
+    // Cluster 1.
+    histogram_tester.ExpectBucketCount(
+        "History.Clusters.Backend.NumVisitsBelowFold", 1, 1);
+    histogram_tester.ExpectBucketCount(
+        "History.Clusters.Backend.NumVisitsBelowFoldPercentage", 20, 1);
   }
 }
 
@@ -397,9 +390,109 @@ TEST(HistoryClustersUtilTest, CoalesceRelatedSearches) {
   clusters.push_back(cluster);
 
   CoalesceRelatedSearches(clusters);
-  EXPECT_THAT(clusters[0].related_searches,
-              testing::ElementsAre("search1", "search2", "search3", "search4",
-                                   "search5"));
+  EXPECT_THAT(
+      clusters[0].related_searches,
+      ElementsAre("search1", "search2", "search3", "search4", "search5"));
+}
+
+// Verifies crbug.com/1426657.
+TEST(HistoryClustersUtilTest,
+     CoalesceRelatedSearchesHandlesMultipleClustersTruncation) {
+  history::ClusterVisit visit = GetHardcodedClusterVisit(1);
+  visit.annotated_visit.content_annotations.related_searches = {
+      "search1", "search2", "search3", "search4",
+      "search5", "search6", "search7"};
+
+  history::Cluster cluster;
+  cluster.visits = {visit};
+
+  // Deliberately push two instances of the same cluster into the vector.
+  std::vector<history::Cluster> clusters;
+  clusters.push_back(cluster);
+  clusters.push_back(cluster);
+
+  // Verify that we correctly coalesce searches for BOTH clusters.
+  CoalesceRelatedSearches(clusters);
+  EXPECT_THAT(
+      clusters[0].related_searches,
+      ElementsAre("search1", "search2", "search3", "search4", "search5"));
+  EXPECT_THAT(
+      clusters[1].related_searches,
+      ElementsAre("search1", "search2", "search3", "search4", "search5"));
+}
+
+TEST(HistoryClustersUtilTest, SortClusters) {
+  std::vector<history::Cluster> clusters;
+  // This first cluster is meant to validate that the higher scoring "visit 1"
+  // gets sorted to the top, even though "visit 1" is older than "visit 2".
+  // It's to validate the within-cluster sorting.
+  clusters.push_back(history::Cluster(0,
+                                      {
+                                          GetHardcodedClusterVisit(2, 0.5),
+                                          GetHardcodedClusterVisit(1, 0.9),
+                                      },
+                                      {}));
+  // The second cluster is lower scoring, but newer, because the top visit is
+  // newer. It should be sorted above the first cluster because of reverse
+  // chronological between-cluster sorting.
+  clusters.push_back(history::Cluster(0,
+                                      {
+                                          GetHardcodedClusterVisit(3, 0.1),
+                                      },
+                                      {}));
+
+  SortClusters(&clusters);
+
+  ASSERT_EQ(clusters.size(), 2u);
+
+  auto& visits = clusters[0].visits;
+  ASSERT_EQ(visits.size(), 1u);
+  EXPECT_FLOAT_EQ(visits[0].score, 0.1);
+
+  visits = clusters[1].visits;
+  ASSERT_EQ(visits.size(), 2u);
+  EXPECT_FLOAT_EQ(visits[0].score, 0.9);
+  EXPECT_FLOAT_EQ(visits[1].score, 0.5);
+}
+
+TEST(HistoryClustersUtilTest, IsShownVisitCandidateZeroScore) {
+  history::ClusterVisit cluster_visit = testing::CreateClusterVisit(
+      testing::CreateDefaultAnnotatedVisit(2, GURL("https://two.com/"),
+                                           base::Time::FromTimeT(10)),
+      absl::nullopt, 0.0);
+
+  ASSERT_FALSE(IsShownVisitCandidate(cluster_visit));
+}
+
+TEST(HistoryClustersUtilTest, IsShownVisitCandidateHidden) {
+  history::ClusterVisit cluster_visit = testing::CreateClusterVisit(
+      testing::CreateDefaultAnnotatedVisit(2, GURL("https://two.com/"),
+                                           base::Time::FromTimeT(10)),
+      absl::nullopt, 1.0);
+  cluster_visit.interaction_state =
+      history::ClusterVisit::InteractionState::kHidden;
+
+  ASSERT_FALSE(IsShownVisitCandidate(cluster_visit));
+}
+
+TEST(HistoryClustersUtilTest, IsShownVisitCandidateNoTitle) {
+  history::ClusterVisit cluster_visit = testing::CreateClusterVisit(
+      testing::CreateDefaultAnnotatedVisit(2, GURL("https://two.com/"),
+                                           base::Time::FromTimeT(10)),
+      absl::nullopt, 0.0);
+  cluster_visit.annotated_visit.url_row.set_title(u"");
+
+  ASSERT_FALSE(IsShownVisitCandidate(cluster_visit));
+}
+
+TEST(HistoryClustersUtilTest, IsShownVisitCandidate) {
+  history::ClusterVisit cluster_visit = testing::CreateClusterVisit(
+      testing::CreateDefaultAnnotatedVisit(2, GURL("https://two.com/"),
+                                           base::Time::FromTimeT(10)),
+      absl::nullopt, 1.0);
+  cluster_visit.annotated_visit.url_row.set_title(u"sometitle");
+
+  ASSERT_TRUE(IsShownVisitCandidate(cluster_visit));
 }
 
 }  // namespace

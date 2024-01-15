@@ -2,7 +2,7 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-assert(is_mac)
+assert(is_apple)
 
 import("//testing/test.gni")
 
@@ -14,14 +14,9 @@ component("metal_util") {
   sources = [
     "device.h",
     "device.mm",
-    "device_removal.h",
-    "device_removal.mm",
     "hdr_copier_layer.h",
     "hdr_copier_layer.mm",
     "metal_util_export.h",
-    "test_shader.h",
-    "test_shader.mm",
-    "types.h",
   ]
 
   deps = [
@@ -32,7 +27,6 @@ component("metal_util") {
   ]
 
   frameworks = [
-    "Cocoa.framework",
     "IOSurface.framework",
     "QuartzCore.framework",
   ]
@@ -41,14 +35,12 @@ component("metal_util") {
     "Metal.framework",
     "MetalKit.framework",
   ]
-}
 
-source_set("unit_tests") {
-  testonly = true
-  sources = [ "test_shader_unittest.cc" ]
-  deps = [
-    ":metal_util",
-    "//base",
-    "//testing/gtest",
-  ]
+  if (is_mac) {
+    sources += [
+      "device_removal.h",
+      "device_removal.mm",
+    ]
+    frameworks += [ "Cocoa.framework" ]
+  }
 }

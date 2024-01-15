@@ -13,26 +13,29 @@ Application
 Storage
  Local Storage
   http://127.0.0.1:8000/
-  http://devtools.oopif.test:8000
+  http://devtools.oopif.test:8000/^0http://127.0.0.1
  Session Storage
   http://127.0.0.1:8000/
-  http://devtools.oopif.test:8000
+  http://devtools.oopif.test:8000/^0http://127.0.0.1
  IndexedDB
-  Database-iframe - http://devtools.oopif.test:8000
+  Database-iframe
    Database-iframe
-  Database-main-frame - http://127.0.0.1:8000
+  Database-main-frame
  Web SQL
  Cookies
   http://127.0.0.1:8000
   http://devtools.oopif.test:8000
- Trust Tokens
+ Private State Tokens
  Interest Groups
-Cache
+ Shared Storage
+  http://127.0.0.1:8000
+  http://devtools.oopif.test:8000
  Cache Storage
- Back/forward cache
 Background Services
+ Back/forward cache
  Background Fetch
  Background Sync
+ Bounce Tracking Mitigations
  Notifications
  Payment Handler
  Periodic Background Sync
@@ -60,19 +63,21 @@ Storage
  Session Storage
   http://127.0.0.1:8000/
  IndexedDB
-  Database-main-frame - http://127.0.0.1:8000
+  Database-main-frame
  Web SQL
  Cookies
   http://127.0.0.1:8000
   http://devtools.oopif.test:8000
- Trust Tokens
+ Private State Tokens
  Interest Groups
-Cache
+ Shared Storage
+  http://127.0.0.1:8000
  Cache Storage
- Back/forward cache
 Background Services
+ Back/forward cache
  Background Fetch
  Background Sync
+ Bounce Tracking Mitigations
  Notifications
  Payment Handler
  Periodic Background Sync
@@ -95,26 +100,29 @@ Application
 Storage
  Local Storage
   http://127.0.0.1:8000/
-  http://devtools.oopif.test:8000
+  http://devtools.oopif.test:8000/^0http://127.0.0.1
  Session Storage
   http://127.0.0.1:8000/
-  http://devtools.oopif.test:8000
+  http://devtools.oopif.test:8000/^0http://127.0.0.1
  IndexedDB
-  Database-main-frame - http://127.0.0.1:8000
-  Database-iframe - http://devtools.oopif.test:8000
+  Database-main-frame
+  Database-iframe
    Database-iframe
  Web SQL
  Cookies
   http://127.0.0.1:8000
   http://devtools.oopif.test:8000
- Trust Tokens
+ Private State Tokens
  Interest Groups
-Cache
+ Shared Storage
+  http://127.0.0.1:8000
+  http://devtools.oopif.test:8000
  Cache Storage
- Back/forward cache
 Background Services
+ Back/forward cache
  Background Fetch
  Background Sync
+ Bounce Tracking Mitigations
  Notifications
  Payment Handler
  Periodic Background Sync

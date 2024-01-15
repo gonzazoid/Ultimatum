@@ -13,7 +13,7 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "net/base/net_export.h"
 #include "net/cookies/canonical_cookie.h"
 #include "net/cookies/cookie_access_delegate.h"
@@ -169,20 +169,14 @@ class NET_EXPORT CookieStore {
     return cookie_access_delegate_.get();
   }
 
-  // Will convert a site's partitioned cookies into unpartitioned cookies. This
-  // may result in multiple cookies which have the same (partition_key, name,
-  // host_key, path), which violates the database's unique constraint. The
-  // algorithm we use to coalesce the cookies into a single unpartitioned cookie
-  // is the following:
-  //
-  // 1.  If one of the cookies has no partition key (i.e. it is unpartitioned)
-  //     choose this cookie.
-  //
-  // 2.  Choose the partitioned cookie with the most recent last_access_time.
-  //
-  // TODO(crbug.com/1296161): Delete this when the partitioned cookies Origin
-  // Trial ends.
-  virtual void ConvertPartitionedCookiesToUnpartitioned(const GURL& url) {}
+  // Returns a boolean indicating whether the cookie `site` has any cookie
+  // in another partition other than the `cookie_partition_key` supplied.
+  // Will return nullopt if cookies have not finished loading.
+  // If the partition key is null, the method assumes it is because partitioned
+  // cookies are disabled.
+  virtual absl::optional<bool> SiteHasCookieInOtherPartition(
+      const net::SchemefulSite& site,
+      const absl::optional<CookiePartitionKey>& cookie_partition_key) const;
 
  private:
   // Used to determine whether a particular cookie should be subject to legacy

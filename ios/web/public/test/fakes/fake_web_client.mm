@@ -9,15 +9,11 @@
 #import "base/strings/sys_string_conversions.h"
 #import "ios/web/common/uikit_ui_util.h"
 #import "ios/web/public/test/error_test_util.h"
-#import "ios/web/public/test/js_test_util.h"
+#import "ios/web/public/test/fakes/crw_fake_find_session.h"
 #import "ios/web/public/thread/web_task_traits.h"
 #import "ios/web/test/test_url_constants.h"
 #import "ui/base/resource/resource_bundle.h"
 #import "url/gurl.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace web {
 
@@ -32,10 +28,6 @@ void FakeWebClient::AddAdditionalSchemes(Schemes* schemes) const {
 
 bool FakeWebClient::IsAppSpecificURL(const GURL& url) const {
   return url.SchemeIs(kTestWebUIScheme) || url.SchemeIs(kTestAppSpecificScheme);
-}
-
-std::u16string FakeWebClient::GetPluginNotSupportedText() const {
-  return plugin_not_supported_text_;
 }
 
 std::string FakeWebClient::GetUserAgent(UserAgentType type) const {
@@ -57,16 +49,6 @@ std::vector<JavaScriptFeature*> FakeWebClient::GetJavaScriptFeatures(
   return java_script_features_;
 }
 
-NSString* FakeWebClient::GetDocumentStartScriptForMainFrame(
-    BrowserState* browser_state) const {
-  return early_page_script_ ? early_page_script_ : @"";
-}
-
-NSString* FakeWebClient::GetDocumentStartScriptForAllFrames(
-    BrowserState* browser_state) const {
-  return web::test::GetPageScript(@"cookie_test");
-}
-
 void FakeWebClient::SetPluginNotSupportedText(const std::u16string& text) {
   plugin_not_supported_text_ = text;
 }
@@ -76,17 +58,13 @@ void FakeWebClient::SetJavaScriptFeatures(
   java_script_features_ = features;
 }
 
-void FakeWebClient::SetEarlyPageScript(NSString* page_script) {
-  early_page_script_ = [page_script copy];
-}
-
 void FakeWebClient::PrepareErrorPage(
     WebState* web_state,
     const GURL& url,
     NSError* error,
     bool is_post,
     bool is_off_the_record,
-    const absl::optional<net::SSLInfo>& info,
+    const std::optional<net::SSLInfo>& info,
     int64_t navigation_id,
     base::OnceCallback<void(NSString*)> callback) {
   net::CertStatus cert_status = info.has_value() ? info.value().cert_status : 0;
@@ -96,6 +74,10 @@ void FakeWebClient::PrepareErrorPage(
 
 UIView* FakeWebClient::GetWindowedContainer() {
   return GetAnyKeyWindow().rootViewController.view;
+}
+
+bool FakeWebClient::EnableWebInspector(web::BrowserState* browser_state) const {
+  return true;
 }
 
 UserAgentType FakeWebClient::GetDefaultUserAgent(web::WebState* web_state,

@@ -4,7 +4,6 @@
 
 #include "chromeos/ash/components/proximity_auth/proximity_auth_system.h"
 
-#include "ash/constants/ash_features.h"
 #include "chromeos/ash/components/multidevice/logging/logging.h"
 #include "chromeos/ash/components/proximity_auth/proximity_auth_client.h"
 #include "chromeos/ash/components/proximity_auth/remote_device_life_cycle_impl.h"
@@ -14,13 +13,11 @@
 namespace proximity_auth {
 
 ProximityAuthSystem::ProximityAuthSystem(
-    ScreenlockType screenlock_type,
     ProximityAuthClient* proximity_auth_client,
     ash::secure_channel::SecureChannelClient* secure_channel_client)
     : secure_channel_client_(secure_channel_client),
       unlock_manager_(
-          std::make_unique<UnlockManagerImpl>(screenlock_type,
-                                              proximity_auth_client)) {}
+          std::make_unique<UnlockManagerImpl>(proximity_auth_client)) {}
 
 ProximityAuthSystem::ProximityAuthSystem(
     ash::secure_channel::SecureChannelClient* secure_channel_client,
@@ -55,7 +52,7 @@ void ProximityAuthSystem::Stop() {
 void ProximityAuthSystem::SetRemoteDevicesForUser(
     const AccountId& account_id,
     const ash::multidevice::RemoteDeviceRefList& remote_devices,
-    absl::optional<ash::multidevice::RemoteDeviceRef> local_device) {
+    std::optional<ash::multidevice::RemoteDeviceRef> local_device) {
   PA_LOG(VERBOSE) << "Setting devices for user " << account_id.Serialize()
                   << ". Remote device count: " << remote_devices.size()
                   << ", Local device: ["
@@ -79,9 +76,11 @@ void ProximityAuthSystem::SetRemoteDevicesForUser(
 ash::multidevice::RemoteDeviceRefList
 ProximityAuthSystem::GetRemoteDevicesForUser(
     const AccountId& account_id) const {
-  if (remote_devices_map_.find(account_id) == remote_devices_map_.end())
+  auto it = remote_devices_map_.find(account_id);
+  if (it == remote_devices_map_.end()) {
     return ash::multidevice::RemoteDeviceRefList();
-  return remote_devices_map_.at(account_id);
+  }
+  return it->second;
 }
 
 void ProximityAuthSystem::OnAuthAttempted() {
@@ -92,42 +91,22 @@ void ProximityAuthSystem::OnSuspend() {
   PA_LOG(INFO) << "Preparing for device suspension.";
   DCHECK(!suspended_);
   suspended_ = true;
-  OnSuspendOrScreenOffChange();
+  unlock_manager_->SetRemoteDeviceLifeCycle(nullptr);
+  remote_device_life_cycle_.reset();
 }
 
 void ProximityAuthSystem::OnSuspendDone() {
   PA_LOG(INFO) << "Device resumed from suspension.";
   DCHECK(suspended_);
   suspended_ = false;
-  OnSuspendOrScreenOffChange();
-}
 
-void ProximityAuthSystem::OnScreenOff() {
-  if (!base::FeatureList::IsEnabled(
-          ash::features::kSmartLockBluetoothScreenOffFix)) {
-    return;
+  if (!ScreenlockBridge::Get()->IsLocked()) {
+    PA_LOG(INFO) << "Suspend done, but no lock screen.";
+  } else if (!started_) {
+    PA_LOG(INFO) << "Suspend done, but not system started.";
+  } else {
+    OnFocusedUserChanged(ScreenlockBridge::Get()->focused_account_id());
   }
-
-  PA_LOG(INFO) << "Screen is off.";
-  DCHECK(!screen_off_);
-  screen_off_ = true;
-  OnSuspendOrScreenOffChange();
-}
-
-void ProximityAuthSystem::OnScreenOffDone() {
-  if (!base::FeatureList::IsEnabled(
-          ash::features::kSmartLockBluetoothScreenOffFix)) {
-    return;
-  }
-
-  // It's possible to end up here when the screen is dimmed and the screen_off_
-  // boolean was not true, in which case we can return early.
-  if (!screen_off_)
-    return;
-
-  PA_LOG(INFO) << "Screen is on.";
-  screen_off_ = false;
-  OnSuspendOrScreenOffChange();
 }
 
 void ProximityAuthSystem::CancelConnectionAttempt() {
@@ -137,21 +116,19 @@ void ProximityAuthSystem::CancelConnectionAttempt() {
 std::unique_ptr<RemoteDeviceLifeCycle>
 ProximityAuthSystem::CreateRemoteDeviceLifeCycle(
     ash::multidevice::RemoteDeviceRef remote_device,
-    absl::optional<ash::multidevice::RemoteDeviceRef> local_device) {
+    std::optional<ash::multidevice::RemoteDeviceRef> local_device) {
   return std::make_unique<RemoteDeviceLifeCycleImpl>(
       remote_device, local_device, secure_channel_client_);
 }
 
-void ProximityAuthSystem::OnScreenDidLock(
-    ScreenlockBridge::LockHandler::ScreenType screen_type) {
+void ProximityAuthSystem::OnScreenDidLock() {
   const AccountId& focused_account_id =
       ScreenlockBridge::Get()->focused_account_id();
   if (focused_account_id.is_valid())
     OnFocusedUserChanged(focused_account_id);
 }
 
-void ProximityAuthSystem::OnScreenDidUnlock(
-    ScreenlockBridge::LockHandler::ScreenType screen_type) {
+void ProximityAuthSystem::OnScreenDidUnlock() {
   unlock_manager_->SetRemoteDeviceLifeCycle(nullptr);
   remote_device_life_cycle_.reset();
 }
@@ -171,13 +148,15 @@ void ProximityAuthSystem::OnFocusedUserChanged(const AccountId& account_id) {
     }
   }
 
-  if (remote_devices_map_.find(account_id) == remote_devices_map_.end() ||
-      remote_devices_map_[account_id].size() == 0) {
+  auto remote_devices_it = remote_devices_map_.find(account_id);
+  if (remote_devices_it == remote_devices_map_.end() ||
+      remote_devices_it->second.empty()) {
     PA_LOG(INFO) << "User " << account_id.Serialize()
                  << " does not have a Smart Lock host device.";
     return;
   }
-  if (local_device_map_.find(account_id) == local_device_map_.end()) {
+  auto local_device_it = local_device_map_.find(account_id);
+  if (local_device_it == local_device_map_.end()) {
     PA_LOG(INFO) << "User " << account_id.Serialize()
                  << " does not have a local device.";
     return;
@@ -186,12 +165,12 @@ void ProximityAuthSystem::OnFocusedUserChanged(const AccountId& account_id) {
   // TODO(tengs): We currently assume each user has only one RemoteDevice, so we
   // can simply take the first item in the list.
   ash::multidevice::RemoteDeviceRef remote_device =
-      remote_devices_map_[account_id][0];
+      remote_devices_it->second[0];
 
-  absl::optional<ash::multidevice::RemoteDeviceRef> local_device;
-  local_device = local_device_map_.at(account_id);
+  std::optional<ash::multidevice::RemoteDeviceRef> local_device;
+  local_device = local_device_it->second;
 
-  if (!suspended_ && !screen_off_) {
+  if (!suspended_) {
     PA_LOG(INFO) << "Creating RemoteDeviceLifeCycle for focused user: "
                  << account_id.Serialize();
     remote_device_life_cycle_ =
@@ -209,22 +188,6 @@ std::string ProximityAuthSystem::GetLastRemoteStatusUnlockForLogging() {
     return unlock_manager_->GetLastRemoteStatusUnlockForLogging();
   }
   return std::string();
-}
-
-void ProximityAuthSystem::OnSuspendOrScreenOffChange() {
-  if (suspended_ || screen_off_) {
-    unlock_manager_->SetRemoteDeviceLifeCycle(nullptr);
-    remote_device_life_cycle_.reset();
-    return;
-  }
-
-  if (!ScreenlockBridge::Get()->IsLocked()) {
-    PA_LOG(INFO) << "System resumed, but no lock screen.";
-  } else if (!started_) {
-    PA_LOG(INFO) << "System resumed, but ProximityAuthSystem is stopped.";
-  } else {
-    OnFocusedUserChanged(ScreenlockBridge::Get()->focused_account_id());
-  }
 }
 
 }  // namespace proximity_auth

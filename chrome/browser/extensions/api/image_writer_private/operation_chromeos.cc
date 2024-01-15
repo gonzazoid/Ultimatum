@@ -5,7 +5,7 @@
 #include <stdint.h>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "chrome/browser/extensions/api/image_writer_private/error_constants.h"
 #include "chrome/browser/extensions/api/image_writer_private/operation.h"
 #include "chromeos/ash/components/dbus/image_burner/image_burner_client.h"
@@ -37,7 +37,7 @@ void ClearImageBurner() {
 
 void Operation::Write(base::OnceClosure continuation) {
   DCHECK(IsRunningInCorrectSequence());
-  SetStage(image_writer_api::STAGE_WRITE);
+  SetStage(image_writer_api::Stage::kWrite);
 
   // Note this has to be run on the FILE thread to avoid concurrent access.
   AddCleanUpFunction(base::BindOnce(&ClearImageBurner));

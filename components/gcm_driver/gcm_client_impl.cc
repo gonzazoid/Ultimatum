@@ -9,8 +9,8 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
@@ -67,15 +67,6 @@ enum MessageType {
   DATA_MESSAGE,      // Regular data message.
   DELETED_MESSAGES,  // Messages were deleted on the server.
   SEND_ERROR,        // Error sending a message.
-};
-
-enum ResetStoreError {
-  DESTROYING_STORE_FAILED,
-  INFINITE_STORE_RESET,
-  // NOTE: always keep this entry at the end. Add new value only immediately
-  // above this line. Make sure to update the corresponding histogram enum
-  // accordingly.
-  RESET_STORE_ERROR_COUNT
 };
 
 const int kMaxRegistrationRetries = 5;
@@ -212,10 +203,6 @@ bool InstanceIDUsesSubtypeForAppId(const std::string& app_id) {
   return !crx_file::id_util::IdIsValid(app_id);
 }
 
-void RecordResetStoreErrorToUMA(ResetStoreError error) {
-  UMA_HISTOGRAM_ENUMERATION("GCM.ResetStore", error, RESET_STORE_ERROR_COUNT);
-}
-
 }  // namespace
 
 void RecordRegistrationRequestToUMA(gcm::RegistrationCacheStatus status) {
@@ -292,7 +279,6 @@ GCMClientImpl::~GCMClientImpl() = default;
 void GCMClientImpl::Initialize(
     const ChromeBuildInfo& chrome_build_info,
     const base::FilePath& path,
-    bool remove_account_mappings_with_email_key,
     const scoped_refptr<base::SequencedTaskRunner>& blocking_task_runner,
     scoped_refptr<base::SequencedTaskRunner> io_task_runner,
     base::RepeatingCallback<void(
@@ -311,9 +297,8 @@ void GCMClientImpl::Initialize(
   url_loader_factory_ = url_loader_factory;
   network_connection_tracker_ = network_connection_tracker;
   chrome_build_info_ = chrome_build_info;
-  gcm_store_ = std::make_unique<GCMStoreImpl>(
-      path, remove_account_mappings_with_email_key, blocking_task_runner,
-      std::move(encryptor));
+  gcm_store_ = std::make_unique<GCMStoreImpl>(path, blocking_task_runner,
+                                              std::move(encryptor));
   delegate_ = delegate;
   io_task_runner_ = std::move(io_task_runner);
   recorder_.SetDelegate(this);
@@ -530,7 +515,6 @@ void GCMClientImpl::ResetStore() {
   // If already being reset, don't do it again. We want to prevent from
   // resetting and loading from the store again and again.
   if (gcm_store_reset_) {
-    RecordResetStoreErrorToUMA(INFINITE_STORE_RESET);
     state_ = UNINITIALIZED;
     return;
   }
@@ -677,14 +661,10 @@ void GCMClientImpl::StartCheckin() {
   ToCheckinProtoVersion(chrome_build_info_, &chrome_build_proto);
 
   std::map<std::string, std::string> empty_account_tokens;
-  bool include_account_tokens = base::FeatureList::IsEnabled(
-      features::kGCMIncludeAccountTokensInCheckinRequest);
 
   CheckinRequest::RequestInfo request_info(
       device_checkin_info_.android_id, device_checkin_info_.secret,
-      include_account_tokens ? device_checkin_info_.account_tokens
-                             : empty_account_tokens,
-      gservices_settings_.digest(), chrome_build_proto);
+      empty_account_tokens, gservices_settings_.digest(), chrome_build_proto);
   checkin_request_ = std::make_unique<CheckinRequest>(
       gservices_settings_.GetCheckinURL(), request_info, GetGCMBackoffPolicy(),
       base::BindOnce(&GCMClientImpl::OnCheckinCompleted,
@@ -807,7 +787,6 @@ void GCMClientImpl::DestroyStoreCallback(bool success) {
 
   if (!success) {
     LOG(ERROR) << "Failed to destroy GCM store";
-    RecordResetStoreErrorToUMA(DESTROYING_STORE_FAILED);
     state_ = UNINITIALIZED;
     return;
   }
@@ -825,7 +804,6 @@ void GCMClientImpl::ResetStoreCallback(bool success) {
 
   if (!success) {
     LOG(ERROR) << "Failed to reset GCM store";
-    RecordResetStoreErrorToUMA(DESTROYING_STORE_FAILED);
     state_ = UNINITIALIZED;
     return;
   }
@@ -1187,7 +1165,6 @@ void GCMClientImpl::OnUnregisterCompleted(
 
 void GCMClientImpl::OnGCMStoreDestroyed(bool success) {
   DLOG_IF(ERROR, !success) << "GCM store failed to be destroyed!";
-  UMA_HISTOGRAM_BOOLEAN("GCM.StoreDestroySucceeded", success);
 }
 
 void GCMClientImpl::Send(const std::string& app_id,
@@ -1415,13 +1392,6 @@ void GCMClientImpl::HandleIncomingDataMessage(
     bool was_subtype,
     const mcs_proto::DataMessageStanza& data_message_stanza,
     MessageData& message_data) {
-  UMA_HISTOGRAM_BOOLEAN("GCM.DataMessageReceived", true);
-
-  bool has_collapse_key =
-      data_message_stanza.has_token() && !data_message_stanza.token().empty();
-  UMA_HISTOGRAM_BOOLEAN("GCM.DataMessageReceivedHasCollapseKey",
-                        has_collapse_key);
-
   recorder_.RecordDataMessageReceived(app_id, data_message_stanza.from(),
                                       data_message_stanza.ByteSize(),
                                       GCMStatsRecorder::DATA_MESSAGE);
@@ -1447,7 +1417,6 @@ void GCMClientImpl::HandleIncomingDeletedMessages(
     if (!base::StringToInt(count_iter->second, &deleted_count))
       deleted_count = 0;
   }
-  UMA_HISTOGRAM_COUNTS_1000("GCM.DeletedMessagesReceived", deleted_count);
 
   recorder_.RecordDataMessageReceived(app_id, data_message_stanza.from(),
                                       data_message_stanza.ByteSize(),

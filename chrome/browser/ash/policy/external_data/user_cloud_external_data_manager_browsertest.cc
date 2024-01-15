@@ -5,13 +5,13 @@
 #include <memory>
 #include <string>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/json/json_writer.h"
 #include "base/path_service.h"
-#include "base/run_loop.h"
+#include "base/test/test_future.h"
 #include "base/values.h"
 #include "build/build_config.h"
 #include "chrome/browser/ash/policy/core/user_cloud_policy_manager_ash.h"
@@ -47,7 +47,7 @@ const char kExternalDataPath[] = "policy/blank.html";
 class UserCloudExternalDataManagerTest : public LoginPolicyTestBase {
  protected:
   void SetUp() override {
-    fake_gaia_.set_initialize_fake_merge_session(false);
+    fake_gaia_.set_initialize_configuration(false);
 
     LoginPolicyTestBase::SetUp();
   }
@@ -68,7 +68,7 @@ class UserCloudExternalDataManagerTest : public LoginPolicyTestBase {
   }
 
   std::string external_data_;
-  std::unique_ptr<base::DictionaryValue> metadata_;
+  base::Value::Dict metadata_;
 };
 
 IN_PROC_BROWSER_TEST_F(UserCloudExternalDataManagerTest, FetchExternalData) {
@@ -81,7 +81,7 @@ IN_PROC_BROWSER_TEST_F(UserCloudExternalDataManagerTest, FetchExternalData) {
   ASSERT_TRUE(profile);
 
   std::string value;
-  ASSERT_TRUE(base::JSONWriter::Write(*metadata_, &value));
+  ASSERT_TRUE(base::JSONWriter::Write(metadata_, &value));
   enterprise_management::CloudPolicySettings policy;
   policy.mutable_wallpaperimage()->set_value(value);
   user_policy_helper()->SetPolicyAndWait(policy, profile);
@@ -94,29 +94,26 @@ IN_PROC_BROWSER_TEST_F(UserCloudExternalDataManagerTest, FetchExternalData) {
   ASSERT_TRUE(policy_connector);
 
   {
-    base::RunLoop refresh_loop;
+    base::test::TestFuture<void> refresh_policy_future;
     policy_connector->policy_service()->RefreshPolicies(
-        refresh_loop.QuitWhenIdleClosure());
-    refresh_loop.Run();
+        refresh_policy_future.GetCallback(), PolicyFetchReason::kTest);
+    ASSERT_TRUE(refresh_policy_future.Wait())
+        << "RefreshPolicies did not invoke the finished callback.";
   }
 
   const PolicyMap& policies = policy_connector->policy_service()->GetPolicies(
       PolicyNamespace(POLICY_DOMAIN_CHROME, std::string()));
   const PolicyMap::Entry* policy_entry = policies.Get(key::kWallpaperImage);
   ASSERT_TRUE(policy_entry);
-  EXPECT_EQ(*metadata_, *policy_entry->value(base::Value::Type::DICT));
+  EXPECT_EQ(metadata_, *policy_entry->value(base::Value::Type::DICT));
   ASSERT_TRUE(policy_entry->external_data_fetcher);
 
-  base::RunLoop run_loop;
-  std::unique_ptr<std::string> fetched_external_data;
-  base::FilePath file_path;
-  policy_entry->external_data_fetcher->Fetch(
-      base::BindOnce(&test::ExternalDataFetchCallback, &fetched_external_data,
-                     &file_path, run_loop.QuitClosure()));
-  run_loop.Run();
-
-  ASSERT_TRUE(fetched_external_data);
-  EXPECT_EQ(external_data_, *fetched_external_data);
+  base::test::TestFuture<std::unique_ptr<std::string>, const base::FilePath&>
+      fetch_data_future;
+  policy_entry->external_data_fetcher->Fetch(fetch_data_future.GetCallback());
+  ASSERT_TRUE(fetch_data_future.Get<std::unique_ptr<std::string>>());
+  EXPECT_EQ(external_data_,
+            *fetch_data_future.Get<std::unique_ptr<std::string>>());
 }
 
 }  // namespace policy

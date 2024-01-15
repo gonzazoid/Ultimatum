@@ -6,8 +6,8 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/strings/utf_string_conversions.h"
@@ -64,7 +64,9 @@ enum Event {
 class TestProxyResolverFactory : public ProxyResolverV8TracingFactory {
  public:
   struct PendingRequest {
-    raw_ptr<std::unique_ptr<ProxyResolverV8Tracing>> resolver;
+    raw_ptr<std::unique_ptr<ProxyResolverV8Tracing>,
+            AcrossTasksDanglingUntriaged>
+        resolver;
     net::CompletionOnceCallback callback;
   };
 

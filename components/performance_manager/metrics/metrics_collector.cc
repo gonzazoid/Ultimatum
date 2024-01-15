@@ -81,32 +81,14 @@ class UkmCollectionStateHolder
 // navigation is committed.
 const base::TimeDelta kMetricsReportDelayTimeout = base::Minutes(5);
 
-const char kTabFromBackgroundedToFirstFaviconUpdatedUMA[] =
-    "TabManager.Heuristics.FromBackgroundedToFirstFaviconUpdated";
-const char kTabFromBackgroundedToFirstTitleUpdatedUMA[] =
-    "TabManager.Heuristics.FromBackgroundedToFirstTitleUpdated";
-const char kTabFromBackgroundedToFirstNonPersistentNotificationCreatedUMA[] =
-    "TabManager.Heuristics."
-    "FromBackgroundedToFirstNonPersistentNotificationCreated";
+const char kTabNavigationWithSameOriginTabHistogramName[] =
+    "Tabs.NewNavigationWithSameOriginTab";
 
 const int kDefaultFrequencyUkmEQTReported = 5u;
 
 MetricsCollector::MetricsCollector() = default;
 
 MetricsCollector::~MetricsCollector() = default;
-
-void MetricsCollector::OnNonPersistentNotificationCreated(
-    const FrameNode* frame_node) {
-  // Only record metrics while a page is backgrounded.
-  auto* page_node = frame_node->GetPageNode();
-  if (page_node->IsVisible() || !ShouldReportMetrics(page_node))
-    return;
-
-  auto* record = GetMetricsReportRecord(page_node);
-  record->first_non_persistent_notification_created.OnSignalReceived(
-      frame_node->IsMainFrame(), page_node->GetTimeSinceLastVisibilityChange(),
-      graph_->GetUkmRecorder());
-}
 
 void MetricsCollector::OnPassedToGraph(Graph* graph) {
   graph_ = graph;
@@ -118,28 +100,35 @@ void MetricsCollector::OnTakenFromGraph(Graph* graph) {
   graph_ = nullptr;
 }
 
-void MetricsCollector::OnIsVisibleChanged(const PageNode* page_node) {
-  // The page becomes visible again, clear all records in order to
-  // report metrics when page becomes invisible next time.
-  if (page_node->IsVisible())
-    ResetMetricsReportRecord(page_node);
-}
-
 void MetricsCollector::OnUkmSourceIdChanged(const PageNode* page_node) {
   ukm::SourceId ukm_source_id = page_node->GetUkmSourceID();
   UpdateUkmSourceIdForPage(page_node, ukm_source_id);
-  auto* record = GetMetricsReportRecord(page_node);
-  record->UpdateUkmSourceID(ukm_source_id);
 }
 
-void MetricsCollector::OnFaviconUpdated(const PageNode* page_node) {
-  // Only record metrics while it is backgrounded.
-  if (page_node->IsVisible() || !ShouldReportMetrics(page_node))
-    return;
+void MetricsCollector::OnMainFrameDocumentChanged(const PageNode* page_node) {
+  bool found_same_origin_page = false;
   auto* record = GetMetricsReportRecord(page_node);
-  record->first_favicon_updated.OnSignalReceived(
-      true, page_node->GetTimeSinceLastVisibilityChange(),
-      graph_->GetUkmRecorder());
+  if (!page_node->GetMainFrameUrl().SchemeIsHTTPOrHTTPS() ||
+      url::IsSameOriginWith(record->previous_url,
+                            page_node->GetMainFrameUrl())) {
+    record->previous_url = page_node->GetMainFrameUrl();
+    return;
+  }
+
+  for (const auto* page_node_it : graph_->GetAllPageNodes()) {
+    if (page_node_it != page_node) {
+      if (page_node_it->GetBrowserContextID() ==
+              page_node->GetBrowserContextID() &&
+          url::IsSameOriginWith(page_node_it->GetMainFrameUrl(),
+                                page_node->GetMainFrameUrl())) {
+        found_same_origin_page = true;
+        break;
+      }
+    }
+  }
+  record->previous_url = page_node->GetMainFrameUrl();
+  base::UmaHistogramBoolean(kTabNavigationWithSameOriginTabHistogramName,
+                            found_same_origin_page);
 }
 
 void MetricsCollector::OnProcessLifetimeChange(
@@ -157,16 +146,6 @@ void MetricsCollector::OnBeforeProcessNodeRemoved(
   // the end of the process' life.
   if (process_node->GetProcess().IsValid())
     OnProcessDestroyed(process_node);
-}
-
-void MetricsCollector::OnTitleUpdated(const PageNode* page_node) {
-  // Only record metrics while it is backgrounded.
-  if (page_node->IsVisible() || !ShouldReportMetrics(page_node))
-    return;
-  auto* record = GetMetricsReportRecord(page_node);
-  record->first_title_updated.OnSignalReceived(
-      true, page_node->GetTimeSinceLastVisibilityChange(),
-      graph_->GetUkmRecorder());
 }
 
 // static
@@ -205,28 +184,10 @@ void MetricsCollector::UpdateUkmSourceIdForPage(const PageNode* page_node,
   state->ukm_source_id = ukm_source_id;
 }
 
-void MetricsCollector::ResetMetricsReportRecord(const PageNode* page_node) {
-  auto* record = GetMetricsReportRecord(page_node);
-  record->Reset();
-}
-
 MetricsCollector::MetricsReportRecord::MetricsReportRecord() = default;
 
 MetricsCollector::MetricsReportRecord::MetricsReportRecord(
     const MetricsReportRecord& other) = default;
-
-void MetricsCollector::MetricsReportRecord::UpdateUkmSourceID(
-    ukm::SourceId ukm_source_id) {
-  first_favicon_updated.SetUkmSourceID(ukm_source_id);
-  first_non_persistent_notification_created.SetUkmSourceID(ukm_source_id);
-  first_title_updated.SetUkmSourceID(ukm_source_id);
-}
-
-void MetricsCollector::MetricsReportRecord::Reset() {
-  first_favicon_updated.Reset();
-  first_non_persistent_notification_created.Reset();
-  first_title_updated.Reset();
-}
 
 void MetricsCollector::OnProcessDestroyed(const ProcessNode* process_node) {
   const base::TimeTicks now = base::TimeTicks::Now();

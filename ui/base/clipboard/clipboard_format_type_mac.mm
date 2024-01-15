@@ -5,7 +5,11 @@
 #include "ui/base/clipboard/clipboard_format_type.h"
 
 #import <Cocoa/Cocoa.h>
+#import <CoreServices/CoreServices.h>  // pre-macOS 11
+#import <UniformTypeIdentifiers/UniformTypeIdentifiers.h> // macOS 11
 
+#include "base/apple/bridging.h"
+#include "base/apple/foundation_util.h"
 #include "base/no_destructor.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_number_conversions.h"
@@ -15,36 +19,45 @@
 
 namespace ui {
 
+struct ClipboardFormatType::ObjCStorage {
+  // A Uniform Type identifier string.
+  NSString* uttype;
+};
+
 // ClipboardFormatType implementation.
-// MacOS formats are implemented via Uniform Type Identifiers, documented here:
-// https://developer.apple.com/library/archive/documentation/General/Conceptual/DevPedia-CocoaCore/UniformTypeIdentifier.html#//apple_ref/doc/uid/TP40008195-CH60
-ClipboardFormatType::ClipboardFormatType() : data_(nil) {}
+ClipboardFormatType::ClipboardFormatType()
+    : objc_storage_(std::make_unique<ObjCStorage>()) {}
 
 ClipboardFormatType::ClipboardFormatType(NSString* native_format)
-    : data_([native_format retain]) {}
+    : ClipboardFormatType() {
+  objc_storage_->uttype = native_format;
+}
 
 ClipboardFormatType::ClipboardFormatType(const ClipboardFormatType& other)
-    : data_([other.data_ retain]) {}
+    : ClipboardFormatType() {
+  objc_storage_->uttype = other.objc_storage_->uttype;
+}
 
 ClipboardFormatType& ClipboardFormatType::operator=(
     const ClipboardFormatType& other) {
   if (this != &other) {
-    [data_ release];
-    data_ = [other.data_ retain];
+    objc_storage_->uttype = other.objc_storage_->uttype;
   }
   return *this;
 }
 
 bool ClipboardFormatType::operator==(const ClipboardFormatType& other) const {
-  return [data_ isEqualToString:other.data_];
+  return [objc_storage_->uttype isEqualToString:other.objc_storage_->uttype];
 }
 
-ClipboardFormatType::~ClipboardFormatType() {
-  [data_ release];
-}
+ClipboardFormatType::~ClipboardFormatType() = default;
 
 std::string ClipboardFormatType::Serialize() const {
-  return base::SysNSStringToUTF8(data_);
+  return base::SysNSStringToUTF8(objc_storage_->uttype);
+}
+
+NSString* ClipboardFormatType::ToNSString() const {
+  return objc_storage_->uttype;
 }
 
 // static
@@ -58,23 +71,20 @@ std::string ClipboardFormatType::GetName() const {
 }
 
 bool ClipboardFormatType::operator<(const ClipboardFormatType& other) const {
-  return [data_ compare:other.data_] == NSOrderedAscending;
+  return [objc_storage_->uttype compare:other.objc_storage_->uttype] ==
+         NSOrderedAscending;
 }
 
 // static
 std::string ClipboardFormatType::WebCustomFormatName(int index) {
-  return base::StrCat({"com.web.custom.format", base::NumberToString(index)});
-}
-
-// static
-std::string ClipboardFormatType::WebCustomFormatMapName() {
-  return "com.web.custom.format.map";
+  return base::StrCat(
+      {"org.w3.web-custom-format.type-", base::NumberToString(index)});
 }
 
 // static
 const ClipboardFormatType& ClipboardFormatType::WebCustomFormatMap() {
   static base::NoDestructor<ClipboardFormatType> type(
-      base::SysUTF8ToNSString(ClipboardFormatType::WebCustomFormatMapName()));
+      @"org.w3.web-custom-format.map");
   return *type;
 }
 
@@ -95,13 +105,17 @@ ClipboardFormatType ClipboardFormatType::GetType(
 
 // static
 const ClipboardFormatType& ClipboardFormatType::FilenamesType() {
-  static base::NoDestructor<ClipboardFormatType> type(NSFilenamesPboardType);
+  // This is an awkward mismatch between macOS which has a "multiple items on a
+  // pasteboard approach" and Chromium which has a "one item containing multiple
+  // items" concept. This works well enough, though, as `NSPasteboard.types` is
+  // a union of all types, and thus will find individual items of this type.
+  static base::NoDestructor<ClipboardFormatType> type(NSPasteboardTypeFileURL);
   return *type;
 }
 
 // static
 const ClipboardFormatType& ClipboardFormatType::UrlType() {
-  static base::NoDestructor<ClipboardFormatType> type(NSURLPboardType);
+  static base::NoDestructor<ClipboardFormatType> type(NSPasteboardTypeURL);
   return *type;
 }
 
@@ -113,18 +127,24 @@ const ClipboardFormatType& ClipboardFormatType::PlainTextType() {
 
 // static
 const ClipboardFormatType& ClipboardFormatType::HtmlType() {
-  static base::NoDestructor<ClipboardFormatType> type(NSHTMLPboardType);
+  static base::NoDestructor<ClipboardFormatType> type(NSPasteboardTypeHTML);
   return *type;
 }
 
 const ClipboardFormatType& ClipboardFormatType::SvgType() {
-  static base::NoDestructor<ClipboardFormatType> type(kImageSvg);
-  return *type;
+  if (@available(macOS 11, *)) {
+    static base::NoDestructor<ClipboardFormatType> type(UTTypeSVG.identifier);
+    return *type;
+  } else {
+    static base::NoDestructor<ClipboardFormatType> type(
+        base::apple::CFToNSPtrCast(kUTTypeScalableVectorGraphics));
+    return *type;
+  }
 }
 
 // static
 const ClipboardFormatType& ClipboardFormatType::RtfType() {
-  static base::NoDestructor<ClipboardFormatType> type(NSRTFPboardType);
+  static base::NoDestructor<ClipboardFormatType> type(NSPasteboardTypeRTF);
   return *type;
 }
 
@@ -142,13 +162,15 @@ const ClipboardFormatType& ClipboardFormatType::BitmapType() {
 
 // static
 const ClipboardFormatType& ClipboardFormatType::WebKitSmartPasteType() {
-  static base::NoDestructor<ClipboardFormatType> type(kWebSmartPastePboardType);
+  static base::NoDestructor<ClipboardFormatType> type(
+      kUTTypeWebKitWebSmartPaste);
   return *type;
 }
 
 // static
 const ClipboardFormatType& ClipboardFormatType::WebCustomDataType() {
-  static base::NoDestructor<ClipboardFormatType> type(kWebCustomDataPboardType);
+  static base::NoDestructor<ClipboardFormatType> type(
+      kUTTypeChromiumWebCustomData);
   return *type;
 }
 

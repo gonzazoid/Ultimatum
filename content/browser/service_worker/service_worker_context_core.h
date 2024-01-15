@@ -9,15 +9,18 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/containers/circular_deque.h"
 #include "base/containers/id_map.h"
+#include "base/functional/callback.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list_threadsafe.h"
+#include "base/observer_list_types.h"
 #include "components/services/storage/public/mojom/quota_client.mojom.h"
 #include "components/services/storage/public/mojom/service_worker_storage_control.mojom.h"
 #include "content/browser/service_worker/service_worker_info.h"
@@ -46,6 +49,10 @@ class ServiceWorkerContextWrapper;
 class ServiceWorkerJobCoordinator;
 class ServiceWorkerQuotaClient;
 class ServiceWorkerRegistration;
+#if !BUILDFLAG(IS_ANDROID)
+class ServiceWorkerHidDelegateObserver;
+class ServiceWorkerUsbDelegateObserver;
+#endif  // !BUILDFLAG(IS_ANDROID)
 
 // This class manages data associated with service workers.
 // The class is single threaded and should only be used on the UI thread.
@@ -70,6 +77,10 @@ class CONTENT_EXPORT ServiceWorkerContextCore
       base::OnceCallback<void(blink::ServiceWorkerStatusCode status)>;
   using ContainerHostByClientUUIDMap =
       std::map<std::string, std::unique_ptr<ServiceWorkerContainerHost>>;
+  using WarmUpRequest =
+      std::tuple<GURL,
+                 blink::StorageKey,
+                 ServiceWorkerContext::WarmUpServiceWorkerCallback>;
 
   // Iterates over ServiceWorkerContainerHost objects in the
   // ContainerHostByClientUUIDMap.
@@ -99,6 +110,15 @@ class CONTENT_EXPORT ServiceWorkerContextCore
     ContainerHostByClientUUIDMap::iterator container_host_iterator_;
   };
 
+  class TestVersionObserver : public base::CheckedObserver {
+   public:
+    TestVersionObserver() = default;
+
+    // Called when a new `ServiceWorkerVersion` is added to this context.
+    virtual void OnServiceWorkerVersionCreated(
+        ServiceWorkerVersion* service_worker_version) {}
+  };
+
   // This is owned by ServiceWorkerContextWrapper. |observer_list| is created in
   // ServiceWorkerContextWrapper. When Notify() of |observer_list| is called in
   // ServiceWorkerContextCore, the methods of ServiceWorkerContextCoreObserver
@@ -125,6 +145,12 @@ class CONTENT_EXPORT ServiceWorkerContextCore
   void OnMainScriptResponseSet(
       int64_t version_id,
       const ServiceWorkerVersion::MainScriptResponse& response);
+
+  // Called when a Service Worker opens a window.
+  void OnWindowOpened(const GURL& script_url, const GURL& url);
+
+  // Called when a Service Worker navigates an existing tab.
+  void OnClientNavigated(const GURL& script_url, const GURL& url);
 
   // OnControlleeAdded/Removed are called asynchronously. It is possible the
   // container host identified by |client_uuid| was already destroyed when they
@@ -261,11 +287,6 @@ class CONTENT_EXPORT ServiceWorkerContextCore
   // SERVICE_WORKER_FAILED if any did not succeed.
   void DeleteForStorageKey(const blink::StorageKey& key,
                            StatusCallback callback);
-  // TODO(crbug.com/1199077): Delete this overload when ServiceWorkerQuotaClient
-  // and storage::mojom::QuotaClient support StorageKey.
-  void DeleteForOrigin(const url::Origin& origin, StatusCallback callback) {
-    DeleteForStorageKey(blink::StorageKey(origin), std::move(callback));
-  }
 
   // Performs internal storage cleanup. Operations to the storage in the past
   // (e.g. deletion) are usually recorded in disk for a certain period until
@@ -275,8 +296,13 @@ class CONTENT_EXPORT ServiceWorkerContextCore
 
   // Updates the service worker. If |force_bypass_cache| is true or 24 hours
   // have passed since the last update, bypasses the browser cache.
-  void UpdateServiceWorker(ServiceWorkerRegistration* registration,
-                           bool force_bypass_cache);
+  // This is used for update requests where there is no associated execution
+  // context.
+  void UpdateServiceWorkerWithoutExecutionContext(
+      ServiceWorkerRegistration* registration,
+      bool force_bypass_cache);
+  // As above, but for sites with an associated execution context, which leads
+  // to the specification of `outside_fetch_client_settings_object`.
   // |callback| is called when the promise for
   // ServiceWorkerRegistration.update() would be resolved.
   void UpdateServiceWorker(ServiceWorkerRegistration* registration,
@@ -384,6 +410,46 @@ class CONTENT_EXPORT ServiceWorkerContextCore
   // which are called in InitializeRegisteredOrigins().
   void WaitForRegistrationsInitializedForTest();
 
+  // Enqueue a warm-up request that consists of a tuple of (document_url, key,
+  // callback). The added request will be consumed in LIFO order. If the
+  // `warm_up_requests_` queue size exceeds the limit, then the older entries
+  // will be removed from the queue, and the removed entry's callbacks will be
+  // triggered.
+  void AddWarmUpRequest(
+      const GURL& document_url,
+      const blink::StorageKey& key,
+      ServiceWorkerContext::WarmUpServiceWorkerCallback callback);
+
+  std::optional<WarmUpRequest> PopNextWarmUpRequest();
+  bool IsWaitingForWarmUp(const blink::StorageKey& key) const;
+
+  bool IsProcessingWarmingUp() const { return is_processing_warming_up_; }
+  void BeginProcessingWarmingUp() { is_processing_warming_up_ = true; }
+  void EndProcessingWarmingUp() { is_processing_warming_up_ = false; }
+
+  void AddVersionObserverForTest(TestVersionObserver* observer) {
+    test_version_observers_.AddObserver(observer);
+  }
+
+  void RemoveVersionObserverForTest(TestVersionObserver* observer) {
+    test_version_observers_.RemoveObserver(observer);
+  }
+
+#if !BUILDFLAG(IS_ANDROID)
+  ServiceWorkerHidDelegateObserver* hid_delegate_observer();
+
+  void SetServiceWorkerHidDelegateObserverForTesting(
+      std::unique_ptr<ServiceWorkerHidDelegateObserver> hid_delegate_observer);
+
+  // In the service worker case, WebUSB is only available in extension service
+  // workers. Since extension isn't available in ANDROID, guard
+  // ServiceWorkerUsbDelegateObserver within non-android platforms.
+  ServiceWorkerUsbDelegateObserver* usb_delegate_observer();
+
+  void SetServiceWorkerUsbDelegateObserverForTesting(
+      std::unique_ptr<ServiceWorkerUsbDelegateObserver> usb_delegate_observer);
+#endif  // !BUILDFLAG(IS_ANDROID)
+
  private:
   friend class ServiceWorkerContextCoreTest;
   FRIEND_TEST_ALL_PREFIXES(ServiceWorkerContextCoreTest, FailureInfo);
@@ -402,6 +468,13 @@ class CONTENT_EXPORT ServiceWorkerContextCore
                             blink::ServiceWorkerStatusCode status,
                             const std::string& status_message,
                             ServiceWorkerRegistration* registration);
+
+  void UpdateServiceWorkerImpl(ServiceWorkerRegistration* registration,
+                               bool force_bypass_cache,
+                               bool skip_script_comparison,
+                               blink::mojom::FetchClientSettingsObjectPtr
+                                   outside_fetch_client_settings_object,
+                               UpdateCallback callback);
 
   void UpdateComplete(UpdateCallback callback,
                       blink::ServiceWorkerStatusCode status,
@@ -504,6 +577,17 @@ class CONTENT_EXPORT ServiceWorkerContextCore
   std::set<blink::StorageKey> registered_storage_keys_;
   bool registrations_initialized_ = false;
   base::OnceClosure on_registrations_initialized_for_test_;
+
+  base::circular_deque<WarmUpRequest> warm_up_requests_;
+
+  bool is_processing_warming_up_ = false;
+
+#if !BUILDFLAG(IS_ANDROID)
+  std::unique_ptr<ServiceWorkerHidDelegateObserver> hid_delegate_observer_;
+  std::unique_ptr<ServiceWorkerUsbDelegateObserver> usb_delegate_observer_;
+#endif  // !BUILDFLAG(IS_ANDROID)
+
+  base::ObserverList<TestVersionObserver> test_version_observers_;
 
   base::WeakPtrFactory<ServiceWorkerContextCore> weak_factory_{this};
 };

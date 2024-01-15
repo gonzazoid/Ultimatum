@@ -9,30 +9,30 @@
 #include <string>
 #include <vector>
 
+#include "ash/webui/system_apps/public/system_web_app_type.h"
 #include "base/files/file_path.h"
 #include "base/memory/raw_ptr.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/ash/system_web_apps/types/system_web_app_background_task_info.h"
-#include "chrome/browser/ash/system_web_apps/types/system_web_app_type.h"
 #include "ui/base/models/simple_menu_model.h"
 #include "url/gurl.h"
 #include "url/origin.h"
 
 class Browser;
 class Profile;
-struct WebAppInstallInfo;
 
 namespace apps {
 struct AppLaunchParams;
-}
+}  // namespace apps
 
 namespace gfx {
 class Rect;
-}
+}  // namespace gfx
 
 namespace web_app {
+struct WebAppInstallInfo;
 class WebAppProvider;
-}
+}  // namespace web_app
 
 namespace ash {
 
@@ -79,7 +79,7 @@ class SystemWebAppDelegate {
   const GURL& GetInstallUrl() const { return install_url_; }
 
   // Returns a WebAppInstallInfo struct to complete installation.
-  virtual std::unique_ptr<WebAppInstallInfo> GetWebAppInfo() const = 0;
+  virtual std::unique_ptr<web_app::WebAppInstallInfo> GetWebAppInfo() const = 0;
 
   // Returns a vector of AppIDs. Each app_id (a string id) may correspond to any
   // ChromeOS app: ChromeApp, WebApp, Arc++ etc. The apps specified will have
@@ -91,11 +91,19 @@ class SystemWebAppDelegate {
   // properties for window size.
   virtual gfx::Size GetMinimumWindowSize() const;
 
-  // If set, we allow only a single window for this app.
-  virtual bool ShouldReuseExistingWindow() const;
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+  // Decides whether to launch the app at the given url in an existing app
+  // window (returned by the function) or a new one (nullptr). By default, an
+  // existing app window is reused independent of the url.
+  //
+  // This is implemented in
+  // chrome/browser/ui/ash/system_web_apps/system_web_app_delegate_ui_impl.cc.
+  virtual Browser* GetWindowForLaunch(Profile* profile, const GURL& url) const;
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
   // If true, adds a "New Window" option to App's shelf context menu.
-  // ShouldReuseExistingWindow() should return false at the same time.
+  // NOTE: Combining this with a GetWindowForLaunch function that allows window
+  // reuse can lead to an unintuitive UX.
   virtual bool ShouldShowNewWindowMenuOption() const;
 
   // Called when the app is launched with `params`. If the returned value is
@@ -114,15 +122,23 @@ class SystemWebAppDelegate {
   // Resource Ids for additional search terms.
   virtual std::vector<int> GetAdditionalSearchTerms() const;
 
-  // If false, this app will be hidden from the Chrome OS app launcher.
+  // If false, this app will be hidden from the Chrome OS app launcher. If true,
+  // the app must have a launcher position defined in the GetDefault() function
+  // in //chrome/browser/ash/extensions/default_app_order.cc, which should match
+  // the order in go/default-apps.
   virtual bool ShouldShowInLauncher() const;
 
-  // If false, this app will be hidden from the Chrome OS search.
-  virtual bool ShouldShowInSearch() const;
+  // If false, this app will be hidden from both the Chrome OS search and shelf.
+  // If true, this app will be shown in both the ChromeOS search and shelf.
+  virtual bool ShouldShowInSearchAndShelf() const;
 
-  // If true, navigations (e.g. Omnibox URL, anchor link) to this app
-  // will open in the app's window instead of the navigation's context (e.g.
-  // browser tab).
+  // If true, in Ash browser, navigations (e.g. Omnibox URL, anchor link) to
+  // this app will open in the app's window instead of the navigation's context
+  // (e.g. browser tab).
+  //
+  // This feature isn't applicable to Lacros browser. If you need navigations in
+  // Lacros to launch the app, use crosapi URL handler by adding the app's URL
+  // to `ChromeWebUIControllerFactory::GetListOfAcceptableURLs()`.
   virtual bool ShouldCaptureNavigations() const;
 
   // If false, the app will non-resizeable.
@@ -130,6 +146,9 @@ class SystemWebAppDelegate {
 
   // If false, the surface of app will can be non-maximizable.
   virtual bool ShouldAllowMaximize() const;
+
+  // If false, the surface of the app can not enter fullscreen.
+  virtual bool ShouldAllowFullscreen() const;
 
   // If true, the App's window will have a tab-strip.
   virtual bool ShouldHaveTabStrip() const;
@@ -146,7 +165,7 @@ class SystemWebAppDelegate {
   virtual bool ShouldHandleFileOpenIntents() const;
 
   // Setup information to drive a background task.
-  virtual absl::optional<SystemWebAppBackgroundTaskInfo> GetTimerInfo() const;
+  virtual std::optional<SystemWebAppBackgroundTaskInfo> GetTimerInfo() const;
 
   // Default window bounds of the application.
   virtual gfx::Rect GetDefaultBounds(Browser* browser) const;

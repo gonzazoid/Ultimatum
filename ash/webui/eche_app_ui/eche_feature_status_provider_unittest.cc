@@ -7,11 +7,11 @@
 #include <memory>
 #include <vector>
 
-#include "ash/components/phonehub/fake_phone_hub_manager.h"
-#include "ash/components/phonehub/phone_hub_manager.h"
-#include "ash/services/device_sync/public/cpp/fake_device_sync_client.h"
 #include "base/test/task_environment.h"
 #include "chromeos/ash/components/multidevice/remote_device_test_util.h"
+#include "chromeos/ash/components/phonehub/fake_phone_hub_manager.h"
+#include "chromeos/ash/components/phonehub/phone_hub_manager.h"
+#include "chromeos/ash/services/device_sync/public/cpp/fake_device_sync_client.h"
 #include "chromeos/ash/services/multidevice_setup/public/cpp/fake_multidevice_setup_client.h"
 #include "chromeos/ash/services/secure_channel/public/cpp/client/fake_connection_manager.h"
 #include "testing/gmock/include/gmock/gmock.h"
@@ -80,17 +80,20 @@ class EcheFeatureStatusProviderTest : public testing::Test {
   void SetUp() override {
     fake_phone_hub_manager.fake_feature_status_provider()->SetStatus(
         phonehub::FeatureStatus::kEnabledAndConnected);
+    eche_connection_status_handler_ =
+        std::make_unique<EcheConnectionStatusHandler>();
     provider_ = std::make_unique<EcheFeatureStatusProvider>(
         &fake_phone_hub_manager, &fake_device_sync_client_,
-        &fake_multidevice_setup_client_, &fake_connection_manager_);
+        &fake_multidevice_setup_client_, &fake_connection_manager_,
+        eche_connection_status_handler_.get());
     provider_->AddObserver(&fake_observer_);
   }
 
   void SetDeviceSyncClientReady() { fake_device_sync_client_.NotifyReady(); }
 
   void SetSyncedDevices(
-      const absl::optional<multidevice::RemoteDeviceRef>& local_device,
-      const std::vector<absl::optional<multidevice::RemoteDeviceRef>>
+      const std::optional<multidevice::RemoteDeviceRef>& local_device,
+      const std::vector<std::optional<multidevice::RemoteDeviceRef>>
           phone_devices) {
     fake_device_sync_client_.set_local_device_metadata(local_device);
 
@@ -125,14 +128,14 @@ class EcheFeatureStatusProviderTest : public testing::Test {
 
   void SetHostStatusWithDevice(
       HostStatus host_status,
-      const absl::optional<multidevice::RemoteDeviceRef>& host_device) {
+      const std::optional<multidevice::RemoteDeviceRef>& host_device) {
     fake_multidevice_setup_client_.SetHostStatusWithDevice(
         std::make_pair(host_status, host_device));
   }
 
   void SetHostStatus(HostStatus host_status) {
     fake_multidevice_setup_client_.SetHostStatusWithDevice(
-        std::make_pair(host_status, absl::nullopt /* host_device */));
+        std::make_pair(host_status, std::nullopt /* host_device */));
   }
 
   void SetConnectionStatus(secure_channel::ConnectionManager::Status status) {
@@ -159,6 +162,7 @@ class EcheFeatureStatusProviderTest : public testing::Test {
   device_sync::FakeDeviceSyncClient fake_device_sync_client_;
   multidevice_setup::FakeMultiDeviceSetupClient fake_multidevice_setup_client_;
   secure_channel::FakeConnectionManager fake_connection_manager_;
+  std::unique_ptr<EcheConnectionStatusHandler> eche_connection_status_handler_;
 
   phonehub::FakePhoneHubManager fake_phone_hub_manager;
   FakeObserver fake_observer_;
@@ -174,16 +178,16 @@ TEST_F(EcheFeatureStatusProviderTest, IneligibleForFeature) {
   EXPECT_EQ(FeatureStatus::kIneligible, GetStatus());
 
   SetDeviceSyncClientReady();
-  SetSyncedDevices(/*local_device=*/absl::nullopt,
-                   /*phone_devices=*/{absl::nullopt});
+  SetSyncedDevices(/*local_device=*/std::nullopt,
+                   /*phone_devices=*/{std::nullopt});
   EXPECT_EQ(FeatureStatus::kIneligible, GetStatus());
 
   SetSyncedDevices(CreateLocalDevice(/*supports_eche_client=*/false),
-                   /*phone_devices=*/{absl::nullopt});
+                   /*phone_devices=*/{std::nullopt});
   EXPECT_EQ(FeatureStatus::kIneligible, GetStatus());
 
   SetSyncedDevices(CreateLocalDevice(/*supports_eche_client=*/true),
-                   /*phone_devices=*/{absl::nullopt});
+                   /*phone_devices=*/{std::nullopt});
   EXPECT_EQ(FeatureStatus::kIneligible, GetStatus());
 
   SetSyncedDevices(CreateLocalDevice(/*supports_eche_client=*/true),

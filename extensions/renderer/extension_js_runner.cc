@@ -4,7 +4,7 @@
 
 #include "extensions/renderer/extension_js_runner.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "content/public/renderer/worker_thread.h"
 #include "extensions/renderer/script_context.h"
 #include "third_party/blink/public/web/web_local_frame.h"
@@ -17,7 +17,7 @@ namespace extensions {
 
 ExtensionJSRunner::ExtensionJSRunner(ScriptContext* script_context)
     : script_context_(script_context) {}
-ExtensionJSRunner::~ExtensionJSRunner() {}
+ExtensionJSRunner::~ExtensionJSRunner() = default;
 
 void ExtensionJSRunner::RunJSFunction(v8::Local<v8::Function> function,
                                       v8::Local<v8::Context> context,
@@ -74,7 +74,7 @@ v8::MaybeLocal<v8::Value> ExtensionJSRunner::RunJSFunctionSync(
 }
 
 void ExtensionJSRunner::OnFunctionComplete(ResultCallback callback,
-                                           absl::optional<base::Value> value,
+                                           std::optional<base::Value> value,
                                            base::TimeTicks start_time) {
   DCHECK(script_context_->is_valid());
 

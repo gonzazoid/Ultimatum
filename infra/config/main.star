@@ -7,10 +7,11 @@
 # for information on starlark/lucicfg
 
 load("//lib/branches.star", "branches")
+load("//lib/chrome_settings.star", "chrome_settings")
 load("//project.star", "settings")
 
 lucicfg.check_version(
-    min = "1.31.6",
+    min = "1.40.0",
     message = "Update depot_tools",
 )
 
@@ -22,13 +23,17 @@ lucicfg.config(
     config_dir = "generated",
     tracked_files = [
         "builders/*/*/*",
+        "builders/*/*/*/*",
+        "builders/gn_args_locations.json",
         "cq-builders.md",
         "cq-usage/default.cfg",
         "cq-usage/full.cfg",
+        "cq-usage/mega_cq_bots.txt",
+        "health-specs/health-specs.json",
         "luci/commit-queue.cfg",
-        "luci/chops-weetbix.cfg",
         "luci/cr-buildbucket.cfg",
         "luci/luci-analysis.cfg",
+        "luci/luci-bisection.cfg",
         "luci/luci-logdog.cfg",
         "luci/luci-milo.cfg",
         "luci/luci-notify.cfg",
@@ -40,6 +45,7 @@ lucicfg.config(
         "outages.pyl",
         "sheriff-rotations/*.txt",
         "project.pyl",
+        "testing/*.pyl",
     ],
     fail_on_warnings = True,
     lint_checks = [
@@ -65,11 +71,10 @@ lucicfg.emit(
     data = io.read_file("luci-analysis.cfg"),
 )
 
-# TODO(b/243488110): Delete when Weetbix renaming to
-# LUCI Analysis complete.
+# Just copy LUCI Bisection config to generated outputs.
 lucicfg.emit(
-    dest = "luci/chops-weetbix.cfg",
-    data = io.read_file("chops-weetbix.cfg"),
+    dest = "luci/luci-bisection.cfg",
+    data = io.read_file("luci-bisection.cfg"),
 )
 
 luci.project(
@@ -120,20 +125,10 @@ luci.project(
             roles = "role/analysis.editor",
             groups = ["project-chromium-committers", "googlers"],
         ),
-        # Roles for Weetbix.
-        # TODO(b/243488110): Delete when renaming to
-        # LUCI Analysis complete.
+        # Role for builder health indicators
         luci.binding(
-            roles = "role/weetbix.reader",
-            groups = "all",
-        ),
-        luci.binding(
-            roles = "role/weetbix.queryUser",
-            groups = "authenticated-users",
-        ),
-        luci.binding(
-            roles = "role/weetbix.editor",
-            groups = ["project-chromium-committers", "googlers"],
+            roles = "role/buildbucket.healthUpdater",
+            users = ["guterman@google.com", "generate-builder@cr-builder-health-indicators.iam.gserviceaccount.com", "tne@google.com"],
         ),
     ],
 )
@@ -154,6 +149,10 @@ luci.milo(
 
 luci.notify(
     tree_closing_enabled = True,
+)
+
+chrome_settings.per_builder_outputs(
+    root_dir = "builders",
 )
 
 # An all-purpose public realm.
@@ -204,6 +203,34 @@ luci.realm(
     ],
 )
 
+# Allows builders to write baselines and query ResultDB for new tests.
+# TODO(crbug/1465953) @project is not available, and @root should inherit into
+# project so we'll do this for now until @project is supported.
+luci.realm(
+    name = "@root",
+    bindings = [
+        luci.binding(
+            roles = "role/resultdb.baselineWriter",
+            groups = [
+                "project-chromium-ci-task-accounts",
+                "project-chromium-try-task-accounts",
+            ],
+            users = [
+                "chromium-orchestrator@chops-service-accounts.iam.gserviceaccount.com",
+            ],
+        ),
+        luci.binding(
+            roles = "role/resultdb.baselineReader",
+            groups = [
+                "project-chromium-try-task-accounts",
+            ],
+            users = [
+                "chromium-orchestrator@chops-service-accounts.iam.gserviceaccount.com",
+            ],
+        ),
+    ],
+)
+
 luci.realm(
     name = "webrtc",
     bindings = [
@@ -220,10 +247,23 @@ luci.builder.defaults.test_presentation.set(resultdb.test_presentation(grouping_
 exec("//swarming.star")
 
 exec("//recipes.star")
+exec("//gn_args/gn_args.star")
+exec("//targets/basic_suites.star")
+exec("//targets/binaries.star")
+exec("//targets/bundles.star")
+exec("//targets/compile_targets.star")
+exec("//targets/compound_suites.star")
+exec("//targets/matrix_compound_suites.star")
+exec("//targets/mixins.star")
+exec("//targets/tests.star")
+exec("//targets/variants.star")
 
 exec("//notifiers.star")
 
+exec("//subprojects/build/subproject.star")
+exec("//subprojects/chrome/subproject.star")
 exec("//subprojects/chromium/subproject.star")
+exec("//subprojects/infra.star")
 branches.exec("//subprojects/codesearch/subproject.star")
 branches.exec("//subprojects/findit/subproject.star")
 branches.exec("//subprojects/flakiness/subproject.star")
@@ -237,6 +277,9 @@ branches.exec("//generators/cq-builders-md.star")
 
 exec("//generators/sort-consoles.star")
 
+# Execute validators after eveything except the outage file so that we're
+# validating the final non-outages configuration
+exec("//validators/builder-group-triggers.star")
 exec("//validators/builders-in-consoles.star")
 
 # Execute this file last so that any configuration changes needed for handling

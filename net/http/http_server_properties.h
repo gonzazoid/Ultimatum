@@ -15,8 +15,8 @@
 #include <tuple>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/containers/lru_cache.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/threading/thread_checker.h"
@@ -474,6 +474,10 @@ class NET_EXPORT HttpServerProperties
     return server_info_map_;
   }
 
+  // This will invalidate the start-up properties if called before
+  // initialization.
+  void FlushWritePropertiesForTesting(base::OnceClosure callback);
+
   const BrokenAlternativeServices& broken_alternative_services_for_testing()
       const {
     return broken_alternative_services_;
@@ -618,8 +622,8 @@ class NET_EXPORT HttpServerProperties
   raw_ptr<const base::TickClock> tick_clock_;  // Unowned
   raw_ptr<base::Clock> clock_;                 // Unowned
 
-  // Cached value of kPartitionHttpServerPropertiesByNetworkIsolationKey
-  // feature. Cached to improve performance.
+  // Cached value of whether network state partitioning is enabled. Cached to
+  // improve performance.
   const bool use_network_anonymization_key_;
 
   // Set to true once initial properties have been retrieved from disk by
@@ -640,7 +644,7 @@ class NET_EXPORT HttpServerProperties
 
   IPAddress last_local_address_when_quic_worked_;
   // Contains a map of servers which could share the same alternate protocol.
-  // Map from a Canonical scheme/host/port/NIK (host is some postfix of host
+  // Map from a Canonical scheme/host/port/NAK (host is some postfix of host
   // names) to an actual origin, which has a plausible alternate protocol
   // mapping.
   CanonicalMap canonical_alt_svc_map_;

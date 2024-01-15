@@ -74,19 +74,17 @@ public class EmptyCoordinator implements OfflineItemFilterObserver, FilterCoordi
     }
 
     private void calculateState() {
-        @State
-        int state;
+        @State int state;
         if (!mSource.areItemsAvailable()) {
             state = State.LOADING;
         } else if (mSource.getItems().isEmpty()) {
             state = State.EMPTY;
 
-            @StringRes
-            int textId;
+            @StringRes int textId;
             if (mShowingPrefetch) {
                 textId = R.string.download_manager_prefetch_tab_empty;
             } else {
-                textId = R.string.download_manager_no_downloads;
+                textId = R.string.download_manager_no_downloads_empty_state;
             }
 
             mModel.set(EmptyProperties.EMPTY_TEXT_RES_ID, textId);

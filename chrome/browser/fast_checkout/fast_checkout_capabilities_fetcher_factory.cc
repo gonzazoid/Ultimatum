@@ -7,12 +7,10 @@
 #include <memory>
 
 #include "base/no_destructor.h"
-#include "chrome/browser/autofill_assistant/common_dependencies_chrome.h"
 #include "chrome/browser/fast_checkout/fast_checkout_capabilities_fetcher.h"
 #include "chrome/browser/fast_checkout/fast_checkout_capabilities_fetcher_impl.h"
-#include "components/autofill_assistant/browser/public/autofill_assistant_factory.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
-#include "components/keyed_service/content/browser_context_keyed_service_factory.h"
+#include "content/public/browser/browser_context.h"
+#include "content/public/browser/storage_partition.h"
 
 // static
 FastCheckoutCapabilitiesFetcherFactory*
@@ -22,9 +20,14 @@ FastCheckoutCapabilitiesFetcherFactory::GetInstance() {
 }
 
 FastCheckoutCapabilitiesFetcherFactory::FastCheckoutCapabilitiesFetcherFactory()
-    : BrowserContextKeyedServiceFactory(
+    : ProfileKeyedServiceFactory(
           "FastCheckoutCapabilitiesFetcher",
-          BrowserContextDependencyManager::GetInstance()) {}
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOriginalOnly)
+              .Build()) {}
 
 FastCheckoutCapabilitiesFetcherFactory::
     ~FastCheckoutCapabilitiesFetcherFactory() = default;
@@ -37,11 +40,10 @@ FastCheckoutCapabilitiesFetcherFactory::GetForBrowserContext(
       GetInstance()->GetServiceForBrowserContext(browser_context, true));
 }
 
-KeyedService* FastCheckoutCapabilitiesFetcherFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+FastCheckoutCapabilitiesFetcherFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* browser_context) const {
-  return new FastCheckoutCapabilitiesFetcherImpl(
-      autofill_assistant::AutofillAssistantFactory::CreateForBrowserContext(
-          browser_context,
-          std::make_unique<autofill_assistant::CommonDependenciesChrome>(
-              browser_context)));
+  return std::make_unique<FastCheckoutCapabilitiesFetcherImpl>(
+      browser_context->GetDefaultStoragePartition()
+          ->GetURLLoaderFactoryForBrowserProcess());
 }

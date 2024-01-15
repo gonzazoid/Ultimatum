@@ -23,16 +23,17 @@ namespace {
 
 const char kDisableSurfaceless[] = "disable-surfaceless";
 
-scoped_refptr<gl::GLSurface> CreateGLSurface(gl::GLDisplay* display,
+scoped_refptr<gl::Presenter> CreatePresenter(gl::GLDisplay* display,
                                              gfx::AcceleratedWidget widget) {
-  scoped_refptr<gl::GLSurface> surface;
   if (!base::CommandLine::ForCurrentProcess()->HasSwitch(kDisableSurfaceless))
-    surface = gl::init::CreateSurfacelessViewGLSurface(display, widget);
-  if (!surface)
-    surface = gl::init::CreateViewGLSurface(display, widget);
-  return surface;
+    return gl::init::CreateSurfacelessViewGLSurface(display, widget);
+  return nullptr;
 }
 
+scoped_refptr<gl::GLSurface> CreateGLSurface(gl::GLDisplay* display,
+                                             gfx::AcceleratedWidget widget) {
+  return gl::init::CreateViewGLSurface(display, widget);
+}
 }  // namespace
 
 SkiaRendererFactory::SkiaRendererFactory() {}
@@ -45,7 +46,8 @@ SkiaRendererFactory::~SkiaRendererFactory() {
 }
 
 bool SkiaRendererFactory::Initialize() {
-  display_ = gl::init::InitializeGLOneOff(/*system_device_id=*/0);
+  display_ = gl::init::InitializeGLOneOff(
+      /*gpu_preference=*/gl::GpuPreference::kDefault);
   if (!display_) {
     LOG(FATAL) << "Failed to initialize GL";
   }
@@ -60,13 +62,16 @@ std::unique_ptr<Renderer> SkiaRendererFactory::CreateRenderer(
       OzonePlatform::GetInstance()->GetSurfaceFactoryOzone();
   auto window_surface =
       surface_factory_ozone->CreatePlatformWindowSurface(widget);
+
+  if (auto presenter = CreatePresenter(display_, widget)) {
+    return std::make_unique<SurfacelessSkiaGlRenderer>(
+        widget, std::move(window_surface),
+        gl::init::CreateOffscreenGLSurface(display_, gfx::Size(0, 0)),
+        std::move(presenter), size);
+  }
   scoped_refptr<gl::GLSurface> gl_surface = CreateGLSurface(display_, widget);
   if (!gl_surface)
     LOG(FATAL) << "Failed to create GL surface";
-  if (gl_surface->IsSurfaceless()) {
-    return std::make_unique<SurfacelessSkiaGlRenderer>(
-        widget, std::move(window_surface), std::move(gl_surface), size);
-  }
   return std::make_unique<SkiaGlRenderer>(widget, std::move(window_surface),
                                           std::move(gl_surface), size);
 }

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,12 +8,12 @@
 #include <memory>
 #include <string>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
-#include "chromeos/ash/components/login/auth/recovery/common_types.h"
+#include "chromeos/ash/components/login/auth/public/recovery_types.h"
 #include "net/base/backoff_entry.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
 #include "services/network/public/cpp/simple_url_loader.h"
@@ -25,10 +25,10 @@ class COMPONENT_EXPORT(CHROMEOS_ASH_COMPONENTS_LOGIN_AUTH)
     CryptohomeRecoveryServiceClient {
  public:
   using OnEpochResponseCallback =
-      base::OnceCallback<void(absl::optional<CryptohomeRecoveryEpochResponse>,
+      base::OnceCallback<void(std::optional<CryptohomeRecoveryEpochResponse>,
                               CryptohomeRecoveryServerStatusCode)>;
   using OnRecoveryResponseCallback =
-      base::OnceCallback<void(absl::optional<CryptohomeRecoveryResponse>,
+      base::OnceCallback<void(std::optional<CryptohomeRecoveryResponse>,
                               CryptohomeRecoveryServerStatusCode)>;
 
   explicit CryptohomeRecoveryServiceClient(

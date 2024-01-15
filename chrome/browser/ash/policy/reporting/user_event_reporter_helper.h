@@ -8,7 +8,7 @@
 #include <memory>
 #include <string>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/task/sequenced_task_runner.h"
 #include "components/reporting/client/report_queue.h"
 #include "components/reporting/client/report_queue_configuration.h"
@@ -39,10 +39,9 @@ class UserEventReporterHelper {
       delete;
   virtual ~UserEventReporterHelper();
 
-  // Returns whether the user email can be included in the report. By default,
-  // only affiliated user emails are included. Function can accept
-  // canonicalized and non canonicalized user_email.
-  // Must be called on UI task runner (returned by valid_task_runner() below).
+  // DEPRECATED: please use ReportingUserTracker::ShouldReport() by passing
+  // its instance from DeviceCloudPolicyManagerAsh.
+  // TODO(b/267685577): Remove this.
   virtual bool ShouldReportUser(const std::string& user_email) const;
 
   // Returns whether the provided reporting policy is set.

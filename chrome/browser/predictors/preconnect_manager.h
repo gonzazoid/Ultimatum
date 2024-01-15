@@ -13,7 +13,6 @@
 
 #include "base/containers/id_map.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
 #include "chrome/browser/predictors/proxy_lookup_client_impl.h"
@@ -183,7 +182,7 @@ class PreconnectManager {
       const GURL& url,
       const net::NetworkAnonymizationKey& network_anonymization_key);
   virtual void StartPreresolveHosts(
-      const std::vector<std::string>& hostnames,
+      const std::vector<GURL>& urls,
       const net::NetworkAnonymizationKey& network_anonymization_key);
   virtual void StartPreconnectUrl(
       const GURL& url,
@@ -236,7 +235,7 @@ class PreconnectManager {
   network::mojom::NetworkContext* GetNetworkContext() const;
 
   base::WeakPtr<Delegate> delegate_;
-  const raw_ptr<content::BrowserContext> browser_context_;
+  const raw_ptr<content::BrowserContext, DanglingUntriaged> browser_context_;
   std::list<PreresolveJobId> queued_jobs_;
   PreresolveJobMap preresolve_jobs_;
   std::map<GURL, std::unique_ptr<PreresolveInfo>> preresolve_info_;

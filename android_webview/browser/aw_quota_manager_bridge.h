@@ -11,7 +11,7 @@
 #include <vector>
 
 #include "base/android/jni_weak_ref.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
@@ -30,6 +30,11 @@ class AwBrowserContext;
 
 // TODO(crbug.com/1215208): Change the functions in this class to reference
 // StorageKey instead of Origin.
+//
+// This object is owned by the native AwBrowserContext, and the Java peer is
+// owned by the Java AwBrowserContext.
+//
+// Lifetime: Profile
 class AwQuotaManagerBridge
     : public base::RefCountedThreadSafe<AwQuotaManagerBridge> {
  public:

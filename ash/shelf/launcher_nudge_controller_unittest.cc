@@ -20,6 +20,7 @@
 #include "ash/wm/tablet_mode/tablet_mode_controller.h"
 #include "base/command_line.h"
 #include "base/json/values_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
 #include "ui/compositor/layer.h"
@@ -84,7 +85,7 @@ class TestNudgeAnimationObserver : public HomeButton::NudgeAnimationObserver {
  private:
   base::RunLoop animation_run_loop_;
   base::RunLoop label_run_loop_;
-  HomeButton* const home_button_;
+  const raw_ptr<HomeButton> home_button_;
 
   // Counts the number of started/ended animations.
   int started_animation_count_ = 0;
@@ -141,9 +142,10 @@ class LauncherNudgeControllerTest : public AshTestBase {
     test_api_->RunMessageLoopUntilAnimationsDone();
   }
 
-  LauncherNudgeController* nudge_controller_;
+  raw_ptr<LauncherNudgeController, DanglingUntriaged> nudge_controller_;
   std::unique_ptr<TestNudgeAnimationObserver> observer_;
-  ScrollableShelfView* scrollable_shelf_view_ = nullptr;
+  raw_ptr<ScrollableShelfView, DanglingUntriaged> scrollable_shelf_view_ =
+      nullptr;
   std::unique_ptr<ShelfViewTestAPI> test_api_;
 };
 
@@ -360,7 +362,7 @@ TEST_F(LauncherNudgeControllerTest, NudgeLabelVisibilityTest) {
 
   // Wait until the label to be shown and check if the label is visible.
   waiter.WaitUntilLabelShown();
-  views::View* label_container = home_button->label_container_for_test();
+  views::View* label_container = home_button->expandable_container_for_test();
   EXPECT_TRUE(label_container && label_container->GetVisible());
   EXPECT_EQ(label_container->layer()->opacity(), 1);
 
@@ -390,7 +392,7 @@ TEST_F(LauncherNudgeControllerTest, NudgeLabelVisibilityTest) {
   waiter2.WaitUntilAnimationEnded();
 
   // The label is removed after it is clicked.
-  EXPECT_FALSE(home_button->label_container_for_test());
+  EXPECT_FALSE(home_button->expandable_container_for_test());
 }
 
 TEST_F(LauncherNudgeControllerTest, AnimationUsedDependsOnAvailableSpace) {

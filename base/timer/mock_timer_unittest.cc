@@ -4,7 +4,7 @@
 
 #include "base/timer/mock_timer.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace {
@@ -51,7 +51,20 @@ TEST(MockTimerTest, Stops) {
   EXPECT_FALSE(timer.IsRunning());
 }
 
-class HasWeakPtr : public base::SupportsWeakPtr<HasWeakPtr> {
+TEST(MockOneShotTimerTest, FireNow) {
+  int calls = 0;
+  base::MockOneShotTimer timer;
+  base::TimeDelta delay = base::Seconds(2);
+  timer.Start(FROM_HERE, delay,
+              base::BindOnce(&CallMeMaybe, base::Unretained(&calls)));
+  EXPECT_EQ(delay, timer.GetCurrentDelay());
+  EXPECT_TRUE(timer.IsRunning());
+  timer.FireNow();
+  EXPECT_FALSE(timer.IsRunning());
+  EXPECT_EQ(1, calls);
+}
+
+class HasWeakPtr {
  public:
   HasWeakPtr() = default;
 
@@ -59,6 +72,13 @@ class HasWeakPtr : public base::SupportsWeakPtr<HasWeakPtr> {
   HasWeakPtr& operator=(const HasWeakPtr&) = delete;
 
   virtual ~HasWeakPtr() = default;
+
+  base::WeakPtr<HasWeakPtr> AsWeakPtr() {
+    return weak_ptr_factory_.GetWeakPtr();
+  }
+
+ private:
+  base::WeakPtrFactory<HasWeakPtr> weak_ptr_factory_{this};
 };
 
 TEST(MockTimerTest, DoesNotRetainClosure) {

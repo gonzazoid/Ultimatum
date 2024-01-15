@@ -75,54 +75,21 @@ IN_PROC_BROWSER_TEST_F(HeadlessOriginTrialsBrowserTest,
   // enable the WebComponents V0 origin trial.
   // TODO(crbug.com/1050190): Implement a permanent, sample trial so this test
   // doesn't rely on WebComponents V0, which will eventually go away.
-  EXPECT_FALSE(ResultBool(
+  EXPECT_THAT(
       EvaluateScript(web_contents,
                      "'createShadowRoot' in document.createElement('div')"),
-      "result.value"));
+      DictHasValue("result.result.value", false));
 }
 
 IN_PROC_BROWSER_TEST_F(HeadlessOriginTrialsBrowserTest,
-                       DelegateNotAvailableOnContext) {
-  // Delete this test when |::features::kPersistentOriginTrials| is enabled by
-  // default or fully removed.
-  HeadlessBrowserContext* browser_context =
-      browser()->CreateBrowserContextBuilder().Build();
-  HeadlessBrowserContextImpl* context_impl =
-      HeadlessBrowserContextImpl::From(browser_context);
-  EXPECT_FALSE(context_impl->GetOriginTrialsControllerDelegate())
-      << "Headless browser should not have an OriginTrialsControllerDelegate "
-         "if ::features::kPersistentOriginTrials is not enabled";
-}
-
-// This class can be replaced with |HeadlessOriginTrialsBrowserTest| when
-// |::features::kPersistentOriginTrials| is enabled by default or fully removed.
-class HeadlessPersistentOriginTrialsBrowserTest : public HeadlessBrowserTest {
- public:
-  HeadlessPersistentOriginTrialsBrowserTest() {
-    test_features_.InitAndEnableFeature(::features::kPersistentOriginTrials);
-  }
-  ~HeadlessPersistentOriginTrialsBrowserTest() override = default;
-
- private:
-  base::test::ScopedFeatureList test_features_;
-};
-
-IN_PROC_BROWSER_TEST_F(HeadlessPersistentOriginTrialsBrowserTest,
                        DelegateAvailableOnContext) {
   HeadlessBrowserContext* browser_context =
       browser()->CreateBrowserContextBuilder().Build();
   HeadlessBrowserContextImpl* context_impl =
       HeadlessBrowserContextImpl::From(browser_context);
 
-#if defined(HEADLESS_USE_PREFS)
   EXPECT_TRUE(context_impl->GetOriginTrialsControllerDelegate())
-      << "Headless browser should have an OriginTrialsControllerDelegate if "
-         "HEADLESS_USE_PREFS is enabled";
-#else
-  EXPECT_FALSE(context_impl->GetOriginTrialsControllerDelegate())
-      << "Headless browser should not have an OriginTrialsControllerDelegate "
-         "if HEADLESS_USE_PREFS is disabled";
-#endif  // defined(HEADLESS_USE_PREFS)
+      << "Headless browser should have an OriginTrialsControllerDelegate";
 }
 
 }  // namespace headless

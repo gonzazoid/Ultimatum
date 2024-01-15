@@ -381,11 +381,16 @@ TFLiteOpResolver::TFLiteOpResolver() {
              tflite::ops::builtin::Register_GELU(),
              /* min_version = */ 1,
              /* max_version = */ 2);
+  AddBuiltin(tflite::BuiltinOperator_RANDOM_STANDARD_NORMAL,
+             tflite::ops::builtin::Register_RANDOM_STANDARD_NORMAL());
+  AddBuiltin(tflite::BuiltinOperator_RANDOM_UNIFORM,
+             tflite::ops::builtin::Register_RANDOM_UNIFORM());
 
 #if BUILDFLAG(BUILD_TFLITE_WITH_XNNPACK)
   if (features::TFLiteXNNPACKDelegateEnabled()) {
-    delegate_creators_.push_back([](int num_threads) {
-      return tflite::MaybeCreateXNNPACKDelegate(num_threads);
+    delegate_creators_.push_back([](TfLiteContext* context) {
+      return tflite::MaybeCreateXNNPACKDelegate(
+          context, tflite::XNNPackQS8Options::disabled);
     });
   }
 #endif

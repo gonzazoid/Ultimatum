@@ -11,15 +11,16 @@
 #include "ash/components/arc/session/arc_service_manager.h"
 #include "ash/components/arc/test/fake_webapk_instance.h"
 #include "ash/constants/ash_features.h"
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/test/bind.h"
 #include "base/test/metrics/histogram_tester.h"
+#include "base/test/test_future.h"
 #include "chrome/browser/apps/app_service/app_service_test.h"
 #include "chrome/browser/apps/app_service/webapk/webapk_metrics.h"
 #include "chrome/browser/apps/app_service/webapk/webapk_prefs.h"
 #include "chrome/browser/apps/app_service/webapk/webapk_test_server.h"
-#include "chrome/browser/ui/app_list/arc/arc_app_test.h"
+#include "chrome/browser/ash/app_list/arc/arc_app_test.h"
 #include "chrome/browser/web_applications/test/fake_web_app_provider.h"
 #include "chrome/browser/web_applications/test/web_app_install_test_utils.h"
 #include "chrome/browser/web_applications/web_app_install_info.h"
@@ -42,8 +43,8 @@ constexpr char kTestManifestUrl[] = "https://www.example.com/manifest.json";
 constexpr char kTestShareTextParam[] = "share_text";
 const std::u16string kTestAppTitle = u"Test App";
 
-std::unique_ptr<WebAppInstallInfo> BuildDefaultWebAppInfo() {
-  auto app_info = std::make_unique<WebAppInstallInfo>();
+std::unique_ptr<web_app::WebAppInstallInfo> BuildDefaultWebAppInfo() {
+  auto app_info = std::make_unique<web_app::WebAppInstallInfo>();
   app_info->start_url = GURL(kTestAppUrl);
   app_info->scope = GURL(kTestAppUrl);
   app_info->title = kTestAppTitle;
@@ -85,10 +86,10 @@ arc::mojom::WebApkInfoPtr BuildDefaultWebApkInfo(
   return webapk_info;
 }
 
-absl::optional<arc::ArcFeatures> GetArcFeaturesWithAbiList(
-    const std::string& abi_list) {
+std::optional<arc::ArcFeatures> GetArcFeaturesWithAbiList(
+    std::string abi_list) {
   arc::ArcFeatures arc_features;
-  arc_features.build_props["ro.product.cpu.abilist"] = abi_list;
+  arc_features.build_props.abi_list = abi_list;
   return arc_features;
 }
 
@@ -137,14 +138,11 @@ class WebApkInstallTaskTest : public testing::Test {
   void TearDown() override { arc_test_.TearDown(); }
 
   bool InstallWebApk(std::string app_id) {
-    bool install_success;
     apps::WebApkInstallTask install_task(profile(), app_id);
     base::RunLoop run_loop;
-    install_task.Start(base::BindLambdaForTesting([&](bool success) {
-      install_success = success;
-      run_loop.Quit();
-    }));
-    run_loop.Run();
+    base::test::TestFuture<bool> future;
+    install_task.Start(future.GetCallback());
+    bool install_success = future.Get();
     return install_success;
   }
 
@@ -183,7 +181,7 @@ class WebApkInstallTaskTest : public testing::Test {
 
   std::unique_ptr<arc::FakeWebApkInstance> fake_webapk_instance_;
   std::unique_ptr<apps::WebApkTestServer> webapk_test_server_;
-  base::RepeatingCallback<absl::optional<arc::ArcFeatures>()>
+  base::RepeatingCallback<std::optional<arc::ArcFeatures>()>
       arc_features_getter_;
 };
 
@@ -257,7 +255,7 @@ TEST_F(WebApkInstallTaskTest, ShareTarget) {
 }
 
 TEST_F(WebApkInstallTaskTest, NoIconInManifest) {
-  auto app_info = std::make_unique<WebAppInstallInfo>();
+  auto app_info = std::make_unique<web_app::WebAppInstallInfo>();
   app_info->start_url = GURL(kTestAppUrl);
   app_info->scope = GURL(kTestAppUrl);
   app_info->title = kTestAppTitle;
@@ -311,15 +309,11 @@ TEST_F(WebApkInstallTaskTest, MinterTimeout) {
       switches::kWebApkServerUrl, test_server()->GetURL("/slow?1000").spec());
   base::HistogramTester histograms;
 
-  bool install_success;
   apps::WebApkInstallTask install_task(profile(), app_id);
   install_task.SetTimeoutForTesting(base::Milliseconds(100));
-  base::RunLoop run_loop;
-  install_task.Start(base::BindLambdaForTesting([&](bool success) {
-    install_success = success;
-    run_loop.Quit();
-  }));
-  run_loop.Run();
+  base::test::TestFuture<bool> future;
+  install_task.Start(future.GetCallback());
+  bool install_success = future.Get();
 
   ASSERT_FALSE(install_success);
   histograms.ExpectBucketCount(apps::kWebApkInstallResultHistogram,
@@ -426,6 +420,7 @@ TEST_F(WebApkInstallTaskTest, SuccessfulUpdateIconHash) {
   ASSERT_THAT(
       last_webapk_request()->update_reasons(),
       ::testing::ElementsAre(webapk::WebApk::PRIMARY_ICON_HASH_DIFFERS));
+  ASSERT_TRUE(last_webapk_request()->app_identity_update_supported());
 
   // Check we still only have 1 version of |app_id| installed.
   ASSERT_THAT(apps::webapk_prefs::GetWebApkAppIds(profile()),
@@ -572,4 +567,19 @@ TEST_F(WebApkInstallTaskTest, FailedUpdateNetworkError) {
               testing::ElementsAre(app_id));
   ASSERT_THAT(apps::webapk_prefs::GetUpdateNeededAppIds(profile()),
               testing::ElementsAre(app_id));
+}
+
+TEST_F(WebApkInstallTaskTest, SingleAbi) {
+  auto arc_features_getter =
+      base::BindRepeating(&GetArcFeaturesWithAbiList, "armeabi-v7a");
+  arc::ArcFeaturesParser::SetArcFeaturesGetterForTesting(&arc_features_getter);
+
+  auto app_id =
+      web_app::test::InstallWebApp(profile(), BuildDefaultWebAppInfo());
+
+  webapk_test_server()->RespondWithSuccess("org.chromium.webapk.some_package");
+
+  EXPECT_TRUE(InstallWebApk(app_id));
+
+  ASSERT_EQ(last_webapk_request()->android_abi(), "armeabi-v7a");
 }

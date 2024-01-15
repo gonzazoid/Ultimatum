@@ -8,21 +8,19 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/ranges/algorithm.h"
 #include "components/autofill/core/browser/data_model/autofill_profile.h"
 #include "components/autofill/core/browser/data_model/credit_card.h"
 #include "components/autofill/core/browser/webdata/autofill_webdata_service.h"
 #include "components/browsing_data/core/pref_names.h"
-#include "components/sync/driver/sync_service.h"
-#include "components/sync/driver/sync_user_settings.h"
+#include "components/sync/service/sync_service.h"
+#include "components/sync/service/sync_user_settings.h"
 
 namespace {
 
-bool IsAutofillSyncEnabled(const syncer::SyncService* sync_service) {
+bool IsAutocompleteSyncActive(const syncer::SyncService* sync_service) {
   return sync_service &&
-         sync_service->GetUserSettings()->IsFirstSetupComplete() &&
-         sync_service->IsSyncFeatureActive() &&
          sync_service->GetActiveDataTypes().Has(syncer::AUTOFILL);
 }
 
@@ -48,7 +46,7 @@ AutofillCounter::~AutofillCounter() {
 
 void AutofillCounter::OnInitialized() {
   DCHECK(web_data_service_);
-  sync_tracker_.OnInitialized(base::BindRepeating(&IsAutofillSyncEnabled));
+  sync_tracker_.OnInitialized(base::BindRepeating(&IsAutocompleteSyncActive));
 }
 
 const char* AutofillCounter::GetPrefName() const {
@@ -101,7 +99,7 @@ void AutofillCounter::Count() {
 
   // Count the addresses.
   addresses_query_ = web_data_service_->GetAutofillProfiles(
-      autofill::AutofillProfile::Source::kLocal, this);
+      autofill::AutofillProfile::Source::kLocalOrSyncable, this);
 }
 
 void AutofillCounter::OnWebDataServiceRequestDone(

@@ -7,17 +7,18 @@
 
 #include <memory>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/timer/timer.h"
-#include "components/cast_streaming/public/rpc_call_message_handler.h"
 #include "media/base/buffering_state.h"
 #include "media/base/demuxer_stream.h"
 #include "media/base/renderer.h"
 #include "media/base/renderer_client.h"
+#include "media/cast/openscreen/rpc_call_message_handler.h"
 #include "third_party/openscreen/src/cast/streaming/remoting.pb.h"
 #include "third_party/openscreen/src/cast/streaming/rpc_messenger.h"
 
@@ -46,10 +47,9 @@ class ReceiverController;
 // via RPC calls. When Receiver receives RPC calls, it will call the
 // corresponding functions of |renderer_| to control the media playback of
 // the remoting media.
-class Receiver final
-    : public Renderer,
-      public RendererClient,
-      public cast_streaming::remoting::RpcRendererCallMessageHandler {
+class Receiver final : public Renderer,
+                       public RendererClient,
+                       public media::cast::RpcRendererCallMessageHandler {
  public:
   Receiver(int rpc_handle,
            int remote_handle,
@@ -70,6 +70,7 @@ class Receiver final
   void SetPlaybackRate(double playback_rate) override;
   void SetVolume(float volume) override;
   base::TimeDelta GetMediaTime() override;
+  RendererType GetRendererType() override;
 
   // RendererClient implementation.
   void OnError(PipelineStatus status) override;
@@ -92,7 +93,7 @@ class Receiver final
   base::WeakPtr<Receiver> GetWeakPtr() { return weak_factory_.GetWeakPtr(); }
 
  private:
-  // cast_streaming::remoting::RpcCallMessageHandler overrides.
+  // media::cast::RpcCallMessageHandler overrides.
   void OnRpcInitialize() override;
   void OnRpcSetPlaybackRate(double playback_rate) override;
   void OnRpcFlush(uint32_t audio_count, uint32_t video_count) override;

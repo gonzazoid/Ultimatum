@@ -12,10 +12,12 @@ import zipfile
 
 from util import build_utils
 from util import java_cpp_utils
+import action_helpers  # build_utils adds //build to sys.path.
+import zip_helpers
 
 
 class StringParserDelegate(java_cpp_utils.CppConstantParser.Delegate):
-  STRING_RE = re.compile(r'\s*const char k(.*)\[\]\s*=')
+  STRING_RE = re.compile(r'\s*(?:inline )?const(?:expr)? char k(.*)\[\]\s*=')
   VALUE_RE = re.compile(r'\s*("(?:\"|[^"])*")\s*;')
 
   def ExtractConstantName(self, line):
@@ -93,10 +95,10 @@ def _Main(argv):
       'inputs', nargs='+', help='Input file(s)', metavar='INPUTFILE')
   args = parser.parse_args(argv)
 
-  with build_utils.AtomicOutput(args.srcjar) as f:
+  with action_helpers.atomic_output(args.srcjar) as f:
     with zipfile.ZipFile(f, 'w', zipfile.ZIP_STORED) as srcjar:
       data, path = _Generate(args.inputs, args.template)
-      build_utils.AddToZipHermetic(srcjar, path, data=data)
+      zip_helpers.add_to_zip_hermetic(srcjar, path, data=data)
 
 
 if __name__ == '__main__':

@@ -6,9 +6,9 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
-#include "base/memory/singleton.h"
+#include "base/no_destructor.h"
 #include "chrome/browser/badging/badge_manager.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/web_applications/web_app_provider_factory.h"
@@ -24,19 +24,28 @@ BadgeManager* BadgeManagerFactory::GetForProfile(Profile* profile) {
 
 // static
 BadgeManagerFactory* BadgeManagerFactory::GetInstance() {
-  return base::Singleton<BadgeManagerFactory>::get();
+  static base::NoDestructor<BadgeManagerFactory> instance;
+  return instance.get();
 }
 
 BadgeManagerFactory::BadgeManagerFactory()
-    : ProfileKeyedServiceFactory("BadgeManager") {
+    : ProfileKeyedServiceFactory(
+          "BadgeManager",
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOriginalOnly)
+              .Build()) {
   DependsOn(web_app::WebAppProviderFactory::GetInstance());
 }
 
-BadgeManagerFactory::~BadgeManagerFactory() {}
+BadgeManagerFactory::~BadgeManagerFactory() = default;
 
-KeyedService* BadgeManagerFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+BadgeManagerFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
-  return new BadgeManager(Profile::FromBrowserContext(context));
+  return std::make_unique<BadgeManager>(Profile::FromBrowserContext(context));
 }
 
 }  // namespace badging

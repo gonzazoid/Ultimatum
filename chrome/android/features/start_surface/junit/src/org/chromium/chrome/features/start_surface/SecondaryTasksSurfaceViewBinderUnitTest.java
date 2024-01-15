@@ -30,17 +30,22 @@ import org.robolectric.annotation.Config;
 
 import org.chromium.base.test.BaseRobolectricTestRunner;
 import org.chromium.base.test.UiThreadTest;
+import org.chromium.chrome.browser.flags.ChromeFeatureList;
+import org.chromium.chrome.test.util.browser.Features.DisableFeatures;
 import org.chromium.ui.modelutil.PropertyModel;
 import org.chromium.ui.modelutil.PropertyModelChangeProcessor;
 
 /** Tests for {@link SecondaryTasksSurfaceViewBinder}. */
 @RunWith(BaseRobolectricTestRunner.class)
+// After the refactoring, the SecondaryTasksSurface will go away.
+@DisableFeatures(ChromeFeatureList.START_SURFACE_REFACTOR)
 @Config(manifest = Config.NONE)
 public class SecondaryTasksSurfaceViewBinderUnitTest {
     private Activity mActivity;
     private ViewGroup mParentView;
     private View mTasksSurfaceView;
     private PropertyModel mPropertyModel;
+
     @SuppressWarnings({"FieldCanBeLocal", "unused"})
     private PropertyModelChangeProcessor mPropertyModelChangeProcessor;
 
@@ -56,9 +61,12 @@ public class SecondaryTasksSurfaceViewBinderUnitTest {
         mActivity.setContentView(mParentView);
 
         mPropertyModel = new PropertyModel(StartSurfaceProperties.ALL_KEYS);
-        mPropertyModelChangeProcessor = PropertyModelChangeProcessor.create(mPropertyModel,
-                new TasksSurfaceViewBinder.ViewHolder(mParentView, mTasksSurfaceView, null),
-                SecondaryTasksSurfaceViewBinder::bind);
+        mPropertyModelChangeProcessor =
+                PropertyModelChangeProcessor.create(
+                        mPropertyModel,
+                        new StartSurfaceWithParentViewBinder.ViewHolder(
+                                mParentView, mTasksSurfaceView, null),
+                        SecondaryTasksSurfaceViewBinder::bind);
     }
 
     @Test

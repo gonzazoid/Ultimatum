@@ -8,11 +8,12 @@
 #include <algorithm>
 #include <string>
 
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "base/strings/string_number_conversions.h"
+#include "build/build_config.h"
 #include "chromecast/base/cast_features.h"
 #include "chromecast/browser/cast_touch_device_manager.h"
 #include "chromecast/chromecast_buildflags.h"
@@ -95,7 +96,7 @@ gfx::Rect GetScreenBounds(const gfx::Size& size_in_pixels,
 
 CastDisplayConfigurator::CastDisplayConfigurator(CastScreen* screen)
     : delegate_(
-#if defined(USE_OZONE) && !BUILDFLAG(IS_CAST_AUDIO_ONLY)
+#if BUILDFLAG(IS_OZONE) && !BUILDFLAG(IS_CAST_AUDIO_ONLY)
           ui::OzonePlatform::GetInstance()->CreateNativeDisplayDelegate()
 #else
           nullptr
@@ -166,21 +167,29 @@ void CastDisplayConfigurator::ConfigureDisplayFromCommandLine() {
                display::Display::ROTATE_0);
 }
 
-void CastDisplayConfigurator::SetColorMatrix(
-    const std::vector<float>& color_matrix) {
+void CastDisplayConfigurator::SetColorTemperatureAdjustment(
+    const display::ColorTemperatureAdjustment& cta) {
   if (!delegate_ || !display_)
     return;
+  delegate_->SetColorTemperatureAdjustment(display_->display_id(), cta);
+
+  std::vector<float> color_matrix(9);
+  for (size_t i = 0; i < 3; ++i) {
+    for (size_t j = 0; j < 3; ++j) {
+      color_matrix[3 * i + j] = cta.srgb_matrix.vals[i][j];
+    }
+  }
   delegate_->SetColorMatrix(display_->display_id(), color_matrix);
   NotifyObservers();
 }
 
-void CastDisplayConfigurator::SetGammaCorrection(
-    const std::vector<display::GammaRampRGBEntry>& degamma_lut,
-    const std::vector<display::GammaRampRGBEntry>& gamma_lut) {
+void CastDisplayConfigurator::SetGammaAdjustment(
+    const display::GammaAdjustment& adjustment) {
   if (!delegate_ || !display_)
     return;
+  delegate_->SetGammaAdjustment(display_->display_id(), adjustment);
 
-  delegate_->SetGammaCorrection(display_->display_id(), degamma_lut, gamma_lut);
+  delegate_->SetGammaCorrection(display_->display_id(), {}, adjustment.curve);
   NotifyObservers();
 }
 
@@ -199,7 +208,8 @@ void CastDisplayConfigurator::ForceInitialConfigure() {
 
 void CastDisplayConfigurator::OnDisplaysAcquired(
     bool force_initial_configure,
-    const std::vector<display::DisplaySnapshot*>& displays) {
+    const std::vector<raw_ptr<display::DisplaySnapshot, VectorExperimental>>&
+        displays) {
   DCHECK(delegate_);
   if (displays.empty()) {
     LOG(WARNING) << "No displays detected, skipping display init.";

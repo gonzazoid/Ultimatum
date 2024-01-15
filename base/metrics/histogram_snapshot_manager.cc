@@ -11,35 +11,13 @@
 #include "base/memory/raw_ptr.h"
 #include "base/metrics/histogram_flattener.h"
 #include "base/metrics/histogram_samples.h"
-#include "base/metrics/statistics_recorder.h"
 
 namespace base {
-
-namespace {
-
-// A simple object to set an "active" flag and clear it upon destruction. It is
-// an error if the flag is already set.
-class MakeActive {
- public:
-  explicit MakeActive(std::atomic<bool>* is_active) : is_active_(is_active) {
-    bool was_active = is_active_->exchange(true, std::memory_order_relaxed);
-    CHECK(!was_active);
-  }
-  MakeActive(const MakeActive&) = delete;
-  MakeActive& operator=(const MakeActive&) = delete;
-  ~MakeActive() { is_active_->store(false, std::memory_order_relaxed); }
-
- private:
-  raw_ptr<std::atomic<bool>> is_active_;
-};
-
-}  // namespace
 
 HistogramSnapshotManager::HistogramSnapshotManager(
     HistogramFlattener* histogram_flattener)
     : histogram_flattener_(histogram_flattener) {
   DCHECK(histogram_flattener_);
-  is_active_.store(false, std::memory_order_relaxed);
 }
 
 HistogramSnapshotManager::~HistogramSnapshotManager() = default;
@@ -50,38 +28,57 @@ void HistogramSnapshotManager::PrepareDeltas(
     HistogramBase::Flags required_flags) {
   for (HistogramBase* const histogram : histograms) {
     histogram->SetFlags(flags_to_set);
-    if ((histogram->flags() & required_flags) == required_flags)
+    if (histogram->HasFlags(required_flags)) {
       PrepareDelta(histogram);
+    }
+  }
+}
+
+void HistogramSnapshotManager::SnapshotUnloggedSamples(
+    const std::vector<HistogramBase*>& histograms,
+    HistogramBase::Flags required_flags) {
+  DCHECK(!unlogged_samples_snapshot_taken_);
+  unlogged_samples_snapshot_taken_ = true;
+  for (HistogramBase* const histogram : histograms) {
+    if (histogram->HasFlags(required_flags)) {
+      const HistogramSnapshotPair& histogram_snapshot_pair =
+          histograms_and_snapshots_.emplace_back(
+              histogram, histogram->SnapshotUnloggedSamples());
+      PrepareSamples(histogram_snapshot_pair.first,
+                     *histogram_snapshot_pair.second);
+    }
+  }
+}
+
+void HistogramSnapshotManager::MarkUnloggedSamplesAsLogged() {
+  DCHECK(unlogged_samples_snapshot_taken_);
+  unlogged_samples_snapshot_taken_ = false;
+  std::vector<HistogramSnapshotPair> histograms_and_snapshots;
+  histograms_and_snapshots.swap(histograms_and_snapshots_);
+  for (auto& [histogram, snapshot] : histograms_and_snapshots) {
+    histogram->MarkSamplesAsLogged(*snapshot);
   }
 }
 
 void HistogramSnapshotManager::PrepareDelta(HistogramBase* histogram) {
-  PrepareSamples(histogram, histogram->SnapshotDelta());
+  std::unique_ptr<HistogramSamples> samples = histogram->SnapshotDelta();
+  PrepareSamples(histogram, *samples);
 }
 
 void HistogramSnapshotManager::PrepareFinalDelta(
     const HistogramBase* histogram) {
-  PrepareSamples(histogram, histogram->SnapshotFinalDelta());
+  std::unique_ptr<HistogramSamples> samples = histogram->SnapshotFinalDelta();
+  PrepareSamples(histogram, *samples);
 }
 
-void HistogramSnapshotManager::PrepareSamples(
-    const HistogramBase* histogram,
-    std::unique_ptr<HistogramSamples> samples) {
+void HistogramSnapshotManager::PrepareSamples(const HistogramBase* histogram,
+                                              const HistogramSamples& samples) {
   DCHECK(histogram_flattener_);
-
-  // Ensure that there is no concurrent access going on while accessing the
-  // set of known histograms. The flag will be reset when this object goes
-  // out of scope.
-  MakeActive make_active(&is_active_);
-
-  // Get information known about this histogram. If it did not previously
-  // exist, one will be created and initialized.
-  SampleInfo* sample_info = &known_histograms_[histogram->name_hash()];
 
   // Crash if we detect that our histograms have been overwritten.  This may be
   // a fair distance from the memory smasher, but we hope to correlate these
   // crashes with other events, such as plugins, or usage patterns, etc.
-  uint32_t corruption = histogram->FindCorruption(*samples);
+  uint32_t corruption = histogram->FindCorruption(samples);
   if (HistogramBase::BUCKET_ORDER_ERROR & corruption) {
     // Extract fields useful during debug.
     const BucketRanges* ranges =
@@ -108,15 +105,11 @@ void HistogramSnapshotManager::PrepareSamples(
     DLOG(ERROR) << "Histogram: \"" << histogram->histogram_name()
                 << "\" has data corruption: " << corruption;
     // Don't record corrupt data to metrics services.
-    const uint32_t old_corruption = sample_info->inconsistencies;
-    if (old_corruption == (corruption | old_corruption))
-      return;  // We've already seen this corruption for this histogram.
-    sample_info->inconsistencies |= corruption;
     return;
   }
 
-  if (samples->TotalCount() > 0)
-    histogram_flattener_->RecordDelta(*histogram, *samples);
+  if (samples.TotalCount() > 0)
+    histogram_flattener_->RecordDelta(*histogram, samples);
 }
 
 }  // namespace base

@@ -11,8 +11,9 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
 #include "base/callback_list.h"
+#include "base/functional/callback_forward.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_multi_source_observation.h"
 #include "base/scoped_observation.h"
@@ -34,6 +35,7 @@
 #include "extensions/browser/extension_registry_observer.h"
 #include "extensions/browser/extension_system.h"
 #include "mojo/public/cpp/bindings/remote.h"
+#include "services/accessibility/public/mojom/assistive_technology_type.mojom.h"
 #include "services/media_session/public/mojom/audio_focus.mojom.h"
 #include "ui/accessibility/ax_enums.mojom-forward.h"
 #include "ui/base/ime/ash/input_method_manager.h"
@@ -47,9 +49,14 @@ class Rect;
 }  // namespace gfx
 
 namespace ash {
+
+namespace language_packs {
+struct PackResult;
+}  // namespace language_packs
+
+class AccessibilityDlcInstaller;
 class AccessibilityExtensionLoader;
 class Dictation;
-class PumpkinInstaller;
 class SelectToSpeakEventHandlerDelegateImpl;
 enum class SelectToSpeakState;
 enum class SelectToSpeakPanelAction;
@@ -89,11 +96,13 @@ using AccessibilityStatusCallbackList =
     base::RepeatingCallbackList<void(const AccessibilityStatusEventDetails&)>;
 using AccessibilityStatusCallback =
     AccessibilityStatusCallbackList::CallbackType;
-using GetDlcContentsCallback =
+using GetTtsDlcContentsCallback =
     base::OnceCallback<void(const std::vector<uint8_t>&,
-                            absl::optional<std::string>)>;
+                            std::optional<std::string>)>;
+using InstallFaceGazeAssetsCallback = base::OnceCallback<void(
+    std::optional<::extensions::api::accessibility_private::FaceGazeAssets>)>;
 using InstallPumpkinCallback = base::OnceCallback<void(
-    std::unique_ptr<::extensions::api::accessibility_private::PumpkinData>)>;
+    std::optional<::extensions::api::accessibility_private::PumpkinData>)>;
 
 class AccessibilityPanelWidgetObserver;
 
@@ -179,9 +188,16 @@ class AccessibilityManager
   // Returns true if autoclick is enabled.
   bool IsAutoclickEnabled() const;
 
+  // Enables or disables FaceGaze.
+  void EnableFaceGaze(bool enabled);
+
+  // Returns true if FaceGaze is enabled.
+  bool IsFaceGazeEnabled() const;
+
   // Requests the Autoclick extension find the bounds of the nearest scrollable
   // ancestor to the point in the screen, as given in screen coordinates.
-  void RequestAutoclickScrollableBoundsForPoint(gfx::Point& point_in_screen);
+  void RequestAutoclickScrollableBoundsForPoint(
+      const gfx::Point& point_in_screen);
 
   // Dispatches magnifier bounds update to Magnifier (through Accessibility
   // Common extension).
@@ -242,11 +258,21 @@ class AccessibilityManager
   // Called when the Select-to-Speak extension state has changed.
   void SetSelectToSpeakState(SelectToSpeakState state);
 
+  // Called when the Select to Speak context menu is clicked from
+  // outside Ash browser/webui (for example, on Lacros).
+  void OnSelectToSpeakContextMenuClick();
+
   // Invoked to enable or disable Switch Access.
   void SetSwitchAccessEnabled(bool enabled);
 
   // Returns if Switch Access is enabled.
   bool IsSwitchAccessEnabled() const;
+
+  // Invoked to enable or disable Color Correction.
+  void SetColorCorrectionEnabled(bool enabled);
+
+  // Returns if Color Correction is enabled.
+  bool IsColorCorrectionEnabled() const;
 
   // Returns true if a braille display is connected to the system, otherwise
   // false.
@@ -326,14 +352,14 @@ class AccessibilityManager
                     std::unique_ptr<AccessibilityFocusRingInfo> focus_ring);
 
   // Hides focus ring on screen.
-  void HideFocusRing(std::string caller_id);
+  void HideFocusRing(std::string focus_ring_id);
 
-  // Initializes the focus rings when an extension loads.
-  void InitializeFocusRings(const std::string& extension_id);
+  // Initializes the focus rings when a feature loads.
+  void InitializeFocusRings(ax::mojom::AssistiveTechnologyType at_type);
 
-  // Hides all focus rings for the extension, and removes that extension from
-  // |focus_ring_names_for_extension_id_|.
-  void RemoveFocusRings(const std::string& extension_id);
+  // Hides all focus rings for the `at_type`, and removes that `at_type` from
+  // |focus_ring_names_for_at_type_|.
+  void RemoveFocusRings(ax::mojom::AssistiveTechnologyType at_type);
 
   // Draws a highlight at the given rects in screen coordinates. Rects may be
   // overlapping and will be merged into one layer. This looks similar to
@@ -360,13 +386,24 @@ class AccessibilityManager
   // Sets the bluetooth braille display device address for the current user.
   void UpdateBluetoothBrailleDisplayAddress(const std::string& address);
 
-  // Create a focus ring ID from the extension ID and the name of the ring.
-  const std::string GetFocusRingId(const std::string& extension_id,
+  // Opens a specified subpage in the ChromeOS Settings app.
+  void OpenSettingsSubpage(const std::string& subpage);
+
+  // Create a focus ring ID from the `at_type` and the name of the ring.
+  const std::string GetFocusRingId(ax::mojom::AssistiveTechnologyType at_type,
                                    const std::string& focus_ring_name);
 
   // Sends a panel action event to the Select-to-speak extension.
   void OnSelectToSpeakPanelAction(SelectToSpeakPanelAction action,
                                   double value);
+
+  // Sends the keys currently pressed to the Select-to-speak extension.
+  void SendKeysCurrentlyDownToSelectToSpeak(
+      const std::set<ui::KeyboardCode>& pressed_keys);
+
+  // Sends a mouse event to the Select-to-speak extension.
+  void SendMouseEventToSelectToSpeak(ui::EventType type,
+                                     const gfx::PointF& position);
 
   // Called when Shimless RMA launches to enable accessibility features.
   void OnShimlessRmaLaunched();
@@ -382,6 +419,9 @@ class AccessibilityManager
   void SetProfileForTest(Profile* profile);
   static void SetBrailleControllerForTest(
       extensions::api::braille_display_private::BrailleController* controller);
+  void SetScreenDarkenObserverForTest(base::RepeatingCallback<void()> observer);
+  void SetOpenSettingsSubpageObserverForTest(
+      base::RepeatingCallback<void()> observer);
   void SetFocusRingObserverForTest(base::RepeatingCallback<void()> observer);
   // Runs when highlights are set or updated, but not when they are removed.
   void SetHighlightsObserverForTest(base::RepeatingCallback<void()> observer);
@@ -389,6 +429,8 @@ class AccessibilityManager
       base::RepeatingCallback<void()> observer);
   void SetCaretBoundsObserverForTest(
       base::RepeatingCallback<void(const gfx::Rect&)> observer);
+  void SetMagnifierBoundsObserverForTest(
+      base::RepeatingCallback<void()> observer);
   void SetSwitchAccessKeysForTest(const std::set<int>& action_keys,
                                   const std::string& pref_name);
 
@@ -400,14 +442,27 @@ class AccessibilityManager
     return is_pumpkin_installed_for_testing_;
   }
 
-  // Triggers a request to install Pumpkin. Runs `callback` with a value of
-  // true if the install was successful. Otherwise, runs `callback` with a
-  // value of false.
+  // Triggers a request to install the FaceGaze assets DLC. Runs `callback` with
+  // the file bytes if the DLC was successfully downloaded. Runs `callback` with
+  // an empty object otherwise.
+  void InstallFaceGazeAssets(InstallFaceGazeAssetsCallback callback);
+
+  // Triggers a request to install Pumpkin. Runs `callback` with the file bytes
+  // if the DLC was successfully downloaded. Runs `callback` with an empty
+  // object otherwise.
   void InstallPumpkinForDictation(InstallPumpkinCallback callback);
 
   // Reads the contents of a DLC file and runs `callback` with the results.
-  void GetDlcContents(::extensions::api::accessibility_private::DlcType dlc,
-                      GetDlcContentsCallback callback);
+  void GetTtsDlcContents(
+      ::extensions::api::accessibility_private::DlcType dlc,
+      ::extensions::api::accessibility_private::TtsVariant variant,
+      GetTtsDlcContentsCallback callback);
+  // A helper for GetTtsDlcContents, which is called after retrieving the state
+  // of the target DLC.
+  void GetTtsDlcContentsOnPackState(
+      ::extensions::api::accessibility_private::TtsVariant variant,
+      GetTtsDlcContentsCallback callback,
+      const language_packs::PackResult& pack_result);
   void SetDlcPathForTest(base::FilePath path);
 
  protected:
@@ -428,8 +483,10 @@ class AccessibilityManager
   void PostLoadAccessibilityCommon();
   void PostUnloadAccessibilityCommon();
 
+  void UpdateEnhancedNetworkTts();
   void LoadEnhancedNetworkTts();
   void UnloadEnhancedNetworkTts();
+  void PostLoadEnhancedNetworkTts();
 
   void UpdateAlwaysShowMenuFromPref();
   void OnLargeCursorChanged();
@@ -516,27 +573,34 @@ class AccessibilityManager
   bool ShouldShowSodaSucceededNotificationForDictation();
   bool ShouldShowSodaFailedNotificationForDictation(
       speech::LanguageCode language_code);
-  void ShowSodaDownloadNotificationForDictation(bool succeeded);
+
+  // Updates the Dictation notification according to DLC states. Assumes that
+  // it's only called when a Dictation-related DLC has downloaded (or failed to
+  // download).
+  void UpdateDictationNotification();
 
   void ShowDictationLanguageUpgradedNudge(const std::string& locale);
   speech::LanguageCode GetDictationLanguageCode();
 
   void CreateChromeVoxPanel();
 
-  void OnPumpkinInstalled(bool success);
+  // Methods for managing the FaceGaze assets DLC.
+  void OnFaceGazeAssetsInstalled(bool success, const std::string& root_path);
+  void OnFaceGazeAssetsCreated(
+      std::optional<::extensions::api::accessibility_private::FaceGazeAssets>
+          assets);
+
+  // Pumpkin-related methods.
+  void OnPumpkinInstalled(bool success, const std::string& root_path);
   void OnPumpkinError(const std::string& error);
   void OnPumpkinDataCreated(
-      std::unique_ptr<::extensions::api::accessibility_private::PumpkinData>
+      std::optional<::extensions::api::accessibility_private::PumpkinData>
           data);
 
   void OnAppTerminating();
 
-  // Returns a full file path given a DLC.
-  base::FilePath DlcTypeToPath(
-      ::extensions::api::accessibility_private::DlcType dlc);
-
   // Profile which has the current a11y context.
-  Profile* profile_ = nullptr;
+  raw_ptr<Profile> profile_ = nullptr;
   base::ScopedObservation<Profile, ProfileObserver> profile_observation_{this};
 
   base::ScopedObservation<session_manager::SessionManager,
@@ -572,7 +636,7 @@ class AccessibilityManager
 
   bool braille_ime_current_ = false;
 
-  ChromeVoxPanel* chromevox_panel_ = nullptr;
+  raw_ptr<ChromeVoxPanel> chromevox_panel_ = nullptr;
   std::unique_ptr<AccessibilityPanelWidgetObserver>
       chromevox_panel_widget_observer_;
 
@@ -596,10 +660,10 @@ class AccessibilityManager
 
   std::unique_ptr<AccessibilityExtensionLoader> switch_access_loader_;
 
-  std::unique_ptr<PumpkinInstaller> pumpkin_installer_;
+  std::unique_ptr<AccessibilityDlcInstaller> dlc_installer_;
 
-  std::map<std::string, std::set<std::string>>
-      focus_ring_names_for_extension_id_;
+  std::map<ax::mojom::AssistiveTechnologyType, std::set<std::string>>
+      focus_ring_names_for_at_type_;
 
   bool app_terminating_ = false;
 
@@ -612,17 +676,22 @@ class AccessibilityManager
   bool dictation_triggered_by_user_ = false;
   bool ignore_dictation_locale_pref_change_ = false;
 
-  base::RepeatingCallback<void()> focus_ring_observer_for_test_;
+  base::RepeatingCallback<void()> screen_darken_observer_for_test_;
+  base::RepeatingCallback<void()> open_settings_subpage_observer_for_test_;
   base::RepeatingCallback<void()> highlights_observer_for_test_;
   base::RepeatingCallback<void()> select_to_speak_state_observer_for_test_;
   base::RepeatingCallback<void(const gfx::Rect&)>
       caret_bounds_observer_for_test_;
+  base::RepeatingCallback<void()> magnifier_bounds_observer_for_test_;
+  base::OnceClosure enhanced_network_tts_waiter_for_test_;
 
   // Used to set the audio focus enforcement type for ChromeVox.
   mojo::Remote<media_session::mojom::AudioFocusManager> audio_focus_manager_;
 
   // Whether the virtual keyboard was enabled before Switch Access loaded.
   bool was_vk_enabled_before_switch_access_ = false;
+
+  InstallFaceGazeAssetsCallback install_facegaze_assets_callback_;
 
   InstallPumpkinCallback install_pumpkin_callback_;
   bool is_pumpkin_installed_for_testing_ = false;
@@ -635,22 +704,16 @@ class AccessibilityManager
 
   base::WeakPtrFactory<AccessibilityManager> weak_ptr_factory_{this};
 
+  friend class AccessibilityManagerDictationDialogTest;
+  friend class AccessibilityManagerDictationKeyboardImprovementsTest;
+  friend class AccessibilityManagerDlcTest;
+  friend class AccessibilityManagerNoOnDeviceSpeechRecognitionTest;
+  friend class AccessibilityManagerTest;
+  friend class AccessibilityServiceClientTest;
   friend class DictationTest;
   friend class SwitchAccessTest;
-  friend class AccessibilityManagerTest;
-  friend class AccessibilityManagerSodaTest;
-  friend class AccessibilityManagerDictationDialogTest;
-  friend class AccessibilityManagerNoOnDeviceSpeechRecognitionTest;
 };
 
 }  // namespace ash
 
-// TODO(https://crbug.com/1164001): remove after the Chrome OS source code
-// directory migration is finished.
-namespace chromeos {
-using ::ash::AccessibilityManager;
-using ::ash::AccessibilityNotificationType;
-using ::ash::AccessibilityStatusEventDetails;
-using ::ash::PlaySoundOption;
-}  // namespace chromeos
 #endif  // CHROME_BROWSER_ASH_ACCESSIBILITY_ACCESSIBILITY_MANAGER_H_

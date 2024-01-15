@@ -5,25 +5,15 @@
 #ifndef CHROME_BROWSER_UI_PASSWORDS_BUBBLE_CONTROLLERS_SAVE_UPDATE_BUBBLE_CONTROLLER_H_
 #define CHROME_BROWSER_UI_PASSWORDS_BUBBLE_CONTROLLERS_SAVE_UPDATE_BUBBLE_CONTROLLER_H_
 
-#include "base/memory/raw_ptr.h"
-#include "base/memory/weak_ptr.h"
-#include "chrome/browser/ui/passwords/bubble_controllers/password_bubble_controller_base.h"
-#include "components/password_manager/core/browser/manage_passwords_referrer.h"
-#include "components/password_manager/core/browser/password_form.h"
-#include "components/password_manager/core/browser/statistics_table.h"
-#include "components/password_manager/core/common/password_manager_ui.h"
+#include "chrome/browser/ui/passwords/bubble_controllers/common_saved_account_manager_bubble_controller.h"
 
-class PasswordsModelDelegate;
 namespace base {
 class Clock;
 }
 
-namespace ui {
-class ImageModel;
-}
-
 // This controller provides data and actions for the PasswordSaveUpdateView.
-class SaveUpdateBubbleController : public PasswordBubbleControllerBase {
+class SaveUpdateBubbleController
+    : public CommonSavedAccountManagerBubbleController {
  public:
   explicit SaveUpdateBubbleController(
       base::WeakPtr<PasswordsModelDelegate> delegate,
@@ -33,22 +23,9 @@ class SaveUpdateBubbleController : public PasswordBubbleControllerBase {
   // Called by the view code when the save/update button is clicked by the user.
   void OnSaveClicked();
 
-  // Called by the view code when the "Nope" button in clicked by the user in
-  // update bubble.
-  void OnNopeUpdateClicked();
-
   // Called by the view code when the "Never for this site." button in clicked
   // by the user.
   void OnNeverForThisSiteClicked();
-
-  // Called by the view code when username or password is corrected using
-  // the username correction or password selection features in PendingView.
-  void OnCredentialEdited(std::u16string new_username,
-                          std::u16string new_password);
-
-  // Called by the view code when the "Google Password Manager" link in the
-  // bubble footer in clicked by the user.
-  void OnGooglePasswordManagerLinkClicked();
 
   // The password bubble can switch its state between "save" and "update"
   // depending on the user input. |state_| only captures the correct state on
@@ -64,12 +41,12 @@ class SaveUpdateBubbleController : public PasswordBubbleControllerBase {
   // non-syncing account-store users as well as syncing users.
   bool IsCurrentStateAffectingPasswordsStoredInTheGoogleAccount();
 
-  // Returns true if passwords revealing is not locked or re-authentication is
-  // not available on the given platform. Otherwise, the method schedules
-  // re-authentication and bubble reopen (the current bubble will be destroyed),
-  // and returns false immediately. New bubble will reveal the passwords if the
-  // re-authentication is successful.
-  bool RevealPasswords();
+  // Invokes `callback` with true if passwords revealing is not locked or
+  // re-authentication is not available on the given platform. Otherwise, the
+  // method schedules re-authentication and invokes `callback` with the result
+  // // of authentication.
+  void ShouldRevealPasswords(
+      PasswordsModelDelegate::AvailabilityCallback callback);
 
   // Whether we should show the password store picker (either the account store
   // or the profile store).
@@ -85,14 +62,6 @@ class SaveUpdateBubbleController : public PasswordBubbleControllerBase {
   // before the save bubble action can be concluded.
   bool IsAccountStorageOptInRequiredBeforeSave();
 
-  // Returns the email of current primary account. Returns empty string if no
-  // account is signed in.
-  std::u16string GetPrimaryAccountEmail();
-
-  // Returns the avatar of the primary account. Returns an empty image if no
-  // account is signed in.
-  ui::ImageModel GetPrimaryAccountAvatar(int icon_size_dip);
-
   // Users need to reauth to their account to opt-in using their password
   // account storage. This method returns whether account auth attempt during
   // the last password save process failed or not.
@@ -100,18 +69,6 @@ class SaveUpdateBubbleController : public PasswordBubbleControllerBase {
 
   // PasswordBubbleControllerBase methods:
   std::u16string GetTitle() const override;
-
-  password_manager::ui::State state() const { return state_; }
-
-  const password_manager::PasswordForm& pending_password() const {
-    return pending_password_;
-  }
-
-  bool are_passwords_revealed_when_bubble_is_opened() const {
-    return are_passwords_revealed_when_bubble_is_opened_;
-  }
-
-  bool enable_editing() const { return enable_editing_; }
 
 #if defined(UNIT_TEST)
   void set_clock(base::Clock* clock) { clock_ = clock; }
@@ -122,28 +79,21 @@ class SaveUpdateBubbleController : public PasswordBubbleControllerBase {
 #endif
 
  private:
-  // PasswordBubbleControllerBase methods:
   void ReportInteractions() override;
 
-  // Origin of the page from where this bubble was triggered.
-  url::Origin origin_;
-  password_manager::ui::State state_;
-  password_manager::PasswordForm pending_password_;
-  std::vector<password_manager::PasswordForm> existing_credentials_;
   password_manager::InteractionsStats interaction_stats_;
-  password_manager::metrics_util::UIDisplayDisposition display_disposition_;
 
   // True iff password revealing should require re-auth for privacy reasons.
   bool password_revealing_requires_reauth_;
 
-  // True iff username/password editing should be enabled.
-  bool enable_editing_;
-
-  // Dismissal reason for a password bubble.
-  password_manager::metrics_util::UIDismissalReason dismissal_reason_;
-
   // Used to retrieve the current time, in base::Time units.
   raw_ptr<base::Clock> clock_;
+
+  std::vector<password_manager::PasswordForm> existing_credentials_;
+
+  std::u16string original_username_;
+
+  base::WeakPtrFactory<SaveUpdateBubbleController> weak_ptr_factory_{this};
 };
 
 #endif  // CHROME_BROWSER_UI_PASSWORDS_BUBBLE_CONTROLLERS_SAVE_UPDATE_BUBBLE_CONTROLLER_H_

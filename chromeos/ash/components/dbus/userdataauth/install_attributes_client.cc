@@ -9,10 +9,11 @@
 
 #include <google/protobuf/message_lite.h>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/memory/raw_ptr.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "chromeos/ash/components/dbus/userdataauth/fake_install_attributes_client.h"
 #include "chromeos/dbus/common/blocking_method_caller.h"
@@ -119,7 +120,15 @@ class InstallAttributesClientImpl : public InstallAttributesClient {
                     std::move(callback));
   }
 
-  absl::optional<::user_data_auth::InstallAttributesGetReply>
+  void GetFirmwareManagementParameters(
+      const ::user_data_auth::GetFirmwareManagementParametersRequest& request,
+      GetFirmwareManagementParametersCallback callback) override {
+    CallProtoMethod(::user_data_auth::kGetFirmwareManagementParameters,
+                    ::user_data_auth::kInstallAttributesInterface, request,
+                    std::move(callback));
+  }
+
+  std::optional<::user_data_auth::InstallAttributesGetReply>
   BlockingInstallAttributesGet(
       const ::user_data_auth::InstallAttributesGetRequest& request) override {
     return BlockingCallProtoMethod<::user_data_auth::InstallAttributesGetReply>(
@@ -127,7 +136,7 @@ class InstallAttributesClientImpl : public InstallAttributesClient {
         ::user_data_auth::kInstallAttributesInterface, request);
   }
 
-  absl::optional<::user_data_auth::InstallAttributesSetReply>
+  std::optional<::user_data_auth::InstallAttributesSetReply>
   BlockingInstallAttributesSet(
       const ::user_data_auth::InstallAttributesSetRequest& request) override {
     return BlockingCallProtoMethod<::user_data_auth::InstallAttributesSetReply>(
@@ -135,7 +144,7 @@ class InstallAttributesClientImpl : public InstallAttributesClient {
         ::user_data_auth::kInstallAttributesInterface, request);
   }
 
-  absl::optional<::user_data_auth::InstallAttributesFinalizeReply>
+  std::optional<::user_data_auth::InstallAttributesFinalizeReply>
   BlockingInstallAttributesFinalize(
       const ::user_data_auth::InstallAttributesFinalizeRequest& request)
       override {
@@ -145,7 +154,7 @@ class InstallAttributesClientImpl : public InstallAttributesClient {
         ::user_data_auth::kInstallAttributesInterface, request);
   }
 
-  absl::optional<::user_data_auth::InstallAttributesGetStatusReply>
+  std::optional<::user_data_auth::InstallAttributesGetStatusReply>
   BlockingInstallAttributesGetStatus(
       const ::user_data_auth::InstallAttributesGetStatusRequest& request)
       override {
@@ -172,8 +181,8 @@ class InstallAttributesClientImpl : public InstallAttributesClient {
       LOG(ERROR)
           << "Failed to append protobuf when calling InstallAttributes method "
           << method_name;
-      base::ThreadTaskRunnerHandle::Get()->PostTask(
-          FROM_HERE, base::BindOnce(std::move(callback), absl::nullopt));
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+          FROM_HERE, base::BindOnce(std::move(callback), std::nullopt));
       return;
     }
     // Bind with the weak pointer of |this| so the response is not
@@ -208,33 +217,33 @@ class InstallAttributesClientImpl : public InstallAttributesClient {
     if (!ParseProto(response, &reply_proto)) {
       LOG(ERROR)
           << "Failed to parse reply protobuf from InstallAttributes method";
-      std::move(callback).Run(absl::nullopt);
+      std::move(callback).Run(std::nullopt);
       return;
     }
     std::move(callback).Run(reply_proto);
   }
 
   template <typename ReplyType, typename RequestType>
-  absl::optional<ReplyType> BlockingCallProtoMethod(
-      const char* method_name,
-      const char* interface_name,
-      const RequestType& request) {
+  std::optional<ReplyType> BlockingCallProtoMethod(const char* method_name,
+                                                   const char* interface_name,
+                                                   const RequestType& request) {
     dbus::MethodCall method_call(interface_name, method_name);
     dbus::MessageWriter writer(&method_call);
     if (!writer.AppendProtoAsArrayOfBytes(request)) {
       LOG(ERROR) << "Failed to append protobuf when calling InstallAttributes "
                     "method (blocking) "
                  << method_name;
-      return absl::nullopt;
+      return std::nullopt;
     }
 
     std::unique_ptr<dbus::Response> response(
-        blocking_method_caller_->CallMethodAndBlock(&method_call));
+        blocking_method_caller_->CallMethodAndBlock(&method_call)
+            .value_or(nullptr));
 
     if (!response) {
       LOG(ERROR) << "DBus call failed for InstallAttributes method (blocking) "
                  << method_name;
-      return absl::nullopt;
+      return std::nullopt;
     }
 
     ReplyType reply_proto;
@@ -242,14 +251,14 @@ class InstallAttributesClientImpl : public InstallAttributesClient {
       LOG(ERROR)
           << "Failed to parse proto from InstallAttributes method (blocking) "
           << method_name;
-      return absl::nullopt;
+      return std::nullopt;
     }
 
     return reply_proto;
   }
 
   // D-Bus proxy for cryptohomed, not owned.
-  dbus::ObjectProxy* proxy_ = nullptr;
+  raw_ptr<dbus::ObjectProxy> proxy_ = nullptr;
 
   // For making blocking dbus calls.
   std::unique_ptr<chromeos::BlockingMethodCaller> blocking_method_caller_;

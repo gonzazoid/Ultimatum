@@ -9,8 +9,8 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/run_loop.h"
 #include "base/test/task_environment.h"
 #include "base/time/time.h"
@@ -251,8 +251,8 @@ TEST_F(MojoHostResolverImplTest, ResolveEx) {
 // HostResolver.
 TEST_F(MojoHostResolverImplTest, NetworkAnonymizationKeyUsed) {
   const url::Origin kOrigin = url::Origin::Create(GURL("https://foo.test/"));
-  const net::NetworkAnonymizationKey kNetworkAnonymizationKey(
-      (net::SchemefulSite(kOrigin)), (net::SchemefulSite(kOrigin)));
+  const auto kNetworkAnonymizationKey =
+      net::NetworkAnonymizationKey::CreateSameSite(net::SchemefulSite(kOrigin));
 
   mock_host_resolver_.set_ondemand_mode(true);
 

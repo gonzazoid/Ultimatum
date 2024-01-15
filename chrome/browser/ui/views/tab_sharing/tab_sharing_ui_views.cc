@@ -7,6 +7,7 @@
 #include <string>
 #include <utility>
 
+#include "base/feature_list.h"
 #include "base/memory/ptr_util.h"
 #include "base/ranges/algorithm.h"
 #include "base/strings/utf_string_conversions.h"
@@ -17,11 +18,12 @@
 #include "chrome/browser/media/webrtc/capture_policy_utils.h"
 #include "chrome/browser/media/webrtc/media_capture_devices_dispatcher.h"
 #include "chrome/browser/media/webrtc/same_origin_observer.h"
+#include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/ui/browser.h"
+#include "chrome/browser/ui/browser_finder.h"
 #include "chrome/browser/ui/browser_list.h"
 #include "chrome/browser/ui/sad_tab_helper.h"
-#include "chrome/browser/ui/tab_sharing/tab_sharing_infobar_delegate.h"
 #include "chrome/browser/ui/views/tab_sharing/tab_capture_contents_border_helper.h"
 #include "components/infobars/content/content_infobar_manager.h"
 #include "components/infobars/core/infobar.h"
@@ -119,18 +121,24 @@ uint32_t TabSharingUIViews::next_capture_session_id_ = 0;
 std::unique_ptr<TabSharingUI> TabSharingUI::Create(
     GlobalRenderFrameHostId capturer,
     const content::DesktopMediaID& media_id,
-    std::u16string app_name,
-    bool favicons_used_for_switch_to_tab_button) {
+    const std::u16string& capturer_name,
+    bool favicons_used_for_switch_to_tab_button,
+    bool app_preferred_current_tab,
+    TabSharingInfoBarDelegate::TabShareType capture_type) {
   return std::make_unique<TabSharingUIViews>(
-      capturer, media_id, app_name, favicons_used_for_switch_to_tab_button);
+      capturer, media_id, capturer_name, favicons_used_for_switch_to_tab_button,
+      app_preferred_current_tab, capture_type);
 }
 
 TabSharingUIViews::TabSharingUIViews(
     GlobalRenderFrameHostId capturer,
     const content::DesktopMediaID& media_id,
-    std::u16string app_name,
-    bool favicons_used_for_switch_to_tab_button)
+    const std::u16string& capturer_name,
+    bool favicons_used_for_switch_to_tab_button,
+    bool app_preferred_current_tab,
+    TabSharingInfoBarDelegate::TabShareType capture_type)
     : capture_session_id_(next_capture_session_id_++),
+      profile_(ProfileManager::GetLastUsedProfileAllowedByPolicy()),
       capturer_(capturer),
       capturer_origin_(GetOriginFromId(capturer)),
       can_focus_capturer_(GetOriginFromId(capturer).scheme() !=
@@ -138,17 +146,18 @@ TabSharingUIViews::TabSharingUIViews(
       capturer_restricted_to_same_origin_(
           CapturerRestrictedToSameOrigin(capturer)),
       shared_tab_media_id_(media_id),
-      app_name_(std::move(app_name)),
+      capturer_name_(std::move(capturer_name)),
       shared_tab_(WebContents::FromRenderFrameHost(RenderFrameHost::FromID(
           media_id.web_contents_id.render_process_id,
           media_id.web_contents_id.main_render_frame_id))),
       favicons_used_for_switch_to_tab_button_(
-          favicons_used_for_switch_to_tab_button) {
+          favicons_used_for_switch_to_tab_button),
+      app_preferred_current_tab_(app_preferred_current_tab),
+      capture_type_(capture_type) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
 
   Observe(shared_tab_);
   shared_tab_name_ = GetTabName(shared_tab_);
-  profile_ = ProfileManager::GetLastUsedProfileAllowedByPolicy();
 
   if (capturer_restricted_to_same_origin_) {
     // base::Unretained is safe here because we own the origin observer, so it
@@ -218,8 +227,12 @@ void TabSharingUIViews::StopSharing() {
 }
 
 void TabSharingUIViews::OnBrowserAdded(Browser* browser) {
-  if (browser->profile()->GetOriginalProfile() == profile_)
+  DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
+  CHECK(browser);
+
+  if (IsCapturableByCapturer(browser->profile())) {
     browser->tab_strip_model()->AddObserver(this);
+  }
 }
 
 void TabSharingUIViews::OnBrowserRemoved(Browser* browser) {
@@ -300,7 +313,7 @@ void TabSharingUIViews::WebContentsDestroyed() {
 }
 
 void TabSharingUIViews::OnRegionCaptureRectChanged(
-    const absl::optional<gfx::Rect>& region_capture_rect) {
+    const std::optional<gfx::Rect>& region_capture_rect) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
 
   if (!shared_tab_) {
@@ -339,7 +352,13 @@ void TabSharingUIViews::ApplyDlpForAllUsersForTesting() {
 void TabSharingUIViews::CreateInfobarsForAllTabs() {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
   BrowserList* browser_list = BrowserList::GetInstance();
-  for (auto* browser : *browser_list) {
+  for (Browser* browser : *browser_list) {
+    CHECK(browser);
+
+    if (!IsCapturableByCapturer(browser->profile())) {
+      continue;
+    }
+
     OnBrowserAdded(browser);
 
     TabStripModel* tab_strip_model = browser->tab_strip_model();
@@ -362,6 +381,13 @@ void TabSharingUIViews::CreateInfobarForWebContents(WebContents* contents) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
   DCHECK(contents);
 
+  // Don't show the info bar in a Picture in Picture window, since it doesn't
+  // typically fit anyway.
+  Browser* browser = chrome::FindBrowserWithTab(contents);
+  if (browser && browser->is_type_picture_in_picture()) {
+    return;
+  }
+
   auto infobars_entry = infobars_.find(contents);
   // Recreate the infobar if it already exists.
   if (infobars_entry != infobars_.end()) {
@@ -374,12 +400,8 @@ void TabSharingUIViews::CreateInfobarForWebContents(WebContents* contents) {
 
   const bool is_capturing_tab = (GetGlobalId(contents) == capturer_);
   const bool is_captured_tab = (contents == shared_tab_);
-
-  // We may want to show the "Share this tab instead" button, but we can only do
-  // so if we have a |source_callback_| and if this tab is neither the capturing
-  // nor captured tab.
   const bool is_share_instead_button_possible =
-      !source_callback_.is_null() && !is_capturing_tab && !is_captured_tab;
+      IsShareInsteadButtonPossible(contents);
 
   // If sharing this tab instead of the currently captured tab is possible, it
   // may still be blocked by enterprise policy. If the enterprise policy is
@@ -395,7 +417,7 @@ void TabSharingUIViews::CreateInfobarForWebContents(WebContents* contents) {
                             base::Unretained(this)));
   }
 
-  absl::optional<TabSharingInfoBarDelegate::FocusTarget> focus_target;
+  std::optional<TabSharingInfoBarDelegate::FocusTarget> focus_target;
   if (can_focus_capturer_) {
     // Self-capture -> no switch-to button.
     // Capturer -> switch-to-captured.
@@ -438,9 +460,9 @@ void TabSharingUIViews::CreateInfobarForWebContents(WebContents* contents) {
                 : TabSharingInfoBarDelegate::ButtonState::DISABLED;
 
   infobars_[contents] = TabSharingInfoBarDelegate::Create(
-      infobar_manager, shared_tab_name_, app_name_,
+      infobar_manager, shared_tab_name_, capturer_name_,
       shared_tab_ == contents /*shared_tab*/,
-      share_this_tab_instead_button_state, focus_target, this,
+      share_this_tab_instead_button_state, focus_target, this, capture_type_,
       favicons_used_for_switch_to_tab_button_);
 }
 
@@ -511,7 +533,7 @@ void TabSharingUIViews::RefreshFavicons() {
 
 void TabSharingUIViews::MaybeUpdateFavicon(
     WebContents* focus_target,
-    absl::optional<uint32_t>* current_hash,
+    std::optional<uint32_t>* current_hash,
     WebContents* infobar_owner) {
   const ui::ImageModel favicon = TabFavicon(focus_target);
   const uint32_t hash = GetHash(favicon);
@@ -529,7 +551,7 @@ ui::ImageModel TabSharingUIViews::TabFavicon(WebContents* web_contents) const {
   }
 
   if (!web_contents) {
-    return ui::ImageModel::FromImage(favicon::GetDefaultFavicon());
+    return favicon::GetDefaultFaviconModel();
   }
 
   auto it = favicon_overrides_for_testing_.find(web_contents);
@@ -538,8 +560,8 @@ ui::ImageModel TabSharingUIViews::TabFavicon(WebContents* web_contents) const {
   }
 
   const gfx::Image favicon = favicon::TabFaviconFromWebContents(web_contents);
-  return ui::ImageModel::FromImage(
-      favicon.IsEmpty() ? favicon::GetDefaultFavicon() : favicon);
+  return favicon.IsEmpty() ? favicon::GetDefaultFaviconModel()
+                           : ui::ImageModel::FromImage(favicon);
 }
 
 ui::ImageModel TabSharingUIViews::TabFavicon(
@@ -582,4 +604,49 @@ void TabSharingUIViews::UpdateTabCaptureData(WebContents* contents,
       helper->VisibilityUpdated();
       break;
   }
+}
+
+bool TabSharingUIViews::IsShareInsteadButtonPossible(
+    content::WebContents* web_contents) const {
+  DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
+
+  if (source_callback_.is_null()) {
+    // No callback to support share-this-tab-instead.
+    // This can happen, for instance, if the application specifies
+    // {surfaceSwitching: "exclude"}.
+    return false;
+  }
+
+  if (web_contents == shared_tab_) {
+    return false;  // |web_contents| is already the shared tab.
+  }
+
+  if (GetGlobalId(web_contents) != capturer_) {
+    return true;  // Any tab other than the capturing/captured tab is eligible.
+  }
+
+  // If the application specified {preferCurrentTab: true}, we detect that
+  // the current tab is a reasonable choice. We therefore expose the button
+  // that lets the user switch to sharing the current tab.
+  //
+  // Note that for many applications, choosing the current tab is undesirable.
+  // For example, in the context of video-conferencing applications, it would
+  // often produce a "hall of mirrors" effect.
+  return app_preferred_current_tab_;
+}
+
+bool TabSharingUIViews::IsCapturableByCapturer(const Profile* profile) const {
+  DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
+  CHECK(profile);
+
+  // Guest profiles may have an arbitrary non-guest profile as their original,
+  // so direct comparison would not work. Instead, we rely on the assumption
+  // that there is at most one guest profile.
+  const bool capturer_is_guest = profile_ && profile_->IsGuestSession();
+  const bool new_is_guest = profile->IsGuestSession();
+  if (capturer_is_guest || new_is_guest) {
+    return capturer_is_guest && new_is_guest;
+  }
+
+  return profile->GetOriginalProfile() == profile_;
 }

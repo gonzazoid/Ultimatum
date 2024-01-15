@@ -7,8 +7,8 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
@@ -26,6 +26,7 @@
 #include "net/ssl/openssl_ssl_util.h"
 #include "net/ssl/ssl_connection_status_flags.h"
 #include "net/ssl/ssl_info.h"
+#include "net/ssl/ssl_private_key.h"
 #include "net/traffic_annotation/network_traffic_annotation.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/boringssl/src/include/openssl/bytestring.h"
@@ -90,7 +91,6 @@ class SSLServerContextImpl::SocketImpl : public SSLServerSocket,
   int GetLocalAddress(IPEndPoint* address) const override;
   const NetLogWithSource& NetLog() const override;
   bool WasEverUsed() const override;
-  bool WasAlpnNegotiated() const override;
   NextProto GetNegotiatedProtocol() const override;
   absl::optional<base::StringPiece> GetPeerApplicationSettings() const override;
   bool GetSSLInfo(SSLInfo* ssl_info) override;
@@ -154,19 +154,19 @@ class SSLServerContextImpl::SocketImpl : public SSLServerSocket,
 
   void OnHandshakeIOComplete(int result);
 
-  int DoPayloadRead(IOBuffer* buf, int buf_len);
-  int DoPayloadWrite();
+  [[nodiscard]] int DoPayloadRead(IOBuffer* buf, int buf_len);
+  [[nodiscard]] int DoPayloadWrite();
 
-  int DoHandshakeLoop(int last_io_result);
-  int DoHandshake();
+  [[nodiscard]] int DoHandshakeLoop(int last_io_result);
+  [[nodiscard]] int DoHandshake();
   void DoHandshakeCallback(int result);
   void DoReadCallback(int result);
   void DoWriteCallback(int result);
 
-  int Init();
+  [[nodiscard]] int Init();
   void ExtractClientCert();
 
-  raw_ptr<SSLServerContextImpl> context_;
+  raw_ptr<SSLServerContextImpl, DanglingUntriaged> context_;
 
   NetLogWithSource net_log_;
 
@@ -311,7 +311,7 @@ void SSLServerContextImpl::SocketImpl::OnPrivateKeyComplete(
   signature_result_ = error;
   if (signature_result_ == OK)
     signature_ = signature;
-  DoHandshakeLoop(ERR_IO_PENDING);
+  OnHandshakeIOComplete(ERR_IO_PENDING);
 }
 
 // static
@@ -539,10 +539,6 @@ const NetLogWithSource& SSLServerContextImpl::SocketImpl::NetLog() const {
 
 bool SSLServerContextImpl::SocketImpl::WasEverUsed() const {
   return transport_socket_->WasEverUsed();
-}
-
-bool SSLServerContextImpl::SocketImpl::WasAlpnNegotiated() const {
-  return negotiated_protocol_ != kProtoUnknown;
 }
 
 NextProto SSLServerContextImpl::SocketImpl::GetNegotiatedProtocol() const {
@@ -966,8 +962,9 @@ void SSLServerContextImpl::Init() {
 
   SSL_CTX_set_early_data_enabled(ssl_ctx_.get(),
                                  ssl_server_config_.early_data_enabled);
-  DCHECK_LT(SSL3_VERSION, ssl_server_config_.version_min);
-  DCHECK_LT(SSL3_VERSION, ssl_server_config_.version_max);
+  // TLS versions before TLS 1.2 are no longer supported.
+  CHECK_LE(TLS1_2_VERSION, ssl_server_config_.version_min);
+  CHECK_LE(TLS1_2_VERSION, ssl_server_config_.version_max);
   CHECK(SSL_CTX_set_min_proto_version(ssl_ctx_.get(),
                                       ssl_server_config_.version_min));
   CHECK(SSL_CTX_set_max_proto_version(ssl_ctx_.get(),

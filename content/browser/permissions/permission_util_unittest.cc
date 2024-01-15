@@ -35,7 +35,8 @@ TEST_F(PermissionUtilTest, TestIsDomainOverride) {
   blink::mojom::PermissionDescriptorPtr ptr =
       blink::mojom::PermissionDescriptor::New();
   ptr->extension =
-      blink::mojom::PermissionDescriptorExtension::NewStorageAccess(nullptr);
+      blink::mojom::PermissionDescriptorExtension::NewTopLevelStorageAccess(
+          nullptr);
   EXPECT_TRUE(PermissionUtil::IsDomainOverride(ptr));
 }
 
@@ -43,33 +44,27 @@ TEST_F(PermissionUtilTest, TestExtractDomainOverride) {
   url::Origin expected = url::Origin::Create(GURL("https://example.xyz"));
   blink::mojom::PermissionDescriptorPtr ptr =
       blink::mojom::PermissionDescriptor::New();
-  auto storage_access_extension =
-      blink::mojom::StorageAccessPermissionDescriptor::New();
-  storage_access_extension->siteOverride = expected;
+  auto top_level_storage_access_extension =
+      blink::mojom::TopLevelStorageAccessPermissionDescriptor::New();
+  top_level_storage_access_extension->requestedOrigin = expected;
   ptr->extension =
-      blink::mojom::PermissionDescriptorExtension::NewStorageAccess(
-          std::move(storage_access_extension));
+      blink::mojom::PermissionDescriptorExtension::NewTopLevelStorageAccess(
+          std::move(top_level_storage_access_extension));
   EXPECT_EQ(PermissionUtil::ExtractDomainOverride(ptr), expected);
 }
 
 TEST_F(PermissionUtilTest, TestInvalidDomainOverrideFeatureDisabled) {
-  EXPECT_FALSE(PermissionUtil::ValidateDomainOverride({}, nullptr));
+  EXPECT_FALSE(PermissionUtil::ValidateDomainOverride(
+      {}, nullptr, blink::mojom::PermissionDescriptor::New()));
 }
 TEST_F(PermissionUtilTest, TestInvalidDomainOverrideMultiRequest) {
-  base::test::ScopedFeatureList scoped_feature_list;
-  scoped_feature_list.InitAndEnableFeature(
-      blink::features::kStorageAccessAPIForOriginExtension);
-
   EXPECT_FALSE(PermissionUtil::ValidateDomainOverride(
       {blink::PermissionType::STORAGE_ACCESS_GRANT,
        blink::PermissionType::STORAGE_ACCESS_GRANT},
-      nullptr));
+      nullptr, blink::mojom::PermissionDescriptor::New()));
 }
 TEST_F(PermissionUtilTest, TestInvalidDomainOverrideNullRfh) {
   content::BrowserTaskEnvironment task_environment;
-  base::test::ScopedFeatureList scoped_feature_list;
-  scoped_feature_list.InitAndEnableFeature(
-      blink::features::kStorageAccessAPIForOriginExtension);
 
   TestBrowserContext browser_context;
   RenderViewHostTestEnabler enabler;
@@ -82,13 +77,12 @@ TEST_F(PermissionUtilTest, TestInvalidDomainOverrideNullRfh) {
   web_contents_tester->NavigateAndCommit(GURL("https://example.xyz"));
 
   EXPECT_FALSE(PermissionUtil::ValidateDomainOverride(
-      {blink::PermissionType::STORAGE_ACCESS_GRANT}, nullptr));
+      {blink::PermissionType::STORAGE_ACCESS_GRANT}, nullptr,
+      blink::mojom::PermissionDescriptor::New()));
 }
+
 TEST_F(PermissionUtilTest, TestValidDomainOverride) {
   content::BrowserTaskEnvironment task_environment;
-  base::test::ScopedFeatureList scoped_feature_list;
-  scoped_feature_list.InitAndEnableFeature(
-      blink::features::kStorageAccessAPIForOriginExtension);
 
   TestBrowserContext browser_context;
   RenderViewHostTestEnabler enabler;
@@ -100,8 +94,47 @@ TEST_F(PermissionUtilTest, TestValidDomainOverride) {
       WebContentsTester::For(web_contents.get());
   web_contents_tester->NavigateAndCommit(GURL("https://example.xyz"));
 
+  url::Origin expected =
+      url::Origin::Create(GURL("https://another_example.xyz"));
+  blink::mojom::PermissionDescriptorPtr descriptor =
+      blink::mojom::PermissionDescriptor::New();
+  auto top_level_storage_access_extension =
+      blink::mojom::TopLevelStorageAccessPermissionDescriptor::New();
+  top_level_storage_access_extension->requestedOrigin = expected;
+  descriptor->extension =
+      blink::mojom::PermissionDescriptorExtension::NewTopLevelStorageAccess(
+          std::move(top_level_storage_access_extension));
+
   EXPECT_TRUE(PermissionUtil::ValidateDomainOverride(
       {blink::PermissionType::STORAGE_ACCESS_GRANT},
-      web_contents->GetPrimaryMainFrame()));
+      web_contents->GetPrimaryMainFrame(), descriptor));
+}
+
+TEST_F(PermissionUtilTest, TestSameOriginInvalidDomainOverride) {
+  content::BrowserTaskEnvironment task_environment;
+
+  TestBrowserContext browser_context;
+  RenderViewHostTestEnabler enabler;
+  std::unique_ptr<WebContents> web_contents(
+      WebContentsTester::CreateTestWebContents(
+          WebContents::CreateParams(&browser_context)));
+
+  WebContentsTester* web_contents_tester =
+      WebContentsTester::For(web_contents.get());
+  web_contents_tester->NavigateAndCommit(GURL("https://example.xyz"));
+
+  url::Origin expected = url::Origin::Create(GURL("https://example.xyz"));
+  blink::mojom::PermissionDescriptorPtr descriptor =
+      blink::mojom::PermissionDescriptor::New();
+  auto top_level_storage_access_extension =
+      blink::mojom::TopLevelStorageAccessPermissionDescriptor::New();
+  top_level_storage_access_extension->requestedOrigin = expected;
+  descriptor->extension =
+      blink::mojom::PermissionDescriptorExtension::NewTopLevelStorageAccess(
+          std::move(top_level_storage_access_extension));
+
+  EXPECT_FALSE(PermissionUtil::ValidateDomainOverride(
+      {blink::PermissionType::STORAGE_ACCESS_GRANT},
+      web_contents->GetPrimaryMainFrame(), descriptor));
 }
 }  // namespace content

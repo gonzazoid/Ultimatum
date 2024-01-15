@@ -34,7 +34,11 @@ pybind_extension(
     srcs = ["whitespace_tokenizer_op_resolver_wrapper.cc"],
     hdrs = ["whitespace_tokenizer_op_resolver.h"],
     additional_exported_symbols = ["AddWhitespaceTokenizerCustomOp"],
+    enable_stub_generation = True,
     module_name = "_pywrap_whitespace_tokenizer_op_resolver",
+    pytype_srcs = [
+        "_pywrap_whitespace_tokenizer_op_resolver.pyi",
+    ],
     visibility = ["//visibility:public"],
     deps = [
         ":whitespace_tokenizer_op_resolver",
@@ -106,7 +110,11 @@ pybind_extension(
     srcs = ["ngrams_op_resolver_wrapper.cc"],
     hdrs = ["ngrams_op_resolver.h"],
     additional_exported_symbols = ["AddNgramsCustomOp"],
+    enable_stub_generation = True,
     module_name = "_pywrap_ngrams_op_resolver",
+    pytype_srcs = [
+        "_pywrap_ngrams_op_resolver.pyi",
+    ],
     visibility = ["//visibility:public"],
     deps = [
         ":ngrams_op_resolver",

@@ -16,6 +16,7 @@
 #include "media/base/media_switches.h"
 #include "media/media_buildflags.h"
 #include "ui/display/display_switches.h"
+#include "ui/gfx/hdr_metadata.h"
 
 #if BUILDFLAG(ENABLE_LIBVPX)
 // TODO(dalecurtis): This technically should not be allowed in media/base. See
@@ -33,37 +34,54 @@
 #include "media/base/android/media_codec_util.h"  // nogncheck
 #endif
 
+#if BUILDFLAG(IS_WIN)
+#include "base/win/windows_version.h"
+#endif
+
 namespace media {
 
 namespace {
 
+template <typename T>
 class SupplementalProfileCache {
  public:
-  void UpdateCache(const base::flat_set<media::VideoCodecProfile>& profiles) {
+  void UpdateCache(const base::flat_set<T>& profiles) {
     base::AutoLock lock(profiles_lock_);
     profiles_ = profiles;
   }
-  bool IsProfileSupported(media::VideoCodecProfile profile) {
+  bool IsProfileSupported(T profile) {
     base::AutoLock lock(profiles_lock_);
     return profiles_.find(profile) != profiles_.end();
   }
 
  private:
   base::Lock profiles_lock_;
-  base::flat_set<media::VideoCodecProfile> profiles_ GUARDED_BY(profiles_lock_);
+  base::flat_set<T> profiles_ GUARDED_BY(profiles_lock_);
 };
 
-SupplementalProfileCache* GetSupplementalProfileCache() {
-  static base::NoDestructor<SupplementalProfileCache> cache;
+SupplementalProfileCache<VideoCodecProfile>* GetSupplementalProfileCache() {
+  static base::NoDestructor<SupplementalProfileCache<VideoCodecProfile>> cache;
   return cache.get();
 }
 
-bool IsSupportedHdrMetadata(const gfx::HdrMetadataType& hdr_metadata_type) {
-  switch (hdr_metadata_type) {
+SupplementalProfileCache<AudioType>* GetSupplementalAudioTypeCache() {
+  static base::NoDestructor<SupplementalProfileCache<AudioType>> cache;
+  return cache.get();
+}
+
+bool IsSupportedHdrMetadata(const VideoType& type) {
+  switch (type.hdr_metadata_type) {
     case gfx::HdrMetadataType::kNone:
       return true;
 
     case gfx::HdrMetadataType::kSmpteSt2086:
+      // HDR metadata is currently only used with the PQ transfer function.
+      // See gfx::ColorTransform for more details.
+      return type.color_space.transfer ==
+             VideoColorSpace::TransferID::SMPTEST2084;
+
+    // 2094-10 SEI metadata is not the same as Dolby Vision RPU metadata, Dolby
+    // Vision decoders on each platform only support Dolby Vision RPU metadata.
     case gfx::HdrMetadataType::kSmpteSt2094_10:
     case gfx::HdrMetadataType::kSmpteSt2094_40:
       return false;
@@ -183,6 +201,8 @@ bool IsAudioCodecProprietary(AudioCodec codec) {
     case AudioCodec::kMpegHAudio:
     case AudioCodec::kDTS:
     case AudioCodec::kDTSXP2:
+    case AudioCodec::kDTSE:
+    case AudioCodec::kAC4:
       return true;
 
     case AudioCodec::kFLAC:
@@ -205,8 +225,7 @@ bool IsHevcProfileSupported(const VideoType& type) {
     return false;
 
 #if BUILDFLAG(ENABLE_PLATFORM_HEVC)
-#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_LINUX) || \
-    BUILDFLAG(IS_MAC)
+#if BUILDFLAG(PLATFORM_HAS_OPTIONAL_HEVC_SUPPORT)
 #if BUILDFLAG(IS_CHROMEOS_LACROS)
   // TODO(b/171813538): For Lacros, the supplemental profile cache will be
   // asking lacros-gpu, but we will be doing decoding in ash-gpu. Until the
@@ -217,16 +236,15 @@ bool IsHevcProfileSupported(const VideoType& type) {
     return true;
   }
 #endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+  if (!base::FeatureList::IsEnabled(kPlatformHEVCDecoderSupport)) {
+    return false;
+  }
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
   return GetSupplementalProfileCache()->IsProfileSupported(type.profile);
-#elif BUILDFLAG(IS_ANDROID)
-  // Technically android 5.0 mandates support for only HEVC main profile,
-  // however some platforms (like chromecast) have had more profiles supported
-  // so we'll see what happens if we just enable them all.
-  return base::FeatureList::IsEnabled(kPlatformHEVCDecoderSupport);
 #else
   return true;
-#endif  // BUILDFLAG(IS_WIN) || BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_LINUX) ||
-        // BUILDFLAG(IS_MAC)
+#endif  // BUIDFLAG(PLATFORM_HAS_OPTIONAL_HEVC_SUPPORT)
 #else
   return false;
 #endif  // BUILDFLAG(ENABLE_PLATFORM_HEVC)
@@ -280,8 +298,8 @@ bool IsAV1Supported(const VideoType& type) {
 }
 
 bool IsMPEG4Supported() {
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-  return true;
+#if BUILDFLAG(IS_CHROMEOS) && BUILDFLAG(USE_PROPRIETARY_CODECS)
+  return base::FeatureList::IsEnabled(kCrOSLegacyMediaFormats);
 #else
   return false;
 #endif
@@ -294,17 +312,19 @@ bool IsAACSupported(const AudioType& type) {
   return base::android::BuildInfo::GetInstance()->sdk_int() >=
          base::android::SDK_VERSION_P;
 #elif BUILDFLAG(IS_MAC)
-  if (__builtin_available(macOS 10.15, *))
-    return true;
-  return false;
+  return true;
+#elif BUILDFLAG(IS_WIN)
+  return base::win::GetVersion() >= base::win::Version::WIN11_22H2;
 #else
   return false;
 #endif
 }
 
-bool HasOldVoiceCodecSupport() {
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-  return true;
+bool IsDolbyVisionProfileSupported(const VideoType& type) {
+#if BUILDFLAG(ENABLE_PLATFORM_HEVC) &&               \
+    BUILDFLAG(PLATFORM_HAS_OPTIONAL_HEVC_SUPPORT) && \
+    BUILDFLAG(ENABLE_PLATFORM_DOLBY_VISION)
+  return GetSupplementalProfileCache()->IsProfileSupported(type.profile);
 #else
   return false;
 #endif
@@ -327,8 +347,9 @@ bool IsSupportedVideoType(const VideoType& type) {
 // TODO(chcunningham): Add platform specific logic for Android (move from
 // MimeUtilInternal).
 bool IsDefaultSupportedVideoType(const VideoType& type) {
-  if (!IsSupportedHdrMetadata(type.hdr_metadata_type))
+  if (!IsSupportedHdrMetadata(type)) {
     return false;
+  }
 
 #if !BUILDFLAG(USE_PROPRIETARY_CODECS)
   if (IsVideoCodecProprietary(type.codec))
@@ -336,9 +357,10 @@ bool IsDefaultSupportedVideoType(const VideoType& type) {
 #endif
 
   switch (type.codec) {
+    case VideoCodec::kTheora:
+      return IsBuiltInVideoCodec(type.codec);
     case VideoCodec::kH264:
     case VideoCodec::kVP8:
-    case VideoCodec::kTheora:
       return true;
     case VideoCodec::kAV1:
       return IsAV1Supported(type);
@@ -348,10 +370,11 @@ bool IsDefaultSupportedVideoType(const VideoType& type) {
       return IsHevcProfileSupported(type);
     case VideoCodec::kMPEG4:
       return IsMPEG4Supported();
+    case VideoCodec::kDolbyVision:
+      return IsDolbyVisionProfileSupported(type);
     case VideoCodec::kUnknown:
     case VideoCodec::kVC1:
     case VideoCodec::kMPEG2:
-    case VideoCodec::kDolbyVision:
       return false;
   }
 }
@@ -368,10 +391,6 @@ bool IsDefaultSupportedAudioType(const AudioType& type) {
   switch (type.codec) {
     case AudioCodec::kAAC:
       return IsAACSupported(type);
-    case AudioCodec::kAMR_NB:
-    case AudioCodec::kAMR_WB:
-    case AudioCodec::kGSM_MS:
-      return HasOldVoiceCodecSupport();
     case AudioCodec::kFLAC:
     case AudioCodec::kMP3:
     case AudioCodec::kOpus:
@@ -382,26 +401,29 @@ bool IsDefaultSupportedAudioType(const AudioType& type) {
     case AudioCodec::kPCM_ALAW:
     case AudioCodec::kVorbis:
       return true;
-    case AudioCodec::kEAC3:
+    case AudioCodec::kAMR_NB:
+    case AudioCodec::kAMR_WB:
+    case AudioCodec::kGSM_MS:
     case AudioCodec::kALAC:
-    case AudioCodec::kAC3:
     case AudioCodec::kMpegHAudio:
     case AudioCodec::kUnknown:
       return false;
     case AudioCodec::kDTS:
     case AudioCodec::kDTSXP2:
-#if BUILDFLAG(ENABLE_PLATFORM_DTS_AUDIO)
-      return true;
-#else
-      return false;
-#endif
+    case AudioCodec::kDTSE:
+      return BUILDFLAG(ENABLE_PLATFORM_DTS_AUDIO);
+    case AudioCodec::kAC3:
+    case AudioCodec::kEAC3:
+      return BUILDFLAG(ENABLE_PLATFORM_AC3_EAC3_AUDIO);
+    case AudioCodec::kAC4:
+      return BUILDFLAG(ENABLE_PLATFORM_AC4_AUDIO);
   }
 }
 
 bool IsBuiltInVideoCodec(VideoCodec codec) {
 #if BUILDFLAG(ENABLE_FFMPEG_VIDEO_DECODERS)
   if (codec == VideoCodec::kTheora)
-    return true;
+    return base::FeatureList::IsEnabled(kTheoraVideoCodec);
   if (codec == VideoCodec::kVP8)
     return true;
 #if BUILDFLAG(USE_PROPRIETARY_CODECS)
@@ -423,6 +445,10 @@ bool IsBuiltInVideoCodec(VideoCodec codec) {
 void UpdateDefaultSupportedVideoProfiles(
     const base::flat_set<media::VideoCodecProfile>& profiles) {
   GetSupplementalProfileCache()->UpdateCache(profiles);
+}
+
+void UpdateDefaultSupportedAudioTypes(const base::flat_set<AudioType>& types) {
+  GetSupplementalAudioTypeCache()->UpdateCache(types);
 }
 
 }  // namespace media

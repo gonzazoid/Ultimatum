@@ -146,13 +146,38 @@ class NotificationPermissionBrowserTest : public InProcessBrowserTest {
   StoragePartitioningChromeContentBrowserClient partitioning_client_;
 };
 
-// Tests that notification permissions aren't delegated to an embedded frame
+// Tests that undelegated permissions which have their default/prompt value on
+// an origin are automatically denied in documents from that origin when
+// loaded as a cross-origin iframe.
+IN_PROC_BROWSER_TEST_F(NotificationPermissionBrowserTest,
+                       UndelegatedPermissionDeniedIfNotGrantedToOrigin) {
+  EXPECT_TRUE(ui_test_utils::NavigateToURL(browser(), TesterUrl()));
+  content::RenderFrameHost* main_frame =
+      GetActiveWebContents()->GetPrimaryMainFrame();
+  EXPECT_EQ("default", EvalJs(main_frame, "getNotificationPermission()"));
+  EXPECT_EQ("denied",
+            EvalJs(main_frame, "getServiceWorkerNotificationPermission()"));
+
+  EXPECT_TRUE(ui_test_utils::NavigateToURL(browser(), EmbedderUrl()));
+  main_frame = GetActiveWebContents()->GetPrimaryMainFrame();
+  EXPECT_EQ("default", EvalJs(main_frame, "getNotificationPermission()"));
+
+  content::RenderFrameHost* iframe = CreateChildIframe(main_frame, TesterUrl());
+  EXPECT_EQ("denied", EvalJs(iframe, "getNotificationPermission()"));
+  EXPECT_EQ("denied",
+            EvalJs(iframe, "getServiceWorkerNotificationPermission()"));
+  EXPECT_EQ("denied", EvalJs(iframe, "getPushPermission()"));
+  // TODO(crbug.com/1409720): This should return 'denied'.
+  EXPECT_EQ("prompt", EvalJs(iframe, "getServiceWorkerPushPermission()"));
+}
+
+// Tests that undelegated permissions aren't delegated to an embedded frame
 // as other permissions are. If 'example.com' was granted notification
 // permissions by the user when it was a top-level frame, then it retains that
 // permission when iframed in another page, regardless of the other page's
 // permission status.
 IN_PROC_BROWSER_TEST_F(NotificationPermissionBrowserTest,
-                       PermissionNotDelegated) {
+                       UndelegatedPermissionsAreNotDelegated) {
   GrantNotificationPermissionForTest(TesterUrl());
 
   EXPECT_TRUE(ui_test_utils::NavigateToURL(browser(), TesterUrl()));
@@ -165,6 +190,11 @@ IN_PROC_BROWSER_TEST_F(NotificationPermissionBrowserTest,
   EXPECT_TRUE(ui_test_utils::NavigateToURL(browser(), EmbedderUrl()));
   main_frame = GetActiveWebContents()->GetPrimaryMainFrame();
   EXPECT_EQ("default", EvalJs(main_frame, "getNotificationPermission()"));
+  EXPECT_EQ("denied",
+            EvalJs(main_frame, "getServiceWorkerNotificationPermission()"));
+  EXPECT_EQ("prompt", EvalJs(main_frame, "getPushPermission()"));
+  // TODO(crbug.com/1409720): This should return 'denied'.
+  EXPECT_EQ("prompt", EvalJs(main_frame, "getServiceWorkerPushPermission()"));
 
   content::RenderFrameHost* iframe = CreateChildIframe(main_frame, TesterUrl());
   EXPECT_EQ("granted", EvalJs(iframe, "getNotificationPermission()"));
@@ -224,4 +254,51 @@ IN_PROC_BROWSER_TEST_F(NotificationPermissionBrowserTest,
       "a JavaScript error: \"NotAllowedError: "
       "Registration failed - permission denied\"\n",
       EvalJs(iframe, "requestPushPermission()").error);
+}
+
+// Test that the Notifications.NonPersistentNotificationThirdPartyCount metric
+// triggers in third-party contexts. Note: This test doesn't exactly fit with
+// the others in this class, but the helper methods here are exactly what we
+// needed and this test will be removed once the metric is removed.
+IN_PROC_BROWSER_TEST_F(NotificationPermissionBrowserTest,
+                       NonPersistentNotificationThirdPartyCountMetricTest) {
+  GrantNotificationPermissionForTest(TesterUrl());
+
+  EXPECT_TRUE(ui_test_utils::NavigateToURL(browser(), TesterUrl()));
+  content::RenderFrameHost* main_frame =
+      GetActiveWebContents()->GetPrimaryMainFrame();
+
+  base::HistogramTester histogram_tester;
+  const std::string histogram_name =
+      "Notifications.NonPersistentNotificationThirdPartyCount";
+
+  const std::string show_notification_js = R"(new Promise((resolve) => {
+     const notification = new Notification("done");
+     notification.onshow = () => {
+       const title = notification.title;
+       notification.close();
+       resolve(title);
+     };
+   });)";
+
+  EXPECT_EQ("done", EvalJs(main_frame, show_notification_js));
+
+  histogram_tester.ExpectBucketCount(histogram_name, false, 1);
+  histogram_tester.ExpectBucketCount(histogram_name, true, 0);
+
+  content::RenderFrameHost* iframe = CreateChildIframe(main_frame, TesterUrl());
+
+  EXPECT_EQ("done", EvalJs(iframe, show_notification_js));
+
+  histogram_tester.ExpectBucketCount(histogram_name, false, 2);
+  histogram_tester.ExpectBucketCount(histogram_name, true, 0);
+
+  EXPECT_TRUE(ui_test_utils::NavigateToURL(browser(), EmbedderUrl()));
+  main_frame = GetActiveWebContents()->GetPrimaryMainFrame();
+  iframe = CreateChildIframe(main_frame, TesterUrl());
+
+  EXPECT_EQ("done", EvalJs(iframe, show_notification_js));
+
+  histogram_tester.ExpectBucketCount(histogram_name, false, 2);
+  histogram_tester.ExpectBucketCount(histogram_name, true, 1);
 }

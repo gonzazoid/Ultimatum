@@ -5,12 +5,12 @@
 #include "components/browsing_data/content/cache_storage_helper.h"
 
 #include "base/strings/utf_string_conversions.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/storage_partition.h"
 #include "content/public/test/browser_task_environment.h"
 #include "content/public/test/test_browser_context.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "third_party/blink/public/common/storage_key/storage_key.h"
 #include "url/gurl.h"
 
 namespace browsing_data {
@@ -32,39 +32,46 @@ class CannedCacheStorageHelperTest : public testing::Test {
 };
 
 TEST_F(CannedCacheStorageHelperTest, Empty) {
-  const GURL origin("http://host1:1/");
+  const blink::StorageKey storage_key =
+      blink::StorageKey::CreateFromStringForTesting("http://host1:1/");
 
   auto helper = MakeHelper();
   ASSERT_TRUE(helper->empty());
-  helper->Add(url::Origin::Create(origin));
+  helper->Add(storage_key);
   ASSERT_FALSE(helper->empty());
   helper->Reset();
   ASSERT_TRUE(helper->empty());
 }
 
 TEST_F(CannedCacheStorageHelperTest, Delete) {
-  const url::Origin origin1 = url::Origin::Create(GURL("http://host1:9000"));
-  const url::Origin origin2 = url::Origin::Create(GURL("http://example.com"));
+  const blink::StorageKey storage_key_1 =
+      blink::StorageKey::CreateFromStringForTesting("http://host1:9000");
+  const blink::StorageKey storage_key_2 =
+      blink::StorageKey::CreateFromStringForTesting("http://example.com");
 
   auto helper = MakeHelper();
   EXPECT_TRUE(helper->empty());
-  helper->Add(origin1);
-  helper->Add(origin2);
-  helper->Add(origin2);
+  helper->Add(storage_key_1);
+  helper->Add(storage_key_2);
+  helper->Add(storage_key_2);
   EXPECT_EQ(2u, helper->GetCount());
-  helper->DeleteCacheStorage(origin2);
+  helper->DeleteCacheStorage(storage_key_2);
   EXPECT_EQ(1u, helper->GetCount());
 }
 
 TEST_F(CannedCacheStorageHelperTest, IgnoreExtensionsAndDevTools) {
-  const GURL origin1("chrome-extension://abcdefghijklmnopqrstuvwxyz/");
-  const GURL origin2("devtools://abcdefghijklmnopqrstuvwxyz/");
+  const blink::StorageKey storage_key_1 =
+      blink::StorageKey::CreateFromStringForTesting(
+          "chrome-extension://abcdefghijklmnopqrstuvwxyz/");
+  const blink::StorageKey storage_key_2 =
+      blink::StorageKey::CreateFromStringForTesting(
+          "devtools://abcdefghijklmnopqrstuvwxyz/");
 
   auto helper = MakeHelper();
   ASSERT_TRUE(helper->empty());
-  helper->Add(url::Origin::Create(origin1));
+  helper->Add(storage_key_1);
   ASSERT_TRUE(helper->empty());
-  helper->Add(url::Origin::Create(origin2));
+  helper->Add(storage_key_2);
   ASSERT_TRUE(helper->empty());
 }
 

@@ -1,4 +1,6 @@
 include_rules = [
+  "+components/browser_ui/device_lock/android",
+  "+components/device_reauth/device_authenticator.h",
   "+components/feature_engagement",
   "+components/google/core/common/google_util.h",
   "+components/grit/components_scaled_resources.h",
@@ -8,11 +10,17 @@ include_rules = [
   "+components/language/core/browser",
   "+components/leveldb_proto",
   "+components/metrics",
+  "+components/optimization_guide",
+  "+components/optimization_guide/core",
+  "+components/plus_addresses",
   "+components/profile_metrics",
   "+components/policy",
+  "+components/resources",
   "+components/security_state",
+  "+components/security_interstitials/core/insecure_form_util.h",
   "+components/security_interstitials/core/pref_names.h",
   "+components/signin/public",
+  "+components/strings",
   "+components/sync",
   "+components/translate/core/browser",
   "+components/translate/core/common",
@@ -20,7 +28,6 @@ include_rules = [
   "+components/version_info",
   "+components/webdata/common",
   "+components/webdata_services",
-  "+components/messages/android/messages_feature.h",
   "+crypto/hkdf.h",
   "+crypto/random.h",
   "+google_apis/gaia",
@@ -30,9 +37,12 @@ include_rules = [
   "+services/network/public",
   "+services/network/test",
   "+sql",
+  "+third_party/icu/fuzzers/fuzzer_utils.h", # For fuzz-tests.
   "+third_party/libaddressinput", # For address i18n.
   "+third_party/libphonenumber",  # For phone number i18n.
   "+third_party/re2",
+  "+third_party/tflite",
+  "+third_party/tflite_support",
   "+ui/accessibility",
   "+ui/base",
   "+ui/gfx",
@@ -40,10 +50,8 @@ include_rules = [
 
 specific_include_rules = {
   ".*test.(cc|h)": [
+    "+components/device_reauth",
     "+content/public/test",
-  ],
-  "autofill_download_manager_unittest\.cc": [
-    "+services/network/test",
   ],
   "autofill_manager_unittest\.cc": [
     "+components/ukm",
@@ -65,15 +73,18 @@ specific_include_rules = {
     "+third_party/blink/public/mojom/webauthn",
   ],
   "test_autofill_driver\.h": [
-    "+components/autofill/content/browser/content_autofill_driver.h"
+    "+components/autofill/content/browser/content_autofill_driver.h",
+    "+components/autofill/core/browser/autofill_driver_router.h",
   ],
-  "credit_card_access_manager_unittest\.cc": [
+  "credit_card_access_manager(_unittest)?\.cc": [
+    "+components/device_reauth",
     "+content/public/test",
   ],
   "credit_card_save_manager_unittest\.cc": [
     "+components/ukm",
   ],
   "test_autofill_client\.h": [
+    "+components/device_reauth",
     "+components/ukm",
   ],
   "password_requirements_spec_fetcher_unittest\.cc": [
@@ -81,5 +92,8 @@ specific_include_rules = {
   ],
   "autofill_image_fetcher(_unittest)?\.cc": [
     "+components/image_fetcher",
+  ],
+  "autofill_optimization_guide(_unittest)?\.(cc|h)": [
+    "+components/optimization_guide",
   ],
 }

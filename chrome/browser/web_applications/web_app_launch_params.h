@@ -8,7 +8,7 @@
 #include <vector>
 
 #include "base/files/file_path.h"
-#include "chrome/browser/web_applications/web_app_id.h"
+#include "components/webapps/common/web_app_id.h"
 #include "url/gurl.h"
 
 namespace web_app {
@@ -18,19 +18,19 @@ namespace web_app {
 struct WebAppLaunchParams {
   WebAppLaunchParams();
   WebAppLaunchParams(const WebAppLaunchParams&);
-  WebAppLaunchParams(WebAppLaunchParams&&);
+  WebAppLaunchParams(WebAppLaunchParams&&) noexcept;
 
   ~WebAppLaunchParams();
 
   WebAppLaunchParams& operator=(const WebAppLaunchParams&);
-  WebAppLaunchParams& operator=(WebAppLaunchParams&&);
+  WebAppLaunchParams& operator=(WebAppLaunchParams&&) noexcept;
 
   // Whether this launch triggered a navigation that needs to be awaited before
   // sending the launch params to the document.
   bool started_new_navigation = true;
 
   // The app being launched, used for scope validation.
-  AppId app_id;
+  webapps::AppId app_id;
 
   // The URL the web app was launched with. Note that redirects may cause us to
   // enqueue in a different URL, we still report the original launch target URL

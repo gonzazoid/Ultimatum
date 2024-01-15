@@ -6,12 +6,15 @@
 
 #include "base/json/json_writer.h"
 #include "base/run_loop.h"
+#include "base/test/scoped_feature_list.h"
 #include "base/threading/platform_thread.h"
 #include "base/values.h"
 #include "build/build_config.h"
 #include "content/browser/attribution_reporting/attribution_manager_impl.h"
 #include "content/browser/attribution_reporting/attribution_test_utils.h"
+#include "content/browser/attribution_reporting/test/source_observer.h"
 #include "content/browser/web_contents/web_contents_impl.h"
+#include "content/common/features.h"
 #include "content/public/browser/navigation_handle.h"
 #include "content/public/common/content_switches.h"
 #include "content/public/test/browser_test.h"
@@ -41,9 +44,9 @@ using ::testing::Pair;
 using ::testing::Pointee;
 using ::testing::UnorderedElementsAre;
 
-class AttributionSourceDisabledBrowserTest : public ContentBrowserTest {
+class AttributionSourceBrowserTest : public ContentBrowserTest {
  public:
-  AttributionSourceDisabledBrowserTest() = default;
+  AttributionSourceBrowserTest() = default;
 
   void SetUpOnMainThread() override {
     host_resolver()->AddRule("*", "127.0.0.1");
@@ -72,6 +75,19 @@ class AttributionSourceDisabledBrowserTest : public ContentBrowserTest {
   std::unique_ptr<net::EmbeddedTestServer> https_server_;
 };
 
+class AttributionSourceDisabledBrowserTest : public AttributionSourceBrowserTest {
+ public:
+  AttributionSourceDisabledBrowserTest() {
+    scoped_feature_list_.InitWithFeatures(
+        /*enabled_features=*/
+        {},
+        /*disabled_features=*/{features::kPrivacySandboxAdsAPIsM1Override});
+  }
+
+ private:
+  base::test::ScopedFeatureList scoped_feature_list_;
+};
+
 // Verifies that impressions are not logged when the Runtime feature isn't
 // enabled.
 IN_PROC_BROWSER_TEST_F(AttributionSourceDisabledBrowserTest,
@@ -98,7 +114,7 @@ IN_PROC_BROWSER_TEST_F(AttributionSourceDisabledBrowserTest,
 }
 
 class AttributionSourceDeclarationBrowserTest
-    : public AttributionSourceDisabledBrowserTest {
+    : public AttributionSourceBrowserTest {
  public:
   AttributionSourceDeclarationBrowserTest() = default;
 
@@ -108,28 +124,6 @@ class AttributionSourceDeclarationBrowserTest
         switches::kEnableExperimentalWebPlatformFeatures);
   }
 };
-
-IN_PROC_BROWSER_TEST_F(AttributionSourceDeclarationBrowserTest,
-                       ImpressionTagClicked_ImpressionReceived) {
-  GURL page_url =
-      https_server()->GetURL("b.test", "/page_with_impression_creator.html");
-  EXPECT_TRUE(NavigateToURL(web_contents(), page_url));
-
-  // Create an anchor tag with impression attributes and click the link.
-  GURL register_source_url = https_server()->GetURL(
-      "b.test", "/attribution_reporting/register_source_headers.html");
-  EXPECT_TRUE(ExecJs(web_contents(), JsReplace(R"(
-    createAttributionSrcAnchor({id: 'link',
-                        url: 'page_with_conversion_redirect.html',
-                        attributionsrc: $1,
-                        target: '_top'});)",
-                                               register_source_url)));
-
-  SourceObserver source_observer(web_contents());
-  EXPECT_TRUE(ExecJs(shell(), "simulateClick('link');"));
-
-  source_observer.Wait();
-}
 
 IN_PROC_BROWSER_TEST_F(AttributionSourceDeclarationBrowserTest,
                        ImpressionTagNavigatesRemoteFrame_ImpressionReceived) {
@@ -578,46 +572,6 @@ IN_PROC_BROWSER_TEST_F(AttributionSourceDeclarationBrowserTest,
   EXPECT_TRUE(ExecJs(web_contents(), "simulateClick('link');"));
 
   second_impression_observer.Wait();
-}
-
-IN_PROC_BROWSER_TEST_F(AttributionSourceDeclarationBrowserTest,
-                       WindowOpenImpression_ImpressionReceived) {
-  SourceObserver source_observer(web_contents());
-  GURL page_url =
-      https_server()->GetURL("b.test", "/page_with_impression_creator.html");
-  EXPECT_TRUE(NavigateToURL(web_contents(), page_url));
-
-  GURL register_url = https_server()->GetURL(
-      "a.test", "/attribution_reporting/register_source_headers.html");
-
-  // Navigate the page using window.open and set an impression.
-  EXPECT_TRUE(ExecJs(web_contents(), JsReplace(R"(
-    window.open("https://d.test", "_top", "attributionsrc="+$1);)",
-                                               register_url)));
-
-  // Wait for the impression to be seen by the observer.
-  source_observer.Wait();
-}
-
-IN_PROC_BROWSER_TEST_F(AttributionSourceDeclarationBrowserTest,
-                       WindowOpenNoUserGesture_NoImpression) {
-  SourceObserver source_observer(web_contents());
-  GURL page_url =
-      https_server()->GetURL("b.test", "/page_with_impression_creator.html");
-  EXPECT_TRUE(NavigateToURL(web_contents(), page_url));
-
-  GURL register_url = https_server()->GetURL(
-      "a.test", "/attribution_reporting/register_source_headers.html");
-
-  // Navigate the page using window.open and set an impression, but do not give
-  // a user gesture.
-  EXPECT_TRUE(ExecJs(web_contents(),
-                     JsReplace(R"(
-    window.open("https://a.com", "_top", "attributionsrc="+$1);)",
-                               register_url),
-                     EXECUTE_SCRIPT_NO_USER_GESTURE));
-
-  EXPECT_TRUE(source_observer.WaitForNavigationWithNoImpression());
 }
 
 IN_PROC_BROWSER_TEST_F(AttributionSourceDeclarationBrowserTest,

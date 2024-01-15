@@ -7,9 +7,8 @@
 #include <stddef.h>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/sys_byteorder.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "components/webrtc/fake_ssl_client_socket.h"
 #include "net/base/io_buffer.h"
@@ -50,11 +49,8 @@ bool IsPseudoTlsClientSocket(P2PSocketType type) {
 P2PSocketTcp::SendBuffer::SendBuffer() : rtc_packet_id(-1) {}
 P2PSocketTcp::SendBuffer::SendBuffer(
     int32_t rtc_packet_id,
-    scoped_refptr<net::DrainableIOBuffer> buffer,
-    const net::NetworkTrafficAnnotationTag traffic_annotation)
-    : rtc_packet_id(rtc_packet_id),
-      buffer(buffer),
-      traffic_annotation(traffic_annotation) {}
+    scoped_refptr<net::DrainableIOBuffer> buffer)
+    : rtc_packet_id(rtc_packet_id), buffer(buffer) {}
 P2PSocketTcp::SendBuffer::SendBuffer(const SendBuffer& rhs) = default;
 P2PSocketTcp::SendBuffer::~SendBuffer() = default;
 
@@ -63,9 +59,11 @@ P2PSocketTcpBase::P2PSocketTcpBase(
     mojo::PendingRemote<mojom::P2PSocketClient> client,
     mojo::PendingReceiver<mojom::P2PSocket> socket,
     P2PSocketType type,
+    const net::NetworkTrafficAnnotationTag& traffic_annotation,
     ProxyResolvingClientSocketFactory* proxy_resolving_socket_factory)
     : P2PSocket(delegate, std::move(client), std::move(socket), P2PSocket::TCP),
       type_(type),
+      traffic_annotation_(traffic_annotation),
       proxy_resolving_socket_factory_(proxy_resolving_socket_factory) {}
 
 P2PSocketTcpBase::~P2PSocketTcpBase() = default;
@@ -221,11 +219,10 @@ void P2PSocketTcpBase::OnRead(int result) {
     DoRead();
 }
 
-bool P2PSocketTcpBase::OnPacket(std::vector<int8_t> data) {
+bool P2PSocketTcpBase::OnPacket(base::span<const uint8_t> data) {
   if (!connected_) {
     P2PSocket::StunMessageType type;
-    bool stun = GetStunPacketType(reinterpret_cast<uint8_t*>(&*data.begin()),
-                                  data.size(), &type);
+    bool stun = GetStunPacketType(data, &type);
     if (stun && IsRequestOrResponse(type)) {
       connected_ = true;
     } else if (!stun || type == STUN_DATA_INDICATION) {
@@ -245,23 +242,23 @@ bool P2PSocketTcpBase::OnPacket(std::vector<int8_t> data) {
     return true;
   }
 
-  client_->DataReceived(
-      remote_address_.ip_address, data,
+  auto packet = mojom::P2PReceivedPacket::New(
+      data, remote_address_.ip_address,
       base::TimeTicks() + base::Nanoseconds(rtc::TimeNanos()));
 
-  delegate_->DumpPacket(
-      base::make_span(reinterpret_cast<const uint8_t*>(&data[0]), data.size()),
-      true);
+  std::vector<mojom::P2PReceivedPacketPtr> received_packets;
+  received_packets.push_back(std::move(packet));
 
+  // TODO(crbug.com/1376527): Batch multiple packets in the TCP case as well.
+  client_->DataReceived(std::move(received_packets));
+
+  delegate_->DumpPacket(data, true);
   return true;
 }
 
 void P2PSocketTcpBase::WriteOrQueue(SendBuffer& send_buffer) {
-  IncrementTotalSentPackets();
   if (write_buffer_.buffer.get()) {
     write_queue_.push(send_buffer);
-    IncrementDelayedPackets();
-    IncrementDelayedBytes(send_buffer.buffer->size());
     return;
   }
 
@@ -274,7 +271,7 @@ void P2PSocketTcpBase::DoWrite() {
     int result = socket_->Write(
         write_buffer_.buffer.get(), write_buffer_.buffer->BytesRemaining(),
         base::BindOnce(&P2PSocketTcp::OnWritten, base::Unretained(this)),
-        net::NetworkTrafficAnnotationTag(write_buffer_.traffic_annotation));
+        traffic_annotation_);
 
     if (result == net::ERR_IO_PENDING) {
       write_pending_ = true;
@@ -316,8 +313,6 @@ bool P2PSocketTcpBase::HandleWriteResult(int result) {
     } else {
       write_buffer_ = write_queue_.front();
       write_queue_.pop();
-      // Update how many bytes are still waiting to be sent.
-      DecrementDelayedBytes(write_buffer_.buffer->size());
     }
   }
   return true;
@@ -339,8 +334,10 @@ bool P2PSocketTcpBase::HandleReadResult(int result) {
   int pos = 0;
   while (pos <= read_buffer_->offset()) {
     size_t bytes_consumed = 0;
-    if (!ProcessInput(head + pos, read_buffer_->offset() - pos,
-                      &bytes_consumed)) {
+    if (!ProcessInput(
+            base::make_span(reinterpret_cast<const uint8_t*>(head + pos),
+                            static_cast<size_t>(read_buffer_->offset() - pos)),
+            &bytes_consumed)) {
       return false;
     }
     if (!bytes_consumed)
@@ -357,33 +354,47 @@ bool P2PSocketTcpBase::HandleReadResult(int result) {
   return true;
 }
 
-void P2PSocketTcpBase::Send(
-    const std::vector<int8_t>& data,
-    const P2PPacketInfo& packet_info,
-    const net::MutableNetworkTrafficAnnotationTag& traffic_annotation) {
+bool P2PSocketTcpBase::SendPacket(base::span<const uint8_t> data,
+                                  const P2PPacketInfo& packet_info) {
   // Renderer should use this socket only to send data to |remote_address_|.
   if (data.size() > kMaximumPacketSize ||
       !(packet_info.destination == remote_address_.ip_address)) {
     NOTREACHED();
     OnError();
-    return;
+    return false;
   }
 
   if (!connected_) {
     P2PSocket::StunMessageType type = P2PSocket::StunMessageType();
-    bool stun = GetStunPacketType(
-        reinterpret_cast<const uint8_t*>(&*data.begin()), data.size(), &type);
+    bool stun = GetStunPacketType(data, &type);
     if (!stun || type == STUN_DATA_INDICATION) {
       LOG(ERROR) << "Page tried to send a data packet to "
                  << packet_info.destination.ToString()
                  << " before STUN binding is finished.";
       OnError();
-      return;
+      return false;
     }
   }
 
-  DoSend(packet_info.destination, data, packet_info.packet_options,
-         net::NetworkTrafficAnnotationTag(traffic_annotation));
+  DoSend(packet_info.destination, data, packet_info.packet_options);
+  return true;
+}
+
+void P2PSocketTcpBase::Send(base::span<const uint8_t> data,
+                            const P2PPacketInfo& packet_info) {
+  SendPacket(data, packet_info);
+}
+
+void P2PSocketTcpBase::SendBatch(
+    std::vector<mojom::P2PSendPacketPtr> packet_batch) {
+  for (auto& packet : packet_batch) {
+    // If there's an error in SendPacket, this object is destroyed by the
+    // internal call to P2PSocket::OnError, so do not reference this after
+    // SendPacket returns false.
+    if (!SendPacket(packet->data, packet->packet_info)) {
+      return;
+    }
+  }
 }
 
 void P2PSocketTcpBase::SetOption(P2PSocketOption option, int32_t value) {
@@ -407,11 +418,13 @@ P2PSocketTcp::P2PSocketTcp(
     mojo::PendingRemote<mojom::P2PSocketClient> client,
     mojo::PendingReceiver<mojom::P2PSocket> socket,
     P2PSocketType type,
+    const net::NetworkTrafficAnnotationTag& traffic_annotation,
     ProxyResolvingClientSocketFactory* proxy_resolving_socket_factory)
     : P2PSocketTcpBase(delegate,
                        std::move(client),
                        std::move(socket),
                        type,
+                       traffic_annotation,
                        proxy_resolving_socket_factory) {
   DCHECK(type == P2P_SOCKET_TCP_CLIENT || type == P2P_SOCKET_SSLTCP_CLIENT ||
          type == P2P_SOCKET_TLS_CLIENT);
@@ -419,40 +432,38 @@ P2PSocketTcp::P2PSocketTcp(
 
 P2PSocketTcp::~P2PSocketTcp() {}
 
-bool P2PSocketTcp::ProcessInput(char* input,
-                                int input_len,
+bool P2PSocketTcp::ProcessInput(base::span<const uint8_t> input,
                                 size_t* bytes_consumed) {
   *bytes_consumed = 0;
-  if (input_len < kPacketHeaderSize)
+  if (input.size() < kPacketHeaderSize)
     return true;
 
-  int packet_size = base::NetToHost16(*reinterpret_cast<uint16_t*>(input));
-  if (input_len < packet_size + kPacketHeaderSize)
+  uint32_t packet_size =
+      base::NetToHost16(*reinterpret_cast<const uint16_t*>(input.data()));
+  if (input.size() < packet_size + kPacketHeaderSize)
     return true;
 
-  char* cur = input + kPacketHeaderSize;
   *bytes_consumed = kPacketHeaderSize + packet_size;
 
-  return OnPacket(std::vector<int8_t>(cur, cur + packet_size));
+  return OnPacket(input.subspan(kPacketHeaderSize, packet_size));
 }
 
-void P2PSocketTcp::DoSend(
-    const net::IPEndPoint& to,
-    const std::vector<int8_t>& data,
-    const rtc::PacketOptions& options,
-    const net::NetworkTrafficAnnotationTag traffic_annotation) {
-  int size = kPacketHeaderSize + data.size();
-  SendBuffer send_buffer(options.packet_id,
-                         base::MakeRefCounted<net::DrainableIOBuffer>(
-                             base::MakeRefCounted<net::IOBuffer>(size), size),
-                         traffic_annotation);
+void P2PSocketTcp::DoSend(const net::IPEndPoint& to,
+                          base::span<const uint8_t> data,
+                          const rtc::PacketOptions& options) {
+  int buffer_size = kPacketHeaderSize + data.size();
+  SendBuffer send_buffer(
+      options.packet_id,
+      base::MakeRefCounted<net::DrainableIOBuffer>(
+          base::MakeRefCounted<net::IOBufferWithSize>(buffer_size),
+          buffer_size));
   *reinterpret_cast<uint16_t*>(send_buffer.buffer->data()) =
       base::HostToNet16(data.size());
-  memcpy(send_buffer.buffer->data() + kPacketHeaderSize, &data[0], data.size());
+  memcpy(send_buffer.buffer->data() + kPacketHeaderSize, data.data(),
+         data.size());
 
   cricket::ApplyPacketOptions(
-      reinterpret_cast<uint8_t*>(send_buffer.buffer->data()) +
-          kPacketHeaderSize,
+      send_buffer.buffer->bytes() + kPacketHeaderSize,
       send_buffer.buffer->BytesRemaining() - kPacketHeaderSize,
       options.packet_time_params, rtc::TimeMicros());
 
@@ -465,11 +476,13 @@ P2PSocketStunTcp::P2PSocketStunTcp(
     mojo::PendingRemote<mojom::P2PSocketClient> client,
     mojo::PendingReceiver<mojom::P2PSocket> socket,
     P2PSocketType type,
+    const net::NetworkTrafficAnnotationTag& traffic_annotation,
     ProxyResolvingClientSocketFactory* proxy_resolving_socket_factory)
     : P2PSocketTcpBase(delegate,
                        std::move(client),
                        std::move(socket),
                        type,
+                       traffic_annotation,
                        proxy_resolving_socket_factory) {
   DCHECK(type == P2P_SOCKET_STUN_TCP_CLIENT ||
          type == P2P_SOCKET_STUN_SSLTCP_CLIENT ||
@@ -478,31 +491,26 @@ P2PSocketStunTcp::P2PSocketStunTcp(
 
 P2PSocketStunTcp::~P2PSocketStunTcp() {}
 
-bool P2PSocketStunTcp::ProcessInput(char* input,
-                                    int input_len,
+bool P2PSocketStunTcp::ProcessInput(base::span<const uint8_t> input,
                                     size_t* bytes_consumed) {
   *bytes_consumed = 0;
-  if (input_len < kPacketHeaderSize + kPacketLengthOffset)
+  if (input.size() < kPacketHeaderSize + kPacketLengthOffset)
     return true;
 
   int pad_bytes;
-  int packet_size = GetExpectedPacketSize(
-      reinterpret_cast<const uint8_t*>(input), input_len, &pad_bytes);
+  size_t packet_size = GetExpectedPacketSize(input, &pad_bytes);
 
-  if (input_len < packet_size + pad_bytes)
+  if (input.size() < packet_size + pad_bytes)
     return true;
 
   // We have a complete packet. Read through it.
-  char* cur = input;
   *bytes_consumed = packet_size + pad_bytes;
-  return OnPacket(std::vector<int8_t>(cur, cur + packet_size));
+  return OnPacket(input.subspan(0, packet_size));
 }
 
-void P2PSocketStunTcp::DoSend(
-    const net::IPEndPoint& to,
-    const std::vector<int8_t>& data,
-    const rtc::PacketOptions& options,
-    const net::NetworkTrafficAnnotationTag traffic_annotation) {
+void P2PSocketStunTcp::DoSend(const net::IPEndPoint& to,
+                              base::span<const uint8_t> data,
+                              const rtc::PacketOptions& options) {
   // Each packet is expected to have header (STUN/TURN ChannelData), where
   // header contains message type and and length of message.
   if (data.size() < kPacketHeaderSize + kPacketLengthOffset) {
@@ -512,8 +520,7 @@ void P2PSocketStunTcp::DoSend(
   }
 
   int pad_bytes;
-  size_t expected_len = GetExpectedPacketSize(
-      reinterpret_cast<const uint8_t*>(&data[0]), data.size(), &pad_bytes);
+  size_t expected_len = GetExpectedPacketSize(data, &pad_bytes);
 
   // Accepts only complete STUN/TURN packets.
   if (data.size() != expected_len) {
@@ -523,17 +530,17 @@ void P2PSocketStunTcp::DoSend(
   }
 
   // Add any pad bytes to the total size.
-  int size = data.size() + pad_bytes;
+  int buffer_size = data.size() + pad_bytes;
 
-  SendBuffer send_buffer(options.packet_id,
-                         base::MakeRefCounted<net::DrainableIOBuffer>(
-                             base::MakeRefCounted<net::IOBuffer>(size), size),
-                         traffic_annotation);
-  memcpy(send_buffer.buffer->data(), &data[0], data.size());
+  SendBuffer send_buffer(
+      options.packet_id,
+      base::MakeRefCounted<net::DrainableIOBuffer>(
+          base::MakeRefCounted<net::IOBufferWithSize>(buffer_size),
+          buffer_size));
+  memcpy(send_buffer.buffer->data(), data.data(), data.size());
 
-  cricket::ApplyPacketOptions(
-      reinterpret_cast<uint8_t*>(send_buffer.buffer->data()), data.size(),
-      options.packet_time_params, rtc::TimeMicros());
+  cricket::ApplyPacketOptions(send_buffer.buffer->bytes(), data.size(),
+                              options.packet_time_params, rtc::TimeMicros());
 
   if (pad_bytes) {
     char padding[4] = {0};
@@ -542,25 +549,24 @@ void P2PSocketStunTcp::DoSend(
   }
 
   // WriteOrQueue may free the memory, so dump it first.
-  delegate_->DumpPacket(
-      base::make_span(reinterpret_cast<uint8_t*>(send_buffer.buffer->data()),
-                      data.size()),
-      false);
+  delegate_->DumpPacket(base::make_span(reinterpret_cast<const uint8_t*>(
+                                            send_buffer.buffer->data()),
+                                        data.size()),
+                        false);
 
   WriteOrQueue(send_buffer);
 }
 
-int P2PSocketStunTcp::GetExpectedPacketSize(const uint8_t* data,
-                                            int len,
+int P2PSocketStunTcp::GetExpectedPacketSize(base::span<const uint8_t> data,
                                             int* pad_bytes) {
-  DCHECK_LE(kTurnChannelDataHeaderSize, len);
+  DCHECK_LE(static_cast<size_t>(kTurnChannelDataHeaderSize), data.size());
   // Both stun and turn had length at offset 2.
   int packet_size = base::NetToHost16(
-      *reinterpret_cast<const uint16_t*>(data + kPacketLengthOffset));
+      *reinterpret_cast<const uint16_t*>(data.data() + kPacketLengthOffset));
 
   // Get packet type (STUN or TURN).
   uint16_t msg_type =
-      base::NetToHost16(*reinterpret_cast<const uint16_t*>(data));
+      base::NetToHost16(*reinterpret_cast<const uint16_t*>(data.data()));
 
   *pad_bytes = 0;
   // Add heder length to packet length.

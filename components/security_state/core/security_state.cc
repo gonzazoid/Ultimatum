@@ -45,44 +45,13 @@ std::string GetHistogramSuffixForSafetyTipStatus(
       return "SafetyTip_Unknown";
     case security_state::SafetyTipStatus::kNone:
       return "SafetyTip_None";
-    case security_state::SafetyTipStatus::kBadReputation:
-      return "SafetyTip_BadReputation";
     case security_state::SafetyTipStatus::kLookalike:
       return "SafetyTip_Lookalike";
-    case security_state::SafetyTipStatus::kBadReputationIgnored:
-      return "SafetyTip_BadReputationIgnored";
     case security_state::SafetyTipStatus::kLookalikeIgnored:
       return "SafetyTip_LookalikeIgnored";
-    case security_state::SafetyTipStatus::kDigitalAssetLinkMatch:
-      return "SafetyTip_DigitalAssetLinkMatch";
-    case security_state::SafetyTipStatus::kBadKeyword:
-      return "SafetyTip_BadKeyword";
   }
   NOTREACHED();
   return std::string();
-}
-
-// Returns whether to set the security level based on the safety tip status.
-// Sets |level| to the right value if status should be set.
-bool ShouldSetSecurityLevelFromSafetyTip(security_state::SafetyTipStatus status,
-                                         SecurityLevel* level) {
-  switch (status) {
-    case security_state::SafetyTipStatus::kBadReputation:
-      *level = security_state::NONE;
-      return true;
-    case security_state::SafetyTipStatus::kBadReputationIgnored:
-    case security_state::SafetyTipStatus::kLookalike:
-    case security_state::SafetyTipStatus::kLookalikeIgnored:
-    case security_state::SafetyTipStatus::kBadKeyword:
-      // TODO(crbug/1012982): Decide whether to degrade the indicator once the
-      // UI lands.
-    case security_state::SafetyTipStatus::kDigitalAssetLinkMatch:
-    case security_state::SafetyTipStatus::kUnknown:
-    case security_state::SafetyTipStatus::kNone:
-      return false;
-  }
-  NOTREACHED();
-  return false;
 }
 
 }  // namespace
@@ -97,18 +66,18 @@ SecurityLevel GetSecurityLevel(
     return DANGEROUS;
   }
 
-  // If the navigation was upgraded to HTTPS because of HTTPS-Only Mode, but did
-  // not succeed (either currently showing the HTTPS-Only Mode interstitial, or
-  // the navigation fell back to HTTP), set the security level to WARNING. The
-  // HTTPS-Only Mode interstitial warning is considered "less serious" than the
-  // general certificate error interstitials.
+  // If the navigation was upgraded to HTTPS because of HTTPS-First Mode, but
+  // did not succeed and is showing the HTTPS-First Mode interstitial, set the
+  // security level to WARNING. The HTTPS-First Mode interstitial warning is
+  // considered "less serious" than the general certificate error interstitials.
   //
   // This check must come before the checks for `connection_info_initialized`
-  // (because the HTTPS-Only Mode intersitital can trigger if the HTTPS version
-  // of the page does not commit) and certificate errors (because the HTTPS-Only
-  // Mode interstitial takes precedent if the certificate error occurred due to
-  // an upgraded main-frame navigation).
-  if (visible_security_state.is_https_only_mode_upgraded) {
+  // (because the HTTPS-First Mode intersitital can trigger if the HTTPS version
+  // of the page does not commit) and certificate errors (because the
+  // HTTPS-First Mode interstitial takes precedent if the certificate error
+  // occurred due to an upgraded main-frame navigation).
+  if (visible_security_state.is_https_only_mode_upgraded &&
+      visible_security_state.is_error_page) {
     return WARNING;
   }
 
@@ -171,13 +140,6 @@ SecurityLevel GetSecurityLevel(
       return WARNING;
     }
     return NONE;
-  }
-
-  // Downgrade the security level for pages that trigger a Safety Tip.
-  SecurityLevel safety_tip_level;
-  if (ShouldSetSecurityLevelFromSafetyTip(
-          visible_security_state.safety_tip_info.status, &safety_tip_level)) {
-    return safety_tip_level;
   }
 
   // In most cases, SHA1 use is treated as a certificate error, in which case

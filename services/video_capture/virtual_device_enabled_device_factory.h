@@ -35,8 +35,8 @@ class VirtualDeviceEnabledDeviceFactory : public DeviceFactory {
   // DeviceFactory implementation.
   void GetDeviceInfos(GetDeviceInfosCallback callback) override;
   void CreateDevice(const std::string& device_id,
-                    mojo::PendingReceiver<mojom::Device> device_receiver,
                     CreateDeviceCallback callback) override;
+  void StopDevice(const std::string device_id) override;
   void AddSharedMemoryVirtualDevice(
       const media::VideoCaptureDeviceInfo& device_info,
       mojo::PendingRemote<mojom::Producer> producer,

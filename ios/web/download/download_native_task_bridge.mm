@@ -4,19 +4,14 @@
 
 #import "ios/web/download/download_native_task_bridge.h"
 
-#import "base/callback.h"
+#import "base/apple/foundation_util.h"
 #import "base/check.h"
 #import "base/files/file_util.h"
-#import "base/mac/foundation_util.h"
-#import "base/strings/sys_string_conversions.h"
+#import "base/functional/callback.h"
 #import "base/task/thread_pool.h"
 #import "ios/web/download/download_result.h"
 #import "ios/web/web_view/error_translation_util.h"
 #import "net/base/net_errors.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace {
 
@@ -50,8 +45,7 @@ void DownloadDidFinishWithSize(
 @interface DownloadNativeTaskBridge ()
 
 @property(nonatomic, readwrite, strong) NSData* resumeData;
-@property(nonatomic, readwrite, strong)
-    WKDownload* download API_AVAILABLE(ios(15));
+@property(nonatomic, readwrite, strong) WKDownload* download;
 
 @end
 
@@ -65,8 +59,8 @@ void DownloadDidFinishWithSize(
 }
 
 - (instancetype)initWithDownload:(WKDownload*)download
-                        delegate:(id<DownloadNativeTaskBridgeDelegate>)delegate
-    API_AVAILABLE(ios(15)) {
+                        delegate:
+                            (id<DownloadNativeTaskBridgeDelegate>)delegate {
   if ((self = [super init])) {
     _download = download;
     _delegate = delegate;
@@ -124,8 +118,7 @@ void DownloadDidFinishWithSize(
   _progressCallback = std::move(progressCallback);
   _responseCallback = std::move(responseCallback);
   _completeCallback = std::move(completeCallback);
-  _urlForDownload =
-      [NSURL fileURLWithPath:base::SysUTF8ToNSString(path.AsUTF8Unsafe())];
+  _urlForDownload = base::apple::FilePathToNSURL(path);
 
   if (_resumeData) {
     DCHECK(!_startDownloadBlock);
@@ -145,7 +138,7 @@ void DownloadDidFinishWithSize(
   _startDownloadBlock = nil;
 }
 
-- (void)onResumedDownload:(WKDownload*)download API_AVAILABLE(ios(15)) {
+- (void)onResumedDownload:(WKDownload*)download {
   _resumeData = nil;
   if (download) {
     _download = download;
@@ -172,8 +165,7 @@ void DownloadDidFinishWithSize(
 - (void)download:(WKDownload*)download
     decideDestinationUsingResponse:(NSURLResponse*)response
                  suggestedFilename:(NSString*)suggestedFilename
-                 completionHandler:(void (^)(NSURL* destination))handler
-    API_AVAILABLE(ios(15)) {
+                 completionHandler:(void (^)(NSURL* destination))handler {
   _response = response;
   _suggestedFilename = suggestedFilename;
   [self responseReceived:_response];
@@ -192,7 +184,7 @@ void DownloadDidFinishWithSize(
 
 - (void)download:(WKDownload*)download
     didFailWithError:(NSError*)error
-          resumeData:(NSData*)resumeData API_AVAILABLE(ios(15)) {
+          resumeData:(NSData*)resumeData {
   self.resumeData = resumeData;
   [self stopObservingDownloadProgress];
   if (!_completeCallback.is_null()) {
@@ -209,7 +201,7 @@ void DownloadDidFinishWithSize(
   }
 }
 
-- (void)downloadDidFinish:(WKDownload*)download API_AVAILABLE(ios(15)) {
+- (void)downloadDidFinish:(WKDownload*)download {
   [self stopObservingDownloadProgress];
   if (!_completeCallback.is_null()) {
     // The method -downloadDidFinish: will be called as soon as the
@@ -223,9 +215,8 @@ void DownloadDidFinishWithSize(
     // See https://crbug.com/1346030 for examples of truncation.
     base::ThreadPool::PostTaskAndReplyWithResult(
         FROM_HERE, {base::TaskPriority::USER_VISIBLE, base::MayBlock()},
-        base::BindOnce(
-            &FileSizeForFileAtPath,
-            base::FilePath(base::SysNSStringToUTF8(_urlForDownload.path))),
+        base::BindOnce(&FileSizeForFileAtPath,
+                       base::apple::NSStringToFilePath(_urlForDownload.path)),
         base::BindOnce(&DownloadDidFinishWithSize, std::move(_progressCallback),
                        std::move(_completeCallback)));
   }
@@ -236,7 +227,7 @@ void DownloadDidFinishWithSize(
 - (void)observeValueForKeyPath:(NSString*)keyPath
                       ofObject:(id)object
                         change:(NSDictionary*)change
-                       context:(void*)context API_AVAILABLE(ios(15)) {
+                       context:(void*)context {
   if (!_progressCallback.is_null()) {
     NSProgress* progress = self.progress;
     _progressCallback.Run(progress.completedUnitCount, progress.totalUnitCount,
@@ -273,7 +264,7 @@ void DownloadDidFinishWithSize(
   int http_error = -1;
   if ([response isKindOfClass:[NSHTTPURLResponse class]]) {
     http_error =
-        base::mac::ObjCCastStrict<NSHTTPURLResponse>(response).statusCode;
+        base::apple::ObjCCastStrict<NSHTTPURLResponse>(response).statusCode;
   }
 
   std::move(_responseCallback).Run(http_error, response.MIMEType);

@@ -7,6 +7,7 @@
 
 #include <string>
 
+#include "base/memory/raw_ptr.h"
 #include "ui/base/ime/ash/input_method_manager.h"
 
 class AccountId;
@@ -42,7 +43,7 @@ class InputMethodPersistence : public InputMethodManager::Observer {
       Profile* profile);
 
  private:
-  InputMethodManager* input_method_manager_;
+  raw_ptr<InputMethodManager> input_method_manager_;
 };
 
 void SetUserLastInputMethodPreferenceForTesting(
@@ -51,12 +52,5 @@ void SetUserLastInputMethodPreferenceForTesting(
 
 }  // namespace input_method
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when ChromeOS code migration is done.
-namespace chromeos {
-namespace input_method {
-using ::ash::input_method::SetUserLastInputMethodPreferenceForTesting;
-}  // namespace input_method
-}  // namespace chromeos
 
 #endif  // CHROME_BROWSER_ASH_INPUT_METHOD_INPUT_METHOD_PERSISTENCE_H_

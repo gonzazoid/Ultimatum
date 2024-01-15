@@ -31,6 +31,7 @@
 #include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/dom/element.h"
 #include "third_party/blink/renderer/core/dom/first_letter_pseudo_element.h"
+#include "third_party/blink/renderer/core/dom/node_computed_style.h"
 #include "third_party/blink/renderer/core/dom/node_traversal.h"
 #include "third_party/blink/renderer/core/dom/text.h"
 #include "third_party/blink/renderer/core/editing/editing_utilities.h"
@@ -51,20 +52,42 @@
 #include "third_party/blink/renderer/core/html/forms/text_control_element.h"
 #include "third_party/blink/renderer/core/html/html_br_element.h"
 #include "third_party/blink/renderer/core/html_names.h"
-#include "third_party/blink/renderer/core/layout/api/line_layout_item.h"
 #include "third_party/blink/renderer/core/layout/hit_test_request.h"
 #include "third_party/blink/renderer/core/layout/hit_test_result.h"
+#include "third_party/blink/renderer/core/layout/inline/inline_node_data.h"
 #include "third_party/blink/renderer/core/layout/layout_inline.h"
 #include "third_party/blink/renderer/core/layout/layout_text_fragment.h"
 #include "third_party/blink/renderer/core/layout/layout_view.h"
-#include "third_party/blink/renderer/core/layout/line/inline_iterator.h"
-#include "third_party/blink/renderer/core/layout/line/inline_text_box.h"
-#include "third_party/blink/renderer/core/layout/ng/inline/ng_inline_node_data.h"
 #include "third_party/blink/renderer/core/svg_element_type_helpers.h"
 #include "third_party/blink/renderer/platform/text/text_boundaries.h"
 #include "ui/gfx/geometry/rect_conversions.h"
 
 namespace blink {
+
+namespace {
+
+bool IsEmptyInline(const LayoutInline& inline_object) {
+  for (const LayoutObject* curr = inline_object.FirstChild(); curr;
+       curr = curr->NextSibling()) {
+    if (curr->IsFloatingOrOutOfFlowPositioned()) {
+      continue;
+    }
+    if (const auto* inline_child = DynamicTo<LayoutInline>(curr)) {
+      if (IsEmptyInline(*inline_child)) {
+        continue;
+      }
+    }
+    if (const auto* text_child = DynamicTo<LayoutText>(curr)) {
+      if (text_child->IsAllCollapsibleWhitespace()) {
+        continue;
+      }
+    }
+    return false;
+  }
+  return true;
+}
+
+}  // anonymous namespace
 
 template <typename PositionType>
 static PositionType CanonicalizeCandidate(const PositionType& candidate) {
@@ -434,12 +457,12 @@ bool HasRenderedNonAnonymousDescendantsWithHeight(
     // Note: tests[1][2] require this.
     // [1] editing/style/underline.html
     // [2] editing/inserting/return-with-object-element.html
-    if (block_flow->HasNGInlineNodeData() &&
-        block_flow->GetNGInlineNodeData()
-            ->ItemsData(false)
-            .text_content.empty() &&
-        block_flow->HasLineIfEmpty())
-      return false;
+    if (const InlineNodeData* inline_data = block_flow->GetInlineNodeData()) {
+      if (inline_data->ItemsData(false).text_content.empty() &&
+          block_flow->HasLineIfEmpty()) {
+        return false;
+      }
+    }
   }
   const LayoutObject* stop = layout_object->NextInPreOrderAfterChildren();
   // TODO(editing-dev): Avoid single-character parameter names.
@@ -447,17 +470,20 @@ bool HasRenderedNonAnonymousDescendantsWithHeight(
        o = o->ChildPaintBlockedByDisplayLock()
                ? o->NextInPreOrderAfterChildren()
                : o->NextInPreOrder()) {
-    if (o->ChildPaintBlockedByDisplayLock())
+    if (o->ChildPaintBlockedByDisplayLock() || !o->NonPseudoNode()) {
       continue;
+    }
 
-    if (o->NonPseudoNode()) {
-      if ((o->IsText() && To<LayoutText>(o)->HasNonCollapsedText()) ||
-          (o->IsBox() && To<LayoutBox>(o)->PixelSnappedLogicalHeight()) ||
-          (o->IsLayoutInline() && IsEmptyInline(LineLayoutItem(o)) &&
-           // TODO(crbug.com/771398): Find alternative ways to check whether an
-           // empty LayoutInline is rendered, without checking InlineBox.
-           !To<LayoutInline>(o)->PhysicalLinesBoundingBox().IsEmpty()))
-        return true;
+    if (const auto* text = DynamicTo<LayoutText>(o);
+        text && text->HasNonCollapsedText()) {
+      return true;
+    } else if (const auto* box = DynamicTo<LayoutBox>(o);
+               box && box->LogicalHeight()) {
+      return true;
+    } else if (const auto* inline_object = DynamicTo<LayoutInline>(o);
+               inline_object && IsEmptyInline(*inline_object) &&
+               !inline_object->PhysicalLinesBoundingBox().IsEmpty()) {
+      return true;
     }
   }
   return false;
@@ -691,13 +717,23 @@ static PositionTemplate<Strategy> MostBackwardCaretPosition(
   DCHECK(adjusted_position.IsNotNull()) << position;
 #endif
   PositionIteratorAlgorithm<Strategy> last_visible(adjusted_position);
-  const bool start_editable = IsEditable(*start_node);
-  Node* last_node = start_node;
+  Node* last_node;
+  // If we're snapping the caret to the edges of an inline element rather than
+  // crossing an editing boundary, we want to detect that editable boundary even
+  // if it happens between the position's container and anchor nodes.
+  if (rule == kCannotCrossEditingBoundary &&
+      client == SnapToClient::kLocalCaretRect) {
+    last_node = position.ComputeContainerNode();
+  } else {
+    last_node = start_node;
+  }
+  const bool start_editable = IsEditable(*last_node);
   bool boundary_crossed = false;
   absl::optional<WritingMode> writing_mode;
   for (PositionIteratorAlgorithm<Strategy> current_pos = last_visible;
        !current_pos.AtStart(); current_pos.Decrement()) {
     Node* current_node = current_pos.GetNode();
+    DCHECK(current_node);
     // Don't check for an editability change if we haven't moved to a different
     // node, to avoid the expense of computing IsEditable().
     if (current_node != last_node) {
@@ -726,9 +762,10 @@ static PositionTemplate<Strategy> MostBackwardCaretPosition(
       return last_visible.DeprecatedComputePosition();
 
     // skip position in non-laid out or invisible node
-    const LayoutObject* const layout_object =
-        AssociatedLayoutObjectOf(*current_node, current_pos.OffsetInLeafNode(),
-                                 LayoutObjectSide::kFirstLetterIfOnBoundary);
+    const LayoutObject* const layout_object = AssociatedLayoutObjectOf(
+        *current_node,
+        IsA<Text>(current_node) ? current_pos.OffsetInTextNode() : 0,
+        LayoutObjectSide::kFirstLetterIfOnBoundary);
     if (!layout_object ||
         layout_object->Style()->Visibility() != EVisibility::kVisible) {
       if (boundary_crossed && rule == kCannotCrossEditingBoundary)
@@ -749,8 +786,13 @@ static PositionTemplate<Strategy> MostBackwardCaretPosition(
     }
 
     if (boundary_crossed) {
-      if (rule == kCannotCrossEditingBoundary)
+      if (rule == kCannotCrossEditingBoundary) {
+        if (current_node == start_node) {
+          DCHECK(position.IsBeforeAnchor() || position.IsAfterAnchor());
+          return position;
+        }
         return PositionTemplate<Strategy>::AfterNode(*current_node);
+      }
       if (rule == kCanCrossEditingBoundary) {
         last_visible = current_pos;
         break;
@@ -796,10 +838,10 @@ static PositionTemplate<Strategy> MostBackwardCaretPosition(
           text_layout_object->CaretMaxOffset() + text_start_offset);
     }
 
-    DCHECK_GE(current_pos.OffsetInLeafNode(),
+    DCHECK_GE(current_pos.OffsetInTextNode(),
               static_cast<int>(text_layout_object->TextStartOffset()));
     if (text_layout_object->IsAfterNonCollapsedCharacter(
-            current_pos.OffsetInLeafNode() -
+            current_pos.OffsetInTextNode() -
             text_layout_object->TextStartOffset()))
       return current_pos.ComputePosition();
   }
@@ -859,13 +901,23 @@ PositionTemplate<Strategy> MostForwardCaretPosition(
                 position.AnchorNode(),
                 Strategy::CaretMaxOffset(*position.AnchorNode()))
           : position);
-  const bool start_editable = IsEditable(*start_node);
-  Node* last_node = start_node;
+  Node* last_node;
+  // If we're snapping the caret to the edges of an inline element rather than
+  // crossing an editing boundary, we want to detect that editable boundary even
+  // if it happens between the position's container and anchor nodes.
+  if (rule == kCannotCrossEditingBoundary &&
+      client == SnapToClient::kLocalCaretRect) {
+    last_node = position.ComputeContainerNode();
+  } else {
+    last_node = start_node;
+  }
+  const bool start_editable = IsEditable(*last_node);
   bool boundary_crossed = false;
   absl::optional<WritingMode> writing_mode;
   for (PositionIteratorAlgorithm<Strategy> current_pos = last_visible;
        !current_pos.AtEnd(); current_pos.Increment()) {
     Node* current_node = current_pos.GetNode();
+    DCHECK(current_node);
     // Don't check for an editability change if we haven't moved to a different
     // node, to avoid the expense of computing IsEditable().
     if (current_node != last_node) {
@@ -904,8 +956,9 @@ PositionTemplate<Strategy> MostForwardCaretPosition(
       return last_visible.DeprecatedComputePosition();
 
     // skip position in non-laid out or invisible node
-    const LayoutObject* const layout_object =
-        AssociatedLayoutObjectOf(*current_node, current_pos.OffsetInLeafNode());
+    const LayoutObject* const layout_object = AssociatedLayoutObjectOf(
+        *current_node,
+        IsA<Text>(current_node) ? current_pos.OffsetInTextNode() : 0);
     if (!layout_object ||
         layout_object->Style()->Visibility() != EVisibility::kVisible) {
       if (boundary_crossed && rule == kCannotCrossEditingBoundary)
@@ -926,8 +979,13 @@ PositionTemplate<Strategy> MostForwardCaretPosition(
     }
 
     if (boundary_crossed) {
-      if (rule == kCannotCrossEditingBoundary)
+      if (rule == kCannotCrossEditingBoundary) {
+        if (current_node == start_node) {
+          DCHECK(position.IsBeforeAnchor() || position.IsAfterAnchor());
+          return position;
+        }
         return PositionTemplate<Strategy>::BeforeNode(*current_node);
+      }
       if (rule == kCanCrossEditingBoundary)
         return current_pos.DeprecatedComputePosition();
     }
@@ -940,7 +998,7 @@ PositionTemplate<Strategy> MostForwardCaretPosition(
     // ignored.
     if (EditingIgnoresContent(*current_node) ||
         IsDisplayInsideTable(current_node)) {
-      if (current_pos.OffsetInLeafNode() <= 0)
+      if (current_pos.AtStartOfNode())
         return PositionTemplate<Strategy>::EditingPositionOf(current_node, 0);
       continue;
     }
@@ -960,10 +1018,10 @@ PositionTemplate<Strategy> MostForwardCaretPosition(
           text_layout_object->CaretMinOffset() + text_start_offset);
     }
 
-    DCHECK_GE(current_pos.OffsetInLeafNode(),
+    DCHECK_GE(current_pos.OffsetInTextNode(),
               static_cast<int>(text_layout_object->TextStartOffset()));
     if (text_layout_object->IsBeforeNonCollapsedCharacter(
-            current_pos.OffsetInLeafNode() -
+            current_pos.OffsetInTextNode() -
             text_layout_object->TextStartOffset()))
       return current_pos.ComputePosition();
   }
@@ -1070,9 +1128,8 @@ static bool IsVisuallyEquivalentCandidateAlgorithm(
   if (!layout_object->IsSelectable())
     return false;
 
-  if (layout_object->IsLayoutBlockFlow() ||
-      layout_object->IsFlexibleBoxIncludingNG() ||
-      layout_object->IsLayoutGridIncludingNG()) {
+  if (layout_object->IsLayoutBlockFlow() || layout_object->IsFlexibleBox() ||
+      layout_object->IsLayoutGrid()) {
     if (To<LayoutBlock>(layout_object)->LogicalHeight() ||
         anchor_node->GetDocument().body() == anchor_node) {
       if (!HasRenderedNonAnonymousDescendantsWithHeight(layout_object))
@@ -1403,7 +1460,7 @@ gfx::Rect FirstRectForRange(const EphemeralRange& range) {
   const PositionWithAffinity start_position(
       CreateVisiblePosition(range.StartPosition()).DeepEquivalent(),
       TextAffinity::kDownstream);
-  const gfx::Rect start_caret_rect =
+  gfx::Rect start_caret_rect =
       AbsoluteCaretBoundsOf(start_position, &extra_width_to_end_of_line);
   if (start_caret_rect.IsEmpty())
     return gfx::Rect();
@@ -1411,24 +1468,36 @@ gfx::Rect FirstRectForRange(const EphemeralRange& range) {
   const PositionWithAffinity end_position(
       CreateVisiblePosition(range.EndPosition()).DeepEquivalent(),
       TextAffinity::kUpstream);
-  const gfx::Rect end_caret_rect = AbsoluteCaretBoundsOf(end_position);
-  if (end_caret_rect.IsEmpty())
-    return gfx::Rect();
 
-  if (start_caret_rect.y() == end_caret_rect.y()) {
-    // start and end are on the same line
-    return gfx::Rect(
-        std::min(start_caret_rect.x(), end_caret_rect.x()),
-        start_caret_rect.y(), abs(end_caret_rect.x() - start_caret_rect.x()),
-        std::max(start_caret_rect.height(), end_caret_rect.height()));
+  const PositionWithAffinity end_position_in_same_line =
+      InSameLine(start_position, end_position) ? end_position
+                                               : EndOfLine(start_position);
+  gfx::Rect end_caret_rect = AbsoluteCaretBoundsOf(end_position_in_same_line);
+  if (end_caret_rect.IsEmpty()) {
+    return gfx::Rect();
   }
 
-  // start and end aren't on the same line, so go from start to the end of its
-  // line
-  return gfx::Rect(
-      start_caret_rect.x(), start_caret_rect.y(),
-      (start_caret_rect.width() + extra_width_to_end_of_line).ToInt(),
-      start_caret_rect.height());
+  // Some tests expect the resultant rectangles don't include caret widths.
+  // e.g.
+  //  - RenderViewImplTest.GetCompositionCharacterBoundsTest
+  //  - LocalFrameTest.CharacterIndexAtPointWithPinchZoom
+  if (start_position.AnchorNode()
+          ->GetComputedStyle()
+          ->IsHorizontalWritingMode()) {
+    end_caret_rect.set_width(0);
+    start_caret_rect.set_width(0);
+  } else {
+    end_caret_rect.set_height(0);
+    start_caret_rect.set_height(0);
+  }
+
+  const gfx::Point left_top = {
+      std::min(start_caret_rect.x(), end_caret_rect.x()),
+      std::min(start_caret_rect.y(), end_caret_rect.y())};
+  const int right = std::max(start_caret_rect.right(), end_caret_rect.right());
+  const int bottom =
+      std::max(start_caret_rect.bottom(), end_caret_rect.bottom());
+  return gfx::Rect(left_top, {right - left_top.x(), bottom - left_top.y()});
 }
 
 }  // namespace blink

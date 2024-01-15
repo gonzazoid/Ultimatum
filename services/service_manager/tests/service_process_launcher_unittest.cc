@@ -7,9 +7,9 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/path_service.h"
 #include "base/run_loop.h"
 #include "base/test/task_environment.h"
@@ -75,7 +75,7 @@ TEST(ServiceProcessLauncherTest, DISABLED_StartJoin) {
 
   // The test executable is a data_deps and thus generated test data.
   base::FilePath test_service_path;
-  base::PathService::Get(base::DIR_GEN_TEST_DATA_ROOT, &test_service_path);
+  base::PathService::Get(base::DIR_OUT_TEST_DATA_ROOT, &test_service_path);
   test_service_path = test_service_path.AppendASCII(kTestServiceName)
                           .AddExtension(kServiceExtension);
 

@@ -6,7 +6,7 @@
 #import <XCTest/XCTest.h>
 
 #import "base/ios/ios_util.h"
-#import "ios/chrome/browser/prefs/pref_names.h"
+#import "ios/chrome/browser/shared/model/prefs/pref_names.h"
 #import "ios/chrome/browser/ui/popup_menu/popup_menu_constants.h"
 #import "ios/chrome/test/earl_grey/chrome_earl_grey.h"
 #import "ios/chrome/test/earl_grey/chrome_earl_grey_ui.h"
@@ -16,10 +16,6 @@
 
 #import "ios/testing/earl_grey/earl_grey_test.h"
 #import "ios/third_party/earl_grey2/src/CommonLib/Matcher/GREYLayoutConstraint.h"  // nogncheck
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace {
 // Unexpectedly, the first and last destinations in the carousel overlap their
@@ -52,6 +48,8 @@ GREYLayoutConstraint* RightConstraint() {
   [super setUp];
   [ChromeEarlGrey
       resetDataForLocalStatePref:prefs::kOverflowMenuDestinationUsageHistory];
+  [ChromeEarlGrey
+      resetDataForLocalStatePref:prefs::kOverflowMenuNewDestinations];
 }
 
 - (void)tearDown {
@@ -62,7 +60,7 @@ GREYLayoutConstraint* RightConstraint() {
 
 #pragma mark - Helpers
 
-// Tests the destination carousel displays the default sort order, which is:
+// Verifies the destination carousel displays the default sort order, which is:
 // 1. Bookmarks
 // 2. History
 // 3. Reading List
@@ -139,8 +137,8 @@ GREYLayoutConstraint* RightConstraint() {
   [ChromeEarlGreyUI closeToolsMenu];
 }
 
-// Tests the destination carousel displays the default sort order for incognito,
-// which is:
+// Verifies the destination carousel displays the default sort order for
+// incognito, which is:
 // 1. Bookmarks
 // 2. Reading List
 // 3. Password Manager
@@ -270,8 +268,8 @@ GREYLayoutConstraint* RightConstraint() {
 // non-visible "below-the-fold" destinations; "below-the-fold" destinations are
 // made visible to the user when they scroll the carousel.
 
-// Tests an above-the-fold destination never moves within group (A), regardless
-// of usage.
+// Tests an above-the-fold destination never moves within group (A),
+// regardless of usage.
 - (void)testAboveFoldDestinationNeverPromotes {
   // Tap the above-fold destination, Password Manager, 5 times.
   for (int i = 0; i < 5; i++) {
@@ -342,9 +340,9 @@ GREYLayoutConstraint* RightConstraint() {
                             chrome_test_util::RecentTabsDestinationButton())];
 }
 
-// Tests a below-the-fold destination is not promoted until the third click for
-// a fresh destination usage history.
-- (void)testNoSwapUntilMinNumClicksReached {
+// Tests a below-the-fold destination is not promoted until the third click
+// for a fresh destination usage history.
+- (void)testNoSwapUntilMinClickCountReached {
   [DestinationUsageHistoryCase verifyCarouselHasDefaultSortOrderOnNTP:YES];
 
   // 1st Settings tap (no promotion expected after this tap)

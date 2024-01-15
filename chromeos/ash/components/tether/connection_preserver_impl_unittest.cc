@@ -6,10 +6,11 @@
 
 #include <memory>
 
-#include "ash/services/device_sync/public/cpp/fake_device_sync_client.h"
 #include "base/base64.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
+#include "base/ranges/algorithm.h"
 #include "base/test/task_environment.h"
 #include "base/timer/mock_timer.h"
 #include "chromeos/ash/components/multidevice/remote_device_test_util.h"
@@ -19,6 +20,7 @@
 #include "chromeos/ash/components/tether/fake_active_host.h"
 #include "chromeos/ash/components/tether/mock_tether_host_response_recorder.h"
 #include "chromeos/ash/components/tether/timer_factory.h"
+#include "chromeos/ash/services/device_sync/public/cpp/fake_device_sync_client.h"
 #include "chromeos/ash/services/secure_channel/public/cpp/client/fake_client_channel.h"
 #include "chromeos/ash/services/secure_channel/public/cpp/client/fake_connection_attempt.h"
 #include "chromeos/ash/services/secure_channel/public/cpp/client/fake_secure_channel_client.h"
@@ -64,10 +66,9 @@ class ConnectionPreserverImplTest : public testing::Test {
                                .SetPublicKey("local device")
                                .Build()),
         test_remote_devices_(multidevice::CreateRemoteDeviceRefListForTest(3)) {
-    std::transform(
-        test_remote_devices_.begin(), test_remote_devices_.end(),
-        std::back_inserter(test_remote_device_ids_),
-        [](const auto& remote_device) { return remote_device.GetDeviceId(); });
+    base::ranges::transform(test_remote_devices_,
+                            std::back_inserter(test_remote_device_ids_),
+                            &multidevice::RemoteDeviceRef::GetDeviceId);
   }
 
   void SetUp() override {
@@ -94,7 +95,8 @@ class ConnectionPreserverImplTest : public testing::Test {
         mock_tether_host_response_recorder_.get());
 
     mock_timer_ = new base::MockOneShotTimer();
-    connection_preserver_->SetTimerForTesting(base::WrapUnique(mock_timer_));
+    connection_preserver_->SetTimerForTesting(
+        base::WrapUnique(mock_timer_.get()));
   }
 
   void TearDown() override { connection_preserver_.reset(); }
@@ -191,7 +193,7 @@ class ConnectionPreserverImplTest : public testing::Test {
   std::unique_ptr<FakeActiveHost> fake_active_host_;
   std::unique_ptr<NiceMock<MockTetherHostResponseRecorder>>
       mock_tether_host_response_recorder_;
-  base::MockOneShotTimer* mock_timer_;
+  raw_ptr<base::MockOneShotTimer, DanglingUntriaged> mock_timer_;
 
   std::unique_ptr<ConnectionPreserverImpl> connection_preserver_;
 

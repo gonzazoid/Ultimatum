@@ -11,12 +11,6 @@ namespace base {
 class FilePath;
 }  // namespace base
 
-namespace network {
-namespace mojom {
-class NetworkService;
-}  // namespace mojom
-}  // namespace network
-
 namespace component_updater {
 
 class ComponentUpdateService;
@@ -28,33 +22,21 @@ class CRLSetPolicy : public ComponentInstallerPolicy {
   CRLSetPolicy& operator=(const CRLSetPolicy&) = delete;
   ~CRLSetPolicy() override;
 
-  // Queues a task to reconfigure the network service returned by
-  // content::GetNetworkService() (or configured by
-  // SetNetworkServiceForTesting) after the Network Service instance has
-  // changed (i.e. as signaled by
-  // content::ContentBrowserClient::OnNetworkServiceCreated).
-  static void ReconfigureAfterNetworkRestart();
-
  private:
   friend class CRLSetComponentInstallerTest;
 
-  // Configures the CRLSet component to send updates to |network_service|
-  // instead of the network service provided by |content::GetNetworkService()|.
-  static void SetNetworkServiceForTesting(
-      network::mojom::NetworkService* network_service);
-
   // ComponentInstallerPolicy implementation.
-  bool VerifyInstallation(const base::Value& manifest,
+  bool VerifyInstallation(const base::Value::Dict& manifest,
                           const base::FilePath& install_dir) const override;
   bool SupportsGroupPolicyEnabledComponentUpdates() const override;
   bool RequiresNetworkEncryption() const override;
   update_client::CrxInstaller::Result OnCustomInstall(
-      const base::Value& manifest,
+      const base::Value::Dict& manifest,
       const base::FilePath& install_dir) override;
   void OnCustomUninstall() override;
   void ComponentReady(const base::Version& version,
                       const base::FilePath& install_dir,
-                      base::Value manifest) override;
+                      base::Value::Dict manifest) override;
   base::FilePath GetRelativeInstallDir() const override;
   void GetHash(std::vector<uint8_t>* hash) const override;
   std::string GetName() const override;

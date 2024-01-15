@@ -8,11 +8,11 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/ranges/algorithm.h"
 #include "base/run_loop.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/bind.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/win/async_operation.h"
 #include "base/win/scoped_hstring.h"
 #include "device/bluetooth/bluetooth_remote_gatt_service_winrt.h"
@@ -270,7 +270,7 @@ void FakeBluetoothLEDeviceWinrt::SimulateConfirmOnly() {
 }
 
 void FakeBluetoothLEDeviceWinrt::SimulateDisplayPin(
-    base::StringPiece display_pin) {
+    std::string_view display_pin) {
   device_information_ =
       Make<FakeDeviceInformationWinrt>(Make<FakeDeviceInformationPairingWinrt>(
           DevicePairingKinds_ConfirmPinMatch, display_pin));
@@ -446,7 +446,7 @@ HRESULT FakeBluetoothLEDeviceStaticsWinrt::FromBluetoothAddressAsync(
     uint64_t bluetooth_address,
     IAsyncOperation<BluetoothLEDevice*>** operation) {
   auto async_op = Make<base::win::AsyncOperation<BluetoothLEDevice*>>();
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(async_op->callback(),
                      Make<FakeBluetoothLEDeviceWinrt>(bluetooth_test_winrt_)));

@@ -7,8 +7,8 @@
 #include <memory>
 #include <string>
 
-#include "base/bind.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/time/time.h"
@@ -64,20 +64,20 @@ void FirstWebContentsProfiler::RecordFinishReason(
 
 void FirstWebContentsProfiler::RecordNavigationFinished(
     base::TimeTicks navigation_start) {
-  startup_metric_utils::RecordFirstWebContentsMainNavigationStart(
+  startup_metric_utils::GetBrowser().RecordFirstWebContentsMainNavigationStart(
       navigation_start);
-  startup_metric_utils::RecordFirstWebContentsMainNavigationFinished(
-      base::TimeTicks::Now());
+  startup_metric_utils::GetBrowser()
+      .RecordFirstWebContentsMainNavigationFinished(base::TimeTicks::Now());
 }
 
 void FirstWebContentsProfiler::RecordFirstNonEmptyPaint() {
-  startup_metric_utils::RecordFirstWebContentsNonEmptyPaint(
+  startup_metric_utils::GetBrowser().RecordFirstWebContentsNonEmptyPaint(
       base::TimeTicks::Now(),
       web_contents()->GetPrimaryMainFrame()->GetProcess()->GetLastInitTime());
 }
 
 bool FirstWebContentsProfiler::WasStartupInterrupted() {
-  return startup_metric_utils::WasMainWindowStartupInterrupted();
+  return startup_metric_utils::GetBrowser().WasMainWindowStartupInterrupted();
 }
 
 }  // namespace

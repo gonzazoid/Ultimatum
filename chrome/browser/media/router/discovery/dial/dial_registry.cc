@@ -7,8 +7,9 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/strings/string_number_conversions.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/time/default_clock.h"
 #include "base/time/time.h"
 #include "base/values.h"
@@ -115,15 +116,15 @@ bool DialRegistry::ReadyToDiscover() {
                                 base::Unretained(this)))) {
     // If the ConnectionType is unknown, return false. We'll try to start
     // discovery again when we receive the OnConnectionChanged callback.
-    client_.OnDialError(DIAL_UNKNOWN);
+    client_->OnDialError(DIAL_UNKNOWN);
     return false;
   }
   if (type == network::mojom::ConnectionType::CONNECTION_NONE) {
-    client_.OnDialError(DIAL_NETWORK_DISCONNECTED);
+    client_->OnDialError(DIAL_NETWORK_DISCONNECTED);
     return false;
   }
   if (network::NetworkConnectionTracker::IsConnectionCellular(type)) {
-    client_.OnDialError(DIAL_CELLULAR_NETWORK);
+    client_->OnDialError(DIAL_CELLULAR_NETWORK);
     return false;
   }
   return true;
@@ -135,7 +136,7 @@ bool DialRegistry::DiscoverNow() {
     return false;
 
   if (!dial_) {
-    client_.OnDialError(DIAL_UNKNOWN);
+    client_->OnDialError(DIAL_UNKNOWN);
     return false;
   }
 
@@ -237,7 +238,7 @@ void DialRegistry::MaybeSendDeviceList() {
        it != device_by_label_map_.end(); ++it) {
     device_list.push_back(*(it->second));
   }
-  client_.OnDialDeviceList(device_list);
+  client_->OnDialDeviceList(device_list);
 
   // Reset watermark.
   last_event_registry_generation_ = registry_generation_;
@@ -301,14 +302,14 @@ void DialRegistry::OnError(DialService::DialServiceErrorCode code) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   switch (code) {
     case DialService::DIAL_SERVICE_SOCKET_ERROR:
-      client_.OnDialError(DIAL_SOCKET_ERROR);
+      client_->OnDialError(DIAL_SOCKET_ERROR);
       break;
     case DialService::DIAL_SERVICE_NO_INTERFACES:
-      client_.OnDialError(DIAL_NO_INTERFACES);
+      client_->OnDialError(DIAL_NO_INTERFACES);
       break;
     default:
       NOTREACHED();
-      client_.OnDialError(DIAL_UNKNOWN);
+      client_->OnDialError(DIAL_UNKNOWN);
       break;
   }
 }
@@ -317,7 +318,7 @@ void DialRegistry::OnConnectionChanged(network::mojom::ConnectionType type) {
   switch (type) {
     case network::mojom::ConnectionType::CONNECTION_NONE:
       if (dial_) {
-        client_.OnDialError(DIAL_NETWORK_DISCONNECTED);
+        client_->OnDialError(DIAL_NETWORK_DISCONNECTED);
         StopPeriodicDiscovery();
         Clear();
         MaybeSendDeviceList();

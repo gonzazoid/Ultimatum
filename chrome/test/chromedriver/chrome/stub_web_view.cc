@@ -24,10 +24,6 @@ bool StubWebView::WasCrashed() {
   return false;
 }
 
-Status StubWebView::ConnectIfNecessary() {
-  return Status(kOk);
-}
-
 Status StubWebView::HandleEventsUntil(const ConditionalFunc& conditional_func,
                                       const Timeout& timeout) {
   return Status{kOk};
@@ -57,7 +53,8 @@ Status StubWebView::Resume(const Timeout* timeout) {
   return Status(kOk);
 }
 
-Status StubWebView::StartBidiServer(std::string bidi_mapper_script) {
+Status StubWebView::StartBidiServer(std::string bidi_mapper_script,
+                                    const base::Value::Dict& mapper_options) {
   return Status{kOk};
 }
 
@@ -89,7 +86,7 @@ Status StubWebView::TraverseHistory(int delta, const Timeout* timeout) {
 
 Status StubWebView::EvaluateScript(const std::string& frame,
                                    const std::string& function,
-                                   const bool awaitPromise,
+                                   const bool await_promise,
                                    std::unique_ptr<base::Value>* result) {
   return Status(kOk);
 }
@@ -98,14 +95,6 @@ Status StubWebView::CallFunction(const std::string& frame,
                                  const std::string& function,
                                  const base::Value::List& args,
                                  std::unique_ptr<base::Value>* result) {
-  return Status(kOk);
-}
-
-Status StubWebView::CallAsyncFunction(const std::string& frame,
-                                      const std::string& function,
-                                      const base::Value::List& args,
-                                      const base::TimeDelta& timeout,
-                                      std::unique_ptr<base::Value>* result) {
   return Status(kOk);
 }
 
@@ -178,9 +167,9 @@ Status StubWebView::AddCookie(const std::string& name,
                               const std::string& value,
                               const std::string& domain,
                               const std::string& path,
-                              const std::string& sameSite,
+                              const std::string& same_site,
                               bool secure,
-                              bool httpOnly,
+                              bool http_only,
                               double expiry) {
   return Status(kOk);
 }
@@ -264,6 +253,10 @@ Status StubWebView::SynthesizeScrollGesture(int x,
 
 bool StubWebView::IsNonBlocking() const {
   return false;
+}
+
+Status StubWebView::GetFedCmTracker(FedCmTracker** out_tracker) {
+  return Status(kUnknownCommand);
 }
 
 FrameTracker* StubWebView::GetFrameTracker() const {

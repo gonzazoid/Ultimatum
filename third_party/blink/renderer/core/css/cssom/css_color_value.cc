@@ -61,15 +61,17 @@ CSSNumericValue* CSSColorValue::ToNumberOrPercentage(
 CSSNumericValue* CSSColorValue::ToPercentage(const V8CSSNumberish* input) {
   CSSNumericValue* value = CSSNumericValue::FromPercentish(input);
   DCHECK(value);
-  if (!CSSOMTypes::IsCSSStyleValuePercentage(*value))
+  if (!CSSOMTypes::IsCSSStyleValuePercentage(*value)) {
     return nullptr;
+  }
 
   return value;
 }
 
 float CSSColorValue::ComponentToColorInput(CSSNumericValue* input) {
-  if (CSSOMTypes::IsCSSStyleValuePercentage(*input))
+  if (CSSOMTypes::IsCSSStyleValuePercentage(*input)) {
     return input->to(CSSPrimitiveValue::UnitType::kPercentage)->value() / 100;
+  }
   return input->to(CSSPrimitiveValue::UnitType::kNumber)->value();
 }
 
@@ -139,7 +141,7 @@ V8UnionCSSColorValueOrCSSStyleValue* CSSColorValue::parse(
         return MakeGarbageCollected<V8UnionCSSColorValueOrCSSStyleValue>(
             CreateCSSRGBByNumbers(
                 result->Value().Red(), result->Value().Green(),
-                result->Value().Blue(), result->Value().Alpha()));
+                result->Value().Blue(), result->Value().AlphaAsInteger()));
       case CSSColorType::kHSL:
         return MakeGarbageCollected<V8UnionCSSColorValueOrCSSStyleValue>(
             MakeGarbageCollected<CSSHSL>(result->Value()));
@@ -161,7 +163,7 @@ V8UnionCSSColorValueOrCSSStyleValue* CSSColorValue::parse(
 
     return MakeGarbageCollected<V8UnionCSSColorValueOrCSSStyleValue>(
         CreateCSSRGBByNumbers(color.Red(), color.Green(), color.Blue(),
-                              color.Alpha()));
+                              color.AlphaAsInteger()));
   }
 
   return MakeGarbageCollected<V8UnionCSSColorValueOrCSSStyleValue>(

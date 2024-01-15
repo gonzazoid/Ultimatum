@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -45,22 +45,14 @@ TEST_F(SearchUserModelTest, ExecuteModelWithInput) {
 
   EXPECT_FALSE(ExecuteWithInput(/*inputs=*/{}));
 
-  std::string subsegment_key = GetSubsegmentKey(kSearchUserKey);
-  std::vector<float> input = {0};
-  ExecuteWithInputAndCheckSubsegmentName<SearchUserModel>(
-      input, subsegment_key, /*sub_segment_name=*/"None");
+  ModelProvider::Request input = {0};
+  ExpectClassifierResults(/*input=*/{0}, {kSearchUserModelLabelNone});
 
-  input[0] = 1;
-  ExecuteWithInputAndCheckSubsegmentName<SearchUserModel>(
-      input, subsegment_key, /*sub_segment_name=*/"Low");
+  ExpectClassifierResults(/*input=*/{1}, {kSearchUserModelLabelLow});
 
-  input[0] = 5;
-  ExecuteWithInputAndCheckSubsegmentName<SearchUserModel>(
-      input, subsegment_key, /*sub_segment_name=*/"Medium");
+  ExpectClassifierResults(/*input=*/{5}, {kSearchUserModelLabelMedium});
 
-  input[0] = 22;
-  ExecuteWithInputAndCheckSubsegmentName<SearchUserModel>(
-      input, subsegment_key, /*sub_segment_name=*/"High");
+  ExpectClassifierResults(/*input=*/{22}, {kSearchUserModelLabelHigh});
 }
 
 }  // namespace segmentation_platform

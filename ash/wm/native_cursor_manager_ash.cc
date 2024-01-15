@@ -14,8 +14,6 @@
 #include "ui/aura/window_tree_host.h"
 #include "ui/base/cursor/cursor.h"
 #include "ui/base/cursor/mojom/cursor_type.mojom-shared.h"
-#include "ui/base/layout.h"
-#include "ui/wm/core/cursor_loader.h"
 #include "ui/wm/core/native_cursor_manager_delegate.h"
 
 namespace ash {
@@ -79,15 +77,9 @@ display::Display::Rotation NativeCursorManagerAsh::GetRotation() const {
 void NativeCursorManagerAsh::SetDisplay(
     const display::Display& display,
     ::wm::NativeCursorManagerDelegate* delegate) {
-  DCHECK(display.is_valid());
-
-  const float original_scale = display.device_scale_factor();
-  // And use the nearest resource scale factor.
-  const float cursor_scale = ui::GetScaleForResourceScaleFactor(
-      ui::GetSupportedResourceScaleFactor(original_scale));
-
-  if (cursor_loader_.SetDisplayData(display.panel_rotation(), cursor_scale))
+  if (cursor_loader_.SetDisplay(display)) {
     SetCursor(delegate->GetCursor(), delegate);
+  }
 
   Shell::Get()
       ->window_tree_host_manager()
@@ -104,8 +96,6 @@ void NativeCursorManagerAsh::SetCursor(
     gfx::NativeCursor invisible_cursor(ui::mojom::CursorType::kNone);
     cursor_loader_.SetPlatformCursor(&invisible_cursor);
     cursor.SetPlatformCursor(invisible_cursor.platform());
-    if (cursor.type() != ui::mojom::CursorType::kCustom)
-      cursor.set_image_scale_factor(cursor_loader_.scale());
   }
 
   delegate->CommitCursor(cursor);

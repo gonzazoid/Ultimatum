@@ -5,13 +5,11 @@
 #ifndef CONTENT_BROWSER_ACCESSIBILITY_BROWSER_ACCESSIBILITY_COCOA_H_
 #define CONTENT_BROWSER_ACCESSIBILITY_BROWSER_ACCESSIBILITY_COCOA_H_
 
-#include "base/memory/raw_ptr.h"
-
 #import <Cocoa/Cocoa.h>
+
 #include <string>
 #include <vector>
 
-#import "base/mac/scoped_nsobject.h"
 #include "content/browser/accessibility/browser_accessibility.h"
 #include "content/browser/accessibility/browser_accessibility_manager.h"
 #include "content/common/content_export.h"
@@ -36,19 +34,11 @@ struct CONTENT_EXPORT AXTextEdit {
 
   std::u16string inserted_text;
   std::u16string deleted_text;
-  base::scoped_nsprotocol<id> edit_text_marker;
+  id __strong edit_text_marker;
 };
 
 // Returns true if the given object is an NSRange instance.
 bool IsNSRange(id value);
-
-// Returns an AXTextMarker representing the given position in the tree.
-id AXTextMarkerFrom(const BrowserAccessibilityCocoa* anchor,
-                    int offset,
-                    ax::mojom::TextAffinity affinity);
-
-// Returns an AXTextMarkerRange that spans the given AXTextMarkers.
-id AXTextMarkerRangeFrom(id anchor_text_marker, id focus_text_marker);
 
 }  // namespace content
 
@@ -56,18 +46,7 @@ id AXTextMarkerRangeFrom(id anchor_text_marker, id focus_text_marker);
 // object. The renderer converts webkit's accessibility tree into a
 // WebAccessibility tree and passes it to the browser process over IPC.
 // This class converts it into a format Cocoa can query.
-@interface BrowserAccessibilityCocoa : AXPlatformNodeCocoa {
- @private
-  raw_ptr<content::BrowserAccessibility> _owner;
-  // An array of children of this object. Cached to avoid re-computing.
-  base::scoped_nsobject<NSMutableArray> _children;
-  // Whether the children have changed and need to be updated.
-  bool _needsToUpdateChildren;
-  // Whether _children is currently being computed.
-  bool _gettingChildren;
-  // Stores the previous value of an edit field.
-  std::u16string _oldValue;
-}
+@interface BrowserAccessibilityCocoa : AXPlatformNodeCocoa
 
 // This creates a cocoa browser accessibility object around
 // the cross platform BrowserAccessibility object, which can't be nullptr.
@@ -81,10 +60,6 @@ id AXTextMarkerRangeFrom(id anchor_text_marker, id focus_text_marker);
 
 // Invalidate children for a non-ignored ancestor (including self).
 - (void)childrenChanged;
-
-// Convenience method to get the internal, cross-platform role
-// from browserAccessibility_.
-- (ax::mojom::Role)internalRole;
 
 // Get the BrowserAccessibility that this object wraps.
 - (content::BrowserAccessibility*)owner;

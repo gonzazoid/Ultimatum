@@ -9,7 +9,7 @@ import 'chrome://resources/polymer/v3_0/iron-media-query/iron-media-query.js';
 import './navigation_shared_vars.css.js';
 import './page_toolbar.js';
 
-import {assert} from 'chrome://resources/js/assert.js';
+import {assert} from 'chrome://resources/ash/common/assert.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {SelectorItem} from './navigation_selector.js';
@@ -74,6 +74,14 @@ export class NavigationViewPanelElement extends PolymerElement {
       },
 
       /**
+       * If |hasSearch| is True, the toolbar internal widths will be adjusted
+       * to fit the search bar when |showNav| is False.
+       */
+      hasSearch: {
+        type: Boolean,
+      },
+
+      /**
        * Can only be set to True if specified from the parent element by
        * adding show-banner as an attribute to <navigation-view-panel>. If
        * True, a banner will appear above the 2 column view (sidebar +
@@ -111,6 +119,8 @@ export class NavigationViewPanelElement extends PolymerElement {
   constructor() {
     super();
     window.addEventListener('menu-tap', () => this.onMenuButtonTap_());
+    window.addEventListener(
+        'navigation-selected', () => this.onNavigationSelected_());
 
     /**
      * Event callback for 'scroll'.
@@ -254,6 +264,17 @@ export class NavigationViewPanelElement extends PolymerElement {
   }
 
   /**
+   * Selects the page that has the given id.
+   * @param {string} id
+   */
+  selectPageById(id) {
+    const selectorItem = this.selectorItems_.find(item => item.id == id);
+    if (selectorItem) {
+      this.selectedItem = selectorItem;
+    }
+  }
+
+  /**
    * @param {!SelectorItem} item
    * @private
    */
@@ -301,6 +322,22 @@ export class NavigationViewPanelElement extends PolymerElement {
         return;
       }
       this.shadowRoot.querySelector('page-toolbar').setAttribute('shadow', '');
+    }
+  }
+
+  /**
+   * @param {string} selectorId The ID of the section to search for.
+   * @return {boolean}
+   */
+  pageExists(selectorId) {
+    return !!this.selectorItems_.find(({id}) => id === selectorId);
+  }
+
+  /** @private */
+  onNavigationSelected_() {
+    // Don't toggle, but rather only close the drawer if it's opened.
+    if (this.$.drawer.open) {
+      this.$.drawer.close();
     }
   }
 }

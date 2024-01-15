@@ -8,6 +8,7 @@
 #include <string>
 
 #include "base/files/file_path.h"
+#include "components/optimization_guide/core/model_enums.h"
 #include "components/optimization_guide/proto/models.pb.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
@@ -49,6 +50,30 @@ GetModelOverrideForOptimizationTarget(
 
 // Checks all the files in |file_paths_to_check| exists.
 bool CheckAllPathsExist(const std::vector<base::FilePath>& file_paths_to_check);
+
+// Returns the relative filepath for |child| w.r.t. |parent|. For example, with
+// child="/foo/bar/baz/abc.txt"  and parent="/foo/bar/", this returns the
+// relative path "baz/abc.txt".
+base::FilePath ConvertToRelativePath(const base::FilePath& parent,
+                                     const base::FilePath& child);
+
+// Returns the hash of |model_cache_key| that can be used as key in a
+// persistent dict, or can be used as file paths.
+std::string GetModelCacheKeyHash(proto::ModelCacheKey model_cache_key);
+
+// Records the model remove version histograms. One general histogram and one
+// histogram broken down by |optimization_target| are recorded.
+void RecordPredictionModelStoreModelRemovalVersionHistogram(
+    proto::OptimizationTarget optimization_target,
+    PredictionModelStoreModelRemovalReason model_removal_reason);
+
+// Returns whether the model for `opt_target` with `model_version` is in the
+// `killswitch_model_versions`.
+bool IsPredictionModelVersionInKillSwitch(
+    const std::map<proto::OptimizationTarget, std::set<int64_t>>&
+        killswitch_model_versions,
+    proto::OptimizationTarget opt_target,
+    int64_t model_version);
 
 }  // namespace optimization_guide
 

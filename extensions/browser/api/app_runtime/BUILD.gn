@@ -13,8 +13,9 @@ source_set("app_runtime") {
     "app_runtime_api.h",
   ]
 
+  configs += [ "//build/config/compiler:wexit_time_destructors" ]
+
   deps = [
-    "//components/services/app_service/public/mojom",
     "//extensions/common",
     "//extensions/common/api",
   ]

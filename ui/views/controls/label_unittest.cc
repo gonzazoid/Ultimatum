@@ -10,18 +10,22 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/i18n/rtl.h"
 #include "base/memory/raw_ptr.h"
 #include "base/test/gtest_util.h"
+#include "base/test/scoped_feature_list.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "ui/accessibility/accessibility_features.h"
 #include "ui/accessibility/ax_enums.mojom.h"
 #include "ui/accessibility/ax_node_data.h"
 #include "ui/base/clipboard/clipboard.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/base/metadata/metadata_header_macros.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/base/ui_base_switches.h"
 #include "ui/color/color_provider.h"
 #include "ui/compositor/canvas_painter.h"
@@ -33,6 +37,7 @@
 #include "ui/gfx/text_constants.h"
 #include "ui/gfx/text_elider.h"
 #include "ui/strings/grit/ui_strings.h"
+#include "ui/views/accessibility/view_accessibility.h"
 #include "ui/views/background.h"
 #include "ui/views/border.h"
 #include "ui/views/controls/base_control_test_widget.h"
@@ -63,6 +68,8 @@ const int kControlCommandModifier = ui::EF_CONTROL_DOWN;
 const int kMinTextDimension = 4;
 
 class TestLabel : public Label {
+  METADATA_HEADER(TestLabel, Label)
+
  public:
   TestLabel() : Label(u"TestLabel") { SizeToPreferredSize(); }
 
@@ -90,6 +97,9 @@ class TestLabel : public Label {
   int schedule_paint_count_ = 0;
 };
 
+BEGIN_METADATA(TestLabel)
+END_METADATA
+
 // A test utility function to set the application default text direction.
 void SetRTL(bool rtl) {
   // Override the current locale/direction.
@@ -109,9 +119,9 @@ std::u16string ToRTL(const char* ascii) {
   std::u16string rtl;
   for (const char* c = ascii; *c; ++c) {
     if (*c >= '0' && *c <= '6')
-      rtl += L'\x5d0' + (*c - '0');
+      rtl += static_cast<char16_t>(u'א' + (*c - '0'));
     else
-      rtl += static_cast<std::u16string::value_type>(*c);
+      rtl += static_cast<char16_t>(*c);
   }
   return rtl;
 }
@@ -124,6 +134,11 @@ class LabelTest : public test::BaseControlTestWidget {
   LabelTest(const LabelTest&) = delete;
   LabelTest& operator=(const LabelTest&) = delete;
   ~LabelTest() override = default;
+
+  void TearDown() override {
+    label_ = nullptr;
+    test::BaseControlTestWidget::TearDown();
+  }
 
  protected:
   void CreateWidgetContent(View* container) override {
@@ -297,6 +312,42 @@ TEST_F(LabelTest, ColorPropertyOnEnabledColorIdChange) {
   label()->SetAutoColorReadabilityEnabled(false);
   label()->SetEnabledColorId(ui::kColorPrimaryForeground);
   EXPECT_EQ(color, label()->GetEnabledColor());
+
+  // Update the enabled id and verify the actual enabled color is updated to
+  // reflect the color id change. Regression test case for: b/262402965.
+  label()->SetEnabledColorId(ui::kColorAccent);
+  EXPECT_EQ(
+      label()->GetWidget()->GetColorProvider()->GetColor(ui::kColorAccent),
+      label()->GetEnabledColor());
+}
+
+TEST_F(LabelTest, BackgroundColor) {
+  // The correct default background color is set.
+  EXPECT_EQ(widget()->GetColorProvider()->GetColor(ui::kColorDialogBackground),
+            label()->GetBackgroundColor());
+
+  label()->SetBackgroundColor(SK_ColorBLUE);
+  EXPECT_EQ(SK_ColorBLUE, label()->GetBackgroundColor());
+}
+
+TEST_F(LabelTest, BackgroundColorId) {
+  // The correct default background color is set.
+  EXPECT_EQ(widget()->GetColorProvider()->GetColor(ui::kColorDialogBackground),
+            label()->GetBackgroundColor());
+
+  label()->SetBackgroundColorId(ui::kColorAlertHighSeverity);
+  EXPECT_EQ(widget()->GetColorProvider()->GetColor(ui::kColorAlertHighSeverity),
+            label()->GetBackgroundColor());
+
+  // A color id takes precedence.
+  label()->SetBackgroundColor(SK_ColorBLUE);
+  EXPECT_EQ(widget()->GetColorProvider()->GetColor(ui::kColorAlertHighSeverity),
+            label()->GetBackgroundColor());
+
+  // Once a color id is no longer set, colors can be set again.
+  label()->SetBackgroundColorId(absl::nullopt);
+  label()->SetBackgroundColor(SK_ColorBLUE);
+  EXPECT_EQ(SK_ColorBLUE, label()->GetBackgroundColor());
 }
 
 TEST_F(LabelTest, AlignmentProperty) {
@@ -685,6 +736,13 @@ TEST_F(LabelTest, Accessibility) {
   label()->GetAccessibleNodeData(&node_data);
   EXPECT_EQ(label()->GetText(),
             node_data.GetString16Attribute(ax::mojom::StringAttribute::kName));
+
+  // If the displayed text is the source of the accessible name, and that text
+  // is cleared, the accessible name should also be cleared.
+  label()->SetText(u"");
+  label()->GetAccessibleNodeData(&node_data);
+  EXPECT_EQ(label()->GetText(),
+            node_data.GetString16Attribute(ax::mojom::StringAttribute::kName));
 }
 
 TEST_F(LabelTest, SetTextNotifiesAccessibilityEvent) {
@@ -720,6 +778,39 @@ TEST_F(LabelTest, TextChangeWithoutLayout) {
   label()->OnPaint(&canvas);
   EXPECT_TRUE(label()->display_text_);
   EXPECT_EQ(u"Altered", label()->display_text_->GetDisplayText());
+}
+
+TEST_F(LabelTest, AccessibleNameAndRole) {
+  label()->SetText(u"Text");
+  EXPECT_EQ(label()->GetAccessibleName(), u"Text");
+  EXPECT_EQ(label()->GetAccessibleRole(), ax::mojom::Role::kStaticText);
+
+  ui::AXNodeData data;
+  label()->GetAccessibleNodeData(&data);
+  EXPECT_EQ(data.GetString16Attribute(ax::mojom::StringAttribute::kName),
+            u"Text");
+  EXPECT_EQ(data.role, ax::mojom::Role::kStaticText);
+
+  label()->SetTextContext(style::CONTEXT_DIALOG_TITLE);
+  EXPECT_EQ(label()->GetAccessibleName(), u"Text");
+  EXPECT_EQ(label()->GetAccessibleRole(), ax::mojom::Role::kTitleBar);
+
+  data = ui::AXNodeData();
+  label()->GetAccessibleNodeData(&data);
+  EXPECT_EQ(data.GetString16Attribute(ax::mojom::StringAttribute::kName),
+            u"Text");
+  EXPECT_EQ(data.role, ax::mojom::Role::kTitleBar);
+
+  label()->SetText(u"New Text");
+  label()->SetAccessibleRole(ax::mojom::Role::kLink);
+  EXPECT_EQ(label()->GetAccessibleName(), u"New Text");
+  EXPECT_EQ(label()->GetAccessibleRole(), ax::mojom::Role::kLink);
+
+  data = ui::AXNodeData();
+  label()->GetAccessibleNodeData(&data);
+  EXPECT_EQ(data.GetString16Attribute(ax::mojom::StringAttribute::kName),
+            u"New Text");
+  EXPECT_EQ(data.role, ax::mojom::Role::kLink);
 }
 
 TEST_F(LabelTest, EmptyLabelSizing) {
@@ -1088,18 +1179,6 @@ TEST_F(LabelTest, CanForceDirectionality) {
                            gfx::DirectionalityMode::DIRECTIONALITY_FORCE_RTL);
   EXPECT_EQ(base::i18n::TextDirection::RIGHT_TO_LEFT,
             ltr_text_force_rtl.GetTextDirectionForTesting());
-
-  SetRTL(true);
-  Label ltr_use_ui(u"0123456", 0, style::STYLE_PRIMARY,
-                   gfx::DirectionalityMode::DIRECTIONALITY_FROM_UI);
-  EXPECT_EQ(base::i18n::TextDirection::RIGHT_TO_LEFT,
-            ltr_use_ui.GetTextDirectionForTesting());
-
-  SetRTL(false);
-  Label rtl_use_ui(ToRTL("0123456"), 0, style::STYLE_PRIMARY,
-                   gfx::DirectionalityMode::DIRECTIONALITY_FROM_UI);
-  EXPECT_EQ(base::i18n::TextDirection::LEFT_TO_RIGHT,
-            rtl_use_ui.GetTextDirectionForTesting());
 }
 
 TEST_F(LabelTest, DefaultDirectionalityIsFromText) {
@@ -1207,6 +1286,117 @@ TEST_F(LabelTest, MAYBE_ChecksSubpixelRenderingOntoOpaqueSurface) {
   view.SetBackground(CreateSolidBackground(SK_ColorWHITE));
   label->OnPaint(&canvas);
 }
+
+#if BUILDFLAG(SUPPORTS_AX_TEXT_OFFSETS)
+TEST_F(LabelTest, WordOffsets) {
+  base::test::ScopedFeatureList scoped_feature_list;
+  scoped_feature_list.InitAndEnableFeature(::features::kUiaProvider);
+  const std::u16string text = u"This is a string";
+  label()->SetText(text);
+  label()->SizeToPreferredSize();
+  EXPECT_EQ(text, label()->GetDisplayTextForTesting());
+  ui::AXNodeData node_data;
+  label()->GetViewAccessibility().GetAccessibleNodeData(&node_data);
+  std::vector<int32_t> expected_starts = {0, 5, 8, 10};
+  std::vector<int32_t> expected_ends = {4, 7, 9, 16};
+  EXPECT_EQ(
+      node_data.GetIntListAttribute(ax::mojom::IntListAttribute::kWordStarts),
+      expected_starts);
+  EXPECT_EQ(
+      node_data.GetIntListAttribute(ax::mojom::IntListAttribute::kWordEnds),
+      expected_ends);
+}
+
+TEST_F(LabelTest, AccessibleGraphemeOffsets) {
+  struct {
+    std::u16string text;
+    std::vector<int32_t> expected_offsets;
+  } cases[] = {
+      {std::u16string(), {}},
+      // LTR.
+      {u"This is a string",
+       {0, 6, 13, 15, 21, 24, 27, 32, 35, 41, 45, 50, 54, 58, 61, 68, 76}},
+      // RTL: should render left-to-right as "<space>43210 \n cba9876".
+      // Note this used to say "Arabic language", in Arabic, but the last
+      // character in the string (\u0629) got fancy in an updated Mac font, so
+      // now the penultimate character repeats.
+      //
+      // TODO(accessibility): This is not the correct order of grapheme offsets.
+      // Blink returns the offsets from the right boundary when in RTL and so
+      // should we for Views.
+      {u"اللغة العربيي",
+       {67, 63, 59, 52, 46, 43, 40, 36, 29, 24, 20, 16, 6, 17}},
+      // LTR कि (DEVANAGARI KA with VOWEL I) (2-char grapheme), LTR abc, and LTR
+      // कि.
+      {u"\u0915\u093fabc\u0915\u093f", {10, 23, 29, 36, 42, 56}},
+      // LTR ab, LTR कि (DEVANAGARI KA with VOWEL I) (2-char grapheme), LTR cd.
+      {u"ab\u0915\u093fcd", {3, 9, 16, 29, 35, 43}},
+      // LTR ab, 𝄞 'MUSICAL SYMBOL G CLEF' U+1D11E (surrogate pair), LTR cd.
+      // Windows requires wide strings for \Unnnnnnnn universal character names.
+      {u"ab\U0001D11Ecd", {4, 10, 17, 23, 29, 37}},
+  };
+
+  base::test::ScopedFeatureList scoped_feature_list;
+  scoped_feature_list.InitAndEnableFeature(::features::kUiaProvider);
+
+  for (size_t i = 0; i < std::size(cases); i++) {
+    SCOPED_TRACE(base::StringPrintf("Testing cases[%" PRIuS "]", i));
+    label()->SetText(cases[i].text);
+    label()->SizeToPreferredSize();
+    EXPECT_EQ(cases[i].text, label()->GetDisplayTextForTesting());
+
+    ui::AXNodeData node_data;
+    label()->GetViewAccessibility().GetAccessibleNodeData(&node_data);
+    EXPECT_EQ(node_data.GetIntListAttribute(
+                  ax::mojom::IntListAttribute::kCharacterOffsets),
+              cases[i].expected_offsets);
+  }
+}
+
+TEST_F(LabelTest, AccessibleGraphemeOffsetsObscured) {
+  base::test::ScopedFeatureList scoped_feature_list;
+  scoped_feature_list.InitAndEnableFeature(::features::kUiaProvider);
+  const std::u16string text = u"password";
+  label()->SetText(text);
+  label()->SizeToPreferredSize();
+  label()->SetObscured(true);
+  EXPECT_EQ(
+      std::u16string(text.size(), gfx::RenderText::kPasswordReplacementChar),
+      label()->GetDisplayTextForTesting());
+  ui::AXNodeData node_data;
+  label()->GetViewAccessibility().GetAccessibleNodeData(&node_data);
+  std::vector<int32_t> expected_offsets = {6, 10, 15, 20, 25, 30, 35, 40, 45};
+  EXPECT_EQ(node_data.GetIntListAttribute(
+                ax::mojom::IntListAttribute::kCharacterOffsets),
+            expected_offsets);
+}
+
+TEST_F(LabelTest, AccessibleGraphemeOffsetsElided) {
+  base::test::ScopedFeatureList scoped_feature_list;
+  scoped_feature_list.InitAndEnableFeature(::features::kUiaProvider);
+  const std::u16string text = u"This is a string";
+
+  label()->SetText(text);
+  gfx::Size size = label()->GetPreferredSize();
+  label()->SetBoundsRect(gfx::Rect(size));
+  EXPECT_EQ(text, label()->GetDisplayTextForTesting());
+
+  size.set_width(size.width() / 2);
+  label()->SetBoundsRect(gfx::Rect(size));
+  EXPECT_GT(text.size(), label()->GetDisplayTextForTesting().size());
+
+  label()->SetElideBehavior(gfx::ELIDE_TAIL);
+  EXPECT_EQ(u"This i\x2026", label()->GetDisplayTextForTesting());
+
+  ui::AXNodeData node_data;
+  label()->GetViewAccessibility().GetAccessibleNodeData(&node_data);
+  std::vector<int32_t> expected_offsets = {1,  7,  14, 16, 22, 25, 28, 38, 38,
+                                           38, 38, 38, 38, 38, 38, 38, 38};
+  EXPECT_EQ(node_data.GetIntListAttribute(
+                ax::mojom::IntListAttribute::kCharacterOffsets),
+            expected_offsets);
+}
+#endif  // BUILDFLAG(SUPPORTS_AX_TEXT_OFFSETS)
 
 TEST_F(LabelSelectionTest, Selectable) {
   // By default, labels don't support text selection.

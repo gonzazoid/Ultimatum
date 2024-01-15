@@ -6,17 +6,7 @@ import {Destination, DestinationOrigin, PrintPreviewButtonStripElement, State} f
 import {assert} from 'chrome://resources/js/assert.js';
 import {eventToPromise} from 'chrome://webui-test/test_util.js';
 
-const button_strip_interactive_test = {
-  suiteName: 'ButtonStripInteractiveTest',
-  TestNames: {
-    FocusPrintOnReady: 'focus print on ready',
-  },
-};
-
-Object.assign(
-    window, {button_strip_interactive_test: button_strip_interactive_test});
-
-suite(button_strip_interactive_test.suiteName, function() {
+suite('ButtonStripInteractiveTest', function() {
   let buttonStrip: PrintPreviewButtonStripElement;
 
   setup(function() {
@@ -35,15 +25,13 @@ suite(button_strip_interactive_test.suiteName, function() {
 
   // Tests that the print button is automatically focused when the destination
   // is ready.
-  test(
-      assert(button_strip_interactive_test.TestNames.FocusPrintOnReady),
-      function() {
-        const printButton =
-            assert(buttonStrip.shadowRoot!.querySelector('.action-button'));
-        const whenFocusDone = eventToPromise('focus', printButton!);
+  test('focus print on ready', function() {
+    const printButton = buttonStrip.shadowRoot!.querySelector('.action-button');
+    assert(printButton);
+    const whenFocusDone = eventToPromise('focus', printButton);
 
-        // Simulate initialization finishing.
-        buttonStrip.state = State.READY;
-        return whenFocusDone;
-      });
+    // Simulate initialization finishing.
+    buttonStrip.state = State.READY;
+    return whenFocusDone;
+  });
 });

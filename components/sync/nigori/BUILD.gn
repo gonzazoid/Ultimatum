@@ -4,6 +4,8 @@
 
 static_library("nigori") {
   sources = [
+    "cross_user_sharing_keys.cc",
+    "cross_user_sharing_keys.h",
     "cryptographer_impl.cc",
     "cryptographer_impl.h",
     "keystore_keys_cryptographer.cc",
@@ -26,7 +28,7 @@ static_library("nigori") {
     "pending_local_nigori_commit.h",
   ]
 
-  deps = [ "//components/os_crypt" ]
+  deps = [ "//components/os_crypt/sync" ]
 
   public_deps = [
     "//base",

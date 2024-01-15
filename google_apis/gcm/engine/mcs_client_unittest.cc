@@ -10,13 +10,15 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ptr_util.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/simple_test_clock.h"
 #include "base/test/task_environment.h"
 #include "base/timer/timer.h"
@@ -217,13 +219,11 @@ void MCSClientTest::TearDown() {
 
 void MCSClientTest::BuildMCSClient() {
   gcm_store_ = std::make_unique<GCMStoreImpl>(
-      temp_directory_.GetPath(),
-      /*remove_account_mappings_with_email_key=*/true,
-      task_environment_.GetMainThreadTaskRunner(),
+      temp_directory_.GetPath(), task_environment_.GetMainThreadTaskRunner(),
       base::WrapUnique<Encryptor>(new FakeEncryptor));
   mcs_client_ = std::make_unique<TestMCSClient>(
       &clock_, &connection_factory_, gcm_store_.get(),
-      base::ThreadTaskRunnerHandle::Get(), &recorder_);
+      base::SingleThreadTaskRunner::GetCurrentDefault(), &recorder_);
 }
 
 void MCSClientTest::InitializeClient() {

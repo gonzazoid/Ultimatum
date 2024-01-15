@@ -8,10 +8,11 @@
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
 #include "components/viz/common/gpu/raster_context_provider.h"
-#include "components/viz/common/resources/resource_format_utils.h"
+#include "components/viz/common/resources/shared_image_format_utils.h"
 #include "gpu/command_buffer/client/raster_interface.h"
 #include "gpu/command_buffer/client/shared_image_interface.h"
 #include "gpu/command_buffer/common/mailbox_holder.h"
+#include "gpu/command_buffer/common/shared_image_capabilities.h"
 #include "media/base/simple_sync_token_client.h"
 #include "media/base/wait_and_replace_sync_token_client.h"
 #include "media/renderers/video_frame_yuv_converter.h"
@@ -20,6 +21,10 @@
 #include "third_party/skia/include/core/SkColorSpace.h"
 #include "third_party/skia/include/core/SkImage.h"
 #include "third_party/skia/include/gpu/GrDirectContext.h"
+#include "third_party/skia/include/gpu/GrTypes.h"
+#include "third_party/skia/include/gpu/ganesh/SkImageGanesh.h"
+#include "third_party/skia/include/gpu/ganesh/gl/GrGLBackendSurface.h"
+#include "third_party/skia/include/gpu/gl/GrGLTypes.h"
 #include "ui/gfx/gpu_memory_buffer.h"
 
 namespace {
@@ -30,7 +35,7 @@ class ScopedAcceleratedSkImage {
  public:
   static std::unique_ptr<ScopedAcceleratedSkImage> Create(
       viz::RasterContextProvider* provider,
-      viz::ResourceFormat format,
+      viz::SharedImageFormat format,
       const gfx::Size& size,
       const gfx::ColorSpace& color_space,
       GrSurfaceOrigin surface_origin,
@@ -59,15 +64,14 @@ class ScopedAcceleratedSkImage {
     GrGLTextureInfo gl_info = {
         mailbox_holder.texture_target,
         texture_id,
-        viz::TextureStorageFormat(
-            format, provider->ContextCapabilities().angle_rgbx_internal_format),
+        provider->GetGrGLTextureFormat(format),
     };
-    GrBackendTexture backend_texture(size.width(), size.height(),
-                                     GrMipmapped::kNo, gl_info);
+    auto backend_texture = GrBackendTextures::MakeGL(
+        size.width(), size.height(), skgpu::Mipmapped::kNo, gl_info);
 
-    SkColorType color_type = viz::ResourceFormatToClosestSkColorType(
+    SkColorType color_type = viz::ToClosestSkColorType(
         /*gpu_compositing=*/true, format);
-    sk_sp<SkImage> sk_image = SkImage::MakeFromTexture(
+    sk_sp<SkImage> sk_image = SkImages::BorrowTextureFrom(
         gr_context, backend_texture, surface_origin, color_type,
         kOpaque_SkAlphaType, color_space.ToSkColorSpace());
     if (!sk_image) {
@@ -113,7 +117,7 @@ class ScopedAcceleratedSkImage {
 namespace media {
 
 bool CopyRGBATextureToVideoFrame(viz::RasterContextProvider* provider,
-                                 viz::ResourceFormat src_format,
+                                 viz::SharedImageFormat src_format,
                                  const gfx::Size& src_size,
                                  const gfx::ColorSpace& src_color_space,
                                  GrSurfaceOrigin src_surface_origin,
@@ -131,29 +135,74 @@ bool CopyRGBATextureToVideoFrame(viz::RasterContextProvider* provider,
     return false;
   }
 
+  // With OOP raster, if RGB->YUV conversion is unsupported, the CopySharedImage
+  // calls will fail on the service side with no ability to detect failure on
+  // the client side. Check for support here and early out if it's unsupported.
+  if (!provider->GrContext() &&
+      !provider->ContextCapabilities().supports_rgb_to_yuv_conversion) {
+    DVLOG(1) << "RGB->YUV conversion not supported";
+    return false;
+  }
+
 #if BUILDFLAG(IS_WIN)
   // CopyToGpuMemoryBuffer is only supported for D3D shared images on Windows.
-  if (!provider->ContextCapabilities().shared_image_d3d) {
-    DLOG(ERROR) << "CopyToGpuMemoryBuffer not supported.";
+  if (!provider->SharedImageInterface()->GetCapabilities().shared_image_d3d) {
+    DVLOG(1) << "CopyToGpuMemoryBuffer not supported.";
     return false;
   }
 #endif  // BUILDFLAG(IS_WIN)
 
-  if (!provider->GrContext()) {
-    SkYUVAInfo yuva_info =
-        VideoFrameYUVMailboxesHolder::VideoFrameGetSkYUVAInfo(dst_video_frame);
-    gpu::Mailbox yuva_mailboxes[SkYUVAInfo::kMaxPlanes];
+  if (provider->ContextCapabilities().supports_rgb_to_yuv_conversion &&
+      src_mailbox_holder.mailbox.IsSharedImage()) {
     ri->WaitSyncTokenCHROMIUM(src_mailbox_holder.sync_token.GetConstData());
-    for (int plane = 0; plane < yuva_info.numPlanes(); ++plane) {
+    if (dst_video_frame->shared_image_format_type() ==
+        SharedImageFormatType::kLegacy) {
+      SkYUVAInfo yuva_info =
+          VideoFrameYUVMailboxesHolder::VideoFrameGetSkYUVAInfo(
+              dst_video_frame);
+      gpu::Mailbox yuva_mailboxes[SkYUVAInfo::kMaxPlanes];
+      for (int plane = 0; plane < yuva_info.numPlanes(); ++plane) {
+        gpu::MailboxHolder dst_mailbox_holder =
+            dst_video_frame->mailbox_holder(plane);
+        ri->WaitSyncTokenCHROMIUM(dst_mailbox_holder.sync_token.GetConstData());
+        yuva_mailboxes[plane] = dst_mailbox_holder.mailbox;
+      }
+      ri->ConvertRGBAToYUVAMailboxes(
+          yuva_info.yuvColorSpace(), yuva_info.planeConfig(),
+          yuva_info.subsampling(), yuva_mailboxes, src_mailbox_holder.mailbox);
+    } else {
       gpu::MailboxHolder dst_mailbox_holder =
-          dst_video_frame->mailbox_holder(plane);
+          dst_video_frame->mailbox_holder(0);
       ri->WaitSyncTokenCHROMIUM(dst_mailbox_holder.sync_token.GetConstData());
-      yuva_mailboxes[plane] = dst_mailbox_holder.mailbox;
+
+      // `unpack_flip_y` should be set if the surface origin of the source
+      // doesn't match that of the destination, which is created with
+      // kTopLeft_GrSurfaceOrigin.
+      // TODO(crbug.com/1453515): If this codepath is used with destinations
+      // that are created with other surface origins, will need to generalize
+      // this.
+      bool unpack_flip_y = (src_surface_origin != kTopLeft_GrSurfaceOrigin);
+
+      // Note: the destination video frame can have a coded size that is larger
+      // than that of the source video to account for alignment needs. In this
+      // case, both this codepath and the the legacy codepath above stretch to
+      // fill the destination. Cropping would clearly be more correct, but
+      // implementing that behavior in CopySharedImage() for the MultiplanarSI
+      // case resulted in pixeltest failures due to pixel bleeding around image
+      // borders that we weren't able to resolve (see crbug.com/1451025 for
+      // details).
+      // TODO(crbug.com/1451025): Update this comment when we resolve that bug
+      // and change CopySharedImage() to crop rather than stretch.
+      ri->CopySharedImage(src_mailbox_holder.mailbox,
+                          dst_mailbox_holder.mailbox, GL_TEXTURE_2D, 0, 0, 0, 0,
+                          src_size.width(), src_size.height(), unpack_flip_y,
+                          /*unpack_premultiply_alpha=*/false);
     }
-    ri->ConvertRGBAToYUVAMailboxes(
-        yuva_info.yuvColorSpace(), yuva_info.planeConfig(),
-        yuva_info.subsampling(), yuva_mailboxes, src_mailbox_holder.mailbox);
   } else {
+    // We shouldn't be here with OOP-raster since supports_yuv_rgb_conversion
+    // should be true in that case. We can end up here with non-OOP raster when
+    // dealing with legacy mailbox when YUV-RGB conversion is unsupported by GL.
+    CHECK(provider->GrContext());
     // Create an accelerated SkImage for the source.
     auto scoped_sk_image = ScopedAcceleratedSkImage::Create(
         provider, src_format, src_size, src_color_space, src_surface_origin,
@@ -187,11 +236,9 @@ bool CopyRGBATextureToVideoFrame(viz::RasterContextProvider* provider,
     // Do the blit.
     skia::BlitRGBAToYUVA(scoped_sk_image->sk_image().get(), sk_surface_ptrs,
                          holder.yuva_info());
-    provider->GrContext()->flushAndSubmit(false);
+    provider->GrContext()->flushAndSubmit(GrSyncCpu::kNo);
   }
   ri->Flush();
-
-  const size_t num_planes = dst_video_frame->layout().num_planes();
 
 #if BUILDFLAG(IS_WIN)
   // For shared memory GMBs on Windows we needed to explicitly request a copy
@@ -204,7 +251,7 @@ bool CopyRGBATextureToVideoFrame(viz::RasterContextProvider* provider,
   ri->GenUnverifiedSyncTokenCHROMIUM(blit_done_sync_token.GetData());
 
   auto* sii = provider->SharedImageInterface();
-  for (size_t plane = 0; plane < num_planes; ++plane) {
+  for (size_t plane = 0; plane < dst_video_frame->NumTextures(); ++plane) {
     const auto& mailbox = dst_video_frame->mailbox_holder(plane).mailbox;
     sii->CopyToGpuMemoryBuffer(blit_done_sync_token, mailbox);
   }
@@ -223,8 +270,9 @@ bool CopyRGBATextureToVideoFrame(viz::RasterContextProvider* provider,
   gpu::SyncToken completion_sync_token;
   ri->GenSyncTokenCHROMIUM(completion_sync_token.GetData());
   SimpleSyncTokenClient simple_client(completion_sync_token);
-  for (size_t plane = 0; plane < num_planes; ++plane)
+  for (size_t plane = 0; plane < dst_video_frame->NumTextures(); ++plane) {
     dst_video_frame->UpdateMailboxHolderSyncToken(plane, &simple_client);
+  }
   dst_video_frame->UpdateReleaseSyncToken(&simple_client);
   return true;
 }

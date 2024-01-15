@@ -5,13 +5,14 @@
 #ifndef CHROME_BROWSER_UI_WEBUI_NEARBY_INTERNALS_NEARBY_INTERNALS_HTTP_HANDLER_H_
 #define CHROME_BROWSER_UI_WEBUI_NEARBY_INTERNALS_NEARBY_INTERNALS_HTTP_HANDLER_H_
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
 #include "chrome/browser/nearby_sharing/client/nearby_share_http_notifier.h"
-#include "chrome/browser/nearby_sharing/proto/certificate_rpc.pb.h"
-#include "chrome/browser/nearby_sharing/proto/contact_rpc.pb.h"
-#include "chrome/browser/nearby_sharing/proto/device_rpc.pb.h"
 #include "content/public/browser/web_ui_message_handler.h"
+#include "third_party/nearby/sharing/proto/certificate_rpc.pb.h"
+#include "third_party/nearby/sharing/proto/contact_rpc.pb.h"
+#include "third_party/nearby/sharing/proto/device_rpc.pb.h"
 
 namespace content {
 class BrowserContext;
@@ -35,18 +36,19 @@ class NearbyInternalsHttpHandler : public content::WebUIMessageHandler,
 
   // NearbyShareHttpNotifier::Observer:
   void OnUpdateDeviceRequest(
-      const nearbyshare::proto::UpdateDeviceRequest& request) override;
+      const nearby::sharing::proto::UpdateDeviceRequest& request) override;
   void OnUpdateDeviceResponse(
-      const nearbyshare::proto::UpdateDeviceResponse& response) override;
+      const nearby::sharing::proto::UpdateDeviceResponse& response) override;
   void OnListContactPeopleRequest(
-      const nearbyshare::proto::ListContactPeopleRequest& request) override;
+      const nearby::sharing::proto::ListContactPeopleRequest& request) override;
   void OnListContactPeopleResponse(
-      const nearbyshare::proto::ListContactPeopleResponse& response) override;
+      const nearby::sharing::proto::ListContactPeopleResponse& response)
+      override;
   void OnListPublicCertificatesRequest(
-      const nearbyshare::proto::ListPublicCertificatesRequest& request)
+      const nearby::sharing::proto::ListPublicCertificatesRequest& request)
       override;
   void OnListPublicCertificatesResponse(
-      const nearbyshare::proto::ListPublicCertificatesResponse& response)
+      const nearby::sharing::proto::ListPublicCertificatesResponse& response)
       override;
 
  private:
@@ -62,7 +64,7 @@ class NearbyInternalsHttpHandler : public content::WebUIMessageHandler,
   // Message handler callback that calls List Contacts RPC.
   void ListContactPeople(const base::Value::List& args);
 
-  content::BrowserContext* const context_;
+  const raw_ptr<content::BrowserContext> context_;
   base::ScopedObservation<NearbyShareHttpNotifier,
                           NearbyShareHttpNotifier::Observer>
       observation_{this};

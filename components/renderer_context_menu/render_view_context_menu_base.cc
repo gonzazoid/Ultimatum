@@ -321,6 +321,10 @@ void RenderViewContextMenuBase::RemoveSeparatorBeforeMenuItem(int command_id) {
     toolkit_delegate_->RebuildMenu();
 }
 
+// TODO(crbug.com/1393234): This method returns the RenderViewHost associated
+// with the primary main frame. Using this in the presence of out of process
+// iframes is generally incorrect, and the use of RenderViewHost itself is
+// deprecated. Callers should use GetRenderFrameHost() instead.
 RenderViewHost* RenderViewContextMenuBase::GetRenderViewHost() const {
   return source_web_contents_->GetPrimaryMainFrame()->GetRenderViewHost();
 }
@@ -445,16 +449,34 @@ RenderFrameHost* RenderViewContextMenuBase::GetRenderFrameHost() const {
 
 void RenderViewContextMenuBase::OpenURL(const GURL& url,
                                         const GURL& referring_url,
+                                        const url::Origin& initiator,
                                         WindowOpenDisposition disposition,
                                         ui::PageTransition transition) {
-  OpenURLWithExtraHeaders(url, referring_url, disposition, transition,
-                          "" /* extra_headers */,
-                          false /* started_from_context_menu */);
+  OpenURLWithExtraHeaders(url, referring_url, initiator, disposition,
+                          transition, "" /* extra_headers */,
+                          true /* started_from_context_menu */);
 }
 
 void RenderViewContextMenuBase::OpenURLWithExtraHeaders(
     const GURL& url,
     const GURL& referring_url,
+    const url::Origin& initiator,
+    WindowOpenDisposition disposition,
+    ui::PageTransition transition,
+    const std::string& extra_headers,
+    bool started_from_context_menu) {
+  content::OpenURLParams open_url_params = GetOpenURLParamsWithExtraHeaders(
+      url, referring_url, initiator, disposition, transition, extra_headers,
+      started_from_context_menu);
+
+  source_web_contents_->OpenURL(open_url_params);
+}
+
+content::OpenURLParams
+RenderViewContextMenuBase::GetOpenURLParamsWithExtraHeaders(
+    const GURL& url,
+    const GURL& referring_url,
+    const url::Origin& initiator,
     WindowOpenDisposition disposition,
     ui::PageTransition transition,
     const std::string& extra_headers,
@@ -462,15 +484,17 @@ void RenderViewContextMenuBase::OpenURLWithExtraHeaders(
   // Do not send the referrer url to OTR windows. We still need the
   // |referring_url| to populate the |initiator_origin| below for browser UI.
   GURL referrer_url;
-  if (disposition != WindowOpenDisposition::OFF_THE_RECORD)
+  if (disposition != WindowOpenDisposition::OFF_THE_RECORD) {
     referrer_url = referring_url.GetAsReferrer();
+  }
 
   content::Referrer referrer = content::Referrer::SanitizeForRequest(
       url, content::Referrer(referrer_url, params_.referrer_policy));
 
   if (params_.link_url == url &&
-      disposition != WindowOpenDisposition::OFF_THE_RECORD)
+      disposition != WindowOpenDisposition::OFF_THE_RECORD) {
     params_.link_followed = url;
+  }
 
   OpenURLParams open_url_params(url, referrer, disposition, transition, false,
                                 started_from_context_menu);
@@ -482,14 +506,14 @@ void RenderViewContextMenuBase::OpenURLWithExtraHeaders(
 
   open_url_params.initiator_frame_token = render_frame_token_;
   open_url_params.initiator_process_id = render_process_id_;
-  open_url_params.initiator_origin = url::Origin::Create(referring_url);
+  open_url_params.initiator_origin = initiator;
 
   open_url_params.source_site_instance = site_instance_;
 
   if (disposition != WindowOpenDisposition::OFF_THE_RECORD)
     open_url_params.impression = params_.impression;
 
-  source_web_contents_->OpenURL(open_url_params);
+  return open_url_params;
 }
 
 bool RenderViewContextMenuBase::IsCustomItemChecked(int id) const {

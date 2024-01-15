@@ -9,7 +9,6 @@
 
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/reputation/reputation_service.h"
 #include "chrome/common/url_constants.h"
 #include "components/security_interstitials/content/settings_page_helper.h"
 #include "components/security_interstitials/core/metrics_helper.h"
@@ -17,15 +16,16 @@
 #include "content/public/browser/web_contents.h"
 #include "content/public/common/referrer.h"
 
-// static
-std::unique_ptr<security_interstitials::MetricsHelper>
-EnterpriseWarnControllerClient::GetMetricsHelper(const GURL& url) {
+namespace {
+std::unique_ptr<security_interstitials::MetricsHelper> GetMetricsHelper(
+    const GURL& url) {
   security_interstitials::MetricsHelper::ReportDetails settings;
-  settings.metric_prefix = "enterprise-warn";
+  settings.metric_prefix = "enterprise_warn";
 
   return std::make_unique<security_interstitials::MetricsHelper>(url, settings,
                                                                  nullptr);
 }
+}  // namespace
 
 EnterpriseWarnControllerClient::EnterpriseWarnControllerClient(
     content::WebContents* web_contents,
@@ -47,11 +47,7 @@ void EnterpriseWarnControllerClient::GoBack() {
 }
 
 void EnterpriseWarnControllerClient::Proceed() {
-  // Logic to bypass the warning.
-  // TODO(b/251184055): Uncomment once hook is implemented for URLFiltering
-  // WebProtego
-  // ReputationService::Get(
-  //     Profile::FromBrowserContext(web_contents_->GetBrowserContext()))
-  //     ->SetUserIgnore(request_url_);
-  // Reload();
+  // Already allowlisted when used clicked on proceed.
+  // The reload will just work.
+  Reload();
 }

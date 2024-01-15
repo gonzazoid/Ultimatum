@@ -4,25 +4,35 @@
 
 #include "services/data_decoder/public/cpp/data_decoder.h"
 
-#include "base/callback.h"
+#include <memory>
+#include <string>
+#include <utility>
+
+#include "base/functional/callback.h"
 #include "base/json/json_reader.h"
 #include "base/memory/ref_counted.h"
+#include "base/metrics/histogram_functions.h"
 #include "base/no_destructor.h"
-#include "base/parsing_buildflags.h"
+#include "base/rust_buildflags.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "base/time/time.h"
+#include "base/timer/elapsed_timer.h"
+#include "build/blink_buildflags.h"
 #include "build/build_config.h"
 #include "net/http/structured_headers.h"
+#include "services/data_decoder/public/mojom/cbor_parser.mojom.h"
 #include "services/data_decoder/public/mojom/gzipper.mojom.h"
 #include "services/data_decoder/public/mojom/json_parser.mojom.h"
 #include "services/data_decoder/public/mojom/structured_headers_parser.mojom.h"
 #include "services/data_decoder/public/mojom/xml_parser.mojom.h"
 
 #if BUILDFLAG(IS_ANDROID)
+#include "base/types/expected_macros.h"
 #include "services/data_decoder/public/cpp/json_sanitizer.h"
 #endif
 
-#if BUILDFLAG(IS_IOS)
+#if !BUILDFLAG(USE_BLINK)
 #include "services/data_decoder/data_decoder_service.h"  // nogncheck
 #endif
 
@@ -113,7 +123,7 @@ class ValueParseRequest : public base::RefCounted<ValueParseRequest<T, V>> {
   scoped_refptr<DataDecoder::CancellationFlag> is_cancelled_;
 };
 
-#if BUILDFLAG(IS_IOS)
+#if !BUILDFLAG(USE_BLINK)
 void BindInProcessService(
     mojo::PendingReceiver<mojom::DataDecoderService> receiver) {
   static base::NoDestructor<scoped_refptr<base::SequencedTaskRunner>>
@@ -130,7 +140,7 @@ void BindInProcessService(
 }
 #endif
 
-#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(BUILD_RUST_JSON_PARSER)
+#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(BUILD_RUST_JSON_READER)
 
 void ParsingComplete(scoped_refptr<DataDecoder::CancellationFlag> is_cancelled,
                      DataDecoder::ValueParseCallback callback,
@@ -166,7 +176,7 @@ mojom::DataDecoderService* DataDecoder::GetService() {
     if (provider) {
       provider->BindDataDecoderService(service_.BindNewPipeAndPassReceiver());
     } else {
-#if BUILDFLAG(IS_IOS)
+#if !BUILDFLAG(USE_BLINK)
       BindInProcessService(service_.BindNewPipeAndPassReceiver());
 #else
       LOG(FATAL) << "data_decoder::ServiceProvider::Set() must be called "
@@ -184,19 +194,36 @@ mojom::DataDecoderService* DataDecoder::GetService() {
 
 void DataDecoder::ParseJson(const std::string& json,
                             ValueParseCallback callback) {
-#if BUILDFLAG(BUILD_RUST_JSON_PARSER)
-  // Parses JSON directly in the calling process using the memory-safe
-  // Rust parser.
-  base::ThreadPool::PostTaskAndReplyWithResult(
-      FROM_HERE, {base::TaskPriority::BEST_EFFORT},
-      base::BindOnce(
-          [](const std::string& json) {
-            return base::JSONReader::ReadAndReturnValueWithError(
-                json, base::JSON_PARSE_RFC);
-          },
-          json),
-      base::BindOnce(&ParsingComplete, cancel_requests_, std::move(callback)));
-#elif BUILDFLAG(IS_ANDROID)
+  // Measure decoding time by intercepting the callback.
+  callback = base::BindOnce(
+      [](base::ElapsedTimer timer, ValueParseCallback callback,
+         base::expected<base::Value, std::string> result) {
+        base::UmaHistogramTimes("Security.DataDecoder.Json.DecodingTime",
+                                timer.Elapsed());
+        std::move(callback).Run(std::move(result));
+      },
+      base::ElapsedTimer(), std::move(callback));
+
+  if (base::JSONReader::UsingRust()) {
+#if BUILDFLAG(BUILD_RUST_JSON_READER)
+    base::ThreadPool::PostTaskAndReplyWithResult(
+        FROM_HERE, {base::TaskPriority::BEST_EFFORT},
+        base::BindOnce(
+            [](const std::string& json) {
+              return base::JSONReader::ReadAndReturnValueWithError(
+                  json, base::JSON_PARSE_RFC);
+            },
+            json),
+        base::BindOnce(&ParsingComplete, cancel_requests_,
+                       std::move(callback)));
+#else   // BUILDFLAG(BUILD_RUST_JSON_READER)
+    CHECK(false)
+        << "UseJsonParserFeature enabled, but not supported in this build.";
+#endif  // BUILDFLAG(BUILD_RUST_JSON_READER)
+    return;
+  }
+
+#if BUILDFLAG(IS_ANDROID)
   // For Android, if the full Rust parser is not available, we use the
   // in-process sanitizer and then parse in-process.
   JsonSanitizer::Sanitize(
@@ -204,22 +231,20 @@ void DataDecoder::ParseJson(const std::string& json,
                 [](ValueParseCallback callback,
                    scoped_refptr<CancellationFlag> is_cancelled,
                    JsonSanitizer::Result result) {
-                  if (is_cancelled->data)
-                    return;
-
-                  if (!result.value) {
-                    std::move(callback).Run(base::unexpected(*result.error));
+                  if (is_cancelled->data) {
                     return;
                   }
 
-                  auto value_with_error =
-                      base::JSONReader::ReadAndReturnValueWithError(
-                          *result.value, base::JSON_PARSE_RFC);
+                  RETURN_IF_ERROR(result, [&](std::string error) {
+                    std::move(callback).Run(base::unexpected(std::move(error)));
+                  });
+
                   ParsingComplete(is_cancelled, std::move(callback),
-                                  std::move(value_with_error));
+                                  base::JSONReader::ReadAndReturnValueWithError(
+                                      result.value(), base::JSON_PARSE_RFC));
                 },
                 std::move(callback), cancel_requests_));
-#else
+#else   // BUILDFLAG(IS_ANDROID)
   // Parse JSON out-of-process.
   auto request =
       base::MakeRefCounted<ValueParseRequest<mojom::JsonParser, base::Value>>(
@@ -230,7 +255,7 @@ void DataDecoder::ParseJson(const std::string& json,
       base::BindOnce(&ValueParseRequest<mojom::JsonParser,
                                         base::Value>::OnServiceValueOrError,
                      request));
-#endif
+#endif  // BUILDFLAG(IS_ANDROID)
 }
 
 // static
@@ -285,6 +310,41 @@ void DataDecoder::ParseStructuredHeaderItemIsolated(
                     std::move(callback).Run(std::move(result));
                   },
                   std::move(decoder), std::move(callback)));
+}
+
+void DataDecoder::ParseStructuredHeaderList(
+    const std::string& header,
+    StructuredHeaderParseListCallback callback) {
+  auto request =
+      base::MakeRefCounted<ValueParseRequest<mojom::StructuredHeadersParser,
+                                             net::structured_headers::List>>(
+          std::move(callback), cancel_requests_);
+  GetService()->BindStructuredHeadersParser(request->BindRemote());
+  request->remote()->ParseList(
+      header,
+      base::BindOnce(
+          &ValueParseRequest<mojom::StructuredHeadersParser,
+                             net::structured_headers::List>::OnServiceValue,
+          request));
+}
+
+// static
+void DataDecoder::ParseStructuredHeaderListIsolated(
+    const std::string& header,
+    StructuredHeaderParseListCallback callback) {
+  auto decoder = std::make_unique<DataDecoder>();
+  auto* raw_decoder = decoder.get();
+
+  // We bind the DataDecoder's ownership into the result callback to ensure that
+  // it stays alive until the operation is complete.
+  raw_decoder->ParseStructuredHeaderList(
+      header,
+      base::BindOnce(
+          [](std::unique_ptr<DataDecoder>,
+             StructuredHeaderParseListCallback callback,
+             base::expected<net::structured_headers::List, std::string>
+                 result) { std::move(callback).Run(std::move(result)); },
+          std::move(decoder), std::move(callback)));
 }
 
 void DataDecoder::ParseXml(
@@ -373,6 +433,36 @@ void DataDecoder::GzipUncompress(base::span<const uint8_t> data,
       base::BindOnce(&ValueParseRequest<mojom::Gzipper,
                                         mojo_base::BigBuffer>::OnServiceValue,
                      request));
+}
+
+void DataDecoder::ParseCbor(base::span<const uint8_t> data,
+                            ValueParseCallback callback) {
+  auto request =
+      base::MakeRefCounted<ValueParseRequest<mojom::CborParser, base::Value>>(
+          std::move(callback), cancel_requests_);
+  GetService()->BindCborParser(request->BindRemote());
+  request->remote()->Parse(
+      data,
+      base::BindOnce(&ValueParseRequest<mojom::CborParser,
+                                        base::Value>::OnServiceValueOrError,
+                     request));
+}
+
+// static
+void DataDecoder::ParseCborIsolated(base::span<const uint8_t> data,
+                                    ValueParseCallback callback) {
+  auto decoder = std::make_unique<DataDecoder>();
+  auto* raw_decoder = decoder.get();
+
+  // We bind the DataDecoder's ownership into the result callback to ensure that
+  // it stays alive until the operation is complete.
+  raw_decoder->ParseCbor(
+      data, base::BindOnce(
+                [](std::unique_ptr<DataDecoder>, ValueParseCallback callback,
+                   ValueOrError result) {
+                  std::move(callback).Run(std::move(result));
+                },
+                std::move(decoder), std::move(callback)));
 }
 
 }  // namespace data_decoder

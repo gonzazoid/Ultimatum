@@ -7,14 +7,16 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
+#include "base/json/values_util.h"
 #include "base/time/default_clock.h"
 #include "base/values.h"
 #include "build/build_config.h"
 #include "components/content_settings/core/browser/host_content_settings_map.h"
 #include "components/content_settings/core/common/content_settings.h"
 #include "components/content_settings/core/common/content_settings_constraints.h"
+#include "components/content_settings/core/common/content_settings_metadata.h"
 #include "components/content_settings/core/common/content_settings_types.h"
 #include "components/content_settings/core/common/content_settings_utils.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -28,6 +30,7 @@ namespace {
 const char kInfobarLastShownTimeKey[] = "InfobarLastShownTime";
 const char kActivatedKey[] = "Activated";
 const char kNonRenewingExpiryTime[] = "NonRenewingExpiryTime";
+const char kNonRenewingLifetimeKey[] = "NonRenewingLifetime";
 
 bool ShouldUseSmartUI() {
 #if BUILDFLAG(IS_ANDROID)
@@ -73,7 +76,7 @@ void SubresourceFilterContentSettingsManager::OnDidShowUI(const GURL& url) {
   if (!dict)
     dict = CreateMetadataDictWithActivation(true /* is_activated */);
 
-  double now = clock_->Now().ToDoubleT();
+  double now = clock_->Now().InSecondsFSinceUnixEpoch();
   dict->Set(kInfobarLastShownTimeKey, now);
   SetSiteMetadata(url, std::move(dict));
 }
@@ -89,7 +92,8 @@ bool SubresourceFilterContentSettingsManager::ShouldShowUIForSite(
 
   if (absl::optional<double> last_shown_time =
           dict->FindDouble(kInfobarLastShownTimeKey)) {
-    base::Time last_shown = base::Time::FromDoubleT(*last_shown_time);
+    base::Time last_shown =
+        base::Time::FromSecondsSinceUnixEpoch(*last_shown_time);
     if (clock_->Now() - last_shown < kDelayBeforeShowingInfobarAgain)
       return false;
   }
@@ -132,9 +136,11 @@ void SubresourceFilterContentSettingsManager::SetSiteMetadataBasedOnActivation(
     // time or overwrite existing ads intervention metadata,
     if (dict->FindDouble(kNonRenewingExpiryTime))
       return;
-    double expiry_time =
-        (clock_->Now() + kMaxPersistMetadataDuration).ToDoubleT();
+    double expiry_time = (clock_->Now() + kMaxPersistMetadataDuration)
+                             .InSecondsFSinceUnixEpoch();
     dict->Set(kNonRenewingExpiryTime, expiry_time);
+    dict->Set(kNonRenewingLifetimeKey,
+              base::TimeDeltaToValue(kMaxPersistMetadataDuration));
   }
 
   SetSiteMetadata(url, std::move(dict));
@@ -167,15 +173,26 @@ void SubresourceFilterContentSettingsManager::SetSiteMetadata(
   // kNonRenewingExpiryTime was previously set, then we are storing ads
   // intervention metadata and should not override the expiry time that
   // was previously set.
-  base::Time expiry_time = base::Time::Now() + kMaxPersistMetadataDuration;
+  base::TimeDelta setting_lifetime = kMaxPersistMetadataDuration;
+  base::Time expiry_time = base::Time::Now() + setting_lifetime;
   if (dict && dict->Find(kNonRenewingExpiryTime)) {
     absl::optional<double> metadata_expiry_time =
         dict->FindDouble(kNonRenewingExpiryTime);
     DCHECK(metadata_expiry_time);
-    expiry_time = base::Time::FromDoubleT(*metadata_expiry_time);
-  }
+    expiry_time = base::Time::FromSecondsSinceUnixEpoch(*metadata_expiry_time);
 
-  content_settings::ContentSettingConstraints constraints = {expiry_time};
+    // If the lifetime was stored explicitly, we should use that instead of
+    // assuming what it was. Users may edit the preferences file directly, so we
+    // cannot assume the lifetime field is present and valid.
+    base::Value* stored_lifetime = dict->Find(kNonRenewingLifetimeKey);
+    setting_lifetime = content_settings::RuleMetaData::ComputeLifetime(
+        base::ValueToTimeDelta(stored_lifetime).value_or(base::TimeDelta()),
+        /*expiration=*/expiry_time);
+  }
+  content_settings::ContentSettingConstraints constraints(expiry_time -
+                                                          setting_lifetime);
+  constraints.set_lifetime(setting_lifetime);
+
   settings_map_->SetWebsiteSettingDefaultScope(
       url, GURL(), ContentSettingsType::ADS_DATA,
       dict ? base::Value(std::move(*dict)) : base::Value(), constraints);
@@ -209,7 +226,8 @@ bool SubresourceFilterContentSettingsManager::ShouldDeleteDataWithNoActivation(
   if (!metadata_expiry_time)
     return true;
 
-  base::Time expiry_time = base::Time::FromDoubleT(*metadata_expiry_time);
+  base::Time expiry_time =
+      base::Time::FromSecondsSinceUnixEpoch(*metadata_expiry_time);
   return clock_->Now() > expiry_time;
 }
 

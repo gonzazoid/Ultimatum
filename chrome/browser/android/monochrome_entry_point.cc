@@ -6,12 +6,8 @@
 #include "base/android/base_jni_onload.h"
 #include "base/android/jni_android.h"
 #include "base/android/library_loader/library_loader_hooks.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "chrome/app/android/chrome_jni_onload.h"
-
-#if defined(WEBVIEW_INCLUDES_WEBLAYER)
-#include "weblayer/app/jni_onload.h"
-#endif
 
 namespace {
 
@@ -26,12 +22,6 @@ bool NativeInit(base::android::LibraryProcessType library_process_type) {
 
     case base::android::PROCESS_WEBVIEW_NONEMBEDDED:
       return base::android::OnJNIOnLoadInit();
-
-#if defined(WEBVIEW_INCLUDES_WEBLAYER)
-    case base::android::PROCESS_WEBLAYER:
-    case base::android::PROCESS_WEBLAYER_CHILD:
-      return weblayer::OnJNIOnLoadInit();
-#endif
 
     default:
       NOTREACHED();

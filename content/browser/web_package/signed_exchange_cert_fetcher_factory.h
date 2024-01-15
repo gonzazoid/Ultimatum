@@ -6,14 +6,14 @@
 #define CONTENT_BROWSER_WEB_PACKAGE_SIGNED_EXCHANGE_CERT_FETCHER_FACTORY_H_
 
 #include <memory>
+#include <optional>
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/unguessable_token.h"
 #include "content/browser/web_package/signed_exchange_cert_fetcher.h"
 #include "content/common/content_export.h"
 #include "net/base/isolation_info.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace network {
 class SharedURLLoaderFactory;
@@ -45,7 +45,7 @@ class CONTENT_EXPORT SignedExchangeCertFetcherFactory {
   static std::unique_ptr<SignedExchangeCertFetcherFactory> Create(
       scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
       URLLoaderThrottlesGetter url_loader_throttles_getter,
-      const absl::optional<base::UnguessableToken>& throttling_profile_id,
+      const std::optional<base::UnguessableToken>& throttling_profile_id,
       net::IsolationInfo isolation_info);
 };
 

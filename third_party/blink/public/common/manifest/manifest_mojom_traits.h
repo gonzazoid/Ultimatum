@@ -15,6 +15,7 @@
 #include "third_party/abseil-cpp/absl/types/variant.h"
 #include "third_party/blink/public/common/common_export.h"
 #include "third_party/blink/public/mojom/manifest/manifest.mojom.h"
+#include "third_party/blink/public/mojom/safe_url_pattern.mojom.h"
 
 namespace mojo {
 namespace internal {
@@ -241,6 +242,11 @@ struct BLINK_COMMON_EXPORT StructTraits<blink::mojom::HomeTabParamsDataView,
     return params.icons;
   }
 
+  static const std::vector<::blink::SafeUrlPattern>& scope_patterns(
+      const ::blink::Manifest::HomeTabParams& params) {
+    return params.scope_patterns;
+  }
+
   static bool Read(blink::mojom::HomeTabParamsDataView data,
                    ::blink::Manifest::HomeTabParams* out);
 };
@@ -262,14 +268,7 @@ template <>
 struct BLINK_COMMON_EXPORT UnionTraits<blink::mojom::HomeTabUnionDataView,
                                        ::blink::Manifest::TabStrip::HomeTab> {
   static blink::mojom::HomeTabUnionDataView::Tag GetTag(
-      const ::blink::Manifest::TabStrip::HomeTab& value) {
-    if (absl::holds_alternative<blink::mojom::TabStripMemberVisibility>(
-            value)) {
-      return blink::mojom::HomeTabUnion::Tag::kVisibility;
-    } else {
-      return blink::mojom::HomeTabUnion::Tag::kParams;
-    }
-  }
+      const ::blink::Manifest::TabStrip::HomeTab& value);
 
   static ::blink::mojom::TabStripMemberVisibility visibility(
       const ::blink::Manifest::TabStrip::HomeTab& value) {
@@ -283,34 +282,6 @@ struct BLINK_COMMON_EXPORT UnionTraits<blink::mojom::HomeTabUnionDataView,
 
   static bool Read(blink::mojom::HomeTabUnionDataView data,
                    ::blink::Manifest::TabStrip::HomeTab* out);
-};
-
-template <>
-struct BLINK_COMMON_EXPORT
-    UnionTraits<blink::mojom::NewTabButtonUnionDataView,
-                ::blink::Manifest::TabStrip::NewTabButton> {
-  static blink::mojom::NewTabButtonUnionDataView::Tag GetTag(
-      const ::blink::Manifest::TabStrip::NewTabButton& value) {
-    if (absl::holds_alternative<blink::mojom::TabStripMemberVisibility>(
-            value)) {
-      return blink::mojom::NewTabButtonUnion::Tag::kVisibility;
-    } else {
-      return blink::mojom::NewTabButtonUnion::Tag::kParams;
-    }
-  }
-
-  static ::blink::mojom::TabStripMemberVisibility visibility(
-      const ::blink::Manifest::TabStrip::NewTabButton& value) {
-    return absl::get<blink::mojom::TabStripMemberVisibility>(value);
-  }
-
-  static const ::blink::Manifest::NewTabButtonParams& params(
-      const ::blink::Manifest::TabStrip::NewTabButton& value) {
-    return absl::get<blink::Manifest::NewTabButtonParams>(value);
-  }
-
-  static bool Read(blink::mojom::NewTabButtonUnionDataView data,
-                   ::blink::Manifest::TabStrip::NewTabButton* out);
 };
 
 template <>

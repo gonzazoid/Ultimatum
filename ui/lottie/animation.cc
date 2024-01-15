@@ -7,8 +7,8 @@
 #include <algorithm>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/observer_list.h"
 #include "base/trace_event/trace_event.h"
@@ -256,6 +256,9 @@ void Animation::ResumePlaying() {
 void Animation::Stop() {
   state_ = PlayState::kStopped;
   timer_control_.reset(nullptr);
+  for (AnimationObserver& obs : observers_) {
+    obs.AnimationStopped(this);
+  }
 }
 
 absl::optional<float> Animation::GetCurrentProgress() const {
@@ -411,8 +414,8 @@ cc::SkottieWrapper::FrameDataFetchResult Animation::LoadImageForAsset(
   all_frame_data.emplace(asset_id,
                          image_asset.GetFrameData(t, canvas->image_scale()));
   // Since this callback is only used for Seek() and not rendering, the output
-  // arguments can be ignored and NO_UPDATE can be returned.
-  return cc::SkottieWrapper::FrameDataFetchResult::NO_UPDATE;
+  // arguments can be ignored and kNoUpdate can be returned.
+  return cc::SkottieWrapper::FrameDataFetchResult::kNoUpdate;
 }
 
 void Animation::InitTimer(const base::TimeTicks& timestamp) {

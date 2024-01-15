@@ -6,7 +6,7 @@
 
 #include <string>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/time/time.h"
 #include "build/chromeos_buildflags.h"
@@ -15,9 +15,8 @@
 #include "content/public/browser/browser_thread.h"
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "chromeos/ash/components/dbus/debug_daemon/debug_daemon_client.h"
-#include "content/public/browser/browser_task_traits.h"
+#include "content/public/browser/browser_thread.h"
 #endif
 
 namespace system_logs {
@@ -96,8 +95,8 @@ void CrashIdsSource::OnUploadListAvailable() {
   // hour, which is included in all feedback reports. The other is all of the
   // crash IDs from the past 120 days, which is only included in feedback
   // reports sent from @google.com accounts.
-  std::vector<UploadList::UploadInfo> crashes;
-  crash_upload_list_->GetUploads(kMaxCrashesCountToRetrieve, &crashes);
+  const std::vector<const UploadList::UploadInfo*> crashes =
+      crash_upload_list_->GetUploads(kMaxCrashesCountToRetrieve);
   const base::Time now = base::Time::Now();
   crash_ids_list_.clear();
   crash_ids_list_.reserve(kMaxCrashesCountToRetrieve *
@@ -107,14 +106,14 @@ void CrashIdsSource::OnUploadListAvailable() {
                               (kCrashIdStringSize + 2));
 
   // The feedback server expects the crash IDs to be a comma-separated list.
-  for (const auto& crash_info : crashes) {
+  for (const auto* crash_info : crashes) {
     const base::Time& report_time =
-        crash_info.state == UploadList::UploadInfo::State::Uploaded
-            ? crash_info.upload_time
-            : crash_info.capture_time;
+        crash_info->state == UploadList::UploadInfo::State::Uploaded
+            ? crash_info->upload_time
+            : crash_info->capture_time;
     base::TimeDelta time_diff = now - report_time;
     if (time_diff < k120DaysTimeDelta) {
-      const std::string& crash_id = crash_info.upload_id;
+      const std::string& crash_id = crash_info->upload_id;
       all_crash_ids_list_.append(all_crash_ids_list_.empty() ? crash_id
                                                              : ", " + crash_id);
       if (time_diff < kOneHourTimeDelta) {

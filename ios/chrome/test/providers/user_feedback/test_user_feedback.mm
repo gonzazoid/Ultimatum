@@ -8,10 +8,6 @@
 
 #import "base/notreached.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 namespace ios {
 namespace provider {
 
@@ -21,12 +17,21 @@ bool IsUserFeedbackSupported() {
 
 UIViewController* CreateUserFeedbackViewController(
     UserFeedbackConfiguration* configuration) {
-  NOTREACHED() << "User feedback not supported in unit tests.";
-  return nil;
+  NOTREACHED_NORETURN() << "User feedback not supported in unit tests.";
 }
 
 void UploadAllPendingUserFeedback() {
-  NOTREACHED() << "User feedback not supported in unit tests.";
+  NOTREACHED_NORETURN() << "User feedback not supported in unit tests.";
+}
+
+bool CanUseStartUserFeedbackFlow() {
+  NOTREACHED_NORETURN() << "User feedback not supported in unit tests.";
+}
+
+bool StartUserFeedbackFlow(UserFeedbackConfiguration* configuration,
+                           UIViewController* presenting_view_controller,
+                           NSError** error) {
+  NOTREACHED_NORETURN() << "User feedback not supported in unit tests.";
 }
 
 }  // namespace provider

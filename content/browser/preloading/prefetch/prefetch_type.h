@@ -6,6 +6,8 @@
 #define CONTENT_BROWSER_PRELOADING_PREFETCH_PREFETCH_TYPE_H_
 
 #include "content/common/content_export.h"
+#include "content/public/browser/preloading_trigger_type.h"
+#include "third_party/blink/public/mojom/speculation_rules/speculation_rules.mojom.h"
 
 namespace content {
 
@@ -13,17 +15,24 @@ namespace content {
 // handled.
 class CONTENT_EXPORT PrefetchType {
  public:
-  PrefetchType(bool use_isolated_network_context, bool use_prefetch_proxy);
-  ~PrefetchType();
+  // Construct a PrefetchType for non-SpeculationRules triggers.
+  PrefetchType(PreloadingTriggerType non_specrules_trigger_type,
+               bool use_prefetch_proxy);
 
-  PrefetchType(const PrefetchType& prefetch_type);
-  PrefetchType& operator=(const PrefetchType& prefetch_type);
+  // Construct a PrefetchType for SpeculationRules triggers.
+  PrefetchType(PreloadingTriggerType trigger_type,
+               bool use_prefetch_proxy,
+               blink::mojom::SpeculationEagerness eagerness);
 
-  // Whether prefetches of this type need to use an isolated network context, or
-  // use the default network context.
-  bool IsIsolatedNetworkContextRequired() const {
-    return use_isolated_network_context_;
-  }
+  ~PrefetchType() = default;
+
+  PrefetchType(const PrefetchType& prefetch_type) = default;
+  PrefetchType& operator=(const PrefetchType& prefetch_type) = delete;
+
+  bool operator==(const PrefetchType& rhs) const = default;
+  bool operator!=(const PrefetchType& rhs) const = default;
+
+  PreloadingTriggerType trigger_type() const { return trigger_type_; }
 
   // Whether this prefetch should bypass the proxy even though it would need to
   // be proxied for anonymity. For use in test automation only.
@@ -31,22 +40,19 @@ class CONTENT_EXPORT PrefetchType {
 
   void SetProxyBypassedForTest();
 
-  // Whether prefetches of this type need to use the Prefetch Proxy.
-  bool IsProxyRequired() const { return use_prefetch_proxy_; }
+  // Whether cross-origin prefetches of this type need to use the Prefetch
+  // Proxy.
+  bool IsProxyRequiredWhenCrossOrigin() const { return use_prefetch_proxy_; }
+
+  // Returns the eagerness of the prefetch based on the speculation rules API.
+  blink::mojom::SpeculationEagerness GetEagerness() const;
 
  private:
-  friend CONTENT_EXPORT bool operator==(const PrefetchType& prefetch_type_1,
-                                        const PrefetchType& prefetch_type_2);
-
-  bool use_isolated_network_context_;
-  bool use_prefetch_proxy_;
+  const PreloadingTriggerType trigger_type_;
+  const bool use_prefetch_proxy_;
   bool proxy_bypassed_for_testing_ = false;
+  const std::optional<blink::mojom::SpeculationEagerness> eagerness_;
 };
-
-CONTENT_EXPORT bool operator==(const PrefetchType& prefetch_type_1,
-                               const PrefetchType& prefetch_type_2);
-CONTENT_EXPORT bool operator!=(const PrefetchType& prefetch_type_1,
-                               const PrefetchType& prefetch_type_2);
 
 }  // namespace content
 

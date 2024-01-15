@@ -6,7 +6,16 @@
 
 namespace segmentation_platform {
 
+TrainingLabels::TrainingLabels() = default;
+TrainingLabels::~TrainingLabels() = default;
+
+TrainingLabels::TrainingLabels(const TrainingLabels& other) = default;
+
 ServiceProxy* SegmentationPlatformService::GetServiceProxy() {
+  return nullptr;
+}
+
+DatabaseClient* SegmentationPlatformService::GetDatabaseClient() {
   return nullptr;
 }
 

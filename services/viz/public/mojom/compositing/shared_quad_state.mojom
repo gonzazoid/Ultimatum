@@ -24,7 +24,7 @@ struct SharedQuadState {
   // This rect lives in the target content space. It defines the mask filter
   // info applied to the quad, and also defines rounded corner rects to clip the
   // quads with.
-  gfx.mojom.MaskFilterInfo mask_filter_info;
+  gfx.mojom.MaskFilterInfo? mask_filter_info;
 
   // This rect lives in the target content space.
   gfx.mojom.Rect? clip_rect;
@@ -37,11 +37,7 @@ struct SharedQuadState {
   // supported.
   uint32 blend_mode;
   int32 sorting_context_id;
+  uint32 layer_id;
 
   bool is_fast_rounded_corner;
-
-  // The y offset by which to skew quads in this layer. For experimental
-  // de-jelly effect.
-  float de_jelly_delta_y;
-
 };

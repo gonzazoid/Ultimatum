@@ -5,6 +5,9 @@
 import("//build/config/android/build_vars.gni")
 import("//build/config/android/config.gni")
 import("//build/config/android/rules.gni")
+import("//build/config/clang/clang.gni")
+import("//build/config/coverage/coverage.gni")
+import("//build/config/gclient_args.gni")
 import("//build/config/python.gni")
 import("//build_overrides/build.gni")
 
@@ -14,13 +17,6 @@ if (enable_java_templates) {
   # cache while linting java targets in android_lint.
   android_lint("prepare_android_lint_cache") {
     create_cache = true
-  }
-
-  if (enable_jdk_library_desugaring) {
-    dex_jdk_libs("all_jdk_libs") {
-      output = "$target_out_dir/$target_name.l8.dex"
-      min_sdk_version = default_min_sdk_version
-    }
   }
 
   generate_build_config_srcjar("build_config_gen") {
@@ -47,8 +43,8 @@ if (enable_java_templates) {
       "java/src/org/chromium/build/annotations/CheckDiscard.java",
       "java/src/org/chromium/build/annotations/DoNotClassMerge.java",
       "java/src/org/chromium/build/annotations/DoNotInline.java",
+      "java/src/org/chromium/build/annotations/DoNotStripLogs.java",
       "java/src/org/chromium/build/annotations/IdentifierNameString.java",
-      "java/src/org/chromium/build/annotations/MainDex.java",
       "java/src/org/chromium/build/annotations/MockedInTests.java",
       "java/src/org/chromium/build/annotations/UsedByReflection.java",
     ]
@@ -77,7 +73,6 @@ if (enable_java_templates) {
     }
     robolectric_binary("build_junit_tests") {
       # Test has no JNI, so skip JNI Generator step.
-      generate_final_jni = false
       resources_package = "org.chromium.build"
       sources = [
         "junit/src/org/chromium/build/AndroidAssetsTest.java",
@@ -124,10 +119,12 @@ python_library("devil_chromium_py") {
 group("apk_installer_data") {
   # Other //build users let devil library fetch these from Google Storage.
   if (build_with_chromium) {
-    data_deps = [
-      "//build/android/pylib/device/commands",
-      "//tools/android/md5sum",
-    ]
+    if (is_component_build) {
+      data_deps = [
+        "//build/android/pylib/device/commands",
+        "//tools/android/md5sum",
+      ]
+    }
     data = [ "//third_party/android_build_tools/bundletool/bundletool.jar" ]
   }
 }
@@ -151,20 +148,32 @@ python_library("test_runner_core_py") {
   data = [
     "pylib/gtest/filter/",
     "pylib/instrumentation/render_test.html.jinja",
+    "pylib/local/machine/local_machine_hostside_tradefed_config.xml",
     "test_wrapper/logdog_wrapper.py",
     "//third_party/requests/",
   ]
   data_deps = [ ":logdog_wrapper_py" ]
+  if (use_clang_coverage && checkout_clang_coverage_tools) {
+    # Test runner script may use `llvm-profdata` (if exists) to merge
+    # clang code coverage data after each instrumentation test to
+    # save space. The tool only exists when `checkout_clang_coverage_tools`
+    # gclient custom_var is true.
+    data += [ "${clang_base_path}/bin/llvm-profdata" ]
+  }
 }
 
 group("test_runner_device_support") {
   testonly = true
+
+  # We hardcode using these tools from the public sdk in devil_chromium.json and
+  # in pylib's constants.
   data = [
-    "${android_sdk_build_tools}/aapt",
-    "${android_sdk_build_tools}/dexdump",
-    "${android_sdk_build_tools}/lib64/libc++.so",
-    "${android_sdk_build_tools}/split-select",
-    "${android_sdk_root}/platform-tools/adb",
+    "${public_android_sdk_build_tools}/aapt",
+    "${public_android_sdk_build_tools}/aapt2",
+    "${public_android_sdk_build_tools}/dexdump",
+    "${public_android_sdk_build_tools}/lib64/libc++.so",
+    "${public_android_sdk_build_tools}/split-select",
+    "${public_android_sdk_root}/platform-tools/adb",
   ]
   data_deps = [
     ":apk_installer_data",
@@ -174,8 +183,13 @@ group("test_runner_device_support") {
 
   # Other //build users let devil library fetch these from Google Storage.
   if (build_with_chromium) {
-    data_deps += [ "//tools/android/forwarder2" ]
+    if (!is_component_build) {
+      data_deps += [ "//tools/android/forwarder2" ]
+    }
     data += [ "//tools/android/avd/proto/" ]
+    if (enable_chrome_android_internal) {
+      data += [ "//clank/tools/android/avd/proto/" ]
+    }
     if (is_asan) {
       data_deps += [ "//tools/android/asan/third_party:asan_device_setup" ]
     }
@@ -200,8 +214,7 @@ python_library("resource_sizes_py") {
 
   data = [
     build_vars_file,
-    android_readelf,
-    rebase_path("$android_ndk_library_path/libc++.so.1", root_build_dir),
+    "//third_party/llvm-build/Release+Asserts/bin/llvm-readobj",
   ]
 }
 

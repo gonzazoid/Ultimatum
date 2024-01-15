@@ -8,7 +8,7 @@
 #include <utility>
 
 #include "ash/constants/ash_pref_names.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/process/launch.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
@@ -51,15 +51,8 @@ constexpr int kNumUserInputEventsBuckets = kUserInputEventsDuration.InMinutes();
 // Returns nullopt if no suitable browsers are found.
 Browser* GetFocusedOrTopmostVisibleBrowser() {
   Browser* topmost_browser = nullptr;
-  Browser* browser = nullptr;
-  BrowserList* browser_list = BrowserList::GetInstance();
-  DCHECK(browser_list);
 
-  for (auto browser_iterator =
-           browser_list->begin_browsers_ordered_by_activation();
-       browser_iterator != browser_list->end_browsers_ordered_by_activation();
-       ++browser_iterator) {
-    browser = *browser_iterator;
+  for (Browser* browser : BrowserList::GetInstance()->OrderedByActivation()) {
     if (browser->profile()->IsOffTheRecord() || !browser->window()->IsVisible())
       continue;
 
@@ -67,7 +60,7 @@ Browser* GetFocusedOrTopmostVisibleBrowser() {
       return browser;
 
     if (!topmost_browser)
-      topmost_browser = *browser_iterator;
+      topmost_browser = browser;
   }
   if (topmost_browser)
     return topmost_browser;
@@ -304,7 +297,7 @@ void AdaptiveScreenBrightnessManager::OnTimerFired() {
 }
 
 void AdaptiveScreenBrightnessManager::OnReceiveSwitchStates(
-    const absl::optional<chromeos::PowerManagerClient::SwitchStates>
+    const std::optional<chromeos::PowerManagerClient::SwitchStates>
         switch_states) {
   if (switch_states.has_value()) {
     lid_state_ = switch_states->lid_state;
@@ -313,25 +306,25 @@ void AdaptiveScreenBrightnessManager::OnReceiveSwitchStates(
 }
 
 void AdaptiveScreenBrightnessManager::OnReceiveScreenBrightnessPercent(
-    const absl::optional<double> screen_brightness_percent) {
+    const std::optional<double> screen_brightness_percent) {
   if (screen_brightness_percent.has_value()) {
     previous_screen_brightness_percent_ = screen_brightness_percent_;
     screen_brightness_percent_ = *screen_brightness_percent;
   }
 }
 
-const absl::optional<int>
+const std::optional<int>
 AdaptiveScreenBrightnessManager::GetNightLightTemperaturePercent() const {
   const Profile* const profile = ProfileManager::GetActiveUserProfile();
   if (!profile)
-    return absl::nullopt;
+    return std::nullopt;
 
   const PrefService* const pref_service = profile->GetPrefs();
   if (!pref_service)
-    return absl::nullopt;
+    return std::nullopt;
 
   if (!pref_service->GetBoolean(ash::prefs::kNightLightEnabled))
-    return absl::nullopt;
+    return std::nullopt;
   return std::floor(
       pref_service->GetDouble(ash::prefs::kNightLightTemperature) * 100);
 }
@@ -348,7 +341,7 @@ void AdaptiveScreenBrightnessManager::LogEvent() {
   event->set_brightness(*screen_brightness_percent_);
   if (reason_.has_value()) {
     event->set_reason(*reason_);
-    reason_ = absl::nullopt;
+    reason_ = std::nullopt;
   }
   if (last_event_time_since_boot_.has_value()) {
     event->set_time_since_last_event_sec(
@@ -423,7 +416,7 @@ void AdaptiveScreenBrightnessManager::LogEvent() {
         ScreenBrightnessEvent::Features::EnvData::UNKNOWN_MODE);
   }
 
-  const absl::optional<int> temperature = GetNightLightTemperaturePercent();
+  const std::optional<int> temperature = GetNightLightTemperaturePercent();
   if (temperature.has_value()) {
     features->mutable_env_data()->set_night_light_temperature_percent(
         *temperature);

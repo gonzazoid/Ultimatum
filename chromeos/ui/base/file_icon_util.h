@@ -5,12 +5,17 @@
 #ifndef CHROMEOS_UI_BASE_FILE_ICON_UTIL_H_
 #define CHROMEOS_UI_BASE_FILE_ICON_UTIL_H_
 
+#include <optional>
+
 #include "base/files/file_path.h"
 #include "chromeos/constants/chromeos_features.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/skia/include/core/SkColor.h"
 #include "ui/gfx/color_palette.h"
 #include "ui/gfx/image/image_skia.h"
+
+namespace gfx {
+struct VectorIcon;
+}  // namespace gfx
 
 namespace chromeos {
 
@@ -29,6 +34,7 @@ enum class IconType {
   kGmap,
   kGsheet,
   kGsite,
+  kGmaillayout,
   kGslide,
   kGtable,
   kLinux,
@@ -52,17 +58,26 @@ IconType GetIconTypeForPath(const base::FilePath& filepath);
 
 }  // namespace internal
 
-// Returns the file type icon for the specified `filepath`. If `dark_background`
-// is `true`, lighter foreground colors are used to ensure sufficient contrast.
+// Returns the file type vector icon for the specified `file_path`.
+COMPONENT_EXPORT(CHROMEOS_UI_BASE)
+const gfx::VectorIcon& GetIconForPath(const base::FilePath& file_path);
+
+// Returns the file type icon for the specified `file_path`. If
+// `dark_background` is `true`, lighter foreground colors are used to ensure
+// sufficient contrast.
 COMPONENT_EXPORT(CHROMEOS_UI_BASE)
 gfx::ImageSkia GetIconForPath(const base::FilePath& file_path,
                               bool dark_background,
-                              absl::optional<int> dip_size = {});
+                              std::optional<int> dip_size = {});
 
 // Returns the file type chip icon for the specified `filepath`.
 COMPONENT_EXPORT(CHROMEOS_UI_BASE)
 gfx::ImageSkia GetChipIconForPath(const base::FilePath& filepath,
                                   bool dark_background);
+
+// Returns the file type vector icon for the specified `icon_type`.
+COMPONENT_EXPORT(CHROMEOS_UI_BASE)
+const gfx::VectorIcon& GetIconFromType(const std::string& icon_type);
 
 // Returns the file type icon for the specified `icon_type`.
 COMPONENT_EXPORT(CHROMEOS_UI_BASE)

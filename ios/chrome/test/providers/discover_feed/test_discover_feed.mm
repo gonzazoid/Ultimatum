@@ -4,10 +4,6 @@
 
 #import "ios/public/provider/chrome/browser/discover_feed/discover_feed_api.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 namespace ios {
 namespace provider {
 namespace {
@@ -32,13 +28,14 @@ class TestDiscoverFeedService final : public DiscoverFeedService {
   }
   void RemoveFeedViewController(UIViewController* feed_view_controller) final {}
   void UpdateTheme() final {}
-  void RefreshFeedIfNeeded() final {}
-  void RefreshFeed() final {}
+  BOOL GetFollowingFeedHasUnseenContent() final { return NO; }
+  void SetFollowingFeedContentSeen() final {}
+
+  // DiscoverFeedRefresher implementation:
+  void RefreshFeed(FeedRefreshTrigger trigger) final {}
   void PerformBackgroundRefreshes(void (^completion)(BOOL)) final {}
   void HandleBackgroundRefreshTaskExpiration() final {}
   NSDate* GetEarliestBackgroundRefreshBeginDate() final { return nil; }
-  BOOL GetFollowingFeedHasUnseenContent() final { return NO; }
-  void SetFollowingFeedContentSeen() final {}
 };
 
 }  // anonymous namespace

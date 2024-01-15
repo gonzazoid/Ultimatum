@@ -7,12 +7,12 @@
 
 #include <string>
 
-#include "base/callback_forward.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
 #include "chrome/browser/ash/login/demo_mode/demo_session.h"
-#include "chrome/browser/ash/login/enrollment/enterprise_enrollment_helper.h"
+#include "chrome/browser/ash/login/enrollment/enrollment_launcher.h"
 #include "chrome/browser/component_updater/cros_component_installer_chromeos.h"
 #include "components/policy/core/common/cloud/cloud_policy_store.h"
 
@@ -23,11 +23,12 @@ class EnrollmentStatus;
 }
 
 namespace ash {
+
 class DemoComponents;
 
 // Controls enrollment flow for setting up Demo Mode.
 class DemoSetupController
-    : public EnterpriseEnrollmentHelper::EnrollmentStatusConsumer {
+    : public EnrollmentLauncher::EnrollmentStatusConsumer {
  public:
   // All steps required for setup.
   enum class DemoSetupStep {
@@ -132,7 +133,7 @@ class DemoSetupController
         const policy::EnrollmentStatus& status);
 
     static DemoSetupError CreateFromOtherEnrollmentError(
-        EnterpriseEnrollmentHelper::OtherError error);
+        EnrollmentLauncher::OtherError error);
 
     static DemoSetupError CreateFromComponentError(
         component_updater::CrOSComponentManager::Error error,
@@ -177,11 +178,13 @@ class DemoSetupController
 
   // If the current country requires customization, returns an user email that
   // corresponds to the sub organization the device should be enrolled into.
-  // Otherwise, returns an empty string.
+  // If chrome flag "--demo-mode-enrolling-username" is set for test, it
+  // will override the current country-derived user. If neither of above is
+  // true, returns an empty string.
   static std::string GetSubOrganizationEmail();
 
   // Returns a dictionary mapping setup steps to step indices.
-  static base::Value GetDemoSetupSteps();
+  static base::Value::Dict GetDemoSetupSteps();
 
   // Converts a step enum to a string e.g. to sent to JavaScript.
   static std::string GetDemoSetupStepString(const DemoSetupStep step_enum);
@@ -199,14 +202,14 @@ class DemoSetupController
     demo_config_ = demo_config;
   }
 
-  std::string& get_retailer_store_id_input() {
-    return retailer_store_id_input_;
-  }
+  // Set a canonicalized (whitespace and punctuation removed, case homogenized)
+  // version of the retailer name string.
+  void SetAndCanonicalizeRetailerName(const std::string& retailer_name);
 
-  // Sets demo mode retailer id input by the user. It will be saved as local
-  // prefs when enrollment completes.
-  void set_retailer_store_id_input(const std::string& retailer_store_id_input) {
-    retailer_store_id_input_ = retailer_store_id_input;
+  std::string get_retailer_name_for_testing() { return retailer_name_; }
+
+  void set_store_number(const std::string& store_number) {
+    store_number_ = store_number;
   }
 
   // Initiates enrollment that sets up the device in the demo mode domain. The
@@ -226,16 +229,18 @@ class DemoSetupController
   base::FilePath GetPreinstalledDemoResourcesPath(
       const base::FilePath& relative_path);
 
-  // EnterpriseEnrollmentHelper::EnrollmentStatusConsumer:
+  // EnrollmentLauncher::EnrollmentStatusConsumer:
   void OnDeviceEnrolled() override;
   void OnEnrollmentError(policy::EnrollmentStatus status) override;
   void OnAuthError(const GoogleServiceAuthError& error) override;
-  void OnOtherError(EnterpriseEnrollmentHelper::OtherError error) override;
+  void OnOtherError(EnrollmentLauncher::OtherError error) override;
   void OnDeviceAttributeUploadCompleted(bool success) override;
   void OnDeviceAttributeUpdatePermission(bool granted) override;
 
   void SetCrOSComponentLoadErrorForTest(
       component_updater::CrOSComponentManager::Error error);
+
+  void EnableLoadRealComponentsForTest();
 
  private:
   // Attempts to load the demo SWA and demo resources ChromeOS components  for
@@ -257,9 +262,6 @@ class DemoSetupController
   // Sets current setup step.
   void SetCurrentSetupStep(DemoSetupStep current_step);
 
-  // Sets retailer and store id in local pref.
-  void SetRetailerAndStoreIdInPref();
-
   // Finish the flow with an error.
   void SetupFailed(const DemoSetupError& error);
 
@@ -276,7 +278,12 @@ class DemoSetupController
   // setup.
   int num_setup_retries_ = 0;
 
-  std::string retailer_store_id_input_;
+  // Name of retailer entered during setup flow. Corresponds to the
+  // kDemoModeRetailerId pref.
+  std::string retailer_name_;
+  // Store number entered during setup flow. Corresponds to the kDemoModeStoreId
+  // pref.
+  std::string store_number_;
 
   // Demo mode configuration type that will be setup when Enroll() is called.
   // Should be set explicitly.
@@ -296,20 +303,16 @@ class DemoSetupController
   // Callback to call when enrollment finishes successfully.
   OnSetupSuccess on_setup_success_;
 
-  std::unique_ptr<EnterpriseEnrollmentHelper> enrollment_helper_;
+  std::unique_ptr<EnrollmentLauncher> enrollment_launcher_;
 
   // The Demo Mode Resources ChromeOS Component downloaded for online Demo Mode.
   std::unique_ptr<DemoComponents> demo_components_;
+
+  bool load_real_components_for_test_ = false;
 
   base::WeakPtrFactory<DemoSetupController> weak_ptr_factory_{this};
 };
 
 }  //  namespace ash
-
-// TODO(https://crbug.com/1164001): remove after the //chrome/browser/chromeos
-// source migration is finished.
-namespace chromeos {
-using ::ash::DemoSetupController;
-}
 
 #endif  // CHROME_BROWSER_ASH_LOGIN_DEMO_MODE_DEMO_SETUP_CONTROLLER_H_

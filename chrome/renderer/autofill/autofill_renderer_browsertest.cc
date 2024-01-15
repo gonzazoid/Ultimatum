@@ -5,9 +5,9 @@
 #include <memory>
 #include <tuple>
 
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/scoped_feature_list.h"
@@ -50,8 +50,8 @@ namespace {
 
 class FakeContentAutofillDriver : public mojom::AutofillDriver {
  public:
-  FakeContentAutofillDriver() : called_field_change_(false) {}
-  ~FakeContentAutofillDriver() override {}
+  FakeContentAutofillDriver() = default;
+  ~FakeContentAutofillDriver() override = default;
 
   void BindReceiver(
       mojo::PendingAssociatedReceiver<mojom::AutofillDriver> receiver) {
@@ -63,6 +63,11 @@ class FakeContentAutofillDriver : public mojom::AutofillDriver {
   const std::vector<FormData>* forms() const { return forms_.get(); }
 
   void reset_forms() { return forms_.reset(); }
+
+  void WaitForFormsSeen() {
+    forms_seen_run_loop_->Run();
+    forms_seen_run_loop_ = std::make_unique<base::RunLoop>();
+  }
 
  private:
   // mojom::AutofillDriver:
@@ -76,6 +81,7 @@ class FakeContentAutofillDriver : public mojom::AutofillDriver {
     // call.
     if (!forms_)
       forms_ = std::make_unique<std::vector<FormData>>(updated_forms);
+    forms_seen_run_loop_->Quit();
   }
 
   void FormSubmitted(const FormData& form,
@@ -106,9 +112,7 @@ class FakeContentAutofillDriver : public mojom::AutofillDriver {
       const FormData& form,
       const FormFieldData& field,
       const gfx::RectF& bounding_box,
-      int32_t query_id,
-      AutoselectFirstSuggestion autoselect_first_suggestion,
-      FormElementWasClicked form_element_was_clicked) override {}
+      AutofillSuggestionTriggerSource trigger_source) override {}
 
   void HidePopup() override {}
 
@@ -121,14 +125,16 @@ class FakeContentAutofillDriver : public mojom::AutofillDriver {
   void DidFillAutofillFormData(const FormData& form,
                                base::TimeTicks timestamp) override {}
 
-  void DidPreviewAutofillFormData() override {}
-
   void DidEndTextFieldEditing() override {}
 
-  void SelectFieldOptionsDidChange(const autofill::FormData& form) override {}
+  void SelectOrSelectListFieldOptionsDidChange(
+      const autofill::FormData& form) override {}
+
+  std::unique_ptr<base::RunLoop> forms_seen_run_loop_ =
+      std::make_unique<base::RunLoop>();
 
   // Records whether TextFieldDidChange() get called.
-  bool called_field_change_;
+  bool called_field_change_ = false;
   // Records data received via FormSeen() call.
   std::unique_ptr<std::vector<FormData>> forms_;
 
@@ -142,12 +148,10 @@ using AutofillQueryParam =
 
 class AutofillRendererTest : public ChromeRenderViewTest {
  public:
-  AutofillRendererTest() {}
-
+  AutofillRendererTest() = default;
   AutofillRendererTest(const AutofillRendererTest&) = delete;
   AutofillRendererTest& operator=(const AutofillRendererTest&) = delete;
-
-  ~AutofillRendererTest() override {}
+  ~AutofillRendererTest() override = default;
 
  protected:
   void SetUp() override {
@@ -184,9 +188,8 @@ TEST_F(AutofillRendererTest, SendForms) {
            "    <option>Texas</option>"
            "  </select>"
            "</form>");
+  fake_driver_.WaitForFormsSeen();
 
-  base::RunLoop run_loop;
-  run_loop.RunUntilIdle();
   // Verify that "FormsSeen" sends the expected number of fields.
   ASSERT_TRUE(fake_driver_.forms());
   std::vector<FormData> forms = *(fake_driver_.forms());
@@ -198,30 +201,30 @@ TEST_F(AutofillRendererTest, SendForms) {
   expected.id_attribute = u"firstname";
   expected.name = expected.id_attribute;
   expected.value = std::u16string();
-  expected.form_control_type = "text";
-  expected.max_length = WebInputElement::DefaultMaxLength();
+  expected.form_control_type = FormControlType::kInputText;
+  expected.max_length = FormFieldData::kDefaultMaxLength;
   EXPECT_FORM_FIELD_DATA_EQUALS(expected, forms[0].fields[0]);
 
   expected.id_attribute = u"middlename";
   expected.name = expected.id_attribute;
   expected.value = std::u16string();
-  expected.form_control_type = "text";
-  expected.max_length = WebInputElement::DefaultMaxLength();
+  expected.form_control_type = FormControlType::kInputText;
+  expected.max_length = FormFieldData::kDefaultMaxLength;
   EXPECT_FORM_FIELD_DATA_EQUALS(expected, forms[0].fields[1]);
 
   expected.id_attribute = u"lastname";
   expected.name = expected.id_attribute;
   expected.value = std::u16string();
-  expected.form_control_type = "text";
+  expected.form_control_type = FormControlType::kInputText;
   expected.autocomplete_attribute = "off";
-  expected.max_length = WebInputElement::DefaultMaxLength();
+  expected.max_length = FormFieldData::kDefaultMaxLength;
   EXPECT_FORM_FIELD_DATA_EQUALS(expected, forms[0].fields[2]);
   expected.autocomplete_attribute = std::string();  // reset
 
   expected.id_attribute = u"state";
   expected.name = expected.id_attribute;
   expected.value = u"?";
-  expected.form_control_type = "select-one";
+  expected.form_control_type = FormControlType::kSelectOne;
   expected.max_length = 0;
   EXPECT_FORM_FIELD_DATA_EQUALS(expected, forms[0].fields[3]);
 
@@ -251,14 +254,14 @@ TEST_F(AutofillRendererTest, SendForms) {
       "newForm.appendChild(newEmail);"
       "document.body.appendChild(newForm);");
 
-  WaitForAutofillDidAssociateFormControl();
+  fake_driver_.WaitForFormsSeen();
   ASSERT_TRUE(fake_driver_.forms());
   forms = *(fake_driver_.forms());
   ASSERT_EQ(1UL, forms.size());
   ASSERT_EQ(3UL, forms[0].fields.size());
 
-  expected.form_control_type = "text";
-  expected.max_length = WebInputElement::DefaultMaxLength();
+  expected.form_control_type = FormControlType::kInputText;
+  expected.max_length = FormFieldData::kDefaultMaxLength;
 
   expected.id_attribute = u"second_firstname";
   expected.name = expected.id_attribute;
@@ -298,6 +301,7 @@ TEST_F(AutofillRendererTest, DynamicallyAddedUnownedFormElements) {
       base::FilePath(FILE_PATH_LITERAL("autofill_noform_dynamic.html")));
   ASSERT_TRUE(base::ReadFileToString(test_path, &html_data));
   LoadHTML(html_data.c_str());
+  fake_driver_.WaitForFormsSeen();
 
   base::RunLoop run_loop;
   run_loop.RunUntilIdle();
@@ -311,7 +315,7 @@ TEST_F(AutofillRendererTest, DynamicallyAddedUnownedFormElements) {
 
   ExecuteJavaScriptForTests("AddFields()");
 
-  WaitForAutofillDidAssociateFormControl();
+  fake_driver_.WaitForFormsSeen();
   ASSERT_TRUE(fake_driver_.forms());
   forms = *(fake_driver_.forms());
   ASSERT_EQ(1UL, forms.size());
@@ -322,15 +326,15 @@ TEST_F(AutofillRendererTest, DynamicallyAddedUnownedFormElements) {
   expected.id_attribute = u"EMAIL_ADDRESS";
   expected.name = expected.id_attribute;
   expected.value.clear();
-  expected.form_control_type = "text";
-  expected.max_length = WebInputElement::DefaultMaxLength();
+  expected.form_control_type = FormControlType::kInputText;
+  expected.max_length = FormFieldData::kDefaultMaxLength;
   EXPECT_FORM_FIELD_DATA_EQUALS(expected, forms[0].fields[7]);
 
   expected.id_attribute = u"PHONE_HOME_WHOLE_NUMBER";
   expected.name = expected.id_attribute;
   expected.value.clear();
-  expected.form_control_type = "text";
-  expected.max_length = WebInputElement::DefaultMaxLength();
+  expected.form_control_type = FormControlType::kInputText;
+  expected.max_length = FormFieldData::kDefaultMaxLength;
   EXPECT_FORM_FIELD_DATA_EQUALS(expected, forms[0].fields[8]);
 }
 
@@ -338,6 +342,7 @@ TEST_F(AutofillRendererTest, IgnoreNonUserGestureTextFieldChanges) {
   LoadHTML("<form method='post'>"
            "  <input type='text' id='full_name'/>"
            "</form>");
+  fake_driver_.WaitForFormsSeen();
 
   blink::WebInputElement full_name = GetMainFrame()
                                          ->GetDocument()

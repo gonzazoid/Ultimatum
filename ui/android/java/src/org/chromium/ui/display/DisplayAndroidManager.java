@@ -13,21 +13,16 @@ import android.util.SparseArray;
 import android.view.Display;
 import android.view.WindowManager;
 
-import androidx.annotation.VisibleForTesting;
+import org.jni_zero.CalledByNative;
+import org.jni_zero.JNINamespace;
+import org.jni_zero.NativeMethods;
 
 import org.chromium.base.ContextUtils;
 import org.chromium.base.ThreadUtils;
-import org.chromium.base.annotations.CalledByNative;
-import org.chromium.base.annotations.JNINamespace;
-import org.chromium.base.annotations.NativeMethods;
 import org.chromium.base.compat.ApiHelperForR;
-import org.chromium.build.annotations.MainDex;
 
-/**
- * DisplayAndroidManager is a class that informs its observers Display changes.
- */
+/** DisplayAndroidManager is a class that informs its observers Display changes. */
 @JNINamespace("ui")
-@MainDex
 public class DisplayAndroidManager {
     /**
      * DisplayListenerBackend is used to handle the actual listening of display changes. It handles
@@ -57,8 +52,8 @@ public class DisplayAndroidManager {
 
             displayAndroid.onDisplayRemoved();
             if (mNativePointer != 0) {
-                DisplayAndroidManagerJni.get().removeDisplay(
-                        mNativePointer, DisplayAndroidManager.this, sdkDisplayId);
+                DisplayAndroidManagerJni.get()
+                        .removeDisplay(mNativePointer, DisplayAndroidManager.this, sdkDisplayId);
             }
             mIdMap.remove(sdkDisplayId);
         }
@@ -88,7 +83,6 @@ public class DisplayAndroidManager {
     private int mMainSdkDisplayId;
     private final SparseArray<DisplayAndroid> mIdMap = new SparseArray<>();
     private DisplayListenerBackend mBackend = new DisplayListenerBackend();
-    private int mNextVirtualDisplayId = VIRTUAL_DISPLAY_ID_BEGIN;
 
     /* package */ static DisplayAndroidManager getInstance() {
         ThreadUtils.assertOnUiThread();
@@ -165,8 +159,8 @@ public class DisplayAndroidManager {
 
     private void setNativePointer(long nativePointer) {
         mNativePointer = nativePointer;
-        DisplayAndroidManagerJni.get().setPrimaryDisplayId(
-                mNativePointer, DisplayAndroidManager.this, mMainSdkDisplayId);
+        DisplayAndroidManagerJni.get()
+                .setPrimaryDisplayId(mNativePointer, DisplayAndroidManager.this, mMainSdkDisplayId);
 
         for (int i = 0; i < mIdMap.size(); ++i) {
             updateDisplayOnNativeSide(mIdMap.valueAt(i));
@@ -191,51 +185,48 @@ public class DisplayAndroidManager {
         return displayAndroid;
     }
 
-    private int getNextVirtualDisplayId() {
-        return mNextVirtualDisplayId++;
-    }
-
-    /* package */ VirtualDisplayAndroid addVirtualDisplay() {
-        VirtualDisplayAndroid display = new VirtualDisplayAndroid(getNextVirtualDisplayId());
-        assert mIdMap.get(display.getDisplayId()) == null;
-        mIdMap.put(display.getDisplayId(), display);
-        updateDisplayOnNativeSide(display);
-        return display;
-    }
-
-    /* package */ void removeVirtualDisplay(VirtualDisplayAndroid display) {
-        DisplayAndroid displayAndroid = mIdMap.get(display.getDisplayId());
-        assert displayAndroid == display;
-
-        if (mNativePointer != 0) {
-            DisplayAndroidManagerJni.get().removeDisplay(
-                    mNativePointer, DisplayAndroidManager.this, display.getDisplayId());
-        }
-        mIdMap.remove(display.getDisplayId());
-    }
-
     /* package */ void updateDisplayOnNativeSide(DisplayAndroid displayAndroid) {
         if (mNativePointer == 0) return;
-        DisplayAndroidManagerJni.get().updateDisplay(mNativePointer, DisplayAndroidManager.this,
-                displayAndroid.getDisplayId(), displayAndroid.getDisplayWidth(),
-                displayAndroid.getDisplayHeight(), displayAndroid.getDipScale(),
-                displayAndroid.getRotationDegrees(), displayAndroid.getBitsPerPixel(),
-                displayAndroid.getBitsPerComponent(), displayAndroid.getIsWideColorGamut());
+        DisplayAndroidManagerJni.get()
+                .updateDisplay(
+                        mNativePointer,
+                        DisplayAndroidManager.this,
+                        displayAndroid.getDisplayId(),
+                        displayAndroid.getDisplayWidth(),
+                        displayAndroid.getDisplayHeight(),
+                        displayAndroid.getDipScale(),
+                        displayAndroid.getRotationDegrees(),
+                        displayAndroid.getBitsPerPixel(),
+                        displayAndroid.getBitsPerComponent(),
+                        displayAndroid.getIsWideColorGamut(),
+                        displayAndroid.getIsHdr(),
+                        displayAndroid.getHdrMaxLuminanceRatio());
     }
 
     @NativeMethods
     interface Natives {
-        void updateDisplay(long nativeDisplayAndroidManager, DisplayAndroidManager caller,
-                int sdkDisplayId, int width, int height, float dipScale, int rotationDegrees,
-                int bitsPerPixel, int bitsPerComponent, boolean isWideColorGamut);
+        void updateDisplay(
+                long nativeDisplayAndroidManager,
+                DisplayAndroidManager caller,
+                int sdkDisplayId,
+                int width,
+                int height,
+                float dipScale,
+                int rotationDegrees,
+                int bitsPerPixel,
+                int bitsPerComponent,
+                boolean isWideColorGamut,
+                boolean isHdr,
+                float hdrMaxLuminanceRatio);
+
         void removeDisplay(
                 long nativeDisplayAndroidManager, DisplayAndroidManager caller, int sdkDisplayId);
+
         void setPrimaryDisplayId(
                 long nativeDisplayAndroidManager, DisplayAndroidManager caller, int sdkDisplayId);
     }
 
     /** Clears the object returned by {@link #getInstance()} */
-    @VisibleForTesting
     public static void resetInstanceForTesting() {
         sDisplayAndroidManager = null;
     }

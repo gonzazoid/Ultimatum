@@ -6,7 +6,7 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
@@ -43,7 +43,7 @@
 #include "ui/aura/native_window_occlusion_tracker_win.h"
 #endif
 
-#if defined(USE_OZONE)
+#if BUILDFLAG(IS_OZONE)
 #include "ui/events/ozone/events_ozone.h"
 #endif
 
@@ -67,7 +67,8 @@ AuraTestHelper::AuraTestHelper(ui::ContextFactory* context_factory) {
   ui::test::EnableTestConfigForPlatformWindows();
 #endif
 
-#if defined(USE_OZONE) && BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_OZONE) && BUILDFLAG(IS_CHROMEOS_ASH)
+  // TODO(b/304625912): Native events should be enabled for Crosier.
   ui::DisableNativeUiEventDispatchForTest();
 #endif
 

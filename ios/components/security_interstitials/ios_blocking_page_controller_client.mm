@@ -4,8 +4,8 @@
 
 #import "ios/components/security_interstitials/ios_blocking_page_controller_client.h"
 
-#import "base/bind.h"
 #import "base/check_op.h"
+#import "base/functional/bind.h"
 #import "base/notreached.h"
 #import "components/security_interstitials/core/metrics_helper.h"
 #import "ios/web/public/navigation/navigation_manager.h"
@@ -13,10 +13,6 @@
 #import "ios/web/public/thread/web_task_traits.h"
 #import "ios/web/public/thread/web_thread.h"
 #import "ios/web/public/web_state.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace security_interstitials {
 

@@ -37,9 +37,8 @@ bool LogReplaySocket::Connect(const GURL& url) {
 }
 
 bool LogReplaySocket::Send(const std::string& message) {
-  std::unique_ptr<base::Value> json = base::JSONReader::ReadDeprecated(message);
-  int id = json->FindKey("id")->GetInt();
-  max_id_ = id;
+  absl::optional<base::Value> json = base::JSONReader::Read(message);
+  max_id_ = json->GetDict().FindInt("id").value();
   return true;
 }
 
@@ -104,7 +103,7 @@ bool LogReplaySocket::HasNextMessage() {
     log_reader_.UndoGetNext(std::move(next));
     return true;
   }
-  bool haveMessage = next->id <= max_id_;
+  bool have_message = next->id <= max_id_;
   log_reader_.UndoGetNext(std::move(next));
-  return haveMessage;
+  return have_message;
 }

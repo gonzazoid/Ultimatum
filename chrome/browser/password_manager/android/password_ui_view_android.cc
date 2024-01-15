@@ -13,12 +13,12 @@
 #include "base/android/jni_string.h"
 #include "base/android/jni_weak_ref.h"
 #include "base/android/scoped_java_ref.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/containers/cxx20_erase.h"
 #include "base/files/file.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/metrics/field_trial.h"
 #include "base/metrics/user_metrics.h"
 #include "base/metrics/user_metrics_action.h"
@@ -27,10 +27,11 @@
 #include "base/task/thread_pool.h"
 #include "base/threading/scoped_blocking_call.h"
 #include "chrome/android/chrome_jni_headers/PasswordUIView_jni.h"
+#include "chrome/browser/password_manager/android/local_passwords_migration_warning_util.h"
 #include "chrome/common/url_constants.h"
 #include "chrome/grit/generated_resources.h"
 #include "components/password_manager/core/browser/export/password_csv_writer.h"
-#include "components/password_manager/core/browser/form_parsing/form_parser.h"
+#include "components/password_manager/core/browser/form_parsing/form_data_parser.h"
 #include "components/password_manager/core/browser/leak_detection/leak_detection_check_impl.h"
 #include "components/password_manager/core/browser/password_form.h"
 #include "components/password_manager/core/browser/password_ui_utils.h"
@@ -42,6 +43,8 @@
 
 namespace {
 
+using base::android::ConvertJavaStringToUTF16;
+using base::android::ConvertJavaStringToUTF8;
 using base::android::ConvertUTF16ToJavaString;
 using base::android::ConvertUTF8ToJavaString;
 using base::android::JavaParamRef;
@@ -77,8 +80,7 @@ PasswordUIViewAndroid::SerializationResult SerializePasswords(
   // Write the serialized data in CSV.
   std::string data =
       password_manager::PasswordCSVWriter::SerializePasswords(credentials);
-  int bytes_written = base::WriteFile(export_file, data.data(), data.size());
-  if (bytes_written != base::checked_cast<int>(data.size())) {
+  if (!base::WriteFile(export_file, data)) {
     return {
         0, std::string(),
         logging::SystemErrorCodeToString(logging::GetLastSystemErrorCode())};
@@ -279,6 +281,16 @@ void PasswordUIViewAndroid::HandleShowBlockedCredentialView(
       context, settings_launcher);
 }
 
+void PasswordUIViewAndroid::ShowMigrationWarning(
+    JNIEnv* env,
+    const base::android::JavaParamRef<jobject>& activity,
+    const base::android::JavaParamRef<jobject>& bottom_sheet_controller) {
+  local_password_migration::ShowWarningWithActivity(
+      activity, bottom_sheet_controller, ProfileManager::GetLastUsedProfile(),
+      password_manager::metrics_util::PasswordMigrationWarningTriggers::
+          kPasswordSettings);
+}
+
 void PasswordUIViewAndroid::OnEditUIDismissed() {
   credential_edit_bridge_.reset();
 }
@@ -302,6 +314,12 @@ jboolean JNI_PasswordUIView_HasAccountForLeakCheckRequest(JNIEnv* env) {
       identity_manager);
 }
 
+jboolean PasswordUIViewAndroid::IsWaitingForPasswordStore(
+    JNIEnv* env,
+    const base::android::JavaRef<jobject>&) {
+  return saved_passwords_presenter_.IsWaitingForPasswordStore();
+}
+
 // static
 static jlong JNI_PasswordUIView_Init(JNIEnv* env,
                                      const JavaParamRef<jobject>& obj) {
@@ -310,7 +328,7 @@ static jlong JNI_PasswordUIView_Init(JNIEnv* env,
 }
 
 void PasswordUIViewAndroid::OnSavedPasswordsChanged(
-    password_manager::SavedPasswordsPresenter::SavedPasswordsView passwords) {
+    const password_manager::PasswordStoreChangeList& changes) {
   UpdatePasswordLists();
 }
 

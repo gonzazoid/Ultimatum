@@ -24,10 +24,6 @@ namespace crosapi {
 
 namespace {
 
-std::vector<uint8_t> StrToBytes(const std::string& str) {
-  return std::vector<uint8_t>(str.begin(), str.end());
-}
-
 constexpr mojom::CertProvisioningProcessState AshToMojoState(
     CertProvisioningWorkerState state) {
   switch (state) {
@@ -55,6 +51,16 @@ constexpr mojom::CertProvisioningProcessState AshToMojoState(
       return mojom::CertProvisioningProcessState::kFailed;
     case CertProvisioningWorkerState::kCanceled:
       return mojom::CertProvisioningProcessState::kCanceled;
+    case CertProvisioningWorkerState::kReadyForNextOperation:
+      return mojom::CertProvisioningProcessState::kReadyForNextOperation;
+    case CertProvisioningWorkerState::kAuthorizeInstructionReceived:
+      return mojom::CertProvisioningProcessState::kAuthorizeInstructionReceived;
+    case CertProvisioningWorkerState::kProofOfPossessionInstructionReceived:
+      return mojom::CertProvisioningProcessState::
+          kProofOfPossessionInstructionReceived;
+    case CertProvisioningWorkerState::kImportCertificateInstructionReceived:
+      return mojom::CertProvisioningProcessState::
+          kImportCertificateInstructionReceived;
   }
 }
 
@@ -152,7 +158,7 @@ void CertProvisioningAsh::AppendWorkerStatuses(
 
     status->cert_profile_id = id;
     status->cert_profile_name = worker->GetCertProfile().name;
-    status->public_key = StrToBytes(worker->GetPublicKey());
+    status->public_key = worker->GetPublicKey();
     status->last_update_time = worker->GetLastUpdateTime();
     status->state = AshToMojoState(worker->GetState());
     status->did_fail = false;
@@ -172,7 +178,7 @@ void CertProvisioningAsh::AppendWorkerStatuses(
 
     status->cert_profile_id = id;
     status->cert_profile_name = worker.cert_profile_name;
-    status->public_key = StrToBytes(worker.public_key);
+    status->public_key = worker.public_key;
     status->last_update_time = worker.last_update_time;
     status->state = AshToMojoState(worker.state_before_failure);
     status->did_fail = true;
@@ -192,6 +198,27 @@ void CertProvisioningAsh::UpdateOneProcess(const std::string& cert_profile_id) {
   CertProvisioningScheduler* device_scheduler = GetDeviceScheduler();
   if (device_scheduler) {
     device_scheduler->UpdateOneWorker(cert_profile_id);
+  }
+}
+
+void CertProvisioningAsh::ResetOneProcess(const std::string& cert_profile_id) {
+  DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
+
+  CertProvisioningScheduler* user_scheduler = GetUserScheduler();
+  if (user_scheduler && user_scheduler->ResetOneWorker(cert_profile_id)) {
+    return;
+  }
+
+  CertProvisioningScheduler* device_scheduler = GetDeviceScheduler();
+  if (device_scheduler && device_scheduler->ResetOneWorker(cert_profile_id)) {
+    return;
+  }
+
+  if (user_scheduler || device_scheduler) {
+    LOG(ERROR) << "resetting cert_profile_id was not found. id:"
+               << cert_profile_id << " user_scheduler:" << bool(user_scheduler)
+               << " device_scheduler:" << bool(device_scheduler);
+    return;
   }
 }
 

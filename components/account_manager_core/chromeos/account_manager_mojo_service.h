@@ -8,11 +8,11 @@
 #include <memory>
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "chromeos/crosapi/mojom/account_manager.mojom.h"
 #include "components/account_manager_core/account.h"
-#include "components/account_manager_core/account_addition_result.h"
+#include "components/account_manager_core/account_upsertion_result.h"
 #include "components/account_manager_core/chromeos/access_token_fetcher.h"
 #include "components/account_manager_core/chromeos/account_manager.h"
 #include "components/account_manager_core/chromeos/account_manager_ui.h"
@@ -45,8 +45,8 @@ class COMPONENT_EXPORT(ACCOUNT_MANAGER_CORE) AccountManagerMojoService
   void SetAccountManagerUI(
       std::unique_ptr<account_manager::AccountManagerUI> account_manager_ui);
 
-  void OnAccountAdditionFinishedForTesting(
-      const account_manager::AccountAdditionResult& result);
+  void OnAccountUpsertionFinishedForTesting(
+      const account_manager::AccountUpsertionResult& result);
 
   // crosapi::mojom::AccountManager:
   void IsInitialized(IsInitializedCallback callback) override;
@@ -57,8 +57,9 @@ class COMPONENT_EXPORT(ACCOUNT_MANAGER_CORE) AccountManagerMojoService
       GetPersistentErrorForAccountCallback callback) override;
   void ShowAddAccountDialog(mojom::AccountAdditionOptionsPtr options,
                             ShowAddAccountDialogCallback callback) override;
-  void ShowReauthAccountDialog(const std::string& email,
-                               base::OnceClosure closure) override;
+  void ShowReauthAccountDialog(
+      const std::string& email,
+      ShowReauthAccountDialogCallback callback) override;
   void ShowManageAccountsSettings() override;
   void CreateAccessTokenFetcher(
       mojom::AccountKeyPtr mojo_account_key,
@@ -79,11 +80,12 @@ class COMPONENT_EXPORT(ACCOUNT_MANAGER_CORE) AccountManagerMojoService
 
   // This method is called by `ash::SigninHelper` which passes `AccountKey`
   // of account that was added.
-  void OnAccountAdditionFinished(
-      const account_manager::AccountAdditionResult& result);
+  void OnAccountUpsertionFinished(
+      const account_manager::AccountUpsertionResult& result);
   // A callback for `AccountManagerUI::ShowAccountAdditionDialog`.
-  void OnAddAccountDialogClosed();
-  void FinishAddAccount(const account_manager::AccountAdditionResult& result);
+  void OnSigninDialogClosed();
+  void FinishUpsertAccount(
+      const account_manager::AccountUpsertionResult& result);
   // Deletes `request` from `pending_access_token_requests_`, if present.
   void DeletePendingAccessTokenFetchRequest(AccessTokenFetcher* request);
 
@@ -103,7 +105,9 @@ class COMPONENT_EXPORT(ACCOUNT_MANAGER_CORE) AccountManagerMojoService
   int GetNumPendingAccessTokenRequests() const;
 
   ShowAddAccountDialogCallback account_addition_callback_;
-  bool account_addition_in_progress_ = false;
+  ShowReauthAccountDialogCallback account_reauth_callback_;
+  bool account_signin_in_progress_ = false;
+  bool is_reauth_ = false;
   const raw_ptr<account_manager::AccountManager> account_manager_;
   std::unique_ptr<account_manager::AccountManagerUI> account_manager_ui_;
   std::vector<std::unique_ptr<AccessTokenFetcher>>

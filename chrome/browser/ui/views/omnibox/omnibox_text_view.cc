@@ -25,6 +25,8 @@
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/range/range.h"
 #include "ui/gfx/render_text.h"
+#include "ui/views/style/typography.h"
+#include "ui/views/style/typography_provider.h"
 
 namespace {
 
@@ -56,7 +58,7 @@ struct TextStyle {
   int touchable_size_delta = 0;
 
   // The baseline shift. Ignored under touch (text is always baseline-aligned).
-  gfx::BaselineStyle baseline = gfx::NORMAL_BASELINE;
+  gfx::BaselineStyle baseline = gfx::BaselineStyle::kNormalBaseline;
 };
 
 // The new answer layout has separate and different treatment of text styles,
@@ -77,8 +79,8 @@ void ApplyTextStyleForType(SuggestionAnswer::TextStyle text_style,
 
   const gfx::BaselineStyle baseline =
       (text_style == SuggestionAnswer::TextStyle::SUPERIOR)
-          ? gfx::SUPERIOR
-          : gfx::NORMAL_BASELINE;
+          ? gfx::BaselineStyle::kSuperior
+          : gfx::BaselineStyle::kNormalBaseline;
   render_text->ApplyBaselineStyle(baseline, range);
 
   const bool selected =
@@ -193,7 +195,8 @@ void OmniboxTextView::SetTextWithStyling(
   for (const SuggestionAnswer::TextField& text_field : line.text_fields())
     AppendText(text_field, std::u16string());
   if (!line.text_fields().empty()) {
-    constexpr int kMaxDisplayLines = 3;
+    const int kMaxDisplayLines =
+        OmniboxFieldTrial::IsUniformRowHeightEnabled() ? 1 : 3;
     const SuggestionAnswer::TextField& first_field = line.text_fields().front();
     if (first_field.has_num_lines() && first_field.num_lines() > 1) {
       render_text_->SetMultiline(true);
@@ -271,9 +274,9 @@ std::unique_ptr<gfx::RenderText> OmniboxTextView::CreateRenderText(
   render_text->SetDisplayRect(gfx::Rect(gfx::Size(INT_MAX, 0)));
   render_text->SetCursorEnabled(false);
   render_text->SetElideBehavior(gfx::ELIDE_TAIL);
-  const gfx::FontList& font = views::style::GetFont(
+  const gfx::FontList& font = views::TypographyProvider::Get().GetFont(
       (use_deemphasized_font_ ? CONTEXT_OMNIBOX_DEEMPHASIZED
-                              : CONTEXT_OMNIBOX_PRIMARY),
+                              : CONTEXT_OMNIBOX_POPUP),
       kTextStyle);
   render_text->SetFontList(font);
   render_text->SetText(text);
@@ -310,7 +313,7 @@ void OmniboxTextView::OnStyleChanged() {
   SchedulePaint();
 }
 
-BEGIN_METADATA(OmniboxTextView, views::View)
+BEGIN_METADATA(OmniboxTextView)
 ADD_PROPERTY_METADATA(std::u16string, Text)
 ADD_READONLY_PROPERTY_METADATA(int, LineHeight)
 END_METADATA

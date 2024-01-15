@@ -5,17 +5,13 @@
 package org.chromium.chrome.browser.crash;
 
 import org.chromium.base.ContextUtils;
-import org.chromium.build.annotations.MainDex;
 import org.chromium.build.annotations.UsedByReflection;
 import org.chromium.components.crash.NativeAndJavaSmartExceptionReporter;
 import org.chromium.components.crash.PureJavaExceptionReporter;
 
 import java.io.File;
 
-/**
- * A custom PureJavaExceptionReporter for Android Chrome's browser.
- */
-@MainDex
+/** A custom PureJavaExceptionReporter for Android Chrome's browser. */
 @UsedByReflection("SplitCompatApplication.java")
 public class ChromePureJavaExceptionReporter extends PureJavaExceptionReporter {
     private static final String CHROME_CRASH_PRODUCT_NAME = "Chrome_Android";
@@ -23,7 +19,7 @@ public class ChromePureJavaExceptionReporter extends PureJavaExceptionReporter {
 
     @UsedByReflection("SplitCompatApplication.java")
     public ChromePureJavaExceptionReporter() {
-        super(/*attachLogcat=*/true);
+        super(/* attachLogcat= */ true);
     }
 
     @Override

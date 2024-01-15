@@ -38,7 +38,8 @@ enum class TpmChallengeKeyResultCode {
   kAttestationServiceInternalError = 20,
   kUploadCertificateFailedError = 21,
   kDeviceTrustURLConflictError = 22,
-  kMaxValue = kDeviceTrustURLConflictError,
+  kVerifiedAccessFlowUnsupportedError = 23,
+  kMaxValue = kVerifiedAccessFlowUnsupportedError,
 };
 
 // If |IsSuccess| returns false, |result_code| contains error code and
@@ -70,6 +71,7 @@ struct TpmChallengeKeyResult {
   static const char kAttestationServiceInternalErrorMsg[];
   static const char kUploadCertificateFailedErrorMsg[];
   static const char kDeviceTrustURLConflictError[];
+  static const char kVerifiedAccessFlowUnsupportedErrorMsg[];
 
   static TpmChallengeKeyResult MakeChallengeResponse(
       const std::string& challenge_response);
@@ -93,14 +95,5 @@ std::ostream& operator<<(std::ostream& os, const TpmChallengeKeyResult& result);
 
 }  // namespace attestation
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove after //chrome/browser/chromeos
-// source migration is finished.
-namespace chromeos {
-namespace attestation {
-using ::ash::attestation::TpmChallengeKeyResult;
-using ::ash::attestation::TpmChallengeKeyResultCode;
-}  // namespace attestation
-}  // namespace chromeos
 
 #endif  //  CHROME_BROWSER_ASH_ATTESTATION_TPM_CHALLENGE_KEY_RESULT_H_

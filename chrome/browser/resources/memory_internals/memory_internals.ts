@@ -2,8 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {addWebUIListener, sendWithPromise} from 'chrome://resources/js/cr.m.js';
-import {$} from 'chrome://resources/js/util.js';
+import {addWebUiListener, sendWithPromise} from 'chrome://resources/js/cr.js';
+import {getRequiredElement} from 'chrome://resources/js/util.js';
 
 type Process = [number, string, boolean];
 
@@ -20,12 +20,9 @@ function saveDump() {
   chrome.send('saveDump');
 }
 
-function reportProcess(pid: number) {
-  chrome.send('reportProcess', [pid]);
-}
-
 function startProfiling(pid: number) {
-  chrome.send('startProfiling', [pid]);
+  // After profiling starts, the browser will send an updated process list.
+  sendWithPromise('startProfiling', pid).then(onProcessListReceived);
 }
 
 // celltype should either be "td" or "th". The contents of the |cols| will be
@@ -44,9 +41,9 @@ function addListRow(
 }
 
 function onProcessListReceived(data: ProcessList) {
-  $('message').innerText = data['message'];
+  getRequiredElement('message').innerText = data['message'];
 
-  const proclist = $('proclist');
+  const proclist = getRequiredElement('proclist');
   proclist.innerText = '';  // Clear existing contents.
 
   const processes = data['processes'];
@@ -72,8 +69,7 @@ function onProcessListReceived(data: ProcessList) {
 
     const button = document.createElement('button');
     if (profiled) {
-      button.innerText = '\uD83D\uDC1E Report';
-      button.onclick = () => reportProcess(procId);
+      button.innerText = 'Profiling...';
     } else {
       button.innerText = '\u2600 Start profiling';
       button.onclick = () => startProfiling(procId);
@@ -87,11 +83,11 @@ function onProcessListReceived(data: ProcessList) {
 
 // Get data and have it displayed upon loading.
 document.addEventListener('DOMContentLoaded', () => {
-  $('refresh').onclick = requestProcessList;
-  $('save').onclick = saveDump;
+  getRequiredElement('refresh').onclick = requestProcessList;
+  getRequiredElement('save').onclick = saveDump;
 
-  addWebUIListener('save-dump-progress', (progress: string) => {
-    $('save-dump-text').innerText = progress;
+  addWebUiListener('save-dump-progress', (progress: string) => {
+    getRequiredElement('save-dump-text').innerText = progress;
   });
 
   requestProcessList();

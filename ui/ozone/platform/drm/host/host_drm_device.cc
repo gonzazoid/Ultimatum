@@ -8,12 +8,11 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/task/task_runner.h"
-#include "base/threading/sequenced_task_runner_handle.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "mojo/public/cpp/bindings/pending_associated_remote.h"
 #include "ui/display/types/display_snapshot.h"
 #include "ui/ozone/platform/drm/common/display_types.h"
@@ -139,7 +138,7 @@ void HostDrmDevice::GpuConfigureNativeDisplays(
     // Post this task to protect the callstack from accumulating too many
     // recursive calls to ConfigureDisplaysTask::Run() in cases in which the GPU
     // process crashes repeatedly.
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(callback), false));
   }
 }
@@ -174,8 +173,7 @@ void HostDrmDevice::GpuAddGraphicsDevice(const base::FilePath& path,
   if (!drm_device_.is_bound())
     return;
 
-  base::File file(std::move(fd));
-  drm_device_->AddGraphicsDevice(path, std::move(file));
+  drm_device_->AddGraphicsDevice(path, mojo::PlatformHandle(std::move(fd)));
 }
 
 bool HostDrmDevice::GpuRemoveGraphicsDevice(const base::FilePath& path) {
@@ -205,6 +203,20 @@ void HostDrmDevice::GpuShouldDisplayEventTriggerConfiguration(
                                                       std::move(callback));
 }
 
+bool HostDrmDevice::GpuSetHdcpKeyProp(int64_t display_id,
+                                      const std::string& key) {
+  DCHECK_CALLED_ON_VALID_THREAD(on_ui_thread_);
+  if (!IsConnected()) {
+    return false;
+  }
+
+  auto callback =
+      base::BindOnce(&HostDrmDevice::GpuSetHdcpKeyPropCallback, this);
+  drm_device_->SetHdcpKeyProp(display_id, key, std::move(callback));
+
+  return true;
+}
+
 bool HostDrmDevice::GpuGetHDCPState(int64_t display_id) {
   DCHECK_CALLED_ON_VALID_THREAD(on_ui_thread_);
   if (!IsConnected())
@@ -231,6 +243,33 @@ bool HostDrmDevice::GpuSetHDCPState(
   return true;
 }
 
+void HostDrmDevice::GpuSetColorTemperatureAdjustment(
+    int64_t display_id,
+    const display::ColorTemperatureAdjustment& cta) {
+  if (!IsConnected()) {
+    return;
+  }
+  drm_device_->SetColorTemperatureAdjustment(display_id, cta);
+}
+
+void HostDrmDevice::GpuSetColorCalibration(
+    int64_t display_id,
+    const display::ColorCalibration& calibration) {
+  if (!IsConnected()) {
+    return;
+  }
+  drm_device_->SetColorCalibration(display_id, calibration);
+}
+
+void HostDrmDevice::GpuSetGammaAdjustment(
+    int64_t display_id,
+    const display::GammaAdjustment& adjustment) {
+  if (!IsConnected()) {
+    return;
+  }
+  drm_device_->SetGammaAdjustment(display_id, adjustment);
+}
+
 bool HostDrmDevice::GpuSetColorMatrix(int64_t display_id,
                                       const std::vector<float>& color_matrix) {
   DCHECK_CALLED_ON_VALID_THREAD(on_ui_thread_);
@@ -243,8 +282,8 @@ bool HostDrmDevice::GpuSetColorMatrix(int64_t display_id,
 
 bool HostDrmDevice::GpuSetGammaCorrection(
     int64_t display_id,
-    const std::vector<display::GammaRampRGBEntry>& degamma_lut,
-    const std::vector<display::GammaRampRGBEntry>& gamma_lut) {
+    const display::GammaCurve& degamma_lut,
+    const display::GammaCurve& gamma_lut) {
   DCHECK_CALLED_ON_VALID_THREAD(on_ui_thread_);
   if (!IsConnected())
     return false;
@@ -287,6 +326,12 @@ void HostDrmDevice::GpuShouldDisplayEventTriggerConfigurationCallback(
     bool should_trigger) const {
   DCHECK_CALLED_ON_VALID_THREAD(on_ui_thread_);
   display_manager_->GpuShouldDisplayEventTriggerConfiguration(should_trigger);
+}
+
+void HostDrmDevice::GpuSetHdcpKeyPropCallback(int64_t display_id,
+                                              bool success) const {
+  DCHECK_CALLED_ON_VALID_THREAD(on_ui_thread_);
+  display_manager_->GpuSetHdcpKeyProp(display_id, success);
 }
 
 void HostDrmDevice::GpuGetHDCPStateCallback(

@@ -27,7 +27,8 @@ void MockDevToolsObserver::OnRawRequest(
     const net::CookieAccessResultList& cookies_with_access_result,
     std::vector<network::mojom::HttpRawHeaderPairPtr> headers,
     const base::TimeTicks timestamp,
-    network::mojom::ClientSecurityStatePtr client_security_state) {
+    network::mojom::ClientSecurityStatePtr client_security_state,
+    network::mojom::OtherPartitionInfoPtr site_has_cookie_in_other_partition) {
   raw_request_cookies_.insert(raw_request_cookies_.end(),
                               cookies_with_access_result.begin(),
                               cookies_with_access_result.end());
@@ -47,7 +48,8 @@ void MockDevToolsObserver::OnRawResponse(
     std::vector<network::mojom::HttpRawHeaderPairPtr> headers,
     const absl::optional<std::string>& raw_response_headers,
     network::mojom::IPAddressSpace resource_address_space,
-    int32_t http_status_code) {
+    int32_t http_status_code,
+    const absl::optional<net::CookiePartitionKey>& cookie_partition_key) {
   raw_response_cookies_.insert(raw_response_cookies_.end(),
                                cookies_with_access_result.begin(),
                                cookies_with_access_result.end());
@@ -58,6 +60,8 @@ void MockDevToolsObserver::OnRawResponse(
   response_headers_ = std::move(headers);
   raw_response_headers_ = raw_response_headers;
   raw_response_http_status_code_ = http_status_code;
+
+  response_cookie_partition_key_ = cookie_partition_key;
 
   if (wait_for_raw_response_ &&
       raw_response_cookies_.size() >= wait_for_raw_response_goal_) {
@@ -91,7 +95,9 @@ void MockDevToolsObserver::OnCorsPreflightResponse(
 
 void MockDevToolsObserver::OnCorsPreflightRequestCompleted(
     const base::UnguessableToken& devtool_request_id,
-    const network::URLLoaderCompletionStatus& status) {}
+    const network::URLLoaderCompletionStatus& status) {
+  preflight_status_ = status;
+}
 
 void MockDevToolsObserver::OnTrustTokenOperationDone(
     const std::string& devtool_request_id,
@@ -104,6 +110,13 @@ void MockDevToolsObserver::OnCorsError(
     const GURL& url,
     const network::CorsErrorStatus& status,
     bool is_warning) {
+  // Ignoring kUnexpectedPrivateNetworkAccess because the request will be
+  // restarted with a preflight and we care more about the CORS error that comes
+  // thereafter.
+  if (status.cors_error == mojom::CorsError::kUnexpectedPrivateNetworkAccess) {
+    return;
+  }
+
   OnCorsErrorParams params;
   params.devtools_request_id = devtools_request_id;
   params.initiator_origin = initiator_origin;

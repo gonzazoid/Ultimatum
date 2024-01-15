@@ -5,6 +5,7 @@
 package org.chromium.components.stylus_handwriting;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -12,6 +13,7 @@ import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
@@ -51,9 +53,7 @@ import org.chromium.ui.base.ime.TextInputType;
 import java.util.Arrays;
 import java.util.List;
 
-/**
- * Unit tests for {@link DirectWritingServiceCallback}.
- */
+/** Unit tests for {@link DirectWritingServiceCallback}. */
 @RunWith(BaseRobolectricTestRunner.class)
 @Config(manifest = Config.NONE)
 public class DirectWritingServiceCallbackTest {
@@ -62,15 +62,14 @@ public class DirectWritingServiceCallbackTest {
     private static final float[] GESTURE_START_POINT = new float[] {20.f, 50.f};
     private static final float[] GESTURE_END_POINT = new float[] {100.f, 50.f};
     private static final List<String> TWO_POINT_GESTURES =
-            Arrays.asList(DirectWritingServiceCallback.GESTURE_TYPE_ZIGZAG,
+            Arrays.asList(
+                    DirectWritingServiceCallback.GESTURE_TYPE_ZIGZAG,
                     DirectWritingServiceCallback.GESTURE_TYPE_BACKSPACE,
                     DirectWritingServiceCallback.GESTURE_TYPE_U_TYPE_REMOVE_SPACE,
                     DirectWritingServiceCallback.GESTURE_TYPE_ARCH_TYPE_REMOVE_SPACE);
 
-    @Mock
-    private StylusWritingImeCallback mImeCallback;
-    @Mock
-    private ViewGroup mContainerView;
+    @Mock private StylusWritingImeCallback mImeCallback;
+    @Mock private ViewGroup mContainerView;
 
     private DirectWritingServiceCallback mDwServiceCallback = new DirectWritingServiceCallback();
     private Context mContext;
@@ -107,13 +106,17 @@ public class DirectWritingServiceCallbackTest {
             return DirectWritingServiceCallback.GESTURE_BUNDLE_KEY_LOWEST_POINT;
         } else if (gestureType.equals(DirectWritingServiceCallback.GESTURE_TYPE_WEDGE_SPACE)) {
             return DirectWritingServiceCallback.GESTURE_BUNDLE_KEY_HIGHEST_POINT;
+        } else if (gestureType.equals(DirectWritingServiceCallback.GESTURE_I_TYPE_FUNCTIONAL)) {
+            return DirectWritingServiceCallback.GESTURE_BUNDLE_KEY_CENTER_POINT;
         } else {
             return DirectWritingServiceCallback.GESTURE_BUNDLE_KEY_START_POINT;
         }
     }
 
-    private void setImeCallbackAndVerifyMojoGestureData(Bundle gestureBundle,
-            @StylusWritingGestureAction.EnumType int expectedAction, String expectedTextToInsert) {
+    private void setImeCallbackAndVerifyMojoGestureData(
+            Bundle gestureBundle,
+            @StylusWritingGestureAction.EnumType int expectedAction,
+            String expectedTextToInsert) {
         mDwServiceCallback.updateEditableBounds(new Rect(0, 0, 400, 400), new Point(50, 50));
         mDwServiceCallback.setImeCallback(mImeCallback);
         mDwServiceCallback.onTextViewExtraCommand(
@@ -121,18 +124,20 @@ public class DirectWritingServiceCallbackTest {
         shadowOf(Looper.getMainLooper()).idle();
         ArgumentCaptor<StylusWritingGestureData> gestureDataCaptor =
                 ArgumentCaptor.forClass(StylusWritingGestureData.class);
-        verify(mImeCallback).handleStylusWritingGestureAction(gestureDataCaptor.capture());
+        verify(mImeCallback)
+                .handleStylusWritingGestureAction(anyInt(), gestureDataCaptor.capture());
         StylusWritingGestureData gestureData = gestureDataCaptor.getValue();
         assertEquals(expectedAction, gestureData.action);
-        assertEquals(GESTURE_START_POINT[0], gestureData.startPoint.x, /* tolerance */ 0.1);
-        assertEquals(GESTURE_START_POINT[1], gestureData.startPoint.y, /* tolerance */ 0.1);
+        assertEquals(GESTURE_START_POINT[0], gestureData.startRect.x, /* tolerance= */ 0.1);
+        assertEquals(GESTURE_START_POINT[1], gestureData.startRect.y, /* tolerance= */ 0.1);
 
-        if (isTwoPointGesture(gestureBundle.getString(
-                    DirectWritingServiceCallback.GESTURE_BUNDLE_KEY_GESTURE_TYPE, ""))) {
-            assertEquals(GESTURE_END_POINT[0], gestureData.endPoint.x, /* tolerance */ 0.1);
-            assertEquals(GESTURE_END_POINT[1], gestureData.endPoint.y, /* tolerance */ 0.1);
+        if (isTwoPointGesture(
+                gestureBundle.getString(
+                        DirectWritingServiceCallback.GESTURE_BUNDLE_KEY_GESTURE_TYPE, ""))) {
+            assertEquals(GESTURE_END_POINT[0], gestureData.endRect.x, /* tolerance= */ 0.1);
+            assertEquals(GESTURE_END_POINT[1], gestureData.endRect.y, /* tolerance= */ 0.1);
         } else {
-            assertNull(gestureData.endPoint);
+            assertNull(gestureData.endRect);
         }
 
         assertEquals(FALLBACK_TEXT, mojoStringToJavaString(gestureData.textAlternative));
@@ -147,7 +152,7 @@ public class DirectWritingServiceCallbackTest {
         mDwServiceCallback.onTextViewExtraCommand(
                 DirectWritingServiceCallback.GESTURE_ACTION_RECOGNITION_INFO, bundle);
         shadowOf(Looper.getMainLooper()).idle();
-        verify(mImeCallback, never()).handleStylusWritingGestureAction(any());
+        verify(mImeCallback, never()).handleStylusWritingGestureAction(anyInt(), any());
     }
 
     @Before
@@ -253,6 +258,7 @@ public class DirectWritingServiceCallbackTest {
         shadowOf(Looper.getMainLooper()).idle();
         verify(mImeCallback, never()).setEditableSelectionOffsets(anyInt(), anyInt());
         verify(mImeCallback, never()).sendCompositionToNative(any(), anyInt(), anyBoolean());
+        verify(mImeCallback, never()).finishComposingText();
 
         // Text received from service replaces the current text in input.
         mDwServiceCallback.setImeCallback(mImeCallback);
@@ -260,9 +266,33 @@ public class DirectWritingServiceCallbackTest {
         mDwServiceCallback.updateInputState(currentInputText, 4, 4);
         mDwServiceCallback.setTextSelection(SAMPLE_INPUT, index);
         shadowOf(Looper.getMainLooper()).idle();
+        verify(mImeCallback).finishComposingText();
         verify(mImeCallback).setEditableSelectionOffsets(0, currentInputText.length());
         verify(mImeCallback).sendCompositionToNative(SAMPLE_INPUT, index, true);
         verify(mImeCallback).setEditableSelectionOffsets(index, index);
+    }
+
+    @Test
+    @Feature({"Stylus Handwriting"})
+    public void testUpdateEditBoundsMessage() {
+        mDwServiceCallback.setImeCallback(mImeCallback);
+        DirectWritingServiceCallback.TriggerCallback mockTriggercallback =
+                mock(DirectWritingServiceCallback.TriggerCallback.class);
+        mDwServiceCallback.setTriggerCallback(mockTriggercallback);
+        mDwServiceCallback.updateBoundedEditTextRect();
+        shadowOf(Looper.getMainLooper()).idle();
+        verify(mockTriggercallback).updateEditableBoundsToService();
+    }
+
+    @Test
+    @Feature({"Stylus Handwriting"})
+    public void testIsHoverIconShowing() {
+        DirectWritingServiceCallback.TriggerCallback mockTriggercallback =
+                mock(DirectWritingServiceCallback.TriggerCallback.class);
+        mDwServiceCallback.setTriggerCallback(mockTriggercallback);
+        assertFalse(mDwServiceCallback.isHoverIconShowing());
+        doReturn(true).when(mockTriggercallback).isHandwritingIconShowing();
+        assertTrue(mDwServiceCallback.isHoverIconShowing());
     }
 
     @Test
@@ -275,8 +305,14 @@ public class DirectWritingServiceCallbackTest {
 
         EditorInfo editorInfo = new EditorInfo();
         int index = SAMPLE_INPUT.length();
-        ImeUtils.computeEditorInfo(TextInputType.TEXT, WebTextInputFlags.NONE,
-                WebTextInputMode.DEFAULT, TextInputAction.SEARCH, index, index, SAMPLE_INPUT,
+        ImeUtils.computeEditorInfo(
+                TextInputType.TEXT,
+                WebTextInputFlags.NONE,
+                WebTextInputMode.DEFAULT,
+                TextInputAction.SEARCH,
+                index,
+                index,
+                SAMPLE_INPUT,
                 editorInfo);
         mDwServiceCallback.updateEditorInfo(editorInfo);
         assertEquals(editorInfo.privateImeOptions, mDwServiceCallback.getPrivateImeOptions());
@@ -318,13 +354,19 @@ public class DirectWritingServiceCallbackTest {
         mDwServiceCallback.onTextViewExtraCommand(
                 DirectWritingServiceCallback.GESTURE_ACTION_RECOGNITION_INFO, bundle);
         shadowOf(Looper.getMainLooper()).idle();
-        verify(mImeCallback).handleStylusWritingGestureAction(argThat(gestureData -> {
-            assertEquals(StylusWritingGestureAction.DELETE_TEXT, gestureData.action);
-            // assert that start-x and end-x are clamped to Edit bounds.
-            assertEquals(editBounds.left, gestureData.startPoint.x);
-            assertEquals(editBounds.right, gestureData.endPoint.x);
-            return true;
-        }));
+        verify(mImeCallback)
+                .handleStylusWritingGestureAction(
+                        anyInt(),
+                        argThat(
+                                gestureData -> {
+                                    assertEquals(
+                                            StylusWritingGestureAction.DELETE_TEXT,
+                                            gestureData.action);
+                                    // assert that start-x and end-x are clamped to Edit bounds.
+                                    assertEquals(editBounds.left, gestureData.startRect.x);
+                                    assertEquals(editBounds.right, gestureData.endRect.x);
+                                    return true;
+                                }));
     }
 
     @Test
@@ -375,6 +417,36 @@ public class DirectWritingServiceCallbackTest {
 
     @Test
     @Feature({"Stylus Handwriting"})
+    public void testStylusGestureMessage_splitOrMerge() {
+        // Stylus gesture split or merge is handled only after Ime callback is set.
+        Bundle bundle = getGestureBundle(DirectWritingServiceCallback.GESTURE_I_TYPE_FUNCTIONAL);
+        sendGestureAndVerifyGestureNotHandled(bundle);
+
+        setImeCallbackAndVerifyMojoGestureData(
+                bundle, StylusWritingGestureAction.SPLIT_OR_MERGE, null);
+    }
+
+    @Test
+    @Feature({"Stylus Handwriting"})
+    public void testStylusGestureMessage_unSupportedWithFallbackText() {
+        // Invalid gesture commits fallback text.
+        Bundle bundle = new Bundle();
+        bundle.putString(DirectWritingServiceCallback.GESTURE_BUNDLE_KEY_GESTURE_TYPE, "invalid");
+        bundle.putString(
+                DirectWritingServiceCallback.GESTURE_BUNDLE_KEY_TEXT_ALTERNATIVE, FALLBACK_TEXT);
+        sendGestureAndVerifyGestureNotHandled(bundle);
+
+        mDwServiceCallback.updateEditableBounds(new Rect(0, 0, 400, 400), new Point(50, 50));
+        mDwServiceCallback.setImeCallback(mImeCallback);
+        mDwServiceCallback.onTextViewExtraCommand(
+                DirectWritingServiceCallback.GESTURE_ACTION_RECOGNITION_INFO, bundle);
+        shadowOf(Looper.getMainLooper()).idle();
+        verify(mImeCallback).sendCompositionToNative(FALLBACK_TEXT, FALLBACK_TEXT.length(), true);
+        verify(mImeCallback, never()).handleStylusWritingGestureAction(anyInt(), any());
+    }
+
+    @Test
+    @Feature({"Stylus Handwriting"})
     public void testStylusGestureMessage_UTypeRemoveSpaces() {
         // Stylus gesture remove spaces is handled only after Ime callback is set.
         Bundle bundle =
@@ -399,7 +471,7 @@ public class DirectWritingServiceCallbackTest {
 
     @Test
     @Feature({"Stylus Handwriting"})
-    public void testStylusGestureMessage_invalidGestureType() {
+    public void testStylusGestureMessage_invalidGestureTypeWithoutFallbackText() {
         mDwServiceCallback.setImeCallback(mImeCallback);
         // Gesture type other than the expected ones are not handled.
         Bundle bundle = spy(new Bundle());
@@ -407,6 +479,7 @@ public class DirectWritingServiceCallbackTest {
                 DirectWritingServiceCallback.GESTURE_BUNDLE_KEY_GESTURE_TYPE, "invalid_gesture");
         // verify that gesture bundle is accessed but gesture is not handled for invalid gesture.
         sendGestureAndVerifyGestureNotHandled(bundle);
+        verify(mImeCallback, never()).sendCompositionToNative(any(), anyInt(), anyBoolean());
         verify(bundle).getString(DirectWritingServiceCallback.GESTURE_BUNDLE_KEY_GESTURE_TYPE, "");
     }
 
@@ -415,12 +488,14 @@ public class DirectWritingServiceCallbackTest {
     public void testOnTextViewExtraCommand_invalidAction() {
         mDwServiceCallback.setImeCallback(mImeCallback);
         // Text view extra command only handles gesture recognition. Other actions are ignored.
-        Bundle bundle = spy(
-                getGestureBundle(DirectWritingServiceCallback.GESTURE_TYPE_ARCH_TYPE_REMOVE_SPACE));
+        Bundle bundle =
+                spy(
+                        getGestureBundle(
+                                DirectWritingServiceCallback.GESTURE_TYPE_ARCH_TYPE_REMOVE_SPACE));
         mDwServiceCallback.onTextViewExtraCommand("invalid", bundle);
         shadowOf(Looper.getMainLooper()).idle();
         // verify that Gesture bundle is never accessed, and not handled for invalid action.
         verify(bundle, never()).getString(any(), any());
-        verify(mImeCallback, never()).handleStylusWritingGestureAction(any());
+        verify(mImeCallback, never()).handleStylusWritingGestureAction(anyInt(), any());
     }
 }

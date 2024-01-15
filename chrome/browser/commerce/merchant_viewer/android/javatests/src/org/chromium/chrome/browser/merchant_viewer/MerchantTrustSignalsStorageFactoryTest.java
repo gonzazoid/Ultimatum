@@ -6,7 +6,6 @@ package org.chromium.chrome.browser.merchant_viewer;
 
 import static org.mockito.Mockito.doReturn;
 
-import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Rule;
@@ -25,32 +24,24 @@ import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.profiles.ProfileJni;
 import org.chromium.chrome.test.util.browser.Features;
 
-/**
- * Tests for {@link MerchantTrustSignalsStorageFactory}.
- */
+/** Tests for {@link MerchantTrustSignalsStorageFactory}. */
 @RunWith(BaseRobolectricTestRunner.class)
 @Config(manifest = Config.NONE)
 @LooperMode(LooperMode.Mode.LEGACY)
 public class MerchantTrustSignalsStorageFactoryTest {
-    @Rule
-    public TestRule mProcessor = new Features.JUnitProcessor();
+    @Rule public TestRule mProcessor = new Features.JUnitProcessor();
 
-    @Rule
-    public JniMocker mMocker = new JniMocker();
+    @Rule public JniMocker mMocker = new JniMocker();
 
-    @Mock
-    private Profile mMockProfile1;
+    @Mock private Profile mMockProfile1;
 
-    @Mock
-    private Profile mMockProfile2;
+    @Mock private Profile mMockProfile2;
 
-    @Mock
-    private MerchantTrustSignalsEventStorage.Natives mMockStorage;
+    @Mock private MerchantTrustSignalsEventStorage.Natives mMockStorage;
 
     private ObservableSupplierImpl<Profile> mProfileSupplier;
 
-    @Mock
-    public Profile.Natives mMockProfileNatives;
+    @Mock public Profile.Natives mMockProfileNatives;
 
     @Before
     public void setUp() {
@@ -63,11 +54,6 @@ public class MerchantTrustSignalsStorageFactoryTest {
         MerchantTrustSignalsEventStorage.setSkipNativeAssertionsForTesting(true);
     }
 
-    @After
-    public void cleanup() {
-        MerchantTrustSignalsStorageFactory.sProfileToStorage.clear();
-    }
-
     @Test
     public void testGetForLastUsedProfile() {
         mProfileSupplier = new ObservableSupplierImpl<>();
@@ -75,8 +61,8 @@ public class MerchantTrustSignalsStorageFactoryTest {
 
         MerchantTrustSignalsStorageFactory factory =
                 new MerchantTrustSignalsStorageFactory(mProfileSupplier);
-
         Assert.assertNotNull(factory.getForLastUsedProfile());
+        factory.destroy();
     }
 
     @Test
@@ -88,6 +74,7 @@ public class MerchantTrustSignalsStorageFactoryTest {
                 new MerchantTrustSignalsStorageFactory(mProfileSupplier);
 
         Assert.assertNull(factory.getForLastUsedProfile());
+        factory.destroy();
     }
 
     @Test
@@ -100,6 +87,7 @@ public class MerchantTrustSignalsStorageFactoryTest {
                 new MerchantTrustSignalsStorageFactory(mProfileSupplier);
 
         Assert.assertNull(factory.getForLastUsedProfile());
+        factory.destroy();
     }
 
     @Test
@@ -118,6 +106,7 @@ public class MerchantTrustSignalsStorageFactoryTest {
         Assert.assertNotNull(db2);
 
         Assert.assertNotEquals(db1, db2);
+        factory.destroy();
     }
 
     @Test
@@ -128,7 +117,7 @@ public class MerchantTrustSignalsStorageFactoryTest {
 
         MerchantTrustSignalsStorageFactory factory =
                 new MerchantTrustSignalsStorageFactory(mProfileSupplier);
-
+        factory.getForLastUsedProfile();
         Assert.assertEquals(1, MerchantTrustSignalsStorageFactory.sProfileToStorage.size());
         factory.destroy();
         Assert.assertEquals(0, MerchantTrustSignalsStorageFactory.sProfileToStorage.size());

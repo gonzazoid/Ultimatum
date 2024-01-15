@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/json/json_reader.h"
 #include "base/json/json_writer.h"
 #include "base/values.h"
@@ -24,9 +24,9 @@ void NativeMessagingPipe::Start(
   channel_->Start(this);
 }
 
-void NativeMessagingPipe::OnMessage(std::unique_ptr<base::Value> message) {
+void NativeMessagingPipe::OnMessage(const base::Value& message) {
   std::string message_json;
-  base::JSONWriter::Write(*message, &message_json);
+  base::JSONWriter::Write(message, &message_json);
   host_->OnMessage(message_json);
 }
 
@@ -37,8 +37,8 @@ void NativeMessagingPipe::OnDisconnect() {
 
 void NativeMessagingPipe::PostMessageFromNativeHost(
     const std::string& message) {
-  std::unique_ptr<base::Value> json = base::JSONReader::ReadDeprecated(message);
-  channel_->SendMessage(std::move(json));
+  std::optional<base::Value> json = base::JSONReader::Read(message);
+  channel_->SendMessage(json);
 }
 
 void NativeMessagingPipe::CloseChannel(const std::string& error_message) {

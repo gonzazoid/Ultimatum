@@ -23,6 +23,7 @@
 #include "third_party/blink/renderer/core/animation/document_timeline.h"
 #include "third_party/blink/renderer/core/animation/keyframe_effect_model.h"
 #include "third_party/blink/renderer/core/animation/timing.h"
+#include "third_party/blink/renderer/core/css/properties/longhands.h"
 #include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/dom/node_computed_style.h"
 #include "third_party/blink/renderer/core/execution_context/security_context.h"
@@ -45,7 +46,7 @@ class KeyframeEffectTest : public PageTestBase {
  protected:
   void SetUp() override {
     PageTestBase::SetUp(gfx::Size());
-    element = GetDocument().CreateElementForBinding("foo");
+    element = GetDocument().CreateElementForBinding(AtomicString("foo"));
     GetDocument().documentElement()->AppendChild(element.Get());
   }
 
@@ -330,42 +331,6 @@ TEST_F(AnimationKeyframeEffectV8Test, SpecifiedDurationGetter) {
   EXPECT_FALSE(duration2->IsUnrestrictedDouble());
   EXPECT_TRUE(duration2->IsString());
   EXPECT_EQ("auto", duration2->GetAsString());
-}
-
-TEST_F(AnimationKeyframeEffectV8Test, SetKeyframesAdditiveCompositeOperation) {
-  // AnimationWorklet also needs to be disabled since it depends on
-  // WebAnimationsAPI and prevents us from turning it off if enabled.
-  ScopedAnimationWorkletForTest no_animation_worklet(false);
-  ScopedWebAnimationsAPIForTest no_web_animations(false);
-  V8TestingScope scope;
-  ScriptState* script_state = scope.GetScriptState();
-  ScriptValue js_keyframes = ScriptValue::CreateNull(scope.GetIsolate());
-  v8::Local<v8::Object> timing_input = v8::Object::New(scope.GetIsolate());
-  DummyExceptionStateForTesting exception_state;
-  KeyframeEffectOptions* timing_input_dictionary =
-      NativeValueTraits<KeyframeEffectOptions>::NativeValue(
-          scope.GetIsolate(), timing_input, exception_state);
-  ASSERT_FALSE(exception_state.HadException());
-
-  // Since there are no CSS-targeting keyframes, we can create a KeyframeEffect
-  // with composite = 'add'.
-  timing_input_dictionary->setComposite("add");
-  KeyframeEffect* effect = CreateAnimationFromOption(
-      script_state, element.Get(), js_keyframes, timing_input_dictionary);
-  EXPECT_EQ(effect->Model()->Composite(), EffectModel::kCompositeAdd);
-
-  // But if we then setKeyframes with CSS-targeting keyframes, the composite
-  // should fallback to 'replace'.
-  HeapVector<ScriptValue> blink_keyframes = {
-      V8ObjectBuilder(script_state).AddString("width", "10px").GetScriptValue(),
-      V8ObjectBuilder(script_state).AddString("width", "0px").GetScriptValue()};
-  ScriptValue new_js_keyframes(
-      scope.GetIsolate(),
-      ToV8Traits<IDLSequence<IDLObject>>::ToV8(script_state, blink_keyframes)
-          .ToLocalChecked());
-  effect->setKeyframes(script_state, new_js_keyframes, exception_state);
-  ASSERT_FALSE(exception_state.HadException());
-  EXPECT_EQ(effect->Model()->Composite(), EffectModel::kCompositeReplace);
 }
 
 TEST_F(KeyframeEffectTest, TimeToEffectChange) {

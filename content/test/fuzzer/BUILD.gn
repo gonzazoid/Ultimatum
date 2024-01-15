@@ -8,6 +8,7 @@ import("//build/config/chromeos/ui_mode.gni")
 import("//mojo/public/tools/bindings/mojom.gni")
 import("//mojo/public/tools/fuzzers/mojolpm.gni")
 import("//testing/libfuzzer/fuzzer_test.gni")
+import("//third_party/libprotobuf-mutator/fuzzable_proto_library.gni")
 import("//third_party/protobuf/proto_library.gni")
 
 # Empty group for package discovery.
@@ -28,8 +29,19 @@ source_set("fuzzer_support") {
     "//gin",
     "//tools/v8_context_snapshot",
   ]
-  configs += [ "//tools/v8_context_snapshot:use_v8_context_snapshot" ]
+  deps = [ "//tools/v8_context_snapshot:buildflags" ]
   testonly = true
+}
+
+fuzzer_test("ad_auction_headers_util_fuzzer") {
+  sources = [ "ad_auction_headers_util_fuzzer.cc" ]
+  deps = [
+    ":fuzzer_support",
+    "//content/browser:browser",
+    "//content/browser:for_content_tests",
+    "//content/public/browser:browser_sources",
+  ]
+  seed_corpus = "//content/test/data/fuzzer_corpus/ad_auction_headers_data/"
 }
 
 fuzzer_test("color_parser_fuzzer") {
@@ -207,11 +219,11 @@ mojolpm_fuzzer_test("audio_context_manager_mojolpm_fuzzer") {
 
 fuzzer_test("speech_audio_encoder_fuzzer") {
   sources = [
-    "../../browser/speech/audio_buffer.cc",
-    "../../browser/speech/audio_buffer.h",
-    "../../browser/speech/audio_encoder.cc",
-    "../../browser/speech/audio_encoder.h",
     "../../browser/speech/audio_encoder_fuzzer.cc",
+    "//components/speech/audio_buffer.cc",
+    "//components/speech/audio_buffer.h",
+    "//components/speech/audio_encoder.cc",
+    "//components/speech/audio_encoder.h",
     "//content/common/content_export.h",
   ]
 
@@ -219,31 +231,6 @@ fuzzer_test("speech_audio_encoder_fuzzer") {
     "//base",
     "//third_party/flac",
   ]
-}
-
-fuzzer_test("attribution_simulator_fuzzer") {
-  sources = [ "attribution_simulator_fuzzer.cc" ]
-  deps = [
-    "//content/test:test_support",
-    "//testing/libfuzzer/proto:json_proto",
-    "//testing/libfuzzer/proto:json_proto_converter",
-    "//third_party/libprotobuf-mutator",
-  ]
-  seed_corpus = "//content/test/data/fuzzer_corpus/attribution_simulator/"
-}
-
-fuzzer_test("attribution_source_fuzzer") {
-  sources = [ "attribution_source_fuzzer.cc" ]
-  deps = [
-    "//content/browser",
-    "//content/public/browser:browser_sources",
-    "//content/test:test_support",
-    "//testing/libfuzzer/proto:json_proto",
-    "//testing/libfuzzer/proto:json_proto_converter",
-    "//third_party/libprotobuf-mutator",
-  ]
-  seed_corpus =
-      "//testing/libfuzzer/fuzzers/attribution_source_registration_corpus/"
 }
 
 fuzzer_test("browser_accessibility_fuzzer") {
@@ -334,6 +321,22 @@ fuzzer_test("first_party_set_parser_json_fuzzer") {
   ]
 }
 
+if (use_fuzzing_engine_with_lpm) {
+  fuzzer_test("first_party_set_parser_value_fuzzer") {
+    sources = [ "../../browser/first_party_sets/test/first_party_set_parser_value_fuzzer.cc" ]
+    deps = [
+      ":first_party_set_parser_fuzzer_support",
+      ":related_website_sets_proto",
+      "//third_party/libprotobuf-mutator",
+    ]
+  }
+
+  fuzzable_proto_library("related_website_sets_proto") {
+    sources =
+        [ "../../browser/first_party_sets/test/related_website_sets.proto" ]
+  }
+}
+
 mojolpm_fuzzer_test("media_stream_dispatcher_host_mojolpm_fuzzer") {
   sources = [ "media_stream_dispatcher_host_mojolpm_fuzzer.cc" ]
 
@@ -350,7 +353,7 @@ mojolpm_fuzzer_test("media_stream_dispatcher_host_mojolpm_fuzzer") {
 }
 
 # Fuzzer only supports linux. As we use a `V4L2CaptureDevice`, which is only
-# usable on linux through `VideoCaptureDeviceFactoryLinux`.
+# usable on linux through `VideoCaptureDeviceFactoryV4L2`.
 if (is_linux || is_chromeos_lacros) {
   mojolpm_fuzzer_test("video_capture_host_mojolpm_fuzzer") {
     sources = [ "video_capture_host_mojolpm_fuzzer.cc" ]

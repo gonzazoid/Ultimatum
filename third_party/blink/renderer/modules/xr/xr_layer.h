@@ -11,14 +11,14 @@ namespace blink {
 
 class XRSession;
 
-class XRLayer : public EventTargetWithInlineData {
+class XRLayer : public EventTarget {
   DEFINE_WRAPPERTYPEINFO();
 
  public:
   explicit XRLayer(XRSession*);
   ~XRLayer() override = default;
 
-  XRSession* session() const { return session_; }
+  XRSession* session() const { return session_.Get(); }
 
   // EventTarget overrides.
   ExecutionContext* GetExecutionContext() const override;

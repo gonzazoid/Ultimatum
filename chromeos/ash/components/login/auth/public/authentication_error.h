@@ -6,8 +6,9 @@
 #define CHROMEOS_ASH_COMPONENTS_LOGIN_AUTH_PUBLIC_AUTHENTICATION_ERROR_H_
 
 #include "base/component_export.h"
-#include "chromeos/ash/components/dbus/cryptohome/UserDataAuth.pb.h"
+#include "chromeos/ash/components/cryptohome/error_types.h"
 #include "chromeos/ash/components/login/auth/public/auth_failure.h"
+#include "chromeos/ash/components/login/auth/public/recovery_types.h"
 
 namespace ash {
 
@@ -22,31 +23,38 @@ class COMPONENT_EXPORT(CHROMEOS_ASH_COMPONENTS_LOGIN_AUTH_PUBLIC)
     // The error represents some erroneous state detected by the chrome.
     kChrome,
   };
-  explicit AuthenticationError(
-      user_data_auth::CryptohomeErrorCode cryptohome_code);
-  explicit AuthenticationError(AuthFailure::FailureReason auth_failure);
+  explicit AuthenticationError(::cryptohome::ErrorWrapper cryptohome_code);
+  explicit AuthenticationError(AuthFailure::FailureReason auth_failure_reason);
+  explicit AuthenticationError(AuthFailure auth_failure);
 
   ~AuthenticationError();
 
   Origin get_origin() const { return origin_; }
 
   AuthFailure::FailureReason get_resolved_failure() const {
-    return failure_reason_;
+    return auth_failure_.reason();
   }
 
-  void ResolveToFailure(AuthFailure::FailureReason auth_failure);
+  CryptohomeRecoveryServerStatusCode get_cryptohome_recovery_server_error()
+      const {
+    return auth_failure_.cryptohome_recovery_server_error();
+  }
 
-  user_data_auth::CryptohomeErrorCode get_cryptohome_code() const {
+  void ResolveToFailure(AuthFailure::FailureReason auth_failure_reason);
+
+  ::cryptohome::ErrorWrapper get_cryptohome_code() const {
     return cryptohome_code_;
   }
+
+  std::string ToDebugString() const;
 
  private:
   Origin origin_;
   // Cryptohome-specific fields:
-  user_data_auth::CryptohomeErrorCode cryptohome_code_;
+  ::cryptohome::ErrorWrapper cryptohome_code_;
 
   // Mapping of the `error_code` to auth flow failure reason.
-  AuthFailure::FailureReason failure_reason_ = AuthFailure::NONE;
+  AuthFailure auth_failure_{AuthFailure::NONE};
 };
 
 }  // namespace ash

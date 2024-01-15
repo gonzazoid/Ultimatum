@@ -6,13 +6,12 @@
 
 #include <stddef.h>
 
-#include <memory>
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/files/file.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "chrome/browser/ash/file_system_provider/icon_set.h"
 #include "chrome/browser/ash/file_system_provider/operations/test_util.h"
 #include "chrome/browser/ash/file_system_provider/provided_file_system_interface.h"
@@ -23,9 +22,7 @@
 #include "storage/browser/file_system/async_file_util.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-namespace ash {
-namespace file_system_provider {
-namespace operations {
+namespace ash::file_system_provider::operations {
 namespace {
 
 const char kExtensionId[] = "mbflcebpggnecokmikipoihdbecnjfoj";
@@ -38,8 +35,8 @@ const base::FilePath::CharType kDirectoryPath[] =
 
 class FileSystemProviderOperationsCreateDirectoryTest : public testing::Test {
  protected:
-  FileSystemProviderOperationsCreateDirectoryTest() {}
-  ~FileSystemProviderOperationsCreateDirectoryTest() override {}
+  FileSystemProviderOperationsCreateDirectoryTest() = default;
+  ~FileSystemProviderOperationsCreateDirectoryTest() override = default;
 
   void SetUp() override {
     MountOptions mount_options(kFileSystemId, "" /* display_name */);
@@ -59,12 +56,9 @@ TEST_F(FileSystemProviderOperationsCreateDirectoryTest, Execute) {
   util::StatusCallbackLog callback_log;
 
   CreateDirectory create_directory(
-      nullptr, file_system_info_, base::FilePath(kDirectoryPath),
+      &dispatcher, file_system_info_, base::FilePath(kDirectoryPath),
       true /* recursive */,
       base::BindOnce(&util::LogStatusCallback, &callback_log));
-  create_directory.SetDispatchEventImplForTesting(
-      base::BindRepeating(&util::LoggingDispatchEventImpl::OnDispatchEventImpl,
-                          base::Unretained(&dispatcher)));
 
   EXPECT_TRUE(create_directory.Execute(kRequestId));
 
@@ -79,13 +73,13 @@ TEST_F(FileSystemProviderOperationsCreateDirectoryTest, Execute) {
   const base::Value* options_as_value = &event_args[0];
   ASSERT_TRUE(options_as_value->is_dict());
 
-  CreateDirectoryRequestedOptions options;
-  ASSERT_TRUE(
-      CreateDirectoryRequestedOptions::Populate(*options_as_value, &options));
-  EXPECT_EQ(kFileSystemId, options.file_system_id);
-  EXPECT_EQ(kRequestId, options.request_id);
-  EXPECT_EQ(kDirectoryPath, options.directory_path);
-  EXPECT_TRUE(options.recursive);
+  auto options =
+      CreateDirectoryRequestedOptions::FromValue(options_as_value->GetDict());
+  ASSERT_TRUE(options);
+  EXPECT_EQ(kFileSystemId, options->file_system_id);
+  EXPECT_EQ(kRequestId, options->request_id);
+  EXPECT_EQ(kDirectoryPath, options->directory_path);
+  EXPECT_TRUE(options->recursive);
 }
 
 TEST_F(FileSystemProviderOperationsCreateDirectoryTest, Execute_NoListener) {
@@ -93,12 +87,9 @@ TEST_F(FileSystemProviderOperationsCreateDirectoryTest, Execute_NoListener) {
   util::StatusCallbackLog callback_log;
 
   CreateDirectory create_directory(
-      nullptr, file_system_info_, base::FilePath(kDirectoryPath),
+      &dispatcher, file_system_info_, base::FilePath(kDirectoryPath),
       true /* recursive */,
       base::BindOnce(&util::LogStatusCallback, &callback_log));
-  create_directory.SetDispatchEventImplForTesting(
-      base::BindRepeating(&util::LoggingDispatchEventImpl::OnDispatchEventImpl,
-                          base::Unretained(&dispatcher)));
 
   EXPECT_FALSE(create_directory.Execute(kRequestId));
 }
@@ -113,12 +104,9 @@ TEST_F(FileSystemProviderOperationsCreateDirectoryTest, Execute_ReadOnly) {
       true /* watchable */, extensions::SOURCE_FILE, IconSet());
 
   CreateDirectory create_directory(
-      nullptr, read_only_file_system_info, base::FilePath(kDirectoryPath),
+      &dispatcher, read_only_file_system_info, base::FilePath(kDirectoryPath),
       true /* recursive */,
       base::BindOnce(&util::LogStatusCallback, &callback_log));
-  create_directory.SetDispatchEventImplForTesting(
-      base::BindRepeating(&util::LoggingDispatchEventImpl::OnDispatchEventImpl,
-                          base::Unretained(&dispatcher)));
 
   EXPECT_FALSE(create_directory.Execute(kRequestId));
 }
@@ -128,17 +116,13 @@ TEST_F(FileSystemProviderOperationsCreateDirectoryTest, OnSuccess) {
   util::StatusCallbackLog callback_log;
 
   CreateDirectory create_directory(
-      nullptr, file_system_info_, base::FilePath(kDirectoryPath),
+      &dispatcher, file_system_info_, base::FilePath(kDirectoryPath),
       true /* recursive */,
       base::BindOnce(&util::LogStatusCallback, &callback_log));
-  create_directory.SetDispatchEventImplForTesting(
-      base::BindRepeating(&util::LoggingDispatchEventImpl::OnDispatchEventImpl,
-                          base::Unretained(&dispatcher)));
 
   EXPECT_TRUE(create_directory.Execute(kRequestId));
 
-  create_directory.OnSuccess(kRequestId, std::make_unique<RequestValue>(),
-                             false /* has_more */);
+  create_directory.OnSuccess(kRequestId, RequestValue(), false /* has_more */);
   ASSERT_EQ(1u, callback_log.size());
   EXPECT_EQ(base::File::FILE_OK, callback_log[0]);
 }
@@ -148,21 +132,16 @@ TEST_F(FileSystemProviderOperationsCreateDirectoryTest, OnError) {
   util::StatusCallbackLog callback_log;
 
   CreateDirectory create_directory(
-      nullptr, file_system_info_, base::FilePath(kDirectoryPath),
+      &dispatcher, file_system_info_, base::FilePath(kDirectoryPath),
       true /* recursive */,
       base::BindOnce(&util::LogStatusCallback, &callback_log));
-  create_directory.SetDispatchEventImplForTesting(
-      base::BindRepeating(&util::LoggingDispatchEventImpl::OnDispatchEventImpl,
-                          base::Unretained(&dispatcher)));
 
   EXPECT_TRUE(create_directory.Execute(kRequestId));
 
-  create_directory.OnError(kRequestId, std::make_unique<RequestValue>(),
+  create_directory.OnError(kRequestId, RequestValue(),
                            base::File::FILE_ERROR_TOO_MANY_OPENED);
   ASSERT_EQ(1u, callback_log.size());
   EXPECT_EQ(base::File::FILE_ERROR_TOO_MANY_OPENED, callback_log[0]);
 }
 
-}  // namespace operations
-}  // namespace file_system_provider
-}  // namespace ash
+}  // namespace ash::file_system_provider::operations

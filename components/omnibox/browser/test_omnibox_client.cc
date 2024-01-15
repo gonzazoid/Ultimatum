@@ -8,7 +8,8 @@
 #include <utility>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "build/chromeos_buildflags.h"
 #include "components/omnibox/browser/autocomplete_controller.h"
 #include "components/omnibox/browser/autocomplete_scheme_classifier.h"
 #include "components/omnibox/browser/mock_autocomplete_provider_client.h"
@@ -23,14 +24,15 @@
 
 TestOmniboxClient::TestOmniboxClient()
     : session_id_(SessionID::FromSerializedValue(1)),
-      bookmark_model_(nullptr),
       autocomplete_classifier_(
           std::make_unique<AutocompleteController>(
               CreateAutocompleteProviderClient(),
               AutocompleteClassifier::DefaultOmniboxProviders()),
-          std::make_unique<TestSchemeClassifier>()) {}
+          std::make_unique<TestSchemeClassifier>()),
+      last_log_disposition_(WindowOpenDisposition::UNKNOWN) {}
 
 TestOmniboxClient::~TestOmniboxClient() {
+  template_url_service_ = nullptr;
   autocomplete_classifier_.Shutdown();
 }
 
@@ -41,11 +43,17 @@ TestOmniboxClient::CreateAutocompleteProviderClient() {
       .WillRepeatedly(testing::Return(std::vector<std::u16string>()));
   EXPECT_CALL(*provider_client, GetSchemeClassifier())
       .WillRepeatedly(testing::ReturnRef(scheme_classifier_));
+  EXPECT_CALL(*provider_client, GetApplicationLocale())
+      .WillRepeatedly(testing::Return("en-US"));
 
   auto template_url_service = std::make_unique<TemplateURLService>(
       nullptr /* PrefService */, std::make_unique<SearchTermsData>(),
       nullptr /* KeywordWebDataService */,
-      std::unique_ptr<TemplateURLServiceClient>(), base::RepeatingClosure());
+      std::unique_ptr<TemplateURLServiceClient>(), base::RepeatingClosure()
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+      , false /* for_lacros_main_profile */
+#endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
+  );
 
   // Save a reference to the created TemplateURLService for test use.
   template_url_service_ = template_url_service.get();
@@ -59,17 +67,13 @@ bool TestOmniboxClient::IsPasteAndGoEnabled() const {
   return true;
 }
 
-const SessionID& TestOmniboxClient::GetSessionID() const {
+SessionID TestOmniboxClient::GetSessionID() const {
   return session_id_;
 }
 
-void TestOmniboxClient::SetBookmarkModel(
-    bookmarks::BookmarkModel* bookmark_model) {
-  bookmark_model_ = bookmark_model;
-}
-
-bookmarks::BookmarkModel* TestOmniboxClient::GetBookmarkModel() {
-  return bookmark_model_;
+AutocompleteControllerEmitter*
+TestOmniboxClient::GetAutocompleteControllerEmitter() {
+  return nullptr;
 }
 
 TemplateURLService* TestOmniboxClient::GetTemplateURLService() {
@@ -106,13 +110,10 @@ gfx::Image TestOmniboxClient::GetSizedIcon(
   return gfx::Image(gfx::ImageSkia::CreateFrom1xBitmap(bitmap));
 }
 
-gfx::Image TestOmniboxClient::GetFaviconForPageUrl(
-    const GURL& page_url,
-    FaviconFetchedCallback on_favicon_fetched) {
-  page_url_for_last_favicon_request_ = page_url;
-  return gfx::Image();
+void TestOmniboxClient::OnURLOpenedFromOmnibox(OmniboxLog* log) {
+  last_log_disposition_ = log->disposition;
 }
 
-GURL TestOmniboxClient::GetPageUrlForLastFaviconRequest() const {
-  return page_url_for_last_favicon_request_;
+base::WeakPtr<OmniboxClient> TestOmniboxClient::AsWeakPtr() {
+  return weak_factory_.GetWeakPtr();
 }

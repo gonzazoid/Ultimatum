@@ -33,9 +33,16 @@ BOOL SetStartupParametersForSpotlightAction(
 // Creates an ActionsSpotlightManager.
 + (ActionsSpotlightManager*)actionsSpotlightManager;
 
+- (instancetype)
+    initWithSpotlightInterface:(SpotlightInterface*)spotlightInterface
+         searchableItemFactory:(SearchableItemFactory*)searchableItemFactory;
+
+- (instancetype)init NS_UNAVAILABLE;
+
 // Updates the index with the Spotlight actions if the EnableSpotlightActions
 // experimental flag is set. Otherwise the index is only cleared.
-- (void)indexActions;
+- (void)indexActionsWithIsGoogleDefaultSearchEngine:
+    (BOOL)isGoogleDefaultSearchEngine;
 
 @end
 

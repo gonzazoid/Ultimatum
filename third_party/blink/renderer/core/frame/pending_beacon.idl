@@ -4,9 +4,9 @@
 
 // https://github.com/WICG/pending-beacon/blob/main/README.md
 
-[RuntimeEnabled = PendingBeaconAPI] enum BeaconMethod { "POST", "GET" };
+enum BeaconMethod { "POST", "GET" };
 
-[RuntimeEnabled = PendingBeaconAPI] dictionary PendingBeaconOptions {
+dictionary PendingBeaconOptions {
   long backgroundTimeout = -1;
   long timeout = -1;
 };
@@ -15,8 +15,7 @@
 [
   RuntimeEnabled = PendingBeaconAPI,
   Exposed = Window,
-  SecureContext,
-  ImmutablePrototype
+  SecureContext
 ] interface PendingBeacon {
   [Measure] readonly attribute USVString url;
   [Measure] readonly attribute BeaconMethod method;
@@ -35,9 +34,9 @@
   SecureContext
 ] interface PendingGetBeacon : PendingBeacon {
   [Measure, RaisesException, CallWith = ExecutionContext] constructor(
-      USVString url, optional PendingBeaconOptions options);
+      USVString? url, optional PendingBeaconOptions options);
 
-  [Measure, RaisesException] void setURL(USVString url);
+  [Measure, RaisesException] void setURL(USVString? url);
 };
 
 // Interface for the PendingPostBeacon API.
@@ -47,7 +46,7 @@
   SecureContext
 ] interface PendingPostBeacon : PendingBeacon {
   [Measure, RaisesException, CallWith = ExecutionContext] constructor(
-      USVString url, optional PendingBeaconOptions options);
+      USVString? url, optional PendingBeaconOptions options);
 
   [Measure, RaisesException] void setData(
       (ReadableStream or XMLHttpRequestBodyInit) data);

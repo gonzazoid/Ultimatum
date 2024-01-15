@@ -3,12 +3,12 @@
 // found in the LICENSE file.
 
 // Include test fixture.
-GEN_INCLUDE(['../testing/chromevox_next_e2e_test_base.js']);
+GEN_INCLUDE(['../testing/chromevox_e2e_test_base.js']);
 
 /**
  * Test fixture for LocaleOutputHelper.
  */
-ChromeVoxLocaleOutputHelperTest = class extends ChromeVoxNextE2ETest {
+ChromeVoxLocaleOutputHelperTest = class extends ChromeVoxE2ETest {
   /** @override */
   testGenCppIncludes() {
     super.testGenCppIncludes();
@@ -33,9 +33,13 @@ ChromeVoxLocaleOutputHelperTest = class extends ChromeVoxNextE2ETest {
   async setUpDeferred() {
     await super.setUpDeferred();
 
-    // Alphabetical based on file path.
-    await importModule(
-        'LocaleOutputHelper', '/chromevox/common/locale_output_helper.js');
+    await Promise.all([
+      // Alphabetical based on file path.
+      importModule(
+          'LocaleOutputHelper', '/chromevox/common/locale_output_helper.js'),
+      importModule('LocalStorage', '/common/local_storage.js'),
+      importModule('SettingsManager', '/chromevox/common/settings_manager.js'),
+    ]);
 
     // Mock this api to return a predefined set of voices.
     chrome.tts.getVoices = function(callback) {
@@ -194,7 +198,7 @@ AX_TEST_F(
     async function() {
       const mockFeedback = this.createMockFeedback();
       await this.runWithLoadedTree(this.multipleLanguagesLabeledDoc);
-      localStorage['languageSwitching'] = 'true';
+      SettingsManager.set('languageSwitching', true);
       this.setAvailableVoices();
       mockFeedback.call(doCmd('jumpToTop'))
           .expectSpeechWithLocale('es', 'español: Hola.');
@@ -212,7 +216,7 @@ AX_TEST_F(
     async function() {
       const mockFeedback = this.createMockFeedback();
       await this.runWithLoadedTree(this.nestedLanguagesLabeledDoc);
-      localStorage['languageSwitching'] = 'true';
+      SettingsManager.set('languageSwitching', true);
       this.setAvailableVoices();
       mockFeedback.call(doCmd('jumpToTop'))
           .expectSpeechWithLocale(
@@ -239,7 +243,7 @@ AX_TEST_F(
     async function() {
       const mockFeedback = this.createMockFeedback();
       const root = await this.runWithLoadedTree(this.buttonAndLinkDoc);
-      localStorage['languageSwitching'] = 'true';
+      SettingsManager.set('languageSwitching', true);
       this.setAvailableVoices();
       mockFeedback
           .call(doCmd('jumpToTop'))
@@ -262,7 +266,7 @@ AX_TEST_F(
       const mockFeedback = this.createMockFeedback();
       const root =
           await this.runWithLoadedTree(this.japaneseAndEnglishUnlabeledDoc);
-      localStorage['languageSwitching'] = 'true';
+      SettingsManager.set('languageSwitching', true);
       this.setAvailableVoices();
       mockFeedback
           .call(doCmd('jumpToTop'))
@@ -285,7 +289,7 @@ AX_TEST_F(
       const mockFeedback = this.createMockFeedback();
       const root =
           await this.runWithLoadedTree(this.englishAndKoreanUnlabeledDoc);
-      localStorage['languageSwitching'] = 'true';
+      SettingsManager.set('languageSwitching', true);
       this.setAvailableVoices();
       mockFeedback.call(doCmd('jumpToTop'))
           .expectSpeechWithLocale(
@@ -301,7 +305,7 @@ AX_TEST_F(
       const mockFeedback = this.createMockFeedback();
       const root =
           await this.runWithLoadedTree(this.englishAndFrenchUnlabeledDoc);
-      localStorage['languageSwitching'] = 'true';
+      SettingsManager.set('languageSwitching', true);
       this.setAvailableVoices();
       mockFeedback.call(doCmd('jumpToTop'))
           .expectSpeechWithLocale(
@@ -319,7 +323,7 @@ AX_TEST_F(
       const mockFeedback = this.createMockFeedback();
       const root =
           await this.runWithLoadedTree(this.japaneseCharacterUnlabeledDoc);
-      localStorage['languageSwitching'] = 'true';
+      SettingsManager.set('languageSwitching', true);
       this.setAvailableVoices();
       mockFeedback.call(doCmd('jumpToTop'))
           .expectSpeechWithLocale('en-us', 'ど');
@@ -332,7 +336,7 @@ AX_TEST_F(
       const mockFeedback = this.createMockFeedback();
       const root =
           await this.runWithLoadedTree(this.japaneseAndChineseUnlabeledDoc);
-      localStorage['languageSwitching'] = 'true';
+      SettingsManager.set('languageSwitching', true);
       this.setAvailableVoices();
       mockFeedback.call(doCmd('jumpToTop'))
           .expectSpeechWithLocale(
@@ -353,7 +357,7 @@ AX_TEST_F(
           天気はいいですね. 右万諭全中結社原済権人点掲年難出面者会追
         </p>
     `);
-      localStorage['languageSwitching'] = 'true';
+      SettingsManager.set('languageSwitching', true);
       this.setAvailableVoices();
       mockFeedback.call(doCmd('jumpToTop'))
           .expectSpeechWithLocale(
@@ -368,7 +372,7 @@ AX_TEST_F(
       const mockFeedback = this.createMockFeedback();
       const root =
           await this.runWithLoadedTree(this.japaneseAndKoreanUnlabeledDoc);
-      localStorage['languageSwitching'] = 'true';
+      SettingsManager.set('languageSwitching', true);
       this.setAvailableVoices();
       // Language detection runs and assigns language of 'ko' to the node.
       mockFeedback.call(doCmd('jumpToTop'))
@@ -384,7 +388,7 @@ AX_TEST_F(
     async function() {
       const mockFeedback = this.createMockFeedback();
       const root = await this.runWithLoadedTree(this.asturianAndJapaneseDoc);
-      localStorage['languageSwitching'] = 'true';
+      SettingsManager.set('languageSwitching', true);
       this.setAvailableVoices();
       mockFeedback.call(doCmd('jumpToTop'))
           .expectSpeechWithLocale('ja', '日本語: ど')
@@ -403,7 +407,7 @@ AX_TEST_F(
       const mockFeedback = this.createMockFeedback();
       const root =
           await this.runWithLoadedTree(this.multipleLanguagesLabeledDoc);
-      localStorage['languageSwitching'] = 'false';
+      SettingsManager.set('languageSwitching', false);
       this.setAvailableVoices();
       // Locale should not be set if the language switching feature is off.
       mockFeedback.call(doCmd('jumpToTop'))
@@ -423,7 +427,7 @@ AX_TEST_F(
       const mockFeedback = this.createMockFeedback();
       const root = await this.runWithLoadedTree(
           this.japaneseAndInvalidLanguagesLabeledDoc);
-      localStorage['languageSwitching'] = 'true';
+      SettingsManager.set('languageSwitching', true);
       this.setAvailableVoices();
       mockFeedback.call(doCmd('jumpToTop'))
           .expectSpeechWithLocale('ja', '日本語: どうぞよろしくお願いします')
@@ -440,7 +444,7 @@ AX_TEST_F(
       const mockFeedback = this.createMockFeedback();
       const root =
           await this.runWithLoadedTree(this.vietnameseAndUrduLabeledDoc);
-      localStorage['languageSwitching'] = 'true';
+      SettingsManager.set('languageSwitching', true);
       this.setAvailableVoices();
       mockFeedback.call(doCmd('jumpToTop'))
           .expectSpeechWithLocale(
@@ -455,7 +459,7 @@ AX_TEST_F(
     'ChromeVoxLocaleOutputHelperTest', 'WordNavigationTest', async function() {
       const mockFeedback = this.createMockFeedback();
       await this.runWithLoadedTree(this.nestedLanguagesLabeledDoc);
-      localStorage['languageSwitching'] = 'true';
+      SettingsManager.set('languageSwitching', true);
       this.setAvailableVoices();
       mockFeedback.call(doCmd('jumpToTop'))
           .expectSpeechWithLocale(
@@ -507,7 +511,7 @@ AX_TEST_F(
     async function() {
       const mockFeedback = this.createMockFeedback();
       await this.runWithLoadedTree(this.nestedLanguagesLabeledDoc);
-      localStorage['languageSwitching'] = 'true';
+      SettingsManager.set('languageSwitching', true);
       this.setAvailableVoices();
       mockFeedback.call(doCmd('jumpToTop'))
           .expectSpeechWithLocale(
@@ -552,7 +556,7 @@ AX_TEST_F(
     async function() {
       const mockFeedback = this.createMockFeedback();
       await this.runWithLoadedTree(this.chineseDoc);
-      localStorage['languageSwitching'] = 'true';
+      SettingsManager.set('languageSwitching', true);
       this.setAvailableVoices();
       mockFeedback.call(doCmd('jumpToTop'))
           .expectSpeechWithLocale('en-us', 'United States')
@@ -569,7 +573,7 @@ AX_TEST_F(
     async function() {
       const mockFeedback = this.createMockFeedback();
       await this.runWithLoadedTree(this.portugueseDoc);
-      localStorage['languageSwitching'] = 'true';
+      SettingsManager.set('languageSwitching', true);
       this.setAvailableVoices();
       mockFeedback.call(doCmd('jumpToTop'))
           .expectSpeechWithLocale('en-us', 'United States')
@@ -594,7 +598,7 @@ AX_TEST_F(
   <p lang="en">Penultimate</p>
   <p lang="en-ca">End</p>
   `);
-      localStorage['languageSwitching'] = 'true';
+      SettingsManager.set('languageSwitching', true);
       this.setAvailableVoices();
       mockFeedback.call(doCmd('jumpToTop'))
           .expectSpeechWithLocale('en', 'Start')

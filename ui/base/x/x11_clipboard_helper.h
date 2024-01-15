@@ -10,8 +10,8 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
 #include "base/component_export.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted_memory.h"
 #include "base/memory/scoped_refptr.h"
@@ -117,14 +117,14 @@ class COMPONENT_EXPORT(UI_BASE_X) XClipboardHelper : public x11::EventObserver {
   const SelectionFormatMap& LookupStorageForAtom(x11::Atom atom);
 
   // Our X11 state.
-  const raw_ptr<x11::Connection> connection_;
+  raw_ref<x11::Connection> connection_;
   const x11::Window x_root_window_;
 
   // Input-only window used as a selection owner.
   x11::Window x_window_;
 
   // Events selected on |x_window_|.
-  std::unique_ptr<x11::XScopedEventSelector> x_window_events_;
+  x11::ScopedEventSelector x_window_events_;
 
   // Object which requests and receives selection data.
   const std::unique_ptr<SelectionRequestor> selection_requestor_;

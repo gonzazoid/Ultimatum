@@ -5,6 +5,7 @@
 #include "third_party/blink/renderer/modules/webaudio/iir_processor.h"
 
 #include <memory>
+
 #include "third_party/blink/renderer/modules/webaudio/iir_dsp_kernel.h"
 
 namespace blink {
@@ -68,23 +69,6 @@ IIRProcessor::~IIRProcessor() {
 
 std::unique_ptr<AudioDSPKernel> IIRProcessor::CreateKernel() {
   return std::make_unique<IIRDSPKernel>(this);
-}
-
-void IIRProcessor::Process(const AudioBus* source,
-                           AudioBus* destination,
-                           uint32_t frames_to_process) {
-  if (!IsInitialized()) {
-    destination->Zero();
-    return;
-  }
-
-  // For each channel of our input, process using the corresponding IIRDSPKernel
-  // into the output channel.
-  for (unsigned i = 0; i < kernels_.size(); ++i) {
-    kernels_[i]->Process(source->Channel(i)->Data(),
-                         destination->Channel(i)->MutableData(),
-                         frames_to_process);
-  }
 }
 
 void IIRProcessor::GetFrequencyResponse(int n_frequencies,

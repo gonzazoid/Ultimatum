@@ -5,8 +5,8 @@
 /**
  * @fileoverview The 'certificate-manager' component manages SSL certificates.
  */
-import '../../cr_elements/cr_tabs/cr_tabs.js';
-import '../../cr_elements/cr_hidden_style.css.js';
+import 'chrome://resources/cr_elements/cr_tabs/cr_tabs.js';
+import 'chrome://resources/cr_elements/cr_hidden_style.css.js';
 import 'chrome://resources/polymer/v3_0/iron-pages/iron-pages.js';
 import './ca_trust_edit_dialog.js';
 import './certificate_delete_confirmation_dialog.js';
@@ -19,12 +19,11 @@ import './certificate_provisioning_list.js';
 
 // </if>
 
+import {I18nMixin} from 'chrome://resources/cr_elements/i18n_mixin.js';
+import {WebUiListenerMixin} from 'chrome://resources/cr_elements/web_ui_listener_mixin.js';
+import {focusWithoutInk} from 'chrome://resources/js/focus_without_ink.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
-
-import {focusWithoutInk} from '../../js/focus_without_ink.js';
-import {I18nMixin} from '../../cr_elements/i18n_mixin.js';
-import {loadTimeData} from '../../js/load_time_data.m.js';
-import {WebUiListenerMixin} from '../../cr_elements/web_ui_listener_mixin.js';
 
 import {getTemplate} from './certificate_manager.html.js';
 import {CertificateAction, CertificateActionEvent} from './certificate_manager_types.js';
@@ -167,12 +166,12 @@ export class CertificateManagerElement extends CertificateManagerElementBase {
 
   override connectedCallback() {
     super.connectedCallback();
-    this.addWebUIListener('certificates-changed', this.set.bind(this));
-    this.addWebUIListener(
+    this.addWebUiListener('certificates-changed', this.set.bind(this));
+    this.addWebUiListener(
         'client-import-allowed-changed',
         this.setClientImportAllowed.bind(this));
-    this.addWebUIListener(
-        'ca-import-allowed-changed', this.setCAImportAllowed.bind(this));
+    this.addWebUiListener(
+        'ca-import-allowed-changed', this.setCaImportAllowed.bind(this));
     CertificatesBrowserProxyImpl.getInstance().refreshCertificates();
   }
 
@@ -180,7 +179,7 @@ export class CertificateManagerElement extends CertificateManagerElementBase {
     this.clientImportAllowed = allowed;
   }
 
-  private setCAImportAllowed(allowed: boolean) {
+  private setCaImportAllowed(allowed: boolean) {
     this.caImportAllowed = allowed;
   }
 

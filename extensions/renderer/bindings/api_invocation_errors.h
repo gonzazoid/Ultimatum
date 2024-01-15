@@ -5,10 +5,9 @@
 #ifndef EXTENSIONS_RENDERER_BINDINGS_API_INVOCATION_ERRORS_H_
 #define EXTENSIONS_RENDERER_BINDINGS_API_INVOCATION_ERRORS_H_
 
+#include <cstdint>
 #include <set>
 #include <string>
-
-#include "base/strings/string_piece.h"
 
 // A collection of error-related strings and utilities for parsing API
 // invocations.

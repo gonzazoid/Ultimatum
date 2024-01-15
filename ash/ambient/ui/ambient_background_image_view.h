@@ -7,6 +7,7 @@
 
 #include <string>
 
+#include "ash/ambient/ui/ambient_slideshow_peripheral_ui.h"
 #include "ash/ambient/ui/ambient_view_delegate.h"
 #include "ash/ash_export.h"
 #include "ash/public/cpp/ambient/ambient_backend_controller.h"
@@ -20,10 +21,6 @@
 
 namespace ash {
 
-class AmbientInfoView;
-class JitterCalculator;
-class MediaStringView;
-
 // AmbientBackgroundImageView--------------------------------------------------
 // A custom ImageView to display photo image and details information on ambient.
 // It also handles specific mouse/gesture events to dismiss ambient when user
@@ -33,9 +30,7 @@ class ASH_EXPORT AmbientBackgroundImageView : public views::View,
  public:
   METADATA_HEADER(AmbientBackgroundImageView);
 
-  AmbientBackgroundImageView(
-      AmbientViewDelegate* delegate,
-      JitterCalculator* glanceable_info_jitter_calculator);
+  explicit AmbientBackgroundImageView(AmbientViewDelegate* delegate);
   AmbientBackgroundImageView(const AmbientBackgroundImageView&) = delete;
   AmbientBackgroundImageView& operator=(const AmbientBackgroundImageView&) =
       delete;
@@ -57,6 +52,11 @@ class ASH_EXPORT AmbientBackgroundImageView : public views::View,
   void UpdateImageDetails(const std::u16string& details,
                           const std::u16string& related_details);
 
+  // Shows/Hides the peripheral ui.
+  void SetPeripheralUiVisibility(bool visible);
+
+  void SetForceResizeToFit(bool force_resize_to_fit);
+
   gfx::ImageSkia GetCurrentImage();
 
   gfx::Rect GetImageBoundsInScreenForTesting() const;
@@ -65,8 +65,6 @@ class ASH_EXPORT AmbientBackgroundImageView : public views::View,
 
  private:
   void InitLayout();
-
-  void UpdateGlanceableInfoPosition();
 
   void UpdateLayout();
   bool UpdateRelatedImageViewVisibility();
@@ -81,15 +79,13 @@ class ASH_EXPORT AmbientBackgroundImageView : public views::View,
   bool HasPairedImages() const;
 
   // Owned by |AmbientController| and should always outlive |this|.
-  AmbientViewDelegate* delegate_ = nullptr;
-
-  const base::raw_ptr<JitterCalculator> glanceable_info_jitter_calculator_;
+  raw_ptr<AmbientViewDelegate> delegate_ = nullptr;
 
   // View to display current image(s) on ambient. Owned by the view hierarchy.
-  views::View* image_container_ = nullptr;
-  views::FlexLayout* image_layout_ = nullptr;
-  views::ImageView* image_view_ = nullptr;
-  views::ImageView* related_image_view_ = nullptr;
+  raw_ptr<views::View> image_container_ = nullptr;
+  raw_ptr<views::FlexLayout> image_layout_ = nullptr;
+  raw_ptr<views::ImageView> image_view_ = nullptr;
+  raw_ptr<views::ImageView> related_image_view_ = nullptr;
 
   // The unscaled images used for scaling and displaying in different bounds.
   gfx::ImageSkia image_unscaled_;
@@ -100,11 +96,13 @@ class ASH_EXPORT AmbientBackgroundImageView : public views::View,
 
   bool is_portrait_ = false;
 
+  // Flag that changes the resize behavior such that full image is always shown
+  // without any cropping. False by default.
+  bool force_resize_to_fit_ = false;
+
   ::ambient::TopicType topic_type_ = ::ambient::TopicType::kOther;
 
-  AmbientInfoView* ambient_info_view_ = nullptr;
-
-  MediaStringView* media_string_view_ = nullptr;
+  raw_ptr<AmbientSlideshowPeripheralUi> ambient_peripheral_ui_ = nullptr;
 
   base::ScopedMultiSourceObservation<views::View, views::ViewObserver>
       observed_views_{this};

@@ -10,16 +10,15 @@
 #include "ash/session/session_controller_impl.h"
 #include "ash/shell.h"
 #include "ash/strings/grit/ash_strings.h"
-#include "ash/system/machine_learning/user_settings_event_logger.h"
 #include "ash/system/model/system_tray_model.h"
 #include "ash/system/network/network_utils.h"
 #include "ash/system/network/tray_network_state_model.h"
 #include "ash/system/tray/system_menu_button.h"
 #include "ash/system/tray/tri_view.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/metrics/user_metrics.h"
 #include "base/strings/utf_string_conversions.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "chromeos/ash/components/network/network_connect.h"
 #include "chromeos/services/network_config/public/mojom/cros_network_config.mojom.h"
@@ -86,13 +85,6 @@ bool NetworkTypeIsConfigurable(NetworkType type) {
   return false;
 }
 
-void LogUserNetworkEvent(const NetworkStateProperties& network) {
-  auto* const logger = ml::UserSettingsEventLogger::Get();
-  if (logger) {
-    logger->LogNetworkUkmEvent(network);
-  }
-}
-
 }  // namespace
 
 bool CanNetworkConnect(
@@ -153,8 +145,9 @@ class NetworkStateListDetailedView::InfoBubble
   ~InfoBubble() override {
     // The detailed view can be destructed before info bubble is destructed.
     // Call OnInfoBubbleDestroyed only if the detailed view is live.
-    if (detailed_view_)
+    if (detailed_view_) {
       detailed_view_->OnInfoBubbleDestroyed();
+    }
   }
 
   void OnNetworkStateListDetailedViewIsDeleting() { detailed_view_ = nullptr; }
@@ -173,8 +166,9 @@ class NetworkStateListDetailedView::InfoBubble
   void OnMouseExited(const ui::MouseEvent& event) override {
     // Like the user switching bubble/menu, hide the bubble when the mouse
     // exits.
-    if (detailed_view_)
+    if (detailed_view_) {
       detailed_view_->ResetInfoBubble();
+    }
   }
 
   void OnBeforeBubbleWidgetInit(views::Widget::InitParams* params,
@@ -185,7 +179,7 @@ class NetworkStateListDetailedView::InfoBubble
   }
 
   // Not owned.
-  NetworkStateListDetailedView* detailed_view_;
+  raw_ptr<NetworkStateListDetailedView> detailed_view_;
 };
 
 //------------------------------------------------------------------------------
@@ -193,7 +187,7 @@ class NetworkStateListDetailedView::InfoBubble
 
 NetworkStateListDetailedView::NetworkStateListDetailedView(
     DetailedViewDelegate* delegate,
-    ListType list_type,
+    NetworkDetailedViewListType list_type,
     LoginStatus login)
     : TrayDetailedView(delegate),
       list_type_(list_type),
@@ -209,8 +203,9 @@ NetworkStateListDetailedView::NetworkStateListDetailedView(
 
 NetworkStateListDetailedView::~NetworkStateListDetailedView() {
   model_->RemoveObserver(this);
-  if (info_bubble_)
+  if (info_bubble_) {
     info_bubble_->OnNetworkStateListDetailedViewIsDeleting();
+  }
   ResetInfoBubble();
 }
 
@@ -224,15 +219,14 @@ const char* NetworkStateListDetailedView::GetClassName() const {
 
 void NetworkStateListDetailedView::Init() {
   CreateScrollableList();
-  CreateTitleRow(list_type_ == ListType::LIST_TYPE_NETWORK
-                     ? IDS_ASH_STATUS_TRAY_NETWORK
-                     : IDS_ASH_STATUS_TRAY_VPN);
+  CreateTitleRow(GetStringIdForNetworkDetailedViewTitleRow(list_type_));
 
   model_->AddObserver(this);
   Update();
 
-  if (list_type_ == LIST_TYPE_NETWORK && IsWifiEnabled())
+  if (list_type_ == LIST_TYPE_NETWORK && IsWifiEnabled()) {
     ScanAndStartTimer();
+  }
 }
 
 void NetworkStateListDetailedView::Update() {
@@ -251,12 +245,14 @@ void NetworkStateListDetailedView::NetworkListChanged() {
 }
 
 void NetworkStateListDetailedView::HandleViewClicked(views::View* view) {
-  if (login_ == LoginStatus::LOCKED)
+  if (login_ == LoginStatus::LOCKED) {
     return;
+  }
 
   std::string guid;
-  if (!IsNetworkEntry(view, &guid))
+  if (!IsNetworkEntry(view, &guid)) {
     return;
+  }
 
   model_->cros_network_config()->GetNetworkState(
       guid, base::BindOnce(&NetworkStateListDetailedView::HandleViewClickedImpl,
@@ -292,7 +288,6 @@ void NetworkStateListDetailedView::HandleViewClickedImpl(
           list_type_ == LIST_TYPE_VPN
               ? UserMetricsAction("StatusArea_VPN_ConnectToNetwork")
               : UserMetricsAction("StatusArea_Network_ConnectConfigured"));
-      LogUserNetworkEvent(*network.get());
       if (list_type_ == LIST_TYPE_NETWORK) {
         RecordNetworkRowClickedAction(
             NetworkRowClickedAction::kConnectToNetwork);
@@ -316,8 +311,9 @@ void NetworkStateListDetailedView::HandleViewClickedImpl(
 }
 
 void NetworkStateListDetailedView::CreateExtraTitleRowButtons() {
-  if (login_ == LoginStatus::LOCKED)
+  if (login_ == LoginStatus::LOCKED) {
     return;
+  }
 
   DCHECK(!info_button_);
   tri_view()->SetContainerVisible(TriView::Container::END, true);
@@ -354,8 +350,9 @@ void NetworkStateListDetailedView::ShowSettings() {
 
   SystemTrayClient* system_tray_client =
       Shell::Get()->system_tray_model()->client();
-  if (system_tray_client)
+  if (system_tray_client) {
     system_tray_client->ShowNetworkSettings(guid);
+  }
 }
 
 void NetworkStateListDetailedView::UpdateHeaderButtons() {
@@ -375,15 +372,18 @@ void NetworkStateListDetailedView::UpdateHeaderButtons() {
 }
 
 void NetworkStateListDetailedView::UpdateScanningBar() {
-  if (list_type_ != LIST_TYPE_NETWORK)
+  if (list_type_ != LIST_TYPE_NETWORK) {
     return;
+  }
 
   bool is_wifi_enabled = IsWifiEnabled();
-  if (is_wifi_enabled && !network_scan_repeating_timer_.IsRunning())
+  if (is_wifi_enabled && !network_scan_repeating_timer_.IsRunning()) {
     ScanAndStartTimer();
+  }
 
-  if (!is_wifi_enabled && network_scan_repeating_timer_.IsRunning())
+  if (!is_wifi_enabled && network_scan_repeating_timer_.IsRunning()) {
     network_scan_repeating_timer_.Stop();
+  }
 
   bool scanning_bar_visible = false;
   if (is_wifi_enabled) {
@@ -397,8 +397,9 @@ void NetworkStateListDetailedView::UpdateScanningBar() {
 }
 
 void NetworkStateListDetailedView::ToggleInfoBubble() {
-  if (ResetInfoBubble())
+  if (ResetInfoBubble()) {
     return;
+  }
 
   info_bubble_ = new InfoBubble(tri_view(), CreateNetworkInfoView(), this);
   views::BubbleDialogDelegateView::CreateBubble(info_bubble_)->Show();
@@ -406,8 +407,9 @@ void NetworkStateListDetailedView::ToggleInfoBubble() {
 }
 
 bool NetworkStateListDetailedView::ResetInfoBubble() {
-  if (!info_bubble_)
+  if (!info_bubble_) {
     return false;
+  }
 
   info_bubble_->GetWidget()->Close();
   return true;
@@ -427,35 +429,42 @@ views::View* NetworkStateListDetailedView::CreateNetworkInfoView() {
   const DeviceStateProperties* device =
       network ? model_->GetDevice(network->type) : nullptr;
   if (device) {
-    if (device->ipv4_address)
+    if (device->ipv4_address) {
       ipv4_address = device->ipv4_address->ToString();
-    if (device->ipv6_address)
+    }
+    if (device->ipv6_address) {
       ipv6_address = device->ipv6_address->ToString();
+    }
   }
 
   std::string ethernet_address, wifi_address, cellular_address;
   if (list_type_ == LIST_TYPE_NETWORK) {
     const DeviceStateProperties* ethernet =
         model_->GetDevice(NetworkType::kEthernet);
-    if (ethernet && ethernet->mac_address)
+    if (ethernet && ethernet->mac_address) {
       ethernet_address = *ethernet->mac_address;
+    }
     const DeviceStateProperties* wifi = model_->GetDevice(NetworkType::kWiFi);
-    if (wifi && wifi->mac_address)
+    if (wifi && wifi->mac_address) {
       wifi_address = *wifi->mac_address;
+    }
     const DeviceStateProperties* cellular =
         model_->GetDevice(NetworkType::kCellular);
-    if (cellular && cellular->mac_address)
+    if (cellular && cellular->mac_address) {
       cellular_address = *cellular->mac_address;
+    }
   }
 
   std::u16string bubble_text;
   auto maybe_add_mac_address = [&bubble_text](const std::string& address,
                                               int ids) {
-    if (address.empty() || address == kMissingMacAddress)
+    if (address.empty() || address == kMissingMacAddress) {
       return;
+    }
 
-    if (!bubble_text.empty())
+    if (!bubble_text.empty()) {
       bubble_text += u"\n";
+    }
 
     bubble_text += l10n_util::GetStringFUTF16(ids, base::UTF8ToUTF16(address));
   };
@@ -468,8 +477,9 @@ views::View* NetworkStateListDetailedView::CreateNetworkInfoView() {
 
   // Avoid an empty bubble in the unlikely event that there is no network
   // information at all.
-  if (bubble_text.empty())
+  if (bubble_text.empty()) {
     bubble_text = l10n_util::GetStringUTF16(IDS_ASH_STATUS_TRAY_NO_NETWORKS);
+  }
 
   auto* label = new views::Label(bubble_text);
   label->SetMultiLine(true);
@@ -486,8 +496,9 @@ void NetworkStateListDetailedView::ScanAndStartTimer() {
 }
 
 void NetworkStateListDetailedView::CallRequestScan() {
-  if (!IsWifiEnabled())
+  if (!IsWifiEnabled()) {
     return;
+  }
 
   VLOG(1) << "Requesting Network Scan.";
   model_->cros_network_config()->RequestNetworkScan(NetworkType::kWiFi);

@@ -10,10 +10,10 @@
 #include <memory>
 #include <utility>
 
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
 #include "base/containers/flat_map.h"
 #include "base/cpu.h"
+#include "base/functional/callback_helpers.h"
 #include "base/lazy_instance.h"
 #include "base/memory/raw_ptr.h"
 #include "base/metrics/histogram_functions.h"
@@ -31,9 +31,6 @@
 #include "base/task/thread_pool.h"
 #include "base/threading/platform_thread.h"
 #include "base/threading/thread_id_name_manager.h"
-#include "base/threading/thread_task_runner_handle.h"
-#include "components/power_scheduler/power_mode.h"
-#include "components/power_scheduler/power_mode_arbiter.h"
 #include "content/common/process_visibility_tracker.h"
 #include "content/public/common/content_switches.h"
 #include "content/public/common/process_type.h"
@@ -81,33 +78,6 @@ const char* GetPerThreadHistogramNameForProcessType(ProcessTypeForUma type) {
   }
 }
 
-const char* GetPerPowerModeHistogramNameForProcessType(ProcessTypeForUma type) {
-  switch (type) {
-    case ProcessTypeForUma::kBrowser:
-      return "Power.CpuTimeSecondsPerPowerMode.Browser";
-    case ProcessTypeForUma::kRenderer:
-      return "Power.CpuTimeSecondsPerPowerMode.Renderer";
-    case ProcessTypeForUma::kGpu:
-      return "Power.CpuTimeSecondsPerPowerMode.GPU";
-    default:
-      return "Power.CpuTimeSecondsPerPowerMode.Other";
-  }
-}
-
-const char* GetPowerModeChangeHistogramNameForProcessType(
-    ProcessTypeForUma type) {
-  switch (type) {
-    case ProcessTypeForUma::kBrowser:
-      return "Power.PowerScheduler.ProcessPowerModeChange.Browser";
-    case ProcessTypeForUma::kRenderer:
-      return "Power.PowerScheduler.ProcessPowerModeChange.Renderer";
-    case ProcessTypeForUma::kGpu:
-      return "Power.PowerScheduler.ProcessPowerModeChange.GPU";
-    default:
-      return "Power.PowerScheduler.ProcessPowerModeChange.Other";
-  }
-}
-
 const char* GetAvgCpuLoadHistogramNameForProcessType(ProcessTypeForUma type) {
   switch (type) {
     case ProcessTypeForUma::kBrowser:
@@ -118,67 +88,6 @@ const char* GetAvgCpuLoadHistogramNameForProcessType(ProcessTypeForUma type) {
       return "Power.AvgCpuLoad.GPU";
     default:
       return "Power.AvgCpuLoad.Other";
-  }
-}
-
-const char* GetIdleCpuLoadHistogramNameForProcessType(ProcessTypeForUma type) {
-  switch (type) {
-    case ProcessTypeForUma::kBrowser:
-      return "Power.IdleCpuLoad.Browser";
-    case ProcessTypeForUma::kRenderer:
-      return "Power.IdleCpuLoad.Renderer";
-    case ProcessTypeForUma::kGpu:
-      return "Power.IdleCpuLoad.GPU";
-    default:
-      return "Power.IdleCpuLoad.Other";
-  }
-}
-
-// Return whether the power mode is considered idle for the purpose of the CPU
-// load reporting. "Idle" in this case means that nothing CPU-intensive is
-// expected to be happening while in this mode.
-bool IsIdleMode(power_scheduler::PowerMode power_mode) {
-  return power_mode == power_scheduler::PowerMode::kIdle ||
-         power_mode == power_scheduler::PowerMode::kNopAnimation ||
-         power_mode == power_scheduler::PowerMode::kBackground;
-}
-
-PowerModeForUma GetPowerModeForUma(power_scheduler::PowerMode power_mode) {
-  switch (power_mode) {
-    case power_scheduler::PowerMode::kIdle:
-      return PowerModeForUma::kIdle;
-    case power_scheduler::PowerMode::kNopAnimation:
-      return PowerModeForUma::kNopAnimation;
-    case power_scheduler::PowerMode::kSmallMainThreadAnimation:
-      return PowerModeForUma::kSmallMainThreadAnimation;
-    case power_scheduler::PowerMode::kSmallAnimation:
-      return PowerModeForUma::kSmallAnimation;
-    case power_scheduler::PowerMode::kMediumMainThreadAnimation:
-      return PowerModeForUma::kMediumMainThreadAnimation;
-    case power_scheduler::PowerMode::kMediumAnimation:
-      return PowerModeForUma::kMediumAnimation;
-    case power_scheduler::PowerMode::kAudible:
-      return PowerModeForUma::kAudible;
-    case power_scheduler::PowerMode::kVideoPlayback:
-      return PowerModeForUma::kVideoPlayback;
-    case power_scheduler::PowerMode::kMainThreadAnimation:
-      return PowerModeForUma::kMainThreadAnimation;
-    case power_scheduler::PowerMode::kScriptExecution:
-      return PowerModeForUma::kScriptExecution;
-    case power_scheduler::PowerMode::kLoading:
-      return PowerModeForUma::kLoading;
-    case power_scheduler::PowerMode::kAnimation:
-      return PowerModeForUma::kAnimation;
-    case power_scheduler::PowerMode::kLoadingAnimation:
-      return PowerModeForUma::kLoadingAnimation;
-    case power_scheduler::PowerMode::kResponse:
-      return PowerModeForUma::kResponse;
-    case power_scheduler::PowerMode::kNonWebActivity:
-      return PowerModeForUma::kNonWebActivity;
-    case power_scheduler::PowerMode::kBackground:
-      return PowerModeForUma::kBackground;
-    case power_scheduler::PowerMode::kCharging:
-      return PowerModeForUma::kCharging;
   }
 }
 
@@ -392,8 +301,10 @@ class ProcessCpuTimeMetrics::DetailedCpuTimeMetrics {
     // only depends on the process type, which also doesn't change.
     static const char* histogram_name =
         GetPerThreadHistogramNameForProcessType(process_type_);
-    UMA_HISTOGRAM_SCALED_ENUMERATION(histogram_name, type,
-                                     cpu_time_delta.InMicroseconds(),
+    // Histograms use int internally. Make sure it doesn't overflow.
+    int capped_value = std::min<int64_t>(cpu_time_delta.InMicroseconds(),
+                                         std::numeric_limits<int>::max());
+    UMA_HISTOGRAM_SCALED_ENUMERATION(histogram_name, type, capped_value,
                                      base::Time::kMicrosecondsPerSecond);
   }
 
@@ -420,19 +331,16 @@ class ProcessCpuTimeMetrics::DetailedCpuTimeMetrics {
 
 // static
 ProcessCpuTimeMetrics* ProcessCpuTimeMetrics::GetInstance() {
-  static base::NoDestructor<ProcessCpuTimeMetrics> instance(
-      power_scheduler::PowerModeArbiter::GetInstance());
+  static base::NoDestructor<ProcessCpuTimeMetrics> instance;
   return instance.get();
 }
 
-ProcessCpuTimeMetrics::ProcessCpuTimeMetrics(
-    power_scheduler::PowerModeArbiter* arbiter)
+ProcessCpuTimeMetrics::ProcessCpuTimeMetrics()
     : task_runner_(base::ThreadPool::CreateSequencedTaskRunner(
           {base::TaskPriority::BEST_EFFORT,
            // TODO(eseckler): Consider hooking into process shutdown on
            // desktop to reduce metric data loss.
            base::TaskShutdownBehavior::SKIP_ON_SHUTDOWN})),
-      arbiter_(arbiter),
       process_metrics_(base::ProcessMetrics::CreateCurrentProcessMetrics()),
       process_type_(CurrentProcessType()),
       detailed_metrics_(
@@ -465,12 +373,10 @@ ProcessCpuTimeMetrics::~ProcessCpuTimeMetrics() {
   // care of any threading issues.
   base::CurrentThread::Get()->RemoveTaskObserver(this);
   ProcessVisibilityTracker::GetInstance()->RemoveObserver(this);
-  arbiter_->RemoveObserver(this);
 }
 
 void ProcessCpuTimeMetrics::InitializeOnThreadPool() {
   ProcessVisibilityTracker::GetInstance()->AddObserver(this);
-  arbiter_->AddObserver(this);
   PerformFullCollectionOnThreadPool();
 }
 
@@ -502,24 +408,6 @@ void ProcessCpuTimeMetrics::OnVisibilityChanged(bool visible) {
   // attribute them to the old value of |is_visible_| before updating it.
   CollectHighLevelMetricsOnThreadPool();
   is_visible_ = visible;
-}
-
-// power_scheduler::PowerModeArbiter::Observer implementation:
-void ProcessCpuTimeMetrics::OnPowerModeChanged(
-    power_scheduler::PowerMode old_mode,
-    power_scheduler::PowerMode new_mode) {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(thread_pool_);
-
-  UMA_HISTOGRAM_ENUMERATION(
-      GetPowerModeChangeHistogramNameForProcessType(process_type_),
-      GetPowerModeForUma(new_mode));
-
-  // Collect high-level metrics that include a PowerMode breakdown and
-  // attribute them to the old value of |power_mode_| before updating it.
-  if (!power_mode_.has_value())
-    power_mode_ = old_mode;
-  CollectHighLevelMetricsOnThreadPool();
-  power_mode_ = new_mode;
 }
 
 void ProcessCpuTimeMetrics::PerformFullCollectionOnThreadPool() {
@@ -565,16 +453,6 @@ void ProcessCpuTimeMetrics::CollectHighLevelMetricsOnThreadPool() {
           process_cpu_time_delta.InMicroseconds(),
           base::Time::kMicrosecondsPerSecond);
     }
-    if (power_mode_.has_value()) {
-      // Histogram name cannot change after being used once. That's ok since
-      // this only depends on the process type, which also doesn't change.
-      static const char* histogram_name =
-          GetPerPowerModeHistogramNameForProcessType(process_type_);
-      UMA_HISTOGRAM_SCALED_ENUMERATION(histogram_name,
-                                       GetPowerModeForUma(*power_mode_),
-                                       process_cpu_time_delta.InMicroseconds(),
-                                       base::Time::kMicrosecondsPerSecond);
-    }
 
     reported_cpu_time_ = cumulative_cpu_time;
 
@@ -605,39 +483,6 @@ void ProcessCpuTimeMetrics::ReportAverageCpuLoad(
     cpu_load_report_time_ = now;
     cpu_time_on_last_load_report_ = cumulative_cpu_time;
   }
-
-  // When the power mode changes, this function is called first, and the
-  // power_mode_ variable is modified after that. So at this point power_mode_
-  // reflects the mode that has been active before now (and might be active
-  // still).
-  // timestamp_for_idle_cpu_ is used to determine the duration of the idle
-  // power mode. It is updated when the "old" mode is not idle, so when the
-  // mode is idle, it contains the timestamp of the idle mode start.
-  // It's also updated after the cpu load over last 5 idle seconds has been
-  // reported, and a new 5-sec period is started.
-  if (power_mode_.has_value() && IsIdleMode(*power_mode_) &&
-      timestamp_for_idle_cpu_ != base::TimeTicks()) {
-    base::TimeDelta time_in_idle = now - timestamp_for_idle_cpu_;
-    if (time_in_idle >= kIdleCpuLoadReportInterval) {
-      base::TimeDelta cpu_time_in_idle =
-          cumulative_cpu_time - cpu_time_for_idle_cpu_;
-      int idle_load = 100LL * cpu_time_in_idle.InMilliseconds() /
-                      time_in_idle.InMilliseconds();
-      static const char* histogram_name =
-          GetIdleCpuLoadHistogramNameForProcessType(process_type_);
-      base::UmaHistogramCounts1000(histogram_name, idle_load);
-
-      timestamp_for_idle_cpu_ = now;
-      cpu_time_for_idle_cpu_ = cumulative_cpu_time;
-    }
-  } else {
-    // When this function is called next time, we'll know whether the new power
-    // mode is idle or not. If it's idle, we'll use timestamp_for_idle_cpu_
-    // to determine idle mode duration. If it's not, we'll just update
-    // timestamp_for_idle_cpu_ once again.
-    timestamp_for_idle_cpu_ = now;
-    cpu_time_for_idle_cpu_ = cumulative_cpu_time;
-  }
 }
 
 void ProcessCpuTimeMetrics::PerformFullCollectionForTesting() {
@@ -656,11 +501,11 @@ void ProcessCpuTimeMetrics::WaitForCollectionForTesting() const {
 }
 
 // static
-std::unique_ptr<ProcessCpuTimeMetrics> ProcessCpuTimeMetrics::CreateForTesting(
-    power_scheduler::PowerModeArbiter* arbiter) {
+std::unique_ptr<ProcessCpuTimeMetrics>
+ProcessCpuTimeMetrics::CreateForTesting() {
   std::unique_ptr<ProcessCpuTimeMetrics> ptr;
   // Can't use std::make_unique due to private constructor.
-  ptr.reset(new ProcessCpuTimeMetrics(arbiter));
+  ptr.reset(new ProcessCpuTimeMetrics());
   return ptr;
 }
 

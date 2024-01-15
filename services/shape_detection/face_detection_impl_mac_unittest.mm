@@ -8,12 +8,11 @@
 #include <utility>
 
 #include "base/base64.h"
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/mac/mac_util.h"
-#include "base/mac/scoped_nsobject.h"
 #include "base/path_service.h"
 #include "base/run_loop.h"
 #include "base/test/gmock_callback_support.h"
@@ -67,11 +66,11 @@ std::vector<TestParams> GetTestParams() {
        base::BindRepeating(&CreateFaceDetectorImplMac)},
       {false, 120, 120, "services/test/data/mona_lisa.jpg", 1, 4, 10,
        base::BindRepeating(&CreateFaceDetectorImplMacVision)},
-      {false, 240, 240, "services/test/data/the_beatles.jpg", 4, 3, 1,
+      {false, 468, 529, "services/test/data/the_beatles.jpg", 4, 3, 1,
        base::BindRepeating(&CreateFaceDetectorImplMac)},
-      {true, 240, 240, "services/test/data/the_beatles.jpg", 4, 3, 1,
+      {true, 468, 529, "services/test/data/the_beatles.jpg", 4, 3, 1,
        base::BindRepeating(&CreateFaceDetectorImplMac)},
-      {false, 240, 240, "services/test/data/the_beatles.jpg", 4, 4, 10,
+      {false, 468, 529, "services/test/data/the_beatles.jpg", 4, 4, 10,
        base::BindRepeating(&CreateFaceDetectorImplMacVision)},
   };
 }
@@ -122,7 +121,8 @@ TEST_P(FaceDetectionImplMacTest, ScanOneFace) {
 
   // Load image data from test directory.
   base::FilePath image_path;
-  ASSERT_TRUE(base::PathService::Get(base::DIR_SOURCE_ROOT, &image_path));
+  ASSERT_TRUE(
+      base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &image_path));
   image_path = image_path.AppendASCII(GetParam().image_path);
   ASSERT_TRUE(base::PathExists(image_path));
   std::string image_data;

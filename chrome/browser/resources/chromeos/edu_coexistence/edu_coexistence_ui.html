@@ -1,4 +1,4 @@
-<style include="edu-coexistence-css">
+<style include="common">
   paper-spinner-lite {
     --spinner-size: 38px;
     display: none;
@@ -23,18 +23,17 @@
 
 <edu-coexistence-template>
   <span slot="main">
-    <div class="new-oobe-layout-back-button" hidden$="[[!showGaiaButtons_]]">
-      <edu-coexistence-button hidden$="[[!newOobeLayoutEnabled_]]"
-                              button-type="back"
+    <div class="back-button" hidden$="[[!showGaiaButtons]]">
+      <edu-coexistence-button button-type="back"
          id="gaia-back-button"
-         on-go-back="handleGaiaLoginGoBack_">
+         on-go-back="handleGaiaLoginGoBack">
       </edu-coexistence-button>
     </div>
 
-    <webview id="signinFrame" hidden$="[[loading_]]" class="signin-frame"
+    <webview id="signinFrame" hidden$="[[loading]]" class="signin-frame"
              allowscaling></webview>
-    <div class ="spinner-container" hidden$="[[!loading_]]">
-      <paper-spinner-lite class="spinner" active="[[loading_]]">
+    <div class ="spinner-container" hidden$="[[!loading]]">
+      <paper-spinner-lite class="spinner" active="[[loading]]">
       </paper-spinner-lite>
       <div id="comment" aria-live="polite"
            aria-label$="$i18n{loadingMessage}">
@@ -42,20 +41,11 @@
       </div>
     </div>
   </span>
-  <span slot="buttons" hidden$="[[!showGaiaButtons_]]"
-        class$="[[buttonsLayoutCssClass_]]">
-    <span hidden$="[[newOobeLayoutEnabled_]]">
-      <edu-coexistence-button button-type="back"
-        id="gaia-back-button"
-        on-go-back="handleGaiaLoginGoBack_">
-      </edu-coexistence-button>
-    </span>
-    <span>
-      <gaia-action-buttons id="gaiaNextButton"
-        authenticator="[[controller_.authExtHost_]]"
-        rounded-button="[[newOobeLayoutEnabled_]]"
-        hidden$="[[!showGaiaNextButton_]]">
-      </gaia-action-buttons>
-    </span>
+  <span slot="buttons" hidden$="[[!showGaiaButtons]]" class="buttons-layout">
+    <gaia-action-buttons id="gaiaNextButton"
+      authenticator="[[controller.authenticator]]"
+      rounded-button="true"
+      hidden$="[[!showGaiaNextButton]]">
+    </gaia-action-buttons>
   </span>
 </edu-coexistence-template>

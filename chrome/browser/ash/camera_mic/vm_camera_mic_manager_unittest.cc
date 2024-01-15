@@ -8,39 +8,40 @@
 #include <utility>
 
 #include "ash/constants/ash_constants.h"
-#include "ash/constants/ash_features.h"
 #include "ash/public/cpp/ash_prefs.h"
-#include "ash/public/cpp/vm_camera_mic_constants.h"
 #include "ash/root_window_controller.h"
 #include "ash/shell.h"
+#include "ash/system/notification_center/notification_center_tray.h"
 #include "ash/system/privacy/privacy_indicators_tray_item_view.h"
 #include "ash/system/status_area_widget.h"
 #include "ash/system/unified/unified_system_tray.h"
 #include "ash/test/ash_test_helper.h"
-#include "base/bind.h"
 #include "base/containers/contains.h"
 #include "base/containers/flat_map.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
+#include "base/strings/string_util.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/time/time.h"
-#include "chrome/browser/ash/login/users/mock_user_manager.h"
+#include "chrome/browser/ash/login/users/fake_chrome_user_manager.h"
 #include "chrome/browser/notifications/notification_display_service.h"
 #include "chrome/browser/notifications/notification_display_service_factory.h"
 #include "chrome/test/base/testing_profile.h"
 #include "components/account_id/account_id.h"
 #include "components/prefs/testing_pref_service.h"
-#include "components/services/app_service/public/cpp/features.h"
 #include "components/user_manager/scoped_user_manager.h"
-#include "components/user_manager/user.h"
 #include "content/public/test/browser_task_environment.h"
-#include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/display/test/display_manager_test_api.h"
+#include "ui/message_center/message_center.h"
+
+namespace ash {
 
 namespace {
-using testing::UnorderedElementsAre;
-using VmType = ash::VmCameraMicManager::VmType;
-using DeviceType = ash::VmCameraMicManager::DeviceType;
-using NotificationType = ash::VmCameraMicManager::NotificationType;
+
+using VmType = VmCameraMicManager::VmType;
+using DeviceType = VmCameraMicManager::DeviceType;
+using NotificationType = VmCameraMicManager::NotificationType;
 
 constexpr VmType kCrostiniVm = VmType::kCrostiniVm;
 constexpr VmType kPluginVm = VmType::kPluginVm;
@@ -50,13 +51,13 @@ constexpr DeviceType kCamera = DeviceType::kCamera;
 constexpr DeviceType kMic = DeviceType::kMic;
 
 constexpr NotificationType kMicNotification =
-    ash::VmCameraMicManager::kMicNotification;
+    VmCameraMicManager::kMicNotification;
 constexpr NotificationType kCameraNotification =
-    ash::VmCameraMicManager::kCameraNotification;
+    VmCameraMicManager::kCameraNotification;
 constexpr NotificationType kCameraAndMicNotification =
-    ash::VmCameraMicManager::kCameraAndMicNotification;
+    VmCameraMicManager::kCameraAndMicNotification;
 
-constexpr auto kDebounceTime = ash::VmCameraMicManager::kDebounceTime;
+constexpr auto kDebounceTime = VmCameraMicManager::kDebounceTime;
 
 class FakeNotificationDisplayService : public NotificationDisplayService {
  public:
@@ -77,6 +78,9 @@ class FakeNotificationDisplayService : public NotificationDisplayService {
   }
 
   void GetDisplayed(DisplayedNotificationsCallback callback) override {}
+  void GetDisplayedForOrigin(const GURL& origin,
+                             DisplayedNotificationsCallback callback) override {
+  }
   void AddObserver(Observer* observer) override {}
   void RemoveObserver(Observer* observer) override {}
 
@@ -99,26 +103,24 @@ struct IsActiveTestParam {
 
 // Check the visibility of privacy indicators in all displays.
 void ExpectPrivacyIndicatorsVisible(bool visible) {
-  for (ash::RootWindowController* root_window_controller :
-       ash::Shell::Get()->GetAllRootWindowControllers()) {
-    EXPECT_EQ(root_window_controller->GetStatusAreaWidget()
-                  ->unified_system_tray()
-                  ->privacy_indicators_view()
-                  ->GetVisible(),
-              visible);
+  for (RootWindowController* root_window_controller :
+       Shell::Get()->GetAllRootWindowControllers()) {
+    auto* view = root_window_controller->GetStatusAreaWidget()
+                     ->notification_center_tray()
+                     ->privacy_indicators_view();
+
+    EXPECT_EQ(view->GetVisible(), visible);
   }
 }
 
 }  // namespace
-
-namespace ash {
 
 class VmCameraMicManagerTest : public testing::Test {
  public:
   // Define here to access `VmCameraMicManager` private members.
   struct NotificationTestParam {
     ActiveMap active_map;
-    std::set<std::string> expected_notifications;
+    std::vector<std::string> expected_notifications;
 
     NotificationTestParam(
         const ActiveMap& active_map,
@@ -126,26 +128,24 @@ class VmCameraMicManagerTest : public testing::Test {
             expected_notifications) {
       this->active_map = active_map;
       for (const auto& vm_notification : expected_notifications) {
-        auto result = this->expected_notifications.insert(
+        this->expected_notifications.push_back(
             VmCameraMicManager::GetNotificationId(vm_notification.first,
                                                   vm_notification.second));
-        CHECK(result.second);
       }
     }
   };
 
   std::string GetNotificationId(VmType vm, NotificationType type) {
-    return VmCameraMicManager::GetNotificationId(vm, type);
+    return ash::kPrivacyIndicatorsNotificationIdPrefix +
+           VmCameraMicManager::GetNotificationId(vm, type);
   }
 
   VmCameraMicManagerTest() {
+    fake_user_manager_.Reset(std::make_unique<ash::FakeChromeUserManager>());
+
     // Make the profile the primary one.
-    auto mock_user_manager =
-        std::make_unique<testing::NiceMock<MockUserManager>>();
-    mock_user_manager->AddUser(AccountId::FromUserEmailGaiaId(
+    fake_user_manager_->AddUser(AccountId::FromUserEmailGaiaId(
         testing_profile_.GetProfileUserName(), "id"));
-    scoped_user_manager_ = std::make_unique<user_manager::ScopedUserManager>(
-        std::move(mock_user_manager));
 
     // Inject a fake notification display service.
     fake_display_service_ = static_cast<FakeNotificationDisplayService*>(
@@ -163,6 +163,20 @@ class VmCameraMicManagerTest : public testing::Test {
 
   VmCameraMicManagerTest(const VmCameraMicManagerTest&) = delete;
   VmCameraMicManagerTest& operator=(const VmCameraMicManagerTest&) = delete;
+
+  ~VmCameraMicManagerTest() override { fake_user_manager_.Reset(); }
+
+  // testing::Test:
+  void SetUp() override {
+    // Setting ash prefs for testing multi-display.
+    ash::RegisterLocalStatePrefs(local_state_.registry(), /*for_test=*/true);
+
+    ash::AshTestHelper::InitParams params;
+    params.local_state = &local_state_;
+    ash_test_helper_.SetUp(std::move(params));
+  }
+
+  void TearDown() override { ash_test_helper_.TearDown(); }
 
   void SetCameraAccessing(VmType vm, bool value) {
     vm_camera_mic_manager_->SetCameraAccessing(vm, value);
@@ -204,14 +218,43 @@ class VmCameraMicManagerTest : public testing::Test {
     }
   }
 
+  // Checks that all the notifications from `notification_ids` exist as privacy
+  // indicators notifications.
+  void ExpectNotificationsExist(std::set<std::string> notification_ids) {
+    std::set<std::string> all_privacy_indicators_notifications;
+    for (auto* notification :
+         message_center::MessageCenter::Get()->GetVisibleNotifications()) {
+      // Leaves out any parent container.
+      if (!notification || notification->group_parent()) {
+        continue;
+      }
+
+      auto& notification_id = notification->id();
+      if (base::StartsWith(notification_id,
+                           ash::kPrivacyIndicatorsNotificationIdPrefix)) {
+        all_privacy_indicators_notifications.insert(notification_id);
+      }
+    }
+
+    EXPECT_EQ(all_privacy_indicators_notifications, notification_ids);
+  }
+
  protected:
   content::BrowserTaskEnvironment task_environment_{
       base::test::TaskEnvironment::TimeSource::MOCK_TIME};
+  user_manager::TypedScopedUserManager<ash::FakeChromeUserManager>
+      fake_user_manager_;
   TestingProfile testing_profile_;
-  std::unique_ptr<user_manager::ScopedUserManager> scoped_user_manager_;
 
-  FakeNotificationDisplayService* fake_display_service_;
+  raw_ptr<FakeNotificationDisplayService> fake_display_service_;
   std::unique_ptr<VmCameraMicManager> vm_camera_mic_manager_;
+
+  base::test::ScopedFeatureList scoped_feature_list_;
+
+  // Use this for testing multi-display.
+  TestingPrefServiceSimple local_state_;
+
+  ash::AshTestHelper ash_test_helper_;
 };
 
 TEST_F(VmCameraMicManagerTest, CameraPrivacy) {
@@ -244,47 +287,14 @@ TEST_F(VmCameraMicManagerTest, CameraPrivacy) {
       vm_camera_mic_manager_->IsNotificationActive(kCameraNotification));
 }
 
-// Test when PrivacyIndicators feature is enabled.
-class VmCameraMicManagerPrivacyIndicatorsTest : public VmCameraMicManagerTest {
- public:
-  // VmCameraMicManagerTest:
-  void SetUp() override {
-    scoped_feature_list_.InitWithFeatures(
-        {apps::kAppServiceCapabilityAccessWithoutMojom,
-         ash::features::kPrivacyIndicators},
-        {});
-
-    // Setting ash prefs for testing multi-display.
-    ash::RegisterLocalStatePrefs(local_state_.registry(), /*for_test=*/true);
-
-    ash::AshTestHelper::InitParams params;
-    params.local_state = &local_state_;
-    ash_test_helper_.SetUp(std::move(params));
-  }
-
-  void TearDown() override { ash_test_helper_.TearDown(); }
-
- private:
-  base::test::ScopedFeatureList scoped_feature_list_;
-
-  // Use this for testing multi-display.
-  TestingPrefServiceSimple local_state_;
-
-  ash::AshTestHelper ash_test_helper_;
-};
-
-TEST_F(VmCameraMicManagerPrivacyIndicatorsTest, Notification) {
-  auto& notification_ids = fake_display_service_->notification_ids();
-  auto expected_id = ash::kPrivacyIndicatorsNotificationIdPrefix +
-                     GetNotificationId(VmType::kPluginVm, kCameraNotification);
-
+TEST_F(VmCameraMicManagerTest, PrivacyIndicatorsNotification) {
   SetCameraAccessing(kPluginVm, false);
   SetCameraPrivacyIsOn(false);
   ForwardToStable();
   EXPECT_FALSE(vm_camera_mic_manager_->IsDeviceActive(kCamera));
   EXPECT_FALSE(
       vm_camera_mic_manager_->IsNotificationActive(kCameraNotification));
-  EXPECT_FALSE(base::Contains(notification_ids, expected_id));
+  ExpectNotificationsExist(std::set<std::string>{});
 
   SetCameraAccessing(kPluginVm, true);
   SetCameraPrivacyIsOn(false);
@@ -292,13 +302,14 @@ TEST_F(VmCameraMicManagerPrivacyIndicatorsTest, Notification) {
   EXPECT_TRUE(vm_camera_mic_manager_->IsDeviceActive(kCamera));
   EXPECT_TRUE(
       vm_camera_mic_manager_->IsNotificationActive(kCameraNotification));
-  EXPECT_TRUE(base::Contains(notification_ids, expected_id));
+  ExpectNotificationsExist(std::set<std::string>{
+      GetNotificationId(VmType::kPluginVm, kCameraNotification)});
 }
 
-TEST_F(VmCameraMicManagerPrivacyIndicatorsTest, PrivacyIndicatorsView) {
+TEST_F(VmCameraMicManagerTest, PrivacyIndicatorsView) {
   // Make sure privacy indicators work on multiple displays.
-  display::test::DisplayManagerTestApi(ash::Shell::Get()->display_manager())
-      .UpdateDisplay("800x800,801+0-800x800");
+  display::test::DisplayManagerTestApi(Shell::Get()->display_manager())
+      .UpdateDisplay("800x700,801+0-800x700");
 
   SetCameraAccessing(kPluginVm, false);
   SetCameraPrivacyIsOn(false);
@@ -309,6 +320,12 @@ TEST_F(VmCameraMicManagerPrivacyIndicatorsTest, PrivacyIndicatorsView) {
   SetCameraPrivacyIsOn(false);
   ForwardToStable();
   ExpectPrivacyIndicatorsVisible(/*visible=*/true);
+
+  // Switch back to not accessing, the indicator should not be visible.
+  SetCameraAccessing(kPluginVm, false);
+  SetCameraPrivacyIsOn(false);
+  ForwardToStable();
+  ExpectPrivacyIndicatorsVisible(/*visible=*/false);
 }
 
 // Test `IsDeviceActive()` and `IsNotificationActive()`.
@@ -518,8 +535,15 @@ class VmCameraMicManagerNotificationTest
 TEST_P(VmCameraMicManagerNotificationTest, SetActiveAndForwardToStable) {
   const NotificationTestParam& param = GetParam();
   SetActiveAndForwardToStable(param.active_map);
-  EXPECT_EQ(fake_display_service_->notification_ids(),
-            param.expected_notifications);
+
+  auto expected_notifications = param.expected_notifications;
+
+  for (auto& id : expected_notifications) {
+    id = ash::kPrivacyIndicatorsNotificationIdPrefix + id;
+  }
+
+  ExpectNotificationsExist(std::set<std::string>(expected_notifications.begin(),
+                                                 expected_notifications.end()));
 }
 
 INSTANTIATE_TEST_SUITE_P(
@@ -538,13 +562,11 @@ class VmCameraMicManagerDebounceTest : public VmCameraMicManagerTest {
 TEST_F(VmCameraMicManagerDebounceTest, Simple) {
   SetMicActive(kPluginVm, true);
   ForwardDebounceTime();
-  EXPECT_EQ(
-      fake_display_service_->notification_ids(),
+  ExpectNotificationsExist(
       std::set<std::string>{GetNotificationId(kPluginVm, kMicNotification)});
 
   ForwardToStable();
-  EXPECT_EQ(
-      fake_display_service_->notification_ids(),
+  ExpectNotificationsExist(
       std::set<std::string>{GetNotificationId(kPluginVm, kMicNotification)});
 }
 
@@ -552,18 +574,16 @@ TEST_F(VmCameraMicManagerDebounceTest, CombineCameraAndMic) {
   SetMicActive(kPluginVm, true);
   ForwardDebounceTime(/*factor=*/0.51);
   // Within debounce time, so no notification.
-  EXPECT_EQ(fake_display_service_->notification_ids(), std::set<std::string>{});
+  ExpectNotificationsExist(std::set<std::string>{});
 
   SetCameraAccessing(kPluginVm, true);
   ForwardDebounceTime(/*factor=*/0.51);
-  EXPECT_EQ(fake_display_service_->notification_ids(),
-            std::set<std::string>{
-                GetNotificationId(kPluginVm, kCameraAndMicNotification)});
+  ExpectNotificationsExist(std::set<std::string>{
+      GetNotificationId(kPluginVm, kCameraAndMicNotification)});
 
   ForwardToStable();
-  EXPECT_EQ(fake_display_service_->notification_ids(),
-            std::set<std::string>{
-                GetNotificationId(kPluginVm, kCameraAndMicNotification)});
+  ExpectNotificationsExist(std::set<std::string>{
+      GetNotificationId(kPluginVm, kCameraAndMicNotification)});
 }
 
 // This test that if the devices are turned on and then immediately turned off,
@@ -575,23 +595,21 @@ TEST_F(VmCameraMicManagerDebounceTest, DisplayStageBeforeTarget) {
   SetCameraAccessing(kPluginVm, false);
 
   ForwardDebounceTime();
-  EXPECT_EQ(fake_display_service_->notification_ids(),
-            std::set<std::string>{
-                GetNotificationId(kPluginVm, kCameraAndMicNotification)});
+  ExpectNotificationsExist(std::set<std::string>{
+      GetNotificationId(kPluginVm, kCameraAndMicNotification)});
 
   // Will continue displaying for roughly kDebounceTime.
   ForwardDebounceTime(/*factor=*/0.9);
-  EXPECT_EQ(fake_display_service_->notification_ids(),
-            std::set<std::string>{
-                GetNotificationId(kPluginVm, kCameraAndMicNotification)});
+  ExpectNotificationsExist(std::set<std::string>{
+      GetNotificationId(kPluginVm, kCameraAndMicNotification)});
 
   // Eventually display the "target" notification, which is no notification at
   // all.
   ForwardDebounceTime(/*factor=*/0.11);
-  EXPECT_EQ(fake_display_service_->notification_ids(), std::set<std::string>{});
+  ExpectNotificationsExist(std::set<std::string>{});
 
   ForwardToStable();
-  EXPECT_EQ(fake_display_service_->notification_ids(), std::set<std::string>{});
+  ExpectNotificationsExist(std::set<std::string>{});
 }
 
 // This test that within debounce time, if the state is reverted back to the
@@ -600,9 +618,8 @@ TEST_F(VmCameraMicManagerDebounceTest, RevertBackToStable) {
   SetMicActive(kPluginVm, true);
   SetCameraAccessing(kPluginVm, true);
   ForwardToStable();
-  EXPECT_EQ(fake_display_service_->notification_ids(),
-            std::set<std::string>{
-                GetNotificationId(kPluginVm, kCameraAndMicNotification)});
+  ExpectNotificationsExist(std::set<std::string>{
+      GetNotificationId(kPluginVm, kCameraAndMicNotification)});
 
   // First turn both devices off, and then turn them back up. The state should
   // become stable again so nothing should changed.
@@ -614,14 +631,12 @@ TEST_F(VmCameraMicManagerDebounceTest, RevertBackToStable) {
 
   // Nothing changed.
   ForwardDebounceTime();
-  EXPECT_EQ(fake_display_service_->notification_ids(),
-            std::set<std::string>{
-                GetNotificationId(kPluginVm, kCameraAndMicNotification)});
+  ExpectNotificationsExist(std::set<std::string>{
+      GetNotificationId(kPluginVm, kCameraAndMicNotification)});
 
   ForwardToStable();
-  EXPECT_EQ(fake_display_service_->notification_ids(),
-            std::set<std::string>{
-                GetNotificationId(kPluginVm, kCameraAndMicNotification)});
+  ExpectNotificationsExist(std::set<std::string>{
+      GetNotificationId(kPluginVm, kCameraAndMicNotification)});
 }
 
 // Simulate one of the more complicated case.
@@ -629,8 +644,7 @@ TEST_F(VmCameraMicManagerDebounceTest, SimulateSkypeStartingMeeting) {
   // Simulate the waiting to start screen, in which only the camera is active.
   SetCameraAccessing(kPluginVm, true);
   ForwardToStable();
-  EXPECT_EQ(
-      fake_display_service_->notification_ids(),
+  ExpectNotificationsExist(
       std::set<std::string>{GetNotificationId(kPluginVm, kCameraNotification)});
 
   // Simulate what happens after clicking the starting button. Skype will turn
@@ -642,25 +656,21 @@ TEST_F(VmCameraMicManagerDebounceTest, SimulateSkypeStartingMeeting) {
   ForwardDebounceTime(0.2);
   SetCameraAccessing(kPluginVm, true);
   ForwardDebounceTime(0.7);
-  EXPECT_EQ(fake_display_service_->notification_ids(),
-            std::set<std::string>{
-                GetNotificationId(kPluginVm, kCameraAndMicNotification)});
+  ExpectNotificationsExist(std::set<std::string>{
+      GetNotificationId(kPluginVm, kCameraAndMicNotification)});
   ForwardToStable();
-  EXPECT_EQ(fake_display_service_->notification_ids(),
-            std::set<std::string>{
-                GetNotificationId(kPluginVm, kCameraAndMicNotification)});
+  ExpectNotificationsExist(std::set<std::string>{
+      GetNotificationId(kPluginVm, kCameraAndMicNotification)});
 
   SetCameraAccessing(kPluginVm, false);
   ForwardDebounceTime(0.2);
   SetCameraAccessing(kPluginVm, true);
   ForwardDebounceTime(0.9);
-  EXPECT_EQ(fake_display_service_->notification_ids(),
-            std::set<std::string>{
-                GetNotificationId(kPluginVm, kCameraAndMicNotification)});
+  ExpectNotificationsExist(std::set<std::string>{
+      GetNotificationId(kPluginVm, kCameraAndMicNotification)});
   ForwardToStable();
-  EXPECT_EQ(fake_display_service_->notification_ids(),
-            std::set<std::string>{
-                GetNotificationId(kPluginVm, kCameraAndMicNotification)});
+  ExpectNotificationsExist(std::set<std::string>{
+      GetNotificationId(kPluginVm, kCameraAndMicNotification)});
 }
 
 }  // namespace ash

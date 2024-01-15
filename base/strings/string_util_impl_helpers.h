@@ -6,6 +6,7 @@
 #define BASE_STRINGS_STRING_UTIL_IMPL_HELPERS_H_
 
 #include <algorithm>
+#include <string_view>
 
 #include "base/check.h"
 #include "base/check_op.h"
@@ -14,6 +15,7 @@
 #include "base/ranges/algorithm.h"
 #include "base/strings/string_piece.h"
 #include "base/third_party/icu/icu_utf.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace base::internal {
 
@@ -219,7 +221,7 @@ bool StartsWithT(T str, T search_for, CompareCase case_sensitivity) {
   if (search_for.size() > str.size())
     return false;
 
-  BasicStringPiece<CharT> source = str.substr(0, search_for.size());
+  std::basic_string_view<CharT> source = str.substr(0, search_for.size());
 
   switch (case_sensitivity) {
     case CompareCase::SENSITIVE:
@@ -228,10 +230,6 @@ bool StartsWithT(T str, T search_for, CompareCase case_sensitivity) {
     case CompareCase::INSENSITIVE_ASCII:
       return std::equal(search_for.begin(), search_for.end(), source.begin(),
                         CaseInsensitiveCompareASCII<CharT>());
-
-    default:
-      NOTREACHED();
-      return false;
   }
 }
 
@@ -240,7 +238,7 @@ bool EndsWithT(T str, T search_for, CompareCase case_sensitivity) {
   if (search_for.size() > str.size())
     return false;
 
-  BasicStringPiece<CharT> source =
+  std::basic_string_view<CharT> source =
       str.substr(str.size() - search_for.size(), search_for.size());
 
   switch (case_sensitivity) {
@@ -250,17 +248,13 @@ bool EndsWithT(T str, T search_for, CompareCase case_sensitivity) {
     case CompareCase::INSENSITIVE_ASCII:
       return std::equal(source.begin(), source.end(), search_for.begin(),
                         CaseInsensitiveCompareASCII<CharT>());
-
-    default:
-      NOTREACHED();
-      return false;
   }
 }
 
 // A Matcher for DoReplaceMatchesAfterOffset() that matches substrings.
 template <class CharT>
 struct SubstringMatcher {
-  BasicStringPiece<CharT> find_this;
+  std::basic_string_view<CharT> find_this;
 
   size_t Find(const std::basic_string<CharT>& input, size_t pos) {
     return input.find(find_this.data(), pos, find_this.length());
@@ -277,7 +271,7 @@ auto MakeSubstringMatcher(T find_this) {
 // A Matcher for DoReplaceMatchesAfterOffset() that matches single characters.
 template <class CharT>
 struct CharacterMatcher {
-  BasicStringPiece<CharT> find_any_of_these;
+  std::basic_string_view<CharT> find_any_of_these;
 
   size_t Find(const std::basic_string<CharT>& input, size_t pos) {
     return input.find_first_of(find_any_of_these.data(), pos,
@@ -488,12 +482,12 @@ static std::basic_string<CharT> JoinStringT(list_type parts, T sep) {
 
   auto iter = parts.begin();
   DCHECK(iter != parts.end());
-  result.append(iter->data(), iter->size());
+  result.append(*iter);
   ++iter;
 
   for (; iter != parts.end(); ++iter) {
-    result.append(sep.data(), sep.size());
-    result.append(iter->data(), iter->size());
+    result.append(sep);
+    result.append(*iter);
   }
 
   // Sanity-check that we pre-allocated correctly.
@@ -502,56 +496,90 @@ static std::basic_string<CharT> JoinStringT(list_type parts, T sep) {
   return result;
 }
 
+// Replaces placeholders in `format_string` with values from `subst`.
+// * `placeholder_prefix`: Allows using a specific character as the placeholder
+// prefix. `base::ReplaceStringPlaceholders` uses '$'.
+// * `should_escape_multiple_placeholder_prefixes`:
+//   * If this parameter is `true`, which is the case with
+//   `base::ReplaceStringPlaceholders`, `placeholder_prefix` characters are
+//   replaced by that number less one. Eg $$->$, $$$->$$, etc.
+//   * If this parameter is `false`, each literal `placeholder_prefix` character
+//   in `format_string` is escaped with another `placeholder_prefix`. For
+//   instance, with `%` as the `placeholder_prefix`: %%->%, %%%%->%%, etc.
+// * `is_strict_mode`:
+//   * If this parameter is `true`, error handling is stricter. The function
+//   returns `absl::nullopt` if:
+//     * a placeholder %N is encountered where N > substitutions.size().
+//     * a literal `%` is not escaped with a `%`.
 template <typename T, typename CharT = typename T::value_type>
-std::basic_string<CharT> DoReplaceStringPlaceholders(
+absl::optional<std::basic_string<CharT>> DoReplaceStringPlaceholders(
     T format_string,
     const std::vector<std::basic_string<CharT>>& subst,
+    const CharT placeholder_prefix,
+    const bool should_escape_multiple_placeholder_prefixes,
+    const bool is_strict_mode,
     std::vector<size_t>* offsets) {
   size_t substitutions = subst.size();
-  DCHECK_LT(substitutions, 11U);
+  DCHECK_LT(substitutions, 10U);
 
   size_t sub_length = 0;
-  for (const auto& cur : subst)
+  for (const auto& cur : subst) {
     sub_length += cur.length();
+  }
 
   std::basic_string<CharT> formatted;
   formatted.reserve(format_string.length() + sub_length);
 
   std::vector<ReplacementOffset> r_offsets;
   for (auto i = format_string.begin(); i != format_string.end(); ++i) {
-    if ('$' == *i) {
+    if (placeholder_prefix == *i) {
       if (i + 1 != format_string.end()) {
         ++i;
-        if ('$' == *i) {
-          while (i != format_string.end() && '$' == *i) {
-            formatted.push_back('$');
+        if (placeholder_prefix == *i) {
+          do {
+            formatted.push_back(placeholder_prefix);
             ++i;
-          }
+          } while (should_escape_multiple_placeholder_prefixes &&
+                   i != format_string.end() && placeholder_prefix == *i);
           --i;
         } else {
           if (*i < '1' || *i > '9') {
-            DLOG(ERROR) << "Invalid placeholder: $"
-                        << std::basic_string<CharT>(1, *i);
+            if (is_strict_mode) {
+              DLOG(ERROR) << "Invalid placeholder after placeholder prefix: "
+                          << std::basic_string<CharT>(1, placeholder_prefix)
+                          << std::basic_string<CharT>(1, *i);
+              return absl::nullopt;
+            }
+
             continue;
           }
-          size_t index = static_cast<size_t>(*i - '1');
+          const size_t index = static_cast<size_t>(*i - '1');
           if (offsets) {
             ReplacementOffset r_offset(index, formatted.size());
             r_offsets.insert(
                 ranges::upper_bound(r_offsets, r_offset, &CompareParameter),
                 r_offset);
           }
-          if (index < substitutions)
+          if (index < substitutions) {
             formatted.append(subst.at(index));
+          } else if (is_strict_mode) {
+            DLOG(ERROR) << "index out of range: " << index << ": "
+                        << substitutions;
+            return absl::nullopt;
+          }
         }
+      } else if (is_strict_mode) {
+        DLOG(ERROR) << "unexpected placeholder prefix at end of string";
+        return absl::nullopt;
       }
     } else {
       formatted.push_back(*i);
     }
   }
   if (offsets) {
-    for (const auto& cur : r_offsets)
+    for (const auto& cur : r_offsets) {
       offsets->push_back(cur.offset);
+    }
   }
   return formatted;
 }

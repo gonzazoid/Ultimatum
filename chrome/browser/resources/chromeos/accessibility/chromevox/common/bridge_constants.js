@@ -35,19 +35,14 @@ let BridgeEntry;
 export const BridgeConstants = {};
 
 /** @public {!BridgeEntry} */
-BridgeConstants.BrailleBackground = {
-  TARGET: 'BrailleBackground',
+BridgeConstants.Braille = {
+  TARGET: 'Braille',
   Action: {
     BACK_TRANSLATE: 'backTranslate',
-    REFRESH_BRAILLE_TABLE: 'refreshBrailleTable',
-  },
-};
-
-/** @public {!BridgeEntry} */
-BridgeConstants.BrailleCommandHandler = {
-  TARGET: 'BrailleCommandHandler',
-  Action: {
-    SET_ENABLED: 'setEnabled',
+    PAN_LEFT: 'panLeft',
+    PAN_RIGHT: 'panRight',
+    SET_BYPASS: 'setBypass',
+    WRITE: 'write',
   },
 };
 
@@ -56,17 +51,17 @@ BridgeConstants.ChromeVoxPrefs = {
   TARGET: 'ChromeVoxPrefs',
   Action: {
     GET_PREFS: 'getPrefs',
+    GET_STICKY_PREF: 'getStickyPref',
     SET_LOGGING_PREFS: 'setLoggingPrefs',
     SET_PREF: 'setPref',
   },
 };
 
 /** @public {!BridgeEntry} */
-BridgeConstants.ChromeVoxState = {
-  TARGET: 'ChromeVoxState',
+BridgeConstants.ChromeVoxRange = {
+  TARGET: 'ChromeVoxRange',
   Action: {
     CLEAR_CURRENT_RANGE: 'clearCurrentRange',
-    UPDATE_PUNCTUATION_ECHO: 'updatePunctuationEcho',
   },
 };
 
@@ -79,8 +74,17 @@ BridgeConstants.CommandHandler = {
 };
 
 /** @public {!BridgeEntry} */
-BridgeConstants.EventSourceState = {
-  TARGET: 'EventSourceState',
+BridgeConstants.Earcons = {
+  TARGET: 'Earcons',
+  Action: {
+    CANCEL_EARCON: 'cancelEarcon',
+    PLAY_EARCON: 'playEarcon',
+  },
+};
+
+/** @public {!BridgeEntry} */
+BridgeConstants.EventSource = {
+  TARGET: 'EventSource',
   Action: {
     GET: 'get',
   },
@@ -95,10 +99,33 @@ BridgeConstants.EventStreamLogger = {
 };
 
 /** @public {!BridgeEntry} */
+BridgeConstants.ForcedActionPath = {
+  TARGET: 'ForcedActionPath',
+  Action: {
+    CREATE: 'create',
+    DESTROY: 'destroy',
+    ON_KEY_DOWN: 'onKeyDown',
+  },
+};
+
+/** @public {!BridgeEntry} */
 BridgeConstants.GestureCommandHandler = {
   TARGET: 'GestureCommandHandler',
   Action: {
-    SET_ENABLED: 'setEnabled',
+    SET_BYPASS: 'setBypass',
+  },
+};
+
+/** @public {!BridgeEntry} */
+BridgeConstants.LearnMode = {
+  TARGET: 'LearnMode',
+  Action: {
+    CLEAR_TOUCH_EXPLORE_OUTPUT_TIME: 'clearTouchExploreOutputTime',
+    ON_ACCESSIBILITY_GESTURE: 'onAccessibilityGesture',
+    ON_BRAILLE_KEY_EVENT: 'onBrailleKeyEvent',
+    ON_KEY_DOWN: 'onKeyDown',
+    ON_KEY_UP: 'onKeyUp',
+    READY: 'ready',
   },
 };
 
@@ -128,11 +155,10 @@ BridgeConstants.PanelBackground = {
     CREATE_ALL_NODE_MENU_BACKGROUNDS: 'createAllNodeMenuBackgrounds',
     CREATE_NEW_I_SEARCH: 'createNewISearch',
     DESTROY_I_SEARCH: 'destroyISearch',
-    FOCUS_TAB: 'focusTab',
     GET_ACTIONS_FOR_CURRENT_NODE: 'getActionsForCurrentNode',
-    GET_TAB_MENU_DATA: 'getTabMenuData',
     INCREMENTAL_SEARCH: 'incrementalSearch',
     NODE_MENU_CALLBACK: 'nodeMenuCallback',
+    ON_TUTORIAL_READY: 'onTutorialReady',
     PERFORM_CUSTOM_ACTION_ON_CURRENT_NODE: 'performCustomActionOnCurrentNode',
     PERFORM_STANDARD_ACTION_ON_CURRENT_NODE:
         'performStandardActionOnCurrentNode',
@@ -148,16 +174,8 @@ BridgeConstants.TtsBackground = {
   TARGET: 'TtsBackground',
   Action: {
     GET_CURRENT_VOICE: 'getCurrentVoice',
-  },
-};
-
-/** @public {!BridgeEntry} */
-BridgeConstants.UserActionMonitor = {
-  TARGET: 'UserActionMonitor',
-  Action: {
-    CREATE: 'create',
-    DESTROY: 'destroy',
-    ON_KEY_DOWN: 'onKeyDown',
+    SPEAK: 'speak',
+    UPDATE_PUNCTUATION_ECHO: 'updatePunctuationEcho',
   },
 };
 

@@ -6,14 +6,15 @@
 
 #include <memory>
 
-#include "base/bind.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/strings/stringprintf.h"
 #include "base/test/bind.h"
-#include "base/test/task_environment.h"
 #include "chrome/browser/ash/file_manager/volume_manager.h"
 #include "chrome/browser/ash/file_manager/volume_manager_factory.h"
+#include "chrome/browser/ash/file_manager/volume_manager_observer.h"
 #include "chrome/browser/ash/guest_os/guest_id.h"
 #include "chrome/browser/ash/guest_os/guest_os_test_helpers.h"
 #include "chrome/test/base/testing_profile.h"
@@ -43,6 +44,18 @@ std::unique_ptr<KeyedService> BuildVolumeManager(
       nullptr /* file_system_provider_service */,
       file_manager::VolumeManager::GetMtpStorageInfoCallback());
 }
+
+class MockVolumeManagerObserver : public file_manager::VolumeManagerObserver {
+ public:
+  MockVolumeManagerObserver() = default;
+  ~MockVolumeManagerObserver() override = default;
+
+  MOCK_METHOD(void,
+              OnVolumeMounted,
+              (ash::MountError error_code, const file_manager::Volume& volume),
+              (override));
+};
+
 }  // namespace
 
 namespace guest_os {
@@ -60,6 +73,8 @@ class GuestOsMountProviderTest : public testing::Test {
 
     DiskMountManager::InitializeForTesting(disk_manager_);
     volume_manager_ = file_manager::VolumeManagerFactory::Get(profile_.get());
+    volume_manager_observer_ = std::make_unique<MockVolumeManagerObserver>();
+    volume_manager_->AddObserver(volume_manager_observer_.get());
   }
 
   GuestOsMountProviderTest(const GuestOsMountProviderTest&) = delete;
@@ -104,18 +119,25 @@ class GuestOsMountProviderTest : public testing::Test {
         .Times(n)
         .WillRepeatedly(
             Invoke(this, &GuestOsMountProviderTest::NotifyMountEvent));
+
+    EXPECT_CALL(*volume_manager_observer_, OnVolumeMounted).Times(n);
   }
 
-  // guestos_${UserHash}_${encode(kGuestId.ToString())}. Note that UserHash
-  // is an empty string in these tests.
+  // Use VmType::BRUSCHETTA because TERMINA (Crostini) is special-cased to
+  // use GetCrostiniMountPointName.
+  //
+  // Expect the mount point name to be:
+  //   guestos_${UserHash}_${encode(kGuestId.ToString())}
+  // Note that UserHash is an empty string in these tests.
   const guest_os::GuestId kGuestId =
-      guest_os::GuestId(guest_os::VmType::TERMINA, "cow", "ptery/daccy");
+      guest_os::GuestId(guest_os::VmType::BRUSCHETTA, "cow", "ptery/daccy");
   const std::string kMountName = std::string{"guestos++cow+ptery%2Fdaccy"};
 
   content::BrowserTaskEnvironment task_environment_;
-  ash::disks::MockDiskMountManager* disk_manager_;
+  raw_ptr<ash::disks::MockDiskMountManager, DanglingUntriaged> disk_manager_;
   std::unique_ptr<TestingProfile> profile_;
-  file_manager::VolumeManager* volume_manager_;
+  raw_ptr<file_manager::VolumeManager, DanglingUntriaged> volume_manager_;
+  std::unique_ptr<MockVolumeManagerObserver> volume_manager_observer_;
   std::unique_ptr<MockMountProvider> provider_;
   int cid_ = 41;     // Default set in MockMountProvider
   int port_ = 1234;  // Default set in MockMountProvider
@@ -125,8 +147,8 @@ TEST_F(GuestOsMountProviderTest, MountDiskMountsDisk) {
   ExpectMountCalls(1);
   bool result = false;
 
-  provider_->Mount(profile_.get(), base::BindLambdaForTesting(
-                                       [&result](bool res) { result = res; }));
+  provider_->Mount(
+      base::BindLambdaForTesting([&result](bool res) { result = res; }));
   task_environment_.RunUntilIdle();
 
   EXPECT_TRUE(result);
@@ -145,16 +167,13 @@ TEST_F(GuestOsMountProviderTest, MountDiskMountsDisk) {
 TEST_F(GuestOsMountProviderTest, MultipleCallsAreQueuedAndOnlyMountOnce) {
   ExpectMountCalls(1);
   int successes = 0;
-  provider_->Mount(profile_.get(),
-                   base::BindLambdaForTesting(
-                       [&successes](bool result) { successes += result; }));
-  provider_->Mount(profile_.get(),
-                   base::BindLambdaForTesting(
-                       [&successes](bool result) { successes += result; }));
+  provider_->Mount(base::BindLambdaForTesting(
+      [&successes](bool result) { successes += result; }));
+  provider_->Mount(base::BindLambdaForTesting(
+      [&successes](bool result) { successes += result; }));
   task_environment_.RunUntilIdle();
-  provider_->Mount(profile_.get(),
-                   base::BindLambdaForTesting(
-                       [&successes](bool result) { successes += result; }));
+  provider_->Mount(base::BindLambdaForTesting(
+      [&successes](bool result) { successes += result; }));
   task_environment_.RunUntilIdle();
 
   EXPECT_EQ(successes, 3);
@@ -175,13 +194,13 @@ TEST_F(GuestOsMountProviderTest, CanRemountAfterUnmount) {
             std::move(callback).Run(ash::MountError::kSuccess);
           }));
 
-  provider_->Mount(profile_.get(), base::BindLambdaForTesting(
-                                       [](bool res) { EXPECT_TRUE(res); }));
+  provider_->Mount(
+      base::BindLambdaForTesting([](bool res) { EXPECT_TRUE(res); }));
   task_environment_.RunUntilIdle();
   provider_->Unmount();
   task_environment_.RunUntilIdle();
-  provider_->Mount(profile_.get(), base::BindLambdaForTesting(
-                                       [](bool res) { EXPECT_TRUE(res); }));
+  provider_->Mount(
+      base::BindLambdaForTesting([](bool res) { EXPECT_TRUE(res); }));
   task_environment_.RunUntilIdle();
 
   base::FilePath path;
@@ -206,42 +225,10 @@ TEST_F(GuestOsMountProviderTest, PrepareFailureFailsMounting) {
   bool result = true;
 
   fail_provider.Mount(
-      profile_.get(),
       base::BindLambdaForTesting([&result](bool res) { result = res; }));
   task_environment_.RunUntilIdle();
 
   EXPECT_FALSE(result);
 }
 
-TEST_F(GuestOsMountProviderTest, VolumesMountedOnChildProfiles) {
-  Profile* otr_profile = profile_->GetOffTheRecordProfile(
-      Profile::OTRProfileID::CreateUniqueForTesting(), true);
-  file_manager::VolumeManagerFactory::GetInstance()->SetTestingFactory(
-      otr_profile, base::BindRepeating(&BuildVolumeManager));
-  auto* otr_volume_manager =
-      file_manager::VolumeManagerFactory::Get(otr_profile);
-
-  ExpectMountCalls(1);
-  bool result = false;
-
-  provider_->Mount(otr_profile, base::BindLambdaForTesting(
-                                    [&result](bool res) { result = res; }));
-  task_environment_.RunUntilIdle();
-  EXPECT_TRUE(result);
-  provider_->Mount(profile_.get(), base::BindLambdaForTesting(
-                                       [&result](bool res) { result = res; }));
-  task_environment_.RunUntilIdle();
-  EXPECT_TRUE(result);
-
-  auto volume = volume_manager_->FindVolumeById("guest_os:" + kMountName);
-  ASSERT_TRUE(volume);
-  auto otr_volume =
-      otr_volume_manager->FindVolumeById("guest_os:" + kMountName);
-  ASSERT_TRUE(otr_volume);
-
-  // If we don't destroy the OTR profile now then it lives until the parent
-  // profile gets destroyed, resulting in some services getting destroyed in the
-  // wrong order.
-  profile_->DestroyOffTheRecordProfile(otr_profile);
-}
 }  // namespace guest_os

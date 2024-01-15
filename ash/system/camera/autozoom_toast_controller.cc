@@ -4,14 +4,15 @@
 
 #include "ash/system/camera/autozoom_toast_controller.h"
 
-#include "ash/accessibility/accessibility_controller_impl.h"
+#include <algorithm>
+
+#include "ash/accessibility/accessibility_controller.h"
 #include "ash/shelf/shelf.h"
 #include "ash/shell.h"
 #include "ash/system/camera/autozoom_controller_impl.h"
 #include "ash/system/tray/tray_constants.h"
 #include "ash/system/tray/tray_utils.h"
 #include "ash/system/unified/unified_system_tray.h"
-#include "base/cxx17_backports.h"
 
 namespace ash {
 
@@ -61,18 +62,13 @@ void AutozoomToastController::ShowToast() {
 
   tray_->CloseSecondaryBubbles();
 
-  TrayBubbleView::InitParams init_params;
-  init_params.shelf_alignment = tray_->shelf()->alignment();
+  TrayBubbleView::InitParams init_params =
+      CreateInitParamsForTrayBubble(tray_, /*anchor_to_shelf_corner=*/true);
+  init_params.type = TrayBubbleView::TrayBubbleType::kSecondaryBubble;
   init_params.preferred_width = kAutozoomToastMinWidth;
+
+  // Use this controller as the delegate rather than the tray.
   init_params.delegate = GetWeakPtr();
-  init_params.parent_window = tray_->GetBubbleWindowContainer();
-  init_params.anchor_view = nullptr;
-  init_params.anchor_mode = TrayBubbleView::AnchorMode::kRect;
-  init_params.anchor_rect = tray_->shelf()->GetSystemTrayAnchorRect();
-  // Decrease bottom and right insets to compensate for the adjustment of
-  // the respective edges in Shelf::GetSystemTrayAnchorRect().
-  init_params.insets = GetTrayBubbleInsets();
-  init_params.translucent = true;
 
   auto bubble_view = std::make_unique<TrayBubbleView>(init_params);
   // bubble_view_ is owned by the view hierarchy and not by this class.
@@ -89,8 +85,7 @@ void AutozoomToastController::ShowToast() {
   StartAutoCloseTimer();
   UpdateToastView();
 
-  tray_->SetTrayBubbleHeight(
-      bubble_widget_->GetWindowBoundsInScreen().height());
+  tray_->NotifySecondaryBubbleHeight(toast_view_->height());
 }
 
 void AutozoomToastController::HideToast() {
@@ -98,7 +93,7 @@ void AutozoomToastController::HideToast() {
   if (!bubble_widget_ || bubble_widget_->IsClosed())
     return;
   bubble_widget_->Close();
-  tray_->SetTrayBubbleHeight(0);
+  tray_->NotifySecondaryBubbleHeight(0);
 }
 
 void AutozoomToastController::BubbleViewDestroyed() {
@@ -123,6 +118,8 @@ std::u16string AutozoomToastController::GetAccessibleNameForBubble() {
   return toast_view_->GetAccessibleName();
 }
 
+void AutozoomToastController::HideBubble(const TrayBubbleView* bubble_view) {}
+
 void AutozoomToastController::StartAutoCloseTimer() {
   close_timer_.Stop();
 
@@ -130,12 +127,12 @@ void AutozoomToastController::StartAutoCloseTimer() {
   if (toast_view_ && toast_view_->IsButtonFocused())
     return;
 
-  int autoclose_delay = kTrayPopupAutoCloseDelayInSeconds;
-  if (Shell::Get()->accessibility_controller()->spoken_feedback().enabled())
-    autoclose_delay = kTrayPopupAutoCloseDelayInSecondsWithSpokenFeedback;
-
-  close_timer_.Start(FROM_HERE, base::Seconds(autoclose_delay), this,
-                     &AutozoomToastController::HideToast);
+  close_timer_.Start(
+      FROM_HERE,
+      Shell::Get()->accessibility_controller()->spoken_feedback().enabled()
+          ? kSecondaryBubbleWithSpokenFeedbackDuration
+          : kSecondaryBubbleDuration,
+      this, &AutozoomToastController::HideToast);
 }
 
 void AutozoomToastController::OnAutozoomStateChanged(
@@ -151,8 +148,8 @@ void AutozoomToastController::OnAutozoomStateChanged(
 void AutozoomToastController::UpdateToastView() {
   if (toast_view_) {
     toast_view_->SetAutozoomEnabled(/*enabled=*/delegate_->IsAutozoomEnabled());
-    int width = base::clamp(toast_view_->GetPreferredSize().width(),
-                            kAutozoomToastMinWidth, kAutozoomToastMaxWidth);
+    int width = std::clamp(toast_view_->GetPreferredSize().width(),
+                           kAutozoomToastMinWidth, kAutozoomToastMaxWidth);
     bubble_view_->SetPreferredWidth(width);
   }
 }

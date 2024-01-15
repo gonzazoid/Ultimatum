@@ -6,12 +6,14 @@
 #define GPU_COMMAND_BUFFER_SERVICE_SHARED_IMAGE_ANGLE_VULKAN_IMAGE_BACKING_FACTORY_H_
 
 #include "gpu/command_buffer/service/shared_image/gl_common_image_backing_factory.h"
+#include "gpu/gpu_gles2_export.h"
 
 namespace gpu {
 
 class SharedContextState;
 
-class AngleVulkanImageBackingFactory : public GLCommonImageBackingFactory {
+class GPU_GLES2_EXPORT AngleVulkanImageBackingFactory
+    : public GLCommonImageBackingFactory {
  public:
   AngleVulkanImageBackingFactory(const GpuPreferences& gpu_preferences,
                                  const GpuDriverBugWorkarounds& workarounds,
@@ -28,6 +30,7 @@ class AngleVulkanImageBackingFactory : public GLCommonImageBackingFactory {
       GrSurfaceOrigin surface_origin,
       SkAlphaType alpha_type,
       uint32_t usage,
+      std::string debug_label,
       bool is_thread_safe) override;
   std::unique_ptr<SharedImageBacking> CreateSharedImage(
       const Mailbox& mailbox,
@@ -37,19 +40,29 @@ class AngleVulkanImageBackingFactory : public GLCommonImageBackingFactory {
       GrSurfaceOrigin surface_origin,
       SkAlphaType alpha_type,
       uint32_t usage,
+      std::string debug_label,
       base::span<const uint8_t> pixel_data) override;
   std::unique_ptr<SharedImageBacking> CreateSharedImage(
       const Mailbox& mailbox,
-      int client_id,
-      gfx::GpuMemoryBufferHandle handle,
-      gfx::BufferFormat format,
-      gfx::BufferPlane plane,
-      SurfaceHandle surface_handle,
+      viz::SharedImageFormat format,
       const gfx::Size& size,
       const gfx::ColorSpace& color_space,
       GrSurfaceOrigin surface_origin,
       SkAlphaType alpha_type,
-      uint32_t usage) override;
+      uint32_t usage,
+      std::string debug_label,
+      gfx::GpuMemoryBufferHandle handle) override;
+  std::unique_ptr<SharedImageBacking> CreateSharedImage(
+      const Mailbox& mailbox,
+      gfx::GpuMemoryBufferHandle handle,
+      gfx::BufferFormat format,
+      gfx::BufferPlane plane,
+      const gfx::Size& size,
+      const gfx::ColorSpace& color_space,
+      GrSurfaceOrigin surface_origin,
+      SkAlphaType alpha_type,
+      uint32_t usage,
+      std::string debug_label) override;
   bool IsSupported(uint32_t usage,
                    viz::SharedImageFormat format,
                    const gfx::Size& size,
@@ -59,7 +72,9 @@ class AngleVulkanImageBackingFactory : public GLCommonImageBackingFactory {
                    base::span<const uint8_t> pixel_data) override;
 
  private:
-  bool CanUseAngleVulkanImageBacking(uint32_t usage) const;
+  bool IsGMBSupported(gfx::GpuMemoryBufferType gmb_type) const;
+  bool CanUseAngleVulkanImageBacking(uint32_t usage,
+                                     gfx::GpuMemoryBufferType gmb_type) const;
 
   raw_ptr<SharedContextState> context_state_;
 };

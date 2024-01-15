@@ -6,8 +6,9 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/threading/thread_restrictions.h"
 #include "base/time/time.h"
 #include "components/sync/test/fake_server.h"
@@ -36,11 +37,7 @@ FakeServerHttpPostProvider::FakeServerHttpPostProvider(
     const base::WeakPtr<FakeServer>& fake_server,
     scoped_refptr<base::SequencedTaskRunner> fake_server_task_runner)
     : fake_server_(fake_server),
-      fake_server_task_runner_(fake_server_task_runner),
-      synchronous_post_completion_(
-          base::WaitableEvent::ResetPolicy::AUTOMATIC,
-          base::WaitableEvent::InitialState::NOT_SIGNALED),
-      aborted_(false) {}
+      fake_server_task_runner_(fake_server_task_runner) {}
 
 FakeServerHttpPostProvider::~FakeServerHttpPostProvider() = default;
 
@@ -65,8 +62,6 @@ void FakeServerHttpPostProvider::SetPostPayload(const char* content_type,
   request_content_type_.assign(content_type);
   request_content_.assign(content, content_length);
 }
-
-void FakeServerHttpPostProvider::SetAllowBatching(bool allow_batching) {}
 
 bool FakeServerHttpPostProvider::MakeSynchronousPost(int* net_error_code,
                                                      int* http_status_code) {

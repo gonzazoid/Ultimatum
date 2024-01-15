@@ -8,14 +8,16 @@
 #include <memory>
 #include <string>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "net/cert/x509_certificate.h"
+
+class GURL;
 
 namespace content {
 
 class StoragePartition;
 
-// The SSLHostStateDelegate encapulates the host-specific state for SSL errors.
+// The SSLHostStateDelegate encapsulates the host-specific state for SSL errors.
 // For example, SSLHostStateDelegate remembers whether the user has whitelisted
 // a particular broken cert for use with particular host.  We separate this
 // state from the SSLManager because this state is shared across many navigation
@@ -84,12 +86,28 @@ class SSLHostStateDelegate {
   // |host|.
   virtual void RevokeUserAllowExceptions(const std::string& host) = 0;
 
+  // Sets HTTPS-First Mode enforcement for the given `host`.
+  virtual void SetHttpsEnforcementForHost(
+      const std::string& host,
+      bool enforce,
+      StoragePartition* storage_partition) = 0;
+  // Returns whether HTTPS-First Mode is enabled for the given `url`. This check
+  // ignores the scheme of `url`. E.g. http://example.com and
+  // https://example.com will return the same result.
+  virtual bool IsHttpsEnforcedForUrl(const GURL& url,
+                                     StoragePartition* storage_partition) = 0;
+
   // Returns whether the user has allowed a certificate error exception or
   // HTTP exception for |host|. This does not mean that *all* certificate errors
   // are allowed, just that there exists an exception. To see if a particular
   // certificate and error combination exception is allowed, use QueryPolicy().
   virtual bool HasAllowException(const std::string& host,
                                  StoragePartition* storage_partition) = 0;
+
+  // Returns true if the user has allowed a certificate error exception or HTTP
+  // exception for any host.
+  virtual bool HasAllowExceptionForAnyHost(
+      StoragePartition* storage_partition) = 0;
 
  protected:
   virtual ~SSLHostStateDelegate() {}

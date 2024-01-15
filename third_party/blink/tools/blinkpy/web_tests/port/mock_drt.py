@@ -51,7 +51,6 @@ if tools_dir not in sys.path:
 from blinkpy.common import exit_codes
 from blinkpy.common import read_checksum_from_png
 from blinkpy.common.system.system_host import SystemHost
-from blinkpy.web_tests.models import test_run_results
 from blinkpy.web_tests.port.driver import DriverInput, DriverOutput
 from blinkpy.web_tests.port.factory import PortFactory
 
@@ -88,7 +87,7 @@ class MockDRTPort(object):
         driver = self.__delegate_driver_class()(self, worker_number,
                                                 no_timeout)
         driver.cmd_line = self._overriding_cmd_line(
-            driver.cmd_line, self.__delegate._path_to_driver(), sys.executable,
+            driver.cmd_line, self.__delegate.path_to_driver(), sys.executable,
             path_to_this_file, self.__delegate.name())
         return driver
 
@@ -131,7 +130,7 @@ class MockDRTPort(object):
 
     def _lookup_virtual_test_args(self, test_name):
         # MockDRTPort doesn't support virtual test suites.
-        raise NotImplmentedError()
+        raise NotImplementedError()
 
 
 def main(argv, host, stdin, stdout, stderr):
@@ -212,6 +211,8 @@ class MockDRT(object):
             0,
             checksum,
             wpt_print_mode=self._port.is_wpt_print_reftest(test_name),
+            trace_file=None,
+            startup_trace_file=None,
             args=[])
 
     def output_for_test(self, test_input, is_reftest):

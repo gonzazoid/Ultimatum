@@ -15,8 +15,9 @@
 #include "ui/views/examples/grit/views_examples_resources.h"
 #include "ui/views/layout/box_layout.h"
 
-namespace views {
-namespace examples {
+namespace views::examples {
+
+constexpr int kLayoutInset = 8;
 
 ToggleButtonExample::ToggleButtonExample()
     : ExampleBase(
@@ -25,7 +26,9 @@ ToggleButtonExample::ToggleButtonExample()
 ToggleButtonExample::~ToggleButtonExample() = default;
 
 void ToggleButtonExample::CreateExampleView(View* container) {
-  auto layout = std::make_unique<BoxLayout>(BoxLayout::Orientation::kVertical);
+  auto layout =
+      std::make_unique<BoxLayout>(BoxLayout::Orientation::kVertical,
+                                  gfx::Insets(kLayoutInset), kLayoutInset);
   layout->set_cross_axis_alignment(BoxLayout::CrossAxisAlignment::kCenter);
   container->SetLayoutManager(std::move(layout));
   container
@@ -44,7 +47,15 @@ void ToggleButtonExample::CreateExampleView(View* container) {
   button->SetAccessibleName(
       l10n_util::GetStringUTF16(IDS_TOGGLE_BUTTON_NAME_2));
   button->SetIsOn(true);
+  button = container->AddChildView(
+      std::make_unique<ToggleButton>(base::BindRepeating(
+          [](ToggleButtonExample* example) {
+            PrintStatus("Pressed 3! count: %d", ++example->count_2_);
+          },
+          base::Unretained(this))));
+  button->SetAccessibleName(
+      l10n_util::GetStringUTF16(IDS_TOGGLE_BUTTON_NAME_3));
+  button->SetEnabled(false);
 }
 
-}  // namespace examples
-}  // namespace views
+}  // namespace views::examples

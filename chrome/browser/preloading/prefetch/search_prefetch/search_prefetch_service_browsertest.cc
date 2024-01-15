@@ -9,15 +9,17 @@
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/time/time.h"
+#include "base/timer/elapsed_timer.h"
 #include "chrome/browser/autocomplete/chrome_autocomplete_scheme_classifier.h"
 #include "chrome/browser/chrome_content_browser_client.h"
 #include "chrome/browser/content_settings/host_content_settings_map_factory.h"
-#include "chrome/browser/prefetch/prefetch_prefs.h"
 #include "chrome/browser/preloading/chrome_preloading.h"
 #include "chrome/browser/preloading/prefetch/search_prefetch/field_trial_settings.h"
 #include "chrome/browser/preloading/prefetch/search_prefetch/search_prefetch_browser_test_base.h"
 #include "chrome/browser/preloading/prefetch/search_prefetch/search_prefetch_service.h"
 #include "chrome/browser/preloading/prefetch/search_prefetch/search_prefetch_service_factory.h"
+#include "chrome/browser/preloading/prefetch/search_prefetch/streaming_search_prefetch_url_loader.h"
+#include "chrome/browser/preloading/preloading_prefs.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/search_engines/template_url_service_factory.h"
 #include "chrome/browser/ssl/security_state_tab_helper.h"
@@ -31,10 +33,12 @@
 #include "components/content_settings/core/browser/host_content_settings_map.h"
 #include "components/content_settings/core/common/content_settings.h"
 #include "components/omnibox/browser/autocomplete_input.h"
+#include "components/omnibox/browser/omnibox_controller.h"
 #include "components/omnibox/browser/omnibox_edit_model.h"
 #include "components/omnibox/browser/omnibox_view.h"
 #include "components/prefs/pref_service.h"
 #include "components/search_engines/template_url_service.h"
+#include "content/public/browser/preloading.h"
 #include "content/public/browser/service_worker_context.h"
 #include "content/public/browser/storage_partition.h"
 #include "content/public/common/content_client.h"
@@ -48,6 +52,7 @@
 #include "net/test/embedded_test_server/http_request.h"
 #include "services/metrics/public/cpp/ukm_builders.h"
 #include "services/metrics/public/cpp/ukm_recorder.h"
+#include "services/network/public/mojom/clear_data_filter.mojom.h"
 #include "services/network/public/mojom/network_context.mojom.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/loader/url_loader_throttle.h"
@@ -61,28 +66,45 @@ using omnibox::mojom::NavigationPredictor;
 namespace {
 
 constexpr char kOmniboxSuggestPrefetchQuery[] = "porgs";
-constexpr char kOmniboxSuggestPrefetchSecondItemQuery[] = "porgsandwich";
-constexpr char16_t kOmniboxSuggestPrefetchSecondItemQuery16[] = u"porgsandwich";
 constexpr char kOmniboxSuggestNonPrefetchQuery[] = "puffins";
 constexpr char kOmniboxErrorQuery[] = "502_on_prefetch";
-constexpr char16_t kOmniboxSuggestNonPrefetchQuery16[] = u"puffins";
 constexpr char kLoadInSubframe[] = "/load_in_subframe";
 constexpr char kClientHintsURL[] = "/accept_ch.html";
 constexpr char kThrottleHeader[] = "porgs-header";
 constexpr char kThrottleHeaderValue[] = "porgs-header-value";
 constexpr char kServiceWorkerUrl[] = "/navigation_preload.js";
 
+enum class BlockOnHeaders {
+  kBlockOnHeaders = 0,
+}
+
+const kBlockOnHeadersCases[] = {BlockOnHeaders::kBlockOnHeaders};
+
 using UkmEntry = ukm::TestUkmRecorder::HumanReadableUkmEntry;
 using ukm::builders::Preloading_Attempt;
 using ukm::builders::Preloading_Prediction;
+static const auto kMockElapsedTime =
+    base::ScopedMockElapsedTimersForTest::kMockElapsedTime;
 
-enum class BlockOnHeaders {
-  kBlockOnHeaders = 0,
-  kDirectBeforeHeaders = 1,
+// Since the result can be set upon Mojo disconnection, we have to wait until
+// it to be reported.
+void CheckCorrectForwardingResultMetric(
+    base::HistogramTester& histogram_tester,
+    StreamingSearchPrefetchURLLoader::ForwardingResult result,
+    int count) {
+  while (true) {
+    int num = histogram_tester.GetBucketCount(
+        "Omnibox.SearchPreload.ForwardingResult.NotServedToPrerender", result);
+    if (num >= count) {
+      break;
+    }
+    base::RunLoop run_loop;
+    run_loop.RunUntilIdle();
+  }
+  histogram_tester.ExpectUniqueSample(
+      "Omnibox.SearchPreload.ForwardingResult.NotServedToPrerender", result,
+      count);
 }
-
-const kBlockOnHeadersCases[] = {BlockOnHeaders::kBlockOnHeaders,
-                                BlockOnHeaders::kDirectBeforeHeaders};
 
 }  // namespace
 
@@ -110,7 +132,8 @@ class ThrottleAllContentBrowserClient : public ChromeContentBrowserClient {
       content::BrowserContext* browser_context,
       const base::RepeatingCallback<content::WebContents*()>& wc_getter,
       content::NavigationUIData* navigation_ui_data,
-      int frame_tree_node_id) override {
+      int frame_tree_node_id,
+      absl::optional<int64_t> navigation_id) override {
     std::vector<std::unique_ptr<blink::URLLoaderThrottle>> throttles;
     throttles.push_back(std::make_unique<DeferringThrottle>());
     return throttles;
@@ -141,7 +164,8 @@ class CancelAllContentBrowserClient : public ChromeContentBrowserClient {
       content::BrowserContext* browser_context,
       const base::RepeatingCallback<content::WebContents*()>& wc_getter,
       content::NavigationUIData* navigation_ui_data,
-      int frame_tree_node_id) override {
+      int frame_tree_node_id,
+      absl::optional<int64_t> navigation_id) override {
     std::vector<std::unique_ptr<blink::URLLoaderThrottle>> throttles;
     throttles.push_back(std::make_unique<CancellingThrottle>());
     return throttles;
@@ -172,7 +196,8 @@ class AddHeaderContentBrowserClient : public ChromeContentBrowserClient {
       content::BrowserContext* browser_context,
       const base::RepeatingCallback<content::WebContents*()>& wc_getter,
       content::NavigationUIData* navigation_ui_data,
-      int frame_tree_node_id) override {
+      int frame_tree_node_id,
+      absl::optional<int64_t> navigation_id) override {
     std::vector<std::unique_ptr<blink::URLLoaderThrottle>> throttles;
     throttles.push_back(std::make_unique<AddHeaderModifyingThrottle>());
     return throttles;
@@ -204,7 +229,8 @@ class AddQueryParamContentBrowserClient : public ChromeContentBrowserClient {
       content::BrowserContext* browser_context,
       const base::RepeatingCallback<content::WebContents*()>& wc_getter,
       content::NavigationUIData* navigation_ui_data,
-      int frame_tree_node_id) override {
+      int frame_tree_node_id,
+      absl::optional<int64_t> navigation_id) override {
     std::vector<std::unique_ptr<blink::URLLoaderThrottle>> throttles;
     throttles.push_back(std::make_unique<AddQueryParamModifyingThrottle>());
     return throttles;
@@ -236,7 +262,8 @@ class ChangeQueryContentBrowserClient : public ChromeContentBrowserClient {
       content::BrowserContext* browser_context,
       const base::RepeatingCallback<content::WebContents*()>& wc_getter,
       content::NavigationUIData* navigation_ui_data,
-      int frame_tree_node_id) override {
+      int frame_tree_node_id,
+      absl::optional<int64_t> navigation_id) override {
     std::vector<std::unique_ptr<blink::URLLoaderThrottle>> throttles;
     throttles.push_back(std::make_unique<ChangeQueryModifyingThrottle>());
     return throttles;
@@ -264,8 +291,7 @@ class SearchPrefetchWithoutPrefetchingBrowserTest
     test_ukm_recorder_ = std::make_unique<ukm::TestAutoSetUkmRecorder>();
     attempt_entry_builder_ =
         std::make_unique<content::test::PreloadingAttemptUkmEntryBuilder>(
-            ToPreloadingPredictor(
-                ChromePreloadingPredictor::kDefaultSearchEngine));
+            chrome_preloading_predictor::kDefaultSearchEngine);
   }
 
   ukm::TestAutoSetUkmRecorder* test_ukm_recorder() {
@@ -293,12 +319,13 @@ IN_PROC_BROWSER_TEST_F(SearchPrefetchWithoutPrefetchingBrowserTest,
   std::string search_terms = "prefetch_content";
 
   GURL prefetch_url = GetSearchServerQueryURL(search_terms);
+  GURL canonical_search_url = GetCanonicalSearchURL(prefetch_url);
 
   EXPECT_FALSE(search_prefetch_service->MaybePrefetchURL(prefetch_url,
                                                          GetWebContents()));
   auto prefetch_status =
       search_prefetch_service->GetSearchPrefetchStatusForTesting(
-          base::ASCIIToUTF16(search_terms));
+          canonical_search_url);
 
   EXPECT_FALSE(prefetch_status.has_value());
 
@@ -319,7 +346,7 @@ class SearchPrefetchHoldbackBrowserTest : public SearchPrefetchBaseBrowserTest {
   SearchPrefetchHoldbackBrowserTest() {
     feature_list_.InitWithFeaturesAndParameters(
         {{kSearchPrefetchServicePrefetching, {{"prefetch_holdback", "true"}}}},
-        {/* disabled_features */});
+        {});
   }
 
   void SetUpOnMainThread() override {
@@ -328,8 +355,9 @@ class SearchPrefetchHoldbackBrowserTest : public SearchPrefetchBaseBrowserTest {
     test_ukm_recorder_ = std::make_unique<ukm::TestAutoSetUkmRecorder>();
     attempt_entry_builder_ =
         std::make_unique<content::test::PreloadingAttemptUkmEntryBuilder>(
-            ToPreloadingPredictor(
-                ChromePreloadingPredictor::kDefaultSearchEngine));
+            chrome_preloading_predictor::kDefaultSearchEngine);
+    scoped_test_timer_ =
+        std::make_unique<base::ScopedMockElapsedTimersForTest>();
   }
 
   ukm::TestAutoSetUkmRecorder* test_ukm_recorder() {
@@ -346,6 +374,7 @@ class SearchPrefetchHoldbackBrowserTest : public SearchPrefetchBaseBrowserTest {
   std::unique_ptr<ukm::TestAutoSetUkmRecorder> test_ukm_recorder_;
   std::unique_ptr<content::test::PreloadingAttemptUkmEntryBuilder>
       attempt_entry_builder_;
+  std::unique_ptr<base::ScopedMockElapsedTimersForTest> scoped_test_timer_;
 };
 
 IN_PROC_BROWSER_TEST_F(SearchPrefetchHoldbackBrowserTest,
@@ -357,12 +386,13 @@ IN_PROC_BROWSER_TEST_F(SearchPrefetchHoldbackBrowserTest,
   std::string search_terms = "prefetch_content";
 
   GURL prefetch_url = GetSearchServerQueryURL(search_terms);
+  GURL canonical_search_url = GetCanonicalSearchURL(prefetch_url);
 
   EXPECT_FALSE(search_prefetch_service->MaybePrefetchURL(prefetch_url,
                                                          GetWebContents()));
   auto prefetch_status =
       search_prefetch_service->GetSearchPrefetchStatusForTesting(
-          base::ASCIIToUTF16(search_terms));
+          canonical_search_url);
 
   EXPECT_FALSE(prefetch_status.has_value());
 
@@ -408,19 +438,7 @@ class SearchPrefetchServiceEnabledBrowserTest
          {{"max_attempts_per_caching_duration", "3"},
           {"cache_size", "1"},
           {"device_memory_threshold_MB", "0"}}}};
-    std::vector<base::test::FeatureRef> disabled_features = {};
-    if (BlockOnHeadersEnabled()) {
-      enabled_features.push_back({kSearchPrefetchBlockBeforeHeaders, {}});
-    } else {
-      disabled_features.push_back({kSearchPrefetchBlockBeforeHeaders});
-    }
-
-    feature_list_.InitWithFeaturesAndParameters(enabled_features,
-                                                disabled_features);
-  }
-
-  bool BlockOnHeadersEnabled() {
-    return std::get<0>(GetParam()) == BlockOnHeaders::kBlockOnHeaders;
+    feature_list_.InitWithFeaturesAndParameters(enabled_features, {});
   }
 
   void SetUpOnMainThread() override {
@@ -429,8 +447,9 @@ class SearchPrefetchServiceEnabledBrowserTest
     test_ukm_recorder_ = std::make_unique<ukm::TestAutoSetUkmRecorder>();
     attempt_entry_builder_ =
         std::make_unique<content::test::PreloadingAttemptUkmEntryBuilder>(
-            ToPreloadingPredictor(
-                ChromePreloadingPredictor::kDefaultSearchEngine));
+            chrome_preloading_predictor::kDefaultSearchEngine);
+    scoped_test_timer_ =
+        std::make_unique<base::ScopedMockElapsedTimersForTest>();
   }
 
   ukm::TestAutoSetUkmRecorder* test_ukm_recorder() {
@@ -447,6 +466,7 @@ class SearchPrefetchServiceEnabledBrowserTest
   std::unique_ptr<ukm::TestAutoSetUkmRecorder> test_ukm_recorder_;
   std::unique_ptr<content::test::PreloadingAttemptUkmEntryBuilder>
       attempt_entry_builder_;
+  std::unique_ptr<base::ScopedMockElapsedTimersForTest> scoped_test_timer_;
 };
 
 IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
@@ -466,6 +486,7 @@ IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
   std::string search_terms = "prefetch_content";
 
   GURL prefetch_url = GetSearchServerQueryURL(search_terms);
+  GURL canonical_search_url = GetCanonicalSearchURL(prefetch_url);
 
   EXPECT_TRUE(search_prefetch_service->MaybePrefetchURL(prefetch_url,
                                                         GetWebContents()));
@@ -474,13 +495,11 @@ IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
       SearchPrefetchEligibilityReason::kPrefetchStarted, 1);
   auto prefetch_status =
       search_prefetch_service->GetSearchPrefetchStatusForTesting(
-          base::ASCIIToUTF16(search_terms));
+          canonical_search_url);
   ASSERT_TRUE(prefetch_status.has_value());
-  EXPECT_EQ(BlockOnHeadersEnabled() ? SearchPrefetchStatus::kCanBeServed
-                                    : SearchPrefetchStatus::kInFlight,
-            prefetch_status.value());
+  EXPECT_EQ(SearchPrefetchStatus::kCanBeServed, prefetch_status.value());
 
-  WaitUntilStatusChangesTo(base::ASCIIToUTF16(search_terms),
+  WaitUntilStatusChangesTo(canonical_search_url,
                            SearchPrefetchStatus::kComplete);
   histogram_tester.ExpectUniqueSample(
       "Omnibox.SearchPrefetch.FetchResult.SuggestionPrefetch", true, 1);
@@ -500,7 +519,7 @@ IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
   EXPECT_TRUE(base::Contains(headers["Upgrade-Insecure-Requests"], "1"));
 
   prefetch_status = search_prefetch_service->GetSearchPrefetchStatusForTesting(
-      base::ASCIIToUTF16(search_terms));
+      canonical_search_url);
   ASSERT_TRUE(prefetch_status.has_value());
   EXPECT_EQ(SearchPrefetchStatus::kComplete, prefetch_status.value());
 
@@ -527,7 +546,8 @@ IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
             content::PreloadingHoldbackStatus::kAllowed,
             content::PreloadingTriggeringOutcome::kReady,
             content::PreloadingFailureReason::kUnspecified,
-            /*accurate=*/false),
+            /*accurate=*/false,
+            /*ready_time=*/kMockElapsedTime),
     };
     EXPECT_THAT(attempt_ukm_entries,
                 testing::UnorderedElementsAreArray(expected_attempt_entries))
@@ -548,12 +568,13 @@ IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
   std::string search_terms = "prefetch_content";
 
   GURL prefetch_url = GetSearchServerQueryURL(search_terms);
+  GURL canonical_search_url = GetCanonicalSearchURL(prefetch_url);
 
   EXPECT_FALSE(search_prefetch_service->MaybePrefetchURL(prefetch_url,
                                                          GetWebContents()));
   auto prefetch_status =
       search_prefetch_service->GetSearchPrefetchStatusForTesting(
-          base::ASCIIToUTF16(search_terms));
+          canonical_search_url);
   histogram_tester.ExpectUniqueSample(
       "Omnibox.SearchPrefetch.PrefetchEligibilityReason2.SuggestionPrefetch",
       SearchPrefetchEligibilityReason::kThrottled, 1);
@@ -600,12 +621,13 @@ IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
   std::string search_terms = "prefetch_content";
 
   GURL prefetch_url = GetSearchServerQueryURL(search_terms);
+  GURL canonical_search_url = GetCanonicalSearchURL(prefetch_url);
 
   EXPECT_FALSE(search_prefetch_service->MaybePrefetchURL(prefetch_url,
                                                          GetWebContents()));
   auto prefetch_status =
       search_prefetch_service->GetSearchPrefetchStatusForTesting(
-          base::ASCIIToUTF16(search_terms));
+          canonical_search_url);
   histogram_tester.ExpectUniqueSample(
       "Omnibox.SearchPrefetch.PrefetchEligibilityReason2.SuggestionPrefetch",
       SearchPrefetchEligibilityReason::kThrottled, 1);
@@ -624,18 +646,17 @@ IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
   std::string search_terms = "prefetch_content";
 
   GURL prefetch_url = GetSearchServerQueryURL(search_terms);
+  GURL canonical_search_url = GetCanonicalSearchURL(prefetch_url);
 
   EXPECT_TRUE(search_prefetch_service->MaybePrefetchURL(prefetch_url,
                                                         GetWebContents()));
   auto prefetch_status =
       search_prefetch_service->GetSearchPrefetchStatusForTesting(
-          base::ASCIIToUTF16(search_terms));
+          canonical_search_url);
   ASSERT_TRUE(prefetch_status.has_value());
-  EXPECT_EQ(BlockOnHeadersEnabled() ? SearchPrefetchStatus::kCanBeServed
-                                    : SearchPrefetchStatus::kInFlight,
-            prefetch_status.value());
+  EXPECT_EQ(SearchPrefetchStatus::kCanBeServed, prefetch_status.value());
 
-  WaitUntilStatusChangesTo(base::ASCIIToUTF16(search_terms),
+  WaitUntilStatusChangesTo(canonical_search_url,
                            SearchPrefetchStatus::kComplete);
 
   auto headers = search_server_requests()[0].headers;
@@ -644,7 +665,7 @@ IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
   EXPECT_TRUE(base::Contains(headers[kThrottleHeader], kThrottleHeaderValue));
 
   prefetch_status = search_prefetch_service->GetSearchPrefetchStatusForTesting(
-      base::ASCIIToUTF16(search_terms));
+      canonical_search_url);
   ASSERT_TRUE(prefetch_status.has_value());
   EXPECT_EQ(SearchPrefetchStatus::kComplete, prefetch_status.value());
   content::SetBrowserClientForTesting(old_client);
@@ -661,22 +682,21 @@ IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
   std::string search_terms = "prefetch_content";
 
   GURL prefetch_url = GetSearchServerQueryURL(search_terms);
+  GURL canonical_search_url = GetCanonicalSearchURL(prefetch_url);
 
   EXPECT_TRUE(search_prefetch_service->MaybePrefetchURL(prefetch_url,
                                                         GetWebContents()));
   auto prefetch_status =
       search_prefetch_service->GetSearchPrefetchStatusForTesting(
-          base::ASCIIToUTF16(search_terms));
+          canonical_search_url);
   ASSERT_TRUE(prefetch_status.has_value());
-  EXPECT_EQ(BlockOnHeadersEnabled() ? SearchPrefetchStatus::kCanBeServed
-                                    : SearchPrefetchStatus::kInFlight,
-            prefetch_status.value());
+  EXPECT_EQ(SearchPrefetchStatus::kCanBeServed, prefetch_status.value());
 
-  WaitUntilStatusChangesTo(base::ASCIIToUTF16(search_terms),
+  WaitUntilStatusChangesTo(canonical_search_url,
                            SearchPrefetchStatus::kComplete);
 
   prefetch_status = search_prefetch_service->GetSearchPrefetchStatusForTesting(
-      base::ASCIIToUTF16(search_terms));
+      canonical_search_url);
   ASSERT_TRUE(prefetch_status.has_value());
   EXPECT_EQ(SearchPrefetchStatus::kComplete, prefetch_status.value());
   content::SetBrowserClientForTesting(old_client);
@@ -694,12 +714,13 @@ IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
   std::string search_terms = "prefetch_content";
 
   GURL prefetch_url = GetSearchServerQueryURL(search_terms);
+  GURL canonical_search_url = GetCanonicalSearchURL(prefetch_url);
 
   EXPECT_FALSE(search_prefetch_service->MaybePrefetchURL(prefetch_url,
                                                          GetWebContents()));
   auto prefetch_status =
       search_prefetch_service->GetSearchPrefetchStatusForTesting(
-          base::ASCIIToUTF16(search_terms));
+          canonical_search_url);
   histogram_tester.ExpectUniqueSample(
       "Omnibox.SearchPrefetch.PrefetchEligibilityReason2.SuggestionPrefetch",
       SearchPrefetchEligibilityReason::kThrottled, 1);
@@ -719,7 +740,8 @@ class HeaderObserverContentBrowserClient : public ChromeContentBrowserClient {
       content::BrowserContext* browser_context,
       const base::RepeatingCallback<content::WebContents*()>& wc_getter,
       content::NavigationUIData* navigation_ui_data,
-      int frame_tree_node_id) override;
+      int frame_tree_node_id,
+      absl::optional<int64_t> navigation_id) override;
 
   bool had_raw_request_info() { return had_raw_request_info_; }
 
@@ -737,11 +759,12 @@ HeaderObserverContentBrowserClient::CreateURLLoaderThrottles(
     content::BrowserContext* browser_context,
     const base::RepeatingCallback<content::WebContents*()>& wc_getter,
     content::NavigationUIData* navigation_ui_data,
-    int frame_tree_node_id) {
+    int frame_tree_node_id,
+    absl::optional<int64_t> navigation_id) {
   std::vector<std::unique_ptr<blink::URLLoaderThrottle>> throttles =
       ChromeContentBrowserClient::CreateURLLoaderThrottles(
           request, browser_context, wc_getter, navigation_ui_data,
-          frame_tree_node_id);
+          frame_tree_node_id, navigation_id);
   return throttles;
 }
 
@@ -755,18 +778,17 @@ IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
 
   auto [prefetch_url, search_url] =
       GetSearchPrefetchAndNonPrefetch(search_terms);
+  GURL canonical_search_url = GetCanonicalSearchURL(prefetch_url);
 
   EXPECT_TRUE(search_prefetch_service->MaybePrefetchURL(prefetch_url,
                                                         GetWebContents()));
   auto prefetch_status =
       search_prefetch_service->GetSearchPrefetchStatusForTesting(
-          base::ASCIIToUTF16(search_terms));
+          canonical_search_url);
   ASSERT_TRUE(prefetch_status.has_value());
-  EXPECT_EQ(BlockOnHeadersEnabled() ? SearchPrefetchStatus::kCanBeServed
-                                    : SearchPrefetchStatus::kInFlight,
-            prefetch_status.value());
+  EXPECT_EQ(SearchPrefetchStatus::kCanBeServed, prefetch_status.value());
 
-  WaitUntilStatusChangesTo(base::ASCIIToUTF16(search_terms),
+  WaitUntilStatusChangesTo(canonical_search_url,
                            SearchPrefetchStatus::kComplete);
 
   HeaderObserverContentBrowserClient browser_client;
@@ -784,50 +806,57 @@ IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
       SearchPrefetchServiceFactory::GetForProfile(browser()->profile());
   EXPECT_NE(nullptr, search_prefetch_service);
 
-  EXPECT_TRUE(search_prefetch_service->MaybePrefetchURL(
-      GetSearchServerQueryURL("prefetch_1"), GetWebContents()));
+  GURL prefetch_url_1 = GetSearchServerQueryURL("prefetch_1");
+  GURL canonical_search_url_1 = GetCanonicalSearchURL(prefetch_url_1);
+
+  GURL prefetch_url_2 = GetSearchServerQueryURL("prefetch_2");
+  GURL canonical_search_url_2 = GetCanonicalSearchURL(prefetch_url_2);
+
+  GURL prefetch_url_3 = GetSearchServerQueryURL("prefetch_3");
+  GURL canonical_search_url_3 = GetCanonicalSearchURL(prefetch_url_3);
+
+  GURL prefetch_url_4 = GetSearchServerQueryURL("prefetch_4");
+  GURL canonical_search_url_4 = GetCanonicalSearchURL(prefetch_url_4);
+
+  EXPECT_TRUE(search_prefetch_service->MaybePrefetchURL(prefetch_url_1,
+                                                        GetWebContents()));
   histogram_tester.ExpectUniqueSample(
       "Omnibox.SearchPrefetch.PrefetchEligibilityReason2.SuggestionPrefetch",
       SearchPrefetchEligibilityReason::kPrefetchStarted, 1);
-  EXPECT_TRUE(search_prefetch_service->MaybePrefetchURL(
-      GetSearchServerQueryURL("prefetch_2"), GetWebContents()));
+  EXPECT_TRUE(search_prefetch_service->MaybePrefetchURL(prefetch_url_2,
+                                                        GetWebContents()));
   histogram_tester.ExpectUniqueSample(
       "Omnibox.SearchPrefetch.PrefetchEligibilityReason2.SuggestionPrefetch",
       SearchPrefetchEligibilityReason::kPrefetchStarted, 2);
-  EXPECT_TRUE(search_prefetch_service->MaybePrefetchURL(
-      GetSearchServerQueryURL("prefetch_3"), GetWebContents()));
+  EXPECT_TRUE(search_prefetch_service->MaybePrefetchURL(prefetch_url_3,
+                                                        GetWebContents()));
   histogram_tester.ExpectUniqueSample(
       "Omnibox.SearchPrefetch.PrefetchEligibilityReason2.SuggestionPrefetch",
       SearchPrefetchEligibilityReason::kPrefetchStarted, 3);
-  EXPECT_FALSE(search_prefetch_service->MaybePrefetchURL(
-      GetSearchServerQueryURL("prefetch_4"), GetWebContents()));
+  EXPECT_FALSE(search_prefetch_service->MaybePrefetchURL(prefetch_url_4,
+                                                         GetWebContents()));
   histogram_tester.ExpectBucketCount(
       "Omnibox.SearchPrefetch.PrefetchEligibilityReason2.SuggestionPrefetch",
       SearchPrefetchEligibilityReason::kMaxAttemptsReached, 1);
 
   auto prefetch_status =
-      search_prefetch_service->GetSearchPrefetchStatusForTesting(u"prefetch_1");
+      search_prefetch_service->GetSearchPrefetchStatusForTesting(
+          canonical_search_url_1);
   ASSERT_TRUE(prefetch_status.has_value());
-  EXPECT_EQ(BlockOnHeadersEnabled() ? SearchPrefetchStatus::kCanBeServed
-                                    : SearchPrefetchStatus::kInFlight,
-            prefetch_status.value());
+  EXPECT_EQ(SearchPrefetchStatus::kCanBeServed, prefetch_status.value());
 
-  prefetch_status =
-      search_prefetch_service->GetSearchPrefetchStatusForTesting(u"prefetch_2");
+  prefetch_status = search_prefetch_service->GetSearchPrefetchStatusForTesting(
+      canonical_search_url_2);
   ASSERT_TRUE(prefetch_status.has_value());
-  EXPECT_EQ(BlockOnHeadersEnabled() ? SearchPrefetchStatus::kCanBeServed
-                                    : SearchPrefetchStatus::kInFlight,
-            prefetch_status.value());
+  EXPECT_EQ(SearchPrefetchStatus::kCanBeServed, prefetch_status.value());
 
-  prefetch_status =
-      search_prefetch_service->GetSearchPrefetchStatusForTesting(u"prefetch_3");
+  prefetch_status = search_prefetch_service->GetSearchPrefetchStatusForTesting(
+      canonical_search_url_3);
   ASSERT_TRUE(prefetch_status.has_value());
-  EXPECT_EQ(BlockOnHeadersEnabled() ? SearchPrefetchStatus::kCanBeServed
-                                    : SearchPrefetchStatus::kInFlight,
-            prefetch_status.value());
+  EXPECT_EQ(SearchPrefetchStatus::kCanBeServed, prefetch_status.value());
 
-  prefetch_status =
-      search_prefetch_service->GetSearchPrefetchStatusForTesting(u"prefetch_4");
+  prefetch_status = search_prefetch_service->GetSearchPrefetchStatusForTesting(
+      canonical_search_url_4);
   EXPECT_FALSE(prefetch_status.has_value());
 
   // Navigate to flush the metrics.
@@ -850,26 +879,27 @@ IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
             ukm_source_id, content::PreloadingType::kPrefetch,
             content::PreloadingEligibility::kEligible,
             content::PreloadingHoldbackStatus::kAllowed,
-            content::PreloadingTriggeringOutcome::kFailure,
-            ToPreloadingFailureReason(
-                BlockOnHeadersEnabled()
-                    ? SearchPrefetchServingReason::kNotServedOtherReason
-                    : SearchPrefetchServingReason::kRequestInFlightNotReady),
-            /*accurate=*/true),
+            content::PreloadingTriggeringOutcome::kSuccess,
+            content::PreloadingFailureReason::kUnspecified,
+            /*accurate=*/true,
+            /*ready_time=*/
+            kMockElapsedTime),
         attempt_entry_builder().BuildEntry(
             ukm_source_id, content::PreloadingType::kPrefetch,
             content::PreloadingEligibility::kEligible,
             content::PreloadingHoldbackStatus::kAllowed,
             content::PreloadingTriggeringOutcome::kReady,
             content::PreloadingFailureReason::kUnspecified,
-            /*accurate=*/false),
+            /*accurate=*/false,
+            /*ready_time=*/kMockElapsedTime),
         attempt_entry_builder().BuildEntry(
             ukm_source_id, content::PreloadingType::kPrefetch,
             content::PreloadingEligibility::kEligible,
             content::PreloadingHoldbackStatus::kAllowed,
             content::PreloadingTriggeringOutcome::kReady,
             content::PreloadingFailureReason::kUnspecified,
-            /*accurate=*/false),
+            /*accurate=*/false,
+            /*ready_time=*/kMockElapsedTime),
         attempt_entry_builder().BuildEntry(
             ukm_source_id, content::PreloadingType::kPrefetch,
             content::PreloadingEligibility::kEligible,
@@ -898,18 +928,17 @@ IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
   std::string search_terms = "prefetch_content";
 
   GURL prefetch_url = GetSearchServerQueryURL(search_terms);
+  GURL canonical_search_url = GetCanonicalSearchURL(prefetch_url);
 
   EXPECT_TRUE(search_prefetch_service->MaybePrefetchURL(prefetch_url,
                                                         GetWebContents()));
   auto prefetch_status =
       search_prefetch_service->GetSearchPrefetchStatusForTesting(
-          base::ASCIIToUTF16(search_terms));
+          canonical_search_url);
   ASSERT_TRUE(prefetch_status.has_value());
-  EXPECT_EQ(BlockOnHeadersEnabled() ? SearchPrefetchStatus::kCanBeServed
-                                    : SearchPrefetchStatus::kInFlight,
-            prefetch_status.value());
+  EXPECT_EQ(SearchPrefetchStatus::kCanBeServed, prefetch_status.value());
 
-  WaitUntilStatusChangesTo(base::ASCIIToUTF16(search_terms),
+  WaitUntilStatusChangesTo(canonical_search_url,
                            SearchPrefetchStatus::kComplete);
 
   EXPECT_EQ(1u, search_server_requests().size());
@@ -928,21 +957,20 @@ IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
       SearchPrefetchServiceFactory::GetForProfile(browser()->profile());
   EXPECT_NE(nullptr, search_prefetch_service);
 
-  std::string search_terms = "502_on_prefetch";
+  std::string search_terms = kOmniboxErrorQuery;
 
   GURL prefetch_url = GetSearchServerQueryURL(search_terms);
+  GURL canonical_search_url = GetCanonicalSearchURL(prefetch_url);
 
   EXPECT_TRUE(search_prefetch_service->MaybePrefetchURL(prefetch_url,
                                                         GetWebContents()));
   auto prefetch_status =
       search_prefetch_service->GetSearchPrefetchStatusForTesting(
-          base::ASCIIToUTF16(search_terms));
+          canonical_search_url);
   ASSERT_TRUE(prefetch_status.has_value());
-  EXPECT_EQ(BlockOnHeadersEnabled() ? SearchPrefetchStatus::kCanBeServed
-                                    : SearchPrefetchStatus::kInFlight,
-            prefetch_status.value());
+  EXPECT_EQ(SearchPrefetchStatus::kCanBeServed, prefetch_status.value());
 
-  WaitUntilStatusChangesTo(base::ASCIIToUTF16(search_terms),
+  WaitUntilStatusChangesTo(canonical_search_url,
                            SearchPrefetchStatus::kRequestFailed);
 
   histogram_tester.ExpectUniqueSample(
@@ -955,7 +983,7 @@ IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
   EXPECT_EQ(1u, search_server_prefetch_request_count());
 
   prefetch_status = search_prefetch_service->GetSearchPrefetchStatusForTesting(
-      base::ASCIIToUTF16(search_terms));
+      canonical_search_url);
   ASSERT_TRUE(prefetch_status.has_value());
   EXPECT_EQ(SearchPrefetchStatus::kRequestFailed, prefetch_status.value());
 
@@ -979,7 +1007,8 @@ IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
             content::PreloadingTriggeringOutcome::kFailure,
             ToPreloadingFailureReason(
                 SearchPrefetchServingReason::kRequestFailed),
-            /*accurate=*/true),
+            /*accurate=*/true,
+            /*ready_time=*/kMockElapsedTime),
     };
     EXPECT_THAT(attempt_ukm_entries,
                 testing::UnorderedElementsAreArray(expected_attempt_entries))
@@ -998,6 +1027,7 @@ IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
   std::string search_terms = "prefetch_content";
 
   GURL prefetch_url = GetSearchServerQueryURL(search_terms);
+  GURL canonical_search_url = GetCanonicalSearchURL(prefetch_url);
 
   EXPECT_TRUE(search_prefetch_service->MaybePrefetchURL(prefetch_url,
                                                         GetWebContents()));
@@ -1005,7 +1035,7 @@ IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
       "Omnibox.SearchPrefetch.PrefetchEligibilityReason2.SuggestionPrefetch",
       SearchPrefetchEligibilityReason::kPrefetchStarted, 1);
 
-  WaitUntilStatusChangesTo(base::ASCIIToUTF16(search_terms),
+  WaitUntilStatusChangesTo(canonical_search_url,
                            SearchPrefetchStatus::kComplete);
 
   EXPECT_FALSE(search_prefetch_service->MaybePrefetchURL(prefetch_url,
@@ -1033,7 +1063,8 @@ IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
             content::PreloadingHoldbackStatus::kAllowed,
             content::PreloadingTriggeringOutcome::kSuccess,
             content::PreloadingFailureReason::kUnspecified,
-            /*accurate=*/true),
+            /*accurate=*/true,
+            /*ready_time=*/kMockElapsedTime),
         attempt_entry_builder().BuildEntry(
             ukm_source_id, content::PreloadingType::kPrefetch,
             content::PreloadingEligibility::kEligible,
@@ -1152,6 +1183,7 @@ IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
 
   auto [prefetch_url, search_url] =
       GetSearchPrefetchAndNonPrefetch(search_terms);
+  GURL canonical_search_url = GetCanonicalSearchURL(prefetch_url);
 
   EXPECT_TRUE(search_prefetch_service->MaybePrefetchURL(prefetch_url,
                                                         GetWebContents()));
@@ -1160,12 +1192,12 @@ IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
       SearchPrefetchEligibilityReason::kPrefetchStarted, 1);
   auto prefetch_status =
       search_prefetch_service->GetSearchPrefetchStatusForTesting(
-          base::ASCIIToUTF16(search_terms));
-  WaitUntilStatusChangesTo(base::ASCIIToUTF16(search_terms),
+          canonical_search_url);
+  WaitUntilStatusChangesTo(canonical_search_url,
                            SearchPrefetchStatus::kComplete);
 
   prefetch_status = search_prefetch_service->GetSearchPrefetchStatusForTesting(
-      base::ASCIIToUTF16(search_terms));
+      canonical_search_url);
   ASSERT_TRUE(prefetch_status.has_value());
   EXPECT_EQ(SearchPrefetchStatus::kComplete, prefetch_status.value());
 
@@ -1182,7 +1214,9 @@ IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
       "Omnibox.SearchPrefetch.ClickToNavigationIntercepted", 1);
   histogram_tester.ExpectTotalCount(
       "Omnibox.SearchPrefetch.NavigationInterceptedToForwardingComplete", 1);
-
+  CheckCorrectForwardingResultMetric(
+      histogram_tester,
+      StreamingSearchPrefetchURLLoader::ForwardingResult::kCompleted, 1);
   {
     ukm::SourceId ukm_source_id =
         GetWebContents()->GetPrimaryMainFrame()->GetPageUkmSourceId();
@@ -1199,7 +1233,8 @@ IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
             content::PreloadingHoldbackStatus::kAllowed,
             content::PreloadingTriggeringOutcome::kSuccess,
             content::PreloadingFailureReason::kUnspecified,
-            /*accurate=*/true),
+            /*accurate=*/true,
+            /*ready_time=*/kMockElapsedTime),
     };
     EXPECT_THAT(attempt_ukm_entries,
                 testing::UnorderedElementsAreArray(expected_attempt_entries))
@@ -1227,9 +1262,10 @@ IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
   std::string search_terms = "prefetch_content";
   auto [prefetch_url, search_url] =
       GetSearchPrefetchAndNonPrefetch(search_terms);
+  GURL canonical_search_url = GetCanonicalSearchURL(prefetch_url);
   EXPECT_TRUE(search_prefetch_service->MaybePrefetchURL(prefetch_url,
                                                         GetWebContents()));
-  WaitUntilStatusChangesTo(base::ASCIIToUTF16(search_terms),
+  WaitUntilStatusChangesTo(canonical_search_url,
                            SearchPrefetchStatus::kComplete);
   ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), search_url));
 
@@ -1242,13 +1278,17 @@ IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
       "Omnibox.SearchPrefetch.ClickToNavigationIntercepted", 1);
   histogram_tester.ExpectTotalCount(
       "Omnibox.SearchPrefetch.NavigationInterceptedToForwardingComplete", 1);
+  CheckCorrectForwardingResultMetric(
+      histogram_tester,
+      StreamingSearchPrefetchURLLoader::ForwardingResult::kCompleted, 1);
 
   search_terms = "prefetch_content_2";
   auto [prefetch_url_2, search_url_2] =
       GetSearchPrefetchAndNonPrefetch(search_terms);
+  GURL canonical_search_url_2 = GetCanonicalSearchURL(prefetch_url_2);
   EXPECT_TRUE(search_prefetch_service->MaybePrefetchURL(prefetch_url_2,
                                                         GetWebContents()));
-  WaitUntilStatusChangesTo(base::ASCIIToUTF16(search_terms),
+  WaitUntilStatusChangesTo(canonical_search_url_2,
                            SearchPrefetchStatus::kComplete);
   ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), search_url_2));
 
@@ -1313,9 +1353,10 @@ IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
   std::string search_terms = "prefetch_content";
   auto [prefetch_url, search_url] =
       GetSearchPrefetchAndNonPrefetch(search_terms);
+  GURL canonical_search_url = GetCanonicalSearchURL(prefetch_url);
   EXPECT_TRUE(search_prefetch_service->MaybePrefetchURL(prefetch_url,
                                                         GetWebContents()));
-  WaitUntilStatusChangesTo(base::ASCIIToUTF16(search_terms),
+  WaitUntilStatusChangesTo(canonical_search_url,
                            SearchPrefetchStatus::kComplete);
   ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), search_url));
 
@@ -1327,7 +1368,7 @@ IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
   )";
 
   content::RenderFrameHost* frame = GetWebContents()->GetPrimaryMainFrame();
-  EXPECT_TRUE(content::ExecuteScript(frame, script));
+  EXPECT_TRUE(content::ExecJs(frame, script));
 
   // The prefetch should be served, and only 1 request should be issued.
   EXPECT_EQ(1u, search_server_requests().size());
@@ -1338,13 +1379,17 @@ IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
       "Omnibox.SearchPrefetch.ClickToNavigationIntercepted", 1);
   histogram_tester.ExpectTotalCount(
       "Omnibox.SearchPrefetch.NavigationInterceptedToForwardingComplete", 1);
+  CheckCorrectForwardingResultMetric(
+      histogram_tester,
+      StreamingSearchPrefetchURLLoader::ForwardingResult::kCompleted, 1);
 
   search_terms = "prefetch_content_2";
   auto [prefetch_url_2, search_url_2] =
       GetSearchPrefetchAndNonPrefetch(search_terms);
+  GURL canonical_search_url_2 = GetCanonicalSearchURL(prefetch_url_2);
   EXPECT_TRUE(search_prefetch_service->MaybePrefetchURL(prefetch_url_2,
                                                         GetWebContents()));
-  WaitUntilStatusChangesTo(base::ASCIIToUTF16(search_terms),
+  WaitUntilStatusChangesTo(canonical_search_url_2,
                            SearchPrefetchStatus::kComplete);
   ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), search_url_2));
 
@@ -1408,9 +1453,10 @@ IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
 
   std::string search_terms = "prefetch_content";
   GURL prefetch_url = GetSearchServerQueryURL(search_terms + "&pf=cs");
+  GURL canonical_search_url = GetCanonicalSearchURL(prefetch_url);
   EXPECT_TRUE(search_prefetch_service->MaybePrefetchURL(prefetch_url,
                                                         GetWebContents()));
-  WaitUntilStatusChangesTo(base::ASCIIToUTF16(search_terms),
+  WaitUntilStatusChangesTo(canonical_search_url,
                            SearchPrefetchStatus::kComplete);
   ASSERT_TRUE(ui_test_utils::NavigateToURL(
       browser(), GetSearchServerQueryURL(search_terms)));
@@ -1423,9 +1469,10 @@ IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
 
   search_terms = "prefetch_content_2";
   prefetch_url = GetSearchServerQueryURL(search_terms + "&pf=cs");
+  canonical_search_url = GetCanonicalSearchURL(prefetch_url);
   EXPECT_TRUE(search_prefetch_service->MaybePrefetchURL(prefetch_url,
                                                         GetWebContents()));
-  WaitUntilStatusChangesTo(base::ASCIIToUTF16(search_terms),
+  WaitUntilStatusChangesTo(canonical_search_url,
                            SearchPrefetchStatus::kComplete);
   ASSERT_TRUE(ui_test_utils::NavigateToURL(
       browser(), GetSearchServerQueryURL(search_terms)));
@@ -1476,9 +1523,10 @@ IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
 
   std::string search_terms = "prefetch_content";
   GURL prefetch_url = GetSearchServerQueryURL(search_terms + "&pf=cs");
+  GURL canonical_search_url = GetCanonicalSearchURL(prefetch_url);
   EXPECT_TRUE(search_prefetch_service->MaybePrefetchURL(prefetch_url,
                                                         GetWebContents()));
-  WaitUntilStatusChangesTo(base::ASCIIToUTF16(search_terms),
+  WaitUntilStatusChangesTo(canonical_search_url,
                            SearchPrefetchStatus::kComplete);
   ASSERT_TRUE(ui_test_utils::NavigateToURL(
       browser(), GetSearchServerQueryURL(search_terms)));
@@ -1534,9 +1582,10 @@ IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
 
   std::string search_terms = "prefetch_content";
   GURL prefetch_url = GetSearchServerQueryURL(search_terms + "&pf=cs");
+  GURL canonical_search_url = GetCanonicalSearchURL(prefetch_url);
   EXPECT_TRUE(search_prefetch_service->MaybePrefetchURL(prefetch_url,
                                                         GetWebContents()));
-  WaitUntilStatusChangesTo(base::ASCIIToUTF16(search_terms),
+  WaitUntilStatusChangesTo(canonical_search_url,
                            SearchPrefetchStatus::kComplete);
   ASSERT_TRUE(ui_test_utils::NavigateToURL(
       browser(), GetSearchServerQueryURL(search_terms)));
@@ -1617,17 +1666,18 @@ IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
   std::string search_terms_other = "other";
 
   GURL prefetch_url = GetSearchServerQueryURL(search_terms);
+  GURL canonical_search_url = GetCanonicalSearchURL(prefetch_url);
 
   EXPECT_TRUE(search_prefetch_service->MaybePrefetchURL(prefetch_url,
                                                         GetWebContents()));
   auto prefetch_status =
       search_prefetch_service->GetSearchPrefetchStatusForTesting(
-          base::ASCIIToUTF16(search_terms));
-  WaitUntilStatusChangesTo(base::ASCIIToUTF16(search_terms),
+          canonical_search_url);
+  WaitUntilStatusChangesTo(canonical_search_url,
                            SearchPrefetchStatus::kComplete);
 
   prefetch_status = search_prefetch_service->GetSearchPrefetchStatusForTesting(
-      base::ASCIIToUTF16(search_terms));
+      canonical_search_url);
   ASSERT_TRUE(prefetch_status.has_value());
   EXPECT_EQ(SearchPrefetchStatus::kComplete, prefetch_status.value());
 
@@ -1654,20 +1704,21 @@ IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
       SearchPrefetchServiceFactory::GetForProfile(browser()->profile());
   EXPECT_NE(nullptr, search_prefetch_service);
 
-  std::string search_terms = "502_on_prefetch";
+  std::string search_terms = kOmniboxErrorQuery;
 
   GURL prefetch_url = GetSearchServerQueryURL(search_terms);
+  GURL canonical_search_url = GetCanonicalSearchURL(prefetch_url);
 
   EXPECT_TRUE(search_prefetch_service->MaybePrefetchURL(prefetch_url,
                                                         GetWebContents()));
   auto prefetch_status =
       search_prefetch_service->GetSearchPrefetchStatusForTesting(
-          base::ASCIIToUTF16(search_terms));
-  WaitUntilStatusChangesTo(base::ASCIIToUTF16(search_terms),
+          canonical_search_url);
+  WaitUntilStatusChangesTo(canonical_search_url,
                            SearchPrefetchStatus::kRequestFailed);
 
   prefetch_status = search_prefetch_service->GetSearchPrefetchStatusForTesting(
-      base::ASCIIToUTF16(search_terms));
+      canonical_search_url);
   ASSERT_TRUE(prefetch_status.has_value());
   EXPECT_EQ(SearchPrefetchStatus::kRequestFailed, prefetch_status.value());
 
@@ -1698,7 +1749,9 @@ IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
             content::PreloadingTriggeringOutcome::kFailure,
             ToPreloadingFailureReason(
                 SearchPrefetchServingReason::kRequestFailed),
-            /*accurate=*/true),
+            /*accurate=*/true,
+            /*ready_time=*/
+            kMockElapsedTime),
         attempt_entry_builder().BuildEntry(
             ukm_source_id, content::PreloadingType::kPrefetch,
             content::PreloadingEligibility::kEligible,
@@ -1727,7 +1780,7 @@ IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
   LocationBar* location_bar = browser()->window()->GetLocationBar();
   OmniboxView* omnibox = location_bar->GetOmniboxView();
   AutocompleteController* autocomplete_controller =
-      omnibox->model()->autocomplete_controller();
+      omnibox->controller()->autocomplete_controller();
 
   // Prevent the stop timer from killing the hints fetch early.
   autocomplete_controller->SetStartStopTimerDurationForTesting(
@@ -1736,12 +1789,14 @@ IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
 
   ui_test_utils::WaitForAutocompleteDone(browser());
   EXPECT_TRUE(autocomplete_controller->done());
+  GURL canonical_search_url = GetCanonicalSearchURL(
+      autocomplete_controller->result().match_at(0).destination_url);
 
-  WaitUntilStatusChangesTo(base::ASCIIToUTF16(search_terms),
+  WaitUntilStatusChangesTo(canonical_search_url,
                            SearchPrefetchStatus::kComplete);
   auto prefetch_status =
       search_prefetch_service->GetSearchPrefetchStatusForTesting(
-          base::ASCIIToUTF16(search_terms));
+          canonical_search_url);
   ASSERT_TRUE(prefetch_status.has_value());
   EXPECT_EQ(SearchPrefetchStatus::kComplete, prefetch_status.value());
 
@@ -1765,7 +1820,7 @@ IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
   LocationBar* location_bar = browser()->window()->GetLocationBar();
   OmniboxView* omnibox = location_bar->GetOmniboxView();
   AutocompleteController* autocomplete_controller =
-      omnibox->model()->autocomplete_controller();
+      omnibox->controller()->autocomplete_controller();
 
   // Prevent the stop timer from killing the hints fetch early.
   autocomplete_controller->SetStartStopTimerDurationForTesting(
@@ -1774,8 +1829,10 @@ IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
 
   ui_test_utils::WaitForAutocompleteDone(browser());
   EXPECT_TRUE(autocomplete_controller->done());
+  GURL canonical_search_url = GetCanonicalSearchURL(
+      autocomplete_controller->result().match_at(0).destination_url);
 
-  WaitUntilStatusChangesTo(base::ASCIIToUTF16(search_terms),
+  WaitUntilStatusChangesTo(canonical_search_url,
                            SearchPrefetchStatus::kComplete);
   ASSERT_GT(search_server_requests().size(), 0u);
   EXPECT_NE(std::string::npos,
@@ -1795,7 +1852,7 @@ IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
   LocationBar* location_bar = browser()->window()->GetLocationBar();
   OmniboxView* omnibox = location_bar->GetOmniboxView();
   AutocompleteController* autocomplete_controller =
-      omnibox->model()->autocomplete_controller();
+      omnibox->controller()->autocomplete_controller();
 
   // Prevent the stop timer from killing the hints fetch early.
   autocomplete_controller->SetStartStopTimerDurationForTesting(
@@ -1804,12 +1861,14 @@ IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
 
   ui_test_utils::WaitForAutocompleteDone(browser());
   EXPECT_TRUE(autocomplete_controller->done());
+  GURL canonical_search_url = GetCanonicalSearchURL(
+      autocomplete_controller->result().match_at(0).destination_url);
 
   WaitForDuration(base::Milliseconds(100));
 
   auto prefetch_status =
       search_prefetch_service->GetSearchPrefetchStatusForTesting(
-          base::ASCIIToUTF16(search_terms));
+          canonical_search_url);
   EXPECT_FALSE(prefetch_status.has_value());
   ASSERT_TRUE(ui_test_utils::NavigateToURL(
       browser(), GetSearchServerQueryURL(search_terms)));
@@ -1821,106 +1880,9 @@ IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
 }
 
 IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
-                       OmniboxEditTriggersPrefetchForSecondMatch) {
-  // phi being set to one causes the order of prefetch suggest to be different.
-  // This should still prefetch a result for the |kOmniboxSuggestPrefetchQuery|.
-  AddNewSuggestionRule(
-      kOmniboxSuggestPrefetchQuery,
-      {kOmniboxSuggestPrefetchQuery, kOmniboxSuggestPrefetchSecondItemQuery},
-      /*prefetch_index=*/1, /*prerender_index=*/-1);
-  auto* search_prefetch_service =
-      SearchPrefetchServiceFactory::GetForProfile(browser()->profile());
-  std::string search_terms = kOmniboxSuggestPrefetchQuery;
-
-  // Trigger an omnibox suggest fetch that has a prefetch hint.
-  AutocompleteInput input(
-      base::ASCIIToUTF16(search_terms), metrics::OmniboxEventProto::BLANK,
-      ChromeAutocompleteSchemeClassifier(browser()->profile()));
-  LocationBar* location_bar = browser()->window()->GetLocationBar();
-  OmniboxView* omnibox = location_bar->GetOmniboxView();
-  AutocompleteController* autocomplete_controller =
-      omnibox->model()->autocomplete_controller();
-
-  // Prevent the stop timer from killing the hints fetch early.
-  autocomplete_controller->SetStartStopTimerDurationForTesting(
-      base::Seconds(10));
-  autocomplete_controller->Start(input);
-
-  ui_test_utils::WaitForAutocompleteDone(browser());
-  EXPECT_TRUE(autocomplete_controller->done());
-
-  WaitUntilStatusChangesTo(kOmniboxSuggestPrefetchSecondItemQuery16,
-                           SearchPrefetchStatus::kComplete);
-  auto prefetch_status =
-      search_prefetch_service->GetSearchPrefetchStatusForTesting(
-          kOmniboxSuggestPrefetchSecondItemQuery16);
-  ASSERT_TRUE(prefetch_status.has_value());
-  EXPECT_EQ(SearchPrefetchStatus::kComplete, prefetch_status.value());
-
-  ASSERT_TRUE(ui_test_utils::NavigateToURL(
-      browser(),
-      GetSearchServerQueryURL(kOmniboxSuggestPrefetchSecondItemQuery)));
-
-  auto inner_html = GetDocumentInnerHTML();
-
-  EXPECT_FALSE(base::Contains(inner_html, "regular"));
-  EXPECT_TRUE(base::Contains(inner_html, "prefetch"));
-}
-
-IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
-                       RemovingMatchCancelsInFlight) {
-  set_should_hang_requests(true);
-  auto* search_prefetch_service =
-      SearchPrefetchServiceFactory::GetForProfile(browser()->profile());
-  std::string search_terms = kOmniboxSuggestPrefetchQuery;
-
-  // Trigger an omnibox suggest fetch that has a prefetch hint.
-  AutocompleteInput input(
-      base::ASCIIToUTF16(search_terms), metrics::OmniboxEventProto::BLANK,
-      ChromeAutocompleteSchemeClassifier(browser()->profile()));
-  LocationBar* location_bar = browser()->window()->GetLocationBar();
-  OmniboxView* omnibox = location_bar->GetOmniboxView();
-  AutocompleteController* autocomplete_controller =
-      omnibox->model()->autocomplete_controller();
-
-  // Prevent the stop timer from killing the hints fetch early.
-  autocomplete_controller->SetStartStopTimerDurationForTesting(
-      base::Seconds(10));
-  autocomplete_controller->Start(input);
-
-  ui_test_utils::WaitForAutocompleteDone(browser());
-  EXPECT_TRUE(autocomplete_controller->done());
-
-  WaitUntilStatusChangesTo(base::ASCIIToUTF16(search_terms),
-                           BlockOnHeadersEnabled()
-                               ? SearchPrefetchStatus::kCanBeServed
-                               : SearchPrefetchStatus::kInFlight);
-  auto prefetch_status =
-      search_prefetch_service->GetSearchPrefetchStatusForTesting(
-          base::ASCIIToUTF16(search_terms));
-  ASSERT_TRUE(prefetch_status.has_value());
-  EXPECT_EQ((BlockOnHeadersEnabled() ? SearchPrefetchStatus::kCanBeServed
-                                     : SearchPrefetchStatus::kInFlight),
-            prefetch_status.value());
-
-  // Change the autocomplete to remove "porgs" entirely.
-  AutocompleteInput other_input(
-      kOmniboxSuggestNonPrefetchQuery16, metrics::OmniboxEventProto::BLANK,
-      ChromeAutocompleteSchemeClassifier(browser()->profile()));
-  autocomplete_controller->Start(other_input);
-  ui_test_utils::WaitForAutocompleteDone(browser());
-  EXPECT_TRUE(autocomplete_controller->done());
-  WaitUntilStatusChangesTo(base::ASCIIToUTF16(search_terms),
-                           SearchPrefetchStatus::kRequestCancelled);
-  prefetch_status = search_prefetch_service->GetSearchPrefetchStatusForTesting(
-      base::ASCIIToUTF16(search_terms));
-  ASSERT_TRUE(prefetch_status.has_value());
-  EXPECT_EQ(SearchPrefetchStatus::kRequestCancelled, prefetch_status.value());
-}
-
-IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
                        OmniboxNavigateToMatchingEntryStreaming) {
-  set_hang_requests_after_start(true);
+  set_service_deferral_type(SearchPreloadTestResponseDeferralType::kDeferBody);
+
   auto* search_prefetch_service =
       SearchPrefetchServiceFactory::GetForProfile(browser()->profile());
   std::string search_terms = kOmniboxSuggestPrefetchQuery;
@@ -1932,7 +1894,7 @@ IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
   LocationBar* location_bar = browser()->window()->GetLocationBar();
   OmniboxView* omnibox = location_bar->GetOmniboxView();
   AutocompleteController* autocomplete_controller =
-      omnibox->model()->autocomplete_controller();
+      omnibox->controller()->autocomplete_controller();
 
   // Prevent the stop timer from killing the hints fetch early.
   autocomplete_controller->SetStartStopTimerDurationForTesting(
@@ -1941,28 +1903,30 @@ IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
 
   ui_test_utils::WaitForAutocompleteDone(browser());
   EXPECT_TRUE(autocomplete_controller->done());
+  GURL canonical_search_url = GetCanonicalSearchURL(
+      autocomplete_controller->result().match_at(0).destination_url);
 
-  WaitUntilStatusChangesTo(base::ASCIIToUTF16(search_terms),
+  WaitUntilStatusChangesTo(canonical_search_url,
                            SearchPrefetchStatus::kCanBeServed);
-
   auto prefetch_status =
       search_prefetch_service->GetSearchPrefetchStatusForTesting(
-          base::ASCIIToUTF16(search_terms));
+          canonical_search_url);
   ASSERT_TRUE(prefetch_status.has_value());
   EXPECT_EQ(SearchPrefetchStatus::kCanBeServed, prefetch_status.value());
 
-  omnibox->model()->AcceptInput(WindowOpenDisposition::CURRENT_TAB);
+  omnibox->model()->OpenSelection();
 
-  WaitUntilStatusChangesTo(base::ASCIIToUTF16(search_terms), absl::nullopt);
+  WaitUntilStatusChangesTo(canonical_search_url, absl::nullopt);
 
   prefetch_status = search_prefetch_service->GetSearchPrefetchStatusForTesting(
-      base::ASCIIToUTF16(search_terms));
+      canonical_search_url);
   ASSERT_FALSE(prefetch_status.has_value());
 }
 
 IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
                        HungRequestCanBeServed) {
-  set_should_hang_requests(true);
+  set_service_deferral_type(
+      SearchPreloadTestResponseDeferralType::kDeferHeader);
   auto* search_prefetch_service =
       SearchPrefetchServiceFactory::GetForProfile(browser()->profile());
   std::string search_terms = kOmniboxSuggestPrefetchQuery;
@@ -1974,7 +1938,7 @@ IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
   LocationBar* location_bar = browser()->window()->GetLocationBar();
   OmniboxView* omnibox = location_bar->GetOmniboxView();
   AutocompleteController* autocomplete_controller =
-      omnibox->model()->autocomplete_controller();
+      omnibox->controller()->autocomplete_controller();
 
   // Prevent the stop timer from killing the hints fetch early.
   autocomplete_controller->SetStartStopTimerDurationForTesting(
@@ -1983,43 +1947,28 @@ IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
 
   ui_test_utils::WaitForAutocompleteDone(browser());
   EXPECT_TRUE(autocomplete_controller->done());
+  GURL canonical_search_url = GetCanonicalSearchURL(
+      autocomplete_controller->result().match_at(0).destination_url);
 
   auto prefetch_status =
       search_prefetch_service->GetSearchPrefetchStatusForTesting(
-          base::ASCIIToUTF16(search_terms));
+          canonical_search_url);
   ASSERT_TRUE(prefetch_status.has_value());
-  if (BlockOnHeadersEnabled()) {
-    EXPECT_EQ(SearchPrefetchStatus::kCanBeServed, prefetch_status.value());
-  } else {
-    EXPECT_EQ(SearchPrefetchStatus::kInFlight, prefetch_status.value());
-  }
+  EXPECT_EQ(SearchPrefetchStatus::kCanBeServed, prefetch_status.value());
 
-  omnibox->model()->AcceptInput(WindowOpenDisposition::CURRENT_TAB);
+  omnibox->model()->OpenSelection();
 
-  if (BlockOnHeadersEnabled()) {
-    WaitUntilStatusChangesTo(base::ASCIIToUTF16(search_terms), absl::nullopt);
+  WaitUntilStatusChangesTo(canonical_search_url, absl::nullopt);
 
-    prefetch_status =
-        search_prefetch_service->GetSearchPrefetchStatusForTesting(
-            base::ASCIIToUTF16(search_terms));
-    ASSERT_FALSE(prefetch_status.has_value());
-  } else {
-    WaitForDuration(base::Milliseconds(100));
-
-    prefetch_status =
-        search_prefetch_service->GetSearchPrefetchStatusForTesting(
-            base::ASCIIToUTF16(search_terms));
-    ASSERT_TRUE(prefetch_status.has_value());
-    EXPECT_EQ(SearchPrefetchStatus::kRequestCancelled, prefetch_status.value());
-  }
+  prefetch_status = search_prefetch_service->GetSearchPrefetchStatusForTesting(
+      canonical_search_url);
+  ASSERT_FALSE(prefetch_status.has_value());
 }
 
 IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
                        PrefetchServedBeforeHeaders) {
-  if (!BlockOnHeadersEnabled()) {
-    return;
-  }
-  set_delayed_response(true);
+  set_service_deferral_type(
+      SearchPreloadTestResponseDeferralType::kDeferHeader);
   std::string search_terms = kOmniboxSuggestPrefetchQuery;
 
   // Trigger an omnibox suggest fetch that has a prefetch hint.
@@ -2029,7 +1978,7 @@ IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
   LocationBar* location_bar = browser()->window()->GetLocationBar();
   OmniboxView* omnibox = location_bar->GetOmniboxView();
   AutocompleteController* autocomplete_controller =
-      omnibox->model()->autocomplete_controller();
+      omnibox->controller()->autocomplete_controller();
 
   // Prevent the stop timer from killing the hints fetch early.
   autocomplete_controller->SetStartStopTimerDurationForTesting(
@@ -2038,8 +1987,12 @@ IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
 
   ui_test_utils::WaitForAutocompleteDone(browser());
   EXPECT_TRUE(autocomplete_controller->done());
+  GURL canonical_search_url = GetCanonicalSearchURL(
+      autocomplete_controller->result().match_at(0).destination_url);
 
-  omnibox->model()->AcceptInput(WindowOpenDisposition::CURRENT_TAB);
+  omnibox->model()->OpenSelection();
+  WaitUntilStatusChangesTo(canonical_search_url, absl::nullopt);
+  DispatchDelayedResponseTask();
 
   content::WaitForLoadStop(GetWebContents());
 
@@ -2049,14 +2002,14 @@ IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
   EXPECT_TRUE(base::Contains(inner_html, "prefetch"));
 }
 
+// After search prefetch is activated, it can fallback to a real navigation
+// request after it receives an invalid prefetch response.
 IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
                        PrefetchFallbackFromError) {
-  if (!BlockOnHeadersEnabled()) {
-    return;
-  }
-
   base::HistogramTester histogram_tester;
-  set_delayed_response(true);
+  set_service_deferral_type(
+      SearchPreloadTestResponseDeferralType::kDeferHeader);
+
   auto* search_prefetch_service =
       SearchPrefetchServiceFactory::GetForProfile(browser()->profile());
   std::string search_terms = kOmniboxErrorQuery;
@@ -2068,7 +2021,7 @@ IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
   LocationBar* location_bar = browser()->window()->GetLocationBar();
   OmniboxView* omnibox = location_bar->GetOmniboxView();
   AutocompleteController* autocomplete_controller =
-      omnibox->model()->autocomplete_controller();
+      omnibox->controller()->autocomplete_controller();
 
   // Prevent the stop timer from killing the hints fetch early.
   autocomplete_controller->SetStartStopTimerDurationForTesting(
@@ -2077,9 +2030,21 @@ IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
 
   ui_test_utils::WaitForAutocompleteDone(browser());
   EXPECT_TRUE(autocomplete_controller->done());
+  GURL canonical_search_url = GetCanonicalSearchURL(
+      autocomplete_controller->result().match_at(0).destination_url);
+  WaitUntilStatusChangesTo(canonical_search_url,
+                           SearchPrefetchStatus::kCanBeServed);
 
-  omnibox->model()->AcceptInput(WindowOpenDisposition::CURRENT_TAB);
+  omnibox->model()->OpenSelection();
 
+  // Wait until it is served to a real navigation.
+  WaitUntilStatusChangesTo(canonical_search_url, absl::nullopt);
+
+  // Dispatch the response which is an invalid one.
+  DispatchDelayedResponseTask();
+
+  // Then dispatch the response to the fallback request.
+  DispatchDelayedResponseTask();
   content::WaitForLoadStop(GetWebContents());
 
   auto inner_html = GetDocumentInnerHTML();
@@ -2092,14 +2057,24 @@ IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
   histogram_tester.ExpectBucketCount(
       "Omnibox.SearchPrefetch.PrefetchEligibilityReason2.SuggestionPrefetch",
       SearchPrefetchEligibilityReason::kErrorBackoff, 1);
+
+  // It would receives two responses. The first one is for prefetch
+  // navigation, which is not servable, and the other is for the fallback
+  // navigation and it is servable.
+  histogram_tester.ExpectBucketCount(
+      "Omnibox.SearchPrefetch.ReceivedServableResponse2.Initial."
+      "SuggestionPrefetch",
+      /*can_be_served*/ false, 1);
+  histogram_tester.ExpectBucketCount(
+      "Omnibox.SearchPrefetch.ReceivedServableResponse2.Fallback."
+      "SuggestionPrefetch",
+      /*can_be_served*/ true, 1);
 }
 
 IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
                        PrefetchSecureSecurityState) {
-  if (!BlockOnHeadersEnabled()) {
-    return;
-  }
-  set_delayed_response(true);
+  set_service_deferral_type(
+      SearchPreloadTestResponseDeferralType::kDeferHeader);
   std::string search_terms = kOmniboxSuggestPrefetchQuery;
 
   // Trigger an omnibox suggest fetch that has a prefetch hint.
@@ -2109,7 +2084,7 @@ IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
   LocationBar* location_bar = browser()->window()->GetLocationBar();
   OmniboxView* omnibox = location_bar->GetOmniboxView();
   AutocompleteController* autocomplete_controller =
-      omnibox->model()->autocomplete_controller();
+      omnibox->controller()->autocomplete_controller();
 
   // Prevent the stop timer from killing the hints fetch early.
   autocomplete_controller->SetStartStopTimerDurationForTesting(
@@ -2118,10 +2093,19 @@ IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
 
   ui_test_utils::WaitForAutocompleteDone(browser());
   EXPECT_TRUE(autocomplete_controller->done());
+  GURL canonical_search_url = GetCanonicalSearchURL(
+      autocomplete_controller->result().match_at(0).destination_url);
   SecurityStateTabHelper* helper =
       SecurityStateTabHelper::FromWebContents(GetWebContents());
-  omnibox->model()->AcceptInput(WindowOpenDisposition::CURRENT_TAB);
+  WaitUntilStatusChangesTo(canonical_search_url,
+                           SearchPrefetchStatus::kCanBeServed);
+  omnibox->model()->OpenSelection();
 
+  // Wait until it is served to a real navigation.
+  WaitUntilStatusChangesTo(canonical_search_url, absl::nullopt);
+
+  // Dispatch the response.
+  DispatchDelayedResponseTask();
   content::WaitForLoadStop(GetWebContents());
 
   auto inner_html = GetDocumentInnerHTML();
@@ -2134,11 +2118,8 @@ IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
 
 IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
                        PrefetchFallbackSecureSecurityState) {
-  if (!BlockOnHeadersEnabled()) {
-    return;
-  }
-
-  set_delayed_response(true);
+  set_service_deferral_type(
+      SearchPreloadTestResponseDeferralType::kDeferHeader);
   std::string search_terms = kOmniboxErrorQuery;
 
   // Trigger an omnibox suggest fetch that has a prefetch hint.
@@ -2148,7 +2129,7 @@ IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
   LocationBar* location_bar = browser()->window()->GetLocationBar();
   OmniboxView* omnibox = location_bar->GetOmniboxView();
   AutocompleteController* autocomplete_controller =
-      omnibox->model()->autocomplete_controller();
+      omnibox->controller()->autocomplete_controller();
 
   // Prevent the stop timer from killing the hints fetch early.
   autocomplete_controller->SetStartStopTimerDurationForTesting(
@@ -2157,60 +2138,33 @@ IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
 
   ui_test_utils::WaitForAutocompleteDone(browser());
   EXPECT_TRUE(autocomplete_controller->done());
+  GURL canonical_search_url = GetCanonicalSearchURL(
+      autocomplete_controller->result().match_at(0).destination_url);
   SecurityStateTabHelper* helper =
       SecurityStateTabHelper::FromWebContents(GetWebContents());
-  omnibox->model()->AcceptInput(WindowOpenDisposition::CURRENT_TAB);
+  WaitUntilStatusChangesTo(canonical_search_url,
+                           SearchPrefetchStatus::kCanBeServed);
+
+  omnibox->model()->OpenSelection();
+  // Wait until it is served to the navigation.
+  WaitUntilStatusChangesTo(canonical_search_url, absl::nullopt);
+
+  // Dispatch the response which is an invalid one. And then it would
+  // fallback.
+  DispatchDelayedResponseTask();
+
+  // Dispatch the response for to the fallback request.
+  DispatchDelayedResponseTask();
 
   content::WaitForLoadStop(GetWebContents());
 
   auto inner_html = GetDocumentInnerHTML();
 
-  // Check we fell back to the regular page, and the security level is correct.
+  // Check we fell back to the regular page, and the security level is
+  // correct.
   EXPECT_TRUE(base::Contains(inner_html, "regular"));
   EXPECT_FALSE(base::Contains(inner_html, "prefetch"));
   EXPECT_EQ(helper->GetSecurityLevel(), security_state::SECURE);
-}
-
-IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
-                       OmniboxNavigateToNonMatchingEntryStreamingCancels) {
-  set_hang_requests_after_start(true);
-  auto* search_prefetch_service =
-      SearchPrefetchServiceFactory::GetForProfile(browser()->profile());
-  std::string search_terms = kOmniboxSuggestPrefetchQuery;
-
-  // Trigger an omnibox suggest fetch that has a prefetch hint.
-  AutocompleteInput input(
-      base::ASCIIToUTF16(search_terms), metrics::OmniboxEventProto::BLANK,
-      ChromeAutocompleteSchemeClassifier(browser()->profile()));
-  LocationBar* location_bar = browser()->window()->GetLocationBar();
-  OmniboxView* omnibox = location_bar->GetOmniboxView();
-  AutocompleteController* autocomplete_controller =
-      omnibox->model()->autocomplete_controller();
-
-  // Prevent the stop timer from killing the hints fetch early.
-  autocomplete_controller->SetStartStopTimerDurationForTesting(
-      base::Seconds(10));
-  autocomplete_controller->Start(input);
-
-  ui_test_utils::WaitForAutocompleteDone(browser());
-  EXPECT_TRUE(autocomplete_controller->done());
-
-  WaitUntilStatusChangesTo(base::ASCIIToUTF16(search_terms),
-                           SearchPrefetchStatus::kCanBeServed);
-  auto prefetch_status =
-      search_prefetch_service->GetSearchPrefetchStatusForTesting(
-          base::ASCIIToUTF16(search_terms));
-  ASSERT_TRUE(prefetch_status.has_value());
-  EXPECT_EQ(SearchPrefetchStatus::kCanBeServed, prefetch_status.value());
-  omnibox->model()->OnUpOrDownKeyPressed(1);
-  omnibox->model()->AcceptInput(WindowOpenDisposition::CURRENT_TAB);
-
-  WaitUntilStatusChangesTo(base::ASCIIToUTF16(search_terms),
-                           SearchPrefetchStatus::kRequestCancelled);
-  prefetch_status = search_prefetch_service->GetSearchPrefetchStatusForTesting(
-      base::ASCIIToUTF16(search_terms));
-  ASSERT_TRUE(prefetch_status.has_value());
-  EXPECT_EQ(SearchPrefetchStatus::kRequestCancelled, prefetch_status.value());
 }
 
 IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
@@ -2222,18 +2176,19 @@ IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
   std::string search_terms = "prefetch_content";
 
   GURL prefetch_url = GetSearchServerQueryURL(search_terms);
+  GURL canonical_search_url = GetCanonicalSearchURL(prefetch_url);
 
   EXPECT_TRUE(search_prefetch_service->MaybePrefetchURL(prefetch_url,
                                                         GetWebContents()));
 
   auto prefetch_status =
       search_prefetch_service->GetSearchPrefetchStatusForTesting(
-          base::ASCIIToUTF16(search_terms));
+          canonical_search_url);
   EXPECT_TRUE(prefetch_status.has_value());
 
   ClearBrowsingCacheData(absl::nullopt);
   prefetch_status = search_prefetch_service->GetSearchPrefetchStatusForTesting(
-      base::ASCIIToUTF16(search_terms));
+      canonical_search_url);
   EXPECT_FALSE(prefetch_status.has_value());
 }
 
@@ -2246,18 +2201,19 @@ IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
   std::string search_terms = "prefetch_content";
 
   GURL prefetch_url = GetSearchServerQueryURL(search_terms);
+  GURL canonical_search_url = GetCanonicalSearchURL(prefetch_url);
 
   EXPECT_TRUE(search_prefetch_service->MaybePrefetchURL(prefetch_url,
                                                         GetWebContents()));
 
   auto prefetch_status =
       search_prefetch_service->GetSearchPrefetchStatusForTesting(
-          base::ASCIIToUTF16(search_terms));
+          canonical_search_url);
   EXPECT_TRUE(prefetch_status.has_value());
 
   ClearBrowsingCacheData(GURL(GetSearchServerQueryURLWithNoQuery("/")));
   prefetch_status = search_prefetch_service->GetSearchPrefetchStatusForTesting(
-      base::ASCIIToUTF16(search_terms));
+      canonical_search_url);
   EXPECT_FALSE(prefetch_status.has_value());
 }
 
@@ -2270,18 +2226,19 @@ IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
   std::string search_terms = "prefetch_content";
 
   GURL prefetch_url = GetSearchServerQueryURL(search_terms);
+  GURL canonical_search_url = GetCanonicalSearchURL(prefetch_url);
 
   EXPECT_TRUE(search_prefetch_service->MaybePrefetchURL(prefetch_url,
                                                         GetWebContents()));
 
   auto prefetch_status =
       search_prefetch_service->GetSearchPrefetchStatusForTesting(
-          base::ASCIIToUTF16(search_terms));
+          canonical_search_url);
   EXPECT_TRUE(prefetch_status.has_value());
 
   ClearBrowsingCacheData(GetSuggestServerURL("/"));
   prefetch_status = search_prefetch_service->GetSearchPrefetchStatusForTesting(
-      base::ASCIIToUTF16(search_terms));
+      canonical_search_url);
   EXPECT_TRUE(prefetch_status.has_value());
 }
 
@@ -2294,20 +2251,21 @@ IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
   std::string search_terms = "prefetch_content";
 
   GURL prefetch_url = GetSearchServerQueryURL(search_terms);
+  GURL canonical_search_url = GetCanonicalSearchURL(prefetch_url);
 
   EXPECT_TRUE(search_prefetch_service->MaybePrefetchURL(prefetch_url,
                                                         GetWebContents()));
 
   auto prefetch_status =
       search_prefetch_service->GetSearchPrefetchStatusForTesting(
-          base::ASCIIToUTF16(search_terms));
+          canonical_search_url);
   EXPECT_TRUE(prefetch_status.has_value());
 
   SetDSEWithURL(GetSearchServerQueryURL("blah/q={searchTerms}&extra_stuff"),
                 false);
 
   prefetch_status = search_prefetch_service->GetSearchPrefetchStatusForTesting(
-      base::ASCIIToUTF16(search_terms));
+      canonical_search_url);
   EXPECT_FALSE(prefetch_status.has_value());
 }
 
@@ -2320,19 +2278,20 @@ IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
   std::string search_terms = "prefetch_content";
 
   GURL prefetch_url = GetSearchServerQueryURL(search_terms);
+  GURL canonical_search_url = GetCanonicalSearchURL(prefetch_url);
 
   EXPECT_TRUE(search_prefetch_service->MaybePrefetchURL(prefetch_url,
                                                         GetWebContents()));
 
   auto prefetch_status =
       search_prefetch_service->GetSearchPrefetchStatusForTesting(
-          base::ASCIIToUTF16(search_terms));
+          canonical_search_url);
   EXPECT_TRUE(prefetch_status.has_value());
 
   SetDSEWithURL(GetSuggestServerURL("/q={searchTerms}"), false);
 
   prefetch_status = search_prefetch_service->GetSearchPrefetchStatusForTesting(
-      base::ASCIIToUTF16(search_terms));
+      canonical_search_url);
   EXPECT_FALSE(prefetch_status.has_value());
 }
 
@@ -2345,19 +2304,20 @@ IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
   std::string search_terms = "prefetch_content";
 
   GURL prefetch_url = GetSearchServerQueryURL(search_terms);
+  GURL canonical_search_url = GetCanonicalSearchURL(prefetch_url);
 
   EXPECT_TRUE(search_prefetch_service->MaybePrefetchURL(prefetch_url,
                                                         GetWebContents()));
 
   auto prefetch_status =
       search_prefetch_service->GetSearchPrefetchStatusForTesting(
-          base::ASCIIToUTF16(search_terms));
+          canonical_search_url);
   EXPECT_TRUE(prefetch_status.has_value());
 
   UpdateButChangeNothingInDSE();
 
   prefetch_status = search_prefetch_service->GetSearchPrefetchStatusForTesting(
-      base::ASCIIToUTF16(search_terms));
+      canonical_search_url);
   EXPECT_TRUE(prefetch_status.has_value());
 }
 
@@ -2373,6 +2333,7 @@ IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
   std::string search_terms = "prefetch_content";
 
   GURL prefetch_url = GetSearchServerQueryURL(search_terms);
+  GURL canonical_search_url = GetCanonicalSearchURL(prefetch_url);
 
   EXPECT_FALSE(search_prefetch_service->MaybePrefetchURL(prefetch_url,
                                                          GetWebContents()));
@@ -2419,6 +2380,7 @@ IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
   std::string search_terms = "prefetch_content";
 
   GURL prefetch_url = GetSearchServerQueryURL(search_terms);
+  GURL canonical_search_url = GetCanonicalSearchURL(prefetch_url);
 
   HostContentSettingsMapFactory::GetForProfile(browser()->profile())
       ->SetContentSettingDefaultScope(prefetch_url, GURL(),
@@ -2434,7 +2396,7 @@ IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
 
   auto prefetch_status =
       search_prefetch_service->GetSearchPrefetchStatusForTesting(
-          base::ASCIIToUTF16(search_terms));
+          canonical_search_url);
   EXPECT_FALSE(prefetch_status.has_value());
 }
 
@@ -2449,23 +2411,22 @@ IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
 
   auto [prefetch_url, search_url] =
       GetSearchPrefetchAndNonPrefetch(search_terms);
+  GURL canonical_search_url = GetCanonicalSearchURL(prefetch_url);
 
   EXPECT_TRUE(search_prefetch_service->MaybePrefetchURL(prefetch_url,
                                                         GetWebContents()));
 
   auto prefetch_status =
       search_prefetch_service->GetSearchPrefetchStatusForTesting(
-          base::ASCIIToUTF16(search_terms));
+          canonical_search_url);
   ASSERT_TRUE(prefetch_status.has_value());
-  EXPECT_EQ(BlockOnHeadersEnabled() ? SearchPrefetchStatus::kCanBeServed
-                                    : SearchPrefetchStatus::kInFlight,
-            prefetch_status.value());
+  EXPECT_EQ(SearchPrefetchStatus::kCanBeServed, prefetch_status.value());
 
-  WaitUntilStatusChangesTo(base::ASCIIToUTF16(search_terms),
+  WaitUntilStatusChangesTo(canonical_search_url,
                            SearchPrefetchStatus::kComplete);
 
   prefetch_status = search_prefetch_service->GetSearchPrefetchStatusForTesting(
-      base::ASCIIToUTF16(search_terms));
+      canonical_search_url);
   ASSERT_TRUE(prefetch_status.has_value());
   EXPECT_EQ(SearchPrefetchStatus::kComplete, prefetch_status.value());
   browser()->profile()->GetPrefs()->SetBoolean(prefs::kWebKitJavascriptEnabled,
@@ -2491,23 +2452,22 @@ IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
 
   auto [prefetch_url, search_url] =
       GetSearchPrefetchAndNonPrefetch(search_terms);
+  GURL canonical_search_url = GetCanonicalSearchURL(prefetch_url);
 
   EXPECT_TRUE(search_prefetch_service->MaybePrefetchURL(prefetch_url,
                                                         GetWebContents()));
 
   auto prefetch_status =
       search_prefetch_service->GetSearchPrefetchStatusForTesting(
-          base::ASCIIToUTF16(search_terms));
+          canonical_search_url);
   ASSERT_TRUE(prefetch_status.has_value());
-  EXPECT_EQ(BlockOnHeadersEnabled() ? SearchPrefetchStatus::kCanBeServed
-                                    : SearchPrefetchStatus::kInFlight,
-            prefetch_status.value());
+  EXPECT_EQ(SearchPrefetchStatus::kCanBeServed, prefetch_status.value());
 
-  WaitUntilStatusChangesTo(base::ASCIIToUTF16(search_terms),
+  WaitUntilStatusChangesTo(canonical_search_url,
                            SearchPrefetchStatus::kComplete);
 
   prefetch_status = search_prefetch_service->GetSearchPrefetchStatusForTesting(
-      base::ASCIIToUTF16(search_terms));
+      canonical_search_url);
   ASSERT_TRUE(prefetch_status.has_value());
   EXPECT_EQ(SearchPrefetchStatus::kComplete, prefetch_status.value());
 
@@ -2536,23 +2496,22 @@ IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
 
   auto [prefetch_url, search_url] =
       GetSearchPrefetchAndNonPrefetch(search_terms);
+  GURL canonical_search_url = GetCanonicalSearchURL(prefetch_url);
 
   EXPECT_TRUE(search_prefetch_service->MaybePrefetchURL(prefetch_url,
                                                         GetWebContents()));
 
   auto prefetch_status =
       search_prefetch_service->GetSearchPrefetchStatusForTesting(
-          base::ASCIIToUTF16(search_terms));
+          canonical_search_url);
   ASSERT_TRUE(prefetch_status.has_value());
-  EXPECT_EQ(BlockOnHeadersEnabled() ? SearchPrefetchStatus::kCanBeServed
-                                    : SearchPrefetchStatus::kInFlight,
-            prefetch_status.value());
+  EXPECT_EQ(SearchPrefetchStatus::kCanBeServed, prefetch_status.value());
 
-  WaitUntilStatusChangesTo(base::ASCIIToUTF16(search_terms),
+  WaitUntilStatusChangesTo(canonical_search_url,
                            SearchPrefetchStatus::kComplete);
 
   prefetch_status = search_prefetch_service->GetSearchPrefetchStatusForTesting(
-      base::ASCIIToUTF16(search_terms));
+      canonical_search_url);
   ASSERT_TRUE(prefetch_status.has_value());
   EXPECT_EQ(SearchPrefetchStatus::kComplete, prefetch_status.value());
   EXPECT_EQ(1u, search_server_request_count());
@@ -2577,6 +2536,7 @@ IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest, NoServeReload) {
 
   auto [prefetch_url, search_url] =
       GetSearchPrefetchAndNonPrefetch(search_terms);
+  GURL canonical_search_url = GetCanonicalSearchURL(prefetch_url);
   ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), search_url));
 
   EXPECT_TRUE(search_prefetch_service->MaybePrefetchURL(prefetch_url,
@@ -2584,17 +2544,15 @@ IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest, NoServeReload) {
 
   auto prefetch_status =
       search_prefetch_service->GetSearchPrefetchStatusForTesting(
-          base::ASCIIToUTF16(search_terms));
+          canonical_search_url);
   ASSERT_TRUE(prefetch_status.has_value());
-  EXPECT_EQ(BlockOnHeadersEnabled() ? SearchPrefetchStatus::kCanBeServed
-                                    : SearchPrefetchStatus::kInFlight,
-            prefetch_status.value());
+  EXPECT_EQ(SearchPrefetchStatus::kCanBeServed, prefetch_status.value());
 
-  WaitUntilStatusChangesTo(base::ASCIIToUTF16(search_terms),
+  WaitUntilStatusChangesTo(canonical_search_url,
                            SearchPrefetchStatus::kComplete);
 
   prefetch_status = search_prefetch_service->GetSearchPrefetchStatusForTesting(
-      base::ASCIIToUTF16(search_terms));
+      canonical_search_url);
   ASSERT_TRUE(prefetch_status.has_value());
   EXPECT_EQ(SearchPrefetchStatus::kComplete, prefetch_status.value());
   EXPECT_EQ(2u, search_server_request_count());
@@ -2620,23 +2578,22 @@ IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest, NoServePost) {
 
   auto [prefetch_url, search_url] =
       GetSearchPrefetchAndNonPrefetch(search_terms);
+  GURL canonical_search_url = GetCanonicalSearchURL(prefetch_url);
 
   EXPECT_TRUE(search_prefetch_service->MaybePrefetchURL(prefetch_url,
                                                         GetWebContents()));
 
   auto prefetch_status =
       search_prefetch_service->GetSearchPrefetchStatusForTesting(
-          base::ASCIIToUTF16(search_terms));
+          canonical_search_url);
   ASSERT_TRUE(prefetch_status.has_value());
-  EXPECT_EQ(BlockOnHeadersEnabled() ? SearchPrefetchStatus::kCanBeServed
-                                    : SearchPrefetchStatus::kInFlight,
-            prefetch_status.value());
+  EXPECT_EQ(SearchPrefetchStatus::kCanBeServed, prefetch_status.value());
 
-  WaitUntilStatusChangesTo(base::ASCIIToUTF16(search_terms),
+  WaitUntilStatusChangesTo(canonical_search_url,
                            SearchPrefetchStatus::kComplete);
 
   prefetch_status = search_prefetch_service->GetSearchPrefetchStatusForTesting(
-      base::ASCIIToUTF16(search_terms));
+      canonical_search_url);
   ASSERT_TRUE(prefetch_status.has_value());
   EXPECT_EQ(SearchPrefetchStatus::kComplete, prefetch_status.value());
   EXPECT_EQ(1u, search_server_request_count());
@@ -2661,23 +2618,22 @@ IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
 
   auto [prefetch_url, search_url] =
       GetSearchPrefetchAndNonPrefetch(search_terms);
+  GURL canonical_search_url = GetCanonicalSearchURL(prefetch_url);
 
   EXPECT_TRUE(search_prefetch_service->MaybePrefetchURL(prefetch_url,
                                                         GetWebContents()));
 
   auto prefetch_status =
       search_prefetch_service->GetSearchPrefetchStatusForTesting(
-          base::ASCIIToUTF16(search_terms));
+          canonical_search_url);
   ASSERT_TRUE(prefetch_status.has_value());
-  EXPECT_EQ(BlockOnHeadersEnabled() ? SearchPrefetchStatus::kCanBeServed
-                                    : SearchPrefetchStatus::kInFlight,
-            prefetch_status.value());
+  EXPECT_EQ(SearchPrefetchStatus::kCanBeServed, prefetch_status.value());
 
-  WaitUntilStatusChangesTo(base::ASCIIToUTF16(search_terms),
+  WaitUntilStatusChangesTo(canonical_search_url,
                            SearchPrefetchStatus::kComplete);
 
   prefetch_status = search_prefetch_service->GetSearchPrefetchStatusForTesting(
-      base::ASCIIToUTF16(search_terms));
+      canonical_search_url);
   ASSERT_TRUE(prefetch_status.has_value());
   EXPECT_EQ(SearchPrefetchStatus::kComplete, prefetch_status.value());
   EXPECT_EQ(1u, search_server_request_count());
@@ -2706,23 +2662,22 @@ IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
 
   auto [prefetch_url, search_url] =
       GetSearchPrefetchAndNonPrefetch(search_terms);
+  GURL canonical_search_url = GetCanonicalSearchURL(prefetch_url);
 
   EXPECT_TRUE(search_prefetch_service->MaybePrefetchURL(prefetch_url,
                                                         GetWebContents()));
 
   auto prefetch_status =
       search_prefetch_service->GetSearchPrefetchStatusForTesting(
-          base::ASCIIToUTF16(search_terms));
+          canonical_search_url);
   ASSERT_TRUE(prefetch_status.has_value());
-  EXPECT_EQ(BlockOnHeadersEnabled() ? SearchPrefetchStatus::kCanBeServed
-                                    : SearchPrefetchStatus::kInFlight,
-            prefetch_status.value());
+  EXPECT_EQ(SearchPrefetchStatus::kCanBeServed, prefetch_status.value());
 
-  WaitUntilStatusChangesTo(base::ASCIIToUTF16(search_terms),
+  WaitUntilStatusChangesTo(canonical_search_url,
                            SearchPrefetchStatus::kComplete);
 
   prefetch_status = search_prefetch_service->GetSearchPrefetchStatusForTesting(
-      base::ASCIIToUTF16(search_terms));
+      canonical_search_url);
   ASSERT_TRUE(prefetch_status.has_value());
   EXPECT_EQ(SearchPrefetchStatus::kComplete, prefetch_status.value());
   EXPECT_EQ(1u, search_server_request_count());
@@ -2740,7 +2695,7 @@ IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
 
 IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
                        OnlyStreamedResponseCanServePartialRequest) {
-  set_hang_requests_after_start(true);
+  set_service_deferral_type(SearchPreloadTestResponseDeferralType::kDeferBody);
   auto* search_prefetch_service =
       SearchPrefetchServiceFactory::GetForProfile(browser()->profile());
   EXPECT_NE(nullptr, search_prefetch_service);
@@ -2748,22 +2703,21 @@ IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
   std::string search_terms = "prefetch_content";
 
   GURL prefetch_url = GetSearchServerQueryURL(search_terms);
+  GURL canonical_search_url = GetCanonicalSearchURL(prefetch_url);
 
   EXPECT_TRUE(search_prefetch_service->MaybePrefetchURL(prefetch_url,
                                                         GetWebContents()));
   auto prefetch_status =
       search_prefetch_service->GetSearchPrefetchStatusForTesting(
-          base::ASCIIToUTF16(search_terms));
+          canonical_search_url);
   ASSERT_TRUE(prefetch_status.has_value());
-  EXPECT_EQ(BlockOnHeadersEnabled() ? SearchPrefetchStatus::kCanBeServed
-                                    : SearchPrefetchStatus::kInFlight,
-            prefetch_status.value());
+  EXPECT_EQ(SearchPrefetchStatus::kCanBeServed, prefetch_status.value());
 
-  WaitUntilStatusChangesTo(base::ASCIIToUTF16(search_terms),
+  WaitUntilStatusChangesTo(canonical_search_url,
                            SearchPrefetchStatus::kCanBeServed);
 
   prefetch_status = search_prefetch_service->GetSearchPrefetchStatusForTesting(
-      base::ASCIIToUTF16(search_terms));
+      canonical_search_url);
   ASSERT_TRUE(prefetch_status.has_value());
 
   EXPECT_EQ(SearchPrefetchStatus::kCanBeServed, prefetch_status.value());
@@ -2777,23 +2731,22 @@ IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
 
   std::string search_terms = "prefetch_content";
   GURL prefetch_url = GetSearchServerQueryURL(search_terms);
+  GURL canonical_search_url = GetCanonicalSearchURL(prefetch_url);
   GURL navigation_url = GetSearchServerQueryURLWithSubframeLoad(search_terms);
 
   EXPECT_TRUE(search_prefetch_service->MaybePrefetchURL(prefetch_url,
                                                         GetWebContents()));
   auto prefetch_status =
       search_prefetch_service->GetSearchPrefetchStatusForTesting(
-          base::ASCIIToUTF16(search_terms));
+          canonical_search_url);
   ASSERT_TRUE(prefetch_status.has_value());
-  EXPECT_EQ(BlockOnHeadersEnabled() ? SearchPrefetchStatus::kCanBeServed
-                                    : SearchPrefetchStatus::kInFlight,
-            prefetch_status.value());
+  EXPECT_EQ(SearchPrefetchStatus::kCanBeServed, prefetch_status.value());
 
-  WaitUntilStatusChangesTo(base::ASCIIToUTF16(search_terms),
+  WaitUntilStatusChangesTo(canonical_search_url,
                            SearchPrefetchStatus::kComplete);
 
   prefetch_status = search_prefetch_service->GetSearchPrefetchStatusForTesting(
-      base::ASCIIToUTF16(search_terms));
+      canonical_search_url);
   ASSERT_TRUE(prefetch_status.has_value());
   EXPECT_EQ(SearchPrefetchStatus::kComplete, prefetch_status.value());
 
@@ -2805,16 +2758,16 @@ IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
   // frame navigation to the special subframe loader page, and a navigation to
   // the subframe that matches the prefetch URL.
 
-  // 2 requests should be to the search terms directly, one for the prefetch and
-  // one for the subframe (that can't be served from the prefetch cache).
+  // 2 requests should be to the search terms directly, one for the prefetch
+  // and one for the subframe (that can't be served from the prefetch cache).
   EXPECT_EQ(
       2, base::ranges::count_if(requests, [search_terms](const auto& request) {
         return request.relative_url.find(kLoadInSubframe) ==
                    std::string::npos &&
                request.relative_url.find(search_terms) != std::string::npos;
       }));
-  // 1 request should specify to load content in a subframe but also contain the
-  // search terms.
+  // 1 request should specify to load content in a subframe but also contain
+  // the search terms.
   EXPECT_EQ(
       1, base::ranges::count_if(requests, [search_terms](const auto& request) {
         return request.relative_url.find(kLoadInSubframe) !=
@@ -2857,6 +2810,7 @@ IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
 
   auto [prefetch_url, search_url] =
       GetSearchPrefetchAndNonPrefetch(search_terms);
+  GURL canonical_search_url = GetCanonicalSearchURL(prefetch_url);
 
   RegisterStaticFile(kServiceWorkerUrl, kEnableNavigationPreloadScript,
                      "text/javascript");
@@ -2871,7 +2825,8 @@ IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
       GetSearchServerQueryURLWithNoQuery("/"),
       blink::mojom::ScriptType::kClassic,
       blink::mojom::ServiceWorkerUpdateViaCache::kImports);
-  blink::StorageKey key(url::Origin::Create(options.scope));
+  const blink::StorageKey key =
+      blink::StorageKey::CreateFirstParty(url::Origin::Create(options.scope));
   service_worker_context->RegisterServiceWorker(
       worker_url, key, options,
       base::BindOnce(&RunFirstParam, run_loop.QuitClosure()));
@@ -2885,12 +2840,12 @@ IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
                                                         GetWebContents()));
   auto prefetch_status =
       search_prefetch_service->GetSearchPrefetchStatusForTesting(
-          base::ASCIIToUTF16(search_terms));
-  WaitUntilStatusChangesTo(base::ASCIIToUTF16(search_terms),
+          canonical_search_url);
+  WaitUntilStatusChangesTo(canonical_search_url,
                            SearchPrefetchStatus::kComplete);
 
   prefetch_status = search_prefetch_service->GetSearchPrefetchStatusForTesting(
-      base::ASCIIToUTF16(search_terms));
+      canonical_search_url);
   ASSERT_TRUE(prefetch_status.has_value());
   EXPECT_EQ(SearchPrefetchStatus::kComplete, prefetch_status.value());
 
@@ -2902,7 +2857,7 @@ IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
   EXPECT_TRUE(base::Contains(inner_html, "prefetch"));
 
   prefetch_status = search_prefetch_service->GetSearchPrefetchStatusForTesting(
-      base::ASCIIToUTF16(search_terms));
+      canonical_search_url);
   EXPECT_FALSE(prefetch_status.has_value());
 }
 
@@ -2917,17 +2872,18 @@ IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
 
   auto [prefetch_url, search_url] =
       GetSearchPrefetchAndNonPrefetch(search_terms);
+  GURL canonical_search_url = GetCanonicalSearchURL(prefetch_url);
 
   EXPECT_TRUE(search_prefetch_service->MaybePrefetchURL(prefetch_url,
                                                         GetWebContents()));
   auto prefetch_status =
       search_prefetch_service->GetSearchPrefetchStatusForTesting(
-          base::ASCIIToUTF16(search_terms));
-  WaitUntilStatusChangesTo(base::ASCIIToUTF16(search_terms),
+          canonical_search_url);
+  WaitUntilStatusChangesTo(canonical_search_url,
                            SearchPrefetchStatus::kComplete);
 
   prefetch_status = search_prefetch_service->GetSearchPrefetchStatusForTesting(
-      base::ASCIIToUTF16(search_terms));
+      canonical_search_url);
   ASSERT_TRUE(prefetch_status.has_value());
   EXPECT_EQ(SearchPrefetchStatus::kComplete, prefetch_status.value());
 
@@ -2936,102 +2892,34 @@ IN_PROC_BROWSER_TEST_P(SearchPrefetchServiceEnabledBrowserTest,
   content::RenderFrameHost* frame = GetWebContents()->GetPrimaryMainFrame();
 
   // Check the request total time is non-negative.
-  int value = -1;
   std::string script =
-      "window.domAutomationController.send(window.performance.timing."
-      "responseEnd - window.performance.timing.requestStart)";
-  EXPECT_TRUE(content::ExecuteScriptAndExtractInt(frame, script, &value));
-  EXPECT_LE(0, value);
+      "window.performance.timing."
+      "responseEnd - window.performance.timing.requestStart";
+  EXPECT_LE(0, content::EvalJs(frame, script));
 
   // Check the response time is non-negative.
-  value = -1;
   script =
-      "window.domAutomationController.send(window.performance.timing."
-      "responseEnd - window.performance.timing.responseStart)";
-  EXPECT_TRUE(content::ExecuteScriptAndExtractInt(frame, script, &value));
-  EXPECT_LE(0, value);
+      "window.performance.timing."
+      "responseEnd - window.performance.timing.responseStart";
+  EXPECT_LE(0, content::EvalJs(frame, script));
 
   // Check request start is after (or the same as) navigation start.
-  value = -1;
   script =
-      "window.domAutomationController.send(window.performance.timing."
-      "requestStart - window.performance.timing.navigationStart)";
-  EXPECT_TRUE(content::ExecuteScriptAndExtractInt(frame, script, &value));
-  EXPECT_LE(0, value);
+      "window.performance.timing."
+      "requestStart - window.performance.timing.navigationStart";
+  EXPECT_LE(0, content::EvalJs(frame, script));
 
   // Check response end is after (or the same as) navigation start.
-  value = -1;
   script =
-      "window.domAutomationController.send(window.performance.timing."
-      "responseEnd - window.performance.timing.navigationStart)";
-  EXPECT_TRUE(content::ExecuteScriptAndExtractInt(frame, script, &value));
-  EXPECT_LE(0, value);
+      "window.performance.timing."
+      "responseEnd - window.performance.timing.navigationStart";
+  EXPECT_LE(0, content::EvalJs(frame, script));
 }
 
 INSTANTIATE_TEST_SUITE_P(
     All,
     SearchPrefetchServiceEnabledBrowserTest,
     testing::Combine(testing::ValuesIn(kBlockOnHeadersCases)));
-
-class SearchPrefetchServiceHeadStartTooLongTest
-    : public SearchPrefetchBaseBrowserTest {
- public:
-  SearchPrefetchServiceHeadStartTooLongTest() {
-    feature_list_.InitWithFeaturesAndParameters(
-        {{kSearchPrefetchServicePrefetching,
-          {{"max_attempts_per_caching_duration", "3"},
-           {"cache_size", "1"},
-           {"device_memory_threshold_MB", "0"}}},
-         {kSearchPrefetchBlockBeforeHeaders,
-          {{"block_head_start_ms", "100000"}}}},
-        {});
-  }
-
- private:
-  base::test::ScopedFeatureList feature_list_;
-};
-
-IN_PROC_BROWSER_TEST_F(SearchPrefetchServiceHeadStartTooLongTest,
-                       HungRequestNotServedBeforeHeadStart) {
-  set_should_hang_requests(true);
-  auto* search_prefetch_service =
-      SearchPrefetchServiceFactory::GetForProfile(browser()->profile());
-  std::string search_terms = kOmniboxSuggestPrefetchQuery;
-
-  // Trigger an omnibox suggest fetch that has a prefetch hint.
-  AutocompleteInput input(
-      base::ASCIIToUTF16(search_terms), metrics::OmniboxEventProto::BLANK,
-      ChromeAutocompleteSchemeClassifier(browser()->profile()));
-  LocationBar* location_bar = browser()->window()->GetLocationBar();
-  OmniboxView* omnibox = location_bar->GetOmniboxView();
-  AutocompleteController* autocomplete_controller =
-      omnibox->model()->autocomplete_controller();
-
-  // Prevent the stop timer from killing the hints fetch early.
-  autocomplete_controller->SetStartStopTimerDurationForTesting(
-      base::Seconds(10));
-  autocomplete_controller->Start(input);
-
-  ui_test_utils::WaitForAutocompleteDone(browser());
-  EXPECT_TRUE(autocomplete_controller->done());
-
-  auto prefetch_status =
-      search_prefetch_service->GetSearchPrefetchStatusForTesting(
-          base::ASCIIToUTF16(search_terms));
-  ASSERT_TRUE(prefetch_status.has_value());
-  EXPECT_EQ(SearchPrefetchStatus::kInFlight, prefetch_status.value());
-
-  omnibox->model()->AcceptInput(WindowOpenDisposition::CURRENT_TAB);
-
-  WaitUntilStatusChangesTo(base::ASCIIToUTF16(search_terms),
-                           SearchPrefetchStatus::kRequestCancelled);
-
-  prefetch_status = search_prefetch_service->GetSearchPrefetchStatusForTesting(
-      base::ASCIIToUTF16(search_terms));
-  ASSERT_TRUE(prefetch_status.has_value());
-  EXPECT_EQ(SearchPrefetchStatus::kRequestCancelled, prefetch_status.value());
-}
-
 class SearchPrefetchServiceHeadStartTest
     : public SearchPrefetchBaseBrowserTest {
  public:
@@ -3040,8 +2928,7 @@ class SearchPrefetchServiceHeadStartTest
         {{kSearchPrefetchServicePrefetching,
           {{"max_attempts_per_caching_duration", "3"},
            {"cache_size", "1"},
-           {"device_memory_threshold_MB", "0"}}},
-         {kSearchPrefetchBlockBeforeHeaders, {{"block_head_start_ms", "10"}}}},
+           {"device_memory_threshold_MB", "0"}}}},
         {});
   }
 
@@ -3049,57 +2936,15 @@ class SearchPrefetchServiceHeadStartTest
   base::test::ScopedFeatureList feature_list_;
 };
 
-IN_PROC_BROWSER_TEST_F(SearchPrefetchServiceHeadStartTest,
-                       HungRequestServedAfterHeadStart) {
-  set_should_hang_requests(true);
-  auto* search_prefetch_service =
-      SearchPrefetchServiceFactory::GetForProfile(browser()->profile());
-  std::string search_terms = kOmniboxSuggestPrefetchQuery;
-
-  // Trigger an omnibox suggest fetch that has a prefetch hint.
-  AutocompleteInput input(
-      base::ASCIIToUTF16(search_terms), metrics::OmniboxEventProto::BLANK,
-      ChromeAutocompleteSchemeClassifier(browser()->profile()));
-  LocationBar* location_bar = browser()->window()->GetLocationBar();
-  OmniboxView* omnibox = location_bar->GetOmniboxView();
-  AutocompleteController* autocomplete_controller =
-      omnibox->model()->autocomplete_controller();
-
-  // Prevent the stop timer from killing the hints fetch early.
-  autocomplete_controller->SetStartStopTimerDurationForTesting(
-      base::Seconds(10));
-  autocomplete_controller->Start(input);
-
-  ui_test_utils::WaitForAutocompleteDone(browser());
-  EXPECT_TRUE(autocomplete_controller->done());
-
-  auto prefetch_status =
-      search_prefetch_service->GetSearchPrefetchStatusForTesting(
-          base::ASCIIToUTF16(search_terms));
-  ASSERT_TRUE(prefetch_status.has_value());
-  EXPECT_EQ(SearchPrefetchStatus::kInFlight, prefetch_status.value());
-
-  WaitUntilStatusChangesTo(base::ASCIIToUTF16(search_terms),
-                           SearchPrefetchStatus::kCanBeServed);
-
-  omnibox->model()->AcceptInput(WindowOpenDisposition::CURRENT_TAB);
-
-  WaitUntilStatusChangesTo(base::ASCIIToUTF16(search_terms), absl::nullopt);
-
-  prefetch_status = search_prefetch_service->GetSearchPrefetchStatusForTesting(
-      base::ASCIIToUTF16(search_terms));
-  ASSERT_FALSE(prefetch_status.has_value());
-}
-
 class SearchPrefetchServiceBFCacheTest : public SearchPrefetchBaseBrowserTest {
  public:
   SearchPrefetchServiceBFCacheTest() {
     feature_list_.InitWithFeaturesAndParameters(
-        {{kSearchPrefetchServicePrefetching, {{"cache_size", "1"}}},
-         {{features::kBackForwardCache},
-          {{"ignore_outstanding_network_request_for_testing", "true"}}}},
-        // Allow BackForwardCache for all devices regardless of their memory.
-        {features::kBackForwardCacheMemoryControls});
+        content::GetBasicBackForwardCacheFeatureForTesting(
+            {{kSearchPrefetchServicePrefetching, {{"cache_size", "1"}}},
+             {features::kBackForwardCache,
+              {{"ignore_outstanding_network_request_for_testing", "true"}}}}),
+        content::GetDefaultDisabledBackForwardCacheFeaturesForTesting());
   }
 
  private:
@@ -3119,9 +2964,10 @@ IN_PROC_BROWSER_TEST_F(SearchPrefetchServiceBFCacheTest,
 
   std::string search_terms = "prefetch_content";
   GURL prefetch_url = GetSearchServerQueryURL(search_terms + "&pf=cs");
+  GURL canonical_search_url = GetCanonicalSearchURL(prefetch_url);
   EXPECT_TRUE(search_prefetch_service->MaybePrefetchURL(prefetch_url,
                                                         GetWebContents()));
-  WaitUntilStatusChangesTo(base::ASCIIToUTF16(search_terms),
+  WaitUntilStatusChangesTo(canonical_search_url,
                            SearchPrefetchStatus::kComplete);
   ASSERT_TRUE(ui_test_utils::NavigateToURL(
       browser(), GetSearchServerQueryURL(search_terms)));
@@ -3134,9 +2980,10 @@ IN_PROC_BROWSER_TEST_F(SearchPrefetchServiceBFCacheTest,
 
   search_terms = "prefetch_content_2";
   prefetch_url = GetSearchServerQueryURL(search_terms + "&pf=cs");
+  canonical_search_url = GetCanonicalSearchURL(prefetch_url);
   EXPECT_TRUE(search_prefetch_service->MaybePrefetchURL(prefetch_url,
                                                         GetWebContents()));
-  WaitUntilStatusChangesTo(base::ASCIIToUTF16(search_terms),
+  WaitUntilStatusChangesTo(canonical_search_url,
                            SearchPrefetchStatus::kComplete);
   ASSERT_TRUE(ui_test_utils::NavigateToURL(
       browser(), GetSearchServerQueryURL(search_terms)));
@@ -3187,7 +3034,8 @@ class SearchPrefetchServiceZeroCacheTimeBrowserTest
 
     // Hang responses so the status will stay as InFlight until the entry is
     // removed.
-    set_should_hang_requests(true);
+    set_service_deferral_type(
+        SearchPreloadTestResponseDeferralType::kDeferHeader);
   }
 
  private:
@@ -3196,7 +3044,8 @@ class SearchPrefetchServiceZeroCacheTimeBrowserTest
 
 IN_PROC_BROWSER_TEST_F(SearchPrefetchServiceZeroCacheTimeBrowserTest,
                        ExpireAfterDuration) {
-  set_should_hang_requests(true);
+  set_service_deferral_type(
+      SearchPreloadTestResponseDeferralType::kDeferHeader);
   base::HistogramTester histogram_tester;
   auto* search_prefetch_service =
       SearchPrefetchServiceFactory::GetForProfile(browser()->profile());
@@ -3205,6 +3054,7 @@ IN_PROC_BROWSER_TEST_F(SearchPrefetchServiceZeroCacheTimeBrowserTest,
   std::string search_terms = "prefetch_content";
 
   GURL prefetch_url = GetSearchServerQueryURL(search_terms);
+  GURL canonical_search_url = GetCanonicalSearchURL(prefetch_url);
 
   EXPECT_TRUE(search_prefetch_service->MaybePrefetchURL(prefetch_url,
                                                         GetWebContents()));
@@ -3215,16 +3065,16 @@ IN_PROC_BROWSER_TEST_F(SearchPrefetchServiceZeroCacheTimeBrowserTest,
 
   auto prefetch_status =
       search_prefetch_service->GetSearchPrefetchStatusForTesting(
-          base::ASCIIToUTF16(search_terms));
+          canonical_search_url);
   EXPECT_TRUE(prefetch_status.has_value());
 
-  WaitUntilStatusChangesTo(base::ASCIIToUTF16(search_terms), absl::nullopt);
+  WaitUntilStatusChangesTo(canonical_search_url, absl::nullopt);
   prefetch_status = search_prefetch_service->GetSearchPrefetchStatusForTesting(
-      base::ASCIIToUTF16(search_terms));
+      canonical_search_url);
 
   histogram_tester.ExpectUniqueSample(
       "Omnibox.SearchPrefetch.PrefetchFinalStatus.SuggestionPrefetch",
-      SearchPrefetchStatus::kInFlight, 1);
+      SearchPrefetchStatus::kCanBeServed, 1);
 
   // Prefetch should be gone now.
   EXPECT_FALSE(prefetch_status.has_value());
@@ -3247,7 +3097,9 @@ IN_PROC_BROWSER_TEST_F(SearchPrefetchServiceZeroCacheTimeBrowserTest,
   EXPECT_FALSE(search_prefetch_service->MaybePrefetchURL(
       GetSearchServerQueryURL("prefetch_4"), GetWebContents()));
 
-  WaitUntilStatusChangesTo(u"prefetch_1", absl::nullopt);
+  WaitUntilStatusChangesTo(
+      GetCanonicalSearchURL(GetSearchServerQueryURL("prefetch_1")),
+      absl::nullopt);
 
   EXPECT_TRUE(search_prefetch_service->MaybePrefetchURL(
       GetSearchServerQueryURL("prefetch_4"), GetWebContents()));
@@ -3274,20 +3126,21 @@ IN_PROC_BROWSER_TEST_F(SearchPrefetchServiceZeroErrorTimeBrowserTest,
       SearchPrefetchServiceFactory::GetForProfile(browser()->profile());
   EXPECT_NE(nullptr, search_prefetch_service);
 
-  std::string search_terms = "502_on_prefetch";
+  std::string search_terms = kOmniboxErrorQuery;
 
   GURL prefetch_url = GetSearchServerQueryURL(search_terms);
+  GURL canonical_search_url = GetCanonicalSearchURL(prefetch_url);
 
   EXPECT_TRUE(search_prefetch_service->MaybePrefetchURL(prefetch_url,
                                                         GetWebContents()));
   auto prefetch_status =
       search_prefetch_service->GetSearchPrefetchStatusForTesting(
-          base::ASCIIToUTF16(search_terms));
-  WaitUntilStatusChangesTo(base::ASCIIToUTF16(search_terms),
+          canonical_search_url);
+  WaitUntilStatusChangesTo(canonical_search_url,
                            SearchPrefetchStatus::kRequestFailed);
 
   prefetch_status = search_prefetch_service->GetSearchPrefetchStatusForTesting(
-      base::ASCIIToUTF16(search_terms));
+      canonical_search_url);
   ASSERT_TRUE(prefetch_status.has_value());
   EXPECT_EQ(SearchPrefetchStatus::kRequestFailed, prefetch_status.value());
 
@@ -3320,12 +3173,13 @@ IN_PROC_BROWSER_TEST_F(SearchPrefetchServiceLowMemoryDeviceBrowserTest,
   std::string search_terms = "prefetch_content";
 
   GURL prefetch_url = GetSearchServerQueryURL(search_terms);
+  GURL canonical_search_url = GetCanonicalSearchURL(prefetch_url);
 
   EXPECT_FALSE(search_prefetch_service->MaybePrefetchURL(prefetch_url,
                                                          GetWebContents()));
   auto prefetch_status =
       search_prefetch_service->GetSearchPrefetchStatusForTesting(
-          base::ASCIIToUTF16(search_terms));
+          canonical_search_url);
 
   EXPECT_FALSE(prefetch_status.has_value());
 }
@@ -3350,7 +3204,7 @@ IN_PROC_BROWSER_TEST_F(GooglePFTest, BaseGoogleSearchHasPFForPrefetch) {
 
   TemplateURLRef::SearchTermsArgs search_terms_args =
       TemplateURLRef::SearchTermsArgs(std::u16string());
-  search_terms_args.is_prefetch = true;
+  search_terms_args.prefetch_param = "cs";
 
   std::string generated_url = default_search->url_ref().ReplaceSearchTerms(
       search_terms_args, template_url_service->search_terms_data(), nullptr);
@@ -3364,11 +3218,89 @@ IN_PROC_BROWSER_TEST_F(GooglePFTest, BaseGoogleSearchNoPFForNonPrefetch) {
 
   TemplateURLRef::SearchTermsArgs search_terms_args =
       TemplateURLRef::SearchTermsArgs(std::u16string());
-  search_terms_args.is_prefetch = false;
+  search_terms_args.prefetch_param = "";
 
   std::string generated_url = default_search->url_ref().ReplaceSearchTerms(
       search_terms_args, template_url_service->search_terms_data(), nullptr);
-  EXPECT_FALSE(base::Contains(generated_url, "pf=cs"));
+  EXPECT_FALSE(base::Contains(generated_url, "pf="));
+}
+
+class GooglePFTestFieldTrialOverride : public GooglePFTest {
+ public:
+  GooglePFTestFieldTrialOverride() {
+    feature_list_.InitAndEnableFeatureWithParameters(
+        kSearchNavigationPrefetch, {{"suggest_prefetch_param", "spp"},
+                                    {"navigation_prefetch_param", "npp"}});
+  }
+
+ private:
+  base::test::ScopedFeatureList feature_list_;
+};
+
+IN_PROC_BROWSER_TEST_F(GooglePFTestFieldTrialOverride,
+                       BaseGoogleSearchHasPFForPrefetch) {
+  TemplateURLService* template_url_service =
+      TemplateURLServiceFactory::GetForProfile(browser()->profile());
+  auto* default_search = template_url_service->GetDefaultSearchProvider();
+
+  TemplateURLRef::SearchTermsArgs search_terms_args =
+      TemplateURLRef::SearchTermsArgs(std::u16string());
+
+  // Check kSuggestPrefetchParam.
+  search_terms_args.prefetch_param = kSuggestPrefetchParam.Get();
+
+  std::string suggest_generated_url =
+      default_search->url_ref().ReplaceSearchTerms(
+          search_terms_args, template_url_service->search_terms_data(),
+          nullptr);
+  EXPECT_TRUE(base::Contains(suggest_generated_url, "pf=spp"));
+
+  // Check kNavigationPrefetchParam.
+  search_terms_args.prefetch_param = kNavigationPrefetchParam.Get();
+
+  std::string navigation_generated_url =
+      default_search->url_ref().ReplaceSearchTerms(
+          search_terms_args, template_url_service->search_terms_data(),
+          nullptr);
+  EXPECT_TRUE(base::Contains(navigation_generated_url, "pf=npp"));
+}
+
+class GooglePFTestDefaultFieldTrialValue : public GooglePFTest {
+ public:
+  GooglePFTestDefaultFieldTrialValue() {
+    feature_list_.InitAndEnableFeature(kSearchNavigationPrefetch);
+  }
+
+ private:
+  base::test::ScopedFeatureList feature_list_;
+};
+
+IN_PROC_BROWSER_TEST_F(GooglePFTestDefaultFieldTrialValue,
+                       BaseGoogleSearchHasPFForPrefetch) {
+  TemplateURLService* template_url_service =
+      TemplateURLServiceFactory::GetForProfile(browser()->profile());
+  auto* default_search = template_url_service->GetDefaultSearchProvider();
+
+  TemplateURLRef::SearchTermsArgs search_terms_args =
+      TemplateURLRef::SearchTermsArgs(std::u16string());
+
+  // Check kSuggestPrefetchParam.
+  search_terms_args.prefetch_param = kSuggestPrefetchParam.Get();
+
+  std::string suggest_generated_url =
+      default_search->url_ref().ReplaceSearchTerms(
+          search_terms_args, template_url_service->search_terms_data(),
+          nullptr);
+  EXPECT_TRUE(base::Contains(suggest_generated_url, "pf=cs"));
+
+  // Check kNavigationPrefetchParam.
+  search_terms_args.prefetch_param = kNavigationPrefetchParam.Get();
+
+  std::string navigation_generated_url =
+      default_search->url_ref().ReplaceSearchTerms(
+          search_terms_args, template_url_service->search_terms_data(),
+          nullptr);
+  EXPECT_TRUE(base::Contains(navigation_generated_url, "pf=cs"));
 }
 
 class SearchPrefetchServiceNavigationPrefetchBrowserTest
@@ -3381,28 +3313,28 @@ class SearchPrefetchServiceNavigationPrefetchBrowserTest
           {"cache_size", "1"},
           {"device_memory_threshold_MB", "0"}}},
         {kSearchNavigationPrefetch, {}}};
-    std::vector<base::test::FeatureRef> disabled_features = {};
 
-    feature_list_.InitWithFeaturesAndParameters(enabled_features,
-                                                disabled_features);
+    feature_list_.InitWithFeaturesAndParameters(enabled_features, {});
   }
 
   void SetUpOnMainThread() override {
     SearchPrefetchBaseBrowserTest::SetUpOnMainThread();
     // Initialize PreloadingAttempt for this test suite.
     test_ukm_recorder_ = std::make_unique<ukm::TestAutoSetUkmRecorder>();
+    scoped_test_timer_ =
+        std::make_unique<base::ScopedMockElapsedTimersForTest>();
   }
 
   std::unique_ptr<content::test::PreloadingAttemptUkmEntryBuilder>
-  attempt_entry_builder(ChromePreloadingPredictor predictor) {
+  attempt_entry_builder(content::PreloadingPredictor predictor) {
     return std::make_unique<content::test::PreloadingAttemptUkmEntryBuilder>(
-        ToPreloadingPredictor(predictor));
+        predictor);
   }
 
   std::unique_ptr<content::test::PreloadingPredictionUkmEntryBuilder>
-  prediction_entry_builder(ChromePreloadingPredictor predictor) {
+  prediction_entry_builder(content::PreloadingPredictor predictor) {
     return std::make_unique<content::test::PreloadingPredictionUkmEntryBuilder>(
-        ToPreloadingPredictor(predictor));
+        predictor);
   }
 
   ukm::TestAutoSetUkmRecorder* test_ukm_recorder() {
@@ -3412,6 +3344,7 @@ class SearchPrefetchServiceNavigationPrefetchBrowserTest
  private:
   base::test::ScopedFeatureList feature_list_;
   std::unique_ptr<ukm::TestAutoSetUkmRecorder> test_ukm_recorder_;
+  std::unique_ptr<base::ScopedMockElapsedTimersForTest> scoped_test_timer_;
 };
 
 IN_PROC_BROWSER_TEST_F(SearchPrefetchServiceNavigationPrefetchBrowserTest,
@@ -3429,21 +3362,23 @@ IN_PROC_BROWSER_TEST_F(SearchPrefetchServiceNavigationPrefetchBrowserTest,
       ->OnNavigationLikely(1, autocomplete_match,
                            NavigationPredictor::kMouseDown, GetWebContents());
 
-  WaitUntilStatusChangesTo(base::ASCIIToUTF16(search_terms),
-                           SearchPrefetchStatus::kComplete);
+  WaitUntilStatusChangesTo(
+      GetCanonicalSearchURL(autocomplete_match.destination_url),
+      SearchPrefetchStatus::kComplete);
   auto prefetch_status =
       search_prefetch_service->GetSearchPrefetchStatusForTesting(
-          base::ASCIIToUTF16(search_terms));
+          GetCanonicalSearchURL(autocomplete_match.destination_url));
   ASSERT_TRUE(prefetch_status.has_value());
   EXPECT_EQ(SearchPrefetchStatus::kComplete, prefetch_status.value());
 
   auto [prefetch_url, search_url] =
       GetSearchPrefetchAndNonPrefetch(search_terms);
+  GURL canonical_search_url = GetCanonicalSearchURL(prefetch_url);
   // Navigate.
   ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), search_url));
 
   prefetch_status = search_prefetch_service->GetSearchPrefetchStatusForTesting(
-      base::ASCIIToUTF16(search_terms));
+      canonical_search_url);
   EXPECT_FALSE(prefetch_status.has_value());
 
   auto inner_html = GetDocumentInnerHTML();
@@ -3468,18 +3403,20 @@ IN_PROC_BROWSER_TEST_F(SearchPrefetchServiceNavigationPrefetchBrowserTest,
     // Check that PreloadingAttempt is successful and accurately triggered.
     std::vector<UkmEntry> expected_prediction_entries = {
         prediction_entry_builder(
-            ChromePreloadingPredictor::kOmniboxMousePredictor)
+            chrome_preloading_predictor::kOmniboxMousePredictor)
             ->BuildEntry(ukm_source_id,
                          /*confidence=*/100,
                          /*accurate_prediction=*/true)};
     std::vector<UkmEntry> expected_attempt_entries = {
-        attempt_entry_builder(ChromePreloadingPredictor::kOmniboxMousePredictor)
+        attempt_entry_builder(
+            chrome_preloading_predictor::kOmniboxMousePredictor)
             ->BuildEntry(ukm_source_id, content::PreloadingType::kPrefetch,
                          content::PreloadingEligibility::kEligible,
                          content::PreloadingHoldbackStatus::kAllowed,
                          content::PreloadingTriggeringOutcome::kSuccess,
                          content::PreloadingFailureReason::kUnspecified,
-                         /*accurate=*/true)};
+                         /*accurate=*/true,
+                         /*ready_time=*/kMockElapsedTime)};
     EXPECT_THAT(attempt_ukm_entries,
                 testing::UnorderedElementsAreArray(expected_attempt_entries))
         << content::test::ActualVsExpectedUkmEntriesToString(
@@ -3507,21 +3444,23 @@ IN_PROC_BROWSER_TEST_F(SearchPrefetchServiceNavigationPrefetchBrowserTest,
                            NavigationPredictor::kUpOrDownArrowButton,
                            GetWebContents());
 
-  WaitUntilStatusChangesTo(base::ASCIIToUTF16(search_terms),
-                           SearchPrefetchStatus::kComplete);
+  WaitUntilStatusChangesTo(
+      GetCanonicalSearchURL(autocomplete_match.destination_url),
+      SearchPrefetchStatus::kComplete);
   auto prefetch_status =
       search_prefetch_service->GetSearchPrefetchStatusForTesting(
-          base::ASCIIToUTF16(search_terms));
+          GetCanonicalSearchURL(autocomplete_match.destination_url));
   ASSERT_TRUE(prefetch_status.has_value());
   EXPECT_EQ(SearchPrefetchStatus::kComplete, prefetch_status.value());
 
   auto [prefetch_url, search_url] =
       GetSearchPrefetchAndNonPrefetch(search_terms);
+  GURL canonical_search_url = GetCanonicalSearchURL(prefetch_url);
   // Navigate.
   ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), search_url));
 
   prefetch_status = search_prefetch_service->GetSearchPrefetchStatusForTesting(
-      base::ASCIIToUTF16(search_terms));
+      canonical_search_url);
   EXPECT_FALSE(prefetch_status.has_value());
 
   auto inner_html = GetDocumentInnerHTML();
@@ -3546,19 +3485,101 @@ IN_PROC_BROWSER_TEST_F(SearchPrefetchServiceNavigationPrefetchBrowserTest,
     // Check that PreloadingAttempt is successful and accurately triggered.
     std::vector<UkmEntry> expected_prediction_entries = {
         prediction_entry_builder(
-            ChromePreloadingPredictor::kOmniboxSearchPredictor)
+            chrome_preloading_predictor::kOmniboxSearchPredictor)
             ->BuildEntry(ukm_source_id,
                          /*confidence=*/100,
                          /*accurate_prediction=*/true)};
     std::vector<UkmEntry> expected_attempt_entries = {
         attempt_entry_builder(
-            ChromePreloadingPredictor::kOmniboxSearchPredictor)
+            chrome_preloading_predictor::kOmniboxSearchPredictor)
             ->BuildEntry(ukm_source_id, content::PreloadingType::kPrefetch,
                          content::PreloadingEligibility::kEligible,
                          content::PreloadingHoldbackStatus::kAllowed,
                          content::PreloadingTriggeringOutcome::kSuccess,
                          content::PreloadingFailureReason::kUnspecified,
-                         /*accurate=*/true)};
+                         /*accurate=*/true,
+                         /*ready_time=*/kMockElapsedTime)};
+    EXPECT_THAT(attempt_ukm_entries,
+                testing::UnorderedElementsAreArray(expected_attempt_entries))
+        << content::test::ActualVsExpectedUkmEntriesToString(
+               attempt_ukm_entries, expected_attempt_entries);
+    EXPECT_THAT(prediction_ukm_entries,
+                testing::UnorderedElementsAreArray(expected_prediction_entries))
+        << content::test::ActualVsExpectedUkmEntriesToString(
+               prediction_ukm_entries, expected_attempt_entries);
+  }
+}
+
+IN_PROC_BROWSER_TEST_F(SearchPrefetchServiceNavigationPrefetchBrowserTest,
+                       NavigationPrefetchIsServedTouchDown) {
+  SetDSEWithURL(
+      GetSearchServerQueryURL("{searchTerms}&{google:prefetchSource}"), true);
+  auto* search_prefetch_service =
+      SearchPrefetchServiceFactory::GetForProfile(browser()->profile());
+  std::string search_terms = "terms of service";
+  std::string user_input = "terms";
+
+  AutocompleteMatch autocomplete_match =
+      CreateSearchSuggestionMatch(search_terms, search_terms, false);
+  SearchPrefetchServiceFactory::GetForProfile(browser()->profile())
+      ->OnNavigationLikely(1, autocomplete_match,
+                           NavigationPredictor::kTouchDown, GetWebContents());
+
+  WaitUntilStatusChangesTo(
+      GetCanonicalSearchURL(autocomplete_match.destination_url),
+      SearchPrefetchStatus::kComplete);
+  auto prefetch_status =
+      search_prefetch_service->GetSearchPrefetchStatusForTesting(
+          GetCanonicalSearchURL(autocomplete_match.destination_url));
+  ASSERT_TRUE(prefetch_status.has_value());
+  EXPECT_EQ(SearchPrefetchStatus::kComplete, prefetch_status.value());
+
+  auto [prefetch_url, search_url] =
+      GetSearchPrefetchAndNonPrefetch(search_terms);
+  GURL canonical_search_url = GetCanonicalSearchURL(prefetch_url);
+  // Navigate.
+  ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), search_url));
+
+  prefetch_status = search_prefetch_service->GetSearchPrefetchStatusForTesting(
+      canonical_search_url);
+  EXPECT_FALSE(prefetch_status.has_value());
+
+  auto inner_html = GetDocumentInnerHTML();
+  EXPECT_FALSE(base::Contains(inner_html, "regular"));
+  EXPECT_TRUE(base::Contains(inner_html, "prefetch"));
+
+  {
+    ukm::SourceId ukm_source_id =
+        GetWebContents()->GetPrimaryMainFrame()->GetPageUkmSourceId();
+    auto attempt_ukm_entries = test_ukm_recorder()->GetEntries(
+        Preloading_Attempt::kEntryName,
+        content::test::kPreloadingAttemptUkmMetrics);
+    auto prediction_ukm_entries = test_ukm_recorder()->GetEntries(
+        Preloading_Prediction::kEntryName,
+        content::test::kPreloadingPredictionUkmMetrics);
+
+    // Check that we store one PreloadingPrediction and PreloadingAttempt for
+    // kOmniboxTouchDownPredictor.
+    EXPECT_EQ(attempt_ukm_entries.size(), 1u);
+    EXPECT_EQ(prediction_ukm_entries.size(), 1u);
+
+    // Check that PreloadingAttempt is successful and accurately triggered.
+    std::vector<UkmEntry> expected_prediction_entries = {
+        prediction_entry_builder(
+            chrome_preloading_predictor::kOmniboxTouchDownPredictor)
+            ->BuildEntry(ukm_source_id,
+                         /*confidence=*/100,
+                         /*accurate_prediction=*/true)};
+    std::vector<UkmEntry> expected_attempt_entries = {
+        attempt_entry_builder(
+            chrome_preloading_predictor::kOmniboxTouchDownPredictor)
+            ->BuildEntry(ukm_source_id, content::PreloadingType::kPrefetch,
+                         content::PreloadingEligibility::kEligible,
+                         content::PreloadingHoldbackStatus::kAllowed,
+                         content::PreloadingTriggeringOutcome::kSuccess,
+                         content::PreloadingFailureReason::kUnspecified,
+                         /*accurate=*/true,
+                         /*ready_time=*/kMockElapsedTime)};
     EXPECT_THAT(attempt_ukm_entries,
                 testing::UnorderedElementsAreArray(expected_attempt_entries))
         << content::test::ActualVsExpectedUkmEntriesToString(
@@ -3579,7 +3600,7 @@ IN_PROC_BROWSER_TEST_F(SearchPrefetchServiceNavigationPrefetchBrowserTest,
   std::string search_terms = kOmniboxErrorQuery;
   std::string user_input = "terms";
   AddNewSuggestionRule(user_input, {user_input, search_terms},
-                       /*prefetch_index=*/1, /*prerender_index=*/-1);
+                       /*prefetch_index=*/-1, /*prerender_index=*/-1);
 
   // Trigger an omnibox suggest fetch that does not have a prefetch hint.
   AutocompleteInput input(
@@ -3588,7 +3609,7 @@ IN_PROC_BROWSER_TEST_F(SearchPrefetchServiceNavigationPrefetchBrowserTest,
   LocationBar* location_bar = browser()->window()->GetLocationBar();
   OmniboxView* omnibox = location_bar->GetOmniboxView();
   AutocompleteController* autocomplete_controller =
-      omnibox->model()->autocomplete_controller();
+      omnibox->controller()->autocomplete_controller();
 
   // Prevent the stop timer from killing the hints fetch early.
   autocomplete_controller->SetStartStopTimerDurationForTesting(
@@ -3598,24 +3619,29 @@ IN_PROC_BROWSER_TEST_F(SearchPrefetchServiceNavigationPrefetchBrowserTest,
   ui_test_utils::WaitForAutocompleteDone(browser());
   EXPECT_TRUE(autocomplete_controller->done());
 
-  WaitUntilStatusChangesTo(base::ASCIIToUTF16(search_terms),
+  GURL prefetch_url = GetSearchServerQueryURL(search_terms);
+  GURL canonical_search_url = GetCanonicalSearchURL(prefetch_url);
+
+  EXPECT_TRUE(search_prefetch_service->MaybePrefetchURL(prefetch_url,
+                                                        GetWebContents()));
+  WaitUntilStatusChangesTo(canonical_search_url,
                            SearchPrefetchStatus::kRequestFailed);
   auto prefetch_status =
       search_prefetch_service->GetSearchPrefetchStatusForTesting(
-          base::ASCIIToUTF16(search_terms));
+          canonical_search_url);
   ASSERT_TRUE(prefetch_status.has_value());
   EXPECT_EQ(SearchPrefetchStatus::kRequestFailed, prefetch_status.value());
 
   omnibox->model()->SetPopupSelection(OmniboxPopupSelection(1));
 
   prefetch_status = search_prefetch_service->GetSearchPrefetchStatusForTesting(
-      base::ASCIIToUTF16(search_terms));
+      canonical_search_url);
   ASSERT_TRUE(prefetch_status.has_value());
   EXPECT_EQ(SearchPrefetchStatus::kRequestFailed, prefetch_status.value());
 }
 
 IN_PROC_BROWSER_TEST_F(SearchPrefetchServiceNavigationPrefetchBrowserTest,
-                       NavigationPrefecthDoesntReplaceComplete) {
+                       NavigationPrefetchDoesntReplaceComplete) {
   SetDSEWithURL(
       GetSearchServerQueryURL("{searchTerms}&{google:prefetchSource}"), true);
   auto* search_prefetch_service =
@@ -3623,7 +3649,7 @@ IN_PROC_BROWSER_TEST_F(SearchPrefetchServiceNavigationPrefetchBrowserTest,
   std::string search_terms = "terms of service";
   std::string user_input = "terms";
   AddNewSuggestionRule(user_input, {user_input, search_terms},
-                       /*prefetch_index=*/1, /*prerender_index=*/-1);
+                       /*prefetch_index=*/-1, /*prerender_index=*/-1);
 
   // Trigger an omnibox suggest fetch that does not have a prefetch hint.
   AutocompleteInput input(
@@ -3632,7 +3658,7 @@ IN_PROC_BROWSER_TEST_F(SearchPrefetchServiceNavigationPrefetchBrowserTest,
   LocationBar* location_bar = browser()->window()->GetLocationBar();
   OmniboxView* omnibox = location_bar->GetOmniboxView();
   AutocompleteController* autocomplete_controller =
-      omnibox->model()->autocomplete_controller();
+      omnibox->controller()->autocomplete_controller();
 
   // Prevent the stop timer from killing the hints fetch early.
   autocomplete_controller->SetStartStopTimerDurationForTesting(
@@ -3642,25 +3668,31 @@ IN_PROC_BROWSER_TEST_F(SearchPrefetchServiceNavigationPrefetchBrowserTest,
   ui_test_utils::WaitForAutocompleteDone(browser());
   EXPECT_TRUE(autocomplete_controller->done());
 
-  WaitUntilStatusChangesTo(base::ASCIIToUTF16(search_terms),
+  GURL prefetch_url = GetSearchServerQueryURL(search_terms);
+  GURL canonical_search_url = GetCanonicalSearchURL(prefetch_url);
+
+  EXPECT_TRUE(search_prefetch_service->MaybePrefetchURL(prefetch_url,
+                                                        GetWebContents()));
+
+  WaitUntilStatusChangesTo(canonical_search_url,
                            SearchPrefetchStatus::kComplete);
   auto prefetch_status =
       search_prefetch_service->GetSearchPrefetchStatusForTesting(
-          base::ASCIIToUTF16(search_terms));
+          canonical_search_url);
   ASSERT_TRUE(prefetch_status.has_value());
   EXPECT_EQ(SearchPrefetchStatus::kComplete, prefetch_status.value());
 
   omnibox->model()->SetPopupSelection(OmniboxPopupSelection(1));
 
   prefetch_status = search_prefetch_service->GetSearchPrefetchStatusForTesting(
-      base::ASCIIToUTF16(search_terms));
+      canonical_search_url);
   ASSERT_TRUE(prefetch_status.has_value());
   EXPECT_EQ(SearchPrefetchStatus::kComplete, prefetch_status.value());
 
-  omnibox->model()->AcceptInput(WindowOpenDisposition::CURRENT_TAB);
+  omnibox->model()->OpenSelection();
 
   prefetch_status = search_prefetch_service->GetSearchPrefetchStatusForTesting(
-      base::ASCIIToUTF16(search_terms));
+      canonical_search_url);
   ASSERT_TRUE(prefetch_status.has_value());
   EXPECT_EQ(SearchPrefetchStatus::kComplete, prefetch_status.value());
 }
@@ -3683,7 +3715,7 @@ IN_PROC_BROWSER_TEST_F(SearchPrefetchServiceNavigationPrefetchBrowserTest,
   LocationBar* location_bar = browser()->window()->GetLocationBar();
   OmniboxView* omnibox = location_bar->GetOmniboxView();
   AutocompleteController* autocomplete_controller =
-      omnibox->model()->autocomplete_controller();
+      omnibox->controller()->autocomplete_controller();
 
   // Prevent the stop timer from killing the hints fetch early.
   autocomplete_controller->SetStartStopTimerDurationForTesting(
@@ -3692,24 +3724,26 @@ IN_PROC_BROWSER_TEST_F(SearchPrefetchServiceNavigationPrefetchBrowserTest,
 
   ui_test_utils::WaitForAutocompleteDone(browser());
   EXPECT_TRUE(autocomplete_controller->done());
+  GURL canonical_search_url = GetCanonicalSearchURL(
+      autocomplete_controller->result().match_at(0).destination_url);
 
   omnibox->model()->SetPopupSelection(OmniboxPopupSelection(1));
 
   auto prefetch_status =
       search_prefetch_service->GetSearchPrefetchStatusForTesting(
-          base::ASCIIToUTF16(search_terms));
+          canonical_search_url);
   EXPECT_FALSE(prefetch_status.has_value());
 
-  omnibox->model()->AcceptInput(WindowOpenDisposition::CURRENT_TAB);
+  omnibox->model()->OpenSelection();
 
   prefetch_status = search_prefetch_service->GetSearchPrefetchStatusForTesting(
-      base::ASCIIToUTF16(search_terms));
+      canonical_search_url);
   EXPECT_FALSE(prefetch_status.has_value());
 
   content::WaitForLoadStop(GetWebContents());
 
   prefetch_status = search_prefetch_service->GetSearchPrefetchStatusForTesting(
-      base::ASCIIToUTF16(search_terms));
+      canonical_search_url);
   EXPECT_FALSE(prefetch_status.has_value());
 
   auto inner_html = GetDocumentInnerHTML();
@@ -3729,10 +3763,8 @@ class SearchNavigationPrefetchHoldbackBrowserTest
           {"device_memory_threshold_MB", "0"},
           {"prefetch_holdback", "true"}}},
         {kSearchNavigationPrefetch, {{}}}};
-    std::vector<base::test::FeatureRef> disabled_features = {};
 
-    feature_list_.InitWithFeaturesAndParameters(enabled_features,
-                                                disabled_features);
+    feature_list_.InitWithFeaturesAndParameters(enabled_features, {});
   }
 
   void SetUpOnMainThread() override {
@@ -3741,8 +3773,9 @@ class SearchNavigationPrefetchHoldbackBrowserTest
     test_ukm_recorder_ = std::make_unique<ukm::TestAutoSetUkmRecorder>();
     attempt_entry_builder_ =
         std::make_unique<content::test::PreloadingAttemptUkmEntryBuilder>(
-            ToPreloadingPredictor(
-                ChromePreloadingPredictor::kOmniboxSearchPredictor));
+            chrome_preloading_predictor::kOmniboxSearchPredictor);
+    scoped_test_timer_ =
+        std::make_unique<base::ScopedMockElapsedTimersForTest>();
   }
 
   ukm::TestAutoSetUkmRecorder* test_ukm_recorder() {
@@ -3759,6 +3792,7 @@ class SearchNavigationPrefetchHoldbackBrowserTest
   std::unique_ptr<ukm::TestAutoSetUkmRecorder> test_ukm_recorder_;
   std::unique_ptr<content::test::PreloadingAttemptUkmEntryBuilder>
       attempt_entry_builder_;
+  std::unique_ptr<base::ScopedMockElapsedTimersForTest> scoped_test_timer_;
 };
 
 IN_PROC_BROWSER_TEST_F(SearchNavigationPrefetchHoldbackBrowserTest,
@@ -3777,6 +3811,7 @@ IN_PROC_BROWSER_TEST_F(SearchNavigationPrefetchHoldbackBrowserTest,
 
   auto [prefetch_url, search_url] =
       GetSearchPrefetchAndNonPrefetch(search_terms);
+  GURL canonical_search_url = GetCanonicalSearchURL(prefetch_url);
   // Navigate.
   ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), search_url));
 
@@ -3833,8 +3868,7 @@ class SearchNavigationPrefetchNoCancelBrowserTest
     test_ukm_recorder_ = std::make_unique<ukm::TestAutoSetUkmRecorder>();
     attempt_entry_builder_ =
         std::make_unique<content::test::PreloadingAttemptUkmEntryBuilder>(
-            ToPreloadingPredictor(
-                ChromePreloadingPredictor::kOmniboxSearchPredictor));
+            chrome_preloading_predictor::kOmniboxSearchPredictor);
   }
 
   ukm::TestAutoSetUkmRecorder* test_ukm_recorder() {
@@ -3855,7 +3889,8 @@ class SearchNavigationPrefetchNoCancelBrowserTest
 
 IN_PROC_BROWSER_TEST_F(SearchNavigationPrefetchNoCancelBrowserTest,
                        PrefetchIsNotCancelled) {
-  set_should_hang_requests(true);
+  set_service_deferral_type(
+      SearchPreloadTestResponseDeferralType::kDeferHeader);
   auto* search_prefetch_service =
       SearchPrefetchServiceFactory::GetForProfile(browser()->profile());
   std::string search_terms = kOmniboxSuggestPrefetchQuery;
@@ -3867,13 +3902,14 @@ IN_PROC_BROWSER_TEST_F(SearchNavigationPrefetchNoCancelBrowserTest,
   SearchPrefetchServiceFactory::GetForProfile(browser()->profile())
       ->OnResultChanged(GetWebContents(), autocomplete_result);
 
-  WaitUntilStatusChangesTo(base::ASCIIToUTF16(search_terms),
-                           SearchPrefetchStatus::kInFlight);
+  WaitUntilStatusChangesTo(
+      GetCanonicalSearchURL(autocomplete_match.destination_url),
+      SearchPrefetchStatus::kCanBeServed);
   auto prefetch_status =
       search_prefetch_service->GetSearchPrefetchStatusForTesting(
-          base::ASCIIToUTF16(search_terms));
+          GetCanonicalSearchURL(autocomplete_match.destination_url));
   ASSERT_TRUE(prefetch_status.has_value());
-  EXPECT_EQ(SearchPrefetchStatus::kInFlight, prefetch_status.value());
+  EXPECT_EQ(SearchPrefetchStatus::kCanBeServed, prefetch_status.value());
 
   // Change the autocomplete to remove "porgs" entirely.
   autocomplete_match =
@@ -3884,7 +3920,71 @@ IN_PROC_BROWSER_TEST_F(SearchNavigationPrefetchNoCancelBrowserTest,
       ->OnResultChanged(GetWebContents(), autocomplete_result);
 
   prefetch_status = search_prefetch_service->GetSearchPrefetchStatusForTesting(
-      base::ASCIIToUTF16(search_terms));
+      GetCanonicalSearchURL(autocomplete_match.destination_url));
   ASSERT_TRUE(prefetch_status.has_value());
-  EXPECT_EQ(SearchPrefetchStatus::kInFlight, prefetch_status.value());
+  EXPECT_EQ(SearchPrefetchStatus::kCanBeServed, prefetch_status.value());
+}
+
+class SearchNavigationPrefetchDefaultMatchBrowserTest
+    : public SearchPrefetchBaseBrowserTest {
+ public:
+  SearchNavigationPrefetchDefaultMatchBrowserTest() {
+    std::vector<base::test::FeatureRefAndParams> enabled_features = {
+        {kSearchPrefetchServicePrefetching,
+         {{"max_attempts_per_caching_duration", "3"},
+          {"cache_size", "1"},
+          {"device_memory_threshold_MB", "0"}}},
+        {kSearchPrefetchOnlyAllowDefaultMatchPreloading, {{}}}};
+    std::vector<base::test::FeatureRef> disabled_features = {};
+
+    feature_list_.InitWithFeaturesAndParameters(enabled_features,
+                                                disabled_features);
+  }
+
+  void SetUpOnMainThread() override {
+    SearchPrefetchBaseBrowserTest::SetUpOnMainThread();
+  }
+
+ private:
+  base::test::ScopedFeatureList feature_list_;
+};
+
+IN_PROC_BROWSER_TEST_F(SearchNavigationPrefetchDefaultMatchBrowserTest,
+                       NotDefaultMatch) {
+  SetDSEWithURL(
+      GetSearchServerQueryURL("{searchTerms}&{google:prefetchSource}"), true);
+  auto* search_prefetch_service =
+      SearchPrefetchServiceFactory::GetForProfile(browser()->profile());
+  std::string search_terms = "search";
+  std::string user_input = "terms";
+  AddNewSuggestionRule(user_input, {user_input, search_terms},
+                       /*prefetch_index=*/1, /*prerender_index=*/-1);
+
+  // Trigger an omnibox suggest fetch that does not have a prefetch hint.
+  AutocompleteInput input(
+      base::ASCIIToUTF16(user_input), metrics::OmniboxEventProto::BLANK,
+      ChromeAutocompleteSchemeClassifier(browser()->profile()));
+  LocationBar* location_bar = browser()->window()->GetLocationBar();
+  OmniboxView* omnibox = location_bar->GetOmniboxView();
+  AutocompleteController* autocomplete_controller =
+      omnibox->controller()->autocomplete_controller();
+
+  // Prevent the stop timer from killing the hints fetch early.
+  autocomplete_controller->SetStartStopTimerDurationForTesting(
+      base::Seconds(10));
+  autocomplete_controller->Start(input);
+
+  ui_test_utils::WaitForAutocompleteDone(browser());
+  EXPECT_TRUE(autocomplete_controller->done());
+
+  GURL canonical_search_url = GetCanonicalSearchURL(
+      autocomplete_controller->result().match_at(0).destination_url);
+
+  WaitForDuration(base::Milliseconds(50));
+  auto prefetch_status =
+      search_prefetch_service->GetSearchPrefetchStatusForTesting(
+          GetCanonicalSearchURL(canonical_search_url));
+  EXPECT_FALSE(prefetch_status.has_value());
+
+  omnibox->model()->SetPopupSelection(OmniboxPopupSelection(1));
 }

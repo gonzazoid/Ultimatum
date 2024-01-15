@@ -2,7 +2,11 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {Action} from 'chrome://resources/ash/common/store/store.js';
+import {Action} from 'chrome://resources/js/store.js';
+import {SkColor} from 'chrome://resources/mojo/skia/public/mojom/skcolor.mojom-webui.js';
+
+import {ColorScheme} from '../../color_scheme.mojom-webui.js';
+import {SampleColorScheme} from '../../personalization_app.mojom-webui.js';
 
 /**
  * @fileoverview Defines the actions to change theme state.
@@ -11,20 +15,50 @@ import {Action} from 'chrome://resources/ash/common/store/store.js';
 export enum ThemeActionName {
   SET_DARK_MODE_ENABLED = 'set_dark_mode_enabled',
   SET_COLOR_MODE_AUTO_SCHEDULE_ENABLED = 'set_color_mode_auto_schedule_enabled',
+  SET_COLOR_SCHEME = 'set_color_scheme',
+  SET_SAMPLE_COLOR_SCHEMES = 'set_sample_color_schemes',
+  SET_STATIC_COLOR = 'set_static_color',
+  SET_GEOLOCATION_PERMISSION_ENABLED = 'set_geolocation_permission_enabled',
 }
 
-export type ThemeActions =
-    SetColorModeAutoScheduleAction|SetDarkModeEnabledAction;
+export type ThemeActions = SetColorModeAutoScheduleAction|
+    SetDarkModeEnabledAction|SetColorSchemeAction|SetSampleColorSchemesAction|
+    SetStaticColorAction|SetGeolocationPermissionEnabledAction;
 
-export type SetDarkModeEnabledAction = Action&{
-  name: ThemeActionName.SET_DARK_MODE_ENABLED,
-  enabled: boolean,
-};
+export interface SetDarkModeEnabledAction extends Action {
+  name: ThemeActionName.SET_DARK_MODE_ENABLED;
+  enabled: boolean;
+}
 
-export type SetColorModeAutoScheduleAction = Action&{
-  name: ThemeActionName.SET_COLOR_MODE_AUTO_SCHEDULE_ENABLED,
-  enabled: boolean,
-};
+
+export interface SetColorModeAutoScheduleAction extends Action {
+  name: ThemeActionName.SET_COLOR_MODE_AUTO_SCHEDULE_ENABLED;
+  enabled: boolean;
+}
+
+
+export interface SetColorSchemeAction extends Action {
+  name: ThemeActionName.SET_COLOR_SCHEME;
+  colorScheme: ColorScheme;
+}
+
+
+export interface SetSampleColorSchemesAction extends Action {
+  name: ThemeActionName.SET_SAMPLE_COLOR_SCHEMES;
+  sampleColorSchemes: SampleColorScheme[];
+}
+
+
+export interface SetStaticColorAction extends Action {
+  name: ThemeActionName.SET_STATIC_COLOR;
+  staticColor: SkColor|null;
+}
+
+export interface SetGeolocationPermissionEnabledAction extends Action {
+  name: ThemeActionName.SET_GEOLOCATION_PERMISSION_ENABLED;
+  enabled: boolean;
+}
+
 
 export function setDarkModeEnabledAction(enabled: boolean):
     SetDarkModeEnabledAction {
@@ -34,4 +68,24 @@ export function setDarkModeEnabledAction(enabled: boolean):
 export function setColorModeAutoScheduleEnabledAction(enabled: boolean):
     SetColorModeAutoScheduleAction {
   return {name: ThemeActionName.SET_COLOR_MODE_AUTO_SCHEDULE_ENABLED, enabled};
+}
+
+export function setColorSchemeAction(colorScheme: ColorScheme):
+    SetColorSchemeAction {
+  return {name: ThemeActionName.SET_COLOR_SCHEME, colorScheme};
+}
+
+export function setSampleColorSchemesAction(
+    sampleColorSchemes: SampleColorScheme[]): SetSampleColorSchemesAction {
+  return {name: ThemeActionName.SET_SAMPLE_COLOR_SCHEMES, sampleColorSchemes};
+}
+
+export function setStaticColorAction(staticColor: SkColor|
+                                     null): SetStaticColorAction {
+  return {name: ThemeActionName.SET_STATIC_COLOR, staticColor};
+}
+
+export function setGeolocationPermissionEnabledAction(enabled: boolean):
+    SetGeolocationPermissionEnabledAction {
+  return {name: ThemeActionName.SET_GEOLOCATION_PERMISSION_ENABLED, enabled};
 }

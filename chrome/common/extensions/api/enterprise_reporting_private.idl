@@ -79,11 +79,11 @@ namespace enterprise.reportingPrivate {
     boolean siteIsolationEnabled;
     boolean builtInDnsClientEnabled;
     PasswordProtectionTrigger passwordProtectionWarningTrigger;
-    boolean? chromeCleanupEnabled;
     boolean chromeRemoteDesktopAppBlocked;
     boolean? thirdPartyBlockingEnabled;
     SettingValue osFirewall;
     DOMString[] systemDnsServers;
+    DOMString? enterpriseProfileId;
   };
 
   // Invoked by <code>getContextInfo</code> to return context information.

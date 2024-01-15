@@ -6,7 +6,6 @@
 
 #include "ash/strings/grit/ash_strings.h"
 #include "ash/style/ash_color_id.h"
-#include "ash/style/ash_color_provider.h"
 #include "ash/system/tray/tray_constants.h"
 #include "ash/system/tray/tray_popup_utils.h"
 #include "ash/system/tray/unfocusable_label.h"
@@ -14,6 +13,7 @@
 #include "base/strings/string_number_conversions.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
+#include "ui/chromeos/styles/cros_tokens_color_mappings.h"
 #include "ui/color/color_provider.h"
 #include "ui/views/controls/image_view.h"
 #include "ui/views/controls/label.h"
@@ -70,16 +70,15 @@ void BluetoothDeviceListItemBatteryView::UpdateBatteryInfo(
         0, kSpacingBetweenIconAndLabel, 0, kSpacingBetweenIconAndLabel)));
   }
 
-  const AshColorProvider::ContentLayerType content_layer_type =
-      new_battery_percentage >= kPositiveBatteryPercentageCutoff
-          ? AshColorProvider::ContentLayerType::kTextColorSecondary
-          : AshColorProvider::ContentLayerType::kTextColorAlert;
+  ui::ColorId color_id;
+    color_id = new_battery_percentage >= kPositiveBatteryPercentageCutoff
+                   ? cros_tokens::kCrosSysPositive
+                   : cros_tokens::kCrosSysError;
 
   label_->SetText(l10n_util::GetStringFUTF16(
       message_id, base::NumberToString16(new_battery_percentage)));
   label_->SetAutoColorReadabilityEnabled(false);
-  label_->SetEnabledColor(
-      AshColorProvider::Get()->GetContentLayerColor(content_layer_type));
+  label_->SetEnabledColorId(color_id);
 
   if (last_shown_battery_percentage_ &&
       ApproximatelyEqual(last_shown_battery_percentage_.value(),
@@ -89,13 +88,12 @@ void BluetoothDeviceListItemBatteryView::UpdateBatteryInfo(
 
   last_shown_battery_percentage_ = new_battery_percentage;
 
-  PowerStatus::BatteryImageInfo battery_image_info;
+  PowerStatus::BatteryImageInfo battery_image_info(
+      GetColorProvider()->GetColor(color_id));
   battery_image_info.charge_percent = new_battery_percentage;
 
   icon_->SetImage(PowerStatus::GetBatteryImage(
-      battery_image_info, kUnifiedTraySubIconSize,
-      GetColorProvider()->GetColor(kColorAshShieldAndBaseOpaque),
-      AshColorProvider::Get()->GetContentLayerColor(content_layer_type)));
+      battery_image_info, kUnifiedTraySubIconSize, GetColorProvider()));
 }
 
 bool BluetoothDeviceListItemBatteryView::ApproximatelyEqual(

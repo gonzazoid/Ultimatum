@@ -10,8 +10,8 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/compiler_specific.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "media/cdm/api/content_decryption_module.h"
 
@@ -62,7 +62,7 @@ class CdmFileAdapter : public cdm::FileIOClient {
   FileOpenedCB open_cb_;
   ReadCB read_cb_;
   WriteCB write_cb_;
-  raw_ptr<cdm::FileIO> file_io_ = nullptr;
+  raw_ptr<cdm::FileIO, DanglingUntriaged> file_io_ = nullptr;
 };
 
 }  // namespace media

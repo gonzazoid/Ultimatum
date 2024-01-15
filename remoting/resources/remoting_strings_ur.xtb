@@ -36,7 +36,6 @@
 <translation id="2599300881200251572">‏یہ سروس Chrome ریموٹ ڈیسک ٹاپ کلائنٹس سے موصول ہونے والے کنکشنز کو فعال کرتی ہے۔</translation>
 <translation id="2647232381348739934">‏Chromoting سروس</translation>
 <translation id="2676780859508944670">کام جاری ہے…</translation>
-<translation id="2692522824157224199">‏Copyright 2022 Google LLC.‎ جملہ حقوق محفوظ۔</translation>
 <translation id="2699970397166997657">Chromoting</translation>
 <translation id="2758123043070977469">توثیق کرتے وقت ایک خرابی پیش آ گئی، براہ کرم دوبارہ لاگ ان کریں۔</translation>
 <translation id="2803375539583399270">‏PIN درج کریں</translation>
@@ -58,7 +57,7 @@
 <translation id="3695446226812920698">طریقہ جانیں</translation>
 <translation id="3776024066357219166">‏آپ کے Chrome ریموٹ ڈیسک ٹاپ کا سیشن ختم ہو گیا ہے۔</translation>
 <translation id="3858860766373142691">نام</translation>
-<translation id="3897092660631435901">مینو</translation>
+<translation id="3897092660631435901">مینیو</translation>
 <translation id="3905196214175737742">میزبان مالک کا غلط ڈومین</translation>
 <translation id="3931191050278863510">میزبان بند ہوگیا۔</translation>
 <translation id="3950820424414687140">سائن ان کریں</translation>
@@ -73,7 +72,6 @@
 <translation id="4257751272692708833">‏<ph name="PRODUCT_NAME" /> URL فارورڈر</translation>
 <translation id="4277736576214464567">رسائی کوڈ غلط ہے۔ براہ کرم دوبارہ کوشش کریں۔</translation>
 <translation id="4281844954008187215">سروس کی شرائط</translation>
-<translation id="4372650392690220936">‏کاپی رائٹ 2022 The Chromium Authors۔ جملہ حقوق محفوظ۔</translation>
 <translation id="4405930547258349619">بنیادی لائبریری</translation>
 <translation id="443560535555262820">ایکسیسبیلٹی کی ترجیحات کھولیں</translation>
 <translation id="4450893287417543264">دوبارہ نہ دکھائیں</translation>
@@ -154,6 +152,7 @@
 <translation id="7693372326588366043">میزبانوں کی فہرست ریفریش کریں</translation>
 <translation id="7714222945760997814">اس کی اطلاع دیں</translation>
 <translation id="7868137160098754906">‏براہ کرم ریموٹ کمپیوٹر کیلئے اپنا PIN درج کریں۔</translation>
+<translation id="7881455334687220899">‏کاپی رائٹ 2024 The Chromium Authors۔ جملہ حقوق محفوظ۔</translation>
 <translation id="7895403300744144251">ریموٹ کمپیوٹر پر موجود سیکیورٹی پالیسیاں آپ کے اکاؤنٹ سے کنکشنز کی اجازت نہیں دیتی ہیں۔</translation>
 <translation id="7936528439960309876">دائیں جانب ڈاک کریں</translation>
 <translation id="7970576581263377361">‏توثیق ناکام ہوگئی۔ براہ کرم Chromium میں دوبارہ سائن ان کریں۔</translation>
@@ -185,7 +184,8 @@
 <translation id="8747048596626351634">‏سیشن کریش ہو گیا یا آغاز نہیں ہو سکا۔ ریموٹ کمپیوٹر پر ‎~/.chrome-remote-desktop-session موجود ہونے پر، یقینی بنائیں کہ اس سے ڈیسک ٹاپ ماحول یا ونڈو مینیجر جیسی طویل مدت تک چلنے والی فور گراؤنڈ کارروائی کا آغاز ہوتا ہے۔</translation>
 <translation id="8804164990146287819">راز داری کی پالیسی</translation>
 <translation id="8906511416443321782">‏آڈیو کیپچر کرنے اور Chrome ریموٹ ڈیسک ٹاپ کلائنٹ پر اس کی سلسلہ بندی کرنے کیلئے، مائیکروفون تک رسائی درکار ہے۔</translation>
-<translation id="9111855907838866522">آپ اپنے ریموٹ آلہ سے منسلک ہیں۔ مینو کھولنے کیلئے، براہ کرم چار انگلیوں سے اسکرین پر تھپتھپائیں۔</translation>
+<translation id="9042277333359847053">‏Copyright 2024 Google LLC.‎ جملہ حقوق محفوظ ہیں۔</translation>
+<translation id="9111855907838866522">آپ اپنے ریموٹ آلہ سے منسلک ہیں۔ مینیو کھولنے کیلئے، براہ کرم چار انگلیوں سے اسکرین پر تھپتھپائیں۔</translation>
 <translation id="9126115402994542723">‏اس آلہ سے اس میزبان سے منسلک ہوتے وقت دوبارہ PIN طلب نہ کریں۔</translation>
 <translation id="916856682307586697">‏ڈیفالٹ XSession شروع کریں</translation>
 <translation id="9187628920394877737"><ph name="PRODUCT_NAME" /> کو 'اسکرین ریکارڈنگ' کی اجازت دیں</translation>

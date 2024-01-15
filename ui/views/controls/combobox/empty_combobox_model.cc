@@ -8,8 +8,7 @@
 
 #include "base/notreached.h"
 
-namespace views {
-namespace internal {
+namespace views::internal {
 
 EmptyComboboxModel::EmptyComboboxModel() = default;
 EmptyComboboxModel::~EmptyComboboxModel() = default;
@@ -19,13 +18,11 @@ size_t EmptyComboboxModel::GetItemCount() const {
 }
 
 std::u16string EmptyComboboxModel::GetItemAt(size_t index) const {
-  NOTREACHED();
-  return std::u16string();
+  NOTREACHED_NORETURN();
 }
 
 absl::optional<size_t> EmptyComboboxModel::GetDefaultIndex() const {
   return absl::nullopt;
 }
 
-}  // namespace internal
-}  // namespace views
+}  // namespace views::internal

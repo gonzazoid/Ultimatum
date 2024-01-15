@@ -5,13 +5,12 @@
 #ifndef CC_TREES_RENDER_FRAME_METADATA_H_
 #define CC_TREES_RENDER_FRAME_METADATA_H_
 
-#include "base/time/time.h"
+#include <optional>
 #include "build/build_config.h"
 #include "cc/cc_export.h"
 #include "components/viz/common/quads/selection.h"
 #include "components/viz/common/surfaces/local_surface_id.h"
 #include "components/viz/common/vertical_scroll_direction.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/skia/include/core/SkColor.h"
 #include "ui/gfx/geometry/size.h"
 #include "ui/gfx/geometry/size_f.h"
@@ -67,7 +66,7 @@ class CC_EXPORT RenderFrameMetadata {
   SkColor4f root_background_color = SkColors::kWhite;
 
   // Scroll offset of the root layer.
-  absl::optional<gfx::PointF> root_scroll_offset;
+  std::optional<gfx::PointF> root_scroll_offset;
 
   // Selection region relative to the current viewport. If the selection is
   // empty or otherwise unused, the bound types will indicate such.
@@ -85,7 +84,7 @@ class CC_EXPORT RenderFrameMetadata {
   // information to be used in making the forwarding decision. It exists the
   // entire time points could be forwarded, and forwarding must stop as soon as
   // it is null.
-  absl::optional<DelegatedInkBrowserMetadata> delegated_ink_metadata;
+  std::optional<DelegatedInkBrowserMetadata> delegated_ink_metadata;
 
   // The device scale factor used to generate a CompositorFrame.
   float device_scale_factor = 1.f;
@@ -95,7 +94,7 @@ class CC_EXPORT RenderFrameMetadata {
   gfx::Size viewport_size_in_pixels;
 
   // The last viz::LocalSurfaceId used to submit a CompositorFrame.
-  absl::optional<viz::LocalSurfaceId> local_surface_id;
+  std::optional<viz::LocalSurfaceId> local_surface_id;
 
   // Page scale factor (always 1.f for sub-frame renderers).
   float page_scale_factor = 1.f;
@@ -115,15 +114,7 @@ class CC_EXPORT RenderFrameMetadata {
   viz::VerticalScrollDirection new_vertical_scroll_direction =
       viz::VerticalScrollDirection::kNull;
 
-  // The cumulative time spent performing visual updates for all
-  // `local_surface_id` before this one.
-  base::TimeDelta previous_surfaces_visual_update_duration;
-
-  // The cumulative time spent performing visual updates for the current
-  // `local_surface_id`.
-  base::TimeDelta current_surface_visual_update_duration;
-
-#if BUILDFLAG(IS_ANDROID)
+#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_IOS)
   // Used to position Android bottom bar, whose position is computed by the
   // renderer compositor.
   float bottom_controls_height = 0.f;

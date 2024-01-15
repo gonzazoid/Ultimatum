@@ -47,9 +47,7 @@ bool WriteTimestampedFile(const base::FilePath& file_path,
                           const std::string& contents) {
   base::FilePath timestamped_file_path =
       logging::GenerateTimestampedName(file_path, base::Time::Now());
-  int bytes_written =
-      base::WriteFile(timestamped_file_path, contents.data(), contents.size());
-  return bytes_written > 0;
+  return base::WriteFile(timestamped_file_path, contents);
 }
 
 bool GetBoolOrFalse(const base::Value::Dict& dict, const char* keyname) {
@@ -104,7 +102,7 @@ void NetworkLogsMessageHandler::OnStoreLogs(const base::Value::List& list) {
 void NetworkLogsMessageHandler::OnWriteSystemLogs(
     const std::string& callback_id,
     base::Value::Dict&& options,
-    absl::optional<base::FilePath> syslogs_path) {
+    std::optional<base::FilePath> syslogs_path) {
   if (!syslogs_path) {
     Respond(callback_id, "Error writing system logs file.", /*is_error=*/true);
     return;
@@ -135,7 +133,7 @@ void NetworkLogsMessageHandler::MaybeWriteDebugLogs(
 void NetworkLogsMessageHandler::OnWriteDebugLogs(
     const std::string& callback_id,
     base::Value::Dict&& options,
-    absl::optional<base::FilePath> logs_path) {
+    std::optional<base::FilePath> logs_path) {
   if (!logs_path) {
     Respond(callback_id, "Error writing debug logs.", /*is_error=*/true);
     return;

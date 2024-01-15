@@ -174,13 +174,6 @@ bool Validators::CmpFunctionValidator::IsValid(const GLenum value) const {
   return false;
 }
 
-static const GLenum valid_coverage_modulation_components_table[] = {
-    GL_RGB,
-    GL_RGBA,
-    GL_ALPHA,
-    GL_NONE,
-};
-
 bool Validators::DrawModeValidator::IsValid(const GLenum value) const {
   switch (value) {
     case GL_POINTS:
@@ -311,7 +304,6 @@ static const GLenum valid_g_l_state_table[] = {
     GL_STENCIL_BITS,
     GL_TEXTURE_BINDING_2D,
     GL_TEXTURE_BINDING_CUBE_MAP,
-    GL_TEXTURE_FILTERING_HINT_CHROMIUM,
     GL_UNPACK_ALIGNMENT,
     GL_BIND_GENERATES_RESOURCE_CHROMIUM,
     GL_VERTEX_ARRAY_BINDING_OES,
@@ -478,7 +470,6 @@ bool Validators::HintModeValidator::IsValid(const GLenum value) const {
 
 static const GLenum valid_hint_target_table[] = {
     GL_GENERATE_MIPMAP_HINT,
-    GL_TEXTURE_FILTERING_HINT_CHROMIUM,
 };
 
 static const GLenum valid_hint_target_table_es3[] = {
@@ -635,7 +626,6 @@ bool Validators::QueryTargetValidator::IsValid(const GLenum value) const {
     case GL_ANY_SAMPLES_PASSED_CONSERVATIVE_EXT:
     case GL_COMMANDS_ISSUED_CHROMIUM:
     case GL_COMMANDS_ISSUED_TIMESTAMP_CHROMIUM:
-    case GL_LATENCY_QUERY_CHROMIUM:
     case GL_ASYNC_PIXEL_PACK_COMPLETED_CHROMIUM:
     case GL_COMMANDS_COMPLETED_CHROMIUM:
     case GL_READBACK_SHADOW_COPIES_UPDATED_CHROMIUM:
@@ -788,7 +778,6 @@ bool Validators::ShaderTypeValidator::IsValid(const GLenum value) const {
 bool Validators::SharedImageAccessModeValidator::IsValid(
     const GLenum value) const {
   switch (value) {
-    case GL_SHARED_IMAGE_ACCESS_MODE_OVERLAY_CHROMIUM:
     case GL_SHARED_IMAGE_ACCESS_MODE_READWRITE_CHROMIUM:
     case GL_SHARED_IMAGE_ACCESS_MODE_READ_CHROMIUM:
       return true;
@@ -1310,9 +1299,6 @@ Validators::Validators()
       bufferuiv(valid_bufferuiv_table, std::size(valid_bufferuiv_table)),
       capability(valid_capability_table, std::size(valid_capability_table)),
       compressed_texture_format(),
-      coverage_modulation_components(
-          valid_coverage_modulation_components_table,
-          std::size(valid_coverage_modulation_components_table)),
       dst_blend_factor(valid_dst_blend_factor_table,
                        std::size(valid_dst_blend_factor_table)),
       equation(valid_equation_table, std::size(valid_equation_table)),

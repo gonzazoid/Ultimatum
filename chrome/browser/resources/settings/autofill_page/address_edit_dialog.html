@@ -9,7 +9,7 @@
 
       .address-column {
         margin-inline-end: 16px;
-        width: calc((var(--settings-input-max-width) - 16px) / 2);
+        width: calc((var(--cr-default-input-max-width) - 16px) / 2);
       }
 
       #select-row {
@@ -20,11 +20,11 @@
       }
 
       .md-select {
-        --md-select-width: var(--settings-input-max-width);
+        --md-select-width: var(--cr-default-input-max-width);
       }
 
       .long {
-        width: var(--settings-input-max-width);
+        width: var(--cr-default-input-max-width);
       }
 
       cr-input {
@@ -32,13 +32,13 @@
       }
 
       cr-input:not(.last-row),
-      settings-textarea,
+      cr-textarea,
       .md-select {
         margin-bottom: var(--cr-form-field-bottom-spacing);
       }
 
       #dialog::part(body-container) {
-        max-height: 450px;
+        max-height: 550px;
       }
 
       @media all and (max-height: 714px) {
@@ -46,6 +46,23 @@
           max-height: 270px;
         }
       }
+
+      #notices {
+        margin-bottom: 4px;
+        margin-top: 20px;
+        white-space: initial;
+      }
+
+      #validationError {
+        color: var(--google-red-600);
+      }
+
+      @media (prefers-color-scheme: dark) {
+        #validationError {
+          color: var(--google-red-300);
+        }
+      }
+
     </style>
     <cr-dialog id="dialog" close-text="$i18n{close}">
       <div slot="title">[[title_]]</div>
@@ -54,10 +71,10 @@
           <label id="select-label" class="cr-form-field-label">
             $i18n{addressCountry}
           </label>
-          <select class="md-select" aria-labelledby="select-label"
-              value="[[countryCode_]]" on-change="onCountryChange_"
+          <select id="country" class="md-select" aria-labelledby="select-label"
+              value="[[countryCode_]]" on-change="onCountryCodeSelectChange_"
               autofocus>
-            <option value=""></option>
+            <option value="" hidden="[[isAccountAddress_]]"></option>
             <template is="dom-repeat" items="[[countries_]]">
               <option value="[[getCode_(item)]]"
                   disabled="[[isDivision_(item)]]">
@@ -66,45 +83,48 @@
             </template>
           </select>
         </div>
-        <template is="dom-repeat" items="[[addressWrapper_]]">
+        <template is="dom-repeat" items="[[components_]]">
           <div class="address-row">
             <template is="dom-repeat" items="[[item]]">
-              <template is="dom-if" if="[[item.isTextArea]]">
-                <settings-textarea label="[[item.component.fieldName]]"
-                    value="{{item.value}}" on-value-changed="updateCanSave_"
-                    class$="address-column [[long_(item)]]"
-                    spellcheck="false" maxlength="1000">
-                </settings-textarea>
+              <template is="dom-if" if="[[item.isTextarea]]">
+                <cr-textarea label="[[item.label]]"
+                    value="{{item.value}}"
+                    class$="address-column [[item.additionalClassName]]"
+                    spellcheck="false" maxlength="1000"
+                    required="[[item.isRequired]]"
+                    invalid="[[isVisuallyInvalid_(item.isValidatable,
+                                                  item.isValid)]]">
+                </cr-textarea>
               </template>
-              <template is="dom-if" if="[[!item.isTextArea]]">
-                <cr-input type="text" label="[[item.component.fieldName]]"
+              <template is="dom-if" if="[[!item.isTextarea]]">
+                <cr-input type="text" label="[[item.label]]"
                     value="{{item.value}}" spellcheck="false"
-                    on-value-changed="updateCanSave_" maxlength="1000"
-                    class$="address-column [[long_(item)]]">
+                    maxlength="1000"
+                    class$="address-column [[item.additionalClassName]]"
+                    required="[[item.isRequired]]"
+                    invalid="[[isVisuallyInvalid_(item.isValidatable,
+                                                  item.isValid)]]">
                 </cr-input>
               </template>
             </template>
           </div>
         </template>
-        <div class="address-row">
-          <cr-input id="phoneInput" type="text" label="$i18n{addressPhone}"
-              class="address-column last-row" on-value-changed="updateCanSave_"
-              value="{{phoneNumber_}}" spellcheck="false" maxlength="1000">
-          </cr-input>
-          <cr-input id="emailInput" type="text" label="$i18n{addressEmail}"
-              on-value-changed="updateCanSave_" value="{{email_}}"
-              class="address-column long last-row" spellcheck="false"
-              maxlength="1000">
-          </cr-input>
+        <div id="notices" hidden="[[!isAccountAddress_]]">
+          <div id="validationError">
+            [[validationError_]]<wbr>
+          </div>
+          <div id="accountSourceNotice">
+            [[accountAddressSourceNotice_]]
+          </div>
         </div>
       </div>
       <div slot="button-container">
         <cr-button id="cancelButton" class="cancel-button"
-            on-click="onCancelTap_">
+            on-click="onCancelClick_">
           $i18n{cancel}
         </cr-button>
         <cr-button id="saveButton" class="action-button"
-            disabled="[[!canSave_]]" on-click="onSaveButtonTap_">
+            disabled="[[!canSave_]]" on-click="onSaveButtonClick_">
           $i18n{save}
         </cr-button>
       </div>

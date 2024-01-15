@@ -6,6 +6,7 @@
 
 #include <numeric>
 
+#include "base/ranges/algorithm.h"
 #include "ui/views/view.h"
 
 namespace ash {
@@ -26,7 +27,7 @@ void StackLayout::ViewRemoved(views::View* host, views::View* view) {
 
 gfx::Size StackLayout::GetPreferredSize(const views::View* host) const {
   return std::accumulate(host->children().cbegin(), host->children().cend(),
-                         gfx::Size(), [](gfx::Size size, const auto* v) {
+                         gfx::Size(), [](gfx::Size size, const views::View* v) {
                            size.SetToMax(v->GetPreferredSize());
                            return size;
                          });
@@ -38,8 +39,8 @@ int StackLayout::GetPreferredHeightForWidth(const views::View* host,
   if (children.empty())
     return 0;
   std::vector<int> heights(children.size());
-  std::transform(
-      children.cbegin(), children.cend(), heights.begin(),
+  base::ranges::transform(
+      children, heights.begin(),
       [width](const views::View* v) { return v->GetHeightForWidth(width); });
   return *std::max_element(heights.cbegin(), heights.cend());
 }
@@ -48,15 +49,17 @@ void StackLayout::Layout(views::View* host) {
   const int host_width = host->GetContentsBounds().width();
   const int host_height = host->GetContentsBounds().height();
 
-  for (auto* child : host->children()) {
+  for (views::View* child : host->children()) {
     int child_width = host_width;
     int child_height = host_height;
 
     int child_x = 0;
     uint32_t dimension = static_cast<uint32_t>(RespectDimension::kAll);
 
-    if (respect_dimension_map_.find(child) != respect_dimension_map_.end())
-      dimension = static_cast<uint32_t>(respect_dimension_map_[child]);
+    if (auto iter = respect_dimension_map_.find(child);
+        iter != respect_dimension_map_.end()) {
+      dimension = static_cast<uint32_t>(iter->second);
+    }
 
     if (dimension & static_cast<uint32_t>(RespectDimension::kWidth)) {
       child_width = std::min(child->GetPreferredSize().width(), host_width);

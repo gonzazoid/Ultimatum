@@ -11,12 +11,13 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/check_op.h"
 #include "base/containers/contains.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
+#include "base/memory/singleton.h"
 #include "base/memory/weak_ptr.h"
 #include "base/notreached.h"
 #include "build/build_config.h"
@@ -24,7 +25,6 @@
 #include "chrome/browser/media_galleries/fileapi/media_file_system_backend.h"
 #include "chrome/browser/media_galleries/gallery_watch_manager.h"
 #include "chrome/browser/media_galleries/media_file_system_context.h"
-#include "chrome/browser/media_galleries/media_galleries_histograms.h"
 #include "chrome/browser/media_galleries/media_galleries_preferences_factory.h"
 #include "chrome/browser/profiles/profile.h"
 #include "components/keyed_service/content/browser_context_keyed_service_shutdown_notifier_factory.h"
@@ -342,7 +342,7 @@ class ExtensionGalleriesHost {
   const base::FilePath profile_path_;
 
   // Id of the extension this host belongs to.
-  const std::string extension_id_;
+  const extensions::ExtensionId extension_id_;
 
   // A callback to call when the last WebContents reference goes away.
   base::OnceClosure no_references_callback_;
@@ -433,7 +433,6 @@ MediaGalleriesPreferences* MediaFileSystemRegistry::GetPreferences(
             ->Subscribe(
                 base::BindRepeating(&MediaFileSystemRegistry::OnProfileShutdown,
                                     base::Unretained(this), profile));
-    media_galleries::UsageCount(media_galleries::PROFILES_WITH_USAGE);
   }
 
   return MediaGalleriesPreferencesFactory::GetForProfile(profile);
@@ -696,4 +695,10 @@ void MediaFileSystemRegistry::OnProfileShutdown(Profile* profile) {
   auto profile_subscription_it = profile_subscription_map_.find(profile);
   DCHECK(profile_subscription_it != profile_subscription_map_.end());
   profile_subscription_map_.erase(profile_subscription_it);
+}
+
+// static
+BrowserContextKeyedServiceShutdownNotifierFactory*
+MediaFileSystemRegistry::GetFactoryInstance() {
+  return MediaFileSystemRegistryShutdownNotifierFactory::GetInstance();
 }

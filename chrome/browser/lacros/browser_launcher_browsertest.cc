@@ -3,9 +3,9 @@
 // found in the LICENSE file.
 
 #include "base/containers/contains.h"
-#include "base/run_loop.h"
 #include "base/test/bind.h"
 #include "base/test/scoped_feature_list.h"
+#include "base/test/test_future.h"
 #include "chrome/browser/lacros/browser_service_lacros.h"
 #include "chrome/browser/lifetime/application_lifetime.h"
 #include "chrome/browser/prefs/session_startup_pref.h"
@@ -20,8 +20,8 @@
 #include "chrome/browser/ui/browser_finder.h"
 #include "chrome/browser/ui/browser_list.h"
 #include "chrome/browser/ui/browser_window.h"
-#include "chrome/browser/ui/profile_picker.h"
-#include "chrome/browser/ui/profile_ui_test_utils.h"
+#include "chrome/browser/ui/profiles/profile_picker.h"
+#include "chrome/browser/ui/profiles/profile_ui_test_utils.h"
 #include "chrome/browser/ui/views/session_crashed_bubble_view.h"
 #include "chrome/browser/ui/web_applications/app_browser_controller.h"
 #include "chrome/browser/ui/web_applications/test/web_app_browsertest_util.h"
@@ -43,11 +43,12 @@
 
 namespace {
 
-web_app::AppId InstallPWA(Profile* profile, const GURL& start_url) {
-  auto web_app_info = std::make_unique<WebAppInstallInfo>();
+webapps::AppId InstallPWA(Profile* profile, const GURL& start_url) {
+  auto web_app_info = std::make_unique<web_app::WebAppInstallInfo>();
   web_app_info->start_url = start_url;
   web_app_info->scope = start_url.GetWithoutFilename();
-  web_app_info->user_display_mode = web_app::UserDisplayMode::kStandalone;
+  web_app_info->user_display_mode =
+      web_app::mojom::UserDisplayMode::kStandalone;
   web_app_info->title = u"A Web App";
   return web_app::test::InstallWebApp(profile, std::move(web_app_info));
 }
@@ -84,12 +85,13 @@ class BrowserLauncherTest : public InProcessBrowserTest {
   }
 
   void NewWindowSync(bool incognito, bool should_trigger_session_restore) {
-    base::RunLoop run_loop;
+    base::test::TestFuture<crosapi::mojom::CreationResult> new_window_future;
     browser_service()->NewWindow(
         incognito, should_trigger_session_restore,
         display::Screen::GetScreen()->GetDisplayForNewWindows().id(),
-        run_loop.QuitClosure());
-    run_loop.Run();
+        /*profile_id=*/absl::nullopt, new_window_future.GetCallback());
+    ASSERT_TRUE(new_window_future.Wait())
+        << "NewWindow did not trigger the callback.";
   }
 
   void DisableWelcomePages(const std::vector<Profile*>& profiles) {
@@ -109,23 +111,17 @@ class BrowserLauncherTest : public InProcessBrowserTest {
 
     // Create two profiles.
     base::FilePath dest_path = profile_manager->user_data_dir();
-
-    Profile* profile = nullptr;
-    {
-      base::ScopedAllowBlockingForTesting allow_blocking;
-      profile = profile_manager->GetProfile(
-          dest_path.Append(FILE_PATH_LITERAL("New Profile")));
-      ASSERT_TRUE(profile);
-    }
-    DisableWelcomePages({profile});
+    Profile& profile = profiles::testing::CreateProfileSync(
+        profile_manager, dest_path.Append(FILE_PATH_LITERAL("New Profile")));
+    DisableWelcomePages({&profile});
 
     // Don't delete Profile too early.
     ScopedProfileKeepAlive profile_keep_alive(
-        profile, ProfileKeepAliveOrigin::kBrowserWindow);
+        &profile, ProfileKeepAliveOrigin::kBrowserWindow);
 
     // Open some urls in the browser.
     Browser* browser = Browser::Create(
-        Browser::CreateParams(Browser::TYPE_NORMAL, profile, true));
+        Browser::CreateParams(Browser::TYPE_NORMAL, &profile, true));
     chrome::NewTab(browser);
     ASSERT_TRUE(ui_test_utils::NavigateToURL(
         browser, embedded_test_server()->GetURL("/empty.html")));
@@ -142,14 +138,13 @@ class BrowserLauncherTest : public InProcessBrowserTest {
     // Set different startup preferences for the profile.
     SessionStartupPref pref(SessionStartupPref::URLS);
     pref.urls = urls;
-    SessionStartupPref::SetStartupPref(profile, pref);
-    profile->GetPrefs()->CommitPendingWrite();
+    SessionStartupPref::SetStartupPref(&profile, pref);
+    profile.GetPrefs()->CommitPendingWrite();
 
     // Ensure the session ends with the profile created above.
-    auto last_opened_profiles =
-        g_browser_process->profile_manager()->GetLastOpenedProfiles();
+    auto last_opened_profiles = profile_manager->GetLastOpenedProfiles();
     EXPECT_EQ(1u, last_opened_profiles.size());
-    EXPECT_TRUE(base::Contains(last_opened_profiles, profile));
+    EXPECT_TRUE(base::Contains(last_opened_profiles, &profile));
   }
 
   BrowserServiceLacros* browser_service() const {
@@ -165,11 +160,12 @@ class BrowserLauncherTest : public InProcessBrowserTest {
  private:
   void UninstallWebApps() {
     ProfileManager* profile_manager = g_browser_process->profile_manager();
-    auto* profile = profile_manager->GetProfile(
+    auto* profile = profile_manager->GetProfileByPath(
         profile_manager->GetPrimaryUserProfilePath());
+    ASSERT_TRUE(profile);
 
     web_app::WebAppRegistrar& registrar =
-        web_app::WebAppProvider::GetForTest(profile)->registrar();
+        web_app::WebAppProvider::GetForTest(profile)->registrar_unsafe();
     for (auto& app_id : registrar.GetAppIds()) {
       web_app::test::UninstallWebApp(profile, app_id);
     }
@@ -187,36 +183,27 @@ IN_PROC_BROWSER_TEST_F(BrowserLauncherTest, PRE_FullRestoreWithTwoProfiles) {
 
   // Create two profiles.
   base::FilePath dest_path = profile_manager->user_data_dir();
-
-  Profile* profile1 = nullptr;
-  Profile* profile2 = nullptr;
-  {
-    base::ScopedAllowBlockingForTesting allow_blocking;
-    profile1 = profile_manager->GetProfile(
-        dest_path.Append(FILE_PATH_LITERAL("New Profile 1")));
-    ASSERT_TRUE(profile1);
-
-    profile2 = profile_manager->GetProfile(
-        dest_path.Append(FILE_PATH_LITERAL("New Profile 2")));
-    ASSERT_TRUE(profile2);
-  }
-  DisableWelcomePages({profile1, profile2});
+  Profile& profile1 = profiles::testing::CreateProfileSync(
+      profile_manager, dest_path.Append(FILE_PATH_LITERAL("New Profile 1")));
+  Profile& profile2 = profiles::testing::CreateProfileSync(
+      profile_manager, dest_path.Append(FILE_PATH_LITERAL("New Profile 2")));
+  DisableWelcomePages({&profile1, &profile2});
 
   // Don't delete Profiles too early.
   ScopedProfileKeepAlive profile1_keep_alive(
-      profile1, ProfileKeepAliveOrigin::kBrowserWindow);
+      &profile1, ProfileKeepAliveOrigin::kBrowserWindow);
   ScopedProfileKeepAlive profile2_keep_alive(
-      profile2, ProfileKeepAliveOrigin::kBrowserWindow);
+      &profile2, ProfileKeepAliveOrigin::kBrowserWindow);
 
   // Open some urls with the browsers, and close them.
   Browser* browser1 = Browser::Create(
-      Browser::CreateParams(Browser::TYPE_NORMAL, profile1, true));
+      Browser::CreateParams(Browser::TYPE_NORMAL, &profile1, true));
   chrome::NewTab(browser1);
   ASSERT_TRUE(ui_test_utils::NavigateToURL(
       browser1, embedded_test_server()->GetURL("/empty.html")));
 
   Browser* browser2 = Browser::Create(
-      Browser::CreateParams(Browser::TYPE_NORMAL, profile2, true));
+      Browser::CreateParams(Browser::TYPE_NORMAL, &profile2, true));
   chrome::NewTab(browser2);
   ASSERT_TRUE(ui_test_utils::NavigateToURL(
       browser2, embedded_test_server()->GetURL("/form.html")));
@@ -234,20 +221,20 @@ IN_PROC_BROWSER_TEST_F(BrowserLauncherTest, PRE_FullRestoreWithTwoProfiles) {
   // Set different startup preferences for the 2 profiles.
   SessionStartupPref pref1(SessionStartupPref::URLS);
   pref1.urls = urls1;
-  SessionStartupPref::SetStartupPref(profile1, pref1);
+  SessionStartupPref::SetStartupPref(&profile1, pref1);
   SessionStartupPref pref2(SessionStartupPref::URLS);
   pref2.urls = urls2;
-  SessionStartupPref::SetStartupPref(profile2, pref2);
+  SessionStartupPref::SetStartupPref(&profile2, pref2);
 
-  profile1->GetPrefs()->CommitPendingWrite();
-  profile2->GetPrefs()->CommitPendingWrite();
+  profile1.GetPrefs()->CommitPendingWrite();
+  profile2.GetPrefs()->CommitPendingWrite();
 
   // Ensure the session ends with the above two profiles.
   auto last_opened_profiles =
       g_browser_process->profile_manager()->GetLastOpenedProfiles();
   EXPECT_EQ(2u, last_opened_profiles.size());
-  EXPECT_TRUE(base::Contains(last_opened_profiles, profile1));
-  EXPECT_TRUE(base::Contains(last_opened_profiles, profile2));
+  EXPECT_TRUE(base::Contains(last_opened_profiles, &profile1));
+  EXPECT_TRUE(base::Contains(last_opened_profiles, &profile2));
 }
 
 IN_PROC_BROWSER_TEST_F(BrowserLauncherTest, FullRestoreWithTwoProfiles) {
@@ -258,49 +245,42 @@ IN_PROC_BROWSER_TEST_F(BrowserLauncherTest, FullRestoreWithTwoProfiles) {
 
   // Open the two profiles.
   base::FilePath dest_path = profile_manager->user_data_dir();
-
-  Profile* profile1 = nullptr;
-  Profile* profile2 = nullptr;
-  {
-    base::ScopedAllowBlockingForTesting allow_blocking;
-    profile1 = profile_manager->GetProfile(
-        dest_path.Append(FILE_PATH_LITERAL("New Profile 1")));
-    ASSERT_TRUE(profile1);
-
-    profile2 = profile_manager->GetProfile(
-        dest_path.Append(FILE_PATH_LITERAL("New Profile 2")));
-    ASSERT_TRUE(profile2);
-  }
+  Profile& profile1 = profiles::testing::CreateProfileSync(
+      profile_manager, dest_path.Append(FILE_PATH_LITERAL("New Profile 1")));
+  Profile& profile2 = profiles::testing::CreateProfileSync(
+      profile_manager, dest_path.Append(FILE_PATH_LITERAL("New Profile 2")));
 
   // The profiles to be restored should match those setup in the PRE_ test.
   auto last_opened_profiles =
       g_browser_process->profile_manager()->GetLastOpenedProfiles();
   EXPECT_EQ(2u, last_opened_profiles.size());
-  EXPECT_TRUE(base::Contains(last_opened_profiles, profile1));
-  EXPECT_TRUE(base::Contains(last_opened_profiles, profile2));
+  EXPECT_TRUE(base::Contains(last_opened_profiles, &profile1));
+  EXPECT_TRUE(base::Contains(last_opened_profiles, &profile2));
 
   // Trigger Lacros full restore.
-  base::RunLoop run_loop;
-  testing::SessionsRestoredWaiter restore_waiter(run_loop.QuitClosure(), 2);
+  base::test::TestFuture<void> restore_waiter_future;
+  testing::SessionsRestoredWaiter restore_waiter(
+      restore_waiter_future.GetCallback(), 2);
   browser_service()->OpenForFullRestore(/*skip_crash_restore=*/true);
-  run_loop.Run();
+  ASSERT_TRUE(restore_waiter_future.Wait())
+      << "restore_waiter did not trigger the callback.";
 
   // The startup URLs are ignored, and instead the last open sessions are
   // restored.
-  EXPECT_TRUE(profile1->restored_last_session());
-  EXPECT_TRUE(profile2->restored_last_session());
+  EXPECT_TRUE(profile1.restored_last_session());
+  EXPECT_TRUE(profile2.restored_last_session());
 
   Browser* new_browser = nullptr;
-  ASSERT_EQ(1u, chrome::GetBrowserCount(profile1));
-  new_browser = chrome::FindBrowserWithProfile(profile1);
+  ASSERT_EQ(1u, chrome::GetBrowserCount(&profile1));
+  new_browser = chrome::FindBrowserWithProfile(&profile1);
   ASSERT_TRUE(new_browser);
   TabStripModel* tab_strip = new_browser->tab_strip_model();
   ASSERT_EQ(1, tab_strip->count());
   EXPECT_EQ("/empty.html",
             tab_strip->GetWebContentsAt(0)->GetLastCommittedURL().path());
 
-  ASSERT_EQ(1u, chrome::GetBrowserCount(profile2));
-  new_browser = chrome::FindBrowserWithProfile(profile2);
+  ASSERT_EQ(1u, chrome::GetBrowserCount(&profile2));
+  new_browser = chrome::FindBrowserWithProfile(&profile2);
   ASSERT_TRUE(new_browser);
   tab_strip = new_browser->tab_strip_model();
   ASSERT_EQ(1, tab_strip->count());
@@ -315,28 +295,28 @@ IN_PROC_BROWSER_TEST_F(BrowserLauncherTest,
   ProfileManager* profile_manager = g_browser_process->profile_manager();
   ASSERT_TRUE(embedded_test_server()->Start());
 
-  auto* profile =
-      profile_manager->GetProfile(profile_manager->GetPrimaryUserProfilePath());
+  Profile& profile = profiles::testing::CreateProfileSync(
+      profile_manager, profile_manager->GetPrimaryUserProfilePath());
 
   // Don't delete the profile too early.
   ScopedProfileKeepAlive profile_keep_alive(
-      profile, ProfileKeepAliveOrigin::kBrowserWindow);
+      &profile, ProfileKeepAliveOrigin::kBrowserWindow);
 
   // Set the startup pref to restore the last session.
   SessionStartupPref pref(SessionStartupPref::LAST);
-  SessionStartupPref::SetStartupPref(profile, pref);
-  profile->GetPrefs()->CommitPendingWrite();
+  SessionStartupPref::SetStartupPref(&profile, pref);
+  profile.GetPrefs()->CommitPendingWrite();
 
   // Install and launch a PWA.
-  web_app::AppId app_id = InstallPWA(profile, GetWebAppStartUrl());
-  Browser* app_browser = web_app::LaunchWebAppBrowserAndWait(profile, app_id);
+  webapps::AppId app_id = InstallPWA(&profile, GetWebAppStartUrl());
+  Browser* app_browser = web_app::LaunchWebAppBrowserAndWait(&profile, app_id);
   ASSERT_NE(app_browser, nullptr);
   ASSERT_EQ(app_browser->type(), Browser::Type::TYPE_APP);
   ASSERT_TRUE(web_app::AppBrowserController::IsForWebApp(app_browser, app_id));
 
   // Launch a browser.
   Browser* browser = Browser::Create(
-      Browser::CreateParams(Browser::TYPE_NORMAL, profile, true));
+      Browser::CreateParams(Browser::TYPE_NORMAL, &profile, true));
   chrome::NewTab(browser);
   ASSERT_TRUE(ui_test_utils::NavigateToURL(
       browser, embedded_test_server()->GetURL("/empty.html")));
@@ -351,7 +331,7 @@ IN_PROC_BROWSER_TEST_F(BrowserLauncherTest,
   auto last_opened_profiles =
       g_browser_process->profile_manager()->GetLastOpenedProfiles();
   EXPECT_EQ(1u, last_opened_profiles.size());
-  EXPECT_TRUE(base::Contains(last_opened_profiles, profile));
+  EXPECT_TRUE(base::Contains(last_opened_profiles, &profile));
 
   SetSkipUninstall(true);
 }
@@ -363,36 +343,38 @@ IN_PROC_BROWSER_TEST_F(BrowserLauncherTest,
   ProfileManager* profile_manager = g_browser_process->profile_manager();
   ASSERT_TRUE(embedded_test_server()->Start());
 
-  auto* profile =
-      profile_manager->GetProfile(profile_manager->GetPrimaryUserProfilePath());
+  Profile& profile = profiles::testing::CreateProfileSync(
+      profile_manager, profile_manager->GetPrimaryUserProfilePath());
 
   // The profile should match the one set up in the PRE_ test.
   auto last_opened_profiles =
       g_browser_process->profile_manager()->GetLastOpenedProfiles();
   EXPECT_EQ(1u, last_opened_profiles.size());
-  EXPECT_TRUE(base::Contains(last_opened_profiles, profile));
+  EXPECT_TRUE(base::Contains(last_opened_profiles, &profile));
 
   // Trigger Lacros full restore.
-  EXPECT_FALSE(profile->restored_last_session());
-  base::RunLoop run_loop;
-  testing::SessionsRestoredWaiter restore_waiter(run_loop.QuitClosure(), 1);
+  EXPECT_FALSE(profile.restored_last_session());
+  base::test::TestFuture<void> restore_waiter_future;
+  testing::SessionsRestoredWaiter restore_waiter(
+      restore_waiter_future.GetCallback(), 1);
   browser_service()->OpenForFullRestore(/*skip_crash_restore=*/true);
-  run_loop.Run();
+  ASSERT_TRUE(restore_waiter_future.Wait())
+      << "restore_waiter did not trigger the callback.";
 
   // The last session should be logged as restored.
-  EXPECT_TRUE(profile->restored_last_session());
+  EXPECT_TRUE(profile.restored_last_session());
 
   // A tabbed browser and app browser should have been restored.
-  ASSERT_EQ(2u, chrome::GetBrowserCount(profile));
+  ASSERT_EQ(2u, chrome::GetBrowserCount(&profile));
   Browser* tabbed_browser =
-      chrome::FindAllTabbedBrowsersWithProfile(profile)[0];
+      chrome::FindAllTabbedBrowsersWithProfile(&profile)[0];
   TabStripModel* tab_strip = tabbed_browser->tab_strip_model();
   ASSERT_EQ(1, tab_strip->count());
   EXPECT_EQ("/empty.html",
             tab_strip->GetWebContentsAt(0)->GetLastCommittedURL().path());
 
   Browser* app_browser = nullptr;
-  for (auto* browser : *BrowserList::GetInstance()) {
+  for (Browser* browser : *BrowserList::GetInstance()) {
     if (browser->type() != Browser::Type::TYPE_APP)
       continue;
     EXPECT_FALSE(app_browser);
@@ -414,25 +396,25 @@ IN_PROC_BROWSER_TEST_F(
   ProfileManager* profile_manager = g_browser_process->profile_manager();
   ASSERT_TRUE(embedded_test_server()->Start());
 
-  auto* profile =
-      profile_manager->GetProfile(profile_manager->GetPrimaryUserProfilePath());
+  Profile& profile = profiles::testing::CreateProfileSync(
+      profile_manager, profile_manager->GetPrimaryUserProfilePath());
 
   // Keep the browser process running while the browsers are closed.
   ScopedKeepAlive keep_alive(KeepAliveOrigin::BROWSER,
                              KeepAliveRestartOption::DISABLED);
   ScopedProfileKeepAlive profile_keep_alive(
-      profile, ProfileKeepAliveOrigin::kBrowserWindow);
+      &profile, ProfileKeepAliveOrigin::kBrowserWindow);
 
   // Install and launch a PWA.
-  web_app::AppId app_id = InstallPWA(profile, GetWebAppStartUrl());
-  Browser* app_browser = web_app::LaunchWebAppBrowserAndWait(profile, app_id);
+  webapps::AppId app_id = InstallPWA(&profile, GetWebAppStartUrl());
+  Browser* app_browser = web_app::LaunchWebAppBrowserAndWait(&profile, app_id);
   ASSERT_NE(app_browser, nullptr);
   ASSERT_EQ(app_browser->type(), Browser::Type::TYPE_APP);
   ASSERT_TRUE(web_app::AppBrowserController::IsForWebApp(app_browser, app_id));
 
   // Launch a browser.
   Browser* browser = Browser::Create(
-      Browser::CreateParams(Browser::TYPE_NORMAL, profile, true));
+      Browser::CreateParams(Browser::TYPE_NORMAL, &profile, true));
   chrome::NewTab(browser);
   ASSERT_TRUE(ui_test_utils::NavigateToURL(
       browser, embedded_test_server()->GetURL("/empty.html")));
@@ -451,14 +433,16 @@ IN_PROC_BROWSER_TEST_F(
   ASSERT_EQ(0u, BrowserList::GetInstance()->size());
 
   // Trigger a new window with session restore.
-  base::RunLoop run_loop;
-  testing::SessionsRestoredWaiter restore_waiter(run_loop.QuitClosure(), 1);
+  base::test::TestFuture<void> restore_waiter_future;
+  testing::SessionsRestoredWaiter restore_waiter(
+      restore_waiter_future.GetCallback(), 1);
   NewWindowSync(/*incognito=*/false, /*should_trigger_session_restore=*/true);
-  run_loop.Run();
+  ASSERT_TRUE(restore_waiter_future.Wait())
+      << "restore_waiter did not trigger the callback.";
 
   // The browser window should be restored but app browser should not.
-  ASSERT_EQ(1u, chrome::GetBrowserCount(profile));
-  browser = chrome::FindAllTabbedBrowsersWithProfile(profile)[0];
+  ASSERT_EQ(1u, chrome::GetBrowserCount(&profile));
+  browser = chrome::FindAllTabbedBrowsersWithProfile(&profile)[0];
   tab_strip = browser->tab_strip_model();
   ASSERT_EQ(1, tab_strip->count());
   EXPECT_EQ("/empty.html",
@@ -479,26 +463,20 @@ IN_PROC_BROWSER_TEST_F(BrowserLauncherTest, FullRestoreDoNotSkipCrashRestore) {
 
   // Open the profile.
   base::FilePath dest_path = profile_manager->user_data_dir();
-
-  Profile* profile = nullptr;
-  {
-    base::ScopedAllowBlockingForTesting allow_blocking;
-    profile = profile_manager->GetProfile(
-        dest_path.Append(FILE_PATH_LITERAL("New Profile")));
-    ASSERT_TRUE(profile);
-  }
+  Profile& profile = profiles::testing::CreateProfileSync(
+      profile_manager, dest_path.Append(FILE_PATH_LITERAL("New Profile")));
 
   // The profile to be restored should match the one in the PRE_ test.
   auto last_opened_profiles =
       g_browser_process->profile_manager()->GetLastOpenedProfiles();
   EXPECT_EQ(1u, last_opened_profiles.size());
-  EXPECT_TRUE(base::Contains(last_opened_profiles, profile));
+  EXPECT_TRUE(base::Contains(last_opened_profiles, &profile));
 
   // Disable the profile picker and set the exit type to crashed.
   g_browser_process->local_state()->SetInteger(
       prefs::kBrowserProfilePickerAvailabilityOnStartup,
       static_cast<int>(ProfilePicker::AvailabilityOnStartup::kDisabled));
-  ExitTypeService::GetInstanceForProfile(profile)
+  ExitTypeService::GetInstanceForProfile(&profile)
       ->SetLastSessionExitTypeForTest(ExitType::kCrashed);
 
   // Trigger Lacros full restore but do not skip crash restore prompts.
@@ -507,8 +485,8 @@ IN_PROC_BROWSER_TEST_F(BrowserLauncherTest, FullRestoreDoNotSkipCrashRestore) {
   // The browser should not be restored but instead we should have the browser's
   // crash restore bubble prompt.
   Browser* new_browser = nullptr;
-  ASSERT_EQ(1u, chrome::GetBrowserCount(profile));
-  new_browser = chrome::FindBrowserWithProfile(profile);
+  ASSERT_EQ(1u, chrome::GetBrowserCount(&profile));
+  new_browser = chrome::FindBrowserWithProfile(&profile);
   ASSERT_TRUE(new_browser);
 
   TabStripModel* tab_strip = new_browser->tab_strip_model();
@@ -533,42 +511,271 @@ IN_PROC_BROWSER_TEST_F(BrowserLauncherTest, FullRestoreSkipCrashRestore) {
 
   // Open the profile.
   base::FilePath dest_path = profile_manager->user_data_dir();
-
-  Profile* profile = nullptr;
-  {
-    base::ScopedAllowBlockingForTesting allow_blocking;
-    profile = profile_manager->GetProfile(
-        dest_path.Append(FILE_PATH_LITERAL("New Profile")));
-    ASSERT_TRUE(profile);
-  }
+  Profile& profile = profiles::testing::CreateProfileSync(
+      profile_manager, dest_path.Append(FILE_PATH_LITERAL("New Profile")));
 
   // The profile to be restored should match the one in the PRE_ test.
   auto last_opened_profiles =
       g_browser_process->profile_manager()->GetLastOpenedProfiles();
   EXPECT_EQ(1u, last_opened_profiles.size());
-  EXPECT_TRUE(base::Contains(last_opened_profiles, profile));
+  EXPECT_TRUE(base::Contains(last_opened_profiles, &profile));
 
   // Disable the profile picker and set the exit type to crashed.
   g_browser_process->local_state()->SetInteger(
       prefs::kBrowserProfilePickerAvailabilityOnStartup,
       static_cast<int>(ProfilePicker::AvailabilityOnStartup::kDisabled));
-  ExitTypeService::GetInstanceForProfile(profile)
+  ExitTypeService::GetInstanceForProfile(&profile)
       ->SetLastSessionExitTypeForTest(ExitType::kCrashed);
 
   // Trigger Lacros full restore and skip crash restore prompts.
-  base::RunLoop run_loop;
-  testing::SessionsRestoredWaiter restore_waiter(run_loop.QuitClosure(), 1);
+  base::test::TestFuture<void> restore_waiter_future;
+  testing::SessionsRestoredWaiter restore_waiter(
+      restore_waiter_future.GetCallback(), 1);
   browser_service()->OpenForFullRestore(/*skip_crash_restore=*/true);
-  run_loop.Run();
+  ASSERT_TRUE(restore_waiter_future.Wait())
+      << "restore_waiter did not trigger the callback.";
 
   // The browser should be restored (ignoring startup preference).
   Browser* new_browser = nullptr;
-  ASSERT_EQ(1u, chrome::GetBrowserCount(profile));
-  new_browser = chrome::FindBrowserWithProfile(profile);
+  ASSERT_EQ(1u, chrome::GetBrowserCount(&profile));
+  new_browser = chrome::FindBrowserWithProfile(&profile);
   ASSERT_TRUE(new_browser);
 
   TabStripModel* tab_strip = new_browser->tab_strip_model();
   ASSERT_EQ(1, tab_strip->count());
   EXPECT_EQ("/empty.html",
             tab_strip->GetWebContentsAt(0)->GetLastCommittedURL().path());
+}
+
+IN_PROC_BROWSER_TEST_F(BrowserLauncherTest,
+                       PRE_OpenTwoWindowsAfterCrashWithTwoProfiles) {
+  // Simulate a full restore by creating the profiles in a PRE_ test.
+  ProfileManager* profile_manager = g_browser_process->profile_manager();
+
+  ASSERT_TRUE(embedded_test_server()->Start());
+
+  // Load the main profile and create one additional profile.
+  base::FilePath dest_path = profile_manager->user_data_dir();
+  Profile& profile1 = profiles::testing::CreateProfileSync(
+      profile_manager, profile_manager->GetPrimaryUserProfilePath());
+  Profile& profile2 = profiles::testing::CreateProfileSync(
+      profile_manager, dest_path.Append(FILE_PATH_LITERAL("New Profile 2")));
+  DisableWelcomePages({&profile1, &profile2});
+
+  // Don't delete Profiles too early.
+  ScopedProfileKeepAlive profile1_keep_alive(
+      &profile1, ProfileKeepAliveOrigin::kBrowserWindow);
+  ScopedProfileKeepAlive profile2_keep_alive(
+      &profile2, ProfileKeepAliveOrigin::kBrowserWindow);
+
+  // Open some urls with the browsers, and close them.
+  Browser* browser1 = Browser::Create(
+      Browser::CreateParams(Browser::TYPE_NORMAL, &profile1, true));
+  chrome::NewTab(browser1);
+  ASSERT_TRUE(ui_test_utils::NavigateToURL(
+      browser1, embedded_test_server()->GetURL("/empty.html")));
+
+  Browser* browser2 = Browser::Create(
+      Browser::CreateParams(Browser::TYPE_NORMAL, &profile2, true));
+  chrome::NewTab(browser2);
+  ASSERT_TRUE(ui_test_utils::NavigateToURL(
+      browser2, embedded_test_server()->GetURL("/form.html")));
+
+  // Set different startup preferences for the 2 profiles.
+  std::vector<GURL> urls1;
+  urls1.push_back(ui_test_utils::GetTestUrl(
+      base::FilePath(base::FilePath::kCurrentDirectory),
+      base::FilePath(FILE_PATH_LITERAL("title1.html"))));
+  std::vector<GURL> urls2;
+  urls2.push_back(ui_test_utils::GetTestUrl(
+      base::FilePath(base::FilePath::kCurrentDirectory),
+      base::FilePath(FILE_PATH_LITERAL("title2.html"))));
+
+  // Set different startup preferences for the 2 profiles.
+  SessionStartupPref pref1(SessionStartupPref::URLS);
+  pref1.urls = urls1;
+  SessionStartupPref::SetStartupPref(&profile1, pref1);
+  SessionStartupPref pref2(SessionStartupPref::URLS);
+  pref2.urls = urls2;
+  SessionStartupPref::SetStartupPref(&profile2, pref2);
+
+  profile1.GetPrefs()->CommitPendingWrite();
+  profile2.GetPrefs()->CommitPendingWrite();
+
+  // Ensure the session ends with the above two profiles.
+  auto last_opened_profiles =
+      g_browser_process->profile_manager()->GetLastOpenedProfiles();
+  EXPECT_EQ(2u, last_opened_profiles.size());
+  EXPECT_TRUE(base::Contains(last_opened_profiles, &profile1));
+  EXPECT_TRUE(base::Contains(last_opened_profiles, &profile2));
+}
+
+IN_PROC_BROWSER_TEST_F(BrowserLauncherTest,
+                       OpenTwoWindowsAfterCrashWithTwoProfiles) {
+  // Browser launch should be suppressed with the kNoStartupWindow switch.
+  ASSERT_FALSE(browser());
+
+  ProfileManager* profile_manager = g_browser_process->profile_manager();
+
+  // Open the two profiles.
+  base::FilePath dest_path = profile_manager->user_data_dir();
+  Profile& profile1 = profiles::testing::CreateProfileSync(
+      profile_manager, profile_manager->GetPrimaryUserProfilePath());
+  Profile& profile2 = profiles::testing::CreateProfileSync(
+      profile_manager, dest_path.Append(FILE_PATH_LITERAL("New Profile 2")));
+
+  // The profiles to be restored should match those setup in the PRE_ test.
+  auto last_opened_profiles =
+      g_browser_process->profile_manager()->GetLastOpenedProfiles();
+  EXPECT_EQ(2u, last_opened_profiles.size());
+  EXPECT_TRUE(base::Contains(last_opened_profiles, &profile1));
+  EXPECT_TRUE(base::Contains(last_opened_profiles, &profile2));
+
+  // Disable the profile picker and set the exit type to crashed.
+  g_browser_process->local_state()->SetInteger(
+      prefs::kBrowserProfilePickerAvailabilityOnStartup,
+      static_cast<int>(ProfilePicker::AvailabilityOnStartup::kDisabled));
+  ExitTypeService::GetInstanceForProfile(&profile1)
+      ->SetLastSessionExitTypeForTest(ExitType::kCrashed);
+  ExitTypeService::GetInstanceForProfile(&profile2)
+      ->SetLastSessionExitTypeForTest(ExitType::kCrashed);
+
+  // Launch the browser.
+  base::test::TestFuture<crosapi::mojom::CreationResult> launch_future;
+  browser_service()->Launch(0, /*profile_id=*/absl::nullopt,
+                            launch_future.GetCallback());
+  ASSERT_TRUE(launch_future.Wait()) << "Launch did not trigger the callback.";
+
+  // Make sure 2 windows are preserved, one for each profile.
+  EXPECT_EQ(2u, chrome::GetTotalBrowserCount());
+  EXPECT_EQ(1u, chrome::GetBrowserCount(&profile1));
+  EXPECT_EQ(1u, chrome::GetBrowserCount(&profile2));
+}
+
+// Tests that if the previous session ended as the result of a crash, and a
+// Chrome app is opened before the browser, the browser will still open for the
+// last session's profiles.
+// The test runs the following sequence.
+//   1. Setup the previous session with two browsers of different profiles.
+//   2. Simulate a crash for this session.
+//   3. Start a new session, lacros starts in its windowless state.
+//   4. Launch an app.
+//   5. Attempt to perform a Launch action for the browser. This will attempt to
+//      launch lacros for the last opened profiles.
+// Even if the user opens the app browser before opening lacros, the last
+// session profile windows should still open as expected.
+// This is a regression test for crbug.com/1455065.
+IN_PROC_BROWSER_TEST_F(BrowserLauncherTest,
+                       PRE_LaunchForLastProfilesPostCrashAppOpenedFirst) {
+  // Simulate a full restore by creating the profiles in a PRE_ test.
+  ProfileManager* profile_manager = g_browser_process->profile_manager();
+
+  ASSERT_TRUE(embedded_test_server()->Start());
+
+  // Load the main profile and create one additional profile.
+  base::FilePath dest_path = profile_manager->user_data_dir();
+  Profile& profile1 = profiles::testing::CreateProfileSync(
+      profile_manager, profile_manager->GetPrimaryUserProfilePath());
+  Profile& profile2 = profiles::testing::CreateProfileSync(
+      profile_manager, dest_path.Append(FILE_PATH_LITERAL("New Profile 2")));
+  DisableWelcomePages({&profile1, &profile2});
+
+  // Don't delete Profiles too early.
+  ScopedProfileKeepAlive profile1_keep_alive(
+      &profile1, ProfileKeepAliveOrigin::kBrowserWindow);
+  ScopedProfileKeepAlive profile2_keep_alive(
+      &profile2, ProfileKeepAliveOrigin::kBrowserWindow);
+
+  // Create a browser for each profile and navigate the tab to a unique URL.
+  Browser* browser1 = Browser::Create(
+      Browser::CreateParams(Browser::TYPE_NORMAL, &profile1, true));
+  chrome::NewTab(browser1);
+  ASSERT_TRUE(ui_test_utils::NavigateToURL(
+      browser1, embedded_test_server()->GetURL("/empty.html")));
+
+  Browser* browser2 = Browser::Create(
+      Browser::CreateParams(Browser::TYPE_NORMAL, &profile2, true));
+  chrome::NewTab(browser2);
+  ASSERT_TRUE(ui_test_utils::NavigateToURL(
+      browser2, embedded_test_server()->GetURL("/form.html")));
+
+  // Set different startup preferences for the 2 profiles. Despite these
+  // differences the browsers for each profile should relaunch as expected with
+  // the crash recovery flow.
+  std::vector<GURL> urls1;
+  urls1.push_back(ui_test_utils::GetTestUrl(
+      base::FilePath(base::FilePath::kCurrentDirectory),
+      base::FilePath(FILE_PATH_LITERAL("title1.html"))));
+  std::vector<GURL> urls2;
+  urls2.push_back(ui_test_utils::GetTestUrl(
+      base::FilePath(base::FilePath::kCurrentDirectory),
+      base::FilePath(FILE_PATH_LITERAL("title2.html"))));
+
+  SessionStartupPref pref1(SessionStartupPref::URLS);
+  pref1.urls = urls1;
+  SessionStartupPref::SetStartupPref(&profile1, pref1);
+  SessionStartupPref pref2(SessionStartupPref::URLS);
+  pref2.urls = urls2;
+  SessionStartupPref::SetStartupPref(&profile2, pref2);
+
+  profile1.GetPrefs()->CommitPendingWrite();
+  profile2.GetPrefs()->CommitPendingWrite();
+
+  // Ensure the session ends with the above two profiles.
+  auto last_opened_profiles =
+      g_browser_process->profile_manager()->GetLastOpenedProfiles();
+  EXPECT_EQ(2u, last_opened_profiles.size());
+  EXPECT_TRUE(base::Contains(last_opened_profiles, &profile1));
+  EXPECT_TRUE(base::Contains(last_opened_profiles, &profile2));
+}
+
+IN_PROC_BROWSER_TEST_F(BrowserLauncherTest,
+                       LaunchForLastProfilesPostCrashAppOpenedFirst) {
+  // Browser launch should be suppressed with the kNoStartupWindow switch.
+  ASSERT_FALSE(browser());
+
+  ProfileManager* profile_manager = g_browser_process->profile_manager();
+
+  // Re-recreate the last two profiles.
+  base::FilePath dest_path = profile_manager->user_data_dir();
+  Profile& profile1 = profiles::testing::CreateProfileSync(
+      profile_manager, profile_manager->GetPrimaryUserProfilePath());
+  Profile& profile2 = profiles::testing::CreateProfileSync(
+      profile_manager, dest_path.Append(FILE_PATH_LITERAL("New Profile 2")));
+
+  // The profiles to be restored should match those setup in the PRE_ test.
+  auto last_opened_profiles =
+      g_browser_process->profile_manager()->GetLastOpenedProfiles();
+  EXPECT_EQ(2u, last_opened_profiles.size());
+  EXPECT_TRUE(base::Contains(last_opened_profiles, &profile1));
+  EXPECT_TRUE(base::Contains(last_opened_profiles, &profile2));
+
+  // Disable the profile picker and set the exit type to crashed.
+  g_browser_process->local_state()->SetInteger(
+      prefs::kBrowserProfilePickerAvailabilityOnStartup,
+      static_cast<int>(ProfilePicker::AvailabilityOnStartup::kDisabled));
+  ExitTypeService::GetInstanceForProfile(&profile1)
+      ->SetLastSessionExitTypeForTest(ExitType::kCrashed);
+  ExitTypeService::GetInstanceForProfile(&profile2)
+      ->SetLastSessionExitTypeForTest(ExitType::kCrashed);
+
+  // First launch the app. Only the app browser should exist.
+  webapps::AppId app_id = InstallPWA(&profile1, GetWebAppStartUrl());
+  Browser* app_browser = web_app::LaunchWebAppBrowserAndWait(&profile1, app_id);
+  EXPECT_EQ(1u, chrome::GetTotalBrowserCount());
+  ASSERT_NE(app_browser, nullptr);
+  ASSERT_EQ(app_browser->type(), Browser::Type::TYPE_APP);
+  ASSERT_TRUE(web_app::AppBrowserController::IsForWebApp(app_browser, app_id));
+
+  // Launch the browser. A browser window for each last profile should be
+  // restored.
+  base::test::TestFuture<crosapi::mojom::CreationResult> launch_future;
+  browser_service()->Launch(0, /*profile_id=*/absl::nullopt,
+                            launch_future.GetCallback());
+  ASSERT_TRUE(launch_future.Wait()) << "Launch did not trigger the callback.";
+
+  // Make sure 2 windows are preserved, one for each profile.
+  EXPECT_EQ(3u, chrome::GetTotalBrowserCount());
+  EXPECT_EQ(2u, chrome::GetBrowserCount(&profile1));
+  EXPECT_EQ(1u, chrome::GetBrowserCount(&profile2));
 }

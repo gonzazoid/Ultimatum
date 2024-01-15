@@ -7,8 +7,7 @@
 #include "base/logging.h"
 #include "base/notreached.h"
 
-namespace arc {
-namespace input_overlay {
+namespace arc::input_overlay {
 namespace {
 // Key strings in the Json file.
 constexpr char kAnchor[] = "anchor";
@@ -21,46 +20,42 @@ constexpr char kAspectRatio[] = "aspect_ratio";
 constexpr char kXonY[] = "x_on_y";
 constexpr char kYonX[] = "y_on_x";
 
-absl::optional<gfx::PointF> ParseTwoElementsArray(const base::Value& value,
-                                                  const char* key,
-                                                  bool required) {
-  const base::Value* list_value = value.FindListKey(key);
-  if (!list_value) {
-    if (required)
+std::optional<gfx::PointF> ParseTwoElementsArray(const base::Value::Dict& value,
+                                                 const char* key,
+                                                 bool required) {
+  const base::Value::List* list = value.FindList(key);
+  if (!list) {
+    if (required) {
       LOG(ERROR) << "Require values for key " << key;
-    return absl::nullopt;
+    }
+    return std::nullopt;
   }
-  if (!list_value->is_list()) {
-    LOG(ERROR) << "Require list values for key " << key;
-    return absl::nullopt;
-  }
-  auto& list = list_value->GetList();
-  if (list.size() != 2) {
+  if (list->size() != 2) {
     LOG(ERROR) << "Require two elements for " << key << ". But got "
-               << list.size() << " elements.";
-    return absl::nullopt;
+               << list->size() << " elements.";
+    return std::nullopt;
   }
-  double x = list.front().GetDouble();
-  double y = list.back().GetDouble();
+  const double x = list->front().GetDouble();
+  const double y = list->back().GetDouble();
   if (std::abs(x) > 1 || std::abs(y) > 1) {
     LOG(ERROR) << "Require normalized values for " << key << ". But got x{" << x
                << "}, y{" << y << "}";
-    return absl::nullopt;
+    return std::nullopt;
   }
-  return absl::make_optional<gfx::PointF>(x, y);
+  return std::make_optional<gfx::PointF>(x, y);
 }
 
-absl::optional<int> ParseIntValue(const base::Value& value, std::string key) {
-  auto val = value.FindIntKey(key);
-  if (val) {
+std::optional<int> ParseIntValue(const base::Value::Dict& value,
+                                 std::string key) {
+  if (std::optional<int> val = value.FindInt(key)) {
     if (*val <= 0) {
       LOG(ERROR) << "Value for {" << key << "} should be positive, but got {"
                  << *val << "}.";
-      return absl::nullopt;
+      return std::nullopt;
     }
     return val;
   }
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 float CalculateDependent(const gfx::PointF& anchor,
@@ -70,20 +65,22 @@ float CalculateDependent(const gfx::PointF& anchor,
                          const gfx::RectF& content_bounds) {
   float res;
   if (height_dependent) {
-    float anchor_to_target_y =
+    const float anchor_to_target_y =
         std::abs(anchor_to_target.y()) * content_bounds.height();
     res = anchor.x() * content_bounds.width() +
           (anchor_to_target.x() < 0 ? -1 : 1) * anchor_to_target_y * dependent;
-    if (res >= content_bounds.width())
+    if (res >= content_bounds.width()) {
       res = content_bounds.width() - 1;
+    }
   } else {
-    float anchor_to_target_x =
+    const float anchor_to_target_x =
         std::abs(anchor_to_target.x()) * content_bounds.width();
     res = anchor.y() * content_bounds.height() +
           (std::signbit(anchor_to_target.y()) ? -1 : 1) * anchor_to_target_x *
               dependent;
-    if (res >= content_bounds.height())
+    if (res >= content_bounds.height()) {
       res = content_bounds.height() - 1;
+    }
   }
   // Make sure it is inside of the window bounds.
   return std::max(0.0f, res);
@@ -91,10 +88,10 @@ float CalculateDependent(const gfx::PointF& anchor,
 
 }  // namespace
 
-bool ParsePositiveFraction(const base::Value& value,
+bool ParsePositiveFraction(const base::Value::Dict& value,
                            const char* key,
-                           absl::optional<float>* output) {
-  *output = value.FindDoubleKey(key);
+                           std::optional<float>* output) {
+  *output = value.FindDouble(key);
   if (*output && **output <= 0) {
     LOG(ERROR) << "Require positive value of " << key << ". But got {"
                << output->value() << "}.";
@@ -118,7 +115,7 @@ std::unique_ptr<Position> Position::ConvertFromProto(
   return position;
 }
 
-bool Position::ParseFromJson(const base::Value& value) {
+bool Position::ParseFromJson(const base::Value::Dict& value) {
   switch (position_type_) {
     case PositionType::kDefault:
       return ParseDefaultFromJson(value);
@@ -143,24 +140,24 @@ gfx::PointF Position::CalculatePosition(
   }
 }
 
-bool Position::ParseDefaultFromJson(const base::Value& value) {
+bool Position::ParseDefaultFromJson(const base::Value::Dict& value) {
   // Parse anchor point if existing, or the anchor point is (0, 0).
-  auto anchor = ParseTwoElementsArray(value, kAnchor, false);
-  if (!anchor) {
-    LOG(WARNING) << "Anchor is assigned to default (0, 0).";
-  } else {
+  if (auto anchor = ParseTwoElementsArray(value, kAnchor, false)) {
     anchor_.set_x(anchor.value().x());
     anchor_.set_y(anchor.value().y());
+  } else {
+    LOG(WARNING) << "Anchor is assigned to default (0, 0).";
   }
   // Parse the vector which starts from anchor point to the target position.
   auto anchor_to_target = ParseTwoElementsArray(value, kAnchorToTarget, true);
-  if (!anchor_to_target)
+  if (!anchor_to_target) {
     return false;
+  }
   anchor_to_target_.set_x(anchor_to_target.value().x());
   anchor_to_target_.set_y(anchor_to_target.value().y());
 
-  auto target = anchor_ + anchor_to_target_;
-  if (!gfx::RectF(1.0, 1.0).Contains(target)) {
+  if (const auto target = anchor_ + anchor_to_target_;
+      !gfx::RectF(1.0, 1.0).Contains(target)) {
     LOG(ERROR)
         << "The target position is located at outside of the window. The value "
            "should be within [0, 1]. But got target {"
@@ -174,15 +171,19 @@ bool Position::ParseDefaultFromJson(const base::Value& value) {
   return true;
 }
 
-bool Position::ParseDependentFromJson(const base::Value& value) {
-  if (!ParseDefaultFromJson(value))
+bool Position::ParseDependentFromJson(const base::Value::Dict& value) {
+  if (!ParseDefaultFromJson(value)) {
     return false;
-  if (!ParsePositiveFraction(value, kAspectRatio, &aspect_ratio_))
+  }
+  if (!ParsePositiveFraction(value, kAspectRatio, &aspect_ratio_)) {
     return false;
-  if (!ParsePositiveFraction(value, kXonY, &x_on_y_))
+  }
+  if (!ParsePositiveFraction(value, kXonY, &x_on_y_)) {
     return false;
-  if (!ParsePositiveFraction(value, kYonX, &y_on_x_))
+  }
+  if (!ParsePositiveFraction(value, kYonX, &y_on_x_)) {
     return false;
+  }
 
   if (aspect_ratio_ && (!x_on_y_ || !y_on_x_)) {
     LOG(ERROR) << "Require both x_on_y and y_on_x is aspect_ratio is set.";
@@ -210,25 +211,27 @@ gfx::PointF Position::CalculateDefaultPosition(
     const gfx::RectF& content_bounds) const {
   auto res = anchor_ + anchor_to_target_;
   res.Scale(content_bounds.width(), content_bounds.height());
-  if (max_x_)
+  if (max_x_) {
     res.set_x(std::min((int)res.x(), *max_x_));
-  if (max_y_)
+  }
+  if (max_y_) {
     res.set_y(std::min((int)res.y(), *max_y_));
+  }
   return res;
 }
 
 gfx::PointF Position::CalculateDependentPosition(
     const gfx::RectF& content_bounds) const {
   auto res = Position::CalculateDefaultPosition(content_bounds);
-  float cur_aspect_ratio =
-      1. * content_bounds.width() / content_bounds.height();
+  const float cur_aspect_ratio =
+      1.0f * content_bounds.width() / content_bounds.height();
   if (cur_aspect_ratio >= *aspect_ratio_) {
-    float x = CalculateDependent(anchor_, anchor_to_target_, true, *x_on_y_,
-                                 content_bounds);
+    const float x = CalculateDependent(anchor_, anchor_to_target_, true,
+                                       *x_on_y_, content_bounds);
     res.set_x(x);
   } else {
-    float y = CalculateDependent(anchor_, anchor_to_target_, false, *y_on_x_,
-                                 content_bounds);
+    const float y = CalculateDependent(anchor_, anchor_to_target_, false,
+                                       *y_on_x_, content_bounds);
     res.set_y(y);
   }
   return res;
@@ -267,5 +270,4 @@ bool Position::operator!=(const Position& other) const {
   return !(*this == other);
 }
 
-}  // namespace input_overlay
-}  // namespace arc
+}  // namespace arc::input_overlay

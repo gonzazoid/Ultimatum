@@ -30,12 +30,13 @@ class COMPONENT_EXPORT(HIBERMAN_CLIENT) FakeHibermanClient
   static FakeHibermanClient* Get();
 
   // HibermanClient override:
+  bool IsAlive() const override;
+  bool IsEnabled() const override;
   void WaitForServiceToBeAvailable(
       chromeos::WaitForServiceToBeAvailableCallback callback) override;
   void ResumeFromHibernate(const std::string& account_id,
-                           ResumeFromHibernateCallback callback) override;
-  void ResumeFromHibernateAS(const std::string& auth_session_id,
-                             ResumeFromHibernateCallback callback) override;
+                           const std::string& auth_session_id) override;
+  void AbortResumeHibernate(const std::string& reason) override;
 };
 
 }  // namespace ash

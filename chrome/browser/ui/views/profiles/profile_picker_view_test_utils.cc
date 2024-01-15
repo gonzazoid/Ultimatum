@@ -2,25 +2,25 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "chrome/browser/ui/profile_ui_test_utils.h"
+#include "chrome/browser/ui/profiles/profile_ui_test_utils.h"
 
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
+#include "base/location.h"
 #include "base/run_loop.h"
-#include "base/test/bind.h"
-#include "base/test/test_future.h"
 #include "build/build_config.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/profiles/profile_test_util.h"
 #include "chrome/browser/profiles/profile_window.h"
-#include "chrome/browser/ui/profile_picker.h"
+#include "chrome/browser/ui/profiles/profile_picker.h"
 #include "chrome/browser/ui/views/profiles/profile_management_step_controller.h"
 #include "chrome/browser/ui/views/profiles/profile_picker_view.h"
 #include "chrome/browser/ui/views/profiles/profile_picker_view_test_utils.h"
-#include "chrome/browser/ui/webui/signin/enterprise_profile_welcome_handler.h"
-#include "chrome/browser/ui/webui/signin/enterprise_profile_welcome_ui.h"
+#include "chrome/browser/ui/webui/signin/managed_user_profile_notice_handler.h"
+#include "chrome/browser/ui/webui/signin/managed_user_profile_notice_ui.h"
+#include "chrome/common/webui_url_constants.h"
 #include "chrome/test/base/ui_test_utils.h"
-#include "content/public/browser/notification_service.h"
 #include "content/public/browser/web_contents.h"
 #include "ui/views/controls/webview/webview.h"
 #include "ui/views/view.h"
@@ -55,25 +55,25 @@ class TestProfileManagementFlowController
       Step step,
       ProfileManagementStepTestView::StepControllerFactory factory,
       base::OnceClosure initial_step_load_finished_closure)
-      : ProfileManagementFlowController(host,
-                                        std::move(clear_host_callback),
-                                        step),
+      : ProfileManagementFlowController(host, std::move(clear_host_callback)),
+        step_(step),
+        step_controller_factory_(std::move(factory)),
         initial_step_load_finished_closure_(
-            std::move(initial_step_load_finished_closure)) {
-    RegisterStep(initial_step(), factory.Run(host));
+            std::move(initial_step_load_finished_closure)) {}
+
+  void Init(StepSwitchFinishedCallback step_switch_finished_callback) override {
+    RegisterStep(step_, step_controller_factory_.Run(host()));
+    SwitchToStep(
+        step_, /*reset_state=*/true,
+        /*step_switch_finished_callback=*/
+        base::BindOnce(
+            &TestProfileManagementFlowController::OnInitialStepSwitchFinished,
+            weak_ptr_factory_.GetWeakPtr(),
+            std::move(step_switch_finished_callback)));
   }
 
-  void Init(base::OnceCallback<void(bool)>
-                initial_step_switch_finished_callback) override {
-    ProfileManagementFlowController::Init(base::BindOnce(
-        &TestProfileManagementFlowController::OnInitialStepSwitchFinished,
-        weak_ptr_factory_.GetWeakPtr(),
-        std::move(initial_step_switch_finished_callback)));
-  }
-
-  void OnInitialStepSwitchFinished(
-      base::OnceCallback<void(bool)> original_callback,
-      bool success) {
+  void OnInitialStepSwitchFinished(StepSwitchFinishedCallback original_callback,
+                                   bool success) {
     if (original_callback) {
       std::move(original_callback).Run(success);
     }
@@ -92,6 +92,10 @@ class TestProfileManagementFlowController
     std::move(initial_step_load_finished_closure_).Run();
   }
 
+  void CancelPostSignInFlow() override { NOTREACHED_NORETURN(); }
+
+  Step step_;
+  ProfileManagementStepTestView::StepControllerFactory step_controller_factory_;
   base::OnceClosure initial_step_load_finished_closure_;
   base::WeakPtrFactory<TestProfileManagementFlowController> weak_ptr_factory_{
       this};
@@ -135,19 +139,87 @@ void ViewDeletedWaiter::OnViewIsDeleting(views::View* observed_view) {
   run_loop_.Quit();
 }
 
-// -- ProfileManagementStepTestView --------------------------------------------
+// -- PickerLoadStopWaiter -----------------------------------------------------
 
-// static
-ProfileManagementStepTestView* ProfileManagementStepTestView::CreateForStep(
-    Profile* profile,
-    ProfileManagementFlowController::Step step,
-    StepControllerFactory step_controller_factory) {
-  auto* view = new ProfileManagementStepTestView(
-      ProfilePicker::Params::ForFirstRun(profile->GetPath()), step,
-      std::move(step_controller_factory));
+PickerLoadStopWaiter::PickerLoadStopWaiter(views::WebView* web_view,
+                                           const GURL& expected_url,
+                                           Mode wait_mode)
+    : web_view_(*web_view), expected_url_(expected_url), wait_mode_(wait_mode) {
+  CHECK(!expected_url.is_empty() || wait_mode_ == Mode::kCheckUrlAtNextLoad);
 
-  return view;
+  // Observe attached WebContents changes. This can happen when navigating
+  // between a page rendered in the system profile and one rendered in a user's
+  // regular profile. Like the "profile type choice" -> "sign-in page"
+  // transition for example.
+  web_contents_attached_subscription_ =
+      web_view->AddWebContentsAttachedCallback(
+          base::BindRepeating(&PickerLoadStopWaiter::OnWebContentsAttached,
+                              base::Unretained(this)));
 }
+
+void PickerLoadStopWaiter::DidStopLoading() {
+  if (ShouldKeepWaiting()) {
+    DVLOG(1) << "Load completed but stop condition not met, ignoring event.";
+    return;
+  }
+
+  // Quitting the loop via a posted task to make sure that any prod work that
+  // also is triggered via this same WebContents event can complete before the
+  // test code resumes.
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE, run_loop_.QuitClosure());
+}
+
+void PickerLoadStopWaiter::Wait() {
+  if (!ShouldKeepWaiting()) {
+    DVLOG(1) << "Stop condition already met, wait not needed.";
+    return;
+  }
+
+  DVLOG(1) << "Starting wait for the completed navigation to " << expected_url_;
+  Observe(web_view_->web_contents());
+  run_loop_.Run();
+}
+
+void PickerLoadStopWaiter::OnWebContentsAttached(views::WebView* web_view) {
+  DVLOG(1) << "New WebContents attached. Updating the observation target.";
+
+  auto* web_contents = web_view_->web_contents();
+  Observe(web_contents);
+
+  // Attempt to process a load that might have happened before the `WebContents`
+  // is swapped in. `ProfilePickerView` cross-profile page loads typically
+  // happen that way.
+  if (web_contents && !web_contents->IsLoading()) {
+    DidStopLoading();
+  }
+}
+
+bool PickerLoadStopWaiter::ShouldKeepWaiting() const {
+  auto* web_contents = web_view_->web_contents();
+  if (!web_contents || web_contents->IsLoading()) {
+    return true;
+  }
+
+  auto& current_url = web_contents->GetLastCommittedURL();
+  switch (wait_mode_) {
+    case Mode::kWaitUntilUrlLoaded:
+      if (current_url != expected_url_) {
+        DVLOG(1) << "WebContents stopped loading on URL that doesn't match the "
+                    "expected one. Actual URL: "
+                 << current_url;
+        return true;
+      }
+      return false;
+    case Mode::kCheckUrlAtNextLoad:
+      if (!expected_url_.is_empty()) {
+        EXPECT_EQ(current_url, expected_url_);
+      }
+      return false;
+  }
+}
+
+// -- ProfileManagementStepTestView --------------------------------------------
 
 ProfileManagementStepTestView::ProfileManagementStepTestView(
     ProfilePicker::Params&& params,
@@ -159,13 +231,17 @@ ProfileManagementStepTestView::ProfileManagementStepTestView(
 
 ProfileManagementStepTestView::~ProfileManagementStepTestView() = default;
 
-void ProfileManagementStepTestView::ShowAndWait() {
+void ProfileManagementStepTestView::ShowAndWait(
+    std::optional<gfx::Size> view_size) {
   Display();
 
   // waits for the view to be shown to return. If we don't wait enough
   // and the test is flaky, try to poll the page to check the presence of some
   // UI elements to know when to stop waiting.
   run_loop_.Run();
+
+  if (view_size.has_value())
+    GetWidget()->SetSize(view_size.value());
 }
 
 std::unique_ptr<ProfileManagementFlowController>
@@ -181,49 +257,79 @@ ProfileManagementStepTestView::CreateFlowController(
 namespace profiles::testing {
 
 void WaitForPickerWidgetCreated() {
+  if (!ProfilePicker::IsOpen()) {
+    base::RunLoop run_loop;
+    ProfilePicker::AddOnProfilePickerOpenedCallbackForTesting(
+        run_loop.QuitClosure());
+    run_loop.Run();
+  }
   ViewAddedWaiter(ProfilePicker::GetViewForTesting()).Wait();
 }
 
-void WaitForPickerLoadStop(const GURL& url) {
-  content::WebContents* wc = GetPickerWebContents();
-  if (wc && wc->GetLastCommittedURL() == url && !wc->IsLoading())
-    return;
+void WaitForPickerLoadStop(const GURL& expected_url) {
+  if (!ProfilePicker::IsOpen()) {
+    base::RunLoop run_loop;
+    ProfilePicker::AddOnProfilePickerOpenedCallbackForTesting(
+        run_loop.QuitClosure());
+    run_loop.Run();
+  }
 
-  ui_test_utils::UrlLoadObserver url_observer(
-      url, content::NotificationService::AllSources());
-  url_observer.Wait();
+  auto* web_view = ProfilePicker::GetWebViewForTesting();
+  ASSERT_NE(web_view, nullptr);
 
-  // Update the pointer as the picker's WebContents could have changed in the
-  // meantime.
-  wc = GetPickerWebContents();
-  EXPECT_EQ(wc->GetLastCommittedURL(), url);
+  PickerLoadStopWaiter(web_view, expected_url,
+                       PickerLoadStopWaiter::Mode::kCheckUrlAtNextLoad)
+      .Wait();
+}
+
+void WaitForPickerUrl(const GURL& url) {
+  if (!ProfilePicker::IsOpen()) {
+    base::RunLoop run_loop;
+    ProfilePicker::AddOnProfilePickerOpenedCallbackForTesting(
+        run_loop.QuitClosure());
+    run_loop.Run();
+  }
+
+  auto* web_view = ProfilePicker::GetWebViewForTesting();
+  ASSERT_NE(web_view, nullptr);
+
+  PickerLoadStopWaiter(web_view, url,
+                       PickerLoadStopWaiter::Mode::kWaitUntilUrlLoaded)
+      .Wait();
 }
 
 void WaitForPickerClosed() {
-  if (!ProfilePicker::IsOpen())
-    return;
-  ViewDeletedWaiter(ProfilePicker::GetViewForTesting()).Wait();
+  if (auto* view = ProfilePicker::GetViewForTesting()) {
+    ViewDeletedWaiter(view).Wait();
+
+    // The profile picker might still be open if for example it was scheduled to
+    // reopen on closure. But the view should not be the same anyway (it would
+    // just be null in most cases).
+    ASSERT_NE(view, ProfilePicker::GetViewForTesting());
+  } else {
+    ASSERT_FALSE(ProfilePicker::IsOpen());
+  }
 }
 
-EnterpriseProfileWelcomeHandler* ExpectPickerWelcomeScreenType(
-    EnterpriseProfileWelcomeUI::ScreenType expected_type) {
+ManagedUserProfileNoticeHandler* ExpectPickerNoticeScreenType(
+    ManagedUserProfileNoticeUI::ScreenType expected_type) {
   content::WebContents* web_contents = GetPickerWebContents();
   EXPECT_TRUE(web_contents);
-  EnterpriseProfileWelcomeHandler* handler =
+  ManagedUserProfileNoticeHandler* handler =
       web_contents->GetWebUI()
           ->GetController()
-          ->GetAs<EnterpriseProfileWelcomeUI>()
+          ->GetAs<ManagedUserProfileNoticeUI>()
           ->GetHandlerForTesting();
   EXPECT_TRUE(handler);
   EXPECT_EQ(handler->GetTypeForTesting(), expected_type);
   return handler;
 }
 
-void ExpectPickerWelcomeScreenTypeAndProceed(
-    EnterpriseProfileWelcomeUI::ScreenType expected_type,
+void ExpectPickerManagedUserNoticeScreenTypeAndProceed(
+    ManagedUserProfileNoticeUI::ScreenType expected_type,
     signin::SigninChoice choice) {
-  EnterpriseProfileWelcomeHandler* handler =
-      ExpectPickerWelcomeScreenType(expected_type);
+  ManagedUserProfileNoticeHandler* handler =
+      ExpectPickerNoticeScreenType(expected_type);
 
   // Simulate clicking on the next button.
   handler->CallProceedCallbackForTesting(choice);
@@ -233,18 +339,19 @@ void ExpectPickerWelcomeScreenTypeAndProceed(
 void CompleteLacrosFirstRun(
     LoginUIService::SyncConfirmationUIClosedResult result) {
   ProfileManager* profile_manager = g_browser_process->profile_manager();
-  Profile* profile = profiles::testing::CreateProfileSync(
+  Profile& profile = profiles::testing::CreateProfileSync(
       profile_manager, profile_manager->GetPrimaryUserProfilePath());
 
   WaitForPickerWidgetCreated();
-  WaitForPickerLoadStop(GURL("chrome://enterprise-profile-welcome/"));
+  WaitForPickerLoadStop(GURL(chrome::kChromeUIIntroURL));
 
-  ASSERT_TRUE(ProfilePicker::IsLacrosFirstRunOpen());
+  ASSERT_TRUE(ProfilePicker::IsFirstRunOpen());
   EXPECT_EQ(0u, BrowserList::GetInstance()->size());
 
-  EnterpriseProfileWelcomeHandler* handler = ExpectPickerWelcomeScreenType(
-      EnterpriseProfileWelcomeUI::ScreenType::kLacrosConsumerWelcome);
-  handler->HandleProceedForTesting(/*should_link_data=*/false);
+  base::Value::List args;
+  GetPickerWebContents()->GetWebUI()->ProcessWebUIMessage(
+      GetPickerWebContents()->GetURL(), "continueWithAccount", std::move(args));
+
   WaitForPickerLoadStop(AppendSyncConfirmationQueryParams(
       GURL("chrome://sync-confirmation/"), SyncConfirmationStyle::kWindow));
 
@@ -255,7 +362,7 @@ void CompleteLacrosFirstRun(
     // open.
     ProfilePicker::Hide();
   } else {
-    LoginUIServiceFactory::GetForProfile(profile)->SyncConfirmationUIClosed(
+    LoginUIServiceFactory::GetForProfile(&profile)->SyncConfirmationUIClosed(
         result);
   }
 }

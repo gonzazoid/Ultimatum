@@ -4,21 +4,21 @@
 
 #include "content/browser/handwriting/handwriting_recognition_service_impl_cros.h"
 
+#include <optional>
 #include <utility>
 #include <vector>
 
-#include "ash/constants/ash_switches.h"
 #include "base/command_line.h"
 #include "base/run_loop.h"
 #include "base/test/bind.h"
 #include "chromeos/services/machine_learning/public/cpp/fake_service_connection.h"
+#include "chromeos/services/machine_learning/public/cpp/ml_switches.h"
 #include "chromeos/services/machine_learning/public/cpp/service_connection.h"
 #include "content/browser/handwriting/handwriting_recognizer_impl_cros.h"
 #include "content/public/test/test_renderer_host.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/remote.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/mojom/handwriting/handwriting.mojom.h"
 
 namespace content {
@@ -33,7 +33,7 @@ class HandwritingRecognitionServiceImplCrOSTest
     chromeos::machine_learning::ServiceConnection::GetInstance()->Initialize();
     // We need to add the switch to "enable" HWR support.
     base::CommandLine::ForCurrentProcess()->AppendSwitchASCII(
-        ash::switches::kOndeviceHandwritingSwitch, "use_rootfs");
+        ::switches::kOndeviceHandwritingSwitch, "use_rootfs");
   }
 
   chromeos::machine_learning::FakeServiceConnectionImpl&
@@ -141,7 +141,7 @@ TEST_F(HandwritingRecognitionServiceImplCrOSTest,
   recognizer_remote->GetPrediction(
       std::move(strokes), handwriting::mojom::HandwritingHints::New(),
       base::BindLambdaForTesting(
-          [&](absl::optional<std::vector<
+          [&](std::optional<std::vector<
                   handwriting::mojom::HandwritingPredictionPtr>> result) {
             is_callback_called = true;
             ASSERT_TRUE(result.has_value());

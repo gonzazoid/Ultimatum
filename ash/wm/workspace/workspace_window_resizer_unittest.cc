@@ -10,20 +10,22 @@
 #include "ash/shelf/shelf.h"
 #include "ash/shell.h"
 #include "ash/test/ash_test_base.h"
+#include "ash/wm/test/fake_window_state.h"
 #include "ash/wm/window_positioning_utils.h"
 #include "ash/wm/window_state.h"
+#include "ash/wm/window_state_delegate.h"
 #include "ash/wm/window_util.h"
 #include "ash/wm/wm_event.h"
 #include "ash/wm/work_area_insets.h"
 #include "ash/wm/workspace/phantom_window_controller.h"
 #include "ash/wm/workspace_controller.h"
 #include "base/containers/adapters.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/stringprintf.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
-#include "chromeos/ui/wm/features.h"
 #include "ui/aura/client/aura_constants.h"
 #include "ui/aura/test/test_window_delegate.h"
 #include "ui/aura/test/test_windows.h"
@@ -39,8 +41,10 @@
 #include "ui/events/gesture_detection/gesture_configuration.h"
 #include "ui/events/test/event_generator.h"
 #include "ui/gfx/geometry/insets.h"
+#include "ui/gfx/geometry/point_f.h"
 #include "ui/views/widget/widget.h"
 #include "ui/views/widget/widget_observer.h"
+#include "ui/wm/core/coordinate_conversion.h"
 
 namespace ash {
 namespace {
@@ -162,7 +166,7 @@ class WorkspaceWindowResizerTest : public AshTestBase {
       int window_component = HTCAPTION) {
     auto resizer =
         CreateWindowResizer(window, gfx::PointF(point_in_parent),
-                            window_component, ::wm::WINDOW_MOVE_SOURCE_MOUSE);
+                            window_component, wm::WINDOW_MOVE_SOURCE_MOUSE);
     workspace_resizer_ = WorkspaceWindowResizer::GetInstanceForTest();
     return resizer;
   }
@@ -170,9 +174,10 @@ class WorkspaceWindowResizerTest : public AshTestBase {
   std::unique_ptr<WorkspaceWindowResizer> CreateWorkspaceResizerForTest(
       aura::Window* window,
       int window_component,
-      const std::vector<aura::Window*>& attached_windows) {
+      const std::vector<raw_ptr<aura::Window, VectorExperimental>>&
+          attached_windows) {
     return CreateWorkspaceResizerForTest(window, gfx::Point(), window_component,
-                                         ::wm::WINDOW_MOVE_SOURCE_MOUSE,
+                                         wm::WINDOW_MOVE_SOURCE_MOUSE,
                                          attached_windows);
   }
 
@@ -180,8 +185,9 @@ class WorkspaceWindowResizerTest : public AshTestBase {
       aura::Window* window,
       const gfx::Point& point_in_parent,
       int window_component,
-      ::wm::WindowMoveSource source,
-      const std::vector<aura::Window*>& attached_windows) {
+      wm::WindowMoveSource source,
+      const std::vector<raw_ptr<aura::Window, VectorExperimental>>&
+          attached_windows) {
     WindowState* window_state = WindowState::Get(window);
     window_state->CreateDragDetails(gfx::PointF(point_in_parent),
                                     window_component, source);
@@ -242,7 +248,8 @@ class WorkspaceWindowResizerTest : public AshTestBase {
   TestWindowDelegate touch_resize_delegate_;
   std::unique_ptr<aura::Window> touch_resize_window_;
 
-  WorkspaceWindowResizer* workspace_resizer_ = nullptr;
+  raw_ptr<WorkspaceWindowResizer, DanglingUntriaged> workspace_resizer_ =
+      nullptr;
 };
 
 // Assertions around attached window resize dragging from the right with 2
@@ -534,11 +541,11 @@ TEST_F(WorkspaceWindowResizerTest, MouseMoveWithTouchDrag) {
   // The cursor should not be locked initially.
   EXPECT_FALSE(shell->cursor_manager()->IsCursorLocked());
 
-  std::vector<aura::Window*> windows;
+  std::vector<raw_ptr<aura::Window, VectorExperimental>> windows;
   windows.push_back(window2_.get());
   std::unique_ptr<WorkspaceWindowResizer> resizer =
       CreateWorkspaceResizerForTest(window_.get(), gfx::Point(), HTRIGHT,
-                                    ::wm::WINDOW_MOVE_SOURCE_TOUCH, windows);
+                                    wm::WINDOW_MOVE_SOURCE_TOUCH, windows);
   ASSERT_TRUE(resizer.get());
 
   // Creating a WorkspaceWindowResizer should not lock the cursor.
@@ -1543,13 +1550,13 @@ TEST_F(WorkspaceWindowResizerTest, DontRewardRightmostWindowForOverflows) {
   window4_->SetBounds(gfx::Rect(400, 100, 100, 100));
   delegate2_.set_max_size(gfx::Size(101, 0));
 
-  std::vector<aura::Window*> windows;
+  std::vector<raw_ptr<aura::Window, VectorExperimental>> windows;
   windows.push_back(window2_.get());
   windows.push_back(window3_.get());
   windows.push_back(window4_.get());
   std::unique_ptr<WorkspaceWindowResizer> resizer =
       CreateWorkspaceResizerForTest(window_.get(), gfx::Point(), HTRIGHT,
-                                    ::wm::WINDOW_MOVE_SOURCE_MOUSE, windows);
+                                    wm::WINDOW_MOVE_SOURCE_MOUSE, windows);
   ASSERT_TRUE(resizer.get());
   // Move it 51 to the left, which should contract w1 and expand w2-4.
   // w2 will hit its max size straight away, and in doing so will leave extra
@@ -2121,7 +2128,12 @@ TEST_F(WorkspaceWindowResizerTest, DragToMaximizeValidMetric) {
 // Makes sure that we are not creating any resizer in kiosk mode.
 TEST_F(WorkspaceWindowResizerTest, DoesNotWorkInAppMode) {
   GetSessionControllerClient()->SetIsRunningInAppMode(true);
+  window_->SetProperty(aura::client::kResizeBehaviorKey,
+                       aura::client::kResizeBehaviorNone);
   EXPECT_FALSE(CreateResizerForTest(window_.get()));
+  window_->SetProperty(aura::client::kResizeBehaviorKey,
+                       aura::client::kResizeBehaviorCanResize);
+  EXPECT_TRUE(CreateResizerForTest(window_.get()));
 }
 
 TEST_F(WorkspaceWindowResizerTest, DoNotCreateResizerIfNotActiveSession) {
@@ -2223,47 +2235,6 @@ TEST_F(WorkspaceWindowResizerTest, FlingRestoreSize) {
   EXPECT_EQ(snapped_bounds, touch_resize_window_->bounds());
 }
 
-// Tests that fling to maximize does not crash or DCHECK if the window's restore
-// bounds is on another display.
-TEST_F(WorkspaceWindowResizerTest,
-       FlingMaximizeRestoreBoundsOnDifferentDisplay) {
-  UpdateDisplay("800x600,500x400");
-
-  // Prepare `touch_resize_window_` in the 2nd display.
-  gfx::Size window_size(300, 300);
-  InitTouchResizeWindow(gfx::Rect(gfx::Point(800, 100), window_size),
-                        HTCAPTION);
-
-  // Speculatively simulate how a window could get a restore bounds in another
-  // display. What actually happens in the field is still a mystery.
-  // 1. Maximize to set a restore bounds in the 2nd display.
-  auto* window_state = WindowState::Get(touch_resize_window_.get());
-  window_state->Maximize();
-  ASSERT_TRUE(window_state->IsMaximized());
-
-  // 2. SetBoundsInScreen to move the window to the primary display.
-  touch_resize_window_->SetBoundsInScreen(
-      gfx::Rect(100, 100, 300, 30),
-      display::Screen::GetScreen()->GetPrimaryDisplay());
-
-  // Ensures that the restore bounds is not in the same display of window.
-  gfx::Rect restore_bounds = window_state->GetRestoreBoundsInScreen();
-  ASSERT_FALSE(
-      touch_resize_window_->GetRootWindow()->GetBoundsInScreen().Contains(
-          restore_bounds));
-
-  // Fling up.
-  ui::test::EventGenerator generator(Shell::GetPrimaryRootWindow(),
-                                     touch_resize_window_.get());
-  generator.GestureScrollSequence(gfx::Point(250, 110), gfx::Point(250, 10),
-                                  base::Milliseconds(10), 10);
-  ASSERT_TRUE(window_state->IsMaximized());
-
-  // No crash, no DCHECK, and the window stays in the primary display.
-  EXPECT_TRUE(
-      Shell::GetPrimaryRootWindow()->Contains(touch_resize_window_.get()));
-}
-
 using MultiDisplayWorkspaceWindowResizerTest = AshTestBase;
 
 // Makes sure that window drag magnetism still works when a window is dragged
@@ -2280,13 +2251,57 @@ TEST_F(MultiDisplayWorkspaceWindowResizerTest, Magnetism) {
   EXPECT_EQ(win2->GetRootWindow(), roots[1]);
 
   std::unique_ptr<WindowResizer> resizer = CreateWindowResizer(
-      win1.get(), gfx::PointF(), HTCAPTION, ::wm::WINDOW_MOVE_SOURCE_MOUSE);
+      win1.get(), gfx::PointF(), HTCAPTION, wm::WINDOW_MOVE_SOURCE_MOUSE);
   ASSERT_TRUE(resizer.get());
 
   // Drag `win1` such that its right edge is 5 pixels from the left edge of
   // `win2`. Expect that `win1` will snap to `win2` on its left edge.
   resizer->Drag(CalculateDragPoint(*resizer, 1135, 0), /*event_flags=*/0);
   EXPECT_EQ(gfx::Rect(1150, 10, 100, 100), win1->GetBoundsInScreen());
+}
+
+// Makes sure that window drag locations are correct when a window is dragged
+// between different displays.
+TEST_F(MultiDisplayWorkspaceWindowResizerTest, DragWindowBetweenDisplays) {
+  UpdateDisplay("800x600,1200x800@1.25");
+  auto roots = Shell::GetAllRootWindows();
+  ASSERT_EQ(2u, roots.size());
+
+  // Create a window on the extended display.
+  const gfx::Rect initial_bounds_in_screen(850, 100, 200, 150);
+  auto win = CreateToplevelTestWindow(initial_bounds_in_screen);
+  EXPECT_EQ(win->GetRootWindow(), roots[1]);
+
+  auto delegate = std::make_unique<FakeWindowStateDelegate>();
+  auto* delegate_ptr = delegate.get();
+  auto* window_state = WindowState::Get(win.get());
+  window_state->SetDelegate(std::move(delegate));
+
+  const gfx::PointF initial_drag_point_in_screen(
+      initial_bounds_in_screen.CenterPoint());
+  gfx::PointF initial_drag_point_in_parent(initial_drag_point_in_screen);
+  wm::ConvertPointFromScreen(win->GetRootWindow(),
+                             &initial_drag_point_in_parent);
+
+  // Create resizer with the initial drag location at the center of the window.
+  std::unique_ptr<WindowResizer> resizer =
+      CreateWindowResizer(win.get(), initial_drag_point_in_parent, HTCAPTION,
+                          wm::WINDOW_MOVE_SOURCE_MOUSE);
+  ASSERT_TRUE(resizer.get());
+
+  const gfx::Vector2d drag_offset(-600, 0);
+  const gfx::PointF drag_point_in_parent =
+      CalculateDragPoint(*resizer, drag_offset.x(), drag_offset.y());
+
+  resizer->Drag(drag_point_in_parent, /*event_flags=*/0);
+  gfx::Rect expected_bounds_in_screen(initial_bounds_in_screen);
+  expected_bounds_in_screen.Offset(drag_offset);
+  EXPECT_EQ(expected_bounds_in_screen, win->GetBoundsInScreen());
+
+  resizer->CompleteDrag();
+  gfx::PointF expected_drag_point_in_screen(initial_drag_point_in_screen);
+  expected_drag_point_in_screen.Offset(drag_offset.x(), drag_offset.y());
+  EXPECT_EQ(expected_drag_point_in_screen, delegate_ptr->drag_end_location());
 }
 
 // Make sure metrics is recorded during tab dragging.
@@ -2315,9 +2330,8 @@ TEST_F(WorkspaceWindowResizerTest, TabDraggingHistogram) {
     window_->SetBounds(gfx::Rect(100, 100, 100, 100));
     window_->SetProperty(ash::kIsDraggingTabsKey, test.is_dragging_tab);
 
-    std::unique_ptr<WindowResizer> resizer =
-        CreateWindowResizer(window_.get(), gfx::PointF(), HTCAPTION,
-                            ::wm::WINDOW_MOVE_SOURCE_MOUSE);
+    std::unique_ptr<WindowResizer> resizer = CreateWindowResizer(
+        window_.get(), gfx::PointF(), HTCAPTION, wm::WINDOW_MOVE_SOURCE_MOUSE);
     ASSERT_TRUE(resizer.get());
     resizer->Drag(test.drag_to_point, 0);
 

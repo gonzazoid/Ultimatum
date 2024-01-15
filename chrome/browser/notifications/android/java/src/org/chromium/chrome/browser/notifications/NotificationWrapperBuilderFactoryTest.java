@@ -8,8 +8,8 @@ import android.app.Notification;
 import android.app.NotificationChannel;
 import android.content.Context;
 import android.os.Build;
-import android.support.test.InstrumentationRegistry;
 
+import androidx.test.core.app.ApplicationProvider;
 import androidx.test.filters.MediumTest;
 
 import org.junit.After;
@@ -18,7 +18,6 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 
 import org.chromium.base.test.util.CommandLineFlags;
-import org.chromium.chrome.R;
 import org.chromium.chrome.browser.flags.ChromeSwitches;
 import org.chromium.chrome.browser.notifications.channels.ChromeChannelDefinitions;
 import org.chromium.chrome.test.ChromeJUnit4ClassRunner;
@@ -29,10 +28,9 @@ import org.chromium.components.browser_ui.notifications.NotificationWrapper;
 import org.chromium.components.browser_ui.notifications.NotificationWrapperBuilder;
 
 /**
- * Tests that NotificationWrapperBuilders created using
- * {@link NotificationWrapperBuilderFactory#createNotificationWrapperBuilder(String)} can
- * be built and the notifications they build don't cause a crash when passed to
- * NotificationManager#notify.
+ * Tests that NotificationWrapperBuilders created using {@link
+ * NotificationWrapperBuilderFactory#createNotificationWrapperBuilder(String)} can be built and the
+ * notifications they build don't cause a crash when passed to NotificationManager#notify.
  */
 @RunWith(ChromeJUnit4ClassRunner.class)
 @CommandLineFlags.Add({ChromeSwitches.DISABLE_FIRST_RUN_EXPERIENCE})
@@ -43,7 +41,7 @@ public class NotificationWrapperBuilderFactoryTest {
 
     @Before
     public void setUp() {
-        Context context = InstrumentationRegistry.getTargetContext();
+        Context context = ApplicationProvider.getApplicationContext();
 
         mNotificationManager = new NotificationManagerProxyImpl(context);
 
@@ -74,9 +72,11 @@ public class NotificationWrapperBuilderFactoryTest {
                 NotificationWrapperBuilderFactory.createNotificationWrapperBuilder(
                         ChromeChannelDefinitions.ChannelId.BROWSER);
 
-        Notification notification = notificationBuilder.setContentTitle("Title")
-                                            .setSmallIcon(R.drawable.ic_chrome)
-                                            .build();
+        Notification notification =
+                notificationBuilder
+                        .setContentTitle("Title")
+                        .setSmallIcon(R.drawable.ic_chrome)
+                        .build();
 
         mNotificationManager.notify(TEST_NOTIFICATION_ID, notification);
     }
@@ -88,12 +88,14 @@ public class NotificationWrapperBuilderFactoryTest {
                 NotificationWrapperBuilderFactory.createNotificationWrapperBuilder(
                         ChromeChannelDefinitions.ChannelId.BROWSER,
                         new NotificationMetadata(
-                                NotificationUmaTracker.SystemNotificationType.BROWSER_ACTIONS, null,
+                                NotificationUmaTracker.SystemNotificationType.BROWSER_ACTIONS,
+                                null,
                                 TEST_NOTIFICATION_ID));
 
-        NotificationWrapper notification = builder.setContentTitle("Title")
-                                                   .setSmallIcon(R.drawable.ic_chrome)
-                                                   .buildNotificationWrapper();
+        NotificationWrapper notification =
+                builder.setContentTitle("Title")
+                        .setSmallIcon(R.drawable.ic_chrome)
+                        .buildNotificationWrapper();
 
         mNotificationManager.notify(notification);
     }

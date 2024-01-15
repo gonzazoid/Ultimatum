@@ -10,9 +10,7 @@
 #include "third_party/blink/public/platform/web_string.h"
 #include "third_party/blink/public/platform/web_vector.h"
 #include "third_party/blink/public/web/web_range.h"
-#include "third_party/blink/renderer/bindings/core/v8/v8_edit_context_enter_key_hint.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_edit_context_init.h"
-#include "third_party/blink/renderer/bindings/core/v8/v8_edit_context_input_mode.h"
 #include "third_party/blink/renderer/core/css/css_color.h"
 #include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/editing/ime/character_bounds_update_event.h"
@@ -27,6 +25,8 @@
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
 #include "third_party/blink/renderer/core/geometry/dom_rect.h"
+#include "third_party/blink/renderer/core/html/html_element.h"
+#include "third_party/blink/renderer/platform/instrumentation/use_counter.h"
 #include "third_party/blink/renderer/platform/text/text_boundaries.h"
 #include "third_party/blink/renderer/platform/wtf/decimal.h"
 #include "third_party/blink/renderer/platform/wtf/text/string_builder.h"
@@ -35,8 +35,10 @@
 namespace blink {
 
 EditContext::EditContext(ScriptState* script_state, const EditContextInit* dict)
-    : ExecutionContextClient(ExecutionContext::From(script_state)) {
+    : ActiveScriptWrappable<EditContext>({}),
+      execution_context_(ExecutionContext::From(script_state)) {
   DCHECK(IsMainThread());
+  UseCounter::Count(GetExecutionContext(), WebFeature::kEditContext);
 
   if (dict->hasText())
     text_ = dict->text();
@@ -46,15 +48,6 @@ EditContext::EditContext(ScriptState* script_state, const EditContextInit* dict)
 
   if (dict->hasSelectionEnd())
     selection_end_ = std::min(dict->selectionEnd(), text_.length());
-
-  if (dict->hasInputMode())
-    setInputMode(dict->inputMode());
-
-  if (dict->hasEnterKeyHint())
-    setEnterKeyHint(dict->enterKeyHint());
-
-  if (dict->hasInputPanelPolicy())
-    setInputPanelPolicy(dict->inputPanelPolicy());
 }
 
 EditContext* EditContext::Create(ScriptState* script_state,
@@ -69,7 +62,11 @@ const AtomicString& EditContext::InterfaceName() const {
 }
 
 ExecutionContext* EditContext::GetExecutionContext() const {
-  return ExecutionContextClient::GetExecutionContext();
+  return execution_context_;
+}
+
+LocalDOMWindow* EditContext::DomWindow() const {
+  return To<LocalDOMWindow>(GetExecutionContext());
 }
 
 bool EditContext::HasPendingActivity() const {
@@ -93,12 +90,6 @@ void EditContext::SetVirtualKeyboardVisibilityRequest(
     ui::mojom::VirtualKeyboardVisibilityRequest vk_visibility_request) {
   GetInputMethodController().SetVirtualKeyboardVisibilityRequest(
       vk_visibility_request);
-}
-
-bool EditContext::IsVirtualKeyboardPolicyManual() const {
-  return GetInputMethodController()
-             .GetActiveEditContext()
-             ->inputPanelPolicy() == "manual";
 }
 
 void EditContext::DispatchCompositionEndEvent(const String& text) {
@@ -179,12 +170,6 @@ void EditContext::DispatchTextFormatEvent(
 
     text_formats.push_back(TextFormat::Create(
         range_start, range_end,
-        cssvalue::CSSColor::SerializeAsCSSComponentValue(
-            Color::FromSkColor(ime_text_span.text_color)),
-        cssvalue::CSSColor::SerializeAsCSSComponentValue(
-            Color::FromSkColor(ime_text_span.background_color)),
-        cssvalue::CSSColor::SerializeAsCSSComponentValue(
-            Color::FromSkColor(ime_text_span.underline_color)),
         underline_style, underline_thickness));
   }
 
@@ -257,7 +242,7 @@ void EditContext::updateCharacterBounds(
                std::to_string(range_start) + ", " +
                    std::to_string(character_bounds.size()));
 
-  character_bounds_.Clear();
+  character_bounds_.clear();
   base::ranges::for_each(character_bounds, [this](const auto& bounds) {
     auto result_bounds = bounds->ToEnclosingRect();
     TRACE_EVENT1("ime", "EditContext::updateCharacterBounds", "charBounds",
@@ -305,22 +290,8 @@ String EditContext::text() const {
   return text_;
 }
 
-void EditContext::setText(const String& text) {
-  TRACE_EVENT1("ime", "EditContext::setText", "text", text);
-  text_ = text;
-}
-
 uint32_t EditContext::selectionStart() const {
   return selection_start_;
-}
-
-void EditContext::setSelectionStart(uint32_t selection_start,
-                                    ExceptionState& exception_state) {
-  TRACE_EVENT1("ime", "EditContext::setSelectionStart", "start",
-               std::to_string(selection_start));
-  // Following this spec:
-  // https://html.spec.whatwg.org/C/#dom-textarea/input-setselectionrange
-  selection_start_ = std::min(selection_end_, selection_start);
 }
 
 uint32_t EditContext::selectionEnd() const {
@@ -331,21 +302,7 @@ uint32_t EditContext::characterBoundsRangeStart() const {
   return character_bounds_range_start_;
 }
 
-void EditContext::setSelectionEnd(uint32_t selection_end,
-                                  ExceptionState& exception_state) {
-  TRACE_EVENT1("ime", "EditContext::setSelectionEnd", "end",
-               std::to_string(selection_end));
-
-  // Following this spec:
-  // https://html.spec.whatwg.org/C/#dom-textarea/input-setselectionrange
-  selection_end_ = std::min(selection_end, text_.length());
-}
-
-V8EditContextInputPanelPolicy EditContext::inputPanelPolicy() const {
-  return V8EditContextInputPanelPolicy(input_panel_policy_);
-}
-
-const HeapVector<Member<Element>>& EditContext::attachedElements() {
+const HeapVector<Member<HTMLElement>>& EditContext::attachedElements() {
   return attached_elements_;
 }
 
@@ -357,115 +314,6 @@ const HeapVector<Member<DOMRect>> EditContext::characterBounds() {
                                bound.height());
       });
   return dom_rects;
-}
-
-void EditContext::setInputPanelPolicy(
-    const V8EditContextInputPanelPolicy& input_policy) {
-  input_panel_policy_ = input_policy.AsEnum();
-}
-
-void EditContext::setInputMode(const V8EditContextInputMode& input_mode) {
-  // inputMode password is not supported by browsers yet:
-  // https://github.com/whatwg/html/issues/4875
-
-  switch (input_mode.AsEnum()) {
-    case V8EditContextInputMode::Enum::kText:
-      input_mode_ = WebTextInputMode::kWebTextInputModeText;
-      break;
-    case V8EditContextInputMode::Enum::kTel:
-      input_mode_ = WebTextInputMode::kWebTextInputModeTel;
-      break;
-    case V8EditContextInputMode::Enum::kEmail:
-      input_mode_ = WebTextInputMode::kWebTextInputModeEmail;
-      break;
-    case V8EditContextInputMode::Enum::kSearch:
-      input_mode_ = WebTextInputMode::kWebTextInputModeSearch;
-      break;
-    case V8EditContextInputMode::Enum::kDecimal:
-      input_mode_ = WebTextInputMode::kWebTextInputModeDecimal;
-      break;
-    case V8EditContextInputMode::Enum::kNumeric:
-      input_mode_ = WebTextInputMode::kWebTextInputModeNumeric;
-      break;
-    case V8EditContextInputMode::Enum::kUrl:
-      input_mode_ = WebTextInputMode::kWebTextInputModeUrl;
-      break;
-    case V8EditContextInputMode::Enum::kPassword:
-    case V8EditContextInputMode::Enum::kNone:
-      input_mode_ = WebTextInputMode::kWebTextInputModeNone;
-  }
-}
-
-V8EditContextInputMode EditContext::inputMode() const {
-  switch (input_mode_) {
-    case WebTextInputMode::kWebTextInputModeText:
-      return V8EditContextInputMode(V8EditContextInputMode::Enum::kText);
-    case WebTextInputMode::kWebTextInputModeSearch:
-      return V8EditContextInputMode(V8EditContextInputMode::Enum::kSearch);
-    case WebTextInputMode::kWebTextInputModeEmail:
-      return V8EditContextInputMode(V8EditContextInputMode::Enum::kEmail);
-    case WebTextInputMode::kWebTextInputModeDecimal:
-      return V8EditContextInputMode(V8EditContextInputMode::Enum::kDecimal);
-    case WebTextInputMode::kWebTextInputModeNumeric:
-      return V8EditContextInputMode(V8EditContextInputMode::Enum::kNumeric);
-    case WebTextInputMode::kWebTextInputModeTel:
-      return V8EditContextInputMode(V8EditContextInputMode::Enum::kTel);
-    case WebTextInputMode::kWebTextInputModeUrl:
-      return V8EditContextInputMode(V8EditContextInputMode::Enum::kUrl);
-    default:
-      return V8EditContextInputMode(V8EditContextInputMode::Enum::kNone);
-  }
-}
-
-void EditContext::setEnterKeyHint(
-    const V8EditContextEnterKeyHint& enter_key_hint) {
-  switch (enter_key_hint.AsEnum()) {
-    case V8EditContextEnterKeyHint::Enum::kEnter:
-      enter_key_hint_ = ui::TextInputAction::kEnter;
-      break;
-    case V8EditContextEnterKeyHint::Enum::kDone:
-      enter_key_hint_ = ui::TextInputAction::kDone;
-      break;
-    case V8EditContextEnterKeyHint::Enum::kGo:
-      enter_key_hint_ = ui::TextInputAction::kGo;
-      break;
-    case V8EditContextEnterKeyHint::Enum::kNext:
-      enter_key_hint_ = ui::TextInputAction::kNext;
-      break;
-    case V8EditContextEnterKeyHint::Enum::kPrevious:
-      enter_key_hint_ = ui::TextInputAction::kPrevious;
-      break;
-    case V8EditContextEnterKeyHint::Enum::kSearch:
-      enter_key_hint_ = ui::TextInputAction::kSearch;
-      break;
-    case V8EditContextEnterKeyHint::Enum::kSend:
-      enter_key_hint_ = ui::TextInputAction::kSend;
-      break;
-  }
-}
-
-V8EditContextEnterKeyHint EditContext::enterKeyHint() const {
-  switch (enter_key_hint_) {
-    case ui::TextInputAction::kEnter:
-      return V8EditContextEnterKeyHint(V8EditContextEnterKeyHint::Enum::kEnter);
-    case ui::TextInputAction::kDone:
-      return V8EditContextEnterKeyHint(V8EditContextEnterKeyHint::Enum::kDone);
-    case ui::TextInputAction::kGo:
-      return V8EditContextEnterKeyHint(V8EditContextEnterKeyHint::Enum::kGo);
-    case ui::TextInputAction::kNext:
-      return V8EditContextEnterKeyHint(V8EditContextEnterKeyHint::Enum::kNext);
-    case ui::TextInputAction::kPrevious:
-      return V8EditContextEnterKeyHint(
-          V8EditContextEnterKeyHint::Enum::kPrevious);
-    case ui::TextInputAction::kSearch:
-      return V8EditContextEnterKeyHint(
-          V8EditContextEnterKeyHint::Enum::kSearch);
-    case ui::TextInputAction::kSend:
-      return V8EditContextEnterKeyHint(V8EditContextEnterKeyHint::Enum::kSend);
-    default:
-      // Defaulting to enter.
-      return V8EditContextEnterKeyHint(V8EditContextEnterKeyHint::Enum::kEnter);
-  }
 }
 
 void EditContext::GetLayoutBounds(gfx::Rect* control_bounds,
@@ -498,8 +346,14 @@ bool EditContext::SetComposition(
       return false;
     has_composition_ = true;
   }
-  if (text.IsEmpty() && !has_composition_)
+  if (text.IsEmpty()) {
+    if (has_composition_) {
+      // Receiving an empty text string is a signal to delete any text in the
+      // composition range and terminate the composition
+      CancelComposition();
+    }
     return true;
+  }
 
   WebRange actual_replacement_range = replacement_range;
   if (actual_replacement_range.IsEmpty()) {
@@ -539,6 +393,12 @@ bool EditContext::SetComposition(
   return true;
 }
 
+void EditContext::ClearCompositionState() {
+  has_composition_ = false;
+  composition_range_start_ = 0;
+  composition_range_end_ = 0;
+}
+
 bool EditContext::SetCompositionFromExistingText(
     int composition_start,
     int composition_end,
@@ -551,6 +411,8 @@ bool EditContext::SetCompositionFromExistingText(
   if (composition_start < 0 || composition_end < 0)
     return false;
 
+  CHECK_GT(composition_end, composition_start);
+
   if (!has_composition_) {
     if (!DispatchCompositionStartEvent(""))
       return false;
@@ -561,24 +423,39 @@ bool EditContext::SetCompositionFromExistingText(
   composition_start =
       std::min(composition_start, static_cast<int>(text_.length()));
   composition_end = std::min(composition_end, static_cast<int>(text_.length()));
-  String update_text(text_.Substring(composition_start, composition_end));
-  text_ =
-      text_.Substring(0, composition_start) + text_.Substring(composition_end);
+  String update_text(
+      text_.Substring(composition_start, composition_end - composition_start));
   if (composition_range_start_ == 0 && composition_range_end_ == 0) {
     composition_range_start_ = composition_start;
     composition_range_end_ = composition_end;
   }
 
   DispatchTextUpdateEvent(update_text, composition_range_start_,
-                          composition_range_end_, composition_start,
-                          composition_start);
+                          composition_range_end_, selection_start_,
+                          selection_end_);
   DispatchTextFormatEvent(ime_text_spans);
   DispatchCharacterBoundsUpdateEvent(composition_range_start_,
                                      composition_range_end_);
-  // Update the selection range.
-  selection_start_ = composition_start;
-  selection_end_ = composition_start;
   return true;
+}
+
+void EditContext::CancelComposition() {
+  DCHECK(has_composition_);
+
+  // Delete the text in the composition range
+  text_ = text_.Substring(0, composition_range_start_) +
+          text_.Substring(composition_range_end_);
+
+  // Place the selection where the deleted composition had been
+  selection_start_ = composition_range_start_;
+  selection_end_ = composition_range_start_;
+  DispatchTextUpdateEvent(g_empty_string, composition_range_start_,
+                          composition_range_end_, selection_start_,
+                          selection_end_);
+
+  DispatchTextFormatEvent(WebVector<ui::ImeTextSpan>());
+  DispatchCompositionEndEvent(g_empty_string);
+  ClearCompositionState();
 }
 
 bool EditContext::InsertText(const WebString& text) {
@@ -606,7 +483,7 @@ void EditContext::DeleteCurrentSelection() {
   stringBuilder.Append(StringView(text_, selection_end_));
   text_ = stringBuilder.ToString();
 
-  DispatchTextUpdateEvent(String(), selection_start_, selection_end_,
+  DispatchTextUpdateEvent(g_empty_string, selection_start_, selection_end_,
                           selection_start_, selection_start_);
 
   selection_end_ = selection_start_;
@@ -676,36 +553,34 @@ bool EditContext::CommitText(const WebString& text,
   // events accordingly.
   // Update the cached selection too.
   String update_text(text);
-  uint32_t update_range_start;
-  uint32_t update_range_end;
-  uint32_t new_selection_start;
-  uint32_t new_selection_end;
-  if (has_composition_) {
-    text_ = text_.Substring(0, composition_range_start_) + update_text +
-            text_.Substring(composition_range_end_);
-    selection_start_ = composition_range_start_ + update_text.length();
-    selection_end_ = composition_range_start_ + update_text.length();
-    update_range_start = composition_range_start_;
-    update_range_end = composition_range_end_;
-  } else {
-    text_ = text_.Substring(0, selection_start_) + update_text +
-            text_.Substring(selection_end_);
-    update_range_start = selection_start_;
-    update_range_end = selection_end_;
-    selection_start_ = selection_start_ + update_text.length();
-    selection_end_ = selection_end_ + update_text.length();
-  }
-  new_selection_start = selection_start_;
-  new_selection_end = selection_end_;
-  composition_range_start_ = 0;
-  composition_range_end_ = 0;
-  DispatchTextUpdateEvent(update_text, update_range_start, update_range_end,
-                          new_selection_start, new_selection_end);
-  // Fire composition end event.
-  if (!text.IsEmpty() && has_composition_)
-    DispatchCompositionEndEvent(text);
 
-  has_composition_ = false;
+  WebRange actual_replacement_range = replacement_range;
+  if (actual_replacement_range.IsEmpty()) {
+    if (has_composition_) {
+      actual_replacement_range =
+          WebRange(composition_range_start_,
+                   composition_range_end_ - composition_range_start_);
+    } else {
+      actual_replacement_range =
+          WebRange(selection_start_, selection_end_ - selection_start_);
+    }
+  }
+
+  text_ = text_.Substring(0, actual_replacement_range.StartOffset()) +
+          update_text + text_.Substring(actual_replacement_range.EndOffset());
+  selection_start_ = selection_end_ =
+      actual_replacement_range.StartOffset() + update_text.length();
+
+  DispatchTextUpdateEvent(update_text, actual_replacement_range.StartOffset(),
+                          actual_replacement_range.EndOffset(),
+                          selection_start_, selection_end_);
+  // Fire composition end event.
+  if (!text.IsEmpty() && has_composition_) {
+    DispatchTextFormatEvent(WebVector<ui::ImeTextSpan>());
+    DispatchCompositionEndEvent(text);
+  }
+
+  ClearCompositionState();
   return true;
 }
 
@@ -715,27 +590,26 @@ bool EditContext::FinishComposingText(
 
   String text;
   if (has_composition_) {
-    text = text_.Substring(composition_range_start_, composition_range_end_);
-    // Fire composition end event.
+    text = text_.Substring(composition_range_start_,
+                           composition_range_end_ - composition_range_start_);
+    DispatchTextFormatEvent(WebVector<ui::ImeTextSpan>());
     DispatchCompositionEndEvent(text);
   } else {
-    text = text_.Substring(selection_start_, selection_end_);
+    text = text_.Substring(selection_start_, selection_end_ - selection_start_);
   }
 
-  // TODO(snianu): also need to fire formatupdate here to remove formats from
-  // the previous compositions?
-  selection_start_ = selection_start_ + text.length();
-  selection_end_ = selection_end_ + text.length();
-  composition_range_start_ = 0;
-  composition_range_end_ = 0;
-  has_composition_ = false;
+  if (selection_behavior == kDoNotKeepSelection) {
+    selection_start_ = selection_start_ + text.length();
+    selection_end_ = selection_end_ + text.length();
+  }
+
+  ClearCompositionState();
   return true;
 }
 
 void EditContext::ExtendSelectionAndDelete(int before, int after) {
   TRACE_EVENT1("ime", "EditContext::ExtendSelectionAndDelete", "before, afters",
                std::to_string(before) + ", " + std::to_string(after));
-  String text;
   before = std::min(before, static_cast<int>(selection_start_));
   after = std::min(after, static_cast<int>(text_.length()));
   text_ = text_.Substring(0, selection_start_ - before) +
@@ -744,110 +618,108 @@ void EditContext::ExtendSelectionAndDelete(int before, int after) {
   const uint32_t update_range_end = selection_end_ + after;
   selection_start_ = selection_start_ - before;
   selection_end_ = selection_start_;
-  DispatchTextUpdateEvent(text, update_range_start, update_range_end,
+  DispatchTextUpdateEvent(g_empty_string, update_range_start, update_range_end,
                           selection_start_, selection_end_);
 }
 
-void EditContext::AttachElement(Element* element_to_attach) {
+void EditContext::DeleteSurroundingText(int before, int after) {
+  TRACE_EVENT1("ime", "EditContext::DeleteSurroundingText", "before, after",
+               std::to_string(before) + ", " + std::to_string(after));
+  const uint32_t update_range_start = std::max(selection_start_ - before, 0U);
+  const uint32_t update_range_end =
+      std::min(selection_end_ + after, text_.length());
+  selection_end_ = selection_end_ - (selection_start_ - update_range_start);
+  selection_start_ = update_range_start;
+  text_ = text_.Substring(0, update_range_start) +
+          text_.Substring(selection_start_, selection_end_ - selection_start_) +
+          text_.Substring(update_range_end);
+  String update_event_text(
+      text_.Substring(selection_start_, selection_end_ - selection_start_));
+
+  DispatchTextUpdateEvent(update_event_text, update_range_start,
+                          update_range_end, selection_start_, selection_end_);
+}
+
+void EditContext::SetSelection(int start, int end) {
+  TRACE_EVENT1("ime", "EditContext::SetSelection", "start, end",
+               std::to_string(start) + ", " + std::to_string(end));
+
+  selection_start_ = start;
+  selection_end_ = end;
+
+  DispatchTextUpdateEvent(g_empty_string, /*update_range_start=*/0,
+                          /*update_range_end=*/0, selection_start_,
+                          selection_end_);
+}
+
+void EditContext::AttachElement(HTMLElement* element_to_attach) {
   if (base::Contains(attached_elements_, element_to_attach,
-                     &Member<Element>::Get))
+                     &Member<HTMLElement>::Get)) {
     return;
+  }
+
+  // Currently an EditContext can only have one associated element.
+  // However, the spec is written with the expectation that this limit may be
+  // relaxed in the future; e.g. attachedElements() returns a list. For now, the
+  // EditContext implementation still uses a list of attached_elements_, but
+  // this could be changed to just a single Element pointer. See
+  // https://w3c.github.io/edit-context/#editcontext-interface
+  CHECK(attached_elements_.empty())
+      << "An EditContext can be only be associated with a single element";
+
+  // We assume throughout this class that since EditContext is only associated
+  // with at most one element, it can only have one ExecutionContext. If things
+  // change such that an EditContext can be associated with multiple elements,
+  // the way we manage the ExecutionContext will need to be reworked such
+  // that we return the ExecutionContext of the element that has most recently
+  // received focus.
+  execution_context_ = element_to_attach->GetExecutionContext();
 
   attached_elements_.push_back(element_to_attach);
 }
 
-void EditContext::DetachElement(Element* element_to_detach) {
+void EditContext::DetachElement(HTMLElement* element_to_detach) {
   auto* it = base::ranges::find(attached_elements_, element_to_detach,
-                                &Member<Element>::Get);
+                                &Member<HTMLElement>::Get);
 
   if (it != attached_elements_.end())
     attached_elements_.erase(it);
 }
 
-WebTextInputType EditContext::TextInputType() {
-  switch (input_mode_) {
-    case WebTextInputMode::kWebTextInputModeText:
-      return WebTextInputType::kWebTextInputTypeText;
-    case WebTextInputMode::kWebTextInputModeTel:
-      return WebTextInputType::kWebTextInputTypeTelephone;
-    case WebTextInputMode::kWebTextInputModeEmail:
-      return WebTextInputType::kWebTextInputTypeEmail;
-    case WebTextInputMode::kWebTextInputModeSearch:
-      return WebTextInputType::kWebTextInputTypeSearch;
-    case WebTextInputMode::kWebTextInputModeNumeric:
-      return WebTextInputType::kWebTextInputTypeNumber;
-    case WebTextInputMode::kWebTextInputModeDecimal:
-      return WebTextInputType::kWebTextInputTypeNumber;
-    case WebTextInputMode::kWebTextInputModeUrl:
-      return WebTextInputType::kWebTextInputTypeURL;
-    default:
-      return WebTextInputType::kWebTextInputTypeText;
-  }
-}
-
-ui::TextInputAction EditContext::GetEditContextEnterKeyHint() const {
-  return enter_key_hint_;
-}
-
-WebTextInputMode EditContext::GetInputModeOfEditContext() const {
-  return input_mode_;
-}
-
 WebTextInputInfo EditContext::TextInputInfo() {
   WebTextInputInfo info;
   // Fetch all the text input info from edit context.
-  // TODO(crbug.com/1197325): Change this to refer to the "view" part of the
-  // EditContext once the EditContext spec adds this feature.
   info.node_id = GetInputMethodController().NodeIdOfFocusedElement();
-  info.action = GetEditContextEnterKeyHint();
-  info.input_mode = GetInputModeOfEditContext();
-  info.type = TextInputType();
-  info.virtual_keyboard_policy = IsVirtualKeyboardPolicyManual()
-                                     ? ui::mojom::VirtualKeyboardPolicy::MANUAL
-                                     : ui::mojom::VirtualKeyboardPolicy::AUTO;
+  info.action = GetInputMethodController().InputActionOfFocusedElement();
+  info.input_mode = GetInputMethodController().InputModeOfFocusedElement();
+  info.type = GetInputMethodController().TextInputType();
+  info.virtual_keyboard_policy =
+      GetInputMethodController().VirtualKeyboardPolicyOfFocusedElement();
   info.value = text();
-  info.flags = TextInputFlags();
+  info.flags = GetInputMethodController().TextInputFlags();
   info.selection_start = selection_start_;
   info.selection_end = selection_end_;
-  info.composition_start = composition_range_start_;
-  info.composition_end = composition_range_end_;
+  if (has_composition_) {
+    info.composition_start = composition_range_start_;
+    info.composition_end = composition_range_end_;
+  }
   return info;
 }
 
-int EditContext::TextInputFlags() const {
-  int flags = 0;
-  // Disable spellcheck & autocorrect for EditContext.
-  flags |= kWebTextInputFlagAutocorrectOff;
-  flags |= kWebTextInputFlagSpellcheckOff;
-
-  // TODO:(snianu) Enable this once the password type
-  // is supported by inputMode attribute.
-  // if (input_mode_ == WebTextInputMode::kPassword)
-  //   flags |= kWebTextInputFlagHasBeenPasswordField;
-
-  return flags;
-}
-
-WebRange EditContext::CompositionRange() {
+WebRange EditContext::CompositionRange() const {
   return WebRange(composition_range_start_,
                   composition_range_end_ - composition_range_start_);
 }
 
 bool EditContext::GetCompositionCharacterBounds(WebVector<gfx::Rect>& bounds) {
-  WebRange composition_range = CompositionRange();
-  if (composition_range.IsEmpty())
+  if (!HasValidCompositionBounds()) {
     return false;
-
-  // The number of character bounds provided by the authors has to be the same
-  // as the length of the composition (as we request in
-  // CompositionCharacterBoundsUpdate event).
-  if (static_cast<int>(character_bounds_.size()) != composition_range.length())
-    return false;
+  }
 
   TRACE_EVENT1("ime", "EditContext::GetCompositionCharacterBounds", "size",
                std::to_string(character_bounds_.size()));
 
-  bounds.Clear();
+  bounds.clear();
   base::ranges::for_each(
       character_bounds_, [&bounds, this](auto& bound_in_css_pixels) {
         // EditContext's coordinates are in CSS pixels, which need to be
@@ -862,15 +734,86 @@ bool EditContext::GetCompositionCharacterBounds(WebVector<gfx::Rect>& bounds) {
   return true;
 }
 
+bool EditContext::FirstRectForCharacterRange(uint32_t location,
+                                             uint32_t length,
+                                             gfx::Rect& rect_in_viewport) {
+  if (HasValidCompositionBounds()) {
+    WebRange range = this->CompositionRange();
+
+    // If the requested range is within the current composition range,
+    // we'll use that to provide the result.
+    if (base::saturated_cast<int>(location) >= range.StartOffset() &&
+        base::saturated_cast<int>(location + length) <= range.EndOffset()) {
+      if (length == 0) {
+        if (location == character_bounds_.size()) {
+          // Zero-width rect after the last character in the composition range
+          rect_in_viewport =
+              gfx::Rect(character_bounds_[location - 1].right(),
+                        character_bounds_[location - 1].y(), 0,
+                        character_bounds_[location - 1].height());
+        } else {
+          // Zero-width rect before the next character in the composition range
+          rect_in_viewport = gfx::Rect(character_bounds_[location].x(),
+                                       character_bounds_[location].y(), 0,
+                                       character_bounds_[location].height());
+        }
+      } else {
+        const int start_in_composition = location - range.StartOffset();
+        const int end_in_composition = location + length - range.StartOffset();
+        gfx::Rect rect = character_bounds_[start_in_composition];
+        for (int i = start_in_composition + 1; i < end_in_composition; ++i) {
+          rect.Union(character_bounds_[i]);
+        }
+
+        rect_in_viewport = rect;
+      }
+      return true;
+    }
+  }
+
+  // If we couldn't get a result from the composition bounds then we'll fall
+  // back to using the selection bounds, since these will generally be close to
+  // where the composition is happening.
+  if (!selection_bounds_.IsEmpty()) {
+    rect_in_viewport = selection_bounds_;
+    return true;
+  }
+
+  // If we have neither composition bounds nor selection bounds, we'll fall back
+  // to using the control bounds. In this case the IME might not be drawn
+  // exactly in the right spot, but will at least be adjacent to the editable
+  // region rather than in the corner of the screen.
+  if (!control_bounds_.IsEmpty()) {
+    rect_in_viewport = control_bounds_;
+    return true;
+  }
+
+  return false;
+}
+
+bool EditContext::HasValidCompositionBounds() const {
+  WebRange composition_range = CompositionRange();
+  if (composition_range.IsEmpty()) {
+    return false;
+  }
+
+  // The number of character bounds provided by the authors has to be the same
+  // as the length of the composition (as we request in
+  // CompositionCharacterBoundsUpdate event).
+  return (base::saturated_cast<int>(character_bounds_.size()) ==
+          composition_range.length());
+}
+
 WebRange EditContext::GetSelectionOffsets() const {
   return WebRange(selection_start_, selection_end_ - selection_start_);
 }
 
 void EditContext::Trace(Visitor* visitor) const {
   ActiveScriptWrappable::Trace(visitor);
-  ExecutionContextClient::Trace(visitor);
-  EventTargetWithInlineData::Trace(visitor);
+  EventTarget::Trace(visitor);
+  ElementRareDataField::Trace(visitor);
   visitor->Trace(attached_elements_);
+  visitor->Trace(execution_context_);
 }
 
 }  // namespace blink

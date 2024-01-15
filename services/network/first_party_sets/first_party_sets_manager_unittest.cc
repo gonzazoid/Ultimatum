@@ -10,15 +10,17 @@
 
 #include "base/containers/flat_set.h"
 #include "base/functional/callback_helpers.h"
+#include "base/test/metrics/histogram_tester.h"
+#include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
 #include "base/test/test_future.h"
+#include "base/version.h"
+#include "net/base/features.h"
 #include "net/base/schemeful_site.h"
-#include "net/cookies/cookie_constants.h"
 #include "net/first_party_sets/first_party_set_entry.h"
 #include "net/first_party_sets/first_party_set_metadata.h"
 #include "net/first_party_sets/first_party_sets_context_config.h"
 #include "net/first_party_sets/global_first_party_sets.h"
-#include "net/first_party_sets/same_party_context.h"
 #include "testing/gmock/include/gmock/gmock-matchers.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -30,19 +32,40 @@ using ::testing::Optional;
 using ::testing::Pair;
 using ::testing::UnorderedElementsAre;
 
-using Type = net::SamePartyContext::Type;
+const char* kDelayedQueriesCountHistogram =
+    "Cookie.FirstPartySets.Network.DelayedQueriesCount";
+const char* kMostDelayedQueryDeltaHistogram =
+    "Cookie.FirstPartySets.Network.MostDelayedQueryDelta";
 
 namespace network {
 
-class FirstPartySetsManagerTest : public ::testing::Test {
+class WaitingFeatureInitializer {
  public:
-  explicit FirstPartySetsManagerTest(bool enabled) : manager_(enabled) {}
+  explicit WaitingFeatureInitializer(bool enabled) {
+    if (enabled) {
+      features_.InitAndEnableFeature(net::features::kWaitForFirstPartySetsInit);
+    } else {
+      features_.InitAndDisableFeature(
+          net::features::kWaitForFirstPartySetsInit);
+    }
+  }
+
+ private:
+  base::test::ScopedFeatureList features_;
+};
+
+class FirstPartySetsManagerTest : public ::testing::Test,
+                                  public WaitingFeatureInitializer {
+ public:
+  explicit FirstPartySetsManagerTest(bool enabled, bool wait_for_init)
+      : WaitingFeatureInitializer(wait_for_init), manager_(enabled) {}
 
   void SetCompleteSets(
       const base::flat_map<net::SchemefulSite, net::FirstPartySetEntry>&
           content,
       const base::flat_map<net::SchemefulSite, net::SchemefulSite>& aliases) {
-    manager_.SetCompleteSets(net::GlobalFirstPartySets(content, aliases));
+    manager_.SetCompleteSets(
+        net::GlobalFirstPartySets(base::Version("1.2.3"), content, aliases));
   }
 
   FirstPartySetsManager::EntriesResult FindEntriesAndWait(
@@ -54,23 +77,26 @@ class FirstPartySetsManagerTest : public ::testing::Test {
     return result.has_value() ? result.value() : future.Get();
   }
 
+  base::HistogramTester& histogram_tester() { return histogram_tester_; }
   FirstPartySetsManager& manager() { return manager_; }
 
  private:
   base::test::TaskEnvironment env_;
+  base::HistogramTester histogram_tester_;
   FirstPartySetsManager manager_;
 };
 
 class FirstPartySetsManagerDisabledTest : public FirstPartySetsManagerTest {
  public:
   FirstPartySetsManagerDisabledTest()
-      : FirstPartySetsManagerTest(/*enabled=*/false) {}
+      : FirstPartySetsManagerTest(/*enabled=*/false, /*wait_for_init=*/true) {}
 };
 
 TEST_F(FirstPartySetsManagerDisabledTest, SetCompleteSets) {
   net::SchemefulSite example_cctld(GURL("https://example.cctld"));
   net::SchemefulSite example_test(GURL("https://example.test"));
   net::SchemefulSite aaaa(GURL("https://aaaa.test"));
+
   SetCompleteSets({{aaaa, net::FirstPartySetEntry(
                               example_test, net::SiteType::kAssociated, 0)},
                    {example_test,
@@ -86,6 +112,9 @@ TEST_F(FirstPartySetsManagerDisabledTest, SetCompleteSets) {
                   },
                   net::FirstPartySetsContextConfig(), base::NullCallback()),
               Optional(IsEmpty()));
+
+  histogram_tester().ExpectTotalCount(kDelayedQueriesCountHistogram, 1);
+  histogram_tester().ExpectTotalCount(kMostDelayedQueryDeltaHistogram, 1);
 }
 
 TEST_F(FirstPartySetsManagerDisabledTest, FindEntries) {
@@ -95,12 +124,13 @@ TEST_F(FirstPartySetsManagerDisabledTest, FindEntries) {
               Optional(IsEmpty()));
 }
 
-class FirstPartySetsEnabledTest : public FirstPartySetsManagerTest {
+class FirstPartySetsManagerEnabledTest : public FirstPartySetsManagerTest {
  public:
-  FirstPartySetsEnabledTest() : FirstPartySetsManagerTest(/*enabled=*/true) {}
+  FirstPartySetsManagerEnabledTest()
+      : FirstPartySetsManagerTest(/*enabled=*/true, /*wait_for_init=*/true) {}
 };
 
-TEST_F(FirstPartySetsEnabledTest, SetCompleteSets) {
+TEST_F(FirstPartySetsManagerEnabledTest, SetCompleteSets) {
   net::SchemefulSite example_cctld(GURL("https://example.cctld"));
   net::SchemefulSite example_test(GURL("https://example.test"));
   net::SchemefulSite aaaa(GURL("https://aaaa.test"));
@@ -127,9 +157,11 @@ TEST_F(FirstPartySetsEnabledTest, SetCompleteSets) {
                                        absl::nullopt)),
           Pair(aaaa, net::FirstPartySetEntry(example_test,
                                              net::SiteType::kAssociated, 0))));
+  histogram_tester().ExpectTotalCount(kDelayedQueriesCountHistogram, 1);
+  histogram_tester().ExpectTotalCount(kMostDelayedQueryDeltaHistogram, 1);
 }
 
-TEST_F(FirstPartySetsEnabledTest, SetCompleteSets_Idempotent) {
+TEST_F(FirstPartySetsManagerEnabledTest, SetCompleteSets_Idempotent) {
   net::SchemefulSite example(GURL("https://example.test"));
   net::SchemefulSite aaaa(GURL("https://aaaa.test"));
 
@@ -152,9 +184,11 @@ TEST_F(FirstPartySetsEnabledTest, SetCompleteSets_Idempotent) {
 // Test fixture that allows precise control over when the instance gets FPS
 // data. Useful for testing async flows.
 class AsyncPopulatedFirstPartySetsManagerTest
-    : public FirstPartySetsEnabledTest {
+    : public FirstPartySetsManagerTest {
  public:
-  AsyncPopulatedFirstPartySetsManagerTest() = default;
+  explicit AsyncPopulatedFirstPartySetsManagerTest(bool wait_for_init)
+      : FirstPartySetsManagerTest(/*enabled=*/true,
+                                  /*wait_for_init=*/wait_for_init) {}
 
  protected:
   void Populate() {
@@ -164,28 +198,29 @@ class AsyncPopulatedFirstPartySetsManagerTest
     // /*content=*/ R"(
     //   [
     //     {
-    //       "owner": "https://example.test",
-    //       "members": ["https://member1.test", "https://member3.test"]
+    //       "primary": "https://example.test",
+    //       "associatedSites": ["https://associatedSite1.test",
+    //       "https://associatedSite3.test"]
     //     },
     //     {
-    //       "owner": "https://foo.test",
-    //       "members": ["https://member2.test"]
+    //       "primary": "https://foo.test",
+    //       "associatedSites": ["https://associatedSite2.test"]
     //     }
     //   ]
     //   )";
 
     SetCompleteSets(
         {
-            {net::SchemefulSite(GURL("https://member1.test")),
+            {net::SchemefulSite(GURL("https://associatedSite1.test")),
              net::FirstPartySetEntry(example_test, net::SiteType::kAssociated,
                                      0)},
-            {net::SchemefulSite(GURL("https://member3.test")),
+            {net::SchemefulSite(GURL("https://associatedSite3.test")),
              net::FirstPartySetEntry(example_test, net::SiteType::kAssociated,
                                      0)},
             {example_test,
              net::FirstPartySetEntry(example_test, net::SiteType::kPrimary,
                                      absl::nullopt)},
-            {net::SchemefulSite(GURL("https://member2.test")),
+            {net::SchemefulSite(GURL("https://associatedSite2.test")),
              net::FirstPartySetEntry(foo, net::SiteType::kAssociated, 0)},
             {foo, net::FirstPartySetEntry(foo, net::SiteType::kPrimary,
                                           absl::nullopt)},
@@ -197,14 +232,21 @@ class AsyncPopulatedFirstPartySetsManagerTest
   }
 };
 
-TEST_F(AsyncPopulatedFirstPartySetsManagerTest,
+class AsyncWaitingFirstPartySetsManagerTest
+    : public AsyncPopulatedFirstPartySetsManagerTest {
+ public:
+  AsyncWaitingFirstPartySetsManagerTest()
+      : AsyncPopulatedFirstPartySetsManagerTest(/*wait_for_init=*/true) {}
+};
+
+TEST_F(AsyncWaitingFirstPartySetsManagerTest,
        QueryBeforeReady_ComputeMetadata) {
   base::test::TestFuture<net::FirstPartySetMetadata> future;
   {
     // Force deallocation to provoke a UAF if the impl just copies the pointer.
-    net::SchemefulSite member(GURL("https://member1.test"));
+    net::SchemefulSite associatedSite(GURL("https://associatedSite1.test"));
 
-    EXPECT_FALSE(manager().ComputeMetadata(member, &member, {member},
+    EXPECT_FALSE(manager().ComputeMetadata(associatedSite, &associatedSite,
                                            net::FirstPartySetsContextConfig(),
                                            future.GetCallback()));
   }
@@ -212,39 +254,104 @@ TEST_F(AsyncPopulatedFirstPartySetsManagerTest,
   Populate();
 
   {
-    net::SchemefulSite owner(GURL("https://example.test"));
-    net::FirstPartySetEntry entry(owner, net::SiteType::kAssociated, 0);
+    net::FirstPartySetEntry entry(
+        net::SchemefulSite(GURL("https://example.test")),
+        net::SiteType::kAssociated, 0);
 
-    EXPECT_EQ(future.Get(),
-              net::FirstPartySetMetadata(
-                  net::SamePartyContext(Type::kSameParty), &entry, &entry));
+    EXPECT_EQ(future.Get(), net::FirstPartySetMetadata(&entry, &entry));
   }
+  histogram_tester().ExpectTotalCount(kDelayedQueriesCountHistogram, 1);
+  histogram_tester().ExpectTotalCount(kMostDelayedQueryDeltaHistogram, 1);
 }
 
-TEST_F(AsyncPopulatedFirstPartySetsManagerTest, QueryBeforeReady_FindEntries) {
-  net::SchemefulSite member1(GURL("https://member1.test"));
-  net::SchemefulSite member2(GURL("https://member2.test"));
+TEST_F(AsyncWaitingFirstPartySetsManagerTest, QueryBeforeReady_FindEntries) {
+  net::SchemefulSite associatedSite1(GURL("https://associatedSite1.test"));
+  net::SchemefulSite associatedSite2(GURL("https://associatedSite2.test"));
   net::SchemefulSite example(GURL("https://example.test"));
   net::SchemefulSite example_cctld(GURL("https://example.cctld"));
 
   base::test::TestFuture<FirstPartySetsManager::EntriesResult> future;
-  EXPECT_FALSE(manager().FindEntries({member1, member2, example_cctld},
-                                     net::FirstPartySetsContextConfig(),
-                                     future.GetCallback()));
+  EXPECT_FALSE(manager().FindEntries(
+      {associatedSite1, associatedSite2, example_cctld},
+      net::FirstPartySetsContextConfig(), future.GetCallback()));
 
   Populate();
 
   EXPECT_THAT(
       future.Get(),
       UnorderedElementsAre(
-          Pair(member1,
+          Pair(associatedSite1,
                net::FirstPartySetEntry(example, net::SiteType::kAssociated, 0)),
           Pair(example_cctld,
                net::FirstPartySetEntry(example, net::SiteType::kPrimary,
                                        absl::nullopt)),
-          Pair(member2, net::FirstPartySetEntry(
-                            net::SchemefulSite(GURL("https://foo.test")),
-                            net::SiteType::kAssociated, 0))));
+          Pair(associatedSite2,
+               net::FirstPartySetEntry(
+                   net::SchemefulSite(GURL("https://foo.test")),
+                   net::SiteType::kAssociated, 0))));
+}
+
+class AsyncNonwaitingFirstPartySetsManagerTest
+    : public AsyncPopulatedFirstPartySetsManagerTest {
+ public:
+  AsyncNonwaitingFirstPartySetsManagerTest()
+      : AsyncPopulatedFirstPartySetsManagerTest(/*wait_for_init=*/false) {}
+};
+
+TEST_F(AsyncNonwaitingFirstPartySetsManagerTest,
+       QueryBeforeReady_ComputeMetadata) {
+  net::SchemefulSite associatedSite(GURL("https://associatedSite1.test"));
+
+  EXPECT_EQ(net::FirstPartySetMetadata(),
+            manager().ComputeMetadata(associatedSite, &associatedSite,
+                                      net::FirstPartySetsContextConfig(),
+                                      base::NullCallback()));
+
+  Populate();
+
+  net::FirstPartySetEntry entry(
+      net::SchemefulSite(GURL("https://example.test")),
+      net::SiteType::kAssociated, 0);
+
+  EXPECT_EQ(net::FirstPartySetMetadata(&entry, &entry),
+            manager().ComputeMetadata(associatedSite, &associatedSite,
+                                      net::FirstPartySetsContextConfig(),
+                                      base::NullCallback()));
+
+  histogram_tester().ExpectUniqueSample(
+      kDelayedQueriesCountHistogram, /*sample=*/0, /*expected_bucket_count=*/1);
+  histogram_tester().ExpectUniqueSample(kMostDelayedQueryDeltaHistogram,
+                                        /*sample=*/0,
+                                        /*expected_bucket_count=*/1);
+}
+
+TEST_F(AsyncNonwaitingFirstPartySetsManagerTest, QueryBeforeReady_FindEntries) {
+  net::SchemefulSite associatedSite1(GURL("https://associatedSite1.test"));
+  net::SchemefulSite associatedSite2(GURL("https://associatedSite2.test"));
+  net::SchemefulSite example(GURL("https://example.test"));
+  net::SchemefulSite example_cctld(GURL("https://example.cctld"));
+
+  EXPECT_THAT(manager().FindEntries(
+                  {associatedSite1, associatedSite2, example_cctld},
+                  net::FirstPartySetsContextConfig(), base::NullCallback()),
+              Optional(IsEmpty()));
+
+  Populate();
+
+  EXPECT_THAT(
+      manager().FindEntries({associatedSite1, associatedSite2, example_cctld},
+                            net::FirstPartySetsContextConfig(),
+                            base::NullCallback()),
+      Optional(UnorderedElementsAre(
+          Pair(associatedSite1,
+               net::FirstPartySetEntry(example, net::SiteType::kAssociated, 0)),
+          Pair(example_cctld,
+               net::FirstPartySetEntry(example, net::SiteType::kPrimary,
+                                       absl::nullopt)),
+          Pair(associatedSite2,
+               net::FirstPartySetEntry(
+                   net::SchemefulSite(GURL("https://foo.test")),
+                   net::SiteType::kAssociated, 0)))));
 }
 
 }  // namespace network

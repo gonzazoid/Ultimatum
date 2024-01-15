@@ -23,13 +23,21 @@ SyncMojoServiceFactoryAsh* SyncMojoServiceFactoryAsh::GetInstance() {
 }
 
 SyncMojoServiceFactoryAsh::SyncMojoServiceFactoryAsh()
-    : ProfileKeyedServiceFactory("SyncMojoServiceAsh") {
+    : ProfileKeyedServiceFactory(
+          "SyncMojoServiceAsh",
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOriginalOnly)
+              .Build()) {
   DependsOn(SyncServiceFactory::GetInstance());
 }
 
 SyncMojoServiceFactoryAsh::~SyncMojoServiceFactoryAsh() = default;
 
-KeyedService* SyncMojoServiceFactoryAsh::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+SyncMojoServiceFactoryAsh::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
   Profile* profile = Profile::FromBrowserContext(context);
   syncer::SyncService* sync_service =
@@ -40,7 +48,7 @@ KeyedService* SyncMojoServiceFactoryAsh::BuildServiceInstanceFor(
     return nullptr;
   }
 
-  return new SyncMojoServiceAsh(sync_service);
+  return std::make_unique<SyncMojoServiceAsh>(sync_service);
 }
 
 }  // namespace ash

@@ -5,6 +5,7 @@
 #ifndef CHROME_BROWSER_ASH_LOGIN_TEST_EMBEDDED_TEST_SERVER_SETUP_MIXIN_H_
 #define CHROME_BROWSER_ASH_LOGIN_TEST_EMBEDDED_TEST_SERVER_SETUP_MIXIN_H_
 
+#include "base/memory/raw_ptr.h"
 #include "chrome/test/base/mixin_based_in_process_browser_test.h"
 #include "net/test/embedded_test_server/embedded_test_server.h"
 
@@ -33,15 +34,9 @@ class EmbeddedTestServerSetupMixin : public InProcessBrowserTestMixin {
   base::FilePath test_data_dir_;
 
   // Embedded test server owned by test that uses this mixin.
-  net::EmbeddedTestServer* embedded_test_server_;
+  raw_ptr<net::EmbeddedTestServer> embedded_test_server_;
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove after the //chrome/browser/chromeos
-// source migration is finished.
-namespace chromeos {
-using ::ash::EmbeddedTestServerSetupMixin;
-}
 
 #endif  // CHROME_BROWSER_ASH_LOGIN_TEST_EMBEDDED_TEST_SERVER_SETUP_MIXIN_H_

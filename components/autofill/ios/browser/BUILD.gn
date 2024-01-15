@@ -2,10 +2,11 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
+import("//build/config/features.gni")
 import("//ios/web/public/js_messaging/optimize_js.gni")
+import("//ios/web/public/js_messaging/optimize_ts.gni")
 
 source_set("browser") {
-  configs += [ "//build/config/compiler:enable_arc" ]
   sources = [
     "autofill_agent.h",
     "autofill_agent.mm",
@@ -13,12 +14,12 @@ source_set("browser") {
     "autofill_driver_ios.h",
     "autofill_driver_ios.mm",
     "autofill_driver_ios_bridge.h",
-    "autofill_driver_ios_webframe.h",
-    "autofill_driver_ios_webframe.mm",
+    "autofill_driver_ios_factory.h",
+    "autofill_driver_ios_factory.mm",
     "autofill_java_script_feature.h",
     "autofill_java_script_feature.mm",
-    "autofill_switches.cc",
-    "autofill_switches.h",
+    "autofill_manager_observer_bridge.h",
+    "autofill_manager_observer_bridge.mm",
     "credit_card_util.h",
     "credit_card_util.mm",
     "form_suggestion.h",
@@ -39,7 +40,9 @@ source_set("browser") {
     "//base",
     "//components/autofill/core/browser",
     "//components/autofill/core/common",
+    "//components/autofill/ios/common",
     "//components/autofill/ios/form_util",
+    "//components/autofill/ios/form_util:child_frame_registrar",
     "//components/autofill/ios/form_util:form_handler_feature",
     "//components/autofill/ios/form_util:form_util_feature",
     "//components/prefs:prefs",
@@ -58,10 +61,11 @@ source_set("browser") {
     "//ui/gfx/geometry",
     "//url",
   ]
+
+  configs += [ "//build/config/compiler:wexit_time_destructors" ]
 }
 
 source_set("util") {
-  configs += [ "//build/config/compiler:enable_arc" ]
   sources = [
     "autofill_util.h",
     "autofill_util.mm",
@@ -75,21 +79,27 @@ source_set("util") {
     "//ios/web/public/security",
     "//url",
   ]
+  configs += [ "//build/config/compiler:wexit_time_destructors" ]
 }
 
 optimize_js("autofill_js") {
   primary_script = "resources/autofill_controller.js"
   sources = [ "resources/autofill_controller.js" ]
+
+  deps = [
+    "//components/autofill/ios/form_util:fill_js_dependencies",
+    "//ios/web/public/js_messaging:gcrweb",
+  ]
 }
 
-optimize_js("suggestion_controller_js") {
-  primary_script = "resources/suggestion_controller.js"
-  sources = [ "resources/suggestion_controller.js" ]
+optimize_ts("suggestion_controller_js") {
+  sources = [ "resources/suggestion_controller.ts" ]
+
+  deps = [ "//ios/web/public/js_messaging:gcrweb" ]
 }
 
 source_set("test_support") {
   testonly = true
-  configs += [ "//build/config/compiler:enable_arc" ]
   sources = [
     "credit_card_save_manager_test_observer_bridge.h",
     "credit_card_save_manager_test_observer_bridge.mm",
@@ -111,31 +121,40 @@ source_set("test_support") {
 
 source_set("unit_tests") {
   testonly = true
-  configs += [ "//build/config/compiler:enable_arc" ]
   sources = [
+    "autofill_across_iframes_unittest.mm",
     "autofill_agent_unittests.mm",
     "autofill_util_unittests.mm",
     "form_suggestion_provider_query_unittests.mm",
   ]
   deps = [
     ":browser",
+    ":test_support",
     ":util",
     "//base",
     "//base/test:test_support",
     "//components/autofill/core/browser:test_support",
+    "//components/autofill/core/common",
     "//components/autofill/ios/form_util",
+    "//components/autofill/ios/form_util:child_frame_registrar",
     "//components/autofill/ios/form_util:form_handler_feature",
+    "//components/autofill/ios/form_util:form_util_feature",
+    "//components/autofill/ios/form_util:test_support",
     "//components/leveldb_proto:leveldb_proto",
     "//components/prefs",
+    "//components/prefs:test_support",
+    "//ios/testing:embedded_test_server_support",
     "//ios/web/public",
     "//ios/web/public/js_messaging",
     "//ios/web/public/test",
     "//ios/web/public/test:test_fixture",
     "//ios/web/public/test/fakes",
+    "//net:test_support",
     "//services/metrics/public/cpp:ukm_builders",
     "//testing/gmock",
     "//testing/gtest",
     "//third_party/ocmock",
+    "//ui/gfx:test_support",
   ]
 }
 

@@ -6,8 +6,7 @@ package org.chromium.chrome.browser.password_manager;
 
 import android.content.Context;
 
-import androidx.annotation.VisibleForTesting;
-
+import org.chromium.base.ResettersForTesting;
 import org.chromium.chrome.browser.password_manager.CredentialManagerLauncher.CredentialManagerError;
 import org.chromium.chrome.browser.password_manager.PasswordCheckupClientHelper.PasswordCheckBackendException;
 
@@ -47,13 +46,15 @@ public abstract class PasswordCheckupClientHelperFactory {
      */
     protected PasswordCheckupClientHelper doCreateHelper(Context context)
             throws PasswordCheckBackendException {
-        throw new PasswordCheckBackendException("Downstream implementation is not present.",
+        throw new PasswordCheckBackendException(
+                "Downstream implementation is not present.",
                 CredentialManagerError.BACKEND_NOT_AVAILABLE);
     }
 
-    @VisibleForTesting
     public static void setFactoryForTesting(
             PasswordCheckupClientHelperFactory passwordCheckupClientHelperFactory) {
+        var oldValue = sInstance;
         sInstance = passwordCheckupClientHelperFactory;
+        ResettersForTesting.register(() -> sInstance = oldValue);
     }
 }

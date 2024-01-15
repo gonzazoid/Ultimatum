@@ -8,10 +8,10 @@
 
 #include <cmath>
 
-#include "base/auto_reset.h"
 #include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
 #include "base/trace_event/trace_event.h"
+#include "ui/base/ui_base_features.h"
 #include "ui/events/event_constants.h"
 #include "ui/events/gesture_detection/gesture_configuration.h"
 #include "ui/events/gesture_detection/gesture_event_data.h"
@@ -77,6 +77,14 @@ gfx::RectF ClampBoundingBox(const gfx::RectF& bounds,
       center.x() - width / 2.f, center.y() - height / 2.f, width, height);
 }
 
+float EffectiveSlopDistance(const MotionEvent& event,
+                            const GestureProvider::Config& config) {
+  return (base::FeatureList::IsEnabled(features::kStylusSpecificTapSlop) &&
+          event.GetToolType() == MotionEvent::ToolType::STYLUS)
+             ? config.gesture_detector_config.stylus_slop
+             : config.gesture_detector_config.touch_slop;
+}
+
 }  // namespace
 
 // GestureProviderClient:
@@ -113,8 +121,7 @@ class GestureProvider::GestureListenerImpl : public ScaleGestureListener,
         gesture_provider_(gesture_provider),
         gesture_detector_(config.gesture_detector_config, this, this),
         scale_gesture_detector_(config.scale_gesture_detector_config, this),
-        snap_scroll_controller_(config.gesture_detector_config.touch_slop,
-                                gfx::SizeF(config.display.size())),
+        snap_scroll_controller_(gfx::SizeF(config.display.size())),
         ignore_multitouch_zoom_events_(false),
         ignore_single_tap_(false),
         pinch_event_sent_(false),
@@ -127,9 +134,11 @@ class GestureProvider::GestureListenerImpl : public ScaleGestureListener,
 
   void OnTouchEvent(const MotionEvent& event) {
     const bool in_scale_gesture = IsScaleGestureDetectionInProgress();
-    snap_scroll_controller_.SetSnapScrollMode(event, in_scale_gesture);
-    if (in_scale_gesture)
+    snap_scroll_controller_.SetSnapScrollMode(
+        event, in_scale_gesture, EffectiveSlopDistance(event, config_));
+    if (in_scale_gesture) {
       SetIgnoreSingleTap(true);
+    }
 
     const MotionEvent::Action action = event.GetAction();
     if (action == MotionEvent::Action::DOWN) {
@@ -324,6 +333,8 @@ class GestureProvider::GestureListenerImpl : public ScaleGestureListener,
     }
 
     float scale = detector.GetScaleFactor();
+    float angle = detector.GetAngleChange();
+
     if (scale == 1)
       return true;
 
@@ -347,6 +358,7 @@ class GestureProvider::GestureListenerImpl : public ScaleGestureListener,
     GestureEventDetails pinch_details(ET_GESTURE_PINCH_UPDATE);
     pinch_details.set_device_type(GestureDeviceType::DEVICE_TOUCHSCREEN);
     pinch_details.set_scale(scale);
+    pinch_details.set_pinch_angle(angle);
     pinch_details.set_primary_unique_touch_event_id(
         current_down_action_unique_touch_event_id_);
     Send(CreateGesture(pinch_details,
@@ -364,9 +376,11 @@ class GestureProvider::GestureListenerImpl : public ScaleGestureListener,
   }
 
   // GestureListener implementation.
-  bool OnDown(const MotionEvent& e) override {
+  bool OnDown(const MotionEvent& e, int tap_down_count) override {
+    DCHECK_GE(tap_down_count, 0);
     GestureEventDetails tap_details(ET_GESTURE_TAP_DOWN);
     tap_details.set_device_type(GestureDeviceType::DEVICE_TOUCHSCREEN);
+    tap_details.set_tap_down_count(tap_down_count);
     tap_details.set_primary_unique_touch_event_id(
         current_down_action_unique_touch_event_id_);
     Send(CreateGesture(tap_details, e));
@@ -392,7 +406,8 @@ class GestureProvider::GestureListenerImpl : public ScaleGestureListener,
       distance_y = delta.y();
     }
 
-    snap_scroll_controller_.UpdateSnapScrollMode(distance_x, distance_y);
+    snap_scroll_controller_.UpdateSnapScrollMode(
+        distance_x, distance_y, EffectiveSlopDistance(e2, config_));
     if (snap_scroll_controller_.IsSnappingScrolls()) {
       if (snap_scroll_controller_.IsSnapHorizontal())
         distance_y = 0;
@@ -800,7 +815,7 @@ class GestureProvider::GestureListenerImpl : public ScaleGestureListener,
       float dy = source_pointer_down_event->GetY(source_index) - ev2.GetY(i);
       delta += SubtractSlopRegion(dx, dy);
     }
-    delta.Scale(1.0 / ev2.GetPointerCount());
+    delta.InvScale(ev2.GetPointerCount());
     return delta;
   }
 

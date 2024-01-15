@@ -4,29 +4,18 @@
 
 #include "ash/system/power/power_button_display_controller.h"
 
-#include "ash/accessibility/accessibility_controller_impl.h"
+#include "ash/accessibility/accessibility_controller.h"
 #include "ash/media/media_controller_impl.h"
 #include "ash/shell.h"
 #include "ash/system/power/scoped_backlights_forced_off.h"
-#include "ash/wm/tablet_mode/tablet_mode_controller.h"
 #include "base/time/tick_clock.h"
 #include "chromeos/dbus/power/power_policy_controller.h"
+#include "ui/display/screen.h"
 #include "ui/events/devices/device_data_manager.h"
 #include "ui/events/devices/stylus_state.h"
 #include "ui/events/event.h"
 
 namespace ash {
-
-namespace {
-
-// Returns true if device is currently in tablet/tablet mode, otherwise false.
-bool IsTabletModeActive() {
-  TabletModeController* tablet_mode_controller =
-      Shell::Get()->tablet_mode_controller();
-  return tablet_mode_controller && tablet_mode_controller->InTabletMode();
-}
-
-}  // namespace
 
 PowerButtonDisplayController::PowerButtonDisplayController(
     BacklightsForcedOffSetter* backlights_forced_off_setter,
@@ -37,7 +26,8 @@ PowerButtonDisplayController::PowerButtonDisplayController(
   ui::DeviceDataManager::GetInstance()->AddObserver(this);
   Shell::Get()->AddPreTargetHandler(this, ui::EventTarget::Priority::kSystem);
 
-  backlights_forced_off_observation_.Observe(backlights_forced_off_setter_);
+  backlights_forced_off_observation_.Observe(
+      backlights_forced_off_setter_.get());
 }
 
 PowerButtonDisplayController::~PowerButtonDisplayController() {
@@ -112,16 +102,18 @@ void PowerButtonDisplayController::OnKeyEvent(ui::KeyEvent* event) {
   if (event->key_code() == ui::VKEY_POWER)
     return;
 
-  if (!IsTabletModeActive())
+  if (!display::Screen::GetScreen()->InTabletMode()) {
     SetBacklightsForcedOff(false);
+  }
 }
 
 void PowerButtonDisplayController::OnMouseEvent(ui::MouseEvent* event) {
   if (event->flags() & ui::EF_IS_SYNTHESIZED)
     return;
 
-  if (!IsTabletModeActive())
+  if (!display::Screen::GetScreen()->InTabletMode()) {
     SetBacklightsForcedOff(false);
+  }
 }
 
 void PowerButtonDisplayController::OnStylusStateChanged(ui::StylusState state) {

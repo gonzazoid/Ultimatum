@@ -10,12 +10,14 @@
 #include <memory>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/run_loop.h"
 #include "base/system/system_monitor.h"
+#include "base/task/single_thread_task_runner.h"
+#include "base/test/metrics/histogram_tester.h"
 #include "base/test/task_environment.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/values.h"
 #include "chromeos/ash/components/audio/audio_devices_pref_handler.h"
 #include "chromeos/ash/components/audio/audio_devices_pref_handler_stub.h"
@@ -77,7 +79,8 @@ const uint64_t kMicJackId = 10011;
 const uint64_t kKeyboardMicId = 10012;
 const uint64_t kFrontMicId = 10013;
 const uint64_t kRearMicId = 10014;
-const uint64_t kOtherId = 10015;
+const uint64_t kBluetoothNbMicId = 10015;
+const uint64_t kOtherId = 10016;
 const uint64_t kUSBJabraSpeakerOutputId1 = 90003;
 const uint64_t kUSBJabraSpeakerOutputId2 = 90004;
 const uint64_t kUSBJabraSpeakerInputId1 = 90005;
@@ -100,6 +103,7 @@ const uint32_t kInputAudioEffect = 1;
 const uint32_t kOutputAudioEffect = 0;
 
 const int kStepPercentage = 4;
+const int kDefaultUnmuteVolumePercent = 4;
 
 const AudioNodeInfo kInternalSpeaker[] = {{false, kInternalSpeakerId,
                                            "Fake Speaker", "INTERNAL_SPEAKER",
@@ -136,6 +140,10 @@ const AudioNodeInfo kOther[] = {
 const AudioNodeInfo kBluetoothHeadset[] = {{false, kBluetoothHeadsetId,
                                             "Bluetooth Headset", "BLUETOOTH",
                                             "Bluetooth Headset 1", 25}};
+
+const AudioNodeInfo kBluetoothNbMic[] = {{true, kBluetoothNbMicId,
+                                          "Fake Bt Mic", "BLUETOOTH_NB_MIC",
+                                          "Bluetooth Nb Mic", 0}};
 
 const AudioNodeInfo kHDMIOutput[] = {
     {false, kHDMIOutputId, "HDMI output", "HDMI", "HDMI output", 25}};
@@ -192,7 +200,7 @@ class TestObserver : public CrasAudioHandler::AudioObserver {
 
   int output_mute_changed_count() const { return output_mute_changed_count_; }
 
-  void reset_output_mute_changed_count() { input_mute_changed_count_ = 0; }
+  void reset_output_mute_changed_count() { output_mute_changed_count_ = 0; }
 
   int input_mute_changed_count() const { return input_mute_changed_count_; }
 
@@ -206,6 +214,36 @@ class TestObserver : public CrasAudioHandler::AudioObserver {
 
   int output_channel_remixing_changed_count() const {
     return output_channel_remixing_changed_count_;
+  }
+
+  int noise_cancellation_state_change_count() const {
+    return noise_cancellation_state_change_count_;
+  }
+
+  int hfp_mic_sr_state_change_count() const {
+    return hfp_mic_sr_state_change_count_;
+  }
+
+  int output_started_change_count() const {
+    return output_started_change_count_;
+  }
+
+  int output_stopped_change_count() const {
+    return output_stopped_change_count_;
+  }
+
+  int nonchrome_output_started_change_count() const {
+    return nonchrome_output_started_change_count_;
+  }
+
+  int nonchrome_output_stopped_change_count() const {
+    return nonchrome_output_stopped_change_count_;
+  }
+
+  int survey_triggerd_count() const { return survey_triggerd_count_; }
+
+  const CrasAudioHandler::AudioSurvey& survey_triggerd_recv() const {
+    return survey_triggerd_recv_;
   }
 
   TestObserver(const TestObserver&) = delete;
@@ -248,6 +286,36 @@ class TestObserver : public CrasAudioHandler::AudioObserver {
     ++output_channel_remixing_changed_count_;
   }
 
+  void OnNoiseCancellationStateChanged() override {
+    ++noise_cancellation_state_change_count_;
+  }
+
+  void OnHfpMicSrStateChanged() override { ++hfp_mic_sr_state_change_count_; }
+
+  void OnOutputStarted() override { ++output_started_change_count_; }
+
+  void OnOutputStopped() override { ++output_stopped_change_count_; }
+
+  void OnNonChromeOutputStarted() override {
+    ++nonchrome_output_started_change_count_;
+  }
+
+  void OnNonChromeOutputStopped() override {
+    ++nonchrome_output_stopped_change_count_;
+  }
+
+  void OnForceRespectUiGainsStateChanged() override {}
+
+  void OnSurveyTriggered(const CrasAudioHandler::AudioSurvey& survey) override {
+    ++survey_triggerd_count_;
+    survey_triggerd_recv_.set_type(survey.type());
+    survey_triggerd_recv_.clear_data();
+
+    for (const auto& it : survey.data()) {
+      survey_triggerd_recv_.AddData(it.first, it.second);
+    }
+  }
+
  private:
   int active_output_node_changed_count_ = 0;
   int active_input_node_changed_count_ = 0;
@@ -257,6 +325,14 @@ class TestObserver : public CrasAudioHandler::AudioObserver {
   int output_volume_changed_count_ = 0;
   int input_gain_changed_count_ = 0;
   int output_channel_remixing_changed_count_ = 0;
+  int noise_cancellation_state_change_count_ = 0;
+  int hfp_mic_sr_state_change_count_ = 0;
+  int output_started_change_count_ = 0;
+  int output_stopped_change_count_ = 0;
+  int nonchrome_output_stopped_change_count_ = 0;
+  int nonchrome_output_started_change_count_ = 0;
+  int survey_triggerd_count_ = 0;
+  CrasAudioHandler::AudioSurvey survey_triggerd_recv_;
 };
 
 class SystemMonitorObserver
@@ -266,8 +342,9 @@ class SystemMonitorObserver
   ~SystemMonitorObserver() override = default;
 
   void OnDevicesChanged(base::SystemMonitor::DeviceType device_type) override {
-    if (device_type == base::SystemMonitor::DeviceType::DEVTYPE_AUDIO)
+    if (device_type == base::SystemMonitor::DeviceType::DEVTYPE_AUDIO) {
       device_changes_received_++;
+    }
   }
 
   int device_changes_received() const { return device_changes_received_; }
@@ -294,13 +371,15 @@ class FakeVideoCaptureManager {
   void RemoveAllObservers() { observers_.Clear(); }
 
   void NotifyVideoCaptureStarted(media::VideoFacingMode facing) {
-    for (auto& observer : observers_)
+    for (auto& observer : observers_) {
       observer.OnVideoCaptureStarted(facing);
+    }
   }
 
   void NotifyVideoCaptureStopped(media::VideoFacingMode facing) {
-    for (auto& observer : observers_)
+    for (auto& observer : observers_) {
       observer.OnVideoCaptureStopped(facing);
+    }
   }
 
  private:
@@ -336,6 +415,11 @@ class CrasAudioHandlerTest : public testing::TestWithParam<int> {
     CrasAudioHandler::Shutdown();
     audio_pref_handler_ = nullptr;
     CrasAudioClient::Shutdown();
+
+    // We can't delete the `MicrophoneMuteSwitchMonitor` singleton, so we
+    // must reset it to a predictable state to prevent the tests from
+    // influencing each other.
+    ui::MicrophoneMuteSwitchMonitor::Get()->SetMicrophoneMuteSwitchValue(false);
   }
 
   AudioNode GenerateAudioNode(const AudioNodeInfo* node_info) {
@@ -385,10 +469,16 @@ class CrasAudioHandlerTest : public testing::TestWithParam<int> {
     CrasAudioClient::InitializeFake();
     audio_pref_handler_ = base::MakeRefCounted<AudioDevicesPrefHandlerStub>();
     bool active;
+
     for (const AudioNode& node : audio_nodes_in_pref) {
       active = node.id == active_device_in_pref.id;
-      audio_pref_handler_->SetDeviceActive(AudioDevice(node), active,
-                                           activate_by_user);
+      AudioDevice device(node);
+      audio_pref_handler_->SetDeviceActive(device, active, activate_by_user);
+
+      // Ensure the active device has higher priority than all other devices.
+      audio_pref_handler_->SetUserPriorityHigherThan(device, nullptr);
+      audio_pref_handler_->SetUserPriorityHigherThan(active_device_in_pref,
+                                                     &device);
     }
 
     bool activate_by;
@@ -441,6 +531,25 @@ class CrasAudioHandlerTest : public testing::TestWithParam<int> {
     base::RunLoop().RunUntilIdle();
   }
 
+  void SetUpCrasAudioHandlerWithPrimaryActiveNodeAndHfpMicSrState(
+      const AudioNodeList& audio_nodes,
+      const AudioNode& primary_active_node,
+      bool hfp_mic_sr_enabled) {
+    CrasAudioClient::InitializeFake();
+    fake_cras_audio_client()->SetAudioNodesForTesting(audio_nodes);
+    fake_cras_audio_client()->SetActiveOutputNode(primary_active_node.id);
+    fake_cras_audio_client()->SetHfpMicSrSupported(
+        /*hfp_mic_sr_supported=*/true);
+    audio_pref_handler_ = base::MakeRefCounted<AudioDevicesPrefHandlerStub>();
+    audio_pref_handler_->SetHfpMicSrState(hfp_mic_sr_enabled);
+    CrasAudioHandler::Initialize(fake_manager_->MakeRemote(),
+                                 audio_pref_handler_);
+    cras_audio_handler_ = CrasAudioHandler::Get();
+    test_observer_ = std::make_unique<TestObserver>();
+    cras_audio_handler_->AddAudioObserver(test_observer_.get());
+    base::RunLoop().RunUntilIdle();
+  }
+
   void ChangeAudioNodes(const AudioNodeList& audio_nodes) {
     fake_cras_audio_client()->SetAudioNodesAndNotifyObserversForTesting(
         audio_nodes);
@@ -463,8 +572,9 @@ class CrasAudioHandlerTest : public testing::TestWithParam<int> {
     AudioDeviceList audio_devices;
     cras_audio_handler_->GetAudioDevices(&audio_devices);
     for (size_t i = 0; i < audio_devices.size(); ++i) {
-      if (audio_devices[i].active)
+      if (audio_devices[i].active) {
         ++num_active_nodes;
+      }
     }
     return num_active_nodes;
   }
@@ -518,11 +628,13 @@ class CrasAudioHandlerTest : public testing::TestWithParam<int> {
   base::test::SingleThreadTaskEnvironment task_environment_;
   base::SystemMonitor system_monitor_;
   SystemMonitorObserver system_monitor_observer_;
-  CrasAudioHandler* cras_audio_handler_ = nullptr;  // Not owned.
+  raw_ptr<CrasAudioHandler, DanglingUntriaged> cras_audio_handler_ =
+      nullptr;  // Not owned.
   std::unique_ptr<TestObserver> test_observer_;
   scoped_refptr<AudioDevicesPrefHandlerStub> audio_pref_handler_;
   std::unique_ptr<FakeMediaControllerManager> fake_manager_;
   std::unique_ptr<FakeVideoCaptureManager> video_capture_manager_;
+  base::HistogramTester histogram_tester_;
 };
 
 class HDMIRediscoverWaiter {
@@ -537,7 +649,7 @@ class HDMIRediscoverWaiter {
 
   void WaitUntilTimeOut(int wait_duration_in_ms) {
     base::RunLoop run_loop;
-    base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE, run_loop.QuitClosure(),
         base::Milliseconds(wait_duration_in_ms));
     run_loop.Run();
@@ -548,7 +660,7 @@ class HDMIRediscoverWaiter {
       std::move(quit_loop_func).Run();
       return;
     }
-    base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE,
         base::BindOnce(&HDMIRediscoverWaiter::CheckHDMIRediscoverGracePeriodEnd,
                        base::Unretained(this), std::move(quit_loop_func)),
@@ -562,7 +674,7 @@ class HDMIRediscoverWaiter {
   }
 
  private:
-  CrasAudioHandlerTest* cras_audio_handler_test_;  // not owned
+  raw_ptr<CrasAudioHandlerTest> cras_audio_handler_test_;  // not owned
   int grace_period_duration_in_ms_;
 };
 
@@ -945,6 +1057,40 @@ TEST_P(CrasAudioHandlerTest, ConnectAndDisconnectBluetoothHeadset) {
   EXPECT_EQ(kHeadphone->id, active_output.id);
   EXPECT_EQ(kHeadphone->id, cras_audio_handler_->GetPrimaryActiveOutputNode());
   EXPECT_TRUE(cras_audio_handler_->has_alternative_output());
+}
+
+TEST_P(CrasAudioHandlerTest, NumberNonChromeOutputs) {
+  AudioNodeList audio_nodes =
+      GenerateAudioNodeList({kInternalSpeaker, kHDMIOutput});
+  SetUpCrasAudioHandler(audio_nodes);
+  // start at 0.
+  EXPECT_EQ(test_observer_->nonchrome_output_started_change_count(), 0);
+  EXPECT_EQ(test_observer_->nonchrome_output_stopped_change_count(), 0);
+  EXPECT_EQ(cras_audio_handler_->NumberOfNonChromeOutputStreams(), 0);
+  fake_cras_audio_client()->SetNumberOfNonChromeOutputStreams(1);
+  EXPECT_EQ(test_observer_->nonchrome_output_started_change_count(), 1);
+  EXPECT_EQ(test_observer_->nonchrome_output_stopped_change_count(), 0);
+  EXPECT_EQ(cras_audio_handler_->NumberOfNonChromeOutputStreams(), 1);
+  // And again, to 2. No change expected.
+  fake_cras_audio_client()->SetNumberOfNonChromeOutputStreams(2);
+  EXPECT_EQ(test_observer_->nonchrome_output_started_change_count(), 1);
+  EXPECT_EQ(test_observer_->nonchrome_output_stopped_change_count(), 0);
+  EXPECT_EQ(cras_audio_handler_->NumberOfNonChromeOutputStreams(), 2);
+  // Down to 0? it gets stopped.
+  fake_cras_audio_client()->SetNumberOfNonChromeOutputStreams(0);
+  EXPECT_EQ(test_observer_->nonchrome_output_started_change_count(), 1);
+  EXPECT_EQ(test_observer_->nonchrome_output_stopped_change_count(), 1);
+  EXPECT_EQ(cras_audio_handler_->NumberOfNonChromeOutputStreams(), 0);
+  // Down to 0 again for some reason: already stopped.
+  fake_cras_audio_client()->SetNumberOfNonChromeOutputStreams(0);
+  EXPECT_EQ(test_observer_->nonchrome_output_started_change_count(), 1);
+  EXPECT_EQ(test_observer_->nonchrome_output_stopped_change_count(), 1);
+  EXPECT_EQ(cras_audio_handler_->NumberOfNonChromeOutputStreams(), 0);
+  // And again, to 2. Up we go.
+  fake_cras_audio_client()->SetNumberOfNonChromeOutputStreams(2);
+  EXPECT_EQ(test_observer_->nonchrome_output_started_change_count(), 2);
+  EXPECT_EQ(test_observer_->nonchrome_output_stopped_change_count(), 1);
+  EXPECT_EQ(cras_audio_handler_->NumberOfNonChromeOutputStreams(), 2);
 }
 
 TEST_P(CrasAudioHandlerTest, InitializeWithHDMIOutput) {
@@ -1377,8 +1523,9 @@ TEST_P(CrasAudioHandlerTest, OneActiveAudioOutputAfterLoginNewUserSession) {
   EXPECT_EQ(kHeadphone->id, cras_audio_handler_->GetPrimaryActiveOutputNode());
   EXPECT_TRUE(cras_audio_handler_->has_alternative_output());
   for (size_t i = 0; i < audio_devices.size(); ++i) {
-    if (audio_devices[i].id != kHeadphone->id)
+    if (audio_devices[i].id != kHeadphone->id) {
       EXPECT_FALSE(audio_devices[i].active);
+    }
   }
 }
 
@@ -1396,6 +1543,7 @@ TEST_P(CrasAudioHandlerTest, NoiseCancellationRefreshPrefEnabledNoNC) {
   // Noise cancellation should still be disabled despite the pref being enabled
   // since the audio_effect of the internal mic is unavailable.
   EXPECT_FALSE(fake_cras_audio_client()->noise_cancellation_enabled());
+  EXPECT_TRUE(audio_pref_handler_->GetNoiseCancellationState());
 }
 
 TEST_P(CrasAudioHandlerTest, NoiseCancellationRefreshPrefEnabledWithNC) {
@@ -1411,6 +1559,7 @@ TEST_P(CrasAudioHandlerTest, NoiseCancellationRefreshPrefEnabledWithNC) {
 
   // Noise Cancellation is enabled.
   EXPECT_TRUE(fake_cras_audio_client()->noise_cancellation_enabled());
+  EXPECT_TRUE(audio_pref_handler_->GetNoiseCancellationState());
 }
 
 TEST_P(CrasAudioHandlerTest, NoiseCancellationRefreshPrefDisableNoNC) {
@@ -1426,6 +1575,7 @@ TEST_P(CrasAudioHandlerTest, NoiseCancellationRefreshPrefDisableNoNC) {
 
   // Noise cancellation should still be disabled since the pref is disabled.
   EXPECT_FALSE(fake_cras_audio_client()->noise_cancellation_enabled());
+  EXPECT_FALSE(audio_pref_handler_->GetNoiseCancellationState());
 }
 
 TEST_P(CrasAudioHandlerTest, NoiseCancellationRefreshPrefDisableWithNC) {
@@ -1441,6 +1591,72 @@ TEST_P(CrasAudioHandlerTest, NoiseCancellationRefreshPrefDisableWithNC) {
 
   // Noise cancellation should still be disabled since the pref is disabled.
   EXPECT_FALSE(fake_cras_audio_client()->noise_cancellation_enabled());
+  EXPECT_FALSE(audio_pref_handler_->GetNoiseCancellationState());
+}
+
+TEST_P(CrasAudioHandlerTest, HfpMicSrRefreshPrefEnabledNoHfpMicSr) {
+  AudioNodeList audio_nodes = GenerateAudioNodeList({});
+  // Set up initial audio devices, only with bluetooth mic.
+  AudioNode bt_nb_mic = GenerateAudioNode(kBluetoothNbMic);
+  // Clear the audio effect, no hfp_mic_sr supported.
+  bt_nb_mic.audio_effect = 0u;
+  audio_nodes.push_back(bt_nb_mic);
+  // Simulate enable pref for hfp_mic_sr.
+  SetUpCrasAudioHandlerWithPrimaryActiveNodeAndHfpMicSrState(
+      audio_nodes, bt_nb_mic, /*hfp_mic_sr_enabled=*/true);
+
+  // hfp_mic_sr should still be disabled despite the pref being enabled
+  // since the audio_effect of the hfp mic sr is unavailable.
+  EXPECT_FALSE(fake_cras_audio_client()->hfp_mic_sr_enabled());
+  EXPECT_TRUE(audio_pref_handler_->GetHfpMicSrState());
+}
+
+TEST_P(CrasAudioHandlerTest, HfpMicSrRefreshPrefEnabledWithHfpMicSr) {
+  AudioNodeList audio_nodes = GenerateAudioNodeList({});
+  // Set up initial audio devices, only with bluetooth mic.
+  AudioNode bt_nb_mic = GenerateAudioNode(kBluetoothNbMic);
+  // Enable hfp_mic_sr effect.
+  bt_nb_mic.audio_effect = cras::EFFECT_TYPE_HFP_MIC_SR;
+  audio_nodes.push_back(bt_nb_mic);
+  // Simulate enable pref for hfp_mic_sr.
+  SetUpCrasAudioHandlerWithPrimaryActiveNodeAndHfpMicSrState(
+      audio_nodes, bt_nb_mic, /*hfp_mic_sr_enabled=*/true);
+
+  // hfp_mic_sr is enabled.
+  EXPECT_TRUE(fake_cras_audio_client()->hfp_mic_sr_enabled());
+  EXPECT_TRUE(audio_pref_handler_->GetHfpMicSrState());
+}
+
+TEST_P(CrasAudioHandlerTest, HfpMicSrRefreshPrefDisableNoHfpMicSr) {
+  AudioNodeList audio_nodes = GenerateAudioNodeList({});
+  // Set up initial audio devices, only with bluetooth mic.
+  AudioNode bt_nb_mic = GenerateAudioNode(kBluetoothNbMic);
+  // Clear audio effect, no hfp_mic_sr.
+  bt_nb_mic.audio_effect = 0u;
+  audio_nodes.push_back(bt_nb_mic);
+  // Simulate enable pref for hfp_mic_sr.
+  SetUpCrasAudioHandlerWithPrimaryActiveNodeAndHfpMicSrState(
+      audio_nodes, bt_nb_mic, /*hfp_mic_sr_enabled=*/false);
+
+  // hfp_mic_sr should still be disabled since the pref is disabled.
+  EXPECT_FALSE(fake_cras_audio_client()->hfp_mic_sr_enabled());
+  EXPECT_FALSE(audio_pref_handler_->GetHfpMicSrState());
+}
+
+TEST_P(CrasAudioHandlerTest, HfpMicSrRefreshPrefDisableWithHfpMicSr) {
+  AudioNodeList audio_nodes = GenerateAudioNodeList({});
+  // Set up initial audio devices, only with bluetooth mic.
+  AudioNode bt_nb_mic = GenerateAudioNode(kBluetoothNbMic);
+  // Enable hfp_mic_sr effect.
+  bt_nb_mic.audio_effect = cras::EFFECT_TYPE_HFP_MIC_SR;
+  audio_nodes.push_back(bt_nb_mic);
+  // Simulate enable pref for hfp_mic_sr.
+  SetUpCrasAudioHandlerWithPrimaryActiveNodeAndHfpMicSrState(
+      audio_nodes, bt_nb_mic, /*hfp_mic_sr_enabled=*/false);
+
+  // hfp_mic_sr should still be disabled since the pref is disabled.
+  EXPECT_FALSE(fake_cras_audio_client()->hfp_mic_sr_enabled());
+  EXPECT_FALSE(audio_pref_handler_->GetHfpMicSrState());
 }
 
 TEST_P(CrasAudioHandlerTest, BluetoothSpeakerIdChangedOnFly) {
@@ -1853,14 +2069,15 @@ TEST_P(CrasAudioHandlerTest, MultipleNodesChangedSignalsOnPlugInHeadphone) {
   cras_audio_handler_->GetAudioDevices(&audio_devices);
   EXPECT_EQ(init_nodes_size + 1, audio_devices.size());
   for (size_t i = 0; i < audio_devices.size(); ++i) {
-    if (audio_devices[i].id == kInternalSpeaker->id)
+    if (audio_devices[i].id == kInternalSpeaker->id) {
       EXPECT_FALSE(audio_devices[i].active);
-    else if (audio_devices[i].id == bluetooth_headset.id)
+    } else if (audio_devices[i].id == bluetooth_headset.id) {
       EXPECT_FALSE(audio_devices[i].active);
-    else if (audio_devices[i].id == headphone.id)
+    } else if (audio_devices[i].id == headphone.id) {
       EXPECT_TRUE(audio_devices[i].active);
-    else
+    } else {
       NOTREACHED();
+    }
   }
 }
 
@@ -1906,12 +2123,13 @@ TEST_P(CrasAudioHandlerTest, MultipleNodesChangedSignalsOnPlugInUSBMic) {
   cras_audio_handler_->GetAudioDevices(&audio_devices);
   EXPECT_EQ(init_nodes_size + 1, audio_devices.size());
   for (size_t i = 0; i < audio_devices.size(); ++i) {
-    if (audio_devices[i].id == kInternalMic->id)
+    if (audio_devices[i].id == kInternalMic->id) {
       EXPECT_FALSE(audio_devices[i].active);
-    else if (audio_devices[i].id == usb_mic.id)
+    } else if (audio_devices[i].id == usb_mic.id) {
       EXPECT_TRUE(audio_devices[i].active);
-    else
+    } else {
       NOTREACHED();
+    }
   }
 }
 
@@ -1954,14 +2172,15 @@ TEST_P(CrasAudioHandlerTest, MultipleNodesChangedSignalsOnSystemBoot) {
   cras_audio_handler_->GetAudioDevices(&audio_devices);
   EXPECT_EQ(init_nodes_size, audio_devices.size());
   for (size_t i = 0; i < audio_devices.size(); ++i) {
-    if (audio_devices[i].id == internal_speaker.id)
+    if (audio_devices[i].id == internal_speaker.id) {
       EXPECT_FALSE(audio_devices[i].active);
-    else if (audio_devices[i].id == headphone.id)
+    } else if (audio_devices[i].id == headphone.id) {
       EXPECT_TRUE(audio_devices[i].active);
-    else if (audio_devices[i].id == internal_mic.id)
+    } else if (audio_devices[i].id == internal_mic.id) {
       EXPECT_TRUE(audio_devices[i].active);
-    else
+    } else {
       NOTREACHED();
+    }
   }
 }
 
@@ -2090,6 +2309,25 @@ TEST_P(CrasAudioHandlerTest, SetOutputMute) {
   EXPECT_FALSE(audio_pref_handler_->GetMuteValue(speaker));
 }
 
+TEST_P(CrasAudioHandlerTest, SetOutputMuteWithSource) {
+  AudioNodeList audio_nodes = GenerateAudioNodeList({kInternalSpeaker});
+  SetUpCrasAudioHandler(audio_nodes);
+  histogram_tester_.ExpectBucketCount(
+      CrasAudioHandler::kOutputVolumeMuteSourceHistogramName,
+      CrasAudioHandler::AudioSettingsChangeSource::kSystemTray,
+      /*expected_count=*/0);
+
+  // Mute the device.
+  cras_audio_handler_->SetOutputMute(
+      true, CrasAudioHandler::AudioSettingsChangeSource::kSystemTray);
+
+  // Verify mute source is recorded.
+  histogram_tester_.ExpectBucketCount(
+      CrasAudioHandler::kOutputVolumeMuteSourceHistogramName,
+      CrasAudioHandler::AudioSettingsChangeSource::kSystemTray,
+      /*expected_count=*/1);
+}
+
 TEST_P(CrasAudioHandlerTest, SetInputMute) {
   AudioNodeList audio_nodes = GenerateAudioNodeList({kInternalMic});
   SetUpCrasAudioHandler(audio_nodes);
@@ -2110,6 +2348,26 @@ TEST_P(CrasAudioHandlerTest, SetInputMute) {
   // Verify the input is unmuted, OnInputMuteChanged event is fired.
   EXPECT_FALSE(cras_audio_handler_->IsInputMuted());
   EXPECT_EQ(2, test_observer_->input_mute_changed_count());
+}
+
+TEST_P(CrasAudioHandlerTest, SetInputMuteWithSource) {
+  AudioNodeList audio_nodes = GenerateAudioNodeList({kInternalMic});
+  SetUpCrasAudioHandler(audio_nodes);
+  histogram_tester_.ExpectBucketCount(
+      CrasAudioHandler::kInputGainMuteSourceHistogramName,
+      CrasAudioHandler::AudioSettingsChangeSource::kSystemTray,
+      /*expected_count=*/0);
+
+  // Mute the device.
+  cras_audio_handler_->SetInputMute(
+      true, CrasAudioHandler::InputMuteChangeMethod::kOther,
+      CrasAudioHandler::AudioSettingsChangeSource::kSystemTray);
+
+  // Verify mute source is recorded.
+  histogram_tester_.ExpectBucketCount(
+      CrasAudioHandler::kInputGainMuteSourceHistogramName,
+      CrasAudioHandler::AudioSettingsChangeSource::kSystemTray,
+      /*expected_count=*/1);
 }
 
 TEST_P(CrasAudioHandlerTest, SetOutputVolumePercent) {
@@ -2334,6 +2592,64 @@ TEST_P(CrasAudioHandlerTest, DecreaseOutputVolumeByOneStepUSB) {
   EXPECT_EQ(0, cras_audio_handler_->GetOutputVolumePercent());
 }
 
+TEST_P(CrasAudioHandlerTest, AdjustOutputVolumeToAudibleLevelUSB) {
+  AudioNodeList audio_nodes =
+      GenerateAudioNodeList({kUSBHeadphone1, kUSBHeadphone2});
+  SetUpCrasAudioHandler(audio_nodes);
+  cras_audio_handler_->ChangeActiveNodes({kUSBHeadphone1->id});
+  cras_audio_handler_->SetOutputVolumePercent(0);
+  cras_audio_handler_->AdjustOutputVolumeToAudibleLevel();
+  EXPECT_EQ(4, cras_audio_handler_->GetOutputVolumePercent());
+
+  cras_audio_handler_->ChangeActiveNodes({kUSBHeadphone2->id});
+  cras_audio_handler_->SetOutputVolumePercent(0);
+  cras_audio_handler_->AdjustOutputVolumeToAudibleLevel();
+  EXPECT_EQ(6, cras_audio_handler_->GetOutputVolumePercent());
+  // If volume is not under audible level, don't change the volume.
+  cras_audio_handler_->ChangeActiveNodes({kUSBHeadphone1->id});
+  cras_audio_handler_->SetOutputVolumePercent(50);
+  cras_audio_handler_->AdjustOutputVolumeToAudibleLevel();
+  EXPECT_EQ(50, cras_audio_handler_->GetOutputVolumePercent());
+
+  cras_audio_handler_->ChangeActiveNodes({kUSBHeadphone2->id});
+  cras_audio_handler_->SetOutputVolumePercent(50);
+  cras_audio_handler_->AdjustOutputVolumeToAudibleLevel();
+  EXPECT_EQ(50, cras_audio_handler_->GetOutputVolumePercent());
+}
+
+TEST_P(CrasAudioHandlerTest, AdjustOutputVolumeToAudibleLevelOther) {
+  AudioNodeList audio_nodes = GenerateAudioNodeList(
+      {kInternalSpeaker, kHeadphone, kOther, kBluetoothHeadset, kHDMIOutput});
+  SetUpCrasAudioHandler(audio_nodes);
+  for (const auto& audio_node : audio_nodes) {
+    cras_audio_handler_->ChangeActiveNodes({audio_node.id});
+    cras_audio_handler_->SetOutputVolumePercent(0);
+    cras_audio_handler_->AdjustOutputVolumeToAudibleLevel();
+    EXPECT_EQ(kDefaultUnmuteVolumePercent,
+              cras_audio_handler_->GetOutputVolumePercent());
+  }
+  // If volume is not under audible level, don't change the volume.
+  for (const auto& audio_node : audio_nodes) {
+    cras_audio_handler_->ChangeActiveNodes({audio_node.id});
+    cras_audio_handler_->SetOutputVolumePercent(50);
+    cras_audio_handler_->AdjustOutputVolumeToAudibleLevel();
+    EXPECT_EQ(50, cras_audio_handler_->GetOutputVolumePercent());
+  }
+}
+
+TEST_P(CrasAudioHandlerTest, RejectInvalidForOutputNodeVolumeChanged) {
+  AudioNodeList audio_nodes = GenerateAudioNodeList({kInternalSpeaker});
+  SetUpCrasAudioHandler(audio_nodes);
+  EXPECT_EQ(0, test_observer_->output_volume_changed_count());
+  const std::vector<int> invalid_volumes = {-1, 101};
+
+  for (const int kVolume : invalid_volumes) {
+    fake_cras_audio_client()->NotifyOutputNodeVolumeChangedForTesting(
+        kInternalSpeaker->id, kVolume);
+    EXPECT_EQ(0, test_observer_->output_volume_changed_count());
+  }
+}
+
 TEST_P(CrasAudioHandlerTest, RestartAudioClientWithCrasReady) {
   AudioNodeList audio_nodes = GenerateAudioNodeList({kInternalSpeaker});
   SetUpCrasAudioHandler(audio_nodes);
@@ -2341,7 +2657,7 @@ TEST_P(CrasAudioHandlerTest, RestartAudioClientWithCrasReady) {
 
   const int kDefaultVolume = cras_audio_handler_->GetOutputVolumePercent();
   // Disable the auto OutputNodeVolumeChanged signal.
-  fake_cras_audio_client()->set_notify_volume_change_with_delay(true);
+  fake_cras_audio_client()->disable_volume_change_events();
 
   fake_cras_audio_client()->SetAudioNodesForTesting(audio_nodes);
   RestartAudioClient();
@@ -2371,7 +2687,7 @@ TEST_P(CrasAudioHandlerTest, RestartAudioClientWithCrasDropRequest) {
 
   const int kDefaultVolume = cras_audio_handler_->GetOutputVolumePercent();
   // Disable the auto OutputNodeVolumeChanged signal.
-  fake_cras_audio_client()->set_notify_volume_change_with_delay(true);
+  fake_cras_audio_client()->disable_volume_change_events();
 
   fake_cras_audio_client()->SetAudioNodesForTesting(audio_nodes);
   RestartAudioClient();
@@ -2405,7 +2721,7 @@ TEST_P(CrasAudioHandlerTest, SetOutputVolumeWithDelayedSignal) {
   EXPECT_EQ(kDefaultVolume, cras_audio_handler_->GetOutputVolumePercent());
 
   // Disable the auto OutputNodeVolumeChanged signal.
-  fake_cras_audio_client()->set_notify_volume_change_with_delay(true);
+  fake_cras_audio_client()->disable_volume_change_events();
 
   // Verify the volume state is not changed before OutputNodeVolumeChanged
   // signal fires.
@@ -2437,7 +2753,7 @@ TEST_P(CrasAudioHandlerTest,
   EXPECT_EQ(kDefaultVolume, cras_audio_handler_->GetOutputVolumePercent());
 
   // Disable the auto OutputNodeVolumeChanged signal.
-  fake_cras_audio_client()->set_notify_volume_change_with_delay(true);
+  fake_cras_audio_client()->disable_volume_change_events();
 
   // Verify the volume state is not changed before OutputNodeVolumeChanged
   // signal fires.
@@ -2488,6 +2804,36 @@ TEST_P(CrasAudioHandlerTest,
   EXPECT_EQ(kVolume, audio_pref_handler_->GetOutputVolumeValue(&device));
 }
 
+TEST_P(CrasAudioHandlerTest,
+       ChangeOutputVolumeFromNonChromeSourceNonActiveDevice) {
+  AudioNodeList audio_nodes =
+      GenerateAudioNodeList({kInternalSpeaker, kHeadphone});
+  AudioDevice active_device(GenerateAudioNode(kInternalSpeaker));
+  SetupCrasAudioHandlerWithActiveNodeInPref(
+      audio_nodes, audio_nodes,
+      AudioDevice(GenerateAudioNode(kInternalSpeaker)), true);
+  EXPECT_EQ(0, test_observer_->output_volume_changed_count());
+
+  cras_audio_handler_->SwitchToDevice(active_device, false,
+                                      CrasAudioHandler::ACTIVATE_BY_USER);
+
+  const AudioDevice* device = GetDeviceFromId(kHeadphone->id);
+  const int kDefaultVolume = 75;
+  int expected_output_volume_changed_count = 1;
+  EXPECT_EQ(expected_output_volume_changed_count,
+            test_observer_->output_volume_changed_count());
+  EXPECT_EQ(kDefaultVolume, audio_pref_handler_->GetOutputVolumeValue(device));
+
+  const int kVolume = 20;
+  fake_cras_audio_client()->NotifyOutputNodeVolumeChangedForTesting(
+      kHeadphone->id, kVolume);
+  EXPECT_EQ(++expected_output_volume_changed_count,
+            test_observer_->output_volume_changed_count());
+  // Since the device is not active,
+  EXPECT_EQ(kDefaultVolume, cras_audio_handler_->GetOutputVolumePercent());
+  EXPECT_EQ(kVolume, audio_pref_handler_->GetOutputVolumeValue(device));
+}
+
 TEST_P(CrasAudioHandlerTest, SetInputGainPercent) {
   AudioNodeList audio_nodes = GenerateAudioNodeList({kInternalMic});
   SetUpCrasAudioHandler(audio_nodes);
@@ -2503,6 +2849,95 @@ TEST_P(CrasAudioHandlerTest, SetInputGainPercent) {
   EXPECT_EQ(1, test_observer_->input_gain_changed_count());
   AudioDevice internal_mic(GenerateAudioNode(kInternalMic));
   EXPECT_EQ(kGain, audio_pref_handler_->GetInputGainValue(&internal_mic));
+}
+
+TEST_P(CrasAudioHandlerTest, SetInputGainWithDelayedSignal) {
+  AudioNodeList audio_nodes = GenerateAudioNodeList({kInternalMic});
+  SetUpCrasAudioHandler(audio_nodes);
+  EXPECT_EQ(0, test_observer_->input_gain_changed_count());
+
+  const int kDefaultGain = cras_audio_handler_->GetInputGainPercent();
+
+  // Disable the auto InputNodeGainChanged signal.
+  fake_cras_audio_client()->disable_gain_change_events();
+
+  // Verify the gain state is not changed before InputNodeGainChanged
+  // signal fires.
+  const int kGain = 60;
+  cras_audio_handler_->SetInputGainPercent(kGain);
+  EXPECT_EQ(0, test_observer_->input_gain_changed_count());
+  EXPECT_EQ(kDefaultGain, cras_audio_handler_->GetInputGainPercent());
+
+  // Verify the output gain is changed to the designated value after
+  // OnInputNodeGainChanged cras signal fires, and the gain change event
+  // has been fired to notify the observers.
+  fake_cras_audio_client()->NotifyInputNodeGainChangedForTesting(
+      kInternalMic->id, kGain);
+  EXPECT_EQ(1, test_observer_->input_gain_changed_count());
+  EXPECT_EQ(kGain, cras_audio_handler_->GetInputGainPercent());
+  AudioDevice device;
+  EXPECT_TRUE(cras_audio_handler_->GetPrimaryActiveInputDevice(&device));
+  EXPECT_EQ(device.id, kInternalMic->id);
+  EXPECT_EQ(kGain, audio_pref_handler_->GetInputGainValue(&device));
+}
+
+TEST_P(CrasAudioHandlerTest,
+       ChangeInputGainsWithDelayedSignalForSingleActiveDevice) {
+  AudioNodeList audio_nodes = GenerateAudioNodeList({kInternalMic});
+  SetUpCrasAudioHandler(audio_nodes);
+  EXPECT_EQ(0, test_observer_->input_gain_changed_count());
+
+  const int kDefaultGain = cras_audio_handler_->GetInputGainPercent();
+
+  // Disable the auto InputNodeGainChanged signal.
+  fake_cras_audio_client()->disable_gain_change_events();
+
+  // Verify the gain state is not changed before InputNodeGainChanged
+  // signal fires.
+  EXPECT_EQ(kDefaultGain, cras_audio_handler_->GetInputGainPercent());
+  const int kGain1 = 10;
+  const int kGain2 = 90;
+  cras_audio_handler_->SetInputGainPercent(kGain1);
+  EXPECT_EQ(0, test_observer_->input_gain_changed_count());
+  EXPECT_EQ(kDefaultGain, cras_audio_handler_->GetInputGainPercent());
+  cras_audio_handler_->SetInputGainPercent(kGain2);
+  EXPECT_EQ(0, test_observer_->input_gain_changed_count());
+  EXPECT_EQ(kDefaultGain, cras_audio_handler_->GetInputGainPercent());
+
+  // Simulate InputNodeGainChanged signal fired with big latency that
+  // it lags behind the SetInputNodeGain requests. Chrome sets the gain
+  // to 50 then 60, but the gain changed signal for 50 comes back after
+  // chrome sets the gain to 60. Verify chrome will sync to the designated
+  // gain level after all signals arrive.
+  fake_cras_audio_client()->NotifyInputNodeGainChangedForTesting(
+      kInternalMic->id, kGain1);
+  EXPECT_EQ(1, test_observer_->input_gain_changed_count());
+  EXPECT_EQ(kGain1, cras_audio_handler_->GetInputGainPercent());
+
+  fake_cras_audio_client()->NotifyInputNodeGainChangedForTesting(
+      kInternalMic->id, kGain2);
+  EXPECT_EQ(2, test_observer_->input_gain_changed_count());
+  EXPECT_EQ(kGain2, cras_audio_handler_->GetInputGainPercent());
+}
+
+TEST_P(CrasAudioHandlerTest,
+       ChangeInputGainFromNonChromeSourceSingleActiveDevice) {
+  AudioNodeList audio_nodes = GenerateAudioNodeList({kInternalMic});
+  SetUpCrasAudioHandler(audio_nodes);
+  EXPECT_EQ(0, test_observer_->input_gain_changed_count());
+
+  // Simulate InputNodeGainChanged signal fired by a non-chrome source.
+  // Verify chrome will sync its gain state to the gain from the signal,
+  // and notify its observers for the gain change event.
+  const int kGain = 20;
+  fake_cras_audio_client()->NotifyInputNodeGainChangedForTesting(
+      kInternalMic->id, kGain);
+  EXPECT_EQ(1, test_observer_->input_gain_changed_count());
+  EXPECT_EQ(kGain, cras_audio_handler_->GetInputGainPercent());
+  AudioDevice device;
+  EXPECT_TRUE(cras_audio_handler_->GetPrimaryActiveInputDevice(&device));
+  EXPECT_EQ(device.id, kInternalMic->id);
+  EXPECT_EQ(kGain, audio_pref_handler_->GetInputGainValue(&device));
 }
 
 TEST_P(CrasAudioHandlerTest, SetMuteForDevice) {
@@ -2650,8 +3085,8 @@ TEST_P(CrasAudioHandlerTest, ActiveDeviceSelectionWithStableDeviceId) {
   EXPECT_EQ(kUSBHeadphone1->id,
             cras_audio_handler_->GetPrimaryActiveOutputNode());
 
-  // Change the active device to internal speaker, now USB headphone becomes
-  // inactive.
+  // Change the active device to internal speaker, now internal speaker has
+  // higher preference priority than USB headphone.
   AudioDevice speaker(GenerateAudioNode(kInternalSpeaker));
   cras_audio_handler_->SwitchToDevice(speaker, true,
                                       CrasAudioHandler::ACTIVATE_BY_USER);
@@ -2673,8 +3108,8 @@ TEST_P(CrasAudioHandlerTest, ActiveDeviceSelectionWithStableDeviceId) {
   audio_nodes.push_back(usb_headset);
   ChangeAudioNodes(audio_nodes);
 
-  // Since USB headset was inactive before it was unplugged, it won't be
-  // selected as active after it's plugged in again.
+  // Since internal speaker has higher preference priority than USB headphone,
+  // it won't be selected as active after it's plugged in again.
   EXPECT_EQ(kInternalSpeaker->id,
             cras_audio_handler_->GetPrimaryActiveOutputNode());
 
@@ -2696,9 +3131,10 @@ TEST_P(CrasAudioHandlerTest, ActiveDeviceSelectionWithStableDeviceId) {
   audio_nodes.push_back(usb_headset);
   ChangeAudioNodes(audio_nodes);
 
-  // There is no active node after USB2 unplugged, the 1st USB got selected
-  // by its priority.
-  EXPECT_EQ(usb_headset.id, cras_audio_handler_->GetPrimaryActiveOutputNode());
+  // There is no active node after USB2 unplugged, the internal speaker got
+  // selected by its preference priority.
+  EXPECT_EQ(kInternalSpeakerId,
+            cras_audio_handler_->GetPrimaryActiveOutputNode());
 
   audio_nodes.clear();
   internal_speaker.active = false;
@@ -2721,7 +3157,7 @@ TEST_P(CrasAudioHandlerTest, ActiveDeviceSelectionWithStableDeviceId) {
 TEST_P(CrasAudioHandlerTest, PersistActiveDeviceAcrossSession) {
   // Set the active device to internal speaker before the session starts.
   AudioNodeList audio_nodes =
-      GenerateAudioNodeList({kInternalSpeaker, kHeadphone});
+      GenerateAudioNodeList({kInternalSpeaker, kUSBHeadphone1});
   SetupCrasAudioHandlerWithActiveNodeInPref(
       audio_nodes, audio_nodes,
       AudioDevice(GenerateAudioNode(kInternalSpeaker)), true);
@@ -2741,7 +3177,7 @@ TEST_P(CrasAudioHandlerTest, PersistActiveSpeakerAcrossReboot) {
   // Simulates the device was shut down with three audio devices, and
   // internal speaker being the active one selected by user.
   AudioNodeList audio_nodes_in_pref =
-      GenerateAudioNodeList({kInternalSpeaker, kHeadphone, kUSBHeadphone1});
+      GenerateAudioNodeList({kInternalSpeaker, kHDMIOutput, kUSBHeadphone1});
 
   // Simulate the first NodesChanged signal coming with only one node.
   AudioNodeList audio_nodes = GenerateAudioNodeList({kUSBHeadphone1});
@@ -2757,9 +3193,9 @@ TEST_P(CrasAudioHandlerTest, PersistActiveSpeakerAcrossReboot) {
   EXPECT_EQ(kUSBHeadphone1->id,
             cras_audio_handler_->GetPrimaryActiveOutputNode());
 
-  // Simulate another NodesChanged signal coming later with all ndoes.
+  // Simulate another NodesChanged signal coming later with all nodes.
   audio_nodes.push_back(GenerateAudioNode(kInternalSpeaker));
-  audio_nodes.push_back(GenerateAudioNode(kHeadphone));
+  audio_nodes.push_back(GenerateAudioNode(kHDMIOutput));
   ChangeAudioNodes(audio_nodes);
 
   // Verify the active output has been restored to internal speaker.
@@ -2849,46 +3285,11 @@ TEST_P(CrasAudioHandlerTest, PlugInHeadphoneFirstTimeAfterPowerDown) {
 }
 
 TEST_P(CrasAudioHandlerTest,
-       PersistActiveUsbHeadphoneAcrossRebootUsbComeLater) {
-  // Simulates the device was shut down with three audio devices, and
-  // usb headphone being the active one selected by priority.
-  AudioNodeList audio_nodes_in_pref =
-      GenerateAudioNodeList({kInternalSpeaker, kHeadphone, kUSBHeadphone1});
-
-  // Simulate the first NodesChanged signal coming with only internal speaker
-  // and the headphone.
-  AudioNodeList audio_nodes =
-      GenerateAudioNodeList({kInternalSpeaker, kHeadphone});
-
-  SetupCrasAudioHandlerWithActiveNodeInPref(
-      audio_nodes, audio_nodes_in_pref,
-      AudioDevice(GenerateAudioNode(kUSBHeadphone1)), false);
-
-  // Verify the headphone has been made active.
-  AudioDeviceList audio_devices;
-  cras_audio_handler_->GetAudioDevices(&audio_devices);
-  EXPECT_EQ(audio_nodes.size(), audio_devices.size());
-  EXPECT_EQ(kHeadphone->id, cras_audio_handler_->GetPrimaryActiveOutputNode());
-
-  // Simulate USB node comes later with all ndoes.
-  AudioNode usb_node = GenerateAudioNode(kUSBHeadphone1);
-  usb_node.plugged_time = 80000000;
-  audio_nodes.push_back(usb_node);
-  ChangeAudioNodes(audio_nodes);
-
-  // Verify the active output has been restored to usb headphone.
-  cras_audio_handler_->GetAudioDevices(&audio_devices);
-  EXPECT_EQ(audio_nodes.size(), audio_devices.size());
-  EXPECT_EQ(kUSBHeadphone1->id,
-            cras_audio_handler_->GetPrimaryActiveOutputNode());
-}
-
-TEST_P(CrasAudioHandlerTest,
        PersistActiveUsbHeadphoneAcrossRebootUsbComeFirst) {
   // Simulates the device was shut down with three audio devices, and
   // usb headphone being the active one selected by priority.
   AudioNodeList audio_nodes_in_pref =
-      GenerateAudioNodeList({kInternalSpeaker, kHeadphone, kUSBHeadphone1});
+      GenerateAudioNodeList({kInternalSpeaker, kUSBHeadphone1, kUSBHeadphone2});
 
   // Simulate the first NodesChanged signal coming with only internal speaker
   // and the USB headphone.
@@ -2906,8 +3307,8 @@ TEST_P(CrasAudioHandlerTest,
   EXPECT_EQ(kUSBHeadphone1->id,
             cras_audio_handler_->GetPrimaryActiveOutputNode());
 
-  // Simulate another NodesChanged signal coming later with all ndoes.
-  AudioNode headphone_node = GenerateAudioNode(kHeadphone);
+  // Simulate another NodesChanged signal coming later with all nodes.
+  AudioNode headphone_node = GenerateAudioNode(kUSBHeadphone2);
   headphone_node.plugged_time = 80000000;
   audio_nodes.push_back(headphone_node);
   ChangeAudioNodes(audio_nodes);
@@ -2916,7 +3317,8 @@ TEST_P(CrasAudioHandlerTest,
   cras_audio_handler_->GetAudioDevices(&audio_devices);
   EXPECT_EQ(audio_nodes.size(), audio_devices.size());
   EXPECT_EQ(kUSBHeadphone1->id,
-            cras_audio_handler_->GetPrimaryActiveOutputNode());
+            cras_audio_handler_->GetPrimaryActiveOutputNode())
+      << headphone_node.id;
 }
 
 // This covers the crbug.com/586026. Cras lost the active state of the internal
@@ -2945,8 +3347,9 @@ TEST_P(CrasAudioHandlerTest, UnplugHeadphoneLostActiveInternalSpeakerByCras) {
   audio_nodes.clear();
   audio_nodes.push_back(GenerateAudioNode(kInternalSpeaker));
   audio_nodes.push_back(GenerateAudioNode(kUSBHeadphone1));
-  for (const auto& node : audio_nodes)
+  for (const auto& node : audio_nodes) {
     ASSERT_FALSE(node.active) << node.id << " expexted to be inactive";
+  }
   ChangeAudioNodes(audio_nodes);
 
   // Verify the active output is set back to internal speaker.
@@ -3203,7 +3606,7 @@ TEST_P(CrasAudioHandlerTest, ChangeVolumeHotrodDualSpeakersWithDelayedSignals) {
   EXPECT_EQ(kDefaultVolume, cras_audio_handler_->GetOutputVolumePercent());
 
   // Disable the auto OutputNodeVolumeChanged signal.
-  fake_cras_audio_client()->set_notify_volume_change_with_delay(true);
+  fake_cras_audio_client()->disable_volume_change_events();
   test_observer_->reset_output_volume_changed_count();
 
   // Adjust the volume of output devices continuously.
@@ -3983,10 +4386,7 @@ TEST_P(CrasAudioHandlerTest, HotPlug35mmHeadphoneAndMic) {
 // priority
 // output devices already plugged and user has manually selected an active
 // output.
-// The hotplug of hdmi output should not change user's selection of active
-// device.
-// crbug.com/447826.
-TEST_P(CrasAudioHandlerTest, HotPlugHDMINotChangeActiveOutput) {
+TEST_P(CrasAudioHandlerTest, HotPlugHDMIChangeActiveOutput) {
   AudioNodeList audio_nodes;
   AudioNode internal_speaker = GenerateAudioNode(kInternalSpeaker);
   audio_nodes.push_back(internal_speaker);
@@ -4026,17 +4426,18 @@ TEST_P(CrasAudioHandlerTest, HotPlugHDMINotChangeActiveOutput) {
   audio_nodes.push_back(hdmi);
   ChangeAudioNodes(audio_nodes);
 
-  // The active output should not change.
-  EXPECT_EQ(kInternalSpeaker->id,
-            cras_audio_handler_->GetPrimaryActiveOutputNode());
+  // The active output change to hdmi as it has higher built-in priority than
+  // the internal speaker.
+  EXPECT_EQ(kHDMIOutputId, cras_audio_handler_->GetPrimaryActiveOutputNode());
 }
 
 // Test the case in which the active device was set to inactive from cras after
 // resuming from suspension state. See crbug.com/478968.
 TEST_P(CrasAudioHandlerTest, ActiveNodeLostAfterResume) {
   AudioNodeList audio_nodes = GenerateAudioNodeList({kHeadphone, kHDMIOutput});
-  for (const auto& node : audio_nodes)
+  for (const auto& node : audio_nodes) {
     ASSERT_FALSE(node.active) << node.id << " expected to be inactive";
+  }
   SetUpCrasAudioHandler(audio_nodes);
 
   // Verify the headphone is selected as the active output.
@@ -4125,8 +4526,9 @@ TEST_P(CrasAudioHandlerTest, HDMIRemainInactiveAfterSuspendResume) {
 // during this process. See crbug.com/478968.
 TEST_P(CrasAudioHandlerTest, ActiveNodeLostDuringLoginSession) {
   AudioNodeList audio_nodes = GenerateAudioNodeList({kHeadphone});
-  for (const auto& node : audio_nodes)
+  for (const auto& node : audio_nodes) {
     ASSERT_FALSE(node.active) << node.id << " expected to be inactive";
+  }
   SetUpCrasAudioHandler(audio_nodes);
 
   // Verify the headphone is selected as the active output.
@@ -4200,8 +4602,8 @@ TEST_P(CrasAudioHandlerTest, HDMIOutputRediscover) {
   EXPECT_FALSE(cras_audio_handler_->IsOutputMuted());
 }
 
-// This tests the case of output unmuting event is notified after the hdmi
-// output re-discover grace period ends, see crbug.com/512601.
+// This tests the case of output unmuting event is not notified after the hdmi
+// output re-discover grace period ends.
 TEST_P(CrasAudioHandlerTest, HDMIOutputUnplugDuringSuspension) {
   AudioNodeList audio_nodes =
       GenerateAudioNodeList({kInternalSpeaker, kHDMIOutput});
@@ -4235,7 +4637,7 @@ TEST_P(CrasAudioHandlerTest, HDMIOutputUnplugDuringSuspension) {
   EXPECT_TRUE(cras_audio_handler_->IsOutputMuted());
 
   // After HDMI re-discover grace period, verify internal speaker is still the
-  // active output and not muted, and unmute event by system is notified.
+  // active output and not muted.
   test_observer_->reset_output_mute_changed_count();
   HDMIRediscoverWaiter waiter(this, grace_period_in_ms);
   waiter.WaitUntilHDMIRediscoverGracePeriodEnd();
@@ -4245,7 +4647,7 @@ TEST_P(CrasAudioHandlerTest, HDMIOutputUnplugDuringSuspension) {
   EXPECT_EQ(kInternalSpeaker->id,
             cras_audio_handler_->GetPrimaryActiveOutputNode());
   EXPECT_FALSE(cras_audio_handler_->IsOutputMuted());
-  EXPECT_EQ(1, test_observer_->output_mute_changed_count());
+  EXPECT_EQ(0, test_observer_->output_mute_changed_count());
 }
 
 TEST_P(CrasAudioHandlerTest, FrontCameraStartStop) {
@@ -4670,10 +5072,12 @@ TEST_P(CrasAudioHandlerTest, ShouldBeForcefullyMutedByAudioPolicy) {
 
     audio_pref_handler_->SetAudioOutputAllowedValue(false);
     EXPECT_TRUE(cras_audio_handler_->IsOutputMutedByPolicy());
+    EXPECT_TRUE(cras_audio_handler_->IsOutputForceMuted());
     EXPECT_TRUE(cras_audio_handler_->IsOutputMuted());
 
     audio_pref_handler_->SetAudioOutputAllowedValue(true);
     EXPECT_FALSE(cras_audio_handler_->IsOutputMutedByPolicy());
+    EXPECT_FALSE(cras_audio_handler_->IsOutputForceMuted());
     EXPECT_EQ(cras_audio_handler_->IsOutputMuted(), previous_value);
   }
 }
@@ -4687,10 +5091,12 @@ TEST_P(CrasAudioHandlerTest, ShouldBeForcefullyMutedBySecurityCurtainMode) {
 
     cras_audio_handler_->SetOutputMuteLockedBySecurityCurtain(true);
     EXPECT_TRUE(cras_audio_handler_->IsOutputMutedBySecurityCurtain());
+    EXPECT_TRUE(cras_audio_handler_->IsOutputForceMuted());
     EXPECT_TRUE(cras_audio_handler_->IsOutputMuted());
 
     cras_audio_handler_->SetOutputMuteLockedBySecurityCurtain(false);
     EXPECT_FALSE(cras_audio_handler_->IsOutputMutedBySecurityCurtain());
+    EXPECT_FALSE(cras_audio_handler_->IsOutputForceMuted());
     EXPECT_EQ(cras_audio_handler_->IsOutputMuted(), previous_value);
   }
 }
@@ -4711,6 +5117,7 @@ TEST_P(CrasAudioHandlerTest,
   // The force mute through the policy should still be in effect.
   EXPECT_TRUE(cras_audio_handler_->IsOutputMuted());
   EXPECT_TRUE(cras_audio_handler_->IsOutputMutedByPolicy());
+  EXPECT_TRUE(cras_audio_handler_->IsOutputForceMuted());
 }
 
 TEST_P(CrasAudioHandlerTest,
@@ -4729,6 +5136,7 @@ TEST_P(CrasAudioHandlerTest,
   // The force mute through the policy should still be in effect.
   EXPECT_TRUE(cras_audio_handler_->IsOutputMuted());
   EXPECT_TRUE(cras_audio_handler_->IsOutputMutedBySecurityCurtain());
+  EXPECT_TRUE(cras_audio_handler_->IsOutputForceMuted());
 }
 
 TEST_P(CrasAudioHandlerTest, MicrophoneMuteKeyboardSwitchTest) {
@@ -4774,6 +5182,326 @@ TEST_P(CrasAudioHandlerTest, MicrophoneMuteKeyboardSwitchTest) {
   EXPECT_TRUE(cras_audio_handler_->IsInputMuted());
   EXPECT_EQ(input_mute_changed_counter,
             test_observer_->input_mute_changed_count());
+}
+
+TEST_P(CrasAudioHandlerTest,
+       InputShouldBeForcefullyMutedBySecurityCurtainMode) {
+  AudioNodeList audio_nodes = GenerateAudioNodeList({kInternalMic, kMicJack});
+  SetUpCrasAudioHandler(audio_nodes);
+
+  for (bool previous_value : {true, false}) {
+    cras_audio_handler_->SetInputMute(
+        previous_value,
+        CrasAudioHandler::InputMuteChangeMethod::kKeyboardButton);
+
+    // Force enable input muting.
+    cras_audio_handler_->SetInputMuteLockedBySecurityCurtain(true);
+    EXPECT_TRUE(cras_audio_handler_->IsInputMutedBySecurityCurtain());
+    EXPECT_TRUE(cras_audio_handler_->IsInputMuted());
+
+    // Trying to unmute should now be blocked.
+    cras_audio_handler_->SetInputMute(
+        false, CrasAudioHandler::InputMuteChangeMethod::kKeyboardButton);
+    EXPECT_TRUE(cras_audio_handler_->IsInputMutedBySecurityCurtain());
+    EXPECT_TRUE(cras_audio_handler_->IsInputMuted());
+
+    // Stop force enabling input muting - the device should go to unmuted state.
+    cras_audio_handler_->SetInputMuteLockedBySecurityCurtain(false);
+    EXPECT_FALSE(cras_audio_handler_->IsInputMutedBySecurityCurtain());
+    EXPECT_FALSE(cras_audio_handler_->IsInputMuted());
+  }
+}
+
+TEST_P(CrasAudioHandlerTest,
+       HwSwitchInputMutingShouldNotBeBrokenBySecurityCurtain) {
+  AudioNodeList audio_nodes = GenerateAudioNodeList({kInternalMic, kMicJack});
+  SetUpCrasAudioHandler(audio_nodes);
+
+  // Simulate hw microphone mute switch toggle.
+  ui::MicrophoneMuteSwitchMonitor::Get()->SetMicrophoneMuteSwitchValue(true);
+
+  // Now enabling and disabling security input muting should not unmute the
+  // device
+
+  cras_audio_handler_->SetInputMuteLockedBySecurityCurtain(true);
+  EXPECT_TRUE(cras_audio_handler_->IsInputMuted());
+
+  cras_audio_handler_->SetInputMuteLockedBySecurityCurtain(false);
+  EXPECT_TRUE(cras_audio_handler_->IsInputMuted());
+}
+
+TEST_P(CrasAudioHandlerTest,
+       SecurityCurtainInputMutingShouldNotBeBrokenByHwSwitch) {
+  AudioNodeList audio_nodes = GenerateAudioNodeList({kInternalMic, kMicJack});
+  SetUpCrasAudioHandler(audio_nodes);
+
+  // Force enable input muting through security curtain
+  cras_audio_handler_->SetInputMuteLockedBySecurityCurtain(true);
+
+  // Now toggling the hw microphone mute switch should not unmute the system.
+  ui::MicrophoneMuteSwitchMonitor::Get()->SetMicrophoneMuteSwitchValue(true);
+  EXPECT_TRUE(cras_audio_handler_->IsInputMuted());
+
+  ui::MicrophoneMuteSwitchMonitor::Get()->SetMicrophoneMuteSwitchValue(false);
+  EXPECT_TRUE(cras_audio_handler_->IsInputMuted());
+}
+
+TEST_P(CrasAudioHandlerTest, IsNoiseCancellationSupportedForDeviceNoNC) {
+  AudioNodeList audio_nodes = GenerateAudioNodeList({});
+  // Set up initial audio devices, only with internal mic.
+  AudioNode internalMic = GenerateAudioNode(kInternalMic);
+  // Clear the audio effect, no Noise Cancellation supported.
+  internalMic.audio_effect = 0u;
+  audio_nodes.push_back(internalMic);
+  // Disable noise cancellation for board.
+  SetUpCrasAudioHandlerWithPrimaryActiveNodeAndNoiseCancellationState(
+      audio_nodes, /*primary_active_node=*/audio_nodes[0],
+      /*noise_cancellation_enabled=*/false);
+
+  EXPECT_FALSE(cras_audio_handler_->IsNoiseCancellationSupportedForDevice(
+      kInternalMicId));
+}
+
+TEST_P(CrasAudioHandlerTest, IsNoiseCancellationSupportedForDeviceWithNC) {
+  AudioNodeList audio_nodes = GenerateAudioNodeList({});
+  AudioNode internalMic = GenerateAudioNode(kInternalMic);
+  // Set the audio effect, Noise Cancellation supported.
+  internalMic.audio_effect = cras::EFFECT_TYPE_NOISE_CANCELLATION;
+  audio_nodes.push_back(internalMic);
+  AudioNode micJack = GenerateAudioNode(kMicJack);
+  // Clear the audio effect, no Noise Cancellation supported.
+  micJack.audio_effect = 0u;
+  audio_nodes.push_back(micJack);
+  AudioNode internalSpeaker = GenerateAudioNode(kInternalSpeaker);
+  // Force audio_effect value to verify output nodes always return false.
+  internalSpeaker.audio_effect = cras::EFFECT_TYPE_NOISE_CANCELLATION;
+  audio_nodes.push_back(internalSpeaker);
+
+  // Enable noise cancellation for board.
+  SetUpCrasAudioHandlerWithPrimaryActiveNodeAndNoiseCancellationState(
+      audio_nodes, /*primary_active_node=*/audio_nodes[0],
+      /*noise_cancellation_enabled=*/true);
+
+  EXPECT_TRUE(cras_audio_handler_->IsNoiseCancellationSupportedForDevice(
+      kInternalMicId));
+  EXPECT_FALSE(
+      cras_audio_handler_->IsNoiseCancellationSupportedForDevice(kMicJackId));
+  EXPECT_FALSE(cras_audio_handler_->IsNoiseCancellationSupportedForDevice(
+      kInternalSpeakerId));
+}
+
+TEST_P(CrasAudioHandlerTest,
+       SetNoiseCancellationStateUpdatesAudioPrefAndClient) {
+  AudioNodeList audio_nodes = GenerateAudioNodeList({});
+  AudioNode internalMic = GenerateAudioNode(kInternalMic);
+  // Set the audio effect, Noise Cancellation supported.
+  internalMic.audio_effect = cras::EFFECT_TYPE_NOISE_CANCELLATION;
+  audio_nodes.push_back(internalMic);
+
+  // Enable noise cancellation for board.
+  SetUpCrasAudioHandlerWithPrimaryActiveNodeAndNoiseCancellationState(
+      audio_nodes, /*primary_active_node=*/audio_nodes[0],
+      /*noise_cancellation_enabled=*/true);
+
+  EXPECT_TRUE(audio_pref_handler_->GetNoiseCancellationState());
+  EXPECT_TRUE(fake_cras_audio_client()->noise_cancellation_enabled());
+
+  // Turn off noise cancellation.
+  cras_audio_handler_->SetNoiseCancellationState(
+      /*noise_cancellation_on=*/false,
+      CrasAudioHandler::AudioSettingsChangeSource::kSystemTray);
+
+  EXPECT_FALSE(audio_pref_handler_->GetNoiseCancellationState());
+  EXPECT_FALSE(fake_cras_audio_client()->noise_cancellation_enabled());
+  histogram_tester_.ExpectBucketCount(
+      CrasAudioHandler::kNoiseCancellationEnabledSourceHistogramName,
+      CrasAudioHandler::AudioSettingsChangeSource::kSystemTray, 1);
+
+  // Turn on noise cancellation.
+  cras_audio_handler_->SetNoiseCancellationState(
+      /*noise_cancellation_on=*/true,
+      CrasAudioHandler::AudioSettingsChangeSource::kSystemTray);
+
+  EXPECT_TRUE(audio_pref_handler_->GetNoiseCancellationState());
+  EXPECT_TRUE(fake_cras_audio_client()->noise_cancellation_enabled());
+  histogram_tester_.ExpectBucketCount(
+      CrasAudioHandler::kNoiseCancellationEnabledSourceHistogramName,
+      CrasAudioHandler::AudioSettingsChangeSource::kSystemTray, 2);
+}
+
+TEST_P(CrasAudioHandlerTest, SetNoiseCancellationStateObserver) {
+  AudioNodeList audio_nodes = GenerateAudioNodeList({});
+  AudioNode internalMic = GenerateAudioNode(kInternalMic);
+  // Set the audio effect, Noise Cancellation supported.
+  internalMic.audio_effect = cras::EFFECT_TYPE_NOISE_CANCELLATION;
+  audio_nodes.push_back(internalMic);
+
+  // Enable noise cancellation for board.
+  SetUpCrasAudioHandlerWithPrimaryActiveNodeAndNoiseCancellationState(
+      audio_nodes, /*primary_active_node=*/audio_nodes[0],
+      /*noise_cancellation_enabled=*/true);
+
+  EXPECT_EQ(0, test_observer_->noise_cancellation_state_change_count());
+
+  // Change noise cancellation state to trigger observer.
+  cras_audio_handler_->SetNoiseCancellationState(
+      false, CrasAudioHandler::AudioSettingsChangeSource::kSystemTray);
+
+  EXPECT_EQ(1, test_observer_->noise_cancellation_state_change_count());
+}
+
+TEST_P(CrasAudioHandlerTest, IsHfpMicSrSupportedForDeviceNoHfpMicSr) {
+  AudioNodeList audio_nodes = GenerateAudioNodeList({});
+  // Set up initial audio devices, only with bluetooth mic.
+  AudioNode bt_nb_mic = GenerateAudioNode(kBluetoothNbMic);
+  // Clear the audio effect, no hfp_mic_sr supported.
+  bt_nb_mic.audio_effect = 0u;
+  audio_nodes.push_back(bt_nb_mic);
+  // Disable hfp_mic_sr for board.
+  SetUpCrasAudioHandlerWithPrimaryActiveNodeAndHfpMicSrState(
+      audio_nodes, /*primary_active_node=*/audio_nodes[0],
+      /*hfp_mic_sr_enabled=*/false);
+
+  EXPECT_FALSE(
+      cras_audio_handler_->IsHfpMicSrSupportedForDevice(kBluetoothNbMicId));
+}
+
+TEST_P(CrasAudioHandlerTest, IsHfpMicSrSupportedForDeviceWithHfpMicSr) {
+  AudioNodeList audio_nodes = GenerateAudioNodeList({});
+  AudioNode bt_nb_mic = GenerateAudioNode(kBluetoothNbMic);
+  // Set the audio effect, hfp_mic_sr supported.
+  bt_nb_mic.audio_effect = cras::EFFECT_TYPE_HFP_MIC_SR;
+  audio_nodes.push_back(bt_nb_mic);
+  AudioNode micJack = GenerateAudioNode(kMicJack);
+  // Clear the audio effect, no hfp_mic_sr supported.
+  micJack.audio_effect = 0u;
+  audio_nodes.push_back(micJack);
+  AudioNode internalSpeaker = GenerateAudioNode(kInternalSpeaker);
+  // Force audio_effect value to verify output nodes always return false.
+  internalSpeaker.audio_effect = cras::EFFECT_TYPE_HFP_MIC_SR;
+  audio_nodes.push_back(internalSpeaker);
+
+  // Enable hfp_mic_sr for board.
+  SetUpCrasAudioHandlerWithPrimaryActiveNodeAndHfpMicSrState(
+      audio_nodes, /*primary_active_node=*/audio_nodes[0],
+      /*hfp_mic_sr_enabled=*/true);
+
+  EXPECT_TRUE(
+      cras_audio_handler_->IsHfpMicSrSupportedForDevice(kBluetoothNbMicId));
+  EXPECT_FALSE(cras_audio_handler_->IsHfpMicSrSupportedForDevice(kMicJackId));
+  EXPECT_FALSE(
+      cras_audio_handler_->IsHfpMicSrSupportedForDevice(kInternalSpeakerId));
+}
+
+TEST_P(CrasAudioHandlerTest, SetHfpMicSrStateUpdatesAudioPrefAndClient) {
+  AudioNodeList audio_nodes = GenerateAudioNodeList({});
+  AudioNode bt_nb_mic = GenerateAudioNode(kBluetoothNbMic);
+  // Set the audio effect, hfp_mic_sr supported.
+  bt_nb_mic.audio_effect = cras::EFFECT_TYPE_HFP_MIC_SR;
+  audio_nodes.push_back(bt_nb_mic);
+
+  // Enable hfp_mic_sr for board.
+  SetUpCrasAudioHandlerWithPrimaryActiveNodeAndHfpMicSrState(
+      audio_nodes, /*primary_active_node=*/audio_nodes[0],
+      /*hfp_mic_sr_enabled=*/true);
+
+  EXPECT_TRUE(audio_pref_handler_->GetHfpMicSrState());
+  EXPECT_TRUE(fake_cras_audio_client()->hfp_mic_sr_enabled());
+
+  // Turn off hfp_mic_sr.
+  cras_audio_handler_->SetHfpMicSrState(
+      /*hfp_mic_sr_on=*/false,
+      CrasAudioHandler::AudioSettingsChangeSource::kSystemTray);
+
+  EXPECT_FALSE(audio_pref_handler_->GetHfpMicSrState());
+  EXPECT_FALSE(fake_cras_audio_client()->hfp_mic_sr_enabled());
+
+  // Turn on hfp_mic_sr.
+  cras_audio_handler_->SetHfpMicSrState(
+      /*hfp_mic_sr_on=*/true,
+      CrasAudioHandler::AudioSettingsChangeSource::kSystemTray);
+
+  EXPECT_TRUE(audio_pref_handler_->GetHfpMicSrState());
+  EXPECT_TRUE(fake_cras_audio_client()->hfp_mic_sr_enabled());
+}
+
+TEST_P(CrasAudioHandlerTest, SetHfpMicSrStateObserver) {
+  AudioNodeList audio_nodes = GenerateAudioNodeList({});
+  AudioNode bt_nb_mic = GenerateAudioNode(kBluetoothNbMic);
+  // Set the audio effect, hfp_mic_sr supported.
+  bt_nb_mic.audio_effect = cras::EFFECT_TYPE_HFP_MIC_SR;
+  audio_nodes.push_back(bt_nb_mic);
+
+  // Enable hfp_mic_sr for board.
+  SetUpCrasAudioHandlerWithPrimaryActiveNodeAndHfpMicSrState(
+      audio_nodes, /*primary_active_node=*/audio_nodes[0],
+      /*hfp_mic_sr_enabled=*/true);
+
+  EXPECT_EQ(0, test_observer_->hfp_mic_sr_state_change_count());
+
+  // Change hfp_mic_sr state to trigger observer.
+  cras_audio_handler_->SetHfpMicSrState(
+      false, CrasAudioHandler::AudioSettingsChangeSource::kSystemTray);
+
+  EXPECT_EQ(1, test_observer_->hfp_mic_sr_state_change_count());
+}
+
+TEST_P(CrasAudioHandlerTest, SpeakOnMuteDetectionSwitchTest) {
+  AudioNodeList audio_nodes = GenerateAudioNodeList({});
+  // Set up initial audio devices, only with internal mic.
+  AudioNode internalMic = GenerateAudioNode(kInternalMic);
+  audio_nodes.push_back(internalMic);
+  SetUpCrasAudioHandlerWithPrimaryActiveNode(audio_nodes, internalMic);
+
+  // Speak-on-mute detection should still be disabled since it is not set during
+  // the initialization.
+  EXPECT_FALSE(fake_cras_audio_client()->speak_on_mute_detection_enabled());
+
+  // Simulate enable speak-on-mute detection from handler, which should enable
+  // speak-on-mute detection in the client.
+  cras_audio_handler_->SetSpeakOnMuteDetection(/*som_on=*/true);
+  EXPECT_TRUE(fake_cras_audio_client()->speak_on_mute_detection_enabled());
+
+  // Simulate disable speak-on-mute detection from handler, which should disable
+  // speak-on-mute detection in the client.
+  cras_audio_handler_->SetSpeakOnMuteDetection(/*som_on=*/false);
+  EXPECT_FALSE(fake_cras_audio_client()->speak_on_mute_detection_enabled());
+}
+
+TEST_P(CrasAudioHandlerTest, AudioSurveyDefault) {
+  AudioNodeList audio_nodes = GenerateAudioNodeList(
+      {kInternalSpeaker, kHeadphone, kInternalMic, kUSBMic1});
+  base::flat_map<std::string, std::string> survey_specific_data = {
+      {"key", "value"}};
+
+  SetUpCrasAudioHandler(audio_nodes);
+
+  // Simulate an audio survey gets triggered.
+  fake_cras_audio_client()->NotifySurveyTriggered(survey_specific_data);
+
+  EXPECT_EQ(test_observer_->survey_triggerd_count(), 1);
+  EXPECT_EQ(test_observer_->survey_triggerd_recv().type(),
+            CrasAudioHandler::SurveyType::kGeneral);
+  EXPECT_THAT(test_observer_->survey_triggerd_recv().data(),
+              testing::ElementsAre(std::make_pair("key", "value")));
+}
+
+TEST_P(CrasAudioHandlerTest, AudioSurveyBluetooth) {
+  AudioNodeList audio_nodes = GenerateAudioNodeList(
+      {kInternalSpeaker, kHeadphone, kInternalMic, kUSBMic1});
+  base::flat_map<std::string, std::string> survey_specific_data = {
+      {CrasAudioHandler::kSurveyNameKey,
+       CrasAudioHandler::kSurveyNameBluetooth}};
+
+  SetUpCrasAudioHandler(audio_nodes);
+
+  // Simulate an audio survey gets triggered.
+  fake_cras_audio_client()->NotifySurveyTriggered(survey_specific_data);
+
+  EXPECT_EQ(test_observer_->survey_triggerd_count(), 1);
+  EXPECT_EQ(test_observer_->survey_triggerd_recv().type(),
+            CrasAudioHandler::SurveyType::kBluetooth);
+  EXPECT_EQ(test_observer_->survey_triggerd_recv().data().size(), 0u);
 }
 
 }  // namespace ash

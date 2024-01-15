@@ -3,7 +3,6 @@
 # found in the LICENSE file.
 
 source_set("net_export") {
-  configs += [ "//build/config/compiler:enable_arc" ]
   sources = [
     "net_export_ui.h",
     "net_export_ui.mm",
@@ -13,10 +12,10 @@ source_set("net_export") {
     "//components/net_log",
     "//components/resources",
     "//ios/chrome/app/strings",
-    "//ios/chrome/browser/application_context",
-    "//ios/chrome/browser/browser_state",
-    "//ios/chrome/browser/url:constants",
-    "//ios/chrome/browser/webui",
+    "//ios/chrome/browser/shared/model/application_context",
+    "//ios/chrome/browser/shared/model/browser_state",
+    "//ios/chrome/browser/shared/model/url:constants",
+    "//ios/chrome/browser/webui/model",
     "//ios/chrome/common:common",
     "//ios/web/public/webui",
     "//net",

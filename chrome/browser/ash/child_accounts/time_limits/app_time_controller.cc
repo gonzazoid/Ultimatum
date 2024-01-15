@@ -8,8 +8,8 @@
 
 #include "ash/constants/notifier_catalogs.h"
 #include "ash/public/cpp/notification_utils.h"
-#include "base/bind.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/strings/strcat.h"
@@ -18,6 +18,7 @@
 #include "base/values.h"
 #include "chrome/browser/apps/app_service/app_service_proxy.h"
 #include "chrome/browser/apps/app_service/app_service_proxy_factory.h"
+#include "chrome/browser/ash/app_list/arc/arc_app_utils.h"
 #include "chrome/browser/ash/child_accounts/child_user_service.h"
 #include "chrome/browser/ash/child_accounts/time_limits/app_activity_registry.h"
 #include "chrome/browser/ash/child_accounts/time_limits/app_service_wrapper.h"
@@ -29,7 +30,6 @@
 #include "chrome/browser/notifications/notification_display_service.h"
 #include "chrome/browser/notifications/notification_handler.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/ui/app_list/arc/arc_app_utils.h"
 #include "chrome/common/pref_names.h"
 #include "chrome/grit/generated_resources.h"
 #include "chromeos/ui/vector_icons/vector_icons.h"
@@ -37,8 +37,6 @@
 #include "components/prefs/pref_registry_simple.h"
 #include "components/prefs/pref_service.h"
 #include "components/services/app_service/public/cpp/app_launch_util.h"
-#include "components/services/app_service/public/cpp/features.h"
-#include "components/services/app_service/public/mojom/types.mojom.h"
 #include "extensions/browser/extension_prefs.h"
 #include "extensions/browser/extension_registry.h"
 #include "extensions/common/extension.h"
@@ -109,7 +107,7 @@ std::u16string GetNotificationTitleFor(const std::u16string& app_name,
 std::u16string GetNotificationMessageFor(
     const std::u16string& app_name,
     AppNotification notification,
-    absl::optional<base::TimeDelta> time_limit) {
+    std::optional<base::TimeDelta> time_limit) {
   switch (notification) {
     case AppNotification::kFiveMinutes:
       return l10n_util::GetStringFUTF16(
@@ -270,7 +268,7 @@ bool AppTimeController::IsExtensionAllowlisted(
   return true;
 }
 
-absl::optional<base::TimeDelta> AppTimeController::GetTimeLimitForApp(
+std::optional<base::TimeDelta> AppTimeController::GetTimeLimitForApp(
     const std::string& app_service_id,
     apps::AppType app_type) const {
   const app_time::AppId app_id =
@@ -329,7 +327,7 @@ void AppTimeController::TimeLimitsPolicyUpdated(const std::string& pref_name) {
   app_registry_->SetReportingEnabled(
       policy::ActivityReportingEnabledFromDict(policy));
 
-  absl::optional<base::TimeDelta> new_reset_time =
+  std::optional<base::TimeDelta> new_reset_time =
       policy::ResetTimeFromDict(policy);
   // TODO(agawronska): Propagate the information about reset time change.
   if (new_reset_time && *new_reset_time != limits_reset_time_)
@@ -369,7 +367,7 @@ void AppTimeController::TimeLimitsAllowlistPolicyUpdated(
 
 void AppTimeController::ShowAppTimeLimitNotification(
     const AppId& app_id,
-    const absl::optional<base::TimeDelta>& time_limit,
+    const std::optional<base::TimeDelta>& time_limit,
     AppNotification notification) {
   DCHECK_NE(AppNotification::kUnknown, notification);
 
@@ -527,24 +525,17 @@ void AppTimeController::OpenFamilyLinkApp() {
   // Link Help app install page.
   DCHECK(
       apps::AppServiceProxyFactory::IsAppServiceAvailableForProfile(profile_));
-  if (base::FeatureList::IsEnabled(apps::kAppServiceLaunchWithoutMojom)) {
-    apps::AppServiceProxyFactory::GetForProfile(profile_)->LaunchAppWithUrl(
-        arc::kPlayStoreAppId, ui::EF_NONE,
-        GURL(ChildUserService::kFamilyLinkHelperAppPlayStoreURL),
-        apps::LaunchSource::kFromChromeInternal);
-  } else {
-    apps::AppServiceProxyFactory::GetForProfile(profile_)->LaunchAppWithUrl(
-        arc::kPlayStoreAppId, ui::EF_NONE,
-        GURL(ChildUserService::kFamilyLinkHelperAppPlayStoreURL),
-        apps::mojom::LaunchSource::kFromChromeInternal);
-  }
+  apps::AppServiceProxyFactory::GetForProfile(profile_)->LaunchAppWithUrl(
+      arc::kPlayStoreAppId, ui::EF_NONE,
+      GURL(ChildUserService::kFamilyLinkHelperAppPlayStoreURL),
+      apps::LaunchSource::kFromChromeInternal);
 }
 
 void AppTimeController::ShowNotificationForApp(
     const std::string& app_name,
     AppNotification notification,
-    absl::optional<base::TimeDelta> time_limit,
-    absl::optional<gfx::ImageSkia> icon) {
+    std::optional<base::TimeDelta> time_limit,
+    std::optional<gfx::ImageSkia> icon) {
   DCHECK(notification == AppNotification::kFiveMinutes ||
          notification == AppNotification::kOneMinute ||
          notification == AppNotification::kTimeLimitChanged ||
@@ -570,8 +561,8 @@ void AppTimeController::ShowNotificationForApp(
   option_fields.fullscreen_visibility =
       message_center::FullscreenVisibility::OVER_USER;
 
-  std::unique_ptr<message_center::Notification> message_center_notification =
-      ash::CreateSystemNotification(
+  message_center::Notification message_center_notification =
+      CreateSystemNotification(
           message_center::NOTIFICATION_TYPE_SIMPLE, notification_id, title,
           message, notification_source, GURL(),
           message_center::NotifierId(
@@ -588,7 +579,7 @@ void AppTimeController::ShowNotificationForApp(
           message_center::SystemNotificationWarningLevel::NORMAL);
 
   if (icon.has_value()) {
-    message_center_notification->set_icon(
+    message_center_notification.set_icon(
         ui::ImageModel::FromImageSkia(icon.value()));
   }
 
@@ -602,7 +593,7 @@ void AppTimeController::ShowNotificationForApp(
                                       notification_id);
 
   notification_display_service->Display(NotificationHandler::Type::TRANSIENT,
-                                        *message_center_notification,
+                                        message_center_notification,
                                         /*metadata=*/nullptr);
 }
 

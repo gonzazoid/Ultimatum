@@ -4,11 +4,12 @@
 
 #include "components/translate/core/browser/translate_model_service.h"
 
-#include "base/bind.h"
 #include "base/files/file.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_macros.h"
+#include "base/task/sequenced_task_runner.h"
 #include "components/optimization_guide/core/optimization_guide_model_provider.h"
 #include "components/optimization_guide/proto/models.pb.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
@@ -65,18 +66,24 @@ TranslateModelService::TranslateModelService(
 }
 
 TranslateModelService::~TranslateModelService() {
-  for (auto& pending_request : pending_model_requests_) {
-    // Clear any pending requests, no model file is acceptable as shutdown is
-    // happening.
-    std::move(pending_request).Run(false);
-  }
-  pending_model_requests_.clear();
+  opt_guide_->RemoveObserverForOptimizationTargetModel(
+      optimization_guide::proto::OPTIMIZATION_TARGET_LANGUAGE_DETECTION, this);
+  // Clear any pending requests, no model file is acceptable as shutdown is
+  // happening.
+  NotifyModelUpdatesAndClear(false);
 }
 
 void TranslateModelService::Shutdown() {
   // This and the optimization guide are keyed services, currently optimization
   // guide is a BrowserContextKeyedService, it will be cleaned first so removing
   // the observer should not be performed.
+  UnloadModelFile();
+  // Clear any pending requests, no model file is acceptable as shutdown is
+  // happening.
+  NotifyModelUpdatesAndClear(false);
+}
+
+void TranslateModelService::UnloadModelFile() {
   if (language_detection_model_file_) {
     // If the model file is already loaded, it should be closed on a
     // background thread.
@@ -84,24 +91,31 @@ void TranslateModelService::Shutdown() {
         FROM_HERE, base::BindOnce(&CloseModelFile,
                                   std::move(*language_detection_model_file_)));
   }
+}
+
+void TranslateModelService::NotifyModelUpdatesAndClear(
+    bool is_model_available) {
   for (auto& pending_request : pending_model_requests_) {
-    // Clear any pending requests, no model file is acceptable as shutdown is
-    // happening.
-    std::move(pending_request).Run(false);
+    std::move(pending_request).Run(is_model_available);
   }
   pending_model_requests_.clear();
 }
 
 void TranslateModelService::OnModelUpdated(
     optimization_guide::proto::OptimizationTarget optimization_target,
-    const optimization_guide::ModelInfo& model_info) {
+    base::optional_ref<const optimization_guide::ModelInfo> model_info) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   if (optimization_target !=
       optimization_guide::proto::OPTIMIZATION_TARGET_LANGUAGE_DETECTION) {
     return;
   }
+  if (!model_info.has_value()) {
+    UnloadModelFile();
+    NotifyModelUpdatesAndClear(false);
+    return;
+  }
   background_task_runner_->PostTaskAndReplyWithResult(
-      FROM_HERE, base::BindOnce(&LoadModelFile, model_info.GetModelFilePath()),
+      FROM_HERE, base::BindOnce(&LoadModelFile, model_info->GetModelFilePath()),
       base::BindOnce(&TranslateModelService::OnModelFileLoaded,
                      weak_ptr_factory_.GetWeakPtr()));
 }
@@ -112,25 +126,10 @@ void TranslateModelService::OnModelFileLoaded(base::File model_file) {
   if (!model_file.IsValid())
     return;
 
-  if (language_detection_model_file_) {
-    // If the model file is already loaded, it should be closed on a
-    // background thread.
-    background_task_runner_->PostTask(
-        FROM_HERE, base::BindOnce(&CloseModelFile,
-                                  std::move(*language_detection_model_file_)));
-  }
+  UnloadModelFile();
   language_detection_model_file_ = std::move(model_file);
   result_recorder.set_was_loaded();
-  UMA_HISTOGRAM_COUNTS_100(
-      "TranslateModelService.LanguageDetectionModel.PendingRequestCallbacks",
-      pending_model_requests_.size());
-  for (auto& pending_request : pending_model_requests_) {
-    if (!pending_request) {
-      continue;
-    }
-    std::move(pending_request).Run(true);
-  }
-  pending_model_requests_.clear();
+  NotifyModelUpdatesAndClear(true);
 }
 
 base::File TranslateModelService::GetLanguageDetectionModelFile() {

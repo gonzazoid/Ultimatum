@@ -7,11 +7,16 @@
  * the UI. Both top-level categories and content settings that represent
  * individual permissions under Site Details should appear here.
  * This should be kept in sync with the |kContentSettingsTypeGroupNames| array
- * in chrome/browser/ui/webui/settings/site_settings_helper.cc
+ * in chrome/browser/ui/webui/settings/site_settings_helper.cc. See
+ * chrome/browser/resources/settings/site_settings_page/site_settings_page_util
+ * for translations.
  */
+
 export enum ContentSettingsTypes {
   ADS = 'ads',
+  ANTI_ABUSE = 'anti-abuse',
   AR = 'ar',
+  AUTO_PICTURE_IN_PICTURE = 'auto-picture-in-picture',
   AUTOMATIC_DOWNLOADS = 'multiple-automatic-downloads',
   BACKGROUND_SYNC = 'background-sync',
   BLUETOOTH_DEVICES = 'bluetooth-devices',
@@ -28,24 +33,30 @@ export enum ContentSettingsTypes {
   JAVASCRIPT = 'javascript',
   LOCAL_FONTS = 'local-fonts',
   MIC = 'media-stream-mic',  // AKA Microphone.
+  MIDI = 'midi',
   MIDI_DEVICES = 'midi-sysex',
   MIXEDSCRIPT = 'mixed-script',
   NOTIFICATIONS = 'notifications',
   PAYMENT_HANDLER = 'payment-handler',
+  PERFORMANCE = 'performance',
   POPUPS = 'popups',
+  PRIVATE_NETWORK_DEVICES = 'private-network-devices',
   PROTECTED_CONTENT = 'protected-content',
   PROTOCOL_HANDLERS = 'register-protocol-handler',
   SENSORS = 'sensors',
   SERIAL_PORTS = 'serial-ports',
   SOUND = 'sound',
+  STORAGE_ACCESS = 'storage-access',
   USB_DEVICES = 'usb-devices',
   VR = 'vr',
   WINDOW_MANAGEMENT = 'window-placement',
   ZOOM_LEVELS = 'zoom-levels',
+  WEB_PRINTING = 'web-printing',
 
-  // The following item is not in the C++ kContentSettingsTypeGroupNames, but it
-  // is used everywhere where ContentSettingsTypes is used in JS.
+  // The following items are not in the C++ kContentSettingsTypeGroupNames, but
+  // are used everywhere where ContentSettingsTypes is used in JS.
   PDF_DOCUMENTS = 'pdfDocuments',
+  SITE_DATA = 'site-data',
 }
 
 /**
@@ -73,6 +84,7 @@ export enum ChooserType {
   SERIAL_PORTS = 'serial-ports-data',
   HID_DEVICES = 'hid-devices-data',
   BLUETOOTH_DEVICES = 'bluetooth-devices-data',
+  PRIVATE_NETWORK_DEVICES = 'private-network-devices-data',
 }
 
 /**
@@ -105,14 +117,15 @@ export enum SiteSettingSource {
 }
 
 /**
- * Enumeration of states for the notification default setting generated pref.
- * Must be kept in sync with the enum of the same name located in:
- * chrome/browser/content_settings/generated_notification_pref.h
+ * Enumeration of states for the notification and geolocation default setting
+ * generated pref. Must be kept in sync with the SettingsState enum in:
+ * chrome/browser/content_settings/generated_permission_prompting_behavior_pref.h
  */
-export enum NotificationSetting {
-  ASK = 0,
-  QUIETER_MESSAGING = 1,
-  BLOCK = 2,
+export enum SettingsState {
+  LOUD = 0,
+  QUIET = 1,
+  CPSS = 2,
+  BLOCK = 3,
 }
 
 /**
@@ -163,3 +176,24 @@ export enum AllSitesDialog {
  * match for SiteExceptions.
  */
 export const SITE_EXCEPTION_WILDCARD: string = '*';
+
+/**
+ * Corresponds to the animation-duration CSS parameter defined in
+ * chrome/browser/resources/settings/site_settings_page/site_review_shared.css.
+ * Set to be slightly higher, as we want to ensure that the animation is
+ * finished before updating the model for the right visual effect.
+ */
+export const MODEL_UPDATE_DELAY_MS = 300;
+
+/**
+ * Types of cookies exceptions based on the use of wildcard in the patterns:
+ * - THIRD_PARTY: primary pattern is wildcard (third-party exception).
+ * - SITE_DATA: primary pattern is set, secondary pattern is wildcard (site data
+ * exceptions) or is set (only possible via extensions API).
+ * - COMBINED: any pattern combination can be used.
+ */
+export enum CookiesExceptionType {
+  THIRD_PARTY = 'third-party',
+  SITE_DATA = 'site-data',
+  COMBINED = 'combined',
+}

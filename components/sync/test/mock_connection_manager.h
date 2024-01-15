@@ -13,8 +13,8 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/compiler_specific.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/synchronization/lock.h"
 #include "components/sync/base/model_type.h"
@@ -58,7 +58,6 @@ class MockConnectionManager : public ServerConnectionManager {
   // Overridden ServerConnectionManager functions.
   HttpResponse PostBuffer(const std::string& buffer_in,
                           const std::string& access_token,
-                          bool allow_batching,
                           std::string* buffer_out) override;
 
   // Control of commit response.
@@ -146,9 +145,6 @@ class MockConnectionManager : public ServerConnectionManager {
   void SetKeystoreKey(const std::string& key);
 
   void FailNonPeriodicGetUpdates() { fail_non_periodic_get_updates_ = true; }
-
-  // Simple inspectors.
-  bool client_stuck() const { return client_stuck_; }
 
   void SetGUClientCommand(std::unique_ptr<sync_pb::ClientCommand> command);
   void SetCommitClientCommand(std::unique_ptr<sync_pb::ClientCommand> command);
@@ -291,7 +287,7 @@ class MockConnectionManager : public ServerConnectionManager {
       ModelType value);
 
   // When false, we pretend to have network connectivity issues.
-  bool server_reachable_;
+  bool server_reachable_ = true;
 
   // All IDs that have been committed.
   std::vector<std::string> committed_ids_;
@@ -300,47 +296,46 @@ class MockConnectionManager : public ServerConnectionManager {
   std::vector<std::string> transient_error_ids_;
 
   // Control of when/if we return conflicts.
-  bool conflict_all_commits_;
-  int conflict_n_commits_;
+  bool conflict_all_commits_ = false;
+  int conflict_n_commits_ = 0;
 
   // Commit messages we've sent, and responses we've returned.
   std::vector<std::unique_ptr<sync_pb::CommitMessage>> commit_messages_;
   std::vector<std::unique_ptr<sync_pb::CommitResponse>> commit_responses_;
 
   // The next id the mock will return to a commit.
-  int next_new_id_;
+  int next_new_id_ = 10000;
 
   // The store birthday we send to the client.
-  std::string store_birthday_;
+  std::string store_birthday_ = "Store BDay!";
   base::Lock store_birthday_lock_;
-  bool store_birthday_sent_;
-  bool client_stuck_;
+  bool store_birthday_sent_ = false;
 
   // On each PostBufferToPath() call, we decrement this counter.  The call fails
   // iff we hit zero at that call.
-  int countdown_to_postbuffer_fail_;
+  int countdown_to_postbuffer_fail_ = 0;
 
   // The updates we'll return to the next request.
   std::list<sync_pb::GetUpdatesResponse> update_queue_;
   base::OnceClosure mid_commit_callback_;
-  raw_ptr<MidCommitObserver> mid_commit_observer_;
+  raw_ptr<MidCommitObserver> mid_commit_observer_ = nullptr;
 
   // The keystore key we return for a GetUpdates with need_encryption_key set.
   std::string keystore_key_;
 
   // Whether we are faking a server mandating clients to throttle requests.
   // Protected by |response_code_override_lock_|.
-  bool throttling_;
+  bool throttling_ = false;
 
   // Whether we are faking a server mandating clients to partial failure
   // requests.
   // Protected by |response_code_override_lock_|.
-  bool partial_failure_;
+  bool partial_failure_ = false;
 
   base::Lock response_code_override_lock_;
 
   // True if we are only accepting GetUpdatesCallerInfo::PERIODIC requests.
-  bool fail_non_periodic_get_updates_;
+  bool fail_non_periodic_get_updates_ = false;
 
   std::unique_ptr<sync_pb::ClientCommand> gu_client_command_;
   std::unique_ptr<sync_pb::ClientCommand> commit_client_command_;
@@ -349,7 +344,7 @@ class MockConnectionManager : public ServerConnectionManager {
 
   ModelTypeSet partial_failure_type_;
 
-  int num_get_updates_requests_;
+  int num_get_updates_requests_ = 0;
 
   std::string next_token_;
 

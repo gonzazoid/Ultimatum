@@ -6,6 +6,7 @@
 
 #include <memory>
 #include <string>
+#include <tuple>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -15,19 +16,19 @@
 #include "chrome/browser/ash/login/test/device_state_mixin.h"
 #include "chrome/browser/ash/login/test/login_manager_mixin.h"
 #include "chrome/browser/ash/login/test/user_policy_mixin.h"
-#include "chrome/browser/ash/platform_keys/key_permissions/key_permissions.pb.h"
-#include "chrome/browser/ash/platform_keys/key_permissions/key_permissions_pref_util.h"
+#include "chrome/browser/ash/platform_keys/key_permissions/key_permissions_util.h"
 #include "chrome/browser/ash/platform_keys/platform_keys_service.h"
 #include "chrome/browser/ash/platform_keys/platform_keys_service_factory.h"
 #include "chrome/browser/ash/platform_keys/platform_keys_service_test_util.h"
 #include "chrome/browser/ash/scoped_test_system_nss_key_slot_mixin.h"
 #include "chrome/browser/browser_process.h"
-#include "chrome/browser/platform_keys/platform_keys.h"
+#include "chrome/browser/chromeos/platform_keys/platform_keys.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/common/pref_names.h"
 #include "chrome/test/base/mixin_based_in_process_browser_test.h"
 #include "chromeos/ash/components/login/auth/public/user_context.h"
+#include "chromeos/components/kcer/key_permissions.pb.h"
 #include "components/prefs/pref_test_utils.h"
 #include "components/signin/public/identity_manager/identity_test_utils.h"
 #include "content/public/test/browser_test.h"
@@ -97,29 +98,25 @@ class KeyPermissionsManagerBrowserTestBase
   virtual KeyPermissionsManager* GetKeyPermissionsManager() = 0;
 
   std::vector<uint8_t> GenerateKey() {
-    test_util::GenerateKeyExecutionWaiter generate_key_waiter;
+    base::test::TestFuture<std::vector<uint8_t>,
+                           chromeos::platform_keys::Status>
+        generate_key_waiter;
     GetPlatformKeysService()->GenerateRSAKey(GetToken(),
                                              /*modulus_length_bits=*/2048,
                                              /*sw_backed=*/false,
                                              generate_key_waiter.GetCallback());
     EXPECT_TRUE(generate_key_waiter.Wait());
-    const std::string& pub_key = generate_key_waiter.public_key_spki_der();
-    return std::vector<uint8_t>(pub_key.begin(), pub_key.end());
+    return std::get<std::vector<uint8_t>>(generate_key_waiter.Take());
   }
 
   // Returns all keys on the token.
   std::vector<std::vector<uint8_t>> GetAllKeys() {
-    test_util::GetAllKeysExecutionWaiter get_all_keys_waiter;
+    base::test::TestFuture<std::vector<std::vector<uint8_t>>, Status>
+        get_all_keys_waiter;
     GetPlatformKeysService()->GetAllKeys(GetToken(),
                                          get_all_keys_waiter.GetCallback());
     EXPECT_TRUE(get_all_keys_waiter.Wait());
-
-    std::vector<std::vector<uint8_t>> result;
-    result.reserve(get_all_keys_waiter.public_keys().size());
-    for (const auto& pub_key_str : get_all_keys_waiter.public_keys()) {
-      result.emplace_back(pub_key_str.begin(), pub_key_str.end());
-    }
-    return result;
+    return std::get<0>(get_all_keys_waiter.Take());
   }
 
   // Sets |usage| of |public_key| to |allowed| by altering kKeyPermissions key
@@ -141,18 +138,14 @@ class KeyPermissionsManagerBrowserTestBase
         break;
     }
 
-    const std::string serialized_key_permissions =
-        key_permissions.SerializeAsString();
-
-    std::string public_key_str(public_key.begin(), public_key.end());
-
-    test_util::SetAttributeForKeyExecutionWaiter set_attr_waiter;
+    base::test::TestFuture<Status> set_attr_waiter;
     GetPlatformKeysService()->SetAttributeForKey(
-        GetToken(), public_key_str, KeyAttributeType::kKeyPermissions,
-        serialized_key_permissions, set_attr_waiter.GetCallback());
+        GetToken(), public_key, KeyAttributeType::kKeyPermissions,
+        internal::KeyPermissionsProtoToBytes(key_permissions),
+        set_attr_waiter.GetCallback());
     ASSERT_TRUE(set_attr_waiter.Wait());
 
-    ASSERT_EQ(set_attr_waiter.status(), Status::kSuccess);
+    ASSERT_EQ(set_attr_waiter.Get<Status>(), Status::kSuccess);
   }
 
   // Checks if |public_key| is allowed for |usage| by checking kKeyPermissions
@@ -161,23 +154,21 @@ class KeyPermissionsManagerBrowserTestBase
   // fake chaps.
   bool IsKeyAllowedForUsageInChaps(KeyUsage usage,
                                    const std::vector<uint8_t>& public_key) {
-    std::string public_key_str(public_key.begin(), public_key.end());
-
-    test_util::GetAttributeForKeyExecutionWaiter get_attr_waiter;
+    base::test::TestFuture<absl::optional<std::vector<uint8_t>>, Status>
+        get_attr_waiter;
     GetPlatformKeysService()->GetAttributeForKey(
-        GetToken(), public_key_str, KeyAttributeType::kKeyPermissions,
+        GetToken(), public_key, KeyAttributeType::kKeyPermissions,
         get_attr_waiter.GetCallback());
     EXPECT_TRUE(get_attr_waiter.Wait());
 
-    if (!get_attr_waiter.attribute_value().has_value()) {
+    absl::optional<std::vector<uint8_t>> attr = get_attr_waiter.Get<0>();
+    if (!attr.has_value()) {
       return false;
     }
 
-    std::string serialized_key_permissions =
-        get_attr_waiter.attribute_value().value();
-
     chaps::KeyPermissions key_permissions;
-    EXPECT_TRUE(key_permissions.ParseFromString(serialized_key_permissions));
+    EXPECT_TRUE(
+        internal::KeyPermissionsProtoFromBytes(attr.value(), key_permissions));
 
     switch (usage) {
       case KeyUsage::kArc:

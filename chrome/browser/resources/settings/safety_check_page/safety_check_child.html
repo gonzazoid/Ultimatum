@@ -16,6 +16,10 @@
     width: var(--cr-link-row-icon-width, var(--cr-icon-size));
   }
 
+  .button-icon {
+    padding-inline-end: 0;
+  }
+
   .icon-blue {
     fill: var(--google-blue-600);
   }
@@ -43,14 +47,19 @@
     aria-label="[[getStatusIconAriaLabel_(iconStatus)]]">
 </iron-icon>
 <div class="flex cr-padded-text">
-  <div id="label" inner-h-t-m-l="[[label]]"></div>
-  <div id="subLabel" class="secondary" no-search inner-h-t-m-l="[[subLabel]]">
+  <div id="label" inner-h-t-m-l="[[sanitizeInnerHtml_(label)]]"></div>
+  <div id="subLabel" class="secondary" no-search
+      inner-h-t-m-l="[[sanitizeInnerHtml_(subLabel)]]">
   </div>
 </div>
 <template is="dom-if" if="[[showButton_(buttonLabel)]]" restamp>
   <cr-button id="button" class$="[[buttonClass]]" on-click="onButtonClick_"
       aria-label="[[buttonAriaLabel]]" no-search>
     [[buttonLabel]]
+    <template is="dom-if" if="[[showButtonIcon_(buttonIcon)]]">
+      <iron-icon class="button-icon icon-blue" icon="[[buttonIcon]]" slot="suffix-icon">
+      </iron-icon>
+    </template>
   </cr-button>
 </template>
 <template is="dom-if" if="[[showManagedIcon_(managedIcon)]]">

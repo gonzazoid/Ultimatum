@@ -10,6 +10,8 @@
 #include <utility>
 #include <vector>
 
+#include "base/component_export.h"
+#include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/strings/string_split.h"
 #include "build/build_config.h"
@@ -34,13 +36,15 @@ struct AXNodeData;
 
 // TODO(nektar): Move this struct over to AXNode so that it can be accessed by
 // AXPosition.
-struct AX_EXPORT AXLegacyHypertext {
+struct COMPONENT_EXPORT(AX_PLATFORM) AXLegacyHypertext {
   using OffsetToIndex = std::map<int32_t, int32_t>;
 
   AXLegacyHypertext();
   ~AXLegacyHypertext();
   AXLegacyHypertext(const AXLegacyHypertext& other);
   AXLegacyHypertext& operator=(const AXLegacyHypertext& other);
+  AXLegacyHypertext(AXLegacyHypertext&& other) noexcept;
+  AXLegacyHypertext& operator=(AXLegacyHypertext&& other);
 
   // A flag that should be set if the hypertext information in this struct is
   // out-of-date and needs to be updated. This flag should always be set upon
@@ -61,7 +65,7 @@ struct AX_EXPORT AXLegacyHypertext {
   std::u16string hypertext;
 };
 
-class AX_EXPORT AXPlatformNodeBase : public AXPlatformNode {
+class COMPONENT_EXPORT(AX_PLATFORM) AXPlatformNodeBase : public AXPlatformNode {
  public:
   using AXPosition = AXNodePosition::AXPositionInstance;
 
@@ -100,7 +104,8 @@ class AX_EXPORT AXPlatformNodeBase : public AXPlatformNode {
   void NotifyAccessibilityEvent(ax::mojom::Event event_type) override;
 
 #if BUILDFLAG(IS_APPLE)
-  void AnnounceText(const std::u16string& text) override;
+  void AnnounceTextAs(const std::u16string& text,
+                      AnnouncementType announcement_type) override;
 #endif
 
   AXPlatformNodeDelegate* GetDelegate() const override;
@@ -127,7 +132,7 @@ class AX_EXPORT AXPlatformNodeBase : public AXPlatformNode {
   AXPlatformNodeChildIterator AXPlatformNodeChildrenBegin() const;
   AXPlatformNodeChildIterator AXPlatformNodeChildrenEnd() const;
 
-  ax::mojom::Role GetRole() const;
+  virtual ax::mojom::Role GetRole() const;
   bool HasBoolAttribute(ax::mojom::BoolAttribute attribute) const;
   bool GetBoolAttribute(ax::mojom::BoolAttribute attribute) const;
   bool GetBoolAttribute(ax::mojom::BoolAttribute attribute, bool* value) const;
@@ -283,6 +288,11 @@ class AX_EXPORT AXPlatformNodeBase : public AXPlatformNode {
 
   // Returns true if this node is currently focused.
   bool IsFocused() const;
+
+  // Returns true if this node is focusable.
+  // This does more than just use HasState(ax::mojom::State::kFocusable) -- it
+  // also checks whether the object is a likely activedescendant.
+  bool IsFocusable() const;
 
   // Returns true if this node can be scrolled either in the horizontal or the
   // vertical direction.

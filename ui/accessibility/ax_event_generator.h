@@ -22,8 +22,6 @@
 
 namespace ui {
 
-class AXLiveRegionTracker;
-
 // Subclass of AXTreeObserver that automatically generates AXEvents to fire
 // based on changes to an accessibility tree.  Every platform
 // tends to want different events, so this class lets each platform
@@ -43,6 +41,7 @@ class AX_EXPORT AXEventGenerator : public AXTreeObserver {
     ATK_TEXT_OBJECT_ATTRIBUTE_CHANGED,
     ATOMIC_CHANGED,
     AUTO_COMPLETE_CHANGED,
+    AUTOFILL_AVAILABILITY_CHANGED,
     BUSY_CHANGED,
     CARET_BOUNDS_CHANGED,
     CHECKED_STATE_CHANGED,
@@ -94,6 +93,7 @@ class AX_EXPORT AXEventGenerator : public AXTreeObserver {
     MULTISELECTABLE_STATE_CHANGED,
     NAME_CHANGED,
     OBJECT_ATTRIBUTE_CHANGED,
+    ORIENTATION_CHANGED,
     OTHER_ATTRIBUTE_CHANGED,
     PARENT_CHANGED,
     PLACEHOLDER_CHANGED,
@@ -156,7 +156,9 @@ class AX_EXPORT AXEventGenerator : public AXTreeObserver {
     ~TargetedEvent();
 
     const AXNodeID node_id;
-    const EventParams& event_params;
+    // This field is not a raw_ref<> because it was filtered by the rewriter
+    // for: #constexpr-ctor-field-initializer
+    RAW_PTR_EXCLUSION const EventParams& event_params;
   };
 
   class AX_EXPORT Iterator {
@@ -250,9 +252,11 @@ class AX_EXPORT AXEventGenerator : public AXTreeObserver {
 
  protected:
   // AXTreeObserver overrides.
-  void OnIgnoredWillChange(AXTree* tree,
-                           AXNode* node,
-                           bool is_ignored_new_value) override;
+  void OnIgnoredWillChange(
+      AXTree* tree,
+      AXNode* node,
+      bool is_ignored_new_value,
+      bool is_changing_unignored_parents_children) override;
   void OnNodeDataChanged(AXTree* tree,
                          const AXNodeData& old_node_data,
                          const AXNodeData& new_node_data) override;
@@ -295,7 +299,6 @@ class AX_EXPORT AXEventGenerator : public AXTreeObserver {
   void OnTreeDataChanged(AXTree* tree,
                          const ui::AXTreeData& old_data,
                          const ui::AXTreeData& new_data) override;
-  void OnNodeWillBeDeleted(AXTree* tree, AXNode* node) override;
   void OnSubtreeWillBeDeleted(AXTree* tree, AXNode* node) override;
   void OnNodeWillBeReparented(AXTree* tree, AXNode* node) override;
   void OnSubtreeWillBeReparented(AXTree* tree, AXNode* node) override;
@@ -316,7 +319,10 @@ class AX_EXPORT AXEventGenerator : public AXTreeObserver {
       const std::vector<int32_t>& lhs,
       const std::vector<int32_t>& rhs);
 
-  void FireLiveRegionEvents(AXNode* node);
+  // Return true if this node can fire live region events when it's removed.
+  bool IsRemovalRelevantInLiveRegion(AXNode* node);
+
+  void FireLiveRegionEvents(AXNode* node, bool is_removal);
   void FireActiveDescendantEvents();
   // If the given target node is inside a text field and the node's modification
   // could affect the field's value, generates an `VALUE_IN_TEXT_FIELD_CHANGED`
@@ -345,14 +351,12 @@ class AX_EXPORT AXEventGenerator : public AXTreeObserver {
           ancestor_ignored_changed_map);
   void PostprocessEvents();
 
-  AXLiveRegionTracker* GetOrCreateLiveRegionTracker();
-
   raw_ptr<AXTree> tree_ = nullptr;  // Not owned.
   std::map<AXNodeID, std::set<EventParams>> tree_events_;
 
   // Valid between the call to OnIntAttributeChanged and the call to
   // OnAtomicUpdateFinished. List of nodes whose active descendant changed.
-  std::vector<AXNode*> active_descendant_changed_;
+  std::vector<raw_ptr<AXNode, VectorExperimental>> active_descendant_changed_;
 
   // Keeps track of nodes that have changed their state from ignored to
   // unignored, but which used to be in an invisible subtree. We should not fire
@@ -360,11 +364,8 @@ class AX_EXPORT AXEventGenerator : public AXTreeObserver {
   // previously unknown to ATs.
   std::set<AXNodeID> nodes_to_suppress_parent_changed_on_;
 
-  // Helper that tracks live regions.
-  std::unique_ptr<AXLiveRegionTracker> live_region_tracker_;
-
-  // Please make sure that this ScopedObserver is always declared last in order
-  // to prevent any use-after-free.
+  // Please make sure that this ScopedObservation is always declared last in
+  // order to prevent any use-after-free.
   base::ScopedObservation<AXTree, AXTreeObserver> tree_event_observation_{this};
 };
 

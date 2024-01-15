@@ -5,14 +5,18 @@
 import("//build/buildflag_header.gni")
 import("//build/config/chromeos/ui_mode.gni")
 import("//build/config/features.gni")
+import("//build/config/sanitizers/sanitizers.gni")
 import("//chrome/services/file_util/public/features.gni")
 import("//components/safe_browsing/buildflags.gni")
+import("//testing/test.gni")
 
 source_set("file_util") {
   sources = [
     "file_util_service.cc",
     "file_util_service.h",
   ]
+
+  configs += [ "//build/config/compiler:wexit_time_destructors" ]
 
   deps = [
     ":buildflags",
@@ -21,10 +25,12 @@ source_set("file_util") {
     "//components/safe_browsing:buildflags",
     "//extensions/buildflags:buildflags",
     "//mojo/public/cpp/bindings",
+    "//third_party/zlib",
   ]
 
   public_deps = [
     "//chrome/services/file_util/public/mojom",
+    "//components/safe_browsing/core/common:common",
     "//mojo/public/cpp/bindings",
     "//mojo/public/mojom/base",
   ]
@@ -35,11 +41,11 @@ source_set("file_util") {
       "zip_file_creator.h",
     ]
 
-    deps += ["//components/services/filesystem/public/mojom"]
+    deps += [ "//components/services/filesystem/public/mojom" ]
   }
 
   if (is_mac) {
-    deps += ["//chrome/utility/safe_browsing/mac"]
+    deps += [ "//chrome/utility/safe_browsing" ]
   }
 
   if (safe_browsing_mode == 1) {
@@ -60,21 +66,25 @@ source_set("file_util") {
     deps += [
       "//chrome/common/safe_browsing",
       "//chrome/common/safe_browsing:archive_analyzer_results",
-      "//chrome/common/safe_browsing:rar_analyzer",
+      "//chrome/utility/safe_browsing",
     ]
 
     if (is_linux || is_win) {
       deps += [
-        "//chrome/common/safe_browsing:document_analyzer",
         "//chrome/common/safe_browsing:document_analyzer_results",
+        "//chrome/utility/safe_browsing:document_analyzer",
       ]
     }
   }
 
-  if (enable_xz_extractor) {
+  if (enable_extractors) {
     sources += [
-      "xz_file_extractor.cc",
-      "xz_file_extractor.h",
+      "single_file_tar_file_extractor.cc",
+      "single_file_tar_file_extractor.h",
+      "single_file_tar_reader.cc",
+      "single_file_tar_reader.h",
+      "single_file_tar_xz_file_extractor.cc",
+      "single_file_tar_xz_file_extractor.h",
     ]
     deps += [
       "//third_party/lzma_sdk:lzma_sdk",
@@ -86,22 +96,75 @@ source_set("file_util") {
 source_set("unit_tests") {
   testonly = true
 
-  if (enable_xz_extractor) {
-    sources = ["xz_file_extractor_unittest.cc"]
+  if (enable_extractors) {
+    sources = [
+      "single_file_tar_file_extractor_unittest.cc",
+      "single_file_tar_reader_unittest.cc",
+      "single_file_tar_xz_file_extractor_unittest.cc",
+    ]
 
     deps = [
       ":file_util",
       "//base/test:test_support",
+      "//chrome/common:constants",
       "//testing/gmock",
       "//testing/gtest",
     ]
   }
 }
 
+source_set("test_support") {
+  testonly = true
+  sources = [
+    "fake_file_util_service.cc",
+    "fake_file_util_service.h",
+  ]
+
+  if (is_linux || is_win) {
+    sources += [
+      "fake_document_analysis_service.cc",
+      "fake_document_analysis_service.h",
+    ]
+  }
+
+  deps = [
+    ":buildflags",
+    "//base",
+    "//build:chromeos_buildflags",
+    "//chrome/services/file_util/public/mojom:mojom",
+    "//components/safe_browsing:buildflags",
+    "//extensions/buildflags:buildflags",
+    "//mojo/public/cpp/bindings",
+    "//testing/gmock",
+    "//third_party/abseil-cpp:absl",
+  ]
+}
+
 buildflag_header("buildflags") {
   header = "buildflags.h"
   flags = [
-    "ENABLE_XZ_EXTRACTOR=$enable_xz_extractor",
+    "ENABLE_EXTRACTORS=$enable_extractors",
     "ENABLE_MALDOCA=$enable_maldoca",
   ]
+}
+
+if (enable_extractors && fuzztest_supported) {
+  test("single_file_tar_reader_fuzzer") {
+    sources = [ "single_file_tar_reader_fuzzer.cc" ]
+
+    enable_fuzztest = true
+
+    deps = [
+      ":file_util",
+      "//third_party/fuzztest:fuzztest_gtest_main",
+    ]
+
+    if (safe_browsing_mode == 1) {
+      deps += [ "//chrome/common:common" ]
+    }
+
+    if (is_mac) {
+      frameworks = [ "AppKit.framework" ]
+    }
+  }
 }

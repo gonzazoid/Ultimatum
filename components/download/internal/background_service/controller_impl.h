@@ -202,7 +202,6 @@ class ControllerImpl : public Controller,
 
   // Handles and clears any pending task finished callbacks.
   void HandleTaskFinished(DownloadTaskType task_type,
-                          bool needs_reschedule,
                           stats::ScheduledTaskStatus status);
   void OnCompleteCleanupTask();
 
@@ -264,7 +263,7 @@ class ControllerImpl : public Controller,
   std::unique_ptr<Configuration> config_;
   ServiceConfigImpl service_config_;
   std::unique_ptr<Logger> logger_;
-  raw_ptr<LogSink> log_sink_;
+  raw_ptr<LogSink, DanglingUntriaged> log_sink_;
   std::unique_ptr<ClientSet> clients_;
   std::unique_ptr<DownloadDriver> driver_;
   std::unique_ptr<Model> model_;

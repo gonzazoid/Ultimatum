@@ -9,10 +9,11 @@
 #include <memory>
 #include <utility>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/test_simple_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "chromeos/ash/components/multidevice/remote_device_ref.h"
 #include "chromeos/ash/components/multidevice/remote_device_test_util.h"
 #include "chromeos/ash/components/proximity_auth/messenger.h"
@@ -37,7 +38,7 @@ class TestableRemoteDeviceLifeCycleImpl : public RemoteDeviceLifeCycleImpl {
  public:
   TestableRemoteDeviceLifeCycleImpl(
       ash::multidevice::RemoteDeviceRef remote_device,
-      absl::optional<ash::multidevice::RemoteDeviceRef> local_device,
+      std::optional<ash::multidevice::RemoteDeviceRef> local_device,
       ash::secure_channel::SecureChannelClient* secure_channel_client)
       : RemoteDeviceLifeCycleImpl(remote_device,
                                   local_device,
@@ -76,7 +77,7 @@ class ProximityAuthRemoteDeviceLifeCycleImplTest
                     test_local_device_,
                     fake_secure_channel_client_.get()),
         task_runner_(new base::TestSimpleTaskRunner()),
-        thread_task_runner_handle_(task_runner_) {}
+        thread_task_runner_current_default_handle_(task_runner_) {}
 
   ~ProximityAuthRemoteDeviceLifeCycleImplTest() override {
     life_cycle_.RemoveObserver(this);
@@ -160,10 +161,12 @@ class ProximityAuthRemoteDeviceLifeCycleImplTest
       fake_secure_channel_client_;
   TestableRemoteDeviceLifeCycleImpl life_cycle_;
 
-  ash::secure_channel::FakeConnectionAttempt* fake_connection_attempt_;
+  raw_ptr<ash::secure_channel::FakeConnectionAttempt, DanglingUntriaged>
+      fake_connection_attempt_;
 
   scoped_refptr<base::TestSimpleTaskRunner> task_runner_;
-  base::ThreadTaskRunnerHandle thread_task_runner_handle_;
+  base::SingleThreadTaskRunner::CurrentDefaultHandle
+      thread_task_runner_current_default_handle_;
   base::test::ScopedFeatureList scoped_feature_list_;
 };
 

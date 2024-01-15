@@ -64,8 +64,7 @@ class MHTMLArchiveTest : public testing::Test {
  public:
   MHTMLArchiveTest() {
     file_path_ = test::CoreTestDataPath("frameserializer/css/");
-    mhtml_date_ = base::Time::FromJsTime(1520551829000);
-    mhtml_date_header_ = String::FromUTF8("Thu, 8 Mar 2018 23:30:29 -0000");
+    mhtml_date_ = base::Time::FromMillisecondsSinceUnixEpoch(1520551829000);
   }
 
  protected:
@@ -80,6 +79,11 @@ class MHTMLArchiveTest : public testing::Test {
     AddResource(url, mime, ReadFile(file_name));
   }
 
+  // Adds a resource as an empty file.
+  void AddResource(const char* url, const char* mime) {
+    AddResource(url, mime, SharedBuffer::Create());
+  }
+
   void AddTestMainResource() {
     AddResource("http://www.test.com", "text/html", "css_test_page.html");
   }
@@ -92,20 +96,14 @@ class MHTMLArchiveTest : public testing::Test {
                 "import_style_from_link.css");
     AddResource("http://www.test.com/import_styles.css", "text/css",
                 "import_styles.css");
-    AddResource("http://www.test.com/red_background.png", "image/png",
-                "red_background.png");
-    AddResource("http://www.test.com/orange_background.png", "image/png",
-                "orange_background.png");
-    AddResource("http://www.test.com/yellow_background.png", "image/png",
-                "yellow_background.png");
-    AddResource("http://www.test.com/green_background.png", "image/png",
-                "green_background.png");
-    AddResource("http://www.test.com/blue_background.png", "image/png",
-                "blue_background.png");
-    AddResource("http://www.test.com/purple_background.png", "image/png",
-                "purple_background.png");
-    AddResource("http://www.test.com/ul-dot.png", "image/png", "ul-dot.png");
-    AddResource("http://www.test.com/ol-dot.png", "image/png", "ol-dot.png");
+    AddResource("http://www.test.com/red_background.png", "image/png");
+    AddResource("http://www.test.com/orange_background.png", "image/png");
+    AddResource("http://www.test.com/yellow_background.png", "image/png");
+    AddResource("http://www.test.com/green_background.png", "image/png");
+    AddResource("http://www.test.com/blue_background.png", "image/png");
+    AddResource("http://www.test.com/purple_background.png", "image/png");
+    AddResource("http://www.test.com/ul-dot.png", "image/png");
+    AddResource("http://www.test.com/ol-dot.png", "image/png");
   }
 
   HashMap<String, String> ExtractHeaders(LineReader& line_reader) {
@@ -186,7 +184,6 @@ class MHTMLArchiveTest : public testing::Test {
   Vector<char>& mhtml_data() { return mhtml_data_; }
 
   base::Time mhtml_date() const { return mhtml_date_; }
-  const String& mhtml_date_header() const { return mhtml_date_header_; }
 
   void CheckLoadResult(const KURL url,
                        scoped_refptr<const SharedBuffer> data,
@@ -215,7 +212,6 @@ class MHTMLArchiveTest : public testing::Test {
   Vector<SerializedResource> resources_;
   Vector<char> mhtml_data_;
   base::Time mhtml_date_;
-  String mhtml_date_header_;
 };
 
 TEST_F(MHTMLArchiveTest,
@@ -390,7 +386,10 @@ TEST_F(MHTMLArchiveTest, MHTMLDate) {
   // The serialization process should have added a date header corresponding to
   // mhtml_date().
   HashMap<String, String> mhtml_headers = ExtractMHTMLHeaders();
-  ASSERT_EQ(mhtml_date_header(), mhtml_headers.find("Date")->value);
+  base::Time header_date;
+  EXPECT_TRUE(base::Time::FromString(
+      mhtml_headers.find("Date")->value.Utf8().c_str(), &header_date));
+  EXPECT_EQ(mhtml_date(), header_date);
 
   scoped_refptr<SharedBuffer> data =
       SharedBuffer::Create(mhtml_data().data(), mhtml_data().size());

@@ -4,11 +4,7 @@
 
 #import "ios/public/provider/chrome/browser/follow/follow_api.h"
 
-#import "base/threading/sequenced_task_runner_handle.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "base/task/sequenced_task_runner.h"
 
 namespace ios {
 namespace provider {
@@ -21,6 +17,7 @@ class ChromiumFollowService final : public FollowService {
   bool IsWebSiteFollowed(WebPageURLs* web_page_urls) final;
   NSURL* GetRecommendedSiteURL(WebPageURLs* web_page_urls) final;
   NSArray<FollowedWebSite*>* GetFollowedWebSites() final;
+  void LoadFollowedWebSites() final;
   void FollowWebSite(WebPageURLs* web_page_urls,
                      FollowSource source,
                      ResultCallback callback) final;
@@ -44,17 +41,20 @@ NSArray<FollowedWebSite*>* ChromiumFollowService::GetFollowedWebSites() {
   return @[];
 }
 
+void ChromiumFollowService::LoadFollowedWebSites() {
+  // Do nothing.
+}
+
 void ChromiumFollowService::FollowWebSite(WebPageURLs* web_page_urls,
                                           FollowSource source,
                                           ResultCallback callback) {
-  FollowedWebSite* web_channel =
-      [[FollowedWebSite alloc] initWithTitle:@""
-                                  webPageURL:web_page_urls.URL
-                                  faviconURL:nil
-                                      RSSURL:[web_page_urls.RSSURLs firstObject]
-                                   available:NO];
+  FollowedWebSite* web_channel = [[FollowedWebSite alloc] init];
+  web_channel.title = @"";
+  web_channel.webPageURL = web_page_urls.URL;
+  web_channel.RSSURL = [web_page_urls.RSSURLs firstObject];
+  web_channel.state = FollowedWebSiteStateStateUnknown;
 
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(std::move(callback), FollowResult::Failure, web_channel));
 }
@@ -62,14 +62,13 @@ void ChromiumFollowService::FollowWebSite(WebPageURLs* web_page_urls,
 void ChromiumFollowService::UnfollowWebSite(WebPageURLs* web_page_urls,
                                             FollowSource source,
                                             ResultCallback callback) {
-  FollowedWebSite* web_channel =
-      [[FollowedWebSite alloc] initWithTitle:@""
-                                  webPageURL:web_page_urls.URL
-                                  faviconURL:nil
-                                      RSSURL:[web_page_urls.RSSURLs firstObject]
-                                   available:NO];
+  FollowedWebSite* web_channel = [[FollowedWebSite alloc] init];
+  web_channel.title = @"";
+  web_channel.webPageURL = web_page_urls.URL;
+  web_channel.RSSURL = [web_page_urls.RSSURLs firstObject];
+  web_channel.state = FollowedWebSiteStateStateUnknown;
 
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(std::move(callback), FollowResult::Failure, web_channel));
 }

@@ -1,7 +1,34 @@
 <style include="os-feedback-shared">
+  :host-context(body.jelly-enabled) #descriptionEmptyError {
+    font: var(--cros-annotation-2-font);
+  }
+
+  :host-context(body.jelly-enabled) #descriptionText {
+    background-color: var(--cros-sys-input_field_on_shaded);
+    font: var(--cros-body-2-font);
+  }
+
+  :host-context(body.jelly-enabled) #descriptionText::placeholder {
+    font: var(--cros-body-2-font);
+  }
+
+  :host-context(body.jelly-enabled) #descriptionText.has-error {
+    color: var(--cros-sys-error);
+    outline: 2px solid var(--cros-sys-error);
+  }
+
+  :host-context(body.jelly-enabled) #feedbackWritingGuidance {
+    font: var(--cros-body-2-font);
+  }
+
+  :host-context(body.jelly-enabled) #emptyErrorIcon {
+    --iron-icon-fill-color: var(--cros-sys-error);
+  }
+
   iframe {
     border-style: none;
-    height: 100%;
+    height: var(--iframe-height);
+    width: 100%;
   }
 
   #descriptionText {
@@ -86,12 +113,14 @@
   <div id="header">
     <h1 class="page-title">[[i18n('pageTitle')]]</h1>
   </div>
-  <div id="content">
+  <div id="shadowElevation"></div>
+  <div id="content" on-scroll="onContainerScroll">
     <div id="descriptionPane">
       <div id="descriptionHeader">
         <h2 id="descriptionTitle">[[i18n('descriptionLabel')]]</h2>
-        <a id="feedbackWritingGuidance" href="[[feedbackWritingGuidanceUrl_()]]"
-            target="_blank">
+        <a id="feedbackWritingGuidance" href="[[feedbackWritingGuidanceUrl()]]"
+            target="_blank"
+            hidden$="[[!isUserLoggedIn(feedbackContext)]]">
             [[i18n('feedbackHelpLinkLabel')]]
         </a>
       </div>
@@ -100,7 +129,7 @@
       </span>
       <textarea id="descriptionText"
           aria-labelledby="descriptionTitle suggestionExplainAriaLabel"
-          aria-required="true" on-input="handleInputChanged_">
+          aria-required="true" on-input="handleInputChanged">
       </textarea>
       <div id='emptyErrorContainer' aria-hidden="true" hidden>
         <iron-icon icon="cr:error-outline" id="emptyErrorIcon"></iron-icon>
@@ -109,13 +138,18 @@
         </p>
       </div>
     </div>
-    <iframe on-load="resolveIframeLoaded_"
-        src="chrome-untrusted://os-feedback/untrusted_index.html">
-    </iframe>
+    <div>
+      <iframe on-load="resolveIframeLoaded"
+          src="chrome-untrusted://os-feedback/untrusted_index.html"
+          scrolling="no" hidden$="[[!isUserLoggedIn(feedbackContext)]]">
+      </iframe>
+    </div>
+    <div id="shadowShield"></div>
   </div>
+  <div id="separator"></div>
   <div id="navButtons">
     <cr-button id="buttonContinue" class="action-button"
-        on-click="handleContinueButtonClicked_">
+        on-click="handleContinueButtonClicked">
       [[i18n('continueButtonLabel')]]
     </cr-button>
   </div>

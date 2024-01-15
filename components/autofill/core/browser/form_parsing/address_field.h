@@ -12,7 +12,9 @@
 #include "base/compiler_specific.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "components/autofill/core/browser/autofill_type.h"
+#include "components/autofill/core/browser/country_type.h"
 #include "components/autofill/core/browser/form_parsing/form_field.h"
 #include "components/autofill/core/common/language_code.h"
 
@@ -20,14 +22,22 @@ namespace autofill {
 
 class AutofillField;
 class AutofillScanner;
-class LogManager;
 
 class AddressField : public FormField {
  public:
-  static std::unique_ptr<FormField> Parse(AutofillScanner* scanner,
-                                          const LanguageCode& page_language,
-                                          PatternSource pattern_source,
-                                          LogManager* log_manager);
+  static std::unique_ptr<FormField> Parse(ParsingContext& context,
+                                          AutofillScanner* scanner);
+
+  // Returns whether a stand-alone zip field is supported for `client_country`.
+  // In some countries that's a prevalent UI (the user is first asked to enter
+  // their zip code and then a lot of information is derived). This is not
+  // enabled for all countries because there is a certain risk of false positive
+  // classifications. We may reevaluate that decision in the future.
+  static bool IsStandaloneZipSupported(const GeoIpCountryCode& client_country);
+
+  static std::unique_ptr<FormField> ParseStandaloneZip(
+      ParsingContext& context,
+      AutofillScanner* scanner);
 
   AddressField(const AddressField&) = delete;
   AddressField& operator=(const AddressField&) = delete;
@@ -44,108 +54,119 @@ class AddressField : public FormField {
     RESULT_MATCH_NAME_LABEL  // Name and label both match the pattern.
   };
 
-  explicit AddressField(LogManager* log_manager);
+  AddressField();
 
-  bool ParseCompany(AutofillScanner* scanner,
-                    const LanguageCode& page_language,
-                    PatternSource pattern_source);
+  bool ParseCompany(ParsingContext& context, AutofillScanner* scanner);
 
-  bool ParseAddress(AutofillScanner* scanner,
-                    const LanguageCode& page_language,
-                    PatternSource pattern_source);
+  bool ParseAddress(ParsingContext& context, AutofillScanner* scanner);
 
-  bool ParseAddressFieldSequence(AutofillScanner* scanner,
-                                 const LanguageCode& page_language,
-                                 PatternSource pattern_source);
+  bool ParseAddressFieldSequence(ParsingContext& context,
+                                 AutofillScanner* scanner);
 
-  bool ParseAddressLines(AutofillScanner* scanner,
-                         const LanguageCode& page_language,
-                         PatternSource pattern_source);
+  bool ParseAddressLines(ParsingContext& context, AutofillScanner* scanner);
 
-  bool ParseCountry(AutofillScanner* scanner,
-                    const LanguageCode& page_language,
-                    PatternSource pattern_source);
+  bool ParseZipCode(ParsingContext& context, AutofillScanner* scanner);
 
-  bool ParseZipCode(AutofillScanner* scanner,
-                    const LanguageCode& page_language,
-                    PatternSource pattern_source);
+  bool ParseCity(ParsingContext& context, AutofillScanner* scanner);
 
-  bool ParseDependentLocality(AutofillScanner* scanner,
-                              const LanguageCode& page_language,
-                              PatternSource pattern_source);
-
-  bool ParseCity(AutofillScanner* scanner,
-                 const LanguageCode& page_language,
-                 PatternSource pattern_source);
-
-  bool ParseState(AutofillScanner* scanner,
-                  const LanguageCode& page_language,
-                  PatternSource pattern_source);
+  bool ParseState(ParsingContext& context, AutofillScanner* scanner);
 
   // Parses the current field pointed to by |scanner|, if it exists, and tries
   // to determine if the field's type corresponds to one of the following:
-  // dependent locality, city, state, country, zip, or none of those.
-  bool ParseDependentLocalityCityStateCountryZipCode(
-      AutofillScanner* scanner,
-      const LanguageCode& page_language,
-      PatternSource pattern_source);
+  // dependent locality, city, state, country, zip, landmark, between streets,
+  // admin level 2 or none of those.
+  bool ParseAddressField(ParsingContext& context, AutofillScanner* scanner);
 
   // Like ParseFieldSpecifics(), but applies |pattern| against the name and
   // label of the current field separately. If the return value is
   // RESULT_MATCH_NAME_LABEL, then |scanner| advances and |match| is filled if
   // it is non-NULL. Otherwise |scanner| does not advance and |match| does not
   // change.
-  ParseNameLabelResult ParseNameAndLabelSeparately(
+  static ParseNameLabelResult ParseNameAndLabelSeparately(
+      ParsingContext& context,
       AutofillScanner* scanner,
       const std::u16string& pattern,
       MatchParams match_type,
       base::span<const MatchPatternRef> patterns,
-      AutofillField** match,
-      const RegExLogging& logging);
+      raw_ptr<AutofillField>* match,
+      const char* regex_name);
 
   // Run matches on the name and label separately. If the return result is
   // RESULT_MATCH_NAME_LABEL, then |scanner| advances and the field is set.
   // Otherwise |scanner| rewinds and the field is cleared.
-  ParseNameLabelResult ParseNameAndLabelForZipCode(
-      AutofillScanner* scanner,
-      const LanguageCode& page_language,
-      PatternSource pattern_source);
+  ParseNameLabelResult ParseNameAndLabelForZipCode(ParsingContext& context,
+                                                   AutofillScanner* scanner);
 
   ParseNameLabelResult ParseNameAndLabelForDependentLocality(
-      AutofillScanner* scanner,
-      const LanguageCode& page_language,
-      PatternSource pattern_source);
+      ParsingContext& context,
+      AutofillScanner* scanner);
 
-  ParseNameLabelResult ParseNameAndLabelForCity(
-      AutofillScanner* scanner,
-      const LanguageCode& page_language,
-      PatternSource pattern_source);
+  ParseNameLabelResult ParseNameAndLabelForCity(ParsingContext& context,
+                                                AutofillScanner* scanner);
 
-  ParseNameLabelResult ParseNameAndLabelForCountry(
-      AutofillScanner* scanner,
-      const LanguageCode& page_language,
-      PatternSource pattern_source);
+  ParseNameLabelResult ParseNameAndLabelForCountry(ParsingContext& context,
+                                                   AutofillScanner* scanner);
 
-  ParseNameLabelResult ParseNameAndLabelForState(
-      AutofillScanner* scanner,
-      const LanguageCode& page_language,
-      PatternSource pattern_source);
+  ParseNameLabelResult ParseNameAndLabelForLandmark(ParsingContext& context,
+                                                    AutofillScanner* scanner);
 
-  raw_ptr<LogManager> log_manager_;
-  AutofillField* company_ = nullptr;
-  AutofillField* street_name_ = nullptr;
-  AutofillField* house_number_ = nullptr;
-  AutofillField* address1_ = nullptr;
-  AutofillField* address2_ = nullptr;
-  AutofillField* address3_ = nullptr;
-  AutofillField* street_address_ = nullptr;
-  AutofillField* apartment_number_ = nullptr;
-  AutofillField* dependent_locality_ = nullptr;
-  AutofillField* city_ = nullptr;
-  AutofillField* state_ = nullptr;
-  AutofillField* zip_ = nullptr;
-  AutofillField* zip4_ = nullptr;  // optional ZIP+4; we don't fill this yet.
-  AutofillField* country_ = nullptr;
+  ParseNameLabelResult ParseNameAndLabelForBetweenStreets(
+      ParsingContext& context,
+      AutofillScanner* scanner);
+
+  // Run matches on the name and label for a field and sets
+  // `between_streets_line_1_` and `between_streets_line_2_` respectively if a
+  // match is found.
+  ParseNameLabelResult ParseNameAndLabelForBetweenStreetsLines12(
+      ParsingContext& context,
+      AutofillScanner* scanner);
+
+  ParseNameLabelResult ParseNameAndLabelForAdminLevel2(
+      ParsingContext& context,
+      AutofillScanner* scanner);
+
+  ParseNameLabelResult ParseNameAndLabelForBetweenStreetsOrLandmark(
+      ParsingContext& context,
+      AutofillScanner* scanner);
+
+  ParseNameLabelResult ParseNameAndLabelForOverflowAndLandmark(
+      ParsingContext& context,
+      AutofillScanner* scanner);
+
+  ParseNameLabelResult ParseNameAndLabelForOverflow(ParsingContext& context,
+                                                    AutofillScanner* scanner);
+
+  ParseNameLabelResult ParseNameAndLabelForState(ParsingContext& context,
+                                                 AutofillScanner* scanner);
+
+  // Return true if the form being parsed shows an indication of being a
+  // structured address form.
+  bool PossiblyAStructuredAddressForm() const;
+
+  raw_ptr<AutofillField> company_ = nullptr;
+  raw_ptr<AutofillField> street_location_ = nullptr;
+  raw_ptr<AutofillField> street_name_ = nullptr;
+  raw_ptr<AutofillField> house_number_ = nullptr;
+  raw_ptr<AutofillField> address1_ = nullptr;
+  raw_ptr<AutofillField> address2_ = nullptr;
+  raw_ptr<AutofillField> address3_ = nullptr;
+  raw_ptr<AutofillField> street_address_ = nullptr;
+  raw_ptr<AutofillField> apartment_number_ = nullptr;
+  raw_ptr<AutofillField> dependent_locality_ = nullptr;
+  raw_ptr<AutofillField> city_ = nullptr;
+  raw_ptr<AutofillField> state_ = nullptr;
+  raw_ptr<AutofillField> zip_ = nullptr;
+  raw_ptr<AutofillField> zip4_ =
+      nullptr;  // optional ZIP+4; we don't fill this yet.
+  raw_ptr<AutofillField> country_ = nullptr;
+  raw_ptr<AutofillField> landmark_ = nullptr;
+  raw_ptr<AutofillField> between_streets_ = nullptr;
+  raw_ptr<AutofillField> between_streets_line_1_ = nullptr;
+  raw_ptr<AutofillField> between_streets_line_2_ = nullptr;
+  raw_ptr<AutofillField> admin_level2_ = nullptr;
+  raw_ptr<AutofillField> between_streets_or_landmark_ = nullptr;
+  raw_ptr<AutofillField> overflow_and_landmark_ = nullptr;
+  raw_ptr<AutofillField> overflow_ = nullptr;
 };
 
 }  // namespace autofill

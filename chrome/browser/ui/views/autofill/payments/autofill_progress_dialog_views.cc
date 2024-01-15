@@ -4,7 +4,8 @@
 
 #include "chrome/browser/ui/views/autofill/payments/autofill_progress_dialog_views.h"
 
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/functional/bind.h"
+#include "base/task/single_thread_task_runner.h"
 #include "chrome/browser/ui/autofill/payments/autofill_progress_dialog_controller.h"
 #include "chrome/browser/ui/autofill/payments/payments_ui_constants.h"
 #include "chrome/browser/ui/views/autofill/payments/payments_view_util.h"
@@ -12,11 +13,14 @@
 #include "chrome/browser/ui/views/chrome_typography.h"
 #include "components/autofill/core/browser/metrics/autofill_metrics.h"
 #include "components/constrained_window/constrained_window_views.h"
+#include "ui/views/accessibility/view_accessibility.h"
 #include "ui/views/bubble/bubble_frame_view.h"
 #include "ui/views/controls/label.h"
 #include "ui/views/controls/throbber.h"
 #include "ui/views/layout/box_layout.h"
+#include "ui/views/layout/box_layout_view.h"
 #include "ui/views/style/typography.h"
+#include "ui/views/view_class_properties.h"
 
 namespace autofill {
 
@@ -25,6 +29,9 @@ AutofillProgressDialogViews::AutofillProgressDialogViews(
     : controller_(controller) {
   SetButtons(ui::DIALOG_BUTTON_CANCEL);
   SetButtonLabel(ui::DIALOG_BUTTON_CANCEL, controller_->GetCancelButtonLabel());
+  SetCancelCallback(
+      base::BindOnce(&AutofillProgressDialogViews::OnDialogCanceled,
+                     weak_ptr_factory_.GetWeakPtr()));
   SetModalType(ui::MODAL_TYPE_CHILD);
   set_fixed_width(views::LayoutProvider::Get()->GetDistanceMetric(
       views::DISTANCE_MODAL_DIALOG_PREFERRED_WIDTH));
@@ -33,25 +40,45 @@ AutofillProgressDialogViews::AutofillProgressDialogViews(
       views::DialogContentType::kControl, views::DialogContentType::kControl));
 
   auto* layout = SetLayoutManager(std::make_unique<views::BoxLayout>(
-      views::BoxLayout::Orientation::kVertical, gfx::Insets(),
+      views::BoxLayout::Orientation::kHorizontal, gfx::Insets(),
       ChromeLayoutProvider::Get()->GetDistanceMetric(
-          views::DISTANCE_RELATED_CONTROL_VERTICAL)));
+          views::DISTANCE_RELATED_CONTROL_HORIZONTAL)));
   layout->set_cross_axis_alignment(
-      views::BoxLayout::CrossAxisAlignment::kCenter);
+      views::BoxLayout::CrossAxisAlignment::kStart);
+  layout->set_main_axis_alignment(views::BoxLayout::MainAxisAlignment::kCenter);
 
-  progress_throbber_ = AddChildView(std::make_unique<views::Throbber>());
+  auto* throbber_container =
+      AddChildView(std::make_unique<views::BoxLayoutView>());
+  progress_throbber_ =
+      throbber_container->AddChildView(std::make_unique<views::Throbber>());
 
   label_ = AddChildView(std::make_unique<views::Label>(
       controller_->GetLoadingMessage(), views::style::CONTEXT_DIALOG_BODY_TEXT,
       views::style::STYLE_SECONDARY));
   label_->SetMultiLine(true);
+  label_->SetEnabledColorId(ui::kColorThrobber);
+  // Set the maximum width of the label view so it will not compress the
+  // throbber view.
+  label_->SetMaximumWidth(views::LayoutProvider::Get()->GetDistanceMetric(
+                              views::DISTANCE_MODAL_DIALOG_PREFERRED_WIDTH) -
+                          progress_throbber_->GetPreferredSize().width() -
+                          ChromeLayoutProvider::Get()->GetDistanceMetric(
+                              views::DISTANCE_RELATED_CONTROL_HORIZONTAL) -
+                          margins().width());
+
+  // Center-align the throbber vertically with the first line of the label.
+  progress_throbber_->SetProperty(
+      views::kMarginsKey,
+      gfx::Insets().set_top((label_->GetLineHeight() -
+                             progress_throbber_->GetPreferredSize().height()) /
+                            2));
 }
 
 AutofillProgressDialogViews::~AutofillProgressDialogViews() {
-  // This if-statement is only entered when the user closes the dialog. In other
-  // cases, |controller_| will already be set to nullptr.
+  // This if-statement is always entered, unless the tab is closed. In this
+  // scenario `controller_` will already be invalidated.
   if (controller_) {
-    controller_->OnDismissed(/*is_canceled_by_user=*/true);
+    controller_->OnDismissed(is_canceled_by_user_);
     controller_ = nullptr;
   }
 }
@@ -68,52 +95,58 @@ AutofillProgressDialogView* AutofillProgressDialogView::CreateAndShow(
 
 void AutofillProgressDialogViews::Dismiss(bool show_confirmation_before_closing,
                                           bool is_canceled_by_user) {
-  // If |show_confirmation_before_closing| is true, show the confirmation and
-  // close the widget with a delay. |show_confirmation_before_closing| being
+  is_canceled_by_user_ = is_canceled_by_user;
+
+  // If `show_confirmation_before_closing` is true, show the confirmation and
+  // close the widget with a delay. `show_confirmation_before_closing` being
   // true implies that the user did not cancel the dialog, as it is only set to
   // true once this step in the current flow is completed without any user
   // interaction.
   if (show_confirmation_before_closing) {
     progress_throbber_->Stop();
     label_->SetText(controller_->GetConfirmationMessage());
+    // For accessibility consideration, announce the confirmation message when
+    // unmasking is finished.
+    label_->GetViewAccessibility().AnnouncePolitely(
+        controller_->GetConfirmationMessage());
     progress_throbber_->SetChecked(true);
-    base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+    GetBubbleFrameView()->SetTitleView(
+        CreateTitleView(controller_->GetConfirmationTitle(),
+                        TitleWithIconAndSeparatorView::Icon::GOOGLE_PAY));
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE,
         base::BindOnce(&AutofillProgressDialogViews::CloseWidget,
-                       weak_ptr_factory_.GetWeakPtr(), is_canceled_by_user),
+                       weak_ptr_factory_.GetWeakPtr()),
         kDelayBeforeDismissingProgressDialog);
     return;
   }
 
   // Otherwise close the widget directly.
-  CloseWidget(is_canceled_by_user);
+  CloseWidget();
 }
 
 void AutofillProgressDialogViews::AddedToWidget() {
   DCHECK(progress_throbber_);
   progress_throbber_->Start();
 
-  GetBubbleFrameView()->SetTitleView(
-      std::make_unique<TitleWithIconAndSeparatorView>(
-          GetWindowTitle(), TitleWithIconAndSeparatorView::Icon::GOOGLE_PAY));
+  GetBubbleFrameView()->SetTitleView(CreateTitleView(
+      GetWindowTitle(), TitleWithIconAndSeparatorView::Icon::GOOGLE_PAY));
 }
 
-void AutofillProgressDialogViews::OnThemeChanged() {
-  views::DialogDelegateView::OnThemeChanged();
-  SkColor enabled_color = GetColorProvider()->GetColor(ui::kColorThrobber);
-  label_->SetEnabledColor(enabled_color);
+void AutofillProgressDialogViews::InvalidateControllerForCallbacks() {
+  controller_ = nullptr;
 }
 
 std::u16string AutofillProgressDialogViews::GetWindowTitle() const {
-  return controller_->GetTitle();
+  return controller_->GetLoadingTitle();
 }
 
-void AutofillProgressDialogViews::CloseWidget(bool is_canceled_by_user) {
-  if (controller_) {
-    controller_->OnDismissed(is_canceled_by_user);
-    controller_ = nullptr;
-  }
+void AutofillProgressDialogViews::CloseWidget() {
   GetWidget()->CloseWithReason(views::Widget::ClosedReason::kUnspecified);
+}
+
+void AutofillProgressDialogViews::OnDialogCanceled() {
+  is_canceled_by_user_ = true;
 }
 
 }  // namespace autofill

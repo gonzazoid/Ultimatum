@@ -2,7 +2,7 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-import("//build/config/chromecast_build.gni")
+import("//build/config/cast.gni")
 import("//build/config/ui.gni")  # For the toolkit_views variables.
 import("//mojo/public/tools/bindings/mojom.gni")
 import("//ppapi/buildflags/buildflags.gni")  # For the enable_plugins variable.
@@ -23,6 +23,7 @@ mojom("web_test_common_mojom") {
   sources = [
     "common/fake_bluetooth_chooser.mojom",
     "common/mojo_echo.mojom",
+    "common/mojo_optional_numerics_unittest.mojom",
     "common/web_test.mojom",
     "common/web_test_bluetooth_fake_adapter_setter.mojom",
   ]
@@ -93,12 +94,12 @@ static_library("web_test_browser") {
     "browser/leak_detector.h",
     "browser/mojo_echo.cc",
     "browser/mojo_echo.h",
+    "browser/mojo_optional_numerics_unittest.cc",
+    "browser/mojo_optional_numerics_unittest.h",
     "browser/mojo_web_test_helper.cc",
     "browser/mojo_web_test_helper.h",
     "browser/test_info_extractor.cc",
     "browser/test_info_extractor.h",
-    "browser/web_test_attribution_manager.cc",
-    "browser/web_test_attribution_manager.h",
     "browser/web_test_background_fetch_delegate.cc",
     "browser/web_test_background_fetch_delegate.h",
     "browser/web_test_bluetooth_adapter_provider.cc",
@@ -124,31 +125,42 @@ static_library("web_test_browser") {
     "browser/web_test_devtools_bindings.h",
     "browser/web_test_download_manager_delegate.cc",
     "browser/web_test_download_manager_delegate.h",
+    "browser/web_test_fedcm_manager.cc",
+    "browser/web_test_fedcm_manager.h",
     "browser/web_test_first_device_bluetooth_chooser.cc",
     "browser/web_test_first_device_bluetooth_chooser.h",
     "browser/web_test_javascript_dialog_manager.cc",
     "browser/web_test_javascript_dialog_manager.h",
+    "browser/web_test_origin_trial_throttle.cc",
+    "browser/web_test_origin_trial_throttle.h",
     "browser/web_test_permission_manager.cc",
     "browser/web_test_permission_manager.h",
     "browser/web_test_push_messaging_service.cc",
     "browser/web_test_push_messaging_service.h",
+    "browser/web_test_sensor_provider_manager.cc",
+    "browser/web_test_sensor_provider_manager.h",
     "browser/web_test_shell_platform_delegate.cc",
     "browser/web_test_shell_platform_delegate.h",
     "browser/web_test_storage_access_manager.cc",
     "browser/web_test_storage_access_manager.h",
+    "browser/web_test_tracing_controller.cc",
+    "browser/web_test_tracing_controller.h",
     "browser/web_test_tts_platform.cc",
     "browser/web_test_tts_platform.h",
   ]
 
   if (is_mac) {
-    sources += [
-      "browser/web_test_browser_main_platform_support_mac.mm",
-      "browser/web_test_shell_platform_delegate_mac.mm",
-    ]
+    sources += [ "browser/web_test_shell_platform_delegate_mac.mm" ]
   } else if (toolkit_views && !is_castos) {
     sources += [ "browser/web_test_shell_platform_delegate_views.cc" ]
+  } else if (is_ios) {
+    sources += [ "browser/web_test_shell_platform_delegate_ios.mm" ]
   } else {
     sources += [ "browser/web_test_shell_platform_delegate_aura.cc" ]
+  }
+
+  if (is_apple) {
+    sources += [ "browser/web_test_browser_main_platform_support_mac.mm" ]
   }
 
   if (is_win) {
@@ -169,6 +181,7 @@ static_library("web_test_browser") {
     "//components/download/public/background_service:public",
     "//components/download/public/common:public",
     "//components/network_session_configurator/common",
+    "//components/origin_trials:common",
     "//components/proxy_config",
     "//content/browser:for_content_tests",  # For non-component builds.
     "//content/public/browser",  # For component builds.
@@ -219,6 +232,10 @@ static_library("web_test_browser") {
 
   if (use_aura) {
     deps += [ "//ui/aura:test_support" ]
+  }
+
+  if (use_ozone) {
+    deps += [ "//ui/ozone" ]
   }
 }
 
@@ -315,8 +332,6 @@ static_library("web_test_renderer") {
     "renderer/web_test_content_settings_client.h",
     "renderer/web_test_grammar_checker.cc",
     "renderer/web_test_grammar_checker.h",
-    "renderer/web_test_render_thread_observer.cc",
-    "renderer/web_test_render_thread_observer.h",
     "renderer/web_test_spell_checker.cc",
     "renderer/web_test_spell_checker.h",
   ]
@@ -349,7 +364,7 @@ static_library("web_test_renderer") {
     "//third_party/blink/renderer/core/web_test",
   ]
 
-  if (enable_printing) {
+  if (enable_printing || enable_printing_tests) {
     sources += [
       "renderer/pixel_dump.cc",
       "renderer/pixel_dump.h",

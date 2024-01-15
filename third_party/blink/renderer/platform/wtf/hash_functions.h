@@ -22,40 +22,37 @@
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_WTF_HASH_FUNCTIONS_H_
 
 #include <stdint.h>
-#include <memory>
 #include <type_traits>
+
 #include "base/bit_cast.h"
-#include "base/memory/scoped_refptr.h"
-#include "build/build_config.h"
-#include "third_party/blink/renderer/platform/wtf/hash_table_deleted_value_type.h"
-#include "third_party/blink/renderer/platform/wtf/std_lib_extras.h"
 
 namespace WTF {
+
+namespace internal {
 
 template <size_t size>
 struct IntTypes;
 template <>
 struct IntTypes<1> {
-  typedef int8_t SignedType;
   typedef uint8_t UnsignedType;
 };
 template <>
 struct IntTypes<2> {
-  typedef int16_t SignedType;
   typedef uint16_t UnsignedType;
 };
 template <>
 struct IntTypes<4> {
-  typedef int32_t SignedType;
   typedef uint32_t UnsignedType;
 };
 template <>
 struct IntTypes<8> {
-  typedef int64_t SignedType;
   typedef uint64_t UnsignedType;
 };
 
-// integer hash function
+template <typename T>
+using IntHashBits = typename IntTypes<sizeof(T)>::UnsignedType;
+
+// Hash functions for integral and enum types.
 
 // Thomas Wang's 32 Bit Mix Function:
 // http://www.cris.com/~Ttwang/tech/inthash.htm
@@ -93,6 +90,8 @@ inline unsigned HashInt(uint64_t key) {
   return static_cast<unsigned>(key);
 }
 
+}  // namespace internal
+
 // Compound integer hash method:
 // http://opendatastructures.org/versions/edition-0.1d/ods-java/node33.html#SECTION00832000000000000000
 inline unsigned HashInts(unsigned key1, unsigned key2) {
@@ -108,76 +107,28 @@ inline unsigned HashInts(unsigned key1, unsigned key2) {
 }
 
 template <typename T>
-struct IntHash {
-  static unsigned GetHash(T key) {
-    return HashInt(
-        static_cast<typename IntTypes<sizeof(T)>::UnsignedType>(key));
-  }
-  static bool Equal(T a, T b) { return a == b; }
-  static const bool safe_to_compare_to_empty_or_deleted = true;
-};
+unsigned HashInt(T key) {
+  static_assert(std::is_integral_v<T> || std::is_enum_v<T>);
+  return internal::HashInt(static_cast<internal::IntHashBits<T>>(key));
+}
 
 template <typename T>
-struct FloatHash {
-  typedef typename IntTypes<sizeof(T)>::UnsignedType Bits;
-  static unsigned GetHash(T key) { return HashInt(base::bit_cast<Bits>(key)); }
-  static bool Equal(T a, T b) {
-    return base::bit_cast<Bits>(a) == base::bit_cast<Bits>(b);
-  }
-  static const bool safe_to_compare_to_empty_or_deleted = true;
-};
-
-// pointer identity hash function
+unsigned HashFloat(T key) {
+  static_assert(std::is_floating_point_v<T>);
+  return internal::HashInt(base::bit_cast<internal::IntHashBits<T>>(key));
+}
 
 template <typename T>
-struct PtrHash {
-  static unsigned GetHash(T* key) {
-#if defined(COMPILER_MSVC)
-#pragma warning(push)
-// work around what seems to be a bug in MSVC's conversion warnings
-#pragma warning(disable : 4244)
-#endif
-    return IntHash<uintptr_t>::GetHash(reinterpret_cast<uintptr_t>(key));
-#if defined(COMPILER_MSVC)
-#pragma warning(pop)
-#endif
-  }
-  static bool Equal(T* a, T* b) { return a == b; }
-  static bool Equal(std::nullptr_t, T* b) { return !b; }
-  static bool Equal(T* a, std::nullptr_t) { return !a; }
-  static const bool safe_to_compare_to_empty_or_deleted = true;
-};
+bool FloatEqualForHash(T a, T b) {
+  static_assert(std::is_floating_point_v<T>);
+  return base::bit_cast<internal::IntHashBits<T>>(a) ==
+         base::bit_cast<internal::IntHashBits<T>>(b);
+}
 
 template <typename T>
-struct RefPtrHash : PtrHash<T> {
-  using PtrHash<T>::GetHash;
-  static unsigned GetHash(const scoped_refptr<T>& key) {
-    return GetHash(key.get());
-  }
-  using PtrHash<T>::Equal;
-  static bool Equal(const scoped_refptr<T>& a, const scoped_refptr<T>& b) {
-    return a == b;
-  }
-  static bool Equal(T* a, const scoped_refptr<T>& b) { return a == b; }
-  static bool Equal(const scoped_refptr<T>& a, T* b) { return a == b; }
-};
-
-template <typename T>
-struct UniquePtrHash : PtrHash<T> {
-  using PtrHash<T>::GetHash;
-  static unsigned GetHash(const std::unique_ptr<T>& key) {
-    return GetHash(key.get());
-  }
-  static bool Equal(const std::unique_ptr<T>& a, const std::unique_ptr<T>& b) {
-    return a == b;
-  }
-  static bool Equal(const std::unique_ptr<T>& a, const T* b) {
-    return a.get() == b;
-  }
-  static bool Equal(const T* a, const std::unique_ptr<T>& b) {
-    return a == b.get();
-  }
-};
+unsigned HashPointer(T* key) {
+  return HashInt(reinterpret_cast<internal::IntHashBits<T*>>(key));
+}
 
 // Useful compounding hash functions.
 inline void AddIntToHash(unsigned& hash, unsigned key) {
@@ -185,142 +136,9 @@ inline void AddIntToHash(unsigned& hash, unsigned key) {
 }
 
 inline void AddFloatToHash(unsigned& hash, float value) {
-  AddIntToHash(hash, FloatHash<float>::GetHash(value));
+  AddIntToHash(hash, HashFloat(value));
 }
 
-// Default hash function for each type.
-template <typename T>
-struct DefaultHash;
-
-// Actual implementation of DefaultHash.
-//
-// The case of |isIntegral| == false is not implemented. If you see a compile
-// error saying DefaultHashImpl<T, false> is not defined, that's because the
-// default hash functions for T are not defined. You need to implement them
-// yourself.
-template <typename T, bool isIntegral>
-struct DefaultHashImpl;
-
-template <typename T>
-struct DefaultHashImpl<T, true> : IntHash<T> {};
-
-// Canonical implementation of DefaultHash.
-template <typename T>
-struct DefaultHash
-    : DefaultHashImpl<T, std::is_integral<T>::value || std::is_enum<T>::value> {
-};
-
-// Specializations of DefaultHash follow.
-template <>
-struct DefaultHash<float> : FloatHash<float> {};
-template <>
-struct DefaultHash<double> : FloatHash<double> {};
-
-// Specializations for pointer types.
-template <typename T>
-struct DefaultHash<T*> : PtrHash<T> {};
-template <typename T>
-struct DefaultHash<scoped_refptr<T>> : RefPtrHash<T> {};
-template <typename T>
-struct DefaultHash<std::unique_ptr<T>> : UniquePtrHash<T> {};
-
-// Specializations for pairs.
-
-// Generic case (T or U is non-integral):
-template <typename T, typename U, bool areBothIntegral>
-struct PairHashImpl {
-  static unsigned GetHash(const std::pair<T, U>& p) {
-    return HashInts(DefaultHash<T>::GetHash(p.first),
-                    DefaultHash<U>::GetHash(p.second));
-  }
-  static bool Equal(const std::pair<T, U>& a, const std::pair<T, U>& b) {
-    return DefaultHash<T>::Equal(a.first, b.first) &&
-           DefaultHash<U>::Equal(a.second, b.second);
-  }
-  static const bool safe_to_compare_to_empty_or_deleted =
-      DefaultHash<T>::safe_to_compare_to_empty_or_deleted &&
-      DefaultHash<U>::safe_to_compare_to_empty_or_deleted;
-};
-
-// Special version for pairs of integrals:
-template <typename T, typename U>
-struct PairHashImpl<T, U, true> {
-  static unsigned GetHash(const std::pair<T, U>& p) {
-    return HashInts(p.first, p.second);
-  }
-  static bool Equal(const std::pair<T, U>& a, const std::pair<T, U>& b) {
-    return PairHashImpl<T, U, false>::Equal(
-        a, b);  // Refer to the generic version.
-  }
-  static const bool safe_to_compare_to_empty_or_deleted =
-      PairHashImpl<T, U, false>::safe_to_compare_to_empty_or_deleted;
-};
-
-// Combined version:
-template <typename T, typename U>
-struct PairHash
-    : PairHashImpl<T,
-                   U,
-                   std::is_integral<T>::value && std::is_integral<U>::value> {};
-
-template <typename T, typename U>
-struct DefaultHash<std::pair<T, U>> : PairHash<T, U> {};
-
-// Wrapper for integral type to extend to have 0 and max keys.
-template <typename T>
-struct IntegralWithAllKeys {
-  IntegralWithAllKeys() : IntegralWithAllKeys(0, ValueType::kEmpty) {}
-  explicit IntegralWithAllKeys(T value)
-      : IntegralWithAllKeys(value, ValueType::kValid) {}
-  explicit IntegralWithAllKeys(HashTableDeletedValueType)
-      : IntegralWithAllKeys(0, ValueType::kDeleted) {}
-
-  bool IsHashTableDeletedValue() const {
-    return value_type_ == ValueType::kDeleted;
-  }
-
-  unsigned Hash() const {
-    return HashInts(value_, static_cast<unsigned>(value_type_));
-  }
-
-  bool operator==(const IntegralWithAllKeys& b) const {
-    return value_ == b.value_ && value_type_ == b.value_type_;
-  }
-
- private:
-  enum class ValueType : uint8_t { kEmpty, kValid, kDeleted };
-
-  IntegralWithAllKeys(T value, ValueType value_type)
-      : value_(value), value_type_(value_type) {
-    static_assert(std::is_integral<T>::value,
-                  "Only integral types are supported.");
-  }
-
-  T value_;
-  ValueType value_type_;
-};
-
-// Specialization for integral type to have all possible values for key
-// including 0 and max.
-template <typename T>
-struct IntegralWithAllKeysHash {
-  static unsigned GetHash(const IntegralWithAllKeys<T>& key) {
-    return key.Hash();
-  }
-  static bool Equal(const IntegralWithAllKeys<T>& a,
-                    const IntegralWithAllKeys<T>& b) {
-    return a == b;
-  }
-  static const bool safe_to_compare_to_empty_or_deleted = true;
-};
-
-template <typename T>
-struct DefaultHash<IntegralWithAllKeys<T>> : IntegralWithAllKeysHash<T> {};
-
 }  // namespace WTF
-
-using WTF::DefaultHash;
-using WTF::IntHash;
-using WTF::PtrHash;
 
 #endif  // THIRD_PARTY_BLINK_RENDERER_PLATFORM_WTF_HASH_FUNCTIONS_H_

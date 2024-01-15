@@ -2,10 +2,9 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {BrowserChannel, UpdateStatus} from 'chrome://os-settings/chromeos/os_settings.js';
-import {webUIListenerCallback} from 'chrome://resources/js/cr.m.js';
-
-import {TestBrowserProxy} from '../../test_browser_proxy.js';
+import {BrowserChannel, UpdateStatus} from 'chrome://os-settings/os_settings.js';
+import {webUIListenerCallback} from 'chrome://resources/ash/common/cr.m.js';
+import {TestBrowserProxy} from 'chrome://webui-test/test_browser_proxy.js';
 
 /** @implements {AboutPageBrowserProxy} */
 export class TestAboutPageBrowserProxyChromeOS extends TestBrowserProxy {
@@ -21,10 +20,11 @@ export class TestAboutPageBrowserProxyChromeOS extends TestBrowserProxy {
       'getRegulatoryInfo',
       'checkInternetConnection',
       'getEndOfLifeInfo',
+      'endOfLifeIncentiveButtonClicked',
       'launchReleaseNotes',
       'openOsHelpPage',
       'openDiagnostics',
-      'refreshTPMFirmwareUpdateStatus',
+      'refreshTpmFirmwareUpdateStatus',
       'requestUpdate',
       'setChannel',
       'getFirmwareUpdateCount',
@@ -67,6 +67,7 @@ export class TestAboutPageBrowserProxyChromeOS extends TestBrowserProxy {
     this.endOfLifeInfo_ = {
       hasEndOfLife: false,
       aboutPageEndOfLifeMessage: '',
+      shouldShowEndOfLifeIncentive: false,
     };
 
     /** @private {!boolean} */
@@ -203,6 +204,10 @@ export class TestAboutPageBrowserProxyChromeOS extends TestBrowserProxy {
     return Promise.resolve(this.endOfLifeInfo_);
   }
 
+  endOfLifeIncentiveButtonClicked() {
+    this.methodCalled('endOfLifeIncentiveButtonClicked');
+  }
+
   /** @override */
   setChannel(channel, isPowerwashAllowed) {
     this.methodCalled('setChannel', [channel, isPowerwashAllowed]);
@@ -214,8 +219,8 @@ export class TestAboutPageBrowserProxyChromeOS extends TestBrowserProxy {
   }
 
   /** @override */
-  refreshTPMFirmwareUpdateStatus() {
-    this.methodCalled('refreshTPMFirmwareUpdateStatus');
+  refreshTpmFirmwareUpdateStatus() {
+    this.methodCalled('refreshTpmFirmwareUpdateStatus');
     webUIListenerCallback(
         'tpm-firmware-update-status-changed', this.tpmFirmwareUpdateStatus_);
   }

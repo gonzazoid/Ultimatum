@@ -8,7 +8,6 @@
 
 #include "base/json/json_writer.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/ui/settings_window_manager_chromeos.h"
 #include "chrome/browser/ui/webui/ash/account_manager/account_migration_welcome_ui.h"
 #include "chrome/common/pref_names.h"
@@ -77,8 +76,8 @@ void AccountMigrationWelcomeDialog::GetDialogSize(gfx::Size* size) const {
 
 std::string AccountMigrationWelcomeDialog::GetDialogArgs() const {
   std::string data;
-  base::DictionaryValue dialog_args;
-  dialog_args.SetStringKey("email", email_);
+  base::Value::Dict dialog_args;
+  dialog_args.Set("email", email_);
   base::JSONWriter::Write(dialog_args, &data);
   return data;
 }
@@ -91,7 +90,7 @@ bool AccountMigrationWelcomeDialog::ShouldShowCloseButton() const {
   return false;
 }
 
-const std::string& AccountMigrationWelcomeDialog::Id() {
+std::string AccountMigrationWelcomeDialog::Id() {
   return id_;
 }
 

@@ -4,9 +4,14 @@
 
 #include "components/commerce/core/shopping_power_bookmark_data_provider.h"
 
+#include <memory>
+
+#include "base/functional/bind.h"
+#include "base/memory/weak_ptr.h"
 #include "components/commerce/core/price_tracking_utils.h"
 #include "components/commerce/core/shopping_service.h"
 #include "components/power_bookmarks/core/power_bookmark_service.h"
+#include "components/power_bookmarks/core/power_bookmark_utils.h"
 #include "components/power_bookmarks/core/proto/power_bookmark_meta.pb.h"
 #include "components/power_bookmarks/core/proto/shopping_specifics.pb.h"
 

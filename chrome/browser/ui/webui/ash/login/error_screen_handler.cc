@@ -11,19 +11,14 @@
 #include "ui/chromeos/devicetype_utils.h"
 #include "ui/chromeos/strings/network/network_element_localized_strings_provider.h"
 
-namespace chromeos {
+namespace ash {
 
 ErrorScreenHandler::ErrorScreenHandler() : BaseScreenHandler(kScreenId) {}
 
 ErrorScreenHandler::~ErrorScreenHandler() = default;
 
-void ErrorScreenHandler::Show() {
-  base::Value::Dict data;
-  if (LoginDisplayHost::default_host()) {
-    data.Set("hasUserPods",
-             ash::LoginDisplayHost::default_host()->HasUserPods());
-  }
-  ShowInWebUI(std::move(data));
+void ErrorScreenHandler::ShowScreenWithParam(bool is_closeable) {
+  ShowInWebUI(base::Value::Dict().Set("isCloseable", is_closeable));
 }
 
 void ErrorScreenHandler::ShowOobeScreen(OobeScreenId screen) {
@@ -50,10 +45,6 @@ void ErrorScreenHandler::SetOfflineSigninAllowed(bool value) {
 
 void ErrorScreenHandler::SetShowConnectingIndicator(bool value) {
   CallExternalAPI("showConnectingIndicator", value);
-}
-
-void ErrorScreenHandler::SetIsPersistentError(bool is_persistent) {
-  CallExternalAPI("setIsPersistentError", is_persistent);
 }
 
 void ErrorScreenHandler::SetUIState(NetworkError::UIState ui_state) {
@@ -96,4 +87,4 @@ void ErrorScreenHandler::DeclareLocalizedValues(
   builder->Add("offlineLogin", IDS_OFFLINE_LOGIN_HTML);
 }
 
-}  // namespace chromeos
+}  // namespace ash

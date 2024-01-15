@@ -2,8 +2,10 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {sanitizeInnerHtml} from 'chrome://resources/js/parse_html_subset.js';
+
 /* Script used to strip anchor links from webview */
-/* #export */ const webviewStripLinksContentScript = {
+export const webviewStripLinksContentScript = {
   name: 'stripLinks',
   matches: ['<all_urls>'],
   js: {
@@ -16,7 +18,7 @@
 /**
  * Sanitizer which filters the html snippet with a set of whitelisted tags.
  */
-/* #export */ class HtmlSanitizer {
+export class HtmlSanitizer {
   constructor() {
     // initialize set of whitelisted tags.
     this.allowedTags = new Set(['b', 'i', 'br', 'p', 'a', 'ul', 'li', 'div']);
@@ -32,10 +34,11 @@
    * @public
    */
   sanitizeHtml(content) {
-    var doc = document.implementation.createHTMLDocument();
-    var div = doc.createElement('div');
-    div.innerHTML = content;
-    return this.sanitizeNode_(doc, div).innerHTML;
+    const doc = document.implementation.createHTMLDocument();
+    const div = doc.createElement('div');
+    div.innerHTML = sanitizeInnerHtml(content, {tags: ['i', 'ul', 'li']});
+    return sanitizeInnerHtml(
+        this.sanitizeNode_(doc, div).innerHTML, {tags: ['i', 'ul', 'li']});
   }
 
   /**
@@ -48,7 +51,7 @@
    * @private
    */
   sanitizeNode_(doc, node) {
-    var name = node.nodeName.toLowerCase();
+    const name = node.nodeName.toLowerCase();
     if (name == '#text') {
       return node;
     }
@@ -56,7 +59,7 @@
       return doc.createTextNode('');
     }
 
-    var copy = doc.createElement(name);
+    const copy = doc.createElement(name);
     // Only allow 'href' attribute for tag 'a'.
     if (name == 'a' && node.attributes.length == 1 &&
         node.attributes.item(0).name == 'href') {
@@ -64,7 +67,7 @@
     }
 
     while (node.childNodes.length > 0) {
-      var child = node.removeChild(node.childNodes[0]);
+      const child = node.removeChild(node.childNodes[0]);
       copy.appendChild(this.sanitizeNode_(doc, child));
     }
     return copy;
@@ -76,7 +79,7 @@
  * Must be in sync with the corresponding c++ enum
  * @enum {number}
  */
-/* #export */ const AssistantNativeIconType = {
+export const AssistantNativeIconType = {
   NONE: 0,
 
   // Web & App Activity.

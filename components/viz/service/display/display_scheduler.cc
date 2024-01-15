@@ -8,9 +8,10 @@
 #include <utility>
 
 #include "base/auto_reset.h"
-#include "base/cxx17_backports.h"
 #include "base/memory/raw_ptr.h"
 #include "base/metrics/histogram_macros.h"
+#include "base/task/delay_policy.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/trace_event/trace_event.h"
 #include "components/viz/common/features.h"
 #include "components/viz/service/performance_hint/hint_session.h"
@@ -20,16 +21,16 @@ namespace viz {
 namespace {
 
 base::TimeDelta ComputeAdpfTarget(const BeginFrameArgs& args) {
-  int target_ms = features::kAdpfTargetDurationMs.Get();
-  if (target_ms > 0 && target_ms <= 1000) {
-    return base::Milliseconds(target_ms);
-  }
   if (args.possible_deadlines) {
     const auto& deadline = args.possible_deadlines->GetPreferredDeadline();
     // Arbitrarily use 75% of the deadline for CPU work.
     return deadline.latch_delta * 3 / 4;
   }
   return base::Milliseconds(12);
+}
+
+bool DrawImmediatelyWhenInteractive() {
+  return features::ShouldDrawImmediatelyWhenInteractive();
 }
 
 }  // namespace
@@ -100,9 +101,16 @@ DisplayScheduler::~DisplayScheduler() {
   StopObservingBeginFrames();
 }
 
+void DisplayScheduler::SetDamageTracker(DisplayDamageTracker* damage_tracker) {
+  DisplaySchedulerBase::SetDamageTracker(damage_tracker);
+  damage_tracker->SetDisplayBeginFrameSourceId(
+      begin_frame_source_->source_id());
+}
+
 void DisplayScheduler::SetVisible(bool visible) {
-  if (visible_ == visible)
+  if (visible_ == visible) {
     return;
+  }
 
   visible_ = visible;
   // If going invisible, we'll stop observing begin frames once we try
@@ -186,13 +194,15 @@ void DisplayScheduler::MaybeCreateHintSession(
 
 void DisplayScheduler::ReportFrameTime(
     base::TimeDelta frame_time,
-    base::flat_set<base::PlatformThreadId> thread_ids) {
+    base::flat_set<base::PlatformThreadId> thread_ids,
+    base::TimeTicks draw_start,
+    HintSession::BoostType boost_type) {
   MaybeCreateHintSession(std::move(thread_ids));
   if (hint_session_) {
     UMA_HISTOGRAM_CUSTOM_MICROSECONDS_TIMES("Compositing.Display.AdpfHintUs",
                                             frame_time, base::Microseconds(1),
                                             base::Milliseconds(50), 50);
-    hint_session_->ReportCpuCompletionTime(frame_time);
+    hint_session_->ReportCpuCompletionTime(frame_time, draw_start, boost_type);
   }
 }
 
@@ -281,38 +291,39 @@ int DisplayScheduler::MaxPendingSwaps() const {
   // Interval for 90hz and 120hz with some delta for margin of error.
   constexpr base::TimeDelta k90HzInterval = base::Microseconds(11500);
   constexpr base::TimeDelta k120HzInterval = base::Microseconds(8500);
-  int max_pending_swaps;
-  if (current_begin_frame_args_.possible_deadlines) {
-    // Estimate the max pending swap based on the frame rate and presentation
-    // time.
-    const auto& deadline =
-        current_begin_frame_args_.possible_deadlines->GetPreferredDeadline();
-    int64_t total_time_nanos = deadline.present_delta.InNanoseconds();
-    int64_t interval_nanos = current_begin_frame_args_.interval.InNanoseconds();
-    // Assuming no frames are dropped, then:
-    // * A new frame is started every `interval_nanos`.
-    // * A buffer is returned after its present time is passed.
-    // This gives us the formula that number of pending swaps needed (ie the
-    // max) is the number of new frames that can be started before the buffer
-    // for a frame is returned: total_time_nanos / interval_nanos.
-    // However present time is generally not an exact multiple of interval, and
-    // here the 0.8 constant is chosen to bias rounding up.
-    max_pending_swaps =
-        (total_time_nanos + 0.8 * interval_nanos) / interval_nanos;
-    max_pending_swaps = base::clamp(max_pending_swaps, 0,
-                                    pending_swap_params_.max_pending_swaps);
+  int param_max_pending_swaps;
+  if (current_begin_frame_args_.interval < k120HzInterval &&
+      pending_swap_params_.max_pending_swaps_120hz) {
+    param_max_pending_swaps =
+        pending_swap_params_.max_pending_swaps_120hz.value();
+  } else if (current_begin_frame_args_.interval < k90HzInterval &&
+             pending_swap_params_.max_pending_swaps_90hz) {
+    param_max_pending_swaps =
+        pending_swap_params_.max_pending_swaps_90hz.value();
   } else {
-    if (current_begin_frame_args_.interval < k120HzInterval &&
-        pending_swap_params_.max_pending_swaps_120hz) {
-      max_pending_swaps = pending_swap_params_.max_pending_swaps_120hz.value();
-    } else if (current_begin_frame_args_.interval < k90HzInterval &&
-               pending_swap_params_.max_pending_swaps_90hz) {
-      max_pending_swaps = pending_swap_params_.max_pending_swaps_90hz.value();
-    } else {
-      max_pending_swaps = pending_swap_params_.max_pending_swaps;
-    }
+    param_max_pending_swaps = pending_swap_params_.max_pending_swaps;
   }
-  return max_pending_swaps;
+  if (!current_begin_frame_args_.possible_deadlines) {
+    return param_max_pending_swaps;
+  }
+
+  // Estimate the max pending swap based on the frame rate and presentation
+  // time.
+  const auto& deadline =
+      current_begin_frame_args_.possible_deadlines->GetPreferredDeadline();
+  int64_t total_time_nanos = deadline.present_delta.InNanoseconds();
+  int64_t interval_nanos = current_begin_frame_args_.interval.InNanoseconds();
+  // Assuming no frames are dropped, then:
+  // * A new frame is started every `interval_nanos`.
+  // * A buffer is returned after its present time is passed.
+  // This gives us the formula that number of pending swaps needed (ie the
+  // max) is the number of new frames that can be started before the buffer
+  // for a frame is returned: total_time_nanos / interval_nanos.
+  // However present time is generally not an exact multiple of interval, and
+  // here the 0.8 constant is chosen to bias rounding up.
+  int deadline_max_pending_swaps =
+      (total_time_nanos + 0.8 * interval_nanos) / interval_nanos;
+  return std::clamp(deadline_max_pending_swaps, 0, param_max_pending_swaps);
 }
 
 void DisplayScheduler::SetNeedsOneBeginFrame(bool needs_draw) {
@@ -395,8 +406,11 @@ DisplayScheduler::DesiredBeginFrameDeadlineMode() const {
     return BeginFrameDeadlineMode::kImmediate;
   }
 
-  if (pending_swaps_ >= MaxPendingSwaps()) {
-    TRACE_EVENT_INSTANT0("viz", "Swap throttled", TRACE_EVENT_SCOPE_THREAD);
+  const int max_pending_swaps = MaxPendingSwaps();
+  if (pending_swaps_ >= max_pending_swaps) {
+    TRACE_EVENT_INSTANT2("viz", "Swap throttled", TRACE_EVENT_SCOPE_THREAD,
+                         "pending_swaps", pending_swaps_, "max_pending_swaps",
+                         max_pending_swaps);
     return BeginFrameDeadlineMode::kLate;
   }
 
@@ -405,8 +419,14 @@ DisplayScheduler::DesiredBeginFrameDeadlineMode() const {
     return BeginFrameDeadlineMode::kLate;
   }
 
+  // Only wait if we actually have pending surfaces and we're not forcing draw
+  // due to an ongoing interaction.
+  bool wait_for_pending_surfaces =
+      has_pending_surfaces_ && !(DrawImmediatelyWhenInteractive() &&
+                                 damage_tracker_->HasDamageDueToInteraction());
+
   bool all_surfaces_ready =
-      !has_pending_surfaces_ && damage_tracker_->IsRootSurfaceValid() &&
+      !wait_for_pending_surfaces && damage_tracker_->IsRootSurfaceValid() &&
       !damage_tracker_->expecting_root_surface_damage_because_of_resize();
 
   // When no draw is needed, only allow an early deadline in full-pipe mode.
@@ -475,7 +495,7 @@ void DisplayScheduler::ScheduleBeginFrameDeadline() {
 
   begin_frame_deadline_timer_.Start(FROM_HERE, desired_deadline,
                                     begin_frame_deadline_closure_,
-                                    base::ExactDeadline(true));
+                                    base::subtle::DelayPolicy::kPrecise);
   TRACE_EVENT2("viz", "Using new deadline", "deadline_mode", deadline_mode,
                "desired_deadline", desired_deadline);
 }
@@ -513,6 +533,7 @@ void DisplayScheduler::DidFinishFrame(bool did_draw) {
   BeginFrameAck ack(current_begin_frame_args_, did_draw);
   if (client_)
     client_->DidFinishFrame(ack);
+  damage_tracker_->DidFinishFrame();
 }
 
 void DisplayScheduler::DidSwapBuffers() {

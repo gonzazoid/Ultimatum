@@ -11,10 +11,10 @@
 #include <ostream>
 #include <sstream>
 #include <string>
+#include <string_view>
 #include <type_traits>
 
 #include "base/containers/flat_map.h"
-#include "base/strings/string_piece.h"
 #include "base/values.h"
 
 #include "testing/gmock/include/gmock/gmock.h"
@@ -53,6 +53,47 @@ class AttachEncryptionSettingsMatcher : public RequestValidityMatcherInterface {
 // attachEncryptionSettings must be absent.
 class NoAttachEncryptionSettingsMatcher
     : public RequestValidityMatcherInterface {
+ public:
+  bool MatchAndExplain(const base::Value::Dict& arg,
+                       MatchResultListener* listener) const override;
+  void DescribeTo(std::ostream* os) const override;
+  void DescribeNegationTo(std::ostream* os) const override;
+  std::string Name() const override;
+};
+
+// ConfigurationFileVersion must be of bool type and true.
+class ConfigurationFileVersionMatcher : public RequestValidityMatcherInterface {
+ public:
+  bool MatchAndExplain(const base::Value::Dict& arg,
+                       MatchResultListener* listener) const override;
+  void DescribeTo(std::ostream* os) const override;
+  void DescribeNegationTo(std::ostream* os) const override;
+  std::string Name() const override;
+};
+
+// ConfigurationFileVersion must be absent.
+class NoConfigurationFileVersionMatcher
+    : public RequestValidityMatcherInterface {
+ public:
+  bool MatchAndExplain(const base::Value::Dict& arg,
+                       MatchResultListener* listener) const override;
+  void DescribeTo(std::ostream* os) const override;
+  void DescribeNegationTo(std::ostream* os) const override;
+  std::string Name() const override;
+};
+
+// source must be of string type.
+class SourceMatcher : public RequestValidityMatcherInterface {
+ public:
+  bool MatchAndExplain(const base::Value::Dict& arg,
+                       MatchResultListener* listener) const override;
+  void DescribeTo(std::ostream* os) const override;
+  void DescribeNegationTo(std::ostream* os) const override;
+  std::string Name() const override;
+};
+
+// source must be absent.
+class NoSourceMatcher : public RequestValidityMatcherInterface {
  public:
   bool MatchAndExplain(const base::Value::Dict& arg,
                        MatchResultListener* listener) const override;
@@ -226,6 +267,38 @@ class RequestValidityMatcherBuilder {
   }
 
   // Creates and returns a |RequestValidityMatcherBuilder| instance that
+  // contains a matcher that is suited for verifying a configuration file
+  // request. If request_config_file is false the matcher will ensure the
+  // request does not request the configuration file.
+  static RequestValidityMatcherBuilder<T> CreateConfigurationFileRequestUpload(
+      bool request_config_file) {
+    auto builder = RequestValidityMatcherBuilder<T>::CreateEmpty();
+    builder.AppendMatcher(RequestIdMatcher());
+    if (request_config_file) {
+      builder.AppendMatcher(ConfigurationFileVersionMatcher());
+    } else {
+      builder.AppendMatcher(NoConfigurationFileVersionMatcher());
+    }
+    return builder;
+  }
+
+  // Creates and returns a |RequestValidityMatcherBuilder| instance that
+  // contains a matcher that is suited for verifying a client automated test
+  // request. If client_automated_test is false the matcher will ensure the
+  // request does not include the field source.
+  static RequestValidityMatcherBuilder<T> CreateSourceRequestUpload(
+      bool client_automated_test) {
+    auto builder = RequestValidityMatcherBuilder<T>::CreateEmpty();
+    builder.AppendMatcher(RequestIdMatcher());
+    if (client_automated_test) {
+      builder.AppendMatcher(SourceMatcher());
+    } else {
+      builder.AppendMatcher(NoSourceMatcher());
+    }
+    return builder;
+  }
+
+  // Creates and returns a |RequestValidityMatcherBuilder| instance that
   // contains a matcher that is suited for verifying a single record.
   static RequestValidityMatcherBuilder<T> CreateRecord() {
     return std::move(RequestValidityMatcherBuilder<T>::CreateEmpty()
@@ -263,7 +336,7 @@ class RequestValidityMatcherBuilder {
   }
 
   // Remove a matcher.
-  RequestValidityMatcherBuilder<T>& RemoveMatcher(base::StringPiece name) {
+  RequestValidityMatcherBuilder<T>& RemoveMatcher(std::string_view name) {
     auto matcher_it = matcher_index_.find(name);
     EXPECT_NE(matcher_it, matcher_index_.end())
         << "Matcher \"" << name << "\" not found.";
@@ -287,8 +360,7 @@ class RequestContainingRecordMatcher {
  public:
   using is_gtest_matcher = void;
 
-  explicit RequestContainingRecordMatcher(
-      base::StringPiece matched_record_json);
+  explicit RequestContainingRecordMatcher(std::string_view matched_record_json);
   bool MatchAndExplain(const base::Value::Dict& arg,
                        MatchResultListener* os) const;
   void DescribeTo(std::ostream* os) const;
@@ -338,6 +410,26 @@ Matcher<T> IsEncryptionKeyRequestUploadRequestValid(bool need_key = true) {
       .Build();
 }
 
+// Match a configuration file request upload request that is valid. If
+// request_config_file is false, this matcher will ensure the request does not
+// request a configuration file.
+template <class T = base::Value::Dict>
+Matcher<T> IsConfigurationFileRequestUploadRequestValid(
+    bool request_config_file = false) {
+  return RequestValidityMatcherBuilder<T>::CreateConfigurationFileRequestUpload(
+             request_config_file)
+      .Build();
+}
+
+// Match a source upload request that is valid.
+template <class T = base::Value::Dict>
+Matcher<T> IsSourceRequestUploadRequestValid(
+    bool client_automated_test = false) {
+  return RequestValidityMatcherBuilder<T>::CreateSourceRequestUpload(
+             client_automated_test)
+      .Build();
+}
+
 // Match a gap upload request that is valid.
 template <class T = base::Value::Dict>
 Matcher<T> IsGapUploadRequestValid() {
@@ -356,7 +448,7 @@ Matcher<T> IsRecordValid() {
 // In this way, you can specify only part of the record of interest (e.g., omit
 // "encryptedWrappedRecord").
 template <class T = base::Value::Dict>
-Matcher<T> DoesRequestContainRecord(base::StringPiece matched_record_json) {
+Matcher<T> DoesRequestContainRecord(std::string_view matched_record_json) {
   return RequestContainingRecordMatcher(matched_record_json);
 }
 

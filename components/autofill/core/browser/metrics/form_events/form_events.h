@@ -5,11 +5,12 @@
 #ifndef COMPONENTS_AUTOFILL_CORE_BROWSER_METRICS_FORM_EVENTS_FORM_EVENTS_H_
 #define COMPONENTS_AUTOFILL_CORE_BROWSER_METRICS_FORM_EVENTS_FORM_EVENTS_H_
 
-namespace autofill {
+namespace autofill::autofill_metrics {
 
 // Form Events for autofill.
 // These events are triggered separately for address and credit card forms.
-// Event IDs must not change as they are recorded in metrics.
+// These values are persisted to logs. Entries should not be renumbered and
+// numeric values should never be reused.
 enum FormEvent {
   // User interacted with a field of this kind of form. Logged only once per
   // page load.
@@ -83,9 +84,9 @@ enum FormEvent {
   FORM_EVENT_DID_DYNAMIC_REFILL = 28,
   // The form dynamically changed another time after the refill.
   FORM_EVENT_DYNAMIC_CHANGE_AFTER_REFILL = 29,
-  // The popup was suppressed because the native view couldn't be created.
+
+  // The two events below are deprecated and no longer emitted.
   FORM_EVENT_POPUP_SUPPRESSED = 30,
-  // Same as above, but recoreded only once per page load.
   FORM_EVENT_POPUP_SUPPRESSED_ONCE = 31,
 
   // The form was parsed.
@@ -143,9 +144,67 @@ enum FormEvent {
   // after being autofilled. Recorded once per form.
   FORM_EVENT_AUTOFILLED_FIELD_CLEARED_BY_JAVASCRIPT_AFTER_FILL_ONCE = 57,
 
+  // Credit card suggestions were shown, and it included at least one suggestion
+  // with metadata.
+  FORM_EVENT_CARD_SUGGESTION_WITH_METADATA_SHOWN = 58,
+  // Credit card suggestions were shown, and none had metadata.
+  FORM_EVENT_CARD_SUGGESTION_WITHOUT_METADATA_SHOWN = 59,
+  // The selected credit card suggestion had metadata.
+  FORM_EVENT_CARD_SUGGESTION_WITH_METADATA_SELECTED = 60,
+  // The selected credit card suggestion did not have metadata.
+  FORM_EVENT_CARD_SUGGESTION_WITHOUT_METADATA_SELECTED = 61,
+
+  // Reserved so that the serialized DenseSet<FormEvent> are representable as
+  // int64_t. Such conversions uint64_t -> int64_t happen when serializing a
+  // DenseSet<FormEvent> and passing it to a UKM builder.
+  FORM_EVENT_RESERVED_NOT_FOR_USE = 63,
+
+  // Credit card suggestions were shown, and they included at least one
+  // suggestion with metadata. Logged once per page load.
+  FORM_EVENT_CARD_SUGGESTION_WITH_METADATA_SHOWN_ONCE = 64,
+  // Credit card suggestions were shown, and none had metadata. Logged once per
+  // page load.
+  FORM_EVENT_CARD_SUGGESTION_WITHOUT_METADATA_SHOWN_ONCE = 65,
+  // The selected credit card suggestion had metadata. Logged once per page
+  // load.
+  FORM_EVENT_CARD_SUGGESTION_WITH_METADATA_SELECTED_ONCE = 66,
+  // The selected credit card suggestion did not have metadata. Logged once per
+  // page load.
+  FORM_EVENT_CARD_SUGGESTION_WITHOUT_METADATA_SELECTED_ONCE = 67,
+  // The filled credit card suggestion had metadata.
+  FORM_EVENT_CARD_SUGGESTION_WITH_METADATA_FILLED = 68,
+  // The filled credit card suggestion had no metadata.
+  FORM_EVENT_CARD_SUGGESTION_WITHOUT_METADATA_FILLED = 69,
+  // A credit card was submitted after a suggestion was filled,
+  // and the suggested card had metadata. Logged once per page load.
+  FORM_EVENT_CARD_SUGGESTION_WITH_METADATA_SUBMITTED_ONCE = 70,
+  // A credit card was submitted after a suggestion was filled,
+  // and the suggested card had no metadata. Logged once per page load.
+  FORM_EVENT_CARD_SUGGESTION_WITHOUT_METADATA_SUBMITTED_ONCE = 71,
+
+  // Metric logged when a server card with a matching deduplicated local
+  // suggestion was filled.
+  FORM_EVENT_SERVER_CARD_SUGGESTION_SELECTED_FOR_AN_EXISTING_LOCAL_CARD_ONCE =
+      72,
+  FORM_EVENT_SERVER_CARD_FILLED_FOR_AN_EXISTING_LOCAL_CARD_ONCE = 73,
+  FORM_EVENT_SERVER_CARD_SUBMITTED_FOR_AN_EXISTING_LOCAL_CARD_ONCE = 74,
+
+  // The filled credit card suggestion had metadata. Logged once per
+  // page load.
+  FORM_EVENT_CARD_SUGGESTION_WITH_METADATA_FILLED_ONCE = 75,
+  // The filled credit card suggestion had no metadata. Logged once per
+  // page load.
+  FORM_EVENT_CARD_SUGGESTION_WITHOUT_METADATA_FILLED_ONCE = 76,
+  // A credit card was about to be submitted after a suggestion was filled,
+  // and the suggested card had metadata. Logged once per page load.
+  FORM_EVENT_CARD_SUGGESTION_WITH_METADATA_WILL_SUBMIT_ONCE = 77,
+  // A credit card was about to be submitted after a suggestion was filled,
+  // and the suggested card had no metadata. Logged once per page load.
+  FORM_EVENT_CARD_SUGGESTION_WITHOUT_METADATA_WILL_SUBMIT_ONCE = 78,
+
   NUM_FORM_EVENTS,
 };
 
-}  // namespace autofill
+}  // namespace autofill::autofill_metrics
 
 #endif  // COMPONENTS_AUTOFILL_CORE_BROWSER_METRICS_FORM_EVENTS_FORM_EVENTS_H_

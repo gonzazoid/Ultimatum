@@ -4,7 +4,7 @@
 
 #include "ui/ozone/platform/drm/host/drm_window_host.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/scoped_refptr.h"
 #include "ui/base/cursor/platform_cursor.h"
 #include "ui/display/display.h"
@@ -114,7 +114,7 @@ bool DrmWindowHost::HasCapture() const {
   return widget_ == window_manager_->event_grabber();
 }
 
-void DrmWindowHost::ToggleFullscreen() {}
+void DrmWindowHost::SetFullscreen(bool fullscreen, int64_t target_display_id) {}
 
 void DrmWindowHost::Maximize() {}
 

@@ -16,6 +16,7 @@
 #include "base/thread_annotations.h"
 #include "ui/gl/gl_display.h"
 #include "ui/gl/gl_export.h"
+#include "ui/gl/gl_switches.h"
 #include "ui/gl/gpu_preference.h"
 
 namespace gl {
@@ -42,40 +43,81 @@ class GLDisplayManager {
     gpu_preference_map_[preference] = system_device_id;
   }
 
-  GLDisplayManager(const GLDisplayManager&) = delete;
-  GLDisplayManager& operator=(const GLDisplayManager&) = delete;
-
-  GLDisplayPlatform* GetDisplay(uint64_t system_device_id) {
-    base::AutoLock auto_lock(lock_);
-    for (const auto& display : displays_) {
-      if (display->system_device_id() == system_device_id) {
-        return display.get();
+  // This should be called if display creation is failed on the specified
+  // system_device_id display. This way, we will no longer attempt to use this
+  // display, but instead use the default display.
+  void RemoveGpuPreference(GpuPreference preference) {
+    uint64_t system_device_id = GetSystemDeviceId(preference);
+    for (auto iter = gpu_preference_map_.begin();
+         iter != gpu_preference_map_.end();
+         /* no increment */) {
+      if (iter->second == system_device_id && gpu_preference_map_.size() > 1) {
+        iter = gpu_preference_map_.erase(iter);
+      } else {
+        iter++;
       }
     }
 
-    std::unique_ptr<GLDisplayPlatform> display(
-        new GLDisplayPlatform(system_device_id));
-    displays_.push_back(std::move(display));
-    return displays_.back().get();
+    // Ensure that kDefault is always set if there is at least one other gpu
+    // preference.
+    if (!gpu_preference_map_.empty()) {
+      auto iter = gpu_preference_map_.find(GpuPreference::kDefault);
+      if (iter == gpu_preference_map_.end()) {
+        gpu_preference_map_[GpuPreference::kDefault] =
+            gpu_preference_map_.begin()->second;
+      }
+    }
+
+    base::AutoLock auto_lock(lock_);
+    for (size_t i = 0; i < displays_.size(); i++) {
+      if (displays_[i]->system_device_id() == system_device_id) {
+        displays_.erase(displays_.begin() + i);
+        i--;
+      }
+    }
   }
 
-  GLDisplayPlatform* GetDisplay(GpuPreference preference) {
+  uint64_t GetSystemDeviceId(GpuPreference preference) {
     uint64_t system_device_id = 0;
     auto iter = gpu_preference_map_.find(preference);
-    if (iter == gpu_preference_map_.end() &&
-        preference != GpuPreference::kDefault) {
+    if (!SupportsEGLDualGPURendering() ||
+        (iter == gpu_preference_map_.end() &&
+         preference != GpuPreference::kDefault)) {
       // If kLowPower or kHighPerformance is queried but they are not set in the
       // map, default to the kDefault GPU.
+      // Also do this if EGLDualGPURendering is not enabled.
       iter = gpu_preference_map_.find(GpuPreference::kDefault);
     }
-    if (iter != gpu_preference_map_.end())
+    if (iter != gpu_preference_map_.end()) {
       system_device_id = iter->second;
-    return GetDisplay(system_device_id);
+    }
+    return system_device_id;
   }
+
+  GLDisplayManager(const GLDisplayManager&) = delete;
+  GLDisplayManager& operator=(const GLDisplayManager&) = delete;
 
   bool IsEmpty() {
     base::AutoLock auto_lock(lock_);
     return displays_.empty();
+  }
+
+  void OverrideEGLDualGPURenderingSupportForTests(bool value) {
+    override_egl_dual_gpu_rendering_support_for_tests_ = value;
+  }
+
+  bool SupportsEGLDualGPURendering() {
+    return features::SupportsEGLDualGPURendering() ||
+           override_egl_dual_gpu_rendering_support_for_tests_;
+  }
+
+  GLDisplayPlatform* GetDisplay(GpuPreference preference,
+                                gl::DisplayKey display_key) {
+    return GetDisplay(GetSystemDeviceId(preference), display_key);
+  }
+
+  GLDisplayPlatform* GetDisplay(GpuPreference preference) {
+    return GetDisplay(GetSystemDeviceId(preference), gl::DisplayKey::kDefault);
   }
 
  private:
@@ -89,10 +131,28 @@ class GLDisplayManager {
   GLDisplayManager() = default;
   virtual ~GLDisplayManager() = default;
 
+  GLDisplayPlatform* GetDisplay(uint64_t system_device_id,
+                                gl::DisplayKey display_key) {
+    base::AutoLock auto_lock(lock_);
+    for (const auto& display : displays_) {
+      if (display->system_device_id() == system_device_id &&
+          display->display_key() == display_key) {
+        return display.get();
+      }
+    }
+
+    std::unique_ptr<GLDisplayPlatform> display(
+        new GLDisplayPlatform(system_device_id, display_key));
+    displays_.push_back(std::move(display));
+    return displays_.back().get();
+  }
+
   mutable base::Lock lock_;
   std::vector<std::unique_ptr<GLDisplayPlatform>> displays_ GUARDED_BY(lock_);
 
   std::map<GpuPreference, uint64_t> gpu_preference_map_;
+
+  bool override_egl_dual_gpu_rendering_support_for_tests_ = false;
 };
 
 #if defined(USE_EGL)

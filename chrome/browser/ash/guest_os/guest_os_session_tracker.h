@@ -5,14 +5,15 @@
 #ifndef CHROME_BROWSER_ASH_GUEST_OS_GUEST_OS_SESSION_TRACKER_H_
 #define CHROME_BROWSER_ASH_GUEST_OS_GUEST_OS_SESSION_TRACKER_H_
 
-#include "base/callback_forward.h"
 #include "base/callback_list.h"
+#include "base/containers/flat_set.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback_forward.h"
 #include "chrome/browser/ash/guest_os/guest_id.h"
 #include "chromeos/ash/components/dbus/cicerone/cicerone_client.h"
 #include "chromeos/ash/components/dbus/cicerone/cicerone_service.pb.h"
 #include "chromeos/ash/components/dbus/concierge/concierge_client.h"
-#include "chromeos/ash/components/dbus/concierge/concierge_service.pb.h"
+#include "chromeos/ash/components/dbus/vm_concierge/concierge_service.pb.h"
 #include "components/keyed_service/core/keyed_service.h"
 
 namespace guest_os {
@@ -74,13 +75,24 @@ class GuestOsSessionTracker : protected ash::ConciergeClient::VmObserver,
   absl::optional<vm_tools::concierge::VmInfo> GetVmInfo(
       const std::string& vm_name);
 
+  // Given a container_token for a running guest, returns its GuestId. Returns
+  // nullopt if the token isn't recognised.
+  absl::optional<GuestId> GetGuestIdForToken(
+      const std::string& container_token);
+
   // Returns true if a guest is running, false otherwise.
   bool IsRunning(const GuestId& id);
 
-  void AddGuestForTesting(const GuestId& id);
+  // Returns true if a VM is known to be shutting down, false for running or
+  // stopped.
+  bool IsVmStopping(const std::string& vm_name);
+
+  void AddGuestForTesting(const GuestId& id,
+                          const std::string& token = "test_token");
   void AddGuestForTesting(const GuestId& id,
                           const GuestInfo& info,
-                          bool notify = false);
+                          bool notify = false,
+                          const std::string& token = "test_token");
 
   void AddContainerStartedObserver(ContainerStartedObserver* observer);
   void RemoveContainerStartedObserver(ContainerStartedObserver* observer);
@@ -89,6 +101,8 @@ class GuestOsSessionTracker : protected ash::ConciergeClient::VmObserver,
   // ash::ConciergeClient::VmObserver overrides.
   void OnVmStarted(const vm_tools::concierge::VmStartedSignal& signal) override;
   void OnVmStopped(const vm_tools::concierge::VmStoppedSignal& signal) override;
+  void OnVmStopping(
+      const vm_tools::concierge::VmStoppingSignal& signal) override;
 
   // ash::CiceroneClient::Observer overrides.
   void OnContainerStarted(
@@ -106,19 +120,23 @@ class GuestOsSessionTracker : protected ash::ConciergeClient::VmObserver,
   void OnGetGarconSessionInfo(
       std::string vm_name,
       std::string container_name,
+      std::string container_token,
       absl::optional<vm_tools::cicerone::GetGarconSessionInfoResponse>
           response);
   void HandleNewGuest(const std::string& vm_name,
                       const std::string& container_name,
+                      const std::string& container_token,
                       const std::string& username,
                       const std::string& homedir,
                       const std::string& ipv4_address,
-                      uint32_t sftp_vsock_port);
+                      const uint32_t& sftp_vsock_port);
   void HandleContainerShutdown(const std::string& vm_name,
                                const std::string& container_name);
   std::string owner_id_;
   base::flat_map<std::string, vm_tools::concierge::VmInfo> vms_;
+  base::flat_set<std::string> stopping_vms_;
   base::flat_map<GuestId, GuestInfo> guests_;
+  base::flat_map<std::string, GuestId> tokens_to_guests_;
 
   base::flat_map<GuestId,
                  std::unique_ptr<base::OnceCallbackList<void(GuestInfo)>>>

@@ -9,6 +9,7 @@
 #include "chrome/browser/content_settings/host_content_settings_map_factory.h"
 #include "chrome/browser/content_settings/page_specific_content_settings_delegate.h"
 #include "chrome/test/base/chrome_render_view_host_test_harness.h"
+#include "components/permissions/permission_recovery_success_rate_tracker.h"
 #include "content/public/browser/web_contents.h"
 #include "testing/gmock/include/gmock/gmock-matchers.h"
 
@@ -26,6 +27,9 @@ class PageSpecificContentSettingsTest : public ChromeRenderViewHostTestHarness {
         web_contents(),
         std::make_unique<chrome::PageSpecificContentSettingsDelegate>(
             web_contents()));
+
+    permissions::PermissionRecoverySuccessRateTracker::CreateForWebContents(
+        web_contents());
   }
 };
 
@@ -69,32 +73,28 @@ TEST_F(PageSpecificContentSettingsTest, HistogramTest) {
   // Count should stay same even if a different permission is used
   histograms.ExpectTotalCount(kGeolocationHistogramName, 1);
 
-  PageSpecificContentSettings::MicrophoneCameraState microphone_accessed =
-      PageSpecificContentSettings::MICROPHONE_ACCESSED |
-      PageSpecificContentSettings::CAMERA_ACCESSED |
-      PageSpecificContentSettings::CAMERA_BLOCKED;
+  PageSpecificContentSettings::MicrophoneCameraState microphone_accessed{
+      PageSpecificContentSettings::kMicrophoneAccessed,
+      PageSpecificContentSettings::kCameraAccessed,
+      PageSpecificContentSettings::kCameraBlocked,
+  };
 
   histograms.ExpectTotalCount(kMicrophoneHistogramName, 0);
-  content_settings->OnMediaStreamPermissionSet(test_url, microphone_accessed,
-                                               std::string(), std::string(),
-                                               std::string(), std::string());
+  content_settings->OnMediaStreamPermissionSet(test_url, microphone_accessed);
   histograms.ExpectTotalCount(kMicrophoneHistogramName, 1);
   EXPECT_THAT(histograms.GetAllSamples(kMicrophoneHistogramName),
               testing::ElementsAre(base::Bucket(1, 1)));
-  const PageSpecificContentSettings::MicrophoneCameraState mic_camera_accessed =
-      PageSpecificContentSettings::MICROPHONE_ACCESSED |
-      PageSpecificContentSettings::CAMERA_ACCESSED;
+  const PageSpecificContentSettings::MicrophoneCameraState mic_camera_accessed{
+      PageSpecificContentSettings::kMicrophoneAccessed,
+      PageSpecificContentSettings::kCameraAccessed,
+  };
 
   histograms.ExpectTotalCount(kCameraHistogramName, 0);
-  content_settings->OnMediaStreamPermissionSet(test_url, mic_camera_accessed,
-                                               std::string(), std::string(),
-                                               std::string(), std::string());
+  content_settings->OnMediaStreamPermissionSet(test_url, mic_camera_accessed);
   histograms.ExpectTotalCount(kCameraHistogramName, 1);
   EXPECT_THAT(histograms.GetAllSamples(kCameraHistogramName),
               testing::ElementsAre(base::Bucket(1, 1)));
-  content_settings->OnMediaStreamPermissionSet(test_url, mic_camera_accessed,
-                                               std::string(), std::string(),
-                                               std::string(), std::string());
+  content_settings->OnMediaStreamPermissionSet(test_url, mic_camera_accessed);
   // Count should stay same even after multiple usage of permission
   histograms.ExpectTotalCount(kMicrophoneHistogramName, 1);
   histograms.ExpectTotalCount(kCameraHistogramName, 1);

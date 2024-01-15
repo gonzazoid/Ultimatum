@@ -13,17 +13,13 @@
 #include "base/task/sequenced_task_runner_helpers.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_observer.h"
-#include "content/public/browser/browser_message_filter.h"
 #include "content/public/browser/browser_thread.h"
+#include "extensions/buildflags/buildflags.h"
 #include "extensions/common/extension_l10n_util.h"
 
-struct ExtensionHostMsg_APIActionOrEvent_Params;
-struct ExtensionHostMsg_DOMAction_Params;
+#if BUILDFLAG(ENABLE_EXTENSIONS_LEGACY_IPC)
 
-namespace extensions {
-class ActivityLog;
-struct Message;
-}
+#include "content/public/browser/browser_message_filter.h"
 
 // This class filters out incoming Chrome-specific IPC messages from the
 // extension process on the IPC thread.
@@ -60,21 +56,9 @@ class ChromeExtensionMessageFilter : public content::BrowserMessageFilter,
       const std::string& default_locale,
       extension_l10n_util::GzippedMessagesPermission gzip_permission,
       IPC::Message* reply_msg);
-  void OnAddAPIActionToExtensionActivityLog(
-      const std::string& extension_id,
-      const ExtensionHostMsg_APIActionOrEvent_Params& params);
-  void OnAddDOMActionToExtensionActivityLog(
-      const std::string& extension_id,
-      const ExtensionHostMsg_DOMAction_Params& params);
-  void OnAddEventToExtensionActivityLog(
-      const std::string& extension_id,
-      const ExtensionHostMsg_APIActionOrEvent_Params& params);
 
   // ProfileObserver:
   void OnProfileWillBeDestroyed(Profile* profile) override;
-
-  // Returns true if an action should be logged for the given extension.
-  bool ShouldLogExtensionAction(const std::string& extension_id) const;
 
   // The Profile associated with our renderer process.  This should only be
   // accessed on the UI thread! Furthermore since this class is refcounted it
@@ -82,11 +66,8 @@ class ChromeExtensionMessageFilter : public content::BrowserMessageFilter,
   // calls and the like.
   raw_ptr<Profile> profile_;
 
-  // The ActivityLog associated with the given profile. Also only safe to
-  // access on the UI thread, and may be null.
-  raw_ptr<extensions::ActivityLog> activity_log_;
-
   base::ScopedObservation<Profile, ProfileObserver> observed_profile_{this};
 };
+#endif
 
 #endif  // CHROME_BROWSER_RENDERER_HOST_CHROME_EXTENSION_MESSAGE_FILTER_H_

@@ -7,15 +7,16 @@
 #include <memory>
 #include <string>
 
-#include "base/allocator/partition_allocator/partition_root.h"
-#include "base/bind.h"
+#include "base/allocator/partition_allocator/src/partition_alloc/partition_root.h"
 #include "base/command_line.h"
 #include "base/containers/contains.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/json/json_reader.h"
 #include "base/process/process_handle.h"
 #include "base/run_loop.h"
 #include "base/sampling_heap_profiler/poisson_allocation_sampler.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/bind.h"
 #include "base/threading/platform_thread.h"
 #include "base/trace_event/heap_profiler.h"
@@ -29,6 +30,7 @@
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/render_process_host.h"
 #include "content/public/browser/tracing_controller.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace heap_profiling {
 
@@ -83,37 +85,48 @@ bool RenderersAreBeingProfiled(
 }
 
 // On success, populates |pid|.
-int NumProcessesWithName(base::Value* dump_json,
+int NumProcessesWithName(const base::Value::Dict& dump_json,
                          std::string name,
                          std::vector<int>* pids) {
+  const base::Value::List* events = dump_json.FindList("traceEvents");
+  if (!events) {
+    return 0;
+  }
+
   int num_processes = 0;
-  base::Value* events = dump_json->FindKey("traceEvents");
-  for (const base::Value& event : events->GetList()) {
-    const base::Value* found_name =
-        event.FindKeyOfType("name", base::Value::Type::STRING);
-    if (!found_name)
+  for (const base::Value& event : *events) {
+    const base::Value::Dict* event_dict = event.GetIfDict();
+    if (!event_dict) {
       continue;
-    if (found_name->GetString() != "process_name")
+    }
+
+    const std::string* found_name = event_dict->FindString("name");
+    if (!found_name) {
       continue;
-    const base::Value* found_args =
-        event.FindKeyOfType("args", base::Value::Type::DICTIONARY);
-    if (!found_args)
+    }
+    if (*found_name != "process_name") {
       continue;
-    const base::Value* found_process_name =
-        found_args->FindKeyOfType("name", base::Value::Type::STRING);
-    if (!found_process_name)
+    }
+
+    const base::Value::Dict* found_args = event_dict->FindDict("args");
+    if (!found_args) {
       continue;
-    if (found_process_name->GetString() != name)
+    }
+    const std::string* found_process_name = found_args->FindString("name");
+    if (!found_process_name) {
       continue;
+    }
+    if (*found_process_name != name) {
+      continue;
+    }
 
     if (pids) {
-      const base::Value* found_pid =
-          event.FindKeyOfType("pid", base::Value::Type::INTEGER);
+      absl::optional<int> found_pid = event_dict->FindInt("pid");
       if (!found_pid) {
         LOG(ERROR) << "Process missing pid.";
         return 0;
       }
-      pids->push_back(found_pid->GetInt());
+      pids->push_back(found_pid.value());
     }
 
     ++num_processes;
@@ -121,30 +134,48 @@ int NumProcessesWithName(base::Value* dump_json,
   return num_processes;
 }
 
-base::Value* FindArgDump(base::ProcessId pid,
-                         base::Value* dump_json,
-                         const char* arg) {
-  base::Value* events = dump_json->FindKey("traceEvents");
-  base::Value* dumps = nullptr;
-  base::Value* heaps_v2 = nullptr;
-  for (base::Value& event : events->GetList()) {
-    const base::Value* found_name =
-        event.FindKeyOfType("name", base::Value::Type::STRING);
-    if (!found_name)
-      continue;
-    if (found_name->GetString() != "periodic_interval")
-      continue;
-    const base::Value* found_pid =
-        event.FindKeyOfType("pid", base::Value::Type::INTEGER);
-    if (!found_pid)
-      continue;
-    if (static_cast<base::ProcessId>(found_pid->GetInt()) != pid)
-      continue;
-    dumps = &event;
-    heaps_v2 = dumps->FindPath({"args", "dumps", arg});
-    if (heaps_v2)
-      return heaps_v2;
+const base::Value::Dict* FindArgDump(base::ProcessId pid,
+                                     const base::Value::Dict& dump_json,
+                                     const char* arg) {
+  const base::Value::List* events = dump_json.FindList("traceEvents");
+  if (!events) {
+    return nullptr;
   }
+
+  for (const base::Value& event : *events) {
+    const base::Value::Dict* event_dict = event.GetIfDict();
+    if (!event_dict) {
+      continue;
+    }
+
+    const std::string* found_name = event_dict->FindString("name");
+    if (!found_name) {
+      continue;
+    }
+    if (*found_name != "periodic_interval") {
+      continue;
+    }
+
+    absl::optional<int> found_pid = event_dict->FindInt("pid");
+    if (!found_pid) {
+      continue;
+    }
+    if (static_cast<base::ProcessId>(found_pid.value()) != pid) {
+      continue;
+    }
+
+    const base::Value::Dict* dumps =
+        event_dict->FindDictByDottedPath("args.dumps");
+    if (!dumps) {
+      continue;
+    }
+
+    const base::Value::Dict* heaps = dumps->FindDict(arg);
+    if (heaps) {
+      return heaps;
+    }
+  }
+
   return nullptr;
 }
 
@@ -157,32 +188,54 @@ struct Node {
 using NodeMap = std::unordered_map<uint64_t, Node>;
 
 // Parses maps.types and maps.strings. Returns |true| on success.
-bool ParseTypes(base::Value* heaps_v2, NodeMap* output) {
-  base::Value* types = heaps_v2->FindPath({"maps", "types"});
-  for (const base::Value& type_value : types->GetList()) {
-    const base::Value* id = type_value.FindKey("id");
-    const base::Value* name_sid = type_value.FindKey("name_sid");
+bool ParseTypes(const base::Value::Dict* heaps_v2, NodeMap* output) {
+  const base::Value::List* types = heaps_v2->FindListByDottedPath("maps.types");
+  if (!types) {
+    LOG(ERROR) << "maps.type not a list";
+    return false;
+  }
+
+  for (const base::Value& type_value : *types) {
+    const base::Value::Dict* type_dict = type_value.GetIfDict();
+    if (!type_dict) {
+      continue;
+    }
+
+    const absl::optional<int> id = type_dict->FindInt("id");
+    const absl::optional<int> name_sid = type_dict->FindInt("name_sid");
     if (!id || !name_sid) {
       LOG(ERROR) << "Node missing id or name_sid field";
       return false;
     }
 
     Node node;
-    node.name_id = name_sid->GetInt();
-    (*output)[id->GetInt()] = node;
+    node.name_id = *name_sid;
+    (*output)[*id] = node;
   }
 
-  base::Value* strings = heaps_v2->FindPath({"maps", "strings"});
-  for (const base::Value& string_value : strings->GetList()) {
-    const base::Value* id = string_value.FindKey("id");
-    const base::Value* string = string_value.FindKey("string");
+  const base::Value::List* strings =
+      heaps_v2->FindListByDottedPath("maps.strings");
+  if (!types) {
+    LOG(ERROR) << "maps.strings not a list";
+    return false;
+  }
+
+  for (const base::Value& string_value : *strings) {
+    const base::Value::Dict* string_dict = string_value.GetIfDict();
+    if (!string_dict) {
+      continue;
+    }
+
+    const absl::optional<int> id = string_dict->FindInt("id");
+    const std::string* string = string_dict->FindString("string");
     if (!id || !string) {
       LOG(ERROR) << "String struct missing id or string field";
       return false;
     }
+
     for (auto& pair : *output) {
-      if (pair.second.name_id == id->GetInt()) {
-        pair.second.name = string->GetString();
+      if (pair.second.name_id == id.value()) {
+        pair.second.name = *string;
         break;
       }
     }
@@ -192,30 +245,41 @@ bool ParseTypes(base::Value* heaps_v2, NodeMap* output) {
 }
 
 // |expected_size| of 0 means no expectation.
-bool GetAllocatorSubarray(base::Value* heaps_v2,
+bool GetAllocatorSubarray(const base::Value::Dict* heaps_v2,
                           const char* allocator_name,
                           const char* subarray_name,
                           size_t expected_size,
                           const base::Value::List*& output) {
-  base::Value* subarray =
-      heaps_v2->FindPath({"allocators", allocator_name, subarray_name});
+  const base::Value::Dict* allocators = heaps_v2->FindDict("allocators");
+  if (!allocators) {
+    LOG(ERROR) << "Failed to find allocators array in heaps v2";
+    return false;
+  }
+
+  const base::Value::Dict* allocator = allocators->FindDict(allocator_name);
+  if (!allocator) {
+    LOG(ERROR) << "Failed to find allocator_name " << allocator_name
+               << " in heaps v2";
+    return false;
+  }
+
+  const base::Value::List* subarray = allocator->FindList(subarray_name);
   if (!subarray) {
     LOG(ERROR) << "Failed to find path: 'allocators." << allocator_name << "."
                << subarray_name << "' in heaps v2";
     return false;
   }
 
-  const base::Value::List& subarray_list = subarray->GetList();
-  if (expected_size && subarray_list.size() != expected_size) {
+  if (expected_size && subarray->size() != expected_size) {
     LOG(ERROR) << subarray_name << " has wrong size";
     return false;
   }
 
-  output = &subarray_list;
+  output = subarray;
   return true;
 }
 
-bool ValidateSamplingAllocations(base::Value* heaps_v2,
+bool ValidateSamplingAllocations(const base::Value::Dict* heaps_v2,
                                  const char* allocator_name,
                                  int approximate_size,
                                  int approximate_count,
@@ -292,13 +356,15 @@ bool ValidateSamplingAllocations(base::Value* heaps_v2,
   return true;
 }
 
-bool ValidateProcessMmaps(base::Value* process_mmaps,
+bool ValidateProcessMmaps(const base::Value::Dict* process_mmaps,
                           bool should_have_contents) {
-  base::Value* vm_regions = nullptr;
+  const base::Value::List* vm_regions = nullptr;
   size_t count = 0;
   if (process_mmaps) {
-    vm_regions = process_mmaps->FindKey("vm_regions");
-    count = vm_regions->GetList().size();
+    vm_regions = process_mmaps->FindList("vm_regions");
+    if (vm_regions) {
+      count = vm_regions->size();
+    }
   }
   if (!should_have_contents) {
     if (count != 0) {
@@ -315,10 +381,10 @@ bool ValidateProcessMmaps(base::Value* process_mmaps,
 
   // File paths may contain PII. Make sure that "mf" entries only contain the
   // basename, rather than a full path.
-  for (const base::Value& vm_region : vm_regions->GetList()) {
-    const base::Value* file_path_value = vm_region.FindKey("mf");
+  for (const base::Value& vm_region : *vm_regions) {
+    const std::string* file_path_value = vm_region.GetDict().FindString("mf");
     if (file_path_value) {
-      std::string file_path = file_path_value->GetString();
+      const std::string& file_path = *file_path_value;
 
       base::FilePath::StringType path(file_path.begin(), file_path.end());
       if (base::FilePath(path).BaseName().AsUTF8Unsafe() != file_path) {
@@ -331,7 +397,7 @@ bool ValidateProcessMmaps(base::Value* process_mmaps,
   return true;
 }
 
-void HandleOOM(size_t unsued_size) {
+void HandleOOM(size_t unused_size) {
   LOG(FATAL) << "Out of memory.";
 }
 
@@ -341,15 +407,7 @@ TestDriver::TestDriver()
     : wait_for_ui_thread_(base::WaitableEvent::ResetPolicy::AUTOMATIC,
                           base::WaitableEvent::InitialState::NOT_SIGNALED) {
   partition_alloc::PartitionAllocGlobalInit(HandleOOM);
-  partition_allocator_.init({
-      partition_alloc::PartitionOptions::AlignedAlloc::kDisallowed,
-      partition_alloc::PartitionOptions::ThreadCache::kDisabled,
-      partition_alloc::PartitionOptions::Quarantine::kDisallowed,
-      partition_alloc::PartitionOptions::Cookie::kAllowed,
-      partition_alloc::PartitionOptions::BackupRefPtr::kDisabled,
-      partition_alloc::PartitionOptions::BackupRefPtrZapping::kDisabled,
-      partition_alloc::PartitionOptions::UseConfigurablePool::kNo,
-  });
+  partition_allocator_.init(partition_alloc::PartitionOptions{});
 }
 TestDriver::~TestDriver() {
   partition_alloc::PartitionAllocGlobalUninitForTesting();
@@ -414,19 +472,19 @@ bool TestDriver::RunTest(const Options& options) {
     wait_for_ui_thread_.Wait();
   }
 
-  std::unique_ptr<base::Value> dump_json =
-      base::JSONReader::ReadDeprecated(serialized_trace_);
-  if (!dump_json) {
+  absl::optional<base::Value> dump_json =
+      base::JSONReader::Read(serialized_trace_);
+  if (!dump_json || !dump_json->is_dict()) {
     LOG(ERROR) << "Failed to deserialize trace.";
     return false;
   }
 
-  if (!ValidateBrowserAllocations(dump_json.get())) {
+  if (!ValidateBrowserAllocations(dump_json->GetDict())) {
     LOG(ERROR) << "Failed to validate browser allocations";
     return false;
   }
 
-  if (!ValidateRendererAllocations(dump_json.get())) {
+  if (!ValidateRendererAllocations(dump_json->GetDict())) {
     LOG(ERROR) << "Failed to validate renderer allocations";
     return false;
   }
@@ -466,7 +524,7 @@ bool TestDriver::CheckOrStartProfilingOnUIThreadWithAsyncSignalling() {
       bool already_initialized = SetOnInitAllocatorShimCallbackForTesting(
           base::BindOnce(&base::WaitableEvent::Signal,
                          base::Unretained(&wait_for_ui_thread_)),
-          base::ThreadTaskRunnerHandle::Get());
+          base::SingleThreadTaskRunner::GetCurrentDefault());
       if (!already_initialized) {
         wait_for_profiling_to_start_ = true;
       }
@@ -483,7 +541,7 @@ bool TestDriver::CheckOrStartProfilingOnUIThreadWithAsyncSignalling() {
     SetOnInitAllocatorShimCallbackForTesting(
         base::BindOnce(&base::WaitableEvent::Signal,
                        base::Unretained(&wait_for_ui_thread_)),
-        base::ThreadTaskRunnerHandle::Get());
+        base::SingleThreadTaskRunner::GetCurrentDefault());
   } else {
     start_callback = base::BindOnce(&base::WaitableEvent::Signal,
                                     base::Unretained(&wait_for_ui_thread_));
@@ -521,7 +579,8 @@ bool TestDriver::CheckOrStartProfilingOnUIThreadWithNestedRunLoops() {
   // start. Otherwise, wait for the Supervisor to start.
   if (ShouldProfileBrowser()) {
     SetOnInitAllocatorShimCallbackForTesting(
-        run_loop->QuitClosure(), base::ThreadTaskRunnerHandle::Get());
+        run_loop->QuitClosure(),
+        base::SingleThreadTaskRunner::GetCurrentDefault());
   } else {
     start_callback = run_loop->QuitClosure();
   }
@@ -613,8 +672,9 @@ void TestDriver::TraceFinished(base::OnceClosure closure,
   std::move(closure).Run();
 }
 
-bool TestDriver::ValidateBrowserAllocations(base::Value* dump_json) {
-  base::Value* heaps_v2 =
+bool TestDriver::ValidateBrowserAllocations(
+    const base::Value::Dict& dump_json) {
+  const base::Value::Dict* heaps_v2 =
       FindArgDump(base::Process::Current().Pid(), dump_json, "heaps_v2");
 
   if (!ShouldProfileBrowser()) {
@@ -676,7 +736,7 @@ bool TestDriver::ValidateBrowserAllocations(base::Value* dump_json) {
     return false;
   }
 
-  base::Value* process_mmaps =
+  const base::Value::Dict* process_mmaps =
       FindArgDump(base::Process::Current().Pid(), dump_json, "process_mmaps");
   if (!ValidateProcessMmaps(process_mmaps, HasNativeFrames())) {
     LOG(ERROR) << "Failed to validate browser process mmaps.";
@@ -686,7 +746,8 @@ bool TestDriver::ValidateBrowserAllocations(base::Value* dump_json) {
   return true;
 }
 
-bool TestDriver::ValidateRendererAllocations(base::Value* dump_json) {
+bool TestDriver::ValidateRendererAllocations(
+    const base::Value::Dict& dump_json) {
   // On Android Webview, there is may not be a separate Renderer process. If we
   // are not asked to profile the Renderer, do not perform any Renderer checks.
   if (!ShouldProfileRenderer())
@@ -701,13 +762,14 @@ bool TestDriver::ValidateRendererAllocations(base::Value* dump_json) {
 
   for (int pid : pids) {
     base::ProcessId renderer_pid = static_cast<base::ProcessId>(pid);
-    base::Value* heaps_v2 = FindArgDump(renderer_pid, dump_json, "heaps_v2");
+    const base::Value::Dict* heaps_v2 =
+        FindArgDump(renderer_pid, dump_json, "heaps_v2");
     if (!heaps_v2) {
       LOG(ERROR) << "Failed to find heaps v2 for renderer";
       return false;
     }
 
-    base::Value* process_mmaps =
+    const base::Value::Dict* process_mmaps =
         FindArgDump(renderer_pid, dump_json, "process_mmaps");
     if (!ValidateProcessMmaps(process_mmaps, HasNativeFrames())) {
       LOG(ERROR) << "Failed to validate renderer process mmaps.";

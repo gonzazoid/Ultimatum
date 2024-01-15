@@ -4,12 +4,12 @@
 
 #include "extensions/renderer/bindings/api_binding_hooks_test_delegate.h"
 
-#include "base/strings/string_piece.h"
+#include <string_view>
 
 namespace extensions {
 
-APIBindingHooksTestDelegate::APIBindingHooksTestDelegate() {}
-APIBindingHooksTestDelegate::~APIBindingHooksTestDelegate() {}
+APIBindingHooksTestDelegate::APIBindingHooksTestDelegate() = default;
+APIBindingHooksTestDelegate::~APIBindingHooksTestDelegate() = default;
 
 bool APIBindingHooksTestDelegate::CreateCustomEvent(
     v8::Local<v8::Context> context,
@@ -22,7 +22,7 @@ bool APIBindingHooksTestDelegate::CreateCustomEvent(
   return false;
 }
 
-void APIBindingHooksTestDelegate::AddHandler(base::StringPiece name,
+void APIBindingHooksTestDelegate::AddHandler(std::string_view name,
                                              RequestHandler handler) {
   request_handlers_[std::string(name)] = std::move(handler);
 }
@@ -46,7 +46,7 @@ APIBindingHooks::RequestResult APIBindingHooksTestDelegate::HandleRequest(
     const std::string& method_name,
     const APISignature* signature,
     v8::Local<v8::Context> context,
-    std::vector<v8::Local<v8::Value>>* arguments,
+    v8::LocalVector<v8::Value>* arguments,
     const APITypeReferenceMap& refs) {
   auto iter = request_handlers_.find(method_name);
   if (iter == request_handlers_.end()) {

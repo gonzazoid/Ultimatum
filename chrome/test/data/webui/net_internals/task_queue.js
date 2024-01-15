@@ -4,12 +4,10 @@
 
 import {PromiseResolver} from 'chrome://resources/js/promise_resolver.js';
 
-import {assertEquals, assertFalse, assertNotReached, assertTrue} from '../chai_assert.js';
+import {assertEquals, assertFalse, assertNotReached, assertTrue} from 'chrome://webui-test/chai_assert.js';
 
 /**
  * This class allows multiple Tasks to be queued up to be run sequentially.
- * A Task can wait for asynchronous callbacks from the browser before
- * completing, at which point the next queued Task will be run.
  */
 export class TaskQueue {
   constructor() {
@@ -57,9 +55,6 @@ export class TaskQueue {
    */
   runNextTask(argArray) {
     assertTrue(!!this.whenDonePromise_);
-    // The last Task may have used |NetInternalsTest.callback|.  Make sure
-    // it's now null.
-    assertEquals(null, NetInternalsTest.callback);
 
     if (this.tasks_.length > 0) {
       const nextTask = this.tasks_.shift();
@@ -79,7 +74,6 @@ export class Task {
   constructor() {
     this.taskQueue_ = null;
     this.isDone_ = false;
-    this.completeAsync_ = false;
   }
 
   /**
@@ -89,15 +83,6 @@ export class Task {
    */
   start() {
     assertNotReached('Start function not overridden.');
-  }
-
-  /**
-   * Updates value of |completeAsync_|.  If set to true, the next Task will
-   * start asynchronously.  Useful if the Task completes on an event that
-   * the next Task may care about.
-   */
-  setCompleteAsync(value) {
-    this.completeAsync_ = value;
   }
 
   /**
@@ -125,20 +110,8 @@ export class Task {
     assertFalse(this.isDone_);
     this.isDone_ = true;
 
-    // Function to run the next task in the queue.
-    const runNextTask = this.taskQueue_.runNextTask.bind(
-        this.taskQueue_, Array.prototype.slice.call(arguments));
-
-    // If we need to start the next task asynchronously, we need to wrap
-    // it with the test framework code.
-    if (this.completeAsync_) {
-      window.setTimeout(
-          window.activeTest_.continueTest(WhenTestDone.EXPECT, runNextTask), 0);
-      return;
-    }
-
-    // Otherwise, just run the next task directly.
-    runNextTask();
+    // Run the next task in the queue.
+    this.taskQueue_.runNextTask(Array.prototype.slice.call(arguments));
   }
 }
 

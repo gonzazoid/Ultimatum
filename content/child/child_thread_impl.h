@@ -11,6 +11,7 @@
 #include <memory>
 #include <string>
 
+#include "base/auto_reset.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
@@ -18,6 +19,7 @@
 #include "base/threading/thread.h"
 #include "build/build_config.h"
 #include "components/variations/child_process_field_trial_syncer.h"
+#include "content/child/child_process_synthetic_trial_syncer.h"
 #include "content/common/associated_interfaces.mojom.h"
 #include "content/common/child_process.mojom.h"
 #include "content/public/child/child_thread.h"
@@ -42,9 +44,9 @@
 #endif
 
 namespace IPC {
-class MessageFilter;
 class SyncChannel;
 class SyncMessageFilter;
+class UrgentMessageObserver;
 }  // namespace IPC
 
 namespace mojo {
@@ -85,8 +87,10 @@ class ChildThreadImpl : public IPC::Listener, virtual public ChildThread {
   // Returns true if the thread should be destroyed.
   virtual bool ShouldBeDestroyed();
 
+#if BUILDFLAG(CONTENT_ENABLE_LEGACY_IPC)
   // IPC::Sender implementation:
   bool Send(IPC::Message* msg) override;
+#endif
 
   // ChildThread implementation:
 #if BUILDFLAG(IS_WIN)
@@ -102,7 +106,9 @@ class ChildThreadImpl : public IPC::Listener, virtual public ChildThread {
 
   IPC::SyncChannel* channel() { return channel_.get(); }
 
+#if BUILDFLAG(CONTENT_ENABLE_LEGACY_IPC)
   IPC::MessageRouter* GetRouter();
+#endif
 
   IPC::SyncMessageFilter* sync_message_filter() const {
     return sync_message_filter_.get();
@@ -149,7 +155,10 @@ class ChildThreadImpl : public IPC::Listener, virtual public ChildThread {
   // available to handle incoming interface requests from the browser.
   void ExposeInterfacesToBrowser(mojo::BinderMap binders);
 
+#if BUILDFLAG(CONTENT_ENABLE_LEGACY_IPC)
   virtual bool OnControlMessageReceived(const IPC::Message& msg);
+#endif
+
   // IPC::Listener implementation:
   bool OnMessageReceived(const IPC::Message& msg) override;
   void OnAssociatedInterfaceRequest(
@@ -161,6 +170,12 @@ class ChildThreadImpl : public IPC::Listener, virtual public ChildThread {
 
   bool IsInBrowserProcess() const;
 
+#if BUILDFLAG(IS_ANDROID)
+  // Received memory pressure signal sent by the browser process.
+  virtual void OnMemoryPressureFromBrowserReceived(
+      base::MemoryPressureListener::MemoryPressureLevel level);
+#endif
+
  private:
   // TODO(crbug.com/1111231): This class is a friend so that it can call our
   // private mojo implementation methods, acting as a pass-through. This is only
@@ -171,6 +186,7 @@ class ChildThreadImpl : public IPC::Listener, virtual public ChildThread {
 
   class IOThreadState;
 
+#if BUILDFLAG(CONTENT_ENABLE_LEGACY_IPC)
   class ChildThreadMessageRouter : public IPC::MessageRouter {
    public:
     // |sender| must outlive this object.
@@ -183,6 +199,7 @@ class ChildThreadImpl : public IPC::Listener, virtual public ChildThread {
    private:
     const raw_ptr<IPC::Sender> sender_;
   };
+#endif
 
   void Init(const Options& options);
 
@@ -193,6 +210,8 @@ class ChildThreadImpl : public IPC::Listener, virtual public ChildThread {
 #if BUILDFLAG(IS_WIN)
   const mojo::Remote<mojom::FontCacheWin>& GetFontCacheWin();
 #endif
+
+  const base::AutoReset<ChildThreadImpl*> resetter_;
 
   base::Thread mojo_ipc_thread_{"Mojo IPC"};
   std::unique_ptr<mojo::core::ScopedIPCSupport> mojo_ipc_support_;
@@ -205,9 +224,11 @@ class ChildThreadImpl : public IPC::Listener, virtual public ChildThread {
   // Allows threads other than the main thread to send sync messages.
   scoped_refptr<IPC::SyncMessageFilter> sync_message_filter_;
 
+#if BUILDFLAG(CONTENT_ENABLE_LEGACY_IPC)
   // Implements message routing functionality to the consumers of
   // ChildThreadImpl.
   ChildThreadMessageRouter router_;
+#endif
 
   // The OnChannelError() callback was invoked - the channel is dead, don't
   // attempt to communicate.
@@ -252,9 +273,9 @@ struct ChildThreadImpl::Options {
   bool with_legacy_ipc_channel = true;
   bool connect_to_browser = false;
   scoped_refptr<base::SingleThreadTaskRunner> browser_process_io_runner;
-  std::vector<IPC::MessageFilter*> startup_filters;
   raw_ptr<mojo::OutgoingInvitation> mojo_invitation = nullptr;
   scoped_refptr<base::SingleThreadTaskRunner> ipc_task_runner;
+  raw_ptr<IPC::UrgentMessageObserver> urgent_message_observer = nullptr;
 
   // Indicates that this child process exposes one or more Mojo interfaces to
   // the browser process. Subclasses which initialize this to |true| must
@@ -280,11 +301,11 @@ class ChildThreadImpl::Options::Builder {
   Builder& InBrowserProcess(const InProcessChildThreadParams& params);
   Builder& ConnectToBrowser(bool connect_to_browser);
   Builder& WithLegacyIPCChannel(bool with_legacy_ipc_channel);
-  Builder& AddStartupFilter(IPC::MessageFilter* filter);
   Builder& IPCTaskRunner(
       scoped_refptr<base::SingleThreadTaskRunner> ipc_task_runner);
   Builder& ServiceBinder(ServiceBinder binder);
   Builder& ExposesInterfacesToBrowser();
+  Builder& SetUrgentMessageObserver(IPC::UrgentMessageObserver* observer);
 
   Options Build();
 

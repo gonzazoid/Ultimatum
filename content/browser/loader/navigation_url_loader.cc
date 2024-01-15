@@ -32,6 +32,10 @@ std::unique_ptr<NavigationURLLoader> NavigationURLLoader::Create(
     NavigationURLLoaderDelegate* delegate,
     LoaderType loader_type,
     mojo::PendingRemote<network::mojom::CookieAccessObserver> cookie_observer,
+    mojo::PendingRemote<network::mojom::TrustTokenAccessObserver>
+        trust_token_observer,
+    mojo::PendingRemote<network::mojom::SharedDictionaryAccessObserver>
+        shared_dictionary_observer,
     mojo::PendingRemote<network::mojom::URLLoaderNetworkServiceObserver>
         url_loader_network_observer,
     mojo::PendingRemote<network::mojom::DevToolsObserver> devtools_observer,
@@ -68,8 +72,10 @@ std::unique_ptr<NavigationURLLoader> NavigationURLLoader::Create(
       browser_context, storage_partition, std::move(request_info),
       std::move(navigation_ui_data), service_worker_handle,
       std::move(prefetched_signed_exchange_cache), delegate,
-      std::move(cookie_observer), std::move(url_loader_network_observer),
-      std::move(devtools_observer), std::move(initial_interceptors));
+      std::move(cookie_observer), std::move(trust_token_observer),
+      std::move(shared_dictionary_observer),
+      std::move(url_loader_network_observer), std::move(devtools_observer),
+      std::move(initial_interceptors));
 }
 
 // static
@@ -79,4 +85,26 @@ void NavigationURLLoader::SetFactoryForTesting(
   g_loader_factory = factory;
 }
 
+// static
+uint32_t NavigationURLLoader::GetURLLoaderOptions(
+    bool is_outermost_main_frame) {
+  uint32_t options = network::mojom::kURLLoadOptionNone;
+
+  // Ensure that Mime sniffing works.
+  options |= network::mojom::kURLLoadOptionSniffMimeType;
+
+  if (is_outermost_main_frame) {
+    // SSLInfo is not needed on subframe or fenced frame responses because users
+    // can inspect only the certificate for the main frame when using the info
+    // bubble.
+    options |= network::mojom::kURLLoadOptionSendSSLInfoWithResponse;
+  }
+
+  // When there's a certificate error for a frame load (regardless of whether
+  // the error caused the connection to fail), SSLInfo is useful for adjusting
+  // security UI accordingly.
+  options |= network::mojom::kURLLoadOptionSendSSLInfoForCertificateError;
+
+  return options;
+}
 }  // namespace content

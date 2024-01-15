@@ -10,8 +10,7 @@
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/stringprintf.h"
 
-namespace views {
-namespace debug {
+namespace views::debug {
 
 namespace {
 
@@ -68,7 +67,7 @@ AttributeStrings GetAttributeStrings(ViewDebugWrapper* view, bool verbose) {
   } else {
     AddPtrAttributeString(attributes, "address", view->GetAddress());
     AddAttributeString(attributes, "bounds", view->GetBounds());
-    AddAttributeString(attributes, "enabled", view->GetNeedsLayout());
+    AddAttributeString(attributes, "enabled", view->GetEnabled());
     AddAttributeString(attributes, "id", view->GetID());
     AddAttributeString(attributes, "needs-layout", view->GetNeedsLayout());
     AddAttributeString(attributes, "visible", view->GetVisible());
@@ -143,5 +142,4 @@ void PrintViewHierarchy(std::ostream* out,
   PrintViewHierarchyImpl(out, view, 0, verbose, depth, column_limit);
 }
 
-}  // namespace debug
-}  // namespace views
+}  // namespace views::debug

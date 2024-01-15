@@ -7,22 +7,31 @@
 #include <stdint.h>
 
 #include "base/no_destructor.h"
-#include "build/chromeos_buildflags.h"
-#include "chrome/browser/metrics/structured/cros_events_processor.h"
-#include "components/metrics/structured/histogram_util.h"
+#include "components/metrics/structured/recorder.h"
 #include "components/metrics/structured/structured_metrics_features.h"
+#include "components/metrics_services_manager/metrics_services_manager.h"
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "chrome/browser/metrics/structured/ash_structured_metrics_recorder.h"  // nogncheck
+#include "chrome/browser/ash/login/startup_utils.h"
+#include "chrome/browser/browser_process.h"                       // nogncheck
+#include "chrome/browser/metrics/structured/ash_event_storage.h"  // nogncheck
+#include "chrome/browser/metrics/structured/ash_structured_metrics_delegate.h"  // nogncheck
+#include "chrome/browser/metrics/structured/cros_events_processor.h"  // nogncheck
+#include "chrome/browser/metrics/structured/event_logging_features.h"  // nogncheck
+#include "chrome/browser/metrics/structured/key_data_provider_ash.h"  // nogncheck
+#include "chrome/browser/metrics/structured/metadata_processor_ash.h"  // nogncheck
+#include "chrome/browser/metrics/structured/oobe_structured_metrics_watcher.h"  // nogncheck
+#include "components/metrics/structured/structured_metrics_recorder.h"  // nogncheck
+#include "components/metrics/structured/structured_metrics_service.h"  // nogncheck
 #elif BUILDFLAG(IS_CHROMEOS_LACROS)
 #include "base/task/current_thread.h"
-#include "base/threading/sequenced_task_runner_handle.h"
-#include "chrome/browser/metrics/structured/lacros_structured_metrics_recorder.h"  // nogncheck
+#include "chrome/browser/metrics/structured/lacros_structured_metrics_delegate.h"  // nogncheck
 #endif
 
 namespace metrics::structured {
 namespace {
 
+#if BUILDFLAG(IS_CHROMEOS)
 // Platforms for which the StructuredMetricsClient will be initialized for.
 enum class StructuredMetricsPlatform {
   kUninitialized = 0,
@@ -36,16 +45,17 @@ void LogInitializationInStructuredMetrics(StructuredMetricsPlatform platform) {
       .SetPlatform(static_cast<int64_t>(platform))
       .Record();
 }
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
 }  // namespace
 
 ChromeStructuredMetricsRecorder::ChromeStructuredMetricsRecorder() {
 // TODO(jongahn): Make a static factory class and pass it into ctor.
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-  delegate_ = std::make_unique<AshStructuredMetricsRecorder>();
+  delegate_ = std::make_unique<AshStructuredMetricsDelegate>();
   StructuredMetricsClient::Get()->SetDelegate(this);
 #elif BUILDFLAG(IS_CHROMEOS_LACROS)
-  delegate_ = std::make_unique<LacrosStructuredMetricsRecorder>();
+  delegate_ = std::make_unique<LacrosStructuredMetricsDelegate>();
   StructuredMetricsClient::Get()->SetDelegate(this);
 #endif
 }
@@ -58,38 +68,48 @@ ChromeStructuredMetricsRecorder* ChromeStructuredMetricsRecorder::Get() {
   return chrome_recorder.get();
 }
 
+#if BUILDFLAG(IS_CHROMEOS_ASH)
 // static
 void ChromeStructuredMetricsRecorder::RegisterLocalStatePrefs(
     PrefRegistrySimple* registry) {
   cros_event::CrOSEventsProcessor::RegisterLocalStatePrefs(registry);
 }
-
-// static
-void ChromeStructuredMetricsRecorder::RegisterUserProfilePrefs(
-    PrefRegistrySimple* registry) {
-  cros_event::CrOSEventsProcessor::RegisterUserProfilePrefs(registry);
-}
+#endif
 
 void ChromeStructuredMetricsRecorder::Initialize() {
-  // Adds CrOSEvents processor if feature is enabled.
-  if (base::FeatureList::IsEnabled(kCrOSEvents)) {
-    StructuredMetricsClient::Get()->AddEventsProcessor(
-        std::make_unique<cros_event::CrOSEventsProcessor>());
-  }
-
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   auto* ash_recorder =
-      static_cast<AshStructuredMetricsRecorder*>(delegate_.get());
+      static_cast<AshStructuredMetricsDelegate*>(delegate_.get());
   ash_recorder->Initialize();
+
+  auto* service = g_browser_process->GetMetricsServicesManager()
+                      ->GetStructuredMetricsService();
+
+  // Adds CrOSEvents processor if feature is enabled.
+  if (base::FeatureList::IsEnabled(kEventSequenceLogging)) {
+    Recorder::GetInstance()->AddEventsProcessor(
+        std::make_unique<cros_event::CrOSEventsProcessor>(
+            cros_event::kResetCounterPath));
+
+    if (!ash::StartupUtils::IsOobeCompleted()) {
+      Recorder::GetInstance()->AddEventsProcessor(
+          std::make_unique<OobeStructuredMetricsWatcher>(
+              service, GetOobeEventUploadCount()));
+    }
+  }
+
+  Recorder::GetInstance()->AddEventsProcessor(
+      std::make_unique<MetadataProcessorAsh>());
+
   LogInitializationInStructuredMetrics(StructuredMetricsPlatform::kAshChrome);
 
 #elif BUILDFLAG(IS_CHROMEOS_LACROS)
   auto* lacros_recorder =
-      static_cast<LacrosStructuredMetricsRecorder*>(delegate_.get());
+      static_cast<LacrosStructuredMetricsDelegate*>(delegate_.get());
 
   // Ensure that the sequence is the ui thread.
   DCHECK(base::CurrentUIThread::IsSet());
-  lacros_recorder->SetSequence(base::SequencedTaskRunnerHandle::Get());
+  lacros_recorder->SetSequence(base::SequencedTaskRunner::GetCurrentDefault());
   LogInitializationInStructuredMetrics(
       StructuredMetricsPlatform::kLacrosChrome);
 #endif

@@ -5,12 +5,17 @@
 #include "chromeos/ash/services/secure_channel/pending_connection_manager_impl.h"
 
 #include <memory>
+#include <optional>
 #include <sstream>
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
 #include "base/containers/flat_map.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ptr_exclusion.h"
+#include "base/ranges/algorithm.h"
 #include "base/test/task_environment.h"
+#include "base/test/to_vector.h"
 #include "chromeos/ash/services/secure_channel/ble_initiator_connection_attempt.h"
 #include "chromeos/ash/services/secure_channel/ble_listener_connection_attempt.h"
 #include "chromeos/ash/services/secure_channel/fake_authenticated_channel.h"
@@ -26,7 +31,6 @@
 #include "chromeos/ash/services/secure_channel/pending_nearby_initiator_connection_request.h"
 #include "device/bluetooth/test/mock_bluetooth_adapter.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace ash::secure_channel {
 
@@ -101,8 +105,8 @@ class FakeBleInitiatorConnectionAttemptFactory
     ++num_instances_deleted_;
   }
 
-  FakeBleConnectionManager* expected_ble_connection_manager_;
-  absl::optional<ConnectionAttemptDetails> expected_connection_attempt_details_;
+  raw_ptr<FakeBleConnectionManager> expected_ble_connection_manager_;
+  std::optional<ConnectionAttemptDetails> expected_connection_attempt_details_;
 
   base::flat_map<ConnectionAttemptDetails,
                  FakeConnectionAttempt<BleInitiatorFailureType>*>
@@ -110,8 +114,8 @@ class FakeBleInitiatorConnectionAttemptFactory
 
   size_t num_instances_created_ = 0u;
   size_t num_instances_deleted_ = 0u;
-  FakeConnectionAttempt<BleInitiatorFailureType>* last_created_instance_ =
-      nullptr;
+  raw_ptr<FakeConnectionAttempt<BleInitiatorFailureType>, DanglingUntriaged>
+      last_created_instance_ = nullptr;
 };
 
 class FakeBleListenerConnectionAttemptFactory
@@ -181,8 +185,8 @@ class FakeBleListenerConnectionAttemptFactory
     ++num_instances_deleted_;
   }
 
-  FakeBleConnectionManager* expected_ble_connection_manager_;
-  absl::optional<ConnectionAttemptDetails> expected_connection_attempt_details_;
+  raw_ptr<FakeBleConnectionManager> expected_ble_connection_manager_;
+  std::optional<ConnectionAttemptDetails> expected_connection_attempt_details_;
 
   base::flat_map<ConnectionAttemptDetails,
                  FakeConnectionAttempt<BleListenerFailureType>*>
@@ -190,8 +194,8 @@ class FakeBleListenerConnectionAttemptFactory
 
   size_t num_instances_created_ = 0u;
   size_t num_instances_deleted_ = 0u;
-  FakeConnectionAttempt<BleListenerFailureType>* last_created_instance_ =
-      nullptr;
+  raw_ptr<FakeConnectionAttempt<BleListenerFailureType>, DanglingUntriaged>
+      last_created_instance_ = nullptr;
 };
 
 class FakeNearbyInitiatorConnectionAttemptFactory
@@ -262,8 +266,8 @@ class FakeNearbyInitiatorConnectionAttemptFactory
     ++num_instances_deleted_;
   }
 
-  FakeNearbyConnectionManager* expected_nearby_connection_manager_;
-  absl::optional<ConnectionAttemptDetails> expected_connection_attempt_details_;
+  raw_ptr<FakeNearbyConnectionManager> expected_nearby_connection_manager_;
+  std::optional<ConnectionAttemptDetails> expected_connection_attempt_details_;
 
   base::flat_map<ConnectionAttemptDetails,
                  FakeConnectionAttempt<NearbyInitiatorFailureType>*>
@@ -271,8 +275,8 @@ class FakeNearbyInitiatorConnectionAttemptFactory
 
   size_t num_instances_created_ = 0u;
   size_t num_instances_deleted_ = 0u;
-  FakeConnectionAttempt<NearbyInitiatorFailureType>* last_created_instance_ =
-      nullptr;
+  raw_ptr<FakeConnectionAttempt<NearbyInitiatorFailureType>, DanglingUntriaged>
+      last_created_instance_ = nullptr;
 };
 
 class FakePendingBleInitiatorConnectionRequestFactory
@@ -319,10 +323,15 @@ class FakePendingBleInitiatorConnectionRequestFactory
     return instance;
   }
 
-  ClientConnectionParameters* expected_client_connection_parameters_ = nullptr;
-  absl::optional<ConnectionPriority> expected_connection_priority_;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter
+  // for: #constexpr-ctor-field-initializer
+  RAW_PTR_EXCLUSION ClientConnectionParameters*
+      expected_client_connection_parameters_ = nullptr;
+  std::optional<ConnectionPriority> expected_connection_priority_;
 
-  FakePendingConnectionRequest<BleInitiatorFailureType>*
+  // This field is not a raw_ptr<> because it was filtered by the rewriter
+  // for: #constexpr-ctor-field-initializer
+  RAW_PTR_EXCLUSION FakePendingConnectionRequest<BleInitiatorFailureType>*
       last_created_instance_ = nullptr;
 };
 
@@ -370,11 +379,14 @@ class FakePendingBleListenerConnectionRequestFactory
     return instance;
   }
 
-  ClientConnectionParameters* expected_client_connection_parameters_ = nullptr;
-  absl::optional<ConnectionPriority> expected_connection_priority_;
+  raw_ptr<ClientConnectionParameters, DanglingUntriaged>
+      expected_client_connection_parameters_ = nullptr;
+  std::optional<ConnectionPriority> expected_connection_priority_;
 
-  FakePendingConnectionRequest<BleListenerFailureType>* last_created_instance_ =
-      nullptr;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter
+  // for: #constexpr-ctor-field-initializer
+  RAW_PTR_EXCLUSION FakePendingConnectionRequest<BleListenerFailureType>*
+      last_created_instance_ = nullptr;
 };
 
 class FakePendingNearbyInitiatorConnectionRequestFactory
@@ -421,10 +433,15 @@ class FakePendingNearbyInitiatorConnectionRequestFactory
     return instance;
   }
 
-  ClientConnectionParameters* expected_client_connection_parameters_ = nullptr;
-  absl::optional<ConnectionPriority> expected_connection_priority_;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter
+  // for: #constexpr-ctor-field-initializer
+  RAW_PTR_EXCLUSION ClientConnectionParameters*
+      expected_client_connection_parameters_ = nullptr;
+  std::optional<ConnectionPriority> expected_connection_priority_;
 
-  FakePendingConnectionRequest<NearbyInitiatorFailureType>*
+  // This field is not a raw_ptr<> because it was filtered by the rewriter
+  // for: #constexpr-ctor-field-initializer
+  RAW_PTR_EXCLUSION FakePendingConnectionRequest<NearbyInitiatorFailureType>*
       last_created_instance_ = nullptr;
 };
 
@@ -446,11 +463,8 @@ GenerateFakeClientParameters(size_t num_to_generate) {
 std::vector<ClientConnectionParameters*> ClientParamsListToRawPtrs(
     const std::vector<std::unique_ptr<ClientConnectionParameters>>&
         unique_ptr_list) {
-  std::vector<ClientConnectionParameters*> raw_ptr_list;
-  std::transform(unique_ptr_list.begin(), unique_ptr_list.end(),
-                 std::back_inserter(raw_ptr_list),
-                 [](const auto& unique_ptr) { return unique_ptr.get(); });
-  return raw_ptr_list;
+  return base::test::ToVector(
+      unique_ptr_list, &std::unique_ptr<ClientConnectionParameters>::get);
 }
 
 }  // namespace

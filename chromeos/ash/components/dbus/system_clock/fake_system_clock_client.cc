@@ -4,8 +4,8 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/functional/bind.h"
+#include "base/task/sequenced_task_runner.h"
 #include "chromeos/ash/components/dbus/system_clock/fake_system_clock_client.h"
 
 namespace ash {
@@ -29,10 +29,22 @@ void FakeSystemClockClient::SetServiceIsAvailable(bool is_available) {
   if (!is_available_)
     return;
 
+  is_enabled_ = true;
+
   std::vector<dbus::ObjectProxy::WaitForServiceToBeAvailableCallback> callbacks;
   callbacks.swap(callbacks_);
   for (auto& callback : callbacks)
     std::move(callback).Run(true);
+}
+
+void FakeSystemClockClient::DisableService() {
+  is_enabled_ = false;
+
+  std::vector<dbus::ObjectProxy::WaitForServiceToBeAvailableCallback> callbacks;
+  callbacks.swap(callbacks_);
+  for (auto& callback : callbacks) {
+    std::move(callback).Run(false);
+  }
 }
 
 void FakeSystemClockClient::AddObserver(Observer* observer) {
@@ -54,20 +66,20 @@ bool FakeSystemClockClient::CanSetTime() {
 }
 
 void FakeSystemClockClient::GetLastSyncInfo(GetLastSyncInfoCallback callback) {
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), network_synchronized_));
 }
 
 void FakeSystemClockClient::WaitForServiceToBeAvailable(
     dbus::ObjectProxy::WaitForServiceToBeAvailableCallback callback) {
   // Parent controls when callbacks are fired.
-  if (!is_available_) {
+  if (!is_available_ && is_enabled_) {
     callbacks_.push_back(std::move(callback));
     return;
   }
 
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
-      FROM_HERE, base::BindOnce(std::move(callback), true));
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE, base::BindOnce(std::move(callback), is_enabled_));
 }
 
 SystemClockClient::TestInterface* FakeSystemClockClient::GetTestInterface() {

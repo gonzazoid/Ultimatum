@@ -11,7 +11,7 @@
 
 #include <utility>
 
-#include "base/mac/foundation_util.h"
+#include "base/apple/foundation_util.h"
 #include "base/mac/scoped_ionotificationportref.h"
 #include "base/mac/scoped_ioobject.h"
 #include "base/mac/scoped_ioplugininterface.h"
@@ -29,7 +29,7 @@ UsbDeviceMac::UsbDeviceMac(uint64_t entry_id,
 UsbDeviceMac::~UsbDeviceMac() = default;
 
 void UsbDeviceMac::Open(OpenCallback callback) {
-  base::ScopedCFTypeRef<CFDictionaryRef> matching_dict(
+  base::apple::ScopedCFTypeRef<CFDictionaryRef> matching_dict(
       IORegistryEntryIDMatching(entry_id()));
   if (!matching_dict.get()) {
     USB_LOG(ERROR) << "Failed to create matching dictionary for ID.";
@@ -50,7 +50,7 @@ void UsbDeviceMac::Open(OpenCallback callback) {
   base::mac::ScopedIOPluginInterface<IOCFPlugInInterface> plugin_interface;
   int32_t score;
   IOReturn kr = IOCreatePlugInInterfaceForService(
-      usb_device, kIOUSBDeviceUserClientTypeID, kIOCFPlugInInterfaceID,
+      usb_device.get(), kIOUSBDeviceUserClientTypeID, kIOCFPlugInInterfaceID,
       plugin_interface.InitializeInto(), &score);
   if ((kr != kIOReturnSuccess) || !plugin_interface) {
     USB_LOG(ERROR) << "Unable to create a plug-in: " << std::hex << kr;
@@ -59,7 +59,7 @@ void UsbDeviceMac::Open(OpenCallback callback) {
   }
 
   base::mac::ScopedIOPluginInterface<IOUSBDeviceInterface187> device_interface;
-  kr = (*plugin_interface)
+  kr = (*plugin_interface.get())
            ->QueryInterface(
                plugin_interface.get(),
                CFUUIDGetUUIDBytes(kIOUSBDeviceInterfaceID),
@@ -70,7 +70,7 @@ void UsbDeviceMac::Open(OpenCallback callback) {
     return;
   }
 
-  kr = (*device_interface)->USBDeviceOpen(device_interface);
+  kr = (*device_interface.get())->USBDeviceOpen(device_interface.get());
   if (kr != kIOReturnSuccess) {
     USB_LOG(ERROR) << "Failed to open device: " << std::hex << kr;
     std::move(callback).Run(nullptr);

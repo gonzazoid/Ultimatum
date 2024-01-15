@@ -9,10 +9,10 @@
 #include <memory>
 #include <string>
 
-#include "base/bind.h"
 #include "base/check_op.h"
 #include "base/environment.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/memory/ref_counted_memory.h"
 #include "base/nix/xdg_util.h"
 #include "base/notreached.h"
@@ -20,7 +20,6 @@
 #include "base/process/process.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/utf_string_conversions.h"
-#include "base/task/task_runner_util.h"
 #include "base/task/thread_pool.h"
 #include "components/dbus/menu/menu.h"
 #include "components/dbus/properties/dbus_properties.h"
@@ -102,12 +101,6 @@ int NextServiceId() {
   return ++status_icon_count;
 }
 
-std::string ServiceNameFromId(int service_id) {
-  return std::string(kInterfaceStatusNotifierItem) + '-' +
-         base::NumberToString(base::Process::Current().Pid()) + '-' +
-         base::NumberToString(service_id);
-}
-
 std::string PropertyIdFromId(int service_id) {
   return "chrome_status_icon_" + base::NumberToString(service_id);
 }
@@ -155,14 +148,14 @@ bool ShouldWriteIconToFile() {
     case base::nix::DESKTOP_ENVIRONMENT_KDE3:
     case base::nix::DESKTOP_ENVIRONMENT_KDE4:
     case base::nix::DESKTOP_ENVIRONMENT_KDE5:
+    case base::nix::DESKTOP_ENVIRONMENT_KDE6:
     case base::nix::DESKTOP_ENVIRONMENT_UKUI:
     case base::nix::DESKTOP_ENVIRONMENT_UNITY:
     case base::nix::DESKTOP_ENVIRONMENT_XFCE:
     case base::nix::DESKTOP_ENVIRONMENT_LXQT:
       return false;
   }
-  NOTREACHED();
-  return false;
+  NOTREACHED_NORETURN();
 }
 
 base::FilePath WriteIconFile(size_t icon_file_id,
@@ -176,7 +169,7 @@ base::FilePath WriteIconFile(size_t icon_file_id,
 
   base::FilePath file_path = temp_dir.Append(
       "status_icon_" + base::NumberToString(icon_file_id) + ".png");
-  if (!base::WriteFile(file_path, data->front_as<char>(), data->size())) {
+  if (!base::WriteFile(file_path, *data)) {
     base::DeletePathRecursively(temp_dir);
     return {};
   }
@@ -296,19 +289,6 @@ void StatusIconLinuxDbus::OnHostRegisteredResponse(dbus::Response* response) {
   }
 
   service_id_ = NextServiceId();
-  bus_->RequestOwnership(ServiceNameFromId(service_id_),
-                         dbus::Bus::ServiceOwnershipOptions::REQUIRE_PRIMARY,
-                         base::BindOnce(&StatusIconLinuxDbus::OnOwnership,
-                                        weak_factory_.GetWeakPtr()));
-}
-
-void StatusIconLinuxDbus::OnOwnership(const std::string& service_name,
-                                      bool success) {
-  DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
-  if (!success) {
-    delegate_->OnImplInitializationFailed();
-    return;
-  }
 
   static constexpr struct {
     const char* name;
@@ -381,10 +361,17 @@ void StatusIconLinuxDbus::OnInitialized(bool success) {
     return;
   }
 
+  watcher_->SetNameOwnerChangedCallback(
+      base::BindRepeating(&StatusIconLinuxDbus::OnNameOwnerChangedReceived,
+                          weak_factory_.GetWeakPtr()));
+  RegisterStatusNotifierItem();
+}
+
+void StatusIconLinuxDbus::RegisterStatusNotifierItem() {
   dbus::MethodCall method_call(kInterfaceStatusNotifierWatcher,
                                kMethodRegisterStatusNotifierItem);
   dbus::MessageWriter writer(&method_call);
-  writer.AppendString(ServiceNameFromId(service_id_));
+  writer.AppendString(bus_->GetConnectionName());
   watcher_->CallMethod(&method_call, dbus::ObjectProxy::TIMEOUT_USE_DEFAULT,
                        base::BindOnce(&StatusIconLinuxDbus::OnRegistered,
                                       weak_factory_.GetWeakPtr()));
@@ -394,6 +381,15 @@ void StatusIconLinuxDbus::OnRegistered(dbus::Response* response) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
   if (!response)
     delegate_->OnImplInitializationFailed();
+}
+
+void StatusIconLinuxDbus::OnNameOwnerChangedReceived(
+    const std::string& old_owner,
+    const std::string& new_owner) {
+  // Re-register the item when the StatusNotifierWatcher has a new owner.
+  if (!new_owner.empty()) {
+    RegisterStatusNotifierItem();
+  }
 }
 
 void StatusIconLinuxDbus::OnActivate(
@@ -476,8 +472,8 @@ void StatusIconLinuxDbus::SetIconImpl(const gfx::ImageSkia& image,
     return;
 
   if (should_write_icon_to_file_) {
-    base::PostTaskAndReplyWithResult(
-        icon_task_runner_.get(), FROM_HERE,
+    icon_task_runner_->PostTaskAndReplyWithResult(
+        FROM_HERE,
         base::BindOnce(WriteIconFile, icon_file_id_++,
                        gfx::Image(image).As1xPNGBytes()),
         base::BindOnce(&StatusIconLinuxDbus::OnIconFileWritten, this));

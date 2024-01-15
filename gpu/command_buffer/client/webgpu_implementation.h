@@ -6,12 +6,15 @@
 #define GPU_COMMAND_BUFFER_CLIENT_WEBGPU_IMPLEMENTATION_H_
 
 #include <dawn/webgpu.h>
+#include <dawn/wire/WireClient.h>
 
 #include <memory>
 #include <utility>
 #include <vector>
 
 #include "base/memory/raw_ptr.h"
+#include "gpu/command_buffer/client/dawn_client_memory_transfer_service.h"
+#include "gpu/command_buffer/client/dawn_client_serializer.h"
 #include "gpu/command_buffer/client/gpu_control_client.h"
 #include "gpu/command_buffer/client/implementation_base.h"
 #include "gpu/command_buffer/client/logging.h"
@@ -24,7 +27,40 @@
 namespace gpu {
 namespace webgpu {
 
-class DawnWireServices;
+#if BUILDFLAG(USE_DAWN)
+class DawnWireServices : public APIChannel {
+ private:
+  friend class base::RefCounted<DawnWireServices>;
+  ~DawnWireServices() override;
+
+ public:
+  DawnWireServices(WebGPUImplementation* webgpu_implementation,
+                   WebGPUCmdHelper* helper,
+                   MappedMemoryManager* mapped_memory,
+                   std::unique_ptr<TransferBuffer> transfer_buffer);
+
+  const DawnProcTable& GetProcs() const override;
+
+  WGPUInstance GetWGPUInstance() const override;
+
+  dawn::wire::WireClient* wire_client();
+  DawnClientSerializer* serializer();
+  DawnClientMemoryTransferService* memory_transfer_service();
+
+  void Disconnect() override;
+
+  bool IsDisconnected() const;
+
+  void FreeMappedResources(WebGPUCmdHelper* helper);
+
+ private:
+  bool disconnected_ = false;
+  DawnClientMemoryTransferService memory_transfer_service_;
+  DawnClientSerializer serializer_;
+  dawn::wire::WireClient wire_client_;
+  WGPUInstance wgpu_instance_;
+};
+#endif
 
 class WEBGPU_EXPORT WebGPUImplementation final : public WebGPUInterface,
                                                  public ImplementationBase {
@@ -44,6 +80,16 @@ class WEBGPU_EXPORT WebGPUImplementation final : public WebGPUInterface,
 // it means we can easily edit the non-auto generated parts right here in
 // this file instead of having to edit some template or the code generator.
 #include "gpu/command_buffer/client/webgpu_implementation_autogen.h"
+
+  void AssociateMailbox(GLuint device_id,
+                        GLuint device_generation,
+                        GLuint id,
+                        GLuint generation,
+                        GLuint usage,
+                        const WGPUTextureFormat* view_formats,
+                        GLuint view_format_count,
+                        MailboxFlags flags,
+                        const Mailbox& mailbox) override;
 
   // ContextSupport implementation.
   void SetAggressivelyFreeResources(bool aggressively_free_resources) override;

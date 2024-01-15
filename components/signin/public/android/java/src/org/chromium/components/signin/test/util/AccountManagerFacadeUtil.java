@@ -4,21 +4,21 @@
 
 package org.chromium.components.signin.test.util;
 
+import org.jni_zero.CalledByNative;
 import org.mockito.Mockito;
 
-import org.chromium.base.annotations.CalledByNative;
 import org.chromium.components.signin.AccountManagerFacade;
 import org.chromium.components.signin.AccountManagerFacadeProvider;
 
-/**
- * Util class to set java AccountManagerFacade for native tests.
- */
+/** Util class to set java AccountManagerFacade for native tests. */
 final class AccountManagerFacadeUtil {
-    /**
-     * Stubs AccountManagerFacade for native tests.
-     */
+    /** Stubs AccountManagerFacade for native tests. */
     @CalledByNative
-    private static void setUpMockFacade() {
-        AccountManagerFacadeProvider.setInstanceForTests(Mockito.mock(AccountManagerFacade.class));
+    private static void setUpMockFacade(boolean useFakeImpl) {
+        // TODO(crbug.com/1466421): Remove Mockito and use FakeAccountManagerFacade instead.
+        AccountManagerFacadeProvider.setInstanceForTests(
+                useFakeImpl
+                        ? new FakeAccountManagerFacade()
+                        : Mockito.mock(AccountManagerFacade.class));
     }
 }

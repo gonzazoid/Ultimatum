@@ -9,21 +9,22 @@
 #include <algorithm>
 #include <set>
 #include <string>
+#include <string_view>
 #include <utility>
 
 #include "base/barrier_closure.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/containers/contains.h"
 #include "base/files/file_enumerator.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/strings/string_number_conversions.h"
-#include "base/strings/string_piece.h"
 #include "base/strings/stringprintf.h"
 #include "base/system/sys_info.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "base/trace_event/memory_dump_manager.h"
@@ -33,7 +34,6 @@
 #include "components/services/storage/dom_storage/dom_storage_database.h"
 #include "components/services/storage/dom_storage/local_storage_database.pb.h"
 #include "components/services/storage/dom_storage/storage_area_impl.h"
-#include "components/services/storage/filesystem_proxy_factory.h"
 #include "components/services/storage/public/cpp/constants.h"
 #include "mojo/public/cpp/bindings/self_owned_receiver.h"
 #include "storage/common/database/database_identifier.h"
@@ -65,7 +65,7 @@ namespace {
 // Temporary alias as this code moves incrementally into the storage namespace.
 using StorageAreaImpl = StorageAreaImpl;
 
-constexpr base::StringPiece kVersionKey = "VERSION";
+constexpr std::string_view kVersionKey = "VERSION";
 const uint8_t kMetaPrefix[] = {'M', 'E', 'T', 'A', ':'};
 const int64_t kMinSchemaVersion = 1;
 const int64_t kCurrentLocalStorageSchemaVersion = 1;
@@ -100,9 +100,9 @@ DomStorageDatabase::Key CreateMetaDataKey(
 absl::optional<blink::StorageKey> ExtractStorageKeyFromMetaDataKey(
     const DomStorageDatabase::Key& key) {
   DCHECK_GT(key.size(), std::size(kMetaPrefix));
-  const base::StringPiece key_string(reinterpret_cast<const char*>(key.data()),
-                                     key.size());
-  return blink::StorageKey::Deserialize(
+  const std::string_view key_string(reinterpret_cast<const char*>(key.data()),
+                                    key.size());
+  return blink::StorageKey::DeserializeForLocalStorage(
       key_string.substr(std::size(kMetaPrefix)));
 }
 
@@ -388,7 +388,7 @@ void LocalStorageImpl::ShutDown(base::OnceClosure callback) {
     return;  // Keep everything.
   }
 
-  if (!storage_keys_to_purge_on_shutdown_.empty()) {
+  if (!origins_to_purge_on_shutdown_.empty()) {
     RetrieveStorageUsage(
         base::BindOnce(&LocalStorageImpl::OnGotStorageUsageForShutdown,
                        base::Unretained(this)));
@@ -411,13 +411,11 @@ void LocalStorageImpl::PurgeMemory() {
 void LocalStorageImpl::ApplyPolicyUpdates(
     std::vector<mojom::StoragePolicyUpdatePtr> policy_updates) {
   for (const auto& update : policy_updates) {
-    // TODO(https://crbug.com/1199077): Pass the real StorageKey when
-    // StoragePolicyUpdate is converted.
-    blink::StorageKey storage_key(update->origin);
+    const url::Origin origin = update->origin;
     if (!update->purge_on_shutdown)
-      storage_keys_to_purge_on_shutdown_.erase(storage_key);
+      origins_to_purge_on_shutdown_.erase(origin);
     else
-      storage_keys_to_purge_on_shutdown_.insert(std::move(storage_key));
+      origins_to_purge_on_shutdown_.insert(std::move(origin));
   }
 }
 
@@ -466,7 +464,7 @@ bool LocalStorageImpl::OnMemoryDump(
   pmd->AddOwnershipEdge(leveldb_mad->guid(), global_dump->guid(), kImportance);
 
   if (args.level_of_detail ==
-      base::trace_event::MemoryDumpLevelOfDetail::BACKGROUND) {
+      base::trace_event::MemoryDumpLevelOfDetail::kBackground) {
     size_t total_cache_size, unused_area_count;
     GetStatistics(&total_cache_size, &unused_area_count);
     auto* mad = pmd->CreateAllocatorDump(context_name + "/cache_size");
@@ -751,8 +749,20 @@ void LocalStorageImpl::OnGotStorageUsageForShutdown(
     std::vector<mojom::StorageUsageInfoPtr> usage) {
   std::vector<blink::StorageKey> storage_keys_to_delete;
   for (const auto& info : usage) {
-    if (base::Contains(storage_keys_to_purge_on_shutdown_, info->storage_key))
-      storage_keys_to_delete.push_back(info->storage_key);
+    const blink::StorageKey& storage_key = info->storage_key;
+    const url::Origin& key_origin = storage_key.origin();
+    // Delete the storage if its origin matches one of the origins to purge, or
+    // if it is third-party and the top-level site is same-site with one of
+    // those origins.
+    for (const auto& origin_to_purge : origins_to_purge_on_shutdown_) {
+      if (key_origin == origin_to_purge ||
+          (storage_key.IsThirdPartyContext() &&
+           net::SchemefulSite(origin_to_purge) ==
+               storage_key.top_level_site())) {
+        storage_keys_to_delete.push_back(storage_key);
+        break;
+      }
+    }
   }
 
   if (!storage_keys_to_delete.empty()) {

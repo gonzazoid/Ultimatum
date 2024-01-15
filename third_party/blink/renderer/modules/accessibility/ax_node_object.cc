@@ -35,6 +35,8 @@
 #include <queue>
 
 #include "base/auto_reset.h"
+#include "base/containers/contains.h"
+#include "base/containers/fixed_flat_set.h"
 #include "base/numerics/safe_conversions.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/features.h"
@@ -44,8 +46,10 @@
 #include "third_party/blink/renderer/bindings/core/v8/v8_image_bitmap_options.h"
 #include "third_party/blink/renderer/core/aom/accessible_node.h"
 #include "third_party/blink/renderer/core/css/css_resolution_units.h"
+#include "third_party/blink/renderer/core/css/properties/longhands.h"
 #include "third_party/blink/renderer/core/display_lock/display_lock_utilities.h"
 #include "third_party/blink/renderer/core/dom/flat_tree_traversal.h"
+#include "third_party/blink/renderer/core/dom/focus_params.h"
 #include "third_party/blink/renderer/core/dom/layout_tree_builder_traversal.h"
 #include "third_party/blink/renderer/core/dom/node_computed_style.h"
 #include "third_party/blink/renderer/core/dom/node_traversal.h"
@@ -76,12 +80,13 @@
 #include "third_party/blink/renderer/core/html/forms/html_opt_group_element.h"
 #include "third_party/blink/renderer/core/html/forms/html_option_element.h"
 #include "third_party/blink/renderer/core/html/forms/html_select_element.h"
-#include "third_party/blink/renderer/core/html/forms/html_select_menu_element.h"
+#include "third_party/blink/renderer/core/html/forms/html_select_list_element.h"
 #include "third_party/blink/renderer/core/html/forms/html_text_area_element.h"
 #include "third_party/blink/renderer/core/html/forms/labels_node_list.h"
 #include "third_party/blink/renderer/core/html/forms/radio_input_type.h"
 #include "third_party/blink/renderer/core/html/forms/text_control_element.h"
 #include "third_party/blink/renderer/core/html/html_anchor_element.h"
+#include "third_party/blink/renderer/core/html/html_details_element.h"
 #include "third_party/blink/renderer/core/html/html_div_element.h"
 #include "third_party/blink/renderer/core/html/html_dlist_element.h"
 #include "third_party/blink/renderer/core/html/html_element.h"
@@ -93,25 +98,25 @@
 #include "third_party/blink/renderer/core/html/html_slot_element.h"
 #include "third_party/blink/renderer/core/html/html_table_caption_element.h"
 #include "third_party/blink/renderer/core/html/html_table_cell_element.h"
+#include "third_party/blink/renderer/core/html/html_table_col_element.h"
 #include "third_party/blink/renderer/core/html/html_table_element.h"
 #include "third_party/blink/renderer/core/html/html_table_row_element.h"
 #include "third_party/blink/renderer/core/html/html_table_section_element.h"
 #include "third_party/blink/renderer/core/html/media/html_media_element.h"
 #include "third_party/blink/renderer/core/html/media/html_video_element.h"
 #include "third_party/blink/renderer/core/html/parser/html_parser_idioms.h"
-#include "third_party/blink/renderer/core/html/portal/html_portal_element.h"
 #include "third_party/blink/renderer/core/html/shadow/shadow_element_names.h"
+#include "third_party/blink/renderer/core/html_names.h"
 #include "third_party/blink/renderer/core/imagebitmap/image_bitmap.h"
 #include "third_party/blink/renderer/core/input_type_names.h"
+#include "third_party/blink/renderer/core/layout/inline/abstract_inline_text_box.h"
+#include "third_party/blink/renderer/core/layout/inline/inline_node.h"
+#include "third_party/blink/renderer/core/layout/inline/offset_mapping.h"
 #include "third_party/blink/renderer/core/layout/layout_block_flow.h"
 #include "third_party/blink/renderer/core/layout/layout_box_model_object.h"
-#include "third_party/blink/renderer/core/layout/layout_file_upload_control.h"
 #include "third_party/blink/renderer/core/layout/layout_inline.h"
 #include "third_party/blink/renderer/core/layout/layout_object.h"
-#include "third_party/blink/renderer/core/layout/layout_table.h"
 #include "third_party/blink/renderer/core/layout/layout_view.h"
-#include "third_party/blink/renderer/core/layout/ng/inline/ng_inline_node.h"
-#include "third_party/blink/renderer/core/layout/ng/inline/ng_offset_mapping.h"
 #include "third_party/blink/renderer/core/loader/progress_tracker.h"
 #include "third_party/blink/renderer/core/mathml/mathml_element.h"
 #include "third_party/blink/renderer/core/mathml_names.h"
@@ -141,6 +146,7 @@
 #include "third_party/blink/renderer/platform/text/text_direction.h"
 #include "third_party/blink/renderer/platform/weborigin/kurl.h"
 #include "third_party/blink/renderer/platform/wtf/text/string_builder.h"
+#include "third_party/skia/include/core/SkImage.h"
 #include "ui/accessibility/ax_common.h"
 #include "ui/accessibility/ax_role_properties.h"
 #include "ui/events/keycodes/dom/dom_code.h"
@@ -218,7 +224,7 @@ blink::AXObject* GetDOMTableAXAncestor(blink::Node* node,
     if (!node)
       return nullptr;
 
-    blink::AXObject* ax_object = cache.GetOrCreate(node);
+    blink::AXObject* ax_object = cache.Get(node);
     if (ax_object && !IsNeutralWithinTable(ax_object))
       return ax_object;
   }
@@ -322,6 +328,59 @@ String GetTitle(blink::Element* element) {
   return element->title();
 }
 
+bool CanHaveInlineTextBoxChildren(const blink::AXObject* obj) {
+  if (!ui::CanHaveInlineTextBoxChildren(obj->RoleValue())) {
+    return false;
+  }
+
+  // Requires a layout object for there to be any inline text boxes.
+  if (!obj->GetLayoutObject()) {
+    return false;
+  }
+
+  // Inline text boxes are included if and only if the parent is unignored.
+  // If the parent is ignored but included in tree, the inline textbox is
+  // still withheld.
+  return !obj->LastKnownIsIgnoredValue();
+}
+
+bool HasLayoutText(const blink::AXObject* obj) {
+  // This method should only be used when layout is clean.
+#if DCHECK_IS_ON()
+  DCHECK(obj->GetDocument()->Lifecycle().GetState() >=
+         blink::DocumentLifecycle::kLayoutClean)
+      << "Unclean document at lifecycle "
+      << obj->GetDocument()->Lifecycle().ToString();
+#endif
+
+  // If no layout object, could be display:none or display locked.
+  if (!obj->GetLayoutObject()) {
+    return false;
+  }
+
+  if (blink::DisplayLockUtilities::LockedAncestorPreventingPaint(
+          *obj->GetLayoutObject())) {
+    return false;
+  }
+
+  // Only text has inline textbox children.
+  if (!obj->GetLayoutObject()->IsText()) {
+    return false;
+  }
+
+  // TODO(accessibility): Unclear why text would need layout if it's not display
+  // locked and the document is currently in a clean layout state.
+  // It seems to be fairly rare, but is creating some crashes, and there is
+  // no repro case yet.
+  if (obj->GetLayoutObject()->NeedsLayout()) {
+    DCHECK(false) << "LayoutText needed layout but was not display locked: "
+                  << obj->ToString(true, true);
+    return false;
+  }
+
+  return true;
+}
+
 }  // namespace
 
 namespace blink {
@@ -330,6 +389,7 @@ using html_names::kAltAttr;
 using html_names::kTitleAttr;
 using html_names::kTypeAttr;
 using html_names::kValueAttr;
+using mojom::blink::FormControlType;
 
 // In ARIA 1.1, default value of aria-level was changed to 2.
 const int kDefaultHeadingLevel = 2;
@@ -410,8 +470,6 @@ void AXNodeObject::AlterSliderOrSpinButtonValue(bool increase) {
                           action, orientation, text_direction);
   GetNode()->DispatchEvent(*keydown);
 
-  // TODO(crbug.com/1099069): add a brief pause between keydown and keyup?
-
   // The keydown handler may have caused the node to be removed.
   if (!GetNode())
     return;
@@ -419,7 +477,21 @@ void AXNodeObject::AlterSliderOrSpinButtonValue(bool increase) {
   KeyboardEvent* keyup =
       CreateKeyboardEvent(local_dom_window, WebInputEvent::Type::kKeyUp, action,
                           orientation, text_direction);
-  GetNode()->DispatchEvent(*keyup);
+
+  // Add a 100ms delay between keydown and keyup to make events look less
+  // evidently synthesized.
+  GetDocument()
+      ->GetTaskRunner(TaskType::kUserInteraction)
+      ->PostDelayedTask(
+          FROM_HERE,
+          WTF::BindOnce(
+              [](Node* node, KeyboardEvent* evt) {
+                if (node) {
+                  node->DispatchEvent(*evt);
+                }
+              },
+              WrapWeakPersistent(GetNode()), WrapPersistent(keyup)),
+          base::Milliseconds(100));
 }
 
 AXObject* AXNodeObject::ActiveDescendant() {
@@ -432,7 +504,7 @@ AXObject* AXNodeObject::ActiveDescendant() {
   if (!descendant)
     return nullptr;
 
-  AXObject* ax_descendant = AXObjectCache().GetOrCreate(descendant);
+  AXObject* ax_descendant = AXObjectCache().Get(descendant);
   return ax_descendant && ax_descendant->IsVisible() ? ax_descendant : nullptr;
 }
 
@@ -440,18 +512,17 @@ AXObjectInclusion AXNodeObject::ShouldIncludeBasedOnSemantics(
     IgnoredReasons* ignored_reasons) const {
   DCHECK(GetDocument());
 
+  // All nodes must have an unignored parent within their tree under
+  // the root node of the web area, so force that node to always be unignored.
+  if (IsA<Document>(GetNode())) {
+    return kIncludeObject;
+  }
+
   if (IsPresentational()) {
     if (ignored_reasons)
       ignored_reasons->push_back(IgnoredReason(kAXPresentational));
     return kIgnoreObject;
   }
-
-  // Objects inside a portal should be ignored. Portals don't directly expose
-  // their contents as the contents are not focusable (portals do not currently
-  // support input events). Portals do use their contents to compute a default
-  // accessible name.
-  if (GetDocument()->GetPage() && GetDocument()->GetPage()->InsidePortal())
-    return kIgnoreObject;
 
   Node* node = GetNode();
   if (!node) {
@@ -459,6 +530,7 @@ AXObjectInclusion AXNodeObject::ShouldIncludeBasedOnSemantics(
     // alt text. This can allow auto alt to be applied to them.
     if (IsImage())
       return kIncludeObject;
+
     return kDefaultBehavior;
   }
 
@@ -474,8 +546,16 @@ AXObjectInclusion AXNodeObject::ShouldIncludeBasedOnSemantics(
   }
 
   Element* element = GetElement();
-  if (!element)
+  if (!element) {
     return kDefaultBehavior;
+  }
+
+  if (IsExcludedByFormControlsFilter()) {
+    if (ignored_reasons) {
+      ignored_reasons->push_back(IgnoredReason(kAXUninteresting));
+    }
+    return kIgnoreObject;
+  }
 
   if (IsA<SVGElement>(node)) {
     // The symbol element is used to define graphical templates which can be
@@ -502,6 +582,14 @@ AXObjectInclusion AXNodeObject::ShouldIncludeBasedOnSemantics(
       return kIncludeObject;
     }
 
+    // If setting enabled, do not ignore SVG grouping (<g>) elements.
+    if (IsA<SVGGElement>(node)) {
+      Settings* settings = GetDocument()->GetSettings();
+      if (settings->GetAccessibilityIncludeSvgGElement()) {
+        return kIncludeObject;
+      }
+    }
+
     // If we return kDefaultBehavior here, the logic related to inclusion of
     // clickable objects, links, controls, etc. will not be reached. We handle
     // SVG elements early to ensure properties in a <symbol> subtree do not
@@ -511,7 +599,14 @@ AXObjectInclusion AXNodeObject::ShouldIncludeBasedOnSemantics(
   if (IsTableLikeRole() || IsTableRowLikeRole() || IsTableCellLikeRole())
     return kIncludeObject;
 
-  // All focusable elements except the <body> are included.
+  if (IsA<HTMLHtmlElement>(node)) {
+    if (ignored_reasons) {
+      ignored_reasons->push_back(IgnoredReason(kAXUninteresting));
+    }
+    return kIgnoreObject;
+  }
+
+  // All focusable elements except the <body> and <html> are included.
   if (!IsA<HTMLBodyElement>(node) && CanSetFocusAttribute())
     return kIncludeObject;
 
@@ -546,7 +641,7 @@ AXObjectInclusion AXNodeObject::ShouldIncludeBasedOnSemantics(
   // Descendants are pruned: IsRelevantPseudoElementDescendant() returns false.
   // Note: this is duplicated from AXLayoutObject because CSS alt text may apply
   // to both Elements and pseudo-elements.
-  absl::optional<String> alt_text = GetCSSAltText(GetNode());
+  absl::optional<String> alt_text = GetCSSAltText(GetElement());
   if (alt_text && !alt_text->empty())
     return kIncludeObject;
 
@@ -561,11 +656,12 @@ AXObjectInclusion AXNodeObject::ShouldIncludeBasedOnSemantics(
   if (IsEditableRoot())
     return kIncludeObject;
 
-  static const HashSet<ax::mojom::blink::Role> always_included_computed_roles =
-      {
+  static constexpr auto always_included_computed_roles =
+      base::MakeFixedFlatSet<ax::mojom::blink::Role>({
           ax::mojom::blink::Role::kAbbr,
           ax::mojom::blink::Role::kApplication,
           ax::mojom::blink::Role::kArticle,
+          ax::mojom::blink::Role::kAudio,
           ax::mojom::blink::Role::kBanner,
           ax::mojom::blink::Role::kBlockquote,
           ax::mojom::blink::Role::kComplementary,
@@ -605,9 +701,9 @@ AXObjectInclusion AXNodeObject::ShouldIncludeBasedOnSemantics(
           ax::mojom::blink::Role::kMark,
           ax::mojom::blink::Role::kMath,
           ax::mojom::blink::Role::kMathMLMath,
-          // Don't ignore MathML nodes by default, since MathML relies on child
-          // positions to determine semantics (e.g. numerator is the first
-          // child of a fraction).
+          // Don't ignore MathML nodes by default, since MathML
+          // relies on child positions to determine semantics
+          // (e.g. numerator is the first child of a fraction).
           ax::mojom::blink::Role::kMathMLFraction,
           ax::mojom::blink::Role::kMathMLIdentifier,
           ax::mojom::blink::Role::kMathMLMultiscripts,
@@ -640,12 +736,14 @@ AXObjectInclusion AXNodeObject::ShouldIncludeBasedOnSemantics(
           ax::mojom::blink::Role::kSplitter,
           ax::mojom::blink::Role::kSubscript,
           ax::mojom::blink::Role::kSuperscript,
+          ax::mojom::blink::Role::kTerm,
           ax::mojom::blink::Role::kTime,
-      };
+          ax::mojom::blink::Role::kVideo,
+      });
 
-  if (always_included_computed_roles.find(RoleValue()) !=
-      always_included_computed_roles.end())
+  if (base::Contains(always_included_computed_roles, RoleValue())) {
     return kIncludeObject;
+  }
 
   // Using the title or accessibility description (so we
   // check if there's some kind of accessible name for the element)
@@ -692,24 +790,62 @@ AXObjectInclusion AXNodeObject::ShouldIncludeBasedOnSemantics(
     return kIncludeObject;
   }
 
+  // The SVG-AAM says the foreignObject element is normally presentational.
+  if (IsA<SVGForeignObjectElement>(node)) {
+    if (ignored_reasons) {
+      ignored_reasons->push_back(IgnoredReason(kAXPresentational));
+    }
+    return kIgnoreObject;
+  }
+
   return kDefaultBehavior;
 }
 
+bool AXNodeObject::ComputeAccessibilityIsIgnored(
+    IgnoredReasons* ignored_reasons) const {
+  if (AXObject::ComputeAccessibilityIsIgnored(ignored_reasons)) {
+    // Fallback elements inside of a <canvas> are invisible, but are not ignored
+    // if they are semantic and not aria-hidden or hidden via style.
+    if (IsAriaHidden() || IsHiddenViaStyle() || IsHiddenByChildTree() ||
+        !GetNode()->parentElement() ||
+        !GetNode()->parentElement()->IsInCanvasSubtree()) {
+      return true;
+    }
+  }
+
+  // Handle content that is either visible or in a canvas subtree.
+  AXObjectInclusion include = ShouldIncludeBasedOnSemantics(ignored_reasons);
+  if (include == kIgnoreObject) {
+    return true;
+  }
+
+  if (include == kDefaultBehavior && !IsA<Text>(GetNode())) {
+    if (ignored_reasons) {
+      ignored_reasons->push_back(IgnoredReason(kAXUninteresting));
+    }
+    return true;
+  }
+
+  return false;
+}
+
 // static
-absl::optional<String> AXNodeObject::GetCSSAltText(const Node* node) {
+std::optional<String> AXNodeObject::GetCSSAltText(const Element* element) {
   // CSS alt text rules allow text to be assigned to ::before/::after content.
   // For example, the following CSS assigns "bullet" text to bullet.png:
   // .something::before {
   //   content: url(bullet.png) / "bullet";
   // }
 
-  if (!node || !node->GetComputedStyle() ||
-      node->GetComputedStyle()->ContentBehavesAsNormal()) {
-    return absl::nullopt;
+  if (!element) {
+    return std::nullopt;
+  }
+  const ComputedStyle* style = element->GetComputedStyle();
+  if (!style || style->ContentBehavesAsNormal()) {
+    return std::nullopt;
   }
 
-  const ComputedStyle* style = node->GetComputedStyle();
-  if (node->IsPseudoElement()) {
+  if (element->IsPseudoElement()) {
     for (const ContentData* content_data = style->GetContentData();
          content_data; content_data = content_data->Next()) {
       if (content_data->IsAltText())
@@ -730,94 +866,61 @@ absl::optional<String> AXNodeObject::GetCSSAltText(const Node* node) {
   return absl::nullopt;
 }
 
-bool AXNodeObject::ComputeAccessibilityIsIgnored(
-    IgnoredReasons* ignored_reasons) const {
-#if DCHECK_IS_ON()
-  // Double-check that an AXObject is never accessed before
-  // it's been initialized.
-  DCHECK(initialized_);
-#endif
+// The following lists are for deciding whether the tags aside,
+// header and footer can be interpreted as roles complementary, banner and
+// contentInfo or if they should be interpreted as generic.
+// This function only handles the complementary, banner, and contentInfo roles,
+// which belong to the landmark roles set.
+static HashSet<ax::mojom::blink::Role>& GetLandmarkIsNotAllowedAncestorRoles(
+    ax::mojom::blink::Role landmark) {
+  // clang-format off
+  DEFINE_STATIC_LOCAL(
+      // https://html.spec.whatwg.org/multipage/dom.html#sectioning-content-2
+      // The aside element should not assume the complementary role when nested
+      // within the following sectioning content elements.
+      HashSet<ax::mojom::blink::Role>, complementary_is_not_allowed_roles,
+      ({
+        ax::mojom::blink::Role::kArticle,
+        ax::mojom::blink::Role::kComplementary,
+        ax::mojom::blink::Role::kNavigation,
+        ax::mojom::blink::Role::kSection
+      }));
+      // https://w3c.github.io/html-aam/#el-header-ancestorbody
+      // The header and footer elements should not assume the banner and
+      // contentInfo roles, respectively, when nested within any of the
+      // sectioning content elements or the main element.
+  DEFINE_STATIC_LOCAL(
+      HashSet<ax::mojom::blink::Role>, landmark_is_not_allowed_roles,
+      ({
+        ax::mojom::blink::Role::kArticle,
+        ax::mojom::blink::Role::kComplementary,
+        ax::mojom::blink::Role::kMain,
+        ax::mojom::blink::Role::kNavigation,
+        ax::mojom::blink::Role::kSection
+      }));
+  // clang-format on
 
-  // If we don't have a node, then ignore the node object.
-  // TODO(vmpstr/aleventhal): Investigate how this can happen.
-  if (!GetNode()) {
-    NOTREACHED();
-    return true;
+  if (landmark == ax::mojom::blink::Role::kComplementary) {
+    return complementary_is_not_allowed_roles;
   }
-
-  // All nodes must have an unignored parent within their tree under
-  // the root node of the web area, so force that node to always be unignored.
-  if (IsWebArea())
-    return false;
-
-  DCHECK_NE(role_, ax::mojom::blink::Role::kUnknown);
-  // Use AXLayoutObject::ComputeAccessibilityIsIgnored().
-  DCHECK(!GetLayoutObject());
-
-  if (DisplayLockUtilities::IsDisplayLockedPreventingPaint(GetNode())) {
-    if (IsAriaHidden() ||
-        DisplayLockUtilities::ShouldIgnoreNodeDueToDisplayLock(
-            *GetNode(), DisplayLockActivationReason::kAccessibility)) {
-      if (ignored_reasons)
-        ignored_reasons->push_back(IgnoredReason(kAXNotRendered));
-      return true;
-    }
-    return ShouldIncludeBasedOnSemantics(ignored_reasons) == kIgnoreObject;
-  }
-
-  auto* element = DynamicTo<Element>(GetNode());
-  if (!element)
-    element = GetNode()->parentElement();
-
-  if (!element)
-    return true;
-
-  if (element->IsInCanvasSubtree())
-    return ShouldIncludeBasedOnSemantics(ignored_reasons) == kIgnoreObject;
-
-  if (AOMPropertyOrARIAAttributeIsFalse(AOMBooleanProperty::kHidden))
-    return false;
-
-  if (element->HasDisplayContentsStyle()) {
-    if (ShouldIncludeBasedOnSemantics(ignored_reasons) == kIncludeObject)
-      return false;
-  }
-
-  if (ignored_reasons)
-    ignored_reasons->push_back(IgnoredReason(kAXNotRendered));
-  return true;
+  return landmark_is_not_allowed_roles;
 }
 
-// There should only be one banner/contentInfo per page. If header/footer are
-// being used within an article, aside, nave, section, blockquote, details,
-// fieldset, figure, td, or main, then it should not be exposed as whole
-// page's banner/contentInfo.
-static HashSet<QualifiedName>& GetLandmarkRolesNotAllowed() {
-  DEFINE_STATIC_LOCAL(HashSet<QualifiedName>, landmark_roles_not_allowed, ());
-  if (landmark_roles_not_allowed.empty()) {
-    landmark_roles_not_allowed.insert(html_names::kArticleTag);
-    landmark_roles_not_allowed.insert(html_names::kAsideTag);
-    landmark_roles_not_allowed.insert(html_names::kNavTag);
-    landmark_roles_not_allowed.insert(html_names::kSectionTag);
-    landmark_roles_not_allowed.insert(html_names::kBlockquoteTag);
-    landmark_roles_not_allowed.insert(html_names::kDetailsTag);
-    landmark_roles_not_allowed.insert(html_names::kFieldsetTag);
-    landmark_roles_not_allowed.insert(html_names::kFigureTag);
-    landmark_roles_not_allowed.insert(html_names::kTdTag);
-    landmark_roles_not_allowed.insert(html_names::kMainTag);
-  }
-  return landmark_roles_not_allowed;
-}
-
-bool AXNodeObject::IsDescendantOfElementType(
-    HashSet<QualifiedName>& tag_names) const {
+bool AXNodeObject::IsDescendantOfLandmarkDisallowedElement() const {
   if (!GetNode())
     return false;
 
-  for (Element* parent = GetNode()->parentElement(); parent;
-       parent = parent->parentElement()) {
-    if (tag_names.Contains(parent->TagQName()))
+  if (AriaRoleAttribute() == ax::mojom::blink::Role::kComplementary) {
+    return false;
+  }
+
+  auto role_names = GetLandmarkIsNotAllowedAncestorRoles(RoleValue());
+
+  for (AXObject* parent = ParentObjectUnignored(); parent;
+       parent = parent->ParentObjectUnignored()) {
+    if (role_names.Contains(parent->RoleValue())) {
       return true;
+    }
   }
   return false;
 }
@@ -924,6 +1027,249 @@ ax::mojom::blink::Role AXNodeObject::DetermineTableCellRole() const {
   return DecideRoleFromSiblings(GetElement());
 }
 
+// The following is a heuristic used to determine if a
+// <table> should be with ax::mojom::blink::Role::kTable or
+// ax::mojom::blink::Role::kLayoutTable.
+// Only "data" tables should be exposed as tables.
+// Unfortunately, there is no determinsistic or precise way to differentiate a
+// layout table vs a data table. Fortunately, CSS authoring techniques have
+// improved a lot and mostly supplanted the practice of using tables for layout.
+bool AXNodeObject::IsDataTable() const {
+  DCHECK(!IsDetached());
+
+  auto* table_element = DynamicTo<HTMLTableElement>(GetNode());
+  if (!table_element) {
+    return false;
+  }
+
+  if (!GetLayoutObject()) {
+    // The table is not rendered, so the author has no reason to use the table
+    // for layout. Treat as a data table by default as there is not enough
+    // information to decide otherwise.
+    // One useful result of this is that a table inside a canvas fallback is
+    // treated as a data table.
+    return true;
+  }
+
+  // If it has an ARIA role, it's definitely a data table.
+  AtomicString role;
+  if (HasAOMPropertyOrARIAAttribute(AOMStringProperty::kRole, role)) {
+    return true;
+  }
+
+  // When a section of the document is contentEditable, all tables should be
+  // treated as data tables, otherwise users may not be able to work with rich
+  // text editors that allow creating and editing tables.
+  if (GetNode() && blink::IsEditable(*GetNode())) {
+    return true;
+  }
+
+  // If there is a caption element, summary, THEAD, or TFOOT section, it's most
+  // certainly a data table
+  if (!table_element->Summary().empty() || table_element->tHead() ||
+      table_element->tFoot() || table_element->caption()) {
+    return true;
+  }
+
+  // if someone used "rules" attribute than the table should appear
+  if (!table_element->Rules().empty()) {
+    return true;
+  }
+
+  // if there's a colgroup or col element, it's probably a data table.
+  if (Traversal<HTMLTableColElement>::FirstChild(*table_element)) {
+    return true;
+  }
+
+  // If there are at least 20 rows, we'll call it a data table.
+  HTMLTableRowsCollection* rows = table_element->rows();
+  int num_rows = rows->length();
+  if (num_rows >= AXObjectCacheImpl::kDataTableHeuristicMinRows) {
+    return true;
+  }
+  if (num_rows <= 0) {
+    return false;
+  }
+
+  int num_cols_in_first_body = rows->Item(0)->cells()->length();
+  // If there's only one cell, it's not a good AXTable candidate.
+  if (num_rows == 1 && num_cols_in_first_body == 1) {
+    return false;
+  }
+
+  // Store the background color of the table to check against cell's background
+  // colors.
+  const ComputedStyle* table_style = GetLayoutObject()->Style();
+  if (!table_style) {
+    return false;
+  }
+
+  Color table_bg_color =
+      table_style->VisitedDependentColor(GetCSSPropertyBackgroundColor());
+  bool has_cell_spacing = table_style->HorizontalBorderSpacing() &&
+                          table_style->VerticalBorderSpacing();
+
+  // check enough of the cells to find if the table matches our criteria
+  // Criteria:
+  //   1) must have at least one valid cell (and)
+  //   2) at least half of cells have borders (or)
+  //   3) at least half of cells have different bg colors than the table, and
+  //      there is cell spacing
+  unsigned valid_cell_count = 0;
+  unsigned bordered_cell_count = 0;
+  unsigned background_difference_cell_count = 0;
+  unsigned cells_with_top_border = 0;
+  unsigned cells_with_bottom_border = 0;
+  unsigned cells_with_left_border = 0;
+  unsigned cells_with_right_border = 0;
+
+  Color alternating_row_colors[5];
+  int alternating_row_color_count = 0;
+  for (int row = 0; row < num_rows; ++row) {
+    HTMLTableRowElement* row_element = rows->Item(row);
+    int n_cols = row_element->cells()->length();
+    for (int col = 0; col < n_cols; ++col) {
+      const Element* cell = row_element->cells()->item(col);
+      if (!cell) {
+        continue;
+      }
+      // Any <th> tag -> treat as data table.
+      if (cell->HasTagName(html_names::kThTag)) {
+        return true;
+      }
+
+      // Check for an explicitly assigned a "data" table attribute.
+      auto* cell_elem = DynamicTo<HTMLTableCellElement>(*cell);
+      if (cell_elem) {
+        if (!cell_elem->Headers().empty() || !cell_elem->Abbr().empty() ||
+            !cell_elem->Axis().empty() ||
+            !cell_elem->FastGetAttribute(html_names::kScopeAttr).empty()) {
+          return true;
+        }
+      }
+
+      LayoutObject* cell_layout_object = cell->GetLayoutObject();
+      if (!cell_layout_object || !cell_layout_object->IsLayoutBlock()) {
+        continue;
+      }
+
+      const LayoutBlock* cell_layout_block =
+          To<LayoutBlock>(cell_layout_object);
+      if (cell_layout_block->Size().width < 1 ||
+          cell_layout_block->Size().height < 1) {
+        continue;
+      }
+
+      valid_cell_count++;
+
+      const ComputedStyle* computed_style = cell_layout_block->Style();
+      if (!computed_style) {
+        continue;
+      }
+
+      // If the empty-cells style is set, we'll call it a data table.
+      if (computed_style->EmptyCells() == EEmptyCells::kHide) {
+        return true;
+      }
+
+      // If a cell has matching bordered sides, call it a (fully) bordered cell.
+      if ((cell_layout_block->BorderTop() > 0 &&
+           cell_layout_block->BorderBottom() > 0) ||
+          (cell_layout_block->BorderLeft() > 0 &&
+           cell_layout_block->BorderRight() > 0)) {
+        bordered_cell_count++;
+      }
+
+      // Also keep track of each individual border, so we can catch tables where
+      // most cells have a bottom border, for example.
+      if (cell_layout_block->BorderTop() > 0) {
+        cells_with_top_border++;
+      }
+      if (cell_layout_block->BorderBottom() > 0) {
+        cells_with_bottom_border++;
+      }
+      if (cell_layout_block->BorderLeft() > 0) {
+        cells_with_left_border++;
+      }
+      if (cell_layout_block->BorderRight() > 0) {
+        cells_with_right_border++;
+      }
+
+      // If the cell has a different color from the table and there is cell
+      // spacing, then it is probably a data table cell (spacing and colors take
+      // the place of borders).
+      Color cell_color = computed_style->VisitedDependentColor(
+          GetCSSPropertyBackgroundColor());
+      if (has_cell_spacing && table_bg_color != cell_color &&
+          !cell_color.IsFullyTransparent()) {
+        background_difference_cell_count++;
+      }
+
+      // If we've found 10 "good" cells, we don't need to keep searching.
+      if (bordered_cell_count >= 10 || background_difference_cell_count >= 10) {
+        return true;
+      }
+
+      // For the first 5 rows, cache the background color so we can check if
+      // this table has zebra-striped rows.
+      if (row < 5 && row == alternating_row_color_count) {
+        LayoutObject* layout_row = cell_layout_block->Parent();
+        if (!layout_row || !layout_row->IsBoxModelObject() ||
+            !layout_row->IsTableRow()) {
+          continue;
+        }
+        const ComputedStyle* row_computed_style = layout_row->Style();
+        if (!row_computed_style) {
+          continue;
+        }
+        Color row_color = row_computed_style->VisitedDependentColor(
+            GetCSSPropertyBackgroundColor());
+        alternating_row_colors[alternating_row_color_count] = row_color;
+        alternating_row_color_count++;
+      }
+    }
+  }
+
+  // if there is less than two valid cells, it's not a data table
+  if (valid_cell_count <= 1) {
+    return false;
+  }
+
+  // half of the cells had borders, it's a data table
+  unsigned needed_cell_count = valid_cell_count / 2;
+  if (bordered_cell_count >= needed_cell_count ||
+      cells_with_top_border >= needed_cell_count ||
+      cells_with_bottom_border >= needed_cell_count ||
+      cells_with_left_border >= needed_cell_count ||
+      cells_with_right_border >= needed_cell_count) {
+    return true;
+  }
+
+  // half had different background colors, it's a data table
+  if (background_difference_cell_count >= needed_cell_count) {
+    return true;
+  }
+
+  // Check if there is an alternating row background color indicating a zebra
+  // striped style pattern.
+  if (alternating_row_color_count > 2) {
+    Color first_color = alternating_row_colors[0];
+    for (int k = 1; k < alternating_row_color_count; k++) {
+      // If an odd row was the same color as the first row, its not alternating.
+      if (k % 2 == 1 && alternating_row_colors[k] == first_color) {
+        return false;
+      }
+      // If an even row is not the same as the first row, its not alternating.
+      if (!(k % 2) && alternating_row_colors[k] != first_color) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  return false;
+}
+
 ax::mojom::blink::Role AXNodeObject::RoleFromLayoutObjectOrNode() const {
   return ax::mojom::blink::Role::kGenericContainer;
 }
@@ -939,8 +1285,8 @@ ax::mojom::blink::Role AXNodeObject::NativeRoleIgnoringAria() const {
     return RoleFromLayoutObjectOrNode();
   }
 
-  if (GetNode()->IsPseudoElement() && GetCSSAltText(GetNode())) {
-    const ComputedStyle* style = GetNode()->GetComputedStyle();
+  if (GetNode()->IsPseudoElement() && GetCSSAltText(GetElement())) {
+    const ComputedStyle* style = GetElement()->GetComputedStyle();
     ContentData* content_data = style->GetContentData();
     // We just check the first item of the content list to determine the
     // appropriate role, should only ever be image or text.
@@ -959,18 +1305,14 @@ ax::mojom::blink::Role AXNodeObject::NativeRoleIgnoringAria() const {
   if (GetNode()->IsTextNode())
     return ax::mojom::blink::Role::kStaticText;
 
-  const HTMLSelectMenuElement* owner_select_menu =
-      HTMLSelectMenuElement::OwnerSelectMenu(GetNode());
-  if (owner_select_menu) {
-    HTMLSelectMenuElement::PartType part_type =
-        owner_select_menu->AssignedPartType(GetNode());
-    if (part_type == HTMLSelectMenuElement::PartType::kButton) {
+  if (auto* button = DynamicTo<HTMLButtonElement>(GetNode())) {
+    if (button->OwnerSelectList()) {
       return ax::mojom::blink::Role::kComboBoxMenuButton;
-    } else if (part_type == HTMLSelectMenuElement::PartType::kListBox) {
-      return ax::mojom::blink::Role::kListBox;
-    } else if (part_type == HTMLSelectMenuElement::PartType::kOption) {
-      return ax::mojom::blink::Role::kListBoxOption;
     }
+  }
+
+  if (IsA<HTMLListboxElement>(GetNode())) {
+    return ax::mojom::blink::Role::kListBox;
   }
 
   if (IsA<HTMLImageElement>(GetNode()))
@@ -996,9 +1338,6 @@ ax::mojom::blink::Role AXNodeObject::NativeRoleIgnoringAria() const {
     return ax::mojom::blink::Role::kGenericContainer;
   }
 
-  if (IsA<HTMLPortalElement>(*GetNode()))
-    return ax::mojom::blink::Role::kPortal;
-
   if (IsA<HTMLButtonElement>(*GetNode()))
     return ButtonRoleType();
 
@@ -1009,8 +1348,14 @@ ax::mojom::blink::Role AXNodeObject::NativeRoleIgnoringAria() const {
     ContainerNode* parent = LayoutTreeBuilderTraversal::Parent(*GetNode());
     if (ToHTMLSlotElementIfSupportsAssignmentOrNull(parent))
       parent = LayoutTreeBuilderTraversal::Parent(*parent);
-    if (parent && IsA<HTMLDetailsElement>(parent))
-      return ax::mojom::blink::Role::kDisclosureTriangle;
+    if (HTMLDetailsElement* parent_details =
+            DynamicTo<HTMLDetailsElement>(parent)) {
+      if (parent_details->GetName().empty()) {
+        return ax::mojom::blink::Role::kDisclosureTriangle;
+      } else {
+        return ax::mojom::blink::Role::kDisclosureTriangleGrouped;
+      }
+    }
     return ax::mojom::blink::Role::kGenericContainer;
   }
 
@@ -1030,41 +1375,42 @@ ax::mojom::blink::Role AXNodeObject::NativeRoleIgnoringAria() const {
     return DetermineTableSectionRole();
 
   if (const auto* input = DynamicTo<HTMLInputElement>(*GetNode())) {
-    const AtomicString& type = input->type();
-    if (input->DataList() && type != input_type_names::kColor)
+    FormControlType type = input->FormControlType();
+    if (input->DataList() && type != FormControlType::kInputColor) {
       return ax::mojom::blink::Role::kTextFieldWithComboBox;
-    if (type == input_type_names::kButton)
-      return ButtonRoleType();
-    if (type == input_type_names::kCheckbox)
-      return ax::mojom::blink::Role::kCheckBox;
-    if (type == input_type_names::kDate)
-      return ax::mojom::blink::Role::kDate;
-    if (type == input_type_names::kDatetime ||
-        type == input_type_names::kDatetimeLocal ||
-        type == input_type_names::kMonth || type == input_type_names::kWeek) {
-      return ax::mojom::blink::Role::kDateTime;
     }
-    if (type == input_type_names::kFile)
-      return ax::mojom::blink::Role::kButton;
-    if (type == input_type_names::kRadio)
-      return ax::mojom::blink::Role::kRadioButton;
-    if (type == input_type_names::kNumber)
-      return ax::mojom::blink::Role::kSpinButton;
-    if (input->IsTextButton())
-      return ButtonRoleType();
-    if (type == input_type_names::kRange)
-      return ax::mojom::blink::Role::kSlider;
-    if (type == input_type_names::kSearch)
-      return ax::mojom::blink::Role::kSearchBox;
-    if (type == input_type_names::kColor)
-      return ax::mojom::blink::Role::kColorWell;
-    if (type == input_type_names::kTime)
-      return ax::mojom::blink::Role::kInputTime;
-    if (type == input_type_names::kButton || type == input_type_names::kImage ||
-        type == input_type_names::kReset || type == input_type_names::kSubmit) {
-      return ax::mojom::blink::Role::kButton;
+    switch (type) {
+      case FormControlType::kInputButton:
+      case FormControlType::kInputReset:
+      case FormControlType::kInputSubmit:
+        return ButtonRoleType();
+      case FormControlType::kInputCheckbox:
+        return ax::mojom::blink::Role::kCheckBox;
+      case FormControlType::kInputDate:
+        return ax::mojom::blink::Role::kDate;
+      case FormControlType::kInputDatetimeLocal:
+      case FormControlType::kInputMonth:
+      case FormControlType::kInputWeek:
+        return ax::mojom::blink::Role::kDateTime;
+      case FormControlType::kInputFile:
+        return ax::mojom::blink::Role::kButton;
+      case FormControlType::kInputRadio:
+        return ax::mojom::blink::Role::kRadioButton;
+      case FormControlType::kInputNumber:
+        return ax::mojom::blink::Role::kSpinButton;
+      case FormControlType::kInputRange:
+        return ax::mojom::blink::Role::kSlider;
+      case FormControlType::kInputSearch:
+        return ax::mojom::blink::Role::kSearchBox;
+      case FormControlType::kInputColor:
+        return ax::mojom::blink::Role::kColorWell;
+      case FormControlType::kInputTime:
+        return ax::mojom::blink::Role::kInputTime;
+      case FormControlType::kInputImage:
+        return ax::mojom::blink::Role::kButton;
+      default:
+        return ax::mojom::blink::Role::kTextField;
     }
-    return ax::mojom::blink::Role::kTextField;
   }
 
   if (auto* select_element = DynamicTo<HTMLSelectElement>(*GetNode())) {
@@ -1076,10 +1422,12 @@ ax::mojom::blink::Role AXNodeObject::NativeRoleIgnoringAria() const {
 
   if (auto* option = DynamicTo<HTMLOptionElement>(*GetNode())) {
     HTMLSelectElement* select_element = option->OwnerSelectElement();
-    if (!select_element || select_element->IsMultiple())
+    if (!select_element || select_element->IsMultiple() ||
+        option->OwnerSelectList()) {
       return ax::mojom::blink::Role::kListBoxOption;
-    else
+    } else {
       return ax::mojom::blink::Role::kMenuListOption;
+    }
   }
 
   if (IsA<HTMLTextAreaElement>(*GetNode()))
@@ -1133,15 +1481,16 @@ ax::mojom::blink::Role AXNodeObject::NativeRoleIgnoringAria() const {
   if (GetNode()->HasTagName(html_names::kDdTag))
     return ax::mojom::blink::Role::kDescriptionListDetail;
 
+  if (GetNode()->HasTagName(html_names::kDfnTag))
+    return ax::mojom::blink::Role::kTerm;
+
   if (GetNode()->HasTagName(html_names::kDtTag))
     return ax::mojom::blink::Role::kDescriptionListTerm;
 
   // Mapping of MathML elements. See https://w3c.github.io/mathml-aam/
   if (auto* element = DynamicTo<MathMLElement>(GetNode())) {
     if (element->HasTagName(mathml_names::kMathTag)) {
-      return RuntimeEnabledFeatures::MathMLCoreEnabled()
-                 ? ax::mojom::blink::Role::kMathMLMath
-                 : ax::mojom::blink::Role::kMath;
+      return ax::mojom::blink::Role::kMathMLMath;
     }
     if (element->HasTagName(mathml_names::kMfracTag))
       return ax::mojom::blink::Role::kMathMLFraction;
@@ -1225,8 +1574,14 @@ ax::mojom::blink::Role AXNodeObject::NativeRoleIgnoringAria() const {
   if (GetNode()->HasTagName(html_names::kStrongTag))
     return ax::mojom::blink::Role::kStrong;
 
-  if (GetNode()->HasTagName(html_names::kDelTag))
+  if (GetNode()->HasTagName(html_names::kSearchTag)) {
+    return ax::mojom::blink::Role::kSearch;
+  }
+
+  if (GetNode()->HasTagName(html_names::kDelTag) ||
+      GetNode()->HasTagName(html_names::kSTag)) {
     return ax::mojom::blink::Role::kContentDeletion;
+  }
 
   if (GetNode()->HasTagName(html_names::kInsTag))
     return ax::mojom::blink::Role::kContentInsertion;
@@ -1249,9 +1604,6 @@ ax::mojom::blink::Role AXNodeObject::NativeRoleIgnoringAria() const {
   if (GetNode()->HasTagName(html_names::kAsideTag))
     return ax::mojom::blink::Role::kComplementary;
 
-  if (GetNode()->HasTagName(html_names::kPreTag))
-    return ax::mojom::blink::Role::kPre;
-
   if (GetNode()->HasTagName(html_names::kSectionTag)) {
     // Treat a named <section> as role="region".
     return IsNameFromAuthorAttribute() ? ax::mojom::blink::Role::kRegion
@@ -1260,6 +1612,10 @@ ax::mojom::blink::Role AXNodeObject::NativeRoleIgnoringAria() const {
 
   if (GetNode()->HasTagName(html_names::kAddressTag))
     return ax::mojom::blink::Role::kGroup;
+
+  if (GetNode()->HasTagName(html_names::kHgroupTag)) {
+    return ax::mojom::blink::Role::kGroup;
+  }
 
   if (IsA<HTMLDialogElement>(*GetNode()))
     return ax::mojom::blink::Role::kDialog;
@@ -1272,25 +1628,11 @@ ax::mojom::blink::Role AXNodeObject::NativeRoleIgnoringAria() const {
   if (IsFrame(GetNode()))
     return ax::mojom::blink::Role::kIframe;
 
-  if (IsA<HTMLFencedFrameElement>(GetNode())) {
-    // Shadow DOM <fencedframe>s are marked as a group, as they are not the
-    // child tree owner. The child tree owner is their <iframe> child.
-    DCHECK(blink::features::IsFencedFramesShadowDOMBased());
-    return ax::mojom::blink::Role::kGroup;
-  }
-
-  // There should only be one banner/contentInfo per page. If header/footer are
-  // being used within an article or section then it should not be exposed as
-  // whole page's banner/contentInfo but as a generic container role.
   if (GetNode()->HasTagName(html_names::kHeaderTag)) {
-    if (IsDescendantOfElementType(GetLandmarkRolesNotAllowed()))
-      return ax::mojom::blink::Role::kHeaderAsNonLandmark;
     return ax::mojom::blink::Role::kHeader;
   }
 
   if (GetNode()->HasTagName(html_names::kFooterTag)) {
-    if (IsDescendantOfElementType(GetLandmarkRolesNotAllowed()))
-      return ax::mojom::blink::Role::kFooterAsNonLandmark;
     return ax::mojom::blink::Role::kFooter;
   }
 
@@ -1330,7 +1672,8 @@ ax::mojom::blink::Role AXNodeObject::DetermineAccessibilityRole() {
 #endif
 
   if (IsDetached()) {
-    NOTREACHED();
+    NOTREACHED() << "Do not compute role on detached object: "
+                 << ToString(true, true);
     return ax::mojom::blink::Role::kUnknown;
   }
 
@@ -1350,7 +1693,7 @@ void AXNodeObject::AccessibilityChildrenFromAOMProperty(
     return;
   AXObjectCacheImpl& cache = AXObjectCache();
   for (const auto& element : elements) {
-    if (AXObject* child = cache.GetOrCreate(element)) {
+    if (AXObject* child = cache.Get(element)) {
       // Only aria-labelledby and aria-describedby can target hidden elements.
       if (!child)
         continue;
@@ -1434,9 +1777,11 @@ bool AXNodeObject::IsControl() const {
 }
 
 bool AXNodeObject::IsAutofillAvailable() const {
-  // Autofill state is stored in AXObjectCache.
-  WebAXAutofillState state = AXObjectCache().GetAutofillState(AXObjectID());
-  return state == WebAXAutofillState::kAutofillAvailable;
+  // Autofill suggestion availability is stored in AXObjectCache.
+  WebAXAutofillSuggestionAvailability suggestion_availability =
+      AXObjectCache().GetAutofillSuggestionAvailability(AXObjectID());
+  return suggestion_availability ==
+         WebAXAutofillSuggestionAvailability::kAutofillAvailable;
 }
 
 bool AXNodeObject::IsDefault() const {
@@ -1470,8 +1815,10 @@ bool AXNodeObject::IsImageButton() const {
 
 bool AXNodeObject::IsInputImage() const {
   auto* html_input_element = DynamicTo<HTMLInputElement>(GetNode());
-  if (html_input_element && RoleValue() == ax::mojom::blink::Role::kButton)
-    return html_input_element->type() == input_type_names::kImage;
+  if (html_input_element && RoleValue() == ax::mojom::blink::Role::kButton) {
+    return html_input_element->FormControlType() ==
+           FormControlType::kInputImage;
+  }
 
   return false;
 }
@@ -1519,7 +1866,7 @@ bool AXNodeObject::IsLineBreakingObject() const {
   // Line 2</pre>
   if (const LayoutText* layout_text = DynamicTo<LayoutText>(layout_object)) {
     const ComputedStyle& style = layout_object->StyleRef();
-    if (layout_text->HasNonCollapsedText() && style.PreserveNewline() &&
+    if (layout_text->HasNonCollapsedText() && style.ShouldPreserveBreaks() &&
         layout_text->PlainText().find('\n') != WTF::kNotFound) {
       return true;
     }
@@ -1538,10 +1885,8 @@ bool AXNodeObject::IsLoaded() const {
 
   // Check for a navigation API single-page app navigation in progress.
   if (auto* window = GetDocument()->domWindow()) {
-    if (auto* navigation_api = NavigationApi::navigation(*window)) {
-      if (navigation_api->HasNonDroppedOngoingNavigation())
-        return false;
-    }
+    if (window->navigation()->HasNonDroppedOngoingNavigation())
+      return false;
   }
 
   return true;
@@ -1578,7 +1923,7 @@ bool AXNodeObject::IsNativeImage() const {
     return true;
 
   if (const auto* input = DynamicTo<HTMLInputElement>(*node))
-    return input->type() == input_type_names::kImage;
+    return input->FormControlType() == FormControlType::kInputImage;
 
   return false;
 }
@@ -1607,18 +1952,18 @@ bool AXNodeObject::IsSpinButton() const {
 
 bool AXNodeObject::IsNativeSlider() const {
   if (const auto* input = DynamicTo<HTMLInputElement>(GetNode()))
-    return input->type() == input_type_names::kRange;
+    return input->FormControlType() == FormControlType::kInputRange;
   return false;
 }
 
 bool AXNodeObject::IsNativeSpinButton() const {
   if (const auto* input = DynamicTo<HTMLInputElement>(GetNode()))
-    return input->type() == input_type_names::kNumber;
+    return input->FormControlType() == FormControlType::kInputNumber;
   return false;
 }
 
-bool AXNodeObject::IsChildTreeOwner() const {
-  return ui::IsChildTreeOwner(native_role_);
+bool AXNodeObject::IsEmbeddingElement() const {
+  return ui::IsEmbeddingElement(native_role_);
 }
 
 bool AXNodeObject::IsClickable() const {
@@ -1653,6 +1998,14 @@ bool AXNodeObject::IsClickable() const {
   if (HasContentEditableAttributeSet())
     return true;
 
+  // Certain user-agent shadow DOM elements are expected to be clickable but
+  // they do not have event listeners attached or a clickable native role. We
+  // whitelist them here.
+  if (element->ShadowPseudoId() ==
+      shadow_element_names::kPseudoCalendarPickerIndicator) {
+    return true;
+  }
+
   // Only use native roles. For ARIA elements, require a click listener.
   return ui::IsClickable(native_role_);
 }
@@ -1670,16 +2023,6 @@ bool AXNodeObject::IsFocused() const {
 
   Element* focused_element = GetDocument()->FocusedElement();
   return focused_element && focused_element == GetElement();
-}
-
-// aria-grabbed is deprecated in WAI-ARIA 1.1.
-AccessibilityGrabbedState AXNodeObject::IsGrabbed() const {
-  if (!SupportsARIADragging())
-    return kGrabbedStateUndefined;
-
-  const AtomicString& grabbed = GetAttribute(html_names::kAriaGrabbedAttr);
-  return EqualIgnoringASCIICase(grabbed, "true") ? kGrabbedStateTrue
-                                                 : kGrabbedStateFalse;
 }
 
 AccessibilitySelectedState AXNodeObject::IsSelected() const {
@@ -1772,7 +2115,7 @@ bool AXNodeObject::IsTabItemSelected() const {
     return false;
 
   for (const auto& element : elements) {
-    AXObject* tab_panel = AXObjectCache().GetOrCreate(element);
+    AXObject* tab_panel = AXObjectCache().Get(element);
 
     // A tab item should only control tab panels.
     if (!tab_panel ||
@@ -1808,15 +2151,6 @@ AXRestriction AXNodeObject::Restriction() const {
   if (IsDisabled())
     return kRestrictionDisabled;
 
-  // Check aria-readonly if supported by current role.
-  bool is_read_only;
-  if (SupportsARIAReadOnly() &&
-      HasAOMPropertyOrARIAAttribute(AOMBooleanProperty::kReadOnly,
-                                    is_read_only)) {
-    // ARIA overrides other readonly state markup.
-    return is_read_only ? kRestrictionReadOnly : kRestrictionNone;
-  }
-
   // Only editable fields can be marked @readonly (unlike @aria-readonly).
   auto* text_area_element = DynamicTo<HTMLTextAreaElement>(*elem);
   if (text_area_element && text_area_element->IsReadOnly())
@@ -1824,6 +2158,15 @@ AXRestriction AXNodeObject::Restriction() const {
   if (const auto* input = DynamicTo<HTMLInputElement>(*elem)) {
     if (input->IsTextField() && input->IsReadOnly())
       return kRestrictionReadOnly;
+  }
+
+  // Check aria-readonly if supported by current role.
+  bool is_read_only;
+  if (SupportsARIAReadOnly() &&
+      HasAOMPropertyOrARIAAttribute(AOMBooleanProperty::kReadOnly,
+                                    is_read_only)) {
+    // ARIA overrides other readonly state markup.
+    return is_read_only ? kRestrictionReadOnly : kRestrictionNone;
   }
 
   // If a grid cell does not have it's own ARIA input restriction,
@@ -1854,10 +2197,9 @@ AccessibilityExpanded AXNodeObject::IsExpanded() const {
   if (!element)
     return kExpandedUndefined;
 
-  if (HTMLSelectMenuElement* select_menu =
-          HTMLSelectMenuElement::OwnerSelectMenu(element)) {
-    if (select_menu->ButtonPart() == element) {
-      return select_menu->open() ? kExpandedExpanded : kExpandedCollapsed;
+  if (auto* button = DynamicTo<HTMLButtonElement>(element)) {
+    if (auto* select_list = button->OwnerSelectList()) {
+      return select_list->open() ? kExpandedExpanded : kExpandedCollapsed;
     }
   }
 
@@ -1868,13 +2210,13 @@ AccessibilityExpanded AXNodeObject::IsExpanded() const {
                : kExpandedCollapsed;
   }
 
-  // For form controls that act as triggering elements for popups of type
-  // kPopup, then set aria-expanded=false when the popup is hidden, and
+  // For form controls that act as triggering elements for popovers of type
+  // kAuto, then set aria-expanded=false when the popover is hidden, and
   // aria-expanded=true when it is showing.
   if (auto* form_control = DynamicTo<HTMLFormControlElement>(element)) {
-    if (auto popup = form_control->popupTargetElement().element;
-        popup && popup->PopupType() == PopupValueType::kAuto) {
-      return popup->popupOpen() ? kExpandedExpanded : kExpandedCollapsed;
+    if (auto popover = form_control->popoverTargetElement().popover;
+        popover && popover->PopoverType() == PopoverValueType::kAuto) {
+      return popover->popoverOpen() ? kExpandedExpanded : kExpandedCollapsed;
     }
   }
 
@@ -2014,9 +2356,10 @@ unsigned AXNodeObject::HierarchicalLevel() const {
 
 String AXNodeObject::AutoComplete() const {
   // Check cache for auto complete state.
-  if (AXObjectCache().GetAutofillState(AXObjectID()) ==
-      WebAXAutofillState::kAutocompleteAvailable)
+  if (AXObjectCache().GetAutofillSuggestionAvailability(AXObjectID()) ==
+      WebAXAutofillSuggestionAvailability::kAutocompleteAvailable) {
     return "list";
+  }
 
   if (IsAtomicTextField() || IsARIATextField()) {
     const AtomicString& aria_auto_complete =
@@ -2134,7 +2477,7 @@ AXObject* AXNodeObject::InPageLinkTarget() const {
   String fragment = link_url.FragmentIdentifier();
   TreeScope& tree_scope = anchor->GetTreeScope();
   Node* target = tree_scope.FindAnchor(fragment);
-  AXObject* ax_target = AXObjectCache().GetOrCreate(target);
+  AXObject* ax_target = AXObjectCache().Get(target);
   if (!ax_target || !IsPotentialInPageLinkTarget(*ax_target->GetNode()))
     return AXObject::InPageLinkTarget();
 
@@ -2151,6 +2494,31 @@ AXObject* AXNodeObject::InPageLinkTarget() const {
     return nullptr;
 
   return ax_target;
+}
+
+const AtomicString& AXNodeObject::EffectiveTarget() const {
+  // The "target" attribute defines the target browser context and is supported
+  // on <a>, <area>, <base>, and <form>. Valid values are: "frame_name", "self",
+  // "blank", "top", and "parent", where "frame_name" is the value of the "name"
+  // attribute on any enclosing iframe.
+  //
+  // <area> is a subclass of <a>, while <base> provides the document's base
+  // target that any <a>'s or any <area>'s target can override.
+  // `HtmlAnchorElement::GetEffectiveTarget()` will take <base> into account.
+  //
+  // <form> is out of scope, because it affects the target to which the form is
+  // submitted, and could also be overridden by a "formTarget" attribute on e.g.
+  // a form's submit button. However, screen reader users have no need to know
+  // to which target (browser context) a form would be submitted.
+  const auto* anchor = DynamicTo<HTMLAnchorElement>(GetNode());
+  if (anchor) {
+    const AtomicString self_value("_self");
+    const AtomicString& effective_target = anchor->GetEffectiveTarget();
+    if (effective_target != self_value) {
+      return anchor->GetEffectiveTarget();
+    }
+  }
+  return AXObject::EffectiveTarget();
 }
 
 AccessibilityOrientation AXNodeObject::Orientation() const {
@@ -2215,7 +2583,7 @@ AXObject::AXObjectVector AXNodeObject::RadioButtonsInGroup() const {
     HeapVector<Member<HTMLInputElement>> html_radio_buttons =
         FindAllRadioButtonsWithSameName(node_radio_button);
     for (HTMLInputElement* radio_button : html_radio_buttons) {
-      AXObject* ax_radio_button = AXObjectCache().GetOrCreate(radio_button);
+      AXObject* ax_radio_button = AXObjectCache().Get(radio_button);
       if (ax_radio_button)
         radio_buttons.push_back(ax_radio_button);
     }
@@ -2242,8 +2610,10 @@ AXObject::AXObjectVector AXNodeObject::RadioButtonsInGroup() const {
 HeapVector<Member<HTMLInputElement>>
 AXNodeObject::FindAllRadioButtonsWithSameName(HTMLInputElement* radio_button) {
   HeapVector<Member<HTMLInputElement>> all_radio_buttons;
-  if (!radio_button || radio_button->type() != input_type_names::kRadio)
+  if (!radio_button ||
+      radio_button->FormControlType() != FormControlType::kInputRadio) {
     return all_radio_buttons;
+  }
 
   constexpr bool kTraverseForward = true;
   constexpr bool kTraverseBackward = false;
@@ -2371,10 +2741,12 @@ void AXNodeObject::GetTextStyleAndTextDecorationStyle(
   *text_strikethrough_style = ax::mojom::blink::TextDecorationStyle::kNone;
   *text_underline_style = ax::mojom::blink::TextDecorationStyle::kNone;
 
-  if (style->GetFontWeight() == BoldWeightValue())
+  if (style->GetFontWeight() == kBoldWeightValue) {
     *text_style |= TextStyleFlag(ax::mojom::blink::TextStyle::kBold);
-  if (style->GetFontDescription().Style() == ItalicSlopeValue())
+  }
+  if (style->GetFontDescription().Style() == kItalicSlopeValue) {
     *text_style |= TextStyleFlag(ax::mojom::blink::TextStyle::kItalic);
+  }
 
   for (const auto& decoration : style->AppliedTextDecorations()) {
     if (EnumHasFlags(decoration.Lines(), TextDecorationLine::kOverline)) {
@@ -2502,8 +2874,9 @@ String AXNodeObject::ImageDataUrl(const gfx::Size& max_size) const {
   Vector<char> pixel_storage(
       base::checked_cast<wtf_size_t>(info.computeByteSize(row_bytes)));
   SkPixmap pixmap(info, pixel_storage.data(), row_bytes);
-  if (!SkImage::MakeFromBitmap(bitmap)->readPixels(pixmap, 0, 0))
+  if (!SkImages::RasterFromBitmap(bitmap)->readPixels(pixmap, 0, 0)) {
     return String();
+  }
 
   // Encode as a PNG and return as a data url.
   std::unique_ptr<ImageDataBuffer> buffer = ImageDataBuffer::Create(pixmap);
@@ -2542,7 +2915,7 @@ RGBA32 AXNodeObject::BackgroundColor() const {
   if (!layout_object)
     return Color::kTransparent.Rgb();
 
-  if (IsWebArea()) {
+  if (IsA<Document>(GetNode())) {
     LocalFrameView* view = DocumentFrameView();
     if (view)
       return view->BaseBackgroundColor().Rgb();
@@ -2744,6 +3117,23 @@ int AXNodeObject::SetSize() const {
 bool AXNodeObject::ValueForRange(float* out_value) const {
   float value_now;
   if (HasAOMPropertyOrARIAAttribute(AOMFloatProperty::kValueNow, value_now)) {
+    // Adjustment when the aria-valuenow is less than aria-valuemin or greater
+    // than the aria-valuemax value.
+    // See https://w3c.github.io/aria/#authorErrorDefaultValuesTable.
+    float min_value, max_value;
+    if (MinValueForRange(&min_value)) {
+      if (value_now < min_value) {
+        *out_value = min_value;
+        return true;
+      }
+    }
+    if (MaxValueForRange(&max_value)) {
+      if (value_now > max_value) {
+        *out_value = max_value;
+        return true;
+      }
+    }
+
     *out_value = value_now;
     return true;
   }
@@ -2759,6 +3149,7 @@ bool AXNodeObject::ValueForRange(float* out_value) const {
   }
 
   // In ARIA 1.1, default values for aria-valuenow were changed as below.
+  // - meter: A value matching the implicit or explicitly set aria-valuemin.
   // - scrollbar, slider : half way between aria-valuemin and aria-valuemax
   // - separator : 50
   // - spinbutton : 0
@@ -2775,6 +3166,14 @@ bool AXNodeObject::ValueForRange(float* out_value) const {
     case ax::mojom::blink::Role::kSplitter: {
       *out_value = 50.0f;
       return true;
+    }
+    case ax::mojom::blink::Role::kMeter: {
+      float min_value;
+      if (MinValueForRange(&min_value)) {
+        *out_value = min_value;
+        return true;
+      }
+      [[fallthrough]];
     }
     case ax::mojom::blink::Role::kSpinButton: {
       *out_value = 0.0f;
@@ -2808,6 +3207,7 @@ bool AXNodeObject::MaxValueForRange(float* out_value) const {
   // for aria-valuemax were changed to 100. This change was made for
   // progressbar in ARIA 1.2.
   switch (AriaRoleAttribute()) {
+    case ax::mojom::blink::Role::kMeter:
     case ax::mojom::blink::Role::kProgressIndicator:
     case ax::mojom::blink::Role::kScrollBar:
     case ax::mojom::blink::Role::kSplitter:
@@ -2843,6 +3243,7 @@ bool AXNodeObject::MinValueForRange(float* out_value) const {
   // for aria-valuemin were changed to 0. This change was made for
   // progressbar in ARIA 1.2.
   switch (AriaRoleAttribute()) {
+    case ax::mojom::blink::Role::kMeter:
     case ax::mojom::blink::Role::kProgressIndicator:
     case ax::mojom::blink::Role::kScrollBar:
     case ax::mojom::blink::Role::kSplitter:
@@ -2859,17 +3260,30 @@ bool AXNodeObject::MinValueForRange(float* out_value) const {
 
 bool AXNodeObject::StepValueForRange(float* out_value) const {
   if (IsNativeSlider() || IsNativeSpinButton()) {
-    // AT may want to know whether a step value was explicitly provided or not,
-    // so return false if there was not one set.
-    if (!To<HTMLInputElement>(*GetNode())
-             .FastGetAttribute(html_names::kStepAttr)) {
+    auto step_range =
+        To<HTMLInputElement>(*GetNode()).CreateStepRange(kRejectAny);
+    auto step = step_range.Step().ToString().ToFloat();
+
+    // Provide a step if ATs incrementing slider should move by step, otherwise
+    // AT will move by 5%.
+    // If there are too few allowed stops (< 20), incrementing/decrementing
+    // the slider by 5% could get stuck, and therefore the step is exposed.
+    // The step is also exposed if moving by 5% would cause intermittent
+    // behavior where sometimes the slider would alternate by 1 or 2 steps.
+    // Therefore the final decision is to use the step if there are
+    // less than stops in the slider, otherwise, move by 5%.
+    float max = step_range.Maximum().ToString().ToFloat();
+    float min = step_range.Minimum().ToString().ToFloat();
+    int num_stops = base::saturated_cast<int>((max - min) / step);
+    constexpr int kNumStopsForFivePercentRule = 40;
+    if (num_stops >= kNumStopsForFivePercentRule) {
+      // No explicit step, and the step is very small -- don't expose a step
+      // so that Talkback will move by 5% increments.
       *out_value = 0.0f;
       return false;
     }
 
-    auto step =
-        To<HTMLInputElement>(*GetNode()).CreateStepRange(kRejectAny).Step();
-    *out_value = step.ToString().ToFloat();
+    *out_value = step;
     return std::isfinite(*out_value);
   }
 
@@ -2891,8 +3305,10 @@ KURL AXNodeObject::Url() const {
   if (IsLink())  // <area>, <link>, <html:a> or <svg:a>
     return GetElement()->HrefURL();
 
-  if (IsWebArea() && GetDocument())
+  if (IsWebArea()) {
+    DCHECK(GetDocument());
     return GetDocument()->Url();
+  }
 
   auto* html_image_element = DynamicTo<HTMLImageElement>(GetNode());
   if (IsImage() && html_image_element) {
@@ -2912,18 +3328,28 @@ KURL AXNodeObject::Url() const {
 
 AXObject* AXNodeObject::ChooserPopup() const {
   // When color & date chooser popups are visible, they can be found in the tree
-  // as a WebArea child of the <input> control itself.
+  // as a group child of the <input> control itself.
   switch (native_role_) {
     case ax::mojom::blink::Role::kColorWell:
+    case ax::mojom::blink::Role::kComboBoxSelect:
     case ax::mojom::blink::Role::kDate:
-    case ax::mojom::blink::Role::kDateTime: {
+    case ax::mojom::blink::Role::kDateTime:
+    case ax::mojom::blink::Role::kInputTime:
+    case ax::mojom::blink::Role::kTextFieldWithComboBox: {
       for (const auto& child : ChildrenIncludingIgnored()) {
-        if (child->IsWebArea())
-          return child;
+        if (IsA<Document>(child->GetNode())) {
+          return child.Get();
+        }
       }
       return nullptr;
     }
     default:
+#if DCHECK_IS_ON()
+      for (const auto& child : ChildrenIncludingIgnored()) {
+        DCHECK(!IsA<Document>(child->GetNode()))
+            << "Chooser popup exists for " << native_role_;
+      }
+#endif
       return nullptr;
   }
 }
@@ -3011,30 +3437,50 @@ String AXNodeObject::GetValueForControl() const {
     return aria_value_text;
   }
 
-  if (GetLayoutObject() && GetLayoutObject()->IsFileUploadControl())
-    return To<LayoutFileUploadControl>(GetLayoutObject())->FileTextValue();
-
   // Handle other HTML input elements that aren't text controls, like date and
   // time controls, by returning their value converted to text, with the
   // exception of checkboxes and radio buttons (which would return "on"), and
   // buttons which will return their name.
   // https://html.spec.whatwg.org/C/#dom-input-value
   if (const auto* input = DynamicTo<HTMLInputElement>(node)) {
-    if (input->type() == input_type_names::kFile)
+    if (input->FormControlType() == FormControlType::kInputFile) {
       return input->FileStatusText();
+    }
 
-    if (input->type() != input_type_names::kButton &&
-        input->type() != input_type_names::kCheckbox &&
-        input->type() != input_type_names::kImage &&
-        input->type() != input_type_names::kRadio &&
-        input->type() != input_type_names::kReset &&
-        input->type() != input_type_names::kSubmit) {
+    if (input->FormControlType() != FormControlType::kInputButton &&
+        input->FormControlType() != FormControlType::kInputCheckbox &&
+        input->FormControlType() != FormControlType::kInputImage &&
+        input->FormControlType() != FormControlType::kInputRadio &&
+        input->FormControlType() != FormControlType::kInputReset &&
+        input->FormControlType() != FormControlType::kInputSubmit) {
       return input->Value();
     }
   }
 
-  // An ARIA combobox can get value from inner contents.
   if (RoleValue() == ax::mojom::blink::Role::kComboBoxMenuButton) {
+    // An HTML <selectlist>'s button gets its value from the selected option.
+    if (auto* button = DynamicTo<HTMLButtonElement>(node)) {
+      if (auto* select_list = button->OwnerSelectList()) {
+        if (HTMLOptionElement* selected = select_list->selectedOption()) {
+          // TODO(accessibility) Because these <option> elements can contain
+          // anything, we need to create an AXObject for the selected option,
+          // and use ax_selected_option->ComputedName(). However, for now, the
+          // AXObject is not created because AXObject::IsRelevantSlotElement()
+          // returns false for the invisible slot parent. Also, strangely,
+          // selected->innerText()/GetInnerTextWithoutUpdate() are returning "".
+          // See the following content_browsertest:
+          // All/DumpAccessibilityTreeTest.AccessibilitySelectList/blink.
+          // TODO(crbug.com/1401767): DCHECK fails with synchronous
+          // serialization.
+          DCHECK(selected->firstChild())
+              << "There is a selected option but it has no DOM children.";
+          return selected->textContent();
+        }
+        return String();
+      }
+    }
+
+    // An ARIA combobox can get value from inner contents.
     AXObjectSet visited;
     return TextFromDescendants(visited, nullptr, false);
   }
@@ -3061,16 +3507,6 @@ void AXNodeObject::AriaDescribedbyElements(AXObjectVector& describedby) const {
 
 void AXNodeObject::AriaOwnsElements(AXObjectVector& owns) const {
   AccessibilityChildrenFromAOMProperty(AOMRelationListProperty::kOwns, owns);
-}
-
-// TODO(accessibility): Aria-dropeffect and aria-grabbed are deprecated in
-// aria 1.1 Also those properties are expected to be replaced by a new feature
-// in a future version of WAI-ARIA. After that we will re-implement them
-// following new spec.
-bool AXNodeObject::SupportsARIADragging() const {
-  const AtomicString& grabbed = GetAttribute(html_names::kAriaGrabbedAttr);
-  return EqualIgnoringASCIICase(grabbed, "true") ||
-         EqualIgnoringASCIICase(grabbed, "false");
 }
 
 ax::mojom::blink::Dropeffect AXNodeObject::ParseDropeffect(
@@ -3109,7 +3545,7 @@ void AXNodeObject::Dropeffects(
 
 ax::mojom::blink::HasPopup AXNodeObject::HasPopup() const {
   const AtomicString& has_popup =
-      GetAOMPropertyOrARIAAttribute(AOMStringProperty::kHasPopUp);
+      GetAOMPropertyOrARIAAttribute(AOMStringProperty::kHasPopup);
   if (!has_popup.IsNull()) {
     if (EqualIgnoringASCIICase(has_popup, "false"))
       return ax::mojom::blink::HasPopup::kFalse;
@@ -3140,12 +3576,32 @@ ax::mojom::blink::HasPopup AXNodeObject::HasPopup() const {
     return ax::mojom::blink::HasPopup::kListbox;
   }
 
-  if (AXObjectCache().GetAutofillState(AXObjectID()) !=
-      WebAXAutofillState::kNoSuggestions) {
+  if (AXObjectCache().GetAutofillSuggestionAvailability(AXObjectID()) !=
+      WebAXAutofillSuggestionAvailability::kNoSuggestions) {
     return ax::mojom::blink::HasPopup::kMenu;
   }
 
   return AXObject::HasPopup();
+}
+
+ax::mojom::blink::IsPopup AXNodeObject::IsPopup() const {
+  if (IsDetached() || !GetElement()) {
+    return ax::mojom::blink::IsPopup::kNone;
+  }
+  const auto* html_element = DynamicTo<HTMLElement>(GetElement());
+  if (!html_element) {
+    return ax::mojom::blink::IsPopup::kNone;
+  }
+  switch (html_element->PopoverType()) {
+    case PopoverValueType::kNone:
+      return ax::mojom::blink::IsPopup::kNone;
+    case PopoverValueType::kAuto:
+      return ax::mojom::blink::IsPopup::kAuto;
+    case PopoverValueType::kHint:
+      return ax::mojom::blink::IsPopup::kHint;
+    case PopoverValueType::kManual:
+      return ax::mojom::blink::IsPopup::kManual;
+  }
 }
 
 bool AXNodeObject::IsEditableRoot() const {
@@ -3197,12 +3653,12 @@ bool AXNodeObject::HasContentEditableAttributeSet() const {
 }
 
 // Returns the nearest block-level LayoutBlockFlow ancestor
-static LayoutBlockFlow* NonInlineBlockFlow(LayoutObject* object) {
+static LayoutBlockFlow* GetNearestBlockFlow(LayoutObject* object) {
   LayoutObject* current = object;
   while (current) {
-    auto* block_flow = DynamicTo<LayoutBlockFlow>(current);
-    if (block_flow && !block_flow->IsAtomicInlineLevel())
+    if (auto* block_flow = DynamicTo<LayoutBlockFlow>(current)) {
       return block_flow;
+    }
     current = current->Parent();
   }
 
@@ -3211,14 +3667,14 @@ static LayoutBlockFlow* NonInlineBlockFlow(LayoutObject* object) {
 }
 
 // Returns true if |r1| and |r2| are both non-null, both inline, and are
-// contained within the same non-inline LayoutBlockFlow.
-static bool IsInSameNonInlineBlockFlow(LayoutObject* r1, LayoutObject* r2) {
+// contained within the same LayoutBlockFlow.
+static bool IsInSameBlockFlow(LayoutObject* r1, LayoutObject* r2) {
   if (!r1 || !r2)
     return false;
   if (!r1->IsInline() || !r2->IsInline())
     return false;
-  LayoutBlockFlow* b1 = NonInlineBlockFlow(r1);
-  LayoutBlockFlow* b2 = NonInlineBlockFlow(r2);
+  LayoutBlockFlow* b1 = GetNearestBlockFlow(r1);
+  LayoutBlockFlow* b2 = GetNearestBlockFlow(r2);
   return b1 && b2 && b1 == b2;
 }
 
@@ -3234,14 +3690,14 @@ bool AXNodeObject::OnNativeSetValueAction(const String& string) {
     return false;
 
   auto* html_input_element = DynamicTo<HTMLInputElement>(*GetNode());
-  if (html_input_element && layout_object->IsTextFieldIncludingNG()) {
+  if (html_input_element && layout_object->IsTextField()) {
     html_input_element->SetValue(
         string, TextFieldEventBehavior::kDispatchInputAndChangeEvent);
     return true;
   }
 
   if (auto* text_area_element = DynamicTo<HTMLTextAreaElement>(*GetNode())) {
-    DCHECK(layout_object->IsTextAreaIncludingNG());
+    DCHECK(layout_object->IsTextArea());
     text_area_element->SetValue(
         string, TextFieldEventBehavior::kDispatchInputAndChangeEvent);
     return true;
@@ -3291,20 +3747,6 @@ String AXNodeObject::TextAlternative(
   if (!GetNode() && !GetLayoutObject())
     return String();
 
-  // Exclude offscreen objects inside a portal.
-  // NOTE: If an object is found to be offscreen, this also omits its children,
-  // which may not be offscreen in some cases.
-  Page* page = GetNode() ? GetNode()->GetDocument().GetPage() : nullptr;
-  if (page && page->InsidePortal()) {
-    LayoutRect bounds = GetBoundsInFrameCoordinates();
-    gfx::Size document_size =
-        GetNode()->GetDocument().GetLayoutView()->GetLayoutSize();
-    bool is_visible =
-        bounds.Intersects(LayoutRect(gfx::Point(), document_size));
-    if (!is_visible)
-      return String();
-  }
-
   // Step 2E from: http://www.w3.org/TR/accname-aam-1.1 -- value from control.
   // This must occur before 2C, because 2C is not applied if 2E will be:
   // 2C: "If traversal of the current node is due to recursion and the current
@@ -3325,7 +3767,7 @@ String AXNodeObject::TextAlternative(
       recursive, aria_label_or_description_root, visited, name_from,
       related_objects, name_sources, &found_text_alternative);
   if (found_text_alternative && !name_sources)
-    return text_alternative;
+    return MaybeAppendFileDescriptionToName(text_alternative);
 
   // Step 2D from: http://www.w3.org/TR/accname-aam-1.1  -- native markup.
   text_alternative =
@@ -3335,7 +3777,7 @@ String AXNodeObject::TextAlternative(
       !text_alternative.empty() ||
       name_from == ax::mojom::blink::NameFrom::kAttributeExplicitlyEmpty;
   if (has_text_alternative && !name_sources)
-    return text_alternative;
+    return MaybeAppendFileDescriptionToName(text_alternative);
 
   // Step 2F / 2G from: http://www.w3.org/TR/accname-aam-1.1 -- from content.
   if (aria_label_or_description_root || SupportsNameFromContents(recursive)) {
@@ -3361,32 +3803,25 @@ String AXNodeObject::TextAlternative(
           found_text_alternative = true;
           name_sources->back().text = text_alternative;
         } else {
-          return text_alternative;
+          return MaybeAppendFileDescriptionToName(text_alternative);
         }
       }
     }
   }
 
   // Step 2I from: http://www.w3.org/TR/accname-aam-1.1
-  name_from = ax::mojom::blink::NameFrom::kTitle;
-  if (name_sources) {
-    name_sources->push_back(NameSource(found_text_alternative, kTitleAttr));
-    name_sources->back().type = name_from;
-  }
-  const AtomicString& title = GetAttribute(kTitleAttr);
-  if (!title.empty()) {
-    text_alternative = title;
-    name_from = ax::mojom::blink::NameFrom::kTitle;
+  String resulting_text = TextAlternativeFromTooltip(
+      name_from, name_sources, &found_text_alternative, &text_alternative,
+      related_objects);
+  if (!resulting_text.empty()) {
     if (name_sources) {
-      found_text_alternative = true;
-      name_sources->back().text = text_alternative;
+      text_alternative = resulting_text;
     } else {
-      return text_alternative;
+      return resulting_text;
     }
   }
 
   name_from = ax::mojom::blink::NameFrom::kNone;
-
   if (name_sources && found_text_alternative) {
     for (NameSource& name_source : *name_sources) {
       if (!name_source.text.IsNull() && !name_source.superseded) {
@@ -3406,15 +3841,36 @@ static bool ShouldInsertSpaceBetweenObjectsIfNeeded(
     AXObject* next,
     ax::mojom::blink::NameFrom last_used_name_from,
     ax::mojom::blink::NameFrom name_from) {
-  // If we're going between two layoutObjects that are in separate
+  LayoutObject* next_layout = next->GetLayoutObject();
+  LayoutObject* prev_layout = previous->GetLayoutObject();
+
+  // If we're going between two LayoutObjects that are in separate
   // LayoutBoxes, add whitespace if it wasn't there already. Intuitively if
   // you have <span>Hello</span><span>World</span>, those are part of the same
   // LayoutBox so we should return "HelloWorld", but given
   // <div>Hello</div><div>World</div> the strings are in separate boxes so we
   // should return "Hello World".
-  if (!IsInSameNonInlineBlockFlow(next->GetLayoutObject(),
-                                  previous->GetLayoutObject()))
+  // https://www.w3.org/TR/css-display-3/#the-display-properties
+  if (!IsInSameBlockFlow(next_layout, prev_layout)) {
     return true;
+  }
+
+  // Even if we are in the same block flow, let's make sure to add whitespace
+  // if the layout objects define new formatting contexts for their children,
+  // as is the case with the inline-* family of display properties.
+  // So we want the following:
+  //    <span style="display:inline-block;">Hello</span><span>World</span>
+  //    <span style="display:inline-flex;">Hello</span><span>World</span>
+  //    <span style="display:inline-grid;">Hello</span><span>World</span>
+  //    <span style="display:inline-table;">Hello</span><span>World</span>
+  // to return "Hello World". See "inner display type" in the CSS Display 3.0
+  // spec: https://www.w3.org/TR/css-display-3/#the-display-properties
+  CHECK(next_layout);
+  CHECK(prev_layout);
+  if (next_layout->IsAtomicInlineLevel() ||
+      prev_layout->IsAtomicInlineLevel()) {
+    return true;
+  }
 
   // Even if it is in the same inline block flow, if we are using a text
   // alternative such as an ARIA label or HTML title, we should separate
@@ -3431,6 +3887,7 @@ static bool ShouldInsertSpaceBetweenObjectsIfNeeded(
     case ax::mojom::blink::NameFrom::kRelatedElement:
     case ax::mojom::blink::NameFrom::kTitle:
     case ax::mojom::blink::NameFrom::kValue:
+    case ax::mojom::blink::NameFrom::kPopoverAttribute:
       return true;
   }
   switch (name_from) {
@@ -3444,6 +3901,7 @@ static bool ShouldInsertSpaceBetweenObjectsIfNeeded(
     case ax::mojom::blink::NameFrom::kRelatedElement:
     case ax::mojom::blink::NameFrom::kTitle:
     case ax::mojom::blink::NameFrom::kValue:
+    case ax::mojom::blink::NameFrom::kPopoverAttribute:
       return true;
   }
 
@@ -3451,9 +3909,6 @@ static bool ShouldInsertSpaceBetweenObjectsIfNeeded(
   // using a space.
   if (previous->IsControl() || next->IsControl())
     return true;
-
-  if (!RuntimeEnabledFeatures::LayoutNGBlockInInlineEnabled())
-    return false;
 
   // When |previous| and |next| are in same inline formatting context, we
   // may have block-in-inline between |previous| and |next|.
@@ -3475,9 +3930,8 @@ static bool ShouldInsertSpaceBetweenObjectsIfNeeded(
   //      LayoutBlockFlow (anonymous)
   //        LayoutText "def" <= next
   // See accessibility/name-calc-aria-hidden.html
-  const auto* next_layout_object = next->GetLayoutObject();
   for (auto* layout_object = previous->GetLayoutObject();
-       layout_object && layout_object != next_layout_object;
+       layout_object && layout_object != next_layout;
        layout_object = layout_object->NextInPreOrder()) {
     if (layout_object->IsBlockInInline())
       return true;
@@ -3506,7 +3960,17 @@ String AXNodeObject::TextFromDescendants(
 #if defined(AX_FAIL_FAST_BUILD)
   base::AutoReset<bool> auto_reset(&is_computing_text_from_descendants_, true);
 #endif
-  for (AXObject* child : children) {
+  wtf_size_t num_children = children.size();
+  for (wtf_size_t index = 0; index < num_children; index++) {
+    DCHECK_EQ(children.size(), num_children);
+    if (index >= children.size()) {
+      // TODO(accessibility) Remove this condition once we solve all causes of
+      // the child list being altered during this loop.
+      break;
+    }
+    AXObject* child = children[index];
+    DCHECK(child);
+    DCHECK(!child->IsDetached()) << child->ToString(true, true);
     constexpr size_t kMaxDescendantsForTextAlternativeComputation = 100;
     if (visited.size() > kMaxDescendantsForTextAlternativeComputation)
       break;
@@ -3714,13 +4178,32 @@ bool AXNodeObject::HasValidHTMLTableStructureAndLayout() const {
   //   In that case the children will still be added via AddNodeChildren(),
   //   so that no content is lost.
   // See comments in AddTableChildren() for more information about valid tables.
-  for (Element* child = ElementTraversal::FirstChild(*GetElement()); child;
-       child = ElementTraversal::NextSibling(*child)) {
-    if (!IsA<HTMLTableSectionElement>(child) &&
-        !IsA<HTMLTableCaptionElement>(child) &&
-        !child->HasTagName(html_names::kColgroupTag)) {
-      return false;
+  auto* table = To<HTMLTableElement>(GetNode());
+  auto* thead = table->tHead();
+  auto* tfoot = table->tFoot();
+  for (Node* node = LayoutTreeBuilderTraversal::FirstChild(*GetElement()); node;
+       node = LayoutTreeBuilderTraversal::NextSibling(*node)) {
+    if (Element* child = DynamicTo<Element>(node)) {
+      if (child == thead || child == tfoot) {
+        // Only 1 thead and 1 tfoot are allowed.
+        continue;
+      }
+      if (IsA<HTMLTableSectionElement>(child) &&
+          child->HasTagName(html_names::kTbodyTag)) {
+        // Multiple <tbody>s are valid, but only 1 thead or tfoot.
+        continue;
+      }
+      if (!child->GetLayoutObject() &&
+          child->HasTagName(html_names::kColgroupTag)) {
+        continue;
+      }
+      if (IsA<HTMLTableCaptionElement>(child) && child == table->caption()) {
+        continue;  // Only one caption is valid.
+      }
+    } else if (!node->GetLayoutObject()) {
+      continue;
     }
+    return false;
   }
 
   return true;
@@ -3790,7 +4273,7 @@ int AXNodeObject::TextOffsetInFormattingContext(int offset) const {
   // Layout br (subclass of layout text), e.g. <p><br></p>.
 
   if (layout_obj->IsLayoutInline()) {
-    // The NGOffsetMapping class doesn't map layout inline objects to their text
+    // The OffsetMapping class doesn't map layout inline objects to their text
     // mappings because such an operation could be ambiguous. An inline object
     // may have another inline object inside it. For example,
     // <span><span>Inner</span outer</span>. We need to recursively retrieve the
@@ -3815,23 +4298,24 @@ int AXNodeObject::TextOffsetInFormattingContext(int offset) const {
   // compute offset mappings for empty LayoutText objects. Other text objects
   // (such as some list markers) are not affected.
   if (const LayoutText* layout_text = DynamicTo<LayoutText>(layout_obj)) {
-    if (layout_text->GetText().empty())
+    if (layout_text->HasEmptyText()) {
       return AXObject::TextOffsetInFormattingContext(offset);
+    }
   }
 
   LayoutBlockFlow* formatting_context =
-      NGOffsetMapping::GetInlineFormattingContextOf(*layout_obj);
+      OffsetMapping::GetInlineFormattingContextOf(*layout_obj);
   if (!formatting_context || formatting_context == layout_obj)
     return AXObject::TextOffsetInFormattingContext(offset);
 
   // If "formatting_context" is not a Layout NG object, the offset mappings will
   // be computed on demand and cached.
-  const NGOffsetMapping* inline_offset_mapping =
-      NGInlineNode::GetOffsetMapping(formatting_context);
+  const OffsetMapping* inline_offset_mapping =
+      InlineNode::GetOffsetMapping(formatting_context);
   if (!inline_offset_mapping)
     return AXObject::TextOffsetInFormattingContext(offset);
 
-  const base::span<const NGOffsetMappingUnit> mapping_units =
+  const base::span<const OffsetMappingUnit> mapping_units =
       inline_offset_mapping->GetMappingUnitsForLayoutObject(*layout_obj);
   if (mapping_units.empty())
     return AXObject::TextOffsetInFormattingContext(offset);
@@ -3842,72 +4326,114 @@ int AXNodeObject::TextOffsetInFormattingContext(int offset) const {
 // Inline text boxes.
 //
 
+bool AXNodeObject::ShouldLoadInlineTextBoxes() const {
+  CHECK(!IsDetached());
+
+  if (!CanHaveInlineTextBoxChildren(this)) {
+    return false;
+  }
+
+  if (!AXObjectCache().GetAXMode().has_mode(ui::AXMode::kInlineTextBoxes)) {
+    return false;
+  }
+
+#if defined(REDUCE_AX_INLINE_TEXTBOXES)
+  // On Android, once an object has loaded inline text boxes, it will keep
+  // them refreshed.
+  return always_load_inline_text_boxes_;
+#else
+  // Other platforms keep all inline text boxes in the tree and refreshed,
+  // depending on the AXMode.
+  return true;
+#endif
+}
+
 void AXNodeObject::LoadInlineTextBoxes() {
+#if DCHECK_IS_ON()
+  DCHECK(GetDocument()->Lifecycle().GetState() >=
+         DocumentLifecycle::kLayoutClean)
+      << "Unclean document at lifecycle "
+      << GetDocument()->Lifecycle().ToString();
+#endif
+
   std::queue<AXID> work_queue;
   work_queue.push(AXObjectID());
 
   while (!work_queue.empty()) {
     AXObject* work_obj = AXObjectCache().ObjectFromAXID(work_queue.front());
     work_queue.pop();
-    if (!work_obj || !work_obj->AccessibilityIsIncludedInTree())
+    if (!work_obj || !work_obj->LastKnownIsIncludedInTreeValue()) {
       continue;
+    }
 
-    if (ui::CanHaveInlineTextBoxChildren(work_obj->RoleValue())) {
+    if (CanHaveInlineTextBoxChildren(work_obj)) {
       if (work_obj->CachedChildrenIncludingIgnored().empty()) {
         // We only need to add inline textbox children if they aren't present.
         // Although some platforms (e.g. Android), load inline text boxes
         // on subtrees that may later be stale, once they are stale, the old
         // inline text boxes are cleared because SetNeedsToUpdateChildren()
         // calls ClearChildren().
-        work_obj->ForceAddInlineTextBoxChildren();
+        work_obj->LoadInlineTextBoxesHelper();
       }
     } else {
       for (const auto& child : work_obj->ChildrenIncludingIgnored())
         work_queue.push(child->AXObjectID());
     }
   }
+
+  // If the work was deferred via ChildrenChanged(), update accessibility
+  // to force that work to be performed now.
+  if (!AXObjectCache().IsProcessingDeferredEvents()) {
+    AXObjectCache().UpdateAXForAllDocuments();
+  }
 }
 
-void AXNodeObject::ForceAddInlineTextBoxChildren() {
-  AddInlineTextBoxChildren(true /*force*/);
-  children_dirty_ = false;  // Avoid adding these children twice.
+void AXNodeObject::LoadInlineTextBoxesHelper() {
+  // The inline textbox children start empty.
+  DCHECK(CachedChildrenIncludingIgnored().empty());
+
+#if defined(REDUCE_AX_INLINE_TEXTBOXES)
+  // Keep inline text box children up-to-date for this object in the future.
+  // This is only necessary on Android, which tries to skip inline text boxes
+  // for most objects.
+  always_load_inline_text_boxes_ = true;
+#endif
+
+  if (AXObjectCache().IsProcessingDeferredEvents()) {
+    // Can only add new objects while processing deferred events.
+    AddInlineTextBoxChildren();
+    // Avoid adding these children twice.
+    SetNeedsToUpdateChildren(false);
+    // If inline text box children were added, mark the node dirty so that the
+    // results are serialized.
+    if (!CachedChildrenIncludingIgnored().empty()) {
+      AXObjectCache().AddDirtyObjectToSerializationQueue(
+          this, /*subtree*/ false, ax::mojom::blink::EventFrom::kNone,
+          ax::mojom::blink::Action::kNone, {});
+    }
+  } else {
+    // Wait until processing deferred events.
+    AXObjectCache().ChildrenChanged(this);
+  }
 }
 
-void AXNodeObject::AddInlineTextBoxChildren(bool force) {
-  Document* document = GetDocument();
-  if (!document) {
-    NOTREACHED();
-    return;
-  }
-
-  Settings* settings = document->GetSettings();
-  if (!force &&
-      (!settings || !settings->GetInlineTextBoxAccessibilityEnabled())) {
-    return;
-  }
-
-  if (!GetLayoutObject() || !GetLayoutObject()->IsText())
-    return;
-
-  if (GetLayoutObject()->NeedsLayout()) {
-    // If a LayoutText or a LayoutBR needs layout, its inline text boxes are
-    // either nonexistent or invalid, so defer until the layout happens and the
-    // layoutObject calls AXObjectCacheImpl::inlineTextBoxesUpdated.
-    return;
-  }
-
-  if (LastKnownIsIgnoredValue()) {
-    // Inline textboxes are included if and only if the parent is unignored.
-    // If the parent is ignored but included in tree, the inline textbox is
-    // still withheld.
-    return;
-  }
+void AXNodeObject::AddInlineTextBoxChildren() {
+  CHECK(GetDocument());
+  CHECK(ShouldLoadInlineTextBoxes());
+  CHECK(GetLayoutObject());
+  GetLayoutObject()->CheckIsNotDestroyed();
+  CHECK(GetLayoutObject()->IsText());
+  CHECK(!GetLayoutObject()->NeedsLayout());
+  CHECK(AXObjectCache().GetAXMode().has_mode(ui::AXMode::kInlineTextBoxes));
+  CHECK(!AXObjectCache().GetAXMode().HasExperimentalFlags(
+      ui::AXMode::kExperimentalFormControls))
+      << "Form controls mode should not have inline text boxes turned on.";
+  CHECK(AXObjectCache().IsProcessingDeferredEvents());
 
   auto* layout_text = To<LayoutText>(GetLayoutObject());
-  for (scoped_refptr<AbstractInlineTextBox> box =
-           layout_text->FirstAbstractInlineTextBox();
-       box.get(); box = box->NextInlineTextBox()) {
-    AXObject* ax_box = AXObjectCache().GetOrCreate(box.get(), this);
+  for (auto* box = layout_text->FirstAbstractInlineTextBox(); box;
+       box = box->NextInlineTextBox()) {
+    AXObject* ax_box = AXObjectCache().GetOrCreate(box, this);
     if (!ax_box)
       continue;
 
@@ -3921,8 +4447,7 @@ void AXNodeObject::AddValidationMessageChild() {
   // event is needed in AXObjectCacheImpl::ValidationMessageObjectIfInvalid().
   DCHECK_EQ(children_.size(), 0U)
       << "Validation message must be the first child";
-  AddChildAndCheckIncluded(AXObjectCache().ValidationMessageObjectIfInvalid(
-      /* suppress children changed, already processing that */ false));
+  AddChildAndCheckIncluded(AXObjectCache().ValidationMessageObjectIfInvalid());
 }
 
 void AXNodeObject::AddImageMapChildren() {
@@ -3933,8 +4458,8 @@ void AXNodeObject::AddImageMapChildren() {
   HTMLImageElement* curr_image_element = DynamicTo<HTMLImageElement>(GetNode());
   DCHECK(curr_image_element);
   DCHECK(curr_image_element->IsLink());
-  String usemap = curr_image_element->FastGetAttribute(html_names::kUsemapAttr);
-  DCHECK(!usemap.empty());
+  DCHECK(
+      !curr_image_element->FastGetAttribute(html_names::kUsemapAttr).empty());
 
   // Even though several images can point to the same map via usemap, only
   // use one reported via HTMLImageMapElement::ImageElement(), which is always
@@ -3954,32 +4479,10 @@ void AXNodeObject::AddImageMapChildren() {
 
   // Is this the primary image for this map?
   if (primary_image_element != curr_image_element) {
-    // No, the current image (for |this|) is not the primary image.
-    // Therefore, do not add area children to it.
-    AXObject* ax_primary_image =
-        AXObjectCache().GetOrCreate(primary_image_element);
-    if (ax_primary_image &&
-        ax_primary_image->ChildCountIncludingIgnored() == 0 &&
-        NodeTraversal::FirstChild(*map)) {
-      // The primary image still needs to add the area children, and there's at
-      // least one to add.
-      AXObjectCache().ChildrenChanged(primary_image_element);
-    }
     return;
   }
 
   // Yes, this is the primary image.
-
-  // If the children were part of a different parent, notify that parent that
-  // its children have changed.
-  if (AXObject* ax_previous_parent = AXObjectCache().GetAXImageForMap(*map)) {
-    if (ax_previous_parent != this) {
-      DCHECK(ax_previous_parent->GetNode());
-      AXObjectCache().ChildrenChangedWithCleanLayout(
-          ax_previous_parent->GetNode(), ax_previous_parent);
-      ax_previous_parent->ClearChildren();
-    }
-  }
 
   // Add the children to |this|.
   Node* child = LayoutTreeBuilderTraversal::FirstChild(*map);
@@ -4000,68 +4503,10 @@ void AXNodeObject::AddPopupChildren() {
   auto* html_input_element = DynamicTo<HTMLInputElement>(GetNode());
   if (html_input_element) {
     AddChildAndCheckIncluded(html_input_element->PopupRootAXObject());
-    return;
   }
 }
 
-bool AXNodeObject::CanAddLayoutChild(LayoutObject& child) {
-  if (child.IsAnonymous())
-    return true;
-
-  // An non-anonymous layout object (has a DOM node) is only reached when a
-  // pseudo element is inside another pseudo element.
-  // This is because layout object traversal only occurs for pseudo element
-  // subtrees -- see AXObject::ShouldUseLayoutObjectTraversalForChildren().
-  // The only way a node will occur inside of that subtree is if it's another
-  // pseudo element.
-  DCHECK(child.GetNode()->IsPseudoElement());
-
-  // ---------------------------------------------------------------------------
-  // Under certain circumstances the LayoutTreeBuilderTraversal and LayoutObject
-  // trees do not match, e.g. for the combination of ::before/::after and
-  // ::marker pseudo elements in legacy layout.
-  // In this case, there is a danger that the AXObject created for |child| will
-  // be added in two places.Unfortunately, this requires a slow check.
-  // For more info, see discussion here:
-  // https://crrev.com/c/chromium/src/+/3591572/9/third_party/blink/renderer/modules/accessibility/ax_node_object.cc#3973
-  // TODO(accessibility) Remove this once legacy layout is completely removed,
-  // as this problem will go away.
-  AXObject* ax_dom_parent = AXObjectCache().SafeGet(
-      LayoutTreeBuilderTraversal::Parent(*child.GetNode()));
-  if (ax_dom_parent &&
-      !ax_dom_parent->ShouldUseLayoutObjectTraversalForChildren()) {
-    DCHECK_NE(ax_dom_parent, this);
-    for (Node* child_node =
-             LayoutTreeBuilderTraversal::FirstChild(*ax_dom_parent->GetNode());
-         child_node;
-         child_node = LayoutTreeBuilderTraversal::NextSibling(*child_node)) {
-      if (child_node == child.GetNode()) {
-        // Different AX parent would have the same AX child (via
-        // LayoutTreeBuilderTraversal).
-        return false;
-      }
-    }
-  }
-  // ---------------------------------------------------------------------------
-
-  return true;
-}
-
-#if DCHECK_IS_ON()
-#define CHECK_NO_OTHER_PARENT_FOR(child)                                \
-  AXObject* ax_preexisting = AXObjectCache().Get(child);                \
-  DCHECK(!ax_preexisting || !ax_preexisting->CachedParentObject() ||    \
-         ax_preexisting->CachedParentObject() == this)                  \
-      << "Newly added child can't have a different preexisting parent:" \
-      << "\nChild = " << ax_preexisting->ToString(true, true)           \
-      << "\nNew parent = " << ToString(true, true)                      \
-      << "\nPreexisting parent = "                                      \
-      << ax_preexisting->CachedParentObject()->ToString(true, true);
-#else
-#define CHECK_NO_OTHER_PARENT_FOR(child) (void(0))
-#endif
-
-void AXNodeObject::AddLayoutChildren() {
+void AXNodeObject::AddPseudoElementChildrenFromLayoutTree() {
   // Children are added this way only for pseudo-element subtrees.
   // See AXObject::ShouldUseLayoutObjectTraversalForChildren().
   if (!GetLayoutObject()) {
@@ -4071,13 +4516,10 @@ void AXNodeObject::AddLayoutChildren() {
   }
   LayoutObject* child = GetLayoutObject()->SlowFirstChild();
   while (child) {
-    if (CanAddLayoutChild(*child)) {
-      CHECK_NO_OTHER_PARENT_FOR(child);
-      // All added pseudo element desecendants are included in the tree.
-      if (AXObject* ax_child = AXObjectCache().GetOrCreate(child, this)) {
-        DCHECK(AXObjectCacheImpl::IsRelevantPseudoElementDescendant(*child));
-        AddChildAndCheckIncluded(ax_child);
-      }
+    // All added pseudo element descendants are included in the tree.
+    if (AXObject* ax_child = AXObjectCache().GetOrCreate(child, this)) {
+      DCHECK(AXObjectCacheImpl::IsRelevantPseudoElementDescendant(*child));
+      AddChildAndCheckIncluded(ax_child);
     }
     child = child->NextSibling();
   }
@@ -4108,7 +4550,6 @@ void AXNodeObject::AddAccessibleNodeChildren() {
     return;
 
   for (const auto& child : accessible_node->GetChildren()) {
-    CHECK_NO_OTHER_PARENT_FOR(child);
     AddChildAndCheckIncluded(AXObjectCache().GetOrCreate(child, this));
   }
 }
@@ -4137,16 +4578,18 @@ void AXNodeObject::AddChildrenImpl() {
     return;                                                               \
   }
 
-  DCHECK(children_dirty_);
+  CHECK(NeedsToUpdateChildren());
 
   if (!CanHaveChildren()) {
-    NOTREACHED()
+    // TODO(crbug.com/1407397): Make sure this is no longer firing then
+    // transform this block to CHECK(CanHaveChildren());
+    DUMP_WILL_BE_NOTREACHED_NORETURN()
         << "Should not reach AddChildren() if CanHaveChildren() is false.\n"
         << ToString(true, true);
     return;
   }
 
-  if (ui::CanHaveInlineTextBoxChildren(RoleValue())) {
+  if (ShouldLoadInlineTextBoxes() && HasLayoutText(this)) {
     AddInlineTextBoxChildren();
     CHECK_ATTACHED();
     return;
@@ -4167,7 +4610,7 @@ void AXNodeObject::AddChildrenImpl() {
   if (HasValidHTMLTableStructureAndLayout())
     AddTableChildren();
   else if (ShouldUseLayoutObjectTraversalForChildren())
-    AddLayoutChildren();
+    AddPseudoElementChildrenFromLayoutTree();
   else
     AddNodeChildren();
   CHECK_ATTACHED();
@@ -4201,12 +4644,12 @@ void AXNodeObject::AddChildren() {
          "and add children on: "
       << ToString(true, true);
   SANITIZER_CHECK(!is_adding_children_)
-      << " Reentering method on " << GetNode();
+      << " Reentering method on " << ToString(true, true);
   base::AutoReset<bool> reentrancy_protector(&is_adding_children_, true);
 #endif
 
   AddChildrenImpl();
-  children_dirty_ = false;
+  SetNeedsToUpdateChildren(false);
 
 #if DCHECK_IS_ON()
   // All added children must be attached.
@@ -4224,6 +4667,7 @@ void AXNodeObject::AddNodeChild(Node* node) {
     return;
 
   AXObject* ax_child = AXObjectCache().Get(node);
+  CHECK(!ax_child || !ax_child->IsDetached());
   // Should not have another parent unless owned.
   if (AXObjectCache().IsAriaOwned(ax_child))
     return;  // Do not add owned children to their natural parent.
@@ -4235,9 +4679,12 @@ void AXNodeObject::AddNodeChild(Node* node) {
 #endif
 
   if (!ax_child) {
-    ax_child = AXObjectCache().GetOrCreate(node, this);
-    if (!ax_child)
+    ax_child =
+        AXObjectCache().CreateAndInit(node, node->GetLayoutObject(), this);
+    if (!ax_child) {
       return;
+    }
+    CHECK(!ax_child->IsDetached());
   }
 
   AddChild(ax_child);
@@ -4318,9 +4765,7 @@ void AXNodeObject::AddChildAndCheckIncluded(AXObject* child,
                                             bool is_from_aria_owns) {
   if (!child)
     return;
-  DCHECK(child->AccessibilityIsIncludedInTree())
-      << "A parent " << ToString(true, true) << "\n    ... tried to add child "
-      << child->ToString(true, true);
+  DCHECK(child->LastKnownIsIncludedInTreeValue());
   AddChild(child, is_from_aria_owns);
 }
 
@@ -4344,14 +4789,14 @@ void AXNodeObject::InsertChild(AXObject* child,
   // - For a reused, older object, it may need to be changed to a new parent.
   child->SetParent(this);
 
-#if DCHECK_IS_ON()
-  child->EnsureCorrectParentComputation();
-#endif
-
+  if (ChildrenNeedToUpdateCachedValues()) {
+    child->InvalidateCachedValues();
+  }
   // Update cached values preemptively, but don't allow children changed to be
-  // called if ignored change, we are already recomputing children and don't
-  // want to recurse.
-  child->UpdateCachedAttributeValuesIfNeeded(false);
+  // called on the parent if the ignored state changes, as we are already
+  // recomputing children and don't want to recurse.
+  child->UpdateCachedAttributeValuesIfNeeded(
+      /*notify_parent_of_ignored_changes*/ false);
 
   if (!child->LastKnownIsIncludedInTreeValue()) {
     DCHECK(!is_from_aria_owns)
@@ -4389,29 +4834,15 @@ void AXNodeObject::InsertChild(AXObject* child,
 
 bool AXNodeObject::CanHaveChildren() const {
   DCHECK(!IsDetached());
-  DCHECK(!IsA<HTMLMapElement>(GetNode()));
-
-  // Placeholder gets exposed as an attribute on the input accessibility node,
-  // so there's no need to add its text children. Placeholder text is a separate
-  // node that gets removed when it disappears, so this will only be present if
-  // the placeholder is visible.
-  if (GetElement() && GetElement()->ShadowPseudoId() ==
-                          shadow_element_names::kPseudoInputPlaceholder) {
-    return false;
-  }
-
-  if (IsA<HTMLBRElement>(GetNode()) &&
-      (!GetLayoutObject() || !GetLayoutObject()->IsBR())) {
-    // A <br> element that is not treated as a line break could occur when the
-    // <br> element has DOM children. A <br> does not usually have DOM children,
-    // but there is nothing preventing a script from creating this situation.
-    // This anomalous child content is not rendered, and therefore AXObjects
-    // should not be created for the children. Enforcing that <br>s to only have
-    // children when they are line breaks also helps create consistency: any AX
-    // child of a <br> will always be an AXInlineTextBox.
-    return false;
-  }
-
+  // Notes:
+  // * Native text fields expose any children they might have, complying
+  // with browser-side expectations that editable controls have children
+  // containing the actual text content.
+  // * ARIA roles with childrenPresentational:true in the ARIA spec expose
+  // their contents to the browser side, allowing platforms to decide whether
+  // to make them a leaf, ensuring that focusable content cannot be hidden,
+  // and improving stability in Blink.
+  bool result = !GetElement() || AXObject::CanHaveChildren(*GetElement());
   switch (native_role_) {
     case ax::mojom::blink::Role::kCheckBox:
     case ax::mojom::blink::Role::kListBoxOption:
@@ -4426,29 +4857,24 @@ bool AXNodeObject::CanHaveChildren() const {
     case ax::mojom::blink::Role::kSplitter:
     case ax::mojom::blink::Role::kSwitch:
     case ax::mojom::blink::Role::kTab:
-      return false;
+      DCHECK(!result) << "Expected to disallow children for:"
+                      << "\n* Node: " << GetNode()
+                      << "\n* Layout Object: " << GetLayoutObject()
+                      << "\n* Native role: " << native_role_
+                      << "\n* Aria role: " << AriaRoleAttribute();
+      break;
     case ax::mojom::blink::Role::kComboBoxSelect:
     case ax::mojom::blink::Role::kPopUpButton:
-    case ax::mojom::blink::Role::kLineBreak:
     case ax::mojom::blink::Role::kStaticText:
       // Note: these can have AXInlineTextBox children, but when adding them, we
       // also check AXObjectCache().InlineTextBoxAccessibilityEnabled().
-      return true;
+      DCHECK(result) << "Expected to allow children for " << GetElement()
+                     << " on role " << native_role_;
+      break;
     default:
       break;
   }
-
-  // Allow native text fields to expose any children they might have, complying
-  // with browser-side expectations that editable controls have children
-  // containing the actual text content.
-  if (blink::EnclosingTextControl(GetNode()))
-    return true;
-
-  // ARIA roles with childrenPresentational:true in the ARIA spec expose
-  // their contents to the browser side, allowing platforms to decide whether
-  // to make them a leaf, ensuring that focusable content cannot be hidden,
-  // and improving stability in Blink.
-  return true;
+  return result;
 }
 
 //
@@ -4474,8 +4900,16 @@ double AXNodeObject::EstimatedLoadingProgress() const {
 Element* AXNodeObject::ActionElement() const {
   const AXObject* current = this;
 
-  if (!current->GetElement())
-    return nullptr;  // Do not expose action element for text or document.
+  if (blink::IsA<blink::Document>(current->GetNode()))
+    return nullptr;  // Do not expose action element for document.
+
+  // In general, we look an action element up only for AXObjects that have a
+  // backing Element. We make an exception for text nodes and pseudo elements
+  // because we also want these to expose a default action when any of their
+  // ancestors is clickable. We have found Windows ATs relying on this behavior
+  // (see https://crbug.com/1382034).
+  DCHECK(current->GetElement() || current->IsTextObject() ||
+         current->ShouldUseLayoutObjectTraversalForChildren());
 
   while (current) {
     // Handles clicks or is a textfield and is not a disabled form control.
@@ -4526,7 +4960,7 @@ Node* AXNodeObject::GetNode() const {
       << "If there is an associated layout object, its node should match the "
          "associated node of this accessibility object.\n"
       << ToString(true, true);
-  return node_;
+  return node_.Get();
 }
 
 // TODO(chrishall): consider merging this with AXObject::Language in followup.
@@ -4536,7 +4970,7 @@ AtomicString AXNodeObject::Language() const {
 
   // If it's the root, get the computed language for the document element,
   // because the root LayoutObject doesn't have the right value.
-  if (RoleValue() == ax::mojom::blink::Role::kRootWebArea) {
+  if (IsWebArea()) {
     Element* document_element = GetDocument()->documentElement();
     if (!document_element)
       return g_empty_atom;
@@ -4592,17 +5026,36 @@ const AtomicString& AXNodeObject::GetInternalsAttribute(
   return element.EnsureElementInternals().FastGetAttribute(attribute);
 }
 
+bool AXNodeObject::OnNativeBlurAction() {
+  Document* document = GetDocument();
+  Node* node = GetNode();
+  if (!document || !node) {
+    return false;
+  }
+
+  // An AXObject's node will always be of type `Element`, `Document` or
+  // `Text`. If the object we're currently on is associated with the currently
+  // focused element or the document object, we want to clear the focus.
+  // Otherwise, no modification is needed.
+  Element* element = GetElement();
+  if (element) {
+    element->blur();
+    return true;
+  }
+
+  if (IsA<Document>(GetNode())) {
+    document->ClearFocusedElement();
+    return true;
+  }
+
+  return false;
+}
+
 bool AXNodeObject::OnNativeFocusAction() {
-  // Checking if node is focusable in a native focus action requires that we
-  // have updated style and layout tree, since the focus check relies on the
-  // existence of layout objects to determine the result. However, these layout
-  // objects may have been deferred by display-locking.
   Document* document = GetDocument();
   Node* node = GetNode();
   if (!document || !node)
     return false;
-
-  document->UpdateStyleAndLayoutTreeForNode(node);
 
   if (!CanSetFocusAttribute())
     return false;
@@ -4615,9 +5068,7 @@ bool AXNodeObject::OnNativeFocusAction() {
     // This fixes a scenario with Narrator Item Navigation when the user
     // navigates from the outer UI to the document when the last focused
     // element was within a nested iframe before leaving the document frame.
-    Page* page = document->GetPage();
-    // Elements inside a portal should not be focusable.
-    if (page && !page->InsidePortal()) {
+    if (Page* page = document->GetPage()) {
       page->GetFocusController().SetFocusedElement(document->documentElement(),
                                                    document->GetFrame());
     } else {
@@ -4657,12 +5108,19 @@ bool AXNodeObject::OnNativeFocusAction() {
     //
     // This code is in the process of being removed. See the comment above
     // |kSimulateClickOnAXFocus| in `blink/common/features.cc`.
-    if (!IsClickable() && CanBeActiveDescendant()) {
+    if (!IsClickable()) {
       return OnNativeClickAction();
     }
   }
 
-  element->Focus();
+  element->Focus(FocusParams(FocusTrigger::kUserGesture));
+
+  // Calling NotifyUserActivation here allows the browser to activate features
+  // that need user activation, such as showing an autofill suggestion.
+  LocalFrame::NotifyUserActivation(
+      document->GetFrame(),
+      mojom::blink::UserActivationNotificationType::kInteraction);
+
   return true;
 }
 
@@ -4692,68 +5150,10 @@ bool AXNodeObject::OnNativeSetSequentialFocusNavigationStartingPointAction() {
   return true;
 }
 
-void AXNodeObject::ChildrenChangedWithCleanLayout() {
-  if (!GetNode() && !GetLayoutObject())
-    return;
-
-  DCHECK(!IsDetached()) << "Don't call on detached node: "
-                        << ToString(true, true);
-
-  // When children changed on a <map> that means we need to forward the
-  // children changed to the <img> that parents the <area> elements.
-  // TODO(accessibility) Consider treating <img usemap> as aria-owns so that
-  // we get implementation "for free" vai relation cache, etc.
-  if (HTMLMapElement* map_element = DynamicTo<HTMLMapElement>(GetNode())) {
-    HTMLImageElement* image_element = map_element->ImageElement();
-    if (image_element) {
-      AXObject* ax_image = AXObjectCache().Get(image_element);
-      if (ax_image) {
-        ax_image->ChildrenChangedWithCleanLayout();
-        return;
-      }
-    }
-  }
-
-  // Always invalidate |children_| even if it was invalidated before, because
-  // now layout is clean.
-  SetNeedsToUpdateChildren();
-
-  // The caller, AXObjectCacheImpl::ChildrenChangedWithCleanLayout(), is only
-  // Between the time that AXObjectCacheImpl::ChildrenChanged() determines
-  // which included parent to use and now, it's possible that the parent will
-  // no longer be ignored. This is rare, but is covered by this test:
-  // external/wpt/accessibility/crashtests/delayed-ignored-change.html/
-  //
-  // If this object is no longer included in the tree, then our parent needs to
-  // recompute its included-in-the-tree children vector. (And if our parent
-  // isn't included in the tree either, it will recursively update its parent
-  // and so on.)
-  //
-  // The first ancestor that's included in the tree will
-  // be the one that actually fires the ChildrenChanged
-  // event notification.
-  if (!LastKnownIsIncludedInTreeValue()) {
-    if (AXObject* ax_parent = CachedParentObject()) {
-      ax_parent->ChildrenChangedWithCleanLayout();
-      return;
-    }
-  }
-
-  // TODO(accessibility) Move this up.
-  if (!CanHaveChildren())
-    return;
-
-  DCHECK(!IsDetached()) << "None of the above should be able to detach |this|: "
-                        << ToString(true, true);
-
-  AXObjectCache().PostNotification(this,
-                                   ax::mojom::blink::Event::kChildrenChanged);
-}
-
 void AXNodeObject::SelectedOptions(AXObjectVector& options) const {
   if (auto* select = DynamicTo<HTMLSelectElement>(GetNode())) {
     for (auto* const option : *select->selectedOptions()) {
-      AXObject* ax_option = AXObjectCache().GetOrCreate(option);
+      AXObject* ax_option = AXObjectCache().Get(option);
       if (ax_option)
         options.push_back(ax_option);
     }
@@ -4852,23 +5252,151 @@ void AXNodeObject::HandleActiveDescendantChanged() {
   }
 }
 
-AXObject* AXNodeObject::ErrorMessage() const {
+AXObject::AXObjectVector AXNodeObject::ErrorMessage() const {
   if (GetInvalidState() == ax::mojom::blink::InvalidState::kFalse)
-    return nullptr;
+    return AXObjectVector();
 
-  // Check for aria-errormessage.
-  Element* existing_error_message =
-      GetAOMPropertyOrARIAAttribute(AOMRelationProperty::kErrorMessage);
-  if (existing_error_message)
-    return AXObjectCache().GetOrCreate(existing_error_message);
+  AXObjectVector aria_error_messages = ErrorMessageFromAria();
+  if (aria_error_messages.size() > 0) {
+    return aria_error_messages;
+  }
 
-  // Check for visible validationMessage. This can only be visible for a focused
+  AXObjectVector html_error_messages = ErrorMessageFromHTML();
+  if (html_error_messages.size() > 0) {
+    return html_error_messages;
+  }
+
+  return AXObjectVector();
+}
+
+AXObject::AXObjectVector AXNodeObject::ErrorMessageFromAria() const {
+  Element* el = GetElement();
+  if (!el) {
+    return AXObjectVector();
+  }
+
+  HeapVector<Member<Element>> elements_from_attribute;
+  if (!ElementsFromAttribute(el, elements_from_attribute,
+                             html_names::kAriaErrormessageAttr)) {
+    return AXObjectVector();
+  }
+
+  AXObjectVector error_messages;
+  for (Element* element : elements_from_attribute) {
+    AXObject* obj = AXObjectCache().Get(element);
+    if (obj && !obj->AccessibilityIsIgnored()) {
+      error_messages.push_back(obj);
+    }
+  }
+  return error_messages;
+}
+
+AXObject::AXObjectVector AXNodeObject::ErrorMessageFromHTML() const {
+  // This can only be visible for a focused
   // control. Corollary: if there is a visible validationMessage alert box, then
   // it is related to the current focus.
-  if (this != AXObjectCache().FocusedObject())
-    return nullptr;
+  if (this != AXObjectCache().FocusedObject()) {
+    return AXObjectVector();
+  }
 
-  return AXObjectCache().ValidationMessageObjectIfInvalid(true);
+  AXObject* native_error_message =
+      AXObjectCache().ValidationMessageObjectIfInvalid();
+  if (native_error_message && !native_error_message->IsDetached()) {
+    CHECK_GE(native_error_message->IndexInParent(), 0);
+    return AXObjectVector({native_error_message});
+  }
+
+  return AXObjectVector();
+}
+
+String AXNodeObject::TextAlternativeFromTooltip(
+    ax::mojom::blink::NameFrom& name_from,
+    NameSources* name_sources,
+    bool* found_text_alternative,
+    String* text_alternative,
+    AXRelatedObjectVector* related_objects) const {
+  name_from = ax::mojom::blink::NameFrom::kTitle;
+  const AtomicString& title = GetAttribute(kTitleAttr);
+  String title_text = *text_alternative = TextAlternativeFromTitleAttribute(
+      title, name_from, name_sources, found_text_alternative);
+  if (!title_text.empty()) {
+    return title_text;
+  }
+
+  auto* form_control = DynamicTo<HTMLFormControlElement>(GetElement());
+  if (!form_control) {
+    return String();
+  }
+
+  auto popover_target = form_control->popoverTargetElement();
+  if (!popover_target.popover ||
+      popover_target.popover->PopoverType() != PopoverValueType::kHint) {
+    return String();
+  }
+
+  DCHECK(RuntimeEnabledFeatures::HTMLPopoverHintEnabled());
+
+  name_from = ax::mojom::blink::NameFrom::kPopoverAttribute;
+  if (name_sources) {
+    name_sources->push_back(
+        NameSource(*found_text_alternative, html_names::kPopovertargetAttr));
+    name_sources->back().type = name_from;
+  }
+  AXObject* popover_ax_object = AXObjectCache().Get(popover_target.popover);
+
+  // Hint popovers are used for text if and only if all of the contents are
+  // plain, e.g. have no interesting semantic or interactive elements.
+  // Otherwise, the hint will be exposed via the kDetails relationship. The
+  // motivation for this is that by reusing the simple mechanism of titles,
+  // screen reader users can easily access the information of plain hints
+  // without having to navigate to it, making the content more accessible.
+  // However, in the case of rich hints, a kDetails relationship is required to
+  // ensure that users are able to access and interact with the hint as they can
+  // navigate to it using commands.
+  if (!popover_ax_object || !popover_ax_object->IsPlainContent()) {
+    return String();
+  }
+  AXObjectSet visited;
+  String popover_text =
+      RecursiveTextAlternative(*popover_ax_object, popover_ax_object, visited);
+  *text_alternative = popover_text;
+  if (related_objects) {
+    related_objects->push_back(MakeGarbageCollected<NameSourceRelatedObject>(
+        popover_ax_object, popover_text));
+  }
+
+  if (name_sources) {
+    NameSource& source = name_sources->back();
+    source.related_objects = *related_objects;
+    source.text = *text_alternative;
+    *found_text_alternative = true;
+  }
+
+  return popover_text;
+}
+
+String AXNodeObject::TextAlternativeFromTitleAttribute(
+    const AtomicString& title,
+    ax::mojom::blink::NameFrom& name_from,
+    NameSources* name_sources,
+    bool* found_text_alternative) const {
+  String text_alternative;
+  if (name_sources) {
+    name_sources->push_back(NameSource(*found_text_alternative, kTitleAttr));
+    name_sources->back().type = name_from;
+  }
+  name_from = ax::mojom::blink::NameFrom::kTitle;
+  if (!title.IsNull()) {
+    text_alternative = title;
+    if (name_sources) {
+      NameSource& source = name_sources->back();
+      source.attribute_value = title;
+      source.attribute_value = title;
+      source.text = text_alternative;
+      *found_text_alternative = true;
+    }
+  }
+  return text_alternative;
 }
 
 // Based on
@@ -4996,7 +5524,7 @@ String AXNodeObject::NativeTextAlternative(
       name_sources->push_back(NameSource(*found_text_alternative, kAltAttr));
       name_sources->back().type = name_from;
     }
-    if (!alt.IsNull()) {
+    if (!alt.empty() && !alt.IsNull()) {
       text_alternative = alt;
       if (name_sources) {
         NameSource& source = name_sources->back();
@@ -5026,22 +5554,15 @@ String AXNodeObject::NativeTextAlternative(
       }
     }
 
-    // title attr
-    if (name_sources) {
-      name_sources->push_back(NameSource(*found_text_alternative, kTitleAttr));
-      name_sources->back().type = name_from;
-    }
-    name_from = ax::mojom::blink::NameFrom::kTitle;
-    const AtomicString& title = input_element->getAttribute(kTitleAttr);
-    if (!title.IsNull()) {
-      text_alternative = title;
+    // title attr or popover
+    String resulting_text = TextAlternativeFromTooltip(
+        name_from, name_sources, found_text_alternative, &text_alternative,
+        related_objects);
+    if (!resulting_text.empty()) {
       if (name_sources) {
-        NameSource& source = name_sources->back();
-        source.attribute_value = title;
-        source.text = text_alternative;
-        *found_text_alternative = true;
+        text_alternative = resulting_text;
       } else {
-        return text_alternative;
+        return resulting_text;
       }
     }
 
@@ -5064,6 +5585,18 @@ String AXNodeObject::NativeTextAlternative(
 
   // 5.1 Text inputs - step 3 (placeholder attribute)
   if (html_element && html_element->IsTextControl()) {
+    // title attr
+    String resulting_text = TextAlternativeFromTooltip(
+        name_from, name_sources, found_text_alternative, &text_alternative,
+        related_objects);
+    if (!resulting_text.empty()) {
+      if (name_sources) {
+        text_alternative = resulting_text;
+      } else {
+        return resulting_text;
+      }
+    }
+
     name_from = ax::mojom::blink::NameFrom::kPlaceholder;
     if (name_sources) {
       name_sources->push_back(
@@ -5083,31 +5616,6 @@ String AXNodeObject::NativeTextAlternative(
       } else {
         return text_alternative;
       }
-    }
-  }
-
-  // Input type=file. Not part of the spec, but Blink implements it
-  // as a single control that has both a button ("Choose file...") and
-  // some text showing the filename, and we need to concatenate both into
-  // the name of the button.
-  if (input_element && input_element->type() == input_type_names::kFile) {
-    name_from = ax::mojom::blink::NameFrom::kValue;
-
-    String displayed_file_path = GetValueForControl();
-    String upload_button_text = input_element->UploadButton()->Value();
-    if (!displayed_file_path.empty()) {
-      text_alternative = displayed_file_path + ", " + upload_button_text;
-    } else {
-      text_alternative = upload_button_text;
-    }
-    *found_text_alternative = true;
-
-    if (name_sources) {
-      name_sources->push_back(NameSource(true, kValueAttr));
-      name_sources->back().type = name_from;
-      name_sources->back().text = text_alternative;
-    } else {
-      return text_alternative;
     }
   }
 
@@ -5174,7 +5682,7 @@ String AXNodeObject::NativeTextAlternative(
     }
     HTMLTableCaptionElement* caption = table_element->caption();
     if (caption) {
-      AXObject* caption_ax_object = AXObjectCache().GetOrCreate(caption);
+      AXObject* caption_ax_object = AXObjectCache().Get(caption);
       if (caption_ax_object) {
         text_alternative =
             RecursiveTextAlternative(*caption_ax_object, nullptr, visited);
@@ -5292,7 +5800,7 @@ String AXNodeObject::NativeTextAlternative(
     }
     HTMLElement* legend = html_field_set_element->Legend();
     if (legend) {
-      AXObject* legend_ax_object = AXObjectCache().GetOrCreate(legend);
+      AXObject* legend_ax_object = AXObjectCache().Get(legend);
       // Avoid an infinite loop
       if (legend_ax_object && !visited.Contains(legend_ax_object)) {
         text_alternative =
@@ -5319,8 +5827,7 @@ String AXNodeObject::NativeTextAlternative(
   }
 
   // Document.
-  if (IsWebArea()) {
-    Document* document = GetDocument();
+  if (Document* document = DynamicTo<Document>(GetNode())) {
     if (document) {
       name_from = ax::mojom::blink::NameFrom::kAttribute;
       if (name_sources) {
@@ -5368,6 +5875,30 @@ String AXNodeObject::NativeTextAlternative(
   }
 
   return text_alternative;
+}
+
+// This is not part of the spec, but we think it's a worthy addition: if the
+// labelled input is of type="file", we append the chosen file name to it. We do
+// this because this type of input is actually exposed as a button, and buttons
+// may not have a "value" field. An unlabelled input is manager later in this
+// function, it's named with the default text in the button, 'Choose File', plus
+// the file name.
+String AXNodeObject::MaybeAppendFileDescriptionToName(
+    const String& name) const {
+  const auto* input_element = DynamicTo<HTMLInputElement>(GetNode());
+  if (!input_element ||
+      input_element->FormControlType() != FormControlType::kInputFile) {
+    return name;
+  }
+
+  String displayed_file_path = GetValueForControl();
+  if (!displayed_file_path.empty()) {
+    if (GetTextDirection() == ax::mojom::blink::WritingDirection::kRtl)
+      return name + " :" + displayed_file_path;
+    else
+      return name + ": " + displayed_file_path;
+  }
+  return name;
 }
 
 String AXNodeObject::Description(
@@ -5447,10 +5978,9 @@ String AXNodeObject::Description(
   if (!element)
     return String();
 
-  Vector<String> ids;
   HeapVector<Member<Element>> elements_from_attribute;
   if (ElementsFromAttribute(element, elements_from_attribute,
-                            html_names::kAriaDescribedbyAttr, ids)) {
+                            html_names::kAriaDescribedbyAttr)) {
     // TODO(meredithl): Determine description sources when |aria_describedby| is
     // the empty string, in order to make devtools work with attr-associated
     // elements.
@@ -5461,12 +5991,6 @@ String AXNodeObject::Description(
     AXObjectSet visited;
     description = TextFromElements(true, visited, elements_from_attribute,
                                    related_objects);
-
-    for (auto& member_element : elements_from_attribute)
-      ids.push_back(member_element->GetIdAttribute());
-
-    TokenVectorFromAttribute(element, ids, html_names::kAriaDescribedbyAttr);
-    AXObjectCache().UpdateReverseTextRelations(this, ids);
 
     if (!description.IsNull()) {
       if (description_sources) {
@@ -5577,7 +6101,7 @@ String AXNodeObject::Description(
     }
     HTMLTableCaptionElement* caption = table_element->caption();
     if (caption) {
-      AXObject* caption_ax_object = AXObjectCache().GetOrCreate(caption);
+      AXObject* caption_ax_object = AXObjectCache().Get(caption);
       if (caption_ax_object) {
         AXObjectSet visited;
         description =
@@ -5638,6 +6162,44 @@ String AXNodeObject::Description(
         description_sources->back().text = description;
       } else {
         return description;
+      }
+    }
+  }
+
+  // For form controls that act as triggering elements for popovers of type
+  // kHint, then set aria-describedby to the popover.
+  if (name_from != ax::mojom::blink::NameFrom::kPopoverAttribute) {
+    if (auto* form_control = DynamicTo<HTMLFormControlElement>(element)) {
+      auto popover_target = form_control->popoverTargetElement();
+      if (popover_target.popover &&
+          popover_target.popover->PopoverType() == PopoverValueType::kHint) {
+        DCHECK(RuntimeEnabledFeatures::HTMLPopoverHintEnabled());
+        description_from = ax::mojom::blink::DescriptionFrom::kPopoverAttribute;
+        if (description_sources) {
+          description_sources->push_back(DescriptionSource(
+              found_description, html_names::kPopovertargetAttr));
+          description_sources->back().type = description_from;
+        }
+        AXObject* popover_ax_object =
+            AXObjectCache().Get(popover_target.popover);
+        if (popover_ax_object && popover_ax_object->IsPlainContent()) {
+          AXObjectSet visited;
+          description = RecursiveTextAlternative(*popover_ax_object,
+                                                 popover_ax_object, visited);
+          if (related_objects) {
+            related_objects->push_back(
+                MakeGarbageCollected<NameSourceRelatedObject>(popover_ax_object,
+                                                              description));
+          }
+          if (description_sources) {
+            DescriptionSource& source = description_sources->back();
+            source.related_objects = *related_objects;
+            source.text = description;
+            found_description = true;
+          } else {
+            return description;
+          }
+        }
       }
     }
   }

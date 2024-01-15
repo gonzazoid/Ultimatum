@@ -29,9 +29,7 @@ class SharesheetHeaderView : public views::View {
  public:
   METADATA_HEADER(SharesheetHeaderView);
 
-  explicit SharesheetHeaderView(apps::IntentPtr intent,
-                                Profile* profile,
-                                bool show_content_previews);
+  explicit SharesheetHeaderView(apps::IntentPtr intent, Profile* profile);
   ~SharesheetHeaderView() override;
   SharesheetHeaderView(const SharesheetHeaderView&) = delete;
   SharesheetHeaderView& operator=(const SharesheetHeaderView&) = delete;
@@ -43,9 +41,6 @@ class SharesheetHeaderView : public views::View {
     kGenericText = 0,
     kLink,
   };
-
-  // views::View:
-  void GetAccessibleNodeData(ui::AXNodeData* node_data) override;
 
   // Adds the view for text preview.
   void ShowTextPreview();

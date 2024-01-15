@@ -8,24 +8,33 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
+#include <string_view>
 
 #include "base/containers/fixed_flat_map.h"
 #include "base/json/json_value_converter.h"
+#include "base/ranges/algorithm.h"
 #include "base/stl_util.h"
 #include "base/strings/string_number_conversions.h"
-#include "base/strings/string_piece.h"
 #include "base/strings/string_util.h"
 #include "base/values.h"
 #include "google_apis/common/parser_util.h"
 #include "google_apis/common/time_util.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace google_apis {
 
 namespace calendar {
 
 namespace {
+// CalendarList
+constexpr char kCalendarListKind[] = "calendar#calendarList";
+
+// SingleCalendar
+constexpr char kCalendarColorId[] = "colorId";
+constexpr char kPrimary[] = "primary";
+constexpr char kSelected[] = "selected";
+constexpr char kSingleCalendarKind[] = "calendar#calendarListEntry";
 
 // EventList
 constexpr char kCalendarEventListKind[] = "calendar#events";
@@ -52,38 +61,23 @@ constexpr char kStatus[] = "status";
 constexpr char kSummary[] = "summary";
 
 constexpr auto kEventStatuses =
-    base::MakeFixedFlatMap<base::StringPiece, CalendarEvent::EventStatus>(
+    base::MakeFixedFlatMap<std::string_view, CalendarEvent::EventStatus>(
         {{"cancelled", CalendarEvent::EventStatus::kCancelled},
          {"confirmed", CalendarEvent::EventStatus::kConfirmed},
          {"tentative", CalendarEvent::EventStatus::kTentative}});
 
 constexpr auto kAttendeesResponseStatuses =
-    base::MakeFixedFlatMap<base::StringPiece, CalendarEvent::ResponseStatus>(
+    base::MakeFixedFlatMap<std::string_view, CalendarEvent::ResponseStatus>(
         {{"accepted", CalendarEvent::ResponseStatus::kAccepted},
          {"declined", CalendarEvent::ResponseStatus::kDeclined},
          {"needsAction", CalendarEvent::ResponseStatus::kNeedsAction},
          {"tentative", CalendarEvent::ResponseStatus::kTentative}});
 
-// Converts the `items` field from the response. This method helps to use the
-// custom conversion entrypoint `CalendarEvent::CreateFrom`.
-// Returns false when it fails (e.g. the value is structurally different from
-// expected).
-bool ConvertResponseItems(const base::Value* value,
-                          std::vector<std::unique_ptr<CalendarEvent>>* result) {
-  const auto* items = value->GetIfList();
-  if (!items)
-    return false;
-
-  result->reserve(items->size());
-  for (const auto& item : *items) {
-    auto event = CalendarEvent::CreateFrom(item);
-    if (!event)
-      return false;
-    result->push_back(std::move(event));
-  }
-
-  return true;
-}
+// ConferenceData
+constexpr char kConferenceDataEntryPoints[] = "conferenceData.entryPoints";
+constexpr char kEntryPointType[] = "entryPointType";
+constexpr char kVideoConferenceValue[] = "video";
+constexpr char kEntryPointUri[] = "uri";
 
 // Converts the event status to `EventStatus`. Returns false when it fails
 // (e.g. the value is structurally different from expected).
@@ -106,13 +100,13 @@ bool ConvertEventStatus(const base::Value* value,
   return true;
 }
 
-// Returns user's self response status on the event, or `absl::nullopt` in case
+// Returns user's self response status on the event, or `std::nullopt` in case
 // the passed value is structurally different from expected.
-absl::optional<CalendarEvent::ResponseStatus> CalculateSelfResponseStatus(
+std::optional<CalendarEvent::ResponseStatus> CalculateSelfResponseStatus(
     const base::Value& value) {
   const auto* event = value.GetIfDict();
   if (!event)
-    return absl::nullopt;
+    return std::nullopt;
 
   const auto* attendees_raw_value = event->Find(kAttendees);
   if (!attendees_raw_value) {
@@ -139,12 +133,12 @@ absl::optional<CalendarEvent::ResponseStatus> CalculateSelfResponseStatus(
 
   const auto* attendees = attendees_raw_value->GetIfList();
   if (!attendees)
-    return absl::nullopt;
+    return std::nullopt;
 
   for (const auto& x : *attendees) {
     const auto* attendee = x.GetIfDict();
     if (!attendee)
-      return absl::nullopt;
+      return std::nullopt;
 
     const bool is_self = attendee->FindBool(kAttendeesSelf).value_or(false);
     if (!is_self) {
@@ -157,7 +151,7 @@ absl::optional<CalendarEvent::ResponseStatus> CalculateSelfResponseStatus(
 
     const auto* responseStatus = attendee->FindString(kAttendeesResponseStatus);
     if (!responseStatus)
-      return absl::nullopt;
+      return std::nullopt;
 
     const auto* it = kAttendeesResponseStatuses.find(*responseStatus);
     if (it != kAttendeesResponseStatuses.end()) {
@@ -168,9 +162,83 @@ absl::optional<CalendarEvent::ResponseStatus> CalculateSelfResponseStatus(
   return CalendarEvent::ResponseStatus::kUnknown;
 }
 
+// Pulls the video conference URI out of the conferenceData field, if there is
+// one on the event. Returns the first one it finds or an empty GURL if there is
+// none.
+GURL GetConferenceDataUri(const base::Value::Dict& dict) {
+  const auto* entry_points =
+      dict.FindListByDottedPath(kConferenceDataEntryPoints);
+  if (!entry_points) {
+    return GURL();
+  }
+
+  const auto video_conference_entry_point = base::ranges::find_if(
+      entry_points->begin(), entry_points->end(), [](const auto& entry_point) {
+        const std::string* entry_point_type =
+            entry_point.GetDict().FindString(kEntryPointType);
+        if (!entry_point_type) {
+          return false;
+        }
+        return *entry_point_type == kVideoConferenceValue;
+      });
+
+  if (video_conference_entry_point == entry_points->end()) {
+    return GURL();
+  }
+
+  const std::string* entry_point_uri =
+      video_conference_entry_point->GetDict().FindString(kEntryPointUri);
+  if (!entry_point_uri) {
+    return GURL();
+  }
+  const GURL entry_point_url = GURL(*entry_point_uri);
+  if (entry_point_url.is_valid()) {
+    return entry_point_url;
+  }
+
+  return GURL();
+}
+
+// Converts the `items` field from the response. This method helps to use the
+// custom conversion entrypoint `CalendarEvent::CreateFrom`.
+// Returns false when the conversion fails (e.g. the value is structurally
+// different from expected).
+// Returns true otherwise.
+bool ConvertResponseItems(const base::Value* value, CalendarEvent* event) {
+  base::JSONValueConverter<CalendarEvent> converter;
+
+  if (!IsResourceKindExpected(*value, kCalendarEventKind) ||
+      !converter.Convert(*value, event)) {
+    DVLOG(1) << "Unable to create: Invalid CalendarEvent JSON!";
+    return false;
+  }
+
+  auto self_response_status = CalculateSelfResponseStatus(*value);
+  if (self_response_status.has_value()) {
+    event->set_self_response_status(self_response_status.value());
+  }
+
+  GURL conference_data_uri = GetConferenceDataUri(value->GetDict());
+  event->set_conference_data_uri(conference_data_uri);
+
+  return true;
+}
+
 bool IsAllDayEvent(const base::Value* value, bool* result) {
   *result = value->GetDict().Find("date") != nullptr;
   return result;
+}
+
+bool ConvertCalendarListResponseItems(const base::Value* value,
+                                      SingleCalendar* calendar) {
+  base::JSONValueConverter<SingleCalendar> converter;
+
+  if (!IsResourceKindExpected(*value, kSingleCalendarKind) ||
+      !converter.Convert(*value, calendar)) {
+    DVLOG(1) << "Unable to create: Invalid calendarListEntry JSON!";
+    return false;
+  }
+  return true;
 }
 
 }  // namespace
@@ -228,28 +296,6 @@ void CalendarEvent::RegisterJSONConverter(
                                       &IsAllDayEvent);
 }
 
-// static
-std::unique_ptr<CalendarEvent> CalendarEvent::CreateFrom(
-    const base::Value& value) {
-  auto event = std::make_unique<CalendarEvent>();
-  base::JSONValueConverter<CalendarEvent> converter;
-  if (!IsResourceKindExpected(value, kCalendarEventKind) ||
-      !converter.Convert(value, event.get())) {
-    DVLOG(1) << "Unable to create: Invalid CalendarEvent JSON!";
-    return nullptr;
-  }
-
-  auto self_response_status = CalculateSelfResponseStatus(value);
-  if (self_response_status.has_value()) {
-    event->set_self_response_status(self_response_status.value());
-    return event;
-  }
-
-  DVLOG(1) << "Unable to calculate self response status: Invalid "
-              "CalendarEvent JSON!";
-  return nullptr;
-}
-
 int CalendarEvent::GetApproximateSizeInBytes() const {
   int total_bytes = 0;
 
@@ -274,8 +320,8 @@ void EventList::RegisterJSONConverter(
   converter->RegisterStringField(kTimeZone, &EventList::time_zone_);
   converter->RegisterStringField(kApiResponseETagKey, &EventList::etag_);
   converter->RegisterStringField(kApiResponseKindKey, &EventList::kind_);
-  converter->RegisterCustomValueField(kApiResponseItemsKey, &EventList::items_,
-                                      &ConvertResponseItems);
+  converter->RegisterRepeatedCustomValue<CalendarEvent>(
+      kApiResponseItemsKey, &EventList::items_, &ConvertResponseItems);
 }
 
 // static
@@ -291,6 +337,66 @@ std::unique_ptr<EventList> EventList::CreateFrom(const base::Value& value) {
 }
 
 void EventList::InjectItemForTesting(std::unique_ptr<CalendarEvent> item) {
+  items_.push_back(std::move(item));
+}
+
+SingleCalendar::SingleCalendar() = default;
+
+SingleCalendar::~SingleCalendar() = default;
+
+SingleCalendar::SingleCalendar(const SingleCalendar&) = default;
+
+SingleCalendar& SingleCalendar::operator=(const SingleCalendar&) = default;
+
+// static
+void SingleCalendar::RegisterJSONConverter(
+    base::JSONValueConverter<SingleCalendar>* converter) {
+  converter->RegisterStringField(kApiResponseIdKey, &SingleCalendar::id_);
+  converter->RegisterStringField(kCalendarColorId, &SingleCalendar::color_id_);
+  converter->RegisterBoolField(kPrimary, &SingleCalendar::primary_);
+  converter->RegisterBoolField(kSelected, &SingleCalendar::selected_);
+}
+
+int SingleCalendar::GetApproximateSizeInBytes() const {
+  int total_bytes = 0;
+
+  total_bytes += sizeof(SingleCalendar);
+  total_bytes += id_.length();
+  total_bytes += color_id_.length();
+  total_bytes += sizeof(primary_);
+  total_bytes += sizeof(selected_);
+
+  return total_bytes;
+}
+
+CalendarList::CalendarList() = default;
+
+CalendarList::~CalendarList() = default;
+
+// static
+void CalendarList::RegisterJSONConverter(
+    base::JSONValueConverter<CalendarList>* converter) {
+  converter->RegisterStringField(kApiResponseETagKey, &CalendarList::etag_);
+  converter->RegisterStringField(kApiResponseKindKey, &CalendarList::kind_);
+  converter->RegisterRepeatedCustomValue<SingleCalendar>(
+      kApiResponseItemsKey, &CalendarList::items_,
+      &ConvertCalendarListResponseItems);
+}
+
+// static
+std::unique_ptr<CalendarList> CalendarList::CreateFrom(
+    const base::Value& value) {
+  auto calendars = std::make_unique<CalendarList>();
+  base::JSONValueConverter<CalendarList> converter;
+  if (!IsResourceKindExpected(value, kCalendarListKind) ||
+      !converter.Convert(value, calendars.get())) {
+    DVLOG(1) << "Unable to create: Invalid CalendarList JSON!";
+    return nullptr;
+  }
+  return calendars;
+}
+
+void CalendarList::InjectItemForTesting(std::unique_ptr<SingleCalendar> item) {
   items_.push_back(std::move(item));
 }
 

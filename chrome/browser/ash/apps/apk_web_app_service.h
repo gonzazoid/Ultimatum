@@ -9,19 +9,19 @@
 #include <vector>
 
 #include "ash/components/arc/mojom/app.mojom-forward.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/gtest_prod_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
+#include "chrome/browser/ash/app_list/arc/arc_app_list_prefs.h"
 #include "chrome/browser/ash/apps/apk_web_app_installer.h"
 #include "chrome/browser/ash/crosapi/browser_manager.h"
 #include "chrome/browser/ash/crosapi/web_app_service_ash.h"
-#include "chrome/browser/ui/app_list/arc/arc_app_list_prefs.h"
-#include "chrome/browser/web_applications/web_app_id.h"
-#include "chrome/browser/web_applications/web_app_install_manager.h"
-#include "chrome/browser/web_applications/web_app_install_manager_observer.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "components/services/app_service/public/cpp/app_registry_cache.h"
+#include "components/webapps/browser/uninstall_result_code.h"
+#include "components/webapps/common/web_app_id.h"
 
 class ArcAppListPrefs;
 class Profile;
@@ -36,16 +36,19 @@ enum class InstallResultCode;
 enum class UninstallResultCode;
 }  // namespace webapps
 
-namespace web_app {
-class WebAppProvider;
-}  // namespace web_app
+namespace apps {
+class PromiseAppServiceTest;
+}
 
 namespace ash {
 
+// Service which manages integration of ARC packages containing web apps.
+// Watches for installation of APK web app packages and installs the
+// corresponding web app, and responds to events from both ARC and web apps to
+// keep these packages in sync.
 class ApkWebAppService : public KeyedService,
                          public ApkWebAppInstaller::Owner,
                          public ArcAppListPrefs::Observer,
-                         public web_app::WebAppInstallManagerObserver,
                          public apps::AppRegistryCache::Observer,
                          public crosapi::WebAppServiceAsh::Observer {
  public:
@@ -54,10 +57,13 @@ class ApkWebAppService : public KeyedService,
   class Delegate {
    public:
     using WebAppInstallCallback = base::OnceCallback<void(
-        const web_app::AppId& web_app_id,
+        const webapps::AppId& web_app_id,
         bool is_web_only_twa,
-        const absl::optional<std::string> sha256_fingerprint,
+        const std::optional<std::string> sha256_fingerprint,
         webapps::InstallResultCode code)>;
+
+    using WebAppUninstallCallback =
+        base::OnceCallback<void(webapps::UninstallResultCode code)>;
 
     virtual ~Delegate();
 
@@ -70,11 +76,12 @@ class ApkWebAppService : public KeyedService,
         arc::mojom::WebAppInfoPtr web_app_info,
         WebAppInstallCallback callback) = 0;
 
-    // Tells Lacros to remove a web app install source "ARC" for a web app with
-    // ID |web_app_id|. If no other sources left, the web app will be
+    // Tells Lacros to remove a web app install source "ARC" for a web app
+    // with ID |web_app_id|. If no other sources left, the web app will be
     // uninstalled. Does nothing if Lacros is not connected.
     virtual void MaybeUninstallWebAppInLacros(
-        const web_app::AppId& web_app_id) = 0;
+        const webapps::AppId& web_app_id,
+        WebAppUninstallCallback callback) = 0;
 
     // Tells ARC to uninstall a package identified by |package_name|. Returns
     // true if the call to ARC was successful, false if ARC is not running.
@@ -92,47 +99,58 @@ class ApkWebAppService : public KeyedService,
 
   ~ApkWebAppService() override;
 
-  void SetArcAppListPrefsForTesting(ArcAppListPrefs* prefs);
+  bool IsWebOnlyTwa(const webapps::AppId& app_id);
 
-  bool IsWebOnlyTwa(const web_app::AppId& app_id);
-  bool IsWebOnlyTwaDeprecated(const web_app::AppId& app_id);
-
-  bool IsWebAppInstalledFromArc(const web_app::AppId& web_app_id);
+  bool IsWebAppInstalledFromArc(const webapps::AppId& web_app_id);
 
   bool IsWebAppShellPackage(const std::string& package_name);
 
-  absl::optional<std::string> GetPackageNameForWebApp(
-      const web_app::AppId& app_id);
+  std::optional<std::string> GetPackageNameForWebApp(
+      const webapps::AppId& app_id,
+      bool include_installing_apks = false);
 
-  absl::optional<std::string> GetPackageNameForWebApp(const GURL& url);
+  std::optional<std::string> GetPackageNameForWebApp(const GURL& url);
 
-  absl::optional<std::string> GetWebAppIdForPackageName(
+  std::optional<std::string> GetWebAppIdForPackageName(
       const std::string& package_name);
 
-  absl::optional<std::string> GetCertificateSha256Fingerprint(
-      const web_app::AppId& app_id);
-  absl::optional<std::string> GetCertificateSha256FingerprintDeprecated(
-      const web_app::AppId& app_id);
+  std::optional<std::string> GetCertificateSha256Fingerprint(
+      const webapps::AppId& app_id);
+
+  // Save a mapping of the web app ID to the package name for a web-only TWA
+  // that is currently installing.
+  void AddInstallingWebApkPackageName(const std::string& app_id,
+                                      const std::string& package_name);
 
   using WebAppCallbackForTesting =
       base::OnceCallback<void(const std::string& package_name,
-                              const web_app::AppId& web_app_id)>;
+                              const webapps::AppId& web_app_id)>;
   void SetWebAppInstalledCallbackForTesting(
       WebAppCallbackForTesting web_app_installed_callback);
   void SetWebAppUninstalledCallbackForTesting(
       WebAppCallbackForTesting web_app_uninstalled_callback);
 
  private:
-  FRIEND_TEST_ALL_PREFIXES(ApkWebAppInstallerDelayedArcStartBrowserTest,
-                           DelayedUninstall);
+  friend class apps::PromiseAppServiceTest;
 
   Delegate& GetDelegate() {
     return test_delegate_ ? *test_delegate_ : *real_delegate_;
   }
 
-  // Uninstalls a web app with id |web_app_id| iff it was installed via calling
-  // ApkWebAppInstaller::Install().
-  void UninstallWebApp(const web_app::AppId& web_app_id);
+  // Starts installation of a web app with the given `web_app_info`. Will first
+  // load an icon from the ARC app with the given `package_name`. Does nothing
+  // if ARC is not started, or if Lacros is enabled and not connected.
+  void MaybeInstallWebApp(const std::string& package_name,
+                          arc::mojom::WebAppInfoPtr web_app_info);
+
+  // Removes the ARC install source from the web app with the given
+  // `web_app_id`. If there are no other sources left, the web app will be
+  // uninstalled. Does nothing if Lacros is enabled and not connected.
+  void MaybeUninstallWebApp(const webapps::AppId& web_app_id);
+
+  // Uninstalls the ARC package with the given `package_name`. Does nothing if
+  // ARC is not started.
+  void MaybeUninstallArcPackage(const std::string& package_name);
 
   // If the app has updated from a web app to Android app or vice-versa,
   // this function pins the new app in the old app's place on the shelf if it
@@ -151,10 +169,6 @@ class ApkWebAppService : public KeyedService,
   void OnPackageListInitialRefreshed() override;
   void OnArcAppListPrefsDestroyed() override;
 
-  // web_app::WebAppInstallManagerObserver overrides.
-  void OnWebAppWillBeUninstalled(const web_app::AppId& web_app_id) override;
-  void OnWebAppInstallManagerDestroyed() override;
-
   // apps::AppRegistryCache::Observer overrides:
   void OnAppUpdate(const apps::AppUpdate& update) override;
   void OnAppTypeInitialized(apps::AppType app_type) override;
@@ -164,35 +178,47 @@ class ApkWebAppService : public KeyedService,
   // croapi::WebAppServiceAsh::Observer overrides:
   void OnWebAppProviderBridgeConnected() override;
 
-  void MaybeRemoveArcPackageForWebApp(const web_app::AppId& web_app_id);
+  void MaybeRemoveArcPackageForWebApp(const webapps::AppId& web_app_id);
   void OnDidGetWebAppIcon(const std::string& package_name,
                           arc::mojom::WebAppInfoPtr web_app_info,
                           arc::mojom::RawIconPngDataPtr icon);
   void OnDidFinishInstall(const std::string& package_name,
-                          const web_app::AppId& web_app_id,
+                          const webapps::AppId& web_app_id,
                           bool is_web_only_twa,
-                          const absl::optional<std::string> sha256_fingerprint,
+                          const std::optional<std::string> sha256_fingerprint,
                           webapps::InstallResultCode code);
+  void OnDidRemoveInstallSource(const webapps::AppId& app_id,
+                                webapps::UninstallResultCode code);
   void UpdatePackageInfo(const std::string& app_id,
                          const arc::mojom::WebAppInfoPtr& web_app_info);
   const base::Value::Dict& WebAppToApks() const;
   void SyncArcAndWebApps();
 
+  void RemoveObsoletePrefValues(const webapps::AppId& web_app_id);
+
+  // Remove the app ID from the map of currently installing APKs.
+  void RemoveInstallingWebApkPackageName(const std::string& app_id);
+
   WebAppCallbackForTesting web_app_installed_callback_;
   WebAppCallbackForTesting web_app_uninstalled_callback_;
 
-  Profile* profile_;
-  ArcAppListPrefs* arc_app_list_prefs_;
-  web_app::WebAppProvider* provider_{nullptr};
+  raw_ptr<Profile> profile_;
+  raw_ptr<ArcAppListPrefs, DanglingUntriaged> arc_app_list_prefs_;
 
   // Delegate implementation used in production.
   std::unique_ptr<Delegate> real_delegate_;
   // And override delegate implementation for tests. See |GetDelegate()|.
   raw_ptr<Delegate> test_delegate_;
 
-  base::ScopedObservation<web_app::WebAppInstallManager,
-                          web_app::WebAppInstallManagerObserver>
-      install_manager_observer_{this};
+  // True when ARC is fully initialized, after ArcAppLauncher has sent the
+  // initial package list.
+  bool arc_initialized_ = false;
+
+  // Maps the app IDs of any currently installing web app apks to their ARC
+  // package names. This allows us to track the web app apks that are currently
+  // installing.
+  std::map<std::string, std::string> currently_installing_apks_;
+
   base::ScopedObservation<apps::AppRegistryCache,
                           apps::AppRegistryCache::Observer>
       app_registry_cache_observer_{this};

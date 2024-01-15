@@ -6,9 +6,8 @@
 
 #import <memory>
 
-#import "base/bind.h"
-#import "base/callback_helpers.h"
-#import "base/guid.h"
+#import "base/functional/bind.h"
+#import "base/functional/callback_helpers.h"
 #import "base/location.h"
 #import "base/memory/ref_counted.h"
 #import "base/metrics/histogram_functions.h"
@@ -27,10 +26,6 @@
 #import "net/url_request/url_request_context_getter_observer.h"
 #import "services/network/network_context.h"
 #import "services/network/public/cpp/weak_wrapper_shared_url_loader_factory.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace web {
 namespace {

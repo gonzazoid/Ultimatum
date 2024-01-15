@@ -5,7 +5,7 @@
 #ifndef COMPONENTS_PREFS_PERSISTENT_PREF_STORE_H_
 #define COMPONENTS_PREFS_PERSISTENT_PREF_STORE_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "components/prefs/prefs_export.h"
 #include "components/prefs/writeable_pref_store.h"
 
@@ -76,9 +76,6 @@ class COMPONENTS_PREFS_EXPORT PersistentPrefStore : public WriteablePrefStore {
   // triggers an eventual write if there is lossy data pending and if there
   // isn't one scheduled already.
   virtual void SchedulePendingLossyWrites() = 0;
-
-  // It should be called only for Incognito pref store.
-  virtual void ClearMutableValues() = 0;
 
   // Cleans preference data that may have been saved outside of the store.
   virtual void OnStoreDeletionFromDisk() = 0;

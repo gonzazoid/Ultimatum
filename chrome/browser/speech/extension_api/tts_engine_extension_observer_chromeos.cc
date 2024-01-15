@@ -100,7 +100,12 @@ class TtsEngineExtensionObserverChromeOSFactory
             "TtsEngineExtensionObserverChromeOS",
             // If given an incognito profile (including the Chrome OS login
             // profile), share the service with the original profile.
-            ProfileSelections::BuildRedirectedInIncognito()) {
+            ProfileSelections::Builder()
+                .WithRegular(ProfileSelection::kRedirectedToOriginal)
+                // TODO(crbug.com/1418376): Check if this service is needed in
+                // Guest mode.
+                .WithGuest(ProfileSelection::kRedirectedToOriginal)
+                .Build()) {
     DependsOn(extensions::EventRouterFactory::GetInstance());
   }
 
@@ -186,8 +191,10 @@ bool TtsEngineExtensionObserverChromeOS::IsLoadedTtsEngine(
   extensions::EventRouter* event_router =
       extensions::EventRouter::Get(profile_);
   DCHECK(event_router);
-  if (event_router->ExtensionHasEventListener(extension_id,
-                                              tts_engine_events::kOnSpeak) &&
+  if ((event_router->ExtensionHasEventListener(extension_id,
+                                               tts_engine_events::kOnSpeak) ||
+       event_router->ExtensionHasEventListener(
+           extension_id, tts_engine_events::kOnSpeakWithAudioStream)) &&
       event_router->ExtensionHasEventListener(extension_id,
                                               tts_engine_events::kOnStop)) {
     return true;
@@ -265,4 +272,9 @@ void TtsEngineExtensionObserverChromeOS::CreateTtsServiceIfNeeded() {
         tts_service->reset();
       },
       &tts_service_));
+}
+
+// static
+void TtsEngineExtensionObserverChromeOS::EnsureFactoryBuilt() {
+  TtsEngineExtensionObserverChromeOSFactory::GetInstance();
 }

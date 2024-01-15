@@ -9,7 +9,8 @@
 #include <utility>
 #include <vector>
 
-#include "ash/services/device_sync/public/cpp/device_sync_client.h"
+#include "base/memory/raw_ptr.h"
+#include "chromeos/ash/services/device_sync/public/cpp/device_sync_client.h"
 #include "chromeos/ash/services/multidevice_setup/multidevice_setup_base.h"
 #include "chromeos/ash/services/multidevice_setup/public/mojom/multidevice_setup.mojom.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
@@ -88,7 +89,7 @@ class MultiDeviceSetupInitializer
 
     std::string host_instance_id_or_legacy_device_id;
     // Null for SetHostDeviceWithoutAuthToken().
-    absl::optional<std::string> auth_token;
+    std::optional<std::string> auth_token;
     base::OnceCallback<void(bool)> callback;
   };
 
@@ -120,13 +121,17 @@ class MultiDeviceSetupInitializer
   void GetHostStatus(GetHostStatusCallback callback) override;
   void SetFeatureEnabledState(mojom::Feature feature,
                               bool enabled,
-                              const absl::optional<std::string>& auth_token,
+                              const std::optional<std::string>& auth_token,
                               SetFeatureEnabledStateCallback callback) override;
   void GetFeatureStates(GetFeatureStatesCallback callback) override;
   void RetrySetHostNow(RetrySetHostNowCallback callback) override;
   void TriggerEventForDebugging(
       mojom::EventTypeForDebugging type,
       TriggerEventForDebuggingCallback callback) override;
+  void SetQuickStartPhoneInstanceID(
+      const std::string& qs_phone_instance_id) override;
+  void GetQuickStartPhoneInstanceID(
+      GetQuickStartPhoneInstanceIDCallback callback) override;
 
   // MultiDeviceSetupBase:
   void SetHostDeviceWithoutAuthToken(
@@ -139,13 +144,13 @@ class MultiDeviceSetupInitializer
 
   void InitializeImplementation();
 
-  PrefService* pref_service_;
-  device_sync::DeviceSyncClient* device_sync_client_;
-  AuthTokenValidator* auth_token_validator_;
-  OobeCompletionTracker* oobe_completion_tracker_;
-  AndroidSmsAppHelperDelegate* android_sms_app_helper_delegate_;
-  AndroidSmsPairingStateTracker* android_sms_pairing_state_tracker_;
-  const device_sync::GcmDeviceInfoProvider* gcm_device_info_provider_;
+  raw_ptr<PrefService> pref_service_;
+  raw_ptr<device_sync::DeviceSyncClient> device_sync_client_;
+  raw_ptr<AuthTokenValidator> auth_token_validator_;
+  raw_ptr<OobeCompletionTracker> oobe_completion_tracker_;
+  raw_ptr<AndroidSmsAppHelperDelegate> android_sms_app_helper_delegate_;
+  raw_ptr<AndroidSmsPairingStateTracker> android_sms_pairing_state_tracker_;
+  raw_ptr<const device_sync::GcmDeviceInfoProvider> gcm_device_info_provider_;
   bool is_secondary_user_;
 
   std::unique_ptr<MultiDeviceSetupBase> multidevice_setup_impl_;
@@ -164,17 +169,20 @@ class MultiDeviceSetupInitializer
   std::vector<GetHostStatusCallback> pending_get_host_args_;
   std::vector<std::tuple<mojom::Feature,
                          bool,
-                         absl::optional<std::string>,
+                         std::optional<std::string>,
                          SetFeatureEnabledStateCallback>>
       pending_set_feature_enabled_args_;
   std::vector<GetFeatureStatesCallback> pending_get_feature_states_args_;
   std::vector<RetrySetHostNowCallback> pending_retry_set_host_args_;
+  std::vector<std::string> pending_set_qs_phone_instance_id_args_;
+  std::vector<GetQuickStartPhoneInstanceIDCallback>
+      pending_get_qs_phone_instance_id_args_;
 
   // Special case: for SetHostDevice(), SetHostDeviceWithoutAuthToken(), and
   // RemoveHostDevice(), only keep track of the most recent call. Since each
   // call to either of these functions overwrites the previous call, only one
   // needs to be passed.
-  absl::optional<SetHostDeviceArgs> pending_set_host_args_;
+  std::optional<SetHostDeviceArgs> pending_set_host_args_;
   bool pending_should_remove_host_device_ = false;
 };
 

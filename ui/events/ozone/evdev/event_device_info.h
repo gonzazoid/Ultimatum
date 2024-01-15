@@ -53,6 +53,10 @@ enum COMPONENT_EXPORT(EVDEV) KeyboardType {
   VALID_KEYBOARD,
 };
 
+std::ostream& operator<<(std::ostream& os, const KeyboardType value);
+
+std::ostream& operator<<(std::ostream& os, const EventDeviceType value);
+
 // Device information for Linux input devices
 //
 // This stores and queries information about input devices; in
@@ -182,6 +186,9 @@ class COMPONENT_EXPORT(EVDEV) EventDeviceInfo {
   // Determine whether horizontal and vertical resolutions are reported by the
   // device.
   bool HasValidMTAbsXY() const;
+
+  // Determine whether this device supports heatmap.
+  bool SupportsHeatmap() const;
 
   // Determine whether the device supports rumble.
   bool SupportsRumble() const;

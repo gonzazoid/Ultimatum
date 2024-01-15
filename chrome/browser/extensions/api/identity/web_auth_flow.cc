@@ -7,236 +7,205 @@
 #include <memory>
 #include <utility>
 
-#include "base/base64.h"
 #include "base/feature_list.h"
-#include "base/location.h"
-#include "base/notreached.h"
-#include "base/strings/string_util.h"
-#include "base/strings/utf_string_conversions.h"
+#include "base/functional/bind.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/time/time.h"
+#include "base/timer/timer.h"
 #include "base/trace_event/trace_event.h"
-#include "chrome/browser/extensions/component_loader.h"
-#include "chrome/browser/extensions/extension_service.h"
+#include "chrome/browser/extensions/api/identity/web_auth_flow_info_bar_delegate.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/common/extensions/api/identity_private.h"
-#include "chrome/common/extensions/extension_constants.h"
-#include "chrome/grit/browser_resources.h"
-#include "components/guest_view/browser/guest_view_base.h"
+#include "chrome/browser/ui/browser.h"
+#include "chrome/browser/ui/browser_window.h"
 #include "content/public/browser/browser_context.h"
+#include "content/public/browser/navigation_controller.h"
 #include "content/public/browser/navigation_entry.h"
 #include "content/public/browser/navigation_handle.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/web_contents.h"
-#include "crypto/random.h"
-#include "extensions/browser/app_window/app_window.h"
-#include "extensions/browser/event_router.h"
-#include "extensions/browser/extension_system.h"
-#include "extensions/browser/guest_view/web_view/web_view_guest.h"
+#include "content/public/browser/web_contents_observer.h"
 #include "net/http/http_response_headers.h"
 #include "net/http/http_status_code.h"
+#include "ui/base/page_transition_types.h"
 #include "url/gurl.h"
 #include "url/url_constants.h"
 
-using content::RenderViewHost;
 using content::WebContents;
 using content::WebContentsObserver;
-using guest_view::GuestViewBase;
 
 namespace extensions {
 
-namespace {
-
-// Returns whether `partition` should be persisted on disk.
-bool ShouldPersistStorage(WebAuthFlow::Partition partition) {
-  switch (partition) {
-    case WebAuthFlow::LAUNCH_WEB_AUTH_FLOW:
-      return base::FeatureList::IsEnabled(kPersistentStorageForWebAuthFlow);
-    case WebAuthFlow::GET_AUTH_TOKEN:
-      return false;
-  }
-
-  NOTREACHED() << "Unexpected partition value " << partition;
-  return false;
-}
-
-// Returns a unique identifier of the storage partition corresponding to
-// `partition`.
-std::string GetStoragePartitionId(WebAuthFlow::Partition partition) {
-  switch (partition) {
-    case WebAuthFlow::LAUNCH_WEB_AUTH_FLOW:
-      return "launchWebAuthFlow";
-    case WebAuthFlow::GET_AUTH_TOKEN:
-      return "getAuthFlow";
-  }
-
-  NOTREACHED() << "Unexpected partition value " << partition;
-  return std::string();
-}
-
-// Returns a partition name suitable to use in the `webview.partition`
-// parameter.
-std::string GetPartitionNameForWebView(WebAuthFlow::Partition partition) {
-  std::string persist_prefix =
-      ShouldPersistStorage(partition) ? "persist:" : "";
-  return persist_prefix + GetStoragePartitionId(partition);
-}
-}  // namespace
-
-namespace identity_private = api::identity_private;
-
-BASE_FEATURE(kPersistentStorageForWebAuthFlow,
-             "PersistentStorageForWebAuthFlow",
-             base::FEATURE_DISABLED_BY_DEFAULT);
-
-WebAuthFlow::WebAuthFlow(Delegate* delegate,
-                         Profile* profile,
-                         const GURL& provider_url,
-                         Mode mode,
-                         Partition partition)
+WebAuthFlow::WebAuthFlow(
+    Delegate* delegate,
+    Profile* profile,
+    const GURL& provider_url,
+    Mode mode,
+    bool user_gesture,
+    AbortOnLoad abort_on_load_for_non_interactive,
+    absl::optional<base::TimeDelta> timeout_for_non_interactive,
+    absl::optional<gfx::Rect> popup_bounds)
     : delegate_(delegate),
       profile_(profile),
       provider_url_(provider_url),
       mode_(mode),
-      partition_(partition),
-      embedded_window_created_(false) {
+      user_gesture_(user_gesture),
+      abort_on_load_for_non_interactive_(abort_on_load_for_non_interactive),
+      timeout_for_non_interactive_(timeout_for_non_interactive),
+      non_interactive_timeout_timer_(std::make_unique<base::OneShotTimer>()),
+      popup_bounds_(popup_bounds) {
   TRACE_EVENT_NESTABLE_ASYNC_BEGIN0("identity", "WebAuthFlow", this);
+  if (timeout_for_non_interactive_) {
+    DCHECK_GE(*timeout_for_non_interactive_, base::TimeDelta());
+    DCHECK_LE(*timeout_for_non_interactive_, base::Minutes(1));
+  }
 }
 
 WebAuthFlow::~WebAuthFlow() {
   DCHECK(!delegate_);
 
+  if (web_contents()) {
+    web_contents()->Close();
+  }
+
+  CloseInfoBar();
+
   // Stop listening to notifications first since some of the code
   // below may generate notifications.
   WebContentsObserver::Observe(nullptr);
 
-  if (!app_window_key_.empty()) {
-    AppWindowRegistry::Get(profile_)->RemoveObserver(this);
-
-    if (app_window_ && app_window_->web_contents())
-      app_window_->web_contents()->Close();
-  }
   TRACE_EVENT_NESTABLE_ASYNC_END0("identity", "WebAuthFlow", this);
+}
+
+void WebAuthFlow::SetClockForTesting(
+    const base::TickClock* tick_clock,
+    scoped_refptr<base::SequencedTaskRunner> task_runner) {
+  non_interactive_timeout_timer_ =
+      std::make_unique<base::OneShotTimer>(tick_clock);
+  non_interactive_timeout_timer_->SetTaskRunner(task_runner);
 }
 
 void WebAuthFlow::Start() {
   DCHECK(profile_);
   DCHECK(!profile_->IsOffTheRecord());
 
-  AppWindowRegistry::Get(profile_)->AddObserver(this);
+  content::WebContents::CreateParams params(profile_);
+  web_contents_ = content::WebContents::Create(params);
+  WebContentsObserver::Observe(web_contents_.get());
 
-  // Attach a random ID string to the window so we can recognize it
-  // in OnAppWindowAdded.
-  std::string random_bytes;
-  crypto::RandBytes(base::WriteInto(&random_bytes, 33), 32);
-  base::Base64Encode(random_bytes, &app_window_key_);
+  content::NavigationController::LoadURLParams load_params(provider_url_);
+  web_contents_->GetController().LoadURLWithParams(load_params);
 
-  // identityPrivate.onWebFlowRequest(app_window_key, provider_url_, mode_)
-  base::Value::List args;
-  args.Append(app_window_key_);
-  args.Append(provider_url_.spec());
-  if (mode_ == WebAuthFlow::INTERACTIVE)
-    args.Append("interactive");
-  else
-    args.Append("silent");
-  args.Append(GetPartitionNameForWebView(partition_));
-
-  auto event =
-      std::make_unique<Event>(events::IDENTITY_PRIVATE_ON_WEB_FLOW_REQUEST,
-                              identity_private::OnWebFlowRequest::kEventName,
-                              std::move(args), profile_);
-  ExtensionSystem* system = ExtensionSystem::Get(profile_);
-
-  extensions::ComponentLoader* component_loader =
-      system->extension_service()->component_loader();
-  if (!component_loader->Exists(extension_misc::kIdentityApiUiAppId)) {
-    component_loader->Add(
-        IDR_IDENTITY_API_SCOPE_APPROVAL_MANIFEST,
-        base::FilePath(FILE_PATH_LITERAL("identity_scope_approval_dialog")));
-  }
-
-  EventRouter::Get(profile_)->DispatchEventWithLazyListener(
-      extension_misc::kIdentityApiUiAppId, std::move(event));
+  MaybeStartTimeout();
 }
 
 void WebAuthFlow::DetachDelegateAndDelete() {
   delegate_ = nullptr;
-  base::ThreadTaskRunnerHandle::Get()->DeleteSoon(FROM_HERE, this);
+  base::SingleThreadTaskRunner::GetCurrentDefault()->DeleteSoon(FROM_HERE,
+                                                                this);
 }
 
-content::StoragePartition* WebAuthFlow::GetGuestPartition() {
-  return profile_->GetStoragePartition(
-      GetWebViewPartitionConfig(partition_, profile_));
+void WebAuthFlow::DisplayInfoBar() {
+  DCHECK(web_contents());
+
+  info_bar_delegate_ = WebAuthFlowInfoBarDelegate::Create(
+      web_contents(), info_bar_parameters_.extension_display_name);
 }
 
-const std::string& WebAuthFlow::GetAppWindowKey() const {
-  return app_window_key_;
-}
-
-// static
-content::StoragePartitionConfig WebAuthFlow::GetWebViewPartitionConfig(
-    Partition partition,
-    content::BrowserContext* browser_context) {
-  // This has to mirror the logic in WebViewGuest::CreateWebContents for
-  // creating the correct StoragePartitionConfig.
-  auto result = content::StoragePartitionConfig::Create(
-      browser_context, extension_misc::kIdentityApiUiAppId,
-      GetStoragePartitionId(partition),
-      /*in_memory=*/!ShouldPersistStorage(partition));
-  result.set_fallback_to_partition_domain_for_blob_urls(
-      browser_context->IsOffTheRecord()
-          ? content::StoragePartitionConfig::FallbackMode::
-                kFallbackPartitionInMemory
-          : content::StoragePartitionConfig::FallbackMode::
-                kFallbackPartitionOnDisk);
-  return result;
-}
-
-void WebAuthFlow::OnAppWindowAdded(AppWindow* app_window) {
-  if (app_window->window_key() == app_window_key_ &&
-      app_window->extension_id() == extension_misc::kIdentityApiUiAppId) {
-    app_window_ = app_window;
-    WebContentsObserver::Observe(app_window->web_contents());
+void WebAuthFlow::CloseInfoBar() {
+  if (info_bar_delegate_) {
+    info_bar_delegate_->CloseInfoBar();
   }
 }
 
-void WebAuthFlow::OnAppWindowRemoved(AppWindow* app_window) {
-  if (app_window->window_key() == app_window_key_ &&
-      app_window->extension_id() == extension_misc::kIdentityApiUiAppId) {
-    app_window_ = nullptr;
-    WebContentsObserver::Observe(nullptr);
-
-    if (delegate_)
-      delegate_->OnAuthFlowFailure(WebAuthFlow::WINDOW_CLOSED);
+bool WebAuthFlow::DisplayAuthPageInPopupWindow() {
+  if (Browser::GetCreationStatusForProfile(profile_) !=
+      Browser::CreationStatus::kOk) {
+    return false;
   }
+
+  Browser::CreateParams browser_params(Browser::TYPE_POPUP, profile_,
+                                       user_gesture_);
+  browser_params.omit_from_session_restore = true;
+  browser_params.should_trigger_session_restore = false;
+  if (popup_bounds_.has_value()) {
+    browser_params.initial_bounds = popup_bounds_.value();
+  }
+
+  Browser* browser = Browser::Create(browser_params);
+  browser->tab_strip_model()->AddWebContents(
+      std::move(web_contents_), /*index=*/0,
+      ui::PageTransition::PAGE_TRANSITION_AUTO_TOPLEVEL,
+      AddTabTypes::ADD_ACTIVE);
+
+  browser->window()->Show();
+  return true;
 }
 
 void WebAuthFlow::BeforeUrlLoaded(const GURL& url) {
-  if (delegate_ && embedded_window_created_)
+  if (delegate_) {
     delegate_->OnAuthFlowURLChange(url);
+  }
 }
 
 void WebAuthFlow::AfterUrlLoaded() {
-  if (delegate_ && embedded_window_created_ && mode_ == WebAuthFlow::SILENT)
-    delegate_->OnAuthFlowFailure(WebAuthFlow::INTERACTION_REQUIRED);
-}
-
-void WebAuthFlow::InnerWebContentsCreated(
-    content::WebContents* inner_web_contents) {
-  DCHECK(app_window_);
-
-  if (!delegate_ || embedded_window_created_)
+  initial_url_loaded_ = true;
+  if (delegate_ && mode_ == WebAuthFlow::SILENT) {
+    if (abort_on_load_for_non_interactive_ == AbortOnLoad::kYes) {
+      non_interactive_timeout_timer_->Stop();
+      delegate_->OnAuthFlowFailure(WebAuthFlow::INTERACTION_REQUIRED);
+    } else {
+      // Wait for timeout.
+    }
     return;
+  }
 
-  // Switch from watching the app window to the guest inside it.
-  embedded_window_created_ = true;
-  WebContentsObserver::Observe(inner_web_contents);
+  // If `web_contents_` is nullptr, this means that the interactive tab has
+  // already been opened once.
+  if (delegate_ && web_contents_ && mode_ == WebAuthFlow::INTERACTIVE) {
+    bool is_auth_page_displayed = DisplayAuthPageInPopupWindow();
+    if (!is_auth_page_displayed) {
+      delegate_->OnAuthFlowFailure(WebAuthFlow::Failure::CANNOT_CREATE_WINDOW);
+      return;
+    }
+
+    if (info_bar_parameters_.should_show) {
+      DisplayInfoBar();
+    }
+  }
 }
 
-void WebAuthFlow::PrimaryMainFrameRenderProcessGone(
-    base::TerminationStatus status) {
-  if (delegate_)
+void WebAuthFlow::MaybeStartTimeout() {
+  if (mode_ != WebAuthFlow::SILENT) {
+    // Only applies to non-interactive flows.
+    return;
+  }
+  if (abort_on_load_for_non_interactive_ == AbortOnLoad::kYes &&
+      !timeout_for_non_interactive_) {
+    // Preserve previous behaviour: no timeout if aborting on load and timeout
+    // value is not specified.
+    return;
+  }
+  // `base::Unretained(this)` is safe because `this` owns
+  // `non_interactive_timeout_timer_`.
+  non_interactive_timeout_timer_->Start(
+      FROM_HERE,
+      timeout_for_non_interactive_.value_or(kNonInteractiveMaxTimeout),
+      base::BindOnce(&WebAuthFlow::OnTimeout, base::Unretained(this)));
+}
+
+void WebAuthFlow::OnTimeout() {
+  if (delegate_) {
+    delegate_->OnAuthFlowFailure(initial_url_loaded_
+                                     ? WebAuthFlow::INTERACTION_REQUIRED
+                                     : WebAuthFlow::TIMED_OUT);
+  }
+}
+
+void WebAuthFlow::WebContentsDestroyed() {
+  WebContentsObserver::Observe(nullptr);
+  if (delegate_) {
     delegate_->OnAuthFlowFailure(WebAuthFlow::WINDOW_CLOSED);
+  }
 }
 
 void WebAuthFlow::TitleWasSet(content::NavigationEntry* entry) {
@@ -250,14 +219,16 @@ void WebAuthFlow::DidStopLoading() {
 
 void WebAuthFlow::DidStartNavigation(
     content::NavigationHandle* navigation_handle) {
-  if (navigation_handle->IsInPrimaryMainFrame())
+  if (navigation_handle->IsInPrimaryMainFrame()) {
     BeforeUrlLoaded(navigation_handle->GetURL());
+  }
 }
 
 void WebAuthFlow::DidRedirectNavigation(
     content::NavigationHandle* navigation_handle) {
-  if (navigation_handle->IsInPrimaryMainFrame())
+  if (navigation_handle->IsInPrimaryMainFrame()) {
     BeforeUrlLoaded(navigation_handle->GetURL());
+  }
 }
 
 void WebAuthFlow::DidFinishNavigation(
@@ -267,6 +238,10 @@ void WebAuthFlow::DidFinishNavigation(
   // flow if a navigation failed in a sub-frame. https://crbug.com/1049565.
   if (!navigation_handle->IsInPrimaryMainFrame())
     return;
+
+  if (delegate_) {
+    delegate_->OnNavigationFinished(navigation_handle);
+  }
 
   bool failed = false;
   if (navigation_handle->GetNetErrorCode() != net::OK) {
@@ -309,8 +284,20 @@ void WebAuthFlow::DidFinishNavigation(
         navigation_handle->GetResponseHeaders()->response_code());
   }
 
-  if (failed && delegate_)
+  if (failed && delegate_) {
     delegate_->OnAuthFlowFailure(LOAD_FAILED);
+  }
+}
+
+void WebAuthFlow::SetShouldShowInfoBar(
+    const std::string& extension_display_name) {
+  info_bar_parameters_.should_show = true;
+  info_bar_parameters_.extension_display_name = extension_display_name;
+}
+
+base::WeakPtr<WebAuthFlowInfoBarDelegate>
+WebAuthFlow::GetInfoBarDelegateForTesting() {
+  return info_bar_delegate_;
 }
 
 }  // namespace extensions

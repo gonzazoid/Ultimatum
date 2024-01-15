@@ -56,7 +56,7 @@ class PdfPrinterHandler : public PrinterHandler,
                   PrintCallback callback) override;
 
   // SelectFileDialog::Listener implementation.
-  void FileSelected(const base::FilePath& path,
+  void FileSelected(const ui::SelectedFileInfo& file,
                     int index,
                     void* params) override;
   void FileSelectionCanceled(void* params) override;
@@ -80,14 +80,16 @@ class PdfPrinterHandler : public PrinterHandler,
                           content::WebContents* initiator,
                           bool prompt_user);
 
+  // Write data to the file system. Protected so unit tests can access it.
+  void PostPrintToPdfTask();
+
   // The print preview web contents. Protected so unit tests can access it.
-  const raw_ptr<content::WebContents> preview_web_contents_;
+  const raw_ptr<content::WebContents, DanglingUntriaged> preview_web_contents_;
 
   // The underlying dialog object. Protected so unit tests can access it.
   scoped_refptr<ui::SelectFileDialog> select_file_dialog_;
 
  private:
-  void PostPrintToPdfTask();
   void OnGotUniqueFileName(const base::FilePath& path);
 
   // Prompts the user to save the file. The dialog will default to saving
@@ -100,9 +102,11 @@ class PdfPrinterHandler : public PrinterHandler,
                            const base::FilePath& path);
 
   // Return save location as the Drive mount or fetch from Download Preferences.
-  base::FilePath GetSaveLocation() const;
+  // Virtual so that unit tests could override it to avoid checking Download
+  // Preferences.
+  virtual base::FilePath GetSaveLocation() const;
 
-  const raw_ptr<Profile> profile_;
+  const raw_ptr<Profile, DanglingUntriaged> profile_;
   const raw_ptr<PrintPreviewStickySettings> sticky_settings_;
 
   // Holds the path to the print to pdf request. It is empty if no such request
@@ -119,7 +123,7 @@ class PdfPrinterHandler : public PrinterHandler,
   // The callback to call when complete.
   PrintCallback print_callback_;
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
   // Determines if the local Drive mount is sent to the file picker as the
   // default save location. Set to true for Save to Drive print jobs.
   bool use_drive_mount_ = false;

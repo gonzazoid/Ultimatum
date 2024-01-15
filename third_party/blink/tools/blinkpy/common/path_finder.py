@@ -27,6 +27,7 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import os
+import posixpath
 import sys
 
 from blinkpy.common.memoized import memoized
@@ -35,7 +36,10 @@ from blinkpy.common.memoized import memoized
 def add_typ_dir_to_sys_path():
     path_to_typ = get_typ_dir()
     if path_to_typ not in sys.path:
-        sys.path.insert(0, path_to_typ)
+        # `//third_party/catapult/third_party/typ/` has a `tools/` module that
+        # conflicts with `wpt/tools/`. Always place `typ/` last in the path to
+        # ensure WPT always takes precedence.
+        sys.path.append(path_to_typ)
 
 
 def add_bindings_scripts_dir_to_sys_path():
@@ -68,14 +72,26 @@ def add_build_android_to_sys_path():
         sys.path.insert(0, path)
 
 
+def add_build_ios_to_sys_path():
+    path = get_build_ios_dir()
+    if path not in sys.path:
+        sys.path.insert(0, path)
+
+
 def bootstrap_wpt_imports():
     """Bootstrap the availability of all wpt-vended packages."""
-    path = os.path.join(get_wpt_tools_wpt_dir(), 'tools')
-    if path not in sys.path:
+    path = get_wpt_tools_wpt_dir()
+    # Do not add the Chromium-vended version of WPT to the path if there's
+    # already a WPT root there.
+    #
+    # This WPT detection is admittedly crude, but it's meant to detect
+    # `/tmp/wpt` created by `LocalWPT`.
+    if path not in sys.path and not any(
+            os.path.basename(path).lower() == 'wpt' for path in sys.path):
         sys.path.insert(0, path)
     # This module is under `//third_party/wpt_tools/wpt/tools`, and has the side
     # effect of inserting wpt-related directories into `sys.path`.
-    import localpaths  # pylint: disable=unused-import
+    from tools import localpaths  # pylint: disable=unused-import
 
 
 def add_depot_tools_dir_to_os_path():
@@ -113,6 +129,11 @@ def get_testing_dir():
 
 def get_build_android_dir():
     return os.path.join(get_chromium_src_dir(), 'build', 'android')
+
+
+def get_build_ios_dir():
+    return os.path.join(get_chromium_src_dir(), 'ios', 'build', 'bots',
+                        'scripts')
 
 
 def get_typ_dir():
@@ -176,10 +197,9 @@ class PathFinder(object):
                                             'perf_tests')
 
     def wpt_prefix(self):
-        return self._filesystem.join('external', 'wpt', '')
-
-    def webdriver_prefix(self):
-        return self._filesystem.join('external', 'wpt', 'webdriver', '')
+        # Always use '/' instead of the platform dependent separator.
+        # This should be only used with a test id.
+        return posixpath.join('external', 'wpt', '')
 
     @memoized
     def _blink_base(self):
@@ -230,19 +250,11 @@ class PathFinder(object):
         # Assume the path already points to a valid WPT and pass through.
         return wpt_path
 
-    def strip_webdriver_tests_path(self, wpt_webdriver_test_path):
-        if self.is_webdriver_test_path(wpt_webdriver_test_path):
-            return wpt_webdriver_test_path[len(self.webdriver_prefix()):]
-        return wpt_webdriver_test_path
-
     def is_wpt_path(self, test_path):
         return test_path.startswith(self.wpt_prefix())
 
     def is_wpt_internal_path(self, test_path):
         return test_path.startswith('wpt_internal/')
-
-    def is_webdriver_test_path(self, test_path):
-        return test_path.startswith(self.webdriver_prefix())
 
     @memoized
     def depot_tools_base(self):

@@ -15,7 +15,7 @@
 #include "base/dcheck_is_on.h"
 #include "base/memory/ref_counted.h"
 #include "base/sequence_checker.h"
-#include "base/strings/string_piece_forward.h"
+#include "base/strings/string_piece.h"
 #include "base/thread_annotations.h"
 #include "base/time/time.h"
 #include "sql/database.h"
@@ -56,6 +56,10 @@ enum class ColumnType {
 // in the connection object using set_error_delegate().
 class COMPONENT_EXPORT(SQL) Statement {
  public:
+  // Utility function that returns what //sql code encodes the 'time' value as
+  // in a database when using BindTime
+  static int64_t TimeToSqlValue(base::Time time);
+
   // Creates an uninitialized statement. The statement will be invalid until
   // you initialize it via Assign.
   Statement();
@@ -132,11 +136,19 @@ class COMPONENT_EXPORT(SQL) Statement {
   void BindDouble(int param_index, double val);
   void BindCString(int param_index, const char* val);
   void BindString(int param_index, base::StringPiece val);
+
+  // If you need to store (potentially invalid) UTF-16 strings losslessly,
+  // store them as BLOBs instead. `BindBlob()` has an overload for this purpose.
   void BindString16(int param_index, base::StringPiece16 value);
   void BindBlob(int param_index, base::span<const uint8_t> value);
 
   // Overload that makes it easy to pass in std::string values.
   void BindBlob(int param_index, base::span<const char> value) {
+    BindBlob(param_index, base::as_bytes(base::make_span(value)));
+  }
+
+  // Overload that makes it easy to pass in std::u16string values.
+  void BindBlob(int param_index, base::span<const char16_t> value) {
     BindBlob(param_index, base::as_bytes(base::make_span(value)));
   }
 
@@ -147,12 +159,22 @@ class COMPONENT_EXPORT(SQL) Statement {
   // * BindInt64(col, val.ToDeltaSinceWindowsEpoch().InMicroseconds())
   //
   // Features that serialize base::Time in other ways, such as ToTimeT() or
-  // ToJavaTime(), will require a database migration to be converted to this
-  // (recommended) serialization method.
+  // InMillisecondsSinceUnixEpoch(), will require a database migration to be
+  // converted to this (recommended) serialization method.
   //
   // TODO(crbug.com/1195962): Migrate all time serialization to this method, and
   //                          then remove the migration details above.
   void BindTime(int param_index, base::Time time);
+
+  // Conforms with base::TimeDelta serialization recommendations.
+  //
+  // This is equivalent to the following snippets, which should be replaced.
+  // * BindInt64(col, delta.ToInternalValue())
+  // * BindInt64(col, delta.InMicroseconds())
+  //
+  // TODO(crbug.com/1402777): Migrate all TimeDelta serialization to this method
+  //                          and remove the migration details above.
+  void BindTimeDelta(int param_index, base::TimeDelta delta);
 
   // Retrieving ----------------------------------------------------------------
 
@@ -173,6 +195,10 @@ class COMPONENT_EXPORT(SQL) Statement {
   int64_t ColumnInt64(int column_index);
   double ColumnDouble(int column_index);
   std::string ColumnString(int column_index);
+
+  // If you need to store and retrieve (potentially invalid) UTF-16 strings
+  // losslessly, store them as BLOBs instead. They may be retrieved with
+  // `ColumnBlobAsString16()`.
   std::u16string ColumnString16(int column_index);
 
   // Conforms with base::Time serialization recommendations.
@@ -186,6 +212,15 @@ class COMPONENT_EXPORT(SQL) Statement {
   //                          then remove the migration details above.
   base::Time ColumnTime(int column_index);
 
+  // Conforms with base::TimeDelta deserialization recommendations.
+  //
+  // This is equivalent to the following snippets, which should be replaced.
+  // * base::TimeDelta::FromInternalValue(ColumnInt64(column_index))
+  //
+  // TODO(crbug.com/1402777): Migrate all TimeDelta serialization to this method
+  //                          and remove the migration details above.
+  base::TimeDelta ColumnTimeDelta(int column_index);
+
   // Returns a span pointing to a buffer containing the blob data.
   //
   // The span's contents should be copied to a caller-owned buffer immediately.
@@ -197,6 +232,7 @@ class COMPONENT_EXPORT(SQL) Statement {
   base::span<const uint8_t> ColumnBlob(int column_index);
 
   bool ColumnBlobAsString(int column_index, std::string* result);
+  bool ColumnBlobAsString16(int column_index, std::u16string* result);
   bool ColumnBlobAsVector(int column_index, std::vector<char>* result);
   bool ColumnBlobAsVector(int column_index, std::vector<uint8_t>* result);
 
@@ -237,6 +273,9 @@ class COMPONENT_EXPORT(SQL) Statement {
   // Helper for Run() and Step(), calls sqlite3_step() and returns the checked
   // value from it.
   SqliteResultCode StepInternal();
+
+  // Retrieve and log the count of VM steps required to execute the query.
+  void ReportQueryExecutionMetrics() const;
 
   // The actual sqlite statement. This may be unique to us, or it may be cached
   // by the Database, which is why it's ref-counted. This pointer is

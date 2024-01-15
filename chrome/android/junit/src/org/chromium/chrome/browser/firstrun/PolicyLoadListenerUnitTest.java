@@ -8,6 +8,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.never;
 
+import static org.chromium.ui.test.util.MockitoHelper.doCallback;
+
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Rule;
@@ -30,7 +32,9 @@ import org.chromium.components.policy.PolicyService;
 
 /** Unit tests for PolicyLoadListener. */
 @RunWith(BaseRobolectricTestRunner.class)
-@Config(manifest = Config.NONE, shadows = {ShadowProcess.class})
+@Config(
+        manifest = Config.NONE,
+        shadows = {ShadowProcess.class})
 // TODO(crbug.com/1210371): Change to use paused loop. See crbug for details.
 @LooperMode(LooperMode.Mode.LEGACY)
 public class PolicyLoadListenerUnitTest {
@@ -39,18 +43,15 @@ public class PolicyLoadListenerUnitTest {
     private static final String LOADING_NOT_FINISHED =
             "Whether policy might exist should be not decided yet.";
 
-    @Rule
-    public MockitoRule mMockitoRule = MockitoJUnit.rule();
+    @Rule public MockitoRule mMockitoRule = MockitoJUnit.rule();
 
     @Spy
     public OneshotSupplierImpl<PolicyService> mTestPolicyServiceSupplier =
             new OneshotSupplierImpl<>();
-    @Spy
-    public Callback<Boolean> mListener;
-    @Mock
-    public PolicyService mPolicyService;
-    @Mock
-    public FirstRunAppRestrictionInfo mTestAppRestrictionInfo;
+
+    @Spy public Callback<Boolean> mListener;
+    @Mock public PolicyService mPolicyService;
+    @Mock public FirstRunAppRestrictionInfo mTestAppRestrictionInfo;
 
     private PolicyService.Observer mPolicyServiceObserver;
     private Callback<Boolean> mAppRestrictionsCallback;
@@ -58,16 +59,10 @@ public class PolicyLoadListenerUnitTest {
 
     @Before
     public void setUp() {
-        Mockito.doAnswer(invocation -> {
-                   mPolicyServiceObserver = invocation.getArgument(0);
-                   return null;
-               })
+        doCallback((PolicyService.Observer observer) -> mPolicyServiceObserver = observer)
                 .when(mPolicyService)
                 .addObserver(any());
-        Mockito.doAnswer(invocation -> {
-                   mAppRestrictionsCallback = invocation.getArgument(0);
-                   return null;
-               })
+        doCallback((Callback<Boolean> callback) -> mAppRestrictionsCallback = callback)
                 .when(mTestAppRestrictionInfo)
                 .getHasAppRestriction(any());
 
@@ -118,7 +113,8 @@ public class PolicyLoadListenerUnitTest {
         Mockito.verify(mListener).onResult(true);
 
         mAppRestrictionsCallback.onResult(true);
-        Assert.assertTrue("App restriction arrives after policy initialized should be ignored.",
+        Assert.assertTrue(
+                "App restriction arrives after policy initialized should be ignored.",
                 mPolicyLoadListener.get());
         Mockito.verify(mListener, never()).onResult(false);
     }

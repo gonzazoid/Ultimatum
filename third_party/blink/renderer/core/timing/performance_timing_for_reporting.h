@@ -7,9 +7,10 @@
 
 #include "base/time/time.h"
 #include "third_party/blink/public/common/performance/largest_contentful_paint_type.h"
-#include "third_party/blink/public/web/web_performance.h"
+#include "third_party/blink/public/web/web_performance_metrics_for_reporting.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context_lifecycle_observer.h"
+#include "third_party/blink/renderer/core/paint/timing/paint_timing_detector.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/instrumentation/tracing/traced_value.h"
 
@@ -21,7 +22,7 @@ class DocumentParserTiming;
 class DocumentTiming;
 class InteractiveDetector;
 class PaintTiming;
-class PaintTimingDetector;
+struct LargestContentfulPaintDetails;
 
 // This class is only used for non-web-exposed reporting purposes (e.g. UKM).
 class CORE_EXPORT PerformanceTimingForReporting final
@@ -32,7 +33,7 @@ class CORE_EXPORT PerformanceTimingForReporting final
     uint64_t navigation_start;
     uint64_t first_paint;
     std::array<uint64_t,
-               WebPerformance::
+               WebPerformanceMetricsForReporting::
                    kRequestAnimationFramesToRecordAfterBackForwardCacheRestore>
         request_animation_frames;
     absl::optional<base::TimeDelta> first_input_delay;
@@ -91,27 +92,15 @@ class CORE_EXPORT PerformanceTimingForReporting final
   // not useful, this function can be removed.
   uint64_t FirstMeaningfulPaintCandidate() const;
 
-  // Largest Image Paint is the first paint after the largest image within
-  // viewport being fully loaded. LargestImagePaint and LargestImagePaintSize
-  // are the time and size of it.
-  uint64_t LargestImagePaintForMetrics() const;
-  uint64_t LargestImagePaintSizeForMetrics() const;
-  blink::LargestContentfulPaintType LargestContentfulPaintTypeForMetrics()
-      const;
-  absl::optional<WebURLRequest::Priority>
-  LargestContentfulPaintImageRequestPriorityForMetrics() const;
+  LargestContentfulPaintDetailsForReporting
+  LargestContentfulPaintDetailsForMetrics() const;
 
-  // The time of the first paint of the largest text within viewport.
-  // Largest Text Paint is the first paint after the largest text within
-  // viewport being painted. LargestTextPaint and LargestTextPaintSize
-  // are the time and size of it.
-  double LargestContentfulPaintImageBPPForMetrics() const;
-  uint64_t LargestTextPaintForMetrics() const;
-  uint64_t LargestTextPaintSizeForMetrics() const;
+  LargestContentfulPaintDetailsForReporting
+  SoftNavigationLargestContentfulPaintDetailsForMetrics() const;
 
-  // Largest Contentful Paint is the either the largest text paint time or the
-  // largest image paint time, whichever has the larger size.
-  base::TimeTicks LargestContentfulPaintAsMonotonicTimeForMetrics() const;
+  LargestContentfulPaintDetailsForReporting
+  PopulateLargestContentfulPaintDetailsForReporting(
+      const LargestContentfulPaintDetails& timing) const;
 
   // The time at which the frame is first eligible for painting due to not
   // being throttled. A zero value indicates throttling.

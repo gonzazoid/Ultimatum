@@ -6,7 +6,18 @@ import("//device/vr/buildflags/buildflags.gni")
 
 if (enable_openxr) {
   source_set("openxr_headers") {
+    # This visibility is done to help enforce the dependency that
+    # openxr_platform.h requires platform headers to be included before it.
+    # If you'd like to expand this visibility, you will need to make similar
+    # DEPS rules for it as are present in the below locations.
+    visibility = [
+      "//chrome/browser/vr/*",
+      "//components/webxr/*",
+      "//device/vr/*",
+    ]
+
     sources = [
+      "dev/xr_android.h",
       "src/include/openxr/openxr.h",
       "src/include/openxr/openxr_platform.h",
       "src/include/openxr/openxr_platform_defines.h",
@@ -16,8 +27,62 @@ if (enable_openxr) {
 
     public_configs = [ ":config" ]
   }
+
+  if (is_android) {
+    # On Android, the loader comes with a couple more external dependencies.
+
+    source_set("jnipp") {
+      sources = [
+        "src/src/external/jnipp/jnipp.cpp",
+        "src/src/external/jnipp/jnipp.h",
+      ]
+
+      cflags_cc = [ "-Wno-shadow" ]
+
+      # JNIPP uses exceptions to communicate failures:
+      configs += [ "//build/config/compiler:exceptions" ]
+    }
+
+    config("android-jni-wrappers-config") {
+      include_dirs = [ "src/src/external/jnipp" ]
+    }
+
+    source_set("android-jni-wrappers") {
+      sources = [
+        "src/src/external/android-jni-wrappers/wrap/ObjectWrapperBase.h",
+        "src/src/external/android-jni-wrappers/wrap/android.content.cpp",
+        "src/src/external/android-jni-wrappers/wrap/android.content.h",
+        "src/src/external/android-jni-wrappers/wrap/android.content.impl.h",
+        "src/src/external/android-jni-wrappers/wrap/android.database.cpp",
+        "src/src/external/android-jni-wrappers/wrap/android.database.h",
+        "src/src/external/android-jni-wrappers/wrap/android.database.impl.h",
+        "src/src/external/android-jni-wrappers/wrap/android.net.cpp",
+        "src/src/external/android-jni-wrappers/wrap/android.net.h",
+        "src/src/external/android-jni-wrappers/wrap/android.net.impl.h",
+      ]
+
+      # android-jni-wrappers assume jnipp headers are in the include path and
+      # they also do so in the headers that are intended to be included by the
+      # consumer of this target, so let's add them to public_configs to
+      # propagate the include dirs to our consumers:
+      public_configs = [ ":android-jni-wrappers-config" ]
+
+      public_deps = [ ":jnipp" ]
+    }
+  }
+
   source_set("openxr") {
+    # This visibility is done to help enforce the dependency that
+    # openxr_platform.h requires platform headers to be included before it.
+    # If you'd like to expand this visibility, you will need to make similar
+    # DEPS rules for it as are present in the below locations.
+    visibility = [
+      "//chrome/browser/vr/*",
+      "//components/webxr/*",
+      "//device/vr/*",
+    ]
     sources = [
+      "dev/xr_android.h",
       "src/include/openxr/openxr.h",
       "src/include/openxr/openxr_platform.h",
       "src/include/openxr/openxr_platform_defines.h",
@@ -48,8 +113,8 @@ if (enable_openxr) {
       "src/src/loader/runtime_interface.hpp",
       "src/src/loader/xr_generated_loader.cpp",
       "src/src/loader/xr_generated_loader.hpp",
-      "src/src/xr_generated_dispatch_table.c",
-      "src/src/xr_generated_dispatch_table.h",
+      "src/src/xr_generated_dispatch_table_core.c",
+      "src/src/xr_generated_dispatch_table_core.h",
     ]
 
     include_dirs = [
@@ -74,6 +139,24 @@ if (enable_openxr) {
       "-Wno-unused-function",
       "-Wno-extra-semi",
     ]
+
+    if (is_android) {
+      sources += [
+        "dev/xr_android.h",
+        "src/src/loader/android_utilities.cpp",
+        "src/src/loader/android_utilities.h",
+      ]
+
+      deps += [ ":android-jni-wrappers" ]
+
+      # OpenXR loader on Android assumes that android-jni-wrappers are in the
+      # include path:
+      include_dirs += [ "src/src/external/android-jni-wrappers" ]
+
+      # OpenXR loader on Android has a bug where there is unconditional try-catch block
+      # (in android_utilities.cpp) even when built without exceptions support.
+      configs += [ "//build/config/compiler:exceptions" ]
+    }
   }
 
   config("config") {
@@ -85,6 +168,13 @@ if (enable_openxr) {
         "XR_OS_WINDOWS",
         "XR_USE_PLATFORM_WIN32",
         "XR_USE_GRAPHICS_API_D3D11",
+      ]
+    } else {
+      defines = [
+        "XRLOADER_DISABLE_EXCEPTION_HANDLING",
+        "XR_OS_ANDROID",
+        "XR_USE_PLATFORM_ANDROID",
+        "XR_USE_GRAPHICS_API_OPENGL_ES",
       ]
     }
   }

@@ -1,6 +1,9 @@
 {
   "$build/chromium_tests_builder_config": {
     "builder_config": {
+      "additional_exclusions": [
+        "infra/config/generated/builders/ci/linux-chromeos-dbg/gn-args.json"
+      ],
       "builder_db": {
         "entries": [
           {
@@ -45,6 +48,10 @@
           "group": "tryserver.chromium.chromiumos"
         },
         {
+          "builder": "linux-chromeos-compile-siso-dbg",
+          "group": "tryserver.chromium.chromiumos"
+        },
+        {
           "builder": "linux-chromeos-dbg",
           "group": "tryserver.chromium.chromiumos"
         }
@@ -54,7 +61,8 @@
   "$build/reclient": {
     "instance": "rbe-chromium-trusted",
     "jobs": 500,
-    "metrics_project": "chromium-reclient-metrics"
+    "metrics_project": "chromium-reclient-metrics",
+    "scandeps_server": true
   },
   "$recipe_engine/resultdb/test_presentation": {
     "column_keys": [],

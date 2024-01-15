@@ -241,8 +241,9 @@ TEST_P(PaintPreviewBaseServiceTest, CaptureMainFrame) {
             EXPECT_EQ(result->proto.subframes_size(), 0);
             EXPECT_TRUE(result->proto.root_frame().is_main_frame());
             auto token = base::UnguessableToken::Deserialize(
-                result->proto.root_frame().embedding_token_high(),
-                result->proto.root_frame().embedding_token_low());
+                             result->proto.root_frame().embedding_token_high(),
+                             result->proto.root_frame().embedding_token_low())
+                             .value();
             switch (GetParam()) {
               case RecordingPersistence::kFileSystem: {
 #if BUILDFLAG(IS_WIN)

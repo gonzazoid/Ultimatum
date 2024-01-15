@@ -5,8 +5,6 @@
 #ifndef CHROME_BROWSER_ASH_FILE_SYSTEM_PROVIDER_OPERATIONS_OPEN_FILE_H_
 #define CHROME_BROWSER_ASH_FILE_SYSTEM_PROVIDER_OPERATIONS_OPEN_FILE_H_
 
-#include <memory>
-
 #include "base/files/file.h"
 #include "chrome/browser/ash/file_system_provider/operations/operation.h"
 #include "chrome/browser/ash/file_system_provider/provided_file_system_info.h"
@@ -18,19 +16,13 @@ namespace base {
 class FilePath;
 }  // namespace base
 
-namespace extensions {
-class EventRouter;
-}  // namespace extensions
-
-namespace ash {
-namespace file_system_provider {
-namespace operations {
+namespace ash::file_system_provider::operations {
 
 // Opens a file for either read or write. The file must exist, otherwise the
 // operation will fail. Created per request.
 class OpenFile : public Operation {
  public:
-  OpenFile(extensions::EventRouter* event_router,
+  OpenFile(RequestDispatcher* dispatcher,
            const ProvidedFileSystemInfo& file_system_info,
            const base::FilePath& file_path,
            OpenFileMode mode,
@@ -44,10 +36,10 @@ class OpenFile : public Operation {
   // Operation overrides.
   bool Execute(int request_id) override;
   void OnSuccess(int request_id,
-                 std::unique_ptr<RequestValue> result,
+                 const RequestValue& result,
                  bool has_more) override;
   void OnError(int request_id,
-               std::unique_ptr<RequestValue> result,
+               const RequestValue& result,
                base::File::Error error) override;
 
  private:
@@ -56,8 +48,6 @@ class OpenFile : public Operation {
   ProvidedFileSystemInterface::OpenFileCallback callback_;
 };
 
-}  // namespace operations
-}  // namespace file_system_provider
-}  // namespace ash
+}  // namespace ash::file_system_provider::operations
 
 #endif  // CHROME_BROWSER_ASH_FILE_SYSTEM_PROVIDER_OPERATIONS_OPEN_FILE_H_

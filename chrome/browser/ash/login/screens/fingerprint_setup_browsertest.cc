@@ -37,9 +37,9 @@ const test::UIPath kAddAnotherFingerButton = {"fingerprint-setup",
                                               "addAnotherFinger"};
 
 constexpr char kTestFingerprintDataString[] = "testFinger";
-constexpr char kAnimationUrlAttribute[] = "animationUrl";
-constexpr char kCheckmarkAnimationUrl[] =
-    "chrome://theme/IDR_FINGERPRINT_COMPLETE_CHECK_LIGHT";
+constexpr char kAssetUrlAttribute[] = "assetUrl";
+constexpr char kCheckmarkAssetUrl[] =
+    "chrome://resources/ash/common/quick_unlock/fingerprint_check.json";
 
 int kMaxAllowedFingerprints = 3;
 
@@ -114,9 +114,9 @@ class FingerprintSetupTest : public OobeBaseTest {
     test::OobeJS().ExpectVisiblePath(kFingerprintArc);
     test::OobeJS().CreateVisibilityWaiter(true, kDoneButton)->Wait();
     test::OobeJS().ExpectHiddenPath(kSkipButtonOnProgress);
-    test::OobeJS().ExpectVisiblePath(kScanningAnimation);
-    test::OobeJS().ExpectAttributeEQ(kAnimationUrlAttribute, kScanningAnimation,
-                                     std::string(kCheckmarkAnimationUrl));
+    test::OobeJS().CreateVisibilityWaiter(true, kScanningAnimation)->Wait();
+    test::OobeJS().ExpectAttributeEQ(kAssetUrlAttribute, kScanningAnimation,
+                                     std::string(kCheckmarkAssetUrl));
     test::OobeJS().ExpectVisiblePath(kAddAnotherFingerButton);
   }
 
@@ -140,7 +140,7 @@ class FingerprintSetupTest : public OobeBaseTest {
 
  private:
   bool screen_exit_ = false;
-  absl::optional<Result> screen_result_;
+  std::optional<Result> screen_result_;
   base::HistogramTester histogram_tester_;
   FingerprintSetupScreen::ScreenExitCallback original_callback_;
   base::RepeatingClosure screen_exit_callback_;

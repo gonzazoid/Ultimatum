@@ -6,13 +6,16 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/test/bind.h"
 #include "base/test/mock_callback.h"
 #include "chrome/browser/ash/printing/oauth2/authorization_zone.h"
+#include "chrome/browser/ash/printing/oauth2/mock_client_ids_database.h"
 #include "chrome/browser/ash/printing/oauth2/status_code.h"
 #include "chrome/browser/ash/printing/oauth2/test_authorization_server.h"
 #include "chrome/test/base/testing_profile.h"
@@ -24,7 +27,6 @@
 #include "content/public/test/browser_task_environment.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
 
 namespace ash::printing::oauth2 {
@@ -72,11 +74,15 @@ class PrintingOAuth2AuthorizationZonesManagerTest : public testing::Test {
         .Times(testing::AtMost(1))
         .WillOnce([this]() { bridge_initialization_.Quit(); });
 
+    auto client_ids_database =
+        std::make_unique<testing::NiceMock<MockClientIdsDatabase>>();
+    client_ids_database_ = client_ids_database.get();
     auth_zones_manager_ = AuthorizationZonesManager::CreateForTesting(
         &profile_,
         base::BindRepeating(
             &PrintingOAuth2AuthorizationZonesManagerTest::CreateAuthZoneMock,
             base::Unretained(this)),
+        std::move(client_ids_database),
         mock_processor_.CreateForwardingProcessor(),
         syncer::ModelTypeStoreTestUtil::FactoryForForwardingStore(
             store_.get()));
@@ -198,13 +204,15 @@ class PrintingOAuth2AuthorizationZonesManagerTest : public testing::Test {
 
   std::unique_ptr<AuthorizationZone> CreateAuthZoneMock(
       const GURL& url,
-      const std::string& client_id) {
+      ClientIdsDatabase* client_ids_database) {
     auto auth_zone = std::make_unique<AuthZoneMock>();
     auto [_, created] = auth_zones_.emplace(url, auth_zone.get());
     DCHECK(created);
     return auth_zone;
   }
 
+  raw_ptr<testing::NiceMock<MockClientIdsDatabase>, DanglingUntriaged>
+      client_ids_database_;
   std::map<GURL, AuthZoneMock*> auth_zones_;
   content::BrowserTaskEnvironment task_environment_;
   TestingProfile profile_;
@@ -304,7 +312,8 @@ TEST_F(PrintingOAuth2AuthorizationZonesManagerTest,
   EXPECT_EQ(cr.data, "data");
 }
 
-TEST_F(PrintingOAuth2AuthorizationZonesManagerTest, ApplySyncChanges) {
+TEST_F(PrintingOAuth2AuthorizationZonesManagerTest,
+       ApplyIncrementalSyncChanges) {
   GURL url_1("https://ala.ma.kota/albo/psa");
   GURL url_2("https://other.server:1234");
 
@@ -321,7 +330,7 @@ TEST_F(PrintingOAuth2AuthorizationZonesManagerTest, ApplySyncChanges) {
   syncer::ModelTypeSyncBridge* bridge =
       auth_zones_manager_->GetModelTypeSyncBridge();
 
-  absl::optional<syncer::ModelError> error = bridge->ApplySyncChanges(
+  std::optional<syncer::ModelError> error = bridge->ApplyIncrementalSyncChanges(
       bridge->CreateMetadataChangeList(), std::move(data_change_list));
   EXPECT_FALSE(error);
 

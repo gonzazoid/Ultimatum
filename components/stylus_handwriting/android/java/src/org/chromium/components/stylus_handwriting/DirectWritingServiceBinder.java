@@ -19,6 +19,8 @@ import android.view.View;
 import android.view.inputmethod.EditorInfo;
 import android.widget.directwriting.IDirectWritingService;
 
+import androidx.annotation.VisibleForTesting;
+
 import org.chromium.base.Log;
 import org.chromium.base.PackageUtils;
 
@@ -31,34 +33,40 @@ import java.util.List;
 class DirectWritingServiceBinder {
     private static final String TAG = "DWServiceBinder";
     private IDirectWritingService mRemoteDwService;
-    private boolean mCallbackRegistered;
     private String mPackageName;
 
-    private final ServiceConnection mConnection = new ServiceConnection() {
-        @Override
-        public void onServiceConnected(ComponentName name, IBinder service) {
-            Log.d(TAG, "onServiceConnected for " + mPackageName + ", ComponentName=" + name);
-            mRemoteDwService = IDirectWritingService.Stub.asInterface(service);
-            registerCallback();
-            updateConfiguration();
-        }
+    private final ServiceConnection mConnection =
+            new ServiceConnection() {
+                @Override
+                public void onServiceConnected(ComponentName name, IBinder service) {
+                    Log.d(
+                            TAG,
+                            "onServiceConnected for " + mPackageName + ", ComponentName=" + name);
+                    mRemoteDwService = IDirectWritingService.Stub.asInterface(service);
+                    registerCallback();
+                    updateConfiguration();
+                }
 
-        @Override
-        public void onServiceDisconnected(ComponentName name) {
-            Log.d(TAG, "onServiceDisconnected for " + mPackageName + ", ComponentName=" + name);
-            // When service is disconnected for any reason, it is needed to unbind the service so
-            // that we can reconnect and start writing again. This also ensures service callback is
-            // registered again which would have been reset at service when this happened.
-            unbindService(mContext);
-        }
-    };
+                @Override
+                public void onServiceDisconnected(ComponentName name) {
+                    Log.d(
+                            TAG,
+                            "onServiceDisconnected for "
+                                    + mPackageName
+                                    + ", ComponentName="
+                                    + name);
+                    // When service is disconnected for any reason, it is needed to unbind the
+                    // service so that we can reconnect and start writing again. This also ensures
+                    // service callback is registered again which would have been reset at service
+                    // when this happened.
+                    unbindService(mContext);
+                }
+            };
 
     private DirectWritingTriggerCallback mTriggerCallback;
     private Context mContext;
 
-    /**
-     * Callback interface for DirectWritingTrigger class.
-     */
+    /** Callback interface for DirectWritingTrigger class. */
     public interface DirectWritingTriggerCallback {
         /**
          * notify to update DW configuration.
@@ -67,9 +75,7 @@ class DirectWritingServiceBinder {
          */
         void updateConfiguration(Bundle bundle);
 
-        /**
-         * @return the object that implements DW service callback interface.
-         */
+        /** @return the object that implements DW service callback interface. */
         DirectWritingServiceCallback getServiceCallback();
     }
 
@@ -87,20 +93,30 @@ class DirectWritingServiceBinder {
         // Verify that connecting service package fingerprint matches with expected fingerprint of
         // Direct Writing service package. This is to prevent any attacker from spoofing the package
         // name and tricking Chrome into connecting to it.
-        List<String> fingerprints = PackageUtils.getCertificateSHA256FingerprintForPackage(
-                context.getPackageManager(), DirectWritingConstants.SERVICE_PKG_NAME);
-        if (fingerprints == null || fingerprints.size() > 1
-                || !(fingerprints.get(0).equals(
-                             DirectWritingConstants.SERVICE_PKG_SHA_256_FINGERPRINT_RELEASE)
-                        || fingerprints.get(0).equals(
-                                DirectWritingConstants.SERVICE_PKG_SHA_256_FINGERPRINT_DEBUG))) {
+        List<String> fingerprints =
+                PackageUtils.getCertificateSHA256FingerprintForPackage(
+                        DirectWritingConstants.SERVICE_PKG_NAME);
+        if (fingerprints == null
+                || fingerprints.size() > 1
+                || !(fingerprints
+                                .get(0)
+                                .equals(
+                                        DirectWritingConstants
+                                                .SERVICE_PKG_SHA_256_FINGERPRINT_RELEASE)
+                        || fingerprints
+                                .get(0)
+                                .equals(
+                                        DirectWritingConstants
+                                                .SERVICE_PKG_SHA_256_FINGERPRINT_DEBUG))) {
             Log.e(TAG, "Don't connect to service due to package fingerprint mismatch");
             return;
         }
         try {
             Intent intent = new Intent();
-            intent.setComponent(new ComponentName(DirectWritingConstants.SERVICE_PKG_NAME,
-                    DirectWritingConstants.SERVICE_CLS_NAME));
+            intent.setComponent(
+                    new ComponentName(
+                            DirectWritingConstants.SERVICE_PKG_NAME,
+                            DirectWritingConstants.SERVICE_CLS_NAME));
             context.bindService(intent, mConnection, BIND_AUTO_CREATE);
 
             mPackageName = context.getPackageName();
@@ -112,7 +128,16 @@ class DirectWritingServiceBinder {
         }
     }
 
-    private void handleWindowFocusLost(Context context) {
+    void setRemoteServiceForTest(IDirectWritingService remoteService) {
+        mRemoteDwService = remoteService;
+    }
+
+    void setTriggerCallbackForTest(DirectWritingTriggerCallback callback) {
+        mTriggerCallback = callback;
+    }
+
+    @VisibleForTesting
+    void handleWindowFocusLost(Context context) {
         if (!context.getPackageName().equals(mPackageName)) {
             return;
         }
@@ -131,22 +156,20 @@ class DirectWritingServiceBinder {
         resetDwServiceConnection();
     }
 
-    private void registerCallback() {
-        if (mCallbackRegistered) return;
-        assert mTriggerCallback != null;
-        DirectWritingServiceCallback serviceCallback = mTriggerCallback.getServiceCallback();
-
+    @VisibleForTesting
+    void registerCallback() {
         // It would be nice to extract the pattern of "do something with a service, surround it in
         // a try catch" into a method, unfortunately that would increase the binary size too much,
         // see:
         // https://ci.chromium.org/ui/p/chromium/builders/try/android-binary-size/1175796/overview
         if (!isServiceConnected()) return;
+        assert mTriggerCallback != null;
+        DirectWritingServiceCallback serviceCallback = mTriggerCallback.getServiceCallback();
         try {
             String callbackPackage =
                     (mPackageName + IDirectWritingService.VALUE_SERVICE_HOST_SOURCE_WEBVIEW);
             mRemoteDwService.registerCallback(serviceCallback, callbackPackage);
             Log.d(TAG, "Service callback registered");
-            mCallbackRegistered = true;
         } catch (DeadObjectException e) {
             Log.e(TAG, "registerCallback failed due to DeadObjectException.", e);
             resetDwServiceConnection();
@@ -155,16 +178,14 @@ class DirectWritingServiceBinder {
         }
     }
 
-    private void unregisterCallback() {
-        if (!mCallbackRegistered) return;
+    @VisibleForTesting
+    void unregisterCallback() {
+        if (!isServiceConnected()) return;
         assert mTriggerCallback != null;
         DirectWritingServiceCallback serviceCallback = mTriggerCallback.getServiceCallback();
-
-        if (!isServiceConnected()) return;
         try {
             mRemoteDwService.unregisterCallback(serviceCallback);
             Log.d(TAG, "Service callback unregistered");
-            mCallbackRegistered = false;
         } catch (DeadObjectException e) {
             Log.e(TAG, "unregisterCallback failed due to DeadObjectException.", e);
             resetDwServiceConnection();
@@ -175,16 +196,19 @@ class DirectWritingServiceBinder {
 
     private void resetDwServiceConnection() {
         mRemoteDwService = null;
-        mCallbackRegistered = false;
         mPackageName = "";
     }
 
     void onWindowFocusChanged(Context context, boolean hasWindowFocus) {
-        if (hasWindowFocus && isServiceConnected()) {
+        if (hasWindowFocus) {
+            // Need to register DW service callback object again when window gets focus, so that
+            // commit happens in the intended Chrome instance and web input. This is required even
+            // though we haven't unregistered the callback. This is a limitation in DW service side.
+            // It is also intentional to not unregister this callback when window loses focus, as it
+            // affects the DW done in Chrome's omnibox (url bar).
             registerCallback();
         } else {
             handleWindowFocusLost(context);
-            unregisterCallback();
         }
     }
 
@@ -251,11 +275,12 @@ class DirectWritingServiceBinder {
         }
     }
 
-    void updateEditableBounds(Rect editableBounds, View rootView) {
+    void updateEditableBounds(Rect editableBounds, View rootView, boolean isOnlyRectChanged) {
         if (!isServiceConnected()) return;
         try {
             mRemoteDwService.onBoundedEditTextChanged(
-                    DirectWritingBundleUtil.buildBundle(editableBounds, rootView));
+                    DirectWritingBundleUtil.buildBundle(
+                            editableBounds, rootView, isOnlyRectChanged));
         } catch (DeadObjectException e) {
             Log.e(TAG, "updateEditableBounds failed due to DeadObjectException.", e);
             resetDwServiceConnection();

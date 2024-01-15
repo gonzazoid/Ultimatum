@@ -36,8 +36,9 @@ class LayerTreeHostFiltersPixelTest
         return "skia_gl";
       case viz::RendererType::kSkiaVk:
         return "skia_vk";
-      case viz::RendererType::kSkiaDawn:
-        return "skia_dawn";
+      case viz::RendererType::kSkiaGraphiteDawn:
+      case viz::RendererType::kSkiaGraphiteMetal:
+        return "skia_graphite";
       case viz::RendererType::kSoftware:
         return "sw";
     }
@@ -62,7 +63,7 @@ class LayerTreeHostFiltersPixelTest
     PaintFilter::CropRect cropRect(
         SkRect::MakeXYWH(-40000, -40000, 80000, 80000));
     filters.Append(FilterOperation::CreateReferenceFilter(
-        sk_make_sp<ColorFilterPaintFilter>(SkColorFilters::Matrix(matrix),
+        sk_make_sp<ColorFilterPaintFilter>(ColorFilter::MakeMatrix(matrix),
                                            nullptr, &cropRect)));
     filter_layer->SetFilters(filters);
     background->SetMasksToBounds(masks_to_bounds);
@@ -91,12 +92,11 @@ INSTANTIATE_TEST_SUITE_P(All,
 GTEST_ALLOW_UNINSTANTIATED_PARAMETERIZED_TEST(LayerTreeHostFiltersPixelTestGPU);
 
 TEST_P(LayerTreeHostFiltersPixelTest, BackdropFilterBlurRect) {
+#if defined(MEMORY_SANITIZER)
   if (renderer_type() == viz::RendererType::kSkiaVk) {
-    // TODO(crbug.com/1354678): The vulkan expected image requires rebasing
-    // after Skia roll, so skip this test until then.
-    return;
+    GTEST_SKIP() << "TODO(crbug.com/1324336): Uninitialized data error";
   }
-
+#endif
   scoped_refptr<SolidColorLayer> background = CreateSolidColorLayer(
       gfx::Rect(200, 200), SK_ColorWHITE);
 
@@ -117,16 +117,11 @@ TEST_P(LayerTreeHostFiltersPixelTest, BackdropFilterBlurRect) {
 
 #if BUILDFLAG(IS_WIN) || defined(ARCH_CPU_ARM64)
   // Windows and ARM64 have 436 pixels off by 1: crbug.com/259915
-  float percentage_pixels_large_error = 1.09f;  // 436px / (200*200)
-  float percentage_pixels_small_error = 0.0f;
-  float average_error_allowed_in_bad_pixels = 1.f;
-  int large_error_allowed = 1;
-  int small_error_allowed = 0;
   pixel_comparator_ = std::make_unique<FuzzyPixelComparator>(
-      true,  // discard_alpha
-      percentage_pixels_large_error, percentage_pixels_small_error,
-      average_error_allowed_in_bad_pixels, large_error_allowed,
-      small_error_allowed);
+      FuzzyPixelComparator()
+          .DiscardAlpha()
+          .SetErrorPixelsPercentageLimit(1.09f)  // 436px / (200*200)
+          .SetAbsErrorLimit(1));
 #endif
 
   RunPixelTest(background,
@@ -154,7 +149,13 @@ TEST_P(LayerTreeHostFiltersPixelTest, BackdropFilterInvalid) {
       base::FilePath(FILE_PATH_LITERAL("backdrop_filter_invalid.png")));
 }
 
-TEST_P(LayerTreeHostFiltersPixelTest, BackdropFilterBlurRadius) {
+// TODO(crbug.com/1416306): currently do not pass on iOS.
+#if BUILDFLAG(IS_IOS)
+#define MAYBE_BackdropFilterBlurRadius DISABLED_BackdropFilterBlurRadius
+#else
+#define MAYBE_BackdropFilterBlurRadius BackdropFilterBlurRadius
+#endif  // BUILDFLAG(IS_IOS)
+TEST_P(LayerTreeHostFiltersPixelTest, MAYBE_BackdropFilterBlurRadius) {
 #if defined(MEMORY_SANITIZER)
   if (renderer_type() == viz::RendererType::kSkiaVk) {
     GTEST_SKIP() << "TODO(crbug.com/1324336): Uninitialized data error";
@@ -182,22 +183,16 @@ TEST_P(LayerTreeHostFiltersPixelTest, BackdropFilterBlurRadius) {
   blur->SetBackdropFilterBounds(backdrop_filter_bounds);
 
 #if BUILDFLAG(IS_FUCHSIA)
-  pixel_comparator_ = std::make_unique<FuzzyPixelOffByOneComparator>(false);
+  pixel_comparator_ = std::make_unique<FuzzyPixelOffByOneComparator>();
 #elif BUILDFLAG(IS_WIN) || defined(ARCH_CPU_ARM64)
-  // Windows and ARM64 have 436 pixels off by 1: crbug.com/259915
-  float percentage_pixels_large_error = 1.09f;  // 436px / (200*200)
-  float percentage_pixels_small_error = 0.0f;
-  float average_error_allowed_in_bad_pixels = 1.f;
-  int large_error_allowed = 2;
-  int small_error_allowed = 0;
-  // Windows using Dawn D3D12 has 4044 pixels off by max of 2.
-  if (use_d3d12())
-    percentage_pixels_large_error = 2.5275f;  // 4044px / (400*400)
+  // Windows and ARM64 have 436 pixels off by 1 or 2: crbug.com/259915
+  float percentage_pixels_error = 1.09f;  // 436px / (200*200)
   pixel_comparator_ = std::make_unique<FuzzyPixelComparator>(
-      true,  // discard_alpha
-      percentage_pixels_large_error, percentage_pixels_small_error,
-      average_error_allowed_in_bad_pixels, large_error_allowed,
-      small_error_allowed);
+      FuzzyPixelComparator()
+          .DiscardAlpha()
+          .SetErrorPixelsPercentageLimit(percentage_pixels_error)
+          .SetAvgAbsErrorLimit(1.f)
+          .SetAbsErrorLimit(2));
 #endif
   RunPixelTest(
       background,
@@ -206,6 +201,11 @@ TEST_P(LayerTreeHostFiltersPixelTest, BackdropFilterBlurRadius) {
 }
 
 TEST_P(LayerTreeHostFiltersPixelTest, BackdropFilterBlurRounded) {
+#if defined(MEMORY_SANITIZER)
+  if (renderer_type() == viz::RendererType::kSkiaVk) {
+    GTEST_SKIP() << "TODO(crbug.com/1324336): Uninitialized data error";
+  }
+#endif
   scoped_refptr<SolidColorLayer> background =
       CreateSolidColorLayer(gfx::Rect(200, 200), SK_ColorWHITE);
 
@@ -234,15 +234,16 @@ TEST_P(LayerTreeHostFiltersPixelTest, BackdropFilterBlurRounded) {
   // Allow for ~1 perimeter of the clip path to have a small error.
   float percentage_pixels_small_error = 100.f * (100*4) / (200*200);
   int large_error_limit = 128;  // Off by two samples in 4 MSAA.
-  float percentage_pixels_large_or_small_error =
-          1.01f * percentage_pixels_small_error;
+  float percentage_pixels_large_error = 0.01f * percentage_pixels_small_error;
   // Divide average error by 4 since we blur most of the result.
   float average_error_allowed_in_bad_pixels = small_error_threshold / 4.f;
   pixel_comparator_ = std::make_unique<FuzzyPixelComparator>(
-      true,  // discard_alpha
-      percentage_pixels_large_or_small_error, percentage_pixels_small_error,
-      average_error_allowed_in_bad_pixels, large_error_limit,
-      small_error_threshold);
+      FuzzyPixelComparator()
+          .DiscardAlpha()
+          .SetErrorPixelsPercentageLimit(percentage_pixels_large_error,
+                                         percentage_pixels_small_error)
+          .SetAvgAbsErrorLimit(average_error_allowed_in_bad_pixels)
+          .SetAbsErrorLimit(large_error_limit, small_error_threshold));
 
   RunPixelTest(background, use_software_renderer()
                                ? base::FilePath(FILE_PATH_LITERAL(
@@ -279,23 +280,21 @@ TEST_P(LayerTreeHostFiltersPixelTest, BackdropFilterBlurOutsets) {
 #if BUILDFLAG(IS_WIN) || defined(_MIPS_ARCH_LOONGSON) || defined(ARCH_CPU_ARM64)
 #if BUILDFLAG(IS_WIN) || defined(ARCH_CPU_ARM64)
   // Windows has 5.9325% pixels by at most 2: crbug.com/259922
-  float percentage_pixels_large_error = 6.0f;
+  float percentage_pixels_error = 6.0f;
 #else
   // Loongson has 8.685% pixels by at most 2: crbug.com/819110
-  float percentage_pixels_large_error = 8.7f;
+  float percentage_pixels_error = 8.7f;
 #endif
-  float percentage_pixels_small_error = 0.0f;
-  float average_error_allowed_in_bad_pixels = 2.f;
-  int large_error_allowed = 2;
-  int small_error_allowed = 0;
   pixel_comparator_ = std::make_unique<FuzzyPixelComparator>(
-      true,  // discard_alpha
-      percentage_pixels_large_error, percentage_pixels_small_error,
-      average_error_allowed_in_bad_pixels, large_error_allowed,
-      small_error_allowed);
+      FuzzyPixelComparator()
+          .DiscardAlpha()
+          .SetErrorPixelsPercentageLimit(percentage_pixels_error)
+          .SetAbsErrorLimit(2));
 #else
-  if (use_skia_vulkan())
-    pixel_comparator_ = std::make_unique<FuzzyPixelOffByOneComparator>(true);
+  if (use_skia_vulkan()) {
+    pixel_comparator_ =
+        std::make_unique<AlphaDiscardingFuzzyPixelOffByOneComparator>();
+  }
 #endif
 
   RunPixelTest(
@@ -389,26 +388,24 @@ TEST_P(LayerTreeHostBlurFiltersPixelTestGPULayerList,
 #if BUILDFLAG(IS_WIN) || defined(ARCH_CPU_ARM64)
 #if BUILDFLAG(IS_WIN)
   // Windows has 116 pixels off by at most 2: crbug.com/225027
-  float percentage_pixels_large_error = 0.3f;  // 116px / (200*200), rounded up
-  int large_error_allowed = 2;
-  // Windows on SkiaRenderer Dawn has 447 pixels off by at most 2.
-  if (use_d3d12())
-    percentage_pixels_large_error = 1.12f;  // 447px / (200*200), rounded up
+  float percentage_pixels_error = 0.3f;  // 116px / (200*200), rounded up
+  int error_allowed = 2;
 #else
-  float percentage_pixels_large_error = 0.25f;  // 96px / (200*200), rounded up
-  int large_error_allowed = 1;
+  float percentage_pixels_error = 0.25f;  // 96px / (200*200), rounded up
+  int error_allowed = 1;
 #endif
-  float percentage_pixels_small_error = 0.0f;
   float average_error_allowed_in_bad_pixels = 1.f;
-  int small_error_allowed = 0;
   pixel_comparator_ = std::make_unique<FuzzyPixelComparator>(
-      true,  // discard_alpha
-      percentage_pixels_large_error, percentage_pixels_small_error,
-      average_error_allowed_in_bad_pixels, large_error_allowed,
-      small_error_allowed);
+      FuzzyPixelComparator()
+          .DiscardAlpha()
+          .SetErrorPixelsPercentageLimit(percentage_pixels_error)
+          .SetAvgAbsErrorLimit(average_error_allowed_in_bad_pixels)
+          .SetAbsErrorLimit(error_allowed));
 #else
-  if (use_skia_vulkan() || renderer_type_ == viz::RendererType::kSkiaDawn)
-    pixel_comparator_ = std::make_unique<FuzzyPixelOffByOneComparator>(true);
+  if (use_skia_vulkan()) {
+    pixel_comparator_ =
+        std::make_unique<AlphaDiscardingFuzzyPixelOffByOneComparator>();
+  }
 #endif
 
   RunPixelTestWithLayerList(
@@ -468,8 +465,7 @@ class LayerTreeHostFiltersScaledPixelTest
     FilterOperation::ShapeRects alpha_shape;
     alpha_shape.emplace_back(half_content, half_content, content_size,
                              content_size);
-    filters.Append(
-        FilterOperation::CreateAlphaThresholdFilter(alpha_shape, 1.f, 0.f));
+    filters.Append(FilterOperation::CreateAlphaThresholdFilter(alpha_shape));
     foreground->SetFilters(filters);
 
     device_scale_factor_ = device_scale_factor;
@@ -541,7 +537,7 @@ TEST_P(LayerTreeHostFiltersPixelTest, ImageFilterClipped) {
   FilterOperations filters;
   filters.Append(
       FilterOperation::CreateReferenceFilter(sk_make_sp<ColorFilterPaintFilter>(
-          SkColorFilters::Matrix(matrix), nullptr, &crop_rect)));
+          ColorFilter::MakeMatrix(matrix), nullptr, &crop_rect)));
 
   // Make the foreground layer's render surface be clipped by the background
   // layer.
@@ -560,7 +556,13 @@ TEST_P(LayerTreeHostFiltersPixelTest, ImageFilterClipped) {
                base::FilePath(FILE_PATH_LITERAL("blue_yellow.png")));
 }
 
-TEST_P(LayerTreeHostFiltersPixelTest, ImageFilterScaled) {
+// TODO(crbug.com/1416306): currently do not pass on iOS.
+#if BUILDFLAG(IS_IOS)
+#define MAYBE_ImageFilterScaled DISABLED_ImageFilterScaled
+#else
+#define MAYBE_ImageFilterScaled ImageFilterScaled
+#endif  // BUILDFLAG(IS_IOS)
+TEST_P(LayerTreeHostFiltersPixelTest, MAYBE_ImageFilterScaled) {
   scoped_refptr<SolidColorLayer> background =
       CreateSolidColorLayer(gfx::Rect(200, 200), SK_ColorWHITE);
 
@@ -601,39 +603,32 @@ TEST_P(LayerTreeHostFiltersPixelTest, ImageFilterScaled) {
 
 #if BUILDFLAG(IS_FUCHSIA)
   if (renderer_type() == viz::RendererType::kSkiaVk) {
-    pixel_comparator_ = std::make_unique<FuzzyPixelOffByOneComparator>(false);
+    pixel_comparator_ = std::make_unique<FuzzyPixelOffByOneComparator>();
   }
 #elif BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_CHROMEOS) || \
     defined(_MIPS_ARCH_LOONGSON) || defined(ARCH_CPU_ARM64)
 #if BUILDFLAG(IS_WIN)
   // Windows has 153 pixels off by at most 2: crbug.com/225027
-  float percentage_pixels_large_error = 0.3825f;  // 153px / (200*200)
-  int large_error_allowed = 2;
-  // Windows using Dawn D3D12 has 166 pixels off by 1.
-  if (use_d3d12()) {
-    percentage_pixels_large_error = 0.415f;  // 166px / (200*200)
-    large_error_allowed = 1;
-  }
+  float percentage_pixels_error = 0.3825f;  // 153px / (200*200)
+  int error_allowed = 2;
 #elif BUILDFLAG(IS_MAC) || BUILDFLAG(IS_CHROMEOS)
   // There's a 1 pixel error on MacOS and ChromeOS
-  float percentage_pixels_large_error = 0.0025f;  // 1px / (200*200)
-  int large_error_allowed = 1;
+  float percentage_pixels_error = 0.0025f;  // 1px / (200*200)
+  int error_allowed = 1;
 #elif defined(_MIPS_ARCH_LOONGSON)
   // Loongson has 2 pixels off by at most 2: crbug.com/819075
-  float percentage_pixels_large_error = 0.005f;  // 2px / (200*200)
-  int large_error_allowed = 2;
+  float percentage_pixels_error = 0.005f;  // 2px / (200*200)
+  int error_allowed = 2;
 #else
-  float percentage_pixels_large_error = 0.0325f;  // 13px / (200*200)
-  int large_error_allowed = 1;
+  float percentage_pixels_error = 0.0325f;  // 13px / (200*200)
+  int error_allowed = 1;
 #endif
-  float percentage_pixels_small_error = 0.0f;
-  float average_error_allowed_in_bad_pixels = 1.f;
-  int small_error_allowed = 0;
   pixel_comparator_ = std::make_unique<FuzzyPixelComparator>(
-      true,  // discard_alpha
-      percentage_pixels_large_error, percentage_pixels_small_error,
-      average_error_allowed_in_bad_pixels, large_error_allowed,
-      small_error_allowed);
+      FuzzyPixelComparator()
+          .DiscardAlpha()
+          .SetErrorPixelsPercentageLimit(percentage_pixels_error)
+          .SetAvgAbsErrorLimit(1.f)
+          .SetAbsErrorLimit(error_allowed));
 #endif
 
   RunPixelTest(
@@ -642,7 +637,18 @@ TEST_P(LayerTreeHostFiltersPixelTest, ImageFilterScaled) {
           .InsertBeforeExtensionASCII(GetRendererSuffix()));
 }
 
-TEST_P(LayerTreeHostFiltersPixelTest, BackdropFilterRotated) {
+// TODO(crbug.com/1416306): currently do not pass on iOS.
+#if BUILDFLAG(IS_IOS)
+#define MAYBE_BackdropFilterRotated DISABLED_BackdropFilterRotated
+#else
+#define MAYBE_BackdropFilterRotated BackdropFilterRotated
+#endif  // BUILDFLAG(IS_IOS)
+TEST_P(LayerTreeHostFiltersPixelTest, MAYBE_BackdropFilterRotated) {
+  if (renderer_type() == viz::RendererType::kSkiaVk) {
+    // TODO(crbug.com/1354678): The vulkan expected image requires rebasing
+    // after Skia roll, so skip this test until then.
+    return;
+  }
   // Add a white background with a rotated red rect in the center.
   scoped_refptr<SolidColorLayer> background =
       CreateSolidColorLayer(gfx::Rect(200, 200), SK_ColorWHITE);
@@ -683,23 +689,24 @@ TEST_P(LayerTreeHostFiltersPixelTest, BackdropFilterRotated) {
   // changes to blur or rectangle rendering.
   // Fuchsia/Flutter forces off the lowp skia raster pipeline resulting
   // in a totally different code path for software rendering.
-  float percentage_pixels_large_error = 5.f;
-  float percentage_pixels_small_error = 0.0f;
-  float average_error_allowed_in_bad_pixels = 2.f;
-  int large_error_allowed = 2;
-  int small_error_allowed = 0;
   pixel_comparator_ = std::make_unique<FuzzyPixelComparator>(
-      true,  // discard_alpha
-      percentage_pixels_large_error, percentage_pixels_small_error,
-      average_error_allowed_in_bad_pixels, large_error_allowed,
-      small_error_allowed);
+      FuzzyPixelComparator()
+          .DiscardAlpha()
+          .SetErrorPixelsPercentageLimit(5.f)
+          .SetAbsErrorLimit(3));
 
   RunPixelTest(background,
                base::FilePath(FILE_PATH_LITERAL("backdrop_filter_rotated_.png"))
                    .InsertBeforeExtensionASCII(GetRendererSuffix()));
 }
 
-TEST_P(LayerTreeHostFiltersPixelTest, ImageRenderSurfaceScaled) {
+// TODO(crbug.com/1416306): currently do not pass on iOS.
+#if BUILDFLAG(IS_IOS)
+#define MAYBE_ImageRenderSurfaceScaled DISABLED_ImageRenderSurfaceScaled
+#else
+#define MAYBE_ImageRenderSurfaceScaled ImageRenderSurfaceScaled
+#endif  // BUILDFLAG(IS_IOS)
+TEST_P(LayerTreeHostFiltersPixelTest, MAYBE_ImageRenderSurfaceScaled) {
   // A filter will cause a render surface to be used.  Here we force the
   // render surface on, and scale the result to make sure that we rasterize at
   // the correct resolution.
@@ -729,27 +736,29 @@ TEST_P(LayerTreeHostFiltersPixelTest, ImageRenderSurfaceScaled) {
 
   background->AddChild(render_surface_layer);
 
-  float percentage_pixels_large_error = 0.0f;
-  float percentage_pixels_small_error = 0.0f;
+  float percentage_pixels_error = 0.0f;
   float average_error_allowed_in_bad_pixels = 0.0f;
-  int large_error_allowed = 0;
-  int small_error_allowed = 0;
+  int error_allowed = 0;
   if (use_software_renderer()) {
     // Software has some huge differences in the AA'd pixels on the different
     // trybots. See crbug.com/452198.
-    percentage_pixels_large_error = 0.686f;
+    percentage_pixels_error = 0.686f;
     average_error_allowed_in_bad_pixels = 16.f;
-    large_error_allowed = 17;
-  } else if (use_d3d12()) {
-    // Windows using Dawn D3D12 has 25 pixels off by 1.
-    percentage_pixels_large_error = 0.028;
-    average_error_allowed_in_bad_pixels = 1.f;
-    large_error_allowed = 1;
+    error_allowed = 17;
+  }
+  if (use_skia_graphite()) {
+    // Skia-Graphite has some minor differences in the AA'd pixels on the
+    // different trybots. See crbug.com/1482558.
+    percentage_pixels_error = 0.02f;
+    average_error_allowed_in_bad_pixels = 2.f;
+    error_allowed = 2;
   }
   pixel_comparator_ = std::make_unique<FuzzyPixelComparator>(
-      /*discard_alpha=*/true, percentage_pixels_large_error,
-      percentage_pixels_small_error, average_error_allowed_in_bad_pixels,
-      large_error_allowed, small_error_allowed);
+      FuzzyPixelComparator()
+          .DiscardAlpha()
+          .SetErrorPixelsPercentageLimit(percentage_pixels_error)
+          .SetAvgAbsErrorLimit(average_error_allowed_in_bad_pixels)
+          .SetAbsErrorLimit(error_allowed));
 
   RunPixelTest(
       background,
@@ -757,21 +766,34 @@ TEST_P(LayerTreeHostFiltersPixelTest, ImageRenderSurfaceScaled) {
           .InsertBeforeExtensionASCII(GetRendererSuffix()));
 }
 
-TEST_P(LayerTreeHostFiltersPixelTest, ZoomFilter) {
+// TODO(crbug.com/1416306): currently does not pass on iOS.
+#if BUILDFLAG(IS_IOS)
+#define MAYBE_ZoomFilter DISABLED_ZoomFilter
+#else
+#define MAYBE_ZoomFilter ZoomFilter
+#endif  // BUILDFLAG(IS_IOS)
+TEST_P(LayerTreeHostFiltersPixelTest, MAYBE_ZoomFilter) {
+  // ZOOM_FILTER is unsupported by software_renderer (crbug.com/1451898)
+  if (use_software_renderer()) {
+    return;
+  }
   scoped_refptr<SolidColorLayer> root =
       CreateSolidColorLayer(gfx::Rect(300, 300), SK_ColorWHITE);
 
-  // Create the pattern. Two blue/yellow side by side blocks with a horizontal
-  // green strip.
+  // Create the pattern. Two blue/yellow side by side blocks with two horizontal
+  // green strips.
   scoped_refptr<SolidColorLayer> left =
       CreateSolidColorLayer(gfx::Rect(0, 0, 100, 150), SK_ColorBLUE);
   root->AddChild(left);
   scoped_refptr<SolidColorLayer> right =
       CreateSolidColorLayer(gfx::Rect(100, 0, 200, 150), SK_ColorYELLOW);
   root->AddChild(right);
-  scoped_refptr<SolidColorLayer> horizontal_strip =
+  scoped_refptr<SolidColorLayer> top_horizontal_strip =
       CreateSolidColorLayer(gfx::Rect(0, 10, 300, 10), SK_ColorGREEN);
-  root->AddChild(horizontal_strip);
+  root->AddChild(top_horizontal_strip);
+  scoped_refptr<SolidColorLayer> bottom_horizontal_strip =
+      CreateSolidColorLayer(gfx::Rect(0, 275, 300, 10), SK_ColorGREEN);
+  root->AddChild(bottom_horizontal_strip);
 
   // Test a zoom that extends past the edge of the screen.
   scoped_refptr<SolidColorLayer> border_edge_zoom =
@@ -785,7 +807,7 @@ TEST_P(LayerTreeHostFiltersPixelTest, ZoomFilter) {
       gfx::RRectF(border_filter_bounds, 0));
   root->AddChild(border_edge_zoom);
 
-  // Test a zoom that extends past the edge of the screen.
+  // Test a zoom that extends past the top edge of the screen.
   scoped_refptr<SolidColorLayer> top_edge_zoom =
       CreateSolidColorLayer(gfx::Rect(70, -10, 50, 50), SK_ColorTRANSPARENT);
   FilterOperations top_filters;
@@ -795,6 +817,43 @@ TEST_P(LayerTreeHostFiltersPixelTest, ZoomFilter) {
   gfx::RectF top_filter_bounds(gfx::SizeF(top_edge_zoom->bounds()));
   top_edge_zoom->SetBackdropFilterBounds(gfx::RRectF(top_filter_bounds, 0));
   root->AddChild(top_edge_zoom);
+
+  // Test a zoom centered near the top left of the screen.
+  scoped_refptr<SolidColorLayer> top_left_zoom =
+      CreateSolidColorLayer(gfx::Rect(-24, -24, 50, 50), SK_ColorTRANSPARENT);
+  FilterOperations top_left_filters;
+  top_left_filters.Append(
+      FilterOperation::CreateZoomFilter(1.25f /* zoom */, 0 /* inset */));
+  top_left_zoom->SetBackdropFilters(top_left_filters);
+  gfx::RectF top_left_filter_bounds(gfx::SizeF(top_left_zoom->bounds()));
+  top_left_zoom->SetBackdropFilterBounds(
+      gfx::RRectF(top_left_filter_bounds, 0));
+  root->AddChild(top_left_zoom);
+
+  // Test a zoom centered near the top right of the screen.
+  scoped_refptr<SolidColorLayer> top_right_zoom =
+      CreateSolidColorLayer(gfx::Rect(274, -24, 50, 50), SK_ColorTRANSPARENT);
+  FilterOperations top_right_filters;
+  top_right_filters.Append(
+      FilterOperation::CreateZoomFilter(4.0f /* zoom */, 0 /* inset */));
+  top_right_zoom->SetBackdropFilters(top_right_filters);
+  gfx::RectF top_right_filter_bounds(gfx::SizeF(top_right_zoom->bounds()));
+  top_right_zoom->SetBackdropFilterBounds(
+      gfx::RRectF(top_right_filter_bounds, 0));
+  root->AddChild(top_right_zoom);
+
+  // Test a zoom centered near the bottom right of the screen.
+  scoped_refptr<SolidColorLayer> bottom_right_zoom =
+      CreateSolidColorLayer(gfx::Rect(270, 270, 50, 50), SK_ColorTRANSPARENT);
+  FilterOperations bottom_right_filters;
+  bottom_right_filters.Append(
+      FilterOperation::CreateZoomFilter(1.25f /* zoom */, 0 /* inset */));
+  bottom_right_zoom->SetBackdropFilters(bottom_right_filters);
+  gfx::RectF bottom_right_filter_bounds(
+      gfx::SizeF(bottom_right_zoom->bounds()));
+  bottom_right_zoom->SetBackdropFilterBounds(
+      gfx::RRectF(bottom_right_filter_bounds, 0));
+  root->AddChild(bottom_right_zoom);
 
   // Test a zoom that is fully within the screen.
   scoped_refptr<SolidColorLayer> contained_zoom =
@@ -809,16 +868,11 @@ TEST_P(LayerTreeHostFiltersPixelTest, ZoomFilter) {
 
 #if BUILDFLAG(IS_WIN)
   // Windows has 1 pixel off by 1: crbug.com/259915
-  float percentage_pixels_large_error = 0.00111112f;  // 1px / (300*300)
-  float percentage_pixels_small_error = 0.0f;
-  float average_error_allowed_in_bad_pixels = 1.f;
-  int large_error_allowed = 1;
-  int small_error_allowed = 0;
   pixel_comparator_ = std::make_unique<FuzzyPixelComparator>(
-      true,  // discard_alpha
-      percentage_pixels_large_error, percentage_pixels_small_error,
-      average_error_allowed_in_bad_pixels, large_error_allowed,
-      small_error_allowed);
+      FuzzyPixelComparator()
+          .DiscardAlpha()
+          .SetErrorPixelsPercentageLimit(0.00111112f)  // 1px / (300*300)
+          .SetAbsErrorLimit(1));
 #endif
 
   RunPixelTest(std::move(root),
@@ -826,7 +880,13 @@ TEST_P(LayerTreeHostFiltersPixelTest, ZoomFilter) {
                    .InsertBeforeExtensionASCII(GetRendererSuffix()));
 }
 
-TEST_P(LayerTreeHostFiltersPixelTest, RotatedFilter) {
+// TODO(crbug.com/1416306): currently do not pass on iOS.
+#if BUILDFLAG(IS_IOS)
+#define MAYBE_RotatedFilter DISABLED_RotatedFilter
+#else
+#define MAYBE_RotatedFilter RotatedFilter
+#endif  // BUILDFLAG(IS_IOS)
+TEST_P(LayerTreeHostFiltersPixelTest, MAYBE_RotatedFilter) {
   scoped_refptr<SolidColorLayer> background =
       CreateSolidColorLayer(gfx::Rect(300, 300), SK_ColorWHITE);
 
@@ -848,34 +908,30 @@ TEST_P(LayerTreeHostFiltersPixelTest, RotatedFilter) {
 
   background->AddChild(child);
 
-#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_FUCHSIA) || BUILDFLAG(IS_MAC)
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_FUCHSIA) || BUILDFLAG(IS_APPLE)
 #if defined(ARCH_CPU_ARM64)
-  // Windows, macOS, and Fuchsia on ARM64 has some pixels difference
+  // Windows, macOS, iOS and Fuchsia on ARM64 has some pixels difference
   // crbug.com/1029728, crbug.com/1048249, crbug.com/1128443
-  float percentage_pixels_large_error = 1.f;
+  float percentage_pixels_error = 1.f;
   float average_error_allowed_in_bad_pixels = 2.f;
-  int large_error_allowed = 3;
+  int error_allowed = 3;
 #elif BUILDFLAG(IS_WIN)
   // Windows has 1 pixel off by 1: crbug.com/259915
-  float percentage_pixels_large_error = 0.00111112f;  // 1px / (300*300)
+  float percentage_pixels_error = 0.00111112f;  // 1px / (300*300)
   float average_error_allowed_in_bad_pixels = 1.f;
-  int large_error_allowed = 1;
-  // Windows using Dawn D3D12 has 104 pixels off by 1.
-  if (use_d3d12())
-    percentage_pixels_large_error = 0.115556f;  // 104px / (300*300)
+  int error_allowed = 1;
 #else
-  float percentage_pixels_large_error = 0.0f;  // 1px / (300*300)
+  float percentage_pixels_error = 0.0f;  // 1px / (300*300)
   float average_error_allowed_in_bad_pixels = 0.0f;
-  int large_error_allowed = 0;
+  int error_allowed = 0;
 #endif
-  float percentage_pixels_small_error = 0.0f;
-  int small_error_allowed = 0;
   pixel_comparator_ = std::make_unique<FuzzyPixelComparator>(
-      true,  // discard_alpha
-      percentage_pixels_large_error, percentage_pixels_small_error,
-      average_error_allowed_in_bad_pixels, large_error_allowed,
-      small_error_allowed);
-#endif
+      FuzzyPixelComparator()
+          .DiscardAlpha()
+          .SetErrorPixelsPercentageLimit(percentage_pixels_error)
+          .SetAvgAbsErrorLimit(average_error_allowed_in_bad_pixels)
+          .SetAbsErrorLimit(error_allowed));
+#endif  // BUILDFLAG(IS_WIN) || BUILDFLAG(IS_FUCHSIA) || BUILDFLAG(IS_APPLE)
 
   RunPixelTest(background,
                base::FilePath(FILE_PATH_LITERAL("rotated_filter_.png"))
@@ -910,38 +966,43 @@ TEST_P(LayerTreeHostFiltersPixelTest, RotatedDropShadowFilter) {
   background->AddChild(child);
 
 #if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_CHROMEOS) || \
-    defined(ARCH_CPU_ARM64) || defined(USE_OZONE)
+    defined(ARCH_CPU_ARM64) || BUILDFLAG(IS_OZONE)
 #if defined(ARCH_CPU_ARM64) && \
-    (BUILDFLAG(IS_WIN) || BUILDFLAG(IS_FUCHSIA) || BUILDFLAG(IS_MAC))
+    (BUILDFLAG(IS_WIN) || BUILDFLAG(IS_FUCHSIA) || BUILDFLAG(IS_APPLE))
+
   // Windows, macOS, and Fuchsia on ARM64 has some pixels difference.
   // crbug.com/1029728, crbug.com/1128443
-  float percentage_pixels_large_error = 0.89f;
+#if !BUILDFLAG(IS_IOS)
+  float percentage_pixels_error = 0.89f;
+#else
+  // iOS on ARM64 has some more differing pixels.
+  float percentage_pixels_error = 0.96f;
+#endif
+
   float average_error_allowed_in_bad_pixels = 5.f;
-  int large_error_allowed = 17;
-#elif BUILDFLAG(IS_MAC) || BUILDFLAG(IS_CHROMEOS) || defined(USE_OZONE)
+  int error_allowed = 17;
+#elif BUILDFLAG(IS_APPLE) || BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_OZONE)
   // There's a 1 pixel error on MacOS and ChromeOS
-  float percentage_pixels_large_error = 0.00111112f;  // 1px / (300*300)
+  float percentage_pixels_error = 0.00111112f;  // 1px / (300*300)
   float average_error_allowed_in_bad_pixels = 1.f;
-  int large_error_allowed = 1;
+  int error_allowed = 1;
 #else
   // Windows and all other ARM64 have 3 pixels off by 1: crbug.com/259915
-  float percentage_pixels_large_error = 0.00333334f;  // 3px / (300*300)
+  float percentage_pixels_error = 0.00333334f;  // 3px / (300*300)
   float average_error_allowed_in_bad_pixels = 1.f;
-  int large_error_allowed = 1;
-  // Windows using Dawn D3D12 has 22 pixels off by 1.
-  if (use_d3d12())
-    percentage_pixels_large_error = 0.02445;  // 22px / (300*300)
+  int error_allowed = 1;
 #endif
-  float percentage_pixels_small_error = 0.0f;
-  int small_error_allowed = 0;
   pixel_comparator_ = std::make_unique<FuzzyPixelComparator>(
-      true,  // discard_alpha
-      percentage_pixels_large_error, percentage_pixels_small_error,
-      average_error_allowed_in_bad_pixels, large_error_allowed,
-      small_error_allowed);
+      FuzzyPixelComparator()
+          .DiscardAlpha()
+          .SetErrorPixelsPercentageLimit(percentage_pixels_error)
+          .SetAvgAbsErrorLimit(average_error_allowed_in_bad_pixels)
+          .SetAbsErrorLimit(error_allowed));
 #else
-  if (use_skia_vulkan())
-    pixel_comparator_ = std::make_unique<FuzzyPixelOffByOneComparator>(true);
+  if (use_skia_vulkan()) {
+    pixel_comparator_ =
+        std::make_unique<AlphaDiscardingFuzzyPixelOffByOneComparator>();
+  }
 #endif
 
   RunPixelTest(
@@ -984,8 +1045,10 @@ TEST_P(LayerTreeHostFiltersPixelTest, TranslatedFilter) {
   parent->AddChild(child);
   clip->AddChild(parent);
 
-  if (use_software_renderer() || renderer_type_ == viz::RendererType::kSkiaDawn)
-    pixel_comparator_ = std::make_unique<FuzzyPixelOffByOneComparator>(true);
+  if (use_software_renderer()) {
+    pixel_comparator_ =
+        std::make_unique<AlphaDiscardingFuzzyPixelOffByOneComparator>();
+  }
 
   RunPixelTest(clip, base::FilePath(
                          FILE_PATH_LITERAL("translated_blue_green_alpha.png")));
@@ -1017,8 +1080,7 @@ TEST_P(LayerTreeHostFiltersPixelTest, EnlargedTextureWithAlphaThresholdFilter) {
   rect2.Inset(-5);
   FilterOperation::ShapeRects alpha_shape = {rect1, rect2};
   FilterOperations filters;
-  filters.Append(
-      FilterOperation::CreateAlphaThresholdFilter(alpha_shape, 0.f, 0.f));
+  filters.Append(FilterOperation::CreateAlphaThresholdFilter(alpha_shape));
   filter_layer->SetFilters(filters);
 
   background->AddChild(filter_layer);
@@ -1026,9 +1088,12 @@ TEST_P(LayerTreeHostFiltersPixelTest, EnlargedTextureWithAlphaThresholdFilter) {
   // Force the allocation a larger textures.
   set_enlarge_texture_amount(gfx::Size(50, 50));
 
-  RunPixelTest(
-      background,
-      base::FilePath(FILE_PATH_LITERAL("enlarged_texture_on_threshold.png")));
+  base::FilePath expected_result =
+      base::FilePath(FILE_PATH_LITERAL("enlarged_texture_on_threshold.png"));
+  if (use_skia_graphite()) {
+    expected_result = expected_result.InsertBeforeExtensionASCII("_graphite");
+  }
+  RunPixelTest(background, expected_result);
 }
 
 TEST_P(LayerTreeHostFiltersPixelTest, EnlargedTextureWithCropOffsetFilter) {
@@ -1064,9 +1129,12 @@ TEST_P(LayerTreeHostFiltersPixelTest, EnlargedTextureWithCropOffsetFilter) {
   // Force the allocation a larger textures.
   set_enlarge_texture_amount(gfx::Size(50, 50));
 
-  RunPixelTest(
-      background,
-      base::FilePath(FILE_PATH_LITERAL("enlarged_texture_on_crop_offset.png")));
+  base::FilePath expected_result =
+      base::FilePath(FILE_PATH_LITERAL("enlarged_texture_on_crop_offset.png"));
+  if (use_skia_graphite()) {
+    expected_result = expected_result.InsertBeforeExtensionASCII("_graphite");
+  }
+  RunPixelTest(background, expected_result);
 }
 
 TEST_P(LayerTreeHostFiltersPixelTest, BlurFilterWithClip) {
@@ -1096,21 +1164,18 @@ TEST_P(LayerTreeHostFiltersPixelTest, BlurFilterWithClip) {
 #if BUILDFLAG(IS_WIN) || defined(ARCH_CPU_ARM64)
 #if BUILDFLAG(IS_WIN)
   // Windows has 1880 pixels off by 1: crbug.com/259915
-  float percentage_pixels_large_error = 4.7f;  // 1880px / (200*200)
+  float percentage_pixels_error = 4.7f;  // 1880px / (200*200)
 #else
   // Differences in floating point calculation on ARM means a small percentage
   // of pixels will have small differences.
-  float percentage_pixels_large_error = 2.76f;  // 1104px / (200*200)
+  float percentage_pixels_error = 2.76f;  // 1104px / (200*200)
 #endif
-  float percentage_pixels_small_error = 0.0f;
-  float average_error_allowed_in_bad_pixels = 1.f;
-  int large_error_allowed = 2;
-  int small_error_allowed = 0;
   pixel_comparator_ = std::make_unique<FuzzyPixelComparator>(
-      true,  // discard_alpha
-      percentage_pixels_large_error, percentage_pixels_small_error,
-      average_error_allowed_in_bad_pixels, large_error_allowed,
-      small_error_allowed);
+      FuzzyPixelComparator()
+          .DiscardAlpha()
+          .SetErrorPixelsPercentageLimit(percentage_pixels_error)
+          .SetAvgAbsErrorLimit(1.f)
+          .SetAbsErrorLimit(2));
 #endif
 
   RunPixelTest(filter_layer,
@@ -1132,7 +1197,7 @@ TEST_P(LayerTreeHostFiltersPixelTestGPU, FilterWithGiantCropRectNoClip) {
 
 class BackdropFilterOffsetTest : public LayerTreeHostFiltersPixelTest {
  protected:
-  void RunPixelTestType(int device_scale_factor) {
+  void RunPixelTestType(float device_scale_factor) {
     scoped_refptr<Layer> root =
         CreateSolidColorLayer(gfx::Rect(200, 200), SK_ColorWHITE);
     scoped_refptr<SolidColorLayer> background =
@@ -1204,7 +1269,7 @@ TEST_P(BackdropFilterOffsetTest, HiDpi) {
 
 class BackdropFilterInvertTest : public LayerTreeHostFiltersPixelTest {
  protected:
-  void RunPixelTestType(int device_scale_factor) {
+  void RunPixelTestType(float device_scale_factor) {
     scoped_refptr<Layer> root =
         CreateSolidColorLayer(gfx::Rect(200, 200), SK_ColorGREEN);
     scoped_refptr<SolidColorLayer> filtered =
@@ -1223,18 +1288,9 @@ class BackdropFilterInvertTest : public LayerTreeHostFiltersPixelTest {
         base::NumberToString(device_scale_factor) + "x");
     if (use_software_renderer()) {
       expected_result = expected_result.InsertBeforeExtensionASCII("_sw");
-    } else if (use_d3d12()) {
-      // Windows using Dawn D3D12 has 16 pixels off by 1.
-      float percentage_pixels_large_error = 0.04f;  // 16px / (200*200)
-      float average_error_allowed_in_bad_pixels = 1.f;
-      int large_error_allowed = 1;
-      float percentage_pixels_small_error = 0.0f;
-      int small_error_allowed = 0;
-      pixel_comparator_ = std::make_unique<FuzzyPixelComparator>(
-          true,  // discard_alpha
-          percentage_pixels_large_error, percentage_pixels_small_error,
-          average_error_allowed_in_bad_pixels, large_error_allowed,
-          small_error_allowed);
+    }
+    if (use_skia_graphite()) {
+      expected_result = expected_result.InsertBeforeExtensionASCII("_graphite");
     }
     RunPixelTest(std::move(root), expected_result);
   }
@@ -1261,7 +1317,105 @@ TEST_P(BackdropFilterInvertTest, StandardDpi) {
   RunPixelTestType(1.f);
 }
 
-TEST_P(BackdropFilterInvertTest, HiDpi) {
+// TODO(crbug.com/1416306): currently do not pass on iOS.
+#if BUILDFLAG(IS_IOS)
+#define MAYBE_HiDpi DISABLED_HiDpi
+#else
+#define MAYBE_HiDpi HiDpi
+#endif  // BUILDFLAG(IS_IOS)
+TEST_P(BackdropFilterInvertTest, MAYBE_HiDpi) {
+  RunPixelTestType(2.f);
+}
+
+// Combines backdrop and forward filters on a single layer.
+class MixedFilterZoomAndOffsetTest : public LayerTreeHostFiltersPixelTest {
+ protected:
+  void RunPixelTestType(float device_scale_factor) {
+    scoped_refptr<Layer> root =
+        CreateSolidColorLayer(gfx::Rect(110, 200), SK_ColorGREEN);
+
+    const gfx::Rect zoom_rect{20, 110, 70, 70};
+
+    gfx::Rect backdrop_content_rect = zoom_rect;
+    root->AddChild(CreateSolidColorLayer(backdrop_content_rect, SK_ColorBLACK));
+    backdrop_content_rect.Inset(10);
+    root->AddChild(CreateSolidColorLayer(backdrop_content_rect, SK_ColorGRAY));
+    backdrop_content_rect.Inset(10);
+    root->AddChild(CreateSolidColorLayer(backdrop_content_rect, SK_ColorWHITE));
+
+    // Placed above 'background_content' to filter using the ZOOM backdrop
+    // effect, but then its regular OFFSET filter operation moves it to the
+    // upper half of the root layer.
+    scoped_refptr<SolidColorLayer> filtered =
+        CreateSolidColorLayer(zoom_rect, SK_ColorTRANSPARENT);
+
+    FilterOperations backdrop_filters;
+    backdrop_filters.Append(FilterOperation::CreateZoomFilter(2.5f, 5.f));
+    filtered->SetBackdropFilters(backdrop_filters);
+    FilterOperations filters;
+    filters.Append(FilterOperation::CreateOffsetFilter({0, -90}));
+    filtered->SetFilters(filters);
+
+    // This should be applied to the ZOOM output *before* the OFFSET moves
+    // everything above the white layer.
+    gfx::RRectF backdrop_filter_bounds(
+        gfx::RectF(gfx::SizeF(filtered->bounds())), 10);
+    filtered->SetBackdropFilterBounds(backdrop_filter_bounds);
+    root->AddChild(filtered);
+
+    device_scale_factor_ = device_scale_factor;
+
+    base::FilePath expected_result =
+        base::FilePath(FILE_PATH_LITERAL("mixed_filters_zoom_offset_.png"));
+    expected_result = expected_result.InsertBeforeExtensionASCII(
+        base::NumberToString(device_scale_factor) + "x");
+
+    // Different OSes and GL vs. Vulkan produce slightly different outputs.
+    float error_percent = 0.02f;
+    float avg_error = 1.f;
+    float max_error = 1.f;
+    if (use_skia_graphite()) {
+      // Graphite's round rect clipping differs in AA from Ganesh, so increase
+      // the allowed differences (vs. a ganesh-rendered image).
+      error_percent = 0.28f;
+      avg_error = 26.1f;
+      max_error = 61.f;
+    }
+
+    pixel_comparator_ = std::make_unique<FuzzyPixelComparator>(
+        FuzzyPixelComparator()
+            .SetErrorPixelsPercentageLimit(error_percent)
+            .SetAvgAbsErrorLimit(avg_error)
+            .SetAbsErrorLimit(max_error));
+    RunPixelTest(std::move(root), expected_result);
+  }
+
+ private:
+  // LayerTreePixelTest overrides
+  void SetupTree() override {
+    SetInitialDeviceScaleFactor(device_scale_factor_);
+    LayerTreeHostFiltersPixelTest::SetupTree();
+  }
+
+  float device_scale_factor_ = 1;
+};
+
+// TODO(989329): SW renderer does not handle simultaneous filters, so
+// the zoomed offset layer does not show up in its expected image.
+// For now only run on SkiaRenderer-based compositors.
+INSTANTIATE_TEST_SUITE_P(,
+                         MixedFilterZoomAndOffsetTest,
+                         ::testing::ValuesIn(viz::GetGpuRendererTypes()),
+                         ::testing::PrintToStringParamName());
+
+// viz::GetGpuRendererTypes() can return an empty list on some platforms.
+GTEST_ALLOW_UNINSTANTIATED_PARAMETERIZED_TEST(MixedFilterZoomAndOffsetTest);
+
+TEST_P(MixedFilterZoomAndOffsetTest, StandardDpi) {
+  RunPixelTestType(1.f);
+}
+
+TEST_P(MixedFilterZoomAndOffsetTest, HiDpi) {
   RunPixelTestType(2.f);
 }
 

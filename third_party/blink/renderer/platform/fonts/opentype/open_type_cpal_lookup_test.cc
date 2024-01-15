@@ -39,12 +39,12 @@ class OpenTypeCpalLookupTest : public FontTestBase {
     FontDescription::VariantLigatures ligatures;
 
     Font colr_palette_font = blink::test::CreateTestFont(
-        "Ahem", pathToColrPalettesTestFont(), 16, &ligatures);
+        AtomicString("Ahem"), pathToColrPalettesTestFont(), 16, &ligatures);
     colr_palette_typeface_ =
         sk_ref_sp(colr_palette_font.PrimaryFont()->PlatformData().Typeface());
 
     Font non_colr_font = blink::test::CreateTestFont(
-        "Ahem", pathToNonColrTestFont(), 16, &ligatures);
+        AtomicString("Ahem"), pathToNonColrTestFont(), 16, &ligatures);
     non_colr_ahem_typeface_ =
         sk_ref_sp(non_colr_font.PrimaryFont()->PlatformData().Typeface());
   }
@@ -79,6 +79,28 @@ TEST_F(OpenTypeCpalLookupTest, DarkLightPalettes) {
     EXPECT_TRUE(palette_result.has_value());
     EXPECT_EQ(*palette_result, expectation.second);
   }
+}
+
+TEST_F(OpenTypeCpalLookupTest, RetrieveColorRecordsFromExistingPalette) {
+  Vector<Color> expected_color_records = {
+      Color::FromRGBA(255, 255, 0, 255),   Color::FromRGBA(0, 0, 255, 255),
+      Color::FromRGBA(255, 0, 255, 255),   Color::FromRGBA(0, 255, 255, 255),
+      Color::FromRGBA(255, 255, 255, 255), Color::FromRGBA(0, 0, 0, 255),
+      Color::FromRGBA(255, 0, 0, 255),     Color::FromRGBA(0, 255, 0, 255),
+  };
+
+  Vector<Color> actual_color_records =
+      OpenTypeCpalLookup::RetrieveColorRecords(colr_palette_typeface_, 3);
+
+  EXPECT_EQ(expected_color_records, actual_color_records);
+}
+
+TEST_F(OpenTypeCpalLookupTest, RetrieveColorRecordsFromNonExistingPalette) {
+  // Palette at index 16 does not exist in the font should return empty Vector
+  Vector<Color> actual_color_records =
+      OpenTypeCpalLookup::RetrieveColorRecords(colr_palette_typeface_, 16);
+
+  EXPECT_EQ(actual_color_records.size(), 0u);
 }
 
 }  // namespace blink

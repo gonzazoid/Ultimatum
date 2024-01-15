@@ -7,7 +7,7 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "ui/aura/client/capture_client.h"
 #include "ui/aura/client/cursor_client.h"
@@ -19,7 +19,6 @@
 #include "ui/base/dragdrop/drag_drop_types.h"
 #include "ui/base/dragdrop/drop_target_event.h"
 #include "ui/base/dragdrop/mojom/drag_drop_types.mojom.h"
-#include "ui/base/layout.h"
 #include "ui/compositor/layer.h"
 #include "ui/ozone/public/ozone_platform.h"
 #include "ui/platform_window/platform_window_delegate.h"
@@ -74,7 +73,7 @@ std::unique_ptr<views::Widget> CreateDragWidget(
 
   std::unique_ptr<views::ImageView> image_view =
       std::make_unique<views::ImageView>();
-  image_view->SetImage(image);
+  image_view->SetImage(ui::ImageModel::FromImageSkia(image));
   widget->SetContentsView(std::move(image_view));
   widget->Show();
   widget->GetNativeWindow()->layer()->SetFillsBoundsOpaquely(false);
@@ -91,7 +90,7 @@ void DropIfAllowed(const ui::OSExchangeData* drag_data,
                    base::OnceClosure drop_cb) {
   if (ui::DataTransferPolicyController::HasInstance()) {
     ui::DataTransferPolicyController::Get()->DropIfAllowed(
-        drag_data->GetSource(), &drag_info.data_endpoint, std::move(drop_cb));
+        drag_data, &drag_info.data_endpoint, std::move(drop_cb));
   } else {
     std::move(drop_cb).Run();
   }
@@ -105,7 +104,8 @@ void PerformDrop(aura::client::DragDropDelegate::DropCallback drop_cb,
                  base::ScopedClosureRunner drag_cancel) {
   if (drop_cb) {
     auto output_drag_op = ui::mojom::DragOperation::kNone;
-    std::move(drop_cb).Run(std::move(data_to_drop), output_drag_op);
+    std::move(drop_cb).Run(std::move(data_to_drop), output_drag_op,
+                           /*drag_image_layer_owner=*/nullptr);
   }
 
   base::IgnoreResult(drag_cancel.Release());
@@ -264,42 +264,22 @@ int DesktopDragDropClientOzone::OnDragMotion(const gfx::PointF& point,
   return client_operation;
 }
 
-void DesktopDragDropClientOzone::OnDragDrop(
-    std::unique_ptr<ui::OSExchangeData> data,
-    int modifiers) {
-  // If we didn't have |data_to_drop_|, then |drag_drop_delegate_| had never
-  // been updated, and now it needs to receive deferred enter and update events
-  // before handling the actual drop.
-  const bool postponed_enter_and_update = !data_to_drop_;
-
-  // If we didn't have |data_to_drop_| already since the drag had entered the
-  // window, take the new data that comes now.
-  if (!data_to_drop_)
-    data_to_drop_ = std::move(data);
-
-  // crbug.com/1151836: check that we have data.
+void DesktopDragDropClientOzone::OnDragDrop(int modifiers) {
+  // Ensure |data_to_drop_| is set, so crashes, such as
+  // https://crbug.com/1151836, are avoided.
   if (data_to_drop_) {
     // This will call the delegate's OnDragEntered if needed.
     auto event = UpdateTargetAndCreateDropEvent(last_drag_point_, modifiers);
     if (drag_drop_delegate_ && event) {
-      if (postponed_enter_and_update) {
-        // TODO(https://crbug.com/1014860): deal with drop refusals.
-        // The delegate's OnDragUpdated returns an operation that the delegate
-        // would accept.  Normally the accepted operation would be propagated
-        // properly, and if the delegate didn't accept it, the drop would never
-        // be called, but in this scenario of postponed updates we send all
-        // events at once.  Now we just drop, but perhaps we could call
-        // OnDragLeave and quit?
-        current_drag_info_ = drag_drop_delegate_->OnDragUpdated(*event);
-      }
       auto drop_cb = drag_drop_delegate_->GetDropCallback(*event);
       if (drop_cb) {
         base::ScopedClosureRunner drag_cancel(
             base::BindOnce(&DesktopDragDropClientOzone::DragCancel,
                            weak_factory_.GetWeakPtr()));
 
+        auto* data_to_drop_raw = data_to_drop_.get();
         DropIfAllowed(
-            data_to_drop_.get(), current_drag_info_,
+            data_to_drop_raw, current_drag_info_,
             base::BindOnce(&PerformDrop, std::move(drop_cb),
                            std::move(data_to_drop_), std::move(drag_cancel)));
       }
@@ -363,7 +343,7 @@ DesktopDragDropClientOzone::UpdateTargetAndCreateDropEvent(
   auto event = std::make_unique<ui::DropTargetEvent>(
       *data_to_drop_, target_location, gfx::PointF(root_location),
       last_drop_operation_);
-  event->set_flags(modifiers);
+  event->SetFlags(modifiers);
   if (delegate_has_changed)
     drag_drop_delegate_->OnDragEntered(*event);
   return event;

@@ -126,7 +126,6 @@ class DTraceParser:
     self._stack_frames = {}
     self._sample_type = sample_type
     self._post_processing_applied = False
-    self._shorten_stack_samples = False
 
   def ParseFile(self, stack_file: typing.TextIO):
     """Parses dtrace `stack_file` and adds the data to this profile.
@@ -140,8 +139,8 @@ class DTraceParser:
 
       # If the next line is non-empty it's not the last in the stack.
       if next_line.strip():
-        # Matches lines like: "0x17e018987e"
-        if line_content.startswith("0x"):
+        # Matches lines like: "0x17e018987e" or "+0x17e018987e"
+        if line_content.startswith("0x") or line_content.startswith("+0x"):
           function = line_content
           module = "unsymbolized module"
         else:
@@ -174,12 +173,19 @@ class DTraceParser:
     Raises:
       SystemExit: When no results are found in stack_dir.
     """
+    # Define the format for DTrace stacks filenames.
+    stack_filename_regex = re.compile('[0-9]*_[0-9]*.txt')
+
+    # Treat all files that respect the name stack_filename_regex as DTrace
+    # stacks.
     for root, dirs, files in os.walk(stack_dir):
       for stack_filename in files:
-        with open(os.path.join(stack_dir, stack_filename),
-                  newline='',
-                  encoding="ISO-8859-1") as stack_file:
-          self.ParseFile(stack_file)
+        if stack_filename_regex.match(stack_filename):
+          logging.info(f"Processing {stack_filename} ...")
+          with open(os.path.join(root, stack_filename),
+                    newline='',
+                    encoding="ISO-8859-1") as stack_file:
+            self.ParseFile(stack_file)
 
     if not self._stack_frames:
       logging.error("No results found, check directory contents")
@@ -239,45 +245,6 @@ class DTraceParser:
       self._stack_frames[stack_string] = stack_frames
       self._stack_weights[stack_string] += sample['weight']
 
-  def ShortenStack(self, stack: typing.List[typing.Tuple[str, str]]):
-    """Drop some frames that don't offer any valuable information. The part
-    above/before the frame is trimmed. This means that the base of the stack
-    can be dropped but no frame can "skipped".
-
-    Example (dropping biz):
-
-    foo;bar;biz;boo --> boo
-    foo;biz;bar;boo --> bar;boo
-
-    Args:
-      stack: An array of strings that represent each frame of a stack trace.
-
-    Returns: The input array with zero or more elements removed.
-    """
-
-    message_pump_roots = [
-        "base::MessagePumpNSRunLoop::DoRun", "base::MessagePumpDefault::Run",
-        "base::MessagePumpKqueue::Run", "base::MessagePumpCFRunLoopBase::Run",
-        "base::MessagePumpNSApplication::DoRun", "base::mac::CallWithEHFrame",
-        "base::internal::WorkerThread::RunPooledWorker",
-        "base::internal::WorkerThread::RunBackgroundPooledWorker"
-    ]
-
-    first_ignored_index = -1
-    for i, (module, function) in enumerate(stack):
-      if any(
-          function.startswith(message_pump_root)
-          for message_pump_root in message_pump_roots):
-        # If any of the markers is present in the function it means everything
-        # under the frame should be dropped from the stack.
-        first_ignored_index = i
-        break
-
-    if first_ignored_index != -1:
-      return stack[:first_ignored_index]
-    else:
-      return stack
-
   def ApplySignatures(self, stack: typing.List[typing.Tuple[str, str]]):
     """Matches and return known signatures to given stackframe.
     """
@@ -294,9 +261,6 @@ class DTraceParser:
         return 'ParkableString'
     return 'unknown'
 
-  def EnableShortenStackSamples(self):
-    self._shorten_stack_samples = True
-
   def PostProcessStackSamples(self):
     """Applies filtering and enhancing to self.samples().  This function can
     only be called once.
@@ -311,58 +275,58 @@ class DTraceParser:
     self._post_processing_applied = True
 
     for key in self._stack_frames:
-      # Filter out the frames we don't care about and all those under it.
-      if self._shorten_stack_samples:
-        self._stack_frames[key] = self.ShortenStack(self._stack_frames[key])
       # Signatures are always added since they are non destructive.
       self._signatures[key] = self.ApplySignatures(self._stack_frames[key])
 
 
 if __name__ == "__main__":
   parser = argparse.ArgumentParser(
-      description='Flip stack order of a collapsed stack file.')
-  parser.add_argument("--stack_dir",
-                      help="Collapsed stack file.",
+      description='Export DTrace stack files into another format.')
+  parser.add_argument("--data_dir",
+                      help="Top level directory that contains DTrace stacks. "
+                      "The directory will be fully walked to find stacks "
+                      "and metadata.json files",
                       required=True)
   parser.add_argument("--output",
                       help="The file to write the collapsed stacks into.")
+  parser.add_argument('--unit',
+                      dest='unit',
+                      choices=["cpu_samples", "wakeups"],
+                      default="cpu_samples",
+                      help="The unit of counts acquired with DTrace")
   parser.add_argument('--format',
                       dest='format',
                       action='store',
                       choices=["pprof", "collapsed"],
                       default="pprof",
                       help="Output format to generate.")
-  parser.add_argument('--shorten',
-                      action='store_true',
-                      help="Shorten stacks by removing.")
   args = parser.parse_args()
   logging.basicConfig(format='%(levelname)s: %(message)s', level=logging.INFO)
 
-  profile_mode = 'cpu_time'
-  if 'wakeups' in args.stack_dir:
-    profile_mode = 'wakeups'
-  parser = DTraceParser(profile_mode)
-  parser.ParseDir(args.stack_dir)
-  if args.shorten:
-    parser.EnableShortenStackSamples()
+  # Traverse |data_dir| and concatenate all metadata.json into one big comment
+  # for the pprof.
+  full_comment = ""
+  metadata_filename_regex = re.compile('metadata.json')
+  for root, dirs, files in os.walk(args.data_dir):
+    for file in files:
+      if metadata_filename_regex.match(file):
+        with open(os.path.join(root, file)) as meta_json:
+          for line in meta_json:
+            full_comment += line
+
+  parser = DTraceParser(args.unit)
+  parser.ParseDir(args.data_dir)
   parser.PostProcessStackSamples()
 
-  data_dir = os.path.abspath(os.path.join(args.stack_dir, os.pardir))
-  metadata_path = os.path.join(data_dir, "metadata.json")
-  if not os.path.isfile(metadata_path):
-    logging.error(f"Could not find metadata.json.")
-    sys.exit(-1)
-  with open(metadata_path, 'r') as metadata_file:
-    metadata = json.load(metadata_file)
-
   output_filename = args.output
+  data_dir = os.path.abspath(os.path.join(args.data_dir, os.pardir))
   if args.format == "pprof":
     profile_builder = ProfileBuilder()
-    profile_builder.AddComment(json.dumps(metadata, indent=2))
-    profile_builder.AddComment(f"Profile mode: {profile_mode}")
+    profile_builder.AddComment(full_comment)
+    profile_builder.AddComment(f"Unit : {args.unit}")
     parser.ConvertToPprof(profile_builder)
     if output_filename is None:
-      output_filename = os.path.join(data_dir, f"profile_{profile_mode}.pb")
+      output_filename = os.path.join(data_dir, f"profile_{args.unit}.pb")
     with open(output_filename, "wb") as output_file:
       output_file.write(profile_builder.SerializeToString())
   else:

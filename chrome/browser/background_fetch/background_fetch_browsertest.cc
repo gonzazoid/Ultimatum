@@ -4,9 +4,9 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/strings/string_util.h"
@@ -229,13 +229,12 @@ class OfflineContentProviderObserver final
   const OfflineItem& latest_item() const { return latest_item_; }
 
  private:
-  void Resume(const ContentId& id) {
-    delegate_->ResumeDownload(id, false /* has_user_gesture */);
-  }
+  void Resume(const ContentId& id) { delegate_->ResumeDownload(id); }
 
   ItemsAddedCallback items_added_callback_;
   FinishedProcessingItemCallback finished_processing_item_callback_;
-  raw_ptr<BackgroundFetchDelegateImpl, DanglingUntriaged> delegate_ = nullptr;
+  raw_ptr<BackgroundFetchDelegateImpl, AcrossTasksDanglingUntriaged> delegate_ =
+      nullptr;
   bool pause_ = false;
   bool resume_ = false;
 
@@ -294,11 +293,8 @@ class BackgroundFetchBrowserTest : public InProcessBrowserTest {
 
     // Register the Service Worker that's required for Background Fetch. The
     // behaviour without an activated worker is covered by layout tests.
-    {
-      std::string script_result;
-      ASSERT_TRUE(RunScript("RegisterServiceWorker()", &script_result));
-      ASSERT_EQ("ok - service worker registered", script_result);
-    }
+    ASSERT_EQ("ok - service worker registered",
+              RunScript("RegisterServiceWorker()"));
 
     test_ukm_recorder_ = std::make_unique<ukm::TestAutoSetUkmRecorder>();
   }
@@ -316,7 +312,7 @@ class BackgroundFetchBrowserTest : public InProcessBrowserTest {
   // Test execution functions.
 
   // Runs the |script| and waits for one or more items to have been added to the
-  // offline items collection. Wrap in ASSERT_NO_FATAL_FAILURE().
+  // offline items collection.
   void RunScriptAndWaitForOfflineItems(const std::string& script,
                                        std::vector<OfflineItem>* items) {
     DCHECK(items);
@@ -326,20 +322,15 @@ class BackgroundFetchBrowserTest : public InProcessBrowserTest {
         base::BindOnce(&BackgroundFetchBrowserTest::DidAddItems,
                        base::Unretained(this), run_loop.QuitClosure(), items));
 
-    std::string result;
-    ASSERT_NO_FATAL_FAILURE(RunScript(script, &result));
-    ASSERT_EQ("ok", result);
+    ASSERT_EQ("ok", RunScript(script));
 
     run_loop.Run();
   }
 
-  // Runs the |script| and waits for a message.
-  // Wrap in ASSERT_NO_FATAL_FAILURE().
+  // Runs the |script| and checks the result.
   void RunScriptAndCheckResultingMessage(const std::string& script,
                                          const std::string& expected_message) {
-    std::string result;
-    ASSERT_NO_FATAL_FAILURE(RunScript(script, &result));
-    ASSERT_EQ(expected_message, result);
+    ASSERT_EQ(expected_message, RunScript(script));
   }
 
   void GetVisualsForOfflineItemSync(
@@ -359,20 +350,17 @@ class BackgroundFetchBrowserTest : public InProcessBrowserTest {
   // Helper functions.
 
   // Runs the |script| in the current tab and writes the output to |*result|.
-  bool RunScript(const std::string& script, std::string* result) {
-    return content::ExecuteScriptAndExtractString(
-        active_browser_->tab_strip_model()
-            ->GetActiveWebContents()
-            ->GetPrimaryMainFrame(),
-        script, result);
+  content::EvalJsResult RunScript(const std::string& script) {
+    return content::EvalJs(active_browser_->tab_strip_model()
+                               ->GetActiveWebContents()
+                               ->GetPrimaryMainFrame(),
+                           script);
   }
 
   // Runs the given |function| and asserts that it responds with "ok".
   // Must be wrapped with ASSERT_NO_FATAL_FAILURE().
   void RunScriptFunction(const std::string& function) {
-    std::string result;
-    ASSERT_TRUE(RunScript(function, &result));
-    ASSERT_EQ("ok", result);
+    ASSERT_EQ("ok", RunScript(function));
   }
 
   // Intercepts all requests.
@@ -472,8 +460,9 @@ class BackgroundFetchBrowserTest : public InProcessBrowserTest {
   net::EmbeddedTestServer* https_server() { return https_server_.get(); }
 
  protected:
-  raw_ptr<BackgroundFetchDelegateImpl, DanglingUntriaged> delegate_ = nullptr;
-  raw_ptr<download::BackgroundDownloadService, DanglingUntriaged>
+  raw_ptr<BackgroundFetchDelegateImpl, AcrossTasksDanglingUntriaged> delegate_ =
+      nullptr;
+  raw_ptr<download::BackgroundDownloadService, AcrossTasksDanglingUntriaged>
       download_service_ = nullptr;
   base::OnceClosure click_event_closure_;
 
@@ -503,7 +492,7 @@ class BackgroundFetchBrowserTest : public InProcessBrowserTest {
 
   std::unique_ptr<net::EmbeddedTestServer> https_server_;
 
-  raw_ptr<Browser, DanglingUntriaged> active_browser_ = nullptr;
+  raw_ptr<Browser, AcrossTasksDanglingUntriaged> active_browser_ = nullptr;
 };
 
 IN_PROC_BROWSER_TEST_F(BackgroundFetchBrowserTest, DownloadService_Acceptance) {
@@ -539,11 +528,11 @@ IN_PROC_BROWSER_TEST_F(BackgroundFetchBrowserTest,
   ASSERT_NO_FATAL_FAILURE(
       RunScriptFunction("StartSingleFileDownloadWithCorrectDownloadTotal()"));
 
-  std::vector<const ukm::mojom::UkmEntry*> entries =
+  std::vector<raw_ptr<const ukm::mojom::UkmEntry, VectorExperimental>> entries =
       test_ukm_recorder_->GetEntriesByName(
           ukm::builders::BackgroundFetch::kEntryName);
   ASSERT_EQ(1u, entries.size());
-  const auto* entry = entries[0];
+  const auto* entry = entries[0].get();
   test_ukm_recorder_->ExpectEntryMetric(
       entry, ukm::builders::BackgroundFetch::kHasTitleName, 1);
   test_ukm_recorder_->ExpectEntryMetric(
@@ -626,6 +615,7 @@ IN_PROC_BROWSER_TEST_F(BackgroundFetchBrowserTest,
   EXPECT_EQ(offline_item.progress.value, 0);
   EXPECT_EQ(offline_item.progress.max.value(), 1);
   EXPECT_EQ(offline_item.progress.unit, OfflineItemProgressUnit::PERCENTAGE);
+  EXPECT_FALSE(offline_item.creation_time.is_null());
 
   // Get visuals associated with the newly added offline item.
   std::unique_ptr<OfflineItemVisuals> out_visuals;
@@ -742,16 +732,8 @@ IN_PROC_BROWSER_TEST_F(BackgroundFetchBrowserTest,
   ASSERT_TRUE(items[0].is_off_the_record);
 }
 
-// Flaky on Windows 7 (https://crbug.com/1039250)
-#if BUILDFLAG(IS_WIN)
-#define MAYBE_FetchesRunToCompletionAndUpdateTitle_Fetched \
-  DISABLED_FetchesRunToCompletionAndUpdateTitle_Fetched
-#else
-#define MAYBE_FetchesRunToCompletionAndUpdateTitle_Fetched \
-  FetchesRunToCompletionAndUpdateTitle_Fetched
-#endif
 IN_PROC_BROWSER_TEST_F(BackgroundFetchBrowserTest,
-                       MAYBE_FetchesRunToCompletionAndUpdateTitle_Fetched) {
+                       FetchesRunToCompletionAndUpdateTitle_Fetched) {
   ASSERT_NO_FATAL_FAILURE(RunScriptAndCheckResultingMessage(
       "RunFetchTillCompletion()", "backgroundfetchsuccess"));
   EXPECT_EQ(offline_content_provider_observer_->latest_item().state,
@@ -763,16 +745,8 @@ IN_PROC_BROWSER_TEST_F(BackgroundFetchBrowserTest,
                        "New Fetched Title!", base::CompareCase::SENSITIVE));
 }
 
-// Flaky on Windows 7 (https://crbug.com/1039250)
-#if BUILDFLAG(IS_WIN)
-#define MAYBE_FetchesRunToCompletionAndUpdateTitle_Failed \
-  DISABLED_FetchesRunToCompletionAndUpdateTitle_Failed
-#else
-#define MAYBE_FetchesRunToCompletionAndUpdateTitle_Failed \
-  FetchesRunToCompletionAndUpdateTitle_Failed
-#endif
 IN_PROC_BROWSER_TEST_F(BackgroundFetchBrowserTest,
-                       MAYBE_FetchesRunToCompletionAndUpdateTitle_Failed) {
+                       FetchesRunToCompletionAndUpdateTitle_Failed) {
   ASSERT_NO_FATAL_FAILURE(RunScriptAndCheckResultingMessage(
       "RunFetchTillCompletionWithMissingResource()", "backgroundfetchfail"));
   EXPECT_EQ(offline_content_provider_observer_->latest_item().state,
@@ -865,14 +839,7 @@ IN_PROC_BROWSER_TEST_F(BackgroundFetchBrowserTest,
       "This origin does not have permission to start a fetch."));
 }
 
-// Flaky on Windows 7 (https://crbug.com/1039250)
-#if BUILDFLAG(IS_WIN)
-#define MAYBE_FetchFromServiceWorker DISABLED_FetchFromServiceWorker
-#else
-#define MAYBE_FetchFromServiceWorker FetchFromServiceWorker
-#endif
-IN_PROC_BROWSER_TEST_F(BackgroundFetchBrowserTest,
-                       MAYBE_FetchFromServiceWorker) {
+IN_PROC_BROWSER_TEST_F(BackgroundFetchBrowserTest, FetchFromServiceWorker) {
   auto* settings_map =
       HostContentSettingsMapFactory::GetForProfile(browser()->profile());
   DCHECK(settings_map);
@@ -971,30 +938,17 @@ class BackgroundFetchFencedFrameBrowserTest
   }
 
   void RegisterServiceWorker(content::RenderFrameHost* render_frame_host) {
-    std::string script_result;
-    ASSERT_TRUE(RunScript("RegisterServiceWorker()", &script_result,
-                          render_frame_host));
-    ASSERT_EQ("ok - service worker registered", script_result);
+    ASSERT_EQ("ok - service worker registered",
+              content::EvalJs(render_frame_host, "RegisterServiceWorker()"));
   }
 
   void StartSingleFileDownload(content::RenderFrameHost* render_frame_host,
                                std::string expected_result) {
-    std::string script_result;
-    ASSERT_NO_FATAL_FAILURE(RunScript("StartSingleFileDownload()",
-                                      &script_result, render_frame_host));
-    ASSERT_EQ(expected_result, script_result);
+    ASSERT_EQ(expected_result,
+              content::EvalJs(render_frame_host, "StartSingleFileDownload()"));
   }
 
  private:
-  // Runs the `script` in `render_frame_host` and writes the output to
-  // `*result`.
-  bool RunScript(const std::string& script,
-                 std::string* result,
-                 content::RenderFrameHost* render_frame_host) {
-    return content::ExecuteScriptAndExtractString(render_frame_host, script,
-                                                  result);
-  }
-
   content::test::FencedFrameTestHelper fenced_frame_test_helper_;
 };
 
@@ -1027,7 +981,7 @@ IN_PROC_BROWSER_TEST_F(BackgroundFetchFencedFrameBrowserTest,
       "frames.";
   StartSingleFileDownload(fenced_frame, kExpectedError);
 
-  std::vector<const ukm::mojom::UkmEntry*> entries =
+  std::vector<raw_ptr<const ukm::mojom::UkmEntry, VectorExperimental>> entries =
       test_ukm_recorder_->GetEntriesByName(
           ukm::builders::BackgroundFetch::kEntryName);
   ASSERT_EQ(0u, entries.size());
@@ -1070,7 +1024,7 @@ IN_PROC_BROWSER_TEST_F(BackgroundFetchFencedFrameBrowserTest,
       "frames.";
   StartSingleFileDownload(fenced_frame, kExpectedError);
 
-  std::vector<const ukm::mojom::UkmEntry*> entries =
+  std::vector<raw_ptr<const ukm::mojom::UkmEntry, VectorExperimental>> entries =
       test_ukm_recorder_->GetEntriesByName(
           ukm::builders::BackgroundFetch::kEntryName);
   ASSERT_EQ(0u, entries.size());

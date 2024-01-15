@@ -5,14 +5,18 @@
 #ifndef COMPONENTS_EXO_SHELL_SURFACE_BASE_H_
 #define COMPONENTS_EXO_SHELL_SURFACE_BASE_H_
 
+#include <stdint.h>
 #include <cstdint>
 #include <memory>
 #include <string>
 
 #include "ash/display/window_tree_host_manager.h"
 #include "base/gtest_prod_util.h"
+#include "base/memory/raw_ptr.h"
 #include "chromeos/ui/base/display_util.h"
 #include "chromeos/ui/base/window_pin_type.h"
+#include "chromeos/ui/frame/caption_buttons/snap_controller.h"
+#include "chromeos/ui/frame/multitask_menu/float_controller_base.h"
 #include "components/exo/surface_observer.h"
 #include "components/exo/surface_tree_host.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -20,18 +24,25 @@
 #include "ui/aura/client/capture_client_observer.h"
 #include "ui/aura/window_observer.h"
 #include "ui/base/hit_test.h"
-#include "ui/display/display_observer.h"
 #include "ui/display/types/display_constants.h"
 #include "ui/gfx/geometry/point.h"
 #include "ui/gfx/geometry/rect.h"
-#include "ui/gfx/geometry/vector2d.h"
+#include "ui/gfx/geometry/rounded_corners_f.h"
+#include "ui/views/view.h"
+#include "ui/views/widget/widget.h"
 #include "ui/views/widget/widget_delegate.h"
 #include "ui/views/widget/widget_observer.h"
+#include "ui/views/window/hit_test_utils.h"
 #include "ui/wm/public/activation_change_observer.h"
+#include "ui/wm/public/tooltip_observer.h"
 
 namespace ash {
 class WindowState;
 }  // namespace ash
+
+namespace views {
+class ClientView;
+}  // namespace views
 
 namespace base {
 namespace trace_event {
@@ -52,7 +63,8 @@ class ShellSurfaceBase : public SurfaceTreeHost,
                          public views::WidgetDelegate,
                          public views::WidgetObserver,
                          public views::View,
-                         public wm::ActivationChangeObserver {
+                         public wm::ActivationChangeObserver,
+                         public wm::TooltipObserver {
  public:
   // The |origin| is the initial position in screen coordinates. The position
   // specified as part of the geometry is relative to the shell surface.
@@ -143,6 +155,16 @@ class ShellSurfaceBase : public SurfaceTreeHost,
   // Set the flag if the surface can maximize or not.
   void SetCanMinimize(bool can_minimize);
 
+  // Set whether the window is persistable.  This should be called before the
+  // widget is created.
+  void SetPersistable(bool persistable);
+
+  // Sets the window corner radii.
+  void SetWindowCornersRadii(const gfx::RoundedCornersF& radii);
+
+  // Sets the shadow corner radii.
+  void SetShadowCornersRadii(const gfx::RoundedCornersF& radii);
+
   // Set normal shadow bounds, |shadow_bounds_|, to |bounds| to be used and
   // applied via `UpdateShadow()`. Set and update resize shadow bounds with
   // |widget_|'s origin and |bounds| via `UpdateResizeShadowBoundsOfWindow()`.
@@ -176,8 +198,7 @@ class ShellSurfaceBase : public SurfaceTreeHost,
       int32_t restore_id,
       const std::string& restore_window_id_source);
 
-  // Floats (place on top of other surfaces) or unfloats the shell surface.
-  void SetFloat();
+  // Unfloats the shell surface.
   void UnsetFloat();
 
   // Returns a trace value representing the state of the surface.
@@ -186,7 +207,7 @@ class ShellSurfaceBase : public SurfaceTreeHost,
   // An overlay creation parameters. The view is owned by the
   // overlay.
   struct OverlayParams {
-    OverlayParams(std::unique_ptr<views::View> overlay);
+    explicit OverlayParams(std::unique_ptr<views::View> overlay);
     ~OverlayParams();
 
     bool translucent = false;
@@ -195,6 +216,7 @@ class ShellSurfaceBase : public SurfaceTreeHost,
     // TODO(oshima): It's unlikely for overlay not to request focus.
     // Remove this.
     bool focusable = true;
+    absl::optional<gfx::RoundedCornersF> corners_radii;
     std::unique_ptr<views::View> contents_view;
   };
 
@@ -218,6 +240,10 @@ class ShellSurfaceBase : public SurfaceTreeHost,
   // initialized, it saves `z_order` for when it is initialized.
   void SetZOrder(ui::ZOrderLevel z_order);
 
+  // Sets the shape of the toplevel window, applied on commit. If shape is null
+  // this will unset the window shape.
+  void SetShape(absl::optional<cc::Region> shape);
+
   // SurfaceDelegate:
   void OnSurfaceCommit() override;
   bool IsInputEnabled(Surface* surface) const override;
@@ -229,8 +255,8 @@ class ShellSurfaceBase : public SurfaceTreeHost,
   void ShowSnapPreviewToPrimary() override;
   void ShowSnapPreviewToSecondary() override;
   void HideSnapPreview() override;
-  void SetSnappedToPrimary() override;
-  void SetSnappedToSecondary() override;
+  void SetSnapPrimary(float snap_ratio) override;
+  void SetSnapSecondary(float snap_ratio) override;
   void UnsetSnap() override;
   void OnActivationRequested() override;
   void OnSetServerStartResize() override;
@@ -238,6 +264,8 @@ class ShellSurfaceBase : public SurfaceTreeHost,
   void UnsetCanGoBack() override;
   void SetPip() override;
   void UnsetPip() override;
+  void SetFloatToLocation(
+      chromeos::FloatStartLocation float_start_location) override;
   void SetAspectRatio(const gfx::SizeF& aspect_ratio) override;
   void MoveToDesk(int desk_index) override;
   void SetVisibleOnAllWorkspaces() override;
@@ -245,12 +273,17 @@ class ShellSurfaceBase : public SurfaceTreeHost,
   void Pin(bool trusted) override;
   void Unpin() override;
   void SetSystemModal(bool system_modal) override;
+  void SetTopInset(int height) override;
 
   // SurfaceObserver:
   void OnSurfaceDestroying(Surface* surface) override;
   void OnContentSizeChanged(Surface*) override {}
   void OnFrameLockingChanged(Surface*, bool) override {}
   void OnDeskChanged(Surface*, int) override {}
+  void OnTooltipShown(Surface* surface,
+                      const std::u16string& text,
+                      const gfx::Rect& bounds) override {}
+  void OnTooltipHidden(Surface* surface) override {}
 
   // CaptureClientObserver:
   void OnCaptureChanged(aura::Window* lost_capture,
@@ -267,6 +300,7 @@ class ShellSurfaceBase : public SurfaceTreeHost,
   bool ShouldSaveWindowPlacement() const override;
   bool WidgetHasHitTestMask() const override;
   void GetWidgetHitTestMask(SkPath* mask) const override;
+  views::ClientView* CreateClientView(views::Widget* widget) override;
 
   // views::WidgetObserver:
   void OnWidgetClosing(views::Widget* widget) override;
@@ -295,12 +329,26 @@ class ShellSurfaceBase : public SurfaceTreeHost,
                          aura::Window* gained_active,
                          aura::Window* lost_active) override;
 
+  // wm::TooltipObserver:
+  void OnTooltipShown(aura::Window* target,
+                      const std::u16string& text,
+                      const gfx::Rect& bounds) override;
+  void OnTooltipHidden(aura::Window* target) override;
+
   // ui::AcceleratorTarget:
   bool AcceleratorPressed(const ui::Accelerator& accelerator) override;
+
+  // SurfaceTreeHost:
+  void SetRootSurface(Surface* root_surface) override;
+  float GetPendingScaleFactor() const override;
 
   bool frame_enabled() const {
     return frame_type_ != SurfaceFrameType::NONE &&
            frame_type_ != SurfaceFrameType::SHADOW;
+  }
+
+  bool frame_overlapped() const {
+    return frame_type_ == SurfaceFrameType::OVERLAP;
   }
 
   Surface* surface_for_testing() { return root_surface(); }
@@ -321,10 +369,20 @@ class ShellSurfaceBase : public SurfaceTreeHost,
     in_extended_drag_ = in_extended_drag;
   }
 
+  const absl::optional<cc::Region>& shape_dp() const { return shape_dp_; }
+
+  // Window corners radii in dps.
+  const absl::optional<gfx::RoundedCornersF>& window_corners_radii() const {
+    return window_corners_radii_dp_;
+  }
+
  protected:
   // Creates the |widget_| for |surface_|. |show_state| is the initial state
   // of the widget (e.g. maximized).
   void CreateShellSurfaceWidget(ui::WindowShowState show_state);
+
+  // Returns true if the window is the ShellSurface's widget's window.
+  bool IsShellSurfaceWindow(const aura::Window* window) const;
 
   // Lets subclasses modify Widget parameters immediately before widget
   // creation.
@@ -345,24 +403,27 @@ class ShellSurfaceBase : public SurfaceTreeHost,
   virtual void SetWidgetBounds(const gfx::Rect& bounds,
                                bool adjusted_by_server) = 0;
 
-  // Updates the bounds of surface to match the current widget bounds.
-  void UpdateSurfaceBounds();
+  // Updates the bounds of host window to match the current widget bounds.
+  void UpdateHostWindowOrigin();
 
   // Creates, deletes and update the shadow bounds based on
   // |shadow_bounds_|.
   void UpdateShadow();
 
-  // Updates the corner radius depending on whether the |widget_| is in pip or
-  // not.
-  void UpdateCornerRadius();
-
   virtual void UpdateFrameType();
+
+  void UpdateWindowRoundedCorners();
 
   // Applies |system_modal_| to |widget_|.
   void UpdateSystemModal();
 
+  // Applies `shape_rects_dp_` to the host window's layer.
+  void UpdateShape();
+
   // Returns the "visible bounds" for the surface from the user's perspective.
-  gfx::Rect GetVisibleBounds() const;
+  // TODO(b/299688152): Make this non virtual back once ARC is updated not to
+  // use geometry to specify the window bounds.
+  virtual gfx::Rect GetVisibleBounds() const;
 
   // Returns the bounds of the client area.
   gfx::Rect GetClientViewBounds() const;
@@ -399,7 +460,9 @@ class ShellSurfaceBase : public SurfaceTreeHost,
   // maximize request. Currently only true for Lacros.
   bool ShouldExitFullscreenFromRestoreOrMaximized();
 
-  views::Widget* widget_ = nullptr;
+  static bool IsPopupWithGrab(aura::Window* window);
+
+  raw_ptr<views::Widget> widget_ = nullptr;
   bool movement_disabled_ = false;
   gfx::Point origin_;
 
@@ -408,6 +471,17 @@ class ShellSurfaceBase : public SurfaceTreeHost,
   gfx::Rect geometry_;
   gfx::Rect pending_geometry_;
   absl::optional<gfx::Rect> initial_bounds_;
+  absl::optional<cc::Region> shape_dp_;
+  absl::optional<cc::Region> pending_shape_dp_;
+
+  // Radii of window corners in dps. Currently only specified by clients that do
+  // server-side rounded windows.
+  absl::optional<gfx::RoundedCornersF> window_corners_radii_dp_;
+  absl::optional<gfx::RoundedCornersF> pending_window_corners_radii_dp_;
+
+  // Radii of shadow corners in dps.
+  absl::optional<gfx::RoundedCornersF> shadow_corners_radii_dp_;
+  absl::optional<gfx::RoundedCornersF> pending_shadow_corners_radii_dp_;
 
   int64_t display_id_ = display::kInvalidDisplayId;
   int64_t pending_display_id_ = display::kInvalidDisplayId;
@@ -423,6 +497,11 @@ class ShellSurfaceBase : public SurfaceTreeHost,
   gfx::Size minimum_size_;
   gfx::Size maximum_size_;
 
+  // Effective and pending top inset (header) heights, that are reserved or
+  // occupied by the top window frame.
+  int top_inset_height_ = 0;
+  int pending_top_inset_height_ = 0;
+
   // The orientation to be applied when widget is being created. Only set when
   // widget is not created yet orientation lock is being set. This is currently
   // only used by ClientControlledShellSurface.
@@ -432,6 +511,22 @@ class ShellSurfaceBase : public SurfaceTreeHost,
  private:
   FRIEND_TEST_ALL_PREFIXES(ShellSurfaceTest,
                            HostWindowBoundsUpdatedAfterCommitWidget);
+  FRIEND_TEST_ALL_PREFIXES(ShellSurfaceTest,
+                           HostWindowBoundsUpdatedWithNegativeCoordinate);
+  FRIEND_TEST_ALL_PREFIXES(ShellSurfaceTest,
+                           HostWindowIncludesAllSubSurfacesWithScaleFactor);
+  FRIEND_TEST_ALL_PREFIXES(ShellSurfaceTest,
+                           ShadowBoundsWithNegativeCoordinate);
+  FRIEND_TEST_ALL_PREFIXES(ShellSurfaceTest, ShadowBoundsWithScaleFactor);
+  FRIEND_TEST_ALL_PREFIXES(ShellSurfaceTest,
+                           LocalSurfaceIdUpdatedOnHostWindowOriginChanged);
+  FRIEND_TEST_ALL_PREFIXES(
+      ShellSurfaceTest,
+      LocalSurfaceIdUpdatedOnHostWindowOriginChangedWithScaleFactor);
+  FRIEND_TEST_ALL_PREFIXES(ShellSurfaceTest, SubpixelPositionOffset);
+
+  // Updates the shadow's rounded corner associated with the `widget_`.
+  void UpdateShadowRoundedCorners();
 
   // Called on widget creation to initialize its window state.
   // TODO(reveman): Remove virtual functions below to avoid FBC problem.
@@ -454,11 +549,13 @@ class ShellSurfaceBase : public SurfaceTreeHost,
 
   void UpdatePinned();
 
+  void UpdateTopInset();
+
   // Returns the resizability of the window. Useful to get the resizability
   // without actually updating it.
   bool CalculateCanResize() const;
 
-  aura::Window* parent_ = nullptr;
+  raw_ptr<aura::Window> parent_ = nullptr;
   bool activatable_ = true;
   bool can_minimize_ = true;
   bool has_frame_colors_ = false;
@@ -487,6 +584,9 @@ class ShellSurfaceBase : public SurfaceTreeHost,
   absl::optional<int32_t> restore_session_id_;
   absl::optional<int32_t> restore_window_id_;
   absl::optional<std::string> restore_window_id_source_;
+
+  // Member determines if the owning process is persistable.
+  bool persistable_ = true;
 
   // Overlay members.
   std::unique_ptr<views::Widget> overlay_widget_;

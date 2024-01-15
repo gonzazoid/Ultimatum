@@ -6,17 +6,14 @@
 
 #include <memory>
 
-#include "ash/constants/ash_features.h"
 #include "ash/constants/ash_switches.h"
 #include "ash/session/session_controller_impl.h"
 #include "ash/shell.h"
 #include "base/command_line.h"
 #include "base/run_loop.h"
-#include "base/test/scoped_feature_list.h"
 #include "chrome/browser/ash/login/lock/screen_locker_tester.h"
 #include "chrome/browser/ash/login/login_manager_test.h"
 #include "chrome/browser/ash/login/test/device_state_mixin.h"
-#include "chrome/browser/ash/login/test/fake_gaia_mixin.h"
 #include "chrome/browser/ash/login/test/login_manager_mixin.h"
 #include "chrome/browser/ash/login/test/oobe_base_test.h"
 #include "chrome/browser/ash/login/test/oobe_screen_waiter.h"
@@ -24,8 +21,9 @@
 #include "chrome/browser/ash/login/ui/login_display_host.h"
 #include "chrome/browser/ash/login/ui/user_adding_screen.h"
 #include "chrome/browser/ui/webui/ash/login/gaia_screen_handler.h"
-#include "chromeos/system/fake_statistics_provider.h"
-#include "chromeos/system/statistics_provider.h"
+#include "chrome/test/base/fake_gaia_mixin.h"
+#include "chromeos/ash/components/system/fake_statistics_provider.h"
+#include "chromeos/ash/components/system/statistics_provider.h"
 #include "content/public/test/browser_test.h"
 #include "google_apis/gaia/fake_gaia.h"
 #include "rlz/buildflags/buildflags.h"
@@ -42,13 +40,6 @@
 #endif  // BUILDFLAG(ENABLE_RLZ)
 
 namespace ash {
-namespace system {
-namespace {
-// TODO(https://crbug.com/1164001): remove when moved to ash::
-using ::chromeos::system::kRlzBrandCodeKey;
-using ::chromeos::system::ScopedFakeStatisticsProvider;
-}  // namespace
-}  // namespace system
 
 namespace {
 
@@ -81,7 +72,7 @@ class UserAddingScreenWaiter : public UserAddingScreen::Observer {
   std::unique_ptr<base::RunLoop> run_loop_;
 };
 
-}  // anonymous namespace
+}  // namespace
 
 class ChromeSessionManagerTest : public LoginManagerTest {
  public:
@@ -114,8 +105,8 @@ IN_PROC_BROWSER_TEST_F(ChromeSessionManagerTest, OobeNewUser) {
 
   // Login via fake gaia to add a new user.
   fake_gaia_.SetupFakeGaiaForLoginManager();
-  fake_gaia_.fake_gaia()->SetFakeMergeSessionParams(
-      FakeGaiaMixin::kFakeUserEmail, "fake_sid", "fake_lsid");
+  fake_gaia_.fake_gaia()->SetConfigurationHelper(FakeGaiaMixin::kFakeUserEmail,
+                                                 "fake_sid", "fake_lsid");
   OobeScreenWaiter(OobeBaseTest::GetFirstSigninScreen()).Wait();
 
   LoginDisplayHost::default_host()
@@ -183,10 +174,27 @@ IN_PROC_BROWSER_TEST_F(ChromeSessionManagerExistingUsersTest,
 }
 
 IN_PROC_BROWSER_TEST_F(ChromeSessionManagerExistingUsersTest,
+                       LoginExistingUsersWithLocalPassword) {
+  // Verify that session state is LOGIN_PRIMARY with existing user data dir.
+  session_manager::SessionManager* manager =
+      session_manager::SessionManager::Get();
+  EXPECT_EQ(session_manager::SessionState::LOGIN_PRIMARY,
+            manager->session_state());
+  EXPECT_EQ(0u, manager->sessions().size());
+
+  const auto& users = login_manager_.users();
+  // Verify that session state is ACTIVE with one user session after signing
+  // in a user with a local password.
+  LoginUserWithLocalPassword(users[0].account_id);
+  EXPECT_EQ(session_manager::SessionState::ACTIVE, manager->session_state());
+  EXPECT_EQ(1u, manager->sessions().size());
+}
+
+IN_PROC_BROWSER_TEST_F(ChromeSessionManagerExistingUsersTest,
                        CheckPastingBehavior) {
   const auto& users = login_manager_.users();
   LoginUser(users[0].account_id);
-  auto* session_controller = ash::Shell::Get()->session_controller();
+  auto* session_controller = Shell::Get()->session_controller();
 
   // Write a text in the clipboard during active session.
   EXPECT_EQ(session_manager::SessionState::ACTIVE,
@@ -253,19 +261,11 @@ IN_PROC_BROWSER_TEST_F(ChromeSessionManagerExistingUsersTest,
 
 class ChromeSessionManagerRmaTest : public ChromeSessionManagerTest {
  public:
-  ChromeSessionManagerRmaTest() {
-    scoped_feature_list_.InitWithFeatures(
-        {chromeos::features::kShimlessRMAFlow}, {});
-  }
-
   // LoginManagerTest:
   void SetUpCommandLine(base::CommandLine* command_line) override {
     ChromeSessionManagerTest::SetUpCommandLine(command_line);
     command_line->AppendSwitch(switches::kLaunchRma);
   }
-
- private:
-  base::test::ScopedFeatureList scoped_feature_list_;
 };
 
 IN_PROC_BROWSER_TEST_F(ChromeSessionManagerRmaTest, DeviceInRma) {
@@ -335,7 +335,7 @@ class ChromeSessionManagerRlzTest : public ChromeSessionManagerTest {
 
     // Login via fake gaia to add a new user.
     fake_gaia_.SetupFakeGaiaForLoginManager();
-    fake_gaia_.fake_gaia()->SetFakeMergeSessionParams(
+    fake_gaia_.fake_gaia()->SetConfigurationHelper(
         FakeGaiaMixin::kFakeUserEmail, "fake_sid", "fake_lsid");
     OobeScreenWaiter(OobeBaseTest::GetFirstSigninScreen()).Wait();
 

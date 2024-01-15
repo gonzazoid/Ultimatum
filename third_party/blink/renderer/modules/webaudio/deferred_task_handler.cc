@@ -25,6 +25,7 @@
 
 #include "third_party/blink/renderer/modules/webaudio/deferred_task_handler.h"
 
+#include "base/task/single_thread_task_runner.h"
 #include "third_party/blink/public/platform/platform.h"
 #include "third_party/blink/renderer/modules/webaudio/audio_node.h"
 #include "third_party/blink/renderer/modules/webaudio/audio_node_output.h"
@@ -171,6 +172,16 @@ void DeferredTaskHandler::UpdateAutomaticPullNodes() {
     base::AutoTryLock try_locker(automatic_pull_handlers_lock_);
     if (try_locker.is_acquired()) {
       rendering_automatic_pull_handlers_.assign(automatic_pull_handlers_);
+
+      // In rare cases, it is possible for automatic pull nodes' output bus
+      // to become stale. Make sure update their rendering output counts.
+      // crbug.com/1505080.
+      for (auto& handler : rendering_automatic_pull_handlers_) {
+        for (unsigned i = 0; i < handler->NumberOfOutputs(); ++i) {
+          handler->Output(i).UpdateRenderingState();
+        }
+      }
+
       automatic_pull_handlers_need_updating_ = false;
     }
   }
@@ -367,13 +378,16 @@ void DeferredTaskHandler::DeleteHandlersOnMainThread() {
 
 void DeferredTaskHandler::ClearHandlersToBeDeleted() {
   DCHECK(IsMainThread());
+  // crbug 1370091: Acquire graph lock before clearing
+  // rendering_automatic_pull_handlers_ to avoid race conditions on
+  // teardown.
+  GraphAutoLocker graph_locker(*this);
 
   {
     base::AutoLock locker(automatic_pull_handlers_lock_);
     rendering_automatic_pull_handlers_.clear();
   }
 
-  GraphAutoLocker locker(*this);
   tail_processing_handlers_.clear();
   rendering_orphan_handlers_.clear();
   deletable_orphan_handlers_.clear();

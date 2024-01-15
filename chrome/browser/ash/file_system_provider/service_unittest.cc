@@ -12,6 +12,7 @@
 
 #include "base/files/file.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/strings/string_number_conversions.h"
 #include "chrome/browser/ash/file_system_provider/fake_extension_provider.h"
@@ -40,8 +41,7 @@
 #include "storage/browser/file_system/external_mount_points.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-namespace ash {
-namespace file_system_provider {
+namespace ash::file_system_provider {
 namespace {
 
 const extensions::ExtensionId kExtensionId = "mbflcebpggnecokmikipoihdbecnjfoj";
@@ -52,29 +52,29 @@ const ProviderId kCustomProviderId =
 
 // The dot in the file system ID is there in order to check that saving to
 // preferences works correctly. File System ID is used as a key in
-// a base::DictionaryValue, so it has to be stored without path expansion.
+// a base::Value::Dict, so it has to be stored without path expansion.
 const char kFileSystemId[] = "camera/pictures/id .!@#$%^&*()_+";
 
 // Creates a fake extension with the specified |extension_id|.
 // TODO(mtomasz): Use the extension builder.
 scoped_refptr<extensions::Extension> CreateFakeExtension(
     const extensions::ExtensionId& extension_id) {
-  base::DictionaryValue manifest;
+  base::Value::Dict manifest;
   std::string error;
-  manifest.SetKey(extensions::manifest_keys::kVersion, base::Value("1.0.0.0"));
-  manifest.SetKey(extensions::manifest_keys::kManifestVersion, base::Value(2));
-  manifest.SetKey(extensions::manifest_keys::kName, base::Value("unused"));
+  manifest.Set(extensions::manifest_keys::kVersion, "1.0.0.0");
+  manifest.Set(extensions::manifest_keys::kManifestVersion, 2);
+  manifest.Set(extensions::manifest_keys::kName, "unused");
 
-  base::ListValue permissions_list;
+  base::Value::List permissions_list;
   permissions_list.Append("fileSystemProvider");
-  manifest.SetKey(extensions::manifest_keys::kPermissions,
-                  std::move(permissions_list));
+  manifest.Set(extensions::manifest_keys::kPermissions,
+               std::move(permissions_list));
 
-  base::DictionaryValue capabilities;
-  capabilities.SetStringKey("source", "network");
-  capabilities.SetBoolKey("watchable", true);
-  manifest.SetKey(extensions::manifest_keys::kFileSystemProviderCapabilities,
-                  std::move(capabilities));
+  base::Value::Dict capabilities;
+  capabilities.Set("source", "network");
+  capabilities.Set("watchable", true);
+  manifest.Set(extensions::manifest_keys::kFileSystemProviderCapabilities,
+               std::move(capabilities));
 
   scoped_refptr<extensions::Extension> extension =
       extensions::Extension::Create(
@@ -90,7 +90,7 @@ class FileSystemProviderServiceTest : public testing::Test {
  protected:
   FileSystemProviderServiceTest() : profile_(nullptr) {}
 
-  ~FileSystemProviderServiceTest() override {}
+  ~FileSystemProviderServiceTest() override = default;
 
   void SetUp() override {
     profile_manager_ = std::make_unique<TestingProfileManager>(
@@ -101,14 +101,14 @@ class FileSystemProviderServiceTest : public testing::Test {
     user_manager_->AddUser(
         AccountId::FromUserEmail(profile_->GetProfileUserName()));
     user_manager_enabler_ = std::make_unique<user_manager::ScopedUserManager>(
-        base::WrapUnique(user_manager_));
+        base::WrapUnique(user_manager_.get()));
     extension_registry_ =
         std::make_unique<extensions::ExtensionRegistry>(profile_);
     service_ = std::make_unique<Service>(profile_, extension_registry_.get());
 
     registry_ = new FakeRegistry;
     // Passes ownership to the service instance.
-    service_->SetRegistryForTesting(base::WrapUnique(registry_));
+    service_->SetRegistryForTesting(base::WrapUnique(registry_.get()));
 
     fake_watcher_.entry_path = base::FilePath(FILE_PATH_LITERAL("/a/b/c"));
     fake_watcher_.recursive = true;
@@ -121,12 +121,12 @@ class FileSystemProviderServiceTest : public testing::Test {
 
   content::BrowserTaskEnvironment task_environment_;
   std::unique_ptr<TestingProfileManager> profile_manager_;
-  TestingProfile* profile_;
-  FakeChromeUserManager* user_manager_;
+  raw_ptr<TestingProfile> profile_;
+  raw_ptr<FakeChromeUserManager, DanglingUntriaged> user_manager_;
   std::unique_ptr<user_manager::ScopedUserManager> user_manager_enabler_;
   std::unique_ptr<extensions::ExtensionRegistry> extension_registry_;
   std::unique_ptr<Service> service_;
-  FakeRegistry* registry_;  // Owned by Service.
+  raw_ptr<FakeRegistry> registry_;  // Owned by Service.
   Watcher fake_watcher_;
 };
 
@@ -494,5 +494,4 @@ TEST_F(FileSystemProviderServiceTest, RememberFileSystem_OnUnmountByUser) {
   service_->RemoveObserver(&observer);
 }
 
-}  // namespace file_system_provider
-}  // namespace ash
+}  // namespace ash::file_system_provider

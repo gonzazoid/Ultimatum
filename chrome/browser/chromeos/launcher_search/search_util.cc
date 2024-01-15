@@ -4,7 +4,7 @@
 
 #include "chrome/browser/chromeos/launcher_search/search_util.h"
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/strings/string_piece.h"
 #include "components/bookmarks/browser/bookmark_model.h"
 #include "components/omnibox/browser/autocomplete_classifier.h"
@@ -13,6 +13,7 @@
 #include "components/omnibox/browser/autocomplete_provider_client.h"
 #include "components/omnibox/browser/favicon_cache.h"
 #include "components/omnibox/browser/suggestion_answer.h"
+#include "components/search_engines/search_terms_data.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "ui/base/page_transition_types.h"
 
@@ -22,6 +23,7 @@ namespace {
 using mojom::SearchResult;
 using mojom::SearchResultPtr;
 using RemoteConsumer = mojo::Remote<crosapi::mojom::SearchResultConsumer>;
+using RequestSource = SearchTermsData::RequestSource;
 
 SearchResult::AnswerType MatchTypeToAnswerType(const int type) {
   switch (static_cast<SuggestionAnswer::AnswerType>(type)) {
@@ -60,7 +62,7 @@ SearchResult::OmniboxType MatchTypeToOmniboxType(
     case AutocompleteMatchType::PHYSICAL_WEB_OVERFLOW_DEPRECATED:
     case AutocompleteMatchType::TAB_SEARCH_DEPRECATED:
     case AutocompleteMatchType::DOCUMENT_SUGGESTION:
-    case AutocompleteMatchType::PEDAL_DEPRECATED:
+    case AutocompleteMatchType::PEDAL:
     case AutocompleteMatchType::HISTORY_CLUSTER:
     case AutocompleteMatchType::STARTER_PACK:
       return SearchResult::OmniboxType::kDomain;
@@ -154,8 +156,7 @@ SearchResultPtr CreateBaseResult(const AutocompleteMatch& match,
   SearchResultPtr result = SearchResult::New();
 
   if (controller && match_copy.search_terms_args) {
-    match_copy.search_terms_args->request_source =
-        TemplateURLRef::CROS_APP_LIST;
+    match_copy.search_terms_args->request_source = RequestSource::CROS_APP_LIST;
     controller->SetMatchDestinationURL(&match_copy);
   }
 

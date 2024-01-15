@@ -7,9 +7,9 @@
 #include <memory>
 
 #include "ash/constants/ash_features.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/test/scoped_feature_list.h"
-#include "chrome/browser/ash/login/users/mock_user_manager.h"
+#include "chrome/browser/ash/login/users/fake_chrome_user_manager.h"
 #include "chrome/browser/notifications/notification_display_service_tester.h"
 #include "chrome/browser/ui/webui/signin/login_ui_service.h"
 #include "chrome/browser/ui/webui/signin/login_ui_service_factory.h"
@@ -94,26 +94,26 @@ class SyncErrorNotifierTest : public BrowserWithTestWindowTest {
   FakeLoginUI login_ui_;
   std::unique_ptr<NotificationDisplayServiceTester> display_service_;
   user_manager::ScopedUserManager scoped_user_manager_{
-      std::make_unique<ash::MockUserManager>()};
+      std::make_unique<ash::FakeChromeUserManager>()};
 };
 
 TEST_F(SyncErrorNotifierTest, NoNotificationWhenNoPassphrase) {
   service_.SetPassphraseRequiredForPreferredDataTypes(false);
-  service_.SetFirstSetupComplete(true);
+  service_.SetInitialSyncFeatureSetupComplete(true);
   error_notifier_->OnStateChanged(&service_);
   ExpectNotificationShown(false);
 }
 
 TEST_F(SyncErrorNotifierTest, NotificationShownWhenBrowserSyncEnabled) {
   service_.SetPassphraseRequiredForPreferredDataTypes(true);
-  service_.SetFirstSetupComplete(true);
+  service_.SetInitialSyncFeatureSetupComplete(true);
   error_notifier_->OnStateChanged(&service_);
   ExpectNotificationShown(true);
 }
 
 TEST_F(SyncErrorNotifierTest, NotificationShownOnce) {
   service_.SetPassphraseRequiredForPreferredDataTypes(true);
-  service_.SetFirstSetupComplete(true);
+  service_.SetInitialSyncFeatureSetupComplete(true);
   error_notifier_->OnStateChanged(&service_);
   ExpectNotificationShown(true);
 

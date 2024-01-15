@@ -7,23 +7,22 @@
 #include <memory>
 #include <string>
 
+#include "ash/webui/settings/public/constants/routes.mojom.h"
+#include "ash/webui/system_apps/public/system_web_app_type.h"
 #include "base/ranges/algorithm.h"
 #include "base/run_loop.h"
 #include "chrome/browser/apps/app_service/app_service_proxy.h"
 #include "chrome/browser/apps/app_service/app_service_proxy_factory.h"
 #include "chrome/browser/ash/system_web_apps/system_web_app_manager.h"
-#include "chrome/browser/ash/system_web_apps/types/system_web_app_type.h"
 #include "chrome/browser/chromeos/arc/arc_web_contents_data.h"
-#include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/ui/ash/system_web_apps/system_web_app_ui_utils.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_finder.h"
 #include "chrome/browser/ui/browser_list.h"
 #include "chrome/browser/ui/settings_window_manager_chromeos.h"
 #include "chrome/browser/ui/web_applications/test/web_app_navigation_browsertest.h"
-#include "chrome/browser/ui/webui/settings/chromeos/constants/routes.mojom.h"
+#include "chrome/browser/web_applications/mojom/user_display_mode.mojom.h"
 #include "chrome/browser/web_applications/test/web_app_install_test_utils.h"
-#include "chrome/browser/web_applications/user_display_mode.h"
 #include "chrome/browser/web_applications/web_app_provider.h"
 #include "chrome/common/webui_url_constants.h"
 #include "chrome/test/base/in_process_browser_test.h"
@@ -34,7 +33,6 @@
 #include "content/public/test/browser_test.h"
 #include "content/public/test/test_navigation_observer.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "ui/accessibility/accessibility_features.h"
 #include "url/gurl.h"
 
 namespace {
@@ -56,31 +54,6 @@ Browser* GetLastActiveBrowser() {
 }
 
 using ArcOpenUrlDelegateImplBrowserTest = InProcessBrowserTest;
-
-class ArcOpenUrlDelegateImplBrowserParamTest
-    : public ArcOpenUrlDelegateImplBrowserTest,
-      public testing::WithParamInterface<bool> {
- public:
-  ArcOpenUrlDelegateImplBrowserParamTest() = default;
-  ArcOpenUrlDelegateImplBrowserParamTest(
-      const ArcOpenUrlDelegateImplBrowserParamTest&) = delete;
-  ArcOpenUrlDelegateImplBrowserParamTest& operator=(
-      const ArcOpenUrlDelegateImplBrowserParamTest&) = delete;
-  ~ArcOpenUrlDelegateImplBrowserParamTest() override = default;
-
-  // ArcOpenUrlDelegateImplBrowserTest:
-  void SetUp() override {
-    scoped_feature_list_.InitWithFeatureState(
-        features::kAccessibilityOSSettingsVisibility,
-        IsAccessibilityOSSettingsVisibilityEnabled());
-    ArcOpenUrlDelegateImplBrowserTest::SetUp();
-  }
-
-  bool IsAccessibilityOSSettingsVisibilityEnabled() const { return GetParam(); }
-
- private:
-  base::test::ScopedFeatureList scoped_feature_list_;
-};
 
 using ArcOpenUrlDelegateImplWebAppBrowserTest =
     web_app::WebAppNavigationBrowserTest;
@@ -178,12 +151,13 @@ IN_PROC_BROWSER_TEST_F(ArcOpenUrlDelegateImplWebAppBrowserTest,
   const GURL app_url = https_server().GetURL(GetAppUrlHost(), GetAppUrlPath());
 
   // InstallTestWebApp() but with a ShareTarget definition added.
-  auto web_app_info = std::make_unique<WebAppInstallInfo>();
+  auto web_app_info = std::make_unique<web_app::WebAppInstallInfo>();
   web_app_info->start_url = app_url;
   web_app_info->scope =
       https_server().GetURL(GetAppUrlHost(), GetAppScopePath());
   web_app_info->title = base::UTF8ToUTF16(GetAppName());
-  web_app_info->user_display_mode = web_app::UserDisplayMode::kStandalone;
+  web_app_info->user_display_mode =
+      web_app::mojom::UserDisplayMode::kStandalone;
   apps::ShareTarget share_target;
   share_target.method = apps::ShareTarget::Method::kGet;
   share_target.action = app_url;
@@ -323,6 +297,17 @@ void TestAllOSSettingPages(const GURL& base_url) {
       ChromePage::AUDIO,
       base_url.Resolve(chromeos::settings::mojom::kAudioSubpagePath));
   TestOpenOSSettingsChromePage(
+      ChromePage::PERDEVICEMOUSE,
+      base_url.Resolve(chromeos::settings::mojom::kPerDeviceMouseSubpagePath));
+  TestOpenOSSettingsChromePage(
+      ChromePage::PERDEVICETOUCHPAD,
+      base_url.Resolve(
+          chromeos::settings::mojom::kPerDeviceTouchpadSubpagePath));
+  TestOpenOSSettingsChromePage(
+      ChromePage::PERDEVICEPOINTINGSTICK,
+      base_url.Resolve(
+          chromeos::settings::mojom::kPerDevicePointingStickSubpagePath));
+  TestOpenOSSettingsChromePage(
       ChromePage::HELP,
       base_url.Resolve(chromeos::settings::mojom::kAboutChromeOsSectionPath));
   TestOpenOSSettingsChromePage(
@@ -351,10 +336,7 @@ void TestAllOSSettingPages(const GURL& base_url) {
           chromeos::settings::mojom::kSecurityAndSignInSubpagePathV2));
   TestOpenOSSettingsChromePage(
       ChromePage::MANAGEACCESSIBILITY,
-      base_url.Resolve(
-          features::IsAccessibilityOSSettingsVisibilityEnabled()
-              ? chromeos::settings::mojom::kAccessibilitySectionPath
-              : chromeos::settings::mojom::kManageAccessibilitySubpagePath));
+      base_url.Resolve(chromeos::settings::mojom::kAccessibilitySectionPath));
   TestOpenOSSettingsChromePage(
       ChromePage::NETWORKSTYPEVPN,
       base_url.Resolve(chromeos::settings::mojom::kVpnDetailsSubpagePath));
@@ -373,6 +355,13 @@ void TestAllOSSettingPages(const GURL& base_url) {
   TestOpenOSSettingsChromePage(
       ChromePage::PRIVACYHUB,
       base_url.Resolve(chromeos::settings::mojom::kPrivacyHubSubpagePath));
+  TestOpenOSSettingsChromePage(
+      ChromePage::PERDEVICEKEYBOARD,
+      base_url.Resolve(
+          chromeos::settings::mojom::kPerDeviceKeyboardSubpagePath));
+  TestOpenOSSettingsChromePage(
+      ChromePage::GRAPHICSTABLET,
+      base_url.Resolve(chromeos::settings::mojom::kGraphicsTabletSubpagePath));
 }
 
 void TestAllBrowserSettingPages(const GURL& base_url) {
@@ -408,13 +397,7 @@ void TestAllAboutPages() {
   TestOpenChromePage(ChromePage::ABOUTBLANK, GURL(url::kAboutBlankURL));
 }
 
-INSTANTIATE_TEST_SUITE_P(
-    All,
-    ArcOpenUrlDelegateImplBrowserParamTest,
-    /*IsAccessibilityOSSettingsVisibilityEnabled()=*/::testing::Bool());
-
-IN_PROC_BROWSER_TEST_P(ArcOpenUrlDelegateImplBrowserParamTest,
-                       TestOpenChromePage) {
+IN_PROC_BROWSER_TEST_F(ArcOpenUrlDelegateImplBrowserTest, TestOpenChromePage) {
   // Install the Settings App.
   ash::SystemWebAppManager::GetForTest(browser()->profile())
       ->InstallSystemAppsForTesting();

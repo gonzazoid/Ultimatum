@@ -6,12 +6,12 @@
 
 #include <utility>
 
+#include <optional>
 #include "base/json/json_string_value_serializer.h"
 #include "base/logging.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/values.h"
 #include "base/win/registry.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 #include <windows.h>
 
@@ -41,15 +41,15 @@ bool DuplicateKeyHandle(HKEY source, base::win::RegKey* dest) {
 
 // Reads value |value_name| from |key| as a JSON string and returns it as
 // |base::Value|.
-absl::optional<base::Value::Dict> ReadValue(const base::win::RegKey& key,
-                                            const wchar_t* value_name) {
+std::optional<base::Value::Dict> ReadValue(const base::win::RegKey& key,
+                                           const wchar_t* value_name) {
   // presubmit: allow wstring
   std::wstring value_json;
   LONG result = key.ReadValue(value_name, &value_json);
   if (result != ERROR_SUCCESS) {
     SetLastError(result);
     PLOG(ERROR) << "Cannot read value '" << value_name << "'";
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   // Parse the value.
@@ -62,12 +62,12 @@ absl::optional<base::Value::Dict> ReadValue(const base::win::RegKey& key,
   if (!value) {
     LOG(ERROR) << "Failed to parse '" << value_name << "': " << error_message
                << " (" << error_code << ").";
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   if (!value->is_dict()) {
     LOG(ERROR) << "Failed to parse '" << value_name << "': not a dictionary.";
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   return std::move(*value).TakeDict();
@@ -101,11 +101,9 @@ bool WriteValue(base::win::RegKey& key,
 
 using protocol::PairingRegistry;
 
-PairingRegistryDelegateWin::PairingRegistryDelegateWin() {
-}
+PairingRegistryDelegateWin::PairingRegistryDelegateWin() {}
 
-PairingRegistryDelegateWin::~PairingRegistryDelegateWin() {
-}
+PairingRegistryDelegateWin::~PairingRegistryDelegateWin() {}
 
 bool PairingRegistryDelegateWin::SetRootKeys(HKEY privileged,
                                              HKEY unprivileged) {
@@ -113,12 +111,14 @@ bool PairingRegistryDelegateWin::SetRootKeys(HKEY privileged,
   DCHECK(!unprivileged_.Valid());
   DCHECK(unprivileged);
 
-  if (!DuplicateKeyHandle(unprivileged, &unprivileged_))
+  if (!DuplicateKeyHandle(unprivileged, &unprivileged_)) {
     return false;
+  }
 
   if (privileged) {
-    if (!DuplicateKeyHandle(privileged, &privileged_))
+    if (!DuplicateKeyHandle(privileged, &privileged_)) {
       return false;
+    }
   }
 
   return true;
@@ -128,7 +128,7 @@ base::Value::List PairingRegistryDelegateWin::LoadAll() {
   base::Value::List pairings;
 
   // Enumerate and parse all values under the unprivileged key.
-  DWORD count = unprivileged_.GetValueCount();
+  DWORD count = unprivileged_.GetValueCount().value_or(0);
   for (DWORD index = 0; index < count; ++index) {
     // presubmit: allow wstring
     std::wstring value_name;
@@ -157,28 +157,30 @@ bool PairingRegistryDelegateWin::DeleteAll() {
   // Enumerate and delete the values in the privileged and unprivileged keys
   // separately in case they get out of sync.
   bool success = true;
-  DWORD count = unprivileged_.GetValueCount();
+  DWORD count = unprivileged_.GetValueCount().value_or(0);
   while (count > 0) {
     // presubmit: allow wstring
     std::wstring value_name;
     LONG result = unprivileged_.GetValueNameAt(0, &value_name);
-    if (result == ERROR_SUCCESS)
+    if (result == ERROR_SUCCESS) {
       result = unprivileged_.DeleteValue(value_name.c_str());
+    }
 
     success = success && (result == ERROR_SUCCESS);
-    count = unprivileged_.GetValueCount();
+    count = unprivileged_.GetValueCount().value_or(0);
   }
 
-  count = privileged_.GetValueCount();
+  count = privileged_.GetValueCount().value_or(0);
   while (count > 0) {
     // presubmit: allow wstring
     std::wstring value_name;
     LONG result = privileged_.GetValueNameAt(0, &value_name);
-    if (result == ERROR_SUCCESS)
+    if (result == ERROR_SUCCESS) {
       result = privileged_.DeleteValue(value_name.c_str());
+    }
 
     success = success && (result == ERROR_SUCCESS);
-    count = privileged_.GetValueCount();
+    count = privileged_.GetValueCount().value_or(0);
   }
 
   return success;
@@ -190,17 +192,19 @@ PairingRegistry::Pairing PairingRegistryDelegateWin::Load(
   std::wstring value_name = base::UTF8ToWide(client_id);
 
   // Read unprivileged fields first.
-  absl::optional<base::Value::Dict> pairing =
+  std::optional<base::Value::Dict> pairing =
       ReadValue(unprivileged_, value_name.c_str());
-  if (!pairing)
+  if (!pairing) {
     return PairingRegistry::Pairing();
+  }
 
   // Read the shared secret.
   if (privileged_.Valid()) {
-    absl::optional<base::Value::Dict> secret =
+    std::optional<base::Value::Dict> secret =
         ReadValue(privileged_, value_name.c_str());
-    if (!secret)
+    if (!secret) {
       return PairingRegistry::Pairing();
+    }
 
     // Merge the two dictionaries.
     pairing->Merge(std::move(*secret));
@@ -212,7 +216,7 @@ PairingRegistry::Pairing PairingRegistryDelegateWin::Load(
 bool PairingRegistryDelegateWin::Save(const PairingRegistry::Pairing& pairing) {
   if (!privileged_.Valid()) {
     LOG(ERROR) << "Cannot save pairing entry '" << pairing.client_id()
-                << "': the pairing registry privileged key is invalid.";
+               << "': the pairing registry privileged key is invalid.";
     return false;
   }
 
@@ -220,7 +224,7 @@ bool PairingRegistryDelegateWin::Save(const PairingRegistry::Pairing& pairing) {
   base::Value::Dict pairing_json = pairing.ToValue();
 
   // Extract the shared secret to a separate dictionary.
-  absl::optional<base::Value> secret_key =
+  std::optional<base::Value> secret_key =
       pairing_json.Extract(PairingRegistry::kSharedSecretKey);
   CHECK(secret_key.has_value());
   base::Value::Dict secret_json;
@@ -241,15 +245,14 @@ bool PairingRegistryDelegateWin::Save(const PairingRegistry::Pairing& pairing) {
 bool PairingRegistryDelegateWin::Delete(const std::string& client_id) {
   if (!privileged_.Valid()) {
     LOG(ERROR) << "Cannot delete pairing entry '" << client_id
-                << "': the delegate is read-only.";
+               << "': the delegate is read-only.";
     return false;
   }
 
   // presubmit: allow wstring
   std::wstring value_name = base::UTF8ToWide(client_id);
   LONG result = privileged_.DeleteValue(value_name.c_str());
-  if (result != ERROR_SUCCESS &&
-      result != ERROR_FILE_NOT_FOUND &&
+  if (result != ERROR_SUCCESS && result != ERROR_FILE_NOT_FOUND &&
       result != ERROR_PATH_NOT_FOUND) {
     SetLastError(result);
     PLOG(ERROR) << "Cannot delete pairing entry '" << client_id << "'";
@@ -257,8 +260,7 @@ bool PairingRegistryDelegateWin::Delete(const std::string& client_id) {
   }
 
   result = unprivileged_.DeleteValue(value_name.c_str());
-  if (result != ERROR_SUCCESS &&
-      result != ERROR_FILE_NOT_FOUND &&
+  if (result != ERROR_SUCCESS && result != ERROR_FILE_NOT_FOUND &&
       result != ERROR_PATH_NOT_FOUND) {
     SetLastError(result);
     PLOG(ERROR) << "Cannot delete pairing entry '" << client_id << "'";

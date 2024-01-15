@@ -92,7 +92,7 @@ ArcSurveyService::~ArcSurveyService() {
 }
 
 bool ArcSurveyService::LoadSurveyData(std::string survey_data) {
-  absl::optional<base::Value> root = base::JSONReader::Read(survey_data);
+  std::optional<base::Value> root = base::JSONReader::Read(survey_data);
   if (!root) {
     LOG(ERROR) << "Unable to find JSON root. Trying char substitutions.";
     base::ReplaceSubstringsAfterOffset(&survey_data, 0, R"(\{@})", ":");
@@ -107,8 +107,8 @@ bool ArcSurveyService::LoadSurveyData(std::string survey_data) {
   }
 
   // Load trigger duration
-  absl::optional<int> elapsed_time_survey_trigger_min =
-      root->FindIntKey(kJSONKeyElapsedTimeSurveyTriggerMin);
+  std::optional<int> elapsed_time_survey_trigger_min =
+      root->GetDict().FindInt(kJSONKeyElapsedTimeSurveyTriggerMin);
   if (elapsed_time_survey_trigger_min) {
     elapsed_time_survey_trigger_ =
         (elapsed_time_survey_trigger_min.value() >= 0)
@@ -118,17 +118,17 @@ bool ArcSurveyService::LoadSurveyData(std::string survey_data) {
   }
 
   // Load package names
-  const base::Value* list = root->FindListKey(kJSONKeyPackageNames);
+  const base::Value::List* list =
+      root->GetDict().FindList(kJSONKeyPackageNames);
   if (!list) {
     VLOG(1) << "List of package names not found in the survey data.";
     return false;
   }
-  const base::Value::List& items = list->GetList();
-  if (items.empty()) {
+  if (list->empty()) {
     VLOG(1) << "List of package names is empty in the survey data.";
     return false;
   }
-  for (const auto& item : items) {
+  for (const auto& item : *list) {
     const std::string* package_name = item.GetIfString();
     if (!package_name) {
       VLOG(1) << "Non-string value found in list. Ignoring all results.";
@@ -236,6 +236,11 @@ const std::set<std::string>* ArcSurveyService::GetAllowedPackagesForTesting() {
 void ArcSurveyService::AddAllowedPackageNameForTesting(
     const std::string package_name) {
   allowed_packages_.emplace(package_name);
+}
+
+// static
+void ArcSurveyService::EnsureFactoryBuilt() {
+  ArcSurveyServiceFactory::GetInstance();
 }
 
 }  // namespace arc

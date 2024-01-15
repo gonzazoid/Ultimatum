@@ -7,12 +7,14 @@
 #include <algorithm>
 #include <sstream>
 #include <utility>
+#include <vector>
 
+#include "ipcz/application_object.h"
 #include "ipcz/box.h"
 #include "ipcz/node_link.h"
 #include "ipcz/node_link_memory.h"
 #include "ipcz/node_messages.h"
-#include "ipcz/portal.h"
+#include "ipcz/parcel.h"
 #include "ipcz/router.h"
 #include "util/log.h"
 #include "util/safe_math.h"
@@ -137,15 +139,17 @@ void RemoteRouterLink::AllocateParcelData(size_t num_bytes,
 }
 
 void RemoteRouterLink::AcceptParcel(const OperationContext& context,
-                                    Parcel& parcel) {
-  const absl::Span<Ref<APIObject>> objects = parcel.objects_view();
+                                    std::unique_ptr<Parcel> parcel) {
+  const absl::Span<Ref<APIObject>> objects = parcel->objects_view();
 
   msg::AcceptParcel accept;
   accept.params().sublink = sublink_;
-  accept.params().sequence_number = parcel.sequence_number();
+  accept.params().sequence_number = parcel->sequence_number();
+  accept.params().padding = 0;
 
   size_t num_portals = 0;
   absl::InlinedVector<DriverObject, 2> driver_objects;
+  std::vector<Ref<ParcelWrapper>> subparcels;
   bool must_relay_driver_objects = false;
   for (Ref<APIObject>& object : objects) {
     switch (object->object_type()) {
@@ -156,10 +160,36 @@ void RemoteRouterLink::AcceptParcel(const OperationContext& context,
       case APIObject::kBox: {
         Box* box = Box::FromObject(object.get());
         ABSL_ASSERT(box);
-        if (!box->object().CanTransmitOn(*node_link()->transport())) {
-          must_relay_driver_objects = true;
+
+        switch (box->type()) {
+          case Box::Type::kDriverObject: {
+            if (!box->driver_object().CanTransmitOn(
+                    *node_link()->transport())) {
+              must_relay_driver_objects = true;
+            }
+            driver_objects.push_back(std::move(box->driver_object()));
+            break;
+          }
+
+          case Box::Type::kApplicationObject: {
+            // Application objects must be serialized into subparcels.
+            ApplicationObject application_object =
+                std::move(box->application_object());
+            if (!application_object.IsSerializable()) {
+              DLOG(FATAL) << "Cannot transmit unserializable object";
+              return;
+            }
+            subparcels.push_back(application_object.Serialize(*node_link()));
+            break;
+          }
+
+          case Box::Type::kSubparcel:
+            subparcels.push_back(std::move(box->subparcel()));
+            break;
+
+          default:
+            DLOG(FATAL) << "Attempted to transmit an invalid object";
         }
-        driver_objects.push_back(std::move(box->object()));
         break;
       }
 
@@ -167,6 +197,37 @@ void RemoteRouterLink::AcceptParcel(const OperationContext& context,
         break;
     }
   }
+
+  // Subparcels cannot contain other subparcels.
+  ABSL_ASSERT(parcel->subparcel_index() == 0 || subparcels.empty());
+
+  // Receivers will reject parcels which contain more than this maximum number
+  // of subparcels.
+  ABSL_ASSERT(subparcels.size() < Parcel::kMaxSubparcelsPerParcel);
+
+  uint32_t num_subparcels;
+  if (parcel->subparcel_index() == 0) {
+    // The total subparcel count includes this (the main) parcel.
+    num_subparcels = checked_cast<uint32_t>(subparcels.size()) + 1;
+
+    // Send the other subparcels separately before sending this main one. All
+    // will be collected on the receiving end and reconstituted into a single
+    // parcel.
+    for (size_t i = 1; i < num_subparcels; ++i) {
+      std::unique_ptr<Parcel> subparcel = subparcels[i - 1]->TakeParcel();
+      subparcel->set_sequence_number(parcel->sequence_number());
+      subparcel->set_num_subparcels(num_subparcels);
+      subparcel->set_subparcel_index(i);
+      AcceptParcel(context, std::move(subparcel));
+    }
+  } else {
+    // This is not the main parcel, so the number of subparcels has already been
+    // set correctly by the main parcel.
+    num_subparcels = parcel->num_subparcels();
+  }
+
+  accept.params().num_subparcels = num_subparcels;
+  accept.params().subparcel_index = parcel->subparcel_index();
 
   // If driver objects will require relaying through the broker, then the parcel
   // must be split into two separate messages: one for the driver objects (which
@@ -185,20 +246,20 @@ void RemoteRouterLink::AcceptParcel(const OperationContext& context,
   // Allocate all the arrays in the message. Note that each allocation may
   // relocate the parcel data in memory, so views into these arrays should not
   // be acquired until all allocations are complete.
-  if (parcel.data_fragment().is_null() ||
-      parcel.data_fragment_memory() != &node_link()->memory()) {
+  if (!parcel->has_data_fragment() ||
+      parcel->data_fragment_memory() != &node_link()->memory()) {
     // Only inline parcel data within the message when we don't have a separate
     // data fragment allocated already, or if the allocated fragment is on the
     // wrong link. The latter case is possible if the transmitting Router
     // switched links since the Parcel's data was allocated.
     accept.params().parcel_data =
-        accept.AllocateArray<uint8_t>(parcel.data_view().size());
+        accept.AllocateArray<uint8_t>(parcel->data_size());
   } else {
     // The data for this parcel already exists in this link's memory, so we only
     // stash a reference to it in the message. This relinquishes ownership of
     // the fragment, effectively passing it to the recipient.
-    accept.params().parcel_fragment = parcel.data_fragment().descriptor();
-    parcel.ReleaseDataFragment();
+    accept.params().parcel_fragment = parcel->data_fragment().descriptor();
+    parcel->ReleaseDataFragment();
   }
   accept.params().handle_types =
       accept.AllocateArray<HandleType>(objects.size());
@@ -213,8 +274,8 @@ void RemoteRouterLink::AcceptParcel(const OperationContext& context,
       accept.GetArrayView<RouterDescriptor>(accept.params().new_routers);
 
   if (!inline_parcel_data.empty()) {
-    memcpy(inline_parcel_data.data(), parcel.data_view().data(),
-           parcel.data_size());
+    memcpy(inline_parcel_data.data(), parcel->data_view().data(),
+           parcel->data_size());
   }
 
   // Serialize attached objects. We accumulate the Routers of all attached
@@ -235,7 +296,7 @@ void RemoteRouterLink::AcceptParcel(const OperationContext& context,
       case APIObject::kPortal: {
         handle_types[i] = HandleType::kPortal;
 
-        Ref<Router> router = Portal::FromObject(&object)->router();
+        Ref<Router> router = WrapRefCounted(Router::FromObject(&object));
         ABSL_ASSERT(portal_index < num_portals);
         router->SerializeNewRouter(context, *node_link(),
                                    descriptors[portal_index]);
@@ -245,8 +306,22 @@ void RemoteRouterLink::AcceptParcel(const OperationContext& context,
       }
 
       case APIObject::kBox:
-        handle_types[i] =
-            must_split_parcel ? HandleType::kRelayedBox : HandleType::kBox;
+        switch (Box::FromObject(&object)->type()) {
+          case Box::Type::kDriverObject:
+            handle_types[i] = must_split_parcel
+                                  ? HandleType::kRelayedBoxedDriverObject
+                                  : HandleType::kBoxedDriverObject;
+            break;
+
+          // Subparcels and application objects both serialized as subparcels.
+          case Box::Type::kApplicationObject:
+          case Box::Type::kSubparcel:
+            handle_types[i] = HandleType::kBoxedSubparcel;
+            break;
+
+          default:
+            DLOG(FATAL) << "Attempted to transmit an invalid object.";
+        }
         break;
 
       default:
@@ -257,17 +332,19 @@ void RemoteRouterLink::AcceptParcel(const OperationContext& context,
 
   // Copy all the serialized router descriptors into the message. Our local
   // copy will supply inputs for BeginProxyingToNewRouter() calls below.
-  memcpy(new_routers.data(), descriptors.data(),
-         new_routers.size() * sizeof(new_routers[0]));
+  if (!descriptors.empty()) {
+    memcpy(new_routers.data(), descriptors.data(),
+           new_routers.size() * sizeof(new_routers[0]));
+  }
 
   if (must_split_parcel) {
     msg::AcceptParcelDriverObjects accept_objects;
     accept_objects.params().sublink = sublink_;
-    accept_objects.params().sequence_number = parcel.sequence_number();
+    accept_objects.params().sequence_number = parcel->sequence_number();
     accept_objects.params().driver_objects =
         accept_objects.AppendDriverObjects(absl::MakeSpan(driver_objects));
 
-    DVLOG(4) << "Transmitting objects for " << parcel.Describe() << " over "
+    DVLOG(4) << "Transmitting objects for " << parcel->Describe() << " over "
              << Describe();
     node_link()->Transmit(accept_objects);
   } else {
@@ -275,7 +352,7 @@ void RemoteRouterLink::AcceptParcel(const OperationContext& context,
         accept.AppendDriverObjects(absl::MakeSpan(driver_objects));
   }
 
-  DVLOG(4) << "Transmitting " << parcel.Describe() << " over " << Describe();
+  DVLOG(4) << "Transmitting " << parcel->Describe() << " over " << Describe();
 
   node_link()->Transmit(accept);
 
@@ -301,26 +378,6 @@ void RemoteRouterLink::AcceptRouteClosure(const OperationContext& context,
   route_closed.params().sublink = sublink_;
   route_closed.params().sequence_length = sequence_length;
   node_link()->Transmit(route_closed);
-}
-
-AtomicQueueState* RemoteRouterLink::GetPeerQueueState() {
-  if (auto* state = GetLinkState()) {
-    return &state->GetQueueState(side_.opposite());
-  }
-  return nullptr;
-}
-
-AtomicQueueState* RemoteRouterLink::GetLocalQueueState() {
-  if (auto* state = GetLinkState()) {
-    return &state->GetQueueState(side_);
-  }
-  return nullptr;
-}
-
-void RemoteRouterLink::SnapshotPeerQueueState(const OperationContext& context) {
-  msg::SnapshotPeerQueueState snapshot;
-  snapshot.params().sublink = sublink_;
-  node_link()->Transmit(snapshot);
 }
 
 void RemoteRouterLink::AcceptRouteDisconnected(

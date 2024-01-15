@@ -5,17 +5,22 @@
 #ifndef COMPONENTS_DEVICE_SIGNALS_CORE_COMMON_SIGNALS_CONSTANTS_H_
 #define COMPONENTS_DEVICE_SIGNALS_CORE_COMMON_SIGNALS_CONSTANTS_H_
 
+#include "base/files/file_path.h"
+#include "build/build_config.h"
+
 namespace device_signals {
 
 // Signal names can be used as keys to store/retrieve signal values from
 // dictionaries.
 namespace names {
 
+extern const char kAgentId[];
 extern const char kAllowScreenLock[];
 extern const char kBrowserVersion[];
 extern const char kBuiltInDnsClientEnabled[];
-extern const char kChromeCleanupEnabled[];
 extern const char kChromeRemoteDesktopAppBlocked[];
+extern const char kCrowdStrike[];
+extern const char kCustomerId[];
 extern const char kDeviceAffiliationIds[];
 extern const char kDeviceHostName[];
 extern const char kDeviceManufacturer[];
@@ -39,6 +44,8 @@ extern const char kSerialNumber[];
 extern const char kSiteIsolationEnabled[];
 extern const char kSystemDnsServers[];
 extern const char kThirdPartyBlockingEnabled[];
+extern const char kTrigger[];
+extern const char kUserEnrollmentDomain[];
 extern const char kWindowsMachineDomain[];
 extern const char kWindowsUserDomain[];
 
@@ -55,6 +62,8 @@ extern const char kUnsupported[];
 extern const char kMissingSystemService[];
 extern const char kMissingBundle[];
 extern const char kMissingParameters[];
+extern const char kParsingFailed[];
+extern const char kUnexpectedValue[];
 
 }  // namespace errors
 

@@ -2,14 +2,14 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-import("//build/config/chromecast_build.gni")
+import("//build/config/cast.gni")
 import("//build/config/locales.gni")
 import("//components/cast_streaming/features.gni")
 import("//media/media_options.gni")
 
 # These args blocks should contain arguments used within the //chromecast
 # directory. Arguments which are used in other Chrome components should
-# be instead declared in //build/config/chromecast_build.gni.
+# be instead declared in //build/config/cast.gni.
 declare_args() {
   # True if Chromecast build is targeted for linux desktop. This type of build
   # is useful for testing and development, but currently supports only a subset
@@ -36,16 +36,6 @@ declare_args() {
   # when the default value is used.
   cast_build_incremental = "999999"
 
-  if (is_android) {
-    # If true, run receiver apps in an Android service instead of an activity.
-    display_web_contents_in_service = is_cast_audio_only
-  }
-
-  # If true, Chromecast WebUI resources are included in a build.
-  # TODO(antz): default to false for audio-only builds, might need further
-  # clean up (b/27119303)
-  enable_chromecast_webui = !is_cast_audio_only && !is_android
-
   # Set true to enable assistant features.
   enable_assistant = false
 
@@ -68,13 +58,6 @@ declare_args() {
     # Set to true to get logcat from a remote service
     # If false, will only get the logs of the app.
     use_remote_service_logcat = false
-
-    # Set the package name and class path for the component which will provide device logs
-    # Values defined in eureka-internal
-    # These values are unused if use_remote_service_logcat is false
-    # device_logs_provider_package is a CSV, and the first resolved one would be used.
-    device_logs_provider_package = ""
-    device_logs_provider_class = ""
   }
 
   # Set to true to enable a CMA media backend that allows mixed audio to be
@@ -150,6 +133,16 @@ declare_args() {
   # cast_shared_library targets are normal shared libraries. When false,
   # they become source_sets.
   use_vendor_shlibs = !is_android
+
+  # build APKs/bundles for the listed device types. Each APK has different
+  # features enabled in its manifest to ensure it is only distributed to select
+  # devices.
+  android_device_types = [
+    "generic",
+    "atv",
+    "tablet",
+    "automotive",
+  ]
 }
 
 declare_args() {

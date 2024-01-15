@@ -4,24 +4,13 @@
 
 import {$} from 'chrome://resources/js/util.js';
 
-import {GetSsrcFromReport, SsrcInfoManager} from './ssrc_info_manager.js';
-import {generateStatsLabel, isDeprecatedStats} from './stats_helper.js';
+import {generateStatsLabel} from './stats_helper.js';
 
 /**
  * Maintains the stats table.
- * @param {SsrcInfoManager} ssrcInfoManager The source of the ssrc info.
  */
 export class StatsTable {
-  /**
-   * @param {SsrcInfoManager} ssrcInfoManager The source of the ssrc info.
-   */
-  constructor(ssrcInfoManager) {
-    /**
-     * @type {SsrcInfoManager}
-     * @private
-     */
-    this.ssrcInfoManager_ = ssrcInfoManager;
-  }
+  constructor() {}
 
   /**
    * Adds |report| to the stats table of |peerConnectionElement|.
@@ -39,10 +28,6 @@ export class StatsTable {
     statsTable.parentElement.firstElementChild.innerText =
         generateStatsLabel(report);
 
-    if (isDeprecatedStats(report)) {
-      statsTable.parentElement.classList.add('stats-deprecation');
-    }
-
     if (report.stats) {
       this.addStatsToTable_(
           statsTable, report.stats.timestamp, report.stats.values);
@@ -51,7 +36,10 @@ export class StatsTable {
 
   clearStatsLists(peerConnectionElement) {
     const containerId = peerConnectionElement.id + '-table-container';
-    const container = $(containerId);
+    // Disable getElementById restriction here, since |containerId| is not
+    // always a valid selector.
+    // eslint-disable-next-line no-restricted-properties
+    const container = document.getElementById(containerId);
     if (container) {
       peerConnectionElement.removeChild(container);
       this.ensureStatsTableContainer_(peerConnectionElement);
@@ -68,7 +56,10 @@ export class StatsTable {
    */
   ensureStatsTableContainer_(peerConnectionElement) {
     const containerId = peerConnectionElement.id + '-table-container';
-    let container = $(containerId);
+    // Disable getElementById restriction here, since |containerId| is not
+    // always a valid selector.
+    // eslint-disable-next-line no-restricted-properties
+    let container = document.getElementById(containerId);
     if (!container) {
       container = document.createElement('div');
       container.id = containerId;
@@ -76,6 +67,14 @@ export class StatsTable {
       const head = document.createElement('div');
       head.textContent = 'Stats Tables';
       container.appendChild(head);
+      const label = document.createElement('label');
+      label.innerText = 'Filter statistics by type including ';
+      container.appendChild(label);
+      const input = document.createElement('input');
+      input.placeholder = 'separate multiple values by `,`';
+      input.size = 25;
+      input.oninput = (e) => this.filterStats(e, container);
+      container.appendChild(input);
       peerConnectionElement.appendChild(container);
     }
     return container;
@@ -95,10 +94,14 @@ export class StatsTable {
    */
   ensureStatsTable_(peerConnectionElement, report) {
     const tableId = peerConnectionElement.id + '-table-' + report.id;
-    let table = $(tableId);
+    // Disable getElementById restriction here, since |tableId| is not
+    // always a valid selector.
+    // eslint-disable-next-line no-restricted-properties
+    let table = document.getElementById(tableId);
     if (!table) {
       const container = this.ensureStatsTableContainer_(peerConnectionElement);
       const details = document.createElement('details');
+      details.attributes['data-statsType'] = report.type;
       container.appendChild(details);
 
       const summary = document.createElement('summary');
@@ -112,20 +115,6 @@ export class StatsTable {
 
       table.appendChild($('trth-template').content.cloneNode(true));
       table.rows[0].cells[0].textContent = 'Statistics ' + report.id;
-
-      // Deprecated stats.
-      if (isDeprecatedStats(report)) {
-        details.appendChild($('stats-deprecation-warning')
-            .content.cloneNode(true));
-      }
-      // Only for legacy stats.
-      if (report.type === 'ssrc') {
-        table.insertRow(1);
-        table.rows[1].appendChild(
-            $('td-colspan-template').content.cloneNode(true));
-        this.ssrcInfoManager_.populateSsrcInfo(
-            table.rows[1].cells[0], GetSsrcFromReport(report));
-      }
     }
     return table;
   }
@@ -139,6 +128,31 @@ export class StatsTable {
    * @private
    */
   addStatsToTable_(statsTable, time, statsData) {
+    const definedMetrics = new Set();
+    for (let i = 0; i < statsData.length - 1; i = i + 2) {
+      definedMetrics.add(statsData[i]);
+    }
+    // For any previously reported metric that is no longer defined, replace its
+    // now obsolete value with the magic string "(removed)".
+    const metricsContainer = statsTable.firstChild;
+    for (let i = 0; i < metricsContainer.children.length; ++i) {
+      const metricElement = metricsContainer.children[i];
+      // `metricElement` IDs have the format `bla-bla-bla-bla-${metricName}`.
+      let metricName =
+          metricElement.id.substring(metricElement.id.lastIndexOf('-') + 1);
+      if (metricName.endsWith(']')) {
+        // Computed metrics may contain the '-' character (e.g.
+        // `DifferenceCalculator` based metrics) in which case `metricName` will
+        // not have been parsed correctly. Instead look for starting '['.
+        metricName =
+            metricElement.id.substring(metricElement.id.indexOf('['));
+      }
+      if (metricName && metricName != 'timestamp' &&
+          !definedMetrics.has(metricName)) {
+        this.updateStatsTableRow_(statsTable, metricName, '(removed)');
+      }
+    }
+    // Add or update all "metric: value" that have a defined value.
     const date = new Date(time);
     this.updateStatsTableRow_(statsTable, 'timestamp', date.toLocaleString());
     for (let i = 0; i < statsData.length - 1; i = i + 2) {
@@ -157,7 +171,10 @@ export class StatsTable {
    */
   updateStatsTableRow_(statsTable, rowName, value) {
     const trId = statsTable.id + '-' + rowName;
-    let trElement = $(trId);
+    // Disable getElementById restriction here, since |trId| is not always
+    // a valid selector.
+    // eslint-disable-next-line no-restricted-properties
+    let trElement = document.getElementById(trId);
     const activeConnectionClass = 'stats-table-active-connection';
     if (!trElement) {
       trElement = document.createElement('tr');
@@ -177,5 +194,28 @@ export class StatsTable {
         statsTable.parentElement.classList.remove(activeConnectionClass);
       }
     }
+  }
+
+  /**
+   * Apply a filter to the stats table
+   * @param event InputEvent from the filter input field.
+   * @param container stats table container element.
+   * @private
+   */
+  filterStats(event, container) {
+    const filter = event.target.value;
+    const filters = filter.split(',');
+    container.childNodes.forEach(node => {
+      if (node.nodeName !== 'DETAILS') {
+        return;
+      }
+      const statsType = node.attributes['data-statsType'];
+      if (!filter || filters.includes(statsType) ||
+          filters.find(f => statsType.includes(f))) {
+        node.style.display = 'block';
+      } else {
+        node.style.display = 'none';
+      }
+    });
   }
 }

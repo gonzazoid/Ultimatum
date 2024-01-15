@@ -2,6 +2,7 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
+import("//build/config/features.gni")
 import("//mojo/public/tools/bindings/mojom.gni")
 
 source_set("tests") {
@@ -21,10 +22,12 @@ source_set("tests") {
     "container_test_util.h",
     "data_view_unittest.cc",
     "default_construct_unittest.cc",
+    "direct_receiver_unittest.cc",
     "enum_default_unittest.cc",
     "enum_headers_unittest.cc",
     "equals_unittest.cc",
     "extra_cpp_template_unittest.cc",
+    "feature_unittest.cc",
     "flush_async_unittest.cc",
     "handle_passing_unittest.cc",
     "hash_unittest.cc",
@@ -34,11 +37,11 @@ source_set("tests") {
     "map_unittest.cc",
     "message_queue.cc",
     "message_queue.h",
-    "message_quota_checker_unittest.cc",
     "message_unittest.cc",
     "multiplex_router_unittest.cc",
     "native_struct_unittest.cc",
     "new_endpoint_types_unittest.cc",
+    "nullable_value_types_unittest.cc",
     "receiver_callback_unittest.cc",
     "receiver_set_unittest.cc",
     "receiver_unittest.cc",
@@ -52,6 +55,7 @@ source_set("tests") {
     "service_factory_unittest.cc",
     "struct_headers_unittest.cc",
     "struct_unittest.cc",
+    "supports_urgent_attribute_unittest.cc",
     "sync_handle_registry_unittest.cc",
     "sync_method_unittest.cc",
     "test_helpers_unittest.cc",
@@ -66,7 +70,10 @@ source_set("tests") {
     ":mojo_public_bindings_test_utils",
     ":test_extra_cpp_template_mojom",
     ":test_mojom",
+    ":test_mojom__generate_message_ids",
+    ":test_types",
     "//base/test:test_support",
+    "//build:blink_buildflags",
     "//mojo/core/test:test_support",
     "//mojo/public/cpp/bindings",
     "//mojo/public/cpp/system",
@@ -79,11 +86,18 @@ source_set("tests") {
     "//mojo/public/interfaces/bindings/tests:test_interfaces",
     "//mojo/public/interfaces/bindings/tests:test_struct_traits_interfaces",
     "//testing/gtest",
+    "//third_party/ipcz/src:ipcz_test_support_chromium",
   ]
 
-  data = [ "//mojo/public/interfaces/bindings/tests/data/validation/" ]
-
   if (is_ios) {
+    deps += [
+      "//mojo/public/interfaces/bindings/tests:validation_unittest_bundle_data",
+    ]
+  } else {
+    data = [ "//mojo/public/interfaces/bindings/tests/data/validation/" ]
+  }
+
+  if (!use_blink) {
     assert_no_deps = [ "//third_party/blink/*" ]
   } else {
     sources += [
@@ -92,13 +106,18 @@ source_set("tests") {
     ]
 
     deps += [
-      "//mojo/public/cpp/bindings/tests:struct_with_traits_impl",
+      ":struct_with_traits_impl",
       "//mojo/public/interfaces/bindings/tests:test_interfaces_blink",
     ]
   }
 }
 
-if (!is_ios) {
+source_set("test_types") {
+  sources = [ "nullable_value_types_enums.h" ]
+  testonly = true
+}
+
+if (use_blink) {
   source_set("for_blink_tests") {
     testonly = true
 
@@ -152,8 +171,11 @@ mojom("test_mojom") {
     "binder_map_unittest.test-mojom",
     "connection_group_unittest.test-mojom",
     "default_construct_unittest.test-mojom",
+    "direct_receiver_unittest.test-mojom",
     "enum_default_unittest.test-mojom",
     "enum_headers_unittest.test-mojom",
+    "feature_unittest.test-mojom",
+    "feature_unittest_other.test-mojom",
     "flush_async_unittest.test-mojom",
     "idle_tracking_unittest.test-mojom",
     "interface_unittest.test-mojom",
@@ -161,6 +183,7 @@ mojom("test_mojom") {
     "remote_unittest.test-mojom",
     "service_factory_unittest.test-mojom",
     "struct_headers_unittest.test-mojom",
+    "supports_urgent_attribute_unittest.test-mojom",
     "sync_method_unittest.test-mojom",
     "union_unittest.test-mojom",
   ]
@@ -180,6 +203,7 @@ mojom("test_mojom") {
         {
           mojom = "mojo.test.default_construct.mojom.TestStruct"
           cpp = "::mojo::test::default_construct::TestStruct"
+          default_constructible = false
         },
       ]
       traits_headers = [ "default_construct_unittest_mojom_traits.h" ]

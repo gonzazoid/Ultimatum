@@ -47,7 +47,7 @@ void ConstructCartProto(cart_db::ChromeCartContentProto* proto,
   proto->set_key(domain);
   proto->set_merchant(domain);
   proto->set_merchant_cart_url(navigation_url.spec());
-  proto->set_timestamp(base::Time::Now().ToDoubleT());
+  proto->set_timestamp(base::Time::Now().InSecondsFSinceUnixEpoch());
   for (auto& product : products) {
     if (product->image_url.spec().size() != 0) {
       proto->add_product_image_urls(product->image_url.spec());
@@ -252,8 +252,7 @@ void CommerceHintService::OnAddToCart(const GURL& navigation_url,
     products.push_back(std::move(product_ptr));
   }
   ConstructCartProto(&proto, navigation_url, std::move(products));
-  service_->AddCart(GetDomain(navigation_url), validated_cart,
-                    std::move(proto));
+  service_->AddCart(navigation_url, validated_cart, std::move(proto));
 #endif
 }
 
@@ -278,7 +277,7 @@ void CommerceHintService::OnCartUpdated(
   }
   cart_db::ChromeCartContentProto proto;
   ConstructCartProto(&proto, cart_url, std::move(products));
-  service_->AddCart(proto.key(), validated_cart, std::move(proto));
+  service_->AddCart(cart_url, validated_cart, std::move(proto));
 #endif
 }
 

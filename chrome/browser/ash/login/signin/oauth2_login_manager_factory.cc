@@ -6,16 +6,25 @@
 
 #include "chrome/browser/ash/login/signin/oauth2_login_manager.h"
 #include "chrome/browser/profiles/profile.h"
+#include "chrome/browser/signin/account_reconcilor_factory.h"
 #include "chrome/browser/signin/identity_manager_factory.h"
 
 namespace ash {
 
 OAuth2LoginManagerFactory::OAuth2LoginManagerFactory()
-    : ProfileKeyedServiceFactory("OAuth2LoginManager") {
+    : ProfileKeyedServiceFactory(
+          "OAuth2LoginManager",
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOriginalOnly)
+              .Build()) {
   DependsOn(IdentityManagerFactory::GetInstance());
+  DependsOn(AccountReconcilorFactory::GetInstance());
 }
 
-OAuth2LoginManagerFactory::~OAuth2LoginManagerFactory() {}
+OAuth2LoginManagerFactory::~OAuth2LoginManagerFactory() = default;
 
 // static
 OAuth2LoginManager* OAuth2LoginManagerFactory::GetForProfile(Profile* profile) {
@@ -25,15 +34,15 @@ OAuth2LoginManager* OAuth2LoginManagerFactory::GetForProfile(Profile* profile) {
 
 // static
 OAuth2LoginManagerFactory* OAuth2LoginManagerFactory::GetInstance() {
-  return base::Singleton<OAuth2LoginManagerFactory>::get();
+  static base::NoDestructor<OAuth2LoginManagerFactory> instance;
+  return instance.get();
 }
 
-KeyedService* OAuth2LoginManagerFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+OAuth2LoginManagerFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
   Profile* profile = static_cast<Profile*>(context);
-  OAuth2LoginManager* service;
-  service = new OAuth2LoginManager(profile);
-  return service;
+  return std::make_unique<OAuth2LoginManager>(profile);
 }
 
 }  // namespace ash

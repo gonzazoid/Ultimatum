@@ -32,7 +32,7 @@ namespace {
 class MockTableViewObserver : public views::TableViewObserver {
  public:
   // views::TableViewObserver:
-  MOCK_METHOD0(OnSelectionChanged, void());
+  MOCK_METHOD(void, OnSelectionChanged, (), (override));
 };
 
 }  // namespace
@@ -147,8 +147,9 @@ class DeviceChooserContentViewTest : public ChromeViewsTestBase {
 
  private:
   std::unique_ptr<MockTableViewObserver> table_observer_;
-  raw_ptr<FakeBluetoothChooserController> controller_ = nullptr;
-  raw_ptr<DeviceChooserContentView> content_view_ = nullptr;
+  raw_ptr<FakeBluetoothChooserController, DanglingUntriaged> controller_ =
+      nullptr;
+  raw_ptr<DeviceChooserContentView, DanglingUntriaged> content_view_ = nullptr;
   std::unique_ptr<views::Widget> widget_;
 };
 
@@ -226,7 +227,7 @@ TEST_F(DeviceChooserContentViewTest, SelectAndDeselectAnOption) {
   EXPECT_TRUE(IsDeviceSelected());
   EXPECT_EQ(0u, table_view()->GetFirstSelectedRow());
 
-  table_view()->Select(absl::nullopt);
+  table_view()->Select(std::nullopt);
   EXPECT_FALSE(IsDeviceSelected());
   EXPECT_FALSE(table_view()->GetFirstSelectedRow().has_value());
 }

@@ -72,6 +72,7 @@ class CORE_EXPORT InspectorPageAgent final
     virtual ~Client() = default;
     virtual void PageLayoutInvalidated(bool resized) {}
     virtual void WaitForDebugger() {}
+    virtual bool IsPausedForNewWindow() { return false; }
   };
 
   enum ResourceType {
@@ -123,6 +124,7 @@ class CORE_EXPORT InspectorPageAgent final
       const String& source,
       Maybe<String> world_name,
       Maybe<bool> include_command_line_api,
+      Maybe<bool> runImmediately,
       String* identifier) override;
   protocol::Response removeScriptToEvaluateOnNewDocument(
       const String& identifier) override;
@@ -197,7 +199,7 @@ class CORE_EXPORT InspectorPageAgent final
   protocol::Response setInterceptFileChooserDialog(bool enabled) override;
 
   // InspectorInstrumentation API
-  void DidClearDocumentOfWindowObject(LocalFrame*);
+  void DidCreateMainWorldContext(LocalFrame*);
   void DidNavigateWithinDocument(LocalFrame*);
   void DomContentLoadedEventFired(LocalFrame*);
   void LoadEventFired(LocalFrame*);
@@ -208,7 +210,6 @@ class CORE_EXPORT InspectorPageAgent final
       LocalFrame*,
       const absl::optional<AdScriptIdentifier>& ad_script_on_stack);
   void FrameDetachedFromParent(LocalFrame*, FrameDetachType);
-  void FrameStartedLoading(LocalFrame*);
   void FrameStoppedLoading(LocalFrame*);
   void FrameRequestedNavigation(Frame* target_frame,
                                 const KURL&,
@@ -287,6 +288,8 @@ class CORE_EXPORT InspectorPageAgent final
                                String world_name,
                                bool grant_universal_access,
                                std::unique_ptr<CreateIsolatedWorldCallback>);
+  void EvaluateScriptOnNewDocument(LocalFrame&,
+                                   const String& script_identifier);
 
   Member<InspectedFrames> inspected_frames_;
   HashMap<String, protocol::Binary> compilation_cache_;
@@ -303,7 +306,6 @@ class CORE_EXPORT InspectorPageAgent final
       ad_script_identifiers_;
   v8_inspector::V8InspectorSession* v8_session_;
   Client* client_;
-  String pending_script_to_evaluate_on_load_once_;
   String script_to_evaluate_on_load_once_;
   Member<InspectorResourceContentLoader> inspector_resource_content_loader_;
   int resource_content_loader_client_id_;
@@ -312,6 +314,7 @@ class CORE_EXPORT InspectorPageAgent final
   InspectorAgentState::Boolean screencast_enabled_;
   InspectorAgentState::Boolean lifecycle_events_enabled_;
   InspectorAgentState::Boolean bypass_csp_enabled_;
+  InspectorAgentState::String pending_script_to_evaluate_on_load_once_;
   InspectorAgentState::StringMap scripts_to_evaluate_on_load_;
   InspectorAgentState::StringMap worlds_to_evaluate_on_load_;
   InspectorAgentState::BooleanMap

@@ -229,6 +229,11 @@ int WebGestureEvent::TapCount() const {
   return data.tap.tap_count;
 }
 
+int WebGestureEvent::TapDownCount() const {
+  DCHECK_EQ(type_, WebInputEvent::Type::kGestureTapDown);
+  return data.tap_down.tap_down_count;
+}
+
 void WebGestureEvent::ApplyTouchAdjustment(
     const gfx::PointF& root_frame_coords) {
   // Update the window-relative position of the event so that the node that
@@ -360,16 +365,16 @@ WebGestureEvent::CoalesceScrollAndPinch(
 }
 
 std::unique_ptr<blink::WebGestureEvent>
-WebGestureEvent::GenerateInjectedScrollGesture(
+WebGestureEvent::GenerateInjectedScrollbarGestureScroll(
     WebInputEvent::Type type,
     base::TimeTicks timestamp,
-    WebGestureDevice device,
     gfx::PointF position_in_widget,
     gfx::Vector2dF scroll_delta,
     ui::ScrollGranularity granularity) {
   std::unique_ptr<WebGestureEvent> generated_gesture_event =
       std::make_unique<WebGestureEvent>(type, WebInputEvent::kNoModifiers,
-                                        timestamp, device);
+                                        timestamp,
+                                        WebGestureDevice::kScrollbar);
   DCHECK(generated_gesture_event->IsGestureScroll());
 
   if (type == WebInputEvent::Type::kGestureScrollBegin) {

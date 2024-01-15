@@ -5,8 +5,8 @@
 #ifndef COMPONENTS_SESSIONS_CONTENT_SESSION_TAB_HELPER_H_
 #define COMPONENTS_SESSIONS_CONTENT_SESSION_TAB_HELPER_H_
 
-#include "base/callback.h"
 #include "base/callback_list.h"
+#include "base/functional/callback.h"
 #include "components/sessions/core/session_id.h"
 #include "components/sessions/core/sessions_export.h"
 #include "content/public/browser/web_contents_observer.h"
@@ -24,7 +24,7 @@ class SESSIONS_EXPORT SessionTabHelper
   using DelegateLookup =
       base::RepeatingCallback<SessionTabHelperDelegate*(content::WebContents*)>;
   using WindowIdChangedCallbackList =
-      base::RepeatingCallbackList<void(const SessionID& id)>;
+      base::RepeatingCallbackList<void(SessionID id)>;
 
   SessionTabHelper(const SessionTabHelper&) = delete;
   SessionTabHelper& operator=(const SessionTabHelper&) = delete;
@@ -32,11 +32,11 @@ class SESSIONS_EXPORT SessionTabHelper
   ~SessionTabHelper() override;
 
   // Returns the identifier used by session restore for this tab.
-  const SessionID& session_id() const { return session_id_; }
+  SessionID session_id() const { return session_id_; }
 
   // Identifier of the window the tab is in.
-  void SetWindowID(const SessionID& id);
-  const SessionID& window_id() const { return window_id_; }
+  void SetWindowID(SessionID id);
+  SessionID window_id() const { return window_id_; }
 
   // If the specified WebContents has a SessionTabHelper (probably because it
   // was used as the contents of a tab), returns a tab id. This value is

@@ -5,7 +5,9 @@
 #include "ash/components/arc/audio/arc_audio_bridge.h"
 
 #include "ash/components/arc/session/arc_service_manager.h"
-#include "ash/components/arc/test/test_browser_context.h"
+#include "base/memory/raw_ptr.h"
+#include "chromeos/ash/components/audio/cras_audio_handler.h"
+#include "components/user_prefs/test/test_browser_context_with_prefs.h"
 #include "content/public/test/browser_task_environment.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -20,7 +22,6 @@ class ArcAudioBridgeTest : public testing::Test {
   ~ArcAudioBridgeTest() override = default;
 
   void SetUp() override {
-    ash::CrasAudioHandler::InitializeForTesting();
     bridge_ = ArcAudioBridge::GetForBrowserContextForTesting(&context_);
   }
   void TearDown() override { ash::CrasAudioHandler::Shutdown(); }
@@ -28,10 +29,11 @@ class ArcAudioBridgeTest : public testing::Test {
   ArcAudioBridge* bridge() { return bridge_; }
 
  private:
+  ash::ScopedCrasAudioHandlerForTesting cras_audio_handler_;
   content::BrowserTaskEnvironment task_environment_;
   ArcServiceManager arc_service_manager_;
-  TestBrowserContext context_;
-  ArcAudioBridge* bridge_ = nullptr;
+  user_prefs::TestBrowserContextWithPrefs context_;
+  raw_ptr<ArcAudioBridge> bridge_ = nullptr;
 };
 
 TEST_F(ArcAudioBridgeTest, ConstructDestruct) {

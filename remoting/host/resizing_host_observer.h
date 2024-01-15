@@ -36,9 +36,8 @@ class DesktopResizer;
 // the original desktop size if restore is true.
 class ResizingHostObserver : public ScreenControls {
  public:
-  explicit ResizingHostObserver(
-      std::unique_ptr<DesktopResizer> desktop_resizer,
-      bool restore);
+  explicit ResizingHostObserver(std::unique_ptr<DesktopResizer> desktop_resizer,
+                                bool restore);
 
   ResizingHostObserver(const ResizingHostObserver&) = delete;
   ResizingHostObserver& operator=(const ResizingHostObserver&) = delete;
@@ -49,7 +48,7 @@ class ResizingHostObserver : public ScreenControls {
 
   // ScreenControls interface.
   void SetScreenResolution(const ScreenResolution& resolution,
-                           absl::optional<webrtc::ScreenId> screen_id) override;
+                           std::optional<webrtc::ScreenId> screen_id) override;
   void SetVideoLayout(const protocol::VideoLayout& video_layout) override;
 
   // Allows tests to provide display-info updates.

@@ -28,7 +28,21 @@ bool FakeScrollbar::IsSolidColor() const {
   return is_solid_color_;
 }
 
+SkColor4f FakeScrollbar::GetSolidColor() const {
+  DCHECK(IsSolidColor());
+  return solid_color_;
+}
+
 bool FakeScrollbar::IsOverlay() const { return is_overlay_; }
+
+bool FakeScrollbar::IsFluentOverlayScrollbarMinimalMode() const {
+  return false;
+}
+
+gfx::Rect FakeScrollbar::ShrinkMainThreadedMinimalModeThumbRect(
+    gfx::Rect& rect) const {
+  return rect;
+}
 
 bool FakeScrollbar::HasThumb() const { return has_thumb_; }
 
@@ -62,9 +76,18 @@ float FakeScrollbar::Opacity() const {
 }
 
 bool FakeScrollbar::NeedsRepaintPart(ScrollbarPart part) const {
-  if (part == ScrollbarPart::THUMB)
+  if (part == ScrollbarPart::kThumb) {
     return needs_repaint_thumb_;
+  }
   return needs_repaint_track_;
+}
+
+bool FakeScrollbar::NeedsUpdateDisplay() const {
+  return needs_update_display_;
+}
+
+void FakeScrollbar::ClearNeedsUpdateDisplay() {
+  needs_update_display_ = false;
 }
 
 bool FakeScrollbar::HasTickmarks() const {
@@ -96,6 +119,10 @@ gfx::Size FakeScrollbar::NinePatchThumbCanvasSize() const {
 
 gfx::Rect FakeScrollbar::NinePatchThumbAperture() const {
   return uses_nine_patch_thumb_resource_ ? gfx::Rect(0, 0, 5, 5) : gfx::Rect();
+}
+
+bool FakeScrollbar::IsOpaque() const {
+  return !is_overlay_ && is_opaque_;
 }
 
 }  // namespace cc

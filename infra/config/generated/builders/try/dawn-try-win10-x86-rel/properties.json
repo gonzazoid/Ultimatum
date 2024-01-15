@@ -1,6 +1,9 @@
 {
   "$build/chromium_tests_builder_config": {
     "builder_config": {
+      "additional_exclusions": [
+        "infra/config/generated/builders/try/dawn-try-win10-x86-rel/gn-args.json"
+      ],
       "builder_db": {
         "entries": [
           {
@@ -34,7 +37,7 @@
           {
             "builder_id": {
               "bucket": "ci",
-              "builder": "Dawn Win10 x86 Release (Intel HD 630)",
+              "builder": "Dawn Win10 x86 Release (Intel)",
               "project": "chromium"
             },
             "builder_spec": {
@@ -103,7 +106,7 @@
       "builder_ids_in_scope_for_testing": [
         {
           "bucket": "ci",
-          "builder": "Dawn Win10 x86 Release (Intel HD 630)",
+          "builder": "Dawn Win10 x86 Release (Intel)",
           "project": "chromium"
         },
         {
@@ -114,10 +117,11 @@
       ]
     }
   },
-  "$build/goma": {
-    "enable_ats": false,
-    "rpc_extra_params": "?prod",
-    "server_host": "goma.chromium.org"
+  "$build/reclient": {
+    "instance": "rbe-chromium-untrusted",
+    "jobs": 150,
+    "metrics_project": "chromium-reclient-metrics",
+    "scandeps_server": true
   },
   "$recipe_engine/resultdb/test_presentation": {
     "column_keys": [],

@@ -10,47 +10,101 @@
 #include "ash/capture_mode/capture_mode_bar_view.h"
 #include "ash/capture_mode/capture_mode_constants.h"
 #include "ash/capture_mode/capture_mode_controller.h"
+#include "ash/capture_mode/capture_mode_menu_toggle_button.h"
 #include "ash/capture_mode/capture_mode_metrics.h"
 #include "ash/capture_mode/capture_mode_session.h"
+#include "ash/capture_mode/capture_mode_session_focus_cycler.h"
+#include "ash/capture_mode/capture_mode_types.h"
+#include "ash/capture_mode/capture_mode_util.h"
 #include "ash/constants/ash_features.h"
 #include "ash/public/cpp/style/color_provider.h"
 #include "ash/resources/vector_icons/vector_icons.h"
+#include "ash/screen_util.h"
 #include "ash/strings/grit/ash_strings.h"
 #include "ash/style/ash_color_id.h"
 #include "ash/style/icon_button.h"
-#include "base/bind.h"
+#include "ash/style/system_shadow.h"
 #include "base/files/file_path.h"
-#include "capture_mode_menu_toggle_button.h"
+#include "base/functional/bind.h"
+#include "chromeos/constants/chromeos_features.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/compositor/layer.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/views/background.h"
 #include "ui/views/controls/separator.h"
+#include "ui/views/highlight_border.h"
 #include "ui/views/layout/box_layout.h"
 
 namespace ash {
 
 namespace {
 
-constexpr gfx::Size kSettingsSize{256, 248};
+constexpr int kCornerRadius = 10;
+constexpr gfx::RoundedCornersF kRoundedCorners{kCornerRadius};
 
-constexpr gfx::RoundedCornersF kBorderRadius{10.f};
+constexpr gfx::Size kSettingsSize{266, 248};
 
 // Returns the bounds of the settings widget in screen coordinates relative to
-// the bounds of the |capture_mode_bar_view| based on its given preferred
-// |settings_view_size|.
-gfx::Rect GetWidgetBounds(CaptureModeBarView* capture_mode_bar_view,
-                          const gfx::Size& settings_view_size) {
-  DCHECK(capture_mode_bar_view);
+// the bounds of the `bar_view` based on its given preferred
+// `settings_size`, which should be centered with respect to the capture
+// bar.
+//
+// The bounds priority works as follows:
+// - If there is enough space above the bar view, we will show the menu at its
+//   full height.
+// - Otherwise, we will choose between showing above or below the bar,
+//   whichever has more space. The available space only includes the work area,
+//   as we do not want to show the menu on top of or behind the shelf.
+// - If necessary, we will also constrain the height of the menu, up to
+//   `capture_mode::kSettingsMenuMinHeight`.
+gfx::Rect GetWidgetBounds(CaptureModeBarView* bar_view,
+                          const gfx::Size& settings_size) {
+  const int width = settings_size.width();
+  const int pref_height = settings_size.height();
+
+  const gfx::Rect bar_bounds = bar_view->GetBoundsInScreen();
+  const int x = bar_bounds.CenterPoint().x() - width / 2.f;
+  int menu_bottom =
+      bar_bounds.y() - capture_mode::kSpaceBetweenCaptureBarAndSettingsMenu;
+  int y = menu_bottom - pref_height;
+
+  // Showing the menu above the bar at full height is our priority, but this may
+  // change if it is too close to the top of the screen.
+  if (y < capture_mode::kMinDistanceFromSettingsToScreen) {
+    const gfx::Rect work_area =
+        screen_util::GetDisplayWorkAreaBoundsInScreenForActiveDeskContainer(
+            bar_view->GetWidget()->GetNativeWindow());
+    const int available_above = menu_bottom -
+                                capture_mode::kMinDistanceFromSettingsToScreen -
+                                work_area.y();
+    const int available_below =
+        work_area.y() + work_area.height() -
+        capture_mode::kMinDistanceFromSettingsToScreen -
+        capture_mode::kSpaceBetweenCaptureBarAndSettingsMenu - bar_bounds.y() -
+        bar_bounds.height();
+
+    // We want to show the menu on the side of the bar that has more space.
+    if (available_above >= available_below) {
+      y = std::max(
+          bar_bounds.y() -
+              capture_mode::kSpaceBetweenCaptureBarAndSettingsMenu -
+              pref_height,
+          work_area.y() + capture_mode::kMinDistanceFromSettingsToScreen);
+      menu_bottom =
+          bar_bounds.y() - capture_mode::kSpaceBetweenCaptureBarAndSettingsMenu;
+    } else {
+      y = bar_bounds.bottom() +
+          capture_mode::kSpaceBetweenCaptureBarAndSettingsMenu;
+      menu_bottom = std::min(
+          y + pref_height,
+          work_area.bottom() - capture_mode::kMinDistanceFromSettingsToScreen);
+    }
+  }
 
   return gfx::Rect(
-      capture_mode_bar_view->settings_button()->GetBoundsInScreen().right() -
-          kSettingsSize.width(),
-      capture_mode_bar_view->GetBoundsInScreen().y() -
-          capture_mode::kSpaceBetweenCaptureBarAndSettingsMenu -
-          settings_view_size.height(),
-      kSettingsSize.width(), settings_view_size.height());
+      x, y, width,
+      std::max(capture_mode::kSettingsMenuMinHeight, menu_bottom - y));
 }
 
 CaptureModeController::CaptureFolder GetCurrentCaptureFolder() {
@@ -59,38 +113,75 @@ CaptureModeController::CaptureFolder GetCurrentCaptureFolder() {
 
 }  // namespace
 
-CaptureModeSettingsView::CaptureModeSettingsView(CaptureModeSession* session,
-                                                 bool is_in_projector_mode)
-    : capture_mode_session_(session) {
+CaptureModeSettingsView::CaptureModeSettingsView(
+    CaptureModeSession* session,
+    CaptureModeBehavior* active_behavior)
+    : ScrollView(views::ScrollView::ScrollWithLayers::kEnabled),
+      capture_mode_session_(session),
+      active_behavior_(active_behavior),
+      shadow_(SystemShadow::CreateShadowOnNinePatchLayerForView(
+          this,
+          SystemShadow::Type::kElevation12)) {
   auto* controller = CaptureModeController::Get();
+
+  SetContents(std::make_unique<views::View>());
+
   if (!controller->is_recording_in_progress()) {
     const bool audio_capture_managed_by_policy =
         controller->IsAudioCaptureDisabledByPolicy();
 
-    DCHECK(!audio_capture_managed_by_policy || !is_in_projector_mode)
-        << "A projector session should not be allowed to begin if audio "
+    DCHECK(
+        !audio_capture_managed_by_policy ||
+        active_behavior->SupportsAudioRecordingMode(AudioRecordingMode::kOff))
+        << "A client session should not be allowed to begin if audio "
            "recording is diabled by policy.";
 
     audio_input_menu_group_ =
-        AddChildView(std::make_unique<CaptureModeMenuGroup>(
+        contents()->AddChildView(std::make_unique<CaptureModeMenuGroup>(
             this, kCaptureModeMicIcon,
             l10n_util::GetStringUTF16(IDS_ASH_SCREEN_CAPTURE_AUDIO_INPUT),
             audio_capture_managed_by_policy));
 
-    if (!is_in_projector_mode) {
-      audio_input_menu_group_->AddOption(
-          l10n_util::GetStringUTF16(IDS_ASH_SCREEN_CAPTURE_AUDIO_INPUT_OFF),
-          kAudioOff);
+    // A list of all the possible audio options.
+    struct {
+      // The backend audio recording mode for this option.
+      AudioRecordingMode audio_recording_mode;
+      // The ID of this menu group option.
+      int option_id;
+      // The ID of the string that will be used for the option's label.
+      int string_id;
+      // True if the option can be added if audio recording is managed by an
+      // admin policy.
+      bool add_if_managed_by_policy;
+    } kAudioOptions[] = {
+        {AudioRecordingMode::kOff, kAudioOff,
+         IDS_ASH_SCREEN_CAPTURE_AUDIO_INPUT_OFF,
+         /*add_if_managed_by_policy=*/true},
+        {AudioRecordingMode::kSystem, kAudioSystem,
+         IDS_ASH_SCREEN_CAPTURE_AUDIO_INPUT_SYSTEM,
+         /*add_if_managed_by_policy=*/false},
+        {AudioRecordingMode::kMicrophone, kAudioMicrophone,
+         IDS_ASH_SCREEN_CAPTURE_AUDIO_INPUT_MICROPHONE,
+         /*add_if_managed_by_policy=*/false},
+        {AudioRecordingMode::kSystemAndMicrophone, kAudioSystemAndMicrophone,
+         IDS_ASH_SCREEN_CAPTURE_AUDIO_INPUT_SYSTEM_AND_MICROPHONE,
+         /*add_if_managed_by_policy=*/false},
+    };
+
+    for (const auto& audio_option : kAudioOptions) {
+      if ((!audio_capture_managed_by_policy ||
+           audio_option.add_if_managed_by_policy) &&
+          active_behavior->SupportsAudioRecordingMode(
+              audio_option.audio_recording_mode)) {
+        audio_input_menu_group_->AddOption(
+            /*option_icon=*/nullptr,
+            l10n_util::GetStringUTF16(audio_option.string_id),
+            audio_option.option_id);
+      }
     }
 
-    if (!audio_capture_managed_by_policy) {
-      audio_input_menu_group_->AddOption(
-          l10n_util::GetStringUTF16(
-              IDS_ASH_SCREEN_CAPTURE_AUDIO_INPUT_MICROPHONE),
-          kAudioMicrophone);
-    }
-
-    separator_1_ = AddChildView(std::make_unique<views::Separator>());
+    separator_1_ =
+        contents()->AddChildView(std::make_unique<views::Separator>());
     separator_1_->SetColorId(ui::kColorAshSystemUIMenuSeparator);
     auto* camera_controller = controller->camera_controller();
     const bool camera_managed_by_policy =
@@ -99,37 +190,42 @@ CaptureModeSettingsView::CaptureModeSettingsView(CaptureModeSession* session,
     // the camera controller, since we need to be notified with camera additions
     // and removals, which affect the visibility of the `camera_menu_group_`.
     camera_controller->AddObserver(this);
-    camera_menu_group_ = AddChildView(std::make_unique<CaptureModeMenuGroup>(
-        this, kCaptureModeCameraIcon,
-        l10n_util::GetStringUTF16(IDS_ASH_SCREEN_CAPTURE_CAMERA),
-        camera_managed_by_policy));
+    camera_menu_group_ =
+        contents()->AddChildView(std::make_unique<CaptureModeMenuGroup>(
+            this, kCaptureModeCameraIcon,
+            l10n_util::GetStringUTF16(IDS_ASH_SCREEN_CAPTURE_CAMERA),
+            camera_managed_by_policy));
 
     AddCameraOptions(camera_controller->available_cameras(),
                      camera_managed_by_policy);
   }
 
-  if (features::AreCaptureModeDemoToolsEnabled()) {
-    separator_2_ = AddChildView(std::make_unique<views::Separator>());
+  if (!controller->is_recording_in_progress()) {
+    separator_2_ =
+        contents()->AddChildView(std::make_unique<views::Separator>());
     separator_2_->SetColorId(ui::kColorAshSystemUIMenuSeparator);
     demo_tools_menu_toggle_button_ =
-        AddChildView(std::make_unique<CaptureModeMenuToggleButton>(
+        contents()->AddChildView(std::make_unique<CaptureModeMenuToggleButton>(
             kCaptureModeDemoToolsSettingsMenuEntryPointIcon,
             l10n_util::GetStringUTF16(
-                IDS_ASH_SCREEN_CAPTURE_DEMO_TOOLS_SHOW_KEYS_AND_CLICKS),
+                IDS_ASH_SCREEN_CAPTURE_DEMO_TOOLS_SHOW_CLICKS_AND_KEYS),
             CaptureModeController::Get()->enable_demo_tools(),
             base::BindRepeating(
                 &CaptureModeSettingsView::OnDemoToolsButtonToggled,
                 base::Unretained(this))));
   }
 
-  if (!is_in_projector_mode) {
-    separator_3_ = AddChildView(std::make_unique<views::Separator>());
+  if (active_behavior->ShouldSaveToSettingsBeIncluded()) {
+    separator_3_ =
+        contents()->AddChildView(std::make_unique<views::Separator>());
     separator_3_->SetColorId(ui::kColorAshSystemUIMenuSeparator);
 
-    save_to_menu_group_ = AddChildView(std::make_unique<CaptureModeMenuGroup>(
-        this, kCaptureModeFolderIcon,
-        l10n_util::GetStringUTF16(IDS_ASH_SCREEN_CAPTURE_SAVE_TO)));
+    save_to_menu_group_ =
+        contents()->AddChildView(std::make_unique<CaptureModeMenuGroup>(
+            this, kCaptureModeFolderIcon,
+            l10n_util::GetStringUTF16(IDS_ASH_SCREEN_CAPTURE_SAVE_TO)));
     save_to_menu_group_->AddOption(
+        /*option_icon=*/nullptr,
         l10n_util::GetStringUTF16(IDS_ASH_SCREEN_CAPTURE_SAVE_TO_DOWNLOADS),
         kDownloadsFolder);
     save_to_menu_group_->AddMenuItem(
@@ -140,28 +236,35 @@ CaptureModeSettingsView::CaptureModeSettingsView(CaptureModeSession* session,
             IDS_ASH_SCREEN_CAPTURE_SAVE_TO_SELECT_FOLDER));
   }
 
-  SetPaintToLayer();
   SetBackground(views::CreateThemedSolidBackground(kColorAshShieldAndBase80));
   layer()->SetFillsBoundsOpaquely(false);
-  layer()->SetRoundedCornerRadius(kBorderRadius);
+  layer()->SetRoundedCornerRadius(kRoundedCorners);
   layer()->SetBackgroundBlur(ColorProvider::kBackgroundBlurSigma);
   layer()->SetBackdropFilterQuality(ColorProvider::kBackgroundBlurQuality);
 
-  SetLayoutManager(std::make_unique<views::BoxLayout>(
+  // The options should appear vertically stacked on top of each other.
+  contents()->SetLayoutManager(std::make_unique<views::BoxLayout>(
       views::BoxLayout::Orientation::kVertical));
+
+  capture_mode_util::SetHighlightBorder(
+      this, kCornerRadius,
+      views::HighlightBorder::Type::kHighlightBorderOnShadow);
+
+  shadow_->SetRoundedCornerRadius(kCornerRadius);
 }
 
 CaptureModeSettingsView::~CaptureModeSettingsView() {
   CaptureModeController::Get()->camera_controller()->RemoveObserver(this);
 }
 
+// static
 gfx::Rect CaptureModeSettingsView::GetBounds(
     CaptureModeBarView* capture_mode_bar_view,
-    CaptureModeSettingsView* content_view) {
+    CaptureModeSettingsView* settings_view) {
   DCHECK(capture_mode_bar_view);
 
   const gfx::Size settings_size =
-      content_view ? content_view->GetPreferredSize() : kSettingsSize;
+      settings_view ? settings_view->GetPreferredSize() : kSettingsSize;
   return GetWidgetBounds(capture_mode_bar_view, settings_size);
 }
 
@@ -191,7 +294,8 @@ void CaptureModeSettingsView::OnCaptureFolderMayHaveChanged() {
         l10n_util::GetStringUTF16(IDS_ASH_SCREEN_CAPTURE_SAVE_TO_LINUX_FILES);
   }
 
-  save_to_menu_group_->AddOrUpdateExistingOption(folder_name, kCustomFolder);
+  save_to_menu_group_->AddOrUpdateExistingOption(
+      /*option_icon=*/nullptr, folder_name, kCustomFolder);
 
   controller->CheckFolderAvailability(
       custom_path,
@@ -213,8 +317,17 @@ CaptureModeSettingsView::GetHighlightableItems() {
   audio_input_menu_group_->AppendHighlightableItems(highlightable_items);
   DCHECK(camera_menu_group_);
   camera_menu_group_->AppendHighlightableItems(highlightable_items);
-  if (save_to_menu_group_)
+
+  if (demo_tools_menu_toggle_button_) {
+    highlightable_items.push_back(
+        CaptureModeSessionFocusCycler::HighlightHelper::Get(
+            demo_tools_menu_toggle_button_->toggle_button()));
+  }
+
+  if (save_to_menu_group_) {
     save_to_menu_group_->AppendHighlightableItems(highlightable_items);
+  }
+
   return highlightable_items;
 }
 
@@ -223,10 +336,17 @@ void CaptureModeSettingsView::OnOptionSelected(int option_id) const {
   auto* camera_controller = controller->camera_controller();
   switch (option_id) {
     case kAudioOff:
-      controller->EnableAudioRecording(false);
+      controller->SetAudioRecordingMode(AudioRecordingMode::kOff);
+      break;
+    case kAudioSystem:
+      controller->SetAudioRecordingMode(AudioRecordingMode::kSystem);
       break;
     case kAudioMicrophone:
-      controller->EnableAudioRecording(true);
+      controller->SetAudioRecordingMode(AudioRecordingMode::kMicrophone);
+      break;
+    case kAudioSystemAndMicrophone:
+      controller->SetAudioRecordingMode(
+          AudioRecordingMode::kSystemAndMicrophone);
       break;
     case kDownloadsFolder:
       controller->SetUsesDefaultCaptureFolder(true);
@@ -252,11 +372,17 @@ void CaptureModeSettingsView::OnOptionSelected(int option_id) const {
 bool CaptureModeSettingsView::IsOptionChecked(int option_id) const {
   auto* controller = CaptureModeController::Get();
   auto* camera_controller = controller->camera_controller();
+  const auto effective_audio_mode =
+      controller->GetEffectiveAudioRecordingMode();
   switch (option_id) {
     case kAudioOff:
-      return !CaptureModeController::Get()->GetAudioRecordingEnabled();
+      return effective_audio_mode == AudioRecordingMode::kOff;
+    case kAudioSystem:
+      return effective_audio_mode == AudioRecordingMode::kSystem;
     case kAudioMicrophone:
-      return CaptureModeController::Get()->GetAudioRecordingEnabled();
+      return effective_audio_mode == AudioRecordingMode::kMicrophone;
+    case kAudioSystemAndMicrophone:
+      return effective_audio_mode == AudioRecordingMode::kSystemAndMicrophone;
     case kDownloadsFolder:
       return GetCurrentCaptureFolder().is_default_downloads_folder ||
              !is_custom_folder_available_.value_or(false);
@@ -280,8 +406,11 @@ bool CaptureModeSettingsView::IsOptionEnabled(int option_id) const {
   switch (option_id) {
     case kAudioOff:
       return !audio_capture_managed_by_policy &&
-             !capture_mode_session_->is_in_projector_mode();
+             active_behavior_->SupportsAudioRecordingMode(
+                 AudioRecordingMode::kOff);
+    case kAudioSystem:
     case kAudioMicrophone:
+    case kAudioSystemAndMicrophone:
       return !audio_capture_managed_by_policy;
     case kCustomFolder:
       return is_custom_folder_available_.value_or(false);
@@ -354,6 +483,7 @@ void CaptureModeSettingsView::AddCameraOptions(const CameraInfoList& cameras,
   const bool has_cameras = !cameras.empty();
   if (has_cameras) {
     camera_menu_group_->AddOption(
+        /*option_icon=*/nullptr,
         l10n_util::GetStringUTF16(IDS_ASH_SCREEN_CAPTURE_CAMERA_OFF),
         kCameraOff);
     if (!managed_by_policy) {
@@ -361,6 +491,7 @@ void CaptureModeSettingsView::AddCameraOptions(const CameraInfoList& cameras,
       for (const CameraInfo& camera_info : cameras) {
         option_camera_id_map_[camera_option_id_begin] = camera_info.camera_id;
         camera_menu_group_->AddOption(
+            /*option_icon=*/nullptr,
             base::UTF8ToUTF16(camera_info.display_name),
             camera_option_id_begin++);
       }
@@ -376,10 +507,10 @@ void CaptureModeSettingsView::UpdateCameraMenuGroupVisibility(bool visible) {
 
 void CaptureModeSettingsView::OnDemoToolsButtonToggled() {
   const bool was_on = CaptureModeController::Get()->enable_demo_tools();
-  CaptureModeController::Get()->EnableDemoTools(!was_on);
+  CaptureModeController::Get()->EnableDemoTools(/*enable=*/!was_on);
 }
 
-BEGIN_METADATA(CaptureModeSettingsView, views::View)
+BEGIN_METADATA(CaptureModeSettingsView, views::ScrollView)
 END_METADATA
 
 }  // namespace ash

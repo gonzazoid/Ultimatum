@@ -8,13 +8,14 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/compiler_specific.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/observer_list.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/trace_event/trace_event.h"
 #include "base/values.h"
 #include "components/sync/base/model_type.h"
 #include "components/sync/base/sync_invalidation.h"
@@ -85,11 +86,7 @@ GURL MakeConnectionURL(const GURL& sync_server, const std::string& client_id) {
 SyncManagerImpl::SyncManagerImpl(
     const std::string& name,
     network::NetworkConnectionTracker* network_connection_tracker)
-    : name_(name),
-      network_connection_tracker_(network_connection_tracker),
-      initialized_(false),
-      observing_network_connectivity_changes_(false),
-      sync_encryption_handler_(nullptr) {}
+    : name_(name), network_connection_tracker_(network_connection_tracker) {}
 
 SyncManagerImpl::~SyncManagerImpl() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
@@ -175,8 +172,6 @@ void SyncManagerImpl::Init(InitArgs* args) {
 
   DVLOG(1) << "Setting sync client ID: " << args->cache_guid;
   sync_status_tracker_->SetCacheGuid(args->cache_guid);
-  DVLOG(1) << "Setting invalidator client ID: " << args->invalidator_client_id;
-  sync_status_tracker_->SetInvalidatorClientId(args->invalidator_client_id);
 
   model_type_registry_ = std::make_unique<ModelTypeRegistry>(
       this, args->cancelation_signal, sync_encryption_handler_);
@@ -187,12 +182,12 @@ void SyncManagerImpl::Init(InitArgs* args) {
       this, sync_status_tracker_.get()};
   cycle_context_ = args->engine_components_factory->BuildContext(
       connection_manager_.get(), args->extensions_activity, listeners,
-      &debug_info_event_listener_, model_type_registry_.get(),
-      args->invalidator_client_id, args->cache_guid, args->birthday,
-      args->bag_of_chips, args->poll_interval);
+      &debug_info_event_listener_, model_type_registry_.get(), args->cache_guid,
+      args->birthday, args->bag_of_chips, args->poll_interval);
   scheduler_ = args->engine_components_factory->BuildScheduler(
       name_, cycle_context_.get(), args->cancelation_signal,
-      args->enable_local_sync_backend);
+      args->enable_local_sync_backend,
+      args->sync_poll_immediately_on_every_startup);
 
   scheduler_->Start(SyncScheduler::CONFIGURATION_MODE, base::Time());
 
@@ -372,6 +367,8 @@ void SyncManagerImpl::SetHasPendingInvalidations(
     bool has_pending_invalidations) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   scheduler_->SetHasPendingInvalidations(type, has_pending_invalidations);
+  sync_status_tracker_->SetHasPendingInvalidations(type,
+                                                   has_pending_invalidations);
 }
 
 void SyncManagerImpl::NotifySyncStatusChanged(const SyncStatus& status) {
@@ -403,9 +400,10 @@ void SyncManagerImpl::OnSyncCycleEvent(const SyncCycleEvent& event) {
   }
 }
 
-void SyncManagerImpl::OnActionableError(const SyncProtocolError& error) {
+void SyncManagerImpl::OnActionableProtocolError(
+    const SyncProtocolError& error) {
   for (SyncManager::Observer& observer : observers_) {
-    observer.OnActionableError(error);
+    observer.OnActionableProtocolError(error);
   }
 }
 
@@ -448,6 +446,7 @@ void SyncManagerImpl::OnIncomingInvalidation(
         PendingInvalidationStatus::kDataTypeNotConnected);
   }
   sync_status_tracker_->IncrementNotificationsReceived();
+  scheduler_->ScheduleInvalidationNudge(type);
 }
 
 void SyncManagerImpl::RefreshTypes(ModelTypeSet types) {
@@ -470,7 +469,7 @@ std::unique_ptr<ModelTypeConnector>
 SyncManagerImpl::GetModelTypeConnectorProxy() {
   DCHECK(initialized_);
   return std::make_unique<ModelTypeConnectorProxy>(
-      base::SequencedTaskRunnerHandle::Get(),
+      base::SequencedTaskRunner::GetCurrentDefault(),
       model_type_registry_->AsWeakPtr());
 }
 
@@ -491,6 +490,10 @@ std::string SyncManagerImpl::bag_of_chips() {
   return cycle_context_->bag_of_chips();
 }
 
+ModelTypeSet SyncManagerImpl::GetTypesWithUnsyncedData() {
+  return model_type_registry_->GetTypesWithUnsyncedData();
+}
+
 bool SyncManagerImpl::HasUnsyncedItemsForTest() {
   return model_type_registry_->HasUnsyncedItems();
 }
@@ -508,12 +511,6 @@ SyncManagerImpl::GetBufferedProtocolEvents() {
 void SyncManagerImpl::OnCookieJarChanged(bool account_mismatch) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   cycle_context_->set_cookie_jar_mismatch(account_mismatch);
-}
-
-void SyncManagerImpl::UpdateInvalidationClientId(const std::string& client_id) {
-  DVLOG(1) << "Setting invalidator client ID: " << client_id;
-  sync_status_tracker_->SetInvalidatorClientId(client_id);
-  cycle_context_->set_invalidator_client_id(client_id);
 }
 
 void SyncManagerImpl::UpdateActiveDevicesInvalidationInfo(

@@ -10,11 +10,12 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/strings/escape.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_tokenizer.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
+#include "google_apis/credentials_mode.h"
 #include "google_apis/gcm/engine/gcm_registration_request_handler.h"
 #include "google_apis/gcm/engine/gcm_request_test_base.h"
 #include "google_apis/gcm/engine/instance_id_get_token_request_handler.h"
@@ -109,7 +110,8 @@ void GCMRegistrationRequestTest::CreateRequest(const std::string& sender_ids) {
       base::BindOnce(&RegistrationRequestTest::RegistrationCallback,
                      base::Unretained(this)),
       max_retry_count_, url_loader_factory(),
-      base::ThreadTaskRunnerHandle::Get(), &recorder_, sender_ids);
+      base::SingleThreadTaskRunner::GetCurrentDefault(), &recorder_,
+      sender_ids);
 }
 
 TEST_F(GCMRegistrationRequestTest, RequestSuccessful) {
@@ -433,7 +435,8 @@ void InstanceIDGetTokenRequestTest::CreateRequest(
       base::BindOnce(&RegistrationRequestTest::RegistrationCallback,
                      base::Unretained(this)),
       max_retry_count_, url_loader_factory(),
-      base::ThreadTaskRunnerHandle::Get(), &recorder_, authorized_entity);
+      base::SingleThreadTaskRunner::GetCurrentDefault(), &recorder_,
+      authorized_entity);
 }
 
 TEST_F(InstanceIDGetTokenRequestTest, RequestSuccessful) {
@@ -457,7 +460,7 @@ TEST_F(InstanceIDGetTokenRequestTest, RequestDataAndURL) {
   const network::ResourceRequest* pending_request;
   ASSERT_TRUE(
       test_url_loader_factory()->IsPending(kRegistrationURL, &pending_request));
-  EXPECT_EQ(network::mojom::CredentialsMode::kOmit,
+  EXPECT_EQ(google_apis::GetOmitCredentialsModeForGaiaRequests(),
             pending_request->credentials_mode);
 
   // Verify that authorization header was put together properly.

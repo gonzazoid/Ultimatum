@@ -4,17 +4,18 @@
 
 import 'chrome://resources/js/jstemplate_compiled.js';
 
-import {addWebUIListener, sendWithPromise} from 'chrome://resources/js/cr.m.js';
+import {addWebUiListener, sendWithPromise} from 'chrome://resources/js/cr.js';
 import {$} from 'chrome://resources/js/util.js';
 
 function initialize() {
-  addWebUIListener('partition-data', onPartitionData);
-  addWebUIListener('running-state-changed', onRunningStateChanged);
-  addWebUIListener('error-reported', onErrorReported);
-  addWebUIListener('console-message-reported', onConsoleMessageReported);
-  addWebUIListener('version-state-changed', onVersionStateChanged);
-  addWebUIListener('registration-completed', onRegistrationCompleted);
-  addWebUIListener('registration-deleted', onRegistrationDeleted);
+  addWebUiListener('partition-data', onPartitionData);
+  addWebUiListener('running-state-changed', onRunningStateChanged);
+  addWebUiListener('error-reported', onErrorReported);
+  addWebUiListener('console-message-reported', onConsoleMessageReported);
+  addWebUiListener('version-state-changed', onVersionStateChanged);
+  addWebUiListener('version-router-rules-changed', onVersionRouterRulesChanged);
+  addWebUiListener('registration-completed', onRegistrationCompleted);
+  addWebUiListener('registration-deleted', onRegistrationDeleted);
   update();
 }
 
@@ -197,6 +198,10 @@ function initialize() {
   }
 
   function onVersionStateChanged(partition_id, version_id) {
+    update();
+  }
+
+  function onVersionRouterRulesChanged() {
     update();
   }
 

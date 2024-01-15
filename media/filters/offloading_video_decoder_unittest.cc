@@ -4,8 +4,8 @@
 
 #include "media/filters/offloading_video_decoder.h"
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/test/gmock_callback_support.h"
@@ -19,6 +19,7 @@
 
 using base::test::RunClosure;
 using base::test::RunOnceCallback;
+using base::test::RunOnceCallbackRepeatedly;
 using base::test::RunOnceClosure;
 using testing::_;
 using testing::DoAll;
@@ -300,9 +301,10 @@ TEST_F(OffloadingVideoDecoderTest, ParallelizedOffloading) {
 
   EXPECT_CALL(*decoder_, Decode_(_, _))
       .Times(2)
-      .WillRepeatedly(DoAll(VerifyNotOn(task_env_.GetMainThreadTaskRunner()),
-                            RunClosure(base::BindRepeating(output_cb, nullptr)),
-                            RunOnceCallback<1>(DecoderStatus::Codes::kOk)));
+      .WillRepeatedly(
+          DoAll(VerifyNotOn(task_env_.GetMainThreadTaskRunner()),
+                RunClosure(base::BindRepeating(output_cb, nullptr)),
+                RunOnceCallbackRepeatedly<1>(DecoderStatus::Codes::kOk)));
   EXPECT_CALL(*this, DecodeDone(IsOkStatus()))
       .Times(2)
       .WillRepeatedly(VerifyOn(task_env_.GetMainThreadTaskRunner()));

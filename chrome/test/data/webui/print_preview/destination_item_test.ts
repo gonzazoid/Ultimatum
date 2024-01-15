@@ -3,23 +3,10 @@
 // found in the LICENSE file.
 
 import {Destination, DestinationOrigin, PrintPreviewDestinationListItemElement} from 'chrome://print/print_preview.js';
-import {assert} from 'chrome://resources/js/assert.js';
-
 import {assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chai_assert.js';
 
 
-const destination_item_test = {
-  suiteName: 'DestinationItemTest',
-  TestNames: {
-    NoQuery: 'no query',
-    QueryName: 'query name',
-    QueryDescription: 'query description',
-  },
-};
-
-Object.assign(window, {destination_item_test: destination_item_test});
-
-suite(destination_item_test.suiteName, function() {
+suite('DestinationItemTest', function() {
   let item: PrintPreviewDestinationListItemElement;
 
   const printerId: string = 'FooDevice';
@@ -40,7 +27,7 @@ suite(destination_item_test.suiteName, function() {
 
   // Test that the destination is displayed correctly for the basic case of a
   // destination with no search query.
-  test(assert(destination_item_test.TestNames.NoQuery), function() {
+  test('NoQuery', function() {
     const name = item.shadowRoot!.querySelector('.name')!;
     assertEquals(printerName, name.textContent);
     assertEquals('1', window.getComputedStyle(name).opacity);
@@ -54,7 +41,7 @@ suite(destination_item_test.suiteName, function() {
 
   // Test that the destination is displayed correctly when the search query
   // matches its display name.
-  test(assert(destination_item_test.TestNames.QueryName), function() {
+  test('QueryName', function() {
     item.searchQuery = /(Foo)/ig;
 
     const name = item.shadowRoot!.querySelector('.name')!;
@@ -73,7 +60,7 @@ suite(destination_item_test.suiteName, function() {
 
   // Test that the destination is displayed correctly when the search query
   // matches its description.
-  test(assert(destination_item_test.TestNames.QueryDescription), function() {
+  test('QueryDescription', function() {
     const params = {
       description: 'ABCPrinterBrand Model 123',
       location: 'Building 789 Floor 6',

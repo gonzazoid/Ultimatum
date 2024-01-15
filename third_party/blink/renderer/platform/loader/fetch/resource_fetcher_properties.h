@@ -6,10 +6,10 @@
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_LOADER_FETCH_RESOURCE_FETCHER_PROPERTIES_H_
 
 #include "third_party/blink/public/mojom/service_worker/controller_service_worker_mode.mojom-blink.h"
-#include "third_party/blink/public/platform/web_url_loader.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/heap/member.h"
 #include "third_party/blink/renderer/platform/loader/fetch/loader_freeze_mode.h"
+#include "third_party/blink/renderer/platform/loader/fetch/url_loader/url_loader.h"
 #include "third_party/blink/renderer/platform/platform_export.h"
 #include "third_party/blink/renderer/platform/scheduler/public/frame_status.h"
 #include "third_party/blink/renderer/platform/weborigin/kurl.h"
@@ -91,10 +91,6 @@ class PLATFORM_EXPORT ResourceFetcherProperties
   // if there is no such a frame.
   virtual scheduler::FrameStatus GetFrameStatus() const = 0;
 
-  // The physical URL of Web Bundle from which this global context is loaded.
-  // Used as an additional identifier for MemoryCache.
-  virtual const KURL& WebBundlePhysicalUrl() const = 0;
-
   virtual int GetOutstandingThrottledLimit() const = 0;
 };
 
@@ -158,10 +154,6 @@ class PLATFORM_EXPORT DetachableResourceFetcherProperties final
     return properties_ ? properties_->GetFrameStatus()
                        : scheduler::FrameStatus::kNone;
   }
-  const KURL& WebBundlePhysicalUrl() const override {
-    return properties_ ? properties_->WebBundlePhysicalUrl()
-                       : web_bundle_physical_url_;
-  }
 
   int GetOutstandingThrottledLimit() const override {
     return properties_ ? properties_->GetOutstandingThrottledLimit()
@@ -179,7 +171,6 @@ class PLATFORM_EXPORT DetachableResourceFetcherProperties final
   LoaderFreezeMode freeze_mode_;
   bool load_complete_ = false;
   bool is_subframe_deprioritization_enabled_ = false;
-  KURL web_bundle_physical_url_;
   int outstanding_throttled_limit_ = 0;
 };
 

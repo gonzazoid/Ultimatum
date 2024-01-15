@@ -3,6 +3,7 @@
 # found in the LICENSE file.
 
 import("//build/config/android/rules.gni")
+import("//third_party/jni_zero/jni_zero.gni")
 
 java_cpp_enum("compositor_status_generated_enum") {
   sources = [ "//components/paint_preview/player/compositor_status.h" ]
@@ -55,7 +56,7 @@ generate_jni("jni_headers") {
 }
 
 android_library("java") {
-  annotation_processor_deps = [ "//base/android/jni_generator:jni_processor" ]
+  resources_package = "org.chromium.components.paintpreview.player"
 
   sources = [
     "java/src/org/chromium/components/paintpreview/player/LinkClickHandler.java",
@@ -86,17 +87,22 @@ android_library("java") {
     "java/src/org/chromium/components/paintpreview/player/frame/PlayerFrameViewport.java",
   ]
 
-  srcjar_deps = [ ":compositor_status_generated_enum" ]
+  srcjar_deps = [
+    ":compositor_status_generated_enum",
+    ":jni_headers",
+  ]
 
   deps = [
     "//base:base_java",
-    "//base:jni_java",
     "//build/android:build_java",
     "//components/browser_ui/styles/android:java",
+    "//components/browser_ui/widget/android:java",
     "//components/paint_preview/browser/android:java",
     "//content/public/android:content_java",
     "//third_party/android_swipe_refresh:android_swipe_refresh_java",
     "//third_party/androidx:androidx_annotation_annotation_java",
+    "//third_party/jni_zero:jni_zero_java",
+    "//ui/accessibility:ax_base_java",
     "//ui/android:ui_java",
     "//ui/android:ui_java_resources",
     "//url:gurl_java",
@@ -105,8 +111,8 @@ android_library("java") {
 
 android_library("player_java_test_support") {
   testonly = true
-  annotation_processor_deps = [ "//base/android/jni_generator:jni_processor" ]
 
+  srcjar_deps = [ ":javatests_jni_headers" ]
   sources = [
     "javatests/src/org/chromium/components/paintpreview/player/FrameData.java",
     "javatests/src/org/chromium/components/paintpreview/player/PaintPreviewTestRule.java",
@@ -117,15 +123,13 @@ android_library("player_java_test_support") {
     ":java",
     "//base:base_java",
     "//base:base_java_test_support",
-    "//base:jni_java",
     "//build/android:build_java",
     "//components/paint_preview/browser/android:java",
     "//components/signin/public/android:java",
     "//components/signin/public/android:signin_java_test_support",
     "//content/public/android:content_java",
     "//content/public/test/android:content_java_test_support",
-    "//third_party/android_support_test_runner:rules_java",
-    "//third_party/android_support_test_runner:runner_java",
+    "//third_party/jni_zero:jni_zero_java",
     "//third_party/junit",
     "//url:gurl_java",
   ]
@@ -140,10 +144,11 @@ android_library("javatests") {
     ":player_java_test_support",
     "//base:base_java",
     "//base:base_java_test_support",
+    "//components/paint_preview/browser/android:java",
     "//content/public/android:content_java",
     "//content/public/test/android:content_java_test_support",
-    "//third_party/android_support_test_runner:rules_java",
-    "//third_party/android_support_test_runner:runner_java",
+    "//third_party/android_deps:espresso_java",
+    "//third_party/androidx:androidx_test_monitor_java",
     "//third_party/androidx:androidx_test_runner_java",
     "//third_party/androidx:androidx_test_uiautomator_uiautomator_java",
     "//third_party/hamcrest:hamcrest_java",

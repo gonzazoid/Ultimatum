@@ -4,16 +4,18 @@
 
 #include "chrome/browser/privacy/privacy_metrics_service_factory.h"
 
-#include "base/memory/singleton.h"
+#include "base/no_destructor.h"
 #include "chrome/browser/content_settings/host_content_settings_map_factory.h"
 #include "chrome/browser/privacy/privacy_metrics_service.h"
 #include "chrome/browser/profiles/profile.h"
+#include "chrome/browser/profiles/profile_selections.h"
 #include "chrome/browser/signin/identity_manager_factory.h"
 #include "chrome/browser/sync/sync_service_factory.h"
 #include "components/keyed_service/core/keyed_service.h"
 
 PrivacyMetricsServiceFactory* PrivacyMetricsServiceFactory::GetInstance() {
-  return base::Singleton<PrivacyMetricsServiceFactory>::get();
+  static base::NoDestructor<PrivacyMetricsServiceFactory> instance;
+  return instance.get();
 }
 
 PrivacyMetricsService* PrivacyMetricsServiceFactory::GetForProfile(
@@ -23,8 +25,16 @@ PrivacyMetricsService* PrivacyMetricsServiceFactory::GetForProfile(
 }
 
 PrivacyMetricsServiceFactory::PrivacyMetricsServiceFactory()
-    // No metrics recorded for OTR profiles.
-    : ProfileKeyedServiceFactory("PrivacyMetricsService") {
+    // No metrics recorded for OTR profiles, system profiles, guest
+    // profiles, or unusual ChromeOS profiles.
+    : ProfileKeyedServiceFactory(
+          "PrivacyMetricsService",
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              .WithGuest(ProfileSelection::kNone)
+              .WithSystem(ProfileSelection::kNone)
+              .WithAshInternals(ProfileSelection::kNone)
+              .Build()) {
   DependsOn(HostContentSettingsMapFactory::GetInstance());
   DependsOn(SyncServiceFactory::GetInstance());
   DependsOn(IdentityManagerFactory::GetInstance());

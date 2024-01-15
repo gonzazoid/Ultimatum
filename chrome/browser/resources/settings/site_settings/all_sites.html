@@ -67,7 +67,7 @@
     <div id="fpsLearnMore"
         hidden$="[[!shouldShowFpsLearnMore_(filter, filteredList_)]]">
       [[getFpsLearnMoreLabel_(filter)]]
-      <a href="$i18n{cookiesSettingsHelpCenterURL}"
+      <a href="$i18n{firstPartySetsLearnMoreURL}"
           aria-label="$i18n{siteSettingsFirstPartySetsLearnMoreAccessibility}">
         $i18n{learnMore}
       </a>
@@ -90,7 +90,8 @@
               tabindex$="[[tabIndex]]"
               last-focused="{{lastFocused_}}"
               list-blurred="{{listBlurred_}}"
-              sort-method="[[sortMethod_]]">
+              sort-method="[[sortMethod_]]"
+              is-fps-filtered="[[isFpsFiltered_(filter)]]">
           </site-entry>
         </template>
       </iron-list>
@@ -105,7 +106,7 @@
             $i18n{firstPartySetsShowRelatedSitesButton}
           </button>
           <button class="dropdown-item" role="menuitem" on-click="onRemove_">
-            $i18n{firstPartySetsSiteClearStorageButton}
+            $i18n{firstPartySetsSiteDeleteStorageButton}
           </button>
         </cr-action-menu>
       </template>

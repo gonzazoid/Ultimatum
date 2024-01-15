@@ -6,8 +6,6 @@ package org.chromium.components.browser_ui.media;
 
 import android.util.SparseArray;
 
-import androidx.annotation.VisibleForTesting;
-
 import org.chromium.base.supplier.Supplier;
 
 /**
@@ -15,8 +13,6 @@ import org.chromium.base.supplier.Supplier;
  * Each notification is associated with a different {@link MediaNotificationController}.
  */
 public class MediaNotificationManager {
-    private static final String TAG = "MediaNotification";
-
     // Maps the notification ids to their corresponding notification managers.
     private static SparseArray<MediaNotificationController> sControllers;
 
@@ -36,7 +32,8 @@ public class MediaNotificationManager {
      * @param delegate a factory function for the delegate passed to new {@link
      *         MediaNotificatonController} instances.
      */
-    public static void show(MediaNotificationInfo notificationInfo,
+    public static void show(
+            MediaNotificationInfo notificationInfo,
             Supplier<MediaNotificationController.Delegate> delegateFactory) {
         MediaNotificationController controller = sControllers.get(notificationInfo.id);
         if (controller == null) {
@@ -90,7 +87,6 @@ public class MediaNotificationManager {
         return sControllers.get(notificationId);
     }
 
-    @VisibleForTesting
     public static void setControllerForTesting(
             int notificationId, MediaNotificationController controller) {
         sControllers.put(notificationId, controller);

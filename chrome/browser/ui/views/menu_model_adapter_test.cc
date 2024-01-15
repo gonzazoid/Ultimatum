@@ -3,13 +3,12 @@
 // found in the LICENSE file.
 
 #include "ui/views/controls/menu/menu_model_adapter.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/location.h"
 #include "base/memory/raw_ptr.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/current_thread.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "chrome/browser/ui/views/test/view_event_test_base.h"
 #include "chrome/test/base/interactive_test_utils.h"
 #include "chrome/test/base/ui_test_utils.h"
@@ -47,9 +46,7 @@ class CommonMenuModel : public ui::MenuModel {
   ~CommonMenuModel() override {}
 
  protected:
-  // ui::MenuModel implementation.
-  bool HasIcons() const override { return false; }
-
+  // ui::MenuModel:
   bool IsItemDynamicAt(size_t index) const override { return false; }
 
   bool GetAcceleratorAt(size_t index,
@@ -162,14 +159,18 @@ class MenuModelAdapterTest : public ViewEventTestBase {
   void SetUp() override {
     ViewEventTestBase::SetUp();
 
-    menu_ = menu_model_adapter_.CreateMenu();
+    std::unique_ptr<views::MenuItemView> menu =
+        menu_model_adapter_.CreateMenu();
+    menu_ = menu.get();
     menu_runner_ = std::make_unique<views::MenuRunner>(
-        menu_, views::MenuRunner::HAS_MNEMONICS);
+        std::move(menu), views::MenuRunner::HAS_MNEMONICS);
   }
 
   void TearDown() override {
+    menu_ = nullptr;
     menu_runner_.reset();
 
+    button_ = nullptr;
     ViewEventTestBase::TearDown();
   }
 
@@ -215,7 +216,7 @@ class MenuModelAdapterTest : public ViewEventTestBase {
     menu_model_adapter_.BuildMenu(menu_);
 
     ASSERT_TRUE(base::CurrentUIThread::IsSet());
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, CreateEventTask(this, &MenuModelAdapterTest::Step3));
   }
 
@@ -260,8 +261,8 @@ class MenuModelAdapterTest : public ViewEventTestBase {
   raw_ptr<views::MenuButton> button_ = nullptr;
   TopMenuModel top_menu_model_;
   views::MenuModelAdapter menu_model_adapter_{&top_menu_model_};
-  raw_ptr<views::MenuItemView> menu_ = nullptr;
   std::unique_ptr<views::MenuRunner> menu_runner_;
+  raw_ptr<views::MenuItemView> menu_ = nullptr;
 };
 
 // If this flakes, disable and log details in http://crbug.com/523255.

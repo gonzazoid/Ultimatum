@@ -8,6 +8,7 @@
 #include <map>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "base/feature_list.h"
@@ -17,7 +18,6 @@
 #include "chrome/browser/metrics/perf/random_selector.h"
 #include "third_party/metrics_proto/sampled_profile.pb.h"
 #include "third_party/metrics_proto/system_profile.pb.h"
-#include "third_party/re2/src/re2/stringpiece.h"
 
 namespace ash {
 class DebugDaemonClientProvider;
@@ -84,11 +84,14 @@ class PerfCollector : public internal::MetricCollector {
   // Collects both Ash and Lacros Chrome process and thread types.
   static void CollectProcessTypes(SampledProfile* sampled_profile);
 
-  // Executes asynchronously on another thread pool. When it finishes, posts a
-  // task on the given task_runner.
+  // Executes asynchronously on another thread pool and retries with a delay if
+  // all frequencies couldn't be read. Posts a task on the given task_runner
+  // after each attempt.
   static void ParseCPUFrequencies(
       scoped_refptr<base::SequencedTaskRunner> task_runner,
-      base::WeakPtr<PerfCollector> perf_collector);
+      base::WeakPtr<PerfCollector> perf_collector,
+      int attempt,
+      int max_retries);
   // Saves the given frequencies to |max_frequencies_mhz_|.
   void SaveCPUFrequencies(const std::vector<uint32_t>& frequencies);
 
@@ -104,13 +107,14 @@ class PerfCollector : public internal::MetricCollector {
     kNumCPUsIsZero,
     kSomeZeroCPUFrequencies,
     kAllZeroCPUFrequencies,
+    kSuccessOnRetry,
     // Magic constant used by the histogram macros.
-    kMaxValue = kAllZeroCPUFrequencies,
+    kMaxValue = kSuccessOnRetry,
   };
 
   // Extracts the |lacros_channel| and |lacros_version| from |lacros_path|.
   static bool LacrosChannelAndVersion(
-      re2::StringPiece lacros_path,
+      std::string_view lacros_path,
       metrics::SystemProfileProto_Channel& lacros_channel,
       std::string& lacros_version);
 

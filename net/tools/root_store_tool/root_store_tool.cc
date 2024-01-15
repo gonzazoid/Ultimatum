@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include <inttypes.h>
+
 #include <iostream>
 #include <map>
 #include <set>
@@ -14,6 +16,7 @@
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/logging.h"
+#include "base/numerics/safe_conversions.h"
 #include "base/path_service.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_piece.h"
@@ -70,8 +73,9 @@ absl::optional<std::map<std::string, std::string>> DecodeCerts(
                  << " instead of CERTIFICATE";
       return absl::nullopt;
     }
-    std::string sha256_hex = base::ToLowerASCII(
-        base::HexEncode(crypto::SHA256Hash(base::make_span(data, len))));
+    std::string sha256_hex =
+        base::ToLowerASCII(base::HexEncode(crypto::SHA256Hash(
+            base::make_span(data, base::checked_cast<size_t>(len)))));
     certs[sha256_hex] = std::string(data, data + len);
   }
   return std::move(certs);
@@ -145,20 +149,16 @@ bool WriteRootCppFile(const RootStore& root_store,
   CHECK_GT(root_store.trust_anchors_size(), 0);
 
   std::string string_to_write =
-      "// This file is auto-generated, DO NOT EDIT.\n\n"
-      "const ChromeRootCertInfo kChromeRootCertList[] = {\n";
+      "// This file is auto-generated, DO NOT EDIT.\n\n";
 
-  for (auto& anchor : root_store.trust_anchors()) {
+  for (int i = 0; i < root_store.trust_anchors_size(); i++) {
+    const auto& anchor = root_store.trust_anchors(i);
     // Every trust anchor at this point should have a DER.
     CHECK(!anchor.der().empty());
     std::string der = anchor.der();
 
-    // Begin struct. Assumed type of ChromeRootCertInfo:
-    //
-    // struct {
-    //   base::span<const uint8_t> der;
-    // };
-    string_to_write += "    {{{";
+    base::StringAppendF(&string_to_write,
+                        "constexpr uint8_t kChromeRootCert%d[] = {", i);
 
     // Convert each character to hex representation, escaped.
     for (auto c : der) {
@@ -167,12 +167,20 @@ bool WriteRootCppFile(const RootStore& root_store,
     }
 
     // End struct
-    string_to_write += "}}},\n";
+    string_to_write += "};\n";
+  }
+
+  string_to_write += "constexpr ChromeRootCertInfo kChromeRootCertList[] = {\n";
+
+  for (int i = 0; i < root_store.trust_anchors_size(); i++) {
+    base::StringAppendF(&string_to_write, "    {kChromeRootCert%d},\n", i);
   }
   string_to_write += "};";
 
-  string_to_write += "\n\n\nstatic const int64_t kRootStoreVersion = " +
-                     base::NumberToString(root_store.version_major()) + ";\n";
+  base::StringAppendF(&string_to_write,
+                      "\n\n\nstatic const int64_t kRootStoreVersion = %" PRId64
+                      ";\n",
+                      root_store.version_major());
   if (!base::WriteFile(cpp_path, string_to_write)) {
     return false;
   }

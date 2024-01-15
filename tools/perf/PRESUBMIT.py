@@ -10,11 +10,11 @@ for more details about the presubmit API built into depot_tools.
 
 import os
 
-USE_PYTHON3 = True
+PRESUBMIT_VERSION = '2.0.0'
 
 
 def _CommonChecks(input_api, output_api, block_on_failure=False):
-  """Performs common checks, which includes running pylint.
+  """Performs common checks that vary between commit and upload.
 
     block_on_failure: For some failures, we would like to warn the
         user but still allow them to upload the change. However, we
@@ -23,24 +23,22 @@ def _CommonChecks(input_api, output_api, block_on_failure=False):
   """
   results = []
 
-  results.extend(_CheckExpectations(input_api, output_api))
-  results.extend(_CheckJson(input_api, output_api))
   results.extend(
       _CheckPerfDataCurrentness(input_api, output_api, block_on_failure))
   results.extend(
       _CheckPerfJsonConfigs(input_api, output_api, block_on_failure))
-  results.extend(_CheckWprShaFiles(input_api, output_api))
   results.extend(_CheckShardMaps(input_api, output_api, block_on_failure))
-  results.extend(_CheckVersionsInSmokeTests(input_api, output_api))
-  results.extend(
-      input_api.RunTests(
-          input_api.canned_checks.GetPylint(
-              input_api,
-              output_api,
-              extra_paths_list=_GetPathsToPrepend(input_api),
-              pylintrc='pylintrc',
-              version='2.7')))
   return results
+
+
+def CheckPyLint(input_api, output_api):
+  return input_api.RunTests(
+      input_api.canned_checks.GetPylint(
+          input_api,
+          output_api,
+          extra_paths_list=_GetPathsToPrepend(input_api),
+          pylintrc='pylintrc',
+          version='2.7'))
 
 
 def _GetPathsToPrepend(input_api):
@@ -115,7 +113,8 @@ def _RunValidationScript(
             output_api.PresubmitPromptWarning(error_msg, long_text=out))
   return results
 
-def _CheckExpectations(input_api, output_api):
+
+def CheckExpectations(input_api, output_api):
   return _RunValidationScript(
       input_api,
       output_api,
@@ -140,7 +139,8 @@ def _CheckPerfJsonConfigs(input_api, output_api, block_on_failure):
       block_on_failure
   )
 
-def _CheckWprShaFiles(input_api, output_api):
+
+def CheckWprShaFiles(input_api, output_api):
   """Check whether the wpr sha files have matching URLs."""
   wpr_archive_shas = []
   for affected_file in input_api.AffectedFiles(include_deletes=False):
@@ -164,7 +164,8 @@ def _CheckShardMaps(input_api, output_api, block_on_failure):
       block_on_failure
   )
 
-def _CheckJson(input_api, output_api):
+
+def CheckJson(input_api, output_api):
   """Checks whether JSON files in this change can be parsed."""
   for affected_file in input_api.AffectedFiles(include_deletes=False):
     filename = affected_file.AbsoluteLocalPath()
@@ -175,12 +176,13 @@ def _CheckJson(input_api, output_api):
       # Intentionally invalid JSON file.
       continue
     try:
-      input_api.json.load(open(filename))
+      input_api.json.load(open(filename, encoding='utf-8'))
     except ValueError:
       return [output_api.PresubmitError('Error parsing JSON in %s!' % filename)]
   return []
 
-def _CheckVersionsInSmokeTests(input_api, output_api):
+
+def CheckVersionsInSmokeTests(input_api, output_api):
   return _RunValidationScript(
       input_api,
       output_api,

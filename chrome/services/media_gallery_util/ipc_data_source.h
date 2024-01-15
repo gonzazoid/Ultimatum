@@ -41,6 +41,8 @@ class IPCDataSource : public media::DataSource {
   [[nodiscard]] bool GetSize(int64_t* size_out) override;
   bool IsStreaming() override;
   void SetBitrate(int bitrate) override;
+  bool PassedTimingAllowOriginCheck() override;
+  bool WouldTaintOrigin() override;
 
  private:
   // Media data read helpers: must be run on the utility thread.

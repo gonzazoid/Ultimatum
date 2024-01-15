@@ -4,13 +4,13 @@
 
 #include "chrome/browser/policy/cbcm_invalidations_initializer.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/json/json_writer.h"
 #include "base/values.h"
 #include "chrome/browser/device_identity/device_oauth2_token_service.h"
 #include "chrome/browser/device_identity/device_oauth2_token_service_factory.h"
 #include "chrome/browser/device_identity/device_oauth2_token_store_desktop.h"
-#include "components/os_crypt/os_crypt_mocker.h"
+#include "components/os_crypt/sync/os_crypt_mocker.h"
 #include "components/policy/core/common/cloud/mock_cloud_policy_client.h"
 #include "components/prefs/testing_pref_service.h"
 #include "content/public/test/browser_task_environment.h"
@@ -89,10 +89,10 @@ class CBCMInvalidationsInitializerTest
 
   std::string MakeTokensFromAuthCodesResponse(const std::string& refresh_token,
                                               const std::string& access_token) {
-    base::DictionaryValue dict;
-    dict.SetStringKey("access_token", access_token);
-    dict.SetStringKey("refresh_token", refresh_token);
-    dict.SetIntKey("expires_in", 9999);
+    base::Value::Dict dict;
+    dict.Set("access_token", access_token);
+    dict.Set("refresh_token", refresh_token);
+    dict.Set("expires_in", 9999);
 
     std::string json;
     base::JSONWriter::Write(dict, &json);

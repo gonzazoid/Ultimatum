@@ -107,14 +107,12 @@ int TableColumnAlignmentToCanvasAlignment(
     case ui::TableColumn::RIGHT:
       return gfx::Canvas::TEXT_ALIGN_RIGHT;
   }
-  NOTREACHED();
-  return gfx::Canvas::TEXT_ALIGN_LEFT;
+  NOTREACHED_NORETURN();
 }
 
-absl::optional<size_t> GetClosestVisibleColumnIndex(const TableView* table,
+absl::optional<size_t> GetClosestVisibleColumnIndex(const TableView& table,
                                                     int x) {
-  const std::vector<TableView::VisibleColumn>& columns(
-      table->visible_columns());
+  const std::vector<TableView::VisibleColumn>& columns(table.visible_columns());
   if (columns.empty())
     return absl::nullopt;
   for (size_t i = 0; i < columns.size(); ++i) {

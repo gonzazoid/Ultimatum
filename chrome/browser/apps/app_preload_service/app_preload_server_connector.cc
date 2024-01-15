@@ -4,24 +4,32 @@
 
 #include "chrome/browser/apps/app_preload_service/app_preload_server_connector.h"
 
-#include "base/callback.h"
-#include "base/json/json_writer.h"
-#include "base/values.h"
-#include "chrome/browser/apps/app_preload_service/device_info_manager.h"
+#include "base/functional/callback.h"
+#include "base/metrics/histogram_functions.h"
+#include "base/time/time.h"
+#include "chrome/browser/apps/almanac_api_client/almanac_api_util.h"
+#include "chrome/browser/apps/almanac_api_client/device_info_manager.h"
+#include "chrome/browser/apps/almanac_api_client/proto/client_context.pb.h"
 #include "chrome/browser/apps/app_preload_service/preload_app_definition.h"
-#include "chrome/browser/apps/app_preload_service/proto/app_provisioning.pb.h"
-#include "services/network/public/cpp/resource_request.h"
+#include "chrome/browser/apps/app_preload_service/proto/app_preload.pb.h"
+#include "net/base/net_errors.h"
+#include "services/network/public/cpp/shared_url_loader_factory.h"
 #include "services/network/public/cpp/simple_url_loader.h"
 #include "services/network/public/mojom/url_response_head.mojom.h"
 
 namespace {
 
-// TODO(b/249427934): Temporary test data.
-static constexpr char kServerUrl[] =
-    "http://localhost:9876/v1/app_provisioning/apps?alt=proto";
+// Endpoint for requesting app preload data on the ChromeOS Almanac API.
+constexpr char kAppPreloadAlmanacEndpoint[] = "v1/app-preload?alt=proto";
 
 // Maximum accepted size of an APS Response. 1MB.
 constexpr int kMaxResponseSizeInBytes = 1024 * 1024;
+
+constexpr char kServerErrorHistogramName[] =
+    "AppPreloadService.ServerResponseCodes";
+
+constexpr char kServerRoundTripTimeForFirstLogin[] =
+    "AppPreloadService.ServerRoundTripTimeForFirstLogin";
 
 constexpr net::NetworkTrafficAnnotationTag kTrafficAnnotation =
     net::DefineNetworkTrafficAnnotation("app_preload_service", R"(
@@ -46,19 +54,11 @@ constexpr net::NetworkTrafficAnnotationTag kTrafficAnnotation =
     )");
 
 std::string BuildGetAppsForFirstLoginRequestBody(const apps::DeviceInfo& info) {
-  base::Value::Dict request;
-  request.Set("board", info.board);
-  request.Set("model", info.model);
-  request.Set("language", info.locale);
+  apps::proto::AppPreloadListRequest request_proto;
+  *request_proto.mutable_device_context() = info.ToDeviceContext();
+  *request_proto.mutable_user_context() = info.ToUserContext();
 
-  base::Value::Dict versions;
-  versions.Set("ash_chrome", info.version_info.ash_chrome);
-  versions.Set("platform", info.version_info.platform);
-  request.Set("chrome_os_version", std::move(versions));
-
-  std::string request_body;
-  base::JSONWriter::Write(request, &request_body);
-  return request_body;
+  return request_proto.SerializeAsString();
 }
 
 }  // namespace
@@ -73,59 +73,48 @@ void AppPreloadServerConnector::GetAppsForFirstLogin(
     const DeviceInfo& device_info,
     scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
     GetInitialAppsCallback callback) {
-  auto resource_request = std::make_unique<network::ResourceRequest>();
+  std::unique_ptr<network::SimpleURLLoader> loader = GetAlmanacUrlLoader(
+      kTrafficAnnotation, BuildGetAppsForFirstLoginRequestBody(device_info),
+      kAppPreloadAlmanacEndpoint);
 
-  resource_request->url = GURL(kServerUrl);
-  DCHECK(resource_request->url.is_valid());
-
-  // A POST request is sent with an override to GET due to server requirements.
-  resource_request->method = "POST";
-  resource_request->headers.SetHeader("X-HTTP-Method-Override", "GET");
-
-  resource_request->credentials_mode = network::mojom::CredentialsMode::kOmit;
-
-  loader_ = network::SimpleURLLoader::Create(std::move(resource_request),
-                                             kTrafficAnnotation);
-  loader_->AttachStringForUpload(
-      BuildGetAppsForFirstLoginRequestBody(device_info), "application/json");
-  loader_->DownloadToString(
+  // Retain a pointer while keeping the loader alive by std::moving it into the
+  // callback.
+  auto* loader_ptr = loader.get();
+  loader_ptr->DownloadToString(
       url_loader_factory.get(),
       base::BindOnce(&AppPreloadServerConnector::OnGetAppsForFirstLoginResponse,
-                     weak_ptr_factory_.GetWeakPtr(), std::move(callback)),
+                     weak_ptr_factory_.GetWeakPtr(), std::move(loader),
+                     base::TimeTicks::Now(), std::move(callback)),
       kMaxResponseSizeInBytes);
 }
 
+// static
+GURL AppPreloadServerConnector::GetServerUrl() {
+  return GetAlmanacEndpointUrl(kAppPreloadAlmanacEndpoint);
+}
+
 void AppPreloadServerConnector::OnGetAppsForFirstLoginResponse(
+    std::unique_ptr<network::SimpleURLLoader> loader,
+    base::TimeTicks request_start_time,
     GetInitialAppsCallback callback,
     std::unique_ptr<std::string> response_body) {
-  int response_code = 0;
-  if (loader_->ResponseInfo()) {
-    response_code = loader_->ResponseInfo()->headers->response_code();
-  }
-  const int net_error = loader_->NetError();
-  loader_.reset();
-
-  // TODO(b/249646015): Pass error states to the caller to handle.
-  if (net_error == net::Error::ERR_INSUFFICIENT_RESOURCES) {
-    LOG(ERROR) << "Network request failed due to insufficent resources.";
-    std::move(callback).Run({});
+  absl::Status error =
+      GetDownloadError(loader->NetError(), loader->ResponseInfo(),
+                       response_body.get(), kServerErrorHistogramName);
+  if (!error.ok()) {
+    LOG(ERROR) << error.message();
+    std::move(callback).Run(std::nullopt);
     return;
   }
 
-  // HTTP error codes in the 500-599 range represent server errors.
-  const bool server_error =
-      net_error != net::OK || (response_code >= 500 && response_code < 600);
-  if (server_error || response_body->empty()) {
-    LOG(ERROR) << "Server error.";
-    std::move(callback).Run({});
-    return;
-  }
+  base::UmaHistogramTimes(kServerRoundTripTimeForFirstLogin,
+                          base::TimeTicks::Now() - request_start_time);
 
-  proto::AppProvisioningResponse response;
+  proto::AppPreloadListResponse response;
 
   if (!response.ParseFromString(*response_body)) {
     LOG(ERROR) << "Parsing failed";
-    std::move(callback).Run(std::vector<PreloadAppDefinition>());
+    std::move(callback).Run(std::nullopt);
     return;
   }
 

@@ -9,9 +9,9 @@
 
 #include <memory>
 
-#include "base/bind.h"
 #include "base/files/file.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/memory/ref_counted_memory.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
@@ -73,18 +73,18 @@ void IOHandler::Read(
     callback->sendFailure(Response::InvalidParams("Invalid stream handle"));
     return;
   }
-  if (offset.isJust() && !stream->SupportsSeek()) {
+  if (offset.has_value() && !stream->SupportsSeek()) {
     callback->sendFailure(
         Response::InvalidParams("Read offset is specificed for a stream that "
                                 "does not support random access"));
     return;
   }
-  int size = max_size.fromMaybe(kDefaultChunkSize);
+  int size = max_size.value_or(kDefaultChunkSize);
   if (size <= 0) {
     callback->sendFailure(Response::InvalidParams("Invalid max read size"));
     return;
   }
-  stream->Read(offset.fromMaybe(-1), size,
+  stream->Read(offset.value_or(-1), size,
                base::BindOnce(&IOHandler::ReadComplete,
                               weak_factory_.GetWeakPtr(), std::move(callback)));
 }

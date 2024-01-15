@@ -9,13 +9,14 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/memory/ref_counted.h"
 #include "base/message_loop/message_pump_type.h"
 #include "base/notreached.h"
 #include "base/task/current_thread.h"
+#include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
 #include "ipc/ipc_channel_proxy.h"
 #include "remoting/base/auto_thread.h"
@@ -172,7 +173,7 @@ bool DesktopProcess::Start(
   // Connect to the daemon.
   daemon_channel_ = IPC::ChannelProxy::Create(
       daemon_channel_handle_.release(), IPC::Channel::MODE_CLIENT, this,
-      io_task_runner_, base::ThreadTaskRunnerHandle::Get());
+      io_task_runner_, base::SingleThreadTaskRunner::GetCurrentDefault());
 
   daemon_channel_->GetRemoteAssociatedInterface(
       &desktop_session_request_handler_);
@@ -191,4 +192,4 @@ void DesktopProcess::CrashProcess(const std::string& function_name,
   ::remoting::CrashProcess(function_name, file_name, line_number);
 }
 
-} // namespace remoting
+}  // namespace remoting

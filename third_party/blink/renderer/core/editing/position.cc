@@ -95,9 +95,7 @@ PositionTemplate<Strategy> PositionTemplate<Strategy>::EditingPositionOf(
 template <typename Strategy>
 PositionTemplate<Strategy>::PositionTemplate(const Node* anchor_node,
                                              PositionAnchorType anchor_type)
-    : anchor_node_(const_cast<Node*>(anchor_node)),
-      offset_(0),
-      anchor_type_(anchor_type) {
+    : anchor_node_(const_cast<Node*>(anchor_node)), anchor_type_(anchor_type) {
 #if DCHECK_IS_ON()
   DCHECK(anchor_node_);
   DCHECK_NE(anchor_type_, PositionAnchorType::kOffsetInAnchor);
@@ -123,9 +121,7 @@ PositionTemplate<Strategy>::PositionTemplate(const Node* anchor_node,
 template <typename Strategy>
 PositionTemplate<Strategy>::PositionTemplate(const Node* anchor_node,
                                              int offset)
-    : anchor_node_(const_cast<Node*>(anchor_node)),
-      offset_(offset),
-      anchor_type_(PositionAnchorType::kOffsetInAnchor) {
+    : anchor_node_(const_cast<Node*>(anchor_node)), offset_(offset) {
 #if DCHECK_IS_ON()
   DCHECK(CanBeAnchorNode<Strategy>(anchor_node_.Get())) << anchor_node_;
   if (!anchor_node_) {
@@ -148,6 +144,9 @@ template <typename Strategy>
 PositionTemplate<Strategy>::PositionTemplate(const Node& anchor_node,
                                              int offset)
     : PositionTemplate(&anchor_node, offset) {}
+
+template <typename Strategy>
+PositionTemplate<Strategy>::PositionTemplate() = default;
 
 template <typename Strategy>
 PositionTemplate<Strategy>::PositionTemplate(const PositionTemplate&) = default;
@@ -395,19 +394,6 @@ bool PositionTemplate<Strategy>::IsValidFor(const Document& document) const {
          OffsetInContainerNode() <= LastOffsetInNode(*AnchorNode());
 }
 
-int16_t ComparePositions(const PositionInFlatTree& position_a,
-                         const PositionInFlatTree& position_b) {
-  DCHECK(position_a.IsNotNull());
-  DCHECK(position_b.IsNotNull());
-
-  Node* container_a = position_a.ComputeContainerNode();
-  Node* container_b = position_b.ComputeContainerNode();
-  int offset_a = position_a.ComputeOffsetInContainerNode();
-  int offset_b = position_b.ComputeOffsetInContainerNode();
-  return ComparePositionsInFlatTree(container_a, offset_a, container_b,
-                                    offset_b);
-}
-
 template <typename Strategy>
 int16_t PositionTemplate<Strategy>::CompareTo(
     const PositionTemplate<Strategy>& other) const {
@@ -486,17 +472,7 @@ template <typename Strategy>
 bool PositionTemplate<Strategy>::AtStartOfTree() const {
   if (IsNull())
     return true;
-  return !Strategy::Parent(*AnchorNode()) && offset_ == 0;
-}
-
-template <typename Strategy>
-bool PositionTemplate<Strategy>::AtEndOfTree() const {
-  if (IsNull())
-    return true;
-  // TODO(yosin) We should use |Strategy::lastOffsetForEditing()| instead of
-  // DOM tree version.
-  return !Strategy::Parent(*AnchorNode()) &&
-         offset_ >= EditingStrategy::LastOffsetForEditing(AnchorNode());
+  return !Strategy::Parent(*AnchorNode()) && !ComputeNodeBeforePosition();
 }
 
 // static

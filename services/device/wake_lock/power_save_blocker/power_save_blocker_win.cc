@@ -6,10 +6,11 @@
 
 #include <windows.h>
 
-#include "base/bind.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/sequenced_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/win/scoped_handle.h"
 #include "base/win/windows_version.h"
 
@@ -18,11 +19,6 @@ namespace {
 
 HANDLE CreatePowerRequest(POWER_REQUEST_TYPE type,
                           const std::string& description) {
-  if (type == PowerRequestExecutionRequired &&
-      base::win::GetVersion() == base::win::Version::WIN7) {
-    return INVALID_HANDLE_VALUE;
-  }
-
   std::wstring wide_description = base::ASCIIToWide(description);
   REASON_CONTEXT context = {0};
   context.Version = POWER_REQUEST_CONTEXT_VERSION;
@@ -46,11 +42,6 @@ void DeletePowerRequest(POWER_REQUEST_TYPE type, HANDLE handle) {
   base::win::ScopedHandle request_handle(handle);
   if (!request_handle.IsValid())
     return;
-
-  if (type == PowerRequestExecutionRequired &&
-      base::win::GetVersion() == base::win::Version::WIN7) {
-    return;
-  }
 
   BOOL success = ::PowerClearRequest(request_handle.Get(), type);
   DCHECK(success);
@@ -101,7 +92,7 @@ void PowerSaveBlocker::Delegate::ApplyBlock() {
   handle_.Set(CreatePowerRequest(RequestType(), description_));
   // See comment on instance variable above
   if (type_ == mojom::WakeLockType::kPreventDisplaySleep &&
-      base::win::GetVersion() <= base::win::Version::WIN10) {
+      base::win::GetVersion() < base::win::Version::WIN11) {
     system_sleep_prevention_handle_.Set(
         CreatePowerRequest(PowerRequestSystemRequired, description_));
   }
@@ -118,9 +109,6 @@ POWER_REQUEST_TYPE PowerSaveBlocker::Delegate::RequestType() {
   if (type_ == mojom::WakeLockType::kPreventDisplaySleep ||
       type_ == mojom::WakeLockType::kPreventDisplaySleepAllowDimming)
     return PowerRequestDisplayRequired;
-
-  if (base::win::GetVersion() == base::win::Version::WIN7)
-    return PowerRequestSystemRequired;
 
   return PowerRequestExecutionRequired;
 }

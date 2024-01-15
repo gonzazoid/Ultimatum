@@ -4,7 +4,7 @@
 
 #include "chrome/browser/android/compositor/layer/thumbnail_layer.h"
 
-#include "cc/layers/ui_resource_layer.h"
+#include "cc/slim/ui_resource_layer.h"
 #include "chrome/browser/thumbnail/cc/thumbnail.h"
 #include "ui/gfx/geometry/size_conversions.h"
 
@@ -15,7 +15,7 @@ scoped_refptr<ThumbnailLayer> ThumbnailLayer::Create() {
   return base::WrapRefCounted(new ThumbnailLayer());
 }
 
-void ThumbnailLayer::SetThumbnail(Thumbnail* thumbnail) {
+void ThumbnailLayer::SetThumbnail(thumbnail::Thumbnail* thumbnail) {
   layer_->SetUIResourceId(thumbnail->ui_resource_id());
   UpdateSizes(thumbnail->scaled_content_size(), thumbnail->scaled_data_size());
 }
@@ -43,34 +43,36 @@ void ThumbnailLayer::ClearClip() {
   clipped_ = false;
 }
 
-void ThumbnailLayer::AddSelfToParentOrReplaceAt(scoped_refptr<cc::Layer> parent,
-                                                size_t index) {
-  if (index >= parent->children().size())
+void ThumbnailLayer::AddSelfToParentOrReplaceAt(
+    scoped_refptr<cc::slim::Layer> parent,
+    size_t index) {
+  if (index >= parent->children().size()) {
     parent->AddChild(layer_);
-  else if (parent->children()[index]->id() != layer_->id())
+  } else if (parent->children()[index]->id() != layer_->id()) {
     parent->ReplaceChild(parent->children()[index].get(), layer_);
+  }
 }
 
-scoped_refptr<cc::Layer> ThumbnailLayer::layer() {
+scoped_refptr<cc::slim::Layer> ThumbnailLayer::layer() {
   return layer_;
 }
 
-ThumbnailLayer::ThumbnailLayer() : layer_(cc::UIResourceLayer::Create()) {
+ThumbnailLayer::ThumbnailLayer() : layer_(cc::slim::UIResourceLayer::Create()) {
   layer_->SetIsDrawable(true);
 }
 
-ThumbnailLayer::~ThumbnailLayer() {
-}
+ThumbnailLayer::~ThumbnailLayer() = default;
 
 void ThumbnailLayer::UpdateSizes(const gfx::SizeF& content_size,
                                  const gfx::SizeF& resource_size) {
   if (content_size != content_size_ || resource_size != resource_size_) {
     content_size_ = content_size;
     resource_size_ = resource_size;
-    if (clipped_)
+    if (clipped_) {
       Clip(last_clipping_);
-    else
+    } else {
       ClearClip();
+    }
   }
 }
 

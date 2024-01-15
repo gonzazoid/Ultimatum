@@ -10,7 +10,9 @@
 #include <string>
 
 #include "base/component_export.h"
+#include "base/files/file_path.h"
 #include "base/observer_list.h"
+#include "base/values.h"
 #include "chromeos/ash/components/dbus/biod/biod_client.h"
 #include "dbus/object_path.h"
 
@@ -25,6 +27,22 @@ namespace ash {
 // fingerprint vector, it is considered a match.
 class COMPONENT_EXPORT(BIOD_CLIENT) FakeBiodClient : public BiodClient {
  public:
+  struct FakeRecord {
+    FakeRecord();
+    FakeRecord(const FakeRecord&);
+    ~FakeRecord();
+
+    void Clear();
+
+    std::string user_id;
+    std::string label;
+    // A fake fingerprint is a vector which consists of all the strings which
+    // were "pressed" during the enroll session.
+    std::vector<std::string> fake_fingerprint;
+  };
+
+  using RecordMap = std::map<dbus::ObjectPath, FakeRecord>;
+
   FakeBiodClient();
 
   FakeBiodClient(const FakeBiodClient&) = delete;
@@ -40,6 +58,9 @@ class COMPONENT_EXPORT(BIOD_CLIENT) FakeBiodClient : public BiodClient {
 
   // Emulates biod service restarted.
   void SendRestarted();
+
+  // Emulates biod service status changed.
+  void SendStatusChanged(biod::BiometricsManagerStatus status);
 
   // Emulates a scan that occurs during enrolling a new fingerprint.
   // |fingerprint| is the fake data of the finger as a string. If |is_complete|
@@ -80,9 +101,13 @@ class COMPONENT_EXPORT(BIOD_CLIENT) FakeBiodClient : public BiodClient {
   void RequestRecordLabel(const dbus::ObjectPath& record_path,
                           LabelCallback callback) override;
 
- private:
-  struct FakeRecord;
+  // Simulates the finger_id finger touches the sensor.
+  void TouchFingerprintSensor(int finger_id);
 
+  // Sets the directory where the fake records will be saved.
+  void SetFakeUserDataDir(const base::FilePath& path);
+
+ private:
   // The current session of fingerprint storage. The session determines which
   // events will be sent from user finger touches.
   enum class FingerprintSession {
@@ -91,14 +116,22 @@ class COMPONENT_EXPORT(BIOD_CLIENT) FakeBiodClient : public BiodClient {
     AUTH,
   };
 
+  // Save the fake fingerprint FakeRecord's to the user data directory.
+  void SaveRecords() const;
+  // Load the fake fingerprint FakeRecord's from the user data directory.
+  void LoadRecords();
+
+  // The current enrollment session progress percentage.
+  int current_enroll_percentage_ = 0;
+
   // The stored fingerprints.
-  std::map<dbus::ObjectPath, std::unique_ptr<FakeRecord>> records_;
+  RecordMap records_;
 
   // Current record in process of getting enrolled and its path. These are
   // assigned at the start of an enroll session and freed when the enroll
   // session is finished or cancelled.
   dbus::ObjectPath current_record_path_;
-  std::unique_ptr<FakeRecord> current_record_;
+  FakeRecord current_record_;
 
   // Unique indentifier that gets updated each time an enroll session is started
   // to ensure each record is stored at a different path.
@@ -106,6 +139,9 @@ class COMPONENT_EXPORT(BIOD_CLIENT) FakeBiodClient : public BiodClient {
 
   // The current session of the fake storage.
   FingerprintSession current_session_ = FingerprintSession::NONE;
+
+  // Stores the saved fingerprint records path.
+  base::FilePath fake_biod_db_filepath_;
 
   base::ObserverList<Observer>::Unchecked observers_;
 };

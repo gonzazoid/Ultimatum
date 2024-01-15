@@ -2,8 +2,10 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {assert} from 'chrome://resources/js/assert_ts.js';
+import {assert} from 'chrome://resources/js/assert.js';
 import {PromiseResolver} from 'chrome://resources/js/promise_resolver.js';
+
+import type {TimerProxy} from './types.js';
 
 /**
  * @fileoverview A debouncer which fires the given callback after a delay. The
@@ -14,7 +16,7 @@ import {PromiseResolver} from 'chrome://resources/js/promise_resolver.js';
 export class Debouncer {
   private callback_: () => void;
   private timer_: number|null = null;
-  private timerProxy_: Window;
+  private timerProxy_: TimerProxy;
   private boundTimerCallback_: () => void;
   private isDone_: boolean = false;
   private promiseResolver_: PromiseResolver<void>;

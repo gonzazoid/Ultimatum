@@ -9,9 +9,9 @@
 #include <memory>
 #include <string>
 
-#include "base/bind.h"
 #include "base/files/file.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
@@ -72,7 +72,7 @@ base::File CreateFileForDrop(base::FilePath* file_path) {
     }
 
     // http://crbug.com/110709
-    base::ThreadRestrictions::ScopedAllowIO allow_io;
+    base::ScopedAllowBlocking allow_blocking;
 
     base::File file(
         new_file_path, base::File::FLAG_CREATE | base::File::FLAG_WRITE);

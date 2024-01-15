@@ -2,13 +2,11 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "third_party/blink/public/web/modules/media/audio/audio_output_ipc_factory.h"
-
 #include <string>
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/message_loop/message_pump_type.h"
 #include "base/run_loop.h"
 #include "base/test/bind.h"
@@ -21,7 +19,9 @@
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/common/browser_interface_broker_proxy.h"
 #include "third_party/blink/public/mojom/media/renderer_audio_output_stream_factory.mojom-blink.h"
+#include "third_party/blink/public/web/modules/media/audio/audio_output_ipc_factory.h"
 #include "third_party/blink/renderer/platform/testing/io_task_runner_testing_platform_support.h"
+#include "third_party/blink/renderer/platform/testing/task_environment.h"
 
 using ::testing::_;
 
@@ -33,7 +33,7 @@ const int kRenderFrameId = 0;
 
 blink::LocalFrameToken TokenFromInt(int i) {
   static base::UnguessableToken base_token = base::UnguessableToken::Create();
-  return blink::LocalFrameToken(base::UnguessableToken::Deserialize(
+  return blink::LocalFrameToken(base::UnguessableToken::CreateForTesting(
       base_token.GetHighForSerialization() + i,
       base_token.GetLowForSerialization() + i));
 }
@@ -111,6 +111,7 @@ class AudioOutputIPCFactoryTest : public testing::Test {
 
  private:
   FakeAudioOutputIPCDelegate fake_delegate;
+  test::TaskEnvironment task_environment_;
 };
 
 TEST_F(AudioOutputIPCFactoryTest, CallFactoryFromIOThread) {

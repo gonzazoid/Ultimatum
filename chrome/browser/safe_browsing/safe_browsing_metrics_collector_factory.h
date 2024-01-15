@@ -5,7 +5,7 @@
 #ifndef CHROME_BROWSER_SAFE_BROWSING_SAFE_BROWSING_METRICS_COLLECTOR_FACTORY_H_
 #define CHROME_BROWSER_SAFE_BROWSING_SAFE_BROWSING_METRICS_COLLECTOR_FACTORY_H_
 
-#include "base/memory/singleton.h"
+#include "base/no_destructor.h"
 #include "chrome/browser/profiles/profile_keyed_service_factory.h"
 
 class KeyedService;
@@ -37,14 +37,13 @@ class SafeBrowsingMetricsCollectorFactory : public ProfileKeyedServiceFactory {
       const SafeBrowsingMetricsCollectorFactory&) = delete;
 
  private:
-  friend struct base::DefaultSingletonTraits<
-      SafeBrowsingMetricsCollectorFactory>;
+  friend base::NoDestructor<SafeBrowsingMetricsCollectorFactory>;
 
   SafeBrowsingMetricsCollectorFactory();
   ~SafeBrowsingMetricsCollectorFactory() override = default;
 
   // BrowserContextKeyedServiceFactory:
-  KeyedService* BuildServiceInstanceFor(
+  std::unique_ptr<KeyedService> BuildServiceInstanceForBrowserContext(
       content::BrowserContext* context) const override;
 };
 

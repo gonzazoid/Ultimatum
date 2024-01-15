@@ -8,16 +8,17 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_forward.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_forward.h"
 #include "base/logging.h"
 #include "base/memory/weak_ptr.h"
+#include "base/metrics/histogram_functions.h"
 #include "chromeos/crosapi/mojom/account_manager.mojom.h"
 #include "components/account_manager_core/account.h"
-#include "components/account_manager_core/account_addition_result.h"
 #include "components/account_manager_core/account_manager_util.h"
+#include "components/account_manager_core/account_upsertion_result.h"
 #include "components/account_manager_core/chromeos/access_token_fetcher.h"
 #include "components/account_manager_core/chromeos/account_manager.h"
 #include "components/account_manager_core/chromeos/account_manager_ui.h"
@@ -57,7 +58,7 @@ void ReportErrorStatusFromHasDummyGaiaToken(
 AccountManagerMojoService::AccountManagerMojoService(
     account_manager::AccountManager* account_manager)
     : account_manager_(account_manager) {
-  DCHECK(account_manager_);
+  CHECK(account_manager_);
   account_manager_->AddObserver(this);
 }
 
@@ -75,9 +76,9 @@ void AccountManagerMojoService::SetAccountManagerUI(
   account_manager_ui_ = std::move(account_manager_ui);
 }
 
-void AccountManagerMojoService::OnAccountAdditionFinishedForTesting(
-    const account_manager::AccountAdditionResult& result) {
-  OnAccountAdditionFinished(result);
+void AccountManagerMojoService::OnAccountUpsertionFinishedForTesting(
+    const account_manager::AccountUpsertionResult& result) {
+  OnAccountUpsertionFinished(result);
 }
 
 void AccountManagerMojoService::IsInitialized(IsInitializedCallback callback) {
@@ -113,44 +114,45 @@ void AccountManagerMojoService::GetPersistentErrorForAccount(
 void AccountManagerMojoService::ShowAddAccountDialog(
     crosapi::mojom::AccountAdditionOptionsPtr options,
     ShowAddAccountDialogCallback callback) {
-  DCHECK(account_manager_ui_);
+  CHECK(account_manager_ui_);
   if (account_manager_ui_->IsDialogShown()) {
-    std::move(callback).Run(ToMojoAccountAdditionResult(
-        account_manager::AccountAdditionResult::FromStatus(
-            account_manager::AccountAdditionResult::Status::
+    std::move(callback).Run(ToMojoAccountUpsertionResult(
+        account_manager::AccountUpsertionResult::FromStatus(
+            account_manager::AccountUpsertionResult::Status::
                 kAlreadyInProgress)));
     return;
   }
 
-  DCHECK(!account_addition_in_progress_);
-  account_addition_in_progress_ = true;
+  DCHECK(!account_signin_in_progress_);
+  account_signin_in_progress_ = true;
+  is_reauth_ = false;
   account_addition_callback_ = std::move(callback);
   auto maybe_options = account_manager::FromMojoAccountAdditionOptions(options);
   account_manager_ui_->ShowAddAccountDialog(
       maybe_options.value_or(account_manager::AccountAdditionOptions{}),
-      base::BindOnce(&AccountManagerMojoService::OnAddAccountDialogClosed,
+      base::BindOnce(&AccountManagerMojoService::OnSigninDialogClosed,
                      weak_ptr_factory_.GetWeakPtr()));
 }
 
 void AccountManagerMojoService::ShowReauthAccountDialog(
     const std::string& email,
-    base::OnceClosure closure) {
-  DCHECK(account_manager_ui_);
-  if (account_manager_ui_->IsDialogShown())
+    ShowReauthAccountDialogCallback callback) {
+  CHECK(account_manager_ui_);
+  if (account_manager_ui_->IsDialogShown()) {
+    std::move(callback).Run(ToMojoAccountUpsertionResult(
+        account_manager::AccountUpsertionResult::FromStatus(
+            account_manager::AccountUpsertionResult::Status::
+                kAlreadyInProgress)));
     return;
+  }
 
-  // `closure` is used by the entity which launched the account
-  // re-authentication flow in the first place to know about the completion of
-  // the flow. The notification that we are going to chain here will inform all
-  // observers of `AccountManagerFacade` (see
-  // `AccountManagerFacade::Observer::OnSigninDialogClosed()`), that the signin
-  // dialog was closed.
-  // As of this writing, this notification is used by `AccountReconcilor` to
-  // force mint cookies.
+  DCHECK(!account_signin_in_progress_);
+  account_signin_in_progress_ = true;
+  is_reauth_ = true;
+  account_reauth_callback_ = std::move(callback);
   account_manager_ui_->ShowReauthAccountDialog(
-      email, std::move(closure).Then(base::BindOnce(
-                 &AccountManagerMojoService::NotifySigninDialogClosed,
-                 weak_ptr_factory_.GetWeakPtr())));
+      email, base::BindOnce(&AccountManagerMojoService::OnSigninDialogClosed,
+                            weak_ptr_factory_.GetWeakPtr()));
 }
 
 void AccountManagerMojoService::ShowManageAccountsSettings() {
@@ -182,12 +184,17 @@ void AccountManagerMojoService::ReportAuthError(
     mojom::GoogleServiceAuthErrorPtr mojo_error) {
   absl::optional<account_manager::AccountKey> maybe_account_key =
       account_manager::FromMojoAccountKey(mojo_account_key);
-  DCHECK(maybe_account_key)
-      << "Can't unmarshal account of type: " << mojo_account_key->account_type;
+  base::UmaHistogramBoolean("AccountManager.ReportAuthError.IsAccountKeyEmpty",
+                            !maybe_account_key.has_value());
+  if (!maybe_account_key) {
+    LOG(ERROR) << "Can't unmarshal account with id: " << mojo_account_key->id
+               << " and type: " << mojo_account_key->account_type;
+    return;
+  }
 
   absl::optional<GoogleServiceAuthError> maybe_error =
       account_manager::FromMojoGoogleServiceAuthError(mojo_error);
-  if (!maybe_error.has_value()) {
+  if (!maybe_error) {
     // Newer version of Lacros may have reported an error that older version of
     // Ash doesn't understand yet. Ignore such errors.
     LOG(ERROR) << "Can't unmarshal error with state: " << mojo_error->state;
@@ -219,43 +226,53 @@ void AccountManagerMojoService::OnAccountRemoved(
     observer->OnAccountRemoved(ToMojoAccount(account));
 }
 
-void AccountManagerMojoService::OnAccountAdditionFinished(
-    const account_manager::AccountAdditionResult& result) {
-  if (!account_addition_in_progress_)
+void AccountManagerMojoService::OnAccountUpsertionFinished(
+    const account_manager::AccountUpsertionResult& result) {
+  if (!account_signin_in_progress_) {
     return;
+  }
 
-  FinishAddAccount(result);
+  FinishUpsertAccount(result);
 }
 
-void AccountManagerMojoService::OnAddAccountDialogClosed() {
-  if (!account_addition_in_progress_)
+void AccountManagerMojoService::OnSigninDialogClosed() {
+  if (!account_signin_in_progress_) {
     return;
+  }
 
   // Account addition is still in progress. It means that user didn't complete
   // the account addition flow and closed the dialog.
-  FinishAddAccount(account_manager::AccountAdditionResult::FromStatus(
-      account_manager::AccountAdditionResult::Status::kCancelledByUser));
+  FinishUpsertAccount(account_manager::AccountUpsertionResult::FromStatus(
+      account_manager::AccountUpsertionResult::Status::kCancelledByUser));
 }
 
-void AccountManagerMojoService::FinishAddAccount(
-    const account_manager::AccountAdditionResult& result) {
-  account_addition_in_progress_ = false;
+void AccountManagerMojoService::FinishUpsertAccount(
+    const account_manager::AccountUpsertionResult& result) {
+  if (!account_signin_in_progress_) {
+    return;
+  }
 
-  DCHECK(!account_addition_callback_.is_null());
-  std::move(account_addition_callback_)
-      .Run(ToMojoAccountAdditionResult(result));
+  if (is_reauth_) {
+    CHECK(account_reauth_callback_);
+    std::move(account_reauth_callback_)
+        .Run(ToMojoAccountUpsertionResult(result));
+  } else {
+    CHECK(account_addition_callback_);
+    std::move(account_addition_callback_)
+        .Run(ToMojoAccountUpsertionResult(result));
+  }
+
+  account_signin_in_progress_ = false;
+  is_reauth_ = false;
   NotifySigninDialogClosed();
 }
 
 void AccountManagerMojoService::DeletePendingAccessTokenFetchRequest(
     AccessTokenFetcher* request) {
-  pending_access_token_requests_.erase(
-      std::remove_if(
-          pending_access_token_requests_.begin(),
-          pending_access_token_requests_.end(),
-          [&request](const std::unique_ptr<AccessTokenFetcher>& pending_request)
-              -> bool { return pending_request.get() == request; }),
-      pending_access_token_requests_.end());
+  base::EraseIf(
+      pending_access_token_requests_,
+      [&request](const std::unique_ptr<AccessTokenFetcher>& pending_request)
+          -> bool { return pending_request.get() == request; });
 }
 
 void AccountManagerMojoService::MaybeNotifyAuthErrorObservers(

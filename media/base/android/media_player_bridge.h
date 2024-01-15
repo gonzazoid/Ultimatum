@@ -13,7 +13,8 @@
 #include <string>
 
 #include "base/android/scoped_java_ref.h"
-#include "base/callback.h"
+#include "base/containers/flat_map.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
@@ -80,11 +81,13 @@ class MEDIA_EXPORT MediaPlayerBridge {
   MediaPlayerBridge(const GURL& url,
                     const net::SiteForCookies& site_for_cookies,
                     const url::Origin& top_frame_origin,
+                    bool has_storage_access,
                     const std::string& user_agent,
                     bool hide_url_log,
                     Client* client,
                     bool allow_credentials,
-                    bool is_hls);
+                    bool is_hls,
+                    const base::flat_map<std::string, std::string> headers);
 
   MediaPlayerBridge(const MediaPlayerBridge&) = delete;
   MediaPlayerBridge& operator=(const MediaPlayerBridge&) = delete;
@@ -226,6 +229,10 @@ class MEDIA_EXPORT MediaPlayerBridge {
   // Used to check for cookie content settings.
   url::Origin top_frame_origin_;
 
+  // Used when determining if first-party cookies may be accessible in a
+  // third-party context.
+  bool has_storage_access_;
+
   // Waiting to retrieve cookies for `url_`.
   bool pending_retrieve_cookies_;
 
@@ -275,6 +282,9 @@ class MEDIA_EXPORT MediaPlayerBridge {
   // State for watch time reporting.
   bool is_hls_;
   SimpleWatchTimer watch_timer_;
+
+  // HTTP Request Headers
+  base::flat_map<std::string, std::string> headers_;
 
   // A reference to the owner of `this`.
   raw_ptr<Client> client_;

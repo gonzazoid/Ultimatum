@@ -34,6 +34,7 @@
 
 #include <hb.h>
 
+#include <algorithm>
 #include <memory>
 #include <type_traits>
 
@@ -49,7 +50,8 @@ class SimpleFontData;
 // This struct should be TriviallyCopyable so that std::copy() is equivalent to
 // memcpy.
 // Because glyph offsets are often zero, particularly for Latin runs, we hold it
-// in |ShapeResult::GlyphData::_offsets_| for reducing memory usage.
+// in |ShapeResult::RunInfo::GlyphDataCollection::offsets_| for reducing memory
+// usage.
 struct HarfBuzzRunGlyphData {
   DISALLOW_NEW();
 
@@ -509,6 +511,10 @@ struct ShapeResult::RunInfo final : public RefCounted<ShapeResult::RunInfo> {
     const HarfBuzzRunGlyphData& front() const {
       CHECK(!IsEmpty());
       return (*this)[0];
+    }
+    HarfBuzzRunGlyphData& back() {
+      CHECK(!IsEmpty());
+      return (*this)[size() - 1];
     }
     const HarfBuzzRunGlyphData& back() const {
       CHECK(!IsEmpty());

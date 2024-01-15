@@ -37,6 +37,13 @@ const char PolicyWithQuirks[] = R"({
   /* Some more comments here */
 })";
 
+#if !BUILDFLAG(IS_CHROMEOS)
+const char PrecedencePolicies[] = R"({
+  "CloudPolicyOverridesPlatformPolicy": true,
+  "CloudUserPolicyOverridesCloudMachinePolicy": false,
+})";
+#endif  // BUILDFLAG(IS_CHROMEOS)
+
 class TestHarness : public PolicyProviderTestHarness {
  public:
   TestHarness();
@@ -58,7 +65,7 @@ class TestHarness : public PolicyProviderTestHarness {
   void InstallBooleanPolicy(const std::string& policy_name,
                             bool policy_value) override;
   void InstallStringListPolicy(const std::string& policy_name,
-                               const base::ListValue* policy_value) override;
+                               const base::Value::List& policy_value) override;
   void InstallDictionaryPolicy(const std::string& policy_name,
                                const base::Value::Dict& policy_value) override;
   void Install3rdPartyPolicy(const base::Value::Dict& policies) override;
@@ -127,10 +134,11 @@ void TestHarness::InstallBooleanPolicy(const std::string& policy_name,
   WriteConfigFile(dict, NextConfigFileName());
 }
 
-void TestHarness::InstallStringListPolicy(const std::string& policy_name,
-                                          const base::ListValue* policy_value) {
+void TestHarness::InstallStringListPolicy(
+    const std::string& policy_name,
+    const base::Value::List& policy_value) {
   base::Value::Dict dict;
-  dict.Set(policy_name, policy_value->GetList().Clone());
+  dict.Set(policy_name, policy_value.Clone());
   WriteConfigFile(dict, NextConfigFileName());
 }
 
@@ -161,8 +169,7 @@ void TestHarness::WriteConfigFile(const std::string& data,
   const base::FilePath mandatory_dir(test_dir().Append(kMandatoryPath));
   ASSERT_TRUE(base::CreateDirectory(mandatory_dir));
   const base::FilePath file_path(mandatory_dir.AppendASCII(file_name));
-  ASSERT_EQ((int)data.size(),
-            base::WriteFile(file_path, data.c_str(), data.size()));
+  ASSERT_TRUE(base::WriteFile(file_path, data));
 }
 
 std::string TestHarness::NextConfigFileName() {
@@ -277,5 +284,28 @@ TEST_F(ConfigDirPolicyLoaderTest, ReadPrefsMergePrefs) {
   }
   EXPECT_TRUE(bundle.Equals(expected_bundle));
 }
+
+#if !BUILDFLAG(IS_CHROMEOS)
+TEST_F(ConfigDirPolicyLoaderTest, LoadPrecedencePolicies) {
+  const PolicyNamespace chrome_ns(POLICY_DOMAIN_CHROME, std::string());
+  RegisterChromeSchema(chrome_ns);
+
+  harness_.WriteConfigFile(PrecedencePolicies, "policies.json");
+  ConfigDirPolicyLoader loader(task_environment_.GetMainThreadTaskRunner(),
+                               harness_.test_dir(), POLICY_SCOPE_MACHINE);
+  PolicyBundle bundle = loader.Load();
+  PolicyBundle expected_bundle;
+  expected_bundle.Get(chrome_ns).Set(
+      key::kCloudPolicyOverridesPlatformPolicy, POLICY_LEVEL_MANDATORY,
+      POLICY_SCOPE_MACHINE, POLICY_SOURCE_PLATFORM, base::Value(true),
+      /*external_data_fetcher=*/nullptr);
+  expected_bundle.Get(chrome_ns).Set(
+      key::kCloudUserPolicyOverridesCloudMachinePolicy, POLICY_LEVEL_MANDATORY,
+      POLICY_SCOPE_MACHINE, POLICY_SOURCE_PLATFORM, base::Value(false),
+      /*external_data_fetcher=*/nullptr);
+
+  EXPECT_TRUE(bundle.Equals(expected_bundle));
+}
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
 }  // namespace policy

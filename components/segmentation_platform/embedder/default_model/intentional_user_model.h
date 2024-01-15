@@ -14,23 +14,22 @@ struct Config;
 // Segmentation intentional user model provider. Provides a default model and
 // metadata for the intentional user segment.
 // TODO(crbug/1357107): Add support for non-android platforms.
-class IntentionalUserModel : public ModelProvider {
+class IntentionalUserModel : public DefaultModelProvider {
  public:
   IntentionalUserModel();
   ~IntentionalUserModel() override = default;
 
   // Disallow copy/assign.
-  IntentionalUserModel(IntentionalUserModel&) = delete;
-  IntentionalUserModel& operator=(IntentionalUserModel&) = delete;
+  IntentionalUserModel(const IntentionalUserModel&) = delete;
+  IntentionalUserModel& operator=(const IntentionalUserModel&) = delete;
 
   static std::unique_ptr<Config> GetConfig();
 
   // ModelProvider implementation.
-  void InitAndFetchModel(
-      const ModelUpdatedCallback& model_updated_callback) override;
-  void ExecuteModelWithInput(const std::vector<float>& inputs,
+  std::unique_ptr<ModelConfig> GetModelConfig() override;
+
+  void ExecuteModelWithInput(const ModelProvider::Request& inputs,
                              ExecutionCallback callback) override;
-  bool ModelAvailable() override;
 };
 
 }  // namespace segmentation_platform

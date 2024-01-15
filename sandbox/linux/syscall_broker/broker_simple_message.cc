@@ -27,7 +27,7 @@ ssize_t BrokerSimpleMessage::SendRecvMsgWithFlags(int fd,
                                                   int recvmsg_flags,
                                                   base::ScopedFD* result_fd,
                                                   BrokerSimpleMessage* reply) {
-  return SendRecvMsgWithFlagsMultipleFds(fd, recvmsg_flags, {}, {result_fd, 1},
+  return SendRecvMsgWithFlagsMultipleFds(fd, recvmsg_flags, {}, {result_fd, 1u},
                                          reply);
 }
 
@@ -73,7 +73,7 @@ ssize_t BrokerSimpleMessage::SendRecvMsgWithFlagsMultipleFds(
 
 bool BrokerSimpleMessage::SendMsg(int fd, int send_fd) {
   return SendMsgMultipleFds(
-      fd, send_fd == -1 ? base::span<int>() : base::span<int>(&send_fd, 1));
+      fd, send_fd == -1 ? base::span<int>() : base::span<int>(&send_fd, 1u));
 }
 
 bool BrokerSimpleMessage::SendMsgMultipleFds(int fd,
@@ -125,7 +125,7 @@ ssize_t BrokerSimpleMessage::RecvMsgWithFlags(int fd,
                                               int flags,
                                               base::ScopedFD* return_fd) {
   ssize_t ret = RecvMsgWithFlagsMultipleFds(
-      fd, flags, base::span<base::ScopedFD>(return_fd, 1));
+      fd, flags, base::span<base::ScopedFD>(return_fd, 1u));
   return ret;
 }
 
@@ -304,7 +304,7 @@ bool BrokerSimpleMessage::ReadData(const char** data, size_t* length) {
     broken_ = true;
     return false;
   }
-  *data = reinterpret_cast<char*>(read_next_.get());
+  *data = reinterpret_cast<char*>(read_next_);
   read_next_ = read_next_ + *length;
   return true;
 }

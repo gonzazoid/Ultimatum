@@ -8,6 +8,7 @@
 #include <string>
 
 #include "ash/components/arc/mojom/obb_mounter.mojom.h"
+#include "base/memory/raw_ptr.h"
 #include "components/keyed_service/core/keyed_service.h"
 
 namespace content {
@@ -42,8 +43,11 @@ class ArcObbMounterBridge : public KeyedService, public mojom::ObbMounterHost {
   void UnmountObb(const std::string& target_path,
                   UnmountObbCallback callback) override;
 
+  static void EnsureFactoryBuilt();
+
  private:
-  ArcBridgeService* const arc_bridge_service_;  // Owned by ArcServiceManager.
+  const raw_ptr<ArcBridgeService>
+      arc_bridge_service_;  // Owned by ArcServiceManager.
 };
 
 }  // namespace arc

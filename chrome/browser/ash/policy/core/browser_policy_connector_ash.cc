@@ -9,11 +9,13 @@
 #include <utility>
 
 #include "ash/constants/ash_paths.h"
-#include "base/bind.h"
+#include "ash/shell.h"
 #include "base/check.h"
+#include "base/check_deref.h"
 #include "base/command_line.h"
 #include "base/feature_list.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/memory/ptr_util.h"
 #include "base/notreached.h"
@@ -22,11 +24,7 @@
 #include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/task/thread_pool.h"
-#include "base/threading/thread_task_runner_handle.h"
-#include "chrome/browser/ash/attestation/attestation_ca_client.h"
 #include "chrome/browser/ash/notifications/adb_sideloading_policy_change_notification.h"
-#include "chrome/browser/ash/policy/active_directory/active_directory_migration_manager.h"
-#include "chrome/browser/ash/policy/active_directory/active_directory_policy_manager.h"
 #include "chrome/browser/ash/policy/core/device_cloud_policy_store_ash.h"
 #include "chrome/browser/ash/policy/core/device_local_account.h"
 #include "chrome/browser/ash/policy/core/device_local_account_policy_service.h"
@@ -41,6 +39,7 @@
 #include "chrome/browser/ash/policy/external_data/handlers/device_wilco_dtc_configuration_external_data_handler.h"
 #include "chrome/browser/ash/policy/handlers/adb_sideloading_allowance_mode_policy_handler.h"
 #include "chrome/browser/ash/policy/handlers/bluetooth_policy_handler.h"
+#include "chrome/browser/ash/policy/handlers/device_dlc_predownload_list_policy_handler.h"
 #include "chrome/browser/ash/policy/handlers/device_dock_mac_address_source_handler.h"
 #include "chrome/browser/ash/policy/handlers/device_name_policy_handler_impl.h"
 #include "chrome/browser/ash/policy/handlers/device_wifi_allowed_handler.h"
@@ -52,11 +51,11 @@
 #include "chrome/browser/ash/policy/invalidation/affiliated_invalidation_service_provider.h"
 #include "chrome/browser/ash/policy/invalidation/affiliated_invalidation_service_provider_impl.h"
 #include "chrome/browser/ash/policy/remote_commands/affiliated_remote_commands_invalidator.h"
+#include "chrome/browser/ash/policy/remote_commands/crd/crd_admin_session_controller.h"
 #include "chrome/browser/ash/policy/scheduled_task_handler/device_scheduled_reboot_handler.h"
 #include "chrome/browser/ash/policy/scheduled_task_handler/device_scheduled_update_checker.h"
 #include "chrome/browser/ash/policy/scheduled_task_handler/reboot_notifications_scheduler.h"
 #include "chrome/browser/ash/policy/scheduled_task_handler/scheduled_task_executor_impl.h"
-#include "chrome/browser/ash/policy/server_backed_state/active_directory_device_state_uploader.h"
 #include "chrome/browser/ash/policy/server_backed_state/server_backed_state_keys_broker.h"
 #include "chrome/browser/ash/printing/bulk_printers_calculator_factory.h"
 #include "chrome/browser/ash/settings/cros_settings.h"
@@ -66,7 +65,6 @@
 #include "chrome/browser/policy/networking/device_network_configuration_updater_ash.h"
 #include "chrome/common/chrome_features.h"
 #include "chrome/common/pref_names.h"
-#include "chromeos/ash/components/attestation/attestation_flow_adaptive.h"
 #include "chromeos/ash/components/cryptohome/system_salt_getter.h"
 #include "chromeos/ash/components/dbus/dbus_thread_manager.h"
 #include "chromeos/ash/components/dbus/session_manager/session_manager_client.h"
@@ -78,7 +76,7 @@
 #include "chromeos/ash/components/settings/cros_settings_names.h"
 #include "chromeos/ash/components/settings/cros_settings_provider.h"
 #include "chromeos/ash/components/settings/timezone_settings.h"
-#include "chromeos/system/statistics_provider.h"
+#include "chromeos/ash/components/system/statistics_provider.h"
 #include "components/policy/core/common/cloud/cloud_policy_client.h"
 #include "components/policy/core/common/cloud/cloud_policy_refresh_scheduler.h"
 #include "components/policy/core/common/cloud/resource_cache.h"
@@ -111,16 +109,6 @@ MarketSegment TranslateMarketSegment(
   return MarketSegment::UNKNOWN;
 }
 
-// Checks whether forced re-enrollment is enabled.
-bool IsForcedReEnrollmentEnabled() {
-  return AutoEnrollmentTypeChecker::IsFREEnabled();
-}
-
-std::unique_ptr<ash::attestation::AttestationFlow> CreateAttestationFlow() {
-  return std::make_unique<ash::attestation::AttestationFlowAdaptive>(
-      std::make_unique<ash::attestation::AttestationCAClient>());
-}
-
 }  // namespace
 
 // static
@@ -131,9 +119,10 @@ BrowserPolicyConnectorAsh::CreateBackgroundTaskRunner() {
        base::TaskShutdownBehavior::SKIP_ON_SHUTDOWN});
 }
 
-BrowserPolicyConnectorAsh::BrowserPolicyConnectorAsh()
-    : attestation_flow_(CreateAttestationFlow()) {
+BrowserPolicyConnectorAsh::BrowserPolicyConnectorAsh() {
   DCHECK(ash::InstallAttributes::IsInitialized());
+
+  crd_admin_session_controller_ = std::make_unique<CrdAdminSessionController>();
 
   // DBusThreadManager or DeviceSettingsService may be
   // uninitialized on unit tests.
@@ -144,36 +133,24 @@ BrowserPolicyConnectorAsh::BrowserPolicyConnectorAsh()
             ash::DeviceSettingsService::Get(), ash::InstallAttributes::Get(),
             CreateBackgroundTaskRunner());
 
-    if (ash::InstallAttributes::Get()->IsActiveDirectoryManaged()) {
-      ash::UpstartClient::Get()->StartAuthPolicyService();
+    state_keys_broker_ = std::make_unique<ServerBackedStateKeysBroker>(
+        ash::SessionManagerClient::Get());
 
-      device_active_directory_policy_manager_ =
-          new DeviceActiveDirectoryPolicyManager(
-              std::move(device_cloud_policy_store));
-      providers_for_init_.push_back(
-          base::WrapUnique<ConfigurationPolicyProvider>(
-              device_active_directory_policy_manager_));
-    } else {
-      state_keys_broker_ = std::make_unique<ServerBackedStateKeysBroker>(
-          ash::SessionManagerClient::Get());
+    const base::FilePath device_policy_external_data_path =
+        base::PathService::CheckedGet(ash::DIR_DEVICE_POLICY_EXTERNAL_DATA);
 
-      const base::FilePath device_policy_external_data_path =
-          base::PathService::CheckedGet(ash::DIR_DEVICE_POLICY_EXTERNAL_DATA);
+    auto external_data_manager =
+        std::make_unique<DevicePolicyCloudExternalDataManager>(
+            base::BindRepeating(&GetChromePolicyDetails),
+            CreateBackgroundTaskRunner(), device_policy_external_data_path,
+            device_cloud_policy_store.get());
 
-      auto external_data_manager =
-          std::make_unique<DevicePolicyCloudExternalDataManager>(
-              base::BindRepeating(&GetChromePolicyDetails),
-              CreateBackgroundTaskRunner(), device_policy_external_data_path,
-              device_cloud_policy_store.get());
-
-      device_cloud_policy_manager_ = new DeviceCloudPolicyManagerAsh(
-          std::move(device_cloud_policy_store),
-          std::move(external_data_manager), base::ThreadTaskRunnerHandle::Get(),
-          state_keys_broker_.get());
-      providers_for_init_.push_back(
-          base::WrapUnique<ConfigurationPolicyProvider>(
-              device_cloud_policy_manager_));
-    }
+    device_cloud_policy_manager_ = new DeviceCloudPolicyManagerAsh(
+        std::move(device_cloud_policy_store), std::move(external_data_manager),
+        base::SingleThreadTaskRunner::GetCurrentDefault(),
+        state_keys_broker_.get(), crd_admin_session_controller_->GetDelegate());
+    providers_for_init_.push_back(base::WrapUnique<ConfigurationPolicyProvider>(
+        device_cloud_policy_manager_.get()));
   }
 
   global_user_cloud_policy_provider_ = new ProxyPolicyProvider();
@@ -181,7 +158,7 @@ BrowserPolicyConnectorAsh::BrowserPolicyConnectorAsh()
       global_user_cloud_policy_provider_));
 }
 
-BrowserPolicyConnectorAsh::~BrowserPolicyConnectorAsh() {}
+BrowserPolicyConnectorAsh::~BrowserPolicyConnectorAsh() = default;
 
 void BrowserPolicyConnectorAsh::Init(
     PrefService* local_state,
@@ -204,34 +181,14 @@ void BrowserPolicyConnectorAsh::Init(
     RestartDeviceCloudPolicyInitializer();
   }
 
-  if (!ash::InstallAttributes::Get()->IsActiveDirectoryManaged()) {
-    device_local_account_policy_service_ =
-        std::make_unique<DeviceLocalAccountPolicyService>(
-            ash::SessionManagerClient::Get(), ash::DeviceSettingsService::Get(),
-            ash::CrosSettings::Get(),
-            affiliated_invalidation_service_provider_.get(),
-            CreateBackgroundTaskRunner(), CreateBackgroundTaskRunner(),
-            CreateBackgroundTaskRunner(), url_loader_factory);
-    device_local_account_policy_service_->Connect(device_management_service());
-  } else if (IsForcedReEnrollmentEnabled()) {
-    // Initialize state keys and enrollment ID upload mechanisms to DM Server in
-    // Active Directory mode.
-    state_keys_broker_ = std::make_unique<ServerBackedStateKeysBroker>(
-        ash::SessionManagerClient::Get());
-    active_directory_device_state_uploader_ =
-        std::make_unique<ActiveDirectoryDeviceStateUploader>(
-            /*client_id=*/GetInstallAttributes()->GetDeviceId(),
-            device_management_service(), state_keys_broker_.get(),
-            url_loader_factory, std::make_unique<DMTokenStorage>(local_state),
-            local_state);
-    active_directory_device_state_uploader_->Init();
-
-    // Initialize the manager that will start the migration of Chromad devices
-    // into cloud management, when all pre-requisites are met.
-    active_directory_migration_manager_ =
-        std::make_unique<ActiveDirectoryMigrationManager>(local_state);
-    active_directory_migration_manager_->Init();
-  }
+  device_local_account_policy_service_ =
+      std::make_unique<DeviceLocalAccountPolicyService>(
+          ash::SessionManagerClient::Get(), ash::DeviceSettingsService::Get(),
+          ash::CrosSettings::Get(),
+          affiliated_invalidation_service_provider_.get(),
+          CreateBackgroundTaskRunner(), CreateBackgroundTaskRunner(),
+          CreateBackgroundTaskRunner(), url_loader_factory);
+  device_local_account_policy_service_->Connect(device_management_service());
 
   if (device_cloud_policy_manager_) {
     device_cloud_policy_invalidator_ =
@@ -322,21 +279,45 @@ void BrowserPolicyConnectorAsh::Init(
           chromeos::PowerManagerClient::Get(),
           new ash::AdbSideloadingPolicyChangeNotification());
 
+  reboot_notifications_scheduler_ =
+      std::make_unique<RebootNotificationsScheduler>();
+
   device_scheduled_reboot_handler_ =
       std::make_unique<DeviceScheduledRebootHandler>(
           ash::CrosSettings::Get(),
           std::make_unique<ScheduledTaskExecutorImpl>(
               DeviceScheduledRebootHandler::kRebootTimerTag),
-          std::make_unique<RebootNotificationsScheduler>());
+          reboot_notifications_scheduler_.get());
+
+  device_dlc_predownload_list_policy_handler_ =
+      DeviceDlcPredownloadListPolicyHandler::Create();
+}
+
+void BrowserPolicyConnectorAsh::OnBrowserStarted() {
+  ChromeBrowserPolicyConnector::OnBrowserStarted();
+
+  // `ash::Shell` is not available when `BrowserPolicyConnectorAsh::Init` is
+  // invoked, so we must delay this initialization until now.
+  crd_admin_session_controller_->Init(
+      local_state_,
+      CHECK_DEREF(ash::Shell::Get()).security_curtain_controller());
 }
 
 void BrowserPolicyConnectorAsh::PreShutdown() {
   // Let the |affiliated_invalidation_service_provider_| unregister itself as an
   // observer of per-Profile InvalidationServices and the device-global
-  // invalidation::TiclInvalidationService it may have created as an observer of
+  // invalidation::InvalidationService it may have created as an observer of
   // the DeviceOAuth2TokenService that is destroyed before Shutdown() is called.
-  if (affiliated_invalidation_service_provider_)
+  //
+  // TODO(b/308427142) The comment above is hard to grok, as is the code it
+  // describes. We should clean this up.
+  if (affiliated_invalidation_service_provider_) {
     affiliated_invalidation_service_provider_->Shutdown();
+  }
+
+  // This controller depends on the `SecurityCurtainController` which will be
+  // destroyed before `BrowserPolicyConnectorAsh::Shutdown` is invoked.
+  crd_admin_session_controller_->Shutdown();
 }
 
 void BrowserPolicyConnectorAsh::Shutdown() {
@@ -349,32 +330,34 @@ void BrowserPolicyConnectorAsh::Shutdown() {
   }
   device_network_configuration_updater_.reset();
 
-  if (device_local_account_policy_service_)
+  if (device_local_account_policy_service_) {
     device_local_account_policy_service_->Shutdown();
+  }
 
-  if (active_directory_device_state_uploader_)
-    active_directory_device_state_uploader_->Shutdown();
-
-  if (active_directory_migration_manager_)
-    active_directory_migration_manager_->Shutdown();
-
-  if (device_cloud_policy_initializer_)
+  if (device_cloud_policy_initializer_) {
     device_cloud_policy_initializer_->Shutdown();
+  }
 
-  if (device_cloud_policy_manager_)
+  if (device_cloud_policy_manager_) {
     device_cloud_policy_manager_->RemoveDeviceCloudPolicyManagerObserver(this);
+  }
 
   device_scheduled_update_checker_.reset();
 
   device_scheduled_reboot_handler_.reset();
+
+  device_dlc_predownload_list_policy_handler_.reset();
+
+  reboot_notifications_scheduler_.reset();
 
   // The policy handler is registered as an observer to BuildState which gets
   // destructed before BrowserPolicyConnectorAsh. So destruct the policy
   // handler here so that it can de-register itself as an observer.
   minimum_version_policy_handler_.reset();
 
-  if (device_name_policy_handler_)
+  if (device_name_policy_handler_) {
     device_name_policy_handler_.reset();
+  }
 
   for (auto& device_cloud_external_data_policy_handler :
        device_cloud_external_data_policy_handlers_) {
@@ -399,80 +382,82 @@ bool BrowserPolicyConnectorAsh::IsCloudManaged() const {
   return ash::InstallAttributes::Get()->IsCloudManaged();
 }
 
-bool BrowserPolicyConnectorAsh::IsActiveDirectoryManaged() const {
-  return ash::InstallAttributes::Get()->IsActiveDirectoryManaged();
-}
-
 std::string BrowserPolicyConnectorAsh::GetEnterpriseEnrollmentDomain() const {
   return ash::InstallAttributes::Get()->GetDomain();
 }
 
 std::string BrowserPolicyConnectorAsh::GetEnterpriseDomainManager() const {
   const em::PolicyData* policy = GetDevicePolicy();
-  if (policy && policy->has_managed_by())
+  if (policy && policy->has_managed_by()) {
     return policy->managed_by();
-  if (policy && policy->has_display_domain())
+  }
+  if (policy && policy->has_display_domain()) {
     return policy->display_domain();
+  }
   return GetEnterpriseEnrollmentDomain();
 }
 
 std::string BrowserPolicyConnectorAsh::GetSSOProfile() const {
   const em::PolicyData* policy = GetDevicePolicy();
-  if (policy && policy->has_sso_profile())
+  if (policy && policy->has_sso_profile()) {
     return policy->sso_profile();
+  }
   return std::string();
-}
-
-std::string BrowserPolicyConnectorAsh::GetRealm() const {
-  return ash::InstallAttributes::Get()->GetRealm();
 }
 
 std::string BrowserPolicyConnectorAsh::GetDeviceAssetID() const {
   const em::PolicyData* policy = GetDevicePolicy();
-  if (policy && policy->has_annotated_asset_id())
+  if (policy && policy->has_annotated_asset_id()) {
     return policy->annotated_asset_id();
+  }
   return std::string();
 }
 
 std::string BrowserPolicyConnectorAsh::GetMachineName() const {
   const em::PolicyData* policy = GetDevicePolicy();
-  if (policy && policy->has_machine_name())
+  if (policy && policy->has_machine_name()) {
     return policy->machine_name();
+  }
   return std::string();
 }
 
 std::string BrowserPolicyConnectorAsh::GetDeviceAnnotatedLocation() const {
   const em::PolicyData* policy = GetDevicePolicy();
-  if (policy && policy->has_annotated_location())
+  if (policy && policy->has_annotated_location()) {
     return policy->annotated_location();
+  }
   return std::string();
 }
 
 std::string BrowserPolicyConnectorAsh::GetDirectoryApiID() const {
   const em::PolicyData* policy = GetDevicePolicy();
-  if (policy && policy->has_directory_api_id())
+  if (policy && policy->has_directory_api_id()) {
     return policy->directory_api_id();
+  }
   return std::string();
 }
 
 std::string BrowserPolicyConnectorAsh::GetObfuscatedCustomerID() const {
   const em::PolicyData* policy = GetDevicePolicy();
-  if (policy && policy->has_obfuscated_customer_id())
+  if (policy && policy->has_obfuscated_customer_id()) {
     return policy->obfuscated_customer_id();
+  }
   return std::string();
 }
 
 bool BrowserPolicyConnectorAsh::IsKioskEnrolled() const {
   const em::PolicyData* policy = GetDevicePolicy();
-  if (policy && policy->has_license_sku())
+  if (policy && policy->has_license_sku()) {
     return policy->license_sku() == kKioskSkuName;
+  }
   return false;
 }
 
 std::string BrowserPolicyConnectorAsh::GetCustomerLogoURL() const {
   const em::PolicyData* policy = GetDevicePolicy();
-  if (policy && policy->has_customer_logo())
+  if (policy && policy->has_customer_logo()) {
     return policy->customer_logo().logo_url();
+  }
   return std::string();
 }
 
@@ -487,19 +472,15 @@ ash::InstallAttributes* BrowserPolicyConnectorAsh::GetInstallAttributes()
 
 MarketSegment BrowserPolicyConnectorAsh::GetEnterpriseMarketSegment() const {
   const em::PolicyData* policy = GetDevicePolicy();
-  if (policy && policy->has_market_segment())
+  if (policy && policy->has_market_segment()) {
     return TranslateMarketSegment(policy->market_segment());
+  }
   return MarketSegment::UNKNOWN;
 }
 
 ProxyPolicyProvider*
 BrowserPolicyConnectorAsh::GetGlobalUserCloudPolicyProvider() {
   return global_user_cloud_policy_provider_;
-}
-
-void BrowserPolicyConnectorAsh::SetAttestationFlowForTesting(
-    std::unique_ptr<ash::attestation::AttestationFlow> attestation_flow) {
-  attestation_flow_ = std::move(attestation_flow);
 }
 
 // static
@@ -515,7 +496,7 @@ void BrowserPolicyConnectorAsh::OnDeviceCloudPolicyManagerConnected() {
   // DeviceCloudPolicyInitializer might still be on the call stack, so we
   // should delete the initializer after this function returns.
   device_cloud_policy_initializer_->Shutdown();
-  base::ThreadTaskRunnerHandle::Get()->DeleteSoon(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->DeleteSoon(
       FROM_HERE, std::move(device_cloud_policy_initializer_));
 
   if (!device_cert_provisioning_scheduler_) {
@@ -533,12 +514,6 @@ void BrowserPolicyConnectorAsh::OnDeviceCloudPolicyManagerConnected() {
   }
 }
 
-void BrowserPolicyConnectorAsh::OnDeviceCloudPolicyManagerDisconnected() {
-  DCHECK(!device_cloud_policy_initializer_);
-
-  RestartDeviceCloudPolicyInitializer();
-}
-
 void BrowserPolicyConnectorAsh::OnDeviceCloudPolicyManagerGotRegistry() {
   // Do nothing.
 }
@@ -550,8 +525,9 @@ bool BrowserPolicyConnectorAsh::IsCommandLineSwitchSupported() const {
 std::vector<std::unique_ptr<ConfigurationPolicyProvider>>
 BrowserPolicyConnectorAsh::CreatePolicyProviders() {
   auto providers = ChromeBrowserPolicyConnector::CreatePolicyProviders();
-  for (auto& provider_ptr : providers_for_init_)
+  for (auto& provider_ptr : providers_for_init_) {
     providers.push_back(std::move(provider_ptr));
+  }
   providers_for_init_.clear();
   return providers;
 }
@@ -563,8 +539,9 @@ void BrowserPolicyConnectorAsh::SetTimezoneIfPolicyAvailable() {
           &BrowserPolicyConnectorAsh::SetTimezoneIfPolicyAvailable,
           weak_ptr_factory_.GetWeakPtr()));
 
-  if (result != Provider::TRUSTED)
+  if (result != Provider::TRUSTED) {
     return;
+  }
 
   std::string timezone;
   if (ash::CrosSettings::Get()->GetString(ash::kSystemTimezonePolicy,
@@ -581,7 +558,7 @@ void BrowserPolicyConnectorAsh::RestartDeviceCloudPolicyInitializer() {
           state_keys_broker_.get(),
           device_cloud_policy_manager_->device_store(),
           device_cloud_policy_manager_,
-          chromeos::system::StatisticsProvider::GetInstance());
+          ash::system::StatisticsProvider::GetInstance());
   device_cloud_policy_initializer_->Init();
 }
 
@@ -595,18 +572,10 @@ base::flat_set<std::string> BrowserPolicyConnectorAsh::device_affiliation_ids()
   return {};
 }
 
-ash::AffiliationIDSet BrowserPolicyConnectorAsh::GetDeviceAffiliationIDs()
-    const {
-  base::flat_set<std::string> affiliation_ids = device_affiliation_ids();
-  return {affiliation_ids.begin(), affiliation_ids.end()};
-}
-
 const em::PolicyData* BrowserPolicyConnectorAsh::GetDevicePolicy() const {
-  if (device_cloud_policy_manager_)
+  if (device_cloud_policy_manager_) {
     return device_cloud_policy_manager_->device_store()->policy();
-
-  if (device_active_directory_policy_manager_)
-    return device_active_directory_policy_manager_->store()->policy();
+  }
 
   return nullptr;
 }

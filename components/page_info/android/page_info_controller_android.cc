@@ -10,6 +10,7 @@
 #include "base/android/jni_string.h"
 #include "base/command_line.h"
 #include "base/containers/contains.h"
+#include "base/feature_list.h"
 #include "components/content_settings/core/browser/host_content_settings_map.h"
 #include "components/content_settings/core/common/content_settings.h"
 #include "components/content_settings/core/common/content_settings_types.h"
@@ -18,6 +19,7 @@
 #include "components/page_info/core/features.h"
 #include "components/page_info/page_info.h"
 #include "components/page_info/page_info_ui.h"
+#include "components/permissions/features.h"
 #include "components/security_state/core/security_state.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/navigation_controller.h"
@@ -42,7 +44,7 @@ static jlong JNI_PageInfoController_Init(
   // Important to use GetVisibleEntry to match what's showing in the omnibox.
   content::NavigationEntry* nav_entry =
       web_contents->GetController().GetVisibleEntry();
-  if (!nav_entry || nav_entry->IsInitialEntry())
+  if (nav_entry->IsInitialEntry())
     return 0;
 
   return reinterpret_cast<intptr_t>(
@@ -84,13 +86,6 @@ void PageInfoControllerAndroid::RecordPageInfoAction(
       static_cast<PageInfo::PageInfoAction>(action));
 }
 
-void PageInfoControllerAndroid::SetAboutThisSiteShown(
-    JNIEnv* env,
-    const JavaParamRef<jobject>& obj,
-    jboolean was_about_this_site_shown) {
-  presenter_->SetAboutThisSiteShown(was_about_this_site_shown);
-}
-
 void PageInfoControllerAndroid::UpdatePermissions(
     JNIEnv* env,
     const JavaParamRef<jobject>& obj) {
@@ -107,11 +102,6 @@ void PageInfoControllerAndroid::SetIdentityInfo(
       env, controller_jobject_,
       ConvertUTF16ToJavaString(env, security_description->summary),
       ConvertUTF16ToJavaString(env, security_description->details));
-}
-
-void PageInfoControllerAndroid::SetCookieInfo(
-    const CookieInfoList& cookie_info_list) {
-  NOTIMPLEMENTED();
 }
 
 void PageInfoControllerAndroid::SetPageFeatureInfo(
@@ -157,6 +147,10 @@ void PageInfoControllerAndroid::SetPermissionInfo(
     permissions_to_display.push_back(
         ContentSettingsType::FEDERATED_IDENTITY_API);
   }
+  if (base::FeatureList::IsEnabled(
+          permissions::features::kPermissionStorageAccessAPI)) {
+    permissions_to_display.push_back(ContentSettingsType::STORAGE_ACCESS);
+  }
 
   std::map<ContentSettingsType, ContentSetting>
       user_specified_settings_to_display;
@@ -190,13 +184,13 @@ void PageInfoControllerAndroid::SetPermissionInfo(
 
   for (const auto& chosen_object : chosen_object_info_list) {
     std::u16string object_title =
-        presenter_->GetChooserContextFromUIInfo(chosen_object->ui_info)
+        presenter_->GetChooserContextFromUIInfo(*chosen_object->ui_info)
             ->GetObjectDisplayName(chosen_object->chooser_object->value);
 
     Java_PageInfoController_addPermissionSection(
         env, controller_jobject_, ConvertUTF16ToJavaString(env, object_title),
         ConvertUTF16ToJavaString(env, object_title),
-        static_cast<jint>(chosen_object->ui_info.content_settings_type),
+        static_cast<jint>(chosen_object->ui_info->content_settings_type),
         static_cast<jint>(CONTENT_SETTING_ALLOW));
   }
 

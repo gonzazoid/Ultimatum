@@ -8,11 +8,11 @@
 
 #include <array>
 #include <cstring>
-#include <map>
 #include <memory>
 #include <string>
 
 #include "base/containers/contains.h"
+#include "base/containers/fixed_flat_map.h"
 #include "base/logging.h"
 #include "base/notreached.h"
 #include "base/strings/string_number_conversions.h"
@@ -111,6 +111,7 @@ constexpr char kDeveloperLow[] = "developer-low";
 constexpr char kDeveloperEmpty[] = "developer-empty";
 constexpr char kInterpreterResourceUnavailable[] =
     "interpreter-resource-unavailable";
+constexpr char kCupsPkiExpired[] = "cups-pki-expired";
 
 constexpr char kIppScheme[] = "ipp";
 constexpr char kIppsScheme[] = "ipps";
@@ -155,10 +156,12 @@ CupsJob::JobState ToJobState(ipp_attribute_t* attr) {
   return CupsJob::UNKNOWN;
 }
 
-// Returns a lookup map from strings to PrinterReason::Reason.
-const std::map<base::StringPiece, PReason>& GetLabelToReason() {
-  static const std::map<base::StringPiece, PReason> kLabelToReason =
-      std::map<base::StringPiece, PReason>{
+// Returns the Reason corresponding to the string `reason`.  Returns
+// `PReason::kUnknownReason` if the string is not recognized.
+PrinterStatus::PrinterReason::Reason ToReason(base::StringPiece reason) {
+  // Returns a lookup map from strings to PrinterReason::Reason.
+  static constexpr auto kLabelToReasonMap =
+      base::MakeFixedFlatMap<base::StringPiece, PReason>({
           {kNone, PReason::kNone},
           {kMediaNeeded, PReason::kMediaNeeded},
           {kMediaJam, PReason::kMediaJam},
@@ -193,16 +196,12 @@ const std::map<base::StringPiece, PReason>& GetLabelToReason() {
           {kDeveloperEmpty, PReason::kDeveloperEmpty},
           {kInterpreterResourceUnavailable,
            PReason::kInterpreterResourceUnavailable},
-      };
-  return kLabelToReason;
-}
+          {kCupsPkiExpired, PReason::kCupsPkiExpired},
+      });
 
-// Returns the Reason corresponding to the string `reason`.  Returns
-// UNKOWN_REASON if the string is not recognized.
-PrinterStatus::PrinterReason::Reason ToReason(base::StringPiece reason) {
-  const auto& enum_map = GetLabelToReason();
-  const auto& entry = enum_map.find(reason);
-  return entry != enum_map.end() ? entry->second : PReason::kUnknownReason;
+  const auto* entry = kLabelToReasonMap.find(reason);
+  return entry != kLabelToReasonMap.end() ? entry->second
+                                          : PReason::kUnknownReason;
 }
 
 // Returns the Severity corresponding to `severity`.  Returns UNKNOWN_SEVERITY
@@ -531,14 +530,14 @@ PrinterQueryResult GetPrinterInfo(const std::string& address,
 
   // Lookup the printer IP address.
   http_addrlist_t* addr_list = httpAddrGetList(
-      address.c_str(), AF_INET, base::NumberToString(port).c_str());
+      address.c_str(), AF_UNSPEC, base::NumberToString(port).c_str());
   if (!addr_list) {
     LOG(WARNING) << "Unable to resolve IP address from hostname";
     return PrinterQueryResult::kHostnameResolution;
   }
 
   ScopedHttpPtr http = ScopedHttpPtr(httpConnect2(
-      address.c_str(), port, addr_list, AF_INET,
+      address.c_str(), port, addr_list, AF_UNSPEC,
       encrypted ? HTTP_ENCRYPTION_ALWAYS : HTTP_ENCRYPTION_IF_REQUESTED, 0,
       kHttpConnectTimeoutMs, nullptr));
   if (!http) {

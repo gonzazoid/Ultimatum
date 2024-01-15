@@ -7,23 +7,26 @@
 
 #include <stdint.h>
 
+#include <optional>
 #include <ostream>
+#include <set>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "base/containers/span.h"
 #include "base/observer_list.h"
 #include "base/threading/sequence_bound.h"
+#include "base/types/expected.h"
 #include "content/browser/aggregation_service/aggregatable_report.h"
 #include "content/browser/aggregation_service/aggregation_service.h"
 #include "content/browser/aggregation_service/aggregation_service_observer.h"
 #include "content/browser/aggregation_service/aggregation_service_storage.h"
 #include "content/browser/aggregation_service/aggregation_service_storage_context.h"
 #include "content/browser/aggregation_service/public_key.h"
-#include "content/common/aggregatable_report.mojom.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "third_party/blink/public/mojom/private_aggregation/aggregatable_report.mojom.h"
 #include "third_party/boringssl/src/include/openssl/hpke.h"
 
 namespace base {
@@ -32,21 +35,39 @@ class FilePath;
 class Time;
 }  // namespace base
 
+namespace url {
+class Origin;
+}  // namespace url
+
 namespace content {
 
 class AggregationServiceStorage;
 
 namespace aggregation_service {
 
-struct TestHpkeKey {
-  // Public-private key pair.
-  EVP_HPKE_KEY full_hpke_key;
+class TestHpkeKey {
+ public:
+  // Generates a new HPKE key. Note that `key_id` is just a label.
+  explicit TestHpkeKey(std::string key_id = "example_id");
+  ~TestHpkeKey();
 
-  // Contains a copy of the public key of `full_hpke_key`.
-  PublicKey public_key;
+  // This class is move-only.
+  TestHpkeKey(TestHpkeKey&&);
+  TestHpkeKey& operator=(TestHpkeKey&&);
+  TestHpkeKey(TestHpkeKey&) = delete;
+  TestHpkeKey& operator=(TestHpkeKey&) = delete;
 
-  // Contains a base64-encoded copy of `public_key.key`
-  std::string base64_encoded_public_key;
+  std::string_view key_id() const { return key_id_; }
+  const EVP_HPKE_KEY& full_hpke_key() const { return *full_hpke_key_.get(); }
+
+  // Returns the HPKE key's corresponding public key.
+  PublicKey GetPublicKey() const;
+  // Returns the HPKE key's corresponding public key encoded in base64.
+  std::string GetPublicKeyBase64() const;
+
+ private:
+  std::string key_id_;
+  bssl::ScopedEVP_HPKE_KEY full_hpke_key_;
 };
 
 testing::AssertionResult PublicKeysEqual(const std::vector<PublicKey>& expected,
@@ -66,28 +87,25 @@ testing::AssertionResult SharedInfoEqual(
 
 // Returns an example report request, using the given parameters.
 AggregatableReportRequest CreateExampleRequest(
-    mojom::AggregationServiceMode aggregation_mode =
-        mojom::AggregationServiceMode::kDefault,
-    int failed_send_attempts = 0);
+    blink::mojom::AggregationServiceMode aggregation_mode =
+        blink::mojom::AggregationServiceMode::kDefault,
+    int failed_send_attempts = 0,
+    std::optional<url::Origin> aggregation_coordinator_origin = std::nullopt);
 
 AggregatableReportRequest CreateExampleRequestWithReportTime(
     base::Time report_time,
-    mojom::AggregationServiceMode aggregation_mode =
-        mojom::AggregationServiceMode::kDefault,
-    int failed_send_attempts = 0);
+    blink::mojom::AggregationServiceMode aggregation_mode =
+        blink::mojom::AggregationServiceMode::kDefault,
+    int failed_send_attempts = 0,
+    std::optional<url::Origin> aggregation_coordinator_origin = std::nullopt);
 
 AggregatableReportRequest CloneReportRequest(
     const AggregatableReportRequest& request);
 AggregatableReport CloneAggregatableReport(const AggregatableReport& report);
 
-// Generates a public-private key pair for HPKE and also constructs a PublicKey
-// object for use in assembler methods.
-TestHpkeKey GenerateKey(std::string key_id = "example_id");
-
-absl::optional<PublicKeyset> ReadAndParsePublicKeys(
+base::expected<PublicKeyset, std::string> ReadAndParsePublicKeys(
     const base::FilePath& file,
-    base::Time now,
-    std::string* error_msg = nullptr);
+    base::Time now);
 
 // Returns empty vector in the case of an error.
 std::vector<uint8_t> DecryptPayloadWithHpke(
@@ -181,6 +199,11 @@ class MockAggregationService : public AggregationService {
                base::OnceClosure reports_sent_callback),
               (override));
 
+  MOCK_METHOD(void,
+              GetPendingReportReportingOrigins,
+              (base::OnceCallback<void(std::set<url::Origin>)> callback),
+              (override));
+
   void AddObserver(AggregationServiceObserver* observer) override;
 
   void RemoveObserver(AggregationServiceObserver* observer) override;
@@ -190,8 +213,8 @@ class MockAggregationService : public AggregationService {
   // `report_handled_time` indicates when the report has been handled.
   void NotifyReportHandled(
       const AggregatableReportRequest& request,
-      absl::optional<AggregationServiceStorage::RequestId> id,
-      absl::optional<AggregatableReport> report,
+      std::optional<AggregationServiceStorage::RequestId> id,
+      std::optional<AggregatableReport> report,
       base::Time report_handled_time,
       AggregationServiceObserver::ReportStatus status);
 
@@ -220,7 +243,7 @@ std::ostream& operator<<(
     std::ostream& out,
     AggregationServicePayloadContents::Operation operation);
 std::ostream& operator<<(std::ostream& out,
-                         mojom::AggregationServiceMode aggregation_mode);
+                         blink::mojom::AggregationServiceMode aggregation_mode);
 std::ostream& operator<<(std::ostream& out,
                          AggregatableReportSharedInfo::DebugMode debug_mode);
 

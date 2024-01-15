@@ -9,7 +9,7 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/strings/string_piece.h"
 
 namespace sql {
@@ -138,6 +138,9 @@ class SQLTableBuilder {
   // Returns the number of all columns present in the last version. The last
   // version must be sealed.
   size_t NumberOfColumns() const;
+
+  // Returns the table name.
+  std::string TableName() const;
 
  private:
   // Stores the information about one column (name, type, etc.).

@@ -4,20 +4,36 @@
 
 #import "ios/chrome/browser/ui/ntp/metrics/feed_metrics_constants.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 const int kMinScrollThreshold = 140;
 const int kGoodVisitTimeInFeedSeconds = 60;
 const int kNonShortClickSeconds = 10;
 const int kMinutesBetweenSessions = 5;
 const int kMaxCardsInFeed = 50;
 
-NSString* const kArticleClickTimestampKey = @"ShortClickInteractionTimestamp";
+const char kArticleVisitTimestampKey[] = "ShortClickInteractionTimestamp";
+const char kLongFeedVisitTimeAggregateKey[] = "LongFeedInteractionTimeDelta";
+const char kLongDiscoverFeedVisitTimeAggregateKey[] =
+    "LongDiscoverFeedInteractionTimeDelta";
+const char kLongFollowingFeedVisitTimeAggregateKey[] =
+    "LongFollowingFeedInteractionTimeDelta";
+const char kLastUsedFeedForGoodVisitsKey[] = "LastUsedFeedForGoodVisits";
+const char kLastInteractionTimeForGoodVisits[] =
+    "LastInteractionTimeForGoodVisits";
+const char kLastInteractionTimeForDiscoverGoodVisits[] =
+    "LastInteractionTimeForGoodVisitsDiscover";
+const char kLastInteractionTimeForFollowingGoodVisits[] =
+    "LastInteractionTimeForGoodVisitsFollowing";
+const char kLastDayTimeInFeedReportedKey[] = "LastDayTimeInFeedReported";
+const char kTimeSpentInFeedAggregateKey[] = "TimeSpentInFeedAggregate";
+const char kActivityBucketLastReportedDateKey[] =
+    "ActivityBucketLastReportedDate";
+const char kActivityBucketLastReportedDateArrayKey[] =
+    "ActivityBucketLastReportedDateArray";
 
 #pragma mark - Histograms
 
+const char kTimeSpentInFeedHistogram[] =
+    "ContentSuggestions.Feed.TimeSpentInFeed";
 const char kDiscoverFeedUserActionHistogram[] =
     "ContentSuggestions.Feed.UserActions";
 const char kDiscoverFeedUserActionCommandHistogram[] =
@@ -32,10 +48,8 @@ const char kDiscoverFeedCardShownAtIndex[] =
     "NewTabPage.ContentSuggestions.Shown";
 const char kFollowingFeedCardShownAtIndex[] =
     "ContentSuggestions.Feed.WebFeed.Shown";
-const char kDiscoverFeedCardOpenedAtIndex[] =
-    "NewTabPage.ContentSuggestions.Opened";
-const char kFollowingFeedCardOpenedAtIndex[] =
-    "ContentSuggestions.Feed.WebFeed.Opened";
+const char kAllFeedsActivityBucketsHistogram[] =
+    "ContentSuggestions.Feed.AllFeeds.Activity";
 const char kDiscoverFeedNoticeCardFulfilled[] =
     "ContentSuggestions.Feed.NoticeCardFulfilled2";
 const char kDiscoverFeedArticlesFetchNetworkDurationSuccess[] =
@@ -53,10 +67,13 @@ const char kDiscoverFeedUploadActionsNetworkDurationFailure[] =
 const char kDiscoverFeedNetworkDuration[] =
     "ContentSuggestions.Feed.Network.Duration";
 const char kDiscoverFeedURLOpened[] = "NewTabPage.ContentSuggestions.Opened";
+const char kFollowingFeedURLOpened[] = "ContentSuggestions.Feed.WebFeed.Opened";
 const char kDiscoverFeedActivityLoggingEnabled[] =
     "ContentSuggestions.Feed.ActivityLoggingEnabled";
 const char kDiscoverFeedBrokenNTPHierarchy[] =
     "ContentSuggestions.Feed.BrokenNTPHierarchy";
+const char kDiscoverFeedRefreshTrigger[] =
+    "ContentSuggestions.Feed.RefreshTrigger";
 const char kFeedUserSettingsOnStart[] =
     "ContentSuggestions.Feed.UserSettingsOnStart";
 const char kFollowingFeedSortType[] =
@@ -73,9 +90,12 @@ const char kFollowCountAfterUnfollow[] =
     "ContentSuggestions.Feed.WebFeed.FollowCount.AfterUnfollow";
 const char kFollowCountWhenEngaged[] =
     "ContentSuggestions.Feed.WebFeed.FollowCount.Engaged";
-const char kActionOnNTP[] = "IOS.ContentSuggestions.ActionOnNTP";
-const char kActionOnStartSurface[] =
-    "IOS.ContentSuggestions.ActionOnStartSurface";
+const char kDiscoverIndexWhenSwitchingFeed[] =
+    "ContentSuggestions.Feed.CardIndexOnSwitch";
+const char kFollowingIndexWhenSwitchingFeed[] =
+    "ContentSuggestions.Feed.WebFeed.CardIndexOnSwitch";
+const char kFeedSignInUI[] = "ContentSuggestions.Feed.FeedSignInUI";
+const char kFeedSyncPromo[] = "ContentSuggestions.Feed.FeedSyncPromo";
 
 #pragma mark - User Actions
 
@@ -165,3 +185,21 @@ const char kFollowingFeedGroupByPublisher[] =
     "ContentSuggestions.Feed.WebFeed.SortType.GroupByPublisher";
 const char kFollowingFeedSortByLatest[] =
     "ContentSuggestions.Feed.WebFeed.SortType.SortByLatest";
+const char kFeedSignInPromoUIContinueTapped[] =
+    "ContentSuggestions.Feed.SignIn.FeedSignInPromoUIContinueTapped";
+const char kFeedSignInPromoUICancelTapped[] =
+    "ContentSuggestions.Feed.SignIn.FeedSignInPromoUICancelTapped";
+const char kShowFeedSignInOnlyUIWithUserId[] =
+    "ContentSuggestions.Feed.SignIn.ShowFeedSignInOnlyUIWithUserId";
+const char kShowFeedSignInOnlyUIWithoutUserId[] =
+    "ContentSuggestions.Feed.SignIn.ShowFeedSignInOnlyUIWithoutUserId";
+const char kShowSyncHalfSheetFromFeed[] =
+    "ContentSuggestions.Feed.SignIn.ShowSyncHalfSheetFromFeed";
+const char kShowSignInOnlyFlowFromFeed[] =
+    "ContentSuggestions.Feed.SignIn.ShowSignInOnlyFlowFromFeed";
+const char kShowSignInDisableToastFromFeed[] =
+    "ContentSuggestions.Feed.SignIn.ShowSignInDisableToastFromFeed";
+const char kShowSyncFlowFromFeed[] =
+    "ContentSuggestions.Feed.Sync.ShowSyncFlowFromFeed";
+const char kShowDisableToastFromFeed[] =
+    "ContentSuggestions.Feed.Sync.ShowDisableToastFromFeed";

@@ -33,18 +33,18 @@ test(() => {
   style.animation = "myShorthandAnim";
   assert_not_equals(Object.keys(style).indexOf('animation'), -1);
   assert_not_equals(Object.keys(style).indexOf('webkitAnimation'), -1);
-  assert_equals(style.animation, '0s ease 0s 1 normal none running myShorthandAnim');
+  assert_equals(style.animation, 'auto ease 0s 1 normal none running myShorthandAnim');
   assert_equals(computedStyle.animation, '0s ease 0s 1 normal none running myShorthandAnim');
-  assert_equals(style.webkitAnimation, '0s ease 0s 1 normal none running myShorthandAnim');
+  assert_equals(style.webkitAnimation, 'auto ease 0s 1 normal none running myShorthandAnim');
   assert_equals(computedStyle.webkitAnimation, '0s ease 0s 1 normal none running myShorthandAnim');
   assert_true(checkAnimationShorthandValue());
 
   style.animation = "none";
   assert_not_equals(Object.keys(style).indexOf('animation'), -1);
   assert_not_equals(Object.keys(style).indexOf('webkitAnimation'), -1);
-  assert_equals(style.animation, '0s ease 0s 1 normal none running none');
+  assert_equals(style.animation, 'auto ease 0s 1 normal none running none');
   assert_equals(computedStyle.animation, '0s ease 0s 1 normal none running none');
-  assert_equals(style.webkitAnimation, '0s ease 0s 1 normal none running none');
+  assert_equals(style.webkitAnimation, 'auto ease 0s 1 normal none running none');
   assert_equals(computedStyle.webkitAnimation, '0s ease 0s 1 normal none running none');
   assert_true(checkAnimationShorthandValue());
 
@@ -187,22 +187,22 @@ test(() => {
   assert_true(checkAnimationShorthandValue());
 
   style.animation = "none, none";
-  assert_equals(style.animation, '0s ease 0s 1 normal none running none, 0s ease 0s 1 normal none running none');
+  assert_equals(style.animation, 'auto ease 0s 1 normal none running none, auto ease 0s 1 normal none running none');
   assert_equals(computedStyle.animation, '0s ease 0s 1 normal none running none, 0s ease 0s 1 normal none running none');
-  assert_equals(style.webkitAnimation, '0s ease 0s 1 normal none running none, 0s ease 0s 1 normal none running none');
+  assert_equals(style.webkitAnimation, 'auto ease 0s 1 normal none running none, auto ease 0s 1 normal none running none');
   assert_equals(computedStyle.webkitAnimation, '0s ease 0s 1 normal none running none, 0s ease 0s 1 normal none running none');
 
   style.animation = "ease-in test 20s 10s, none";
-  assert_equals(style.animation, '20s ease-in 10s 1 normal none running test, 0s ease 0s 1 normal none running none');
+  assert_equals(style.animation, '20s ease-in 10s 1 normal none running test, auto ease 0s 1 normal none running none');
   assert_equals(computedStyle.animation, '20s ease-in 10s 1 normal none running test, 0s ease 0s 1 normal none running none');
-  assert_equals(style.webkitAnimation, '20s ease-in 10s 1 normal none running test, 0s ease 0s 1 normal none running none');
+  assert_equals(style.webkitAnimation, '20s ease-in 10s 1 normal none running test, auto ease 0s 1 normal none running none');
   assert_equals(computedStyle.webkitAnimation, '20s ease-in 10s 1 normal none running test, 0s ease 0s 1 normal none running none');
   assert_equals(computedStyle.animationName, 'test, none');
 
   style.animation = "none, ease-in test 20s 10s";
-  assert_equals(style.animation, '0s ease 0s 1 normal none running none, 20s ease-in 10s 1 normal none running test');
+  assert_equals(style.animation, 'auto ease 0s 1 normal none running none, 20s ease-in 10s 1 normal none running test');
   assert_equals(computedStyle.animation, '0s ease 0s 1 normal none running none, 20s ease-in 10s 1 normal none running test');
-  assert_equals(style.webkitAnimation, '0s ease 0s 1 normal none running none, 20s ease-in 10s 1 normal none running test');
+  assert_equals(style.webkitAnimation, 'auto ease 0s 1 normal none running none, 20s ease-in 10s 1 normal none running test');
   assert_equals(computedStyle.webkitAnimation, '0s ease 0s 1 normal none running none, 20s ease-in 10s 1 normal none running test');
   assert_equals(computedStyle.animationName, 'none, test');
 

@@ -5,6 +5,7 @@
 #include "third_party/blink/renderer/core/editing/serializers/serialization.h"
 
 #include "testing/gmock/include/gmock/gmock-matchers.h"
+#include "third_party/blink/renderer/core/css/properties/longhands.h"
 #include "third_party/blink/renderer/core/dom/node_computed_style.h"
 #include "third_party/blink/renderer/core/editing/position.h"
 #include "third_party/blink/renderer/core/editing/testing/editing_test_base.h"
@@ -47,6 +48,23 @@ TEST_F(SerializationTest, CantCreateFragmentCrash) {
   DocumentFragment* sanitized = CreateSanitizedFragmentFromMarkupWithContext(
       GetDocument(), html, 0, html.length(), KURL());
   EXPECT_FALSE(sanitized);
+}
+
+// Regression test for https://crbug.com/1310535
+TEST_F(SerializationTest, CreateFragmentWithDataUrlCrash) {
+  // When same data: URL is set for filter and style image with a style element
+  // CreateSanitizedFragmentFromMarkupWithContext() triggers
+  // ResourceLoader::Start(), and EmptyLocalFrameClientWithFailingLoaderFactory
+  // ::CreateURLLoaderFactory() will be called.
+  // Note: Ideally ResourceLoader::Start() don't need to call
+  // EmptyLocalFrameClientWithFailingLoaderFactory::CreateURLLoaderFactory() for
+  // data: URL.
+  const String html =
+      "<div style=\"filter: url(data:image/gif;base64,xx);\">"
+      "<style>body {background: url(data:image/gif;base64,xx);}</style>";
+  DocumentFragment* sanitized = CreateSanitizedFragmentFromMarkupWithContext(
+      GetDocument(), html, 0, html.length(), KURL());
+  EXPECT_TRUE(sanitized);
 }
 
 // http://crbug.com/938590

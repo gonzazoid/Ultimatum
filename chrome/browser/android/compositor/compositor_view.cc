@@ -5,23 +5,20 @@
 #include "chrome/browser/android/compositor/compositor_view.h"
 
 #include <android/bitmap.h>
-#include <android/native_window_jni.h>
 
 #include <memory>
 #include <vector>
 
 #include "base/android/build_info.h"
 #include "base/android/jni_android.h"
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/containers/id_map.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/rand_util.h"
 #include "base/trace_event/trace_event.h"
-#include "cc/layers/layer.h"
-#include "cc/layers/layer_collections.h"
-#include "cc/layers/solid_color_layer.h"
-#include "cc/layers/texture_layer.h"
+#include "cc/slim/layer.h"
+#include "cc/slim/solid_color_layer.h"
 #include "chrome/android/chrome_jni_headers/CompositorView_jni.h"
 #include "chrome/browser/android/compositor/layer/toolbar_layer.h"
 #include "chrome/browser/android/compositor/layer_title_cache.h"
@@ -61,9 +58,9 @@ jlong JNI_CompositorView_Init(
   view = new CompositorView(env, obj, low_mem_device, window_android,
                             tab_content_manager);
 
-  ui::UIResourceProvider* ui_resource_provider = view->GetUIResourceProvider();
-  if (tab_content_manager)
-    tab_content_manager->SetUIResourceProvider(ui_resource_provider);
+  if (tab_content_manager) {
+    tab_content_manager->SetUIResourceProvider(view->GetUIResourceProvider());
+  }
 
   return reinterpret_cast<intptr_t>(view);
 }
@@ -74,7 +71,7 @@ CompositorView::CompositorView(JNIEnv* env,
                                ui::WindowAndroid* window_android,
                                TabContentManager* tab_content_manager)
     : tab_content_manager_(tab_content_manager),
-      root_layer_(cc::SolidColorLayer::Create()),
+      root_layer_(cc::slim::SolidColorLayer::Create()),
       scene_layer_(nullptr),
       current_surface_format_(0),
       content_width_(0),
@@ -146,8 +143,8 @@ void CompositorView::DidSwapBuffers(const gfx::Size& swap_size) {
   Java_CompositorView_didSwapBuffers(env, obj_, swapped_current_size);
 }
 
-ui::UIResourceProvider* CompositorView::GetUIResourceProvider() {
-  return compositor_ ? &compositor_->GetUIResourceProvider() : nullptr;
+base::WeakPtr<ui::UIResourceProvider> CompositorView::GetUIResourceProvider() {
+  return compositor_ ? compositor_->GetUIResourceProvider() : nullptr;
 }
 
 void CompositorView::OnSurfaceControlFeatureStatusUpdate(bool available) {
@@ -242,8 +239,9 @@ void CompositorView::SetBackground(bool visible, SkColor color) {
 void CompositorView::SetOverlayVideoMode(JNIEnv* env,
                                          const JavaParamRef<jobject>& object,
                                          bool enabled) {
-  if (overlay_video_mode_ == enabled)
+  if (overlay_video_mode_ == enabled) {
     return;
+  }
   overlay_video_mode_ = enabled;
   compositor_->SetRequiresAlphaChannel(enabled);
   SetNeedsComposite(env, object);
@@ -287,11 +285,9 @@ void CompositorView::SetSceneLayer(JNIEnv* env,
     scene_layer_ = scene_layer;
 
     if (!scene_layer) {
-      scene_layer_layer_ = nullptr;
       return;
     }
 
-    scene_layer_layer_ = scene_layer->layer();
     root_layer_->InsertChild(scene_layer->layer(), 0);
   }
 
@@ -324,8 +320,9 @@ void CompositorView::SetSceneLayer(JNIEnv* env,
 
 void CompositorView::FinalizeLayers(JNIEnv* env,
                                     const JavaParamRef<jobject>& jobj) {
-  if (GetResourceManager())
+  if (GetResourceManager()) {
     GetResourceManager()->OnFrameUpdatesFinished();
+  }
 #if !defined(OFFICIAL_BUILD)
   TRACE_EVENT0("compositor", "CompositorView::FinalizeLayers");
 #endif
@@ -377,14 +374,15 @@ void CompositorView::EvictCachedBackBuffer(
 void CompositorView::OnTabChanged(
     JNIEnv* env,
     const base::android::JavaParamRef<jobject>& object) {
-  if (!compositor_)
+  if (!compositor_) {
     return;
+  }
   std::unique_ptr<content::PeakGpuMemoryTracker> tracker =
       content::PeakGpuMemoryTracker::Create(
           content::PeakGpuMemoryTracker::Usage::CHANGE_TAB);
-  compositor_->RequestPresentationTimeForNextFrame(base::BindOnce(
+  compositor_->RequestSuccessfulPresentationTimeForNextFrame(base::BindOnce(
       [](std::unique_ptr<content::PeakGpuMemoryTracker> tracker,
-         const gfx::PresentationFeedback& feedback) {
+         base::TimeTicks presentation_timestamp) {
         // This callback will be ran once the content::Compositor presents the
         // next frame. The destruction of |tracker| will get the peak GPU memory
         // and record a histogram.

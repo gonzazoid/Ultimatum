@@ -30,9 +30,9 @@ enum MouseAction {
 
 // Action types according to the touch events.
 enum ActionType {
-  // |TAP| involves touch down and up.
+  // `TAP` involves touch down and up.
   TAP = 0;
-  // |MOVE| involves touch down, move and up.
+  // `MOVE` involves touch down, move and up.
   MOVE = 1;
 }
 
@@ -59,12 +59,15 @@ message ActionProto {
   // Input Element. Customized input binding for this action.
   optional InputElementProto input_element = 2;
   // Customized Positions for this action. Now it only saves one position. Use
-  // keyword |repeated| for future expansion.
+  // keyword `repeated` for future expansion.
   repeated PositionProto positions = 3;
   // Action type for this action.
   optional ActionType action_type = 4;
-  // This action is deleted or not.
-  optional bool deleted = 5;
+  // This action is deleted or not. It is deprecated because "restore to
+  // default" function is no longer needed.
+  optional bool deleted = 5 [deprecated = true];
+  // The index of the name for this action.
+  optional int32 name_index = 6 [default = -1];
 }
 
 message AppDataProto {
@@ -76,4 +79,10 @@ message AppDataProto {
   // Input mapping hint is on or off. This is associated with the toggle of
   // show hint overlay on the menu.
   optional bool input_mapping_hint = 3;
+  // Customized Positions for the menu entry icon. It is saved when the app
+  // is closed.
+  optional PositionProto menu_entry_position = 4;
+  // System version. Latest version of Game controls. If it is not set, it's
+  // Alpha version. Otherwise, it is AlphaV2+ version.
+  optional string system_version = 5;
 }

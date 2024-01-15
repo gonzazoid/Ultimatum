@@ -12,15 +12,17 @@
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/scoped_observation.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/gtest_util.h"
 #include "base/test/icu_test_util.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/test_timeouts.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/timer/timer.h"
 #include "build/build_config.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
+#include "ui/base/metadata/metadata_header_macros.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/base/ui_base_features.h"
 #include "ui/compositor/compositor.h"
 #include "ui/compositor/layer.h"
@@ -40,6 +42,7 @@
 #include "ui/views/test/widget_test.h"
 #include "ui/views/view_observer.h"
 #include "ui/views/view_test_api.h"
+#include "ui/views/view_tracker.h"
 
 #if BUILDFLAG(IS_MAC)
 #include "ui/base/test/scoped_preferred_scroller_style_mac.h"
@@ -101,24 +104,6 @@ class ScrollViewTestApi {
   raw_ptr<ScrollView> scroll_view_;
 };
 
-class ObserveViewDeletion : public ViewObserver {
- public:
-  explicit ObserveViewDeletion(View* view) { observer_.Observe(view); }
-
-  void OnViewIsDeleting(View* observed_view) override {
-    deleted_view_ = observed_view;
-    observer_.Reset();
-  }
-
-  View* deleted_view() { return deleted_view_; }
-
- private:
-  base::ScopedObservation<View, ViewObserver> observer_{this};
-  // TODO(crbug.com/1298696): views_unittests breaks with MTECheckedPtr
-  // enabled. Triage.
-  raw_ptr<View, DegradeToNoOpWhenMTE> deleted_view_ = nullptr;
-};
-
 }  // namespace test
 
 namespace {
@@ -128,6 +113,8 @@ const int kMinHeight = 50;
 const int kMaxHeight = 100;
 
 class FixedView : public View {
+  METADATA_HEADER(FixedView, View)
+
  public:
   FixedView() = default;
 
@@ -144,7 +131,12 @@ class FixedView : public View {
   void SetFocus() { Focus(); }
 };
 
+BEGIN_METADATA(FixedView)
+END_METADATA
+
 class CustomView : public View {
+  METADATA_HEADER(CustomView, View)
+
  public:
   CustomView() = default;
 
@@ -175,6 +167,9 @@ class CustomView : public View {
   gfx::Point last_location_;
 };
 
+BEGIN_METADATA(CustomView)
+END_METADATA
+
 void CheckScrollbarVisibility(const ScrollView* scroll_view,
                               ScrollBarOrientation orientation,
                               bool should_be_visible) {
@@ -198,6 +193,8 @@ ui::MouseEvent TestLeftMouseAt(const gfx::Point& location, ui::EventType type) {
 // height. This is similar to a TableView that has many columns showing, but
 // very few rows.
 class VerticalResizingView : public View {
+  METADATA_HEADER(VerticalResizingView, View)
+
  public:
   VerticalResizingView() = default;
 
@@ -212,8 +209,13 @@ class VerticalResizingView : public View {
   }
 };
 
+BEGIN_METADATA(VerticalResizingView)
+END_METADATA
+
 // Same as VerticalResizingView, but horizontal instead.
 class HorizontalResizingView : public View {
+  METADATA_HEADER(HorizontalResizingView, View)
+
  public:
   HorizontalResizingView() = default;
 
@@ -228,7 +230,12 @@ class HorizontalResizingView : public View {
   }
 };
 
+BEGIN_METADATA(HorizontalResizingView)
+END_METADATA
+
 class TestScrollBarThumb : public BaseScrollBarThumb {
+  METADATA_HEADER(TestScrollBarThumb, BaseScrollBarThumb)
+
  public:
   using BaseScrollBarThumb::BaseScrollBarThumb;
 
@@ -237,7 +244,12 @@ class TestScrollBarThumb : public BaseScrollBarThumb {
   void OnPaint(gfx::Canvas* canvas) override {}
 };
 
+BEGIN_METADATA(TestScrollBarThumb)
+END_METADATA
+
 class TestScrollBar : public ScrollBar {
+  METADATA_HEADER(TestScrollBar, ScrollBar)
+
  public:
   TestScrollBar(bool horizontal, bool overlaps_content, int thickness)
       : ScrollBar(horizontal),
@@ -259,6 +271,9 @@ class TestScrollBar : public ScrollBar {
   const bool overlaps_content_ = false;
   const int thickness_ = 0;
 };
+
+BEGIN_METADATA(TestScrollBar)
+END_METADATA
 
 }  // namespace
 
@@ -386,7 +401,7 @@ class WidgetScrollViewTest : public test::WidgetTest,
   void WaitForCommit() {
     base::RunLoop run_loop;
     quit_closure_ = run_loop.QuitClosure();
-    base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE, quit_closure_, TestTimeouts::action_timeout());
     run_loop.Run();
     EXPECT_TRUE(quit_closure_.is_null()) << "Timed out waiting for a commit.";
@@ -402,8 +417,9 @@ class WidgetScrollViewTest : public test::WidgetTest,
   // testing::Test:
   void TearDown() override {
     widget_->GetCompositor()->RemoveObserver(this);
-    if (widget_)
-      widget_->CloseNow();
+    if (widget_) {
+      widget_.ExtractAsDangling()->CloseNow();
+    }
     WidgetTest::TearDown();
   }
 
@@ -497,8 +513,7 @@ std::string UiConfigToString(const testing::TestParamInfo<UiConfig>& info) {
     case UiConfig::kRtlWithLayers:
       return "RTL_LAYERS";
   }
-  NOTREACHED();
-  return std::string();
+  NOTREACHED_NORETURN();
 }
 
 // Verifies the viewport is sized to fit the available space.
@@ -922,6 +937,31 @@ TEST_F(ScrollViewTest, ScrollRectToVisible) {
   EXPECT_EQ(415 - viewport_height, test_api.CurrentOffset().y());
 }
 
+// Verifies ScrollByOffset() method works as expected
+TEST_F(ScrollViewTest, ScrollByOffset) {
+  // setup
+  ScrollViewTestApi test_api(scroll_view_.get());
+  auto contents = std::make_unique<CustomView>();
+  contents->SetPreferredSize(gfx::Size(500, 1000));
+  scroll_view_->SetContents(std::move(contents));
+  scroll_view_->SetBoundsRect(gfx::Rect(0, 0, 100, 100));
+
+  views::test::RunScheduledLayout(scroll_view_.get());
+  EXPECT_EQ(gfx::Vector2d(0, 0), test_api.IntegralViewOffset());
+
+  // scroll by an offset of x=5 and y=5
+  scroll_view_->ScrollByOffset(gfx::PointF(5, 5));
+
+  EXPECT_EQ(test_api.CurrentOffset().x(), 5);
+  EXPECT_EQ(test_api.CurrentOffset().y(), 5);
+
+  // scroll back to the initial position
+  scroll_view_->ScrollByOffset(gfx::PointF(-5, -5));
+
+  EXPECT_EQ(test_api.CurrentOffset().x(), 0);
+  EXPECT_EQ(test_api.CurrentOffset().y(), 0);
+}
+
 // Verifies ScrollRectToVisible() scrolls the view horizontally even if the
 // horizontal scrollbar is hidden (but not disabled).
 TEST_F(ScrollViewTest, ScrollRectToVisibleWithHiddenHorizontalScrollbar) {
@@ -952,8 +992,8 @@ TEST_F(ScrollViewTest, ScrollRectToVisibleWithHiddenHorizontalScrollbar) {
   EXPECT_EQ(315 - viewport_width, test_api.CurrentOffset().x());
 }
 
-// Verifies ScrollRectToVisible() scrolls the view horizontally even if the
-// horizontal scrollbar is hidden (but not disabled).
+// Verifies ScrollRectToVisible() scrolls the view vertically even if the
+// vertical scrollbar is hidden (but not disabled).
 TEST_F(ScrollViewTest, ScrollRectToVisibleWithHiddenVerticalScrollbar) {
   scroll_view_->SetVerticalScrollBarMode(
       ScrollView::ScrollBarMode::kHiddenButEnabled);
@@ -977,9 +1017,31 @@ TEST_F(ScrollViewTest, ScrollRectToVisibleWithHiddenVerticalScrollbar) {
   gfx::PointF offset = test_api.CurrentOffset();
   EXPECT_EQ(315 - viewport_height, offset.y());
 
-  // Scroll to the current x-location and 10x10; should do nothing.
+  // Scroll to the current y-location and 10x10; should do nothing.
   contents_ptr->ScrollRectToVisible(gfx::Rect(0, offset.y(), 10, 10));
   EXPECT_EQ(315 - viewport_height, test_api.CurrentOffset().y());
+}
+
+// Verifies ScrollRectToVisible() does not scroll the view horizontally or
+// vertically if the scrollbars are disabled.
+TEST_F(ScrollViewTest, ScrollRectToVisibleWithDisabledScrollbars) {
+  scroll_view_->SetHorizontalScrollBarMode(
+      ScrollView::ScrollBarMode::kDisabled);
+  scroll_view_->SetVerticalScrollBarMode(ScrollView::ScrollBarMode::kDisabled);
+  ScrollViewTestApi test_api(scroll_view_.get());
+  auto contents = std::make_unique<CustomView>();
+  contents->SetPreferredSize(gfx::Size(500, 1000));
+  auto* contents_ptr = scroll_view_->SetContents(std::move(contents));
+
+  scroll_view_->SetBoundsRect(gfx::Rect(0, 0, 100, 100));
+  views::test::RunScheduledLayout(scroll_view_.get());
+  EXPECT_EQ(gfx::Vector2d(0, 0), test_api.IntegralViewOffset());
+
+  contents_ptr->ScrollRectToVisible(gfx::Rect(305, 0, 10, 10));
+  EXPECT_EQ(0, test_api.CurrentOffset().x());
+
+  contents_ptr->ScrollRectToVisible(gfx::Rect(0, 305, 10, 10));
+  EXPECT_EQ(0, test_api.CurrentOffset().y());
 }
 
 // Verifies that child scrolls into view when it's focused.
@@ -1397,6 +1459,19 @@ TEST_F(
   child->SetPaintToLayer();
 
   EXPECT_EQ(test_api.contents_viewport()->layer()->type(), ui::LAYER_TEXTURED);
+}
+
+TEST_F(ScrollViewTest,
+       ContentsViewportLayerHasRoundedCorners_ScrollWithLayersEnabled) {
+  ScrollView scroll_view(ScrollView::ScrollWithLayers::kEnabled);
+  ScrollViewTestApi test_api(&scroll_view);
+  ASSERT_TRUE(test_api.contents_viewport()->layer());
+
+  const gfx::RoundedCornersF corner_radii = gfx::RoundedCornersF{16};
+  scroll_view.SetViewportRoundedCornerRadius(corner_radii);
+
+  EXPECT_EQ(test_api.contents_viewport()->layer()->rounded_corner_radii(),
+            corner_radii);
 }
 
 #if BUILDFLAG(IS_MAC)
@@ -2160,7 +2235,8 @@ TEST_F(ScrollViewTest, IgnoreOverlapWithHiddenVerticalScroll) {
 
 TEST_F(ScrollViewTest, TestSettingContentsToNull) {
   View* contents = InstallContents();
-  test::ObserveViewDeletion view_deletion{contents};
+  ViewTracker tracker(contents);
+  ASSERT_TRUE(tracker.view());
 
   // Make sure the content is installed and working.
   EXPECT_EQ("0,0 100x100", contents->parent()->bounds().ToString());
@@ -2171,8 +2247,9 @@ TEST_F(ScrollViewTest, TestSettingContentsToNull) {
   // The content should now be gone.
   EXPECT_FALSE(scroll_view_->contents());
 
-  // The contents view should have also been deleted.
-  EXPECT_EQ(contents, view_deletion.deleted_view());
+  // The contents view should have also been deleted (and therefore the tracker
+  // is no longer tracking a view).
+  EXPECT_FALSE(tracker.view());
 }
 
 // Test scrolling behavior when clicking on the scroll track.
@@ -2493,7 +2570,7 @@ TEST_F(WidgetScrollViewTest, CompositedTransposedScrollEvents) {
 // is somewhat ambiguous. This is the case where the horizontal component is
 // larger than the vertical.
 TEST_F(WidgetScrollViewTest,
-       CompositedTransposedScrollEventsHorizontalComponentIsLarger) {
+       DISABLED_CompositedTransposedScrollEventsHorizontalComponentIsLarger) {
   // Set up with a vertical scroll bar.
   ScrollView* scroll_view =
       AddScrollViewWithContentSize(gfx::Size(kDefaultHeight * 5, 10));

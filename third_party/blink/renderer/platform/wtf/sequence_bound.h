@@ -5,7 +5,8 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_PLATFORM_WTF_SEQUENCE_BOUND_H_
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_WTF_SEQUENCE_BOUND_H_
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/threading/sequence_bound.h"
 #include "third_party/blink/renderer/platform/wtf/cross_thread_functional.h"
 #include "third_party/blink/renderer/platform/wtf/functional.h"
@@ -69,8 +70,8 @@ struct SequenceBoundBindTraits {
   }
 
   template <template <typename> class CallbackType>
-  using EnableIfIsCrossThreadTask =
-      std::enable_if_t<IsCrossThreadOnceFunction<CallbackType<void()>>::value>;
+  static constexpr bool IsCrossThreadTask =
+      IsCrossThreadOnceFunction<CallbackType<void()>>::value;
 };
 
 }  // namespace internal

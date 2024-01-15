@@ -4,26 +4,33 @@
 
 #include "content/services/auction_worklet/set_bid_bindings.h"
 
+#include <cmath>
+#include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/strings/strcat.h"
 #include "base/strings/stringprintf.h"
 #include "content/services/auction_worklet/auction_v8_helper.h"
 #include "content/services/auction_worklet/bidder_worklet.h"
 #include "content/services/auction_worklet/public/mojom/bidder_worklet.mojom.h"
+#include "content/services/auction_worklet/public/mojom/private_aggregation_request.mojom.h"
+#include "content/services/auction_worklet/webidl_compat.h"
 #include "gin/converter.h"
 #include "gin/dictionary.h"
 #include "third_party/blink/public/common/interest_group/ad_auction_constants.h"
+#include "third_party/blink/public/common/interest_group/ad_auction_currencies.h"
+#include "third_party/blink/public/common/interest_group/ad_display_size_utils.h"
 #include "url/gurl.h"
 #include "url/url_constants.h"
 #include "v8/include/v8-exception.h"
 #include "v8/include/v8-external.h"
 #include "v8/include/v8-function-callback.h"
-#include "v8/include/v8-template.h"
+#include "v8/include/v8-function.h"
 
 namespace auction_worklet {
 
@@ -36,32 +43,112 @@ bool IsAllowedAdUrl(
     const GURL& url,
     std::string& error_prefix,
     const char* argument_name,
+    const base::RepeatingCallback<bool(const std::string&)>& is_excluded,
     const std::vector<blink::InterestGroup::Ad>& ads,
-    const mojom::BidderWorkletNonSharedParams* bidder_worklet_non_shared_params,
-    bool restrict_to_kanon_ads,
-    std::vector<std::string>& out_errors) {
+    std::string& out_error) {
   if (!url.is_valid() || !url.SchemeIs(url::kHttpsScheme)) {
-    out_errors.push_back(base::StrCat({error_prefix, "bid ", argument_name,
-                                       " URL '", url.possibly_invalid_spec(),
-                                       "' isn't a valid https:// URL."}));
+    out_error = base::StrCat({error_prefix, "bid ", argument_name, " URL '",
+                              url.possibly_invalid_spec(),
+                              "' isn't a valid https:// URL."});
     return false;
   }
 
   for (const auto& ad : ads) {
-    if (restrict_to_kanon_ads &&
-        !BidderWorklet::IsKAnon(bidder_worklet_non_shared_params,
-                                ad.render_url)) {
+    if (is_excluded.Run(ad.render_url())) {
       continue;
     }
-
-    if (url == ad.render_url)
+    if (url.spec() == ad.render_url()) {
       return true;
+    }
   }
-  out_errors.push_back(
-      base::StrCat({error_prefix, "bid ", argument_name, " URL '",
-                    url.possibly_invalid_spec(),
-                    "' isn't one of the registered creative URLs."}));
+  out_error = base::StrCat({error_prefix, "bid ", argument_name, " URL '",
+                            url.possibly_invalid_spec(),
+                            "' isn't one of the registered creative URLs."});
   return false;
+}
+
+struct AdRender {
+  std::string url;
+  std::optional<std::string> width;
+  std::optional<std::string> height;
+};
+
+// Handles conversion of (DOMString or AdRender) IDL type.
+bool ConvertDomStringOrAdRender(
+    AuctionV8Helper* v8_helper,
+    AuctionV8Helper::TimeLimitScope& time_limit_scope,
+    const std::string& error_prefix,
+    v8::Local<v8::Value> value,
+    AdRender& out,
+    DictConverter& propagate_errors_to) {
+  if (value->IsString()) {
+    bool ok = gin::ConvertFromV8(v8_helper->isolate(), value, &out.url);
+    DCHECK(ok);  // Shouldn't fail since it's known to be String.
+    return true;
+  }
+
+  DictConverter convert_ad_render(v8_helper, time_limit_scope, error_prefix,
+                                  value);
+  // This is alphabetical, since that's how dictionaries work.
+  if (!convert_ad_render.GetOptional("height", out.height) ||
+      !convert_ad_render.GetRequired("url", out.url) ||
+      !convert_ad_render.GetOptional("width", out.width)) {
+    propagate_errors_to.SetStatus(convert_ad_render.TakeStatus());
+    return false;
+  }
+  return true;
+}
+
+// Parses an AdRender, either a top-level value of render: field in bid or
+// as part of its components array. This is meant to run on the output
+// of ConvertDomStringOrAdRender, which has already converted the string form
+// into a struct matching the dictionary form, and represents the semantics
+// step of the checking, which happens after all the IDL conversions take place.
+//
+// Return whether the parse is successful.
+//
+// The dictionary can be in one of two forms:
+// 1. Contains only the url field:
+//      {url: "https://example.test/"}
+// 2. Contains the url and both width and height fields:
+//      {url: "https://example.test/", width: "100sw", height: "50px"}
+// Any other fields will be ignored.
+//
+// The size units are allowed to be specified as:
+// 1. "px": pixels.
+// 2. "sw": screenwidth.
+//
+// Note the parse is still considered successful even if the size unit ends up
+// being invalid, for example:
+// {url: "https://example.test/", width: "100ft", height: "50in"}
+//
+// This will be immediately handled by `IsValidAdSize`, so we know the reason
+// for the failure in order to emit more accurate error messages.
+bool TryToParseUrlWithSize(AuctionV8Helper* v8_helper,
+                           AuctionV8Helper::TimeLimitScope& time_limit_scope,
+                           const std::string& error_prefix,
+                           AdRender& value,
+                           std::string& ad_url_out,
+                           std::optional<blink::AdSize>& size_out,
+                           std::string& error_out) {
+  // Either no dimensions must be specified, or both.
+  if (value.width.has_value() != value.height.has_value()) {
+    error_out = base::StrCat(
+        {error_prefix, "ads that specify dimensions must specify both."});
+    return false;
+  }
+
+  ad_url_out = std::move(value.url);
+  if (value.width.has_value()) {
+    auto [width_val, width_units] = blink::ParseAdSizeString(*value.width);
+    auto [height_val, height_units] = blink::ParseAdSizeString(*value.height);
+
+    size_out = blink::AdSize(width_val, width_units, height_val, height_units);
+  } else {
+    size_out = std::nullopt;
+  }
+
+  return true;
 }
 
 }  // namespace
@@ -83,30 +170,262 @@ void SetBidBindings::ReInitialize(
     base::TimeTicks start,
     bool has_top_level_seller_origin,
     const mojom::BidderWorkletNonSharedParams* bidder_worklet_non_shared_params,
-    bool restrict_to_kanon_ads) {
+    const std::optional<blink::AdCurrency>& per_buyer_currency,
+    base::RepeatingCallback<bool(const std::string&)> is_ad_excluded,
+    base::RepeatingCallback<bool(const std::string&)>
+        is_component_ad_excluded) {
   DCHECK(bidder_worklet_non_shared_params->ads.has_value());
   start_ = start;
   has_top_level_seller_origin_ = has_top_level_seller_origin;
   bidder_worklet_non_shared_params_ = bidder_worklet_non_shared_params;
-  restrict_to_kanon_ads_ = restrict_to_kanon_ads;
+  per_buyer_currency_ = per_buyer_currency;
+  is_ad_excluded_ = std::move(is_ad_excluded);
+  is_component_ad_excluded_ = std::move(is_component_ad_excluded);
 }
 
-void SetBidBindings::FillInGlobalTemplate(
-    v8::Local<v8::ObjectTemplate> global_template) {
+void SetBidBindings::AttachToContext(v8::Local<v8::Context> context) {
   v8::Local<v8::External> v8_this =
       v8::External::New(v8_helper_->isolate(), this);
-  v8::Local<v8::FunctionTemplate> v8_template = v8::FunctionTemplate::New(
-      v8_helper_->isolate(), &SetBidBindings::SetBid, v8_this);
-  v8_template->RemovePrototype();
-  global_template->Set(v8_helper_->CreateStringFromLiteral("setBid"),
-                       v8_template);
+  v8::Local<v8::Function> v8_function =
+      v8::Function::New(context, &SetBidBindings::SetBid, v8_this)
+          .ToLocalChecked();
+  context->Global()
+      ->Set(context, v8_helper_->CreateStringFromLiteral("setBid"), v8_function)
+      .Check();
 }
 
 void SetBidBindings::Reset() {
   bid_.reset();
   // Make sure we don't keep any dangling references to auction input.
   bidder_worklet_non_shared_params_ = nullptr;
-  restrict_to_kanon_ads_ = false;
+  reject_reason_ = mojom::RejectReason::kNotAvailable;
+  per_buyer_currency_ = std::nullopt;
+  is_ad_excluded_.Reset();
+  is_component_ad_excluded_.Reset();
+}
+
+IdlConvert::Status SetBidBindings::SetBidImpl(
+    v8::Local<v8::Value> generate_bid_result,
+    std::string error_prefix) {
+  v8::Isolate* isolate = v8_helper_->isolate();
+  v8::Local<v8::Context> context = isolate->GetCurrentContext();
+  bid_.reset();
+
+  DCHECK(bidder_worklet_non_shared_params_)
+      << "ReInitialize() must be called before each use";
+
+  struct GenerateBidOutput {
+    std::optional<double> bid;
+    std::optional<std::string> bid_currency;
+    std::optional<AdRender> render;
+    std::optional<v8::Local<v8::Value>> ad;
+    std::optional<std::vector<AdRender>> ad_components;
+    std::optional<double> ad_cost;
+    std::optional<UnrestrictedDouble> modeling_signals;
+    std::optional<bool> allow_component_auction;
+  } idl;
+
+  auto components_exist = base::BindOnce(
+      [](GenerateBidOutput& idl) { idl.ad_components.emplace(); },
+      std::ref(idl));
+
+  AuctionV8Helper::TimeLimitScope time_limit_scope(v8_helper_->GetTimeLimit());
+  DictConverter convert_set_bid(v8_helper_.get(), time_limit_scope,
+                                error_prefix, generate_bid_result);
+
+  scoped_refptr<AuctionV8Helper> ref_v8_helper(v8_helper_.get());
+  std::string render_prefix = base::StrCat({error_prefix, "'render': "});
+  std::string components_prefix =
+      base::StrCat({error_prefix, "adComponents entry: "});
+  auto collect_components = base::BindRepeating(
+      [](scoped_refptr<AuctionV8Helper> v8_helper,
+         AuctionV8Helper::TimeLimitScope& time_limit_scope,
+         DictConverter& convert_set_bid, const std::string& error_prefix,
+         GenerateBidOutput& idl, v8::Local<v8::Value> component) -> bool {
+        AdRender converted_component;
+        if (ConvertDomStringOrAdRender(v8_helper.get(), time_limit_scope,
+                                       error_prefix, component,
+                                       converted_component, convert_set_bid)) {
+          idl.ad_components->push_back(std::move(converted_component));
+          return true;
+        } else {
+          // ConvertDomStringOrAdRender already forwarded the error for us.
+          return false;
+        }
+      },
+      ref_v8_helper, std::ref(time_limit_scope), std::ref(convert_set_bid),
+      std::cref(components_prefix), std::ref(idl));
+
+  convert_set_bid.GetOptional("ad", idl.ad);
+  convert_set_bid.GetOptionalSequence(
+      "adComponents", std::move(components_exist), collect_components);
+  convert_set_bid.GetOptional("adCost", idl.ad_cost);
+  convert_set_bid.GetOptional("allowComponentAuction",
+                              idl.allow_component_auction);
+  convert_set_bid.GetOptional("bid", idl.bid);
+  convert_set_bid.GetOptional("bidCurrency", idl.bid_currency);
+  convert_set_bid.GetOptional("modelingSignals", idl.modeling_signals);
+
+  std::optional<v8::Local<v8::Value>> render_value;
+  if (convert_set_bid.GetOptional("render", render_value) &&
+      render_value.has_value()) {
+    idl.render.emplace();
+    ConvertDomStringOrAdRender(v8_helper_.get(), time_limit_scope,
+                               render_prefix, *render_value, *idl.render,
+                               convert_set_bid);
+  }
+
+  if (convert_set_bid.is_failed()) {
+    return convert_set_bid.TakeStatus();
+  }
+
+  if (!idl.allow_component_auction.has_value()) {
+    idl.allow_component_auction.emplace(false);
+  }
+
+  if (!idl.bid.has_value() || *idl.bid <= 0.0) {
+    // Not an error, just no bid.
+    return IdlConvert::Status::MakeSuccess();
+  }
+
+  if (!idl.render.has_value()) {
+    return IdlConvert::Status::MakeErrorMessage(base::StrCat(
+        {error_prefix, "'render' is required when making a bid."}));
+  }
+
+  std::optional<blink::AdCurrency> bid_currency;
+  if (idl.bid_currency.has_value()) {
+    if (!blink::IsValidAdCurrencyCode(*idl.bid_currency)) {
+      reject_reason_ = mojom::RejectReason::kWrongGenerateBidCurrency;
+      return IdlConvert::Status::MakeErrorMessage(
+          base::StringPrintf("%sbidCurrency of '%s' is not a currency code.",
+                             error_prefix.c_str(), idl.bid_currency->c_str()));
+    }
+    bid_currency = blink::AdCurrency::From(*idl.bid_currency);
+  }
+
+  if (!blink::VerifyAdCurrencyCode(per_buyer_currency_, bid_currency)) {
+    reject_reason_ = mojom::RejectReason::kWrongGenerateBidCurrency;
+    return IdlConvert::Status::MakeErrorMessage(base::StringPrintf(
+        "%sbidCurrency mismatch; returned '%s', expected '%s'.",
+        error_prefix.c_str(), blink::PrintableAdCurrency(bid_currency).c_str(),
+        blink::PrintableAdCurrency(per_buyer_currency_).c_str()));
+  }
+
+  // "ad" field is optional, but if present, must be possible to convert to
+  // JSON.
+  std::string ad_json;
+  if (!idl.ad.has_value()) {
+    ad_json = "null";
+  } else {
+    AuctionV8Helper::ExtractJsonResult json_result =
+        v8_helper_->ExtractJson(context, *idl.ad, &ad_json);
+    if (json_result == AuctionV8Helper::ExtractJsonResult::kFailure) {
+      return IdlConvert::Status::MakeErrorMessage(
+          base::StrCat({error_prefix, "bid has invalid ad value."}));
+    } else if (json_result == AuctionV8Helper::ExtractJsonResult::kTimeout) {
+      return IdlConvert::Status::MakeTimeout(base::StrCat(
+          {error_prefix, "serializing bid 'ad' value to JSON timed out."}));
+    }
+  }
+
+  if (has_top_level_seller_origin_) {
+    if (!*idl.allow_component_auction) {
+      return IdlConvert::Status::MakeErrorMessage(
+          base::StrCat({error_prefix,
+                        "bid does not have allowComponentAuction "
+                        "set to true. Bid dropped from component auction."}));
+    }
+  }
+
+  std::optional<double> modeling_signals;
+  if (idl.modeling_signals.has_value() && idl.modeling_signals->number >= 0 &&
+      idl.modeling_signals->number < (1 << 12)) {
+    modeling_signals = idl.modeling_signals->number;
+  }
+
+  std::string render_url_string;
+  std::optional<blink::AdSize> render_size = std::nullopt;
+  std::string error_msg;
+  if (!TryToParseUrlWithSize(v8_helper_.get(), time_limit_scope, render_prefix,
+                             *idl.render, render_url_string, render_size,
+                             error_msg)) {
+    return IdlConvert::Status::MakeErrorMessage(std::move(error_msg));
+  }
+
+  if (render_size.has_value() && !IsValidAdSize(render_size.value())) {
+    return IdlConvert::Status::MakeErrorMessage(
+        base::StrCat({error_prefix, "bid has invalid size for render ad."}));
+  }
+
+  GURL render_url(render_url_string);
+  if (!IsAllowedAdUrl(render_url, error_prefix, "render", is_ad_excluded_,
+                      bidder_worklet_non_shared_params_->ads.value(),
+                      error_msg)) {
+    return IdlConvert::Status::MakeErrorMessage(std::move(error_msg));
+  }
+
+  std::optional<std::vector<blink::AdDescriptor>> ad_component_descriptors;
+  if (idl.ad_components.has_value()) {
+    if (!bidder_worklet_non_shared_params_->ad_components.has_value()) {
+      return IdlConvert::Status::MakeErrorMessage(
+          base::StrCat({error_prefix,
+                        "bid contains adComponents but InterestGroup has no "
+                        "adComponents."}));
+    }
+
+    // We want < rather than <= here so the semantic check is testable and not
+    // hidden by implementation details of DictConverter.
+    static_assert(blink::kMaxAdAuctionAdComponents <
+                  DictConverter::kSequenceLengthLimit);
+
+    if (idl.ad_components->size() > blink::kMaxAdAuctionAdComponents) {
+      return IdlConvert::Status::MakeErrorMessage(base::StringPrintf(
+          "%sbid adComponents with over %zu items.", error_prefix.c_str(),
+          blink::kMaxAdAuctionAdComponents));
+    }
+
+    ad_component_descriptors.emplace();
+    for (AdRender& component : *idl.ad_components) {
+      std::string ad_component_url_string;
+      std::optional<blink::AdSize> ad_component_size = std::nullopt;
+      if (!TryToParseUrlWithSize(
+              v8_helper_.get(), time_limit_scope, components_prefix, component,
+              ad_component_url_string, ad_component_size, error_msg)) {
+        return IdlConvert::Status::MakeErrorMessage(std::move(error_msg));
+      }
+
+      if (ad_component_size.has_value() &&
+          !IsValidAdSize(ad_component_size.value())) {
+        return IdlConvert::Status::MakeErrorMessage(base::StrCat(
+            {error_prefix,
+             "bid adComponents have invalid size for ad component."}));
+      }
+
+      GURL ad_component_url(ad_component_url_string);
+      if (!IsAllowedAdUrl(
+              ad_component_url, error_prefix, "adComponents",
+              is_component_ad_excluded_,
+              bidder_worklet_non_shared_params_->ad_components.value(),
+              error_msg)) {
+        return IdlConvert::Status::MakeErrorMessage(std::move(error_msg));
+      }
+      ad_component_descriptors->emplace_back(std::move(ad_component_url),
+                                             std::move(ad_component_size));
+    }
+  }
+
+  // `bid_duration` needs to include the entire time the bid script took to run,
+  // including the time from the last setBid() call to when the bidder worklet
+  // timed out, if the worklet did time out. So `bid_duration` is calculated
+  // when ownership of the bid is taken by the caller, instead of here.
+  bid_ = mojom::BidderWorkletBid::New(
+      std::move(ad_json), *idl.bid, std::move(bid_currency),
+      std::move(idl.ad_cost), blink::AdDescriptor(render_url, render_size),
+      std::move(ad_component_descriptors),
+      static_cast<std::optional<uint16_t>>(modeling_signals),
+      /*bid_duration=*/base::TimeDelta());
+  return IdlConvert::Status::MakeSuccess();
 }
 
 // static
@@ -123,159 +442,9 @@ void SetBidBindings::SetBid(const v8::FunctionCallbackInfo<v8::Value>& args) {
     argument_value = args[0];
   }
 
-  std::vector<std::string> errors;
-  if (!bindings->SetBid(argument_value, /*error_prefix=*/"", errors)) {
-    DCHECK_EQ(1u, errors.size());
-    // Remove the trailing period from the error message.
-    std::string error_msg = errors[0].substr(0, errors[0].length() - 1);
-    args.GetIsolate()->ThrowException(v8::Exception::TypeError(
-        v8_helper->CreateUtf8String(error_msg).ToLocalChecked()));
-    return;
-  }
-}
-
-bool SetBidBindings::SetBid(v8::Local<v8::Value> generate_bid_result,
-                            std::string error_prefix,
-                            std::vector<std::string>& errors_out) {
-  v8::Isolate* isolate = v8_helper_->isolate();
-  v8::Local<v8::Context> context = isolate->GetCurrentContext();
-  bid_.reset();
-
-  DCHECK(bidder_worklet_non_shared_params_)
-      << "ReInitialize() must be called before each use";
-
-  // Undefined and null are interpreted as choosing not to bid.
-  if (generate_bid_result->IsNullOrUndefined())
-    return true;
-
-  if (!generate_bid_result->IsObject()) {
-    errors_out.push_back(base::StrCat({error_prefix, "bid not an object."}));
-    return false;
-  }
-
-  gin::Dictionary result_dict(isolate, generate_bid_result.As<v8::Object>());
-
-  double bid;
-  if (!result_dict.Get("bid", &bid)) {
-    errors_out.push_back(base::StrCat(
-        {error_prefix, "returned object must have numeric bid field."}));
-    return false;
-  }
-
-  if (!std::isfinite(bid)) {
-    // Bids should not be infinite or NaN.
-    errors_out.push_back(base::StringPrintf("%sbid of %lf is not a valid bid.",
-                                            error_prefix.c_str(), bid));
-    return false;
-  }
-  if (bid <= 0.0) {
-    // Not an error, just no bid.
-    return true;
-  }
-
-  v8::Local<v8::Value> ad_object;
-  std::string render_url_string;
-  // Parse and validate values.
-  if (!result_dict.Get("ad", &ad_object) ||
-      !result_dict.Get("render", &render_url_string)) {
-    errors_out.push_back(
-        base::StrCat({error_prefix, "bid has incorrect structure."}));
-    return false;
-  }
-
-  // "ad" field is optional, but if present, must be possible to convert to
-  // JSON. Note that if "ad" field isn't present, Get("ad", ...) succeeds, but
-  // `ad_object` is undefined.
-  std::string ad_json;
-  if (ad_object->IsUndefined()) {
-    ad_json = "null";
-  } else {
-    if (!v8_helper_->ExtractJson(context, ad_object, &ad_json)) {
-      errors_out.push_back(
-          base::StrCat({error_prefix, "bid has invalid ad value."}));
-      return false;
-    }
-  }
-
-  if (has_top_level_seller_origin_) {
-    bool allow_component_auction;
-    if (!result_dict.Get("allowComponentAuction", &allow_component_auction) ||
-        !allow_component_auction) {
-      errors_out.push_back(
-          base::StrCat({error_prefix,
-                        "bid does not have allowComponentAuction "
-                        "set to true. Bid dropped from component auction."}));
-      return false;
-    }
-  }
-
-  GURL render_url(render_url_string);
-  if (!IsAllowedAdUrl(render_url, error_prefix, "render",
-                      bidder_worklet_non_shared_params_->ads.value(),
-                      bidder_worklet_non_shared_params_, restrict_to_kanon_ads_,
-                      errors_out)) {
-    return false;
-  }
-
-  absl::optional<std::vector<GURL>> ad_component_urls;
-  v8::Local<v8::Value> ad_components;
-  if (result_dict.Get("adComponents", &ad_components) &&
-      !ad_components->IsNullOrUndefined()) {
-    if (!bidder_worklet_non_shared_params_->ad_components.has_value()) {
-      errors_out.push_back(
-          base::StrCat({error_prefix,
-                        "bid contains adComponents but InterestGroup has no "
-                        "adComponents."}));
-      return false;
-    }
-
-    if (!ad_components->IsArray()) {
-      errors_out.push_back(base::StrCat(
-          {error_prefix, "bid adComponents value must be an array."}));
-      return false;
-    }
-
-    v8::Local<v8::Array> ad_components_array = ad_components.As<v8::Array>();
-    if (ad_components_array->Length() > blink::kMaxAdAuctionAdComponents) {
-      errors_out.push_back(base::StringPrintf(
-          "%sbid adComponents with over %zu items.", error_prefix.c_str(),
-          blink::kMaxAdAuctionAdComponents));
-      return false;
-    }
-
-    ad_component_urls.emplace();
-    for (size_t i = 0; i < ad_components_array->Length(); ++i) {
-      std::string url_string;
-      if (!gin::ConvertFromV8(
-              isolate, ad_components_array->Get(context, i).ToLocalChecked(),
-              &url_string)) {
-        errors_out.push_back(base::StrCat(
-            {error_prefix,
-             "bid adComponents value must be an array of strings."}));
-        return false;
-      }
-
-      GURL ad_component_url(url_string);
-      if (!IsAllowedAdUrl(
-              ad_component_url, error_prefix, "adComponents",
-              bidder_worklet_non_shared_params_->ad_components.value(),
-              bidder_worklet_non_shared_params_, restrict_to_kanon_ads_,
-              errors_out)) {
-        return false;
-      }
-      ad_component_urls->emplace_back(std::move(ad_component_url));
-    }
-  }
-
-  // `bid_duration` needs to include the entire time the bid script took to run,
-  // including the time from the last setBid() call to when the bidder worklet
-  // timed out, if the worklet did time out. So `bid_duration` is calculated
-  // when ownership of the bid is taken by the caller, instead of here.
-  bid_ = mojom::BidderWorkletBid::New(std::move(ad_json), bid,
-                                      std::move(render_url),
-                                      std::move(ad_component_urls),
-                                      /*bid_duration=*/base::TimeDelta());
-  return true;
+  IdlConvert::Status status =
+      bindings->SetBidImpl(argument_value, /*error_prefix=*/"");
+  status.PropagateErrorsToV8(v8_helper);
 }
 
 }  // namespace auction_worklet

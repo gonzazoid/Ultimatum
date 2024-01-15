@@ -11,11 +11,11 @@ import android.os.Handler;
 import android.provider.Settings;
 
 import androidx.annotation.Nullable;
-import androidx.annotation.VisibleForTesting;
 import androidx.vectordrawable.graphics.drawable.Animatable2Compat;
 import androidx.vectordrawable.graphics.drawable.AnimatedVectorDrawableCompat;
 
 import org.chromium.base.ContextUtils;
+import org.chromium.base.ResettersForTesting;
 import org.chromium.base.compat.ApiHelperForO;
 
 /**
@@ -37,12 +37,13 @@ public class AnimationLooper {
     public AnimationLooper(Drawable drawable) {
         mHandler = new Handler();
         mAnimatable = (Animatable) drawable;
-        mAnimationCallback = new Animatable2Compat.AnimationCallback() {
-            @Override
-            public void onAnimationEnd(Drawable drawable) {
-                mHandler.post(mAnimatable::start);
-            }
-        };
+        mAnimationCallback =
+                new Animatable2Compat.AnimationCallback() {
+                    @Override
+                    public void onAnimationEnd(Drawable drawable) {
+                        mHandler.post(mAnimatable::start);
+                    }
+                };
     }
 
     /** Starts the animation of the associated drawable. */
@@ -73,14 +74,15 @@ public class AnimationLooper {
             return ApiHelperForO.areAnimatorsEnabled();
         } else {
             return Settings.Global.getFloat(
-                           ContextUtils.getApplicationContext().getContentResolver(),
-                           Settings.Global.ANIMATOR_DURATION_SCALE, 1.0f)
+                            ContextUtils.getApplicationContext().getContentResolver(),
+                            Settings.Global.ANIMATOR_DURATION_SCALE,
+                            1.0f)
                     != 0.0f;
         }
     }
 
-    @VisibleForTesting
     static void setAreAnimatorsEnabledForTests(@Nullable Boolean areAnimatorsEnabled) {
         sAreAnimatorsEnabledForTests = areAnimatorsEnabled;
+        ResettersForTesting.register(() -> sAreAnimatorsEnabledForTests = null);
     }
 }

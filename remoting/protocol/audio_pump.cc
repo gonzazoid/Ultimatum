@@ -7,12 +7,11 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/notreached.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "media/base/audio_bus.h"
 #include "media/base/audio_sample_types.h"
 #include "media/base/channel_layout.h"
@@ -43,8 +42,8 @@ std::unique_ptr<remoting::AudioPacket> AudioBusToAudioPacket(
     const media::AudioBus& packet) {
   std::unique_ptr<remoting::AudioPacket> result =
       std::make_unique<remoting::AudioPacket>();
-  result->add_data()->resize(
-      packet.channels() * packet.frames() * sizeof(int16_t));
+  result->add_data()->resize(packet.channels() * packet.frames() *
+                             sizeof(int16_t));
   packet.ToInterleaved<media::SignedInt16SampleTypeTraits>(
       packet.frames(),
       reinterpret_cast<int16_t*>(&(result->mutable_data(0)->at(0))));
@@ -132,7 +131,7 @@ AudioPump::Core::Core(base::WeakPtr<AudioPump> pump,
                       std::unique_ptr<AudioSource> audio_source,
                       std::unique_ptr<AudioEncoder> audio_encoder)
     : pump_(pump),
-      pump_task_runner_(base::ThreadTaskRunnerHandle::Get()),
+      pump_task_runner_(base::SingleThreadTaskRunner::GetCurrentDefault()),
       audio_source_(std::move(audio_source)),
       audio_encoder_(std::move(audio_encoder)),
       enabled_(true),

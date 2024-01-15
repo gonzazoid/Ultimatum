@@ -4,17 +4,23 @@
 
 #include "ash/login/ui/login_remove_account_dialog.h"
 #include "ash/login/ui/non_accessible_view.h"
-#include "ash/login/ui/system_label_button.h"
 #include "ash/login/ui/views_utils.h"
 #include "ash/public/cpp/login_types.h"
 #include "ash/public/cpp/shelf_config.h"
 #include "ash/strings/grit/ash_strings.h"
-#include "base/bind.h"
+#include "ash/style/ash_color_id.h"
+#include "ash/style/pill_button.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/strcat.h"
 #include "base/strings/utf_string_conversions.h"
+#include "chromeos/constants/chromeos_features.h"
 #include "chromeos/strings/grit/chromeos_strings.h"
 #include "ui/accessibility/ax_node_data.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/base/metadata/metadata_header_macros.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
+#include "ui/chromeos/styles/cros_tokens_color_mappings.h"
 #include "ui/display/display.h"
 #include "ui/display/screen.h"
 #include "ui/views/accessibility/view_accessibility.h"
@@ -64,24 +70,30 @@ class TrappedFocusSearch : public views::FocusSearch {
   }
 
  private:
-  views::View* const trapped_focus_;
+  const raw_ptr<views::View> trapped_focus_;
 };
 
 }  // namespace
 
 // A system label button that dismisses its bubble dialog parent on key event.
-class RemoveUserButton : public SystemLabelButton {
+class RemoveUserButton : public PillButton {
+  METADATA_HEADER(RemoveUserButton, PillButton)
+
  public:
   RemoveUserButton(PressedCallback callback, LoginRemoveAccountDialog* bubble)
-      : SystemLabelButton(std::move(callback),
-                          l10n_util::GetStringUTF16(
-                              IDS_ASH_LOGIN_POD_REMOVE_ACCOUNT_ACCESSIBLE_NAME),
-                          /*multiline=*/true),
+      : PillButton(std::move(callback),
+                   l10n_util::GetStringUTF16(
+                       IDS_ASH_LOGIN_POD_REMOVE_ACCOUNT_ACCESSIBLE_NAME)),
         bubble_(bubble) {}
 
   RemoveUserButton(const RemoveUserButton&) = delete;
   RemoveUserButton& operator=(const RemoveUserButton&) = delete;
   ~RemoveUserButton() override = default;
+
+  void SetAlert(bool alert) {
+    SetPillButtonType(alert ? PillButton::Type::kAlertWithoutIcon
+                            : PillButton::Type::kDefaultWithoutIcon);
+  }
 
  private:
   void OnKeyEvent(ui::KeyEvent* event) override {
@@ -97,12 +109,16 @@ class RemoveUserButton : public SystemLabelButton {
       bubble_->GetBubbleOpener()->RequestFocus();
     }
 
-    if (event->key_code() == ui::VKEY_RETURN)
+    if (event->key_code() == ui::VKEY_RETURN) {
       views::Button::OnKeyEvent(event);
+    }
   }
 
-  LoginRemoveAccountDialog* bubble_;
+  raw_ptr<LoginRemoveAccountDialog> bubble_;
 };
+
+BEGIN_METADATA(RemoveUserButton)
+END_METADATA
 
 LoginRemoveAccountDialog::TestApi::TestApi(LoginRemoveAccountDialog* bubble)
     : bubble_(bubble) {}
@@ -125,11 +141,11 @@ views::Label* LoginRemoveAccountDialog::TestApi::management_disclosure_label() {
 
 LoginRemoveAccountDialog::LoginRemoveAccountDialog(
     const LoginUserInfo& user,
-    views::View* anchor_view,
+    base::WeakPtr<views::View> anchor_view,
     LoginButton* bubble_opener,
     base::RepeatingClosure on_remove_user_warning_shown,
     base::RepeatingClosure on_remove_user_requested)
-    : LoginBaseBubbleView(anchor_view),
+    : LoginBaseBubbleView(std::move(anchor_view)),
       bubble_opener_(bubble_opener),
       on_remove_user_warning_shown_(on_remove_user_warning_shown),
       on_remove_user_requested_(on_remove_user_requested) {
@@ -152,16 +168,21 @@ LoginRemoveAccountDialog::LoginRemoveAccountDialog(
         views::BoxLayout::Orientation::kVertical, gfx::Insets(),
         kVerticalMarginUsernameMailDp));
     AddChildView(container);
-    // Colors should be updated in OnThemeChanged.
+    const bool is_jelly = chromeos::features::IsJellyrollEnabled();
     username_label_ =
-        container->AddChildView(login_views_utils::CreateBubbleLabel(
-            display_username, nullptr, SK_ColorGREEN,
+        container->AddChildView(login_views_utils::CreateThemedBubbleLabel(
+            display_username, nullptr,
+            is_jelly ? static_cast<ui::ColorId>(cros_tokens::kCrosSysOnSurface)
+                     : kColorAshTextColorPrimary,
             gfx::FontList({login_views_utils::kGoogleSansFont},
                           gfx::Font::FontStyle::NORMAL, kFontSizeUsername,
                           gfx::Font::Weight::MEDIUM),
             kLineHeightUsername));
     email_label_ =
-        container->AddChildView(login_views_utils::CreateBubbleLabel(email));
+        container->AddChildView(login_views_utils::CreateThemedBubbleLabel(
+            email, nullptr,
+            is_jelly ? static_cast<ui::ColorId>(cros_tokens::kCrosSysSecondary)
+                     : kColorAshTextColorSecondary));
   }
 
   // Add a warning text if the user is managed.
@@ -170,7 +191,8 @@ LoginRemoveAccountDialog::LoginRemoveAccountDialog(
         IDS_ASH_LOGIN_MANAGED_SESSION_MONITORING_USER_WARNING,
         base::UTF8ToUTF16(user.user_account_manager.value()));
     management_disclosure_label_ =
-        AddChildView(login_views_utils::CreateBubbleLabel(managed_text, this));
+        AddChildView(login_views_utils::CreateThemedBubbleLabel(
+            managed_text, this, kColorAshTextColorPrimary));
   }
 
   // If we can remove the user, the focus will be trapped by the bubble, and
@@ -199,17 +221,19 @@ LoginRemoveAccountDialog::LoginRemoveAccountDialog(
     remove_user_confirm_data_->SetVisible(false);
 
     remove_user_confirm_data_->AddChildView(
-        login_views_utils::CreateBubbleLabel(part1, this));
+        login_views_utils::CreateThemedBubbleLabel(part1, this,
+                                                   kColorAshTextColorPrimary));
 
     remove_user_confirm_data_->AddChildView(
-        login_views_utils::CreateBubbleLabel(part2, this));
+        login_views_utils::CreateThemedBubbleLabel(part2, this,
+                                                   kColorAshTextColorPrimary));
 
     remove_user_button_ = new RemoveUserButton(
         base::BindRepeating(&LoginRemoveAccountDialog::RemoveUserButtonPressed,
                             base::Unretained(this)),
         this);
     remove_user_button_->SetID(kRemoveUserButtonIdForTest);
-    AddChildView(remove_user_button_);
+    AddChildView(remove_user_button_.get());
 
     // Traps the focus on the remove user button.
     focus_search_ = std::make_unique<TrappedFocusSearch>(remove_user_button_);
@@ -222,51 +246,16 @@ LoginRemoveAccountDialog::LoginRemoveAccountDialog(
 
 LoginRemoveAccountDialog::~LoginRemoveAccountDialog() = default;
 
-void LoginRemoveAccountDialog::ResetState() {
-  if (management_disclosure_label_)
-    management_disclosure_label_->SetVisible(true);
-  if (remove_user_confirm_data_) {
-    remove_user_confirm_data_->SetVisible(false);
-    remove_user_button_->SetBackgroundAndFont(/*alert_mode=*/false);
-    // Reset button's description to none.
-    remove_user_button_->GetViewAccessibility().OverrideDescription(
-        std::u16string(),
-        ax::mojom::DescriptionFrom::kAttributeExplicitlyEmpty);
-  }
-}
-
 LoginButton* LoginRemoveAccountDialog::GetBubbleOpener() const {
   return bubble_opener_;
-}
-
-void LoginRemoveAccountDialog::OnThemeChanged() {
-  LoginBaseBubbleView::OnThemeChanged();
-  username_label_->SetEnabledColor(
-      AshColorProvider::Get()->GetContentLayerColor(
-          AshColorProvider::ContentLayerType::kTextColorPrimary));
-  email_label_->SetEnabledColor(AshColorProvider::Get()->GetContentLayerColor(
-      AshColorProvider::ContentLayerType::kTextColorSecondary));
-  if (remove_user_confirm_data_) {
-    DCHECK_EQ(2u, remove_user_confirm_data_->children().size());
-    for (views::View* label : remove_user_confirm_data_->children()) {
-      static_cast<views::Label*>(label)->SetEnabledColor(
-          AshColorProvider::Get()->GetContentLayerColor(
-              AshColorProvider::ContentLayerType::kTextColorPrimary));
-    }
-  }
-
-  if (management_disclosure_label_) {
-    management_disclosure_label_->SetEnabledColor(
-        AshColorProvider::Get()->GetContentLayerColor(
-            AshColorProvider::ContentLayerType::kTextColorPrimary));
-  }
 }
 
 void LoginRemoveAccountDialog::RequestFocus() {
   // This view has no actual interesting contents to focus, so immediately
   // forward to the button.
-  if (remove_user_button_)
+  if (remove_user_button_) {
     remove_user_button_->RequestFocus();
+  }
 }
 
 bool LoginRemoveAccountDialog::HasFocus() const {
@@ -319,9 +308,10 @@ void LoginRemoveAccountDialog::RemoveUserButtonPressed() {
   // we actually allow the exit.
   if (!remove_user_confirm_data_->GetVisible()) {
     remove_user_confirm_data_->SetVisible(true);
-    if (management_disclosure_label_)
+    if (management_disclosure_label_) {
       management_disclosure_label_->SetVisible(false);
-    remove_user_button_->SetBackgroundAndFont(/*alert_mode=*/true);
+    }
+    remove_user_button_->SetAlert(true);
 
     Layout();
 
@@ -329,8 +319,9 @@ void LoginRemoveAccountDialog::RemoveUserButtonPressed() {
     // ChromeVox, to report the updated description.
     remove_user_button_->GetViewAccessibility().OverrideDescription(
         warning_message_);
-    if (on_remove_user_warning_shown_)
+    if (on_remove_user_warning_shown_) {
       std::move(on_remove_user_warning_shown_).Run();
+    }
     return;
   }
 
@@ -339,8 +330,12 @@ void LoginRemoveAccountDialog::RemoveUserButtonPressed() {
   // for this bubble is being torn down, we can get a crash.
   SetVisible(false);
 
-  if (on_remove_user_requested_)
+  if (on_remove_user_requested_) {
     std::move(on_remove_user_requested_).Run();
+  }
 }
+
+BEGIN_METADATA(LoginRemoveAccountDialog)
+END_METADATA
 
 }  // namespace ash

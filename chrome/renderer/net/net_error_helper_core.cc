@@ -8,12 +8,11 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/location.h"
 #include "base/logging.h"
-#include "base/metrics/histogram_macros.h"
 #include "build/build_config.h"
 #include "components/error_page/common/localized_error.h"
 #include "content/public/common/content_switches.h"
@@ -235,8 +234,6 @@ void NetErrorHelperCore::UpdateErrorPage() {
   DCHECK(committed_error_page_info_->is_finished_loading);
   DCHECK_NE(error_page::DNS_PROBE_POSSIBLE, last_probe_status_);
 
-  UMA_HISTOGRAM_ENUMERATION("DnsProbe.ErrorPageUpdateStatus",
-                            last_probe_status_, error_page::DNS_PROBE_MAX);
   // Every status other than error_page::DNS_PROBE_POSSIBLE and
   // error_page::DNS_PROBE_STARTED is a final status code.  Once one is reached,
   // the page does not need further updates.
@@ -304,6 +301,10 @@ void NetErrorHelperCore::ExecuteButtonPress(Button button) {
     case DIAGNOSE_ERROR:
       RecordEvent(error_page::NETWORK_ERROR_DIAGNOSE_BUTTON_CLICKED);
       delegate_->DiagnoseError(committed_error_page_info_->error.url());
+      return;
+    case PORTAL_SIGNIN:
+      RecordEvent(error_page::NETWORK_ERROR_PORTAL_SIGNIN_BUTTON_CLICKED);
+      delegate_->PortalSignin();
       return;
     case DOWNLOAD_BUTTON:
       RecordEvent(error_page::NETWORK_ERROR_PAGE_DOWNLOAD_BUTTON_CLICKED);

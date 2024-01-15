@@ -5,9 +5,9 @@
 #include <memory>
 #include <string>
 
-#include "base/callback_helpers.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/callback_helpers.h"
 #include "base/json/values_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/path_service.h"
@@ -16,8 +16,9 @@
 #include "base/test/metrics/histogram_tester.h"
 #include "base/time/time.h"
 #include "chrome/browser/devtools/devtools_window_testing.h"
+#include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser.h"
-#include "chrome/browser/ui/hats/hats_service.h"
+#include "chrome/browser/ui/hats/hats_service_desktop.h"
 #include "chrome/browser/ui/hats/hats_service_factory.h"
 #include "chrome/browser/ui/hats/mock_hats_service.h"
 #include "chrome/browser/ui/test/test_browser_dialog.h"
@@ -48,7 +49,7 @@ const SurveyStringData kHatsNextTestSurveyProductSpecificStringData{
 
 // The locale expected by the test survey. This value is checked in
 // hats_next_mock.html for tests that expect a loaded response.
-const std::string kTestLocale = "lt";
+const char kTestLocale[] = "lt";
 
 }  // namespace
 
@@ -71,9 +72,9 @@ class MockHatsNextWebDialog : public HatsNextWebDialog {
                           product_specific_bits_data,
                           product_specific_string_data) {}
 
-  MOCK_METHOD0(ShowWidget, void());
-  MOCK_METHOD0(CloseWidget, void());
-  MOCK_METHOD0(UpdateWidgetSize, void());
+  MOCK_METHOD(void, ShowWidget, (), (override));
+  MOCK_METHOD(void, CloseWidget, (), (override));
+  MOCK_METHOD(void, UpdateWidgetSize, (), (override));
 
   void WaitForClose() {
     base::RunLoop run_loop;
@@ -153,9 +154,9 @@ IN_PROC_BROWSER_TEST_F(HatsNextWebDialogBrowserTest, SurveyLoaded) {
   {
     const base::Value::Dict& pref_data =
         browser()->profile()->GetPrefs()->GetDict(prefs::kHatsSurveyMetadata);
-    absl::optional<base::Time> last_survey_started_time =
+    std::optional<base::Time> last_survey_started_time =
         base::ValueToTime(pref_data.FindByDottedPath(kLastSurveyStartedTime));
-    absl::optional<int> last_major_version =
+    std::optional<int> last_major_version =
         pref_data.FindIntByDottedPath(kLastMajorVersion);
     ASSERT_FALSE(last_survey_started_time.has_value());
     ASSERT_FALSE(last_major_version.has_value());
@@ -178,9 +179,9 @@ IN_PROC_BROWSER_TEST_F(HatsNextWebDialogBrowserTest, SurveyLoaded) {
   {
     const base::Value::Dict& pref_data =
         browser()->profile()->GetPrefs()->GetDict(prefs::kHatsSurveyMetadata);
-    absl::optional<base::Time> last_survey_started_time =
+    std::optional<base::Time> last_survey_started_time =
         base::ValueToTime(pref_data.FindByDottedPath(kLastSurveyStartedTime));
-    absl::optional<int> last_major_version =
+    std::optional<int> last_major_version =
         pref_data.FindIntByDottedPath(kLastMajorVersion);
     ASSERT_TRUE(last_survey_started_time.has_value());
     ASSERT_TRUE(last_major_version.has_value());
@@ -211,7 +212,7 @@ IN_PROC_BROWSER_TEST_F(HatsNextWebDialogBrowserTest, SurveyClosed) {
   // Because no loaded state was provided, only a rejection should be recorded.
   histogram_tester.ExpectUniqueSample(
       kHatsShouldShowSurveyReasonHistogram,
-      HatsService::ShouldShowSurveyReasons::kNoRejectedByHatsService, 1);
+      HatsServiceDesktop::ShouldShowSurveyReasons::kNoRejectedByHatsService, 1);
 }
 
 // Test that a survey which first reports as loaded, then reports closure, only
@@ -237,7 +238,7 @@ IN_PROC_BROWSER_TEST_F(HatsNextWebDialogBrowserTest, SurveyLoadedThenClosed) {
   // The only recorded sample should indicate that the survey was shown.
   histogram_tester.ExpectUniqueSample(
       kHatsShouldShowSurveyReasonHistogram,
-      HatsService::ShouldShowSurveyReasons::kYes, 1);
+      HatsServiceDesktop::ShouldShowSurveyReasons::kYes, 1);
 }
 
 // Test that if the survey does not indicate it is ready for display before the
@@ -258,7 +259,7 @@ IN_PROC_BROWSER_TEST_F(HatsNextWebDialogBrowserTest, SurveyTimeout) {
   EXPECT_EQ(1, failure_count);
   histogram_tester.ExpectUniqueSample(
       kHatsShouldShowSurveyReasonHistogram,
-      HatsService::ShouldShowSurveyReasons::kNoSurveyUnreachable, 1);
+      HatsServiceDesktop::ShouldShowSurveyReasons::kNoSurveyUnreachable, 1);
 }
 
 IN_PROC_BROWSER_TEST_F(HatsNextWebDialogBrowserTest, UnknownURLFragment) {

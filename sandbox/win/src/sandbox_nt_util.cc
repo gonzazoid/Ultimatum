@@ -4,14 +4,18 @@
 
 #include "sandbox/win/src/sandbox_nt_util.h"
 
+#include <ntstatus.h>
 #include <stddef.h>
 #include <stdint.h>
 
 #include <string>
 
+#include <optional>
 #include "base/compiler_specific.h"
+#include "base/containers/span.h"
 #include "base/win/pe_image.h"
 #include "sandbox/win/src/internal_types.h"
+#include "sandbox/win/src/nt_internals.h"
 #include "sandbox/win/src/sandbox_factory.h"
 #include "sandbox/win/src/target_services.h"
 
@@ -132,10 +136,7 @@ void InitGlobalNt() {
   INIT_NT(DuplicateObject);
   INIT_NT(FreeVirtualMemory);
   INIT_NT(MapViewOfSection);
-  INIT_NT(OpenFile);
   INIT_NT(OpenThread);
-  INIT_NT(OpenProcess);
-  INIT_NT(OpenProcessToken);
   INIT_NT(OpenProcessTokenEx);
   INIT_NT(ProtectVirtualMemory);
   INIT_NT(QueryAttributesFile);
@@ -145,16 +146,13 @@ void InitGlobalNt() {
   INIT_NT(QuerySection);
   INIT_NT(QueryVirtualMemory);
   INIT_NT(SetInformationFile);
-  INIT_NT(SetInformationProcess);
   INIT_NT(SignalAndWaitForSingleObject);
   INIT_NT(UnmapViewOfSection);
   INIT_NT(WaitForSingleObject);
-
   INIT_RTL(RtlAllocateHeap);
   INIT_RTL(RtlAnsiStringToUnicodeString);
   INIT_RTL(RtlCompareUnicodeString);
   INIT_RTL(RtlCreateHeap);
-  INIT_RTL(RtlCreateUserThread);
   INIT_RTL(RtlDestroyHeap);
   INIT_RTL(RtlFreeHeap);
   INIT_RTL(RtlNtStatusToDosError);
@@ -164,6 +162,21 @@ void InitGlobalNt() {
   INIT_RTL(memcpy);
   sandbox::g_nt.Initialized = true;
 }
+
+// The TEB structure defined in winternl.h doesn't have the ClientId member.
+// Provide a partial definition here.
+struct PARTIAL_TEB {
+  PVOID NtTib[7];
+  PVOID EnvironmentPointer;
+  CLIENT_ID ClientId;
+  PVOID ActiveRpcHandle;
+  PVOID ThreadLocalStoragePointer;
+  PPEB ProcessEnvironmentBlock;
+};
+
+// Check PEB offset between the partial definition and the public one.
+static_assert(offsetof(PARTIAL_TEB, ProcessEnvironmentBlock) ==
+              offsetof(TEB, ProcessEnvironmentBlock));
 
 }  // namespace.
 
@@ -175,12 +188,14 @@ void* g_heap = nullptr;
 SANDBOX_INTERCEPT HANDLE g_shared_section;
 SANDBOX_INTERCEPT size_t g_shared_IPC_size = 0;
 SANDBOX_INTERCEPT size_t g_shared_policy_size = 0;
+SANDBOX_INTERCEPT size_t g_delegate_data_size = 0;
 
 void* volatile g_shared_policy_memory = nullptr;
 void* volatile g_shared_IPC_memory = nullptr;
+void* volatile g_shared_delegate_data = nullptr;
 
-// Both the IPC and the policy share a single region of memory in which the IPC
-// memory is first and the policy memory is last.
+// The IPC, policy and delegate data share a single region of memory with blocks
+// in that order.
 bool MapGlobalMemory() {
   if (!g_shared_IPC_memory) {
     void* memory = nullptr;
@@ -202,11 +217,19 @@ bool MapGlobalMemory() {
           GetNtExports()->UnmapViewOfSection(NtCurrentProcess, memory));
     }
     DCHECK_NT(g_shared_IPC_size > 0);
-    g_shared_policy_memory =
-        reinterpret_cast<char*>(g_shared_IPC_memory) + g_shared_IPC_size;
+
+    if (g_shared_policy_size > 0) {
+      g_shared_policy_memory =
+          reinterpret_cast<char*>(g_shared_IPC_memory) + g_shared_IPC_size;
+    }
+    // TODO(1435571) make this a read-only mapping in the child, distinct from
+    // the IPC & policy memory as it should be const.
+    if (g_delegate_data_size > 0) {
+      g_shared_delegate_data = reinterpret_cast<char*>(g_shared_IPC_memory) +
+                               g_shared_IPC_size + g_shared_policy_size;
+    }
   }
-  DCHECK_NT(g_shared_policy_memory);
-  DCHECK_NT(g_shared_policy_size > 0);
+
   return true;
 }
 
@@ -216,10 +239,22 @@ void* GetGlobalIPCMemory() {
   return g_shared_IPC_memory;
 }
 
-void* GetGlobalPolicyMemory() {
+void* GetGlobalPolicyMemoryForTesting() {
   if (!MapGlobalMemory())
     return nullptr;
   return g_shared_policy_memory;
+}
+
+std::optional<base::span<const uint8_t>> GetGlobalDelegateData() {
+  if (!g_delegate_data_size) {
+    return std::nullopt;
+  }
+  if (!MapGlobalMemory()) {
+    return std::nullopt;
+  }
+  return base::make_span(
+      reinterpret_cast<const uint8_t*>(g_shared_delegate_data),
+      g_delegate_data_size);
 }
 
 const NtExports* GetNtExports() {
@@ -283,7 +318,7 @@ NTSTATUS CopyData(void* destination, const void* source, size_t bytes) {
   __try {
     GetNtExports()->memcpy(destination, source, bytes);
   } __except (EXCEPTION_EXECUTE_HANDLER) {
-    ret = GetExceptionCode();
+    ret = (NTSTATUS)GetExceptionCode();
   }
   return ret;
 }
@@ -326,7 +361,7 @@ NTSTATUS CopyNameAndAttributes(
       ret = STATUS_SUCCESS;
     } while (false);
   } __except (EXCEPTION_EXECUTE_HANDLER) {
-    ret = GetExceptionCode();
+    ret = (NTSTATUS)GetExceptionCode();
   }
 
   if (!NT_SUCCESS(ret) && *out_name)
@@ -345,7 +380,10 @@ NTSTATUS GetProcessId(HANDLE process, DWORD* process_id) {
   if (!NT_SUCCESS(ret) || sizeof(proc_info) != bytes_returned)
     return ret;
 
-  *process_id = proc_info.UniqueProcessId;
+  // https://learn.microsoft.com/en-us/windows/win32/api/winternl/nf-winternl-ntqueryinformationprocess
+  // "UniqueProcessId Can be cast to a DWORD and contains a unique identifier
+  // for this process."
+  *process_id = static_cast<DWORD>(proc_info.UniqueProcessId);
   return STATUS_SUCCESS;
 }
 
@@ -542,30 +580,27 @@ UNICODE_STRING* ExtractModuleName(const UNICODE_STRING* module_path) {
   if ((!module_path) || (!module_path->Buffer))
     return nullptr;
 
-  wchar_t* sep = nullptr;
-  int start_pos = module_path->Length / sizeof(wchar_t) - 1;
-  int ix = start_pos;
-
-  for (; ix >= 0; --ix) {
-    if (module_path->Buffer[ix] == L'\\') {
-      sep = &module_path->Buffer[ix];
-      break;
+  wchar_t* start_ptr = &module_path->Buffer[0];
+  if (module_path->Length > 0) {
+    size_t last_char = module_path->Length / sizeof(wchar_t) - 1;
+    // Ends with path separator. Not a valid module name.
+    if (module_path->Buffer[last_char] == L'\\')
+      return nullptr;
+    // Search backwards for path separator.
+    for (size_t i = 0; i <= last_char; ++i) {
+      if (module_path->Buffer[last_char - i] == L'\\') {
+        start_ptr = &module_path->Buffer[last_char - i + 1];
+        break;
+      }
     }
   }
 
-  // Ends with path separator. Not a valid module name.
-  if ((ix == start_pos) && sep)
-    return nullptr;
+  size_t skip_bytes = reinterpret_cast<uintptr_t>(start_ptr) -
+                      reinterpret_cast<uintptr_t>(&module_path->Buffer[0]);
+  // We add a nul wchar to the buffer.
+  size_t size_bytes = module_path->Length - skip_bytes + sizeof(wchar_t);
 
-  // No path separator found. Use the entire name.
-  if (!sep) {
-    sep = &module_path->Buffer[-1];
-  }
-
-  // Add one to the size so we can null terminate the string.
-  size_t size_bytes = (start_pos - ix + 1) * sizeof(wchar_t);
-
-  // Based on the code above, size_bytes should always be small enough
+  // Because module_path is a UNICODE_STRING, size_bytes will be small enough
   // to make the static_cast below safe.
   DCHECK_NT(UINT16_MAX > size_bytes);
   char* str_buffer = new (NT_ALLOC) char[size_bytes + sizeof(UNICODE_STRING)];
@@ -577,7 +612,7 @@ UNICODE_STRING* ExtractModuleName(const UNICODE_STRING* module_path) {
   out_string->Length = static_cast<USHORT>(size_bytes - sizeof(wchar_t));
   out_string->MaximumLength = static_cast<USHORT>(size_bytes);
 
-  NTSTATUS ret = CopyData(out_string->Buffer, &sep[1], out_string->Length);
+  NTSTATUS ret = CopyData(out_string->Buffer, start_ptr, out_string->Length);
   if (!NT_SUCCESS(ret)) {
     operator delete(out_string, NT_ALLOC);
     return nullptr;
@@ -690,6 +725,10 @@ bool NtGetPathFromHandle(HANDLE handle,
   if (STATUS_SUCCESS != status)
     return false;
   return true;
+}
+
+CLIENT_ID GetCurrentClientId() {
+  return reinterpret_cast<PARTIAL_TEB*>(NtCurrentTeb())->ClientId;
 }
 
 }  // namespace sandbox

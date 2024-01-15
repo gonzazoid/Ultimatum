@@ -11,6 +11,7 @@ import androidx.annotation.VisibleForTesting;
 
 import org.chromium.net.CronetException;
 import org.chromium.net.InlineExecutionProhibitedException;
+import org.chromium.net.RequestFinishedInfo;
 import org.chromium.net.UploadDataProvider;
 import org.chromium.net.UrlResponseInfo;
 import org.chromium.net.impl.CallbackExceptionImpl;
@@ -21,6 +22,8 @@ import org.chromium.net.impl.JavaUrlRequestUtils.CheckedRunnable;
 import org.chromium.net.impl.JavaUrlRequestUtils.DirectPreventingExecutor;
 import org.chromium.net.impl.JavaUrlRequestUtils.State;
 import org.chromium.net.impl.Preconditions;
+import org.chromium.net.impl.RefCountDelegate;
+import org.chromium.net.impl.RequestFinishedInfoImpl;
 import org.chromium.net.impl.UrlRequestBase;
 import org.chromium.net.impl.UrlResponseInfoImpl;
 
@@ -32,6 +35,7 @@ import java.nio.channels.Channels;
 import java.nio.channels.WritableByteChannel;
 import java.util.AbstractMap;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -44,7 +48,6 @@ import java.util.concurrent.RejectedExecutionException;
  * testing Cronet usage on Android.
  */
 final class FakeUrlRequest extends UrlRequestBase {
-    private static final int DEFAULT_UPLOAD_BUFFER_SIZE = 8192;
     // Used for logging errors.
     private static final String TAG = FakeUrlRequest.class.getSimpleName();
     // Callback used to report responses to the client.
@@ -53,49 +56,70 @@ final class FakeUrlRequest extends UrlRequestBase {
     private final Executor mUserExecutor;
     // The {@link Executor} provided by the engine used to break up callback loops.
     private final Executor mExecutor;
+    // The Annotations provided by the engine during the creation of this request.
+    private final Collection<Object> mRequestAnnotations;
     // The {@link FakeCronetController} that will provide responses for this request.
     private final FakeCronetController mFakeCronetController;
     // The fake {@link CronetEngine} that should be notified when this request starts and stops.
     private final FakeCronetEngine mFakeCronetEngine;
+
     // Source of thread safety for this class.
     @VisibleForTesting(otherwise = VisibleForTesting.PRIVATE)
     final Object mLock = new Object();
+
     // True if direct execution is allowed for this request.
     private final boolean mAllowDirectExecutor;
+
     // The chain of URL's this request has received.
     @GuardedBy("mLock")
     private final List<String> mUrlChain = new ArrayList<>();
+
     // The list of HTTP headers used by this request to establish a connection.
     @GuardedBy("mLock")
     private final ArrayList<Map.Entry<String, String>> mAllHeadersList = new ArrayList<>();
+
+    // The exception that is thrown by the request. This is the same exception as the one in
+    // onFailed
+    @GuardedBy("mLock")
+    private CronetException mCronetException;
+
     // The current URL this request is connecting to.
     @GuardedBy("mLock")
     private String mCurrentUrl;
+
     // The {@link FakeUrlResponse} for the current URL.
     @GuardedBy("mLock")
     private FakeUrlResponse mCurrentFakeResponse;
+
     // The body of the request from UploadDataProvider.
     @GuardedBy("mLock")
     private byte[] mRequestBody;
+
     // The {@link UploadDataProvider} to retrieve a request body from.
     @GuardedBy("mLock")
     private UploadDataProvider mUploadDataProvider;
+
     // The executor to call the {@link UploadDataProvider}'s callback methods with.
     @GuardedBy("mLock")
     private Executor mUploadExecutor;
+
     // The {@link UploadDataSink} for the {@link UploadDataProvider}.
     @GuardedBy("mLock")
     @VisibleForTesting(otherwise = VisibleForTesting.PRIVATE)
     FakeDataSink mFakeDataSink;
+
     // The {@link UrlResponseInfo} for the current request.
     @GuardedBy("mLock")
     private UrlResponseInfo mUrlResponseInfo;
+
     // The response from the current request that needs to be sent.
     @GuardedBy("mLock")
     private ByteBuffer mResponse;
+
     // The HTTP method used by this request to establish a connection.
     @GuardedBy("mLock")
     private String mHttpMethod;
+
     // True after the {@link UploadDataProvider} for this request has been closed.
     @GuardedBy("mLock")
     private boolean mUploadProviderClosed;
@@ -110,13 +134,11 @@ final class FakeUrlRequest extends UrlRequestBase {
      * isn't needed to implement the logic in this class, it is needed to implement
      * {@link #getStatus(StatusListener)}.
      */
-    @StatusValues
-    private volatile int mAdditionalStatusDetails = Status.INVALID;
+    @StatusValues private volatile int mAdditionalStatusDetails = Status.INVALID;
 
-    /**
-     * Used to map from HTTP status codes to the corresponding human-readable text.
-     */
+    /** Used to map from HTTP status codes to the corresponding human-readable text. */
     private static final Map<Integer, String> HTTP_STATUS_CODE_TO_TEXT;
+
     static {
         Map<Integer, String> httpCodeMap = new HashMap<>();
         httpCodeMap.put(100, "Continue");
@@ -184,10 +206,19 @@ final class FakeUrlRequest extends UrlRequestBase {
         HTTP_STATUS_CODE_TO_TEXT = Collections.unmodifiableMap(httpCodeMap);
     }
 
-    FakeUrlRequest(Callback callback, Executor userExecutor, Executor executor, String url,
-            boolean allowDirectExecutor, boolean trafficStatsTagSet, int trafficStatsTag,
-            final boolean trafficStatsUidSet, final int trafficStatsUid,
-            FakeCronetController fakeCronetController, FakeCronetEngine fakeCronetEngine) {
+    FakeUrlRequest(
+            Callback callback,
+            Executor userExecutor,
+            Executor executor,
+            String url,
+            boolean allowDirectExecutor,
+            boolean trafficStatsTagSet,
+            int trafficStatsTag,
+            final boolean trafficStatsUidSet,
+            final int trafficStatsUid,
+            FakeCronetController fakeCronetController,
+            FakeCronetEngine fakeCronetEngine,
+            Collection<Object> requestAnnotations) {
         if (url == null) {
             throw new NullPointerException("URL is required");
         }
@@ -205,6 +236,7 @@ final class FakeUrlRequest extends UrlRequestBase {
         mFakeCronetController = fakeCronetController;
         mFakeCronetEngine = fakeCronetEngine;
         mAllowDirectExecutor = allowDirectExecutor;
+        mRequestAnnotations = requestAnnotations;
     }
 
     @Override
@@ -234,10 +266,14 @@ final class FakeUrlRequest extends UrlRequestBase {
             if (method == null) {
                 throw new NullPointerException("Method is required.");
             }
-            if ("OPTIONS".equalsIgnoreCase(method) || "GET".equalsIgnoreCase(method)
-                    || "HEAD".equalsIgnoreCase(method) || "POST".equalsIgnoreCase(method)
-                    || "PUT".equalsIgnoreCase(method) || "DELETE".equalsIgnoreCase(method)
-                    || "TRACE".equalsIgnoreCase(method) || "PATCH".equalsIgnoreCase(method)) {
+            if ("OPTIONS".equalsIgnoreCase(method)
+                    || "GET".equalsIgnoreCase(method)
+                    || "HEAD".equalsIgnoreCase(method)
+                    || "POST".equalsIgnoreCase(method)
+                    || "PUT".equalsIgnoreCase(method)
+                    || "DELETE".equalsIgnoreCase(method)
+                    || "TRACE".equalsIgnoreCase(method)
+                    || "PATCH".equalsIgnoreCase(method)) {
                 mHttpMethod = method;
             } else {
                 throw new IllegalArgumentException("Invalid http method: " + method);
@@ -253,9 +289,7 @@ final class FakeUrlRequest extends UrlRequestBase {
         }
     }
 
-    /**
-     * Verifies that the request is not already started and throws an exception if it is.
-     */
+    /** Verifies that the request is not already started and throws an exception if it is. */
     @GuardedBy("mLock")
     private void checkNotStarted() {
         if (mState != State.NOT_STARTED) {
@@ -275,6 +309,7 @@ final class FakeUrlRequest extends UrlRequestBase {
                 } finally {
                     if (!transitionedState) {
                         cleanup();
+                        mFakeCronetEngine.onRequestFinished();
                     }
                 }
                 mUrlChain.add(mCurrentUrl);
@@ -298,15 +333,20 @@ final class FakeUrlRequest extends UrlRequestBase {
     @GuardedBy("mLock")
     private void fakeConnect() {
         mAdditionalStatusDetails = Status.WAITING_FOR_RESPONSE;
-        mCurrentFakeResponse = mFakeCronetController.getResponse(
-                mCurrentUrl, mHttpMethod, mAllHeadersList, mRequestBody);
+        mCurrentFakeResponse =
+                mFakeCronetController.getResponse(
+                        mCurrentUrl, mHttpMethod, mAllHeadersList, mRequestBody);
         int responseCode = mCurrentFakeResponse.getHttpStatusCode();
-        mUrlResponseInfo = new UrlResponseInfoImpl(
-                Collections.unmodifiableList(new ArrayList<>(mUrlChain)), responseCode,
-                getDescriptionByCode(responseCode), mCurrentFakeResponse.getAllHeadersList(),
-                mCurrentFakeResponse.getWasCached(), mCurrentFakeResponse.getNegotiatedProtocol(),
-                mCurrentFakeResponse.getProxyServer(),
-                mCurrentFakeResponse.getResponseBody().length);
+        mUrlResponseInfo =
+                new UrlResponseInfoImpl(
+                        Collections.unmodifiableList(new ArrayList<>(mUrlChain)),
+                        responseCode,
+                        getDescriptionByCode(responseCode),
+                        mCurrentFakeResponse.getAllHeadersList(),
+                        mCurrentFakeResponse.getWasCached(),
+                        mCurrentFakeResponse.getNegotiatedProtocol(),
+                        mCurrentFakeResponse.getProxyServer(),
+                        mCurrentFakeResponse.getResponseBody().length);
         mResponse = ByteBuffer.wrap(mCurrentFakeResponse.getResponseBody());
         // Check for a redirect.
         if (responseCode >= 300 && responseCode < 400) {
@@ -315,12 +355,10 @@ final class FakeUrlRequest extends UrlRequestBase {
             closeUploadDataProvider();
             final UrlResponseInfo info = mUrlResponseInfo;
             transitionStates(State.STARTED, State.AWAITING_READ);
-            executeCheckedRunnable(new CheckedRunnable() {
-                @Override
-                public void run() throws Exception {
-                    mCallback.onResponseStarted(FakeUrlRequest.this, info);
-                }
-            });
+            executeCheckedRunnable(
+                    () -> {
+                        mCallback.onResponseStarted(FakeUrlRequest.this, info);
+                    });
         }
     }
 
@@ -336,15 +374,16 @@ final class FakeUrlRequest extends UrlRequestBase {
         if (mUrlResponseInfo.getAllHeaders().get("location") == null) {
             // Response did not have a location header, so this request must fail.
             final String prevUrl = mCurrentUrl;
-            mUserExecutor.execute(new Runnable() {
-                @Override
-                public void run() {
-                    tryToFailWithException(new CronetExceptionImpl(
-                            "Request failed due to bad redirect HTTP headers",
-                            new IllegalStateException("Response recieved from URL: " + prevUrl
-                                    + " was a redirect, but lacked a location header.")));
-                }
-            });
+            mUserExecutor.execute(
+                    () -> {
+                        tryToFailWithException(
+                                new CronetExceptionImpl(
+                                        "Request failed due to bad redirect HTTP headers",
+                                        new IllegalStateException(
+                                                "Response recieved from URL: "
+                                                        + prevUrl
+                                                        + " was a redirect, but lacked a location header.")));
+                    });
             return;
         }
         String pendingRedirectUrl =
@@ -355,17 +394,14 @@ final class FakeUrlRequest extends UrlRequestBase {
         mUrlChain.add(mCurrentUrl);
         transitionStates(State.REDIRECT_RECEIVED, State.AWAITING_FOLLOW_REDIRECT);
         final UrlResponseInfo info = mUrlResponseInfo;
-        mExecutor.execute(new Runnable() {
-            @Override
-            public void run() {
-                executeCheckedRunnable(new CheckedRunnable() {
-                    @Override
-                    public void run() throws Exception {
-                        mCallback.onRedirectReceived(FakeUrlRequest.this, info, pendingRedirectUrl);
-                    }
+        mExecutor.execute(
+                () -> {
+                    executeCheckedRunnable(
+                            () -> {
+                                mCallback.onRedirectReceived(
+                                        FakeUrlRequest.this, info, pendingRedirectUrl);
+                            });
                 });
-            }
-        });
     }
 
     @Override
@@ -381,25 +417,22 @@ final class FakeUrlRequest extends UrlRequestBase {
             if (mResponse.hasRemaining()) {
                 transitionStates(State.READING, State.AWAITING_READ);
                 fillBufferWithResponse(buffer);
-                mExecutor.execute(new Runnable() {
-                    @Override
-                    public void run() {
-                        executeCheckedRunnable(new CheckedRunnable() {
-                            @Override
-                            public void run() throws Exception {
-                                mCallback.onReadCompleted(FakeUrlRequest.this, info, buffer);
-                            }
+                mExecutor.execute(
+                        () -> {
+                            executeCheckedRunnable(
+                                    () -> {
+                                        mCallback.onReadCompleted(
+                                                FakeUrlRequest.this, info, buffer);
+                                    });
                         });
-                    }
-                });
             } else {
-                if (setTerminalState(State.COMPLETE)) {
-                    mUserExecutor.execute(new Runnable() {
-                        @Override
-                        public void run() {
-                            mCallback.onSucceeded(FakeUrlRequest.this, info);
-                        }
-                    });
+                final RefCountDelegate inflightDoneCallbackCount = setTerminalState(State.COMPLETE);
+                if (inflightDoneCallbackCount != null) {
+                    mUserExecutor.execute(
+                            () -> {
+                                mCallback.onSucceeded(FakeUrlRequest.this, info);
+                                inflightDoneCallbackCount.decrement();
+                            });
                 }
             }
         }
@@ -437,14 +470,18 @@ final class FakeUrlRequest extends UrlRequestBase {
     @Override
     public void cancel() {
         synchronized (mLock) {
+            if (mState == State.NOT_STARTED || isDone()) {
+                return;
+            }
+
             final UrlResponseInfo info = mUrlResponseInfo;
-            if (setTerminalState(State.CANCELLED)) {
-                mUserExecutor.execute(new Runnable() {
-                    @Override
-                    public void run() {
-                        mCallback.onCanceled(FakeUrlRequest.this, info);
-                    }
-                });
+            final RefCountDelegate inflightDoneCallbackCount = setTerminalState(State.CANCELLED);
+            if (inflightDoneCallbackCount != null) {
+                mUserExecutor.execute(
+                        () -> {
+                            mCallback.onCanceled(FakeUrlRequest.this, info);
+                            inflightDoneCallbackCount.decrement();
+                        });
             }
         }
     }
@@ -454,8 +491,7 @@ final class FakeUrlRequest extends UrlRequestBase {
         synchronized (mLock) {
             int extraStatus = mAdditionalStatusDetails;
 
-            @StatusValues
-            final int status;
+            @StatusValues final int status;
             switch (mState) {
                 case State.ERROR:
                 case State.COMPLETE:
@@ -477,12 +513,13 @@ final class FakeUrlRequest extends UrlRequestBase {
                 default:
                     throw new IllegalStateException("Switch is exhaustive: " + mState);
             }
-            mUserExecutor.execute(new Runnable() {
-                @Override
-                public void run() {
-                    listener.onStatus(status);
-                }
-            });
+            mUserExecutor.execute(
+                    new Runnable() {
+                        @Override
+                        public void run() {
+                            listener.onStatus(status);
+                        }
+                    });
         }
     }
 
@@ -503,6 +540,7 @@ final class FakeUrlRequest extends UrlRequestBase {
             mState = newState;
         } else {
             if (!(mState == State.CANCELLED || mState == State.ERROR)) {
+                // TODO(crbug/1450573): Use Enums for state instead for better error messages.
                 throw new IllegalStateException(
                         "Invalid state transition - expected " + expected + " but was " + mState);
             }
@@ -519,8 +557,11 @@ final class FakeUrlRequest extends UrlRequestBase {
      */
     private void tryToFailWithException(CronetException e) {
         synchronized (mLock) {
-            if (setTerminalState(State.ERROR)) {
+            mCronetException = e;
+            final RefCountDelegate inflightDoneCallbackCount = setTerminalState(State.ERROR);
+            if (inflightDoneCallbackCount != null) {
                 mCallback.onFailed(FakeUrlRequest.this, mUrlResponseInfo, e);
+                inflightDoneCallbackCount.decrement();
             }
         }
     }
@@ -537,17 +578,16 @@ final class FakeUrlRequest extends UrlRequestBase {
      */
     private void executeCheckedRunnable(JavaUrlRequestUtils.CheckedRunnable checkedRunnable) {
         try {
-            mUserExecutor.execute(new Runnable() {
-                @Override
-                public void run() {
-                    try {
-                        checkedRunnable.run();
-                    } catch (Exception e) {
-                        tryToFailWithException(new CallbackExceptionImpl(
-                                "Exception received from UrlRequest.Callback", e));
-                    }
-                }
-            });
+            mUserExecutor.execute(
+                    () -> {
+                        try {
+                            checkedRunnable.run();
+                        } catch (Exception e) {
+                            tryToFailWithException(
+                                    new CallbackExceptionImpl(
+                                            "Exception received from UrlRequest.Callback", e));
+                        }
+                    });
         } catch (InlineExecutionProhibitedException e) {
             // Don't try to fail using the {@code mUserExecutor} because it produced this error.
             tryToFailWithException(
@@ -562,21 +602,57 @@ final class FakeUrlRequest extends UrlRequestBase {
      *
      * @param terminalState the terminal state to set; one of {@link State.ERROR},
      * {@link State.COMPLETE}, or {@link State.CANCELLED}
-     * @return true if the terminal state has been set.
+     * @return a refcount to decrement after the terminal callback is called, or
+     * null if the terminal state wasn't set.
      */
     @GuardedBy("mLock")
-    private boolean setTerminalState(@State int terminalState) {
+    private RefCountDelegate setTerminalState(@State int terminalState) {
         switch (mState) {
             case State.NOT_STARTED:
                 throw new IllegalStateException("Can't enter terminal state before start");
             case State.ERROR: // fallthrough
             case State.COMPLETE: // fallthrough
             case State.CANCELLED:
-                return false; // Already in a terminal state
-            default: {
-                mState = terminalState;
-                cleanup();
-                return true;
+                return null; // Already in a terminal state
+            default:
+                {
+                    mState = terminalState;
+                    final RefCountDelegate inflightDoneCallbackCount =
+                            new RefCountDelegate(mFakeCronetEngine::onRequestFinished);
+                    reportRequestFinished(inflightDoneCallbackCount);
+                    cleanup();
+                    return inflightDoneCallbackCount;
+                }
+        }
+    }
+
+    private void reportRequestFinished(RefCountDelegate inflightDoneCallbackCount) {
+        synchronized (mLock) {
+            mFakeCronetEngine.reportRequestFinished(
+                    new FakeRequestFinishedInfo(
+                            mCurrentUrl,
+                            mRequestAnnotations,
+                            getRequestFinishedReason(),
+                            mUrlResponseInfo,
+                            mCronetException),
+                    inflightDoneCallbackCount);
+        }
+    }
+
+    @RequestFinishedInfoImpl.FinishedReason
+    @GuardedBy("mLock")
+    private int getRequestFinishedReason() {
+        synchronized (mLock) {
+            switch (mState) {
+                case State.COMPLETE:
+                    return RequestFinishedInfo.SUCCEEDED;
+                case State.ERROR:
+                    return RequestFinishedInfo.FAILED;
+                case State.CANCELLED:
+                    return RequestFinishedInfo.CANCELED;
+                default:
+                    throw new IllegalStateException(
+                            "Request should be in terminal state before calling getRequestFinishedReason");
             }
         }
     }
@@ -595,15 +671,14 @@ final class FakeUrlRequest extends UrlRequestBase {
     private void closeUploadDataProvider() {
         if (mUploadDataProvider != null && !mUploadProviderClosed) {
             try {
-                mUploadExecutor.execute(uploadErrorSetting(new CheckedRunnable() {
-                    @Override
-                    public void run() throws Exception {
-                        synchronized (mLock) {
-                            mUploadDataProvider.close();
-                            mUploadProviderClosed = true;
-                        }
-                    }
-                }));
+                mUploadExecutor.execute(
+                        uploadErrorSetting(
+                                () -> {
+                                    synchronized (mLock) {
+                                        mUploadDataProvider.close();
+                                        mUploadProviderClosed = true;
+                                    }
+                                }));
             } catch (RejectedExecutionException e) {
                 Log.e(TAG, "Exception when closing uploadDataProvider", e);
             }
@@ -639,13 +714,11 @@ final class FakeUrlRequest extends UrlRequestBase {
      */
     private void enterUploadErrorState(final Throwable error) {
         synchronized (mLock) {
-            mUserExecutor.execute(new Runnable() {
-                @Override
-                public void run() {
-                    tryToFailWithException(new CronetExceptionImpl(
-                            "Exception received from UploadDataProvider", error));
-                }
-            });
+            executeCheckedRunnable(
+                    () ->
+                            tryToFailWithException(
+                                    new CronetExceptionImpl(
+                                            "Exception received from UploadDataProvider", error)));
         }
     }
 
@@ -671,12 +744,14 @@ final class FakeUrlRequest extends UrlRequestBase {
                     try {
                         runnable.run();
                     } catch (Throwable t) {
-                        mUserExecutor.execute(new Runnable() {
-                            @Override
-                            public void run() {
-                                tryToFailWithException(new CronetExceptionImpl("System error", t));
-                            }
-                        });
+                        mUserExecutor.execute(
+                                new Runnable() {
+                                    @Override
+                                    public void run() {
+                                        tryToFailWithException(
+                                                new CronetExceptionImpl("System error", t));
+                                    }
+                                });
                     }
                 }
             };
@@ -744,7 +819,8 @@ final class FakeUrlRequest extends UrlRequestBase {
      * @return the HTTP status text as a string
      */
     private static String getDescriptionByCode(Integer code) {
-        return HTTP_STATUS_CODE_TO_TEXT.containsKey(code) ? HTTP_STATUS_CODE_TO_TEXT.get(code)
-                                                          : "Unassigned";
+        return HTTP_STATUS_CODE_TO_TEXT.containsKey(code)
+                ? HTTP_STATUS_CODE_TO_TEXT.get(code)
+                : "Unassigned";
     }
 }

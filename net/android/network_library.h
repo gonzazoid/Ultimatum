@@ -14,7 +14,7 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/strings/string_piece.h"
 #include "net/android/cert_verify_result_android.h"
 #include "net/base/ip_endpoint.h"
@@ -25,6 +25,10 @@
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace net::android {
+
+// Get the list of user-added roots from Android.
+// |roots| is a list of DER-encoded user-added roots from Android.
+std::vector<std::string> GetUserAddedRoots();
 
 // |cert_chain| is DER encoded chain of certificates, with the server's own
 // certificate listed first.
@@ -45,7 +49,7 @@ void ClearTestRootCertificates();
 
 // Returns true if cleartext traffic to |host| is allowed by the app. Always
 // true on L and older.
-bool IsCleartextPermitted(const std::string& host);
+bool IsCleartextPermitted(base::StringPiece host);
 
 // Returns true if it can determine that only loopback addresses are configured.
 // i.e. if only 127.0.0.1 and ::1 are routable.
@@ -54,8 +58,7 @@ bool HaveOnlyLoopbackAddresses();
 
 // Get the mime type (if any) that is associated with the file extension.
 // Returns true if a corresponding mime type exists.
-bool GetMimeTypeFromExtension(const std::string& extension,
-                              std::string* result);
+bool GetMimeTypeFromExtension(base::StringPiece extension, std::string* result);
 
 // Returns MCC+MNC (mobile country code + mobile network code) as
 // the numeric name of the current registered operator. This function

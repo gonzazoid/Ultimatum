@@ -16,7 +16,7 @@ namespace tether {
 // Test double for WifiHotspotConnector.
 class FakeWifiHotspotConnector : public WifiHotspotConnector {
  public:
-  FakeWifiHotspotConnector(NetworkStateHandler* network_state_handler);
+  explicit FakeWifiHotspotConnector(NetworkHandler* network_handler);
 
   FakeWifiHotspotConnector(const FakeWifiHotspotConnector&) = delete;
   FakeWifiHotspotConnector& operator=(const FakeWifiHotspotConnector&) = delete;

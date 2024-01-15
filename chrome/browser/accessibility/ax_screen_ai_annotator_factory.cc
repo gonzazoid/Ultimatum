@@ -5,7 +5,6 @@
 #include "chrome/browser/accessibility/ax_screen_ai_annotator_factory.h"
 
 #include "chrome/browser/accessibility/ax_screen_ai_annotator.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
 #include "content/public/browser/browser_context.h"
 
 namespace screen_ai {
@@ -31,21 +30,27 @@ void AXScreenAIAnnotatorFactory::EnsureExistsForBrowserContext(
 }
 
 AXScreenAIAnnotatorFactory::AXScreenAIAnnotatorFactory()
-    : BrowserContextKeyedServiceFactory(
+    : ProfileKeyedServiceFactory(
           "AXScreenAIAnnotator",
-          BrowserContextDependencyManager::GetInstance()) {}
+          // Incognito profiles should use their own instance.
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOwnInstance)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOwnInstance)
+              .Build()) {}
 
 AXScreenAIAnnotatorFactory::~AXScreenAIAnnotatorFactory() = default;
 
-KeyedService* AXScreenAIAnnotatorFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+AXScreenAIAnnotatorFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
-  return new screen_ai::AXScreenAIAnnotator(context);
+  return std::make_unique<screen_ai::AXScreenAIAnnotator>(context);
 }
 
-// Incognito profiles should use their own instance.
-content::BrowserContext* AXScreenAIAnnotatorFactory::GetBrowserContextToUse(
-    content::BrowserContext* context) const {
-  return context;
+// static
+void AXScreenAIAnnotatorFactory::EnsureFactoryBuilt() {
+  AXScreenAIAnnotatorFactory::GetInstance();
 }
 
 }  // namespace screen_ai

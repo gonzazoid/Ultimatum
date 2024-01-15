@@ -16,12 +16,13 @@
 #include <ios>
 #include <iostream>
 #include <map>
+#include <optional>
 #include <string>
 #include <vector>
 
-#include "base/allocator/partition_allocator/partition_root.h"
-#include "base/allocator/partition_allocator/partition_stats.h"
-#include "base/allocator/partition_allocator/thread_cache.h"
+#include "base/allocator/partition_allocator/src/partition_alloc/partition_root.h"
+#include "base/allocator/partition_allocator/src/partition_alloc/partition_stats.h"
+#include "base/allocator/partition_allocator/src/partition_alloc/thread_cache.h"
 #include "base/check_op.h"
 #include "base/command_line.h"
 #include "base/debug/proc_maps_linux.h"
@@ -40,7 +41,6 @@
 #include "base/time/time.h"
 #include "base/values.h"
 #include "build/build_config.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "tools/memory/partition_allocator/inspect_utils.h"
 
 namespace partition_alloc::tools {
@@ -49,7 +49,6 @@ using ::base::PlatformThreadId;
 using partition_alloc::internal::BucketIndexLookup;
 using partition_alloc::internal::PartitionBucket;
 using partition_alloc::internal::SlotSpanMetadata;
-using partition_alloc::internal::ThreadSafe;
 
 namespace {
 
@@ -142,7 +141,7 @@ class ThreadCacheInspector {
   }
 
   std::vector<BucketStats> AccumulateThreadCacheBuckets();
-  std::uint8_t largest_active_bucket_index() {
+  std::uint16_t largest_active_bucket_index() {
     return registry_.get()->largest_active_bucket_index_;
   }
 
@@ -161,12 +160,12 @@ class PartitionRootInspector {
     size_t allocated_slots = 0;
     size_t freelist_size = 0;
 
-    PartitionBucket<ThreadSafe> bucket;
+    PartitionBucket bucket;
     std::vector<size_t> freelist_sizes;
     // Flattened versions of the lists.
-    std::vector<SlotSpanMetadata<ThreadSafe>> active_slot_spans;
-    std::vector<SlotSpanMetadata<ThreadSafe>> empty_slot_spans;
-    std::vector<SlotSpanMetadata<ThreadSafe>> decommitted_slot_spans;
+    std::vector<SlotSpanMetadata> active_slot_spans;
+    std::vector<SlotSpanMetadata> empty_slot_spans;
+    std::vector<SlotSpanMetadata> decommitted_slot_spans;
   };
 
   PartitionRootInspector(uintptr_t root_addr, pid_t pid)
@@ -174,7 +173,7 @@ class PartitionRootInspector {
   // Returns true for success.
   bool GatherStatistics();
   const std::vector<BucketStats>& bucket_stats() const { return bucket_stats_; }
-  const PartitionRoot<ThreadSafe>* root() { return root_.get(); }
+  const PartitionRoot* root() { return root_.get(); }
 
  private:
   void Update();
@@ -182,7 +181,7 @@ class PartitionRootInspector {
   uintptr_t root_addr_;
   pid_t pid_;
   RemoteProcessMemoryReader reader_;
-  RawBuffer<PartitionRoot<ThreadSafe>> root_;
+  RawBuffer<PartitionRoot> root_;
   std::vector<BucketStats> bucket_stats_;
 };
 
@@ -251,22 +250,22 @@ ThreadCacheInspector::AccumulateThreadCacheBuckets() {
 }
 
 void PartitionRootInspector::Update() {
-  auto root = RawBuffer<PartitionRoot<ThreadSafe>>::ReadFromProcessMemory(
-      reader_, root_addr_);
+  auto root =
+      RawBuffer<PartitionRoot>::ReadFromProcessMemory(reader_, root_addr_);
   if (root.has_value())
     root_ = *root;
 }
 
 namespace {
 
-bool CopySlotSpanList(std::vector<SlotSpanMetadata<ThreadSafe>>& list,
+bool CopySlotSpanList(std::vector<SlotSpanMetadata>& list,
                       uintptr_t head_address,
                       RemoteProcessMemoryReader& reader) {
-  absl::optional<RawBuffer<SlotSpanMetadata<ThreadSafe>>> metadata;
+  std::optional<RawBuffer<SlotSpanMetadata>> metadata;
   for (uintptr_t slot_span_address = head_address; slot_span_address;
        slot_span_address =
            reinterpret_cast<uintptr_t>(metadata->get()->next_slot_span)) {
-    metadata = RawBuffer<SlotSpanMetadata<ThreadSafe>>::ReadFromProcessMemory(
+    metadata = RawBuffer<SlotSpanMetadata>::ReadFromProcessMemory(
         reader, slot_span_address);
     if (!metadata.has_value())
       return false;
@@ -482,81 +481,70 @@ void DisplayRootData(PartitionRootInspector& root_inspector,
             << "kiB";
 }
 
-base::Value Dump(PartitionRootInspector& root_inspector) {
-  auto slot_span_to_value = [](const SlotSpanMetadata<ThreadSafe>& slot_span,
-                               size_t slots_per_span) -> base::Value {
-    auto result = base::Value(base::Value::Type::DICTIONARY);
+base::Value::Dict Dump(PartitionRootInspector& root_inspector) {
+  auto slot_span_to_value = [](const SlotSpanMetadata& slot_span,
+                               size_t slots_per_span) {
+    base::Value::Dict result;
 
-    result.SetKey("num_allocated_slots",
-                  base::Value{slot_span.num_allocated_slots});
-    result.SetKey("num_unprovisioned_slots",
-                  base::Value{slot_span.num_unprovisioned_slots});
-    result.SetKey("freelist_is_sorted",
-                  base::Value{slot_span.freelist_is_sorted()});
-    result.SetKey("freelist_is_sorted",
-                  base::Value{slot_span.freelist_is_sorted()});
+    result.Set("num_allocated_slots", slot_span.num_allocated_slots);
+    result.Set("num_unprovisioned_slots", slot_span.num_unprovisioned_slots);
+    result.Set("freelist_is_sorted", slot_span.freelist_is_sorted());
+    result.Set("freelist_is_sorted", slot_span.freelist_is_sorted());
     size_t freelist_size =
         slot_span.is_decommitted()
             ? 0
             : (slots_per_span - slot_span.num_allocated_slots -
                slot_span.num_unprovisioned_slots);
-    result.SetKey("freelist_size",
-                  base::Value{static_cast<int>(freelist_size)});
-    result.SetKey("marked_full", base::Value{slot_span.marked_full});
-    result.SetKey("is_empty", base::Value{slot_span.is_empty()});
-    result.SetKey("is_decommitted", base::Value{slot_span.is_decommitted()});
+    result.Set("freelist_size", static_cast<int>(freelist_size));
+    result.Set("marked_full", slot_span.marked_full);
+    result.Set("is_empty", slot_span.is_empty());
+    result.Set("is_decommitted", slot_span.is_decommitted());
     return result;
   };
 
-  auto bucket_to_value =
-      [&](const PartitionRootInspector::BucketStats& stats) -> base::Value {
-    auto result = base::Value(base::Value::Type::DICTIONARY);
+  auto bucket_to_value = [&](const PartitionRootInspector::BucketStats& stats) {
+    base::Value::Dict result;
     const size_t kPageSize = base::GetPageSize();
     size_t slots_per_span =
         (stats.bucket.num_system_pages_per_slot_span * kPageSize) /
         stats.slot_size;
 
-    result.SetKey("slot_size", base::Value{static_cast<int>(stats.slot_size)});
-    result.SetKey("num_system_pages_per_slot_span",
-                  base::Value{stats.bucket.num_system_pages_per_slot_span});
-    result.SetKey("num_slots_per_span",
-                  base::Value{static_cast<int>(slots_per_span)});
-    result.SetKey("num_full_slot_spans",
-                  base::Value{stats.bucket.num_full_slot_spans});
-    result.SetKey("allocated_slots",
-                  base::Value{static_cast<int>(stats.allocated_slots)});
-    result.SetKey("freelist_size",
-                  base::Value{static_cast<int>(stats.freelist_size)});
+    result.Set("slot_size", static_cast<int>(stats.slot_size));
+    result.Set("num_system_pages_per_slot_span",
+               stats.bucket.num_system_pages_per_slot_span);
+    result.Set("num_slots_per_span", static_cast<int>(slots_per_span));
+    result.Set("num_full_slot_spans", stats.bucket.num_full_slot_spans);
+    result.Set("allocated_slots", static_cast<int>(stats.allocated_slots));
+    result.Set("freelist_size", static_cast<int>(stats.freelist_size));
 
-    auto active_list = base::Value(base::Value::Type::LIST);
+    base::Value::List active_list;
     for (auto& slot_span : stats.active_slot_spans) {
       active_list.Append(slot_span_to_value(slot_span, slots_per_span));
     }
-    result.SetKey("active_slot_spans", std::move(active_list));
+    result.Set("active_slot_spans", std::move(active_list));
 
-    auto empty_list = base::Value(base::Value::Type::LIST);
+    base::Value::List empty_list;
     for (auto& slot_span : stats.empty_slot_spans) {
       empty_list.Append(slot_span_to_value(slot_span, slots_per_span));
     }
-    result.SetKey("empty_slot_spans", std::move(empty_list));
+    result.Set("empty_slot_spans", std::move(empty_list));
 
-    auto decommitted_list = base::Value(base::Value::Type::LIST);
+    base::Value::List decommitted_list;
     for (auto& slot_span : stats.decommitted_slot_spans) {
       decommitted_list.Append(slot_span_to_value(slot_span, slots_per_span));
     }
-    result.SetKey("decommitted_slot_spans", std::move(decommitted_list));
+    result.Set("decommitted_slot_spans", std::move(decommitted_list));
 
     return result;
   };
 
-  auto result = base::Value(base::Value::Type::DICTIONARY);
-
-  auto bucket_stats = base::Value(base::Value::Type::LIST);
+  base::Value::List bucket_stats;
   for (const auto& stats : root_inspector.bucket_stats()) {
     bucket_stats.Append(bucket_to_value(stats));
   }
 
-  result.SetKey("buckets", std::move(bucket_stats));
+  base::Value::Dict result;
+  result.Set("buckets", std::move(bucket_stats));
   return result;
 }
 }  // namespace partition_alloc::tools
@@ -626,7 +614,7 @@ int main(int argc, char** argv) {
                       (iter / 50) % root_inspector.bucket_stats().size());
 
       if (!json_filename.empty()) {
-        base::Value dump = Dump(root_inspector);
+        base::Value::Dict dump = Dump(root_inspector);
         std::string json_string;
         ok = base::JSONWriter::WriteWithOptions(
             dump, base::JSONWriter::Options::OPTIONS_PRETTY_PRINT,

@@ -147,17 +147,32 @@ bool StructTraits<display::mojom::DisplaySnapshotDataView,
   if (!data.ReadMaximumCursorSize(&maximum_cursor_size))
     return false;
 
+  display::VariableRefreshRateState variable_refresh_rate_state;
+  if (!data.ReadVariableRefreshRateState(&variable_refresh_rate_state))
+    return false;
+
+  const absl::optional<uint16_t> vsync_rate_min =
+      data.vsync_rate_min() > 0 ? absl::make_optional(data.vsync_rate_min())
+                                : absl::nullopt;
+
+  display::DrmFormatsAndModifiers drm_formats_and_modifiers;
+#if BUILDFLAG(IS_CHROMEOS)
+  if (!data.ReadDrmFormatsAndModifiers(&drm_formats_and_modifiers)) {
+    return false;
+  }
+#endif
+
   *out = std::make_unique<display::DisplaySnapshot>(
       data.display_id(), data.port_display_id(), data.edid_display_id(),
       data.connector_index(), origin, physical_size, type,
       data.base_connector_id(), path_topology,
       data.is_aspect_preserving_scaling(), data.has_overscan(),
-      privacy_screen_state, data.has_color_correction_matrix(),
-      data.color_correction_in_linear_space(), color_space,
-      data.bits_per_channel(), hdr_static_metadata, display_name, file_path,
-      std::move(modes), panel_orientation, std::move(edid), current_mode,
-      native_mode, data.product_code(), data.year_of_manufacture(),
-      maximum_cursor_size);
+      privacy_screen_state, data.has_content_protection_key(),
+      data.has_color_correction_matrix(), color_space, data.bits_per_channel(),
+      hdr_static_metadata, display_name, file_path, std::move(modes),
+      panel_orientation, std::move(edid), current_mode, native_mode,
+      data.product_code(), data.year_of_manufacture(), maximum_cursor_size,
+      variable_refresh_rate_state, vsync_rate_min, drm_formats_and_modifiers);
   return true;
 }
 

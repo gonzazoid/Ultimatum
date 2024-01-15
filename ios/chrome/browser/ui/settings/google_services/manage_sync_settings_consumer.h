@@ -7,7 +7,7 @@
 
 #import <UIKit/UIKit.h>
 
-#import "ios/chrome/browser/ui/table_view/table_view_model.h"
+#import "ios/chrome/browser/shared/ui/table_view/table_view_model.h"
 
 // Consumer protocol for manage sync settings.
 @protocol ManageSyncSettingsConsumer <NSObject>
@@ -22,7 +22,8 @@
 
 // Deletes sections at `sections` indexes. Does nothing if the model is not
 // loaded yet.
-- (void)deleteSections:(NSIndexSet*)sections;
+- (void)deleteSections:(NSIndexSet*)section
+      withRowAnimation:(BOOL)withRowAnimation;
 
 // Reloads only a specific `item`. Does nothing if the model is not loaded
 // yet.

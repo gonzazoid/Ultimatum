@@ -6,8 +6,6 @@ package org.chromium.shape_detection;
 
 import static org.junit.Assert.assertNull;
 
-import android.os.Build;
-
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -21,11 +19,9 @@ import org.chromium.mojo_base.BigBufferUtil;
 import org.chromium.skia.mojom.BitmapN32;
 import org.chromium.skia.mojom.BitmapN32ImageInfo;
 
-/**
- * Test suite for conversion-to-Frame utils.
- */
+/** Test suite for conversion-to-Frame utils. */
 @RunWith(BaseRobolectricTestRunner.class)
-@Config(sdk = Build.VERSION_CODES.M, manifest = Config.NONE)
+@Config(manifest = Config.NONE)
 public class BitmapUtilsTest {
     private static final int VALID_WIDTH = 1;
     private static final int VALID_HEIGHT = 1;
@@ -41,9 +37,7 @@ public class BitmapUtilsTest {
         MockitoAnnotations.initMocks(this);
     }
 
-    /**
-     * Verify conversion fails if the Bitmap is invalid.
-     */
+    /** Verify conversion fails if the Bitmap is invalid. */
     @Test
     @Feature({"ShapeDetection"})
     public void testConversionFailsWithInvalidBitmap() {
@@ -54,9 +48,7 @@ public class BitmapUtilsTest {
         assertNull(BitmapUtils.convertToFrame(bitmap));
     }
 
-    /**
-     * Verify conversion fails if the sent dimensions are ugly.
-     */
+    /** Verify conversion fails if the sent dimensions are ugly. */
     @Test
     @Feature({"ShapeDetection"})
     public void testConversionFailsWithInvalidDimensions() {
@@ -69,9 +61,7 @@ public class BitmapUtilsTest {
         assertNull(BitmapUtils.convertToFrame(bitmap));
     }
 
-    /**
-     * Verify conversion fails if Bitmap fails to wrap().
-     */
+    /** Verify conversion fails if Bitmap fails to wrap(). */
     @Test
     @Feature({"ShapeDetection"})
     public void testConversionFailsWithWronglyWrappedData() {

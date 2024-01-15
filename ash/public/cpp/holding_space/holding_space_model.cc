@@ -12,9 +12,9 @@
 #include "ash/public/cpp/holding_space/holding_space_model_observer.h"
 #include "ash/public/cpp/holding_space/holding_space_section.h"
 #include "ash/public/cpp/holding_space/holding_space_util.h"
-#include "base/bind.h"
 #include "base/check.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/ranges/algorithm.h"
 
@@ -39,9 +39,10 @@ HoldingSpaceModel::ScopedItemUpdate::~ScopedItemUpdate() {
   }
 
   // Update backing file.
-  if (file_path_ && file_system_url_) {
-    if (item_->SetBackingFile(file_path_.value(), file_system_url_.value()))
+  if (file_) {
+    if (item_->SetBackingFile(file_.value())) {
       updated_fields |= HoldingSpaceModelObserver::UpdatedField::kBackingFile;
+    }
   }
 
   // Update in-progress commands.
@@ -61,8 +62,8 @@ HoldingSpaceModel::ScopedItemUpdate::~ScopedItemUpdate() {
   }
 
   // Update secondary text color.
-  if (secondary_text_color_) {
-    if (item_->SetSecondaryTextColor(secondary_text_color_.value())) {
+  if (secondary_text_color_id_) {
+    if (item_->SetSecondaryTextColorId(secondary_text_color_id_.value())) {
       updated_fields |=
           HoldingSpaceModelObserver::UpdatedField::kSecondaryTextColor;
     }
@@ -96,17 +97,15 @@ HoldingSpaceModel::ScopedItemUpdate::~ScopedItemUpdate() {
 
 HoldingSpaceModel::ScopedItemUpdate&
 HoldingSpaceModel::ScopedItemUpdate::SetAccessibleName(
-    const absl::optional<std::u16string>& accessible_name) {
+    const std::optional<std::u16string>& accessible_name) {
   accessible_name_ = accessible_name;
   return *this;
 }
 
 HoldingSpaceModel::ScopedItemUpdate&
 HoldingSpaceModel::ScopedItemUpdate::SetBackingFile(
-    const base::FilePath& file_path,
-    const GURL& file_system_url) {
-  file_path_ = file_path;
-  file_system_url_ = file_system_url;
+    const HoldingSpaceFile& file) {
+  file_ = file;
   return *this;
 }
 
@@ -138,21 +137,21 @@ HoldingSpaceModel::ScopedItemUpdate::SetProgress(
 
 HoldingSpaceModel::ScopedItemUpdate&
 HoldingSpaceModel::ScopedItemUpdate::SetSecondaryText(
-    const absl::optional<std::u16string>& secondary_text) {
+    const std::optional<std::u16string>& secondary_text) {
   secondary_text_ = secondary_text;
   return *this;
 }
 
 HoldingSpaceModel::ScopedItemUpdate&
-HoldingSpaceModel::ScopedItemUpdate::SetSecondaryTextColor(
-    const absl::optional<cros_styles::ColorName>& secondary_text_color) {
-  secondary_text_color_ = secondary_text_color;
+HoldingSpaceModel::ScopedItemUpdate::SetSecondaryTextColorId(
+    const std::optional<ui::ColorId>& secondary_text_color_id) {
+  secondary_text_color_id_ = secondary_text_color_id;
   return *this;
 }
 
 HoldingSpaceModel::ScopedItemUpdate&
 HoldingSpaceModel::ScopedItemUpdate::SetText(
-    const absl::optional<std::u16string>& text) {
+    const std::optional<std::u16string>& text) {
   text_ = text;
   return *this;
 }
@@ -238,8 +237,8 @@ std::unique_ptr<HoldingSpaceItem> HoldingSpaceModel::TakeItem(
 }
 
 void HoldingSpaceModel::InitializeOrRemoveItem(const std::string& id,
-                                               const GURL& file_system_url) {
-  if (file_system_url.is_empty()) {
+                                               const HoldingSpaceFile& file) {
+  if (file.file_system_url.is_empty()) {
     RemoveItem(id);
     return;
   }
@@ -250,7 +249,7 @@ void HoldingSpaceModel::InitializeOrRemoveItem(const std::string& id,
   HoldingSpaceItem* item = item_it->get();
   DCHECK(!item->IsInitialized());
 
-  item->Initialize(file_system_url);
+  item->Initialize(file);
   ++initialized_item_counts_by_type_[item->type()];
 
   for (auto& observer : observers_)
@@ -330,7 +329,7 @@ const HoldingSpaceItem* HoldingSpaceModel::GetItem(
   auto item_it = base::ranges::find_if(
       items_,
       [&type, &file_path](const std::unique_ptr<HoldingSpaceItem>& item) {
-        return item->type() == type && item->file_path() == file_path;
+        return item->type() == type && item->file().file_path == file_path;
       });
 
   if (item_it == items_.end())

@@ -17,6 +17,7 @@
 #include "content/public/test/content_test_suite_base.h"
 #include "content/public/test/test_content_client_initializer.h"
 #include "content/test/test_blink_web_unit_test_support.h"
+#include "mojo/core/embedder/embedder.h"
 #include "third_party/blink/public/platform/web_cache.h"
 #include "third_party/blink/public/platform/web_runtime_features.h"
 #include "third_party/blink/public/web/blink.h"
@@ -31,37 +32,10 @@
 
 namespace content {
 
-namespace {
+BlinkTestEnvironment::BlinkTestEnvironment() = default;
+BlinkTestEnvironment::~BlinkTestEnvironment() = default;
 
-class TestEnvironment {
- public:
-  TestEnvironment() {
-    base::DiscardableMemoryAllocator::SetInstance(
-        &discardable_memory_allocator_);
-    ContentTestSuiteBase::InitializeResourceBundle();
-
-    // Depends on resource bundle initialization so has to happen after.
-    blink_test_support_ = std::make_unique<TestBlinkWebUnitTestSupport>(
-        TestBlinkWebUnitTestSupport::SchedulerType::kRealScheduler);
-  }
-
-  ~TestEnvironment() {}
-
-  // This returns when both the main thread and the TaskSchedules queues are
-  // empty.
-  void RunUntilIdle() { base::RunLoop().RunUntilIdle(); }
-
- private:
-  std::unique_ptr<TestBlinkWebUnitTestSupport> blink_test_support_;
-  TestContentClientInitializer content_initializer_;
-  base::TestDiscardableMemoryAllocator discardable_memory_allocator_;
-};
-
-TestEnvironment* test_environment;
-
-}  // namespace
-
-void SetUpBlinkTestEnvironment() {
+void BlinkTestEnvironment::SetUp() {
   blink::WebRuntimeFeatures::EnableExperimentalFeatures(true);
   blink::WebRuntimeFeatures::EnableTestOnlyFeatures(true);
 
@@ -84,16 +58,45 @@ void SetUpBlinkTestEnvironment() {
   display::win::SetDefaultDeviceScaleFactor(1.0f);
 #endif
 
-  test_environment = new TestEnvironment;
+  content_initializer_.emplace();
+
+  base::DiscardableMemoryAllocator::SetInstance(&discardable_memory_allocator_);
+  content::ContentTestSuiteBase::InitializeResourceBundle();
+
+  // TestBlinkWebUnitTestSupport construction needs Mojo to be initialized
+  // first.
+  mojo::core::Init(mojo::core::Configuration{.is_broker_process = true});
+
+  InitializeBlinkTestSupport();
 }
 
-void TearDownBlinkTestEnvironment() {
-  // Flush any remaining messages before we kill ourselves.
-  // http://code.google.com/p/chromium/issues/detail?id=9500
-  test_environment->RunUntilIdle();
+void BlinkTestEnvironment::InitializeBlinkTestSupport() {
+  // Depends on resource bundle initialization so has to happen after.
+  blink_test_support_ = std::make_unique<content::TestBlinkWebUnitTestSupport>(
+      content::TestBlinkWebUnitTestSupport::SchedulerType::kMockScheduler);
+}
 
-  delete test_environment;
-  test_environment = nullptr;
+void BlinkTestEnvironment::TearDown() {
+  blink_test_support_.reset();
+  content_initializer_.reset();
+}
+
+void BlinkTestEnvironmentWithIsolate::TearDown() {
+  // Flush any remaining messages before we kill ourselves. Unlike
+  // BlinkTestEnvironment, this is needed here because kRealScheduler is used
+  // for TestBlinkWebUnitTestSupport, which instantiates a
+  // MainThreadSchedulerImpl and doesn't automatically flushes tasks.
+  // http://code.google.com/p/chromium/issues/detail?id=9500
+  base::RunLoop().RunUntilIdle();
+
+  BlinkTestEnvironment::TearDown();
+}
+
+void BlinkTestEnvironmentWithIsolate::InitializeBlinkTestSupport() {
+  // Depends on resource bundle initialization so has to happen after.
+  blink_test_support_ = std::make_unique<content::TestBlinkWebUnitTestSupport>(
+      content::TestBlinkWebUnitTestSupport::SchedulerType::kRealScheduler);
+  isolate_ = blink::CreateMainThreadIsolate();
 }
 
 }  // namespace content

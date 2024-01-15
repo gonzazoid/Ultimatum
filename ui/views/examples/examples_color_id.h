@@ -17,7 +17,7 @@
   E_CPONLY(kColorBubbleExampleBackground2) \
   E_CPONLY(kColorBubbleExampleBackground3) \
   E_CPONLY(kColorBubbleExampleBackground4) \
-  E_CPONLY(kColorButtonExampleBackground) \
+  E_CPONLY(kColorButtonBackgroundFab) \
   E_CPONLY(kColorDesignerGrabHandle) \
   E_CPONLY(kColorDesignerGrid) \
   E_CPONLY(kColorFadeAnimationExampleBackground) \

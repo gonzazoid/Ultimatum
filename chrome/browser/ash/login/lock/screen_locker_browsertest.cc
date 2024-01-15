@@ -8,7 +8,7 @@
 
 #include "ash/constants/ash_pref_names.h"
 #include "ash/wm/window_state.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "build/build_config.h"
 #include "chrome/browser/ash/login/lock/screen_locker_tester.h"
@@ -112,13 +112,7 @@ IN_PROC_BROWSER_TEST_F(ScreenLockerTest, TestBadThenGoodPassword) {
 }
 
 // Test how locking the screen affects an active fullscreen window.
-// TODO(crbug.com/1364698): Fix flakiness on ASAN builder.
-#if defined(ADDRESS_SANITIZER)
-#define MAYBE_TestFullscreenExit DISABLED_TestFullscreenExit
-#else
-#define MAYBE_TestFullscreenExit TestFullscreenExit
-#endif
-IN_PROC_BROWSER_TEST_F(ScreenLockerTest, MAYBE_TestFullscreenExit) {
+IN_PROC_BROWSER_TEST_F(ScreenLockerTest, TestFullscreenExit) {
   // 1) If the active browser window is in fullscreen and the fullscreen window
   // does not have all the pixels (e.g. the shelf is auto hidden instead of
   // hidden), locking the screen should exit fullscreen. The shelf is

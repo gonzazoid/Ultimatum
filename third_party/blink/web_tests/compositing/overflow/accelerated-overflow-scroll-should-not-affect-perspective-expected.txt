@@ -7,14 +7,13 @@
       "backgroundColor": "#FFFFFF"
     },
     {
-      "name": "LayoutNGBlockFlow (positioned) DIV class='container'",
+      "name": "LayoutNGBlockFlow (positioned, children-inline) DIV class='container'",
       "bounds": [200, 200],
-      "contentsOpaqueForText": true,
       "drawsContent": false,
       "transform": 1
     },
     {
-      "name": "LayoutNGBlockFlow (positioned) DIV class='container'",
+      "name": "LayoutNGBlockFlow (positioned, children-inline) DIV class='container'",
       "bounds": [185, 185],
       "drawsContent": false,
       "transform": 1
@@ -23,7 +22,6 @@
       "name": "HorizontalScrollbar",
       "position": [0, 185],
       "bounds": [200, 15],
-      "contentsOpaqueForText": true,
       "transform": 1
     },
     {

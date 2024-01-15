@@ -11,16 +11,11 @@
 #include "components/autofill/core/browser/autofill_test_utils.h"
 #include "components/autofill/core/browser/autofill_type.h"
 #include "components/autofill/core/browser/data_model/autofill_profile.h"
-#include "components/autofill/core/browser/geo/country_names.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #import "testing/gtest_mac.h"
 #include "testing/platform_test.h"
 #include "ui/base/l10n/l10n_util_mac.h"
 #include "ui/base/resource/resource_bundle.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace ios_web_view {
 
@@ -31,7 +26,6 @@ class CWVAutofillProfileTest : public PlatformTest {
     ui::ResourceBundle::InitSharedInstanceWithLocale(
         l10n_util::GetLocaleOverride(), /*delegate=*/nullptr,
         ui::ResourceBundle::DO_NOT_LOAD_COMMON_RESOURCES);
-    autofill::CountryNames::SetLocaleString(l10n_util::GetLocaleOverride());
   }
 
   ~CWVAutofillProfileTest() override {

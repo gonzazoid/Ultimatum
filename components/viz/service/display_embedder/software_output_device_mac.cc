@@ -7,7 +7,8 @@
 #include <memory>
 #include <utility>
 
-#include "base/mac/foundation_util.h"
+#include "base/apple/foundation_util.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/trace_event/trace_event.h"
 #include "third_party/skia/include/core/SkCanvas.h"
 #include "ui/gfx/ca_layer_params.h"
@@ -114,8 +115,9 @@ SkCanvas* SoftwareOutputDeviceMac::BeginPaint(
   // any position in the list.
   for (auto iter = buffer_queue_.begin(); iter != buffer_queue_.end(); ++iter) {
     Buffer* iter_buffer = iter->get();
-    if (IOSurfaceIsInUse(iter_buffer->io_surface))
+    if (IOSurfaceIsInUse(iter_buffer->io_surface.get())) {
       continue;
+    }
     current_paint_buffer_ = iter_buffer;
     buffer_queue_.splice(buffer_queue_.end(), buffer_queue_, iter);
     break;
@@ -125,8 +127,8 @@ SkCanvas* SoftwareOutputDeviceMac::BeginPaint(
   // it with complete damage.
   if (!current_paint_buffer_) {
     std::unique_ptr<Buffer> new_buffer(new Buffer);
-    new_buffer->io_surface.reset(
-        gfx::CreateIOSurface(pixel_size_, gfx::BufferFormat::BGRA_8888));
+    new_buffer->io_surface =
+        gfx::CreateIOSurface(pixel_size_, gfx::BufferFormat::BGRA_8888);
     if (!new_buffer->io_surface)
       return nullptr;
     // Set the initial damage to be the full buffer.
@@ -149,7 +151,7 @@ SkCanvas* SoftwareOutputDeviceMac::BeginPaint(
   // |current_paint_canvas_|.
   {
     TRACE_EVENT0("browser", "IOSurfaceLock for software paint");
-    IOReturn io_result = IOSurfaceLock(current_paint_buffer_->io_surface,
+    IOReturn io_result = IOSurfaceLock(current_paint_buffer_->io_surface.get(),
                                        kIOSurfaceLockAvoidSync, nullptr);
     if (io_result) {
       DLOG(ERROR) << "Failed to lock IOSurface " << io_result;
@@ -159,8 +161,9 @@ SkCanvas* SoftwareOutputDeviceMac::BeginPaint(
   }
   {
     SkPMColor* pixels = static_cast<SkPMColor*>(
-        IOSurfaceGetBaseAddress(current_paint_buffer_->io_surface));
-    size_t stride = IOSurfaceGetBytesPerRow(current_paint_buffer_->io_surface);
+        IOSurfaceGetBaseAddress(current_paint_buffer_->io_surface.get()));
+    size_t stride =
+        IOSurfaceGetBytesPerRow(current_paint_buffer_->io_surface.get());
     current_paint_canvas_ = SkCanvas::MakeRasterDirectN32(
         pixel_size_.width(), pixel_size_.height(), pixels, stride);
   }
@@ -178,8 +181,9 @@ void SoftwareOutputDeviceMac::EndPaint() {
 
   {
     TRACE_EVENT0("browser", "IOSurfaceUnlock");
-    IOReturn io_result = IOSurfaceUnlock(current_paint_buffer_->io_surface,
-                                         kIOSurfaceLockAvoidSync, nullptr);
+    IOReturn io_result =
+        IOSurfaceUnlock(current_paint_buffer_->io_surface.get(),
+                        kIOSurfaceLockAvoidSync, nullptr);
     if (io_result)
       DLOG(ERROR) << "Failed to unlock IOSurface " << io_result;
   }
@@ -191,7 +195,7 @@ void SoftwareOutputDeviceMac::EndPaint() {
     ca_layer_params.scale_factor = scale_factor_;
     ca_layer_params.pixel_size = pixel_size_;
     ca_layer_params.io_surface_mach_port.reset(
-        IOSurfaceCreateMachPort(current_paint_buffer_->io_surface));
+        IOSurfaceCreateMachPort(current_paint_buffer_->io_surface.get()));
     client_->SoftwareDeviceUpdatedCALayerParams(ca_layer_params);
   }
 

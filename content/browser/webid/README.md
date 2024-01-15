@@ -1,16 +1,16 @@
 # FedCM Browser side
 
 This folder contains the implementation of the browser side logic for the
-[FedCM](https://github.com/fedidcg/FedCM/blob/main/explainer/README.md) feature. It is responsible for making all of the
+[FedCM](https://github.com/fedidcg/FedCM/blob/main/explainer.md) feature. It is responsible for making all of the
 network requests needed to implement a FedCM request and also controls what UI and at which point in
 the process is shown to the user.
 
 ## Anatomy of a FedCM request
 
 A FedCM request is initiated by a [Relying
-Party](https://github.com/fedidcg/FedCM/blob/main/explainer/glossary.md#relying-party-rp) (RP) in order to perform a
+Party](https://github.com/fedidcg/FedCM/blob/main/explorations/glossary.md#relying-party-rp) (RP) in order to perform a
 federated identity related operation e.g., authenticate, logout etc., with an [Identity
-Provider](https://github.com/fedidcg/FedCM/blob/main/explainer/glossary.md#identity-provider-idp) (IDP).
+Provider](https://github.com/fedidcg/FedCM/blob/main/explorations/glossary.md#identity-provider-idp) (IDP).
 
 While RP and IDP could belong to the same site (or origin) the most interesting and common case
 is when the RP and IDP belong to different sites and thus this operation is a cross-site
@@ -94,8 +94,8 @@ be relied upon.
 ## UI
 
 There are currently two different modes supported for FedCM with their own specific UX and UI:
-[permission-oriented mode](https://github.com/fedidcg/FedCM/blob/main/explainer/proposal.md#the-permission-oriented-api),
-and [mediation-oriented mode](https://github.com/fedidcg/FedCM/blob/main/explainer/proposal.md#the-mediated-oriented-api).
+[permission-oriented mode](https://github.com/fedidcg/FedCM/blob/main/explorations/proposal.md#the-permission-oriented-api),
+and [mediation-oriented mode](https://github.com/fedidcg/FedCM/blob/main/explorations/proposal.md#the-mediated-oriented-api).
 
 At the moment the mediation UI is only implemented on
 [Android](../../../chrome/browser/ui/android/webid/README.md) and on Desktop platforms no UI is shown and

@@ -12,6 +12,7 @@
 #include "ash/public/cpp/session/session_observer.h"
 #include "ash/shell_observer.h"
 #include "ash/system/tray/tray_background_view.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/base/ime/input_method_observer.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/events/event_constants.h"
@@ -58,11 +59,13 @@ class ASH_EXPORT DictationButtonTray : public TrayBackgroundView,
   // TrayBackgroundView:
   void Initialize() override;
   void ClickedOutsideBubble() override;
+  void UpdateTrayItemColor(bool is_active) override;
   std::u16string GetAccessibleNameForTray() override;
   void HandleLocaleChange() override;
   void HideBubbleWithView(const TrayBubbleView* bubble_view) override;
   void OnThemeChanged() override;
   void Layout() override;
+  void HideBubble(const TrayBubbleView* bubble_view) override;
 
   // ui::InputMethodObserver:
   void OnFocus() override {}
@@ -102,7 +105,7 @@ class ASH_EXPORT DictationButtonTray : public TrayBackgroundView,
   void TextInputChanged(const ui::TextInputClient* client);
 
   // Weak pointer, will be parented by TrayContainer for its lifetime.
-  views::ImageView* icon_ = nullptr;
+  raw_ptr<views::ImageView> icon_ = nullptr;
 
   // SODA download progress. A value of 0 < X < 100 indicates that download is
   // in-progress.

@@ -3,7 +3,6 @@
 # found in the LICENSE file.
 
 source_set("screen_provider") {
-  configs += [ "//build/config/compiler:enable_arc" ]
   sources = [
     "screen_provider.h",
     "screen_provider.mm",
@@ -11,17 +10,15 @@ source_set("screen_provider") {
   deps = [
     ":screen_type",
     "//base",
-    "//ios/chrome/browser/ui:feature_flags",
+    "//ios/chrome/browser/shared/public/features",
   ]
 }
 
 source_set("screen_provider_protected") {
-  configs += [ "//build/config/compiler:enable_arc" ]
   sources = [ "screen_provider+protected.h" ]
   deps = [ ":screen_provider" ]
 }
 
 source_set("screen_type") {
-  configs += [ "//build/config/compiler:enable_arc" ]
   sources = [ "screen_type.h" ]
 }

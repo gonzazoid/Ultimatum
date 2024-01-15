@@ -9,7 +9,7 @@
 
 #include <memory>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/logging.h"
 #include "base/memory/weak_ptr.h"
 #include "base/values.h"
@@ -44,15 +44,21 @@ class LogMessageHandler {
  private:
   // TODO(yuweih): Reimplement this class using using a message queue which is
   // protected by |g_log_message_handler_lock|.
-  static bool OnLogMessage(
-      int severity, const char* file, int line,
-      size_t message_start, const std::string& str);
-  void PostLogMessageToCorrectThread(
-      int severity, const char* file, int line,
-      size_t message_start, const std::string& str);
-  void SendLogMessageToClient(
-      int severity, const char* file, int line,
-      size_t message_start, const std::string& str);
+  static bool OnLogMessage(int severity,
+                           const char* file,
+                           int line,
+                           size_t message_start,
+                           const std::string& str);
+  void PostLogMessageToCorrectThread(int severity,
+                                     const char* file,
+                                     int line,
+                                     size_t message_start,
+                                     const std::string& str);
+  void SendLogMessageToClient(int severity,
+                              const char* file,
+                              int line,
+                              size_t message_start,
+                              const std::string& str);
 
   Delegate delegate_;
   bool suppress_logging_;

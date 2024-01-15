@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/strings/escape.h"
 #include "base/test/bind.h"
@@ -55,7 +55,7 @@ class PDFIFrameNavigationThrottleBrowserTest : public InProcessBrowserTest {
   }
 
   void SetUp() override {
-    prerender_helper_.SetUp(embedded_test_server());
+    prerender_helper_.RegisterServerRequestMonitor(embedded_test_server());
     InProcessBrowserTest::SetUp();
   }
 
@@ -84,10 +84,12 @@ class PDFIFrameNavigationThrottleBrowserTest : public InProcessBrowserTest {
   BlockAllPluginServiceFilter block_all_plugins_;
 };
 
+// TODO(1205920): The PDF viewer cannot currently be prerendered correctly. Once
+// this is supported, this test should be re-enabled.
 // This test checks that the throttle is able to navigate the iframe'd PDF to
 // the fallback HTML content even while it is prerendering.
 IN_PROC_BROWSER_TEST_F(PDFIFrameNavigationThrottleBrowserTest,
-                       HTMLFallbackInPrerender) {
+                       DISABLED_HTMLFallbackInPrerender) {
   const GURL kUrl(embedded_test_server()->GetURL("/empty.html"));
   ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), kUrl));
 
@@ -114,7 +116,7 @@ IN_PROC_BROWSER_TEST_F(PDFIFrameNavigationThrottleBrowserTest,
   // frame, we expect the navigation to be deferred during WillStartRequest
   // until the prerender is activated.
   {
-    pdf_navigation.WaitForFirstYieldAfterDidStartNavigation();
+    ASSERT_TRUE(pdf_navigation.WaitForFirstYieldAfterDidStartNavigation());
     EXPECT_FALSE(pdf_navigation.GetNavigationHandle()->HasCommitted());
     EXPECT_TRUE(pdf_navigation.GetNavigationHandle()->IsDeferredForTesting());
   }
@@ -132,7 +134,7 @@ IN_PROC_BROWSER_TEST_F(PDFIFrameNavigationThrottleBrowserTest,
   // finish. The initial PDF navigation should be cancelled by the throttle and
   // fallback content loaded in its place.
   {
-    pdf_navigation.WaitForNavigationFinished();
+    ASSERT_TRUE(pdf_navigation.WaitForNavigationFinished());
     EXPECT_TRUE(pdf_navigation.was_committed());
     EXPECT_TRUE(pdf_navigation.was_successful());
 

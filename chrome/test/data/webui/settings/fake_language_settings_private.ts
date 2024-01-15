@@ -11,8 +11,6 @@ import {SettingsPrefsElement} from 'chrome://settings/settings.js';
 import {FakeChromeEvent} from 'chrome://webui-test/fake_chrome_event.js';
 import {TestBrowserProxy} from 'chrome://webui-test/test_browser_proxy.js';
 
-type StringArrayCallback = (strings: string[]) => void;
-
 /**
  * Fake of the chrome.languageSettingsPrivate API.
  */
@@ -203,21 +201,17 @@ export class FakeLanguageSettingsPrivate extends TestBrowserProxy {
   /**
    * Gets languages available for translate, spell checking, input and locale.
    */
-  getLanguageList(
-      callback:
-          (languages: chrome.languageSettingsPrivate.Language[]) => void) {
-    setTimeout(() => {
-      callback(JSON.parse(JSON.stringify(this.languages)));
-    });
+  getLanguageList() {
+    return Promise.resolve(structuredClone(this.languages));
   }
 
   /**
    * Gets languages that should always be automatically translated.
    */
-  getAlwaysTranslateLanguages(callback: StringArrayCallback) {
-    setTimeout(() => {
-      callback(this.settingsPrefs_!.get('prefs.translate_allowlists.value'));
-    });
+  getAlwaysTranslateLanguages() {
+    const alwaysTranslateMap =
+        this.settingsPrefs_!.get('prefs.translate_allowlists.value');
+    return Promise.resolve(Object.keys(alwaysTranslateMap));
   }
 
   /**
@@ -225,31 +219,26 @@ export class FakeLanguageSettingsPrivate extends TestBrowserProxy {
    */
   setLanguageAlwaysTranslateState(
       languageCode: string, alwaysTranslate: boolean) {
-    const alwaysTranslateList =
-        this.settingsPrefs_!.get('prefs.translate_allowlists.value');
+    // Need to create a copy of the translate_allowlist object so that
+    // preference observers are notified during tests.
+    const alwaysTranslateMap = Object.assign(
+        {}, this.settingsPrefs_!.get('prefs.translate_allowlists.value'));
     if (alwaysTranslate) {
-      if (!alwaysTranslateList.includes(languageCode)) {
-        alwaysTranslateList.push(languageCode);
-      }
+      // The target language is not used in tests so set to 'en'.
+      alwaysTranslateMap[languageCode] = 'en';
     } else {
-      const index = alwaysTranslateList.indexOf(languageCode);
-      if (index === -1) {
-        return;
-      }
-      alwaysTranslateList.splice(index, 1);
+      delete alwaysTranslateMap[languageCode];
     }
     this.settingsPrefs_!.set(
-        'prefs.translate_allowlists.value', alwaysTranslateList);
+        'prefs.translate_allowlists.value', alwaysTranslateMap);
   }
 
   /**
    * Gets languages that should never be offered to translate.
    */
-  getNeverTranslateLanguages(callback: StringArrayCallback) {
-    setTimeout(() => {
-      callback(
-          this.settingsPrefs_!.get('prefs.translate_blocked_languages.value'));
-    });
+  getNeverTranslateLanguages() {
+    return Promise.resolve(
+        this.settingsPrefs_!.get('prefs.translate_blocked_languages.value'));
   }
 
   /**
@@ -354,8 +343,8 @@ export class FakeLanguageSettingsPrivate extends TestBrowserProxy {
   /**
    * Gets the translate target language (in most cases, the display locale).
    */
-  getTranslateTargetLanguage(callback: (languageCode: string) => void) {
-    callback('en');
+  getTranslateTargetLanguage() {
+    return Promise.resolve('en');
   }
 
   /**
@@ -369,18 +358,16 @@ export class FakeLanguageSettingsPrivate extends TestBrowserProxy {
   /**
    * Gets the current status of the chosen spell check dictionaries.
    */
-  getSpellcheckDictionaryStatuses(
-      callback: (statuses: chrome.languageSettingsPrivate
-                     .SpellcheckDictionaryStatus[]) => void) {
-    callback([]);
+  getSpellcheckDictionaryStatuses() {
+    return Promise.resolve([]);
   }
 
   /**
    * Gets the custom spell check words, in sorted order.
    */
-  getSpellcheckWords(callback: StringArrayCallback) {
-    callback([]);
+  getSpellcheckWords() {
     this.methodCalled('getSpellcheckWords');
+    return Promise.resolve([]);
   }
 
   /**
@@ -465,7 +452,7 @@ export function getFakeLanguagePrefs() {
     },
     {
       key: 'translate_site_blocklist_with_time',
-      type: chrome.settingsPrivate.PrefType.LIST,
+      type: chrome.settingsPrivate.PrefType.DICTIONARY,
       value: {
         'ru.wikipedia.org': '13305315102292953',
         'de.wikipedia.org': '13305315083099649',
@@ -473,11 +460,11 @@ export function getFakeLanguagePrefs() {
     },
     // Note: The real implementation of this pref is actually a dictionary
     // of {always translate: target}, however only the keys are needed for
-    // testing.
+    // testing so target will always be 'en'.
     {
       key: 'translate_allowlists',
-      type: chrome.settingsPrivate.PrefType.LIST,
-      value: [],
+      type: chrome.settingsPrivate.PrefType.DICTIONARY,
+      value: {},
     },
     {
       key: 'translate_recent_target',

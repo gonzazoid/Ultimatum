@@ -16,8 +16,6 @@ MockInputMethodEngine::~MockInputMethodEngine() = default;
 void MockInputMethodEngine::Focus(
     const TextInputMethod::InputContext& input_context) {}
 
-void MockInputMethodEngine::OnTouch(ui::EventPointerType pointerType) {}
-
 void MockInputMethodEngine::Blur() {}
 
 void MockInputMethodEngine::Enable(const std::string& component_id) {
@@ -34,12 +32,8 @@ void MockInputMethodEngine::ProcessKeyEvent(const ui::KeyEvent& key_event,
                                             KeyEventDoneCallback callback) {}
 
 void MockInputMethodEngine::SetSurroundingText(const std::u16string& text,
-                                               uint32_t cursor_pos,
-                                               uint32_t anchor_pos,
+                                               const gfx::Range selection_range,
                                                uint32_t offset_pos) {}
-
-void MockInputMethodEngine::SetCompositionBounds(
-    const std::vector<gfx::Rect>& bounds) {}
 
 void MockInputMethodEngine::SetCaretBounds(const gfx::Rect& caret_bounds) {}
 

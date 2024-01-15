@@ -12,8 +12,8 @@
 #include "content/public/test/browser_test_utils.h"
 #include "content/public/test/content_browser_test.h"
 #include "content/public/test/content_browser_test_utils.h"
+#include "content/public/test/web_contents_observer_test_utils.h"
 #include "content/shell/browser/shell.h"
-#include "content/test/web_contents_observer_test_utils.h"
 #include "net/dns/mock_host_resolver.h"
 #include "net/test/embedded_test_server/embedded_test_server.h"
 
@@ -95,7 +95,7 @@ IN_PROC_BROWSER_TEST_F(NavigationHandleUserDataBrowserTest,
         EXPECT_EQ(data->value(), "data");
         did_finish_navigation = true;
       }));
-  navigation_manager.WaitForNavigationFinished();
+  ASSERT_TRUE(navigation_manager.WaitForNavigationFinished());
   EXPECT_TRUE(did_finish_navigation);
 
   // Ensure that the data is deleted after navigation finished.
@@ -191,7 +191,7 @@ IN_PROC_BROWSER_TEST_F(NavigationHandleUserDataBrowserTest, VeryEarlyAttach) {
   EXPECT_EQ(data->value(), "data");
 
   // Wait for the navigation to finish.
-  navigation_manager.WaitForNavigationFinished();
+  ASSERT_TRUE(navigation_manager.WaitForNavigationFinished());
   EXPECT_TRUE(did_start_navigation);
   EXPECT_TRUE(did_finish_navigation);
 

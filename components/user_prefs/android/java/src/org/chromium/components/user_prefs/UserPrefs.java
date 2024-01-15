@@ -6,8 +6,9 @@ package org.chromium.components.user_prefs;
 
 import androidx.annotation.VisibleForTesting;
 
-import org.chromium.base.annotations.JNINamespace;
-import org.chromium.base.annotations.NativeMethods;
+import org.jni_zero.JNINamespace;
+import org.jni_zero.NativeMethods;
+
 import org.chromium.components.prefs.PrefService;
 import org.chromium.content_public.browser.BrowserContextHandle;
 
@@ -22,7 +23,7 @@ public class UserPrefs {
         return UserPrefsJni.get().get(browserContextHandle);
     }
 
-    @VisibleForTesting
+    @VisibleForTesting(otherwise = VisibleForTesting.PACKAGE_PRIVATE)
     @NativeMethods
     public interface Natives {
         PrefService get(BrowserContextHandle browserContextHandle);

@@ -8,7 +8,7 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/observer_list.h"
@@ -17,6 +17,7 @@
 #include "base/strings/utf_string_conversions.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
+#include "chrome/browser/extensions/chrome_content_browser_client_extensions_part.h"
 #include "chrome/browser/metrics/power/power_metrics_constants.h"
 #include "content/public/browser/browser_child_process_host.h"
 #include "content/public/browser/browser_child_process_host_iterator.h"
@@ -70,7 +71,6 @@ ProcessMonitor::Metrics SampleMetrics(base::ProcessMetrics& process_metrics) {
 #if BUILDFLAG(IS_MAC)
   metrics.package_idle_wakeups =
       process_metrics.GetPackageIdleWakeupsPerSecond();
-  metrics.energy_impact = process_metrics.GetEnergyImpact();
 #endif
 
   return metrics;
@@ -87,7 +87,6 @@ void ScaleMetrics(ProcessMonitor::Metrics* metrics, double factor) {
 
 #if BUILDFLAG(IS_MAC)
   metrics->package_idle_wakeups *= factor;
-  metrics->energy_impact *= factor;
 #endif
 }
 
@@ -113,9 +112,14 @@ MonitoredProcessType GetMonitoredProcessTypeForRenderProcess(
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
 #if BUILDFLAG(ENABLE_EXTENSIONS)
   content::BrowserContext* browser_context = host->GetBrowserContext();
+  if (extensions::ChromeContentBrowserClientExtensionsPart::
+          AreExtensionsDisabledForProfile(browser_context)) {
+    return MonitoredProcessType::kRenderer;
+  }
+
   extensions::ProcessMap* extension_process_map =
       extensions::ProcessMap::Get(browser_context);
-
+  DCHECK(extension_process_map);
   std::set<std::string> extension_ids =
       extension_process_map->GetExtensionsInProcess(host->GetID());
 
@@ -174,7 +178,6 @@ ProcessMonitor::Metrics& operator+=(ProcessMonitor::Metrics& lhs,
 
 #if BUILDFLAG(IS_MAC)
   lhs.package_idle_wakeups += rhs.package_idle_wakeups;
-  lhs.energy_impact += rhs.energy_impact;
 #endif
 
   return lhs;

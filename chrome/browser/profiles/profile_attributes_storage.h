@@ -12,8 +12,9 @@
 #include <unordered_map>
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/containers/flat_set.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback_forward.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
@@ -42,8 +43,7 @@ class ProfileAttributesEntry;
 class ProfileAvatarDownloader;
 class PrefRegistrySimple;
 
-class ProfileAttributesStorage
-    : public base::SupportsWeakPtr<ProfileAttributesStorage> {
+class ProfileAttributesStorage {
  public:
   using Observer = ProfileAttributesStorageObserver;
 
@@ -55,6 +55,11 @@ class ProfileAttributesStorage
 
   // Register cache related preferences in Local State.
   static void RegisterPrefs(PrefRegistrySimple* registry);
+
+  // Return the keys for all the profiles; exposed as a static method so that
+  // it can be called very early in Chrome initialization.
+  static base::flat_set<std::string> GetAllProfilesKeys(
+      PrefService* local_prefs);
 
   // Adds a new profile with `params` to the attributes storage.
   // `params.profile_path` must be a valid path within the user data directory
@@ -69,17 +74,32 @@ class ProfileAttributesStorage
   // affect the actual profile's data.
   void RemoveProfile(const base::FilePath& profile_path);
 
-  // Returns a vector containing one attributes entry per known profile. They
-  // are not sorted in any particular order.
+  // Returns a vector containing one attributes entry per known profile.
+  // They are not sorted in any particular order.
   std::vector<ProfileAttributesEntry*> GetAllProfilesAttributes() const;
 
-  // Returns all non-Guest profile attributes sorted by name.
-  std::vector<ProfileAttributesEntry*> GetAllProfilesAttributesSortedByName()
-      const;
-
-  // Returns all non-Guest profile attributes sorted by local profile name.
+  // Return all user profile attributes sorted using the `prefs::kProfilesOrder`
+  // profile order stored.
   std::vector<ProfileAttributesEntry*>
-  GetAllProfilesAttributesSortedByLocalProfileName() const;
+  GetAllProfilesAttributesSortedForDisplay() const;
+
+  // Conditionally returns the sorted list based on the feature flag
+  // `kProfilesReordering`. It will return the sorted list based on the stored
+  // order if the feature is enabled, or the sorted list based on the local
+  // profile name if the feature is disabled.
+  std::vector<ProfileAttributesEntry*>
+  GetAllProfilesAttributesSortedByLocalProfileNameWithCheck() const;
+
+  // Conditionally returns the sorted list based on the feature flag
+  // `kProfilesReordering`. It will return the sorted list based on the stored
+  // order if the feature is enabled, or the sorted list based on the name if
+  // the feature is disabled.
+  std::vector<ProfileAttributesEntry*>
+  GetAllProfilesAttributesSortedByNameWithCheck() const;
+
+  // Updates `prefs::kProfilesOrder`. Move profile keys at `from_index` and
+  // place it at `to_index` shifting all keys in between by 1 spot.
+  void UpdateProfilesOrderPref(size_t from_index, size_t to_index);
 
   // Returns a ProfileAttributesEntry with the data for the profile at |path|
   // if the operation is successful. Returns |nullptr| otherwise.
@@ -175,6 +195,10 @@ class ProfileAttributesStorage
       const base::FilePath& profile_path) const;
   void NotifyProfileUserManagementAcceptanceChanged(
       const base::FilePath& profile_path) const;
+  void NotifyProfileManagementEnrollmentTokenChanged(
+      const base::FilePath& profile_path) const;
+  void NotifyProfileManagementIdChanged(
+      const base::FilePath& profile_path) const;
 
   // Returns a pref dictionary key of a profile at `profile_path`.
   std::string StorageKeyFromProfilePath(
@@ -183,6 +207,12 @@ class ProfileAttributesStorage
   // Disables the periodic reporting of profile metrics, as this is causing
   // tests to time out.
   void DisableProfileMetricsForTesting();
+
+  void EnsureProfilesOrderPrefIsInitializedForTesting();
+
+  base::WeakPtr<ProfileAttributesStorage> AsWeakPtr() {
+    return weak_ptr_factory_.GetWeakPtr();
+  }
 
  private:
   FRIEND_TEST_ALL_PREFIXES(ProfileAttributesStorageTest,
@@ -206,8 +236,28 @@ class ProfileAttributesStorage
                              const base::FilePath& image_path,
                              base::OnceClosure callback);
 
+  // Returns all non-Guest profile attributes sorted by name.
+  std::vector<ProfileAttributesEntry*> GetAllProfilesAttributesSortedByName()
+      const;
+
+  // Returns all non-Guest profile attributes sorted by local profile name.
+  std::vector<ProfileAttributesEntry*>
+  GetAllProfilesAttributesSortedByLocalProfileName() const;
+
   std::vector<ProfileAttributesEntry*> GetAllProfilesAttributesSorted(
       bool use_local_profile_name) const;
+
+  // Makes sure that the pref `prefs::kProfilesOrder` is properly initialized
+  // with the existing profiles.
+  void EnsureProfilesOrderPrefIsInitialized();
+
+  // Returns whether the list in `prefs::kProfilesOrder` is consistent with the
+  // profile entries.
+  bool IsProfilesOrderPrefValid() const;
+
+  // Returns a constructed map of storage key to each `ProfileAttributesEntry`.
+  base::flat_map<std::string, ProfileAttributesEntry*> GetStorageKeyEntryMap()
+      const;
 
   // Creates and initializes a ProfileAttributesEntry with `key`. `is_omitted`
   // indicates whether the profile should be hidden in UI.
@@ -295,6 +345,8 @@ class ProfileAttributesStorage
   // PersistentRepeatingTimer for periodically logging profile metrics.
   std::unique_ptr<signin::PersistentRepeatingTimer> repeating_timer_;
 #endif  // !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_CHROMEOS_ASH)
+
+  base::WeakPtrFactory<ProfileAttributesStorage> weak_ptr_factory_{this};
 };
 
 #endif  // CHROME_BROWSER_PROFILES_PROFILE_ATTRIBUTES_STORAGE_H_

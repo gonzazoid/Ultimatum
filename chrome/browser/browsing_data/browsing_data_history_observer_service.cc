@@ -6,7 +6,8 @@
 
 #include <tuple>
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
+#include "base/memory/singleton.h"
 #include "build/build_config.h"
 #include "chrome/browser/browsing_data/navigation_entry_remover.h"
 #include "chrome/browser/history/history_service_factory.h"
@@ -15,15 +16,12 @@
 #include "chrome/browser/sessions/tab_restore_service_factory.h"
 #include "chrome/common/buildflags.h"
 #include "components/search_engines/template_url_service.h"
-#include "content/public/browser/browsing_data_filter_builder.h"
-#include "content/public/browser/storage_partition.h"
-#include "services/network/public/mojom/cookie_manager.mojom.h"
-#include "storage/browser/quota/special_storage_policy.h"
-#include "third_party/blink/public/common/storage_key/storage_key.h"
 
 #if BUILDFLAG(IS_ANDROID)
 #include "chrome/browser/commerce/merchant_viewer/merchant_viewer_data_manager.h"
 #include "chrome/browser/commerce/merchant_viewer/merchant_viewer_data_manager_factory.h"
+#include "chrome/browser/commerce/shopping_service_factory.h"
+#include "components/commerce/core/shopping_service.h"
 #endif
 
 #if BUILDFLAG(ENABLE_SESSION_SERVICE)
@@ -113,71 +111,6 @@ void ClearCommerceData(Profile* profile,
 }
 #endif
 
-bool IsStorageProtected(const blink::StorageKey& storage_key,
-                        storage::SpecialStoragePolicy* policy) {
-  return !(policy && policy->IsStorageProtected(storage_key.origin().GetURL()));
-}
-
-void DeleteStoragePartitionDataWithFilter(
-    content::StoragePartition* storage_partition,
-    std::unique_ptr<content::BrowsingDataFilterBuilder> filter_builder,
-    base::Time delete_begin,
-    base::Time delete_end) {
-  content::StoragePartition::StorageKeyPolicyMatcherFunction
-      storage_key_policy_matcher =
-          filter_builder ? base::BindRepeating(&IsStorageProtected)
-                         : base::NullCallback();
-
-  const uint32_t removal_mask =
-      content::StoragePartition::REMOVE_DATA_MASK_AGGREGATION_SERVICE |
-      content::StoragePartition::
-          REMOVE_DATA_MASK_ATTRIBUTION_REPORTING_SITE_CREATED |
-      content::StoragePartition::
-          REMOVE_DATA_MASK_ATTRIBUTION_REPORTING_INTERNAL |
-      content::StoragePartition::REMOVE_DATA_MASK_PRIVATE_AGGREGATION_INTERNAL;
-  const uint32_t quota_removal_mask = 0;
-  storage_partition->ClearData(
-      removal_mask, quota_removal_mask, filter_builder.get(),
-      std::move(storage_key_policy_matcher),
-      /*cookie_deletion_filter=*/nullptr, /*perform_storage_cleanup=*/false,
-      delete_begin, delete_end, base::DoNothing());
-}
-
-void DeleteStoragePartitionDataForTimeRange(
-    content::StoragePartition* storage_partition,
-    base::Time delete_begin,
-    base::Time delete_end,
-    const absl::optional<std::set<GURL>>& urls) {
-  std::unique_ptr<content::BrowsingDataFilterBuilder> filter_builder;
-  if (urls) {
-    filter_builder = content::BrowsingDataFilterBuilder::Create(
-        content::BrowsingDataFilterBuilder::Mode::kDelete);
-    for (const auto& url : *urls) {
-      url::Origin origin = url::Origin::Create(url);
-      if (!origin.opaque())
-        filter_builder->AddOrigin(std::move(origin));
-    }
-  }
-
-  DeleteStoragePartitionDataWithFilter(
-      storage_partition, std::move(filter_builder), delete_begin, delete_end);
-}
-
-void DeleteStoragePartitionDataForDeletedOrigins(
-    content::StoragePartition* storage_partition,
-    const base::flat_set<GURL>& deleted_origins) {
-  auto filter_builder = content::BrowsingDataFilterBuilder::Create(
-      content::BrowsingDataFilterBuilder::Mode::kDelete);
-  for (const auto& url : deleted_origins) {
-    url::Origin origin = url::Origin::Create(url);
-    if (!origin.opaque())
-      filter_builder->AddOrigin(std::move(origin));
-  }
-  DeleteStoragePartitionDataWithFilter(storage_partition,
-                                       std::move(filter_builder), base::Time(),
-                                       base::Time::Max());
-}
-
 }  // namespace
 
 BrowsingDataHistoryObserverService::BrowsingDataHistoryObserverService(
@@ -201,33 +134,17 @@ void BrowsingDataHistoryObserverService::OnURLsDeleted(
   TemplateURLService* keywords_model =
       TemplateURLServiceFactory::GetForProfile(profile_);
 
-  content::StoragePartition* storage_partition =
-      storage_partition_for_testing_ ? storage_partition_for_testing_.get()
-                                     : profile_->GetDefaultStoragePartition();
-
   if (deletion_info.time_range().IsValid()) {
     if (keywords_model) {
       DeleteTemplateUrlsForTimeRange(keywords_model,
                                      deletion_info.time_range().begin(),
                                      deletion_info.time_range().end());
     }
-
-    if (storage_partition) {
-      DeleteStoragePartitionDataForTimeRange(
-          storage_partition, deletion_info.time_range().begin(),
-          deletion_info.time_range().end(), deletion_info.restrict_urls());
-    }
-
   } else {
     // If the history deletion did not have a time range, delete data by
     // origin.
     auto deleted_origins =
         GetDeletedOrigins(deletion_info.deleted_urls_origin_map());
-
-    if (storage_partition) {
-      DeleteStoragePartitionDataForDeletedOrigins(storage_partition,
-                                                  deleted_origins);
-    }
 
     // Move the deleted origins to avoid an expensive copy.
     if (keywords_model) {
@@ -237,13 +154,12 @@ void BrowsingDataHistoryObserverService::OnURLsDeleted(
   }
 
 #if BUILDFLAG(IS_ANDROID)
-  ClearCommerceData(profile_, deletion_info);
+  commerce::ShoppingService* shopping_service =
+      commerce::ShoppingServiceFactory::GetForBrowserContext(profile_);
+  if (shopping_service && shopping_service->IsMerchantViewerEnabled()) {
+    ClearCommerceData(profile_, deletion_info);
+  }
 #endif
-}
-
-void BrowsingDataHistoryObserverService::OverrideStoragePartitionForTesting(
-    content::StoragePartition* partition) {
-  storage_partition_for_testing_ = partition;
 }
 
 // static
@@ -265,14 +181,15 @@ BrowsingDataHistoryObserverService::Factory::Factory()
 
 #if BUILDFLAG(IS_ANDROID)
   DependsOn(MerchantViewerDataManagerFactory::GetInstance());
+  DependsOn(commerce::ShoppingServiceFactory::GetInstance());
 #endif
 }
 
-KeyedService*
-BrowsingDataHistoryObserverService::Factory::BuildServiceInstanceFor(
-    content::BrowserContext* context) const {
+std::unique_ptr<KeyedService> BrowsingDataHistoryObserverService::Factory::
+    BuildServiceInstanceForBrowserContext(
+        content::BrowserContext* context) const {
   Profile* profile = Profile::FromBrowserContext(context);
-  return new BrowsingDataHistoryObserverService(profile);
+  return std::make_unique<BrowsingDataHistoryObserverService>(profile);
 }
 
 bool BrowsingDataHistoryObserverService::Factory::

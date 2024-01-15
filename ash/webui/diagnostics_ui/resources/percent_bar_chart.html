@@ -1,4 +1,8 @@
 <style include="diagnostics-shared">
+  :host-context(body.jelly-enabled) #chartName {
+    font: var(--cros-body-2-font);
+  }
+
   #chartName {
     color: var(--cros-text-color-secondary);
     display: inline-block;
@@ -21,7 +25,7 @@
 <div id="barChartContainer">
   <div class="body">
     <paper-progress id="barChart"
-        value="[[getAdjustedValue_(value, max)]]" max="[[max]]">
+        value="[[getAdjustedValue(value, max)]]" max="[[max]]">
     </paper-progress>
   </div>
   <label id="chartName">

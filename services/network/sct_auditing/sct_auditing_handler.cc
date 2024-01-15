@@ -5,12 +5,11 @@
 #include "services/network/sct_auditing/sct_auditing_handler.h"
 
 #include "base/base64.h"
-#include "base/bind.h"
 #include "base/containers/cxx20_erase.h"
 #include "base/containers/span.h"
-#include "base/feature_list.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/json/json_reader.h"
 #include "base/json/json_writer.h"
 #include "base/metrics/histogram_functions.h"
@@ -73,29 +72,26 @@ SCTAuditingHandler::SCTAuditingHandler(NetworkContext* context,
     : owner_network_context_(context),
       pending_reporters_(cache_size),
       persistence_path_(persistence_path),
-      foreground_runner_(base::SequencedTaskRunnerHandle::Get()) {
-  if (base::FeatureList::IsEnabled(features::kSCTAuditingRetryReports) &&
-      base::FeatureList::IsEnabled(features::kSCTAuditingPersistReports)) {
-    // If no persistence path is set, only store pending reporters in memory.
-    if (persistence_path_.empty()) {
-      return;
-    }
-
-    // Persisting reports uses a low priority task runner as it should not block
-    // anything user-visible, but it should block shutdown to ensure updates are
-    // persisted to disk (particularly clearing entries or the entire
-    // persisted state).
-    background_runner_ = base::ThreadPool::CreateSequencedTaskRunner(
-        {base::MayBlock(), base::TaskPriority::BEST_EFFORT,
-         base::TaskShutdownBehavior::BLOCK_SHUTDOWN});
-    writer_ = std::make_unique<base::ImportantFileWriter>(persistence_path_,
-                                                          background_runner_);
-
-    // Post a task to load persisted state after startup has finished.
-    foreground_runner_->PostTask(
-        FROM_HERE, base::BindOnce(&SCTAuditingHandler::OnStartupFinished,
-                                  weak_factory_.GetWeakPtr()));
+      foreground_runner_(base::SequencedTaskRunner::GetCurrentDefault()) {
+  // If no persistence path is set, only store pending reporters in memory.
+  if (persistence_path_.empty()) {
+    return;
   }
+
+  // Persisting reports uses a low priority task runner as it should not block
+  // anything user-visible, but it should block shutdown to ensure updates are
+  // persisted to disk (particularly clearing entries or the entire
+  // persisted state).
+  background_runner_ = base::ThreadPool::CreateSequencedTaskRunner(
+      {base::MayBlock(), base::TaskPriority::BEST_EFFORT,
+       base::TaskShutdownBehavior::BLOCK_SHUTDOWN});
+  writer_ = std::make_unique<base::ImportantFileWriter>(persistence_path_,
+                                                        background_runner_);
+
+  // Post a task to load persisted state after startup has finished.
+  foreground_runner_->PostTask(
+      FROM_HERE, base::BindOnce(&SCTAuditingHandler::OnStartupFinished,
+                                weak_factory_.GetWeakPtr()));
 }
 
 SCTAuditingHandler::~SCTAuditingHandler() {
@@ -189,7 +185,7 @@ void SCTAuditingHandler::MaybeEnqueueReport(
               std::move(sct_metadata));
 }
 
-bool SCTAuditingHandler::SerializeData(std::string* output) {
+absl::optional<std::string> SCTAuditingHandler::SerializeData() {
   DCHECK(foreground_runner_->RunsTasksInCurrentSequence());
 
   base::Value::List reports;
@@ -197,30 +193,32 @@ bool SCTAuditingHandler::SerializeData(std::string* output) {
     auto reporter_key = kv.first;
     auto* reporter = kv.second.get();
 
-    base::Value::Dict report_entry;
+    std::string serialized_report;
+    reporter->report()->SerializeToString(&serialized_report);
+    serialized_report = base::Base64Encode(serialized_report);
 
-    report_entry.Set(kReporterKeyKey, reporter_key.ToString());
+    auto report_entry =
+        base::Value::Dict()
+            .Set(kReporterKeyKey, reporter_key.ToString())
+            .Set(kBackoffEntryKey,
+                 net::BackoffEntrySerializer::SerializeToList(
+                     *reporter->backoff_entry(), base::Time::Now()))
+            .Set(kAlreadyCountedKey, reporter->counted_towards_report_limit())
+            .Set(kReportKey, serialized_report);
 
     if (reporter->sct_hashdance_metadata()) {
       report_entry.Set(kSCTHashdanceMetadataKey,
                        reporter->sct_hashdance_metadata()->ToValue());
     }
 
-    base::Value::List backoff_entry_value =
-        net::BackoffEntrySerializer::SerializeToList(*reporter->backoff_entry(),
-                                                     base::Time::Now());
-    report_entry.Set(kBackoffEntryKey, std::move(backoff_entry_value));
-    report_entry.Set(kAlreadyCountedKey,
-                     reporter->counted_towards_report_limit());
-
-    std::string serialized_report;
-    reporter->report()->SerializeToString(&serialized_report);
-    base::Base64Encode(serialized_report, &serialized_report);
-    report_entry.Set(kReportKey, serialized_report);
-
     reports.Append(std::move(report_entry));
   }
-  return base::JSONWriter::Write(reports, output);
+
+  std::string output;
+  if (!base::JSONWriter::Write(reports, &output)) {
+    return absl::nullopt;
+  }
+  return output;
 }
 
 void SCTAuditingHandler::DeserializeData(const std::string& serialized) {
@@ -384,9 +382,10 @@ void SCTAuditingHandler::ClearPendingReports(base::OnceClosure callback) {
                   return std::move(cb).Run();
                 },
                 std::move(callback))));
-    auto data = std::make_unique<std::string>();
-    SerializeData(data.get());
-    writer_->WriteNow(std::move(data));
+    absl::optional<std::string> data = SerializeData();
+    if (data) {
+      writer_->WriteNow(std::move(*data));
+    }
   } else {
     std::move(callback).Run();
   }

@@ -7,8 +7,10 @@
 
 #include <memory>
 
+#include "base/memory/raw_ptr.h"
+#include "base/scoped_observation.h"
+#include "chrome/browser/ash/arc/session/arc_session_manager_observer.h"
 #include "media/media_buildflags.h"
-#include "mojo/public/cpp/bindings/pending_remote.h"
 
 #if BUILDFLAG(USE_ARC_PROTECTED_MEDIA)
 #include "base/memory/weak_ptr.h"
@@ -17,31 +19,31 @@
 
 class Profile;
 
-
-namespace chromeos {
+namespace ash {
 class SchedulerConfigurationManagerBase;
 }
 
 namespace arc {
 
-class ArcDemoModePreferenceHandler;
 class ArcDiskSpaceMonitor;
 class ArcIconCacheDelegateProvider;
 class ArcPlayStoreEnabledPreferenceHandler;
 class ArcServiceManager;
 class ArcSessionManager;
+class ArcVmDataMigrationNotifier;
+class BrowserUrlOpener;
 
 // Detects ARC availability and launches ARC bridge service.
-class ArcServiceLauncher {
+class ArcServiceLauncher : public ArcSessionManagerObserver {
  public:
   // |scheduler_configuration_manager| must outlive |this| object.
-  explicit ArcServiceLauncher(chromeos::SchedulerConfigurationManagerBase*
-                                  scheduler_configuration_manager);
+  explicit ArcServiceLauncher(
+      ash::SchedulerConfigurationManagerBase* scheduler_configuration_manager);
 
   ArcServiceLauncher(const ArcServiceLauncher&) = delete;
   ArcServiceLauncher& operator=(const ArcServiceLauncher&) = delete;
 
-  ~ArcServiceLauncher();
+  ~ArcServiceLauncher() override;
 
   // Returns a global instance.
   static ArcServiceLauncher* Get();
@@ -67,7 +69,13 @@ class ArcServiceLauncher {
   // OnPrimaryUserProfilePrepared() should be called.
   void ResetForTesting();
 
+  // Ensure all ARC keyed service factories are properly initialised.
+  static void EnsureFactoriesBuilt();
+
  private:
+  // ArcSessionManagerObserver overrides:
+  void OnArcPlayStoreEnabledChanged(bool enabled) override;
+
 #if BUILDFLAG(USE_ARC_PROTECTED_MEDIA)
   // Callback for when the CdmFactoryDaemon D-Bus service is available, also
   // used to trigger expanding the property files if a timeout occurs after we
@@ -92,14 +100,19 @@ class ArcServiceLauncher {
   std::unique_ptr<ArcSessionManager> arc_session_manager_;
   std::unique_ptr<ArcPlayStoreEnabledPreferenceHandler>
       arc_play_store_enabled_preference_handler_;
-  std::unique_ptr<ArcDemoModePreferenceHandler>
-      arc_demo_mode_preference_handler_;
   std::unique_ptr<ArcDiskSpaceMonitor> arc_disk_space_monitor_;
   std::unique_ptr<ArcIconCacheDelegateProvider>
       arc_icon_cache_delegate_provider_;
+  std::unique_ptr<BrowserUrlOpener> arc_net_url_opener_;
+  std::unique_ptr<ArcVmDataMigrationNotifier> arc_vm_data_migration_notifier_;
+
   // |scheduler_configuration_manager_| outlives |this|.
-  chromeos::SchedulerConfigurationManagerBase* const
+  const raw_ptr<ash::SchedulerConfigurationManagerBase>
       scheduler_configuration_manager_;
+
+  // Observes ArcSessionManager for changes to ARC-enabled.
+  base::ScopedObservation<ArcSessionManager, ArcSessionManagerObserver>
+      session_manager_obs_{this};
 
 #if BUILDFLAG(USE_ARC_PROTECTED_MEDIA)
   base::WeakPtrFactory<ArcServiceLauncher> weak_factory_{this};

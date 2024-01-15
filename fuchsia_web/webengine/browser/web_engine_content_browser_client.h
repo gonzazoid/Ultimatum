@@ -12,7 +12,6 @@
 #include "content/public/browser/content_browser_client.h"
 #include "fuchsia_web/webengine/browser/content_directory_loader_factory.h"
 #include "mojo/public/cpp/bindings/binder_map.h"
-#include "services/metrics/public/cpp/ukm_source_id.h"
 
 class WebEngineBrowserMainParts;
 
@@ -41,12 +40,11 @@ class WebEngineContentBrowserClient final
       mojo::BinderMapWithContext<content::RenderFrameHost*>* map) override;
   void RegisterNonNetworkNavigationURLLoaderFactories(
       int frame_tree_node_id,
-      ukm::SourceIdObj ukm_source_id,
       NonNetworkURLLoaderFactoryMap* factories) override;
   void RegisterNonNetworkSubresourceURLLoaderFactories(
       int render_process_id,
       int render_frame_id,
-      const absl::optional<url::Origin>& request_initiator_origin,
+      const std::optional<url::Origin>& request_initiator_origin,
       NonNetworkURLLoaderFactoryMap* factories) override;
   bool ShouldEnableStrictSiteIsolation() override;
   void AppendExtraCommandLineSwitches(base::CommandLine* command_line,
@@ -54,6 +52,7 @@ class WebEngineContentBrowserClient final
   std::string GetApplicationLocale() override;
   std::string GetAcceptLangs(content::BrowserContext* context) override;
   base::OnceClosure SelectClientCertificate(
+      content::BrowserContext* browser_context,
       content::WebContents* web_contents,
       net::SSLCertRequestInfo* cert_request_info,
       net::ClientCertIdentityList client_certs,
@@ -67,7 +66,8 @@ class WebEngineContentBrowserClient final
       content::BrowserContext* browser_context,
       const base::RepeatingCallback<content::WebContents*()>& wc_getter,
       content::NavigationUIData* navigation_ui_data,
-      int frame_tree_node_id) override;
+      int frame_tree_node_id,
+      absl::optional<int64_t> navigation_id) override;
   void ConfigureNetworkContextParams(
       content::BrowserContext* context,
       bool in_memory,

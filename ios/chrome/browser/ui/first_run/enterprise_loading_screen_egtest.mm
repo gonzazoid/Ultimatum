@@ -9,7 +9,7 @@
 #import "components/policy/core/common/cloud/cloud_policy_constants.h"
 #import "components/policy/core/common/policy_switches.h"
 #import "components/policy/test_support/embedded_policy_test_server.h"
-#import "ios/chrome/browser/policy/policy_app_interface.h"
+#import "ios/chrome/browser/policy/model/policy_app_interface.h"
 #import "ios/chrome/browser/ui/first_run/first_run_constants.h"
 #import "ios/chrome/test/earl_grey/chrome_earl_grey.h"
 #import "ios/chrome/test/earl_grey/chrome_earl_grey_ui.h"
@@ -18,10 +18,6 @@
 #import "ios/testing/earl_grey/app_launch_manager.h"
 #import "ios/testing/earl_grey/earl_grey_test.h"
 #import "net/http/http_status_code.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace {
 
@@ -120,7 +116,8 @@ constexpr char kEnrollmentToken[] = "enrollment_token";
 
 // Ensures that the loading screen is dismissed when registration and policy
 // fetch succeed.
-- (void)testLoadingScreenDismissedByPolicyFetchSuccess {
+// TODO(crbug.com/1412454): Flaky.
+- (void)FLAKY_testLoadingScreenDismissedByPolicyFetchSuccess {
   [self configureAppWithEnrollmentTokenValid:YES];
   [self verifyLoadingScreenIsDismissed];
   GREYAssertTrue([PolicyAppInterface isCloudPolicyClientRegistered],
@@ -128,7 +125,8 @@ constexpr char kEnrollmentToken[] = "enrollment_token";
 }
 
 // Ensures that the loading screen is dismissed when registration fails.
-- (void)testLoadingScreenDismissedByRegisterFail {
+// TODO(crbug.com/1412454): Flaky.
+- (void)FLAKY_testLoadingScreenDismissedByRegisterFail {
   [self configureAppWithEnrollmentTokenValid:NO];
   [self verifyLoadingScreenIsDismissed];
   GREYAssertFalse(
@@ -138,7 +136,8 @@ constexpr char kEnrollmentToken[] = "enrollment_token";
 
 // Ensures that the loading screen is dismissed when registration succeeds and
 // policy fetch fails.
-- (void)testLoadingScreenDismissedByPolicyFetchError {
+// TODO(crbug.com/1411631): Flaky.
+- (void)DISABLED_testLoadingScreenDismissedByPolicyFetchError {
   _policyTestServer->ConfigureRequestError(
       policy::dm_protocol::kValueRequestPolicy, net::HTTP_METHOD_NOT_ALLOWED);
 

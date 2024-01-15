@@ -7,7 +7,6 @@
 #include <memory>
 
 #include "base/memory/singleton.h"
-#include "build/build_config.h"
 #include "components/keyed_service/content/browser_context_keyed_service_factory.h"
 #include "extensions/browser/api/networking_private/networking_private_delegate.h"
 
@@ -59,7 +58,7 @@ class NetworkingPrivateDelegateFactory
   ~NetworkingPrivateDelegateFactory() override;
 
   // BrowserContextKeyedServiceFactory:
-  KeyedService* BuildServiceInstanceFor(
+  std::unique_ptr<KeyedService> BuildServiceInstanceForBrowserContext(
       content::BrowserContext* browser_context) const override;
   content::BrowserContext* GetBrowserContextToUse(
       content::BrowserContext* context) const override;

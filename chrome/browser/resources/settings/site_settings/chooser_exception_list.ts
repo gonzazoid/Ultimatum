@@ -14,11 +14,14 @@ import '../settings_shared.css.js';
 import '../i18n_setup.js';
 import './chooser_exception_list_entry.js';
 
+import {CrDialogElement} from 'chrome://resources/cr_elements/cr_dialog/cr_dialog.js';
 import {I18nMixin} from 'chrome://resources/cr_elements/i18n_mixin.js';
 import {ListPropertyUpdateMixin} from 'chrome://resources/cr_elements/list_property_update_mixin.js';
 import {WebUiListenerMixin} from 'chrome://resources/cr_elements/web_ui_listener_mixin.js';
 import {PaperTooltipElement} from 'chrome://resources/polymer/v3_0/paper-tooltip/paper-tooltip.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+
+import {TooltipMixin} from '../tooltip_mixin.js';
 
 import {getTemplate} from './chooser_exception_list.html.js';
 import {ChooserType, ContentSettingsTypes} from './constants.js';
@@ -27,12 +30,13 @@ import {ChooserException, RawChooserException, SiteException} from './site_setti
 
 export interface ChooserExceptionListElement {
   $: {
+    confirmResetSettings: CrDialogElement,
     tooltip: PaperTooltipElement,
   };
 }
 
-const ChooserExceptionListElementBase = ListPropertyUpdateMixin(
-    SiteSettingsMixin(WebUiListenerMixin(I18nMixin(PolymerElement))));
+const ChooserExceptionListElementBase = TooltipMixin(ListPropertyUpdateMixin(
+    SiteSettingsMixin(WebUiListenerMixin(I18nMixin(PolymerElement)))));
 
 export class ChooserExceptionListElement extends
     ChooserExceptionListElementBase {
@@ -73,6 +77,12 @@ export class ChooserExceptionListElement extends
       },
 
       hasIncognito_: Boolean,
+
+      resetPermissionsMessage_: {
+        type: String,
+        value: '',
+      },
+
       tooltipText_: String,
     };
   }
@@ -81,17 +91,18 @@ export class ChooserExceptionListElement extends
   chooserType: ChooserType;
   private emptyListMessage_: string;
   private hasIncognito_: boolean;
+  private resetPermissionsMessage_: string;
   private tooltipText_: string;
 
   override connectedCallback() {
     super.connectedCallback();
 
-    this.addWebUIListener(
+    this.addWebUiListener(
         'contentSettingChooserPermissionChanged',
         (category: ContentSettingsTypes, chooserType: ChooserType) => {
           this.objectWithinChooserTypeChanged_(category, chooserType);
         });
-    this.addWebUIListener(
+    this.addWebUiListener(
         'onIncognitoStatusChanged',
         (hasIncognito: boolean) =>
             this.onIncognitoStatusChanged_(hasIncognito));
@@ -135,18 +146,24 @@ export class ChooserExceptionListElement extends
     switch (this.chooserType) {
       case ChooserType.USB_DEVICES:
         this.emptyListMessage_ = this.i18n('noUsbDevicesFound');
+        this.resetPermissionsMessage_ = this.i18n('resetUsbConfirmation');
         break;
       case ChooserType.SERIAL_PORTS:
         this.emptyListMessage_ = this.i18n('noSerialPortsFound');
+        this.resetPermissionsMessage_ =
+            this.i18n('resetSerialPortsConfirmation');
         break;
       case ChooserType.HID_DEVICES:
         this.emptyListMessage_ = this.i18n('noHidDevicesFound');
+        this.resetPermissionsMessage_ = this.i18n('resetHidConfirmation');
         break;
       case ChooserType.BLUETOOTH_DEVICES:
         this.emptyListMessage_ = this.i18n('noBluetoothDevicesFound');
+        this.resetPermissionsMessage_ = this.i18n('resetBluetoothConfirmation');
         break;
       default:
         this.emptyListMessage_ = '';
+        this.resetPermissionsMessage_ = '';
     }
 
     this.populateList_();
@@ -165,23 +182,10 @@ export class ChooserExceptionListElement extends
    */
   private onShowTooltip_(e: CustomEvent<{target: HTMLElement, text: string}>) {
     this.tooltipText_ = e.detail.text;
-    const target = e.detail.target;
     // paper-tooltip normally determines the target from the |for| property,
     // which is a selector. Here paper-tooltip is being reused by multiple
     // potential targets.
-    this.$.tooltip.target = target;
-    const hide = () => {
-      this.$.tooltip.hide();
-      target.removeEventListener('mouseleave', hide);
-      target.removeEventListener('blur', hide);
-      target.removeEventListener('click', hide);
-      this.$.tooltip.removeEventListener('mouseenter', hide);
-    };
-    target.addEventListener('mouseleave', hide);
-    target.addEventListener('blur', hide);
-    target.addEventListener('click', hide);
-    this.$.tooltip.addEventListener('mouseenter', hide);
-    this.$.tooltip.show();
+    this.showTooltipAtTarget(this.$.tooltip, e.detail.target);
   }
 
   /**
@@ -214,6 +218,32 @@ export class ChooserExceptionListElement extends
         this.updateList(propertyPath, siteUidGetter, exception.sites);
       }, this);
     }
+  }
+
+  /**
+   * Confirms the resetting of all content settings for an origin.
+   */
+  private onConfirmClearSettings_(e: Event) {
+    e.preventDefault();
+    this.$.confirmResetSettings.showModal();
+  }
+
+  private onCloseDialog_(e: Event) {
+    (e.target as HTMLElement).closest('cr-dialog')!.close();
+  }
+
+  /**
+   * Resets all permissions for the current origin.
+   */
+  private onResetSettings_(e: Event) {
+    this.chooserExceptions.forEach(exception => {
+      exception.sites.forEach(site => {
+        this.browserProxy.resetChooserExceptionForSite(
+            exception.chooserType, site.origin, exception.object);
+      });
+    });
+
+    this.onCloseDialog_(e);
   }
 }
 

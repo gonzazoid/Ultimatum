@@ -7,6 +7,7 @@
 #include <stdint.h>
 
 #include "base/logging.h"
+#include "base/strings/strcat.h"
 #include "base/strings/stringprintf.h"
 #include "base/system/sys_info.h"
 #include "build/build_config.h"
@@ -16,7 +17,7 @@
 #include "content/public/browser/browser_context.h"
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "chromeos/system/statistics_provider.h"
+#include "chromeos/ash/components/system/statistics_provider.h"
 #endif
 
 #if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) ||           \
@@ -44,10 +45,9 @@ std::string DeviceManagementServiceConfiguration::GetDMServerUrl() const {
 }
 
 std::string DeviceManagementServiceConfiguration::GetAgentParameter() const {
-  return base::StringPrintf("%s %s(%s)",
-                            version_info::GetProductName().c_str(),
-                            version_info::GetVersionNumber().c_str(),
-                            version_info::GetLastChange().c_str());
+  return base::StrCat({version_info::GetProductName(), " ",
+                       version_info::GetVersionNumber(), "(",
+                       version_info::GetLastChange(), ")"});
 }
 
 std::string DeviceManagementServiceConfiguration::GetPlatformParameter() const {
@@ -55,16 +55,16 @@ std::string DeviceManagementServiceConfiguration::GetPlatformParameter() const {
   std::string os_hardware = base::SysInfo::OperatingSystemArchitecture();
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-  chromeos::system::StatisticsProvider* provider =
-      chromeos::system::StatisticsProvider::GetInstance();
+  ash::system::StatisticsProvider* provider =
+      ash::system::StatisticsProvider::GetInstance();
 
-  std::string hwclass;
-  if (!provider->GetMachineStatistic(chromeos::system::kHardwareClassKey,
-                                     &hwclass)) {
+  const absl::optional<base::StringPiece> hwclass =
+      provider->GetMachineStatistic(ash::system::kHardwareClassKey);
+  if (!hwclass) {
     LOG(ERROR) << "Failed to get machine information";
   }
   os_name += ",CrOS," + base::SysInfo::GetLsbReleaseBoard();
-  os_hardware += "," + hwclass;
+  os_hardware += "," + std::string(hwclass.value_or(""));
 #endif
 
   std::string os_version("-");

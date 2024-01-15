@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 #ifndef DEVICE_BLUETOOTH_FLOSS_BLUETOOTH_REMOTE_GATT_DESCRIPTOR_FLOSS_H_
@@ -12,7 +12,7 @@
 #include "device/bluetooth/bluetooth_export.h"
 #include "device/bluetooth/bluetooth_remote_gatt_characteristic.h"
 #include "device/bluetooth/bluetooth_remote_gatt_descriptor.h"
-#include "device/bluetooth/floss/floss_gatt_client.h"
+#include "device/bluetooth/floss/floss_gatt_manager_client.h"
 #include "device/bluetooth/public/cpp/bluetooth_uuid.h"
 
 namespace floss {
@@ -62,14 +62,6 @@ class DEVICE_BLUETOOTH_EXPORT BluetoothRemoteGattDescriptorFloss
                   int32_t handle,
                   const std::vector<uint8_t>& data) override;
 
-  // Register for notifications when this descriptor's value is updated.
-  void RegisterForNotification(base::OnceClosure callback,
-                               ErrorCallback error_callback);
-
-  // Unregister any notifications on this descriptor.
-  void UnregisterForNotification(base::OnceClosure callback,
-                                 ErrorCallback error_callback);
-
  private:
   BluetoothRemoteGattDescriptorFloss(
       BluetoothRemoteGattServiceFloss* service,
@@ -85,11 +77,8 @@ class DEVICE_BLUETOOTH_EXPORT BluetoothRemoteGattDescriptorFloss
                          std::vector<uint8_t> data,
                          DBusResult<Void> result);
 
-  // Handles response to |RegisterForNotification| and
-  // |UnregisterForNotification|.
-  void OnRegisterForNotification(base::OnceClosure callback,
-                                 ErrorCallback error_callback,
-                                 DBusResult<GattStatus> result);
+  // Handle timeout for receiving a |GattDescriptorWrite|.
+  void OnWriteTimeout();
 
   // Send notifications to observer on adapter.
   void NotifyValueChanged();

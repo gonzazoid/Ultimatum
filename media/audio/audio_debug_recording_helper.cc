@@ -7,8 +7,8 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/files/file.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "base/sequence_checker.h"
@@ -69,6 +69,7 @@ void AudioDebugRecordingHelper::DisableDebugRecording() {
   {
     base::AutoLock auto_lock(file_writer_lock_);
     if (file_writer_) {
+      WillDestroyAudioDebugFileWriter();
       file_writer_.reset();
     }
   }
@@ -88,6 +89,10 @@ AudioDebugFileWriter::Ptr AudioDebugRecordingHelper::CreateAudioDebugFileWriter(
     base::File file) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   return AudioDebugFileWriter::Create(params, std::move(file));
+}
+
+void AudioDebugRecordingHelper::WillDestroyAudioDebugFileWriter() {
+  // No special action required.
 }
 
 }  // namespace media

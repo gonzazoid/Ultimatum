@@ -21,7 +21,9 @@ cbor::Value AsCBOR(const AuthenticatorSupportedOptions& options) {
   cbor::Value::MapValue option_map;
   option_map.emplace(kResidentKeyMapKey, options.supports_resident_key);
   option_map.emplace(kUserPresenceMapKey, options.supports_user_presence);
-  option_map.emplace(kPlatformDeviceMapKey, options.is_platform_device);
+  option_map.emplace(kPlatformDeviceMapKey,
+                     options.is_platform_device ==
+                         AuthenticatorSupportedOptions::PlatformDevice::kYes);
 
   using UvAvailability =
       AuthenticatorSupportedOptions::UserVerificationAvailability;
@@ -96,7 +98,7 @@ cbor::Value AsCBOR(const AuthenticatorSupportedOptions& options) {
     option_map.emplace(kEnterpriseAttestationKey, true);
   }
 
-  if (options.supports_large_blobs) {
+  if (options.large_blob_type == LargeBlobSupportType::kKey) {
     option_map.emplace(kLargeBlobsKey, true);
   }
 

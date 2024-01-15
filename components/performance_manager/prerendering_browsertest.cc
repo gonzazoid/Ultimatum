@@ -4,12 +4,13 @@
 
 #include <string>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/weak_ptr.h"
 #include "components/performance_manager/public/graph/frame_node.h"
 #include "components/performance_manager/public/graph/page_node.h"
 #include "components/performance_manager/public/performance_manager.h"
 #include "components/performance_manager/test_support/performance_manager_browsertest_harness.h"
+#include "components/performance_manager/test_support/run_in_graph.h"
 #include "content/public/browser/back_forward_cache.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/web_contents.h"
@@ -42,7 +43,7 @@ class PerformanceManagerPrerenderingBrowserTest
       : prerender_helper_(base::BindRepeating(
             &PerformanceManagerPrerenderingBrowserTest::web_contents,
             base::Unretained(this))) {
-    prerender_helper_.SetUp(&ssl_server_);
+    prerender_helper_.RegisterServerRequestMonitor(&ssl_server_);
   }
 
   void SetUpOnMainThread() override {
@@ -204,14 +205,21 @@ IN_PROC_BROWSER_TEST_F(PerformanceManagerPrerenderingBrowserTest,
   // tree is removed from PerformanceManager.
   content::RenderFrameDeletedObserver deleted_observer(
       prerender_helper_.GetPrerenderedMainFrameHost(prerender_host));
+  bool rfh_should_change =
+      web_contents()
+          ->GetPrimaryMainFrame()
+          ->ShouldChangeRenderFrameHostOnSameSiteNavigation();
   ASSERT_TRUE(content::NavigateToURL(web_contents(), kFinalUrl));
   deleted_observer.WaitUntilDeleted();
   RunInGraph([&](Graph*) {
     ASSERT_TRUE(page_node);
     EXPECT_EQ(page_node->GetMainFrameNodes().size(), 1U);
-    EXPECT_EQ(page_node->GetMainFrameNode(), initial_main_frame_node);
+    // The RenderFrameHost might change after the navigation if RenderDocument
+    // is enabled.
+    EXPECT_EQ(rfh_should_change,
+              page_node->GetMainFrameNode() != initial_main_frame_node);
     EXPECT_EQ(page_node->GetMainFrameUrl(), kFinalUrl);
-    EXPECT_TRUE(initial_main_frame_node->IsCurrent());
+    EXPECT_TRUE(page_node->GetMainFrameNode()->IsCurrent());
   });
 }
 

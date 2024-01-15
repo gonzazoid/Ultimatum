@@ -4,8 +4,9 @@
 
 #include "ui/message_center/views/notification_input_container.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/color/color_id.h"
 #include "ui/color/color_provider.h"
 #include "ui/compositor/layer.h"
@@ -50,7 +51,7 @@ NotificationInputContainer::NotificationInputContainer(
 
 NotificationInputContainer::~NotificationInputContainer() {
   // TODO(pbos): Revisit explicit removal of InkDrop for classes that override
-  // Add/RemoveLayerBeneathView(). This is done so that the InkDrop doesn't
+  // Add/(). This is done so that the InkDrop doesn't
   // access the non-override versions in ~View.
   if (views::InkDrop::Get(this))
     views::InkDrop::Remove(this);
@@ -70,8 +71,10 @@ void NotificationInputContainer::Init() {
   SetSendButtonHighlightPath();
   button_->SetImageHorizontalAlignment(views::ImageButton::ALIGN_CENTER);
   button_->SetImageVerticalAlignment(views::ImageButton::ALIGN_MIDDLE);
+  button_->SetAccessibleName(
+      l10n_util::GetStringUTF16(GetDefaultAccessibleNameStringId()));
   button_->SetTooltipText(
-      l10n_util::GetStringUTF16(GetDefaultPlaceholderStringId()));
+      l10n_util::GetStringUTF16(GetDefaultAccessibleNameStringId()));
 
   OnAfterUserAction(textfield_);
   AddChildView(button_.get());
@@ -107,7 +110,8 @@ void NotificationInputContainer::AnimateBackground(const ui::Event& event) {
                            ui::LocatedEvent::FromIfValid(located_event.get()));
 }
 
-void NotificationInputContainer::AddLayerBeneathView(ui::Layer* layer) {
+void NotificationInputContainer::AddLayerToRegion(ui::Layer* layer,
+                                                  views::LayerRegion region) {
   if (!ink_drop_container_)
     return;
 
@@ -119,14 +123,14 @@ void NotificationInputContainer::AddLayerBeneathView(ui::Layer* layer) {
   textfield_->layer()->SetFillsBoundsOpaquely(false);
   button_->SetPaintToLayer();
   button_->layer()->SetFillsBoundsOpaquely(false);
-  ink_drop_container_->AddLayerBeneathView(layer);
+  ink_drop_container_->AddLayerToRegion(layer, region);
 }
 
-void NotificationInputContainer::RemoveLayerBeneathView(ui::Layer* layer) {
+void NotificationInputContainer::RemoveLayerFromRegions(ui::Layer* layer) {
   if (!ink_drop_container_)
     return;
 
-  ink_drop_container_->RemoveLayerBeneathView(layer);
+  ink_drop_container_->RemoveLayerFromRegions(layer);
   textfield_->DestroyLayer();
   button_->DestroyLayer();
 }
@@ -183,12 +187,8 @@ views::InkDropContainerView* NotificationInputContainer::InstallInkDrop() {
   views::InkDrop::Get(this)->SetMode(
       views::InkDropHost::InkDropMode::ON_NO_GESTURE_HANDLER);
   views::InkDrop::Get(this)->SetVisibleOpacity(1);
-  views::InkDrop::Get(this)->SetBaseColorCallback(base::BindRepeating(
-      [](views::View* host) {
-        return host->GetColorProvider()->GetColor(
-            ui::kColorNotificationInputBackground);
-      },
-      this));
+  views::InkDrop::Get(this)->SetBaseColorId(
+      ui::kColorNotificationInputBackground);
 
   return AddChildView(std::make_unique<views::InkDropContainerView>());
 }
@@ -209,6 +209,10 @@ int NotificationInputContainer::GetDefaultPlaceholderStringId() const {
   return IDS_MESSAGE_CENTER_NOTIFICATION_INLINE_REPLY_PLACEHOLDER;
 }
 
+int NotificationInputContainer::GetDefaultAccessibleNameStringId() const {
+  return IDS_MESSAGE_CENTER_NOTIFICATION_INLINE_REPLY_ACCESSIBLE_NAME;
+}
+
 void NotificationInputContainer::StyleTextfield() {
   // No background.
 }
@@ -220,10 +224,14 @@ void NotificationInputContainer::UpdateButtonImage() {
   auto icon_color_id = textfield_->GetText().empty()
                            ? ui::kColorNotificationInputPlaceholderForeground
                            : ui::kColorNotificationInputForeground;
-  button_->SetImage(
+  button_->SetImageModel(
       views::Button::STATE_NORMAL,
-      gfx::CreateVectorIcon(kNotificationInlineReplyIcon, kInputReplyButtonSize,
-                            GetColorProvider()->GetColor(icon_color_id)));
+      ui::ImageModel::FromVectorIcon(
+          kNotificationInlineReplyIcon,
+          GetColorProvider()->GetColor(icon_color_id), kInputReplyButtonSize));
 }
+
+BEGIN_METADATA(NotificationInputContainer, views::View)
+END_METADATA
 
 }  // namespace message_center

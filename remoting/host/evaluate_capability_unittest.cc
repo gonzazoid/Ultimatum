@@ -4,6 +4,7 @@
 
 #include "remoting/host/evaluate_capability.h"
 
+#include "base/containers/contains.h"
 #include "base/strings/string_util.h"
 #include "remoting/host/base/switches.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -18,7 +19,7 @@ std::string NormalizeOutput(std::string output) {
   base::ReplaceSubstringsAfterOffset(&output, 0, "\r\n", "\n");
   base::ReplaceSubstringsAfterOffset(&output, 0, "\r", "\n");
   // Windows (evilly) use \r\n to replace \n, so we will end up with two \n.
-  while (output.find("\n\n") != std::string::npos) {
+  while (base::Contains(output, "\n\n")) {
     base::ReplaceSubstringsAfterOffset(&output, 0, "\n\n", "\n");
   }
   return output;
@@ -35,9 +36,10 @@ TEST(EvaluateCapabilityTest, DISABLED_ShouldReturnCrashResult) {
 TEST(EvaluateCapabilityTest, ShouldReturnExitCodeAndOutput) {
   std::string output;
   ASSERT_EQ(EvaluateCapability("test", &output), 234);
-  ASSERT_EQ("In EvaluateTest(): Line 1\n"
-            "In EvaluateTest(): Line 2",
-            NormalizeOutput(output));
+  ASSERT_EQ(
+      "In EvaluateTest(): Line 1\n"
+      "In EvaluateTest(): Line 2",
+      NormalizeOutput(output));
 }
 
 TEST(EvaluateCapabilityTest, ShouldReturnSuccessAndOutput) {

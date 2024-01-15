@@ -7,11 +7,12 @@ use std::vec;
 
 use std::convert::TryInto;
 
-use crate::system::ffi;
-use crate::system::handle;
-use crate::system::handle::{CastHandle, Handle};
-// This full import is intentional; nearly every type in mojo_types needs to be used.
-use crate::system::mojo_types::*;
+use crate::ffi;
+use crate::handle;
+use crate::handle::{CastHandle, Handle};
+// This full import is intentional; nearly every type in mojo_types needs to be
+// used.
+use crate::mojo_types::*;
 
 use ffi::c_void;
 
@@ -137,9 +138,10 @@ impl MessageEndpoint {
             assert_ne!(buffer, ptr::null_mut());
             // Will not panic if usize has at least 32 bits, which is true for our targets
             let buffer_size: usize = num_bytes.try_into().unwrap();
-            // MojoGetMessageData points us to the data with a c_void pointer and a length. This
-            // is only available until we destroy the message. We want to copy this into our own
-            // Vec. Read the buffer as a slice, which is safe.
+            // MojoGetMessageData points us to the data with a c_void pointer and a length.
+            // This is only available until we destroy the message. We want to
+            // copy this into our own Vec. Read the buffer as a slice, which is
+            // safe.
             unsafe {
                 let buffer_slice = std::slice::from_raw_parts(buffer.cast(), buffer_size);
                 buffer_slice.to_vec()
@@ -211,9 +213,10 @@ impl MessageEndpoint {
             let buffer_size: usize = buffer_size.try_into().unwrap();
             assert!(bytes.len() <= buffer_size);
             assert_ne!(buffer_ptr, ptr::null_mut());
-            // MojoAppendMessageData tells us where to write with a c_void pointer and a length.
-            // This is only available until we destroy or send the message. We can view this
-            // through a slice and copy our `bytes` into it.
+            // MojoAppendMessageData tells us where to write with a c_void pointer and a
+            // length. This is only available until we destroy or send the
+            // message. We can view this through a slice and copy our `bytes`
+            // into it.
             unsafe {
                 // We know `bytes.len() <= buffer_size`, and `buffer_size` is the limit of the
                 // provided buffer.
@@ -236,13 +239,13 @@ impl MessageEndpoint {
 
 impl CastHandle for MessageEndpoint {
     /// Generates a MessageEndpoint from an untyped handle wrapper
-    /// See mojo::system::handle for information on untyped vs. typed
+    /// See crate::handle for information on untyped vs. typed
     unsafe fn from_untyped(handle: handle::UntypedHandle) -> Self {
         MessageEndpoint { handle: handle }
     }
 
     /// Consumes this object and produces a plain handle wrapper
-    /// See mojo::system::handle for information on untyped vs. typed
+    /// See crate::handle for information on untyped vs. typed
     fn as_untyped(self) -> handle::UntypedHandle {
         self.handle
     }
@@ -251,7 +254,7 @@ impl CastHandle for MessageEndpoint {
 impl Handle for MessageEndpoint {
     /// Returns the native handle wrapped by this structure.
     ///
-    /// See mojo::system::handle for information on handle wrappers
+    /// See crate::handle for information on handle wrappers
     fn get_native_handle(&self) -> MojoHandle {
         self.handle.get_native_handle()
     }

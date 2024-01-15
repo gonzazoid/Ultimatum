@@ -23,20 +23,21 @@ import './site_entry.js';
 import {CrActionMenuElement} from 'chrome://resources/cr_elements/cr_action_menu/cr_action_menu.js';
 import {CrDialogElement} from 'chrome://resources/cr_elements/cr_dialog/cr_dialog.js';
 import {CrLazyRenderElement} from 'chrome://resources/cr_elements/cr_lazy_render/cr_lazy_render.js';
-import {I18nMixin, I18nMixinInterface} from 'chrome://resources/cr_elements/i18n_mixin.js';
-import {WebUiListenerMixin, WebUiListenerMixinInterface} from 'chrome://resources/cr_elements/web_ui_listener_mixin.js';
-import {assert} from 'chrome://resources/js/assert_ts.js';
+import {I18nMixin} from 'chrome://resources/cr_elements/i18n_mixin.js';
+import {WebUiListenerMixin} from 'chrome://resources/cr_elements/web_ui_listener_mixin.js';
+import {assert} from 'chrome://resources/js/assert.js';
 import {IronListElement} from 'chrome://resources/polymer/v3_0/iron-list/iron-list.js';
 import {afterNextRender, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {GlobalScrollTargetMixin} from '../global_scroll_target_mixin.js';
 import {loadTimeData} from '../i18n_setup.js';
+import {DeleteBrowsingDataAction, MetricsBrowserProxy, MetricsBrowserProxyImpl} from '../metrics_browser_proxy.js';
 import {routes} from '../route.js';
-import {Route, RouteObserverMixin, RouteObserverMixinInterface, Router} from '../router.js';
+import {Route, RouteObserverMixin, Router} from '../router.js';
 
 import {getTemplate} from './all_sites.html.js';
 import {AllSitesAction2, AllSitesDialog, ContentSetting, SortMethod} from './constants.js';
-import {SiteSettingsMixin, SiteSettingsMixinInterface} from './site_settings_mixin.js';
+import {SiteSettingsMixin} from './site_settings_mixin.js';
 import {OriginInfo, SiteGroup} from './site_settings_prefs_browser_proxy.js';
 
 interface ActionMenuModel {
@@ -78,19 +79,8 @@ export interface AllSitesElement {
   };
 }
 
-// TODO(crbug.com/1234307): Remove when RouteObserverMixin is converted to
-// TypeScript.
-type Constructor<T> = new (...args: any[]) => T;
-
-const AllSitesElementBaseTemp = GlobalScrollTargetMixin(
-    RouteObserverMixin(
-        WebUiListenerMixin(I18nMixin(SiteSettingsMixin(PolymerElement)))) as
-    unknown as Constructor<PolymerElement>);
-
-const AllSitesElementBase = AllSitesElementBaseTemp as unknown as {
-  new (): PolymerElement & I18nMixinInterface & WebUiListenerMixinInterface &
-      SiteSettingsMixinInterface & RouteObserverMixinInterface,
-};
+const AllSitesElementBase = GlobalScrollTargetMixin(RouteObserverMixin(
+    WebUiListenerMixin(I18nMixin(SiteSettingsMixin(PolymerElement)))));
 
 const FPS_RELATED_SEARCH_PREFIX: string = 'related:';
 
@@ -112,7 +102,7 @@ export class AllSitesElement extends AllSitesElementBase {
       // to siteGroupMap.
       /**
        * Map containing sites to display in the widget, grouped into their
-       * eTLD+1 names.
+       * group names.
        */
       siteGroupMap: {
         type: Object,
@@ -206,11 +196,13 @@ export class AllSitesElement extends AllSitesElementBase {
   private clearAllData_: boolean;
   private sortMethod_?: SortMethod;
   private totalUsage_: string;
+  private metricsBrowserProxy: MetricsBrowserProxy =
+      MetricsBrowserProxyImpl.getInstance();
 
   override ready() {
     super.ready();
 
-    this.addWebUIListener(
+    this.addWebUiListener(
         'onStorageListFetched', this.onStorageListFetched.bind(this));
     this.addEventListener(
         'site-entry-selected', (e: CustomEvent<SelectedItem>) => {
@@ -259,7 +251,7 @@ export class AllSitesElement extends AllSitesElementBase {
       // Create a new map to make an observable change.
       const newMap = new Map(this.siteGroupMap);
       response.forEach(siteGroup => {
-        newMap.set(siteGroup.etldPlus1, siteGroup);
+        newMap.set(siteGroup.groupingKey, siteGroup);
       });
       this.siteGroupMap = newMap;
       this.forceListUpdate_();
@@ -275,7 +267,7 @@ export class AllSitesElement extends AllSitesElementBase {
     // Create a new map to make an observable change.
     const newMap = new Map(this.siteGroupMap);
     list.forEach(storageSiteGroup => {
-      newMap.set(storageSiteGroup.etldPlus1, storageSiteGroup);
+      newMap.set(storageSiteGroup.groupingKey, storageSiteGroup);
     });
     this.siteGroupMap = newMap;
     this.forceListUpdate_();
@@ -307,8 +299,8 @@ export class AllSitesElement extends AllSitesElementBase {
   private filterPopulatedList_(
       siteGroupMap: Map<string, SiteGroup>, searchQuery: string): SiteGroup[] {
     const result = [];
-    for (const [_etldPlus1, siteGroup] of siteGroupMap) {
-      if (this.filter.startsWith(FPS_RELATED_SEARCH_PREFIX)) {
+    for (const [_groupingKey, siteGroup] of siteGroupMap) {
+      if (this.isFpsFiltered_()) {
         const fpsOwnerFilter =
             this.filter.substring(this.filter.indexOf(':') + 1);
         // Checking `siteGroup.fpsOwner` to ensure that we're not matching with
@@ -388,7 +380,7 @@ export class AllSitesElement extends AllSitesElementBase {
    */
   private nameComparator_(siteGroup1: SiteGroup, siteGroup2: SiteGroup):
       number {
-    return siteGroup1.etldPlus1.localeCompare(siteGroup2.etldPlus1);
+    return siteGroup1.displayName.localeCompare(siteGroup2.displayName);
   }
 
   /**
@@ -463,8 +455,8 @@ export class AllSitesElement extends AllSitesElementBase {
   }
 
   private shouldShowFpsLearnMore_(): boolean {
-    return this.filter.startsWith(FPS_RELATED_SEARCH_PREFIX) &&
-        this.filteredList_ && this.filteredList_.length > 0;
+    return this.isFpsFiltered_() && this.filteredList_ &&
+        this.filteredList_.length > 0;
   }
 
   private onShowRelatedSites_() {
@@ -489,10 +481,10 @@ export class AllSitesElement extends AllSitesElementBase {
 
   // Creates a placeholder origin used to hold cookies scoped at the eTLD+1
   // level.
-  private generatePlaceholderOrigin_(etldPlus1: string, numCookies: number):
-      OriginInfo {
+  private generatePlaceholderOrigin_(
+      numCookies: number, origin: string, etldPlus1?: string): OriginInfo {
     return {
-      origin: `http://${etldPlus1}/`,
+      origin: etldPlus1 ? `http://${etldPlus1}/` : origin,
       engagement: 0,
       usage: 0,
       numCookies: numCookies,
@@ -507,7 +499,8 @@ export class AllSitesElement extends AllSitesElementBase {
     const siteGroupToUpdate = this.filteredList_[index];
 
     const updatedSiteGroup: SiteGroup = {
-      etldPlus1: siteGroupToUpdate.etldPlus1,
+      groupingKey: siteGroupToUpdate.groupingKey,
+      displayName: siteGroupToUpdate.displayName,
       hasInstalledPWA: siteGroupToUpdate.hasInstalledPWA,
       numCookies: siteGroupToUpdate.numCookies,
       fpsOwner: siteGroupToUpdate.fpsOwner,
@@ -515,12 +508,15 @@ export class AllSitesElement extends AllSitesElementBase {
       origins: [],
     };
 
+    this.metricsBrowserProxy.recordDeleteBrowsingDataAction(
+        DeleteBrowsingDataAction.SITES_SETTINGS_PAGE);
+
     if (actionScope === 'origin') {
       if (isPartitioned) {
         this.browserProxy.recordAction(
             AllSitesAction2.REMOVE_ORIGIN_PARTITIONED);
         this.browserProxy.clearPartitionedOriginDataAndCookies(
-            this.toUrl(origin)!.href, siteGroupToUpdate.etldPlus1);
+            this.toUrl(origin)!.href, siteGroupToUpdate.groupingKey);
 
       } else {
         this.browserProxy.recordAction(AllSitesAction2.REMOVE_ORIGIN);
@@ -541,13 +537,13 @@ export class AllSitesElement extends AllSitesElementBase {
       if (updatedSiteGroup.origins.length === 0 &&
           updatedSiteGroup.numCookies > 0) {
         const originPlaceHolder = this.generatePlaceholderOrigin_(
-            updatedSiteGroup.etldPlus1, updatedSiteGroup.numCookies);
+            updatedSiteGroup.numCookies, origin, updatedSiteGroup.etldPlus1);
         updatedSiteGroup.origins.push(originPlaceHolder);
       }
     } else {
       this.browserProxy.recordAction(AllSitesAction2.REMOVE_SITE_GROUP);
-      this.browserProxy.clearEtldPlus1DataAndCookies(
-          siteGroupToUpdate.etldPlus1);
+      this.browserProxy.clearSiteGroupDataAndCookies(
+          siteGroupToUpdate.groupingKey);
       siteGroupToUpdate.origins.forEach(originEntry => {
         this.resetPermissionsForOrigin_(originEntry.origin);
       });
@@ -571,6 +567,14 @@ export class AllSitesElement extends AllSitesElementBase {
     return this.filter !== '';
   }
 
+  /**
+   * Checks if a first party set search filter is applied.
+   * @return True if filter starts with `FPS_RELATED_SEARCH_PREFIX`.
+   */
+  private isFpsFiltered_(): boolean {
+    return this.filter.startsWith(FPS_RELATED_SEARCH_PREFIX);
+  }
+
   private getFpsLearnMoreLabel_() {
     const fpsOwner = this.filter.substring(this.filter.indexOf(':') + 1);
     return loadTimeData.getStringF(
@@ -584,8 +588,8 @@ export class AllSitesElement extends AllSitesElementBase {
    */
   private getClearDataButtonString_(): string {
     const buttonStringId = this.isFiltered_() ?
-        'siteSettingsClearDisplayedStorageLabel' :
-        'siteSettingsClearAllStorageLabel';
+        'siteSettingsDeleteDisplayedStorageLabel' :
+        'siteSettingsDeleteAllStorageLabel';
     return this.i18n(buttonStringId);
   }
 
@@ -637,7 +641,7 @@ export class AllSitesElement extends AllSitesElementBase {
       return loadTimeData.substituteString(this.i18n(
           'siteSettingsRemoveSiteOriginPartitionedDialogTitle',
           this.originRepresentation(this.actionMenuModel_.origin),
-          this.originRepresentation(this.actionMenuModel_.item.etldPlus1)));
+          this.actionMenuModel_.item.displayName));
     }
 
     const numInstalledApps =
@@ -672,7 +676,7 @@ export class AllSitesElement extends AllSitesElementBase {
     } else if (singleOriginSite) {
       displayOrigin = this.actionMenuModel_.item.origins[0].origin;
     } else {
-      displayOrigin = this.actionMenuModel_.item.etldPlus1;
+      displayOrigin = this.actionMenuModel_.item.displayName;
     }
 
     return loadTimeData.substituteString(
@@ -715,8 +719,8 @@ export class AllSitesElement extends AllSitesElementBase {
    */
   private getClearAllStorageDialogTitle_(): string {
     const titleId = this.isFiltered_() ?
-        'siteSettingsClearDisplayedStorageDialogTitle' :
-        'siteSettingsClearAllStorageDialogTitle';
+        'siteSettingsDeleteDisplayedStorageDialogTitle' :
+        'siteSettingsDeleteAllStorageDialogTitle';
     return loadTimeData.substituteString(this.i18n(titleId), this.totalUsage_);
   }
 
@@ -730,12 +734,12 @@ export class AllSitesElement extends AllSitesElementBase {
     let messageId;
     if (anyAppsInstalled) {
       messageId = this.isFiltered_() ?
-          'siteSettingsClearDisplayedStorageConfirmationInstalled' :
-          'siteSettingsClearAllStorageConfirmationInstalled';
+          'siteSettingsDeleteDisplayedStorageConfirmationInstalled' :
+          'siteSettingsDeleteAllStorageConfirmationInstalled';
     } else {
       messageId = this.isFiltered_() ?
-          'siteSettingsClearDisplayedStorageConfirmation' :
-          'siteSettingsClearAllStorageConfirmation';
+          'siteSettingsDeleteDisplayedStorageConfirmation' :
+          'siteSettingsDeleteAllStorageConfirmation';
     }
 
     return loadTimeData.substituteString(
@@ -783,14 +787,15 @@ export class AllSitesElement extends AllSitesElementBase {
   }
 
   /**
-   * Helper to remove data and cookies for an etldPlus1.
+   * Helper to remove data and cookies for a group.
    * @param index The index of the target siteGroup in filteredList_ that should
    *     be cleared.
    */
   private clearDataForSiteGroupIndex_(index: number) {
     const siteGroupToUpdate = this.filteredList_[index];
     const updatedSiteGroup: SiteGroup = {
-      etldPlus1: siteGroupToUpdate.etldPlus1,
+      groupingKey: siteGroupToUpdate.groupingKey,
+      displayName: siteGroupToUpdate.displayName,
       hasInstalledPWA: siteGroupToUpdate.hasInstalledPWA,
       numCookies: 0,
       fpsOwner: siteGroupToUpdate.fpsOwner,
@@ -798,7 +803,8 @@ export class AllSitesElement extends AllSitesElementBase {
       origins: [],
     };
 
-    this.browserProxy.clearEtldPlus1DataAndCookies(siteGroupToUpdate.etldPlus1);
+    this.browserProxy.clearSiteGroupDataAndCookies(
+        siteGroupToUpdate.groupingKey);
 
     for (let i = 0; i < siteGroupToUpdate.origins.length; ++i) {
       const updatedOrigin = Object.assign({}, siteGroupToUpdate.origins[i]);
@@ -822,10 +828,10 @@ export class AllSitesElement extends AllSitesElementBase {
   private updateSiteGroup_(index: number, updatedSiteGroup: SiteGroup) {
     if (updatedSiteGroup.origins.length > 0) {
       this.set('filteredList_.' + index, updatedSiteGroup);
-      this.siteGroupMap.set(updatedSiteGroup.etldPlus1, updatedSiteGroup);
+      this.siteGroupMap.set(updatedSiteGroup.groupingKey, updatedSiteGroup);
     } else {
       this.splice('filteredList_', index, 1);
-      this.siteGroupMap.delete(updatedSiteGroup.etldPlus1);
+      this.siteGroupMap.delete(updatedSiteGroup.groupingKey);
     }
   }
 
@@ -838,7 +844,9 @@ export class AllSitesElement extends AllSitesElementBase {
     const anyAppsInstalled = this.filteredList_.some(g => g.hasInstalledPWA);
     const installed = anyAppsInstalled ? 'Installed' : '';
     this.recordUserAction_([...scopes, installed, 'Confirm']);
-    if (this.filter.startsWith(FPS_RELATED_SEARCH_PREFIX)) {
+    this.metricsBrowserProxy.recordDeleteBrowsingDataAction(
+        DeleteBrowsingDataAction.SITES_SETTINGS_PAGE);
+    if (this.isFpsFiltered_()) {
       this.browserProxy.recordAction(AllSitesAction2.DELETE_FOR_ENTIRE_FPS);
     }
     for (let index = this.filteredList_.length - 1; index >= 0; index--) {

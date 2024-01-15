@@ -10,13 +10,14 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_helpers.h"
 #include "base/feature_list.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/native_library.h"
+#include "base/values.h"
 #include "base/version.h"
 #include "base/win/security_util.h"
 #include "base/win/sid.h"
@@ -64,9 +65,11 @@ const char kWidevineCdmArch[] =
 
 namespace component_updater {
 
+// Allows this component to be disabled via `ComponentUpdatesEnabled` policy.
+// See https://chromeenterprise.google/policies/?policy=ComponentUpdatesEnabled
 bool MediaFoundationWidevineCdmComponentInstallerPolicy::
     SupportsGroupPolicyEnabledComponentUpdates() const {
-  return false;
+  return true;
 }
 
 bool MediaFoundationWidevineCdmComponentInstallerPolicy::
@@ -77,19 +80,16 @@ bool MediaFoundationWidevineCdmComponentInstallerPolicy::
 // Set permission on `install_dir` so the CDM can be loaded in the LPAC process.
 update_client::CrxInstaller::Result
 MediaFoundationWidevineCdmComponentInstallerPolicy::OnCustomInstall(
-    const base::Value& manifest,
+    const base::Value::Dict& manifest,
     const base::FilePath& install_dir) {
   DVLOG(1) << __func__ << ": Set permission on " << install_dir;
 
   auto sids = base::win::Sid::FromNamedCapabilityVector(
       {sandbox::policy::kMediaFoundationCdmFiles});
 
-  bool success = false;
-  if (sids) {
-    success = base::win::GrantAccessToPath(
-        install_dir, *sids, FILE_GENERIC_READ | FILE_GENERIC_EXECUTE,
-        CONTAINER_INHERIT_ACE | OBJECT_INHERIT_ACE);
-  }
+  bool success = base::win::GrantAccessToPath(
+      install_dir, sids, FILE_GENERIC_READ | FILE_GENERIC_EXECUTE,
+      CONTAINER_INHERIT_ACE | OBJECT_INHERIT_ACE);
 
   return update_client::CrxInstaller::Result(
       success ? update_client::InstallError::NONE
@@ -101,7 +101,7 @@ void MediaFoundationWidevineCdmComponentInstallerPolicy::OnCustomUninstall() {}
 void MediaFoundationWidevineCdmComponentInstallerPolicy::ComponentReady(
     const base::Version& version,
     const base::FilePath& install_dir,
-    base::Value manifest) {
+    base::Value::Dict manifest) {
   VLOG(1) << "Component ready, version " << version.GetString() << " in "
           << install_dir.value();
 
@@ -113,11 +113,11 @@ void MediaFoundationWidevineCdmComponentInstallerPolicy::ComponentReady(
       version, GetCdmPath(install_dir));
 
   // Ensures MediaFoundationService process is monitored.
-  // TODO(crbug.com/1296219): This is tricky. Move the init to a better place.
   MediaFoundationServiceMonitor::GetInstance();
 
   // Check whether hardware secure decryption CDM should be disabled.
   if (base::FeatureList::IsEnabled(media::kHardwareSecureDecryptionFallback) &&
+      !media::kHardwareSecureDecryptionFallbackPerSite.Get() &&
       MediaFoundationServiceMonitor::
           IsHardwareSecureDecryptionDisabledByPref()) {
     VLOG(1) << "Media Foundation Widevine CDM disabled due to previous errors";
@@ -132,9 +132,8 @@ void MediaFoundationWidevineCdmComponentInstallerPolicy::ComponentReady(
 
 // Called during startup and installation before ComponentReady().
 bool MediaFoundationWidevineCdmComponentInstallerPolicy::VerifyInstallation(
-    const base::Value& manifest,
+    const base::Value::Dict& manifest,
     const base::FilePath& install_dir) const {
-  // TODO(crbug.com/1225681): Compare manifest version and DLL's version.
   return base::PathExists(GetCdmPath(install_dir));
 }
 

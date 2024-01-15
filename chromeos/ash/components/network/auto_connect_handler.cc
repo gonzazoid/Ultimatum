@@ -5,13 +5,12 @@
 #include "chromeos/ash/components/network/auto_connect_handler.h"
 
 #include "ash/constants/ash_features.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/strings/strcat.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/values.h"
 #include "chromeos/ash/components/dbus/shill/shill_manager_client.h"
 #include "chromeos/ash/components/dbus/shill/shill_service_client.h"
@@ -20,6 +19,7 @@
 #include "chromeos/ash/components/network/network_connection_handler.h"
 #include "chromeos/ash/components/network/network_event_log.h"
 #include "chromeos/ash/components/network/network_state.h"
+#include "chromeos/ash/components/network/network_state_handler.h"
 #include "chromeos/ash/components/network/network_type_pattern.h"
 #include "dbus/object_path.h"
 #include "third_party/cros_system_api/dbus/service_constants.h"
@@ -135,7 +135,7 @@ void AutoConnectHandler::Init(
 
   network_state_handler_ = network_state_handler;
   if (network_state_handler_) {
-    network_state_handler_observer_.Observe(network_state_handler_);
+    network_state_handler_observer_.Observe(network_state_handler_.get());
   }
 
   managed_configuration_handler_ = managed_network_configuration_handler;
@@ -279,7 +279,7 @@ void AutoConnectHandler::CheckBestConnection() {
 
   // Request ScanAndConnectToBestServices after processing any pending DBus
   // calls.
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&AutoConnectHandler::CallShillScanAndConnectToBestServices,
                      weak_ptr_factory_.GetWeakPtr()));
@@ -410,7 +410,7 @@ void AutoConnectHandler::DisableAutoconnectForNetwork(
     const std::string& network_type) {
   NET_LOG(EVENT) << "Disable auto-connect forced by policy: "
                  << NetworkPathId(service_path);
-  base::Value properties(base::Value::Type::DICTIONARY);
+  base::Value::Dict properties;
 
   std::string autoconnect_path;
   if (network_type == ::onc::network_config::kWiFi) {
@@ -422,7 +422,7 @@ void AutoConnectHandler::DisableAutoconnectForNetwork(
   } else {
     NOTREACHED();
   }
-  properties.SetBoolPath(autoconnect_path, false);
+  properties.SetByDottedPath(autoconnect_path, false);
   managed_configuration_handler_->SetProperties(
       service_path, properties, base::DoNothing(),
       base::BindOnce(&SetPropertiesErrorCallback));

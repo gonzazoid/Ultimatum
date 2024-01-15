@@ -4,27 +4,33 @@
 
 #include "media/capture/video/linux/v4l2_capture_delegate.h"
 
+#include <fcntl.h>
 #include <linux/version.h>
 #include <linux/videodev2.h>
 #include <poll.h>
-#include <sys/fcntl.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
 
 #include <algorithm>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "base/posix/eintr_wrapper.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/trace_event/trace_event.h"
 #include "build/build_config.h"
-#include "media/base/bind_to_current_loop.h"
 #include "media/base/video_frame.h"
 #include "media/base/video_types.h"
 #include "media/capture/mojom/image_capture_types.h"
 #include "media/capture/video/blob_utils.h"
 #include "media/capture/video/linux/video_capture_device_linux.h"
+
+#if BUILDFLAG(IS_LINUX)
+#include "media/capture/capture_switches.h"
+#include "media/capture/video/linux/v4l2_capture_delegate_gpu_helper.h"
+#endif  // BUILDFLAG(IS_LINUX)
 
 using media::mojom::MeteringMode;
 
@@ -124,6 +130,22 @@ void FillV4L2RequestBuffer(v4l2_requestbuffers* request_buffer, int count) {
   request_buffer->count = count;
 }
 
+// Determines if |control_id| is controlled by a special control and
+// determines the control ID of that special control.
+int GetControllingSpecialControl(int control_id) {
+  switch (control_id) {
+    case V4L2_CID_EXPOSURE_ABSOLUTE:
+      return V4L2_CID_EXPOSURE_AUTO;
+    case V4L2_CID_FOCUS_ABSOLUTE:
+      return V4L2_CID_FOCUS_AUTO;
+    case V4L2_CID_IRIS_ABSOLUTE:
+      return V4L2_CID_EXPOSURE_AUTO;
+    case V4L2_CID_WHITE_BALANCE_TEMPERATURE:
+      return V4L2_CID_AUTO_WHITE_BALANCE;
+  }
+  return 0;
+}
+
 // Determines if |control_id| is special, i.e. controls another one's state.
 bool IsSpecialControl(int control_id) {
   switch (control_id) {
@@ -136,33 +158,8 @@ bool IsSpecialControl(int control_id) {
   return false;
 }
 
-// Determines if |control_id| should be skipped, https://crbug.com/697885.
-#if !defined(V4L2_CID_PAN_SPEED)
-#define V4L2_CID_PAN_SPEED (V4L2_CID_CAMERA_CLASS_BASE + 32)
-#endif
-#if !defined(V4L2_CID_TILT_SPEED)
-#define V4L2_CID_TILT_SPEED (V4L2_CID_CAMERA_CLASS_BASE + 33)
-#endif
-#if !defined(V4L2_CID_PANTILT_CMD)
-#define V4L2_CID_PANTILT_CMD (V4L2_CID_CAMERA_CLASS_BASE + 34)
-#endif
-bool IsBlockedControl(int control_id) {
-  switch (control_id) {
-    case V4L2_CID_PAN_RELATIVE:
-    case V4L2_CID_TILT_RELATIVE:
-    case V4L2_CID_PAN_RESET:
-    case V4L2_CID_TILT_RESET:
-    case V4L2_CID_PAN_ABSOLUTE:
-    case V4L2_CID_TILT_ABSOLUTE:
-    case V4L2_CID_ZOOM_ABSOLUTE:
-    case V4L2_CID_ZOOM_RELATIVE:
-    case V4L2_CID_ZOOM_CONTINUOUS:
-    case V4L2_CID_PAN_SPEED:
-    case V4L2_CID_TILT_SPEED:
-    case V4L2_CID_PANTILT_CMD:
-      return true;
-  }
-  return false;
+bool IsNonEmptyRange(const mojom::RangePtr& range) {
+  return range->min < range->max;
 }
 
 }  // namespace
@@ -189,7 +186,11 @@ class V4L2CaptureDelegate::BufferTracker
   virtual ~BufferTracker();
 
   const raw_ptr<V4L2CaptureDevice> v4l2_;
-  raw_ptr<uint8_t> start_;
+
+  // This field is not a raw_ptr<> because it always points to a mmap'd
+  // region of memory outside of the PA heap. Thus, there would be overhead
+  // involved with using a raw_ptr<> but no safety gains.
+  RAW_PTR_EXCLUSION uint8_t* start_ = nullptr;
   size_t length_;
   size_t payload_size_;
 };
@@ -234,6 +235,78 @@ std::vector<uint32_t> V4L2CaptureDelegate::GetListOfUsableFourCcs(
   return supported_formats;
 }
 
+// Determines if |control_id| should be skipped, https://crbug.com/697885.
+#if !defined(V4L2_CID_PAN_SPEED)
+#define V4L2_CID_PAN_SPEED (V4L2_CID_CAMERA_CLASS_BASE + 32)
+#endif
+#if !defined(V4L2_CID_TILT_SPEED)
+#define V4L2_CID_TILT_SPEED (V4L2_CID_CAMERA_CLASS_BASE + 33)
+#endif
+#if !defined(V4L2_CID_PANTILT_CMD)
+#define V4L2_CID_PANTILT_CMD (V4L2_CID_CAMERA_CLASS_BASE + 34)
+#endif
+// static
+bool V4L2CaptureDelegate::IsBlockedControl(int control_id) {
+  switch (control_id) {
+    case V4L2_CID_PAN_RELATIVE:
+    case V4L2_CID_TILT_RELATIVE:
+    case V4L2_CID_PAN_RESET:
+    case V4L2_CID_TILT_RESET:
+    case V4L2_CID_ZOOM_RELATIVE:
+    case V4L2_CID_ZOOM_CONTINUOUS:
+    case V4L2_CID_PAN_SPEED:
+    case V4L2_CID_TILT_SPEED:
+    case V4L2_CID_PANTILT_CMD:
+      return true;
+  }
+  return false;
+}
+
+// static
+bool V4L2CaptureDelegate::IsControllableControl(
+    int control_id,
+    const base::RepeatingCallback<int(int, void*)>& do_ioctl) {
+  const int special_control_id = GetControllingSpecialControl(control_id);
+  if (!special_control_id) {
+    // The control is not controlled by a special control thus the control is
+    // controllable.
+    return true;
+  }
+
+  // The control is controlled by a special control thus the control is
+  // really controllable (and not changed automatically) only if that special
+  // control is not set to automatic.
+  v4l2_control special_control = {};
+  special_control.id = special_control_id;
+  if (do_ioctl.Run(VIDIOC_G_CTRL, &special_control) < 0) {
+    return false;
+  }
+  switch (control_id) {
+    case V4L2_CID_EXPOSURE_ABSOLUTE:
+      DCHECK_EQ(special_control_id, V4L2_CID_EXPOSURE_AUTO);
+      // For a V4L2_CID_EXPOSURE_AUTO special control, |special_control.value|
+      // is an enum v4l2_exposure_auto_type.
+      // Check if the exposure time is manual. Iris may be manual or automatic.
+      return special_control.value == V4L2_EXPOSURE_MANUAL ||
+             special_control.value == V4L2_EXPOSURE_SHUTTER_PRIORITY;
+    case V4L2_CID_IRIS_ABSOLUTE:
+      DCHECK_EQ(special_control_id, V4L2_CID_EXPOSURE_AUTO);
+      // For a V4L2_CID_EXPOSURE_AUTO special control, |special_control.value|
+      // is an enum v4l2_exposure_auto_type.
+      // Check if the iris is manual. Exposure time may be manual or automatic.
+      return special_control.value == V4L2_EXPOSURE_MANUAL ||
+             special_control.value == V4L2_EXPOSURE_APERTURE_PRIORITY;
+    case V4L2_CID_FOCUS_ABSOLUTE:
+    case V4L2_CID_WHITE_BALANCE_TEMPERATURE:
+      // For V4L2_CID_FOCUS_AUTO and V4L2_CID_AUTO_WHITE_BALANCE special
+      // controls, |special_control.value| is a boolean.
+      return !special_control.value;  // Not automatic.
+    default:
+      NOTIMPLEMENTED();
+      return false;
+  }
+}
+
 V4L2CaptureDelegate::V4L2CaptureDelegate(
     V4L2CaptureDevice* v4l2,
     const VideoCaptureDeviceDescriptor& device_descriptor,
@@ -247,7 +320,11 @@ V4L2CaptureDelegate::V4L2CaptureDelegate(
       device_fd_(v4l2),
       is_capturing_(false),
       timeout_count_(0),
-      rotation_(rotation) {}
+      rotation_(rotation) {
+#if BUILDFLAG(IS_LINUX)
+  use_gpu_buffer_ = switches::IsVideoCaptureUseGpuMemoryBufferEnabled();
+#endif  // BUILDFLAG(IS_LINUX)
+}
 
 void V4L2CaptureDelegate::AllocateAndStart(
     int width,
@@ -371,6 +448,13 @@ void V4L2CaptureDelegate::AllocateAndStart(
 
   client_->OnStarted();
 
+#if BUILDFLAG(IS_LINUX)
+  if (use_gpu_buffer_) {
+    v4l2_gpu_helper_ = std::make_unique<V4L2CaptureDelegateGpuHelper>(
+        std::move(gmb_support_test_));
+  }
+#endif  // BUILDFLAG(IS_LINUX)
+
   // Post task to start fetching frames from v4l2.
   v4l2_task_runner_->PostTask(
       FROM_HERE, base::BindOnce(&V4L2CaptureDelegate::DoCapture, GetWeakPtr()));
@@ -405,47 +489,47 @@ void V4L2CaptureDelegate::GetPhotoState(
   photo_capabilities->tilt = RetrieveUserControlRange(V4L2_CID_TILT_ABSOLUTE);
   photo_capabilities->zoom = RetrieveUserControlRange(V4L2_CID_ZOOM_ABSOLUTE);
 
-  v4l2_queryctrl manual_focus_ctrl = {};
-  manual_focus_ctrl.id = V4L2_CID_FOCUS_ABSOLUTE;
-  if (RunIoctl(VIDIOC_QUERYCTRL, &manual_focus_ctrl))
+  photo_capabilities->focus_distance =
+      RetrieveUserControlRange(V4L2_CID_FOCUS_ABSOLUTE);
+  if (IsNonEmptyRange(photo_capabilities->focus_distance)) {
     photo_capabilities->supported_focus_modes.push_back(MeteringMode::MANUAL);
+  }
 
+  photo_capabilities->current_focus_mode = MeteringMode::NONE;
   v4l2_queryctrl auto_focus_ctrl = {};
-  auto_focus_ctrl.id = V4L2_CID_FOCUS_AUTO;
-  if (RunIoctl(VIDIOC_QUERYCTRL, &auto_focus_ctrl)) {
+  v4l2_control current_auto_focus = {};
+  auto_focus_ctrl.id = current_auto_focus.id = V4L2_CID_FOCUS_AUTO;
+  if (RunIoctl(VIDIOC_QUERYCTRL, &auto_focus_ctrl) &&
+      RunIoctl(VIDIOC_G_CTRL, &current_auto_focus)) {
+    photo_capabilities->current_focus_mode = current_auto_focus.value
+                                                 ? MeteringMode::CONTINUOUS
+                                                 : MeteringMode::MANUAL;
     photo_capabilities->supported_focus_modes.push_back(
         MeteringMode::CONTINUOUS);
   }
 
-  photo_capabilities->current_focus_mode = MeteringMode::NONE;
-  v4l2_control auto_focus_current = {};
-  auto_focus_current.id = V4L2_CID_FOCUS_AUTO;
-  if (DoIoctl(VIDIOC_G_CTRL, &auto_focus_current) >= 0) {
-    photo_capabilities->current_focus_mode = auto_focus_current.value
-                                                 ? MeteringMode::CONTINUOUS
-                                                 : MeteringMode::MANUAL;
-  }
-
-  photo_capabilities->focus_distance =
-      RetrieveUserControlRange(V4L2_CID_FOCUS_ABSOLUTE);
-
-  v4l2_queryctrl auto_exposure_ctrl = {};
-  auto_exposure_ctrl.id = V4L2_CID_EXPOSURE_AUTO;
-  if (RunIoctl(VIDIOC_QUERYCTRL, &auto_exposure_ctrl)) {
+  // Determines the exposure time of the camera sensor. Drivers interpret values
+  // as 100 µs units, same as specs.
+  photo_capabilities->exposure_time =
+      RetrieveUserControlRange(V4L2_CID_EXPOSURE_ABSOLUTE);
+  if (IsNonEmptyRange(photo_capabilities->exposure_time)) {
     photo_capabilities->supported_exposure_modes.push_back(
         MeteringMode::MANUAL);
-    photo_capabilities->supported_exposure_modes.push_back(
-        MeteringMode::CONTINUOUS);
   }
 
   photo_capabilities->current_exposure_mode = MeteringMode::NONE;
-  v4l2_control exposure_current = {};
-  exposure_current.id = V4L2_CID_EXPOSURE_AUTO;
-  if (DoIoctl(VIDIOC_G_CTRL, &exposure_current) >= 0) {
+  v4l2_queryctrl auto_exposure_ctrl = {};
+  v4l2_control current_auto_exposure = {};
+  auto_exposure_ctrl.id = current_auto_exposure.id = V4L2_CID_EXPOSURE_AUTO;
+  if (RunIoctl(VIDIOC_QUERYCTRL, &auto_exposure_ctrl) &&
+      RunIoctl(VIDIOC_G_CTRL, &current_auto_exposure)) {
     photo_capabilities->current_exposure_mode =
-        exposure_current.value == V4L2_EXPOSURE_MANUAL
+        (current_auto_exposure.value == V4L2_EXPOSURE_MANUAL ||
+         current_auto_exposure.value == V4L2_EXPOSURE_SHUTTER_PRIORITY)
             ? MeteringMode::MANUAL
             : MeteringMode::CONTINUOUS;
+    photo_capabilities->supported_exposure_modes.push_back(
+        MeteringMode::CONTINUOUS);
   }
 
   // Exposure compensation is valid if V4L2_CID_EXPOSURE_AUTO control is set to
@@ -454,32 +538,25 @@ void V4L2CaptureDelegate::GetPhotoState(
   photo_capabilities->exposure_compensation =
       RetrieveUserControlRange(V4L2_CID_AUTO_EXPOSURE_BIAS);
 
-  // Determines the exposure time of the camera sensor. Drivers interpret values
-  // as 100 µs units, same as specs.
-  photo_capabilities->exposure_time =
-      RetrieveUserControlRange(V4L2_CID_EXPOSURE_ABSOLUTE);
-
   photo_capabilities->color_temperature =
       RetrieveUserControlRange(V4L2_CID_WHITE_BALANCE_TEMPERATURE);
-  if (photo_capabilities->color_temperature) {
+  if (IsNonEmptyRange(photo_capabilities->color_temperature)) {
     photo_capabilities->supported_white_balance_modes.push_back(
         MeteringMode::MANUAL);
   }
 
-  v4l2_queryctrl white_balance_ctrl = {};
-  white_balance_ctrl.id = V4L2_CID_AUTO_WHITE_BALANCE;
-  if (RunIoctl(VIDIOC_QUERYCTRL, &white_balance_ctrl)) {
+  photo_capabilities->current_white_balance_mode = MeteringMode::NONE;
+  v4l2_queryctrl auto_white_balance_ctrl = {};
+  v4l2_control current_auto_white_balance = {};
+  auto_white_balance_ctrl.id = current_auto_white_balance.id =
+      V4L2_CID_AUTO_WHITE_BALANCE;
+  if (RunIoctl(VIDIOC_QUERYCTRL, &auto_white_balance_ctrl) &&
+      RunIoctl(VIDIOC_G_CTRL, &current_auto_white_balance)) {
+    photo_capabilities->current_white_balance_mode =
+        current_auto_white_balance.value ? MeteringMode::CONTINUOUS
+                                         : MeteringMode::MANUAL;
     photo_capabilities->supported_white_balance_modes.push_back(
         MeteringMode::CONTINUOUS);
-  }
-
-  photo_capabilities->current_white_balance_mode = MeteringMode::NONE;
-  v4l2_control white_balance_current = {};
-  white_balance_current.id = V4L2_CID_AUTO_WHITE_BALANCE;
-  if (DoIoctl(VIDIOC_G_CTRL, &white_balance_current) >= 0) {
-    photo_capabilities->current_white_balance_mode =
-        white_balance_current.value ? MeteringMode::CONTINUOUS
-                                    : MeteringMode::MANUAL;
   }
 
   photo_capabilities->iso = mojom::Range::New();
@@ -509,145 +586,194 @@ void V4L2CaptureDelegate::SetPhotoOptions(
   if (!device_fd_.is_valid() || !is_capturing_)
     return;
 
+  bool special_controls_maybe_changed = false;
+
   if (settings->has_pan) {
-    v4l2_control pan_current = {};
-    pan_current.id = V4L2_CID_PAN_ABSOLUTE;
-    pan_current.value = settings->pan;
-    if (DoIoctl(VIDIOC_S_CTRL, &pan_current) < 0)
+    v4l2_control set_pan = {};
+    set_pan.id = V4L2_CID_PAN_ABSOLUTE;
+    set_pan.value = settings->pan;
+    if (DoIoctl(VIDIOC_S_CTRL, &set_pan) < 0) {
       DPLOG(ERROR) << "setting pan to " << settings->pan;
+    }
   }
 
   if (settings->has_tilt) {
-    v4l2_control tilt_current = {};
-    tilt_current.id = V4L2_CID_TILT_ABSOLUTE;
-    tilt_current.value = settings->tilt;
-    if (DoIoctl(VIDIOC_S_CTRL, &tilt_current) < 0)
+    v4l2_control set_tilt = {};
+    set_tilt.id = V4L2_CID_TILT_ABSOLUTE;
+    set_tilt.value = settings->tilt;
+    if (DoIoctl(VIDIOC_S_CTRL, &set_tilt) < 0) {
       DPLOG(ERROR) << "setting tilt to " << settings->tilt;
+    }
   }
 
   if (settings->has_zoom) {
-    v4l2_control zoom_current = {};
-    zoom_current.id = V4L2_CID_ZOOM_ABSOLUTE;
-    zoom_current.value = settings->zoom;
-    if (DoIoctl(VIDIOC_S_CTRL, &zoom_current) < 0)
+    v4l2_control set_zoom = {};
+    set_zoom.id = V4L2_CID_ZOOM_ABSOLUTE;
+    set_zoom.value = settings->zoom;
+    if (DoIoctl(VIDIOC_S_CTRL, &set_zoom) < 0) {
       DPLOG(ERROR) << "setting zoom to " << settings->zoom;
+    }
   }
 
   if (settings->has_focus_mode &&
       (settings->focus_mode == mojom::MeteringMode::MANUAL ||
        settings->focus_mode == mojom::MeteringMode::CONTINUOUS)) {
-    v4l2_control auto_focus = {};
-    auto_focus.id = V4L2_CID_FOCUS_AUTO;
-    auto_focus.value =
-        settings->focus_mode == mojom::MeteringMode::MANUAL ? false : true;
-    if (DoIoctl(VIDIOC_S_CTRL, &auto_focus) < 0)
-      DPLOG(ERROR) << "setting focusMode to "
-                   << (settings->focus_mode == mojom::MeteringMode::MANUAL
-                           ? "manual"
-                           : "continuous");
+    v4l2_control set_auto_focus = {};
+    set_auto_focus.id = V4L2_CID_FOCUS_AUTO;
+    set_auto_focus.value =
+        settings->focus_mode == mojom::MeteringMode::CONTINUOUS;
+    if (DoIoctl(VIDIOC_S_CTRL, &set_auto_focus) < 0) {
+      DPLOG(ERROR) << "setting focus mode to "
+                   << (settings->focus_mode == mojom::MeteringMode::CONTINUOUS
+                           ? "continuous"
+                           : "manual");
+    }
+    special_controls_maybe_changed = true;
   }
 
-  if (settings->has_focus_distance &&
-      settings->focus_mode == mojom::MeteringMode::MANUAL) {
-    v4l2_control set_focus_distance_ctrl = {};
-    set_focus_distance_ctrl.id = V4L2_CID_FOCUS_ABSOLUTE;
-    set_focus_distance_ctrl.value = settings->focus_distance;
-    if (DoIoctl(VIDIOC_S_CTRL, &set_focus_distance_ctrl) < 0)
-      DPLOG(ERROR) << "setting focus distance to " << settings->focus_distance;
+  if (settings->has_focus_distance) {
+    v4l2_control current_auto_focus = {};
+    current_auto_focus.id = V4L2_CID_FOCUS_AUTO;
+    const int result = DoIoctl(VIDIOC_G_CTRL, &current_auto_focus);
+    // Focus distance can only be applied if auto focus is off.
+    if (result >= 0 && !current_auto_focus.value) {
+      v4l2_control set_focus_distance = {};
+      set_focus_distance.id = V4L2_CID_FOCUS_ABSOLUTE;
+      set_focus_distance.value = settings->focus_distance;
+      if (DoIoctl(VIDIOC_S_CTRL, &set_focus_distance) < 0) {
+        DPLOG(ERROR) << "setting focus distance to "
+                     << settings->focus_distance;
+      }
+    }
   }
 
   if (settings->has_white_balance_mode &&
       (settings->white_balance_mode == mojom::MeteringMode::CONTINUOUS ||
        settings->white_balance_mode == mojom::MeteringMode::MANUAL)) {
-    v4l2_control white_balance_set = {};
-    white_balance_set.id = V4L2_CID_AUTO_WHITE_BALANCE;
-    white_balance_set.value =
+    v4l2_control set_auto_white_balance = {};
+    set_auto_white_balance.id = V4L2_CID_AUTO_WHITE_BALANCE;
+    set_auto_white_balance.value =
         settings->white_balance_mode == mojom::MeteringMode::CONTINUOUS;
-    DoIoctl(VIDIOC_S_CTRL, &white_balance_set);
+    if (DoIoctl(VIDIOC_S_CTRL, &set_auto_white_balance) < 0) {
+      DPLOG(ERROR) << "setting white balance mode to "
+                   << (settings->white_balance_mode ==
+                               mojom::MeteringMode::CONTINUOUS
+                           ? "continuous"
+                           : "manual");
+    }
+    special_controls_maybe_changed = true;
   }
 
   if (settings->has_color_temperature) {
-    v4l2_control auto_white_balance_current = {};
-    auto_white_balance_current.id = V4L2_CID_AUTO_WHITE_BALANCE;
-    const int result = DoIoctl(VIDIOC_G_CTRL, &auto_white_balance_current);
+    v4l2_control current_auto_white_balance = {};
+    current_auto_white_balance.id = V4L2_CID_AUTO_WHITE_BALANCE;
+    const int result = DoIoctl(VIDIOC_G_CTRL, &current_auto_white_balance);
     // Color temperature can only be applied if Auto White Balance is off.
-    if (result >= 0 && !auto_white_balance_current.value) {
+    if (result >= 0 && !current_auto_white_balance.value) {
       v4l2_control set_temperature = {};
       set_temperature.id = V4L2_CID_WHITE_BALANCE_TEMPERATURE;
       set_temperature.value = settings->color_temperature;
-      DoIoctl(VIDIOC_S_CTRL, &set_temperature);
+      if (DoIoctl(VIDIOC_S_CTRL, &set_temperature) < 0) {
+        DPLOG(ERROR) << "setting color temperature to "
+                     << settings->color_temperature;
+      }
     }
   }
 
   if (settings->has_exposure_mode &&
       (settings->exposure_mode == mojom::MeteringMode::CONTINUOUS ||
        settings->exposure_mode == mojom::MeteringMode::MANUAL)) {
-    v4l2_control exposure_mode_set = {};
-    exposure_mode_set.id = V4L2_CID_EXPOSURE_AUTO;
-    exposure_mode_set.value =
+    v4l2_control set_auto_exposure = {};
+    set_auto_exposure.id = V4L2_CID_EXPOSURE_AUTO;
+    // Usually only manual iris modes are supported due to fixed apertures.
+    set_auto_exposure.value =
         settings->exposure_mode == mojom::MeteringMode::CONTINUOUS
-            ? V4L2_EXPOSURE_APERTURE_PRIORITY
-            : V4L2_EXPOSURE_MANUAL;
-    DoIoctl(VIDIOC_S_CTRL, &exposure_mode_set);
+            ? V4L2_EXPOSURE_APERTURE_PRIORITY  // Auto exposure time and manual
+                                               // iris.
+            : V4L2_EXPOSURE_MANUAL;  // Manual exposure time and manual iris.
+    if (DoIoctl(VIDIOC_S_CTRL, &set_auto_exposure) < 0) {
+      DPLOG(ERROR) << "setting exposure mode to "
+                   << (settings->exposure_mode ==
+                               mojom::MeteringMode::CONTINUOUS
+                           ? "continuous"
+                           : "manual");
+    }
+    special_controls_maybe_changed = true;
   }
 
   if (settings->has_exposure_compensation) {
-    v4l2_control auto_exposure_current = {};
-    auto_exposure_current.id = V4L2_CID_EXPOSURE_AUTO;
-    const int result = DoIoctl(VIDIOC_G_CTRL, &auto_exposure_current);
-    // Exposure Compensation is effective only when V4L2_CID_EXPOSURE_AUTO
+    v4l2_control current_auto_exposure = {};
+    current_auto_exposure.id = V4L2_CID_EXPOSURE_AUTO;
+    const int result = DoIoctl(VIDIOC_G_CTRL, &current_auto_exposure);
+    // Exposure compensation is effective only when V4L2_CID_EXPOSURE_AUTO
     // control is set to AUTO, SHUTTER_PRIORITY or APERTURE_PRIORITY.
-    if (result >= 0 && auto_exposure_current.value != V4L2_EXPOSURE_MANUAL) {
-      v4l2_control set_exposure = {};
-      set_exposure.id = V4L2_CID_AUTO_EXPOSURE_BIAS;
-      set_exposure.value = settings->exposure_compensation;
-      DoIoctl(VIDIOC_S_CTRL, &set_exposure);
+    if (result >= 0 && current_auto_exposure.value != V4L2_EXPOSURE_MANUAL) {
+      v4l2_control set_exposure_bias = {};
+      set_exposure_bias.id = V4L2_CID_AUTO_EXPOSURE_BIAS;
+      set_exposure_bias.value = settings->exposure_compensation;
+      if (DoIoctl(VIDIOC_S_CTRL, &set_exposure_bias) < 0) {
+        DPLOG(ERROR) << "setting exposure compensation to "
+                     << settings->exposure_compensation;
+      }
     }
   }
 
   if (settings->has_exposure_time) {
-    v4l2_control exposure_time_current = {};
-    exposure_time_current.id = V4L2_CID_EXPOSURE_AUTO;
-    const int result = DoIoctl(VIDIOC_G_CTRL, &exposure_time_current);
+    v4l2_control current_auto_exposure = {};
+    current_auto_exposure.id = V4L2_CID_EXPOSURE_AUTO;
+    const int result = DoIoctl(VIDIOC_G_CTRL, &current_auto_exposure);
     // Exposure time can only be applied if V4L2_CID_EXPOSURE_AUTO is set to
-    // V4L2_EXPOSURE_MANUAL or V4L2_EXPOSURE_SHUTTER_PRIORITY.
+    // manual exposure time (MANUAL or SHUTTER_PRIORITY).
     if (result >= 0 &&
-        (exposure_time_current.value == V4L2_EXPOSURE_MANUAL ||
-         exposure_time_current.value == V4L2_EXPOSURE_SHUTTER_PRIORITY)) {
+        (current_auto_exposure.value == V4L2_EXPOSURE_MANUAL ||
+         current_auto_exposure.value == V4L2_EXPOSURE_SHUTTER_PRIORITY)) {
       v4l2_control set_exposure_time = {};
       set_exposure_time.id = V4L2_CID_EXPOSURE_ABSOLUTE;
       set_exposure_time.value = settings->exposure_time;
-      DoIoctl(VIDIOC_S_CTRL, &set_exposure_time);
+      if (DoIoctl(VIDIOC_S_CTRL, &set_exposure_time) < 0) {
+        DPLOG(ERROR) << "setting exposure time to " << settings->exposure_time;
+      }
     }
   }
 
   if (settings->has_brightness) {
-    v4l2_control current = {};
-    current.id = V4L2_CID_BRIGHTNESS;
-    current.value = settings->brightness;
-    if (DoIoctl(VIDIOC_S_CTRL, &current) < 0)
+    v4l2_control set_brightness = {};
+    set_brightness.id = V4L2_CID_BRIGHTNESS;
+    set_brightness.value = settings->brightness;
+    if (DoIoctl(VIDIOC_S_CTRL, &set_brightness) < 0) {
       DPLOG(ERROR) << "setting brightness to " << settings->brightness;
+    }
   }
   if (settings->has_contrast) {
-    v4l2_control current = {};
-    current.id = V4L2_CID_CONTRAST;
-    current.value = settings->contrast;
-    if (DoIoctl(VIDIOC_S_CTRL, &current) < 0)
+    v4l2_control set_contrast = {};
+    set_contrast.id = V4L2_CID_CONTRAST;
+    set_contrast.value = settings->contrast;
+    if (DoIoctl(VIDIOC_S_CTRL, &set_contrast) < 0) {
       DPLOG(ERROR) << "setting contrast to " << settings->contrast;
+    }
   }
   if (settings->has_saturation) {
-    v4l2_control current = {};
-    current.id = V4L2_CID_SATURATION;
-    current.value = settings->saturation;
-    if (DoIoctl(VIDIOC_S_CTRL, &current) < 0)
+    v4l2_control set_saturation = {};
+    set_saturation.id = V4L2_CID_SATURATION;
+    set_saturation.value = settings->saturation;
+    if (DoIoctl(VIDIOC_S_CTRL, &set_saturation) < 0) {
       DPLOG(ERROR) << "setting saturation to " << settings->saturation;
+    }
   }
   if (settings->has_sharpness) {
-    v4l2_control current = {};
-    current.id = V4L2_CID_SHARPNESS;
-    current.value = settings->sharpness;
-    if (DoIoctl(VIDIOC_S_CTRL, &current) < 0)
+    v4l2_control set_sharpness = {};
+    set_sharpness.id = V4L2_CID_SHARPNESS;
+    set_sharpness.value = settings->sharpness;
+    if (DoIoctl(VIDIOC_S_CTRL, &set_sharpness) < 0) {
       DPLOG(ERROR) << "setting sharpness to " << settings->sharpness;
+    }
+  }
+
+  if (special_controls_maybe_changed) {
+    // The desired subscription states of the controls controlled by the changed
+    // special controls may have changed thus replace control event
+    // subscriptions.
+    ReplaceControlEventSubscriptions();
   }
 
   std::move(callback).Run(true);
@@ -665,6 +791,11 @@ base::WeakPtr<V4L2CaptureDelegate> V4L2CaptureDelegate::GetWeakPtr() {
   return weak_factory_.GetWeakPtr();
 }
 
+void V4L2CaptureDelegate::SetGPUEnvironmentForTesting(
+    std::unique_ptr<gpu::GpuMemoryBufferSupport> gmb_support) {
+  gmb_support_test_ = std::move(gmb_support);
+}
+
 V4L2CaptureDelegate::~V4L2CaptureDelegate() = default;
 
 bool V4L2CaptureDelegate::RunIoctl(int request, void* argp) {
@@ -679,6 +810,42 @@ bool V4L2CaptureDelegate::RunIoctl(int request, void* argp) {
 
 int V4L2CaptureDelegate::DoIoctl(int request, void* argp) {
   return HANDLE_EINTR(v4l2_->ioctl(device_fd_.get(), request, argp));
+}
+
+bool V4L2CaptureDelegate::IsControllableControl(int control_id) {
+  return IsControllableControl(
+      control_id, base::BindRepeating(&V4L2CaptureDelegate::DoIoctl,
+                                      base::Unretained(this)));
+}
+
+void V4L2CaptureDelegate::ReplaceControlEventSubscriptions() {
+  constexpr uint32_t kControlIds[] = {V4L2_CID_AUTO_EXPOSURE_BIAS,
+                                      V4L2_CID_AUTO_WHITE_BALANCE,
+                                      V4L2_CID_BRIGHTNESS,
+                                      V4L2_CID_CONTRAST,
+                                      V4L2_CID_EXPOSURE_ABSOLUTE,
+                                      V4L2_CID_EXPOSURE_AUTO,
+                                      V4L2_CID_FOCUS_ABSOLUTE,
+                                      V4L2_CID_FOCUS_AUTO,
+                                      V4L2_CID_PAN_ABSOLUTE,
+                                      V4L2_CID_SATURATION,
+                                      V4L2_CID_SHARPNESS,
+                                      V4L2_CID_TILT_ABSOLUTE,
+                                      V4L2_CID_WHITE_BALANCE_TEMPERATURE,
+                                      V4L2_CID_ZOOM_ABSOLUTE};
+  for (uint32_t control_id : kControlIds) {
+    int request = IsControllableControl(control_id) ? VIDIOC_SUBSCRIBE_EVENT
+                                                    : VIDIOC_UNSUBSCRIBE_EVENT;
+    v4l2_event_subscription subscription = {};
+    subscription.type = V4L2_EVENT_CTRL;
+    subscription.id = control_id;
+    if (DoIoctl(request, &subscription) < 0) {
+      DPLOG(INFO) << (request == VIDIOC_SUBSCRIBE_EVENT
+                          ? "VIDIOC_SUBSCRIBE_EVENT"
+                          : "VIDIOC_UNSUBSCRIBE_EVENT")
+                  << ", {type = V4L2_EVENT_CTRL, id = " << control_id << "}";
+    }
+  }
 }
 
 mojom::RangePtr V4L2CaptureDelegate::RetrieveUserControlRange(int control_id) {
@@ -847,6 +1014,7 @@ bool V4L2CaptureDelegate::StartStream() {
                   "VIDIOC_STREAMON failed");
     return false;
   }
+  ReplaceControlEventSubscriptions();
   is_capturing_ = true;
   return true;
 }
@@ -858,7 +1026,7 @@ void V4L2CaptureDelegate::DoCapture() {
 
   pollfd device_pfd = {};
   device_pfd.fd = device_fd_.get();
-  device_pfd.events = POLLIN;
+  device_pfd.events = POLLIN | POLLPRI;
 
   const int result =
       HANDLE_EINTR(v4l2_->poll(&device_pfd, 1, kCaptureTimeoutMs));
@@ -894,6 +1062,41 @@ void V4L2CaptureDelegate::DoCapture() {
     }
   } else {
     timeout_count_ = 0;
+  }
+
+  // Dequeue events if the driver has filled in some.
+  if (device_pfd.revents & POLLPRI) {
+    bool controls_changed = false;
+    bool special_controls_changed = false;
+
+    v4l2_event event;
+    do {
+      if (DoIoctl(VIDIOC_DQEVENT, &event) < 0) {
+        DPLOG(INFO) << "VIDIOC_DQEVENT";
+        break;
+      }
+      switch (event.type) {
+        case V4L2_EVENT_CTRL:
+          controls_changed = true;
+          if (IsSpecialControl(event.id)) {
+            special_controls_changed = true;
+          }
+          break;
+        default:
+          NOTREACHED() << "Unexpected event type dequeued: " << event.type;
+          break;
+      }
+    } while (event.pending > 0u);
+
+    if (special_controls_changed) {
+      // The desired subscription states of the controls controlled by
+      // the changed special controls may have changed thus replace control
+      // event subscriptions.
+      ReplaceControlEventSubscriptions();
+    }
+    if (controls_changed) {
+      client_->OnCaptureConfigurationChanged();
+    }
   }
 
   // Deenqueue, send and reenqueue a buffer if the driver has filled one in.
@@ -943,16 +1146,23 @@ void V4L2CaptureDelegate::DoCapture() {
       client_->OnFrameDropped(
           VideoCaptureFrameDropReason::kV4L2InvalidNumberOfBytesInBuffer);
     } else {
-      // TODO(julien.isorce): build gfx color space from v4l2 color space.
-      // primary = v4l2_format->fmt.pix.colorspace;
-      // range = v4l2_format->fmt.pix.quantization;
-      // matrix = v4l2_format->fmt.pix.ycbcr_enc;
-      // transfer = v4l2_format->fmt.pix.xfer_func;
+      // TODO(crbug:1449570): create color space by BuildColorSpaceFromv4l2(),
+      // and pass it to decoder side while hardware encoding/decoding is
+      // workable on Linux.
+
       // See http://crbug.com/959919.
-      client_->OnIncomingCapturedData(
-          buffer_tracker->start(), buffer_tracker->payload_size(),
-          capture_format_, gfx::ColorSpace(), rotation_, false /* flip_y */,
-          now, timestamp);
+#if BUILDFLAG(IS_LINUX)
+      if (use_gpu_buffer_) {
+        v4l2_gpu_helper_->OnIncomingCapturedData(
+            client_.get(), buffer_tracker->start(),
+            buffer_tracker->payload_size(), capture_format_, gfx::ColorSpace(),
+            rotation_, now, timestamp);
+      } else
+#endif  //  BUILDFLAG(IS_LINUX)
+        client_->OnIncomingCapturedData(
+            buffer_tracker->start(), buffer_tracker->payload_size(),
+            capture_format_, gfx::ColorSpace(), rotation_, false /* flip_y */,
+            now, timestamp);
     }
 
     while (!take_photo_callbacks_.empty()) {
@@ -1013,6 +1223,198 @@ void V4L2CaptureDelegate::SetErrorState(VideoCaptureError error,
   DCHECK(v4l2_task_runner_->BelongsToCurrentThread());
   client_->OnError(error, from_here, reason);
 }
+
+#if BUILDFLAG(IS_LINUX)
+gfx::ColorSpace V4L2CaptureDelegate::BuildColorSpaceFromv4l2() {
+  v4l2_colorspace v4l2_primary = (v4l2_colorspace)video_fmt_.fmt.pix.colorspace;
+  v4l2_quantization v4l2_range =
+      (v4l2_quantization)video_fmt_.fmt.pix.quantization;
+  v4l2_ycbcr_encoding v4l2_matrix =
+      (v4l2_ycbcr_encoding)video_fmt_.fmt.pix.ycbcr_enc;
+  v4l2_xfer_func v4l2_transfer = (v4l2_xfer_func)video_fmt_.fmt.pix.xfer_func;
+
+  DVLOG(2) << __func__ << "v4l2_primary:" << v4l2_primary
+           << ", v4l2_range:" << v4l2_range << ", v4l2_matrix:" << v4l2_matrix
+           << ", v4l2_transfer:" << v4l2_transfer;
+
+  gfx::ColorSpace::PrimaryID primary = gfx::ColorSpace::PrimaryID::INVALID;
+  switch (v4l2_primary) {
+    case V4L2_COLORSPACE_470_SYSTEM_M:
+      primary = gfx::ColorSpace::PrimaryID::BT470M;
+      break;
+    case V4L2_COLORSPACE_470_SYSTEM_BG:
+      primary = gfx::ColorSpace::PrimaryID::BT470BG;
+      break;
+    case V4L2_COLORSPACE_SMPTE170M:
+      primary = gfx::ColorSpace::PrimaryID::SMPTE170M;
+      break;
+    case V4L2_COLORSPACE_SMPTE240M:
+      primary = gfx::ColorSpace::PrimaryID::SMPTE240M;
+      break;
+    case V4L2_COLORSPACE_BT2020:
+      primary = gfx::ColorSpace::PrimaryID::BT2020;
+      break;
+    case V4L2_COLORSPACE_DCI_P3:
+      primary = gfx::ColorSpace::PrimaryID::P3;
+      break;
+    // SRGB, JPEG and REC709 have same primary.
+    case V4L2_COLORSPACE_SRGB:
+    case V4L2_COLORSPACE_JPEG:
+    case V4L2_COLORSPACE_REC709:
+      primary = gfx::ColorSpace::PrimaryID::BT709;
+      break;
+    // The AdobeRGB standard defines the colorspace used by computer graphics
+    // that use the AdobeRGB colorspace. This is also known as the opRGB
+    // standard. (i.e. OPRGB is same as ADOBE_RGB)
+    case V4L2_COLORSPACE_OPRGB:
+      primary = gfx::ColorSpace::PrimaryID::ADOBE_RGB;
+      break;
+    case V4L2_COLORSPACE_BT878:
+    case V4L2_COLORSPACE_DEFAULT:
+    case V4L2_COLORSPACE_RAW:
+      return gfx::ColorSpace();
+  }
+
+  gfx::ColorSpace::RangeID range = gfx::ColorSpace::RangeID::INVALID;
+  switch (v4l2_range) {
+    case V4L2_QUANTIZATION_DEFAULT:
+      if (media::IsYuvPlanar(capture_format_.pixel_format) &&
+          v4l2_primary != V4L2_COLORSPACE_JPEG) {
+        range = gfx::ColorSpace::RangeID::LIMITED;
+      } else {
+        range = gfx::ColorSpace::RangeID::FULL;
+      }
+      break;
+    case V4L2_QUANTIZATION_FULL_RANGE:
+      range = gfx::ColorSpace::RangeID::FULL;
+      break;
+    case V4L2_QUANTIZATION_LIM_RANGE:
+      range = gfx::ColorSpace::RangeID::LIMITED;
+      break;
+  }
+
+  gfx::ColorSpace::MatrixID matrix = gfx::ColorSpace::MatrixID::INVALID;
+  switch (v4l2_matrix) {
+    case V4L2_YCBCR_ENC_DEFAULT:
+      switch (v4l2_primary) {
+        case V4L2_COLORSPACE_470_SYSTEM_BG:
+          matrix = gfx::ColorSpace::MatrixID::BT470BG;
+          break;
+        case V4L2_COLORSPACE_SRGB:
+          matrix = gfx::ColorSpace::MatrixID::RGB;
+          break;
+        // V4L2_COLORSPACE_SMPTE170M, V4L2_COLORSPACE_470_SYSTEM_M,
+        // V4L2_COLORSPACE_OPRGB and V4L2_COLORSPACE_JPEG have same matrix.
+        case V4L2_COLORSPACE_SMPTE170M:
+        case V4L2_COLORSPACE_470_SYSTEM_M:
+        case V4L2_COLORSPACE_OPRGB:
+        case V4L2_COLORSPACE_JPEG:
+          matrix = gfx::ColorSpace::MatrixID::SMPTE170M;
+          break;
+        case V4L2_COLORSPACE_REC709:
+        case V4L2_COLORSPACE_DCI_P3:
+          matrix = gfx::ColorSpace::MatrixID::BT709;
+          break;
+        case V4L2_COLORSPACE_BT2020:
+          matrix = gfx::ColorSpace::MatrixID::BT2020_NCL;
+          break;
+        case V4L2_COLORSPACE_SMPTE240M:
+          matrix = gfx::ColorSpace::MatrixID::SMPTE240M;
+          break;
+        case V4L2_COLORSPACE_DEFAULT:
+        case V4L2_COLORSPACE_BT878:
+        case V4L2_COLORSPACE_RAW:
+          return gfx::ColorSpace();
+      }
+      break;
+    // The default Y’CbCr encoding of SMPTE170M is same as V4L2_YCBCR_ENC_601.
+    case V4L2_YCBCR_ENC_601:
+      matrix = gfx::ColorSpace::MatrixID::SMPTE170M;
+      break;
+    case V4L2_YCBCR_ENC_709:
+      matrix = gfx::ColorSpace::MatrixID::BT709;
+      break;
+    case V4L2_YCBCR_ENC_BT2020:
+      matrix = gfx::ColorSpace::MatrixID::BT2020_NCL;
+      break;
+    case V4L2_YCBCR_ENC_BT2020_CONST_LUM:
+      matrix = gfx::ColorSpace::MatrixID::BT2020_CL;
+      break;
+    case V4L2_YCBCR_ENC_SMPTE240M:
+      matrix = gfx::ColorSpace::MatrixID::SMPTE240M;
+      break;
+    case V4L2_YCBCR_ENC_XV601:
+    case V4L2_YCBCR_ENC_XV709:
+    case V4L2_YCBCR_ENC_SYCC:
+      return gfx::ColorSpace();
+  }
+
+  gfx::ColorSpace::TransferID transfer = gfx::ColorSpace::TransferID::INVALID;
+  switch (v4l2_transfer) {
+    case V4L2_XFER_FUNC_DEFAULT:
+      switch (v4l2_primary) {
+        case V4L2_COLORSPACE_SMPTE170M:
+          transfer = gfx::ColorSpace::TransferID::SMPTE170M;
+          break;
+        // V4L2_COLORSPACE_470_SYSTEM_M, V4L2_COLORSPACE_470_SYSTEM_BG and
+        // V4L2_COLORSPACE_REC709 have same transfer function.
+        case V4L2_COLORSPACE_470_SYSTEM_M:
+        case V4L2_COLORSPACE_470_SYSTEM_BG:
+        case V4L2_COLORSPACE_REC709:
+          transfer = gfx::ColorSpace::TransferID::BT709;
+          break;
+        case V4L2_COLORSPACE_BT2020:
+          transfer = gfx::ColorSpace::TransferID::BT2020_10;
+          break;
+        // V4L2_COLORSPACE_JPEG and V4L2_COLORSPACE_SRGB has same transfer
+        // function.
+        case V4L2_COLORSPACE_SRGB:
+        case V4L2_COLORSPACE_JPEG:
+          transfer = gfx::ColorSpace::TransferID::SRGB;
+          break;
+        case V4L2_COLORSPACE_SMPTE240M:
+          transfer = gfx::ColorSpace::TransferID::SMPTE240M;
+          break;
+        case V4L2_COLORSPACE_RAW:
+        case V4L2_COLORSPACE_DCI_P3:
+        case V4L2_COLORSPACE_DEFAULT:
+        case V4L2_COLORSPACE_BT878:
+          // The default transfer function is V4L2_XFER_FUNC_ADOBERGB, but there
+          // is no same definition or same transfer function in TransferID.
+          // TODO(1449570, 959919): If ADOBE_RGB is handled, pass the right gfx
+          // color space instead of INVALID color space.
+        case V4L2_COLORSPACE_OPRGB:
+          return gfx::ColorSpace();
+      }
+      break;
+    case V4L2_XFER_FUNC_709:
+      transfer = gfx::ColorSpace::TransferID::BT709;
+      break;
+    case V4L2_XFER_FUNC_SRGB:
+      transfer = gfx::ColorSpace::TransferID::SRGB;
+      break;
+    case V4L2_XFER_FUNC_SMPTE240M:
+      transfer = gfx::ColorSpace::TransferID::SMPTE240M;
+      break;
+    // Perceptual quantizer, also known as SMPTEST2084.
+    case V4L2_XFER_FUNC_SMPTE2084:
+      transfer = gfx::ColorSpace::TransferID::PQ;
+      break;
+    case V4L2_XFER_FUNC_NONE:
+    case V4L2_XFER_FUNC_DCI_P3:
+      // The default transfer function is V4L2_XFER_FUNC_ADOBERGB, but there
+      // is no same definition or same transfer function in TransferID.
+      // TODO(1449570, 959919): If ADOBE_RGB is handled, pass the right gfx
+      // color space instead of INVALID color space.
+    case V4L2_XFER_FUNC_OPRGB:
+      return gfx::ColorSpace();
+  }
+
+  DVLOG(2) << __func__ << "build color space:"
+           << gfx::ColorSpace(primary, transfer, matrix, range).ToString();
+  return gfx::ColorSpace(primary, transfer, matrix, range);
+}
+#endif
 
 V4L2CaptureDelegate::BufferTracker::BufferTracker(V4L2CaptureDevice* v4l2)
     : v4l2_(v4l2) {}

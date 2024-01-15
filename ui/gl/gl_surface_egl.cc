@@ -10,11 +10,13 @@
 #include <map>
 #include <memory>
 #include <sstream>
+#include <utility>
 #include <vector>
 
 #include "base/lazy_instance.h"
 #include "base/logging.h"
 #include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ref.h"
 #include "base/scoped_environment_variable_override.h"
 #include "base/system/sys_info.h"
 #include "base/trace_event/trace_event.h"
@@ -32,15 +34,6 @@
 #include "ui/gl/gl_utils.h"
 #include "ui/gl/scoped_make_current.h"
 #include "ui/gl/sync_control_vsync_provider.h"
-
-#if defined(USE_OZONE)
-#include "ui/ozone/buildflags.h"
-#endif  // defined(USE_OZONE)
-
-#if BUILDFLAG(IS_ANDROID)
-#include <android/native_window_jni.h>
-#include "base/android/build_info.h"
-#endif
 
 #if !defined(EGL_FIXED_SIZE_ANGLE)
 #define EGL_FIXED_SIZE_ANGLE 0x3201
@@ -91,7 +84,7 @@ struct TraceSwapEventsInitializer {
   TraceSwapEventsInitializer()
       : value(*TRACE_EVENT_API_GET_CATEGORY_GROUP_ENABLED(
             kSwapEventTraceCategories)) {}
-  const unsigned char& value;
+  const raw_ref<const unsigned char> value;
 };
 
 static base::LazyInstance<TraceSwapEventsInitializer>::Leaky
@@ -177,18 +170,14 @@ EGLConfig ChooseConfig(EGLDisplay display,
   // On X this is only used for PBuffer surfaces.
 
   std::vector<EGLint> renderable_types;
-  if (!base::CommandLine::ForCurrentProcess()->HasSwitch(
-          switches::kDisableES3GLContext)) {
+  if (!GetGlWorkarounds().disable_es3gl_context) {
     renderable_types.push_back(EGL_OPENGL_ES3_BIT);
   }
   renderable_types.push_back(EGL_OPENGL_ES2_BIT);
 
-  EGLint buffer_size = format.GetBufferSize();
   EGLint alpha_size = 8;
-  bool want_rgb565 = buffer_size == 16;
-  EGLint depth_size = format.GetDepthBits();
-  EGLint stencil_size = format.GetStencilBits();
-  EGLint samples = format.GetSamples();
+  bool want_rgb565 = format.IsRGB565();
+  EGLint buffer_size = want_rgb565 ? 16 : 32;
 
   // Some platforms (eg. X11) may want to set custom values for alpha and buffer
   // sizes.
@@ -211,12 +200,6 @@ EGLConfig ChooseConfig(EGLDisplay display,
                                     8,
                                     EGL_RED_SIZE,
                                     8,
-                                    EGL_SAMPLES,
-                                    samples,
-                                    EGL_DEPTH_SIZE,
-                                    depth_size,
-                                    EGL_STENCIL_SIZE,
-                                    stencil_size,
                                     EGL_RENDERABLE_TYPE,
                                     renderable_type,
                                     EGL_SURFACE_TYPE,
@@ -231,12 +214,6 @@ EGLConfig ChooseConfig(EGLDisplay display,
                                    6,
                                    EGL_RED_SIZE,
                                    5,
-                                   EGL_SAMPLES,
-                                   samples,
-                                   EGL_DEPTH_SIZE,
-                                   depth_size,
-                                   EGL_STENCIL_SIZE,
-                                   stencil_size,
                                    EGL_RENDERABLE_TYPE,
                                    renderable_type,
                                    EGL_SURFACE_TYPE,
@@ -363,6 +340,16 @@ GLDisplayEGL* GLSurfaceEGL::GetGLDisplayEGL() {
 
 GLSurfaceEGL::~GLSurfaceEGL() = default;
 
+#if BUILDFLAG(IS_ANDROID)
+NativeViewGLSurfaceEGL::NativeViewGLSurfaceEGL(
+    GLDisplayEGL* display,
+    ScopedANativeWindow scoped_window,
+    std::unique_ptr<gfx::VSyncProvider> vsync_provider)
+    : GLSurfaceEGL(display),
+      scoped_window_(std::move(scoped_window)),
+      window_(scoped_window_.a_native_window()),
+      vsync_provider_external_(std::move(vsync_provider)) {}
+#else
 NativeViewGLSurfaceEGL::NativeViewGLSurfaceEGL(
     GLDisplayEGL* display,
     EGLNativeWindowType window,
@@ -370,17 +357,13 @@ NativeViewGLSurfaceEGL::NativeViewGLSurfaceEGL(
     : GLSurfaceEGL(display),
       window_(window),
       vsync_provider_external_(std::move(vsync_provider)) {
-#if BUILDFLAG(IS_ANDROID)
-  if (window)
-    ANativeWindow_acquire(window);
-#endif
-
 #if BUILDFLAG(IS_WIN)
   RECT windowRect;
   if (GetClientRect(window_, &windowRect))
     size_ = gfx::Rect(windowRect).size();
 #endif
 }
+#endif  // BUILDFLAG(IS_ANDROID)
 
 bool NativeViewGLSurfaceEGL::Initialize(GLSurfaceFormat format) {
   DCHECK(!surface_);
@@ -430,44 +413,12 @@ bool NativeViewGLSurfaceEGL::Initialize(GLSurfaceFormat format) {
     egl_window_attributes.push_back(EGL_SURFACE_ORIENTATION_INVERT_Y_ANGLE);
   }
 
-  switch (format_.GetColorSpace()) {
-    case GLSurfaceFormat::COLOR_SPACE_UNSPECIFIED:
-      break;
-    case GLSurfaceFormat::COLOR_SPACE_SRGB:
-      // Note that COLORSPACE_LINEAR refers to the sRGB color space, but
-      // without opting into sRGB blending. It is equivalent to
-      // COLORSPACE_SRGB with Disable(FRAMEBUFFER_SRGB).
-      if (display_->ext->b_EGL_KHR_gl_colorspace) {
-        egl_window_attributes.push_back(EGL_GL_COLORSPACE_KHR);
-        egl_window_attributes.push_back(EGL_GL_COLORSPACE_LINEAR_KHR);
-      }
-      break;
-    case GLSurfaceFormat::COLOR_SPACE_DISPLAY_P3:
-      // Note that it is not the case that
-      //   COLORSPACE_SRGB is to COLORSPACE_LINEAR_KHR
-      // as
-      //   COLORSPACE_DISPLAY_P3 is to COLORSPACE_DISPLAY_P3_LINEAR
-      // COLORSPACE_DISPLAY_P3 is equivalent to COLORSPACE_LINEAR, except with
-      // with the P3 gamut instead of the the sRGB gamut.
-      // COLORSPACE_DISPLAY_P3_LINEAR has a linear transfer function, and is
-      // intended for use with 16-bit formats.
-      bool p3_supported =
-          display_->ext->b_EGL_EXT_gl_colorspace_display_p3 ||
-          display_->ext->b_EGL_EXT_gl_colorspace_display_p3_passthrough;
-      if (display_->ext->b_EGL_KHR_gl_colorspace && p3_supported) {
-        egl_window_attributes.push_back(EGL_GL_COLORSPACE_KHR);
-        // Chrome relied on incorrect Android behavior when dealing with P3 /
-        // framebuffer_srgb interactions. This behavior was fixed in Q, which
-        // causes invalid Chrome rendering. To achieve Android-P behavior in Q+,
-        // use EGL_GL_COLORSPACE_P3_PASSTHROUGH_EXT where possible.
-        if (display_->ext->b_EGL_EXT_gl_colorspace_display_p3_passthrough) {
-          egl_window_attributes.push_back(
-              EGL_GL_COLORSPACE_DISPLAY_P3_PASSTHROUGH_EXT);
-        } else {
-          egl_window_attributes.push_back(EGL_GL_COLORSPACE_DISPLAY_P3_EXT);
-        }
-      }
-      break;
+  // Note that COLORSPACE_LINEAR refers to the sRGB color space, but
+  // without opting into sRGB blending. It is equivalent to
+  // COLORSPACE_SRGB with Disable(FRAMEBUFFER_SRGB).
+  if (display_->ext->b_EGL_KHR_gl_colorspace) {
+    egl_window_attributes.push_back(EGL_GL_COLORSPACE_KHR);
+    egl_window_attributes.push_back(EGL_GL_COLORSPACE_LINEAR_KHR);
   }
 
   egl_window_attributes.push_back(EGL_NONE);
@@ -621,7 +572,7 @@ bool NativeViewGLSurfaceEGL::IsOffscreen() {
 
 gfx::SwapResult NativeViewGLSurfaceEGL::SwapBuffers(
     PresentationCallback callback,
-    FrameData data) {
+    gfx::FrameData data) {
   TRACE_EVENT2("gpu", "NativeViewGLSurfaceEGL:RealSwapBuffers",
       "width", GetSize().width(),
       "height", GetSize().height());
@@ -664,7 +615,7 @@ void NativeViewGLSurfaceEGL::UpdateSwapEvents(EGLuint64KHR newFrameId,
   // If we weren't able to get a valid frame id before the swap, we can't get
   // its timestamps now.
   const SwapInfo& old_swap_info = swap_info_queue_.front();
-  if (old_swap_info.frame_id_is_valid && g_trace_swap_enabled.Get().value)
+  if (old_swap_info.frame_id_is_valid && *g_trace_swap_enabled.Get().value)
     TraceSwapEvents(old_swap_info.frame_id);
 
   swap_info_queue_.pop();
@@ -774,8 +725,8 @@ gfx::Size NativeViewGLSurfaceEGL::GetSize() {
   EGLint height;
   if (!eglQuerySurface(display_->GetDisplay(), surface_, EGL_WIDTH, &width) ||
       !eglQuerySurface(display_->GetDisplay(), surface_, EGL_HEIGHT, &height)) {
-    NOTREACHED() << "eglQuerySurface failed with error "
-                 << GetLastEGLErrorString();
+    LOG(ERROR) << "eglQuerySurface failed with error "
+               << GetLastEGLErrorString();
     return gfx::Size();
   }
 
@@ -966,7 +917,7 @@ bool NativeViewGLSurfaceEGL::GetFrameTimestampInfoIfAvailable(
 gfx::SwapResult NativeViewGLSurfaceEGL::SwapBuffersWithDamage(
     const std::vector<int>& rects,
     PresentationCallback callback,
-    FrameData data) {
+    gfx::FrameData data) {
   DCHECK(supports_swap_buffer_with_damage_);
 
   GLSurfacePresentationHelper::ScopedSwapBuffers scoped_swap_buffers(
@@ -987,7 +938,7 @@ gfx::SwapResult NativeViewGLSurfaceEGL::PostSubBuffer(
     int width,
     int height,
     PresentationCallback callback,
-    FrameData data) {
+    gfx::FrameData data) {
   TRACE_EVENT2("gpu", "NativeViewGLSurfaceEGL:PostSubBuffer", "width", width,
                "height", height);
   DCHECK(supports_post_sub_buffer_);
@@ -1006,17 +957,6 @@ gfx::SwapResult NativeViewGLSurfaceEGL::PostSubBuffer(
     scoped_swap_buffers.set_result(gfx::SwapResult::SWAP_FAILED);
   }
   return scoped_swap_buffers.result();
-}
-
-bool NativeViewGLSurfaceEGL::SupportsCommitOverlayPlanes() {
-  return false;
-}
-
-gfx::SwapResult NativeViewGLSurfaceEGL::CommitOverlayPlanes(
-    PresentationCallback callback,
-    FrameData data) {
-  NOTREACHED();
-  return gfx::SwapResult::SWAP_FAILED;
 }
 
 bool NativeViewGLSurfaceEGL::OnMakeCurrent(GLContext* context) {
@@ -1039,20 +979,8 @@ void NativeViewGLSurfaceEGL::SetVSyncEnabled(bool enabled) {
   }
 }
 
-bool NativeViewGLSurfaceEGL::ScheduleOverlayPlane(
-    OverlayImage image,
-    std::unique_ptr<gfx::GpuFence> gpu_fence,
-    const gfx::OverlayPlaneData& overlay_plane_data) {
-  NOTIMPLEMENTED();
-  return false;
-}
-
 NativeViewGLSurfaceEGL::~NativeViewGLSurfaceEGL() {
   Destroy();
-#if BUILDFLAG(IS_ANDROID)
-  if (window_)
-    ANativeWindow_release(window_);
-#endif
 }
 
 PbufferGLSurfaceEGL::PbufferGLSurfaceEGL(GLDisplayEGL* display,
@@ -1135,7 +1063,7 @@ bool PbufferGLSurfaceEGL::IsOffscreen() {
 }
 
 gfx::SwapResult PbufferGLSurfaceEGL::SwapBuffers(PresentationCallback callback,
-                                                 FrameData data) {
+                                                 gfx::FrameData data) {
   NOTREACHED() << "Attempted to call SwapBuffers on a PbufferGLSurfaceEGL.";
   return gfx::SwapResult::SWAP_FAILED;
 }
@@ -1225,7 +1153,7 @@ bool SurfacelessEGL::IsSurfaceless() const {
 }
 
 gfx::SwapResult SurfacelessEGL::SwapBuffers(PresentationCallback callback,
-                                            FrameData data) {
+                                            gfx::FrameData data) {
   LOG(ERROR) << "Attempted to call SwapBuffers with SurfacelessEGL.";
   return gfx::SwapResult::SWAP_FAILED;
 }

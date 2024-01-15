@@ -7,13 +7,14 @@
 
 #include <vector>
 
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "media/base/video_color_space.h"
 #include "media/gpu/codec_picture.h"
 #include "media/gpu/media_gpu_export.h"
 
 namespace media {
 
+class V4L2H265Picture;
 class VaapiH265Picture;
 class D3D11H265Picture;
 
@@ -28,6 +29,7 @@ class MEDIA_GPU_EXPORT H265Picture : public CodecPicture {
   H265Picture(const H265Picture&) = delete;
   H265Picture& operator=(const H265Picture&) = delete;
 
+  virtual V4L2H265Picture* AsV4L2H265Picture();
   virtual VaapiH265Picture* AsVaapiH265Picture();
   virtual D3D11H265Picture* AsD3D11H265Picture();
 
@@ -66,6 +68,7 @@ class MEDIA_GPU_EXPORT H265Picture : public CodecPicture {
   bool no_output_of_prior_pics_flag_{false};
   bool pic_output_flag_{false};
   bool valid_for_prev_tid0_pic_{false};
+  uint32_t pic_latency_count_{0};
   int slice_pic_order_cnt_lsb_{0};
   int pic_order_cnt_msb_{0};
   int pic_order_cnt_val_{0};

@@ -9,26 +9,19 @@
 #include "third_party/blink/renderer/bindings/core/v8/v8_binding_for_testing.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_keyframe_animation_options.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_keyframe_effect_options.h"
-#include "third_party/blink/renderer/bindings/core/v8/v8_timeline_offset.h"
-#include "third_party/blink/renderer/bindings/core/v8/v8_timeline_offset_phase.h"
+#include "third_party/blink/renderer/bindings/core/v8/v8_timeline_range_offset.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_union_keyframeanimationoptions_unrestricteddouble.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_union_keyframeeffectoptions_unrestricteddouble.h"
 #include "third_party/blink/renderer/core/animation/animation_test_helpers.h"
 #include "third_party/blink/renderer/core/css/cssom/css_unit_values.h"
 #include "third_party/blink/renderer/core/testing/dummy_page_holder.h"
+#include "third_party/blink/renderer/platform/testing/task_environment.h"
 #include "v8/include/v8.h"
 
 namespace blink {
 
 using animation_test_helpers::SetV8ObjectPropertyAsNumber;
 using animation_test_helpers::SetV8ObjectPropertyAsString;
-
-bool TimelineOffsetDelayEquals(const Timing::Delay& delay,
-                               Timing::TimelineNamedPhase phase,
-                               double relative_offset) {
-  return delay.phase == phase &&
-         std::abs(delay.relative_offset - relative_offset) < 1e-6;
-}
 
 class AnimationTimingInputTest : public testing::Test {
  public:
@@ -42,15 +35,13 @@ class AnimationTimingInputTest : public testing::Test {
                                 String timing_property_value,
                                 bool& timing_conversion_success,
                                 bool is_keyframeeffectoptions = true);
-  Timing ApplyTimingInputDelayAsTimelineOffset(String timing_property,
-                                               absl::optional<String> phase,
-                                               absl::optional<double> percent);
 
  private:
   void SetUp() override { page_holder_ = std::make_unique<DummyPageHolder>(); }
 
   Document* GetDocument() const { return &page_holder_->GetDocument(); }
 
+  test::TaskEnvironment task_environment_;
   std::unique_ptr<DummyPageHolder> page_holder_;
 };
 
@@ -143,40 +134,6 @@ Timing AnimationTimingInputTest::ApplyTimingInputString(
   return result;
 }
 
-Timing AnimationTimingInputTest::ApplyTimingInputDelayAsTimelineOffset(
-    String timing_property,
-    absl::optional<String> phase,
-    absl::optional<double> percent) {
-  KeyframeEffectOptions* keyframe_effect_options =
-      MakeGarbageCollected<KeyframeEffectOptions>();
-
-  TimelineOffset* timeline_offset = TimelineOffset::Create();
-  if (phase) {
-    absl::optional<V8TimelineOffsetPhase> timeline_offset_phase =
-        V8TimelineOffsetPhase::Create(phase.value());
-    timeline_offset->setPhase(timeline_offset_phase.value());
-  }
-  if (percent)
-    timeline_offset->setPercent(CSSUnitValues::percent(percent.value()));
-
-  V8UnionDoubleOrTimelineOffset* delay =
-      MakeGarbageCollected<V8UnionDoubleOrTimelineOffset>(timeline_offset);
-  if (timing_property == "delay")
-    keyframe_effect_options->setDelay(delay);
-  else
-    keyframe_effect_options->setEndDelay(delay);
-
-  auto* options =
-      MakeGarbageCollected<V8UnionKeyframeEffectOptionsOrUnrestrictedDouble>(
-          keyframe_effect_options);
-
-  DummyExceptionStateForTesting exception_state;
-  Timing result = TimingInput::Convert(options, GetDocument(), exception_state);
-  if (exception_state.HadException())
-    return Timing();
-  return result;
-}
-
 TEST_F(AnimationTimingInputTest, TimingInputStartDelay) {
   V8TestingScope scope;
   bool did_success;
@@ -220,31 +177,6 @@ TEST_F(AnimationTimingInputTest, TimingInputStartDelay) {
                    .start_delay.AsTimeValue()
                    .InSecondsF());
   EXPECT_FALSE(did_success);
-
-  Timing timing = ApplyTimingInputDelayAsTimelineOffset("delay", "enter", 0);
-  EXPECT_TRUE(TimelineOffsetDelayEquals(timing.start_delay,
-                                        Timing::TimelineNamedPhase::kEnter, 0));
-
-  timing = ApplyTimingInputDelayAsTimelineOffset("delay", "exit", -50);
-  EXPECT_TRUE(TimelineOffsetDelayEquals(
-      timing.start_delay, Timing::TimelineNamedPhase::kExit, -0.5));
-
-  timing = ApplyTimingInputDelayAsTimelineOffset("delay", "cover", 50.5);
-  EXPECT_TRUE(TimelineOffsetDelayEquals(
-      timing.start_delay, Timing::TimelineNamedPhase::kCover, 0.505));
-
-  timing = ApplyTimingInputDelayAsTimelineOffset("delay", "contain", 110);
-  EXPECT_TRUE(TimelineOffsetDelayEquals(
-      timing.start_delay, Timing::TimelineNamedPhase::kContain, 1.1));
-
-  timing =
-      ApplyTimingInputDelayAsTimelineOffset("delay", "contain", absl::nullopt);
-  EXPECT_TRUE(TimelineOffsetDelayEquals(
-      timing.start_delay, Timing::TimelineNamedPhase::kContain, 0));
-
-  timing = ApplyTimingInputDelayAsTimelineOffset("delay", absl::nullopt, 10);
-  EXPECT_TRUE(TimelineOffsetDelayEquals(
-      timing.start_delay, Timing::TimelineNamedPhase::kCover, 0.1));
 }
 
 TEST_F(AnimationTimingInputTest,
@@ -296,11 +228,6 @@ TEST_F(AnimationTimingInputTest, TimingInputEndDelay) {
                                          ignored_success)
                       .end_delay.AsTimeValue()
                       .InSecondsF());
-
-  Timing timing =
-      ApplyTimingInputDelayAsTimelineOffset("endDelay", "enter", absl::nullopt);
-  EXPECT_TRUE(TimelineOffsetDelayEquals(timing.end_delay,
-                                        Timing::TimelineNamedPhase::kEnter, 1));
 }
 
 TEST_F(AnimationTimingInputTest, TimingInputFillMode) {

@@ -6,6 +6,7 @@
 
 #include <memory>
 
+#include "ash/constants/ash_features.h"
 #include "ash/constants/notifier_catalogs.h"
 #include "ash/public/cpp/notification_utils.h"
 #include "ash/resources/vector_icons/vector_icons.h"
@@ -13,8 +14,10 @@
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/values.h"
+#include "chromeos/ash/components/network/metrics/cellular_network_metrics_logger.h"
 #include "chromeos/ash/components/network/network_event_log.h"
 #include "chromeos/ash/components/network/network_handler.h"
+#include "chromeos/ash/components/network/network_sms_handler.h"
 #include "ui/gfx/paint_vector_icon.h"
 #include "ui/message_center/message_center.h"
 
@@ -28,7 +31,7 @@ const char kNotifierSms[] = "ash.sms";
 
 // Send the |message| to notification center to display to users. Note that each
 // notification will be assigned with different |message_id| as notification id.
-void ShowNotification(const base::Value* message,
+void ShowNotification(const base::Value::Dict* message,
                       const std::string& message_text,
                       const std::string& message_number,
                       int message_id) {
@@ -40,7 +43,7 @@ void ShowNotification(const base::Value* message,
   std::unique_ptr<message_center::Notification> notification;
 
   // TODO(estade): should SMS notifications really be shown to all users?
-  notification = ash::CreateSystemNotification(
+  notification = ash::CreateSystemNotificationPtr(
       message_center::NOTIFICATION_TYPE_SIMPLE,
       SmsObserver::kNotificationPrefix + std::to_string(message_id),
       base::ASCIIToUTF16(message_number),
@@ -60,19 +63,55 @@ SmsObserver::SmsObserver() {
   // TODO(armansito): SMS could be a special case for cellular that requires a
   // user (perhaps the owner) to be logged in. If that is the case, then an
   // additional check should be done before subscribing for SMS notifications.
-  if (NetworkHandler::IsInitialized())
-    NetworkHandler::Get()->network_sms_handler()->AddObserver(this);
+  if (NetworkHandler::IsInitialized()) {
+    if (features::IsSuppressTextMessagesEnabled()) {
+      NetworkHandler::Get()->text_message_provider()->AddObserver(this);
+    } else {
+      NetworkHandler::Get()->network_sms_handler()->AddObserver(this);
+    }
+  }
 }
 
 SmsObserver::~SmsObserver() {
   if (NetworkHandler::IsInitialized()) {
-    NetworkHandler::Get()->network_sms_handler()->RemoveObserver(this);
+    if (features::IsSuppressTextMessagesEnabled()) {
+      NetworkHandler::Get()->text_message_provider()->RemoveObserver(this);
+    } else {
+      NetworkHandler::Get()->network_sms_handler()->RemoveObserver(this);
+    }
   }
 }
 
-void SmsObserver::MessageReceived(const base::Value& message) {
+void SmsObserver::MessageReceived(const std::string& guid,
+                                  const TextMessageData& message_data) {
+  CHECK(features::IsSuppressTextMessagesEnabled());
+
+  if (!message_data.text.has_value() || message_data.text->empty()) {
+    NET_LOG(ERROR) << "SMS message contains no or empty content.";
+    return;
+  }
+  if (!message_data.number.has_value() || message_data.number->empty()) {
+    NET_LOG(DEBUG) << "SMS contains no number. Ignoring.";
+    return;
+  }
+  message_id_++;
+  // TODO(b/295169036) Remove unused message dictionary once suppress text
+  // messages feature flag is removed.
+  ShowNotification(/*message=*/nullptr, *message_data.text,
+                   *message_data.number, message_id_);
+
+  if (NetworkHandler::IsInitialized()) {
+    NetworkHandler::Get()
+        ->text_message_provider()
+        ->LogTextMessageNotificationMetrics(guid);
+  }
+}
+
+void SmsObserver::MessageReceived(const base::Value::Dict& message) {
+  CHECK(!features::IsSuppressTextMessagesEnabled());
+
   const std::string* message_text =
-      message.FindStringKey(NetworkSmsHandler::kTextKey);
+      message.FindString(NetworkSmsHandler::kTextKey);
   if (!message_text) {
     NET_LOG(ERROR) << "SMS message contains no content.";
     return;
@@ -85,7 +124,7 @@ void SmsObserver::MessageReceived(const base::Value& message) {
     return;
   }
   const std::string* message_number =
-      message.FindStringKey(NetworkSmsHandler::kNumberKey);
+      message.FindString(NetworkSmsHandler::kNumberKey);
   if (!message_number) {
     NET_LOG(DEBUG) << "SMS contains no number. Ignoring.";
     return;

@@ -5,6 +5,7 @@
 #include "ui/accessibility/platform/automation/automation_api_util.h"
 #include "ui/accessibility/ax_enum_util.h"
 #include "ui/accessibility/ax_event_generator.h"
+#include "ui/accessibility/ax_position.h"
 
 namespace ui {
 
@@ -19,7 +20,10 @@ bool ShouldIgnoreAXEventForAutomation(ax::mojom::Event event_type) {
     // from the intersection of AXEventGenerator::Event and
     // ax::mojom::Event.
     case ax::mojom::Event::kActiveDescendantChanged:
-    case ax::mojom::Event::kAriaAttributeChanged:
+    // TODO(crbug.com/1464633) Fully remove kAriaAttributeChangedDeprecated
+    // starting in 122, because although it was removed in 118, it is still
+    // present in earlier versions of LaCros.
+    case ax::mojom::Event::kAriaAttributeChangedDeprecated:
     case ax::mojom::Event::kCheckedStateChanged:
     case ax::mojom::Event::kChildrenChanged:
     case ax::mojom::Event::kDocumentSelectionChanged:
@@ -102,6 +106,7 @@ bool ShouldIgnoreGeneratedEventForAutomation(
     case AXEventGenerator::Event::ARIA_CURRENT_CHANGED:
     case AXEventGenerator::Event::ATOMIC_CHANGED:
     case AXEventGenerator::Event::AUTO_COMPLETE_CHANGED:
+    case AXEventGenerator::Event::AUTOFILL_AVAILABILITY_CHANGED:
     case AXEventGenerator::Event::BUSY_CHANGED:
     case AXEventGenerator::Event::CARET_BOUNDS_CHANGED:
     case AXEventGenerator::Event::CHECKED_STATE_CHANGED:
@@ -144,6 +149,7 @@ bool ShouldIgnoreGeneratedEventForAutomation(
     case AXEventGenerator::Event::MULTISELECTABLE_STATE_CHANGED:
     case AXEventGenerator::Event::NAME_CHANGED:
     case AXEventGenerator::Event::OBJECT_ATTRIBUTE_CHANGED:
+    case AXEventGenerator::Event::ORIENTATION_CHANGED:
     case AXEventGenerator::Event::OTHER_ATTRIBUTE_CHANGED:
     case AXEventGenerator::Event::PARENT_CHANGED:
     case AXEventGenerator::Event::PLACEHOLDER_CHANGED:
@@ -220,10 +226,20 @@ AutomationEventTypeToAXEventTuple(const char* event_type_string) {
   }
 
   // Otherwise use the AX event type.
-  ax::mojom::Event ax_event = ax::mojom::Event::kNone;
-  MaybeParseAXEnum<ax::mojom::Event>(event_type_string, &ax_event);
+  auto ax_event = MaybeParseAXEnum<ax::mojom::Event>(event_type_string);
   return std::tuple<ax::mojom::Event, AXEventGenerator::Event>(
-      ax_event, AXEventGenerator::Event::NONE);
+      ax_event.value_or(ax::mojom::Event::kNone),
+      AXEventGenerator::Event::NONE);
+}
+
+AXPositionKind StringToAXPositionKind(const std::string& type) {
+  if (type == "tree") {
+    return AXPositionKind::TREE_POSITION;
+  } else if (type == "text") {
+    return AXPositionKind::TEXT_POSITION;
+  }
+
+  return AXPositionKind::NULL_POSITION;
 }
 
 }  // namespace ui

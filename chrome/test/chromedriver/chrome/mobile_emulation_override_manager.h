@@ -9,14 +9,11 @@
 #include <string>
 
 #include "base/memory/raw_ptr.h"
+#include "base/values.h"
 #include "chrome/test/chromedriver/chrome/devtools_event_listener.h"
-
-namespace base {
-class DictionaryValue;
-}
+#include "chrome/test/chromedriver/chrome/mobile_device.h"
 
 class DevToolsClient;
-struct DeviceMetrics;
 class Status;
 
 // Overrides the device metrics, if requested, for the duration of the
@@ -24,7 +21,8 @@ class Status;
 class MobileEmulationOverrideManager : public DevToolsEventListener {
  public:
   MobileEmulationOverrideManager(DevToolsClient* client,
-                                 const DeviceMetrics* device_metrics);
+                                 absl::optional<MobileDevice> mobile_device,
+                                 int browser_major_version);
 
   MobileEmulationOverrideManager(const MobileEmulationOverrideManager&) =
       delete;
@@ -37,7 +35,7 @@ class MobileEmulationOverrideManager : public DevToolsEventListener {
   Status OnConnected(DevToolsClient* client) override;
   Status OnEvent(DevToolsClient* client,
                  const std::string& method,
-                 const base::DictionaryValue& params) override;
+                 const base::Value::Dict& params) override;
 
   bool IsEmulatingTouch() const;
   bool HasOverrideMetrics() const;
@@ -48,7 +46,8 @@ class MobileEmulationOverrideManager : public DevToolsEventListener {
   Status ApplyOverrideIfNeeded();
 
   raw_ptr<DevToolsClient> client_;
-  raw_ptr<const DeviceMetrics> overridden_device_metrics_;
+  absl::optional<MobileDevice> mobile_device_;
+  int browser_major_version_ = 0;
 };
 
 #endif  // CHROME_TEST_CHROMEDRIVER_CHROME_MOBILE_EMULATION_OVERRIDE_MANAGER_H_

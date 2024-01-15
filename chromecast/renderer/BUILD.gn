@@ -21,7 +21,6 @@ cast_source_set("renderer") {
     "cast_demo_bindings.h",
     "cast_url_loader_throttle_provider.cc",
     "cast_url_loader_throttle_provider.h",
-    "cast_url_rewrite_rules_store.h",
     "cast_websocket_handshake_throttle_provider.cc",
     "cast_websocket_handshake_throttle_provider.h",
     "cast_window_manager_bindings.cc",
@@ -36,14 +35,13 @@ cast_source_set("renderer") {
     "queryable_data_store.h",
     "settings_ui_bindings.cc",
     "settings_ui_bindings.h",
-    "url_rewrite_rules_provider.cc",
-    "url_rewrite_rules_provider.h",
   ]
 
   public_deps = [
     "//chromecast:chromecast_buildflags",
     "//chromecast/browser/mojom",
     "//chromecast/common/mojom",
+    "//components/cast_receiver/renderer",
     "//components/url_rewrite/common",
     "//content/public/renderer",
     "//media",
@@ -65,6 +63,7 @@ cast_source_set("renderer") {
     "//chromecast/media",
     "//chromecast/media/base:media_codec_support",
     "//chromecast/renderer/media",
+    "//components/cdm/renderer",
     "//components/media_control/renderer",
     "//components/network_hints/renderer",
     "//components/on_load_script_injector/renderer",

@@ -39,6 +39,11 @@ enum Sandbox {
   // The network service. May be disabled by policy.
   kNetwork,
 
+  // The on-device model execution service. This sandbox is equivalent to the
+  // GPU process's sandbox, but can be used by service processes to host
+  // trustworthy models that may process untrustworthy inputs.
+  kOnDeviceModelExecution,
+
   // Runs with the same rights as the browser. Usually needed to improve
   // stability by hosting code that interacts with third party code in another
   // process.
@@ -116,6 +121,19 @@ enum Sandbox {
   // hardware video decoding.
   [EnableIf=is_linux_or_chromeos_ash]
   kHardwareVideoDecoding,
+
+  // Used to protect processes that perform hardware video encode acceleration.
+  // Currently uses the same policy as the GPU process sandbox. Warm-up does
+  // something different depending on the video acceleration API: for VA-API, we
+  // open the render node and load libva plus associated libraries (like i965 or
+  // iHD). For V4L2, we set up the broker process to allow opening certain V4L2
+  // devices and we load the libv4l2.so library and encoder plugins.
+  //
+  // TODO(b/248528896): we're using the GPU process sandbox policy for now as a
+  // transition step. However, we should create a policy that's tighter just for
+  // hardware video encoding.
+  [EnableIf=is_linux_or_chromeos]
+  kHardwareVideoEncoding,
 
   // Hosts Input Method Editors.
   [EnableIf=is_chromeos_ash]

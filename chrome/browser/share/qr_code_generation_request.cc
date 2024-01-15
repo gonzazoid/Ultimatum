@@ -9,14 +9,15 @@
 #include "base/android/jni_android.h"
 #include "base/android/jni_string.h"
 #include "base/android/scoped_java_ref.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/strings/utf_string_conversions.h"
-#include "chrome/browser/share/android/jni_headers/QRCodeGenerationRequest_jni.h"
+#include "chrome/android/chrome_jni_headers/QRCodeGenerationRequest_jni.h"
 #include "chrome/services/qrcode_generator/public/cpp/qrcode_generator_service.h"
 #include "chrome/services/qrcode_generator/public/mojom/qrcode_generator.mojom.h"
 #include "third_party/skia/include/core/SkBitmap.h"
 #include "ui/gfx/android/java_bitmap.h"
 
+using base::android::ConvertJavaStringToUTF8;
 using base::android::JavaParamRef;
 using base::android::JavaRef;
 using base::android::ScopedJavaGlobalRef;
@@ -32,26 +33,16 @@ QRCodeGenerationRequest::QRCodeGenerationRequest(
   qrcode_generator::mojom::GenerateQRCodeRequestPtr request =
       qrcode_generator::mojom::GenerateQRCodeRequest::New();
   request->data = url_string;
-  request->should_render = true;
   request->center_image = qrcode_generator::mojom::CenterImage::CHROME_DINO;
   request->render_module_style = qrcode_generator::mojom::ModuleStyle::CIRCLES;
   request->render_locator_style =
       qrcode_generator::mojom::LocatorStyle::ROUNDED;
 
-  remote_ = qrcode_generator::LaunchQRCodeGeneratorService();
-
-  // On RPC error, we will still run the handler with a null bitmap.
-  // The handler will call destroy() on this native object to clean up.
-  // base::Unretained(this) is safe here because the callback won't be invoked
-  // after |remote_| is destroyed, and |remote_| will be destroyed if this
-  // object is destroyed.
-  remote_.set_disconnect_handler(
-      base::BindOnce(&QRCodeGenerationRequest::OnGenerateCodeResponse,
-                     base::Unretained(this), nullptr));
+  qrcode_service_ = std::make_unique<qrcode_generator::QRImageGenerator>();
 
   auto callback = base::BindOnce(
       &QRCodeGenerationRequest::OnGenerateCodeResponse, base::Unretained(this));
-  remote_.get()->GenerateQRCode(std::move(request), std::move(callback));
+  qrcode_service_->GenerateQRCode(std::move(request), std::move(callback));
 }
 
 QRCodeGenerationRequest::~QRCodeGenerationRequest() {}
@@ -64,9 +55,8 @@ void QRCodeGenerationRequest::OnGenerateCodeResponse(
     const qrcode_generator::mojom::GenerateQRCodeResponsePtr service_response) {
   JNIEnv* env = base::android::AttachCurrentThread();
 
-  if (!service_response ||
-      service_response->error_code !=
-          qrcode_generator::mojom::QRCodeGeneratorError::NONE) {
+  if (service_response->error_code !=
+      qrcode_generator::mojom::QRCodeGeneratorError::NONE) {
     Java_QRCodeGenerationRequest_onQRCodeAvailable(
         env, java_qr_code_generation_request_, nullptr);
     return;

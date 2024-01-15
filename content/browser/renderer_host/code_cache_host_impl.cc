@@ -6,8 +6,8 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/threading/thread.h"
@@ -35,14 +35,10 @@ namespace content {
 
 namespace {
 
-enum class Operation {
-  kRead,
-  kWrite,
-};
-
-bool CheckSecurityForAccessingCodeCacheData(const GURL& resource_url,
-                                            int render_process_id,
-                                            Operation operation) {
+bool CheckSecurityForAccessingCodeCacheData(
+    const GURL& resource_url,
+    int render_process_id,
+    CodeCacheHostImpl::Operation operation) {
   ProcessLock process_lock =
       ChildProcessSecurityPolicyImpl::GetInstance()->GetProcessLock(
           render_process_id);
@@ -61,7 +57,7 @@ bool CheckSecurityForAccessingCodeCacheData(const GURL& resource_url,
     }
     if (process_lock.matches_scheme(url::kHttpScheme) ||
         process_lock.matches_scheme(url::kHttpsScheme)) {
-      if (operation == Operation::kWrite) {
+      if (operation == CodeCacheHostImpl::Operation::kWrite) {
         mojo::ReportBadMessage("HTTP(S) pages cannot cache WebUI code");
       }
       return false;
@@ -83,100 +79,25 @@ bool CheckSecurityForAccessingCodeCacheData(const GURL& resource_url,
     return true;
   }
 
-  if (operation == Operation::kWrite) {
+  if (operation == CodeCacheHostImpl::Operation::kWrite) {
     mojo::ReportBadMessage("Invalid URL scheme for code cache.");
   }
   return false;
-}
-
-// Code caches use two keys: the URL of requested resource |resource_url|
-// as the primary key and the origin lock of the renderer that requested this
-// resource as secondary key. This function returns the origin lock of the
-// renderer that will be used as the secondary key for the code cache.
-// The secondary key is:
-// Case 0. absl::nullopt if the resource URL or origin lock have unsupported
-// schemes, or if they represent potentially dangerous combinations such as
-// WebUI code in an open-web page.
-// Case 1. an empty GURL if the render process is not locked to an origin. In
-// this case, code cache uses |resource_url| as the key.
-// Case 2. a absl::nullopt, if the origin lock is opaque (for ex: browser
-// initiated navigation to a data: URL). In these cases, the code should not be
-// cached since the serialized value of opaque origins should not be used as a
-// key.
-// Case 3: origin_lock if the scheme of origin_lock is
-// Http/Https/chrome/chrome-untrusted.
-// Case 4. absl::nullopt otherwise.
-absl::optional<GURL> GetSecondaryKeyForCodeCache(const GURL& resource_url,
-                                                 int render_process_id,
-                                                 Operation operation) {
-  // Case 0: check for invalid schemes.
-  if (!CheckSecurityForAccessingCodeCacheData(resource_url, render_process_id,
-                                              operation)) {
-    return absl::nullopt;
-  }
-  if (!resource_url.is_valid())
-    return absl::nullopt;
-
-  ProcessLock process_lock =
-      ChildProcessSecurityPolicyImpl::GetInstance()->GetProcessLock(
-          render_process_id);
-
-  // Case 1: If process is not locked to a site, it is safe to just use the
-  // |resource_url| of the requested resource as the key. Return an empty GURL
-  // as the second key.
-  if (!process_lock.is_locked_to_site())
-    return GURL::EmptyGURL();
-
-  // Case 2: Don't cache the code corresponding to opaque origins. The same
-  // origin checks should always fail for opaque origins but the serialized
-  // value of opaque origins does not ensure this.
-  // NOTE: HasOpaqueOrigin() will return true if the ProcessLock lock url is
-  // invalid, leading to a return value of absl::nullopt.
-  if (process_lock.HasOpaqueOrigin())
-    return absl::nullopt;
-
-  // Case 3: process_lock_url is used to enfore site-isolation in code caches.
-  // Http/https/chrome schemes are safe to be used as a secondary key. Other
-  // schemes could be enabled if they are known to be safe and if it is
-  // required to cache code from those origins.
-  //
-  // file:// URLs will have a "file:" process lock and would thus share a
-  // cache across all file:// URLs. That would likely be ok for security, but
-  // since this case is not performance sensitive we will keep things simple and
-  // limit the cache to http/https/chrome/chrome-untrusted processes.
-  if (process_lock.matches_scheme(url::kHttpScheme) ||
-      process_lock.matches_scheme(url::kHttpsScheme) ||
-      process_lock.matches_scheme(content::kChromeUIScheme) ||
-      process_lock.matches_scheme(content::kChromeUIUntrustedScheme)) {
-    return process_lock.lock_url();
-  }
-
-  return absl::nullopt;
 }
 
 void DidGenerateCacheableMetadataInCacheStorageOnUI(
     const GURL& url,
     base::Time expected_response_time,
     mojo_base::BigBuffer data,
-    const url::Origin& cache_storage_origin,
     const std::string& cache_storage_cache_name,
     int render_process_id,
+    const blink::StorageKey& code_cache_storage_key,
     storage::mojom::CacheStorageControl* cache_storage_control_for_testing,
     mojo::ReportBadMessageCallback bad_message_callback) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
   auto* render_process_host = RenderProcessHost::FromID(render_process_id);
   if (!render_process_host)
     return;
-
-  // We cannot trust the renderer to give us the correct origin here.  Validate
-  // it against the ChildProcessSecurityPolicy.
-  bool origin_allowed =
-      ChildProcessSecurityPolicyImpl::GetInstance()->CanAccessDataForOrigin(
-          render_process_id, cache_storage_origin);
-  if (!origin_allowed) {
-    std::move(bad_message_callback).Run("Bad cache_storage origin.");
-    return;
-  }
 
   int64_t trace_id = blink::cache_storage::CreateTraceId();
   TRACE_EVENT_WITH_FLOW1(
@@ -193,12 +114,9 @@ void DidGenerateCacheableMetadataInCacheStorageOnUI(
           : render_process_host->GetStoragePartition()
                 ->GetCacheStorageControl();
 
-  // TODO(https://crbug.com/1199077): `CodeCacheHostImpl` will need to get the
-  // real StorageKey somehow.
   cache_storage_control->AddReceiver(
       cross_origin_embedder_policy, mojo::NullRemote(),
-      storage::BucketLocator::ForDefaultBucket(
-          blink::StorageKey(cache_storage_origin)),
+      storage::BucketLocator::ForDefaultBucket(code_cache_storage_key),
       storage::mojom::CacheStorageOwner::kCacheAPI,
       remote.BindNewPipeAndPassReceiver());
 
@@ -238,10 +156,11 @@ void AddCodeCacheReceiver(
     scoped_refptr<GeneratedCodeCacheContext> context,
     int render_process_id,
     const net::NetworkIsolationKey& nik,
+    const blink::StorageKey& storage_key,
     mojo::PendingReceiver<blink::mojom::CodeCacheHost> receiver,
     CodeCacheHostImpl::ReceiverSet::CodeCacheHostReceiverHandler handler) {
-  auto host =
-      std::make_unique<CodeCacheHostImpl>(render_process_id, context, nik);
+  auto host = std::make_unique<CodeCacheHostImpl>(render_process_id, context,
+                                                  nik, storage_key);
   auto* raw_host = host.get();
   auto id = receiver_set->Add(std::move(host), std::move(receiver));
   if (handler)
@@ -249,6 +168,8 @@ void AddCodeCacheReceiver(
 }
 
 }  // namespace
+
+bool CodeCacheHostImpl::use_empty_secondary_key_for_testing_ = false;
 
 CodeCacheHostImpl::ReceiverSet::ReceiverSet(
     scoped_refptr<GeneratedCodeCacheContext> generated_code_cache_context)
@@ -263,6 +184,7 @@ CodeCacheHostImpl::ReceiverSet::~ReceiverSet() = default;
 void CodeCacheHostImpl::ReceiverSet::Add(
     int render_process_id,
     const net::NetworkIsolationKey& nik,
+    const blink::StorageKey& storage_key,
     mojo::PendingReceiver<blink::mojom::CodeCacheHost> receiver,
     CodeCacheHostReceiverHandler handler) {
   if (!receiver_set_) {
@@ -277,14 +199,15 @@ void CodeCacheHostImpl::ReceiverSet::Add(
       generated_code_cache_context_, FROM_HERE,
       base::BindOnce(&AddCodeCacheReceiver, receiver_set_.get(),
                      generated_code_cache_context_, render_process_id, nik,
-                     std::move(receiver), std::move(handler)));
+                     storage_key, std::move(receiver), std::move(handler)));
 }
 
 void CodeCacheHostImpl::ReceiverSet::Add(
     int render_process_id,
     const net::NetworkIsolationKey& nik,
+    const blink::StorageKey& storage_key,
     mojo::PendingReceiver<blink::mojom::CodeCacheHost> receiver) {
-  Add(render_process_id, nik, std::move(receiver),
+  Add(render_process_id, nik, storage_key, std::move(receiver),
       CodeCacheHostReceiverHandler());
 }
 
@@ -295,10 +218,12 @@ void CodeCacheHostImpl::ReceiverSet::Clear() {
 CodeCacheHostImpl::CodeCacheHostImpl(
     int render_process_id,
     scoped_refptr<GeneratedCodeCacheContext> generated_code_cache_context,
-    const net::NetworkIsolationKey& nik)
+    const net::NetworkIsolationKey& nik,
+    const blink::StorageKey& storage_key)
     : render_process_id_(render_process_id),
       generated_code_cache_context_(std::move(generated_code_cache_context)),
-      network_isolation_key_(nik) {
+      network_isolation_key_(nik),
+      storage_key_(storage_key) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 }
 
@@ -322,12 +247,13 @@ void CodeCacheHostImpl::DidGenerateCacheableMetadata(
   if (!code_cache)
     return;
 
-  absl::optional<GURL> origin_lock =
+  std::optional<GURL> secondary_key =
       GetSecondaryKeyForCodeCache(url, render_process_id_, Operation::kWrite);
-  if (!origin_lock)
+  if (!secondary_key) {
     return;
+  }
 
-  code_cache->WriteEntry(url, *origin_lock, network_isolation_key_,
+  code_cache->WriteEntry(url, *secondary_key, network_isolation_key_,
                          expected_response_time, std::move(data));
 }
 
@@ -341,9 +267,9 @@ void CodeCacheHostImpl::FetchCachedCode(blink::mojom::CodeCacheType cache_type,
     return;
   }
 
-  absl::optional<GURL> origin_lock =
+  std::optional<GURL> secondary_key =
       GetSecondaryKeyForCodeCache(url, render_process_id_, Operation::kRead);
-  if (!origin_lock) {
+  if (!secondary_key) {
     std::move(callback).Run(base::Time(), std::vector<uint8_t>());
     return;
   }
@@ -351,7 +277,7 @@ void CodeCacheHostImpl::FetchCachedCode(blink::mojom::CodeCacheType cache_type,
   auto read_callback = base::BindOnce(
       &CodeCacheHostImpl::OnReceiveCachedCode, weak_ptr_factory_.GetWeakPtr(),
       cache_type, base::TimeTicks::Now(), std::move(callback));
-  code_cache->FetchEntry(url, *origin_lock, network_isolation_key_,
+  code_cache->FetchEntry(url, *secondary_key, network_isolation_key_,
                          std::move(read_callback));
 }
 
@@ -363,37 +289,28 @@ void CodeCacheHostImpl::ClearCodeCacheEntry(
   if (!code_cache)
     return;
 
-  absl::optional<GURL> origin_lock =
-      GetSecondaryKeyForCodeCache(url, render_process_id_, Operation::kWrite);
-  if (!origin_lock)
+  std::optional<GURL> secondary_key =
+      GetSecondaryKeyForCodeCache(url, render_process_id_, Operation::kRead);
+  if (!secondary_key) {
     return;
+  }
 
-  code_cache->DeleteEntry(url, *origin_lock, network_isolation_key_);
+  code_cache->DeleteEntry(url, *secondary_key, network_isolation_key_);
 }
 
 void CodeCacheHostImpl::DidGenerateCacheableMetadataInCacheStorage(
     const GURL& url,
     base::Time expected_response_time,
     mojo_base::BigBuffer data,
-    const url::Origin& cache_storage_origin,
     const std::string& cache_storage_cache_name) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-
-  auto task = base::BindOnce(
-      &DidGenerateCacheableMetadataInCacheStorageOnUI, url,
-      expected_response_time, std::move(data), cache_storage_origin,
-      cache_storage_cache_name, render_process_id_,
-      cache_storage_control_for_testing_, mojo::GetBadMessageCallback());
-
-  // This class may or may not be on the UI thread depending on
-  // whether NavigationThreadingOptimizations is enabled.
-  // TODO(crbug.com/1083097): Simplify this code when
-  // the NavigationThreadOptimizations is enabled by default
-  // and the feature is removed.
-  if (BrowserThread::CurrentlyOn(BrowserThread::UI))
-    std::move(task).Run();
-  else
-    GetUIThreadTaskRunner({})->PostTask(FROM_HERE, std::move(task));
+  GetUIThreadTaskRunner({})->PostTask(
+      FROM_HERE,
+      base::BindOnce(&DidGenerateCacheableMetadataInCacheStorageOnUI, url,
+                     expected_response_time, std::move(data),
+                     cache_storage_cache_name, render_process_id_, storage_key_,
+                     cache_storage_control_for_testing_,
+                     mojo::GetBadMessageCallback()));
 }
 
 GeneratedCodeCache* CodeCacheHostImpl::GetCodeCache(
@@ -438,6 +355,78 @@ void CodeCacheHostImpl::OnReceiveCachedCode(
                             base::TimeTicks::Now() - start_time);
   }
   std::move(callback).Run(response_time, std::move(data));
+}
+
+// Code caches use two keys: the URL of requested resource |resource_url|
+// as the primary key and the origin lock of the renderer that requested this
+// resource as secondary key. This function returns the origin lock of the
+// renderer that will be used as the secondary key for the code cache.
+// The secondary key is:
+// Case 0. std::nullopt if the resource URL or origin lock have unsupported
+// schemes, or if they represent potentially dangerous combinations such as
+// WebUI code in an open-web page.
+// Case 1. an empty GURL if the render process is not locked to an origin. In
+// this case, code cache uses |resource_url| as the key.
+// Case 2. a std::nullopt, if the origin lock is opaque (for ex: browser
+// initiated navigation to a data: URL). In these cases, the code should not be
+// cached since the serialized value of opaque origins should not be used as a
+// key.
+// Case 3: origin_lock if the scheme of origin_lock is
+// Http/Https/chrome/chrome-untrusted.
+// Case 4. std::nullopt otherwise.
+std::optional<GURL> CodeCacheHostImpl::GetSecondaryKeyForCodeCache(
+    const GURL& resource_url,
+    int render_process_id,
+    CodeCacheHostImpl::Operation operation) {
+  if (use_empty_secondary_key_for_testing_) {
+    return GURL();
+  }
+  // Case 0: check for invalid schemes.
+  if (!CheckSecurityForAccessingCodeCacheData(resource_url, render_process_id,
+                                              operation)) {
+    return std::nullopt;
+  }
+  if (!resource_url.is_valid()) {
+    return std::nullopt;
+  }
+
+  ProcessLock process_lock =
+      ChildProcessSecurityPolicyImpl::GetInstance()->GetProcessLock(
+          render_process_id);
+
+  // Case 1: If process is not locked to a site, it is safe to just use the
+  // |resource_url| of the requested resource as the key. Return an empty GURL
+  // as the second key.
+  if (!process_lock.is_locked_to_site()) {
+    return GURL::EmptyGURL();
+  }
+
+  // Case 2: Don't cache the code corresponding to opaque origins. The same
+  // origin checks should always fail for opaque origins but the serialized
+  // value of opaque origins does not ensure this.
+  // NOTE: HasOpaqueOrigin() will return true if the ProcessLock lock url is
+  // invalid, leading to a return value of std::nullopt.
+  if (process_lock.HasOpaqueOrigin()) {
+    return std::nullopt;
+  }
+
+  // Case 3: process_lock_url is used to enfore site-isolation in code caches.
+  // Http/https/chrome schemes are safe to be used as a secondary key. Other
+  // schemes could be enabled if they are known to be safe and if it is
+  // required to cache code from those origins.
+  //
+  // file:// URLs will have a "file:" process lock and would thus share a
+  // cache across all file:// URLs. That would likely be ok for security, but
+  // since this case is not performance sensitive we will keep things simple and
+  // limit the cache to http/https/chrome/chrome-untrusted processes.
+  if (process_lock.matches_scheme(url::kHttpScheme) ||
+      process_lock.matches_scheme(url::kHttpsScheme) ||
+      process_lock.matches_scheme(content::kChromeUIScheme) ||
+      process_lock.matches_scheme(content::kChromeUIUntrustedScheme)) {
+    return process_lock.lock_url();
+  }
+
+  return std::nullopt;
 }
 
 }  // namespace content

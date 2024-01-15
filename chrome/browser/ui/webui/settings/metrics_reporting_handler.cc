@@ -9,8 +9,8 @@
 
 #include "chrome/browser/ui/webui/settings/metrics_reporting_handler.h"
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/values.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/metrics/chrome_metrics_service_accessor.h"
@@ -104,7 +104,7 @@ void MetricsReportingHandler::HandleSetMetricsReportingEnabled(
   if (!lacros_chrome_service)
     return;
   // The metrics reporting API was added in Chrome OS 89.
-  if (!lacros_chrome_service->IsMetricsReportingAvailable()) {
+  if (!lacros_chrome_service->IsSupported<crosapi::mojom::MetricsReporting>()) {
     LOG(WARNING) << "MetricsReporting API not available";
     return;
   }

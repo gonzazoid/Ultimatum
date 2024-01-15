@@ -5,6 +5,7 @@
 import("//build/buildflag_header.gni")
 import("//build/config/ui.gni")
 import("//components/viz/viz.gni")
+import("//ui/gl/features.gni")
 
 # Android on x86 architecture is likely an emulator. Some multiplanar texture
 # types don't work on Android emulator.
@@ -17,7 +18,7 @@ buildflag_header("buildflags") {
   flags = [
     "ENABLE_GL_BACKEND_TESTS=$enable_gl_backend_tests",
     "ENABLE_VULKAN_BACKEND_TESTS=$enable_vulkan_backend_tests",
-    "ENABLE_DAWN_BACKEND_TESTS=$enable_dawn_backend_tests",
+    "ENABLE_SKIA_GRAPHITE_TESTS=$enable_skia_graphite_tests",
     "IS_ANDROID_EMULATOR=$is_android_emulator",
   ]
 }
@@ -80,8 +81,6 @@ viz_static_library("test_support") {
     "test_gpu_memory_buffer_manager.h",
     "test_gpu_service_holder.cc",
     "test_gpu_service_holder.h",
-    "test_image_factory.cc",
-    "test_image_factory.h",
     "test_in_process_context_provider.cc",
     "test_in_process_context_provider.h",
     "test_latest_local_surface_id_lookup_delegate.cc",
@@ -112,6 +111,7 @@ viz_static_library("test_support") {
     "//services/viz/privileged/mojom",
     "//testing/gmock",
     "//testing/gtest",
+    "//ui/base:ozone_buildflags",
     "//ui/gfx/geometry",
     "//ui/gl",
     "//ui/latency:test_support",
@@ -124,6 +124,13 @@ viz_static_library("test_support") {
 
   if (enable_vulkan) {
     deps += [ "//gpu/vulkan/init" ]
+  }
+
+  if (use_dawn || skia_use_dawn) {
+    deps += [
+      "//third_party/dawn/src/dawn:proc",
+      "//third_party/dawn/src/dawn/native",
+    ]
   }
 }
 

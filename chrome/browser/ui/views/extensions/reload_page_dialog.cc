@@ -2,9 +2,9 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/bind.h"
-#include "base/callback_forward.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_forward.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/toolbar/toolbar_action_view_controller.h"
 #include "chrome/browser/ui/views/extensions/extensions_dialogs_utils.h"
@@ -20,7 +20,7 @@ std::u16string GetTitle(
     const std::vector<ToolbarActionViewController*> actions) {
   if (actions.size() == 0) {
     return l10n_util::GetStringUTF16(
-        IDS_EXTENSION_RELOAD_PAGE_BUBBLE_UPDATE_PERMISSIONS_TITLE);
+        IDS_EXTENSION_SITE_RELOAD_PAGE_BUBBLE_HEADING);
   }
   if (actions.size() == 1) {
     return l10n_util::GetStringFUTF16(
@@ -53,8 +53,9 @@ void ShowReloadPageDialog(
 
     dialog_builder.SetTitle(GetTitle(actions))
         .AddOkButton(base::BindOnce(std::move(callback)),
-                     l10n_util::GetStringUTF16(
-                         IDS_EXTENSION_RELOAD_PAGE_BUBBLE_OK_BUTTON));
+                     ui::DialogModel::Button::Params().SetLabel(
+                         l10n_util::GetStringUTF16(
+                             IDS_EXTENSION_RELOAD_PAGE_BUBBLE_OK_BUTTON)));
 
     content::WebContents* web_contents =
         browser->tab_strip_model()->GetActiveWebContents();
@@ -70,11 +71,12 @@ void ShowReloadPageDialog(
     }
   } else {
     dialog_builder
-        .SetTitle(
-            l10n_util::GetStringUTF16(IDS_EXTENSION_RELOAD_PAGE_BUBBLE_HEADING))
+        .SetTitle(l10n_util::GetStringUTF16(
+            IDS_EXTENSION_SITE_RELOAD_PAGE_BUBBLE_HEADING))
         .AddOkButton(base::BindOnce(std::move(callback)),
-                     l10n_util::GetStringUTF16(
-                         IDS_EXTENSION_RELOAD_PAGE_BUBBLE_OK_BUTTON));
+                     ui::DialogModel::Button::Params().SetLabel(
+                         l10n_util::GetStringUTF16(
+                             IDS_EXTENSION_RELOAD_PAGE_BUBBLE_OK_BUTTON)));
   }
 
   ShowDialog(container, extension_ids, dialog_builder.Build());

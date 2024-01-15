@@ -8,9 +8,10 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/containers/flat_set.h"
+#include "base/functional/callback.h"
 #include "base/gtest_prod_util.h"
+#include "base/values.h"
 #include "chrome/browser/component_updater/soda_component_installer.h"
 #include "components/component_updater/component_installer.h"
 #include "components/soda/constants.h"
@@ -24,16 +25,12 @@ class FilePath;
 
 namespace component_updater {
 
-// Success callback to be run after the component is downloaded.
-using OnSodaLanguagePackComponentInstalledCallback =
-    base::RepeatingCallback<void(const base::FilePath&)>;
-
 class SodaLanguagePackComponentInstallerPolicy
     : public ComponentInstallerPolicy {
  public:
   SodaLanguagePackComponentInstallerPolicy(
       speech::SodaLanguagePackComponentConfig language_config,
-      OnSodaLanguagePackComponentInstalledCallback on_installed_callback,
+      PrefService* prefs,
       OnSodaLanguagePackComponentReadyCallback on_ready_callback);
   ~SodaLanguagePackComponentInstallerPolicy() override;
 
@@ -55,14 +52,14 @@ class SodaLanguagePackComponentInstallerPolicy
   bool SupportsGroupPolicyEnabledComponentUpdates() const override;
   bool RequiresNetworkEncryption() const override;
   update_client::CrxInstaller::Result OnCustomInstall(
-      const base::Value& manifest,
+      const base::Value::Dict& manifest,
       const base::FilePath& install_dir) override;
   void OnCustomUninstall() override;
-  bool VerifyInstallation(const base::Value& manifest,
+  bool VerifyInstallation(const base::Value::Dict& manifest,
                           const base::FilePath& install_dir) const override;
   void ComponentReady(const base::Version& version,
                       const base::FilePath& install_dir,
-                      base::Value manifest) override;
+                      base::Value::Dict manifest) override;
   base::FilePath GetRelativeInstallDir() const override;
   void GetHash(std::vector<uint8_t>* hash) const override;
   std::string GetName() const override;
@@ -70,7 +67,7 @@ class SodaLanguagePackComponentInstallerPolicy
 
   speech::SodaLanguagePackComponentConfig language_config_;
 
-  OnSodaLanguagePackComponentInstalledCallback on_installed_callback_;
+  raw_ptr<PrefService> prefs_;
   OnSodaLanguagePackComponentReadyCallback on_ready_callback_;
 };
 

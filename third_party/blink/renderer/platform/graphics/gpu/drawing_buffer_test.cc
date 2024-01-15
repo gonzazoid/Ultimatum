@@ -43,7 +43,6 @@
 #include "third_party/blink/public/platform/platform.h"
 #include "third_party/blink/renderer/platform/graphics/canvas_color_params.h"
 #include "third_party/blink/renderer/platform/graphics/gpu/drawing_buffer_test_helpers.h"
-#include "third_party/blink/renderer/platform/graphics/test/gpu_memory_buffer_test_platform.h"
 #include "third_party/blink/renderer/platform/testing/runtime_enabled_features_test_helpers.h"
 #include "ui/gl/gpu_preference.h"
 #include "v8/include/v8.h"
@@ -137,7 +136,7 @@ TEST_F(DrawingBufferTestMultisample, verifyMultisampleResolve) {
   EXPECT_TRUE(drawing_buffer_->ExplicitResolveOfMultisampleData());
 
   // Resolve the multisample buffer
-  drawing_buffer_->ResolveAndBindForReadAndDraw();
+  EXPECT_TRUE(drawing_buffer_->ResolveAndBindForReadAndDraw());
 
   // After resolve, acknowledge new content
   EXPECT_TRUE(drawing_buffer_->MarkContentsChanged());
@@ -352,13 +351,18 @@ class DrawingBufferImageChromiumTest : public DrawingBufferTest,
 
  protected:
   void SetUp() override {
-    platform_ = std::make_unique<
-        ScopedTestingPlatformSupport<GpuMemoryBufferTestPlatform>>();
-
     gfx::Size initial_size(kInitialWidth, kInitialHeight);
     auto gl = std::make_unique<GLES2InterfaceForTests>();
     auto provider =
         std::make_unique<WebGraphicsContext3DProviderForTests>(std::move(gl));
+
+    // DrawingBuffer requests MappableSharedImages with usage SCANOUT, whereas
+    // TestSII by default creates backing SharedMemory GMBs that don't support
+    // this usage. Configure the TestSII to instead use test GMBs that have
+    // relaxed usage validation.
+    auto* sii = static_cast<viz::TestSharedImageInterface*>(
+        provider->SharedImageInterface());
+    sii->UseTestGMBInSharedImageCreationWithBufferUsage();
     GLES2InterfaceForTests* gl_ =
         static_cast<GLES2InterfaceForTests*>(provider->ContextGL());
     EXPECT_CALL(*gl_, CreateAndTexStorage2DSharedImageCHROMIUMMock(_)).Times(1);
@@ -372,13 +376,7 @@ class DrawingBufferImageChromiumTest : public DrawingBufferTest,
     testing::Mock::VerifyAndClearExpectations(gl_);
   }
 
-  void TearDown() override {
-    platform_.reset();
-  }
-
   GLuint image_id0_;
-  std::unique_ptr<ScopedTestingPlatformSupport<GpuMemoryBufferTestPlatform>>
-      platform_;
 };
 
 TEST_F(DrawingBufferImageChromiumTest, VerifyResizingReallocatesImages) {
@@ -512,9 +510,6 @@ TEST_F(DrawingBufferImageChromiumTest, VerifyResizingReallocatesImages) {
 
 TEST_F(DrawingBufferImageChromiumTest, AllocationFailure) {
   GLES2InterfaceForTests* gl_ = drawing_buffer_->ContextGLForTests();
-  viz::TestGpuMemoryBufferManager* gmb_manager =
-      static_cast<viz::TestGpuMemoryBufferManager*>(
-          Platform::Current()->GetGpuMemoryBufferManager());
   viz::TestSharedImageInterface* sii =
       drawing_buffer_->SharedImageInterfaceForTests();
 
@@ -538,10 +533,10 @@ TEST_F(DrawingBufferImageChromiumTest, AllocationFailure) {
   testing::Mock::VerifyAndClearExpectations(gl_);
   VerifyStateWasRestored();
 
-  // Force GpuMemoryBuffer creation failure. Request another resource. It should
+  // Force MappableSI creation failure. Request another resource. It should
   // still be provided, but this time with allowOverlay = false.
   EXPECT_CALL(*gl_, CreateAndTexStorage2DSharedImageCHROMIUMMock(_)).Times(1);
-  gmb_manager->SetFailOnCreate(true);
+  sii->SetFailSharedImageCreationWithBufferUsage(true);
   EXPECT_TRUE(drawing_buffer_->MarkContentsChanged());
   EXPECT_TRUE(drawing_buffer_->PrepareTransferableResource(nullptr, &resource2,
                                                            &release_callback2));
@@ -551,10 +546,10 @@ TEST_F(DrawingBufferImageChromiumTest, AllocationFailure) {
   EXPECT_TRUE(sii->CheckSharedImageExists(mailbox2));
   VerifyStateWasRestored();
 
-  // Check that if GpuMemoryBuffer allocation starts working again, resources
+  // Check that if MappableSI creation starts working again, resources
   // are correctly created with allowOverlay = true.
   EXPECT_CALL(*gl_, CreateAndTexStorage2DSharedImageCHROMIUMMock(_)).Times(1);
-  gmb_manager->SetFailOnCreate(false);
+  sii->SetFailSharedImageCreationWithBufferUsage(false);
   EXPECT_TRUE(drawing_buffer_->MarkContentsChanged());
   EXPECT_TRUE(drawing_buffer_->PrepareTransferableResource(nullptr, &resource3,
                                                            &release_callback3));
@@ -688,8 +683,7 @@ TEST(DrawingBufferDepthStencilTest, packedDepthStencilSupported) {
         want_depth_buffer, want_stencil_buffer, want_antialiasing,
         desynchronized, preserve, DrawingBuffer::kWebGL1,
         DrawingBuffer::kAllowChromiumImage, cc::PaintFlags::FilterQuality::kLow,
-        PredefinedColorSpace::kSRGB, CanvasPixelFormat::kUint8,
-        gl::GpuPreference::kHighPerformance);
+        PredefinedColorSpace::kSRGB, gl::GpuPreference::kHighPerformance);
 
     // When we request a depth or a stencil buffer, we will get both.
     EXPECT_EQ(cases[i].request_depth || cases[i].request_stencil,
@@ -753,16 +747,25 @@ TEST_F(DrawingBufferTest, VerifySetIsHiddenProperlyAffectsMailboxes) {
 
 TEST_F(DrawingBufferTest,
        VerifyTooBigDrawingBufferExceedingV8MaxSizeFailsToCreate) {
-  gfx::Size too_big_size(1, (v8::TypedArray::kMaxLength / 4) + 1);
+  constexpr size_t kBytesPerPixel = 4;
+  constexpr size_t kMaxSize = v8::TypedArray::kMaxByteLength / kBytesPerPixel;
+
+  // Statically compute a width and height such that the product is above
+  // kMaxSize.
+  constexpr int kWidth = 1 << 30;
+  constexpr int kHeight = (kMaxSize / kWidth) + 1;
+  static_assert(size_t{kWidth} * (kHeight - 1) <= kMaxSize);
+  static_assert(size_t{kWidth} * kHeight > kMaxSize);
+
+  gfx::Size too_big_size(kWidth, kHeight);
   Platform::GraphicsInfo graphics_info;
   graphics_info.using_gpu_compositing = true;
   scoped_refptr<DrawingBuffer> too_big_drawing_buffer = DrawingBuffer::Create(
       nullptr, graphics_info, false /* using_swap_chain */, nullptr,
-      too_big_size, false, false, false, false, false, /*desynchronized=*/false,
-      DrawingBuffer::kDiscard, DrawingBuffer::kWebGL1,
+      too_big_size, false, false, false, false, false,
+      /*desynchronized=*/false, DrawingBuffer::kDiscard, DrawingBuffer::kWebGL1,
       DrawingBuffer::kAllowChromiumImage, cc::PaintFlags::FilterQuality::kLow,
-      PredefinedColorSpace::kSRGB, CanvasPixelFormat::kUint8,
-      gl::GpuPreference::kHighPerformance);
+      PredefinedColorSpace::kSRGB, gl::GpuPreference::kHighPerformance);
   EXPECT_EQ(too_big_drawing_buffer, nullptr);
   drawing_buffer_->BeginDestruction();
 }

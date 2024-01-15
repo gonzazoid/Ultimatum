@@ -12,7 +12,7 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/time/time.h"
 #include "content/common/content_export.h"
 #include "content/public/browser/notification_database_data.h"
@@ -68,6 +68,12 @@ class CONTENT_EXPORT PlatformNotificationService {
   // Retrieves the ids of all currently displaying notifications and
   // posts |callback| with the result.
   virtual void GetDisplayedNotifications(
+      DisplayedNotificationsCallback callback) = 0;
+
+  // Retrieves the ids of all currently displaying notifications associated with
+  // `origin` and posts `callback` with the result.
+  virtual void GetDisplayedNotificationsForOrigin(
+      const GURL& origin,
       DisplayedNotificationsCallback callback) = 0;
 
   // Schedules a job to run at |timestamp| and call TriggerNotifications

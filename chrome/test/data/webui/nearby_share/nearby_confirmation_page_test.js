@@ -2,13 +2,14 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-// So that mojo is defined.
-import 'chrome://resources/mojo/mojo/public/js/mojo_bindings_lite.js';
 import 'chrome://nearby/nearby_confirmation_page.js';
+import 'chrome://webui-test/chromeos/mojo_webui_test_support.js';
 
-import {NearbyConfirmationPageElement} from 'chrome://nearby/nearby_confirmation_page.js';
+import {TransferStatus} from 'chrome://nearby/shared/nearby_share.mojom-webui.js';
+import {ShareType} from 'chrome://nearby/shared/nearby_share_share_type.mojom-webui.js';
+import {ShareTargetType} from 'chrome://resources/mojo/chromeos/ash/services/nearby/public/mojom/nearby_share_target_types.mojom-webui.js';
 
-import {assertEquals, assertFalse, assertTrue} from '../chai_assert.js';
+import {assertEquals, assertFalse, assertTrue} from '../chromeos/chai_assert.js';
 
 import {FakeConfirmationManagerRemote, FakeTransferUpdateListenerPendingReceiver} from './fake_mojo_interfaces.js';
 
@@ -51,7 +52,7 @@ suite('ConfirmatonPageTest', function() {
 
   test('calls accept on click', async function() {
     transferUpdateListener.remote_.onTransferUpdate(
-        nearbyShare.mojom.TransferStatus.kAwaitingLocalConfirmation,
+        TransferStatus.kAwaitingLocalConfirmation,
         /*token=*/ null);
     await transferUpdateListener.remote_.$.flushForTesting();
 
@@ -61,7 +62,7 @@ suite('ConfirmatonPageTest', function() {
 
   test('calls reject on click', async function() {
     transferUpdateListener.remote_.onTransferUpdate(
-        nearbyShare.mojom.TransferStatus.kAwaitingLocalConfirmation,
+        TransferStatus.kAwaitingLocalConfirmation,
         /*token=*/ null);
     await transferUpdateListener.remote_.$.flushForTesting();
 
@@ -71,7 +72,7 @@ suite('ConfirmatonPageTest', function() {
 
   test('calls cancel on click', async function() {
     transferUpdateListener.remote_.onTransferUpdate(
-        nearbyShare.mojom.TransferStatus.kAwaitingRemoteAcceptance,
+        TransferStatus.kAwaitingRemoteAcceptance,
         /*token=*/ null);
     await transferUpdateListener.remote_.$.flushForTesting();
 
@@ -82,7 +83,7 @@ suite('ConfirmatonPageTest', function() {
   test('renders confirmation token', async function() {
     const token = 'TestToken1234';
     transferUpdateListener.remote_.onTransferUpdate(
-        nearbyShare.mojom.TransferStatus.kAwaitingLocalConfirmation, token);
+        TransferStatus.kAwaitingLocalConfirmation, token);
     await transferUpdateListener.remote_.$.flushForTesting();
 
     const renderedToken =
@@ -94,10 +95,10 @@ suite('ConfirmatonPageTest', function() {
   test('renders share target name', function() {
     const name = 'Device Name';
     confirmationPageElement.shareTarget =
-        /** @type {!nearbyShare.mojom.ShareTarget} */ ({
+        /** @type {!ShareTarget} */ ({
           id: {high: BigInt(0), low: BigInt(0)},
           name,
-          type: nearbyShare.mojom.ShareTargetType.kPhone,
+          type: ShareTargetType.kPhone,
           imageUrl: {
             url: 'testImageURL',
           },
@@ -115,7 +116,7 @@ suite('ConfirmatonPageTest', function() {
     confirmationPageElement.payloadPreview = {
       description: title,
       fileCount: 1,
-      shareType: nearbyShare.mojom.ShareType.kUnknownFile,
+      shareType: ShareType.kUnknownFile,
     };
     const renderedTitle =
         confirmationPageElement.shadowRoot.querySelector('nearby-preview')
@@ -127,23 +128,23 @@ suite('ConfirmatonPageTest', function() {
   test('renders progress bar', async function() {
     const token = 'TestToken1234';
     transferUpdateListener.remote_.onTransferUpdate(
-        nearbyShare.mojom.TransferStatus.kInProgress, token);
+        TransferStatus.kInProgress, token);
     await transferUpdateListener.remote_.$.flushForTesting();
 
-    const isAnimationHidden =
-        !!confirmationPageElement.shadowRoot.querySelector('cr-lottie[style]');
+    const isAnimationShown =
+        !!confirmationPageElement.shadowRoot.querySelector('#animation');
 
     if (confirmationPageElement.shadowRoot.querySelector('#errorTitle')) {
-      assertTrue(isAnimationHidden);
+      assertFalse(isAnimationShown);
     } else {
-      assertFalse(isAnimationHidden);
+      assertTrue(isAnimationShown);
     }
   });
 
   test('renders error', async function() {
     const token = 'TestToken1234';
     transferUpdateListener.remote_.onTransferUpdate(
-        nearbyShare.mojom.TransferStatus.kRejected, token);
+        TransferStatus.kRejected, token);
     await transferUpdateListener.remote_.$.flushForTesting();
 
     const errorTitle =
@@ -155,17 +156,17 @@ suite('ConfirmatonPageTest', function() {
   test('hide progress bar when error', async function() {
     const token = 'TestToken1234';
     transferUpdateListener.remote_.onTransferUpdate(
-        nearbyShare.mojom.TransferStatus.kRejected, token);
+        TransferStatus.kRejected, token);
     await transferUpdateListener.remote_.$.flushForTesting();
 
-    const isAnimationHidden =
-        !!confirmationPageElement.shadowRoot.querySelector('cr-lottie[style]');
+    const isAnimationShown =
+        !!confirmationPageElement.shadowRoot.querySelector('#animation');
 
     if (confirmationPageElement.shadowRoot.querySelector('#errorTitle')
             .textContent) {
-      assertTrue(isAnimationHidden);
+      assertFalse(isAnimationShown);
     } else {
-      assertFalse(isAnimationHidden);
+      assertTrue(isAnimationShown);
     }
   });
 
@@ -185,13 +186,16 @@ suite('ConfirmatonPageTest', function() {
       MAX_VALUE: true,
     };
 
-    let key;
-    for (key of Object.keys(nearbyShare.mojom.TransferStatus)) {
+    // TypeScript augments numerical enums with additional keys (reverse
+    // mappings), so need to filter those out when iterating over all keys.
+    const keys = Object.keys(TransferStatus)
+                     .filter(k => Number.isInteger(TransferStatus[k]));
+    for (const key of keys) {
       const isErrorState = !(key in nonErrorStates);
       const token = 'TestToken1234';
       if (isErrorState) {
         transferUpdateListener.remote_.onTransferUpdate(
-            nearbyShare.mojom.TransferStatus[key], token);
+            TransferStatus[key], token);
         await transferUpdateListener.remote_.$.flushForTesting();
 
         assertTrue(
@@ -202,7 +206,7 @@ suite('ConfirmatonPageTest', function() {
         confirmationPageElement.set('errorTitle_', null);
         confirmationPageElement.set('errorDescription_', null);
         transferUpdateListener.remote_.onTransferUpdate(
-            nearbyShare.mojom.TransferStatus.kConnecting, token);
+            TransferStatus.kConnecting, token);
         await transferUpdateListener.remote_.$.flushForTesting();
         assertFalse(
             !!confirmationPageElement.shadowRoot.querySelector('#errorTitle'));
@@ -213,12 +217,11 @@ suite('ConfirmatonPageTest', function() {
   test('gets transfer info for testing', async function() {
     const token = 'TestToken1234';
     transferUpdateListener.remote_.onTransferUpdate(
-        nearbyShare.mojom.TransferStatus.kRejected, token);
+        TransferStatus.kRejected, token);
     await transferUpdateListener.remote_.$.flushForTesting();
 
     const info = confirmationPageElement.getTransferInfoForTesting();
-    assertEquals(
-        info.transferStatus, nearbyShare.mojom.TransferStatus.kRejected);
+    assertEquals(info.transferStatus, TransferStatus.kRejected);
     assertEquals(info.confirmationToken, token);
     assertTrue(!!info.errorTitle);
     assertTrue(!!info.errorDescription);

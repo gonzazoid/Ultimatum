@@ -4,6 +4,7 @@
 
 #include "ash/keyboard/keyboard_controller_impl.h"
 
+#include <optional>
 #include <utility>
 
 #include "ash/constants/ash_constants.h"
@@ -13,20 +14,24 @@
 #include "ash/keyboard/ui/keyboard_ui_factory.h"
 #include "ash/keyboard/virtual_keyboard_controller.h"
 #include "ash/public/cpp/keyboard/keyboard_switches.h"
+#include "ash/public/cpp/login_types.h"
 #include "ash/public/cpp/shell_window_ids.h"
 #include "ash/root_window_controller.h"
 #include "ash/session/session_controller_impl.h"
 #include "ash/shelf/shelf.h"
 #include "ash/shell.h"
 #include "ash/shell_delegate.h"
+#include "ash/system/input_device_settings/input_device_settings_controller_impl.h"
+#include "ash/system/model/enterprise_domain_model.h"
+#include "ash/system/model/system_tray_model.h"
 #include "ash/wm/window_util.h"
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
+#include "base/metrics/histogram_functions.h"
 #include "components/pref_registry/pref_registry_syncable.h"
 #include "components/prefs/pref_change_registrar.h"
 #include "components/prefs/pref_service.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/aura/env.h"
 #include "ui/aura/window_delegate.h"
 #include "ui/base/ui_base_features.h"
@@ -58,12 +63,12 @@ const char kSpellCheckEnabledKey[] = "spell_check_enabled";
 // enabled.
 const char kVoiceInputEnabledKey[] = "voice_input_enabled";
 
-absl::optional<display::Display> GetFirstTouchDisplay() {
+std::optional<display::Display> GetFirstTouchDisplay() {
   for (const auto& display : display::Screen::GetScreen()->GetAllDisplays()) {
     if (display.touch_support() == display::Display::TouchSupport::AVAILABLE)
       return display;
   }
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 bool GetVirtualKeyboardFeatureValue(PrefService* prefs,
@@ -94,8 +99,20 @@ KeyboardControllerImpl::~KeyboardControllerImpl() {
 }
 
 // static
-void KeyboardControllerImpl::RegisterProfilePrefs(
-    PrefRegistrySimple* registry) {
+void KeyboardControllerImpl::RegisterProfilePrefs(PrefRegistrySimple* registry,
+                                                  std::string_view country) {
+  // Longpress diacritics pref is default on for NZ managed users only, default
+  // off otherwise.
+  registry->RegisterBooleanPref(
+      ash::prefs::kLongPressDiacriticsEnabled,
+      (country == "NZ" &&
+       Shell::Get()
+               ->system_tray_model()
+               ->enterprise_domain()
+               ->management_device_mode() == ManagementDeviceMode::kNone) ||
+          base::FeatureList::IsEnabled(
+              ash::features::kDiacriticsOnPhysicalKeyboardLongpressDefaultOn),
+      user_prefs::PrefRegistrySyncable::SYNCABLE_OS_PREF);
   registry->RegisterBooleanPref(
       ash::prefs::kXkbAutoRepeatEnabled, ash::kDefaultKeyAutoRepeatEnabled,
       user_prefs::PrefRegistrySyncable::SYNCABLE_OS_PREF);
@@ -268,7 +285,10 @@ void KeyboardControllerImpl::RemoveObserver(
   observers_.RemoveObserver(observer);
 }
 
-KeyRepeatSettings KeyboardControllerImpl::GetKeyRepeatSettings() {
+std::optional<KeyRepeatSettings>
+KeyboardControllerImpl::GetKeyRepeatSettings() {
+  if (!pref_change_registrar_)
+    return std::nullopt;
   PrefService* prefs = pref_change_registrar_->prefs();
   bool enabled = prefs->GetBoolean(ash::prefs::kXkbAutoRepeatEnabled);
   int delay_in_ms = prefs->GetInteger(ash::prefs::kXkbAutoRepeatDelay);
@@ -278,6 +298,11 @@ KeyRepeatSettings KeyboardControllerImpl::GetKeyRepeatSettings() {
 }
 
 bool KeyboardControllerImpl::AreTopRowKeysFunctionKeys() {
+  if (ash::features::IsInputDeviceSettingsSplitEnabled()) {
+    return Shell::Get()
+        ->input_device_settings_controller()
+        ->GetGeneralizedTopRowAreFKeys();
+  }
   PrefService* prefs = pref_change_registrar_->prefs();
   return prefs->GetBoolean(ash::prefs::kSendFunctionKeys);
 }
@@ -311,6 +336,20 @@ void KeyboardControllerImpl::OnSigninScreenPrefServiceInitialized(
 
 void KeyboardControllerImpl::OnActiveUserPrefServiceChanged(
     PrefService* prefs) {
+  auto account_id = Shell::Get()->session_controller()->GetActiveAccountId();
+  if (prefs && !recorded_accounts_.contains(account_id)) {
+    base::UmaHistogramBoolean(
+        "ChromeOS.Settings.Device.KeyboardAutoRepeatEnabled",
+        prefs->GetBoolean(prefs::kXkbAutoRepeatEnabled));
+    base::UmaHistogramTimes(
+        "ChromeOS.Settings.Device.KeyboardAutoRepeatDelay",
+        base::Milliseconds(prefs->GetInteger(prefs::kXkbAutoRepeatDelay)));
+    base::UmaHistogramTimes(
+        "ChromeOS.Settings.Device.KeyboardAutoRepeatInterval",
+        base::Milliseconds(prefs->GetInteger(prefs::kXkbAutoRepeatInterval)));
+    recorded_accounts_.insert(account_id);
+  }
+
   ObservePrefs(prefs);
 }
 
@@ -321,6 +360,12 @@ void KeyboardControllerImpl::OnActiveUserPrefServiceChanged(
 // active user's PrefService, or the signin screen's PrefService if nobody's
 // logged in yet.
 void KeyboardControllerImpl::ObservePrefs(PrefService* prefs) {
+  if (!prefs) {
+    // Just for testing cases.
+    pref_change_registrar_.reset();
+    return;
+  }
+
   pref_change_registrar_ = std::make_unique<PrefChangeRegistrar>();
   pref_change_registrar_->Init(prefs);
 
@@ -350,7 +395,9 @@ void KeyboardControllerImpl::ObservePrefs(PrefService* prefs) {
 }
 
 void KeyboardControllerImpl::SendKeyRepeatUpdate() {
-  OnKeyRepeatSettingsChanged(GetKeyRepeatSettings());
+  auto key_repeat_settings = GetKeyRepeatSettings();
+  DCHECK(key_repeat_settings.has_value());
+  OnKeyRepeatSettingsChanged(key_repeat_settings.value());
 }
 
 void KeyboardControllerImpl::SendKeyboardConfigUpdate() {
@@ -372,14 +419,14 @@ aura::Window* KeyboardControllerImpl::GetContainerForDisplay(
   RootWindowController* controller =
       Shell::Get()->GetRootWindowControllerWithDisplayId(display.id());
   aura::Window* container =
-      controller->GetContainer(kShellWindowId_VirtualKeyboardContainer);
+      controller ? controller->GetContainer(kShellWindowId_VirtualKeyboardContainer) : nullptr ;
   DCHECK(container);
   return container;
 }
 
 aura::Window* KeyboardControllerImpl::GetContainerForDefaultDisplay() {
   const display::Screen* screen = display::Screen::GetScreen();
-  const absl::optional<display::Display> first_touch_display =
+  const std::optional<display::Display> first_touch_display =
       GetFirstTouchDisplay();
   const bool has_touch_display = first_touch_display.has_value();
 
@@ -403,11 +450,6 @@ aura::Window* KeyboardControllerImpl::GetContainerForDefaultDisplay() {
 
 void KeyboardControllerImpl::TransferGestureEventToShelf(
     const ui::GestureEvent& e) {
-  if (!base::FeatureList::IsEnabled(
-          features::kShelfGesturesWithVirtualKeyboard)) {
-    return;
-  }
-
   ash::Shelf* shelf =
       ash::Shelf::ForWindow(keyboard_ui_controller_->GetKeyboardWindow());
   if (shelf) {

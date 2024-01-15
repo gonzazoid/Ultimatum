@@ -15,19 +15,15 @@ namespace privacy_sandbox {
 // Contains a topic and a name in the current locale.
 class CanonicalTopic {
  public:
-  // TODO(crbug.com/1286276): Correctly retrieve the set of available
-  // taxononmies.
-  static const int AVAILABLE_TAXONOMY = 1;
-
   CanonicalTopic(browsing_topics::Topic topic_id, int taxonomy_version);
 
   // The ID of this topic. A Canonical Topic's ID uniquely identifies it
   // within a specific taxonomy version.
   browsing_topics::Topic topic_id() const { return topic_id_; }
 
-  // The taxonomy version of the Canonical Topic. Topics with the same topic
-  // ID, but different taxonomy versions are never equivalent. Even if their
-  // localized representations are identical.
+  // The taxonomy version of the Canonical Topic.
+  // TODO(https://crbug.com/1445239): We no longer have a use for the taxonomy
+  // version and may want to delete it
   int taxonomy_version() const { return taxonomy_version_; }
 
   // Returns the localized string representation of the Canonical Topic, this
@@ -38,7 +34,14 @@ class CanonicalTopic {
   base::Value ToValue() const;
   static absl::optional<CanonicalTopic> FromValue(const base::Value& value);
 
+  // TODO(https://crbug.com/1445239): The less than operator considers
+  // `topic_id_` only, because we no longer use the taxonomy version and may
+  // want to delete it
   bool operator<(const CanonicalTopic& other) const;
+
+  // TODO(https://crbug.com/1445239): The equality operator considers
+  // `topic_id_` only, because we no longer use the taxonomy version and may
+  // want to delete it.
   bool operator==(const CanonicalTopic& other) const;
 
  private:

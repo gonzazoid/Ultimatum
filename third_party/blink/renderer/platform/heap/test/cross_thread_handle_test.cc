@@ -1,9 +1,11 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/platform/heap/cross_thread_handle.h"
 #include "base/memory/scoped_refptr.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
@@ -17,9 +19,12 @@
 namespace WTF {
 
 template <>
-struct CrossThreadCopier<base::internal::UnretainedWrapper<void>>
-    : public CrossThreadCopierPassThrough<
-          base::internal::UnretainedWrapper<void>> {
+struct CrossThreadCopier<
+    base::internal::UnretainedWrapper<void,
+                                      base::unretained_traits::MayNotDangle>>
+    : public CrossThreadCopierPassThrough<base::internal::UnretainedWrapper<
+          void,
+          base::unretained_traits::MayNotDangle>> {
   STATIC_ONLY(CrossThreadCopier);
 };
 

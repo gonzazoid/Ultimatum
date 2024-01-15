@@ -8,7 +8,6 @@ import android.content.Intent;
 import android.os.Bundle;
 
 import androidx.annotation.NonNull;
-import androidx.annotation.VisibleForTesting;
 
 import org.chromium.base.Callback;
 import org.chromium.base.CommandLine;
@@ -24,9 +23,7 @@ import org.chromium.chrome.browser.lifecycle.NativeInitObserver;
 import org.chromium.chrome.browser.tabmodel.TabModelSelector;
 import org.chromium.chrome.browser.tabmodel.TabModelSelectorObserver;
 
-/**
- * A class that provides functionality to block the initial draw for the Incognito restore flow.
- */
+/** A class that provides functionality to block the initial draw for the Incognito restore flow. */
 public class IncognitoRestoreAppLaunchDrawBlocker {
     /**
      * A key that is used to persist information about the last tab model selected to the saved
@@ -39,23 +36,28 @@ public class IncognitoRestoreAppLaunchDrawBlocker {
 
     /** A supplier of {@link TabModelSelector} instance.*/
     private final @NonNull ObservableSupplier<TabModelSelector> mTabModelSelectorSupplier;
+
     /**
      * A {@link ActivityLifecycleDispatcher} instance which allows to listen for {@link
      * NativeInitObserver} signals.
      */
     private final @NonNull ActivityLifecycleDispatcher mActivityLifecycleDispatcher;
+
     /**
      * A {@link Supplier<Intent>} intent supplier which allows to get the intent if Chrome was
      * launched from one.
      */
     private final @NonNull Supplier<Intent> mIntentSupplier;
+
     /** A {@link Supplier<Boolean>} to indicate whether we should ignore the intent. */
     private final @NonNull Supplier<Boolean> mShouldIgnoreIntentSupplier;
+
     /**
      * A {@link Runnable} to unblock the draw operation. This is fired when both native and tab
      * state has been initialized.
      */
     private final @NonNull Runnable mUnblockDrawRunnable;
+
     /** A boolean so we don't fire unblock draw runnable twice. */
     private boolean mIsUnblockDrawRunnableInvoked;
 
@@ -63,13 +65,15 @@ public class IncognitoRestoreAppLaunchDrawBlocker {
      * An observer to listen for the onFinishNativeInitialization events. This signal works as a
      * fallback to unblock the draw,together with whether the tab state is initialized.
      */
-    private final NativeInitObserver mNativeInitObserver = new NativeInitObserver() {
-        @Override
-        public void onFinishNativeInitialization() {
-            mIsNativeInitializationFinished = true;
-            maybeUnblockDraw();
-        }
-    };
+    private final NativeInitObserver mNativeInitObserver =
+            new NativeInitObserver() {
+                @Override
+                public void onFinishNativeInitialization() {
+                    mIsNativeInitializationFinished = true;
+                    maybeUnblockDraw();
+                }
+            };
+
     /**
      * A {@link TabModelSelectorObserver} which notifies about the event when the tab state is
      * initialized. This is one of the signal along with the native initialization that we look for
@@ -86,8 +90,8 @@ public class IncognitoRestoreAppLaunchDrawBlocker {
     /** A callback to add the |mTabModelSelectorObserver|. */
     private final @NonNull Callback<TabModelSelector> mTabModelSelectorSupplierCallback =
             (tabModelSelector) -> {
-        tabModelSelector.addObserver(mTabModelSelectorObserver);
-    };
+                tabModelSelector.addObserver(mTabModelSelectorObserver);
+            };
 
     /**
      * A boolean to indicate when native has finished initialization as by then we would have
@@ -111,7 +115,8 @@ public class IncognitoRestoreAppLaunchDrawBlocker {
      *                                   listen for onFinishNativeInitialization signal.
      * @param unblockDrawRunnable A {@link Runnable} to unblock the draw operation.
      */
-    IncognitoRestoreAppLaunchDrawBlocker(@NonNull Supplier<Bundle> savedInstanceStateSupplier,
+    IncognitoRestoreAppLaunchDrawBlocker(
+            @NonNull Supplier<Bundle> savedInstanceStateSupplier,
             @NonNull ObservableSupplier<TabModelSelector> tabModelSelectorSupplier,
             @NonNull Supplier<Intent> intentSupplier,
             @NonNull Supplier<Boolean> shouldIgnoreIntentSupplier,
@@ -128,9 +133,7 @@ public class IncognitoRestoreAppLaunchDrawBlocker {
         mTabModelSelectorSupplier.addObserver(mTabModelSelectorSupplierCallback);
     }
 
-    /**
-     * The destroy method which would remove any added observers by this class.
-     */
+    /** The destroy method which would remove any added observers by this class. */
     public void destroy() {
         mActivityLifecycleDispatcher.unregister(mNativeInitObserver);
         mTabModelSelectorSupplier.removeObserver(mTabModelSelectorSupplierCallback);
@@ -160,16 +163,20 @@ public class IncognitoRestoreAppLaunchDrawBlocker {
         // There were no Incognito tabs before the Activity got destroyed. So we don't need to block
         // draw here.
         if (!savedInstanceState.getBoolean(
-                    IncognitoReauthControllerImpl.KEY_IS_INCOGNITO_REAUTH_PENDING, false)) {
+                IncognitoReauthControllerImpl.KEY_IS_INCOGNITO_REAUTH_PENDING, false)) {
             return false;
         }
 
         boolean isLastSelectedModelIncognito =
                 savedInstanceState.getBoolean(IS_INCOGNITO_SELECTED, false);
-        boolean isIncognitoFiredFromLauncherShortcut = !mShouldIgnoreIntentSupplier.get()
-                && mIntentSupplier.get() != null
-                && mIntentSupplier.get().getBooleanExtra(
-                        IntentHandler.EXTRA_INVOKED_FROM_LAUNCH_NEW_INCOGNITO_TAB, false);
+        boolean isIncognitoFiredFromLauncherShortcut =
+                !mShouldIgnoreIntentSupplier.get()
+                        && mIntentSupplier.get() != null
+                        && mIntentSupplier
+                                .get()
+                                .getBooleanExtra(
+                                        IntentHandler.EXTRA_INVOKED_FROM_LAUNCH_NEW_INCOGNITO_TAB,
+                                        false);
 
         // We have re-auth pending but we don't need to block draw if last tab model was regular and
         // we are not trying to create a new incognito tab from launcher shortcut.
@@ -198,10 +205,7 @@ public class IncognitoRestoreAppLaunchDrawBlocker {
         mUnblockDrawRunnable.run();
     }
 
-    /**
-     * Test-only method.
-     */
-    @VisibleForTesting
+    /** Test-only method. */
     public void resetIsUnblockDrawRunnableInvokedForTesting() {
         mIsUnblockDrawRunnableInvoked = false;
     }

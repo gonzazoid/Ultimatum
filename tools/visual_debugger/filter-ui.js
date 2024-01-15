@@ -13,43 +13,22 @@ class FilterUI extends HTMLElement {
 
   connectedCallback() {
     this.innerHTML = `
-<style>
-.row {
-  display: flex;
-  justify-content: space-between;
-  padding-bottom: 10px;
-}
-
-#filter-container {
-  max-width: 400px;
-  min-width: 350px;
-  font-family: Roboto;
-  font-size: 10pt;
-  background-color: white;
-  padding: 10px;
-}
-
-#saveFilter {
-  margin: 20px 10px;
-  margin-right: 0px;
-}
-
-</style>
 <div id='filter-container'>
   <div class='sectionTitle' id='filter-ui-title'>Add Filter</div>
   <div class='section'>
     <div class='row'>
       <div class='label' title='Filter annotation to match.
       For example frame.root.damage' >Annotation </div>
-        <div class='input'>
-          <input placeholder='Substring to match' id='annotation' size=40>
-          <!-- TODO: A fancy drop-down here would be nice. -->
-        </div>
+      <div class='input'>
+        <input list="knownAnnotations" placeholder='Substring to match'
+         id='annotation' size=40>
+        <!-- TODO: A fancy drop-down here would be nice. -->
+      </div>
     </div>
     <div class='row'>
       <div class='label'>File name</div>
       <div class='input'>
-        <input placeholder='Substring to match  (usually empty!)'
+        <input placeholder='Substring to match (usually empty!)'
          id='filename' size=40>
         <!-- TODO: A fancy drop-down here would be nice. -->
       </div>
@@ -71,21 +50,28 @@ class FilterUI extends HTMLElement {
       <div class='section'>
         <div>
           <form id="actionform">
-            <input type='radio' id='drawfilter' name='dowhat' value='drawfilter'/>Override
-            <input type='color' id='drawcolor' name='drawcolor' value='#000000'/>
-            opacity <input type='range' name='fillalpha' min='0' max='100'
-             step='10' value='50' list='alphastep'/>
+            <input type='radio' id='drawfilter' name='dowhat'
+              value='drawfilter'/>
+            <label for="drawfilter">Override</label>
+            <input type='color' id='drawcolor' name='drawcolor'
+              value='#000000'/>
+            Opacity: <span id="opacityVal"></span>
+            <input type='range' id="fillAlpha" name='fillalpha'
+              min='0' max='100' step='10' value='10' list='alphastep'/>
             <datalist id='alphastep'>
               <option>0</option><option>10</option><option>20</option>
               <option>30</option><option>40</option><option>50</option>
               <option>60</option> <option>70</option><option>80</option>
               <option>90</option><option>100</option>
             </datalist>
-            <input checked type='radio' name='dowhat' value='drawcaller'/>
-            Draw with caller color and opacity
             <br/>
-            <input type='radio' name='dowhat' value='skip'
-            title='Used as a discard filter'/>Do not draw
+            <input checked type='radio' id="drawCaller" name='dowhat'
+              value='drawcaller'/>
+            <label for="drawCaller">Draw with caller color and opacity</label>
+            <br/>
+            <input type='radio' id="drawSkip" name='dowhat' value='skip' />
+            <label for="drawSkip"
+              title='Used as a discard filter'/>Do not draw</label>
             <br/>
           </form>
         </div>
@@ -99,14 +85,26 @@ class FilterUI extends HTMLElement {
 
     // Event listener to check if custom color selected
     // to automatically select override button
-    document.getElementById('drawcolor').addEventListener("change",function(){
-      document.getElementById('drawfilter').checked = true;
+    let drawFilter = document.getElementById('drawfilter');
+    document.getElementById('drawcolor').addEventListener("input", function() {
+      drawFilter.checked = true;
     });
+
+    let fillAlpha = document.getElementById('fillAlpha');
+    fillAlpha.addEventListener('input', () => {
+      this.updateOpacityText();
+      drawFilter.checked = true;
+    });
+    this.updateOpacityText();
+  }
+
+  updateOpacityText() {
+    let opacityVal =  document.getElementById('opacityVal');
+    opacityVal.innerText = `${fillAlpha.value}%`;
   }
 
   setUpButtons_() {
-    const button = this.querySelector('#saveFilter');
-    button.addEventListener('click', () => {
+    const SaveFilter = () => {
       let input = this.querySelector('#filename');
       const filename = input.value || undefined;
       input = this.querySelector('#functionname');
@@ -124,11 +122,35 @@ class FilterUI extends HTMLElement {
       this.dispatchEvent(new CustomEvent('saveFilter', {
         detail: { selector: { filename, func, anno }, action }
       }));
-    });
+    };
+
+    this.querySelector('#saveFilter').addEventListener('click', SaveFilter);
+    this.querySelector('#filter-container').addEventListener('keypress',
+      (e) => { if (e.key === 'Enter') SaveFilter(); });
   }
 };
 
 window.customElements.define('filter-ui', FilterUI);
+
+// A <datalist> element containing values of previously seen filter annotations.
+let dataListElement = undefined;
+let knownAnnotations = new Set();
+// Called when processing new sources from a frame.
+function notifyUiOfNewSource(source) {
+  if (dataListElement === undefined) {
+    dataListElement = document.createElement("datalist");
+    dataListElement.id = "knownAnnotations";
+    document.body.appendChild(dataListElement);
+  }
+
+  if (!knownAnnotations.has(source.anno)) {
+    let option = document.createElement("option");
+    option.value = source.anno;
+    dataListElement.appendChild(option);
+
+    knownAnnotations.add(source.anno);
+  }
+}
 
 function createFilterChip(filter) {
   const chip = document.createElement('div');
@@ -237,8 +259,8 @@ function showCreateFilterPopup(anchor) {
   filterUi.style.top = (anchor.offsetTop + anchor.offsetHeight) + 'px';
   filterUi.style.left = (anchor.offsetLeft + 20) + 'px';
   filterUi.style.zIndex = maxZIndex;
-  
-  showModal(filterUi);
+
+  showModal(filterUi, '#annotation');
 }
 
 // Traverses through all the filter chips and enables/disables
@@ -312,14 +334,16 @@ function createFilterComplete(enabled, selector, action, index) {
 function showEditFilterPopup(item) {
   var chip = item.closest(".mdc-chip");
   var index = Array.prototype.indexOf.call(chip.parentNode.children, chip);
+  var filter = Filter.getFilter(index);
 
   const menu = new MDCMenu(chip.querySelector('#filterchipmenu'));
   menu.open = false;
 
   const filterUi = document.createElement('filter-ui');
+  const isEnabled = filter.enabled;
   filterUi.addEventListener('saveFilter', (event) => {
     if (event.detail.selector && event.detail.action) {
-      var newChip = createFilterComplete(event.detail.selector,
+      var newChip = createFilterComplete(isEnabled, event.detail.selector,
         event.detail.action, index);
       chip.replaceWith(newChip);
     }
@@ -329,9 +353,7 @@ function showEditFilterPopup(item) {
   filterUi.style.left = (chip.offsetLeft + 20) + 'px';
   filterUi.style.zIndex = maxZIndex;
 
-  showModal(filterUi);
-
-  var filter = Filter.getFilter(index);
+  showModal(filterUi, '#annotation');
 
   // fill form from filter data
   filterUi.querySelector('#filter-ui-title').innerHTML = "Edit Filter";
@@ -344,6 +366,7 @@ function showEditFilterPopup(item) {
     filter.drawColor ? 'drawfilter' : 'drawcaller';
   actionform.drawcolor.value = filter.drawColor;
   actionform.fillalpha.value = filter.fillAlpha;
+  filterUi.updateOpacityText();
 }
 
 function deleteFilter(item) {
@@ -389,8 +412,7 @@ function restoreFilters() {
 
 // Checks if one filter is a duplicate of another.
 // NOTE: Custom equality check needed to avoid marking same style
-// of filters with different enabled states and indices as
-// non-duplicates.
+// of filters with different user states and indices as non-duplicates.
 function isDuplicate(filter1, filter2) {
   if (!filter1 || !filter2) {
     return false;
@@ -404,28 +426,34 @@ function isDuplicate(filter1, filter2) {
   if (filter1.selector_.anno !== filter2.selector_.anno) {
     return false;
   }
-  if (filter1.action_.skipDraw !== filter2.action_.skipDraw) {
-    return false;
-  }
-  if (filter1.action_.color !== filter2.action_.color) {
-    return false;
-  }
-  if (filter1.action_.alpha !== filter2.action_.alpha) {
-    return false;
-  }
+
   return true;
 }
 
 const defaultFilters = [
     {
-      selector_: { filename: "", func: "", anno: "frame.root.quad" },
+      selector_: { filename: "", func: "", anno: "frame.render_pass.meta" },
+      action_: { skipDraw: false },
+      enabled_: false
+    },
+    {
+      selector_: { filename: "", func: "", anno: "frame.render_pass.quad" },
       action_: { skipDraw: false, color: '#000000', alpha: "10" },
       enabled_: true
     },
     {
-      selector_: { filename: "", func: "", anno: "frame.root.damage" },
+      selector_: { filename: "", func: "", anno: "frame.render_pass.damage" },
       action_: { skipDraw: false, color: '#FF0000', alpha: "20" },
       enabled_: true
+    },
+    {
+      selector_: {
+        filename: "",
+        func: "",
+        anno: "frame.render_pass.output_rect",
+      },
+      action_: { skipDraw: false },
+      enabled_: false,
     },
     {
       selector_: { filename: "", func: "", anno: "overlay.selected.rect" },
@@ -438,7 +466,7 @@ const defaultFilters = [
       enabled_: true
     },
     {
-      selector_: { filename: "", func: "", anno: "frame.root.material" },
+      selector_: { filename: "", func: "", anno: "frame.render_pass.material" },
       action_: { skipDraw: false },
       enabled_: false
     }
@@ -453,4 +481,3 @@ const FilterUIDefault = {
                  instance.selector_, instance.action_))
   }
 };
-

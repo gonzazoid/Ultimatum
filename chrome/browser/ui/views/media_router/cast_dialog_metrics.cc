@@ -116,8 +116,7 @@ DialogActivationLocationAndCastMode GetActivationLocationAndCastMode(
     case MediaRouterDialogActivationLocation::TOTAL_COUNT:
       break;
   }
-  NOTREACHED();
-  return DialogActivationLocationAndCastMode::kMaxValue;
+  NOTREACHED_NORETURN();
 }
 
 }  // namespace
@@ -143,82 +142,21 @@ void CastDialogMetrics::OnSinksLoaded(const base::Time& sinks_load_time) {
   sinks_load_time_ = sinks_load_time;
 }
 
-void CastDialogMetrics::OnPaint(const base::Time& paint_time) {
-  if (!paint_time_.is_null())
-    return;
-  MediaRouterMetrics::RecordMediaRouterDialogPaint(paint_time -
-                                                   initialization_time_);
-  paint_time_ = paint_time;
-}
-
-void CastDialogMetrics::OnStartCasting(const base::Time& start_time,
-                                       int selected_sink_index,
-                                       MediaCastMode cast_mode,
-                                       SinkIconType icon_type,
-                                       bool has_cast_and_dial) {
-  DCHECK(!sinks_load_time_.is_null());
-  MediaRouterMetrics::RecordStartRouteDeviceIndex(selected_sink_index);
-  if (!first_action_recorded_) {
-    MediaRouterMetrics::RecordStartLocalSessionLatency(start_time -
-                                                       sinks_load_time_);
-  }
-  MaybeRecordFirstAction(MediaRouterUserAction::START_LOCAL);
+void CastDialogMetrics::OnStartCasting(MediaCastMode cast_mode,
+                                       SinkIconType icon_type) {
   MaybeRecordActivationLocationAndCastMode(cast_mode);
   MediaRouterMetrics::RecordMediaSinkTypeForCastDialog(icon_type);
-  if (has_cast_and_dial) {
-    MediaRouterMetrics::RecordMediaSinkTypeWhenCastAndDialPresent(
-        icon_type, UiType::kCastDialog);
-  }
-}
-
-void CastDialogMetrics::OnStopCasting(bool is_local_route) {
-  if (is_local_route) {
-    MediaRouterMetrics::RecordStopLocalRoute();
-    MaybeRecordFirstAction(MediaRouterUserAction::STOP_LOCAL);
-  } else {
-    MediaRouterMetrics::RecordStopRemoteRoute();
-    MaybeRecordFirstAction(MediaRouterUserAction::STOP_REMOTE);
-  }
-}
-
-void CastDialogMetrics::OnCastModeSelected() {
-  MaybeRecordFirstAction(MediaRouterUserAction::CHANGE_MODE);
-}
-
-void CastDialogMetrics::OnCloseDialog(const base::Time& close_time) {
-  if (!first_action_recorded_ && !paint_time_.is_null())
-    MediaRouterMetrics::RecordCloseDialogLatency(close_time - paint_time_);
-  MaybeRecordFirstAction(MediaRouterUserAction::CLOSE);
 }
 
 void CastDialogMetrics::OnRecordSinkCount(
     const std::vector<CastDialogSinkButton*>& sink_buttons) {
   media_router::MediaRouterMetrics::RecordDeviceCount(sink_buttons.size());
-
-  std::map<MediaRouteProviderId, std::map<bool, int>> counts = {
-      {MediaRouteProviderId::CAST, {{true, 0}, {false, 0}}},
-      {MediaRouteProviderId::DIAL, {{true, 0}, {false, 0}}},
-      {MediaRouteProviderId::WIRED_DISPLAY, {{true, 0}, {false, 0}}}};
-  for (const CastDialogSinkButton* sink_button : sink_buttons) {
-    if (sink_button->sink().provider != MediaRouteProviderId::TEST) {
-      counts.at(sink_button->sink().provider).at(sink_button->GetEnabled())++;
-    }
-  }
-  for (auto provider : {MediaRouteProviderId::CAST, MediaRouteProviderId::DIAL,
-                        MediaRouteProviderId::WIRED_DISPLAY}) {
-    for (bool is_available : {true, false}) {
-      int count = counts.at(provider).at(is_available);
-      media_router::MediaRouterMetrics::RecordCastDialogDeviceCount(
-          activation_location_, provider, is_available, count);
-    }
-  }
 }
 
-void CastDialogMetrics::MaybeRecordFirstAction(MediaRouterUserAction action) {
-  if (first_action_recorded_)
-    return;
-  MediaRouterMetrics::RecordMediaRouterInitialUserAction(action);
-  first_action_recorded_ = true;
+void CastDialogMetrics::OnRecordSinkCount(
+    const std::vector<raw_ptr<CastDialogSinkView, DanglingUntriaged>>&
+        sink_views) {
+  media_router::MediaRouterMetrics::RecordDeviceCount(sink_views.size());
 }
 
 void CastDialogMetrics::MaybeRecordActivationLocationAndCastMode(

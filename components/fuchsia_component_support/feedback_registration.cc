@@ -7,19 +7,30 @@
 #include <fuchsia/feedback/cpp/fidl.h>
 #include <lib/sys/cpp/component_context.h>
 
+#include "base/check.h"
 #include "base/fuchsia/process_context.h"
 #include "base/strings/string_piece.h"
+#include "base/strings/string_util.h"
 #include "build/branding_buildflags.h"
 #include "components/version_info/version_info.h"
 
 namespace fuchsia_component_support {
 
+namespace {
+
+constexpr char kAbsoluteComponentUrlSchemPrefix[] = "fuchsia-pkg://";
+
+}  // namespace
+
 void RegisterProductDataForCrashReporting(
-    base::StringPiece component_url,
+    base::StringPiece absolute_component_url,
     base::StringPiece crash_product_name) {
+  DCHECK(base::StartsWith(absolute_component_url,
+                          kAbsoluteComponentUrlSchemPrefix));
+
   fuchsia::feedback::CrashReportingProduct product_data;
   product_data.set_name(std::string(crash_product_name));
-  product_data.set_version(version_info::GetVersionNumber());
+  product_data.set_version(std::string(version_info::GetVersionNumber()));
   // TODO(https://crbug.com/1077428): Use the actual channel when appropriate.
   // For now, always set it to the empty string to avoid reporting "missing".
   product_data.set_channel("");
@@ -37,7 +48,7 @@ void RegisterProductDataForCrashReporting(
   // noise from such crash reports, which are not received on other platforms,
   // do not set a product name for such builds.
 #if BUILDFLAG(GOOGLE_CHROME_BRANDING) && defined(OFFICIAL_BUILD)
-  crash_reporting_service->Upsert(std::string(component_url),
+  crash_reporting_service->Upsert(std::string(absolute_component_url),
                                   std::move(product_data));
 #endif
 }
@@ -47,7 +58,7 @@ void RegisterProductDataForFeedback(base::StringPiece component_namespace) {
   component_data.set_namespace_(std::string(component_namespace));
   // TODO(https://crbug.com/1077428): Add release channel to the annotations.
   component_data.mutable_annotations()->push_back(
-      {"version", version_info::GetVersionNumber()});
+      {"version", std::string(version_info::GetVersionNumber())});
   base::ComponentContextForProcess()
       ->svc()
       ->Connect<fuchsia::feedback::ComponentDataRegister>()

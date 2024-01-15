@@ -50,18 +50,15 @@ namespace blink {
 namespace {
 
 class FormDataIterationSource final
-    : public PairIterable<String,
-                          IDLString,
-                          Member<V8FormDataEntryValue>,
-                          V8FormDataEntryValue>::IterationSource {
+    : public PairSyncIterable<FormData>::IterationSource {
  public:
   FormDataIterationSource(FormData* form_data)
       : form_data_(form_data), current_(0) {}
 
-  bool Next(ScriptState* script_state,
-            String& name,
-            Member<V8FormDataEntryValue>& value,
-            ExceptionState& exception_state) override {
+  bool FetchNextItem(ScriptState* script_state,
+                     String& name,
+                     V8FormDataEntryValue*& value,
+                     ExceptionState& exception_state) override {
     if (current_ >= form_data_->size())
       return false;
 
@@ -78,8 +75,7 @@ class FormDataIterationSource final
 
   void Trace(Visitor* visitor) const override {
     visitor->Trace(form_data_);
-    PairIterable<String, IDLString, Member<V8FormDataEntryValue>,
-                 V8FormDataEntryValue>::IterationSource::Trace(visitor);
+    PairSyncIterable<FormData>::IterationSource::Trace(visitor);
   }
 
  private:
@@ -100,12 +96,46 @@ FormData::FormData() : encoding_(UTF8Encoding()) {}
 
 FormData* FormData::Create(HTMLFormElement* form,
                            ExceptionState& exception_state) {
-  FormData* form_data = form->ConstructEntryList(nullptr, UTF8Encoding());
+  return FormData::Create(form, nullptr, exception_state);
+}
+
+// https://xhr.spec.whatwg.org/#dom-formdata
+FormData* FormData::Create(HTMLFormElement* form,
+                           HTMLElement* submitter,
+                           ExceptionState& exception_state) {
+  if (!form) {
+    return MakeGarbageCollected<FormData>();
+  }
+  // 1. If form is given, then:
+  HTMLFormControlElement* control = nullptr;
+  // 1.1. If submitter is non-null, then:
+  if (submitter) {
+    // 1.1.1. If submitter is not a submit button, then throw a TypeError.
+    control = DynamicTo<HTMLFormControlElement>(submitter);
+    if (!control || !control->CanBeSuccessfulSubmitButton()) {
+      exception_state.ThrowTypeError(
+          "The specified element is not a submit button.");
+      return nullptr;
+    }
+    // 1.1.2. If submitter's form owner is not this form element, then throw a
+    // "NotFoundError" DOMException.
+    if (control->formOwner() != form) {
+      exception_state.ThrowDOMException(
+          DOMExceptionCode::kNotFoundError,
+          "The specified element is not owned by this form element.");
+      return nullptr;
+    }
+  }
+  // 1.2. Let list be the result of constructing the entry list for form and
+  // submitter.
+  FormData* form_data = form->ConstructEntryList(control, UTF8Encoding());
+  // 1.3. If list is null, then throw an "InvalidStateError" DOMException.
   if (!form_data) {
     exception_state.ThrowDOMException(DOMExceptionCode::kInvalidStateError,
                                       "The form is constructing entry list.");
     return nullptr;
   }
+  // 1.4. Set this’s entry list to list.
   // Return a shallow copy of |form_data| because |form_data| is visible in
   // "formdata" event, and the specification says it should be different from
   // the FormData object to be returned.
@@ -323,11 +353,9 @@ scoped_refptr<EncodedFormData> FormData::EncodeMultiPartFormData() {
   return form_data;
 }
 
-PairIterable<String,
-             IDLString,
-             Member<V8FormDataEntryValue>,
-             V8FormDataEntryValue>::IterationSource*
-FormData::StartIteration(ScriptState*, ExceptionState&) {
+PairSyncIterable<FormData>::IterationSource* FormData::CreateIterationSource(
+    ScriptState*,
+    ExceptionState&) {
   return MakeGarbageCollected<FormDataIterationSource>(this);
 }
 
@@ -385,7 +413,8 @@ void FormData::AppendToControlState(FormControlState& state) const {
   }
 }
 
-FormData* FormData::CreateFromControlState(const FormControlState& state,
+FormData* FormData::CreateFromControlState(ExecutionContext& execution_context,
+                                           const FormControlState& state,
                                            wtf_size_t& index) {
   bool ok = false;
   uint64_t length = state[index].ToUInt64Strict(&ok);
@@ -400,10 +429,12 @@ FormData* FormData::CreateFromControlState(const FormControlState& state,
     const String& name = state[index++];
     const String& entry_type = state[index++];
     if (entry_type == "File") {
-      if (auto* file = File::CreateFromControlState(state, index))
+      if (auto* file =
+              File::CreateFromControlState(&execution_context, state, index)) {
         form_data->append(name, file);
-      else
+      } else {
         return nullptr;
+      }
     } else if (entry_type == "USVString") {
       form_data->append(name, state[index++]);
     } else {

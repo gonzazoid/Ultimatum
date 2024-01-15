@@ -10,6 +10,7 @@
 #include "base/notreached.h"
 #include "base/time/time.h"
 #include "mojo/public/cpp/bindings/self_owned_receiver.h"
+#include "services/device/public/cpp/generic_sensor/sensor_reading_shared_buffer.h"
 #include "services/device/public/cpp/generic_sensor/sensor_traits.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -102,6 +103,10 @@ void FakeSensorProvider::GetSensor(mojom::SensorType type,
     std::move(callback).Run(mojom::SensorCreationResult::ERROR_NOT_AVAILABLE,
                             nullptr);
     return;
+  }
+
+  if (sensor_requested_callback_) {
+    std::move(sensor_requested_callback_).Run(type);
   }
 
   SensorReadingSharedBuffer* buffer = GetSensorReadingSharedBufferForType(type);

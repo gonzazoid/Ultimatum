@@ -14,23 +14,21 @@
         [[getPageTitle_(isTriggered_, triggeredResetToolName_)]]
       </div>
       <div id="dialog-body" slot="body">
-        <span inner-h-t-m-l="
-          [[getExplanationText_(isTriggered_, triggeredResetToolName_)]]">
+        <span inner-h-t-m-l="[[getExplanationText_(
+              isTriggered_, triggeredResetToolName_)]]">
         </span>
-        <span>
-          <a href="$i18nRaw{resetPageLearnMoreUrl}" target="_blank">
-            $i18n{learnMore}
-          </a>
-        </span>
+        <a href="$i18nRaw{resetPageLearnMoreUrl}"
+            aria-label="$i18n{resetLearnMoreAccessibilityText}"
+            target="_blank">$i18n{learnMore}</a>
       </div>
       <div slot="button-container">
         <paper-spinner-lite id="resetSpinner" active="[[clearingInProgress_]]">
         </paper-spinner-lite>
-        <cr-button class="cancel-button" on-click="onCancelTap_"
+        <cr-button class="cancel-button" on-click="onCancelClick_"
             id="cancel" disabled="[[clearingInProgress_]]">
           $i18n{cancel}
         </cr-button>
-        <cr-button class="action-button" on-click="onResetTap_"
+        <cr-button class="action-button" on-click="onResetClick_"
             id="reset" disabled="[[clearingInProgress_]]">
           $i18n{resetDialogCommit}
         </cr-button>

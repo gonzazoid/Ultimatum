@@ -7,14 +7,15 @@
 #include <set>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
 #include "base/files/file_enumerator.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/json/json_file_value_serializer.h"
 #include "base/json/json_string_value_serializer.h"
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/path_service.h"
 #include "base/ranges/algorithm.h"
@@ -38,9 +39,9 @@
 #include "chrome/browser/prefs/pref_service_syncable_util.h"
 #include "chrome/browser/sync/sync_service_factory.h"
 #include "components/prefs/pref_change_registrar.h"
-#include "components/sync/driver/sync_service.h"
-#include "components/sync/driver/sync_service_observer.h"
-#include "components/sync/driver/sync_user_settings.h"
+#include "components/sync/service/sync_service.h"
+#include "components/sync/service/sync_service_observer.h"
+#include "components/sync/service/sync_user_settings.h"
 #include "components/sync_preferences/pref_service_syncable.h"
 #include "components/sync_preferences/pref_service_syncable_observer.h"
 #endif
@@ -145,8 +146,7 @@ class ExternalPrefLoader::PrioritySyncReadyWaiter
  private:
   void MaybeObserveSyncStart() {
     syncer::SyncService* service = SyncServiceFactory::GetForProfile(profile_);
-    DCHECK(service);
-    if (!service->CanSyncFeatureStart()) {
+    if (!service || !service->IsSyncFeatureEnabled()) {
       Finish();
       // Note: |this| is deleted.
       return;
@@ -166,8 +166,9 @@ class ExternalPrefLoader::PrioritySyncReadyWaiter
 
   // syncer::SyncServiceObserver
   void OnStateChanged(syncer::SyncService* sync) override {
-    if (!sync->CanSyncFeatureStart())
+    if (!sync->IsSyncFeatureEnabled()) {
       Finish();
+    }
   }
 
   void OnSyncShutdown(syncer::SyncService* sync) override {
@@ -193,7 +194,7 @@ class ExternalPrefLoader::PrioritySyncReadyWaiter
 
   void Finish() { std::move(done_closure_).Run(); }
 
-  Profile* profile_;
+  raw_ptr<Profile, LeakedDanglingUntriaged> profile_;
 
   base::OnceClosure done_closure_;
 
@@ -297,9 +298,6 @@ void ExternalPrefLoader::LoadOnFileThread() {
 
     ReadStandaloneExtensionPrefFiles(prefs);
   }
-
-  if (base_path_id_ == chrome::DIR_EXTERNAL_EXTENSIONS)
-    UMA_HISTOGRAM_COUNTS_100("Extensions.ExternalJsonCount", prefs.size());
 
   // If we have any records to process, then we must have
   // read at least one .json file.  If so, then we should have

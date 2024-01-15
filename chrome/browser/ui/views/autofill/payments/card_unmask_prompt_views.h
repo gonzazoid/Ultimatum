@@ -35,8 +35,9 @@ class CardUnmaskPromptController;
 class CardUnmaskPromptViews : public CardUnmaskPromptView,
                               public views::BubbleDialogDelegateView,
                               public views::TextfieldController {
+  METADATA_HEADER(CardUnmaskPromptViews, views::BubbleDialogDelegateView)
+
  public:
-  METADATA_HEADER(CardUnmaskPromptViews);
   CardUnmaskPromptViews(CardUnmaskPromptController* controller,
                         content::WebContents* web_contents);
   CardUnmaskPromptViews(const CardUnmaskPromptViews&) = delete;
@@ -53,7 +54,6 @@ class CardUnmaskPromptViews : public CardUnmaskPromptView,
   // views::BubbleDialogDelegateView:
   View* GetContentsView() override;
   void AddedToWidget() override;
-  void OnThemeChanged() override;
   std::u16string GetWindowTitle() const override;
   bool IsDialogButtonEnabled(ui::DialogButton button) const override;
   View* GetInitiallyFocusedView() override;

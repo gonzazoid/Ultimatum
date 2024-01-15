@@ -8,6 +8,7 @@
 
 #include "base/containers/span.h"
 #include "base/ranges/algorithm.h"
+#include "base/test/gmock_expected_support.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace web_package {
@@ -61,15 +62,23 @@ constexpr uint8_t kSignature[] = {
     0x88, 0x75, 0xb6, 0xd0, 0xe1, 0x40, 0x37, 0x44, 0x73, 0x6f, 0xbb,
     0x15, 0x1e, 0x36, 0x99, 0x4d, 0x8a, 0x1b, 0xb5, 0x0e};
 
+// This is a different signature with the first byte changed to 0xFF.
+constexpr uint8_t kOtherSignature[] = {
+    0xFF, 0x1d, 0x57, 0xf6, 0xd1, 0xa7, 0x59, 0xa5, 0x96, 0x06, 0x1e,
+    0xe3, 0x8e, 0x41, 0xc2, 0x30, 0x5b, 0x68, 0x84, 0xae, 0x5b, 0xad,
+    0x57, 0x49, 0x7f, 0x23, 0x76, 0x1c, 0xb2, 0x09, 0xc1, 0x4b, 0x5b,
+    0xb7, 0x4d, 0x69, 0xea, 0x9d, 0x54, 0x32, 0x58, 0xe7, 0x60, 0xcc,
+    0x88, 0x75, 0xb6, 0xd0, 0xe1, 0x40, 0x37, 0x44, 0x73, 0x6f, 0xbb,
+    0x15, 0x1e, 0x36, 0x99, 0x4d, 0x8a, 0x1b, 0xb5, 0x0e};
+
 }  // namespace
 
 TEST(Ed25519SignatureTest, ValidSignatureFromVector) {
   std::vector<uint8_t> bytes(64);
   bytes[3] = 123;
 
-  auto signature = Ed25519Signature::Create(bytes);
-  ASSERT_TRUE(signature.has_value()) << signature.error();
-  EXPECT_TRUE(base::ranges::equal(bytes, signature->bytes()));
+  ASSERT_OK_AND_ASSIGN(auto signature, Ed25519Signature::Create(bytes));
+  EXPECT_TRUE(base::ranges::equal(bytes, signature.bytes()));
 }
 
 TEST(Ed25519SignatureTest, ValidSignatureFromArray) {
@@ -78,15 +87,27 @@ TEST(Ed25519SignatureTest, ValidSignatureFromArray) {
       base::ranges::equal(base::make_span(kSignature), signature.bytes()));
 }
 
+TEST(Ed25519SignatureTest, Equality) {
+  auto signature1a = Ed25519Signature::Create(base::make_span(kSignature));
+  auto signature1b = Ed25519Signature::Create(base::make_span(kSignature));
+  auto signature2 = Ed25519Signature::Create(base::make_span(kOtherSignature));
+  EXPECT_TRUE(signature1a == signature1a);
+  EXPECT_TRUE(signature1a == signature1b);
+  EXPECT_FALSE(signature1a == signature2);
+
+  EXPECT_FALSE(signature1a != signature1a);
+  EXPECT_FALSE(signature1a != signature1b);
+  EXPECT_TRUE(signature1a != signature2);
+}
+
 TEST(Ed25519SignatureTest, InvalidSignature) {
   std::vector<uint8_t> bytes(17);
   bytes[3] = 123;
 
   auto signature = Ed25519Signature::Create(bytes);
-  ASSERT_FALSE(signature.has_value());
-  EXPECT_EQ(
-      signature.error(),
-      "The signature has the wrong length. Expected 64, but got 17 bytes.");
+  EXPECT_THAT(signature,
+              base::test::ErrorIs("The signature has the wrong length. "
+                                  "Expected 64, but got 17 bytes."));
 }
 
 TEST(Ed25519SignatureTest, Verify) {

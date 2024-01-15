@@ -6,6 +6,7 @@
 
 #include <math.h>
 
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -16,14 +17,18 @@
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
+#include "base/strings/utf_offset_string_conversions.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/time/time.h"
 #include "components/bookmarks/browser/bookmark_utils.h"
 #include "components/omnibox/browser/autocomplete_match.h"
 #include "components/omnibox/browser/history_url_provider.h"
+#include "components/omnibox/browser/in_memory_url_index_types.h"
 #include "components/omnibox/browser/omnibox_field_trial.h"
 #include "components/omnibox/browser/url_prefix.h"
-#include "components/omnibox/common/omnibox_features.h"
-#include "net/base/registry_controlled_domains/registry_controlled_domain.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "url/gurl.h"
+#include "url/third_party/mozilla/url_parse.h"
 
 namespace {
 
@@ -130,6 +135,7 @@ ScoredHistoryMatch::ScoredHistoryMatch()
                          RowWordStarts(),
                          false,
                          1,
+                         false,
                          base::Time::Max()) {}
 
 ScoredHistoryMatch::ScoredHistoryMatch(
@@ -141,8 +147,8 @@ ScoredHistoryMatch::ScoredHistoryMatch(
     const RowWordStarts& word_starts,
     bool is_url_bookmarked,
     size_t num_matching_pages,
-    base::Time now)
-    : raw_score(0) {
+    bool is_highly_visited_host,
+    base::Time now) {
   // Initialize HistoryMatch fields. TODO(tommycli): Merge these two classes.
   url_info = row;
   input_location = 0;
@@ -155,6 +161,17 @@ ScoredHistoryMatch::ScoredHistoryMatch(
   // particular, this ensures that the class is initialized after an instance
   // has been constructed via the no-args constructor.
   ScoredHistoryMatch::Init();
+
+  if (OmniboxFieldTrial::IsPopulatingUrlScoringSignalsEnabled()) {
+    // Populate the scoring signals available in the URL Row.
+    scoring_signals = absl::make_optional<ScoringSignals>();
+    scoring_signals->set_typed_count(row.typed_count());
+    scoring_signals->set_visit_count(row.visit_count());
+    base::TimeDelta elapsed_time = now - row.last_visit();
+    scoring_signals->set_elapsed_time_last_visit_secs(elapsed_time.InSeconds());
+    scoring_signals->set_is_host_only(IsHostOnly());
+    scoring_signals->set_length_of_url(row.url().spec().length());
+  }
 
   // Figure out where each search term appears in the URL and/or page title
   // so that we can score as well as provide autocomplete highlighting.
@@ -226,7 +243,7 @@ ScoredHistoryMatch::ScoredHistoryMatch(
       // following "x" or "xn" in this case because those characters no longer
       // exist in the displayed URL string.
       size_t offset =
-        best_inlineable_prefix->prefix.length() + terms_vector[0].length();
+          best_inlineable_prefix->prefix.length() + terms_vector[0].length();
       base::OffsetAdjuster::UnadjustOffset(adjustments, &offset);
       if (offset != std::u16string::npos) {
         // Initialize innermost_match.
@@ -263,14 +280,54 @@ ScoredHistoryMatch::ScoredHistoryMatch(
     }
   }
 
+  // Calculate the score per `topicality_score`, `frequency_score`, and
+  // `specificity_score`.
   const float topicality_score =
       GetTopicalityScore(terms_vector.size(), gurl, adjustments,
                          terms_to_word_starts_offsets, word_starts);
-  const float frequency_score = GetFrequency(now, is_url_bookmarked, visits);
-  const float specificity_score =
-      GetDocumentSpecificityScore(num_matching_pages);
-  raw_score = base::saturated_cast<int>(GetFinalRelevancyScore(
-      topicality_score, frequency_score, specificity_score));
+  float frequency_score = 0, specificity_score = 0;
+  if (topicality_score > 0) {
+    // No need to calculate these intermediates; when `topicality_score` is 0,
+    // they'll be unused.
+    frequency_score = GetFrequency(now, is_url_bookmarked, visits);
+    specificity_score = GetDocumentSpecificityScore(num_matching_pages);
+  }
+  raw_score_before_domain_boosting =
+      base::saturated_cast<int>(GetFinalRelevancyScore(
+          topicality_score, frequency_score, specificity_score, 1));
+
+  // Calculate the score considering `domain_score` as well (if enabled).
+  static float domain_suggestions_score_factor =
+      OmniboxFieldTrial::kDomainSuggestionsScoreFactor.Get();
+  DCHECK_GE(domain_suggestions_score_factor, 1);
+  const float domain_score =
+      is_highly_visited_host ? domain_suggestions_score_factor : 1;
+  raw_score_after_domain_boosting =
+      domain_score > 1 ? base::saturated_cast<int>(GetFinalRelevancyScore(
+                             topicality_score, frequency_score,
+                             specificity_score, domain_score))
+                       : raw_score_before_domain_boosting;
+  DCHECK(domain_score > 1 ? raw_score_before_domain_boosting <=
+                                raw_score_after_domain_boosting
+                          : raw_score_before_domain_boosting ==
+                                raw_score_after_domain_boosting);
+
+  // Calculate the score using an alternative domain scoring (if enabled).
+  static bool domain_suggestions_alternative_scoring =
+      OmniboxFieldTrial::kDomainSuggestionsAlternativeScoring.Get();
+  if (is_highly_visited_host && domain_suggestions_alternative_scoring) {
+    raw_score_after_domain_boosting =
+        std::max(GetDomainRelevancyScore(now), raw_score_after_domain_boosting);
+  }
+
+  // If the domain suggestions feature is CF enabled, use the un-boosted score;
+  // if non-CF enabled, use the boosted score; and if disabled, it doesn't
+  // matter as the scores are equal.
+  static const bool domain_suggestions_counterfactual =
+      OmniboxFieldTrial::kDomainSuggestionsCounterfactual.Get();
+  raw_score = domain_suggestions_counterfactual
+                  ? raw_score_before_domain_boosting
+                  : raw_score_after_domain_boosting;
 
   if (also_do_hup_like_scoring_ && likely_can_inline) {
     // HistoryURL-provider-like scoring gives any match that is
@@ -387,6 +444,141 @@ bool ScoredHistoryMatch::MatchScoreGreater(const ScoredHistoryMatch& m1,
 }
 
 // static
+TermMatches ScoredHistoryMatch::FilterUrlTermMatches(
+    const WordStarts& terms_to_word_starts_offsets,
+    const GURL& url,
+    const WordStarts& url_word_starts,
+    const base::OffsetAdjuster::Adjustments& adjustments,
+    const TermMatches& url_matches) {
+  const url::Parsed& parsed = url.parsed_for_possibly_invalid_spec();
+  size_t host_pos = parsed.CountCharactersBefore(url::Parsed::HOST, true);
+  size_t path_pos = parsed.CountCharactersBefore(url::Parsed::PATH, true);
+  size_t query_pos = parsed.CountCharactersBefore(url::Parsed::QUERY, true);
+  size_t last_part_of_host_pos =
+      url.possibly_invalid_spec().rfind('.', path_pos);
+
+  // |word_starts| and |url_matches| both contain offsets for the cleaned up
+  // URL used for matching, so we have to follow those adjustments.
+  base::OffsetAdjuster::AdjustOffset(adjustments, &host_pos);
+  base::OffsetAdjuster::AdjustOffset(adjustments, &path_pos);
+  base::OffsetAdjuster::AdjustOffset(adjustments, &query_pos);
+  base::OffsetAdjuster::AdjustOffset(adjustments, &last_part_of_host_pos);
+
+  // Filter all matches not at a word boundary and in the path (or
+  // later).
+  TermMatches filtered_matches = FilterTermMatchesByWordStarts(
+      url_matches, terms_to_word_starts_offsets, url_word_starts, path_pos,
+      std::string::npos, true);
+  if (url.has_scheme()) {
+    // Also filter matches not at a word boundary and in the scheme.
+    filtered_matches = FilterTermMatchesByWordStarts(
+        filtered_matches, terms_to_word_starts_offsets, url_word_starts, 0,
+        host_pos, true);
+  }
+  return filtered_matches;
+}
+
+// static
+ScoredHistoryMatch::UrlMatchingSignals
+ScoredHistoryMatch::ComputeUrlMatchingSignals(
+    const WordStarts& terms_to_word_starts_offsets,
+    const GURL& url,
+    const WordStarts& url_word_starts,
+    const base::OffsetAdjuster::Adjustments& adjustments,
+    const TermMatches& url_matches) {
+  auto next_word_starts = url_word_starts.begin();
+  auto end_word_starts = url_word_starts.end();
+
+  const url::Parsed& parsed = url.parsed_for_possibly_invalid_spec();
+  size_t host_pos = parsed.CountCharactersBefore(url::Parsed::HOST, true);
+  size_t path_pos = parsed.CountCharactersBefore(url::Parsed::PATH, true);
+  size_t query_pos = parsed.CountCharactersBefore(url::Parsed::QUERY, true);
+  size_t last_part_of_host_pos =
+      url.possibly_invalid_spec().rfind('.', path_pos);
+
+  // Get end position for 'www'. Not set if 'www' not exists in host.
+  absl::optional<size_t> www_end_pos;
+  if (base::ToLowerASCII(url.spec().substr(host_pos, 3)).compare("www") == 0) {
+    www_end_pos = host_pos + 2;
+  }
+
+  // |word_starts| and |url_matches| both contain offsets for the cleaned up
+  // URL used for matching, so we have to follow those adjustments.
+  base::OffsetAdjuster::AdjustOffset(adjustments, &host_pos);
+  base::OffsetAdjuster::AdjustOffset(adjustments, &path_pos);
+  base::OffsetAdjuster::AdjustOffset(adjustments, &query_pos);
+  base::OffsetAdjuster::AdjustOffset(adjustments, &last_part_of_host_pos);
+  if (www_end_pos.has_value()) {
+    size_t end_pos = *www_end_pos;
+    base::OffsetAdjuster::AdjustOffset(adjustments, &end_pos);
+    www_end_pos = end_pos;
+  }
+
+  absl::optional<bool> host_match_at_word_boundary = absl::nullopt;
+  absl::optional<bool> has_non_scheme_www_match = absl::nullopt;
+  absl::optional<size_t> first_url_match_position = absl::nullopt;
+  size_t total_url_match_length = 0;
+  size_t total_host_match_length = 0;
+  size_t total_path_match_length = 0;
+  size_t total_query_or_ref_match_length = 0;
+  size_t num_input_terms_matched_by_url = 0;
+
+  if (!url_matches.empty()) {
+    // URL matches are sorted by offsets.
+    first_url_match_position = url_matches[0].offset;
+  }
+  num_input_terms_matched_by_url = CountUniqueMatchTerms(url_matches);
+
+  for (const auto& url_match : url_matches) {
+    // Calculate the offset in the URL string where the meaningful (word) part
+    // of the term starts.  This takes into account times when a term starts
+    // with punctuation such as "/foo".
+    const size_t term_word_offset =
+        url_match.offset + terms_to_word_starts_offsets[url_match.term_num];
+    // Advance next_word_starts until it's >= the position of the term we're
+    // considering (adjusted for where the word begins within the term).
+    while ((next_word_starts != end_word_starts) &&
+           (*next_word_starts < term_word_offset)) {
+      ++next_word_starts;
+    }
+    const bool at_word_boundary = (next_word_starts != end_word_starts) &&
+                                  (*next_word_starts == term_word_offset);
+    if (term_word_offset >= query_pos) {
+      // The match is in the query or ref component.
+      total_query_or_ref_match_length += url_match.length;
+    } else if (term_word_offset >= path_pos) {
+      // The match is in the path component.
+      total_path_match_length += url_match.length;
+    } else if (term_word_offset >= host_pos) {
+      if (host_match_at_word_boundary.has_value()) {
+        host_match_at_word_boundary =
+            *host_match_at_word_boundary || at_word_boundary;
+      } else {
+        host_match_at_word_boundary = at_word_boundary;
+      }
+      if (has_non_scheme_www_match.has_value()) {
+        has_non_scheme_www_match = *has_non_scheme_www_match ||
+                                   !www_end_pos.has_value() ||
+                                   (term_word_offset > *www_end_pos);
+      } else {
+        has_non_scheme_www_match =
+            !www_end_pos.has_value() || (term_word_offset > *www_end_pos);
+      }
+      total_host_match_length += url_match.length;
+    }
+    total_url_match_length += url_match.length;
+  }
+
+  UrlMatchingSignals matching_signals = {
+      host_match_at_word_boundary,     has_non_scheme_www_match,
+      first_url_match_position,        total_url_match_length,
+      total_host_match_length,         total_path_match_length,
+      total_query_or_ref_match_length, num_input_terms_matched_by_url};
+
+  return matching_signals;
+}
+
+// static
 TermMatches ScoredHistoryMatch::FilterTermMatchesByWordStarts(
     const TermMatches& term_matches,
     const WordStarts& terms_to_word_starts_offsets,
@@ -429,6 +621,50 @@ TermMatches ScoredHistoryMatch::FilterTermMatchesByWordStarts(
 }
 
 // static
+size_t ScoredHistoryMatch::ComputeTotalMatchLength(
+    const WordStarts& terms_to_word_starts_offsets,
+    const TermMatches& matches,
+    const WordStarts& word_starts,
+    size_t num_words_to_allow) {
+  int total_match_length = 0;
+  auto next_word_starts = word_starts.begin();
+  auto end_word_starts = word_starts.end();
+  size_t word_num = 0;
+  for (const auto& match : matches) {
+    // Calculate the offset in the title string where the meaningful (word) part
+    // of the term starts.  This takes into account times when a term starts
+    // with punctuation such as "/foo".
+    const size_t term_word_offset =
+        match.offset + terms_to_word_starts_offsets[match.term_num];
+    // Advance next_word_starts until it's >= the position of the term we're
+    // considering (adjusted for where the word begins within the term).
+    while ((next_word_starts != end_word_starts) &&
+           (*next_word_starts < term_word_offset)) {
+      ++next_word_starts;
+      ++word_num;
+    }
+
+    // Only count up to the number of allowed words.
+    if (word_num >= num_words_to_allow) {
+      break;
+    }
+    total_match_length += match.length;
+  }
+  return total_match_length;
+}
+
+// static
+size_t ScoredHistoryMatch::CountUniqueMatchTerms(
+    const TermMatches& term_matches) {
+  // Find unique `term_num`s in term_matches
+  std::set<int> unique_term_nums;
+  for (const auto& match : term_matches) {
+    unique_term_nums.insert(match.term_num);
+  }
+  return unique_term_nums.size();
+}
+
+// static
 void ScoredHistoryMatch::Init() {
   static bool initialized = false;
 
@@ -463,115 +699,59 @@ float ScoredHistoryMatch::GetTopicalityScore(
   // in the same part of the URL/title.
   DCHECK_GT(num_terms, 0);
   std::vector<int> term_scores(num_terms, 0);
-  auto next_word_starts = word_starts.url_word_starts_.begin();
-  auto end_word_starts = word_starts.url_word_starts_.end();
 
-  const url::Parsed& parsed = url.parsed_for_possibly_invalid_spec();
-  size_t host_pos = parsed.CountCharactersBefore(url::Parsed::HOST, true);
-  size_t path_pos = parsed.CountCharactersBefore(url::Parsed::PATH, true);
-  size_t query_pos = parsed.CountCharactersBefore(url::Parsed::QUERY, true);
-  size_t last_part_of_host_pos =
-      url.possibly_invalid_spec().rfind('.', path_pos);
+  // Process term matches in the URL.
+  url_matches = FilterUrlTermMatches(terms_to_word_starts_offsets, url,
+                                     word_starts.url_word_starts_, adjustments,
+                                     url_matches);
+  IncrementUrlMatchTermScores(terms_to_word_starts_offsets, url,
+                              word_starts.url_word_starts_, adjustments,
+                              &term_scores);
 
-  // |word_starts| and |url_matches| both contain offsets for the cleaned up
-  // URL used for matching, so we have to follow those adjustments.
-  base::OffsetAdjuster::AdjustOffset(adjustments, &host_pos);
-  base::OffsetAdjuster::AdjustOffset(adjustments, &path_pos);
-  base::OffsetAdjuster::AdjustOffset(adjustments, &query_pos);
-  base::OffsetAdjuster::AdjustOffset(adjustments, &last_part_of_host_pos);
-
-  // Loop through all URL matches and score them appropriately.
-  // First, filter all matches not at a word boundary and in the path (or
-  // later).
-  url_matches = FilterTermMatchesByWordStarts(
-      url_matches, terms_to_word_starts_offsets, word_starts.url_word_starts_,
-      path_pos, std::string::npos, true);
-  if (url.has_scheme()) {
-    // Also filter matches not at a word boundary and in the scheme.
-    url_matches = FilterTermMatchesByWordStarts(
-        url_matches, terms_to_word_starts_offsets, word_starts.url_word_starts_,
-        0, host_pos, true);
-  }
-  url::Component query = parsed.query;
-  url::Component key, value;
-  for (const auto& url_match : url_matches) {
-    // Calculate the offset in the URL string where the meaningful (word) part
-    // of the term starts.  This takes into account times when a term starts
-    // with punctuation such as "/foo".
-    const size_t term_word_offset =
-        url_match.offset + terms_to_word_starts_offsets[url_match.term_num];
-    // Advance next_word_starts until it's >= the position of the term we're
-    // considering (adjusted for where the word begins within the term).
-    while ((next_word_starts != end_word_starts) &&
-           (*next_word_starts < term_word_offset)) {
-      ++next_word_starts;
-    }
-    const bool at_word_boundary = (next_word_starts != end_word_starts) &&
-                                  (*next_word_starts == term_word_offset);
-    if (term_word_offset >= query_pos) {
-      // The match is in the query or ref component.
-      if (OmniboxFieldTrial::ShouldDisableCGIParamMatching()) {
-        // Only match cgi param values, NOT the param keys.
-        while (url::ExtractQueryKeyValue(url.spec().c_str(), &query, &key,
-                                         &value)) {
-          size_t value_begin = value.begin;
-          size_t value_end = value.end();
-          base::OffsetAdjuster::AdjustOffset(adjustments, &value_begin);
-          base::OffsetAdjuster::AdjustOffset(adjustments, &value_end);
-          if (term_word_offset >= value_begin &&
-              term_word_offset <= value_end) {
-            term_scores[url_match.term_num] += 5;
-            break;
-          }
-        }
-      } else {
-        term_scores[url_match.term_num] += 5;
-      }
-    } else if (term_word_offset >= path_pos) {
-      // The match is in the path component.
-      term_scores[url_match.term_num] += 8;
-    } else if (term_word_offset >= host_pos) {
-      if (term_word_offset < last_part_of_host_pos) {
-        // Either there are no dots in the hostname or this match isn't
-        // the last dotted component.
-        term_scores[url_match.term_num] += at_word_boundary ? 10 : 2;
-      } else {
-        // The match is in the last part of a dotted hostname (usually this
-        // is the top-level domain .com, .net, etc.).
-        if (allow_tld_matches_)
-          term_scores[url_match.term_num] += at_word_boundary ? 10 : 0;
-      }
-    } else {
-      // The match is in the protocol (a.k.a. scheme).
-      // Matches not at a word boundary should have been filtered already.
-      if (allow_scheme_matches_)
-        term_scores[url_match.term_num] += 10;
-    }
-  }
-  // Now do the analogous loop over all matches in the title.
-  next_word_starts = word_starts.title_word_starts_.begin();
-  end_word_starts = word_starts.title_word_starts_.end();
-  size_t word_num = 0;
+  // Process term matches in the title.
   title_matches = FilterTermMatchesByWordStarts(
       title_matches, terms_to_word_starts_offsets,
       word_starts.title_word_starts_, 0, std::string::npos, true);
-  for (const auto& title_match : title_matches) {
-    // Calculate the offset in the title string where the meaningful (word) part
-    // of the term starts.  This takes into account times when a term starts
-    // with punctuation such as "/foo".
-    const size_t term_word_offset =
-        title_match.offset + terms_to_word_starts_offsets[title_match.term_num];
-    // Advance next_word_starts until it's >= the position of the term we're
-    // considering (adjusted for where the word begins within the term).
-    while ((next_word_starts != end_word_starts) &&
-           (*next_word_starts < term_word_offset)) {
-      ++next_word_starts;
-      ++word_num;
+  IncrementTitleMatchTermScores(terms_to_word_starts_offsets,
+                                word_starts.title_word_starts_, &term_scores);
+
+  if (OmniboxFieldTrial::IsPopulatingUrlScoringSignalsEnabled()) {
+    // Url matching signals.
+    const auto url_matching_signals = ComputeUrlMatchingSignals(
+        terms_to_word_starts_offsets, url, word_starts.url_word_starts_,
+        adjustments, url_matches);
+    if (url_matching_signals.first_url_match_position.has_value()) {
+      // Not set if there is no URL match.
+      scoring_signals->set_first_url_match_position(
+          *(url_matching_signals.first_url_match_position));
     }
-    if (word_num >= num_title_words_to_allow_)
-      break;  // only count the first ten words
-    term_scores[title_match.term_num] += 8;
+    if (url_matching_signals.host_match_at_word_boundary.has_value()) {
+      // Not set if there is no match in the host.
+      scoring_signals->set_host_match_at_word_boundary(
+          *(url_matching_signals.host_match_at_word_boundary));
+      scoring_signals->set_has_non_scheme_www_match(
+          *(url_matching_signals.has_non_scheme_www_match));
+    }
+    scoring_signals->set_total_url_match_length(
+        url_matching_signals.total_url_match_length);
+    scoring_signals->set_total_host_match_length(
+        url_matching_signals.total_host_match_length);
+    scoring_signals->set_total_path_match_length(
+        url_matching_signals.total_path_match_length);
+    scoring_signals->set_total_query_or_ref_match_length(
+        url_matching_signals.total_query_or_ref_match_length);
+    scoring_signals->set_num_input_terms_matched_by_url(
+        url_matching_signals.num_input_terms_matched_by_url);
+
+    // Title matching signals.
+    size_t total_title_match_length = ComputeTotalMatchLength(
+        terms_to_word_starts_offsets, title_matches,
+        word_starts.title_word_starts_, num_title_words_to_allow_);
+    scoring_signals->set_total_title_match_length(total_title_match_length);
+    scoring_signals->set_num_input_terms_matched_by_title(
+        CountUniqueMatchTerms(title_matches));
   }
+
   // TODO(mpearson): Restore logic for penalizing out-of-order matches.
   // (Perhaps discount them by 0.8?)
   // TODO(mpearson): Consider: if the earliest match occurs late in the string,
@@ -591,10 +771,112 @@ float ScoredHistoryMatch::GetTopicalityScore(
   const float final_topicality_score = topicality_score / num_terms;
 
   // Demote the URL if the topicality score is less than threshold.
-  if (final_topicality_score < topicality_threshold_)
+  if (final_topicality_score < topicality_threshold_) {
     return 0.0;
+  }
 
   return final_topicality_score;
+}
+
+void ScoredHistoryMatch::IncrementUrlMatchTermScores(
+    const WordStarts& terms_to_word_starts_offsets,
+    const GURL& url,
+    const WordStarts& url_word_starts,
+    const base::OffsetAdjuster::Adjustments& adjustments,
+    std::vector<int>* term_scores) {
+  auto next_word_starts = url_word_starts.begin();
+  auto end_word_starts = url_word_starts.end();
+
+  const url::Parsed& parsed = url.parsed_for_possibly_invalid_spec();
+  size_t host_pos = parsed.CountCharactersBefore(url::Parsed::HOST, true);
+  size_t path_pos = parsed.CountCharactersBefore(url::Parsed::PATH, true);
+  size_t query_pos = parsed.CountCharactersBefore(url::Parsed::QUERY, true);
+  size_t last_part_of_host_pos =
+      url.possibly_invalid_spec().rfind('.', path_pos);
+
+  // |word_starts| and |url_matches| both contain offsets for the cleaned up
+  // URL used for matching, so we have to follow those adjustments.
+  base::OffsetAdjuster::AdjustOffset(adjustments, &host_pos);
+  base::OffsetAdjuster::AdjustOffset(adjustments, &path_pos);
+  base::OffsetAdjuster::AdjustOffset(adjustments, &query_pos);
+  base::OffsetAdjuster::AdjustOffset(adjustments, &last_part_of_host_pos);
+
+  for (const auto& url_match : url_matches) {
+    // Calculate the offset in the URL string where the meaningful (word) part
+    // of the term starts.  This takes into account times when a term starts
+    // with punctuation such as "/foo".
+    const size_t term_word_offset =
+        url_match.offset + terms_to_word_starts_offsets[url_match.term_num];
+    // Advance next_word_starts until it's >= the position of the term we're
+    // considering (adjusted for where the word begins within the term).
+    while ((next_word_starts != end_word_starts) &&
+           (*next_word_starts < term_word_offset)) {
+      ++next_word_starts;
+    }
+    const bool at_word_boundary = (next_word_starts != end_word_starts) &&
+                                  (*next_word_starts == term_word_offset);
+    if (term_word_offset >= query_pos) {
+      // The match is in the query or ref component.
+      if (term_scores) {
+        (*term_scores)[url_match.term_num] += 5;
+      }
+    } else if (term_word_offset >= path_pos) {
+      // The match is in the path component.
+      if (term_scores) {
+        (*term_scores)[url_match.term_num] += 8;
+      }
+    } else if (term_word_offset >= host_pos) {
+      if (term_scores) {
+        if (term_word_offset < last_part_of_host_pos) {
+          // Either there are no dots in the hostname or this match isn't
+          // the last dotted component.
+          (*term_scores)[url_match.term_num] += at_word_boundary ? 10 : 2;
+        } else {
+          // The match is in the last part of a dotted hostname (usually this
+          // is the top-level domain .com, .net, etc.).
+          if (allow_tld_matches_) {
+            (*term_scores)[url_match.term_num] += at_word_boundary ? 10 : 0;
+          }
+        }
+      }
+    } else {
+      // The match is in the protocol (a.k.a. scheme).
+      // Matches not at a word boundary should have been filtered already.
+      if (allow_scheme_matches_ && term_scores) {
+        (*term_scores)[url_match.term_num] += 10;
+      }
+    }
+  }
+}
+
+void ScoredHistoryMatch::IncrementTitleMatchTermScores(
+    const WordStarts& terms_to_word_starts_offsets,
+    const WordStarts& title_word_starts,
+    std::vector<int>* term_scores) {
+  auto next_word_starts = title_word_starts.begin();
+  auto end_word_starts = title_word_starts.end();
+  size_t word_num = 0;
+  for (const auto& title_match : title_matches) {
+    // Calculate the offset in the title string where the meaningful (word) part
+    // of the term starts.  This takes into account times when a term starts
+    // with punctuation such as "/foo".
+    const size_t term_word_offset =
+        title_match.offset + terms_to_word_starts_offsets[title_match.term_num];
+    // Advance next_word_starts until it's >= the position of the term we're
+    // considering (adjusted for where the word begins within the term).
+    while ((next_word_starts != end_word_starts) &&
+           (*next_word_starts < term_word_offset)) {
+      ++next_word_starts;
+      ++word_num;
+    }
+    if (word_num >= num_title_words_to_allow_) {
+      break;  // only count the first ten words
+    }
+    if (term_scores &&
+        term_scores->size() > static_cast<size_t>(title_match.term_num)) {
+      (*term_scores)[title_match.term_num] += 8;
+    }
+  }
 }
 
 float ScoredHistoryMatch::GetRecencyScore(int last_visit_days_ago) const {
@@ -669,7 +951,8 @@ float ScoredHistoryMatch::GetDocumentSpecificityScore(
 // static
 float ScoredHistoryMatch::GetFinalRelevancyScore(float topicality_score,
                                                  float frequency_score,
-                                                 float specificity_score) {
+                                                 float specificity_score,
+                                                 float domain_score) {
   // |relevance_buckets| gives a mapping from intermediate score to the final
   // relevance score.
   static base::NoDestructor<ScoreMaxRelevances> default_relevance_buckets(
@@ -680,8 +963,11 @@ float ScoredHistoryMatch::GetFinalRelevancyScore(float topicality_score,
   DCHECK(!relevance_buckets->empty());
   DCHECK_EQ(0.0, (*relevance_buckets)[0].first);
 
-  if (topicality_score == 0)
+  if (topicality_score == 0) {
+    DCHECK_EQ(frequency_score, 0);
+    DCHECK_EQ(specificity_score, 0);
     return 0;
+  }
 
   // Compute an intermediate score by multiplying the topicality, specificity,
   // and frequency scores, then map it to the range [0, 1399].  For typical
@@ -706,7 +992,7 @@ float ScoredHistoryMatch::GetFinalRelevancyScore(float topicality_score,
   // The score maxes out at 1399 (i.e., cannot beat a good inlineable result
   // from HistoryURL provider).
   const float intermediate_score =
-      topicality_score * frequency_score * specificity_score;
+      topicality_score * frequency_score * specificity_score * domain_score;
 
   // Find the threshold where intermediate score is greater than bucket.
   size_t i = 1;
@@ -757,4 +1043,33 @@ ScoredHistoryMatch::GetHQPBucketsFromString(const std::string& buckets_str) {
     hqp_buckets.push_back(bucket);
   }
   return hqp_buckets;
+}
+
+int ScoredHistoryMatch::GetDomainRelevancyScore(base::Time now) const {
+  // Domain scores consider only the last visit time as they're intended for
+  // pages the user hasn't yet visited many times. The goal is to score them
+  // highly enough to surface but not so high they constantly displace
+  // traditional suggestions. Otherwise, for inputs matching a highly visited
+  // domain, domain suggestions would overwhelm all other suggestions. Besides,
+  // if scored conservatively, they'll still be boosted by traditional scores
+  // after they're selected.
+
+  // For simplicity, score them linearly: 1000 - 80 / day.
+  // 80 because (1000-200) / (10-0) = 80.
+  constexpr int max_score = 1000;
+  constexpr int min_score = 200;
+  constexpr auto demote_start = base::Days(0);
+  constexpr auto demote_end = base::Days(10);
+
+  auto elapsed = now - url_info.last_visit();
+
+  // If visited more recently than `demote_start`, return `max_score`.
+  if (elapsed <= demote_start)
+    return max_score;
+  // If visited less recently than `demote_end`, return 0 (not `min_score`).
+  if (elapsed >= demote_end)
+    return 0;
+  // Otherwise, linearly interpolate `max_score` and `min_score`.
+  return max_score - (elapsed - demote_start) / (demote_end - demote_start) *
+                         (max_score - min_score);
 }

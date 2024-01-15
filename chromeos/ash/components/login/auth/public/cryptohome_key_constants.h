@@ -13,6 +13,9 @@ COMPONENT_EXPORT(CHROMEOS_ASH_COMPONENTS_LOGIN_AUTH_PUBLIC)
 extern const char kCryptohomeGaiaKeyLabel[];
 
 COMPONENT_EXPORT(CHROMEOS_ASH_COMPONENTS_LOGIN_AUTH_PUBLIC)
+extern const char kCryptohomeLocalPasswordKeyLabel[];
+
+COMPONENT_EXPORT(CHROMEOS_ASH_COMPONENTS_LOGIN_AUTH_PUBLIC)
 extern const char kCryptohomeGaiaKeyLegacyLabelPrefix[];
 
 COMPONENT_EXPORT(CHROMEOS_ASH_COMPONENTS_LOGIN_AUTH_PUBLIC)
@@ -28,10 +31,5 @@ COMPONENT_EXPORT(CHROMEOS_ASH_COMPONENTS_LOGIN_AUTH_PUBLIC)
 extern const char kCryptohomeRecoveryKeyLabel[];
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when the migration is finished.
-namespace chromeos {
-using ::ash::kCryptohomeGaiaKeyLabel;
-}  // namespace chromeos
 
 #endif  // CHROMEOS_ASH_COMPONENTS_LOGIN_AUTH_PUBLIC_CRYPTOHOME_KEY_CONSTANTS_H_

@@ -25,10 +25,7 @@
 #include "net/dns/mock_host_resolver.h"
 #include "net/test/embedded_test_server/embedded_test_server.h"
 #include "third_party/webrtc/modules/desktop_capture/desktop_capture_types.h"
-
-#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS_ASH)
-#include "ui/ozone/buildflags.h"
-#endif  // BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS_ASH)
+#include "ui/base/ozone_buildflags.h"
 
 namespace extensions {
 
@@ -77,18 +74,10 @@ class DesktopCaptureApiTest : public ExtensionApiTest {
 
 }  // namespace
 
-// The build flag OZONE_PLATFORM_WAYLAND is only available on
-// Linux or ChromeOS, so this simplifies the next set of ifdefs.
-#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS_ASH)
-#if BUILDFLAG(OZONE_PLATFORM_WAYLAND)
-#define OZONE_PLATFORM_WAYLAND
-#endif  // BUILDFLAG(OZONE_PLATFORM_WAYLAND)
-#endif  // BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS_ASH)
-
 // TODO(https://crbug.com/1271673): Crashes on Lacros.
 // TODO(https://crbug.com/1271680): Fails on the linux-wayland-rel bot.
 // TODO(https://crbug.com/1271711): Fails on Mac.
-#if BUILDFLAG(IS_MAC) || defined(OZONE_PLATFORM_WAYLAND) || \
+#if BUILDFLAG(IS_MAC) || BUILDFLAG(IS_OZONE_WAYLAND) || \
     BUILDFLAG(IS_CHROMEOS_LACROS)
 #define MAYBE_ChooseDesktopMedia DISABLED_ChooseDesktopMedia
 #else
@@ -179,7 +168,7 @@ IN_PROC_BROWSER_TEST_F(DesktopCaptureApiTest, MAYBE_ChooseDesktopMedia) {
 // TODO(https://crbug.com/1271673): Crashes on Lacros.
 // TODO(https://crbug.com/1271680): Fails on the linux-wayland-rel bot.
 // TODO(https://crbug.com/1271711): Fails on Mac.
-#if BUILDFLAG(IS_MAC) || defined(OZONE_PLATFORM_WAYLAND) || \
+#if BUILDFLAG(IS_MAC) || BUILDFLAG(IS_OZONE_WAYLAND) || \
     BUILDFLAG(IS_CHROMEOS_LACROS)
 #define MAYBE_Delegation DISABLED_Delegation
 #else
@@ -219,24 +208,16 @@ IN_PROC_BROWSER_TEST_F(DesktopCaptureApiTest, MAYBE_Delegation) {
   };
   picker_factory_.SetTestFlags(test_flags, std::size(test_flags));
 
-  bool result;
-
   content::WebContents* web_contents =
       browser()->tab_strip_model()->GetActiveWebContents();
 
-  ASSERT_TRUE(content::ExecuteScriptAndExtractBool(
-      web_contents, "getStream()", &result));
-  EXPECT_TRUE(result);
+  EXPECT_EQ(true, content::EvalJs(web_contents, "getStream()"));
 
-  ASSERT_TRUE(content::ExecuteScriptAndExtractBool(
-      web_contents, "getStreamWithInvalidId()", &result));
-  EXPECT_TRUE(result);
+  EXPECT_EQ(true, content::EvalJs(web_contents, "getStreamWithInvalidId()"));
 
   // Verify that the picker is closed once the tab is closed.
   content::WebContentsDestroyedWatcher destroyed_watcher(web_contents);
-  ASSERT_TRUE(content::ExecuteScriptAndExtractBool(
-      web_contents, "openPickerDialogAndReturn()", &result));
-  EXPECT_TRUE(result);
+  EXPECT_EQ(true, content::EvalJs(web_contents, "openPickerDialogAndReturn()"));
   EXPECT_TRUE(test_flags[2].picker_created);
   EXPECT_FALSE(test_flags[2].picker_deleted);
 

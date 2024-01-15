@@ -52,9 +52,14 @@ class MODULES_EXPORT AXNodeObject : public AXObject {
 
   ~AXNodeObject() override;
 
-  static absl::optional<String> GetCSSAltText(const Node*);
+  static std::optional<String> GetCSSAltText(const Element*);
 
   void Trace(Visitor*) const override;
+
+  // Call to force-load inline text boxes for the current subtree.
+  void LoadInlineTextBoxes() override;
+  // Should inline text boxes be considered when adding chldren to this node.
+  bool ShouldLoadInlineTextBoxes() const override;
 
  protected:
 #if DCHECK_IS_ON()
@@ -74,6 +79,7 @@ class MODULES_EXPORT AXNodeObject : public AXObject {
   ax::mojom::blink::Role DetermineTableSectionRole() const;
   ax::mojom::blink::Role DetermineTableCellRole() const;
   ax::mojom::blink::Role DetermineTableRowRole() const;
+  bool IsDataTable() const override;
   ax::mojom::blink::Role DetermineAccessibilityRole() override;
   ax::mojom::blink::Role NativeRoleIgnoringAria() const override;
   void AlterSliderOrSpinButtonValue(bool increase);
@@ -111,13 +117,11 @@ class MODULES_EXPORT AXNodeObject : public AXObject {
   bool IsSpinButton() const override;
   bool IsNativeSlider() const override;
   bool IsNativeSpinButton() const override;
-  bool IsChildTreeOwner() const override;
+  bool IsEmbeddingElement() const override;
 
   // Check object state.
   bool IsClickable() const final;
   bool IsFocused() const override;
-  // aria-grabbed is deprecated in WAI-ARIA 1.1.
-  AccessibilityGrabbedState IsGrabbed() const override;
   AccessibilityExpanded IsExpanded() const override;
   AccessibilitySelectedState IsSelected() const override;
   bool IsSelectedFromFocusSupported() const override;
@@ -141,9 +145,14 @@ class MODULES_EXPORT AXNodeObject : public AXObject {
   unsigned HierarchicalLevel() const final;
   void SerializeMarkerAttributes(ui::AXNodeData* node_data) const override;
   AXObject* InPageLinkTarget() const override;
+  const AtomicString& EffectiveTarget() const override;
   AccessibilityOrientation Orientation() const override;
 
   AXObject* GetChildFigcaption() const override;
+  bool IsDescendantOfLandmarkDisallowedElement() const override;
+
+  // Is a redundant label of a radio button or checkbox.
+  static bool IsRedundantLabel(HTMLLabelElement* label);
 
   // Used to compute kRadioGroupIds, which is only used on Mac.
   // TODO(accessibility) Consider computing on browser side and removing here.
@@ -186,11 +195,11 @@ class MODULES_EXPORT AXNodeObject : public AXObject {
   ax::mojom::blink::Role AriaRoleAttribute() const final;
   void AriaDescribedbyElements(AXObjectVector&) const override;
   void AriaOwnsElements(AXObjectVector&) const override;
-  bool SupportsARIADragging() const override;
   void Dropeffects(
       Vector<ax::mojom::blink::Dropeffect>& dropeffects) const override;
 
   ax::mojom::blink::HasPopup HasPopup() const override;
+  ax::mojom::blink::IsPopup IsPopup() const override;
   bool IsEditableRoot() const override;
   bool HasContentEditableAttributeSet() const override;
 
@@ -255,19 +264,26 @@ class MODULES_EXPORT AXNodeObject : public AXObject {
   const AtomicString& GetAttribute(const QualifiedName&) const override;
 
   // Modify or take an action on an object.
+  bool OnNativeBlurAction() final;
   bool OnNativeFocusAction() final;
   bool OnNativeIncrementAction() final;
   bool OnNativeDecrementAction() final;
   bool OnNativeSetSequentialFocusNavigationStartingPointAction() final;
 
   // Notifications that this object may have changed.
-  void ChildrenChangedWithCleanLayout() override;
   void HandleAriaExpandedChanged() override;
   void HandleActiveDescendantChanged() override;
 
-  // The aria-errormessage object or native object from a validationMessage
-  // alert.
-  AXObject* ErrorMessage() const override;
+  // Gets a list of nodes that form an error message for this node, if it
+  // exists. Error messages from ARIA will always override native error
+  // messages.
+  AXObjectVector ErrorMessage() const override;
+  // Gets a list of nodes specified by `aria-errormessage` that form an error
+  // message for this node, if any exist.
+  AXObjectVector ErrorMessageFromAria() const override;
+  // Gets a list of nodes created from HTML validation that form an error
+  // message for this node, if any exist.
+  AXObjectVector ErrorMessageFromHTML() const override;
 
   // Position in set and Size of set
   int PosInSet() const override;
@@ -277,9 +293,8 @@ class MODULES_EXPORT AXNodeObject : public AXObject {
   void ComputeAriaOwnsChildren(
       HeapVector<Member<AXObject>>& owned_children) const;
 
-  // Inline text boxes.
-  void LoadInlineTextBoxes() override;
-  void ForceAddInlineTextBoxChildren() override;
+  // Helper method for LoadInlineTextBoxes().
+  void LoadInlineTextBoxesHelper() override;
 
   //
   // Layout object specific methods.
@@ -295,12 +310,33 @@ class MODULES_EXPORT AXNodeObject : public AXObject {
                                             const QualifiedName&) const;
 
   bool IsNativeCheckboxInMixedState() const;
+
+  // This function returns the text of a tooltip associated with the element.
+  // Although there are two ways of doing this, it is unlikely that an author
+  // would provide 2 overlapping types of tooltips. Order of precedence:
+  // 1. The title attribute is currently preferred if present.
+  // 2. The contents of a plain hint, which has no interesting semantic or
+  // interactive content, is used next.
+  // TODO(accessibility): Follow-up with standards discussion to determine
+  // whether a different order of precedence makes sense.
+  String TextAlternativeFromTooltip(
+      ax::mojom::blink::NameFrom& name_from,
+      NameSources* name_sources,
+      bool* found_text_alternative,
+      String* text_alternative,
+      AXRelatedObjectVector* related_objects) const;
+
+  String TextAlternativeFromTitleAttribute(
+      const AtomicString& title,
+      ax::mojom::blink::NameFrom& name_from,
+      NameSources* name_sources,
+      bool* found_text_alternative) const;
   String NativeTextAlternative(AXObjectSet& visited,
                                ax::mojom::blink::NameFrom&,
                                AXRelatedObjectVector*,
                                NameSources*,
                                bool* found_text_alternative) const;
-  bool IsDescendantOfElementType(HashSet<QualifiedName>& tag_names) const;
+  String MaybeAppendFileDescriptionToName(const String& name) const;
   String PlaceholderFromNativeAttribute() const;
   String GetValueContributionToName(AXObjectSet& visited) const;
   bool UseNameFromSelectedOption() const;
@@ -308,11 +344,9 @@ class MODULES_EXPORT AXNodeObject : public AXObject {
 
   void AddChildrenImpl();
   void AddNodeChildren();
-  void AddLayoutChildren();
+  void AddPseudoElementChildrenFromLayoutTree();
   bool CanAddLayoutChild(LayoutObject& child);
-  // Add inline textbox children, if either force == true or
-  // AXObjectCache().InlineTextBoxAccessibilityEnabled().
-  void AddInlineTextBoxChildren(bool force = false);
+  void AddInlineTextBoxChildren();
   void AddImageMapChildren();
   void AddPopupChildren();
   bool HasValidHTMLTableStructureAndLayout() const;
@@ -328,7 +362,10 @@ class MODULES_EXPORT AXNodeObject : public AXObject {
   ax::mojom::blink::Dropeffect ParseDropeffect(String& dropeffect) const;
 
   static bool IsNameFromLabelElement(HTMLElement* control);
-  static bool IsRedundantLabel(HTMLLabelElement* label);
+
+#if defined(REDUCE_AX_INLINE_TEXTBOXES)
+  bool always_load_inline_text_boxes_ = false;
+#endif
 
   Member<Node> node_;
 };

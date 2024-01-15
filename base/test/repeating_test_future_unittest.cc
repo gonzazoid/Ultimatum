@@ -4,10 +4,10 @@
 
 #include "base/test/repeating_test_future.h"
 
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/bind.h"
 #include "base/test/gtest_util.h"
 #include "base/test/task_environment.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "testing/gtest/include/gtest/gtest-spi.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -18,7 +18,7 @@ namespace {
 struct MoveOnlyValue {
  public:
   MoveOnlyValue() = default;
-  MoveOnlyValue(std::string data) : data(std::move(data)) {}
+  explicit MoveOnlyValue(std::string data) : data(std::move(data)) {}
   MoveOnlyValue(const MoveOnlyValue&) = delete;
   auto& operator=(const MoveOnlyValue&) = delete;
   MoveOnlyValue(MoveOnlyValue&&) = default;
@@ -38,7 +38,8 @@ class RepeatingTestFutureTest : public ::testing::Test {
   ~RepeatingTestFutureTest() override = default;
 
   void RunLater(OnceClosure callable) {
-    ThreadTaskRunnerHandle::Get()->PostTask(FROM_HERE, std::move(callable));
+    SingleThreadTaskRunner::GetCurrentDefault()->PostTask(FROM_HERE,
+                                                          std::move(callable));
   }
 
  private:
@@ -79,7 +80,7 @@ TEST_F(RepeatingTestFutureTest,
   EXPECT_FALSE(future.IsEmpty());
 }
 
-TEST_F(RepeatingTestFutureTest, ShouldBeAbleToTakeElementsFiFo) {
+TEST_F(RepeatingTestFutureTest, ShouldTakeElementsFiFo) {
   RepeatingTestFuture<std::string> future;
 
   future.AddValue("first value");
@@ -122,13 +123,13 @@ TEST_F(RepeatingTestFutureTest,
 TEST_F(RepeatingTestFutureTest, WaitShouldReturnFalseIfTimeoutHappens) {
   test::ScopedRunLoopTimeout timeout(FROM_HERE, Milliseconds(1));
 
-  // |ScopedRunLoopTimeout| will automatically fail the test when a timeout
-  // happens, so we use EXPECT_FATAL_FAILURE to handle this failure.
-  // EXPECT_FATAL_FAILURE only works on static objects.
+  // `ScopedRunLoopTimeout` will automatically fail the test when a timeout
+  // happens, so we use EXPECT_NONFATAL_FAILURE to handle this failure.
+  // EXPECT_NONFATAL_FAILURE only works on static objects.
   static bool success;
   static RepeatingTestFuture<std::string> future;
 
-  EXPECT_FATAL_FAILURE({ success = future.Wait(); }, "timed out");
+  EXPECT_NONFATAL_FAILURE({ success = future.Wait(); }, "timed out");
 
   EXPECT_FALSE(success);
 }

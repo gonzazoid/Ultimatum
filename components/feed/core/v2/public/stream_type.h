@@ -15,28 +15,47 @@ namespace feed {
 // Note: currently there are two options, but this leaves room for more
 // parameters.
 class StreamType {
-  // TODO(crbug.com/1369784) rename to StreamID.
  public:
   StreamType() = default;
   virtual ~StreamType() = default;
-  explicit StreamType(StreamKind k, std::string s = std::string())
-      : kind_(k), web_feed_id_(std::move(s)) {}
+  explicit StreamType(
+      StreamKind k,
+      std::string s = std::string(),
+      // entry_point should be kOther unless StreamKind is SingleWebFeed.
+      SingleWebFeedEntryPoint entry_point = SingleWebFeedEntryPoint::kOther)
+      : kind_(k), web_feed_id_(std::move(s)) {
+    single_web_feed_entry_point_menu_ =
+        entry_point == SingleWebFeedEntryPoint::kMenu;
+  }
   bool operator<(const StreamType& rhs) const {
     if (kind_ == rhs.kind_) {
-      if (kind_ != StreamKind::kChannel)
+      if (kind_ != StreamKind::kSingleWebFeed)
         return false;
+      if (single_web_feed_entry_point_menu_ !=
+          rhs.single_web_feed_entry_point_menu_) {
+        return single_web_feed_entry_point_menu_;
+      }
       return web_feed_id_.compare(rhs.web_feed_id_) < 0;
     }
     return kind_ < rhs.kind_;
   }
   bool operator==(const StreamType& rhs) const {
-    return (kind_ == rhs.kind_) && (web_feed_id_ == rhs.web_feed_id_);
+    return (kind_ == rhs.kind_) && (web_feed_id_ == rhs.web_feed_id_) &&
+           (single_web_feed_entry_point_menu_ ==
+            rhs.single_web_feed_entry_point_menu_);
+  }
+  bool IsForSupervisedUser() const {
+    return kind_ == StreamKind::kSupervisedUser;
   }
   bool IsForYou() const { return kind_ == StreamKind::kForYou; }
   bool IsWebFeed() const { return kind_ == StreamKind::kFollowing; }
-  bool IsChannelFeed() const { return kind_ == StreamKind::kChannel; }
+  bool IsSingleWebFeed() const { return kind_ == StreamKind::kSingleWebFeed; }
+  bool IsSingleWebFeedEntryMenu() const {
+    return kind_ == StreamKind::kSingleWebFeed &&
+           single_web_feed_entry_point_menu_;
+  }
   bool IsValid() const { return kind_ != StreamKind::kUnknown; }
-  StreamKind GetType() const { return kind_; }
+  StreamKind GetKind() const { return kind_; }
   std::string GetWebFeedId() const { return web_feed_id_; }
 
   // Returns a human-readable value, for debugging/DCHECK prints.
@@ -50,8 +69,13 @@ class StreamType {
 
  private:
   StreamKind kind_ = StreamKind::kUnknown;
-  // Identifies the feed ID in the case that the feed is a ChannelFeed.
+  // Identifies the feed ID in the case that the feed is a SingleWebFeed.
   std::string web_feed_id_;
+  // single_web_feed_entry_point_menu_ is needed to differentiate the stored
+  // feeds which are keyed off of streamTypes. THe feeds where
+  // single_web_feed_entry_point_menu_ have a variety of privacy considerations
+  // that need to not collide with other potentially identical cached feeds.
+  bool single_web_feed_entry_point_menu_ = false;
 };
 
 inline std::ostream& operator<<(std::ostream& os,

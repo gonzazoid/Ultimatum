@@ -4,10 +4,15 @@
 
 #include "chrome/browser/ui/views/global_media_controls/media_notification_device_entry_ui.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_forward.h"
 #include "base/strings/utf_string_conversions.h"
+#include "chrome/app/vector_icons/vector_icons.h"
+#include "chrome/browser/ui/views/media_router/cast_dialog_helper.h"
+#include "components/global_media_controls/public/mojom/device_service.mojom.h"
 #include "components/vector_icons/vector_icons.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
+#include "ui/base/models/image_model.h"
 #include "ui/gfx/paint_vector_icon.h"
 #include "ui/views/animation/ink_drop.h"
 #include "ui/views/background.h"
@@ -27,8 +32,8 @@ void ChangeEntryColor(views::ImageView* image_view,
                       SkColor foreground_color,
                       SkColor background_color) {
   if (image_view) {
-    image_view->SetImage(
-        gfx::CreateVectorIcon(*icon, kDeviceIconSize, foreground_color));
+    image_view->SetImage(ui::ImageModel::FromVectorIcon(*icon, foreground_color,
+                                                        kDeviceIconSize));
   }
 
   title_view->SetDisplayedOnBackgroundColor(background_color);
@@ -48,12 +53,54 @@ void ChangeEntryColor(views::ImageView* image_view,
   }
 }
 
-std::unique_ptr<views::ImageView> GetAudioDeviceIcon() {
+const gfx::VectorIcon* GetVectorIcon(
+    global_media_controls::mojom::IconType icon) {
+  switch (icon) {
+    case global_media_controls::mojom::IconType::kInfo:
+      return &vector_icons::kInfoOutlineIcon;
+    case global_media_controls::mojom::IconType::kSpeaker:
+      return &kSpeakerIcon;
+    case global_media_controls::mojom::IconType::kSpeakerGroup:
+      return &kSpeakerGroupIcon;
+    case global_media_controls::mojom::IconType::kInput:
+      return &kInputIcon;
+    case global_media_controls::mojom::IconType::kTv:
+      return &kTvIcon;
+    // In these cases the icon is a placeholder and doesn't actually get shown.
+    case global_media_controls::mojom::IconType::kThrobber:
+    case global_media_controls::mojom::IconType::kUnknown:
+      return &kTvIcon;
+  }
+}
+
+// foreground_color_id is only set for CastDeviceEntryViewAsh.
+std::unique_ptr<views::ImageView> CreateIconView(
+    const gfx::VectorIcon* icon,
+    std::optional<ui::ColorId> foreground_color_id = std::nullopt) {
   auto icon_view = std::make_unique<views::ImageView>();
-  icon_view->SetImage(gfx::CreateVectorIcon(
-      vector_icons::kHeadsetIcon, kDeviceIconSize, gfx::kPlaceholderColor));
+  if (foreground_color_id.has_value()) {
+    icon_view->SetImage(ui::ImageModel::FromVectorIcon(
+        *icon, foreground_color_id.value(), kDeviceIconSize));
+  } else {
+    icon_view->SetImage(ui::ImageModel::FromVectorIcon(
+        *icon, gfx::kPlaceholderColor, kDeviceIconSize));
+  }
   icon_view->SetBorder(views::CreateEmptyBorder(kDeviceIconBorder));
   return icon_view;
+}
+
+// foreground_color_id is only set for CastDeviceEntryViewAsh.
+std::unique_ptr<views::View> CreateIconView(
+    global_media_controls::mojom::IconType icon,
+    std::optional<ui::ColorId> foreground_color_id = std::nullopt) {
+  if (icon == global_media_controls::mojom::IconType::kThrobber) {
+    return media_router::CreateThrobber();
+  }
+  return CreateIconView(GetVectorIcon(icon), foreground_color_id);
+}
+
+std::unique_ptr<views::ImageView> GetAudioDeviceIcon() {
+  return CreateIconView(&vector_icons::kHeadsetIcon);
 }
 
 }  // namespace
@@ -63,6 +110,9 @@ DeviceEntryUI::DeviceEntryUI(const std::string& raw_device_id,
                              const gfx::VectorIcon* icon,
                              const std::string& subtext)
     : raw_device_id_(raw_device_id), device_name_(device_name), icon_(icon) {}
+
+///////////////////////////////////////////////////////////////////////////////
+// AudioDeviceEntryView:
 
 AudioDeviceEntryView::AudioDeviceEntryView(PressedCallback callback,
                                            SkColor foreground_color,
@@ -79,8 +129,6 @@ AudioDeviceEntryView::AudioDeviceEntryView(PressedCallback callback,
   SetFocusBehavior(views::View::FocusBehavior::ALWAYS);
   views::InkDrop::Get(this)->SetMode(views::InkDropHost::InkDropMode::ON);
   views::InkDrop::Get(this)->SetBaseColor(foreground_color);
-  // Bypass color-callback setup in HoverButton.
-  views::InkDrop::Get(this)->SetBaseColorCallback({});
   SetHasInkDropActionOnClick(true);
   SetPreferredSize(kDeviceEntryViewSize);
 }
@@ -122,73 +170,90 @@ DeviceEntryUIType AudioDeviceEntryView::GetType() const {
   return DeviceEntryUIType::kAudio;
 }
 
+///////////////////////////////////////////////////////////////////////////////
+// CastDeviceEntryView:
+
 CastDeviceEntryView::CastDeviceEntryView(
-    base::RepeatingCallback<void(CastDeviceEntryView*)> callback,
+    base::RepeatingClosure callback,
     SkColor foreground_color,
     SkColor background_color,
-    const media_router::UIMediaSink& sink)
-    : DeviceEntryUI(sink.id,
-                    base::UTF16ToUTF8(sink.friendly_name),
-                    CastDialogSinkButton::GetVectorIcon(sink)),
-      CastDialogSinkButton(
-          base::BindRepeating(std::move(callback), base::Unretained(this)),
-          sink) {
-  ChangeCastEntryColor(sink, foreground_color, background_color);
+    const global_media_controls::mojom::DevicePtr& device)
+    : DeviceEntryUI(device->id, device->name, GetVectorIcon(device->icon)),
+      HoverButton(std::move(callback),
+                  CreateIconView(device->icon),
+                  base::UTF8ToUTF16(device->name),
+                  base::UTF8ToUTF16(device->status_text)),
+      device_(device->Clone()) {
+  ChangeCastEntryColor(foreground_color, background_color);
 
   SetFocusBehavior(views::View::FocusBehavior::ALWAYS);
   views::InkDrop::Get(this)->SetMode(views::InkDropHost::InkDropMode::ON);
   views::InkDrop::Get(this)->SetBaseColor(foreground_color);
   SetHasInkDropActionOnClick(true);
-  // Bypass color-callback setup in HoverButton.
-  views::InkDrop::Get(this)->SetBaseColorCallback({});
   SetPreferredSize(kDeviceEntryViewSize);
 }
+
+CastDeviceEntryView::~CastDeviceEntryView() = default;
 
 void CastDeviceEntryView::OnColorsChanged(SkColor foreground_color,
                                           SkColor background_color) {
   views::InkDrop::Get(this)->SetBaseColor(foreground_color);
-  ChangeCastEntryColor(sink(), foreground_color, background_color);
+  ChangeCastEntryColor(foreground_color, background_color);
 }
 
 DeviceEntryUIType CastDeviceEntryView::GetType() const {
   return DeviceEntryUIType::kCast;
 }
 
-void CastDeviceEntryView::OnFocus() {
-  // CastDialogSinkButton::OnFocus() changes the button's status text to "Stop
-  // Casting" if the sink is connected. This status text may cause confusion to
-  // users when the button is shown in the Zenith dialog, where clicking on the
-  // sink button will automatically stop the sink's connected route and start a
-  // new one.
-  HoverButton::OnFocus();
-}
-
-void CastDeviceEntryView::ChangeCastEntryColor(
-    const media_router::UIMediaSink& sink,
-    SkColor foreground_color,
-    SkColor background_color) {
-  switch (sink.state) {
-    // If the sink state is CONNECTING or DISCONNECTING, a throbber icon will
-    // show up. The icon's color remains unchanged.
-    case media_router::UIMediaSinkState::CONNECTING:
-    case media_router::UIMediaSinkState::DISCONNECTING:
-      ChangeEntryColor(nullptr, title(), subtitle(), nullptr, foreground_color,
-                       background_color);
-      break;
-    case media_router::UIMediaSinkState::CONNECTED:
-    case media_router::UIMediaSinkState::AVAILABLE:
-    case media_router::UIMediaSinkState::UNAVAILABLE:
-      ChangeEntryColor(static_cast<views::ImageView*>(icon_view()), title(),
-                       subtitle(), icon_, foreground_color, background_color);
-      break;
-    default:
-      NOTREACHED();
+void CastDeviceEntryView::ChangeCastEntryColor(SkColor foreground_color,
+                                               SkColor background_color) {
+  if (device_->icon == global_media_controls::mojom::IconType::kThrobber) {
+    // Do not pass in `icon_view()` here as we want to keep the throbber view
+    // with its color unchanged.
+    ChangeEntryColor(nullptr, title(), subtitle(), nullptr, foreground_color,
+                     background_color);
+  } else {
+    ChangeEntryColor(static_cast<views::ImageView*>(icon_view()), title(),
+                     subtitle(), icon_, foreground_color, background_color);
   }
 }
 
-BEGIN_METADATA(AudioDeviceEntryView, HoverButton)
+std::string CastDeviceEntryView::GetStatusTextForTest() const {
+  return device_->status_text;
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// CastDeviceEntryViewAsh:
+
+CastDeviceEntryViewAsh::CastDeviceEntryViewAsh(
+    PressedCallback callback,
+    ui::ColorId foreground_color_id,
+    ui::ColorId background_color_id,
+    const global_media_controls::mojom::DevicePtr& device)
+    : DeviceEntryUI(device->id, device->name, GetVectorIcon(device->icon)),
+      HoverButton(std::move(callback),
+                  CreateIconView(device->icon, foreground_color_id),
+                  base::UTF8ToUTF16(device->name)),
+      device_(device->Clone()) {
+  SetFocusBehavior(views::View::FocusBehavior::ALWAYS);
+  views::InkDrop::Get(this)->SetMode(views::InkDropHost::InkDropMode::ON);
+  views::InkDrop::Get(this)->SetBaseColorId(background_color_id);
+  SetHasInkDropActionOnClick(true);
+  SetPreferredSize(kDeviceEntryViewSize);
+}
+
+CastDeviceEntryViewAsh::~CastDeviceEntryViewAsh() = default;
+
+DeviceEntryUIType CastDeviceEntryViewAsh::GetType() const {
+  return DeviceEntryUIType::kCast;
+}
+
+BEGIN_METADATA(AudioDeviceEntryView)
 ADD_PROPERTY_METADATA(bool, Highlighted)
 END_METADATA
 
-BEGIN_METADATA(CastDeviceEntryView, media_router::CastDialogSinkButton)
+BEGIN_METADATA(CastDeviceEntryView)
+END_METADATA
+
+BEGIN_METADATA(CastDeviceEntryViewAsh)
 END_METADATA

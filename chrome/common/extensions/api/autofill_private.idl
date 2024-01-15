@@ -5,18 +5,122 @@
 // Use the <code>chrome.autofillPrivate</code> API to add, remove, or update
 // autofill data from the settings UI.
 namespace autofillPrivate {
-  // Fields used as part of an address.
-  enum AddressField {
-    HONORIFIC, // Honorific fields are not expected from getAddressComponents.
-    FULL_NAME,
+  // Subset of properties from the user account (signin component, AccountInfo).
+  dictionary AccountInfo {
+    DOMString email;
+    boolean isSyncEnabledForAutofillProfiles;
+    boolean isEligibleForAddressAccountStorage;
+  };
+
+  // A copy of FieldType from
+  // chrome/common/extensions/api/autofill_private.idl
+  enum FieldType {
+    NO_SERVER_DATA,
+    UNKNOWN_TYPE,
+    EMPTY_TYPE,
+    NAME_FIRST,
+    NAME_MIDDLE,
+    NAME_LAST,
+    NAME_MIDDLE_INITIAL,
+    NAME_FULL,
+    NAME_SUFFIX,
+    EMAIL_ADDRESS,
+    PHONE_HOME_NUMBER,
+    PHONE_HOME_CITY_CODE,
+    PHONE_HOME_COUNTRY_CODE,
+    PHONE_HOME_CITY_AND_NUMBER,
+    PHONE_HOME_WHOLE_NUMBER,
+    ADDRESS_HOME_LINE1,
+    ADDRESS_HOME_LINE2,
+    ADDRESS_HOME_APT_NUM,
+    ADDRESS_HOME_CITY,
+    ADDRESS_HOME_STATE,
+    ADDRESS_HOME_ZIP,
+    ADDRESS_HOME_COUNTRY,
+    CREDIT_CARD_NAME_FULL,
+    CREDIT_CARD_NUMBER,
+    CREDIT_CARD_EXP_MONTH,
+    CREDIT_CARD_EXP_2_DIGIT_YEAR,
+    CREDIT_CARD_EXP_4_DIGIT_YEAR,
+    CREDIT_CARD_EXP_DATE_2_DIGIT_YEAR,
+    CREDIT_CARD_EXP_DATE_4_DIGIT_YEAR,
+    CREDIT_CARD_TYPE,
+    CREDIT_CARD_VERIFICATION_CODE,
     COMPANY_NAME,
-    ADDRESS_LINES,
-    ADDRESS_LEVEL_1,
-    ADDRESS_LEVEL_2,
-    ADDRESS_LEVEL_3,
-    POSTAL_CODE,
-    SORTING_CODE,
-    COUNTRY_CODE
+    FIELD_WITH_DEFAULT_VALUE,
+    MERCHANT_EMAIL_SIGNUP,
+    MERCHANT_PROMO_CODE,
+    PASSWORD,
+    ACCOUNT_CREATION_PASSWORD,
+    ADDRESS_HOME_STREET_ADDRESS,
+    ADDRESS_HOME_SORTING_CODE,
+    ADDRESS_HOME_DEPENDENT_LOCALITY,
+    ADDRESS_HOME_LINE3,
+    NOT_ACCOUNT_CREATION_PASSWORD,
+    USERNAME,
+    USERNAME_AND_EMAIL_ADDRESS,
+    NEW_PASSWORD,
+    PROBABLY_NEW_PASSWORD,
+    NOT_NEW_PASSWORD,
+    CREDIT_CARD_NAME_FIRST,
+    CREDIT_CARD_NAME_LAST,
+    PHONE_HOME_EXTENSION,
+    CONFIRMATION_PASSWORD,
+    AMBIGUOUS_TYPE,
+    SEARCH_TERM,
+    PRICE,
+    NOT_PASSWORD,
+    SINGLE_USERNAME,
+    NOT_USERNAME,
+    UPI_VPA,
+    ADDRESS_HOME_STREET_NAME,
+    ADDRESS_HOME_HOUSE_NUMBER,
+    ADDRESS_HOME_SUBPREMISE,
+    ADDRESS_HOME_OTHER_SUBUNIT,
+    NAME_LAST_FIRST,
+    NAME_LAST_CONJUNCTION,
+    NAME_LAST_SECOND,
+    NAME_HONORIFIC_PREFIX,
+    ADDRESS_HOME_ADDRESS,
+    ADDRESS_HOME_ADDRESS_WITH_NAME,
+    ADDRESS_HOME_FLOOR,
+    NAME_FULL_WITH_HONORIFIC_PREFIX,
+    BIRTHDATE_DAY,
+    BIRTHDATE_MONTH,
+    BIRTHDATE_4_DIGIT_YEAR,
+    PHONE_HOME_CITY_CODE_WITH_TRUNK_PREFIX,
+    PHONE_HOME_CITY_AND_NUMBER_WITHOUT_TRUNK_PREFIX,
+    PHONE_HOME_NUMBER_PREFIX,
+    PHONE_HOME_NUMBER_SUFFIX,
+    IBAN_VALUE,
+    CREDIT_CARD_STANDALONE_VERIFICATION_CODE,
+    NUMERIC_QUANTITY,
+    ONE_TIME_CODE,
+    DELIVERY_INSTRUCTIONS,
+    ADDRESS_HOME_OVERFLOW,
+    ADDRESS_HOME_LANDMARK,
+    ADDRESS_HOME_OVERFLOW_AND_LANDMARK,
+    ADDRESS_HOME_ADMIN_LEVEL2,
+    ADDRESS_HOME_STREET_LOCATION,
+    ADDRESS_HOME_BETWEEN_STREETS,
+    ADDRESS_HOME_BETWEEN_STREETS_OR_LANDMARK,
+    ADDRESS_HOME_BETWEEN_STREETS_1,
+    ADDRESS_HOME_BETWEEN_STREETS_2,
+    SINGLE_USERNAME_FORGOT_PASSWORD,
+    ADDRESS_HOME_APT,
+    ADDRESS_HOME_APT_TYPE,
+    SINGLE_USERNAME_WITH_INTERMEDIATE_VALUES,
+    MAX_VALID_FIELD_TYPE
+  };
+
+  // The address source origin. Describes where the address is stored.
+  enum AddressSource {
+    // The address is stored in the Chrome infrastructure (locally and
+    // possibly synced between devices).
+    LOCAL_OR_SYNCABLE,
+    // The address is stored in a third party service that is tied
+    // to user's account.
+    ACCOUNT
   };
 
   // Metadata about an autofill entry (address or credit card) which is used to
@@ -31,6 +135,9 @@ namespace autofillPrivate {
     // in the UI; an undefined value means that this entry has just been created
     // on the client and has not yet been given a summary.
     DOMString? summarySublabel;
+
+    // For addresses. Describes where the address is stored.
+    AddressSource? source;
 
     // For credit cards, whether the entry is locally owned by Chrome (as opposed to
     // being synced down from the server). Non-local entries may not be editable.
@@ -52,57 +159,22 @@ namespace autofillPrivate {
     boolean? isVirtualCardEnrolled;
   };
 
+  // Represents single entry of the autofill profile, containing field type and
+  // the corresponding field value.
+  dictionary AddressField {
+    FieldType type;
+    DOMString value;
+  };
+
   // An address entry which can be saved in the autofill section of the
   // settings UI.
   dictionary AddressEntry {
     // Globally unique identifier for this entry.
     DOMString? guid;
 
-    DOMString[]? fullNames;
-
-    // A honorific title added to the name. E.g. "Mr.", "Dr.", "Her Royal
-    // Majesty".
-    DOMString? honorific;
-
-    DOMString? companyName;
-
-    // Street address (multiple lines, newlines preserved).
-    DOMString? addressLines;
-
-    // The broadest administrative level in the address, i.e. the province
-    // within which the locality is found; for example, in the US, this would be
-    // the state; in Switzerland it would be the canton; in the UK, the post
-    // town.
-    DOMString? addressLevel1;
-
-    // The second administrative level, in addresses with two or more
-    // administrative levels; in the countries with two administrative levels,
-    // this would typically be the city, town, village, or other locality within
-    // which the relevant street address is found.
-    DOMString? addressLevel2;
-
-    // The third administrative level, in addresses with three or more
-    // administrative levels.
-    DOMString? addressLevel3;
-
-    // Postal code, post code, ZIP code, CEDEX code (if CEDEX, append "CEDEX",
-    // and the arrondissement, if relevant, to the address-level2 field).
-    DOMString? postalCode;
-
-    // A sorting code is similar to a postal code. However, whereas a postal
-    // code normally refers to a single geographical location, a sorting code
-    // often does not. Instead, a sorting code is assigned to an organization,
-    // which might be geographically distributed. The most prominent example of
-    // a sorting code system is CEDEX in France.
-    DOMString? sortingCode;
-
-    // A two-character string representing the address' country. See
-    // autofill_country.cc for a list of valid codes.
-    DOMString? countryCode;
-
-    DOMString[]? phoneNumbers;
-
-    DOMString[]? emailAddresses;
+    // Fields have to be stored in the array with every field style stored only
+    // once.
+    AddressField[] fields;
 
     DOMString? languageCode;
 
@@ -122,13 +194,16 @@ namespace autofillPrivate {
   // different components to their addresses.
   dictionary AddressComponent {
     // The field type.
-    AddressField field;
+    FieldType field;
 
     // The name of the field.
     DOMString fieldName;
 
     // A hint for the UI regarding whether the input is likely to be long.
     boolean isLongField;
+
+    // Whether this component is required or not.
+    boolean isRequired;
 
     // A placeholder for the text field to be used when the user has not yet
     // input a value for the field.
@@ -161,6 +236,9 @@ namespace autofillPrivate {
     // Globally unique identifier for this entry.
     DOMString? guid;
 
+    // The card's instrument ID from the GPay server, if applicable.
+    DOMString? instrumentId;
+
     // Name of the person who owns the credit card.
     DOMString? name;
 
@@ -182,32 +260,44 @@ namespace autofillPrivate {
     // Credit card's image source.
     DOMString? imageSrc;
 
+    // Credit card's masked cvc.
+    DOMString? cvc;
+
     AutofillMetadata? metadata;
   };
 
-  // Parameters to be passed to validatePhoneNumbers().
-  dictionary ValidatePhoneParams {
-    // The phone numbers to validate.
-    DOMString[] phoneNumbers;
+  // An IBAN entry which can be saved in the autofill section of the
+  // settings UI.
+  dictionary IbanEntry {
+    // Globally unique identifier for this entry.
+    DOMString? guid;
 
-    // The index into |phoneNumbers| at which the newly-added/edited phone
-    // number resides.
-    long indexOfNewNumber;
+    // IBAN value.
+    DOMString? value;
 
-    // A two-character string representing the address' country. See
-    // autofill_country.cc for a list of valid codes.
-    DOMString countryCode;
+    // IBAN's nickname.
+    DOMString? nickname;
+
+    AutofillMetadata? metadata;
   };
 
+  callback GetAccountInfoCallback = void(optional AccountInfo accountInfo);
   callback GetCountryListCallback = void(CountryEntry[] countries);
   callback GetAddressComponentsCallback = void(AddressComponents components);
   callback GetAddressListCallback = void(AddressEntry[] entries);
-  callback ValidatePhoneNumbersCallback =
-      void(DOMString[] validatedPhoneNumbers);
   callback GetCreditCardListCallback = void(CreditCardEntry[] entries);
-  callback GetUpiIdListCallback = void(DOMString[] entries);
+  callback GetIbanListCallback = void(IbanEntry[] entries);
+  callback IsValidIbanCallback = void(boolean isValid);
+  callback GetCreditCardCallback = void(optional CreditCardEntry card);
+  callback CheckForDeviceAuthCallback = void(boolean isDeviceAuthAvailable);
 
   interface Functions {
+    // Gets currently signed-in user profile info, no value is returned if
+    // the user is not signed-in.
+    // |callback|: Callback which will be called with the info.
+    [supportsPromises] static void getAccountInfo(
+        GetAccountInfoCallback callback);
+
     // Saves the given address. If |address| has an empty string as its ID, it
     // will be assigned a new one and added as a new entry.
     // |address|: The address entry to save.
@@ -237,23 +327,30 @@ namespace autofillPrivate {
     // |card|: The card entry to save.
     static void saveCreditCard(CreditCardEntry card);
 
+    // Saves the given IBAN. If `iban` has an empty string as its ID, it will be
+    // assigned a new one and added as a new entry.
+    // |iban|: The IBAN entry to save.
+    static void saveIban(IbanEntry iban);
+
     // Removes the entry (address or credit card) with the given ID.
     // |guid|: ID of the entry to remove.
     static void removeEntry(DOMString guid);
-
-    // Validates a newly-added phone number and invokes the callback with a list
-    // of validated numbers. Note that if the newly-added number was invalid, it
-    // will not be returned in the list of valid numbers.
-    // |params|: The parameters to this function.
-    // |callback|: Callback which will be called with validated phone numbers.
-    [supportsPromises] static void validatePhoneNumbers(
-        ValidatePhoneParams params,
-        ValidatePhoneNumbersCallback callback);
 
     // Gets the list of credit cards.
     // |callback|: Callback which will be called with the list of credit cards.
     [supportsPromises] static void getCreditCardList(
         GetCreditCardListCallback callback);
+
+    // Gets the list of IBANs.
+    // `callback`: Callback which will be called with the list of IBANs.
+    [supportsPromises] static void getIbanList(
+        GetIbanListCallback callback);
+
+    // Returns true if the given `ibanValue` is a valid IBAN.
+    // `callback`: Callback which will be called with the result of IBAN
+    // validation.
+    [supportsPromises] static void isValidIban(
+        DOMString ibanValue, IsValidIbanCallback callback);
 
     // Clears the data associated with a wallet card which was saved
     // locally so that the saved copy is masked (e.g., "Card ending
@@ -270,10 +367,6 @@ namespace autofillPrivate {
     // Enables or disables FIDO Authentication for credit card unmasking.
     static void setCreditCardFIDOAuthEnabledState(boolean enabled);
 
-    // Gets the list of UPI IDs (a.k.a. Virtual Payment Addresses).
-    // |callback|: Callback which will be called with the list of UPI IDs.
-    [supportsPromises] static void getUpiIdList(GetUpiIdListCallback callback);
-
     // Enrolls a credit card into virtual cards.
     // |cardId|: The server side id of the credit card to be enrolled. Note it
     // refers to the legacy server id of credit cards, not the instrument ids.
@@ -284,13 +377,38 @@ namespace autofillPrivate {
     // it refers to the legacy server id of credit cards, not the instrument
     // ids.
     static void removeVirtualCard(DOMString cardId);
+
+    // Authenticates the user via device authentication and if successful, it
+    // will then flip the mandatory auth toggle.
+    static void authenticateUserAndFlipMandatoryAuthToggle();
+
+    // Returns the local card based on the `guid` provided. The user could
+    // also be challenged with a reauth if that is enabled. For a successful
+    // auth, the local card is returned otherwise return a null object.
+    [supportsPromises] static void getLocalCard(
+        DOMString guid, GetCreditCardCallback callback);
+
+    // Returns true if there is authentication available on this device
+    // (biometric or screen lock), false otherwise.
+    [supportsPromises] static void checkIfDeviceAuthAvailable(
+        CheckForDeviceAuthCallback callback);
+
+    // Bulk delete all the CVCs (server and local) from the local webdata
+    // database. For server CVCs, this will also clear them from the Chrome
+    // sync server and thus other devices.
+    static void bulkDeleteAllCvcs();
   };
 
   interface Events {
     // Fired when the personal data has changed, meaning that an entry has
     // been added, removed, or changed.
-    // |entries| The updated list of entries.
+    // `addressEntries`: the updated list of addresses.
+    // `creditCardEntries`: the updated list of credit cards.
+    // `ibans`: the updated list of IBANs.
+    // `accountInfo`: account info if the user is signed-in or no value if not.
     static void onPersonalDataChanged(AddressEntry[] addressEntries,
-        CreditCardEntry[] creditCardEntries);
+        CreditCardEntry[] creditCardEntries,
+        IbanEntry[] ibans,
+        optional AccountInfo accountInfo);
   };
 };

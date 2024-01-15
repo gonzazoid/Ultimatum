@@ -4,9 +4,9 @@
 
 #include "chrome/browser/ash/printing/history/print_job_history_cleaner.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_functions.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/time/clock.h"
 #include "base/time/default_clock.h"
 #include "base/time/time.h"
@@ -73,8 +73,8 @@ void PrintJobHistoryCleaner::OnPrefServiceInitialized(
       expiration_period == kPrintJobHistoryIndefinite ||
       !IsCompletionTimeExpired(oldest_print_job_completion_time_, clock_->Now(),
                                base::Days(expiration_period))) {
-    base::SequencedTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                     std::move(callback));
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE, std::move(callback));
     return;
   }
   print_job_database_->GetPrintJobs(
@@ -87,8 +87,8 @@ void PrintJobHistoryCleaner::OnPrintJobsRetrieved(
     bool success,
     std::vector<printing::proto::PrintJobInfo> print_job_infos) {
   if (!success) {
-    base::SequencedTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                     std::move(callback));
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE, std::move(callback));
     return;
   }
   std::vector<std::string> print_job_ids_to_remove;
@@ -98,8 +98,8 @@ void PrintJobHistoryCleaner::OnPrintJobsRetrieved(
   base::Time now = clock_->Now();
   oldest_print_job_completion_time_ = now;
   for (const auto& print_job_info : print_job_infos) {
-    base::Time completion_time =
-        base::Time::FromJsTime(print_job_info.completion_time());
+    base::Time completion_time = base::Time::FromMillisecondsSinceUnixEpoch(
+        print_job_info.completion_time());
     if (IsCompletionTimeExpired(completion_time, now,
                                 print_job_history_expiration_period)) {
       print_job_ids_to_remove.push_back(print_job_info.id());
@@ -115,8 +115,8 @@ void PrintJobHistoryCleaner::OnPrintJobsRetrieved(
 
 void PrintJobHistoryCleaner::OnPrintJobsDeleted(base::OnceClosure callback,
                                                 bool success) {
-  base::SequencedTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                   std::move(callback));
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(FROM_HERE,
+                                                           std::move(callback));
 }
 
 }  // namespace ash

@@ -7,17 +7,18 @@
 
 #include <stdint.h>
 
-#include "base/callback.h"
+#include <optional>
+
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
+#include "build/build_config.h"
 #include "components/download/public/common/download_danger_type.h"
 #include "components/download/public/common/download_item.h"
-#include "components/download/public/common/download_item_rename_handler.h"
 #include "components/download/public/common/download_url_parameters.h"
 #include "components/download/public/common/quarantine_connection.h"
 #include "content/common/content_export.h"
 #include "content/public/browser/save_page_type.h"
 #include "content/public/browser/web_contents.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/origin.h"
 
 class GURL;
@@ -67,7 +68,7 @@ using DownloadTargetCallback = base::OnceCallback<void(
     const base::FilePath& target_path,
     download::DownloadItem::TargetDisposition disposition,
     download::DownloadDangerType danger_type,
-    download::DownloadItem::MixedContentStatus mixed_content_status,
+    download::DownloadItem::InsecureDownloadStatus insecure_download_status,
     const base::FilePath& intermediate_path,
     const base::FilePath& display_name,
     const std::string& mime_type,
@@ -212,7 +213,7 @@ class CONTENT_EXPORT DownloadManagerDelegate {
       const WebContents::Getter& web_contents_getter,
       const GURL& url,
       const std::string& request_method,
-      absl::optional<url::Origin> request_initiator,
+      std::optional<url::Origin> request_initiator,
       bool from_download_cross_origin_redirect,
       bool content_initiated,
       CheckDownloadAllowedCallback check_download_allowed_cb);
@@ -221,13 +222,6 @@ class CONTENT_EXPORT DownloadManagerDelegate {
   // Service instance if available.
   virtual download::QuarantineConnectionCallback
   GetQuarantineConnectionCallback();
-
-  // Gets a handler to perform the rename for a download item.  If no special
-  // rename handling is required, don't override this, as the default
-  // implementation returns null, which indicates that the default rename
-  // handling should be performed.
-  virtual std::unique_ptr<download::DownloadItemRenameHandler>
-  GetRenameHandlerForDownload(download::DownloadItem* download_item);
 
   // Gets a |DownloadItem| from the GUID, or null if no such GUID is available.
   virtual download::DownloadItem* GetDownloadByGuid(const std::string& guid);
@@ -239,6 +233,13 @@ class CONTENT_EXPORT DownloadManagerDelegate {
       base::flat_map<base::FilePath, base::FilePath> save_package_files,
       SavePackageAllowedCallback callback);
 
+  // Attaches any extra per-DownloadItem info.
+  virtual void AttachExtraInfo(download::DownloadItem* item) {}
+
+#if BUILDFLAG(IS_ANDROID)
+  // Returns whether download is triggered by an external app.
+  virtual bool IsFromExternalApp(download::DownloadItem* item);
+#endif  // BUILDFLAG(IS_ANDROID)
  protected:
   virtual ~DownloadManagerDelegate();
 };

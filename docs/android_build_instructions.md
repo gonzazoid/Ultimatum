@@ -91,7 +91,7 @@ gclient sync
 Once you have checked out the code, run
 
 ```shell
-build/install-build-deps-android.sh
+build/install-build-deps.sh --android
 ```
 
 to get all of the dependencies you need to build on Linux, *plus* all of the
@@ -161,6 +161,28 @@ non-WebView targets. This is also allowed for Monochrome, but only when not set
 as the WebView provider.
 ***
 
+### Faster builds
+
+This section contains some things you can change to speed up your builds,
+sorted so that the things that make the biggest difference are first.
+
+#### Use Reclient
+
+*** note
+**Warning:** If you are a Google employee, do not follow the instructions below.
+See
+[go/building-android-chrome#initialize-remote-execution-distributed-builds](https://goto.google.com/building-android-chrome#initialize-remote-execution-distributed-builds)
+instead.
+***
+
+Chromium's build can be sped up significantly by using a remote execution system
+compatible with [REAPI](https://github.com/bazelbuild/remote-apis). This allows
+you to benefit from remote caching and executing many build actions in parallel
+on a shared cluster of workers.
+
+To use Reclient, follow the corresponding
+[Linux build instructions](linux/build_instructions.md#use-reclient).
+
 ## Build Chromium
 
 Build Chromium with Ninja using the command:
@@ -179,28 +201,21 @@ out/Default chrome/test:unit_tests`).
 
 ### Multiple Chrome Targets
 
-The Google Play Store allows apps to send customized `.apk` or `.aab` files
+The Google Play Store allows apps to send customized bundles (`.aab` files)
 depending on the version of Android running on a device. Chrome uses this
 feature to package optimized versions for different OS versions.
 
-1. `chrome_modern_public_bundle` (ChromeModernPublic.aab)
-   * `minSdkVersion=21` (Lollipop).
-   * Uses [Crazy Linker](https://cs.chromium.org/chromium/src/base/android/linker/BUILD.gn?rcl=6bb29391a86f2be58c626170156cbfaa2cbc5c91&l=9).
-   * Stores native library with "crazy." prefix to prevent extraction.
-   * WebView packaged independently (`system_webview_bundle`).
-2. `monochrome_public_bundle` (MonochromePublic.aab)
+1. `monochrome_public_bundle` (`MonochromePublic.aab`)
    * `minSdkVersion=24` (Nougat).
    * Contains both Chrome and WebView (to save disk space).
-   * Does not use Crazy Linker (WebView requires system linker).
-3. `trichrome_chrome_bundle` (TrichromeChrome.aab)
+2. `trichrome_chrome_bundle` (`TrichromeChrome.aab`)
    * `minSdkVersion=29` (Android 10).
    * Native code shared with WebView through a "Static Shared Library APK": `trichrome_library_apk` 
    * Corresponding WebView target: `trichrome_webview_bundle`
-4. `chrome_public_apk` (ChromePublic.apk)
-   * Used for only local development and tests (simpler than using bundle
-     targets).
-   * Same configuration as chrome_modern_public_bundle, except without
-     separating things into modules.
+3. `chrome_public_bundle` & `chrome_public_apk` (`ChromePublic.aab`, `ChromePublic.apk`)
+   * `minSdkVersion=24` (Nougat).
+   * Used for local development (to avoid building WebView).
+   * WebView packaged independently (`system_webview_bundle` / `system_webview_apk`).
 
 *** note
 **Notes:**
@@ -340,7 +355,7 @@ with `.*`), eg:
 
 ```shell
 export CHROMIUM_LOGCAT_HIGHLIGHT='(WARNING|cr_Child)'
-out/Default.bin/chrome_public_apk logcat
+out/Default/bin/chrome_public_apk logcat
 # Highlights messages/tags containing WARNING and cr_Child strings.
 ```
 
@@ -359,7 +374,7 @@ for more on debugging, including how to debug Java code.
 ### Testing
 
 For information on running tests, see
-[Android Test Instructions](/testing/android/docs/README.md)
+[Android Test Instructions](/docs/testing/android_test_instructions.md)
 
 ### Faster Edit/Deploy
 
@@ -385,6 +400,12 @@ complete successfully. By offloading analysis build steps to a separate build
 server to be run lazily at a low priority when the machine is idle, the actual
 build can complete up to 50-80% faster.
 
+**Note**: Since the build completes before the analysis checks finish, the build
+will not fail if an analysis check fails. Make sure to check the server's output
+at regular intervals to fix outstanding issues caught by these analysis checks.
+
+##### First way (by running it manually)
+
 There are **two** steps to using the build server.
 1. Add the gn arg `android_static_analysis = "build_server"`
 2. Run the script at
@@ -394,6 +415,9 @@ All your local builds will now forward analysis steps to this server, including
 android lint, errorprone, bytecode processor.
 
 If you run (2) in a terminal, the output of the checks will be displayed there.
+
+##### Second way (using systemd)
+
 Alternatively, you can set up the server as a Linux service, so it runs on the
 background and starts on boot. If you're using systemd:
 
@@ -422,11 +446,6 @@ The output can be inspected with
 ```
 journalctl --user -e -u fast-local-dev-server
 ```
-
-**Note**: Since the build completes before the analysis checks finish, the build
-will not fail if an analysis check fails. Make sure to check the terminal that
-the server is running in at regular intervals to fix outstanding issues caught
-by these analysis checks.
 
 [fast_local_dev]: https://source.chromium.org/chromium/chromium/src/+/main:build/android/fast_local_dev_server.py
 

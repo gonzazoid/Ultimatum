@@ -4,7 +4,7 @@
 
 #include "chrome/browser/ui/views/sharing_hub/sharing_hub_bubble_util.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "chrome/grit/generated_resources.h"
 #include "components/strings/grit/components_strings.h"
 #include "components/vector_icons/vector_icons.h"
@@ -67,7 +67,7 @@ gfx::Size TitleWithBackButtonView::GetMinimumSize() const {
   return gfx::Size(0, 0);
 }
 
-BEGIN_METADATA(TitleWithBackButtonView, views::View)
+BEGIN_METADATA(TitleWithBackButtonView)
 END_METADATA
 
 }  // namespace sharing_hub

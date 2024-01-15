@@ -4,11 +4,15 @@
 
 #include "headless/lib/browser/headless_browser_impl.h"
 
-#import "base/mac/scoped_objc_class_swizzler.h"
+#import "base/apple/scoped_objc_class_swizzler.h"
+#include "base/memory/weak_ptr.h"
 #include "base/no_destructor.h"
+#include "content/public/browser/browser_task_traits.h"
+#include "content/public/browser/browser_thread.h"
 #include "content/public/browser/render_widget_host_view.h"
 #include "content/public/browser/web_contents.h"
 #include "headless/lib/browser/headless_web_contents_impl.h"
+#include "services/device/public/cpp/geolocation/system_geolocation_source_mac.h"
 #import "ui/base/cocoa/base_view.h"
 #import "ui/gfx/mac/coordinate_conversion.h"
 
@@ -30,7 +34,7 @@ namespace headless {
 
 namespace {
 
-// Swizzles all event and acctions for NSPopUpButtonCell to avoid showing in
+// Swizzles all event and actions for NSPopUpButtonCell to avoid showing in
 // headless mode.
 class HeadlessPopUpMethods {
  public:
@@ -51,8 +55,8 @@ class HeadlessPopUpMethods {
                                [FakeNSPopUpButtonCell class],
                                @selector(attachPopUpWithFrame:inView:)) {}
 
-  base::mac::ScopedObjCClassSwizzler popup_perform_click_swizzler_;
-  base::mac::ScopedObjCClassSwizzler popup_attach_swizzler_;
+  base::apple::ScopedObjCClassSwizzler popup_perform_click_swizzler_;
+  base::apple::ScopedObjCClassSwizzler popup_attach_swizzler_;
 };
 
 NSString* const kActivityReason = @"Batch headless process";
@@ -65,14 +69,18 @@ const NSActivityOptions kActivityOptions =
 }  // namespace
 
 void HeadlessBrowserImpl::PlatformInitialize() {
+  if (!geolocation_manager_) {
+    geolocation_manager_ =
+        device::SystemGeolocationSourceMac::CreateGeolocationManagerOnMac();
+  }
   screen_ = std::make_unique<display::ScopedNativeScreen>();
   HeadlessPopUpMethods::Init();
 }
 
 void HeadlessBrowserImpl::PlatformStart() {
   // Disallow headless to be throttled as a background process.
-  [[NSProcessInfo processInfo] beginActivityWithOptions:kActivityOptions
-                                                 reason:kActivityReason];
+  [NSProcessInfo.processInfo beginActivityWithOptions:kActivityOptions
+                                               reason:kActivityReason];
 }
 
 void HeadlessBrowserImpl::PlatformInitializeWebContents(
@@ -88,21 +96,42 @@ void HeadlessBrowserImpl::PlatformInitializeWebContents(
 void HeadlessBrowserImpl::PlatformSetWebContentsBounds(
     HeadlessWebContentsImpl* web_contents,
     const gfx::Rect& bounds) {
-  NSView* web_view =
-      web_contents->web_contents()->GetNativeView().GetNativeNSView();
-  NSRect frame = gfx::ScreenRectToNSRect(bounds);
-  [web_view setFrame:frame];
+  content::WebContents* content_web_contents = web_contents->web_contents();
 
-  content::RenderWidgetHostView* host_view =
-      web_contents->web_contents()->GetRenderWidgetHostView();
-  if (host_view)
-    host_view->SetWindowFrameInScreen(bounds);
+  NSView* web_view = content_web_contents->GetNativeView().GetNativeNSView();
+  web_view.frame = gfx::ScreenRectToNSRect(bounds);
+
+  // Render widget host view is not ready at this point, so post a task to set
+  // bounds at later time.
+  content::GetUIThreadTaskRunner({})->PostTask(
+      FROM_HERE,
+      base::BindOnce(
+          [](base::WeakPtr<content::WebContents> content_web_contents,
+             const gfx::Rect& bounds) {
+            if (content_web_contents) {
+              content::RenderWidgetHostView* host_view =
+                  content_web_contents->GetRenderWidgetHostView();
+              if (host_view) {
+                host_view->SetWindowFrameInScreen(bounds);
+              }
+            }
+          },
+          content_web_contents->GetWeakPtr(), bounds));
 }
 
 ui::Compositor* HeadlessBrowserImpl::PlatformGetCompositor(
     HeadlessWebContentsImpl* web_contents) {
   // TODO(eseckler): Support BeginFrameControl on Mac.
   return nullptr;
+}
+
+device::GeolocationManager* HeadlessBrowserImpl::GetGeolocationManager() {
+  return geolocation_manager_.get();
+}
+
+void HeadlessBrowserImpl::SetGeolocationManagerForTesting(
+    std::unique_ptr<device::GeolocationManager> fake_geolocation_manager) {
+  geolocation_manager_ = std::move(fake_geolocation_manager);
 }
 
 }  // namespace headless

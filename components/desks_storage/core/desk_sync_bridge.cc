@@ -4,19 +4,23 @@
 
 #include "components/desks_storage/core/desk_sync_bridge.h"
 
+#include <string>
+
+#include "ash/constants/ash_features.h"
 #include "ash/public/cpp/desk_template.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/check_op.h"
 #include "base/containers/contains.h"
-#include "base/guid.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/json/json_writer.h"
 #include "base/memory/ptr_util.h"
-#include "base/notreached.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/time/time.h"
+#include "base/trace_event/trace_event.h"
+#include "base/uuid.h"
 #include "build/chromeos_buildflags.h"
 #include "chromeos/ui/base/window_state_type.h"
 #include "components/account_id/account_id.h"
@@ -24,6 +28,7 @@
 #include "components/app_restore/app_launch_info.h"
 #include "components/app_restore/window_info.h"
 #include "components/desks_storage/core/desk_model_observer.h"
+#include "components/desks_storage/core/desk_storage_metrics_util.h"
 #include "components/desks_storage/core/desk_template_conversion.h"
 #include "components/desks_storage/core/desk_template_util.h"
 #include "components/services/app_service/public/cpp/app_launch_util.h"
@@ -74,7 +79,7 @@ namespace {
 
 using syncer::ModelTypeStore;
 
-// The maximum number of templates the local storage can hold.
+// The maximum number of templates the chrome sync storage can hold.
 constexpr size_t kMaxTemplateCount = 6u;
 
 // The maximum number of bytes a template can be.
@@ -95,9 +100,10 @@ std::unique_ptr<syncer::EntityData> CopyToEntityData(
   return entity_data;
 }
 
-// Parses the content of `record_list` into `*desk_templates`.
+// Parses the content of `record_list` into `*desk_templates`. The output
+// parameters are first for binding purposes.
 absl::optional<syncer::ModelError> ParseDeskTemplatesOnBackendSequence(
-    base::flat_map<base::GUID, std::unique_ptr<DeskTemplate>>* desk_templates,
+    base::flat_map<base::Uuid, std::unique_ptr<DeskTemplate>>* desk_templates,
     std::unique_ptr<ModelTypeStore::RecordList> record_list) {
   DCHECK(desk_templates);
   DCHECK(desk_templates->empty());
@@ -106,8 +112,8 @@ absl::optional<syncer::ModelError> ParseDeskTemplatesOnBackendSequence(
   for (const syncer::ModelTypeStore::Record& r : *record_list) {
     auto specifics = std::make_unique<sync_pb::WorkspaceDeskSpecifics>();
     if (specifics->ParseFromString(r.value)) {
-      const base::GUID uuid =
-          base::GUID::ParseCaseInsensitive(specifics->uuid());
+      const base::Uuid uuid =
+          base::Uuid::ParseCaseInsensitive(specifics->uuid());
       if (!uuid.is_valid()) {
         return syncer::ModelError(
             FROM_HERE,
@@ -120,7 +126,6 @@ absl::optional<syncer::ModelError> ParseDeskTemplatesOnBackendSequence(
 
       if (!entry)
         continue;
-
       (*desk_templates)[uuid] = std::move(entry);
     } else {
       return syncer::ModelError(
@@ -153,11 +158,11 @@ DeskSyncBridge::CreateMetadataChangeList() {
   return ModelTypeStore::WriteBatch::CreateMetadataChangeList();
 }
 
-absl::optional<syncer::ModelError> DeskSyncBridge::MergeSyncData(
+absl::optional<syncer::ModelError> DeskSyncBridge::MergeFullSyncData(
     std::unique_ptr<syncer::MetadataChangeList> metadata_change_list,
     syncer::EntityChangeList entity_data) {
-  // MergeSyncData will be called when Desk Template model type is enabled to
-  // start syncing. There could be local desk templates that user has created
+  // MergeFullSyncData will be called when Desk Template model type is enabled
+  // to start syncing. There could be local desk templates that user has created
   // before enabling sync or during the time when Desk Template sync is
   // disabled. We should merge local and server data. We will send all
   // local-only templates to server and save server templates to local.
@@ -169,21 +174,21 @@ absl::optional<syncer::ModelError> DeskSyncBridge::MergeSyncData(
   // TODO(yzd) We will add a template update timestamp and update this logic to
   // be: for templates that exist on both local and server side, we will keep
   // the one with later update timestamp.
-  return ApplySyncChanges(std::move(metadata_change_list),
-                          std::move(entity_data));
+  return ApplyIncrementalSyncChanges(std::move(metadata_change_list),
+                                     std::move(entity_data));
 }
 
-absl::optional<syncer::ModelError> DeskSyncBridge::ApplySyncChanges(
+absl::optional<syncer::ModelError> DeskSyncBridge::ApplyIncrementalSyncChanges(
     std::unique_ptr<syncer::MetadataChangeList> metadata_change_list,
     syncer::EntityChangeList entity_changes) {
-  std::vector<const DeskTemplate*> added_or_updated;
-  std::vector<base::GUID> removed;
+  std::vector<raw_ptr<const DeskTemplate, VectorExperimental>> added_or_updated;
+  std::vector<base::Uuid> removed;
   std::unique_ptr<ModelTypeStore::WriteBatch> batch =
       store_->CreateWriteBatch();
 
   for (const std::unique_ptr<syncer::EntityChange>& change : entity_changes) {
-    const base::GUID uuid =
-        base::GUID::ParseCaseInsensitive(change->storage_key());
+    const base::Uuid uuid =
+        base::Uuid::ParseCaseInsensitive(change->storage_key());
     if (!uuid.is_valid()) {
       // Skip invalid storage keys.
       continue;
@@ -239,7 +244,7 @@ void DeskSyncBridge::GetData(StorageKeyList storage_keys,
 
   for (const std::string& uuid : storage_keys) {
     const DeskTemplate* entry =
-        GetUserEntryByUUID(base::GUID::ParseCaseInsensitive(uuid));
+        GetUserEntryByUUID(base::Uuid::ParseCaseInsensitive(uuid));
     if (!entry) {
       continue;
     }
@@ -275,11 +280,13 @@ std::string DeskSyncBridge::GetStorageKey(
 
 DeskModel::GetAllEntriesResult DeskSyncBridge::GetAllEntries() {
   if (!IsReady()) {
-    return GetAllEntriesResult(GetAllEntriesStatus::kFailure,
-                               std::vector<const DeskTemplate*>());
+    LOG(WARNING) << "Unable to get all entries: Not Ready";
+    return GetAllEntriesResult(
+        GetAllEntriesStatus::kFailure,
+        std::vector<raw_ptr<const DeskTemplate, VectorExperimental>>());
   }
 
-  std::vector<const DeskTemplate*> entries;
+  std::vector<raw_ptr<const DeskTemplate, VectorExperimental>> entries;
 
   for (const auto& it : policy_entries_)
     entries.push_back(it.get());
@@ -293,12 +300,14 @@ DeskModel::GetAllEntriesResult DeskSyncBridge::GetAllEntries() {
 }
 
 DeskModel::GetEntryByUuidResult DeskSyncBridge::GetEntryByUUID(
-    const base::GUID& uuid) {
+    const base::Uuid& uuid) {
   if (!IsReady()) {
+    LOG(WARNING) << "Unable to get entry by UUID: Not Ready";
     return GetEntryByUuidResult(GetEntryByUuidStatus::kFailure, nullptr);
   }
 
   if (!uuid.is_valid()) {
+    LOG(WARNING) << "Unable to get entry by UUID: Invalid UUID";
     return GetEntryByUuidResult(GetEntryByUuidStatus::kInvalidUuid, nullptr);
   }
 
@@ -311,6 +320,7 @@ DeskModel::GetEntryByUuidResult DeskSyncBridge::GetEntryByUUID(
       return GetEntryByUuidResult(GetEntryByUuidStatus::kOk,
                                   std::move(policy_entry));
     } else {
+      LOG(WARNING) << "Unable to get entry by UUID: Entry not found";
       return GetEntryByUuidResult(GetEntryByUuidStatus::kNotFound, nullptr);
     }
   } else {
@@ -324,20 +334,31 @@ void DeskSyncBridge::AddOrUpdateEntry(std::unique_ptr<DeskTemplate> new_entry,
   if (!IsReady()) {
     // This sync bridge has not finished initializing. Do not save the new entry
     // yet.
-    std::move(callback).Run(AddOrUpdateEntryStatus::kFailure);
+    LOG(WARNING) << "Unable to add or update entry: Not Ready";
+    std::move(callback).Run(AddOrUpdateEntryStatus::kFailure,
+                            std::move(new_entry));
     return;
   }
 
-  base::GUID uuid = new_entry->uuid();
+  if (!new_entry) {
+    LOG(WARNING) << "Unable to add or update entry: No new entry";
+    std::move(callback).Run(AddOrUpdateEntryStatus::kInvalidArgument,
+                            std::move(new_entry));
+    return;
+  }
+
+  base::Uuid uuid = new_entry->uuid();
   if (!uuid.is_valid()) {
-    std::move(callback).Run(AddOrUpdateEntryStatus::kInvalidArgument);
+    LOG(WARNING) << "Unable to add or update entry: Invalid UUID";
+    std::move(callback).Run(AddOrUpdateEntryStatus::kInvalidArgument,
+                            std::move(new_entry));
     return;
   }
 
   // When a user creates a desk template locally, the desk template has `kUser`
   // as its source. Only user desk templates should be saved to Sync.
   DCHECK_EQ(DeskTemplateSource::kUser, new_entry->source());
-
+  new_entry->set_client_cache_guid(change_processor()->TrackedCacheGuid());
   auto entry = new_entry->Clone();
   entry->set_template_name(
       base::CollapseWhitespace(new_entry->template_name(), true));
@@ -349,8 +370,12 @@ void DeskSyncBridge::AddOrUpdateEntry(std::unique_ptr<DeskTemplate> new_entry,
   auto sync_proto = desk_template_conversion::ToSyncProto(
       entry.get(),
       apps::AppRegistryCacheWrapper::Get().GetAppRegistryCache(account_id_));
+  RecordSavedDeskTemplateSizeHistogram(new_entry->type(),
+                                       sync_proto.ByteSizeLong());
   if (sync_proto.ByteSizeLong() > kMaxTemplateSize) {
-    std::move(callback).Run(AddOrUpdateEntryStatus::kEntryTooLarge);
+    LOG(WARNING) << "Unable to add or update entry: Entry is too large";
+    std::move(callback).Run(AddOrUpdateEntryStatus::kEntryTooLarge,
+                            std::move(new_entry));
     return;
   }
 
@@ -372,14 +397,15 @@ void DeskSyncBridge::AddOrUpdateEntry(std::unique_ptr<DeskTemplate> new_entry,
 
   Commit(std::move(batch));
 
-  std::move(callback).Run(AddOrUpdateEntryStatus::kOk);
+  std::move(callback).Run(AddOrUpdateEntryStatus::kOk, std::move(new_entry));
 }
 
-void DeskSyncBridge::DeleteEntry(const base::GUID& uuid,
+void DeskSyncBridge::DeleteEntry(const base::Uuid& uuid,
                                  DeleteEntryCallback callback) {
   if (!IsReady()) {
     // This sync bridge has not finished initializing.
     // Cannot delete anything.
+    LOG(WARNING) << "Unable to delete entry: Not Ready";
     std::move(callback).Run(DeleteEntryStatus::kFailure);
     return;
   }
@@ -414,13 +440,14 @@ DeskModel::DeleteEntryStatus DeskSyncBridge::DeleteAllEntriesSync() {
   if (!IsReady()) {
     // This sync bridge has not finished initializing.
     // Cannot delete anything.
+    LOG(WARNING) << "Unable to delete entries: Not Ready";
     return DeleteEntryStatus::kFailure;
   }
 
   std::unique_ptr<ModelTypeStore::WriteBatch> batch =
       store_->CreateWriteBatch();
 
-  std::vector<base::GUID> all_uuids = GetAllEntryUuids();
+  std::set<base::Uuid> all_uuids = GetAllEntryUuids();
 
   for (const auto& uuid : all_uuids) {
     change_processor()->Delete(uuid.AsLowercaseString(),
@@ -435,17 +462,19 @@ size_t DeskSyncBridge::GetEntryCount() const {
   return GetSaveAndRecallDeskEntryCount() + GetDeskTemplateEntryCount();
 }
 
-size_t DeskSyncBridge::GetMaxEntryCount() const {
-  return GetMaxSaveAndRecallDeskEntryCount() + GetMaxDeskTemplateEntryCount();
-}
-
 // Return 0 for now since chrome sync does not support save and recall desks.
 size_t DeskSyncBridge::GetSaveAndRecallDeskEntryCount() const {
   return 0u;
 }
 
 size_t DeskSyncBridge::GetDeskTemplateEntryCount() const {
-  return desk_template_entries_.size() + policy_entries_.size();
+  size_t template_count = std::count_if(
+      desk_template_entries_.begin(), desk_template_entries_.end(),
+      [](const std::pair<base::Uuid, std::unique_ptr<ash::DeskTemplate>>&
+             entry) {
+        return entry.second->type() == ash::DeskTemplateType::kTemplate;
+      });
+  return template_count + policy_entries_.size();
 }
 
 // Chrome sync does not support save and recall desks yet. Return 0 for max
@@ -458,15 +487,15 @@ size_t DeskSyncBridge::GetMaxDeskTemplateEntryCount() const {
   return kMaxTemplateCount + policy_entries_.size();
 }
 
-std::vector<base::GUID> DeskSyncBridge::GetAllEntryUuids() const {
-  std::vector<base::GUID> keys;
+std::set<base::Uuid> DeskSyncBridge::GetAllEntryUuids() const {
+  std::set<base::Uuid> keys;
 
   for (const auto& it : policy_entries_)
-    keys.push_back(it.get()->uuid());
+    keys.emplace(it.get()->uuid());
 
   for (const auto& it : desk_template_entries_) {
     DCHECK_EQ(it.first, it.second->uuid());
-    keys.emplace_back(it.first);
+    keys.emplace(it.first);
   }
   return keys;
 }
@@ -487,13 +516,13 @@ bool DeskSyncBridge::IsSyncing() const {
 ash::DeskTemplate* DeskSyncBridge::FindOtherEntryWithName(
     const std::u16string& name,
     ash::DeskTemplateType type,
-    const base::GUID& uuid) const {
+    const base::Uuid& uuid) const {
   return desk_template_util::FindOtherEntryWithName(name, uuid,
                                                     desk_template_entries_);
 }
 
 const DeskTemplate* DeskSyncBridge::GetUserEntryByUUID(
-    const base::GUID& uuid) const {
+    const base::Uuid& uuid) const {
   auto it = desk_template_entries_.find(uuid);
   if (it == desk_template_entries_.end())
     return nullptr;
@@ -507,7 +536,8 @@ void DeskSyncBridge::NotifyDeskModelLoaded() {
 }
 
 void DeskSyncBridge::NotifyRemoteDeskTemplateAddedOrUpdated(
-    const std::vector<const DeskTemplate*>& new_entries) {
+    const std::vector<raw_ptr<const DeskTemplate, VectorExperimental>>&
+        new_entries) {
   if (new_entries.empty()) {
     return;
   }
@@ -518,7 +548,7 @@ void DeskSyncBridge::NotifyRemoteDeskTemplateAddedOrUpdated(
 }
 
 void DeskSyncBridge::NotifyRemoteDeskTemplateDeleted(
-    const std::vector<base::GUID>& uuids) {
+    const std::vector<base::Uuid>& uuids) {
   if (uuids.empty()) {
     return;
   }
@@ -538,7 +568,6 @@ void DeskSyncBridge::OnStoreCreated(
 
   auto stored_desk_templates = std::make_unique<DeskEntries>();
   DeskEntries* stored_desk_templates_copy = stored_desk_templates.get();
-
   store_ = std::move(store);
   store_->ReadAllDataAndPreprocess(
       base::BindOnce(&ParseDeskTemplatesOnBackendSequence,
@@ -559,7 +588,6 @@ void DeskSyncBridge::OnReadAllData(
   }
 
   desk_template_entries_ = std::move(*stored_desk_templates);
-
   store_->ReadAllMetadata(base::BindOnce(&DeskSyncBridge::OnReadAllMetadata,
                                          weak_ptr_factory_.GetWeakPtr()));
 }
@@ -567,6 +595,7 @@ void DeskSyncBridge::OnReadAllData(
 void DeskSyncBridge::OnReadAllMetadata(
     const absl::optional<syncer::ModelError>& error,
     std::unique_ptr<syncer::MetadataBatch> metadata_batch) {
+  TRACE_EVENT0("ui", "DeskSyncBridge::OnReadAllMetadata");
   if (error) {
     change_processor()->ReportError(*error);
     return;
@@ -592,7 +621,7 @@ void DeskSyncBridge::Commit(std::unique_ptr<ModelTypeStore::WriteBatch> batch) {
 void DeskSyncBridge::UploadLocalOnlyData(
     syncer::MetadataChangeList* metadata_change_list,
     const syncer::EntityChangeList& entity_data) {
-  std::set<base::GUID> local_keys_to_upload;
+  std::set<base::Uuid> local_keys_to_upload;
   for (const auto& it : desk_template_entries_) {
     DCHECK_EQ(DeskTemplateSource::kUser, it.second->source());
     local_keys_to_upload.insert(it.first);
@@ -602,11 +631,11 @@ void DeskSyncBridge::UploadLocalOnlyData(
   // server.
   for (const std::unique_ptr<syncer::EntityChange>& change : entity_data) {
     local_keys_to_upload.erase(
-        base::GUID::ParseCaseInsensitive(change->storage_key()));
+        base::Uuid::ParseCaseInsensitive(change->storage_key()));
   }
 
   // Upload the local-only templates.
-  for (const base::GUID& uuid : local_keys_to_upload) {
+  for (const base::Uuid& uuid : local_keys_to_upload) {
     change_processor()->Put(
         uuid.AsLowercaseString(),
         CopyToEntityData(desk_template_conversion::ToSyncProto(
@@ -624,8 +653,12 @@ bool DeskSyncBridge::HasUserTemplateWithName(const std::u16string& name) {
                         });
 }
 
-bool DeskSyncBridge::HasUuid(const base::GUID& uuid) const {
+bool DeskSyncBridge::HasUuid(const base::Uuid& uuid) const {
   return uuid.is_valid() && base::Contains(desk_template_entries_, uuid);
+}
+
+std::string DeskSyncBridge::GetCacheGuid() {
+  return change_processor()->TrackedCacheGuid();
 }
 
 }  // namespace desks_storage

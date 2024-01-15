@@ -5,9 +5,11 @@
 #ifndef COMPONENTS_BROWSING_TOPICS_BROWSING_TOPICS_SERVICE_IMPL_H_
 #define COMPONENTS_BROWSING_TOPICS_BROWSING_TOPICS_SERVICE_IMPL_H_
 
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
 #include "base/timer/timer.h"
+#include "components/browsing_topics/annotator.h"
 #include "components/browsing_topics/browsing_topics_calculator.h"
 #include "components/browsing_topics/browsing_topics_service.h"
 #include "components/browsing_topics/browsing_topics_state.h"
@@ -18,10 +20,6 @@
 namespace content {
 class BrowsingTopicsSiteDataManager;
 }  // namespace content
-
-namespace optimization_guide {
-class PageContentAnnotationsService;
-}  // namespace optimization_guide
 
 namespace browsing_topics {
 
@@ -52,12 +50,16 @@ class BrowsingTopicsServiceImpl
       bool observe,
       std::vector<blink::mojom::EpochTopicPtr>& topics) override;
 
+  int NumVersionsInEpochs(const url::Origin& main_frame_origin) const override;
+
   void GetBrowsingTopicsStateForWebUi(
       bool calculate_now,
       mojom::PageHandler::GetBrowsingTopicsStateCallback callback) override;
 
   std::vector<privacy_sandbox::CanonicalTopic> GetTopTopicsForDisplay()
       const override;
+
+  Annotator* GetAnnotator() override;
 
   void ClearTopic(
       const privacy_sandbox::CanonicalTopic& canonical_topic) override;
@@ -74,8 +76,9 @@ class BrowsingTopicsServiceImpl
       privacy_sandbox::PrivacySandboxSettings* privacy_sandbox_settings,
       history::HistoryService* history_service,
       content::BrowsingTopicsSiteDataManager* site_data_manager,
-      optimization_guide::PageContentAnnotationsService* annotations_service,
+      Annotator* annotator,
       const base::circular_deque<EpochTopics>& epochs,
+      bool is_manually_triggered,
       BrowsingTopicsCalculator::CalculateCompletedCallback callback);
 
   // Allow tests to access `browsing_topics_state_`.
@@ -105,18 +108,27 @@ class BrowsingTopicsServiceImpl
   friend class BrowsingTopicsBrowserTest;
   friend class TesterBrowsingTopicsService;
 
+  using TopicAccessedCallback =
+      base::RepeatingCallback<void(content::RenderFrameHost* rfh,
+                                   const url::Origin& api_origin,
+                                   bool blocked_by_policy,
+                                   privacy_sandbox::CanonicalTopic topic)>;
+
   BrowsingTopicsServiceImpl(
       const base::FilePath& profile_path,
       privacy_sandbox::PrivacySandboxSettings* privacy_sandbox_settings,
       history::HistoryService* history_service,
       content::BrowsingTopicsSiteDataManager* site_data_manager,
-      optimization_guide::PageContentAnnotationsService* annotations_service);
+      std::unique_ptr<Annotator> annotator,
+      TopicAccessedCallback topic_accessed_callback);
 
   void ScheduleBrowsingTopicsCalculation(base::TimeDelta delay);
 
   // Initialize `topics_calculator_` to start calculating this epoch's top
-  // topics and context observed topics.
-  void CalculateBrowsingTopics();
+  // topics and context observed topics. Set `is_manually_triggered`  to true if
+  // this calculation was triggered via the topics-internals page rather than
+  // the regular schedule.
+  void CalculateBrowsingTopics(bool is_manually_triggered);
 
   // Set `browsing_topics_state_loaded_` to true. Start scheduling the topics
   // calculation.
@@ -125,14 +137,20 @@ class BrowsingTopicsServiceImpl
   // KeyedService:
   void Shutdown() override;
 
-  mojom::WebUIGetBrowsingTopicsStateResultPtr
-  GetBrowsingTopicsStateForWebUiHelper();
+  // Note: There could be a race in topics calculation and this callback, in
+  // which
+  // case `browsing_topics_state_`'s underlying data could be newer than
+  // `hashed_to_unhashed_context_domains`'s data. This is a minor issue, as it's
+  // unlikely to happen, and the worst consequence is that we fail to display
+  // some unhashed domains for the latest epoch.
+  void GetBrowsingTopicsStateForWebUiHelper(
+      mojom::PageHandler::GetBrowsingTopicsStateCallback callback,
+      std::map<HashedDomain, std::string> hashed_to_unhashed_context_domains);
 
   // These pointers are safe to hold and use throughout the lifetime of
   // `this`:
-  // - For `privacy_sandbox_settings_`, `history_service_` and
-  // `annotations_service_`: the dependency declared in
-  // `BrowsingTopicsServiceFactory`'s constructor guarantees that
+  // - For `privacy_sandbox_settings_`, `history_service_`: the dependency
+  // declared in `BrowsingTopicsServiceFactory`'s constructor guarantees that
   // `BrowsingTopicsService` will be destroyed first before those depend-on
   // services.
   // - For `site_data_manager_`: it lives in the StoragePartition which lives
@@ -140,8 +158,6 @@ class BrowsingTopicsServiceImpl
   raw_ptr<privacy_sandbox::PrivacySandboxSettings> privacy_sandbox_settings_;
   raw_ptr<history::HistoryService> history_service_;
   raw_ptr<content::BrowsingTopicsSiteDataManager> site_data_manager_;
-  raw_ptr<optimization_guide::PageContentAnnotationsService>
-      annotations_service_;
 
   BrowsingTopicsState browsing_topics_state_;
 
@@ -151,6 +167,11 @@ class BrowsingTopicsServiceImpl
   // in practice, as the loading should be reasonably fast, and normally the API
   // usage or data deletion won't happen at the browser start.
   bool browsing_topics_state_loaded_ = false;
+
+  // Owns the ML model and all associated logic. Its lifetime is the same as
+  // |this| so that the model can be downloaded as early as possible after the
+  // start of a browsing session.
+  std::unique_ptr<Annotator> annotator_;
 
   // This is non-null if a calculation is in progress. A calculation can be
   // triggered periodically, or due to the "Calculate Now" request from the
@@ -166,6 +187,8 @@ class BrowsingTopicsServiceImpl
       get_state_for_webui_callbacks_;
 
   base::OneShotTimer schedule_calculate_timer_;
+
+  TopicAccessedCallback topic_accessed_callback_;
 
   base::ScopedObservation<privacy_sandbox::PrivacySandboxSettings,
                           privacy_sandbox::PrivacySandboxSettings::Observer>

@@ -6,12 +6,14 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/strings/escape.h"
 #include "base/strings/string_number_conversions.h"
-#include "base/strings/string_piece.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/values.h"
+#include "google_apis/credentials_mode.h"
 #include "google_apis/gcm/base/gcm_util.h"
 #include "google_apis/gcm/monitoring/gcm_stats_recorder.h"
 #include "net/base/load_flags.h"
@@ -45,12 +47,15 @@ const char kDeviceRegistrationError[] = "PHONE_REGISTRATION_ERROR";
 
 // Gets correct status from the error message.
 UnregistrationRequest::Status GetStatusFromError(const std::string& error) {
-  if (error.find(kInvalidParameters) != std::string::npos)
+  if (base::Contains(error, kInvalidParameters)) {
     return UnregistrationRequest::INVALID_PARAMETERS;
-  if (error.find(kInternalServerError) != std::string::npos)
+  }
+  if (base::Contains(error, kInternalServerError)) {
     return UnregistrationRequest::INTERNAL_SERVER_ERROR;
-  if (error.find(kDeviceRegistrationError) != std::string::npos)
+  }
+  if (base::Contains(error, kDeviceRegistrationError)) {
     return UnregistrationRequest::DEVICE_REGISTRATION_ERROR;
+  }
   // Should not be reached, unless the server adds new error types.
   return UnregistrationRequest::UNKNOWN_ERROR;
 }
@@ -162,7 +167,8 @@ void UnregistrationRequest::Start() {
   auto request = std::make_unique<network::ResourceRequest>();
   request->url = registration_url_;
   request->method = "POST";
-  request->credentials_mode = network::mojom::CredentialsMode::kOmit;
+  request->credentials_mode =
+      google_apis::GetOmitCredentialsModeForGaiaRequests();
   BuildRequestHeaders(&request->headers);
 
   std::string body;
@@ -271,9 +277,6 @@ void UnregistrationRequest::OnURLLoadComplete(
 
   DVLOG(1) << "UnregistrationRequestStatus: " << status;
 
-  DCHECK(custom_request_handler_.get());
-  custom_request_handler_->ReportUMAs(status);
-
   recorder_->RecordUnregistrationResponse(request_info_.app_id(),
                                           source_to_record_, status);
 
@@ -286,9 +289,6 @@ void UnregistrationRequest::OnURLLoadComplete(
     status = REACHED_MAX_RETRIES;
     recorder_->RecordUnregistrationResponse(request_info_.app_id(),
                                             source_to_record_, status);
-
-    DCHECK(custom_request_handler_.get());
-    custom_request_handler_->ReportUMAs(status);
   }
 
   std::move(callback_).Run(status);

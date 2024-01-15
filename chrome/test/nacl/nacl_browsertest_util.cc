@@ -14,6 +14,7 @@
 #include "base/strings/utf_string_conversions.h"
 #include "base/values.h"
 #include "build/build_config.h"
+#include "chrome/browser/chrome_browser_main_extra_parts_nacl_deprecation.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/common/chrome_paths.h"
@@ -48,15 +49,15 @@ MessageResponse StructuredMessageHandler::HandleMessage(
     return InternalError("Could not parse message JSON: " + temp + " because " +
                          parsed_json.error().message);
 
-  base::DictionaryValue* msg;
-  if (!parsed_json->GetAsDictionary(&msg))
+  const base::Value::Dict* msg = parsed_json->GetIfDict();
+  if (!msg)
     return InternalError("Message was not an object: " + temp);
 
-  std::string type;
-  if (!msg->GetString("type", &type))
+  const std::string* type = msg->FindString("type");
+  if (!type)
     return MissingField("unknown", "type");
 
-  return HandleStructuredMessage(type, msg);
+  return HandleStructuredMessage(*type, *msg);
 }
 
 MessageResponse StructuredMessageHandler::MissingField(
@@ -82,28 +83,30 @@ void LoadTestMessageHandler::Log(const std::string& type,
 }
 
 MessageResponse LoadTestMessageHandler::HandleStructuredMessage(
-   const std::string& type,
-   base::DictionaryValue* msg) {
+    const std::string& type,
+    const base::Value::Dict& msg) {
   if (type == "Log") {
-    std::string message;
-    if (!msg->GetString("message", &message))
+    const std::string* message = msg.FindString("message");
+    if (!message) {
       return MissingField(type, "message");
-    Log("LOG", message);
+    }
+    Log("LOG", *message);
     return CONTINUE;
-  } else if (type == "Shutdown") {
-    std::string message;
-    if (!msg->GetString("message", &message))
+  }
+  if (type == "Shutdown") {
+    const std::string* message = msg.FindString("message");
+    if (!message) {
       return MissingField(type, "message");
-    if (absl::optional<bool> passed = msg->FindBoolKey("passed")) {
-      test_passed_ = *passed;
-    } else {
+    }
+    absl::optional<bool> passed = msg.FindBool("passed");
+    if (!passed) {
       return MissingField(type, "passed");
     }
-    Log("SHUTDOWN", message);
+    test_passed_ = *passed;
+    Log("SHUTDOWN", *message);
     return DONE;
-  } else {
-    return InternalError("Unknown message type: " + type);
   }
+  return InternalError("Unknown message type: " + type);
 }
 
 // A message handler for nacl_integration tests ported to be browser_tests.
@@ -121,8 +124,9 @@ class NaClIntegrationMessageHandler : public StructuredMessageHandler {
 
   void Log(const std::string& message);
 
-  MessageResponse HandleStructuredMessage(const std::string& type,
-                                          base::DictionaryValue* msg) override;
+  MessageResponse HandleStructuredMessage(
+      const std::string& type,
+      const base::Value::Dict& msg) override;
 
   bool test_passed() const {
     return test_passed_;
@@ -143,31 +147,35 @@ void NaClIntegrationMessageHandler::Log(const std::string& message) {
 
 MessageResponse NaClIntegrationMessageHandler::HandleStructuredMessage(
     const std::string& type,
-    base::DictionaryValue* msg) {
+    const base::Value::Dict& msg) {
   if (type == "TestLog") {
-    std::string message;
-    if (!msg->GetString("message", &message))
+    const std::string* message = msg.FindString("message");
+    if (!message) {
       return MissingField(type, "message");
-    Log(message);
+    }
+    Log(*message);
     return CONTINUE;
-  } else if (type == "Shutdown") {
-    std::string message;
-    if (!msg->GetString("message", &message))
+  }
+  if (type == "Shutdown") {
+    const std::string* message = msg.FindString("message");
+    if (!message) {
       return MissingField(type, "message");
-    if (absl::optional<bool> passed = msg->FindBoolKey("passed")) {
-      test_passed_ = *passed;
-    } else {
+    }
+    absl::optional<bool> passed = msg.FindBool("passed");
+    if (!passed) {
       return MissingField(type, "passed");
     }
-    Log(message);
+    test_passed_ = *passed;
+    Log(*message);
     return DONE;
-  } else if (type == "Ping") {
-    return CONTINUE;
-  } else if (type == "JavaScriptIsAlive") {
-    return CONTINUE;
-  } else {
-    return InternalError("Unknown message type: " + type);
   }
+  if (type == "Ping") {
+    return CONTINUE;
+  }
+  if (type == "JavaScriptIsAlive") {
+    return CONTINUE;
+  }
+  return InternalError("Unknown message type: " + type);
 }
 
 // NaCl browser tests serve files out of the build directory because nexes and
@@ -201,6 +209,7 @@ static void AddPnaclParm(const base::FilePath::StringType& url,
 }
 
 NaClBrowserTestBase::NaClBrowserTestBase() {
+  feature_list_.InitAndEnableFeature(kNaclAllow);
 }
 
 NaClBrowserTestBase::~NaClBrowserTestBase() {
@@ -263,11 +272,7 @@ void NaClBrowserTestBase::RunNaClIntegrationTest(
 
   GURL url;
   if (full_url) {
-#if BUILDFLAG(IS_WIN)
-    url = GURL(base::WideToUTF16(url_fragment_with_both));
-#else
     url = GURL(url_fragment_with_both);
-#endif
   } else {
     url = TestURL(url_fragment_with_both);
   }
@@ -302,6 +307,10 @@ bool NaClBrowserTestPnacl::IsAPnaclTest() {
   return true;
 }
 
+base::FilePath::StringType NaClBrowserTestIrt::Variant() {
+  return FILE_PATH_LITERAL("test_irt");
+}
+
 void NaClBrowserTestPnaclSubzero::SetUpCommandLine(
     base::CommandLine* command_line) {
   NaClBrowserTestPnacl::SetUpCommandLine(command_line);
@@ -321,7 +330,7 @@ void NaClBrowserTestNewlibExtension::SetUpCommandLine(
     base::CommandLine* command_line) {
   NaClBrowserTestBase::SetUpCommandLine(command_line);
   base::FilePath src_root;
-  ASSERT_TRUE(base::PathService::Get(base::DIR_SOURCE_ROOT, &src_root));
+  ASSERT_TRUE(base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &src_root));
 
   // Extension-based tests should specialize the GetDocumentRoot() / Variant()
   // to point at the isolated the test extension directory.
@@ -339,7 +348,7 @@ void NaClBrowserTestGLibcExtension::SetUpCommandLine(
     base::CommandLine* command_line) {
   NaClBrowserTestBase::SetUpCommandLine(command_line);
   base::FilePath src_root;
-  ASSERT_TRUE(base::PathService::Get(base::DIR_SOURCE_ROOT, &src_root));
+  ASSERT_TRUE(base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &src_root));
 
   // Extension-based tests should specialize the GetDocumentRoot() / Variant()
   // to point at the isolated the test extension directory.

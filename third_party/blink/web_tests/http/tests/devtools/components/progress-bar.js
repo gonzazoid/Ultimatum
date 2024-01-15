@@ -2,6 +2,10 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {TestRunner} from 'test_runner';
+
+import * as Common from 'devtools/core/common/common.js';
+
 (async function() {
   TestRunner.addResult(`Tests inspector's composite progress bar.\n`);
 
@@ -55,7 +59,7 @@
   TestRunner.runTestSuite([
     function testOneSubProgress(next) {
       var indicator = new MockProgressIndicator();
-      var composite = new Common.CompositeProgress(indicator);
+      var composite = new Common.Progress.CompositeProgress(indicator);
       var subProgress = composite.createSubProgress();
 
       TestRunner.addResult('Testing CompositeProgress with a single subprogress:');
@@ -74,7 +78,7 @@
 
     function testMultipleSubProgresses(next) {
       var indicator = new MockProgressIndicator();
-      var composite = new Common.CompositeProgress(indicator);
+      var composite = new Common.Progress.CompositeProgress(indicator);
       var subProgress1 = composite.createSubProgress();
       var subProgress2 = composite.createSubProgress(3);
 
@@ -107,7 +111,7 @@
 
     function testCancel(next) {
       var indicator = new MockProgressIndicator();
-      var composite = new Common.CompositeProgress(indicator);
+      var composite = new Common.Progress.CompositeProgress(indicator);
       var subProgress = composite.createSubProgress();
 
       TestRunner.addResult('Testing isCanceled:');
@@ -119,9 +123,9 @@
 
     function testNested(next) {
       var indicator = new MockProgressIndicator();
-      var composite0 = new Common.CompositeProgress(indicator);
+      var composite0 = new Common.Progress.CompositeProgress(indicator);
       var subProgress01 = composite0.createSubProgress();
-      var composite1 = new Common.CompositeProgress(subProgress01);
+      var composite1 = new Common.Progress.CompositeProgress(subProgress01);
       var subProgress11 = composite1.createSubProgress(10);  // Weight should have no effect.
 
       TestRunner.addResult('Testing nested subprogresses:');

@@ -10,6 +10,7 @@
 #include <string>
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "base/observer_list.h"
 #include "components/sync_device_info/device_info_tracker.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -35,18 +36,29 @@ class FakeDeviceInfoTracker : public DeviceInfoTracker {
 
   // DeviceInfoTracker
   bool IsSyncing() const override;
-  std::unique_ptr<DeviceInfo> GetDeviceInfo(
-      const std::string& client_id) const override;
-  std::vector<std::unique_ptr<DeviceInfo>> GetAllDeviceInfo() const override;
+  const DeviceInfo* GetDeviceInfo(const std::string& client_id) const override;
+  std::vector<const DeviceInfo*> GetAllDeviceInfo() const override;
   void AddObserver(Observer* observer) override;
   void RemoveObserver(Observer* observer) override;
-  std::map<sync_pb::SyncEnums_DeviceType, int> CountActiveDevicesByType()
+  std::map<DeviceInfo::FormFactor, int> CountActiveDevicesByType()
       const override;
   void ForcePulseForTest() override;
   bool IsRecentLocalCacheGuid(const std::string& cache_guid) const override;
 
   // Adds a new DeviceInfo entry to |devices_|.
   void Add(const DeviceInfo* device);
+
+  // Adds a vector of new DeviceInfo entries to |devices_|.
+  void Add(const std::vector<const DeviceInfo*>& devices);
+
+  // Overload that allows passing ownership.
+  void Add(std::unique_ptr<DeviceInfo> device);
+
+  // Removes a DeviceInfo entry from the device list.
+  // FakeDeviceInfoTracker keeps raw pointers to previously added devices, so
+  // clients should take care of removing them after those are destroyed if the
+  // FakeDeviceInfoTracker may outlive them.
+  void Remove(const DeviceInfo* device);
 
   // Replaces |old_device| with |new_device|. |old_device| must be present in
   // the tracker.
@@ -55,16 +67,18 @@ class FakeDeviceInfoTracker : public DeviceInfoTracker {
   // Overrides the result of CountActiveDevicesByType() to |counts| instead of
   // the actual number of devices in |devices_|.
   void OverrideActiveDeviceCount(
-      const std::map<sync_pb::SyncEnums_DeviceType, int>& counts);
+      const std::map<DeviceInfo::FormFactor, int>& counts);
 
   // Marks an existing DeviceInfo entry as being on the local device.
   void SetLocalCacheGuid(const std::string& cache_guid);
 
  private:
-  // DeviceInfo stored here are not owned.
-  std::vector<const DeviceInfo*> devices_;
+  // Owned DeviceInfo instances (subset of all devices).
+  std::vector<std::unique_ptr<DeviceInfo>> owned_devices_;
+  // DeviceInfo stored here are not necessarily owned.
+  std::vector<raw_ptr<const DeviceInfo, VectorExperimental>> devices_;
   std::string local_device_cache_guid_;
-  absl::optional<std::map<sync_pb::SyncEnums_DeviceType, int>>
+  absl::optional<std::map<DeviceInfo::FormFactor, int>>
       device_count_per_type_override_;
   // Registered observers, not owned.
   base::ObserverList<Observer, true>::Unchecked observers_;

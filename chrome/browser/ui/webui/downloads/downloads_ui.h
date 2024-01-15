@@ -8,10 +8,11 @@
 #include <memory>
 
 #include "chrome/browser/ui/webui/downloads/downloads.mojom.h"
+#include "content/public/browser/webui_config.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/receiver.h"
-#include "ui/base/layout.h"
+#include "ui/base/resource/resource_scale_factor.h"
 #include "ui/webui/mojo_web_ui_controller.h"
 
 namespace base {
@@ -19,6 +20,17 @@ class RefCountedMemory;
 }
 
 class DownloadsDOMHandler;
+
+class DownloadsUIConfig : public content::WebUIConfig {
+ public:
+  DownloadsUIConfig();
+  ~DownloadsUIConfig() override;
+
+  // content::WebUIConfig:
+  std::unique_ptr<content::WebUIController> CreateWebUIController(
+      content::WebUI* web_ui,
+      const GURL& url) override;
+};
 
 class DownloadsUI : public ui::MojoWebUIController,
                     public downloads::mojom::PageHandlerFactory {

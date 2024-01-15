@@ -7,6 +7,8 @@
 // windows.h must be included first.
 #include <windows.h>
 
+#include <string_view>
+
 #define INITGUID
 
 #include <devpkey.h>
@@ -15,21 +17,20 @@
 #include <stdint.h>
 #include <usbiodef.h>
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/memory/free_deleter.h"
 #include "base/memory/ptr_util.h"
 #include "base/scoped_generic.h"
 #include "base/strings/string_number_conversions.h"
-#include "base/strings/string_piece_forward.h"
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
 #include "base/strings/sys_string_conversions.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/threading/scoped_blocking_call.h"
 #include "base/threading/scoped_thread_priority.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "base/win/registry.h"
 #include "base/win/scoped_devinfo.h"
 #include "base/win/scoped_handle.h"
@@ -168,7 +169,7 @@ absl::optional<std::vector<std::wstring>> GetDeviceStringListProperty(
   }
 
   // Windows string list properties use a NUL character as the delimiter.
-  return base::SplitString(buffer, base::WStringPiece(L"\0", 1),
+  return base::SplitString(buffer, std::wstring_view(L"\0", 1),
                            base::KEEP_WHITESPACE, base::SPLIT_WANT_NONEMPTY);
 }
 
@@ -180,7 +181,7 @@ std::wstring GetServiceName(HDEVINFO dev_info, SP_DEVINFO_DATA* dev_info_data) {
 
   // Windows pads this string with a variable number of NUL bytes for no
   // discernible reason.
-  return std::wstring(base::TrimString(*property, base::WStringPiece(L"\0", 1),
+  return std::wstring(base::TrimString(*property, std::wstring_view(L"\0", 1),
                                        base::TRIM_TRAILING));
 }
 
@@ -408,12 +409,29 @@ UsbDeviceWin::FunctionInfo GetFunctionInfo(const std::wstring& instance_id) {
   }
   base::win::RegKey scoped_key(key);
 
+  // Devices may either have DeviceInterfaceGUID or DeviceInterfaceGUIDs
+  // registry keys. Read both and only consider it an error if there are no
+  // useful results.
   std::vector<std::wstring> device_interface_guids;
-  LONG result =
+  LONG guids_result =
       scoped_key.ReadValues(L"DeviceInterfaceGUIDs", &device_interface_guids);
-  if (result != ERROR_SUCCESS) {
-    USB_LOG(ERROR) << "Could not read device interface GUIDs: "
-                   << logging::SystemErrorCodeToString(result);
+
+  std::wstring device_interface_guid;
+  LONG guid_result =
+      scoped_key.ReadValue(L"DeviceInterfaceGUID", &device_interface_guid);
+  if (SUCCEEDED(guid_result)) {
+    device_interface_guids.push_back(std::move(device_interface_guid));
+  }
+
+  if (device_interface_guids.empty()) {
+    if (FAILED(guids_result)) {
+      USB_LOG(ERROR) << "Could not read DeviceInterfaceGUIDs: "
+                     << logging::SystemErrorCodeToString(guids_result);
+    }
+    if (FAILED(guid_result)) {
+      USB_LOG(ERROR) << "Could not read DeviceInterfaceGUID: "
+                     << logging::SystemErrorCodeToString(guid_result);
+    }
     return info;
   }
 
@@ -619,7 +637,7 @@ UsbServiceWin::UsbServiceWin()
 
   helper_ = base::SequenceBound<BlockingTaskRunnerHelper>(
       blocking_task_runner_, weak_factory_.GetWeakPtr(),
-      base::SequencedTaskRunnerHandle::Get());
+      base::SequencedTaskRunner::GetCurrentDefault());
 }
 
 UsbServiceWin::~UsbServiceWin() {
@@ -683,6 +701,11 @@ void UsbServiceWin::CreateDeviceObject(
     uint32_t port_number,
     UsbDeviceWin::DriverType driver_type,
     const std::wstring& driver_name) {
+  if (base::Contains(devices_by_path_, device_path)) {
+    USB_LOG(ERROR) << "Got duplicate add event for path: " << device_path;
+    return;
+  }
+
   // Devices that appear during initial enumeration are gathered into the first
   // result returned by GetDevices() and prevent device add/remove notifications
   // from being sent.

@@ -14,11 +14,11 @@
 #include "content/public/browser/color_chooser.h"
 #include "content/public/browser/global_request_id.h"
 #include "content/public/browser/invalidate_type.h"
-#include "content/public/browser/native_web_keyboard_event.h"
 #include "content/public/browser/navigation_controller.h"
 #include "content/public/browser/page_navigator.h"
 #include "content/public/browser/render_widget_host_view.h"
 #include "content/public/browser/web_contents.h"
+#include "content/public/common/input/native_web_keyboard_event.h"
 #include "content/public/common/referrer.h"
 #include "content/public/common/resource_request_body_android.h"
 #include "third_party/blink/public/mojom/devtools/console_message.mojom.h"
@@ -412,6 +412,15 @@ bool WebContentsDelegateAndroid::DoBrowserControlsShrinkRendererSize(
   return Java_WebContentsDelegateAndroid_controlsResizeView(env, obj);
 }
 
+int WebContentsDelegateAndroid::GetVirtualKeyboardHeight(
+    content::WebContents* contents) {
+  JNIEnv* env = AttachCurrentThread();
+  ScopedJavaLocalRef<jobject> obj = GetJavaDelegate(env);
+  if (obj.is_null())
+    return false;
+  return Java_WebContentsDelegateAndroid_getVirtualKeyboardHeight(env, obj);
+}
+
 blink::mojom::DisplayMode WebContentsDelegateAndroid::GetDisplayMode(
     const content::WebContents* web_contents) {
   JNIEnv* env = base::android::AttachCurrentThread();
@@ -422,6 +431,17 @@ blink::mojom::DisplayMode WebContentsDelegateAndroid::GetDisplayMode(
 
   return static_cast<blink::mojom::DisplayMode>(
       Java_WebContentsDelegateAndroid_getDisplayModeChecked(env, obj));
+}
+
+void WebContentsDelegateAndroid::DidChangeCloseSignalInterceptStatus() {
+  JNIEnv* env = base::android::AttachCurrentThread();
+
+  ScopedJavaLocalRef<jobject> obj = GetJavaDelegate(env);
+  if (obj.is_null()) {
+    return;
+  }
+
+  Java_WebContentsDelegateAndroid_didChangeCloseSignalInterceptStatus(env, obj);
 }
 
 }  // namespace web_contents_delegate_android

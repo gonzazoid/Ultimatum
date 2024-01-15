@@ -13,15 +13,17 @@ GLTextureAndroidImageRepresentation::GLTextureAndroidImageRepresentation(
     SharedImageManager* manager,
     AndroidImageBacking* backing,
     MemoryTypeTracker* tracker,
+    gl::ScopedEGLImage egl_image,
     gles2::Texture* texture)
     : GLTextureImageRepresentation(manager, backing, tracker),
+      egl_image_(std::move(egl_image)),
       texture_(texture) {}
 
 GLTextureAndroidImageRepresentation::~GLTextureAndroidImageRepresentation() {
   EndAccess();
-
-  if (texture_)
-    texture_->RemoveLightweightRef(has_context());
+  if (texture_) {
+    texture_.ExtractAsDangling()->RemoveLightweightRef(has_context());
+  }
 }
 
 gles2::Texture* GLTextureAndroidImageRepresentation::GetTexture(
@@ -31,8 +33,7 @@ gles2::Texture* GLTextureAndroidImageRepresentation::GetTexture(
 }
 
 bool GLTextureAndroidImageRepresentation::BeginAccess(GLenum mode) {
-  bool read_only_mode = (mode == GL_SHARED_IMAGE_ACCESS_MODE_READ_CHROMIUM) ||
-                        (mode == GL_SHARED_IMAGE_ACCESS_MODE_OVERLAY_CHROMIUM);
+  bool read_only_mode = (mode == GL_SHARED_IMAGE_ACCESS_MODE_READ_CHROMIUM);
   bool read_write_mode =
       (mode == GL_SHARED_IMAGE_ACCESS_MODE_READWRITE_CHROMIUM);
   DCHECK(read_only_mode || read_write_mode);

@@ -5,6 +5,8 @@
 #ifndef MEDIA_CAPTURE_VIDEO_MOCK_VIDEO_CAPTURE_DEVICE_CLIENT_H_
 #define MEDIA_CAPTURE_VIDEO_MOCK_VIDEO_CAPTURE_DEVICE_CLIENT_H_
 
+#include <memory>
+
 #include "media/capture/video/video_capture_device.h"
 #include "testing/gmock/include/gmock/gmock.h"
 
@@ -18,6 +20,7 @@ class MockVideoCaptureDeviceClient : public VideoCaptureDevice::Client {
   MockVideoCaptureDeviceClient();
   ~MockVideoCaptureDeviceClient() override;
 
+  MOCK_METHOD0(OnCaptureConfigurationChanged, void(void));
   MOCK_METHOD9(OnIncomingCapturedData,
                void(const uint8_t* data,
                     int length,
@@ -37,9 +40,9 @@ class MockVideoCaptureDeviceClient : public VideoCaptureDevice::Client {
                     int frame_feedback_id));
   MOCK_METHOD4(OnIncomingCapturedExternalBuffer,
                void(CapturedExternalVideoBuffer buffer,
-                    std::vector<CapturedExternalVideoBuffer> scaled_buffers,
                     base::TimeTicks reference_time,
-                    base::TimeDelta timestamp));
+                    base::TimeDelta timestamp,
+                    const gfx::Rect& visible_rect));
   MOCK_METHOD4(ReserveOutputBuffer,
                ReserveResult(const gfx::Size&, VideoPixelFormat, int, Buffer*));
   MOCK_METHOD3(OnError,

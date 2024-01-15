@@ -14,6 +14,7 @@
 #include "base/containers/stack.h"
 #include "base/files/file_path.h"
 #include "base/gtest_prod_util.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "base/memory/ref_counted.h"
 #include "base/time/time.h"
 #include "components/history/core/browser/history_service.h"
@@ -21,6 +22,7 @@
 #include "components/omnibox/browser/scored_history_match.h"
 
 class HistoryQuickProviderTest;
+class OmniboxTriggeredFeatureService;
 class TemplateURLService;
 
 namespace bookmarks {
@@ -30,7 +32,7 @@ class BookmarkModel;
 namespace history {
 class HistoryDatabase;
 class InMemoryURLIndex;
-}
+}  // namespace history
 
 // A structure private to InMemoryURLIndex describing its internal data and
 // providing for restoring, rebuilding and updating that internal data. As
@@ -72,10 +74,11 @@ class URLIndexPrivateData
       const std::string& host_filter,
       size_t max_matches,
       bookmarks::BookmarkModel* bookmark_model,
-      TemplateURLService* template_url_service);
+      TemplateURLService* template_url_service,
+      OmniboxTriggeredFeatureService* triggered_feature_service);
 
   // Returns URL hosts that have been visited more than a threshold.
-  std::vector<std::string> HighlyVisitedHosts() const;
+  const std::vector<std::string>& HighlyVisitedHosts() const;
 
   // Adds the history item in |row| to the index if it does not already already
   // exist and it meets the minimum 'quick' criteria. If the row already exists
@@ -129,6 +132,16 @@ class URLIndexPrivateData
   // Estimates dynamic memory usage.
   // See base/trace_event/memory_usage_estimator.h for more info.
   size_t EstimateMemoryUsage() const;
+
+  // Break up the raw search string (complete with escaped URL elements) into
+  // 'terms' (as opposed to 'words'; see comment in HistoryItemsForTerms()).
+  // We only want to break up the search string on 'true' whitespace rather than
+  // escaped whitespace.  For example, when the user types
+  // "colspec=ID%20Mstone Release" we get two 'terms': "colspec=id%20mstone" and
+  // "release".
+  // Also returns word starts in each term.
+  static std::pair<String16Vector, WordStarts> GetTermsAndWordStartsOffsets(
+      const std::u16string& lower_raw_string);
 
  private:
   friend class base::RefCountedThreadSafe<URLIndexPrivateData>;
@@ -194,7 +207,9 @@ class URLIndexPrivateData
     bool operator()(const HistoryID h1, const HistoryID h2);
 
    private:
-    const HistoryInfoMap& history_info_map_;
+    // This field is not a raw_ref<> because it was filtered by the rewriter
+    // for: #constexpr-ctor-field-initializer
+    RAW_PTR_EXCLUSION const HistoryInfoMap& history_info_map_;
   };
 
   // Information about a URL host aggregated from all URLs of that host. Used to
@@ -237,12 +252,14 @@ class URLIndexPrivateData
 
   // Helper function for HistoryItemsForTerms().  Fills in |scored_items| from
   // the matches listed in |history_ids|.
-  void HistoryIdsToScoredMatches(HistoryIDVector history_ids,
-                                 const std::u16string& lower_raw_string,
-                                 const std::string& host_filter,
-                                 const TemplateURLService* template_url_service,
-                                 bookmarks::BookmarkModel* bookmark_model,
-                                 ScoredHistoryMatches* scored_items) const;
+  void HistoryIdsToScoredMatches(
+      HistoryIDVector history_ids,
+      const std::u16string& lower_raw_string,
+      const std::string& host_filter,
+      const TemplateURLService* template_url_service,
+      bookmarks::BookmarkModel* bookmark_model,
+      ScoredHistoryMatches* scored_items,
+      OmniboxTriggeredFeatureService* triggered_feature_service) const;
 
   // Fills in |terms_to_word_starts_offsets| according to where the word starts
   // in each term.  For example, in the term "-foo" the word starts at offset 1.

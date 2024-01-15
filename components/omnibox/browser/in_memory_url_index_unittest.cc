@@ -32,8 +32,10 @@
 #include "components/history/core/browser/history_service.h"
 #include "components/history/core/test/history_service_test_util.h"
 #include "components/omnibox/browser/in_memory_url_index_types.h"
+#include "components/omnibox/browser/omnibox_triggered_feature_service.h"
 #include "components/omnibox/browser/url_index_private_data.h"
 #include "components/search_engines/template_url_service.h"
+#include "components/url_formatter/url_formatter.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 // The test version of the history url database table ('url') is contained in
@@ -78,9 +80,9 @@ void StringToTerms(const char* search_string,
     lower_string->insert(cursor_position, u" ");
   }
 
-  *lower_terms = base::SplitString(*lower_string, base::kWhitespaceUTF16,
-                                   base::KEEP_WHITESPACE,
-                                   base::SPLIT_WANT_NONEMPTY);
+  *lower_terms =
+      base::SplitString(*lower_string, base::kWhitespaceUTF16,
+                        base::KEEP_WHITESPACE, base::SPLIT_WANT_NONEMPTY);
 }
 
 }  // namespace
@@ -118,10 +120,6 @@ class InMemoryURLIndexTest : public testing::Test {
   URLIndexPrivateData* GetPrivateData() const;
   base::CancelableTaskTracker* GetPrivateDataTracker() const;
   void ClearPrivateData();
-  void set_history_dir(const base::FilePath& dir_path);
-  bool GetCacheFilePath(base::FilePath* file_path) const;
-  void PostRestoreFromCacheFileTask();
-  void PostSaveToCacheFileTask();
   const SchemeSet& scheme_allowlist();
 
   // Pass-through functions to simplify our friendship with URLIndexPrivateData.
@@ -133,6 +131,15 @@ class InMemoryURLIndexTest : public testing::Test {
   void ExpectPrivateDataEmpty(const URLIndexPrivateData& data);
   void ExpectPrivateDataEqual(const URLIndexPrivateData& expected,
                               const URLIndexPrivateData& actual);
+
+  ScoredHistoryMatches HistoryItemsForTerms(const std::u16string& term_string,
+                                            size_t cursor_position,
+                                            const std::string& host_filter,
+                                            size_t max_matches) {
+    OmniboxTriggeredFeatureService x{};
+    return url_index_->HistoryItemsForTerms(term_string, cursor_position,
+                                            host_filter, max_matches, &x);
+  }
 
   base::ScopedTempDir history_dir_;
   base::ScopedTempDir temp_dir_;
@@ -198,7 +205,7 @@ void InMemoryURLIndexTest::SetUp() {
         // Execute the contents of a golden file to populate the [urls] and
         // [visits] tables.
         base::FilePath golden_path;
-        base::PathService::Get(base::DIR_SOURCE_ROOT, &golden_path);
+        base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &golden_path);
         golden_path = golden_path.AppendASCII("components/test/data/omnibox");
         golden_path = golden_path.Append(TestDBName());
         ASSERT_TRUE(base::PathExists(golden_path));
@@ -215,15 +222,15 @@ void InMemoryURLIndexTest::SetUp() {
         {
           sql::Statement s(db.GetUniqueStatement(
               "UPDATE urls SET last_visit_time = ? - ? * last_visit_time"));
-          s.BindInt64(0, time_right_now.ToInternalValue());
-          s.BindInt64(1, day_delta.ToInternalValue());
+          s.BindTime(0, time_right_now);
+          s.BindTimeDelta(1, day_delta);
           ASSERT_TRUE(s.Run());
         }
         {
           sql::Statement s(db.GetUniqueStatement(
               "UPDATE visits SET visit_time = ? - ? * visit_time"));
-          s.BindInt64(0, time_right_now.ToInternalValue());
-          s.BindInt64(1, day_delta.ToInternalValue());
+          s.BindTime(0, time_right_now);
+          s.BindTimeDelta(1, day_delta);
           ASSERT_TRUE(s.Run());
         }
       }));
@@ -310,7 +317,7 @@ void InMemoryURLIndexTest::ExpectPrivateDataEmpty(
 
 // Helper function which compares two maps for equivalence. The maps' values
 // are associative containers and their contents are compared as well.
-template<typename T>
+template <typename T>
 void ExpectMapOfContainersIdentical(const T& expected, const T& actual) {
   ASSERT_EQ(expected.size(), actual.size());
   for (auto expected_iter = expected.begin(); expected_iter != expected.end();
@@ -411,7 +418,8 @@ TEST_F(LimitedInMemoryURLIndexTest, Initialization) {
   sql::Statement statement(GetDB().GetUniqueStatement("SELECT * FROM urls;"));
   ASSERT_TRUE(statement.is_valid());
   uint64_t row_count = 0;
-  while (statement.Step()) ++row_count;
+  while (statement.Step())
+    ++row_count;
   EXPECT_EQ(1U, row_count);
 
   InitializeInMemoryURLIndex();
@@ -420,7 +428,7 @@ TEST_F(LimitedInMemoryURLIndexTest, Initialization) {
   // history_info_map_ should have the same number of items as were filtered.
   EXPECT_EQ(1U, private_data.history_info_map_.size());
   EXPECT_EQ(35U, private_data.char_word_map_.size());
-  EXPECT_EQ(17U, private_data.word_map_.size());
+  EXPECT_EQ(19U, private_data.word_map_.size());
 }
 
 TEST_F(InMemoryURLIndexTest, HiddenURLRowsAreIgnored) {
@@ -431,15 +439,14 @@ TEST_F(InMemoryURLIndexTest, HiddenURLRowsAreIgnored) {
   new_row.set_hidden(true);
 
   EXPECT_FALSE(UpdateURL(new_row));
-  EXPECT_EQ(0U, url_index_
-                    ->HistoryItemsForTerms(u"hidden", std::u16string::npos, "",
-                                           kProviderMaxMatches)
+  EXPECT_EQ(0U, HistoryItemsForTerms(u"hidden", std::u16string::npos, "",
+                                     kProviderMaxMatches)
                     .size());
 }
 
 TEST_F(InMemoryURLIndexTest, Retrieval) {
   // See if a very specific term gives a single result.
-  ScoredHistoryMatches matches = url_index_->HistoryItemsForTerms(
+  ScoredHistoryMatches matches = HistoryItemsForTerms(
       u"DrudgeReport", std::u16string::npos, "", kProviderMaxMatches);
   ASSERT_EQ(1U, matches.size());
 
@@ -449,23 +456,23 @@ TEST_F(InMemoryURLIndexTest, Retrieval) {
   EXPECT_EQ(u"DRUDGE REPORT 2010", matches[0].url_info.title());
 
   // Make sure a trailing space still results in the expected result.
-  matches = url_index_->HistoryItemsForTerms(
-      u"DrudgeReport ", std::u16string::npos, "", kProviderMaxMatches);
+  matches = HistoryItemsForTerms(u"DrudgeReport ", std::u16string::npos, "",
+                                 kProviderMaxMatches);
   ASSERT_EQ(1U, matches.size());
   EXPECT_EQ(5, matches[0].url_info.id());
   EXPECT_EQ("http://drudgereport.com/", matches[0].url_info.url().spec());
   EXPECT_EQ(u"DRUDGE REPORT 2010", matches[0].url_info.title());
 
   // Search which should result in multiple results.
-  matches = url_index_->HistoryItemsForTerms(u"drudge", std::u16string::npos,
-                                             "", kProviderMaxMatches);
+  matches = HistoryItemsForTerms(u"drudge", std::u16string::npos, "",
+                                 kProviderMaxMatches);
   ASSERT_EQ(2U, matches.size());
   // The results should be in descending score order.
   EXPECT_GE(matches[0].raw_score, matches[1].raw_score);
 
   // Search which should result in nearly perfect result.
-  matches = url_index_->HistoryItemsForTerms(
-      u"Nearly Perfect Result", std::u16string::npos, "", kProviderMaxMatches);
+  matches = HistoryItemsForTerms(u"Nearly Perfect Result", std::u16string::npos,
+                                 "", kProviderMaxMatches);
   ASSERT_EQ(1U, matches.size());
   // The results should have a very high score.
   EXPECT_GT(matches[0].raw_score, 900);
@@ -476,13 +483,13 @@ TEST_F(InMemoryURLIndexTest, Retrieval) {
 
   // Search which should result in very poor result.  (It's a mid-word match
   // in a hostname.)  No results since it will be suppressed by default scoring.
-  matches = url_index_->HistoryItemsForTerms(u"heinqui", std::u16string::npos,
-                                             "", kProviderMaxMatches);
+  matches = HistoryItemsForTerms(u"heinqui", std::u16string::npos, "",
+                                 kProviderMaxMatches);
   EXPECT_EQ(0U, matches.size());
   // But if the user adds a term that matches well against the same result,
   // the result should be returned.
-  matches = url_index_->HistoryItemsForTerms(
-      u"heinqui microprocessor", std::u16string::npos, "", kProviderMaxMatches);
+  matches = HistoryItemsForTerms(u"heinqui microprocessor",
+                                 std::u16string::npos, "", kProviderMaxMatches);
   ASSERT_EQ(1U, matches.size());
   EXPECT_EQ(18, matches[0].url_info.id());
   EXPECT_EQ("http://www.theinquirer.net/", matches[0].url_info.url().spec());
@@ -492,75 +499,96 @@ TEST_F(InMemoryURLIndexTest, Retrieval) {
       matches[0].url_info.title());
 
   // A URL that comes from the default search engine should not be returned.
-  matches = url_index_->HistoryItemsForTerms(u"query", std::u16string::npos, "",
-                                             kProviderMaxMatches);
+  matches = HistoryItemsForTerms(u"query", std::u16string::npos, "",
+                                 kProviderMaxMatches);
   EXPECT_EQ(0U, matches.size());
 
   // But if it's not from the default search engine, it should be returned.
   TemplateURL* template_url = template_url_service_->GetTemplateURLForKeyword(
       kNonDefaultTemplateURLKeyword);
   template_url_service_->SetUserSelectedDefaultSearchProvider(template_url);
-  matches = url_index_->HistoryItemsForTerms(u"query", std::u16string::npos, "",
-                                             kProviderMaxMatches);
+  matches = HistoryItemsForTerms(u"query", std::u16string::npos, "",
+                                 kProviderMaxMatches);
   EXPECT_EQ(1U, matches.size());
 
   // Search which will match at the end of a URL with encoded characters.
-  matches = url_index_->HistoryItemsForTerms(u"Mice", std::u16string::npos, "",
-                                             kProviderMaxMatches);
+  matches = HistoryItemsForTerms(u"Mice", std::u16string::npos, "",
+                                 kProviderMaxMatches);
   ASSERT_EQ(1U, matches.size());
   EXPECT_EQ(30, matches[0].url_info.id());
 
   // Check that URLs are not escaped an extra time.
-  matches = url_index_->HistoryItemsForTerms(
-      u"1% wikipedia", std::u16string::npos, "", kProviderMaxMatches);
+  matches = HistoryItemsForTerms(u"1% wikipedia", std::u16string::npos, "",
+                                 kProviderMaxMatches);
   ASSERT_EQ(1U, matches.size());
   EXPECT_EQ(35, matches[0].url_info.id());
   EXPECT_EQ("http://en.wikipedia.org/wiki/1%25_rule_(Internet_culture)",
             matches[0].url_info.url().spec());
 
   // Verify that a single term can appear multiple times in the URL.
-  matches = url_index_->HistoryItemsForTerms(u"fubar", std::u16string::npos, "",
-                                             kProviderMaxMatches);
+  matches = HistoryItemsForTerms(u"fubar", std::u16string::npos, "",
+                                 kProviderMaxMatches);
   ASSERT_EQ(1U, matches.size());
   EXPECT_EQ(34, matches[0].url_info.id());
   EXPECT_EQ("http://fubarfubarandfubar.com/", matches[0].url_info.url().spec());
   EXPECT_EQ(u"Situation Normal -- FUBARED", matches[0].url_info.title());
 }
 
+// Regression test for crbug.com/1494484. Exercises a URL that is valid but may
+// become invalid if handled with url_formatter::FormatUrl().
+TEST_F(InMemoryURLIndexTest,
+       RetrievalWithInternationalizedDomainNameWithInvalidCodePoint) {
+  const GURL url("https://xn--b4ab3a0a.xn--b4aew.com/");
+
+  ASSERT_TRUE(url.is_valid());
+  ASSERT_FALSE(GURL(url_formatter::FormatUrl(
+                        url, url_formatter::kFormatUrlOmitUsernamePassword,
+                        base::UnescapeRule::NONE, nullptr, nullptr, nullptr))
+                   .is_valid());
+
+  history::URLID new_row_id = 87654321;  // Arbitrarily chosen large new row id.
+  history::URLRow new_row = history::URLRow(url, new_row_id++);
+  new_row.set_last_visit(base::Time::Now());
+
+  EXPECT_TRUE(UpdateURL(new_row));
+  EXPECT_EQ(
+      1U, HistoryItemsForTerms(u"\u04a5\u049b\u049d", std::u16string::npos, "",
+                               kProviderMaxMatches)
+              .size());
+}
+
 TEST_F(InMemoryURLIndexTest, CursorPositionRetrieval) {
   // See if a very specific term with no cursor gives an empty result.
-  ScoredHistoryMatches matches = url_index_->HistoryItemsForTerms(
+  ScoredHistoryMatches matches = HistoryItemsForTerms(
       u"DrudReport", std::u16string::npos, "", kProviderMaxMatches);
   EXPECT_EQ(0U, matches.size());
 
   // The same test with the cursor at the end should give an empty result.
-  matches = url_index_->HistoryItemsForTerms(u"DrudReport", 10u, "",
-                                             kProviderMaxMatches);
+  matches = HistoryItemsForTerms(u"DrudReport", 10u, "", kProviderMaxMatches);
   EXPECT_EQ(0U, matches.size());
 
   // If the cursor is between Drud and Report, we should find the desired
   // result.
-  matches = url_index_->HistoryItemsForTerms(u"DrudReport", 4u, "",
-                                             kProviderMaxMatches);
+  matches = HistoryItemsForTerms(u"DrudReport", 4u, "", kProviderMaxMatches);
   ASSERT_EQ(1U, matches.size());
   EXPECT_EQ("http://drudgereport.com/", matches[0].url_info.url().spec());
   EXPECT_EQ(u"DRUDGE REPORT 2010", matches[0].url_info.title());
 
   // Now check multi-word inputs.  No cursor should fail to find a
   // result on this input.
-  matches = url_index_->HistoryItemsForTerms(
-      u"MORTGAGERATE DROPS", std::u16string::npos, "", kProviderMaxMatches);
+  matches = HistoryItemsForTerms(u"MORTGAGERATE DROPS", std::u16string::npos,
+                                 "", kProviderMaxMatches);
   EXPECT_EQ(0U, matches.size());
 
   // Ditto with cursor at end.
-  matches = url_index_->HistoryItemsForTerms(u"MORTGAGERATE DROPS", 18u, "",
-                                             kProviderMaxMatches);
+  matches =
+      HistoryItemsForTerms(u"MORTGAGERATE DROPS", 18u, "", kProviderMaxMatches);
   EXPECT_EQ(0U, matches.size());
 
   // If the cursor is between MORTAGE And RATE, we should find the
   // desired result.
-  matches = url_index_->HistoryItemsForTerms(u"MORTGAGERATE DROPS", 8u, "",
-                                             kProviderMaxMatches);
+  matches =
+      HistoryItemsForTerms(u"MORTGAGERATE DROPS", 8u, "", kProviderMaxMatches);
   ASSERT_EQ(1U, matches.size());
   EXPECT_EQ("http://www.reuters.com/article/idUSN0839880620100708",
             matches[0].url_info.url().spec());
@@ -571,54 +599,54 @@ TEST_F(InMemoryURLIndexTest, CursorPositionRetrieval) {
 
 TEST_F(InMemoryURLIndexTest, URLPrefixMatching) {
   // "drudgere" - found
-  ScoredHistoryMatches matches = url_index_->HistoryItemsForTerms(
+  ScoredHistoryMatches matches = HistoryItemsForTerms(
       u"drudgere", std::u16string::npos, "", kProviderMaxMatches);
   EXPECT_EQ(1U, matches.size());
 
   // "www.atdmt" - not found
-  matches = url_index_->HistoryItemsForTerms(u"www.atdmt", std::u16string::npos,
-                                             "", kProviderMaxMatches);
+  matches = HistoryItemsForTerms(u"www.atdmt", std::u16string::npos, "",
+                                 kProviderMaxMatches);
   EXPECT_EQ(0U, matches.size());
 
   // "atdmt" - found
-  matches = url_index_->HistoryItemsForTerms(u"atdmt", std::u16string::npos, "",
-                                             kProviderMaxMatches);
+  matches = HistoryItemsForTerms(u"atdmt", std::u16string::npos, "",
+                                 kProviderMaxMatches);
   EXPECT_EQ(1U, matches.size());
 
   // "view.atdmt" - found
-  matches = url_index_->HistoryItemsForTerms(
-      u"view.atdmt", std::u16string::npos, "", kProviderMaxMatches);
+  matches = HistoryItemsForTerms(u"view.atdmt", std::u16string::npos, "",
+                                 kProviderMaxMatches);
   EXPECT_EQ(1U, matches.size());
 
   // "view.atdmt" - found
-  matches = url_index_->HistoryItemsForTerms(
-      u"view.atdmt", std::u16string::npos, "", kProviderMaxMatches);
+  matches = HistoryItemsForTerms(u"view.atdmt", std::u16string::npos, "",
+                                 kProviderMaxMatches);
   EXPECT_EQ(1U, matches.size());
 
   // "cnn.com" - found
-  matches = url_index_->HistoryItemsForTerms(u"cnn.com", std::u16string::npos,
-                                             "", kProviderMaxMatches);
+  matches = HistoryItemsForTerms(u"cnn.com", std::u16string::npos, "",
+                                 kProviderMaxMatches);
   EXPECT_EQ(2U, matches.size());
 
   // "www.cnn.com" - found
-  matches = url_index_->HistoryItemsForTerms(
-      u"www.cnn.com", std::u16string::npos, "", kProviderMaxMatches);
+  matches = HistoryItemsForTerms(u"www.cnn.com", std::u16string::npos, "",
+                                 kProviderMaxMatches);
   EXPECT_EQ(1U, matches.size());
 
   // "ww.cnn.com" - found because we suppress mid-term matches.
-  matches = url_index_->HistoryItemsForTerms(
-      u"ww.cnn.com", std::u16string::npos, "", kProviderMaxMatches);
+  matches = HistoryItemsForTerms(u"ww.cnn.com", std::u16string::npos, "",
+                                 kProviderMaxMatches);
   EXPECT_EQ(0U, matches.size());
 
   // "www.cnn.com" - found
-  matches = url_index_->HistoryItemsForTerms(
-      u"www.cnn.com", std::u16string::npos, "", kProviderMaxMatches);
+  matches = HistoryItemsForTerms(u"www.cnn.com", std::u16string::npos, "",
+                                 kProviderMaxMatches);
   EXPECT_EQ(1U, matches.size());
 
   // "tp://www.cnn.com" - not found because we don't allow tp as a mid-term
   // match
-  matches = url_index_->HistoryItemsForTerms(
-      u"tp://www.cnn.com", std::u16string::npos, "", kProviderMaxMatches);
+  matches = HistoryItemsForTerms(u"tp://www.cnn.com", std::u16string::npos, "",
+                                 kProviderMaxMatches);
   EXPECT_EQ(0U, matches.size());
 }
 
@@ -627,14 +655,14 @@ TEST_F(InMemoryURLIndexTest, ProperStringMatching) {
   // "atdmt view" - found
   // "atdmt.view" - not found
   // "view.atdmt" - found
-  ScoredHistoryMatches matches = url_index_->HistoryItemsForTerms(
+  ScoredHistoryMatches matches = HistoryItemsForTerms(
       u"atdmt view", std::u16string::npos, "", kProviderMaxMatches);
   EXPECT_EQ(1U, matches.size());
-  matches = url_index_->HistoryItemsForTerms(
-      u"atdmt.view", std::u16string::npos, "", kProviderMaxMatches);
+  matches = HistoryItemsForTerms(u"atdmt.view", std::u16string::npos, "",
+                                 kProviderMaxMatches);
   EXPECT_EQ(0U, matches.size());
-  matches = url_index_->HistoryItemsForTerms(
-      u"view.atdmt", std::u16string::npos, "", kProviderMaxMatches);
+  matches = HistoryItemsForTerms(u"view.atdmt", std::u16string::npos, "",
+                                 kProviderMaxMatches);
   EXPECT_EQ(1U, matches.size());
 }
 
@@ -746,8 +774,8 @@ TEST_F(InMemoryURLIndexTest, HugeResultSet) {
     EXPECT_TRUE(UpdateURL(new_row));
   }
 
-  ScoredHistoryMatches matches = url_index_->HistoryItemsForTerms(
-      u"b", std::u16string::npos, "", kProviderMaxMatches);
+  ScoredHistoryMatches matches =
+      HistoryItemsForTerms(u"b", std::u16string::npos, "", kProviderMaxMatches);
   EXPECT_EQ(kProviderMaxMatches, matches.size());
 }
 
@@ -756,7 +784,7 @@ TEST_F(InMemoryURLIndexTest, TitleSearch) {
   EXPECT_EQ(30U, GetPrivateData()->history_info_map_.size());
 
   // Ensure title is being searched.
-  ScoredHistoryMatches matches = url_index_->HistoryItemsForTerms(
+  ScoredHistoryMatches matches = HistoryItemsForTerms(
       u"MORTGAGE RATE DROPS", std::u16string::npos, "", kProviderMaxMatches);
   ASSERT_EQ(1U, matches.size());
 
@@ -772,7 +800,7 @@ TEST_F(InMemoryURLIndexTest, TitleSearch) {
 TEST_F(InMemoryURLIndexTest, TitleChange) {
   // Verify current title terms retrieves desired item.
   std::u16string original_terms = u"lebronomics could high taxes influence";
-  ScoredHistoryMatches matches = url_index_->HistoryItemsForTerms(
+  ScoredHistoryMatches matches = HistoryItemsForTerms(
       original_terms, std::u16string::npos, "", kProviderMaxMatches);
   ASSERT_EQ(1U, matches.size());
 
@@ -787,8 +815,8 @@ TEST_F(InMemoryURLIndexTest, TitleChange) {
 
   // Verify new title terms retrieves nothing.
   std::u16string new_terms = u"does eat oats little lambs ivy";
-  matches = url_index_->HistoryItemsForTerms(new_terms, std::u16string::npos,
-                                             "", kProviderMaxMatches);
+  matches = HistoryItemsForTerms(new_terms, std::u16string::npos, "",
+                                 kProviderMaxMatches);
   EXPECT_EQ(0U, matches.size());
 
   // Update the row.
@@ -796,42 +824,42 @@ TEST_F(InMemoryURLIndexTest, TitleChange) {
   EXPECT_TRUE(UpdateURL(old_row));
 
   // Verify we get the row using the new terms but not the original terms.
-  matches = url_index_->HistoryItemsForTerms(new_terms, std::u16string::npos,
-                                             "", kProviderMaxMatches);
+  matches = HistoryItemsForTerms(new_terms, std::u16string::npos, "",
+                                 kProviderMaxMatches);
   ASSERT_EQ(1U, matches.size());
   EXPECT_EQ(expected_id, matches[0].url_info.id());
-  matches = url_index_->HistoryItemsForTerms(
-      original_terms, std::u16string::npos, "", kProviderMaxMatches);
+  matches = HistoryItemsForTerms(original_terms, std::u16string::npos, "",
+                                 kProviderMaxMatches);
   EXPECT_EQ(0U, matches.size());
 }
 
 TEST_F(InMemoryURLIndexTest, NonUniqueTermCharacterSets) {
   // The presence of duplicate characters should succeed. Exercise by cycling
   // through a string with several duplicate characters.
-  ScoredHistoryMatches matches = url_index_->HistoryItemsForTerms(
+  ScoredHistoryMatches matches = HistoryItemsForTerms(
       u"ABRA", std::u16string::npos, "", kProviderMaxMatches);
   ASSERT_EQ(1U, matches.size());
   EXPECT_EQ(28, matches[0].url_info.id());
   EXPECT_EQ("http://www.ddj.com/windows/184416623",
             matches[0].url_info.url().spec());
 
-  matches = url_index_->HistoryItemsForTerms(u"ABRACAD", std::u16string::npos,
-                                             "", kProviderMaxMatches);
+  matches = HistoryItemsForTerms(u"ABRACAD", std::u16string::npos, "",
+                                 kProviderMaxMatches);
   ASSERT_EQ(1U, matches.size());
   EXPECT_EQ(28, matches[0].url_info.id());
 
-  matches = url_index_->HistoryItemsForTerms(
-      u"ABRACADABRA", std::u16string::npos, "", kProviderMaxMatches);
+  matches = HistoryItemsForTerms(u"ABRACADABRA", std::u16string::npos, "",
+                                 kProviderMaxMatches);
   ASSERT_EQ(1U, matches.size());
   EXPECT_EQ(28, matches[0].url_info.id());
 
-  matches = url_index_->HistoryItemsForTerms(
-      u"ABRACADABR", std::u16string::npos, "", kProviderMaxMatches);
+  matches = HistoryItemsForTerms(u"ABRACADABR", std::u16string::npos, "",
+                                 kProviderMaxMatches);
   ASSERT_EQ(1U, matches.size());
   EXPECT_EQ(28, matches[0].url_info.id());
 
-  matches = url_index_->HistoryItemsForTerms(u"ABRACA", std::u16string::npos,
-                                             "", kProviderMaxMatches);
+  matches = HistoryItemsForTerms(u"ABRACA", std::u16string::npos, "",
+                                 kProviderMaxMatches);
   ASSERT_EQ(1U, matches.size());
   EXPECT_EQ(28, matches[0].url_info.id());
 }
@@ -852,23 +880,21 @@ TEST_F(InMemoryURLIndexTest, TypedCharacterCaching) {
 
   // Simulate typing "r" giving "r" in the simulated omnibox. The results for
   // 'r' will be not cached because it is only 1 character long.
-  url_index_->HistoryItemsForTerms(u"r", std::u16string::npos, "",
-                                   kProviderMaxMatches);
+  HistoryItemsForTerms(u"r", std::u16string::npos, "", kProviderMaxMatches);
   EXPECT_EQ(0U, cache.size());
 
   // Simulate typing "re" giving "r re" in the simulated omnibox.
   // 're' should be cached at this point but not 'r' as it is a single
   // character.
-  url_index_->HistoryItemsForTerms(u"r re", std::u16string::npos, "",
-                                   kProviderMaxMatches);
+  HistoryItemsForTerms(u"r re", std::u16string::npos, "", kProviderMaxMatches);
   ASSERT_EQ(1U, cache.size());
   CheckTerm(cache, u"re");
 
   // Simulate typing "reco" giving "r re reco" in the simulated omnibox.
   // 're' and 'reco' should be cached at this point but not 'r' as it is a
   // single character.
-  url_index_->HistoryItemsForTerms(u"r re reco", std::u16string::npos, "",
-                                   kProviderMaxMatches);
+  HistoryItemsForTerms(u"r re reco", std::u16string::npos, "",
+                       kProviderMaxMatches);
   ASSERT_EQ(2U, cache.size());
   CheckTerm(cache, u"re");
   CheckTerm(cache, u"reco");
@@ -876,21 +902,20 @@ TEST_F(InMemoryURLIndexTest, TypedCharacterCaching) {
   // Simulate typing "mort".
   // Since we now have only one search term, the cached results for 're' and
   // 'reco' should be purged, giving us only 1 item in the cache (for 'mort').
-  url_index_->HistoryItemsForTerms(u"mort", std::u16string::npos, "",
-                                   kProviderMaxMatches);
+  HistoryItemsForTerms(u"mort", std::u16string::npos, "", kProviderMaxMatches);
   ASSERT_EQ(1U, cache.size());
   CheckTerm(cache, u"mort");
 
   // Simulate typing "reco" giving "mort reco" in the simulated omnibox.
-  url_index_->HistoryItemsForTerms(u"mort reco", std::u16string::npos, "",
-                                   kProviderMaxMatches);
+  HistoryItemsForTerms(u"mort reco", std::u16string::npos, "",
+                       kProviderMaxMatches);
   ASSERT_EQ(2U, cache.size());
   CheckTerm(cache, u"mort");
   CheckTerm(cache, u"reco");
 
   // Simulate a <DELETE> by removing the 'reco' and adding back the 'rec'.
-  url_index_->HistoryItemsForTerms(u"mort rec", std::u16string::npos, "",
-                                   kProviderMaxMatches);
+  HistoryItemsForTerms(u"mort rec", std::u16string::npos, "",
+                       kProviderMaxMatches);
   ASSERT_EQ(2U, cache.size());
   CheckTerm(cache, u"mort");
   CheckTerm(cache, u"rec");
@@ -902,9 +927,8 @@ TEST_F(InMemoryURLIndexTest, AddNewRows) {
   // Newly created history::URLRows get a last_visit time of 'right now' so it
   // should
   // qualify as a quick result candidate.
-  EXPECT_TRUE(url_index_
-                  ->HistoryItemsForTerms(u"brokeandalone", std::u16string::npos,
-                                         "", kProviderMaxMatches)
+  EXPECT_TRUE(HistoryItemsForTerms(u"brokeandalone", std::u16string::npos, "",
+                                   kProviderMaxMatches)
                   .empty());
 
   // Add a new row.
@@ -914,20 +938,16 @@ TEST_F(InMemoryURLIndexTest, AddNewRows) {
   EXPECT_TRUE(UpdateURL(new_row));
 
   // Verify that we can retrieve it.
-  EXPECT_EQ(
-      1U, url_index_
-              ->HistoryItemsForTerms(u"brokeandalone", std::u16string::npos, "",
+  EXPECT_EQ(1U, HistoryItemsForTerms(u"brokeandalone", std::u16string::npos, "",
                                      kProviderMaxMatches)
-              .size());
+                    .size());
 
   // Add it again just to be sure that is harmless and that it does not update
   // the index.
   EXPECT_FALSE(UpdateURL(new_row));
-  EXPECT_EQ(
-      1U, url_index_
-              ->HistoryItemsForTerms(u"brokeandalone", std::u16string::npos, "",
+  EXPECT_EQ(1U, HistoryItemsForTerms(u"brokeandalone", std::u16string::npos, "",
                                      kProviderMaxMatches)
-              .size());
+                    .size());
 
   // Make up a URL that does not qualify and try to add it.
   history::URLRow unqualified_row(
@@ -936,15 +956,14 @@ TEST_F(InMemoryURLIndexTest, AddNewRows) {
 }
 
 TEST_F(InMemoryURLIndexTest, DeleteRows) {
-  ScoredHistoryMatches matches = url_index_->HistoryItemsForTerms(
+  ScoredHistoryMatches matches = HistoryItemsForTerms(
       u"DrudgeReport", std::u16string::npos, "", kProviderMaxMatches);
   ASSERT_EQ(1U, matches.size());
 
   // Delete the URL then search again.
   EXPECT_TRUE(DeleteURL(matches[0].url_info.url()));
-  EXPECT_TRUE(url_index_
-                  ->HistoryItemsForTerms(u"DrudgeReport", std::u16string::npos,
-                                         "", kProviderMaxMatches)
+  EXPECT_TRUE(HistoryItemsForTerms(u"DrudgeReport", std::u16string::npos, "",
+                                   kProviderMaxMatches)
                   .empty());
 
   // Make up a URL that does not exist in the database and delete it.
@@ -953,7 +972,7 @@ TEST_F(InMemoryURLIndexTest, DeleteRows) {
 }
 
 TEST_F(InMemoryURLIndexTest, ExpireRow) {
-  ScoredHistoryMatches matches = url_index_->HistoryItemsForTerms(
+  ScoredHistoryMatches matches = HistoryItemsForTerms(
       u"DrudgeReport", std::u16string::npos, "", kProviderMaxMatches);
   ASSERT_EQ(1U, matches.size());
 
@@ -963,9 +982,8 @@ TEST_F(InMemoryURLIndexTest, ExpireRow) {
   deleted_rows.push_back(matches[0].url_info);
   url_index_->OnURLsDeleted(
       nullptr, history::DeletionInfo::ForUrls(deleted_rows, std::set<GURL>()));
-  EXPECT_TRUE(url_index_
-                  ->HistoryItemsForTerms(u"DrudgeReport", std::u16string::npos,
-                                         "", kProviderMaxMatches)
+  EXPECT_TRUE(HistoryItemsForTerms(u"DrudgeReport", std::u16string::npos, "",
+                                   kProviderMaxMatches)
                   .empty());
 }
 

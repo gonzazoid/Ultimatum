@@ -37,8 +37,8 @@ std::unique_ptr<KeyedService> TestSystemWebAppManager::BuildDefault(
 // static
 TestSystemWebAppManager* TestSystemWebAppManager::Get(Profile* profile) {
   CHECK(profile->AsTestingProfile());
-  auto* test_swa_manager = static_cast<TestSystemWebAppManager*>(
-      TestSystemWebAppManager::GetForLocalAppsUnchecked(profile));
+  auto* test_swa_manager =
+      static_cast<TestSystemWebAppManager*>(SystemWebAppManager::Get(profile));
   return test_swa_manager;
 }
 
@@ -62,6 +62,10 @@ const base::Version& TestSystemWebAppManager::CurrentVersion() const {
 
 const std::string& TestSystemWebAppManager::CurrentLocale() const {
   return current_locale_;
+}
+
+bool TestSystemWebAppManager::PreviousSessionHadBrokenIcons() const {
+  return icons_are_broken_;
 }
 
 TestSystemWebAppManagerCreator::TestSystemWebAppManagerCreator(

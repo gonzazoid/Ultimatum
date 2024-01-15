@@ -10,10 +10,10 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include "base/memory/raw_ptr.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 class TabGroup;
 class TabGroupController;
@@ -40,7 +40,7 @@ class TabGroupModel {
   // added to it immediately.
   TabGroup* AddTabGroup(
       const tab_groups::TabGroupId& id,
-      absl::optional<tab_groups::TabGroupVisualData> visual_data);
+      std::optional<tab_groups::TabGroupVisualData> visual_data);
 
   // Returns whether a tab group with the given |id| exists.
   bool ContainsTabGroup(const tab_groups::TabGroupId& id) const;
@@ -56,6 +56,10 @@ class TabGroupModel {
 
  private:
   std::map<tab_groups::TabGroupId, std::unique_ptr<TabGroup>> groups_;
+
+  // Used to maintain insertion order of TabGroupsIds added to the
+  // TabGroupModel.
+  std::vector<tab_groups::TabGroupId> group_ids_;
 
   raw_ptr<TabGroupController> controller_;
 

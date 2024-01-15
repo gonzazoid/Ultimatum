@@ -5,8 +5,9 @@
 #ifndef CONTENT_BROWSER_MEDIA_SESSION_MEDIA_SESSION_PLAYER_OBSERVER_H_
 #define CONTENT_BROWSER_MEDIA_SESSION_MEDIA_SESSION_PLAYER_OBSERVER_H_
 
+#include <optional>
+
 #include "base/time/time.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace media {
 enum class MediaContentType;
@@ -48,9 +49,6 @@ class MediaSessionPlayerObserver {
   // The given |player_id| has been requested picture-in-picture.
   virtual void OnEnterPictureInPicture(int player_id) = 0;
 
-  // The given |player_id| has been requested to exit picture-in-picture.
-  virtual void OnExitPictureInPicture(int player_id) = 0;
-
   // The given |player_id| has been requested to route audio output to the
   // specified audio device.
   virtual void OnSetAudioSinkId(int player_id,
@@ -59,8 +57,11 @@ class MediaSessionPlayerObserver {
   // The given |player_id| has been requested to mute or unmute.
   virtual void OnSetMute(int player_id, bool mute) = 0;
 
+  // The given |player_id| has been requested to start Media Remoting.
+  virtual void OnRequestMediaRemoting(int player_id) = 0;
+
   // Returns the position for |player_id|.
-  virtual absl::optional<media_session::MediaPosition> GetPosition(
+  virtual std::optional<media_session::MediaPosition> GetPosition(
       int player_id) const = 0;
 
   // Returns if picture-in-picture is available for |player_id|.

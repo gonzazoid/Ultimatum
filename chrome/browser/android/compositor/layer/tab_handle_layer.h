@@ -6,16 +6,14 @@
 #define CHROME_BROWSER_ANDROID_COMPOSITOR_LAYER_TAB_HANDLE_LAYER_H_
 
 #include "base/memory/raw_ptr.h"
-#include "cc/layers/nine_patch_layer.h"
-#include "cc/layers/solid_color_layer.h"
-#include "cc/layers/ui_resource_layer.h"
 #include "chrome/browser/android/compositor/layer/layer.h"
 #include "ui/android/resources/resource_manager.h"
 
-namespace cc {
+namespace cc::slim {
 class Layer;
 class NinePatchLayer;
-}
+class UIResourceLayer;
+}  // namespace cc::slim
 
 namespace ui {
 class NinePatchResource;
@@ -35,6 +33,8 @@ class TabHandleLayer : public Layer {
 
   void SetProperties(int id,
                      ui::Resource* close_button_resource,
+                     ui::Resource* close_button_background_resource,
+                     ui::Resource* divider_resource,
                      ui::NinePatchResource* tab_handle_resource,
                      ui::NinePatchResource* tab_handle_outline_resource,
                      bool foreground,
@@ -44,13 +44,19 @@ class TabHandleLayer : public Layer {
                      float y,
                      float width,
                      float height,
-                     float content_offset_x,
+                     float content_offset_y,
+                     float divider_offset_x,
+                     float bottom_margin,
+                     float top_margin,
+                     float close_button_padding,
                      float close_button_alpha,
+                     bool is_start_divider_visible,
+                     bool is_end_divider_visible,
                      bool is_loading,
                      float spinner_rotation,
                      float brightness,
                      float opacity);
-  scoped_refptr<cc::Layer> layer() override;
+  scoped_refptr<cc::slim::Layer> layer() override;
 
  protected:
   explicit TabHandleLayer(LayerTitleCache* layer_title_cache);
@@ -59,11 +65,15 @@ class TabHandleLayer : public Layer {
  private:
   raw_ptr<LayerTitleCache> layer_title_cache_;
 
-  scoped_refptr<cc::Layer> layer_;
-  scoped_refptr<cc::UIResourceLayer> close_button_;
-  scoped_refptr<cc::NinePatchLayer> decoration_tab_;
-  scoped_refptr<cc::NinePatchLayer> tab_outline_;
-  scoped_refptr<cc::Layer> title_layer_;
+  scoped_refptr<cc::slim::Layer> layer_;
+  scoped_refptr<cc::slim::Layer> tab_;
+  scoped_refptr<cc::slim::UIResourceLayer> close_button_;
+  scoped_refptr<cc::slim::UIResourceLayer> close_button_hover_highlight_;
+  scoped_refptr<cc::slim::UIResourceLayer> start_divider_;
+  scoped_refptr<cc::slim::UIResourceLayer> end_divider_;
+  scoped_refptr<cc::slim::NinePatchLayer> decoration_tab_;
+  scoped_refptr<cc::slim::NinePatchLayer> tab_outline_;
+  scoped_refptr<cc::slim::Layer> title_layer_;
 
   float brightness_;
   float opacity_;

@@ -6,8 +6,11 @@
 
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/renderer/core/dom/node_computed_style.h"
+#include "third_party/blink/renderer/core/dom/shadow_root.h"
+#include "third_party/blink/renderer/core/dom/text.h"
 #include "third_party/blink/renderer/core/frame/local_frame_view.h"
 #include "third_party/blink/renderer/core/frame/settings.h"
+#include "third_party/blink/renderer/core/html/html_dialog_element.h"
 #include "third_party/blink/renderer/core/page/page_animator.h"
 #include "third_party/blink/renderer/core/style/computed_style.h"
 #include "third_party/blink/renderer/core/testing/core_unit_test_helper.h"
@@ -23,7 +26,7 @@ class HTMLElementTest : public RenderingTest {
 TEST_F(HTMLElementTest, AdjustDirectionalityInFlatTree) {
   SetBodyContent("<bdi><summary><i id=target></i></summary></bdi>");
   UpdateAllLifecyclePhasesForTest();
-  GetDocument().getElementById("target")->remove();
+  GetDocument().getElementById(AtomicString("target"))->remove();
   // Pass if not crashed.
 }
 
@@ -244,7 +247,7 @@ TEST_F(HTMLElementTest,
   )JS");
   GetDocument().body()->appendChild(script);
   EXPECT_EQ(GetDocument().FocusedElement(),
-            GetDocument().getElementById("box"));
+            GetDocument().getElementById(AtomicString("box")));
   EXPECT_FALSE(
       GetDocument().GetPage()->Animator().has_inline_style_mutation_for_test());
 }
@@ -253,7 +256,7 @@ TEST_F(HTMLElementTest, DirAutoByChildChanged) {
   ScopedCSSPseudoDirForTest scoped_feature(false);
 
   SetBodyInnerHTML("<div id='target' dir='auto'></div>");
-  auto* element = GetDocument().getElementById("target");
+  auto* element = GetDocument().getElementById(AtomicString("target"));
   element->setTextContent(u"\u05D1");
   UpdateAllLifecyclePhasesForTest();
   EXPECT_EQ(element->GetComputedStyle()->Direction(), TextDirection::kRtl);
@@ -267,19 +270,234 @@ TEST_F(HTMLElementTest, SlotDirAutoBySingleSlottedNodeRemoved) {
   ScopedCSSPseudoDirForTest scoped_feature(false);
 
   SetBodyInnerHTML("<div id='host'>slotted text</div>");
-  auto* element = GetDocument().getElementById("host");
+  auto* element = GetDocument().getElementById(AtomicString("host"));
   ShadowRoot& shadow_root =
       element->AttachShadowRootInternal(ShadowRootType::kOpen);
   shadow_root.setInnerHTML(
       "<slot id='inner' dir='auto'><div>&#1571;</div></slot>");
   UpdateAllLifecyclePhasesForTest();
 
-  Element* slot = shadow_root.getElementById("inner");
+  Element* slot = shadow_root.getElementById(AtomicString("inner"));
   EXPECT_EQ(slot->GetComputedStyle()->Direction(), TextDirection::kLtr);
 
   element->RemoveChildren();
   UpdateAllLifecyclePhasesForTest();
   EXPECT_EQ(slot->GetComputedStyle()->Direction(), TextDirection::kRtl);
+}
+
+TEST_F(HTMLElementTest, HasImplicitlyAnchoredElement) {
+  ScopedCSSAnchorPositioningForTest scoped_feature(true);
+
+  SetBodyInnerHTML(R"HTML(
+    <div id="anchor1"></div>
+    <div id="anchor2"></div>
+    <div id="target" anchor="anchor1"></div>
+  )HTML");
+
+  Element* anchor1 = GetDocument().getElementById(AtomicString("anchor1"));
+  Element* anchor2 = GetDocument().getElementById(AtomicString("anchor2"));
+  HTMLElement* target =
+      To<HTMLElement>(GetDocument().getElementById(AtomicString("target")));
+
+  EXPECT_EQ(target->anchorElement(), anchor1);
+  EXPECT_TRUE(anchor1->HasImplicitlyAnchoredElement());
+  EXPECT_FALSE(anchor2->HasImplicitlyAnchoredElement());
+
+  target->setAttribute(html_names::kAnchorAttr, AtomicString("anchor2"));
+
+  EXPECT_EQ(target->anchorElement(), anchor2);
+  EXPECT_FALSE(anchor1->HasImplicitlyAnchoredElement());
+  EXPECT_TRUE(anchor2->HasImplicitlyAnchoredElement());
+
+  target->removeAttribute(html_names::kAnchorAttr);
+
+  EXPECT_FALSE(target->anchorElement());
+  EXPECT_FALSE(anchor1->HasImplicitlyAnchoredElement());
+  EXPECT_FALSE(anchor2->HasImplicitlyAnchoredElement());
+}
+
+TEST_F(HTMLElementTest, HasImplicitlyAnchoredElementViaElementAttr) {
+  ScopedCSSAnchorPositioningForTest scoped_feature(true);
+
+  SetBodyInnerHTML(R"HTML(
+    <div id="anchor1"></div>
+    <div id="anchor2"></div>
+    <div id="target" anchor="anchor1"></div>
+  )HTML");
+
+  Element* anchor1 = GetDocument().getElementById(AtomicString("anchor1"));
+  Element* anchor2 = GetDocument().getElementById(AtomicString("anchor2"));
+  HTMLElement* target =
+      To<HTMLElement>(GetDocument().getElementById(AtomicString("target")));
+
+  EXPECT_EQ(target->anchorElement(), anchor1);
+  EXPECT_TRUE(anchor1->HasImplicitlyAnchoredElement());
+  EXPECT_FALSE(anchor2->HasImplicitlyAnchoredElement());
+
+  target->setAnchorElement(anchor2);
+
+  EXPECT_EQ(target->anchorElement(), anchor2);
+  EXPECT_FALSE(anchor1->HasImplicitlyAnchoredElement());
+  EXPECT_TRUE(anchor2->HasImplicitlyAnchoredElement());
+
+  target->setAnchorElement(nullptr);
+
+  EXPECT_FALSE(target->anchorElement());
+  EXPECT_FALSE(anchor1->HasImplicitlyAnchoredElement());
+  EXPECT_FALSE(anchor2->HasImplicitlyAnchoredElement());
+
+  target->setAttribute(html_names::kAnchorAttr, AtomicString("anchor1"));
+
+  EXPECT_EQ(target->anchorElement(), anchor1);
+  EXPECT_TRUE(anchor1->HasImplicitlyAnchoredElement());
+  EXPECT_FALSE(anchor2->HasImplicitlyAnchoredElement());
+}
+
+TEST_F(HTMLElementTest, ImplicitAnchorIdChange) {
+  ScopedCSSAnchorPositioningForTest scoped_feature(true);
+
+  SetBodyInnerHTML(R"HTML(
+    <div id="anchor1"></div>
+    <div id="anchor2"></div>
+    <div id="target" anchor="anchor1"></div>
+  )HTML");
+
+  Element* anchor1 = GetDocument().getElementById(AtomicString("anchor1"));
+  Element* anchor2 = GetDocument().getElementById(AtomicString("anchor2"));
+  HTMLElement* target =
+      To<HTMLElement>(GetDocument().getElementById(AtomicString("target")));
+
+  EXPECT_EQ(target->anchorElement(), anchor1);
+  EXPECT_TRUE(anchor1->HasImplicitlyAnchoredElement());
+  EXPECT_FALSE(anchor2->HasImplicitlyAnchoredElement());
+
+  anchor1->setAttribute(html_names::kIdAttr, AtomicString("anchor2"));
+  anchor2->setAttribute(html_names::kIdAttr, AtomicString("anchor1"));
+
+  EXPECT_EQ(target->anchorElement(), anchor2);
+  EXPECT_FALSE(anchor1->HasImplicitlyAnchoredElement());
+  EXPECT_TRUE(anchor2->HasImplicitlyAnchoredElement());
+}
+
+TEST_F(HTMLElementTest, ImplicitlyAnchoredElementRemoved) {
+  ScopedCSSAnchorPositioningForTest scoped_feature(true);
+
+  SetBodyInnerHTML(R"HTML(
+    <div id="anchor"></div>
+    <div id="target1" anchor="anchor"></div>
+    <div id="target2"></div>
+  )HTML");
+
+  Element* anchor = GetDocument().getElementById(AtomicString("anchor"));
+  HTMLElement* target1 =
+      To<HTMLElement>(GetDocument().getElementById(AtomicString("target1")));
+  HTMLElement* target2 =
+      To<HTMLElement>(GetDocument().getElementById(AtomicString("target2")));
+
+  target2->setAnchorElement(anchor);
+
+  EXPECT_EQ(target1->anchorElement(), anchor);
+  EXPECT_EQ(target2->anchorElement(), anchor);
+  EXPECT_TRUE(anchor->HasImplicitlyAnchoredElement());
+
+  target1->remove();
+  target2->remove();
+
+  EXPECT_FALSE(target1->anchorElement());
+  EXPECT_FALSE(target2->anchorElement());
+  EXPECT_FALSE(anchor->HasImplicitlyAnchoredElement());
+}
+
+TEST_F(HTMLElementTest, ImplicitlyAnchorElementConnected) {
+  ScopedCSSAnchorPositioningForTest scoped_feature(true);
+
+  SetBodyInnerHTML("<div id=anchor></div>");
+
+  Element* anchor = GetDocument().getElementById(AtomicString("anchor"));
+
+  HTMLElement* target1 = To<HTMLElement>(
+      GetDocument().CreateElementForBinding(AtomicString("div")));
+  target1->setAttribute(html_names::kAnchorAttr, AtomicString("anchor"));
+
+  HTMLElement* target2 = To<HTMLElement>(
+      GetDocument().CreateElementForBinding(AtomicString("div")));
+  target2->setAnchorElement(anchor);
+
+  EXPECT_FALSE(target1->anchorElement());
+  EXPECT_FALSE(target2->anchorElement());
+  EXPECT_FALSE(anchor->HasImplicitlyAnchoredElement());
+
+  GetDocument().body()->appendChild(target1);
+  GetDocument().body()->appendChild(target2);
+
+  EXPECT_EQ(target1->anchorElement(), anchor);
+  EXPECT_EQ(target2->anchorElement(), anchor);
+  EXPECT_TRUE(anchor->HasImplicitlyAnchoredElement());
+}
+
+TEST_F(HTMLElementTest, PopoverTopLayerRemovalTiming) {
+  SetBodyInnerHTML(R"HTML(
+    <div id="target" popover></div>
+  )HTML");
+
+  HTMLElement* target =
+      To<HTMLElement>(GetDocument().getElementById(AtomicString("target")));
+
+  EXPECT_FALSE(target->popoverOpen());
+  EXPECT_FALSE(target->IsInTopLayer());
+  target->ShowPopoverInternal(/*invoker*/ nullptr, /*exception_state*/ nullptr);
+  EXPECT_TRUE(target->popoverOpen());
+  EXPECT_TRUE(target->IsInTopLayer());
+
+  // HidePopoverInternal causes :closed to match immediately, but schedules
+  // the removal from the top layer.
+  target->HidePopoverInternal(
+      HidePopoverFocusBehavior::kFocusPreviousElement,
+      HidePopoverTransitionBehavior::kFireEventsAndWaitForTransitions, nullptr);
+  EXPECT_FALSE(target->popoverOpen());
+  EXPECT_TRUE(target->IsInTopLayer());
+  UpdateAllLifecyclePhasesForTest();
+  EXPECT_FALSE(target->IsInTopLayer());
+
+  // Document removal should cause immediate top layer removal.
+  target->ShowPopoverInternal(/*invoker*/ nullptr, /*exception_state*/ nullptr);
+  EXPECT_TRUE(target->popoverOpen());
+  EXPECT_TRUE(target->IsInTopLayer());
+  target->remove();
+  EXPECT_FALSE(target->popoverOpen());
+  EXPECT_FALSE(target->IsInTopLayer());
+}
+
+TEST_F(HTMLElementTest, DialogTopLayerRemovalTiming) {
+  SetBodyInnerHTML(R"HTML(
+    <dialog id="target"></dialog>
+  )HTML");
+
+  auto* target = To<HTMLDialogElement>(
+      GetDocument().getElementById(AtomicString("target")));
+
+  EXPECT_FALSE(target->IsInTopLayer());
+  target->showModal(ASSERT_NO_EXCEPTION);
+  EXPECT_TRUE(target->IsInTopLayer());
+  target->close();
+  EXPECT_TRUE(target->IsInTopLayer());
+  UpdateAllLifecyclePhasesForTest();
+  EXPECT_FALSE(target->IsInTopLayer());
+}
+
+TEST_F(HTMLElementTest, AnchorAttrWithFeatureDisabled) {
+  ScopedHTMLSelectListElementForTest select_list_disabled(false);
+  ScopedCSSAnchorPositioningForTest anchor_pos_disabled(false);
+
+  SetBodyInnerHTML("<div id=anchor><div anchor=anchor id=target></div></div>");
+
+  Element* anchor = GetDocument().getElementById(AtomicString("anchor"));
+  Element* target = GetDocument().getElementById(AtomicString("target"));
+
+  // Shouldn't hook up objects related to anchor attr when the feature is
+  // disabled.
+  EXPECT_FALSE(anchor->HasImplicitlyAnchoredElement());
+  EXPECT_FALSE(target->GetAnchorElementObserver());
 }
 
 }  // namespace blink

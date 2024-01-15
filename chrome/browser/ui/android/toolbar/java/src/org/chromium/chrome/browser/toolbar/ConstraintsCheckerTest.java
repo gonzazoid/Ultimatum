@@ -20,26 +20,25 @@ import org.robolectric.annotation.Config;
 import org.robolectric.shadows.ShadowLooper;
 
 import org.chromium.base.supplier.ObservableSupplierImpl;
+import org.chromium.base.test.BaseRobolectricTestRunner;
 import org.chromium.cc.input.BrowserControlsState;
-import org.chromium.testing.local.LocalRobolectricTestRunner;
 import org.chromium.ui.resources.dynamics.ViewResourceAdapter;
 
 /** Unit tests for {@link ConstraintsChecker}. */
-@RunWith(LocalRobolectricTestRunner.class)
+@RunWith(BaseRobolectricTestRunner.class)
 @Config(manifest = Config.NONE)
 public final class ConstraintsCheckerTest {
-    @Rule
-    public MockitoRule mMockitoRule = MockitoJUnit.rule();
+    @Rule public MockitoRule mMockitoRule = MockitoJUnit.rule();
 
-    @Mock
-    private ViewResourceAdapter mViewResourceAdapter;
+    @Mock private ViewResourceAdapter mViewResourceAdapter;
 
     private ObservableSupplierImpl mConstraintsSupplier = new ObservableSupplierImpl();
 
     @Test
     public void testScheduleRequestResourceOnUnlock() {
-        ConstraintsChecker constraintsChecker = new ConstraintsChecker(
-                mViewResourceAdapter, mConstraintsSupplier, Looper.myLooper());
+        ConstraintsChecker constraintsChecker =
+                new ConstraintsChecker(
+                        mViewResourceAdapter, mConstraintsSupplier, Looper.myLooper());
         constraintsChecker.scheduleRequestResourceOnUnlock();
         mConstraintsSupplier.set(BrowserControlsState.SHOWN);
         verify(mViewResourceAdapter, times(0)).onResourceRequested();
@@ -54,8 +53,9 @@ public final class ConstraintsCheckerTest {
 
     @Test
     public void testAreControlsLocked() {
-        ConstraintsChecker constraintsChecker = new ConstraintsChecker(
-                mViewResourceAdapter, mConstraintsSupplier, Looper.myLooper());
+        ConstraintsChecker constraintsChecker =
+                new ConstraintsChecker(
+                        mViewResourceAdapter, mConstraintsSupplier, Looper.myLooper());
         assertEquals(true, constraintsChecker.areControlsLocked());
 
         mConstraintsSupplier.set(BrowserControlsState.SHOWN);

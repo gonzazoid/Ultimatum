@@ -20,7 +20,7 @@ class GURL;
 class Profile;
 class ScopedKeepAlive;
 
-// BrowserSerivce's Lacros implementation.
+// BrowserService's Lacros implementation.
 // This handles the requests from ash-chrome.
 class BrowserServiceLacros : public crosapi::mojom::BrowserService,
                              public BrowserListObserver {
@@ -33,11 +33,14 @@ class BrowserServiceLacros : public crosapi::mojom::BrowserService,
   // crosapi::mojom::BrowserService:
   void REMOVED_0(REMOVED_0Callback callback) override;
   void REMOVED_2(crosapi::mojom::BrowserInitParamsPtr) override;
+  void REMOVED_7(bool should_trigger_session_restore,
+                 base::OnceClosure callback) override;
   void REMOVED_16(base::flat_map<policy::PolicyNamespace, std::vector<uint8_t>>
                       policy) override;
   void NewWindow(bool incognito,
                  bool should_trigger_session_restore,
                  int64_t target_display_id,
+                 absl::optional<uint64_t> profile_id,
                  NewWindowCallback callback) override;
   void NewFullscreenWindow(const GURL& url,
                            int64_t target_display_id,
@@ -48,15 +51,15 @@ class BrowserServiceLacros : public crosapi::mojom::BrowserService,
       const std::u16string& tab_id,
       const std::u16string& group_id,
       NewWindowForDetachingTabCallback callback) override;
-  void NewTab(bool should_trigger_session_restore,
-              NewTabCallback callback) override;
-  void NewTabWithoutParameter(NewTabWithoutParameterCallback callback) override;
-  void Launch(int64_t target_display_id, LaunchCallback callback) override;
+  void NewTab(NewTabCallback callback) override;
+  void Launch(int64_t target_display_id,
+              absl::optional<uint64_t> profile_id,
+              LaunchCallback callback) override;
   void OpenUrl(const GURL& url,
                crosapi::mojom::OpenUrlParamsPtr params,
                OpenUrlCallback callback) override;
   void RestoreTab(RestoreTabCallback callback) override;
-  void HandleTabScrubbing(float x_offset) override;
+  void HandleTabScrubbing(float x_offset, bool is_fling_scroll_event) override;
   void GetFeedbackData(GetFeedbackDataCallback callback) override;
   void GetHistograms(GetHistogramsCallback callback) override;
   void GetActiveTabUrl(GetActiveTabUrlCallback callback) override;
@@ -64,6 +67,7 @@ class BrowserServiceLacros : public crosapi::mojom::BrowserService,
   void NotifyPolicyFetchAttempt() override;
   void UpdateKeepAlive(bool enabled) override;
   void OpenForFullRestore(bool skip_crash_restore) override;
+  void OpenProfileManager() override;
 
  private:
   struct PendingOpenUrl;

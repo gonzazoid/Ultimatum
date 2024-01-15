@@ -29,7 +29,6 @@
 #include "third_party/blink/renderer/platform/bindings/callback_method_retriever.h"
 #include "third_party/blink/renderer/platform/bindings/v8_binding_macros.h"
 #include "third_party/blink/renderer/platform/runtime_enabled_features.h"
-#include "third_party/blink/renderer/platform/scheduler/common/features.h"
 #include "third_party/blink/renderer/platform/wtf/wtf.h"
 
 namespace blink {
@@ -104,9 +103,10 @@ PaintWorkletGlobalScope* PaintWorkletGlobalScope::Create(
   auto* global_scope = MakeGarbageCollected<PaintWorkletGlobalScope>(
       frame, std::move(creation_params), reporting_proxy);
   global_scope->ScriptController()->Initialize(NullURL());
-  MainThreadDebugger::Instance()->ContextCreated(
-      global_scope->ScriptController()->GetScriptState(),
-      global_scope->GetFrame(), global_scope->DocumentSecurityOrigin());
+  MainThreadDebugger::Instance(global_scope->GetIsolate())
+      ->ContextCreated(global_scope->ScriptController()->GetScriptState(),
+                       global_scope->GetFrame(),
+                       global_scope->DocumentSecurityOrigin());
   return global_scope;
 }
 
@@ -123,22 +123,14 @@ PaintWorkletGlobalScope::PaintWorkletGlobalScope(
     LocalFrame* frame,
     std::unique_ptr<GlobalScopeCreationParams> creation_params,
     WorkerReportingProxy& reporting_proxy)
-    : WorkletGlobalScope(std::move(creation_params),
-                         reporting_proxy,
-                         frame,
-                         /*create_microtask_queue=*/
-                         base::FeatureList::IsEnabled(
-                             scheduler::kMicrotaskQueuePerPaintWorklet)) {}
+    : WorkletGlobalScope(std::move(creation_params), reporting_proxy, frame) {}
 
 PaintWorkletGlobalScope::PaintWorkletGlobalScope(
     std::unique_ptr<GlobalScopeCreationParams> creation_params,
     WorkerThread* thread)
     : WorkletGlobalScope(std::move(creation_params),
                          thread->GetWorkerReportingProxy(),
-                         thread,
-                         /*create_microtask_queue=*/
-                         base::FeatureList::IsEnabled(
-                             scheduler::kMicrotaskQueuePerPaintWorklet)) {}
+                         thread) {}
 
 PaintWorkletGlobalScope::~PaintWorkletGlobalScope() = default;
 
@@ -149,8 +141,8 @@ void PaintWorkletGlobalScope::Dispose() {
             PaintWorkletProxyClient::From(Clients()))
       proxy_client->Dispose();
   } else {
-    MainThreadDebugger::Instance()->ContextWillBeDestroyed(
-        ScriptController()->GetScriptState());
+    MainThreadDebugger::Instance(GetIsolate())
+        ->ContextWillBeDestroyed(ScriptController()->GetScriptState());
   }
   WorkletGlobalScope::Dispose();
 
@@ -198,10 +190,11 @@ void PaintWorkletGlobalScope::registerPaint(const ScriptState* script_state,
       ExecutionContext::From(script_state);
 
   if (!V8ObjectParser::ParseCSSPropertyList(
-          context, execution_context, v8_paint_ctor, "inputProperties",
-          &native_invalidation_properties, &custom_invalidation_properties,
-          &exception_state))
+          context, execution_context, v8_paint_ctor,
+          AtomicString("inputProperties"), &native_invalidation_properties,
+          &custom_invalidation_properties, &exception_state)) {
     return;
+  }
 
   // Get input argument types. Parse the argument type values only when
   // cssPaintAPIArguments is enabled.

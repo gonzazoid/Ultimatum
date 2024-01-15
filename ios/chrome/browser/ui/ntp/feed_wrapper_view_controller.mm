@@ -5,14 +5,10 @@
 #import <UIKit/UIKit.h>
 
 #import "base/check.h"
-#import "ios/chrome/browser/ui/content_suggestions/content_suggestions_feature.h"
+#import "ios/chrome/browser/shared/public/features/features.h"
 #import "ios/chrome/browser/ui/content_suggestions/ntp_home_constant.h"
 #import "ios/chrome/browser/ui/ntp/feed_wrapper_view_controller.h"
 #import "ios/chrome/common/ui/util/constraints_ui_util.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 @implementation FeedWrapperViewController {
   __weak id<FeedWrapperViewControllerDelegate> _delegate;
@@ -54,6 +50,19 @@
   }
 }
 
+#pragma mark - Public
+
+- (NSUInteger)lastVisibleFeedCardIndex {
+  DCHECK(self.contentCollectionView);
+  NSArray<NSIndexPath*>* visibleCardIndices =
+      [self.contentCollectionView indexPathsForVisibleItems];
+  NSInteger lastVisibleIndex;
+  for (NSIndexPath* cardIndex in visibleCardIndices) {
+    lastVisibleIndex = MAX(lastVisibleIndex, cardIndex.item);
+  }
+  return lastVisibleIndex;
+}
+
 #pragma mark - Private
 
 // If the feed is visible, we configure the feed's collection view and view
@@ -65,7 +74,7 @@
   [self.view addSubview:feedView];
   [self.feedViewController didMoveToParentViewController:self];
   feedView.translatesAutoresizingMaskIntoConstraints = NO;
-  AddSameConstraints(feedView, self.view);
+  AddSameConstraints(feedView, self.view.safeAreaLayoutGuide);
 }
 
 // If the feed is not visible, we prepare the empty collection view to be used
@@ -79,11 +88,10 @@
   [self.view addSubview:emptyCollectionView];
   self.contentCollectionView = emptyCollectionView;
   self.contentCollectionView.backgroundColor =
-      IsContentSuggestionsUIModuleRefreshEnabled()
-          ? [UIColor clearColor]
-          : ntp_home::NTPBackgroundColor();
+      IsMagicStackEnabled() ? [UIColor clearColor]
+                            : ntp_home::NTPBackgroundColor();
   self.contentCollectionView.translatesAutoresizingMaskIntoConstraints = NO;
-  AddSameConstraints(self.contentCollectionView, self.view);
+  AddSameConstraints(self.contentCollectionView, self.view.safeAreaLayoutGuide);
 }
 
 @end

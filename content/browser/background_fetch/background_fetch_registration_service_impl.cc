@@ -5,10 +5,10 @@
 #include "content/browser/background_fetch/background_fetch_registration_service_impl.h"
 
 #include <memory>
+#include <optional>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
-#include "base/guid.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ptr_util.h"
 #include "content/browser/background_fetch/background_fetch_context.h"
 #include "content/browser/background_fetch/background_fetch_metrics.h"
@@ -20,7 +20,6 @@
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/render_process_host.h"
 #include "mojo/public/cpp/bindings/self_owned_receiver.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/mojom/fetch/fetch_api_request.mojom.h"
 
 namespace content {
@@ -83,7 +82,7 @@ void BackgroundFetchRegistrationServiceImpl::MatchRequests(
 }
 
 void BackgroundFetchRegistrationServiceImpl::UpdateUI(
-    const absl::optional<std::string>& title,
+    const std::optional<std::string>& title,
     const SkBitmap& icon,
     UpdateUICallback callback) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
@@ -101,7 +100,7 @@ void BackgroundFetchRegistrationServiceImpl::UpdateUI(
 
   // Wrap the icon in an optional for clarity.
   auto optional_icon =
-      icon.isNull() ? absl::nullopt : absl::optional<SkBitmap>(icon);
+      icon.isNull() ? std::nullopt : std::optional<SkBitmap>(icon);
 
   background_fetch_context_->UpdateUI(registration_id_, title, optional_icon,
                                       std::move(callback));
@@ -130,7 +129,7 @@ void BackgroundFetchRegistrationServiceImpl::AddRegistrationObserver(
 bool BackgroundFetchRegistrationServiceImpl::ValidateTitle(
     const std::string& title) {
   if (title.empty() || title.size() > kMaxTitleLength) {
-    mojo::ReportBadMessage("Invalid title");
+    receiver_.ReportBadMessage("Invalid title");
     return false;
   }
 

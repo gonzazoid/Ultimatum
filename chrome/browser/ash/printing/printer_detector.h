@@ -7,7 +7,7 @@
 
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "chromeos/chromeos_export.h"
 #include "chromeos/printing/ppd_provider.h"
 #include "chromeos/printing/printer_configuration.h"
@@ -51,10 +51,5 @@ class CHROMEOS_EXPORT PrinterDetector {
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when the migration is finished.
-namespace chromeos {
-using ::ash::PrinterDetector;
-}
 
 #endif  // CHROME_BROWSER_ASH_PRINTING_PRINTER_DETECTOR_H_

@@ -7,6 +7,7 @@
 
 #include <string>
 
+#include "base/memory/raw_ptr.h"
 #include "components/policy/core/common/remote_commands/remote_command_job.h"
 
 class Profile;
@@ -29,11 +30,10 @@ class UserCommandArcJob : public RemoteCommandJob {
  protected:
   // RemoteCommandJob:
   bool ParseCommandPayload(const std::string& command_payload) override;
-  void RunImpl(CallbackWithResult succeeded_callback,
-               CallbackWithResult failed_callback) override;
+  void RunImpl(CallbackWithResult result_callback) override;
 
  private:
-  Profile* const profile_;
+  const raw_ptr<Profile> profile_;
   std::string command_payload_;
 };
 

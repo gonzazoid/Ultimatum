@@ -21,15 +21,12 @@ MediaTrack::~MediaTrack() = default;
 
 const char* TrackTypeToStr(MediaTrack::Type type) {
   switch (type) {
-    case MediaTrack::Audio:
+    case MediaTrack::Type::kAudio:
       return "audio";
-    case MediaTrack::Text:
-      return "text";
-    case MediaTrack::Video:
+    case MediaTrack::Type::kVideo:
       return "video";
   }
-  NOTREACHED();
-  return "INVALID";
+  NOTREACHED_NORETURN();
 }
 
 }  // namespace media

@@ -4,7 +4,9 @@
 
 #include "sandbox/win/src/sandbox_nt_util.h"
 
+#include <ntstatus.h>
 #include <windows.h>
+#include <winternl.h>
 
 #include <memory>
 #include <vector>
@@ -14,12 +16,15 @@
 #include "base/strings/string_util.h"
 #include "base/win/scoped_handle.h"
 #include "base/win/scoped_process_information.h"
+#include "sandbox/win/src/nt_internals.h"
 #include "sandbox/win/src/policy_broker.h"
 #include "sandbox/win/src/win_utils.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace sandbox {
 namespace {
+
+using ScopedUnicodeString = std::unique_ptr<UNICODE_STRING, NtAllocDeleter>;
 
 TEST(SandboxNtUtil, IsSameProcessPseudoHandle) {
   HANDLE current_process_pseudo = GetCurrentProcess();
@@ -29,15 +34,17 @@ TEST(SandboxNtUtil, IsSameProcessPseudoHandle) {
 TEST(SandboxNtUtil, IsSameProcessNonPseudoHandle) {
   base::win::ScopedHandle current_process(
       OpenProcess(PROCESS_QUERY_INFORMATION, false, GetCurrentProcessId()));
-  ASSERT_TRUE(current_process.IsValid());
-  EXPECT_TRUE(IsSameProcess(current_process.Get()));
+  ASSERT_TRUE(current_process.is_valid());
+  EXPECT_TRUE(IsSameProcess(current_process.get()));
 }
 
 TEST(SandboxNtUtil, IsSameProcessDifferentProcess) {
   STARTUPINFO si = {sizeof(si)};
   PROCESS_INFORMATION pi = {};
-  wchar_t notepad[] = L"notepad";
-  ASSERT_TRUE(CreateProcessW(nullptr, notepad, nullptr, nullptr, false, 0,
+  // Calc is preferred over notepad because notepad will fail to launch on
+  // Windows if the store version is not installed.
+  wchar_t command_line[] = L"calc";
+  ASSERT_TRUE(CreateProcessW(nullptr, command_line, nullptr, nullptr, false, 0,
                              nullptr, nullptr, &si, &pi));
   base::win::ScopedProcessInformation process_info(pi);
 
@@ -249,9 +256,9 @@ TEST(SandboxNtUtil, NtGetPathFromHandle) {
                              base::CompareCase::INSENSITIVE_ASCII));
 
   // Compare to GetNtPathFromWin32Path for extra check.
-  std::wstring nt_path;
-  EXPECT_TRUE(GetNtPathFromWin32Path(exe.value(), &nt_path));
-  EXPECT_STREQ(path.get(), nt_path.c_str());
+  auto nt_path = GetNtPathFromWin32Path(exe.value());
+  EXPECT_TRUE(nt_path);
+  EXPECT_STREQ(path.get(), nt_path->c_str());
 }
 
 TEST(SandboxNtUtil, CopyNameAndAttributes) {
@@ -297,6 +304,58 @@ TEST(SandboxNtUtil, GetNtExports) {
   // Verify that the structure is fully initialized.
   for (size_t i = 0; i < sizeof(NtExports) / sizeof(void*); i++)
     EXPECT_TRUE(reinterpret_cast<void* const*>(exports)[i]);
+}
+
+TEST(SandboxNtUtil, ExtractModuleName) {
+  {
+    UNICODE_STRING module_path = {};
+    ::RtlInitUnicodeString(&module_path, L"no-path-sep");
+    ScopedUnicodeString result(ExtractModuleName(&module_path));
+    EXPECT_TRUE(result);
+    EXPECT_EQ(result->Length, module_path.Length);
+    EXPECT_EQ(std::wstring(module_path.Buffer), std::wstring(result->Buffer));
+  }
+  {
+    UNICODE_STRING module_path = {};
+    ::RtlInitUnicodeString(&module_path, L"c:\\has a\\path\\module.dll");
+    ScopedUnicodeString result(ExtractModuleName(&module_path));
+
+    EXPECT_TRUE(result);
+    EXPECT_EQ(result->Length, 10 * sizeof(wchar_t));
+    EXPECT_EQ(std::wstring(L"module.dll"), std::wstring(result->Buffer));
+  }
+  {
+    UNICODE_STRING module_path = {};
+    ::RtlInitUnicodeString(&module_path, L"c:\\only a\\path\\");
+    ScopedUnicodeString result(ExtractModuleName(&module_path));
+
+    EXPECT_FALSE(result);
+  }
+  {
+    UNICODE_STRING module_path = {};
+    ::RtlInitUnicodeString(&module_path, L"A");
+    ScopedUnicodeString result(ExtractModuleName(&module_path));
+
+    EXPECT_TRUE(result);
+    EXPECT_EQ(result->Length, module_path.Length);
+    EXPECT_EQ(std::wstring(module_path.Buffer), std::wstring(result->Buffer));
+  }
+  {
+    UNICODE_STRING module_path = {};
+    ::RtlInitUnicodeString(&module_path, L"");
+    ScopedUnicodeString result(ExtractModuleName(&module_path));
+
+    EXPECT_TRUE(result);
+    EXPECT_EQ(result->Length, 0);
+  }
+}
+
+TEST(SandboxNtUtil, GetCurrentClientId) {
+  CLIENT_ID client_id = GetCurrentClientId();
+  EXPECT_EQ(client_id.UniqueProcess,
+            reinterpret_cast<LPVOID>(::GetCurrentProcessId()));
+  EXPECT_EQ(client_id.UniqueThread,
+            reinterpret_cast<LPVOID>(::GetCurrentThreadId()));
 }
 
 }  // namespace

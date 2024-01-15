@@ -53,6 +53,14 @@ void MediaBrowserTest::SetUpCommandLine(base::CommandLine* command_line) {
 #if BUILDFLAG(IS_ANDROID)
     features::kLogJsConsoleMessages,
 #endif
+
+#if BUILDFLAG(IS_CHROMEOS)
+    media::kCrOSLegacyMediaFormats,
+#endif
+
+#if BUILDFLAG(ENABLE_HLS_DEMUXER) && BUILDFLAG(USE_PROPRIETARY_CODECS)
+    media::kBuiltInHlsPlayer,
+#endif
   };
 
   std::vector<base::test::FeatureRef> disabled_features = {
@@ -64,10 +72,6 @@ void MediaBrowserTest::SetUpCommandLine(base::CommandLine* command_line) {
     // Disable out of process audio on Linux due to process spawn
     // failures. http://crbug.com/986021
     features::kAudioServiceOutOfProcess,
-#endif
-
-#if BUILDFLAG(IS_CHROMEOS)
-    media::kDeprecateLowUsageCodecs,
 #endif
   };
 
@@ -124,9 +128,8 @@ void MediaBrowserTest::CleanupTest() {
 std::string MediaBrowserTest::EncodeErrorMessage(
     const std::string& original_message) {
   url::RawCanonOutputT<char> buffer;
-  url::EncodeURIComponent(original_message.data(), original_message.size(),
-                          &buffer);
-  return std::string(buffer.data(), buffer.length());
+  url::EncodeURIComponent(original_message, &buffer);
+  return std::string(buffer.view());
 }
 
 void MediaBrowserTest::AddTitlesToAwait(content::TitleWatcher* title_watcher) {
@@ -149,6 +152,24 @@ class MediaTest : public testing::WithParamInterface<bool>,
     if (!is_accelerated())
       command_line->AppendSwitch(switches::kDisableAcceleratedVideoDecode);
     MediaBrowserTest::SetUpCommandLine(command_line);
+  }
+
+  void MaybePlayVideo(base::StringPiece codec_string,
+                      const std::string& file_name) {
+    constexpr char kTestVideoPlaybackScript[] = R"({
+      const video = document.createElement('video');
+      video.canPlayType('video/mp4; codecs=$1') === 'probably';
+    })";
+    EXPECT_TRUE(NavigateToURL(shell(), GURL(url::kAboutBlankURL)));
+    content::WebContents* web_contents = shell()->web_contents();
+    bool result =
+        EvalJs(web_contents, JsReplace(kTestVideoPlaybackScript, codec_string))
+            .ExtractBool();
+    if (!result) {
+      return;
+    }
+
+    PlayVideo(file_name);
   }
 
   // Play specified audio over http:// or file:// depending on |http| setting.
@@ -192,13 +213,21 @@ class MediaTest : public testing::WithParamInterface<bool>,
 };
 
 // Android doesn't support Theora.
-#if !BUILDFLAG(IS_ANDROID)
+#if BUILDFLAG(ENABLE_FFMPEG_VIDEO_DECODERS)
 IN_PROC_BROWSER_TEST_P(MediaTest, VideoBearTheora) {
-  PlayVideo("bear.ogv");
+  if (base::FeatureList::IsEnabled(media::kTheoraVideoCodec)) {
+    PlayVideo("bear.ogv");
+  } else {
+    GTEST_SKIP() << "Theora isn't supported";
+  }
 }
 
 IN_PROC_BROWSER_TEST_P(MediaTest, VideoBearSilentTheora) {
-  PlayVideo("bear_silent.ogv");
+  if (base::FeatureList::IsEnabled(media::kTheoraVideoCodec)) {
+    PlayVideo("bear_silent.ogv");
+  } else {
+    GTEST_SKIP() << "Theora isn't supported";
+  }
 }
 #endif  // !BUILDFLAG(IS_ANDROID)
 
@@ -280,6 +309,20 @@ IN_PROC_BROWSER_TEST_P(MediaTest, VideoBearMovPcmS24be) {
 }
 
 #if BUILDFLAG(USE_PROPRIETARY_CODECS)
+#if BUILDFLAG(ENABLE_HLS_DEMUXER)
+
+IN_PROC_BROWSER_TEST_P(MediaTest, HLSSingleFileBear) {
+  REQUIRE_ACCELERATION_ON_ANDROID();
+  PlayVideo("bear-1280x720-hls-clear-mpl.m3u8");
+}
+
+IN_PROC_BROWSER_TEST_P(MediaTest, HLSMultivariantBitrateBear) {
+  REQUIRE_ACCELERATION_ON_ANDROID();
+  PlayVideo("hls/multi-bitrate-multivariant-bear/playlist.m3u8");
+}
+
+#endif  // BUILDFLAG(ENABLE_HLS_DEMUXER)
+
 IN_PROC_BROWSER_TEST_P(MediaTest, VideoBearMp4) {
   REQUIRE_ACCELERATION_ON_ANDROID();
   PlayVideo("bear.mp4");
@@ -310,6 +353,43 @@ IN_PROC_BROWSER_TEST_P(MediaTest, VideoBearRotated270) {
   RunVideoSizeTest("bear_rotate_270.mp4", 720, 1280);
 }
 
+IN_PROC_BROWSER_TEST_P(MediaTest, VideoBear3gpAacH264) {
+  REQUIRE_ACCELERATION_ON_ANDROID();
+  PlayVideo("bear_h264_aac.3gp");
+}
+
+#if BUILDFLAG(ENABLE_HEVC_PARSER_AND_HW_DECODER)
+// HEVC video stream with 10-bit 422 range extension profile
+IN_PROC_BROWSER_TEST_P(MediaTest, VideoBearMp4Hevc10bit422) {
+  MaybePlayVideo("hev1.4.10.L120.90",
+                 "bear-1280x720-hevc-10bit-422-no-audio.mp4");
+}
+
+// HEVC video stream with 10-bit 444 range extension profile
+IN_PROC_BROWSER_TEST_P(MediaTest, VideoBearMp4Hevc10bit444) {
+  MaybePlayVideo("hev1.4.10.L120.90",
+                 "bear-1280x720-hevc-10bit-444-no-audio.mp4");
+}
+
+// HEVC video stream with 8-bit main profile
+IN_PROC_BROWSER_TEST_P(MediaTest, VideoBearMp4Hevc8bit) {
+  // TODO(crbug.com/1449878) : For Android, the `canPlayType()` test in
+  // `MaybePlayVideo` should be reporting the correct status for HEVC. The below
+  // `REQUIRE_ACCELERATION_ON_ANDROID` flag is a temporary fix.
+  REQUIRE_ACCELERATION_ON_ANDROID();
+  MaybePlayVideo("hev1.1.6.L120.90", "bear-1280x720-hevc-no-audio.mp4");
+}
+
+// HEVC video stream with 10-bit main10 profile
+IN_PROC_BROWSER_TEST_P(MediaTest, VideoBearMp4Hevc10bit) {
+  // TODO(crbug.com/1449878) : For Android, the `canPlayType()` test in
+  // `MaybePlayVideo` should be reporting the correct status for HEVC. The below
+  // `REQUIRE_ACCELERATION_ON_ANDROID` flag is a temporary fix.
+  REQUIRE_ACCELERATION_ON_ANDROID();
+  MaybePlayVideo("hev1.2.4.L120.90", "bear-1280x720-hevc-10bit-no-audio.mp4");
+}
+#endif  // BUILDFLAG(ENABLE_HEVC_PARSER_AND_HW_DECODER)
+
 #if !BUILDFLAG(IS_ANDROID)
 // Android devices usually only support baseline, main and high.
 IN_PROC_BROWSER_TEST_P(MediaTest, VideoBearHighBitDepthMp4) {
@@ -334,7 +414,7 @@ IN_PROC_BROWSER_TEST_P(MediaTest, MAYBE_LoadManyVideos) {
 }
 #endif  // !BUILDFLAG(IS_ANDROID)
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
 IN_PROC_BROWSER_TEST_P(MediaTest, VideoBearAviMp3Mpeg4) {
   PlayVideo("bear_mpeg4_mp3.avi");
 }
@@ -346,19 +426,7 @@ IN_PROC_BROWSER_TEST_P(MediaTest, VideoBearAviMp3Mpeg4Asp) {
 IN_PROC_BROWSER_TEST_P(MediaTest, VideoBearAviMp3Divx) {
   PlayVideo("bear_divx_mp3.avi");
 }
-
-IN_PROC_BROWSER_TEST_P(MediaTest, VideoBear3gpAacH264) {
-  PlayVideo("bear_h264_aac.3gp");
-}
-
-IN_PROC_BROWSER_TEST_P(MediaTest, VideoBear3gpAmrnbMpeg4) {
-  PlayVideo("bear_mpeg4_amrnb.3gp");
-}
-
-IN_PROC_BROWSER_TEST_P(MediaTest, VideoBearWavGsmms) {
-  PlayAudio("bear_gsm_ms.wav");
-}
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+#endif  // BUILDFLAG(IS_CHROMEOS)
 #endif  // BUILDFLAG(USE_PROPRIETARY_CODECS)
 
 IN_PROC_BROWSER_TEST_P(MediaTest, AudioBearFlac) {

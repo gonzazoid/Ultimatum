@@ -7,10 +7,10 @@
 #include <cstdint>
 #include <memory>
 
-#include "base/bind.h"
 #include "base/check.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/task/sequenced_task_runner.h"
 #include "chrome/browser/predictors/autocomplete_action_predictor_table.h"
 #include "chrome/browser/predictors/loading_predictor_config.h"
@@ -76,7 +76,6 @@ PredictorDatabaseInternal::PredictorDatabaseInternal(
     scoped_refptr<base::SequencedTaskRunner> db_task_runner)
     : db_path_(profile->GetPath().Append(kPredictorDatabaseName)),
       db_(std::make_unique<sql::Database>(sql::DatabaseOptions{
-          .exclusive_locking = true,
           .page_size = 4096,
           .cache_size = 500,
           // TODO(pwnall): Add a meta table and remove this option.

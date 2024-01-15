@@ -7,12 +7,13 @@
 
 #include <string>
 
-#include "base/callback.h"
 #include "base/component_export.h"
+#include "base/files/file_path.h"
 #include "base/files/scoped_file.h"
+#include "base/functional/callback.h"
 #include "base/functional/callback_forward.h"
+#include "base/observer_list_types.h"
 #include "chromeos/dbus/dlp/dlp_service.pb.h"
-#include "dbus/object_proxy.h"
 
 namespace dbus {
 class Bus;
@@ -25,10 +26,21 @@ namespace chromeos {
 // initializes the DBusThreadManager instance.
 class COMPONENT_EXPORT(DLP) DlpClient {
  public:
+  class Observer : public base::CheckedObserver {
+   public:
+    ~Observer() override = default;
+
+    virtual void DlpDaemonRestarted() {}
+
+    // Notifies that some files have been successfully added to the daemon.
+    virtual void OnFilesAddedToDlpDaemon(
+        const std::vector<base::FilePath>& files) {}
+  };
+
   using SetDlpFilesPolicyCallback =
       base::OnceCallback<void(const dlp::SetDlpFilesPolicyResponse response)>;
-  using AddFileCallback =
-      base::OnceCallback<void(const dlp::AddFileResponse response)>;
+  using AddFilesCallback =
+      base::OnceCallback<void(const dlp::AddFilesResponse response)>;
   using GetFilesSourcesCallback =
       base::OnceCallback<void(const dlp::GetFilesSourcesResponse response)>;
   using CheckFilesTransferCallback =
@@ -36,11 +48,21 @@ class COMPONENT_EXPORT(DLP) DlpClient {
   using RequestFileAccessCallback =
       base::OnceCallback<void(const dlp::RequestFileAccessResponse response,
                               base::ScopedFD fd)>;
-  using AddFileCall =
-      base::RepeatingCallback<void(const dlp::AddFileRequest, AddFileCallback)>;
+  using AddFilesCall = base::RepeatingCallback<void(const dlp::AddFilesRequest,
+                                                    AddFilesCallback)>;
   using GetFilesSourceCall =
       base::RepeatingCallback<void(const dlp::GetFilesSourcesRequest,
                                    GetFilesSourcesCallback)>;
+  using RequestFileAccessCall =
+      base::RepeatingCallback<void(const dlp::RequestFileAccessRequest,
+                                   RequestFileAccessCallback)>;
+
+  using CheckFilesTransferCall =
+      base::RepeatingCallback<void(const dlp::CheckFilesTransferRequest,
+                                   CheckFilesTransferCallback)>;
+
+  using GetDatabaseEntriesCallback =
+      base::OnceCallback<void(const dlp::GetDatabaseEntriesResponse response)>;
 
   // Interface with testing functionality. Accessed through
   // GetTestInterface(), only implemented in the fake implementation.
@@ -62,11 +84,22 @@ class COMPONENT_EXPORT(DLP) DlpClient {
     // Sets the response for IsAlive call.
     virtual void SetIsAlive(bool is_alive) = 0;
 
-    // use |mock| for AddFile calls.
-    virtual void SetAddFileMock(AddFileCall mock) = 0;
+    // Sets `mock` used in AddFiles calls.
+    virtual void SetAddFilesMock(AddFilesCall mock) = 0;
 
-    // use |mock| for GetFilesSource calls;
+    // Sets `mock` used in GetFilesSource calls.
     virtual void SetGetFilesSourceMock(GetFilesSourceCall mock) = 0;
+
+    // Returns the last CheckFilesTransferRequest. If it wasn't called, it'll
+    // return an empty proto.
+    virtual dlp::CheckFilesTransferRequest GetLastCheckFilesTransferRequest()
+        const = 0;
+
+    // Sets `mock` used in RequestFileAccess calls.
+    virtual void SetRequestFileAccessMock(RequestFileAccessCall mock) = 0;
+
+    // Sets `mock` used in CheckFilesTransfer calls.
+    virtual void SetCheckFilesTransferMock(CheckFilesTransferCall mock) = 0;
 
    protected:
     virtual ~TestInterface() = default;
@@ -92,19 +125,25 @@ class COMPONENT_EXPORT(DLP) DlpClient {
   // methods and request/response messages.
   virtual void SetDlpFilesPolicy(const dlp::SetDlpFilesPolicyRequest request,
                                  SetDlpFilesPolicyCallback callback) = 0;
-  virtual void AddFile(const dlp::AddFileRequest request,
-                       AddFileCallback callback) = 0;
+  virtual void AddFiles(const dlp::AddFilesRequest request,
+                        AddFilesCallback callback) = 0;
   virtual void GetFilesSources(const dlp::GetFilesSourcesRequest request,
                                GetFilesSourcesCallback callback) = 0;
   virtual void CheckFilesTransfer(const dlp::CheckFilesTransferRequest request,
                                   CheckFilesTransferCallback callback) = 0;
   virtual void RequestFileAccess(const dlp::RequestFileAccessRequest request,
                                  RequestFileAccessCallback callback) = 0;
+  virtual void GetDatabaseEntries(GetDatabaseEntriesCallback callback) = 0;
 
   virtual bool IsAlive() const = 0;
 
   // Returns an interface for testing (fake only), or returns nullptr.
   virtual TestInterface* GetTestInterface() = 0;
+
+  // Adds and removes the observer.
+  virtual void AddObserver(Observer* observer) = 0;
+  virtual void RemoveObserver(Observer* observer) = 0;
+  virtual bool HasObserver(const Observer* observer) const = 0;
 
  protected:
   // Initialize/Shutdown should be used instead.

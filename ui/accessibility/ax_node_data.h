@@ -222,8 +222,6 @@ struct AX_BASE_EXPORT AXNodeData {
   void RemoveState(ax::mojom::State state);
   void AddAction(ax::mojom::Action action);
   void AddTextStyle(ax::mojom::TextStyle text_style);
-  // aria-dropeffect is deprecated in WAI-ARIA 1.1.
-  void AddDropeffect(ax::mojom::Dropeffect dropeffect);
 
   // Helper functions to get or set some common int attributes with some
   // specific enum types. To remove an attribute, set it to None.
@@ -236,6 +234,8 @@ struct AX_BASE_EXPORT AXNodeData {
   void SetDefaultActionVerb(ax::mojom::DefaultActionVerb default_action_verb);
   ax::mojom::HasPopup GetHasPopup() const;
   void SetHasPopup(ax::mojom::HasPopup has_popup);
+  ax::mojom::IsPopup GetIsPopup() const;
+  void SetIsPopup(ax::mojom::IsPopup is_popup);
   ax::mojom::InvalidState GetInvalidState() const;
   void SetInvalidState(ax::mojom::InvalidState invalid_state);
   ax::mojom::NameFrom GetNameFrom() const;
@@ -341,10 +341,24 @@ struct AX_BASE_EXPORT AXNodeData {
   bool SupportsExpandCollapse() const;
 
   // Return a string representation of this data, for debugging.
-  virtual std::string ToString() const;
+  virtual std::string ToString(bool verbose = true) const;
 
   // Returns the approximate size in bytes.
   size_t ByteSize() const;
+
+  struct AX_BASE_EXPORT AXNodeDataSize {
+    size_t int_attribute_size = 0;
+    size_t float_attribute_size = 0;
+    size_t bool_attribute_size = 0;
+    size_t string_attribute_size = 0;
+    size_t int_list_attribhute_size = 0;
+    size_t string_list_attribute_size = 0;
+    size_t html_attribute_size = 0;
+    size_t child_ids_size = 0;
+
+    size_t ByteSize() const;
+  };
+  void AccumulateSize(AXNodeDataSize& node_data_size) const;
 
   // Return a string representation of |aria-dropeffect| values, for testing
   // and debugging.

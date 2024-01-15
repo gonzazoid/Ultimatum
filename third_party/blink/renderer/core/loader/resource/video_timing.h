@@ -8,6 +8,7 @@
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/loader/fetch/media_timing.h"
 #include "third_party/blink/renderer/platform/weborigin/kurl.h"
+#include "third_party/blink/renderer/platform/wtf/text/atomic_string.h"
 
 namespace blink {
 
@@ -23,6 +24,9 @@ class VideoTiming final : public GarbageCollected<VideoTiming>,
 
   void SetUrl(const KURL& url) { url_ = url; }
   const KURL& Url() const override { return url_; }
+
+  bool IsDataUrl() const override { return Url().ProtocolIsData(); }
+  AtomicString MediaType() const override { return AtomicString("video"); }
 
   void SetIsSufficientContentLoadedForPaint() override { is_loaded_ = true; }
   bool IsSufficientContentLoadedForPaint() const override { return is_loaded_; }
@@ -59,6 +63,22 @@ class VideoTiming final : public GarbageCollected<VideoTiming>,
     // TODO(crbug.com/1379728): Revisit priority reporting also for videos.
     return absl::nullopt;
   }
+
+  bool IsBroken() const override { return false; }
+  // Video timing does not have information about load start/end time. The
+  // functions return 0 Timeticks as placeholders which would not be reported to
+  // UKM.
+  // TODO(crbug.com/1414077): We should determine what the load start and end
+  // time should be for videos.
+  base::TimeTicks LoadStart() const override { return base::TimeTicks(); }
+
+  base::TimeTicks LoadEnd() const override { return base::TimeTicks(); }
+
+  base::TimeTicks DiscoveryTime() const override { return base::TimeTicks(); }
+
+  bool IsLoadedFromMemoryCache() const override { return false; }
+
+  bool IsPreloadedWithEarlyHints() const override { return false; }
 
  private:
   KURL url_;

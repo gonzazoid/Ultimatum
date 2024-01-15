@@ -6,8 +6,9 @@
 #define COMPONENTS_EXO_WAYLAND_WAYLAND_DISPLAY_OBSERVER_H_
 
 #include <stdint.h>
-#include <wayland-server-protocol-core.h>
 
+#include "ash/shell_observer.h"
+#include "base/memory/raw_ptr.h"
 #include "base/observer_list.h"
 #include "ui/display/display.h"
 #include "ui/display/display_observer.h"
@@ -16,6 +17,7 @@ struct wl_resource;
 
 namespace exo {
 namespace wayland {
+class AuraOutputManager;
 class WaylandDisplayOutput;
 
 // An observer that allows display information changes to be sent
@@ -23,21 +25,27 @@ class WaylandDisplayOutput;
 // "done" event through WaylandDisplayHandler.
 class WaylandDisplayObserver : public base::CheckedObserver {
  public:
-  WaylandDisplayObserver() {}
+  WaylandDisplayObserver();
 
   // Returns |true| if the observer reported any changes and needs
   // to be followed by "done" event, |false| otherwise.
   virtual bool SendDisplayMetrics(const display::Display& display,
                                   uint32_t changed_metrics) = 0;
+
+  // Called when the server should send the active display information to the
+  // client.
+  virtual void SendActiveDisplay() = 0;
+
   // Called when wl_output is destroyed.
   virtual void OnOutputDestroyed() = 0;
 
  protected:
-  ~WaylandDisplayObserver() override {}
+  ~WaylandDisplayObserver() override;
 };
 
 class WaylandDisplayHandler : public display::DisplayObserver,
-                              public WaylandDisplayObserver {
+                              public WaylandDisplayObserver,
+                              public ash::ShellObserver {
  public:
   WaylandDisplayHandler(WaylandDisplayOutput* output,
                         wl_resource* output_resource);
@@ -63,9 +71,9 @@ class WaylandDisplayHandler : public display::DisplayObserver,
 
   size_t CountObserversForTesting() const;
 
- protected:
-  wl_resource* output_resource() const { return output_resource_; }
+  const wl_resource* output_resource() const { return output_resource_; }
 
+ protected:
   // Overridable for testing.
   virtual void XdgOutputSendLogicalPosition(const gfx::Point& position);
   virtual void XdgOutputSendLogicalSize(const gfx::Size& size);
@@ -75,16 +83,29 @@ class WaylandDisplayHandler : public display::DisplayObserver,
   // Overridden from WaylandDisplayObserver:
   bool SendDisplayMetrics(const display::Display& display,
                           uint32_t changed_metrics) override;
+  void SendActiveDisplay() override;
   void OnOutputDestroyed() override;
 
+  // Returns |true| if any metrics were send to the client and a "done" event is
+  // required, |false| otherwise.
+  bool SendXdgOutputMetrics(const display::Display& display,
+                            uint32_t changed_metrics);
+
+  // ShellObserver:
+  void OnDisplayForNewWindowsChanged() override;
+
+  // Gets the AuraOutputManager instance associated with this handler, may
+  // return null.
+  AuraOutputManager* GetAuraOutputManager();
+
   // Output.
-  WaylandDisplayOutput* output_;
+  raw_ptr<WaylandDisplayOutput> output_;
 
   // The output resource associated with the display.
-  wl_resource* const output_resource_;
+  const raw_ptr<wl_resource, DanglingUntriaged> output_resource_;
 
   // Resource associated with a zxdg_output_v1 object.
-  wl_resource* xdg_output_resource_ = nullptr;
+  raw_ptr<wl_resource, DanglingUntriaged> xdg_output_resource_ = nullptr;
 
   base::ObserverList<WaylandDisplayObserver> observers_;
 

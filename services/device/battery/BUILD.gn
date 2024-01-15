@@ -23,6 +23,8 @@ if (!is_android) {
       "battery_status_service.h",
     ]
 
+    configs += [ "//build/config/compiler:wexit_time_destructors" ]
+
     public_deps = [ "//services/device/public/mojom" ]
 
     deps = [
@@ -56,6 +58,12 @@ if (!is_android) {
       sources += [
         "battery_status_manager_win.cc",
         "battery_status_manager_win.h",
+      ]
+    } else if (is_ios) {
+      sources += [ "battery_status_manager_ios.mm" ]
+      frameworks = [
+        "CoreFoundation.framework",
+        "IOKit.framework",
       ]
     } else {
       sources += [ "battery_status_manager_default.cc" ]

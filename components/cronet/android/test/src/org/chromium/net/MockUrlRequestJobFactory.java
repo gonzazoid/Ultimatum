@@ -4,35 +4,34 @@
 
 package org.chromium.net;
 
-import static junit.framework.Assert.assertTrue;
+import static com.google.common.truth.Truth.assertThat;
 
-import org.chromium.base.annotations.JNINamespace;
+import org.jni_zero.JNINamespace;
+import org.jni_zero.NativeMethods;
+
 import org.chromium.net.impl.CronetUrlRequestContext;
 import org.chromium.net.test.FailurePhase;
 
-/**
- * Helper class to set up url interceptors for testing purposes.
- */
+/** Helper class to set up url interceptors for testing purposes. */
 @JNINamespace("cronet")
 public final class MockUrlRequestJobFactory {
     private final long mInterceptorHandle;
     private final CronetTestUtil.NetworkThreadTestConnector mNetworkThreadTestConnector;
 
-    /**
-     * Sets up URL interceptors.
-     */
+    /** Sets up URL interceptors. */
     public MockUrlRequestJobFactory(CronetEngine cronetEngine) {
         mNetworkThreadTestConnector = new CronetTestUtil.NetworkThreadTestConnector(cronetEngine);
 
-        mInterceptorHandle = nativeAddUrlInterceptors(
-                ((CronetUrlRequestContext) cronetEngine).getUrlRequestContextAdapter());
+        mInterceptorHandle =
+                MockUrlRequestJobFactoryJni.get()
+                        .addUrlInterceptors(
+                                ((CronetUrlRequestContext) cronetEngine)
+                                        .getUrlRequestContextAdapter());
     }
 
-    /**
-     * Remove URL Interceptors.
-     */
+    /** Remove URL Interceptors. */
     public void shutdown() {
-        nativeRemoveUrlInterceptorJobFactory(mInterceptorHandle);
+        MockUrlRequestJobFactoryJni.get().removeUrlInterceptorJobFactory(mInterceptorHandle);
         mNetworkThreadTestConnector.shutdown();
     }
 
@@ -44,7 +43,7 @@ public final class MockUrlRequestJobFactory {
      * @param netError reported by UrlRequestJob. Passing -1, results in hang.
      */
     public static String getMockUrlWithFailure(int phase, int netError) {
-        assertTrue(netError < 0);
+        assertThat(netError).isLessThan(0);
         switch (phase) {
             case FailurePhase.START:
             case FailurePhase.READ_SYNC:
@@ -54,7 +53,7 @@ public final class MockUrlRequestJobFactory {
                 throw new IllegalArgumentException(
                         "phase not in org.chromium.net.test.FailurePhase");
         }
-        return nativeGetMockUrlWithFailure(phase, netError);
+        return MockUrlRequestJobFactoryJni.get().getMockUrlWithFailure(phase, netError);
     }
 
     /**
@@ -65,7 +64,7 @@ public final class MockUrlRequestJobFactory {
      * @param dataRepeatCount number of times to repeat the data.
      */
     public static String getMockUrlForData(String data, int dataRepeatCount) {
-        return nativeGetMockUrlForData(data, dataRepeatCount);
+        return MockUrlRequestJobFactoryJni.get().getMockUrlForData(data, dataRepeatCount);
     }
 
     /**
@@ -73,35 +72,33 @@ public final class MockUrlRequestJobFactory {
      * the string "data" as the response.
      */
     public static String getMockUrlForClientCertificateRequest() {
-        return nativeGetMockUrlForClientCertificateRequest();
+        return MockUrlRequestJobFactoryJni.get().getMockUrlForClientCertificateRequest();
     }
 
-    /**
-     * Constructs a mock URL that will fail with an SSL certificate error.
-     */
+    /** Constructs a mock URL that will fail with an SSL certificate error. */
     public static String getMockUrlForSSLCertificateError() {
-        return nativeGetMockUrlForSSLCertificateError();
+        return MockUrlRequestJobFactoryJni.get().getMockUrlForSSLCertificateError();
     }
 
-    /**
-     * Constructs a mock URL that will hang when try to read response body from the remote.
-     */
+    /** Constructs a mock URL that will hang when try to read response body from the remote. */
     public static String getMockUrlForHangingRead() {
-        return nativeGetMockUrlForHangingRead();
+        return MockUrlRequestJobFactoryJni.get().getMockUrlForHangingRead();
     }
 
-    private static native long nativeAddUrlInterceptors(long requestContextAdapter);
+    @NativeMethods("cronet_tests")
+    interface Natives {
+        long addUrlInterceptors(long requestContextAdapter);
 
-    private static native void nativeRemoveUrlInterceptorJobFactory(long interceptorHandle);
+        void removeUrlInterceptorJobFactory(long interceptorHandle);
 
-    private static native String nativeGetMockUrlWithFailure(int phase, int netError);
+        String getMockUrlWithFailure(int phase, int netError);
 
-    private static native String nativeGetMockUrlForData(String data,
-            int dataRepeatCount);
+        String getMockUrlForData(String data, int dataRepeatCount);
 
-    private static native String nativeGetMockUrlForClientCertificateRequest();
+        String getMockUrlForClientCertificateRequest();
 
-    private static native String nativeGetMockUrlForSSLCertificateError();
+        String getMockUrlForSSLCertificateError();
 
-    private static native String nativeGetMockUrlForHangingRead();
+        String getMockUrlForHangingRead();
+    }
 }

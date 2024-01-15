@@ -10,7 +10,7 @@
 #include "ash/public/cpp/shell_window_ids.h"
 #include "ash/shell.h"
 #include "ash/strings/grit/ash_strings.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/ui_base_types.h"
 #include "ui/views/border.h"
@@ -54,7 +54,7 @@ ShutdownConfirmationDialog::ShutdownConfirmationDialog(
   label_->SetHorizontalAlignment(gfx::ALIGN_LEFT);
   label_->SetMultiLine(true);
   label_->SetText(l10n_util::GetStringUTF16(dialog_text_id));
-  AddChildView(label_);
+  AddChildView(label_.get());
 
   // Parent the dialog widget to the PowerButtonAnimationContainer
   int container_id = kShellWindowId_PowerButtonAnimationContainer;

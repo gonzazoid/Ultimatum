@@ -10,12 +10,13 @@
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/bits.h"
 #include "base/debug/crash_logging.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/metrics/histogram_macros.h"
+#include "base/task/sequenced_task_runner.h"
 #include "media/base/android/media_codec_util.h"
-#include "media/base/bind_to_current_loop.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace media {
@@ -28,7 +29,8 @@ class CodecWrapperImpl : public base::RefCountedThreadSafe<CodecWrapperImpl> {
   CodecWrapperImpl(CodecSurfacePair codec_surface_pair,
                    CodecWrapper::OutputReleasedCB output_buffer_release_cb,
                    scoped_refptr<base::SequencedTaskRunner> release_task_runner,
-                   const gfx::Size& initial_expected_size);
+                   const gfx::Size& initial_expected_size,
+                   absl::optional<gfx::Size> coded_size_alignment);
 
   CodecWrapperImpl(const CodecWrapperImpl&) = delete;
   CodecWrapperImpl& operator=(const CodecWrapperImpl&) = delete;
@@ -55,6 +57,11 @@ class CodecWrapperImpl : public base::RefCountedThreadSafe<CodecWrapperImpl> {
   // the codec buffer is not valid. Can be called on any thread. Returns true if
   // the buffer was released.
   bool ReleaseCodecOutputBuffer(int64_t id, bool render);
+
+  size_t GetUnreleasedOutputBufferCount() const {
+    base::AutoLock l(lock_);
+    return buffer_ids_.size();
+  }
 
  private:
   enum class State {
@@ -103,25 +110,36 @@ class CodecWrapperImpl : public base::RefCountedThreadSafe<CodecWrapperImpl> {
   // Most recently reported color space.
   gfx::ColorSpace color_space_ = gfx::ColorSpace::CreateSRGB();
 
+  // The alignment to use for width, height when guessing coded size.
+  const absl::optional<gfx::Size> coded_size_alignment_;
+
   // Task runner on which we'll release codec buffers without rendering.  May be
   // null to always do this on the calling task runner.
   scoped_refptr<base::SequencedTaskRunner> release_task_runner_;
 };
 
-CodecOutputBuffer::CodecOutputBuffer(scoped_refptr<CodecWrapperImpl> codec,
-                                     int64_t id,
-                                     const gfx::Size& size,
-                                     const gfx::ColorSpace& color_space)
+CodecOutputBuffer::CodecOutputBuffer(
+    scoped_refptr<CodecWrapperImpl> codec,
+    int64_t id,
+    const gfx::Size& size,
+    const gfx::ColorSpace& color_space,
+    absl::optional<gfx::Size> coded_size_alignment)
     : codec_(std::move(codec)),
       id_(id),
       size_(size),
-      color_space_(color_space) {}
+      color_space_(color_space),
+      coded_size_alignment_(coded_size_alignment) {}
 
 // For testing.
-CodecOutputBuffer::CodecOutputBuffer(int64_t id,
-                                     const gfx::Size& size,
-                                     const gfx::ColorSpace& color_space)
-    : id_(id), size_(size), color_space_(color_space) {}
+CodecOutputBuffer::CodecOutputBuffer(
+    int64_t id,
+    const gfx::Size& size,
+    const gfx::ColorSpace& color_space,
+    absl::optional<gfx::Size> coded_size_alignment)
+    : id_(id),
+      size_(size),
+      color_space_(color_space),
+      coded_size_alignment_(coded_size_alignment) {}
 
 CodecOutputBuffer::~CodecOutputBuffer() {
   // While it will work if we re-release the buffer, since CodecWrapper handles
@@ -135,23 +153,38 @@ CodecOutputBuffer::~CodecOutputBuffer() {
 
 bool CodecOutputBuffer::ReleaseToSurface() {
   was_rendered_ = true;
-  auto result = codec_->ReleaseCodecOutputBuffer(id_, true);
+  // |codec_| is only null in tests.
+  auto result = codec_ ? codec_->ReleaseCodecOutputBuffer(id_, true) : true;
   if (render_cb_)
     std::move(render_cb_).Run();
   return result;
+}
+
+bool CodecOutputBuffer::CanGuessCodedSize() const {
+  return coded_size_alignment_.has_value();
+}
+
+gfx::Size CodecOutputBuffer::GuessCodedSize() const {
+  DCHECK(CanGuessCodedSize());
+  return gfx::Size(base::bits::AlignUpDeprecatedDoNotUse(
+                       size_.width(), coded_size_alignment_->width()),
+                   base::bits::AlignUpDeprecatedDoNotUse(
+                       size_.height(), coded_size_alignment_->height()));
 }
 
 CodecWrapperImpl::CodecWrapperImpl(
     CodecSurfacePair codec_surface_pair,
     CodecWrapper::OutputReleasedCB output_buffer_release_cb,
     scoped_refptr<base::SequencedTaskRunner> release_task_runner,
-    const gfx::Size& initial_expected_size)
+    const gfx::Size& initial_expected_size,
+    absl::optional<gfx::Size> coded_size_alignment)
     : state_(State::kFlushed),
       codec_(std::move(codec_surface_pair.first)),
       surface_bundle_(std::move(codec_surface_pair.second)),
       next_buffer_id_(0),
       size_(initial_expected_size),
       output_buffer_release_cb_(std::move(output_buffer_release_cb)),
+      coded_size_alignment_(coded_size_alignment),
       release_task_runner_(std::move(release_task_runner)) {
   DVLOG(2) << __func__;
 }
@@ -209,8 +242,8 @@ bool CodecWrapperImpl::Flush() {
   // Dequeued buffers are invalidated by flushing.
   buffer_ids_.clear();
   owned_input_buffer_.reset();
-  auto status = codec_->Flush();
-  if (status == MEDIA_CODEC_ERROR) {
+  MediaCodecResult result = codec_->Flush();
+  if (result.code() == MediaCodecResult::Codes::kError) {
     state_ = State::kError;
     return false;
   }
@@ -231,19 +264,18 @@ CodecWrapperImpl::QueueStatus CodecWrapperImpl::QueueInputBuffer(
     input_buffer = *owned_input_buffer_;
     owned_input_buffer_.reset();
   } else {
-    MediaCodecStatus status =
+    MediaCodecResult result =
         codec_->DequeueInputBuffer(base::TimeDelta(), &input_buffer);
-    switch (status) {
-      case MEDIA_CODEC_ERROR:
+    switch (result.code()) {
+      case MediaCodecResult::Codes::kError:
         state_ = State::kError;
-        return QueueStatus::kError;
-      case MEDIA_CODEC_TRY_AGAIN_LATER:
-        return QueueStatus::kTryAgainLater;
-      case MEDIA_CODEC_OK:
+        return {QueueStatus::Codes::kError, std::move(result)};
+      case MediaCodecResult::Codes::kTryAgainLater:
+        return QueueStatus::Codes::kTryAgainLater;
+      case MediaCodecResult::Codes::kOk:
         break;
       default:
-        NOTREACHED();
-        return QueueStatus::kError;
+        NOTREACHED_NORETURN();
     }
   }
 
@@ -259,39 +291,38 @@ CodecWrapperImpl::QueueStatus CodecWrapperImpl::QueueInputBuffer(
     else
       codec_->QueueEOS(input_buffer);
     state_ = State::kDraining;
-    return QueueStatus::kOk;
+    return QueueStatus::Codes::kOk;
   }
 
   // Queue a buffer.
   const DecryptConfig* decrypt_config = buffer.decrypt_config();
-  MediaCodecStatus status;
+  MediaCodecResult result;
   if (decrypt_config) {
     // TODO(crbug.com/813845): Use encryption scheme settings from
     // DecryptConfig.
-    status = codec_->QueueSecureInputBuffer(
+    result = codec_->QueueSecureInputBuffer(
         input_buffer, buffer.data(), buffer.data_size(),
         decrypt_config->key_id(), decrypt_config->iv(),
         decrypt_config->subsamples(), decrypt_config->encryption_scheme(),
         decrypt_config->encryption_pattern(), buffer.timestamp());
   } else {
-    status = codec_->QueueInputBuffer(input_buffer, buffer.data(),
+    result = codec_->QueueInputBuffer(input_buffer, buffer.data(),
                                       buffer.data_size(), buffer.timestamp());
   }
 
-  switch (status) {
-    case MEDIA_CODEC_OK:
+  switch (result.code()) {
+    case MediaCodecResult::Codes::kOk:
       state_ = State::kRunning;
-      return QueueStatus::kOk;
-    case MEDIA_CODEC_ERROR:
+      return QueueStatus::Codes::kOk;
+    case MediaCodecResult::Codes::kError:
       state_ = State::kError;
-      return QueueStatus::kError;
-    case MEDIA_CODEC_NO_KEY:
+      return {QueueStatus::Codes::kError, std::move(result)};
+    case MediaCodecResult::Codes::kNoKey:
       // The input buffer remains owned by us, so save it for reuse.
       owned_input_buffer_ = input_buffer;
-      return QueueStatus::kNoKey;
+      return QueueStatus::Codes::kNoKey;
     default:
-      NOTREACHED();
-      return QueueStatus::kError;
+      NOTREACHED_NORETURN();
   }
 }
 
@@ -312,7 +343,7 @@ CodecWrapperImpl::DequeueStatus CodecWrapperImpl::DequeueOutputBuffer(
     state_ = State::kDrained;
     if (end_of_stream)
       *end_of_stream = true;
-    return DequeueStatus::kOk;
+    return DequeueStatus::Codes::kOk;
   }
 
   // Dequeue in a loop so we can avoid propagating the uninteresting
@@ -321,11 +352,11 @@ CodecWrapperImpl::DequeueStatus CodecWrapperImpl::DequeueOutputBuffer(
     int index = -1;
     size_t unused;
     bool eos = false;
-    auto status =
+    MediaCodecResult result =
         codec_->DequeueOutputBuffer(base::TimeDelta(), &index, &unused, &unused,
                                     presentation_time, &eos, nullptr);
-    switch (status) {
-      case MEDIA_CODEC_OK: {
+    switch (result.code()) {
+      case MediaCodecResult::Codes::kOk: {
         if (eos) {
           state_ = State::kDrained;
           // We assume that the EOS flag is only ever attached to empty output
@@ -335,27 +366,30 @@ CodecWrapperImpl::DequeueStatus CodecWrapperImpl::DequeueOutputBuffer(
           codec_->ReleaseOutputBuffer(index, false);
           if (end_of_stream)
             *end_of_stream = true;
-          return DequeueStatus::kOk;
+          return DequeueStatus::Codes::kOk;
         }
 
         int64_t buffer_id = next_buffer_id_++;
         buffer_ids_[buffer_id] = index;
-        *codec_buffer = base::WrapUnique(
-            new CodecOutputBuffer(this, buffer_id, size_, color_space_));
-        return DequeueStatus::kOk;
+        *codec_buffer = base::WrapUnique(new CodecOutputBuffer(
+            this, buffer_id, size_, color_space_, coded_size_alignment_));
+        return DequeueStatus::Codes::kOk;
       }
-      case MEDIA_CODEC_TRY_AGAIN_LATER: {
-        return DequeueStatus::kTryAgainLater;
+      case MediaCodecResult::Codes::kTryAgainLater: {
+        return DequeueStatus::Codes::kTryAgainLater;
       }
-      case MEDIA_CODEC_ERROR: {
+      case MediaCodecResult::Codes::kError: {
         state_ = State::kError;
-        return DequeueStatus::kError;
+        return {DequeueStatus::Codes::kError, std::move(result)};
       }
-      case MEDIA_CODEC_OUTPUT_FORMAT_CHANGED: {
+      case MediaCodecResult::Codes::kOutputFormatChanged: {
         gfx::Size temp_size;
-        if (codec_->GetOutputSize(&temp_size) == MEDIA_CODEC_ERROR) {
+        result = codec_->GetOutputSize(&temp_size);
+        if (result.code() == MediaCodecResult::Codes::kError) {
           state_ = State::kError;
-          return DequeueStatus::kError;
+          return {DequeueStatus::Codes::kError,
+                  "Output Size changed to an unusable size.",
+                  std::move(result)};
         }
 
         // In automated testing, we regularly see a blip where MediaCodec sends
@@ -367,8 +401,8 @@ CodecWrapperImpl::DequeueStatus CodecWrapperImpl::DequeueOutputBuffer(
         if (!temp_size.IsEmpty())
           size_ = temp_size;
 
-        bool error =
-            codec_->GetOutputColorSpace(&color_space_) == MEDIA_CODEC_ERROR;
+        bool error = codec_->GetOutputColorSpace(&color_space_) ==
+                     MediaCodecResult::Codes::kError;
         UMA_HISTOGRAM_BOOLEAN("Media.Android.GetColorSpaceError", error);
         if (error && !size_.IsEmpty()) {
           // If we get back an unsupported color space, then just default to
@@ -378,18 +412,18 @@ CodecWrapperImpl::DequeueStatus CodecWrapperImpl::DequeueOutputBuffer(
         }
         continue;
       }
-      case MEDIA_CODEC_OUTPUT_BUFFERS_CHANGED: {
+      case MediaCodecResult::Codes::kOutputBuffersChanged: {
         continue;
       }
-      case MEDIA_CODEC_NO_KEY: {
-        NOTREACHED();
-        return DequeueStatus::kError;
+      case MediaCodecResult::Codes::kNoKey: {
+        NOTREACHED_NORETURN();
       }
     }
   }
 
   state_ = State::kError;
-  return DequeueStatus::kError;
+  return {DequeueStatus::Codes::kError,
+          "Failed to dequeue after multiple attempts."};
 }
 
 bool CodecWrapperImpl::SetSurface(
@@ -485,11 +519,13 @@ CodecWrapper::CodecWrapper(
     CodecSurfacePair codec_surface_pair,
     OutputReleasedCB output_buffer_release_cb,
     scoped_refptr<base::SequencedTaskRunner> release_task_runner,
-    const gfx::Size& initial_expected_size)
+    const gfx::Size& initial_expected_size,
+    absl::optional<gfx::Size> coded_size_alignment)
     : impl_(new CodecWrapperImpl(std::move(codec_surface_pair),
                                  std::move(output_buffer_release_cb),
                                  std::move(release_task_runner),
-                                 initial_expected_size)) {}
+                                 initial_expected_size,
+                                 coded_size_alignment)) {}
 
 CodecWrapper::~CodecWrapper() {
   // The codec must have already been taken.
@@ -544,6 +580,10 @@ bool CodecWrapper::SetSurface(
 
 scoped_refptr<CodecSurfaceBundle> CodecWrapper::SurfaceBundle() {
   return impl_->SurfaceBundle();
+}
+
+size_t CodecWrapper::GetUnreleasedOutputBufferCount() const {
+  return impl_->GetUnreleasedOutputBufferCount();
 }
 
 }  // namespace media

@@ -14,7 +14,7 @@
 #include <unordered_map>
 
 #include "base/containers/small_map.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/synchronization/lock.h"
 #include "base/unguessable_token.h"
 #include "gpu/vulkan/vulkan_implementation.h"
@@ -68,6 +68,14 @@ class FlatlandSysmemBufferManager {
   // passed to `ImportSysmemBufferCollection()`.
   scoped_refptr<FlatlandSysmemBufferCollection> GetCollectionByHandle(
       const zx::eventpair& handle);
+
+  fuchsia::sysmem::Allocator_Sync* sysmem_allocator() {
+    return sysmem_allocator_.get();
+  }
+
+  fuchsia::ui::composition::Allocator* flatland_allocator() {
+    return flatland_allocator_.get();
+  }
 
  private:
   void RegisterCollection(

@@ -5,8 +5,11 @@
 #include "ash/system/bluetooth/bluetooth_detailed_view_controller.h"
 
 #include <memory>
+#include <optional>
 #include <vector>
 
+#include "ash/public/cpp/fake_hats_bluetooth_revamp_trigger_impl.h"
+#include "ash/public/cpp/hats_bluetooth_revamp_trigger.h"
 #include "ash/public/cpp/test/test_system_tray_client.h"
 #include "ash/system/bluetooth/bluetooth_detailed_view.h"
 #include "ash/system/bluetooth/bluetooth_device_list_controller.h"
@@ -18,6 +21,8 @@
 #include "ash/test/ash_test_base.h"
 #include "ash/test/ash_test_helper.h"
 #include "base/check.h"
+#include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "base/run_loop.h"
 #include "base/strings/string_piece.h"
 #include "chromeos/ash/services/bluetooth_config/fake_adapter_state_controller.h"
@@ -26,7 +31,6 @@
 #include "chromeos/ash/services/bluetooth_config/public/mojom/cros_bluetooth_config.mojom.h"
 #include "chromeos/ash/services/bluetooth_config/scoped_bluetooth_config_test_helper.h"
 #include "mojo/public/cpp/bindings/clone_traits.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace ash {
 
@@ -66,7 +70,10 @@ class FakeBluetoothDetailedViewFactory : public BluetoothDetailedView::Factory {
     return bluetooth_detailed_view;
   }
 
-  FakeBluetoothDetailedView* bluetooth_detailed_view_ = nullptr;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter
+  // for: #constexpr-ctor-field-initializer
+  RAW_PTR_EXCLUSION FakeBluetoothDetailedView* bluetooth_detailed_view_ =
+      nullptr;
 };
 
 class FakeBluetoothDeviceListControllerFactory
@@ -93,8 +100,10 @@ class FakeBluetoothDeviceListControllerFactory
     return bluetooth_device_list_controller;
   }
 
-  FakeBluetoothDeviceListController* bluetooth_device_list_controller_ =
-      nullptr;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter
+  // for: #constexpr-ctor-field-initializer
+  RAW_PTR_EXCLUSION FakeBluetoothDeviceListController*
+      bluetooth_device_list_controller_ = nullptr;
 };
 
 }  // namespace
@@ -106,36 +115,34 @@ class BluetoothDetailedViewControllerTest : public AshTestBase {
 
     GetPrimaryUnifiedSystemTray()->ShowBubble();
 
-    bluetooth_detailed_view_controller_ =
-        std::make_unique<BluetoothDetailedViewController>(
-            GetPrimaryUnifiedSystemTray()
-                ->bubble()
-                ->unified_system_tray_controller());
-
     BluetoothDetailedView::Factory::SetFactoryForTesting(
         &bluetooth_detailed_view_factory_);
     BluetoothDeviceListController::Factory::SetFactoryForTesting(
         &bluetooth_device_list_controller_factory_);
 
-    // We have access to the fakes through our factories so we don't bother
-    // caching the view here.
-    detailed_view_ =
-        base::WrapUnique(static_cast<DetailedViewController*>(
-                             bluetooth_detailed_view_controller_.get())
-                             ->CreateView());
+    GetPrimaryUnifiedSystemTray()
+        ->bubble()
+        ->unified_system_tray_controller()
+        ->ShowBluetoothDetailedView();
+
+    fake_trigger_impl_ = std::make_unique<FakeHatsBluetoothRevampTriggerImpl>();
+
+    bluetooth_detailed_view_controller_ =
+        static_cast<BluetoothDetailedViewController*>(
+            GetPrimaryUnifiedSystemTray()
+                ->bubble()
+                ->unified_system_tray_controller()
+                ->detailed_view_controller());
+
     base::RunLoop().RunUntilIdle();
   }
 
   void TearDown() override {
-    detailed_view_.reset();
     BluetoothDeviceListController::Factory::SetFactoryForTesting(nullptr);
     BluetoothDetailedView::Factory::SetFactoryForTesting(nullptr);
-    bluetooth_detailed_view_controller_.reset();
 
     AshTestBase::TearDown();
   }
-
-  std::unique_ptr<views::View> detailed_view_;
 
   BluetoothSystemState GetBluetoothAdapterState() {
     return bluetooth_config_test_helper()
@@ -167,7 +174,7 @@ class BluetoothDetailedViewControllerTest : public AshTestBase {
   }
 
   BluetoothDetailedView::Delegate* bluetooth_detailed_view_delegate() {
-    return bluetooth_detailed_view_controller_.get();
+    return bluetooth_detailed_view_controller_;
   }
 
   FakeBluetoothDetailedView* bluetooth_detailed_view() {
@@ -183,17 +190,37 @@ class BluetoothDetailedViewControllerTest : public AshTestBase {
     return bluetooth_config_test_helper()->fake_device_operation_handler();
   }
 
+  size_t GetTryToShowSurveyCount() {
+    return fake_trigger_impl_->try_to_show_survey_count();
+  }
+
  private:
   ScopedBluetoothConfigTestHelper* bluetooth_config_test_helper() {
     return ash_test_helper()->bluetooth_config_test_helper();
   }
 
-  std::unique_ptr<BluetoothDetailedViewController>
+  std::unique_ptr<FakeHatsBluetoothRevampTriggerImpl> fake_trigger_impl_;
+  raw_ptr<BluetoothDetailedViewController, DanglingUntriaged>
       bluetooth_detailed_view_controller_;
   FakeBluetoothDetailedViewFactory bluetooth_detailed_view_factory_;
   FakeBluetoothDeviceListControllerFactory
       bluetooth_device_list_controller_factory_;
 };
+
+TEST_F(BluetoothDetailedViewControllerTest,
+       TransitionToMainViewWhenBluetoothUnavailable) {
+  EXPECT_TRUE(GetPrimaryUnifiedSystemTray()
+                  ->bubble()
+                  ->unified_system_tray_controller()
+                  ->IsDetailedViewShown());
+
+  SetBluetoothAdapterState(BluetoothSystemState::kUnavailable);
+
+  EXPECT_FALSE(GetPrimaryUnifiedSystemTray()
+                   ->bubble()
+                   ->unified_system_tray_controller()
+                   ->IsDetailedViewShown());
+}
 
 TEST_F(BluetoothDetailedViewControllerTest,
        NotifiesWhenBluetoothEnabledStateChanges) {
@@ -227,21 +254,26 @@ TEST_F(BluetoothDetailedViewControllerTest,
 TEST_F(BluetoothDetailedViewControllerTest,
        ChangesBluetoothEnabledStateWhenTogglePressed) {
   EXPECT_EQ(BluetoothSystemState::kEnabled, GetBluetoothAdapterState());
+  EXPECT_EQ(0u, GetTryToShowSurveyCount());
 
   bluetooth_detailed_view_delegate()->OnToggleClicked(/*new_state=*/false);
   base::RunLoop().RunUntilIdle();
   EXPECT_EQ(BluetoothSystemState::kDisabling, GetBluetoothAdapterState());
+  EXPECT_EQ(1u, GetTryToShowSurveyCount());
 
   bluetooth_detailed_view_delegate()->OnToggleClicked(/*new_state=*/true);
   base::RunLoop().RunUntilIdle();
   EXPECT_EQ(BluetoothSystemState::kEnabling, GetBluetoothAdapterState());
+  EXPECT_EQ(2u, GetTryToShowSurveyCount());
 }
 
 TEST_F(BluetoothDetailedViewControllerTest,
-       OnPairNewDeviceRequestedOpensBluetoothDialog) {
+       OnPairNewDeviceRequestedOpensBluetoothDialogWithHatsTrigger) {
+  EXPECT_EQ(0u, GetTryToShowSurveyCount());
   EXPECT_EQ(0, GetSystemTrayClient()->show_bluetooth_pairing_dialog_count());
   bluetooth_detailed_view_delegate()->OnPairNewDeviceRequested();
   EXPECT_EQ(1, GetSystemTrayClient()->show_bluetooth_pairing_dialog_count());
+  EXPECT_EQ(1u, GetTryToShowSurveyCount());
 }
 
 TEST_F(BluetoothDetailedViewControllerTest,

@@ -8,9 +8,9 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ref_counted_memory.h"
-#include "cc/paint/display_item_list.h"
+#include "cc/paint/paint_op_buffer.h"
 #include "cc/paint/record_paint_canvas.h"
 #include "cc/paint/skottie_color_map.h"
 #include "cc/paint/skottie_wrapper.h"
@@ -53,14 +53,7 @@ class LottieImageSource : public gfx::ImageSkiaSource {
 gfx::ImageSkia CreateImageSkia(Animation* content) {
   const gfx::Size size = content->GetOriginalSize();
 
-  scoped_refptr<cc::DisplayItemList> display_item_list =
-      base::MakeRefCounted<cc::DisplayItemList>(
-          cc::DisplayItemList::kToBeReleasedAsPaintOpBuffer);
-  display_item_list->StartPaint();
-
-  cc::RecordPaintCanvas record_canvas(
-      display_item_list.get(), SkRect::MakeWH(SkFloatToScalar(size.width()),
-                                              SkFloatToScalar(size.height())));
+  cc::InspectableRecordPaintCanvas record_canvas(size);
   gfx::Canvas canvas(&record_canvas, 1.0);
 #if DCHECK_IS_ON()
   gfx::Rect clip_rect;
@@ -69,9 +62,7 @@ gfx::ImageSkia CreateImageSkia(Animation* content) {
 #endif
   content->PaintFrame(&canvas, 0.f, size);
 
-  display_item_list->EndPaintOfPairedEnd();
-  display_item_list->Finalize();
-  const gfx::ImageSkiaRep rep(display_item_list->ReleaseAsRecord(), size, 0.f);
+  const gfx::ImageSkiaRep rep(record_canvas.ReleaseAsRecord(), size, 0.f);
   return gfx::ImageSkia(std::make_unique<LottieImageSource>(rep),
                         rep.pixel_size());
 }
@@ -116,30 +107,21 @@ gfx::ImageSkia CreateImageSkiaWithCurrentTheme(
 }
 #endif
 
-// Converts from |std::string| to |std::vector<uint8_t>|.
-std::vector<uint8_t> StringToBytes(const std::string& bytes_string) {
-  const uint8_t* bytes_pointer =
-      reinterpret_cast<const uint8_t*>(bytes_string.data());
-  return std::vector<uint8_t>(bytes_pointer,
-                              bytes_pointer + bytes_string.size());
-}
-
 }  // namespace
 
-gfx::ImageSkia ParseLottieAsStillImage(const std::string& bytes_string) {
+gfx::ImageSkia ParseLottieAsStillImage(std::vector<uint8_t> data) {
   auto content = std::make_unique<Animation>(
-      cc::SkottieWrapper::CreateSerializable(StringToBytes(bytes_string)));
+      cc::SkottieWrapper::CreateSerializable(std::move(data)));
   return CreateImageSkia(content.get());
 }
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-ui::ImageModel ParseLottieAsThemedStillImage(const std::string& bytes_string) {
-  std::vector<uint8_t> bytes = StringToBytes(bytes_string);
+ui::ImageModel ParseLottieAsThemedStillImage(std::vector<uint8_t> data) {
   const gfx::Size size =
-      std::make_unique<Animation>(cc::SkottieWrapper::CreateSerializable(bytes))
+      std::make_unique<Animation>(cc::SkottieWrapper::CreateSerializable(data))
           ->GetOriginalSize();
   return ui::ImageModel::FromImageGenerator(
-      base::BindRepeating(&CreateImageSkiaWithCurrentTheme, std::move(bytes)),
+      base::BindRepeating(&CreateImageSkiaWithCurrentTheme, std::move(data)),
       size);
 }
 #endif

@@ -6,6 +6,7 @@
 #define ASH_COMPONENTS_ARC_CLIPBOARD_ARC_CLIPBOARD_BRIDGE_H_
 
 #include "ash/components/arc/mojom/clipboard.mojom.h"
+#include "base/memory/raw_ptr.h"
 #include "base/threading/thread_checker.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "ui/base/clipboard/clipboard_observer.h"
@@ -42,8 +43,11 @@ class ArcClipboardBridge : public KeyedService,
   void SetClipContent(mojom::ClipDataPtr clip_data) override;
   void GetClipContent(GetClipContentCallback callback) override;
 
+  static void EnsureFactoryBuilt();
+
  private:
-  ArcBridgeService* const arc_bridge_service_;  // Owned by ArcServiceManager.
+  const raw_ptr<ArcBridgeService>
+      arc_bridge_service_;  // Owned by ArcServiceManager.
 
   bool event_originated_at_instance_;
 

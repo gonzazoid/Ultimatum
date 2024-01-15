@@ -32,7 +32,6 @@
 #include "base/process/kill.h"
 #include "base/process/launch.h"
 #include "base/strings/string_number_conversions.h"
-#include "base/strings/string_tokenizer.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
@@ -111,9 +110,9 @@ const int EXIT_XDG_SETTINGS_SYNTAX_ERROR = 1;
 // system fails, as the system copy may be missing capabilities of the Chrome
 // copy.
 
-// If |protocol| is empty this function sets Chrome as the default browser,
-// otherwise it sets Chrome as the default handler application for |protocol|.
-bool SetDefaultWebClient(const std::string& protocol) {
+// If |scheme| is empty this function sets Chrome as the default browser,
+// otherwise it sets Chrome as the default handler application for |scheme|.
+bool SetDefaultWebClient(const std::string& scheme) {
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   return true;
 #else
@@ -122,11 +121,11 @@ bool SetDefaultWebClient(const std::string& protocol) {
   std::vector<std::string> argv;
   argv.push_back(kXdgSettings);
   argv.push_back("set");
-  if (protocol.empty()) {
+  if (scheme.empty()) {
     argv.push_back(kXdgSettingsDefaultBrowser);
   } else {
     argv.push_back(kXdgSettingsDefaultSchemeHandler);
-    argv.push_back(protocol);
+    argv.push_back(scheme);
   }
   argv.push_back(chrome::GetDesktopName(env.get()));
 
@@ -142,11 +141,11 @@ bool SetDefaultWebClient(const std::string& protocol) {
 #endif
 }
 
-// If |protocol| is empty this function checks if Chrome is the default browser,
+// If |scheme| is empty this function checks if Chrome is the default browser,
 // otherwise it checks if Chrome is the default handler application for
-// |protocol|.
+// |scheme|.
 shell_integration::DefaultWebClientState GetIsDefaultWebClient(
-    const std::string& protocol) {
+    const std::string& scheme) {
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   return shell_integration::UNKNOWN_DEFAULT;
 #else
@@ -158,11 +157,11 @@ shell_integration::DefaultWebClientState GetIsDefaultWebClient(
   std::vector<std::string> argv;
   argv.push_back(kXdgSettings);
   argv.push_back("check");
-  if (protocol.empty()) {
+  if (scheme.empty()) {
     argv.push_back(kXdgSettingsDefaultBrowser);
   } else {
     argv.push_back(kXdgSettingsDefaultSchemeHandler);
-    argv.push_back(protocol);
+    argv.push_back(scheme);
   }
   argv.push_back(chrome::GetDesktopName(env.get()));
 
@@ -357,8 +356,8 @@ std::string GetDesktopEntryStringValueFromFromDesktopFile(
 
 // Allows LaunchXdgUtility to join a process.
 // thread_restrictions.h assumes it to be in shell_integration_linux namespace.
-class LaunchXdgUtilityScopedAllowBaseSyncPrimitives
-    : public base::ScopedAllowBaseSyncPrimitives {};
+class [[maybe_unused, nodiscard]] LaunchXdgUtilityScopedAllowBaseSyncPrimitives
+    : public base::ScopedAllowBaseSyncPrimitives{};
 
 bool LaunchXdgUtility(const std::vector<std::string>& argv, int* exit_code) {
   // xdg-settings internally runs xdg-mime, which uses mv to move newly-created
@@ -394,32 +393,6 @@ std::string GetXdgAppIdForWebApp(std::string app_name,
     app_name = app_name.substr(strlen(web_app::kCrxAppPrefix));
   return GetDesktopBaseName(
       web_app::GetAppShortcutFilename(profile_path, app_name).AsUTF8Unsafe());
-}
-
-base::FilePath GetDataWriteLocation(base::Environment* env) {
-  return base::nix::GetXDGDirectory(env, "XDG_DATA_HOME", ".local/share");
-}
-
-std::vector<base::FilePath> GetDataSearchLocations(base::Environment* env) {
-  base::ScopedBlockingCall scoped_blocking_call(FROM_HERE,
-                                                base::BlockingType::MAY_BLOCK);
-
-  std::vector<base::FilePath> search_paths;
-  base::FilePath write_location = GetDataWriteLocation(env);
-  search_paths.push_back(write_location);
-
-  std::string xdg_data_dirs;
-  if (env->GetVar("XDG_DATA_DIRS", &xdg_data_dirs) && !xdg_data_dirs.empty()) {
-    base::StringTokenizer tokenizer(xdg_data_dirs, ":");
-    while (tokenizer.GetNext()) {
-      search_paths.emplace_back(tokenizer.token_piece());
-    }
-  } else {
-    search_paths.push_back(base::FilePath("/usr/local/share"));
-    search_paths.push_back(base::FilePath("/usr/share"));
-  }
-
-  return search_paths;
 }
 
 namespace internal {
@@ -514,7 +487,8 @@ bool GetExistingShortcutContents(base::Environment* env,
   base::ScopedBlockingCall scoped_blocking_call(FROM_HERE,
                                                 base::BlockingType::MAY_BLOCK);
 
-  std::vector<base::FilePath> search_paths = GetDataSearchLocations(env);
+  std::vector<base::FilePath> search_paths =
+      base::nix::GetXDGDataSearchLocations(env);
 
   for (std::vector<base::FilePath>::const_iterator i = search_paths.begin();
        i != search_paths.end(); ++i) {
@@ -747,7 +721,7 @@ std::string GetDirectoryFileContents(const std::u16string& title,
 
 base::FilePath GetMimeTypesRegistrationFilename(
     const base::FilePath& profile_path,
-    const web_app::AppId& app_id) {
+    const webapps::AppId& app_id) {
   DCHECK(!profile_path.empty() && !app_id.empty());
 
   // Use a prefix to clearly group files created by Chrome.
@@ -802,16 +776,11 @@ bool SetAsDefaultBrowser() {
   return shell_integration_linux::SetDefaultWebClient(std::string());
 }
 
-bool SetAsDefaultProtocolClient(const std::string& protocol) {
-  return shell_integration_linux::SetDefaultWebClient(protocol);
+bool SetAsDefaultClientForScheme(const std::string& scheme) {
+  return shell_integration_linux::SetDefaultWebClient(scheme);
 }
 
-DefaultWebClientSetPermission
-GetPlatformSpecificDefaultWebClientSetPermission() {
-  return SET_DEFAULT_UNATTENDED;
-}
-
-std::u16string GetApplicationNameForProtocol(const GURL& url) {
+std::u16string GetApplicationNameForScheme(const GURL& url) {
   std::unique_ptr<base::Environment> env(base::Environment::Create());
 
   std::string desktop_file_contents;
@@ -827,7 +796,7 @@ std::u16string GetApplicationNameForProtocol(const GURL& url) {
   }
 
   return application_name.empty() ? u"xdg-open"
-                                  : base::ASCIIToUTF16(application_name);
+                                  : base::UTF8ToUTF16(application_name);
 }
 
 DefaultWebClientState GetDefaultBrowser() {
@@ -846,8 +815,17 @@ bool IsFirefoxDefaultBrowser() {
   return browser.find("irefox") != std::string::npos;
 }
 
-DefaultWebClientState IsDefaultProtocolClient(const std::string& protocol) {
-  return shell_integration_linux::GetIsDefaultWebClient(protocol);
+DefaultWebClientState IsDefaultClientForScheme(const std::string& scheme) {
+  return shell_integration_linux::GetIsDefaultWebClient(scheme);
 }
+
+namespace internal {
+
+DefaultWebClientSetPermission GetPlatformSpecificDefaultWebClientSetPermission(
+    WebClientSetMethod method) {
+  return SET_DEFAULT_UNATTENDED;
+}
+
+}  // namespace internal
 
 }  // namespace shell_integration

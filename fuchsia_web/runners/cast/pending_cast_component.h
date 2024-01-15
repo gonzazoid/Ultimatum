@@ -5,13 +5,15 @@
 #ifndef FUCHSIA_WEB_RUNNERS_CAST_PENDING_CAST_COMPONENT_H_
 #define FUCHSIA_WEB_RUNNERS_CAST_PENDING_CAST_COMPONENT_H_
 
-#include <fuchsia/sys/cpp/fidl.h>
+#include <fidl/chromium.cast/cpp/fidl.h>
+#include <fuchsia/component/runner/cpp/fidl.h>
 #include <lib/fidl/cpp/interface_request.h>
+
 #include <memory>
 
+#include "base/fuchsia/fidl_event_handler.h"
 #include "base/strings/string_piece.h"
 #include "fuchsia_web/runners/cast/cast_component.h"
-#include "fuchsia_web/runners/cast/fidl/fidl/chromium/cast/cpp/fidl.h"
 
 namespace base {
 class StartupContext;
@@ -37,11 +39,12 @@ class PendingCastComponent {
     virtual void CancelPendingComponent(PendingCastComponent* component) = 0;
   };
 
-  PendingCastComponent(Delegate* delegate,
-                       std::unique_ptr<base::StartupContext> startup_context,
-                       fidl::InterfaceRequest<fuchsia::sys::ComponentController>
-                           controller_request,
-                       base::StringPiece app_id);
+  PendingCastComponent(
+      Delegate* delegate,
+      std::unique_ptr<base::StartupContext> startup_context,
+      fidl::InterfaceRequest<fuchsia::component::runner::ComponentController>
+          controller_request,
+      base::StringPiece app_id);
   ~PendingCastComponent();
 
   PendingCastComponent(const PendingCastComponent&) = delete;
@@ -62,6 +65,10 @@ class PendingCastComponent {
   // Has no effect if |params_| are not yet complete.
   void MaybeLaunchComponent();
 
+  void OnApplicationContextFidlError(fidl::UnbindInfo error);
+
+  void CancelComponent();
+
   // Reference to the Delegate which manages |this|.
   Delegate* const delegate_;
 
@@ -72,7 +79,9 @@ class PendingCastComponent {
   CastComponent::Params params_;
 
   // Used to receive the media session Id and ApplicationConfig.
-  chromium::cast::ApplicationContextPtr application_context_;
+  fidl::Client<chromium_cast::ApplicationContext> application_context_;
+  base::FidlErrorEventHandler<chromium_cast::ApplicationContext>
+      application_context_error_handler_;
   chromium::cast::ApplicationConfigManagerPtr application_config_manager_;
 };
 

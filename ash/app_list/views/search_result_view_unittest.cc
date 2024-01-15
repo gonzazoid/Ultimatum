@@ -3,9 +3,11 @@
 // found in the LICENSE file.
 
 #include "ash/app_list/views/search_result_view.h"
+#include <memory>
 
 #include "ash/app_list/model/search/test_search_result.h"
-#include "ash/public/cpp/test/test_app_list_color_provider.h"
+#include "ash/public/cpp/app_list/app_list_types.h"
+#include "base/memory/raw_ptr.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/views/controls/label.h"
 #include "ui/views/layout/flex_layout_view.h"
@@ -78,6 +80,18 @@ class SearchResultViewWidgetTest : public views::test::WidgetTest {
     return merged_string;
   }
 
+  std::u16string GetRightDetailsText(SearchResultView* view) {
+    std::u16string merged_string = u"";
+    for (const auto& label_tag_pair : view->right_details_label_tags_) {
+      merged_string += label_tag_pair.GetLabel()->GetText();
+    }
+    return merged_string;
+  }
+
+  bool IsProgressBarChart(SearchResultView* view) {
+    return view->is_progress_bar_answer_card_;
+  }
+
   void SetSearchResultViewMultilineDetailsHeight(
       SearchResultView* search_result_view,
       int height) {
@@ -131,10 +145,9 @@ class SearchResultViewWidgetTest : public views::test::WidgetTest {
 
  private:
   int result_id = 0;
-  TestAppListColorProvider color_provider_;  // Needed by AppListView.
   std::unique_ptr<SearchResultView> answer_card_view_;
   std::unique_ptr<SearchResultView> search_result_view_;
-  views::Widget* widget_;
+  raw_ptr<views::Widget, DanglingUntriaged> widget_;
 };
 
 TEST_F(SearchResultViewWidgetTest, SearchResultTextVectorUpdate) {
@@ -185,40 +198,40 @@ TEST_F(SearchResultViewWidgetTest, PreferredHeight) {
     int preferred_height;
   } kTestCases[] = {{.multi_line_details_height = 0,
                      .multi_line_title_height = 0,
-                     .preferred_height = 80},
+                     .preferred_height = 88},
                     {.multi_line_details_height = 0,
                      .multi_line_title_height = 20,
-                     .preferred_height = 80},
+                     .preferred_height = 88},
                     {.multi_line_details_height = 0,
                      .multi_line_title_height = 40,
-                     .preferred_height = 100},
+                     .preferred_height = 108},
                     {.multi_line_details_height = 18,
                      .multi_line_title_height = 0,
-                     .preferred_height = 80},
+                     .preferred_height = 88},
                     {.multi_line_details_height = 18,
                      .multi_line_title_height = 20,
-                     .preferred_height = 80},
+                     .preferred_height = 88},
                     {.multi_line_details_height = 18,
                      .multi_line_title_height = 40,
-                     .preferred_height = 100},
+                     .preferred_height = 108},
                     {.multi_line_details_height = 36,
                      .multi_line_title_height = 0,
-                     .preferred_height = 98},
+                     .preferred_height = 106},
                     {.multi_line_details_height = 36,
                      .multi_line_title_height = 20,
-                     .preferred_height = 98},
+                     .preferred_height = 106},
                     {.multi_line_details_height = 36,
                      .multi_line_title_height = 40,
-                     .preferred_height = 118},
+                     .preferred_height = 126},
                     {.multi_line_details_height = 54,
                      .multi_line_title_height = 0,
-                     .preferred_height = 116},
+                     .preferred_height = 124},
                     {.multi_line_details_height = 54,
                      .multi_line_title_height = 20,
-                     .preferred_height = 116},
+                     .preferred_height = 124},
                     {.multi_line_details_height = 54,
                      .multi_line_title_height = 40,
-                     .preferred_height = 136}};
+                     .preferred_height = 144}};
   for (auto& test_case : kTestCases) {
     SCOPED_TRACE(testing::Message()
                  << "Test case: {multi_line_details_height: "
@@ -311,6 +324,20 @@ TEST_F(SearchResultViewTest, FlexWeightCalculation) {
                   ->GetProperty(views::kFlexBehaviorKey)
                   ->order());
   }
+}
+
+TEST_F(SearchResultViewWidgetTest, ProgressBarResult) {
+  auto progress_bar_result = std::make_unique<TestSearchResult>();
+  auto system_info_data = std::make_unique<ash::SystemInfoAnswerCardData>(0.5);
+  system_info_data->SetExtraDetails(u"right description");
+  progress_bar_result->SetSystemInfoAnswerCardData(*system_info_data.get());
+  SetupTestSearchResult(progress_bar_result.get());
+  answer_card_view()->SetResult(progress_bar_result.get());
+  answer_card_view()->OnResultChanged();
+  EXPECT_EQ(true, IsProgressBarChart(answer_card_view()));
+  EXPECT_EQ(u"Test Search Result Details 0",
+            GetDetailsText(answer_card_view()));
+  EXPECT_EQ(u"right description", GetRightDetailsText(answer_card_view()));
 }
 
 }  // namespace ash

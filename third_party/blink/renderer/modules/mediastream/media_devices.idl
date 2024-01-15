@@ -30,9 +30,10 @@
     getDisplayMedia(optional DisplayMediaStreamOptions constraints = {});
 
     [
-      RuntimeEnabled = GetDisplayMediaSet, CallWith = ScriptState, RaisesException
+      RuntimeEnabled = GetAllScreensMedia, CallWith = ScriptState, RaisesException,
+      MeasureAs = GetAllScreensMedia
     ] Promise<sequence<MediaStream>>
-    getDisplayMediaSet(optional DisplayMediaStreamOptions constraints = {});
+    getAllScreensMedia();
 
     // https://w3c.github.io/mediacapture-handle/identity/
     // Allows an application APP to opt-in to exposing certain information to

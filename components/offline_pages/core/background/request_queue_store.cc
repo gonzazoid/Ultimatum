@@ -9,15 +9,13 @@
 #include <unordered_set>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/task/task_runner_util.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "components/offline_pages/core/background/save_page_request.h"
 #include "components/offline_pages/core/offline_page_item_utils.h"
 #include "sql/database.h"
@@ -592,9 +590,8 @@ void RequestQueueStore::Initialize(InitializeCallback callback) {
   db_ = std::make_unique<sql::Database>(sql::DatabaseOptions{
       .exclusive_locking = true, .page_size = 4096, .cache_size = 500});
 
-  base::PostTaskAndReplyWithResult(
-      background_task_runner_.get(), FROM_HERE,
-      base::BindOnce(&InitDatabaseSync, db_.get(), db_file_path_),
+  background_task_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE, base::BindOnce(&InitDatabaseSync, db_.get(), db_file_path_),
       base::BindOnce(&RequestQueueStore::OnOpenConnectionDone,
                      weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
 }
@@ -603,14 +600,13 @@ void RequestQueueStore::GetRequests(GetRequestsCallback callback) {
   DCHECK(db_);
   if (!CheckDb()) {
     std::vector<std::unique_ptr<SavePageRequest>> requests;
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(std::move(callback), false, std::move(requests)));
     return;
   }
-  base::PostTaskAndReplyWithResult(
-      background_task_runner_.get(), FROM_HERE,
-      base::BindOnce(&GetAllRequestsSync, db_.get()),
+  background_task_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE, base::BindOnce(&GetAllRequestsSync, db_.get()),
       base::BindOnce(&InvokeGetRequestsCallback, std::move(callback)));
 }
 
@@ -618,7 +614,7 @@ void RequestQueueStore::GetRequestsByIds(
     const std::vector<int64_t>& request_ids,
     UpdateCallback callback) {
   if (!CheckDb()) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(std::move(callback),
                        StoreUpdateResultForIds(StoreState::LOADED, request_ids,
@@ -626,9 +622,8 @@ void RequestQueueStore::GetRequestsByIds(
     return;
   }
 
-  base::PostTaskAndReplyWithResult(
-      background_task_runner_.get(), FROM_HERE,
-      base::BindOnce(&GetRequestsByIdsSync, db_.get(), request_ids),
+  background_task_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE, base::BindOnce(&GetRequestsByIdsSync, db_.get(), request_ids),
       std::move(callback));
 }
 
@@ -636,15 +631,14 @@ void RequestQueueStore::AddRequest(const SavePageRequest& request,
                                    AddOptions options,
                                    AddCallback callback) {
   if (!CheckDb()) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(std::move(callback), AddRequestResult::STORE_FAILURE));
     return;
   }
 
-  base::PostTaskAndReplyWithResult(
-      background_task_runner_.get(), FROM_HERE,
-      base::BindOnce(&AddRequestSync, db_.get(), request, options),
+  background_task_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE, base::BindOnce(&AddRequestSync, db_.get(), request, options),
       std::move(callback));
 }
 
@@ -652,22 +646,21 @@ void RequestQueueStore::UpdateRequests(
     const std::vector<SavePageRequest>& requests,
     UpdateCallback callback) {
   if (!CheckDb()) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(callback),
                                   StoreErrorForAllRequests(requests)));
     return;
   }
 
-  base::PostTaskAndReplyWithResult(
-      background_task_runner_.get(), FROM_HERE,
-      base::BindOnce(&UpdateRequestsSync, db_.get(), requests),
+  background_task_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE, base::BindOnce(&UpdateRequestsSync, db_.get(), requests),
       std::move(callback));
 }
 
 void RequestQueueStore::RemoveRequests(const std::vector<int64_t>& request_ids,
                                        UpdateCallback callback) {
   if (!CheckDb()) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(std::move(callback),
                        StoreUpdateResultForIds(StoreState::LOADED, request_ids,
@@ -675,9 +668,8 @@ void RequestQueueStore::RemoveRequests(const std::vector<int64_t>& request_ids,
     return;
   }
 
-  base::PostTaskAndReplyWithResult(
-      background_task_runner_.get(), FROM_HERE,
-      base::BindOnce(&RemoveRequestsSync, db_.get(), request_ids),
+  background_task_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE, base::BindOnce(&RemoveRequestsSync, db_.get(), request_ids),
       std::move(callback));
 }
 
@@ -685,8 +677,8 @@ void RequestQueueStore::RemoveRequestsIf(
     const base::RepeatingCallback<bool(const SavePageRequest&)>&
         remove_predicate,
     UpdateCallback callback) {
-  base::PostTaskAndReplyWithResult(
-      background_task_runner_.get(), FROM_HERE,
+  background_task_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE,
       base::BindOnce(RemoveRequestsIfSync, db_.get(), remove_predicate),
       std::move(callback));
 }
@@ -695,17 +687,16 @@ void RequestQueueStore::SetAutoFetchNotificationState(
     int64_t request_id,
     SavePageRequest::AutoFetchNotificationState state,
     base::OnceCallback<void(bool updated)> callback) {
-  base::PostTaskAndReplyWithResult(
-      background_task_runner_.get(), FROM_HERE,
+  background_task_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE,
       base::BindOnce(SetAutoFetchNotificationStateSync, db_.get(), request_id,
                      state),
       std::move(callback));
 }
 
 void RequestQueueStore::Reset(ResetCallback callback) {
-  base::PostTaskAndReplyWithResult(
-      background_task_runner_.get(), FROM_HERE,
-      base::BindOnce(ResetSync, db_.get(), db_file_path_),
+  background_task_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE, base::BindOnce(ResetSync, db_.get(), db_file_path_),
       base::BindOnce(&RequestQueueStore::OnResetDone,
                      weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
 }
@@ -730,7 +721,7 @@ void RequestQueueStore::OnOpenConnectionDone(InitializeCallback callback,
 void RequestQueueStore::OnResetDone(ResetCallback callback, bool success) {
   state_ = success ? StoreState::NOT_LOADED : StoreState::FAILED_RESET;
   db_.reset();
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), success));
 }
 

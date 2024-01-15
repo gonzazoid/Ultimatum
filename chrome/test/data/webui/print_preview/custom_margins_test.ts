@@ -3,33 +3,13 @@
 // found in the LICENSE file.
 
 import {CustomMarginsOrientation, Margins, MarginsSetting, MarginsType, MeasurementSystem, MeasurementSystemUnitType, PrintPreviewMarginControlContainerElement, PrintPreviewMarginControlElement, PrintPreviewModelElement, Size, State} from 'chrome://print/print_preview.js';
-import {assert, assertNotReached} from 'chrome://resources/js/assert.js';
+import {assertNotReached} from 'chrome://resources/js/assert.js';
 import {flush} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 import {assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chai_assert.js';
 import {fakeDataBind} from 'chrome://webui-test/polymer_test_util.js';
 import {eventToPromise} from 'chrome://webui-test/test_util.js';
 
-const custom_margins_test = {
-  suiteName: 'CustomMarginsTest',
-  TestNames: {
-    ControlsCheck: 'controls check',
-    SetFromStickySettings: 'set from sticky settings',
-    DragControls: 'drag controls',
-    SetControlsWithTextbox: 'set controls with textbox',
-    SetControlsWithTextboxMetric: 'set controls with textbox metric',
-    RestoreStickyMarginsAfterDefault: 'restore sticky margins after default',
-    MediaSizeClearsCustomMargins: 'media size clears custom margins',
-    LayoutClearsCustomMargins: 'layout clears custom margins',
-    IgnoreDocumentMarginsFromPDF: 'ignore document margins from pdf',
-    MediaSizeClearsCustomMarginsPDF: 'media size clears custom margins pdf',
-    RequestScrollToOutOfBoundsTextbox:
-        'request scroll to out of bounds textbox',
-    ControlsDisabledOnError: 'controls disabled on error',
-  },
-};
-
-Object.assign(window, {custom_margins_test: custom_margins_test});
-suite(custom_margins_test.suiteName, function() {
+suite('CustomMarginsTest', function() {
   let container: PrintPreviewMarginControlContainerElement;
 
   let model: PrintPreviewModelElement;
@@ -266,7 +246,7 @@ suite(custom_margins_test.suiteName, function() {
 
   // Test that controls correctly appear when custom margins are selected and
   // disappear when the preview is loading.
-  test(assert(custom_margins_test.TestNames.ControlsCheck), function() {
+  test('ControlsCheck', function() {
     const getCustomMarginsValue = function(): MarginsSetting {
       return container.getSettingValue('customMargins') as MarginsSetting;
     };
@@ -325,7 +305,7 @@ suite(custom_margins_test.suiteName, function() {
 
   // Tests that the margin controls can be correctly set from the sticky
   // settings.
-  test(assert(custom_margins_test.TestNames.SetFromStickySettings), function() {
+  test('SetFromStickySettings', function() {
     return finishSetup().then(() => {
       const controls = getControls();
 
@@ -345,7 +325,7 @@ suite(custom_margins_test.suiteName, function() {
   });
 
   // Test that dragging margin controls updates the custom margins setting.
-  test(assert(custom_margins_test.TestNames.DragControls), function() {
+  test('DragControls', function() {
     /**
      * Tests that the control can be moved from its current position (assumed
      * to be the default margins) to newPositionInPts by dragging it.
@@ -428,7 +408,7 @@ suite(custom_margins_test.suiteName, function() {
   // Test that setting the margin controls with their textbox inputs updates
   // the custom margins setting.
   test(
-      assert(custom_margins_test.TestNames.SetControlsWithTextbox), function() {
+      'SetControlsWithTextbox', function() {
         return finishSetup().then(() => {
           const controls = getControls();
           // Set a shorter delay for testing so the test doesn't take too
@@ -475,8 +455,7 @@ suite(custom_margins_test.suiteName, function() {
   // as the decimal delimiter and '.' as the thousands delimiter. Regression
   // test for https://crbug.com/1005816.
   test(
-      assert(custom_margins_test.TestNames.SetControlsWithTextboxMetric),
-      function() {
+      'SetControlsWithTextboxMetric', function() {
         measurementSystem =
             new MeasurementSystem('.', ',', MeasurementSystemUnitType.METRIC);
         return finishSetup().then(() => {
@@ -538,8 +517,7 @@ suite(custom_margins_test.suiteName, function() {
   // Test that if there is a custom margins sticky setting, it is restored
   // when margin setting changes.
   test(
-      assert(custom_margins_test.TestNames.RestoreStickyMarginsAfterDefault),
-      function() {
+      'RestoreStickyMarginsAfterDefault', function() {
         const marginValues = setupCustomMargins();
         return finishSetup().then(() => {
           // Simulate setting custom margins.
@@ -567,8 +545,7 @@ suite(custom_margins_test.suiteName, function() {
 
   // Test that if the media size changes, the custom margins are cleared.
   test(
-      assert(custom_margins_test.TestNames.MediaSizeClearsCustomMargins),
-      function() {
+      'MediaSizeClearsCustomMargins', function() {
         return validateMarginsClearedForSetting(
                    'mediaSize', {height_microns: 200000, width_microns: 200000})
             .then(() => {
@@ -588,8 +565,7 @@ suite(custom_margins_test.suiteName, function() {
 
   // Test that if the orientation changes, the custom margins are cleared.
   test(
-      assert(custom_margins_test.TestNames.LayoutClearsCustomMargins),
-      function() {
+      'LayoutClearsCustomMargins', function() {
         return validateMarginsClearedForSetting('layout', true).then(() => {
           // Simulate setting custom margins again
           model.set('settings.margins.value', MarginsType.CUSTOM);
@@ -609,8 +585,7 @@ suite(custom_margins_test.suiteName, function() {
   // not updated based on the document margins - i.e. PDFs do not change the
   // custom margins state.
   test(
-      assert(custom_margins_test.TestNames.IgnoreDocumentMarginsFromPDF),
-      function() {
+      'IgnoreDocumentMarginsFromPDF', function() {
         model.set('settings.margins.available', false);
         return finishSetup().then(() => {
           assertEquals(
@@ -620,13 +595,11 @@ suite(custom_margins_test.suiteName, function() {
 
   // Test that if margins are not available but the user changes the media
   // size, the custom margins are cleared.
-  test(
-      assert(custom_margins_test.TestNames.MediaSizeClearsCustomMarginsPDF),
-      function() {
-        model.set('settings.margins.available', false);
-        return validateMarginsClearedForSetting(
-            'mediaSize', {height_microns: 200000, width_microns: 200000});
-      });
+  test('MediaSizeClearsCustomMarginsPDF', function() {
+    model.set('settings.margins.available', false);
+    return validateMarginsClearedForSetting(
+        'mediaSize', {height_microns: 200000, width_microns: 200000});
+  });
 
   function whenAnimationFrameDone() {
     return new Promise(resolve => window.requestAnimationFrame(resolve));
@@ -635,8 +608,7 @@ suite(custom_margins_test.suiteName, function() {
   // Test that if the user focuses a textbox that is not visible, the
   // text-focus event is fired with the correct values to scroll by.
   test(
-      assert(custom_margins_test.TestNames.RequestScrollToOutOfBoundsTextbox),
-      function() {
+      'RequestScrollToOutOfBoundsTextbox', function() {
         return finishSetup()
             .then(() => {
               // Wait for the controls to be set up, which occurs in an
@@ -694,8 +666,7 @@ suite(custom_margins_test.suiteName, function() {
   // Tests that the margin controls can be correctly set from the sticky
   // settings.
   test(
-      assert(custom_margins_test.TestNames.ControlsDisabledOnError),
-      function() {
+      'ControlsDisabledOnError', function() {
         return finishSetup().then(() => {
           // Simulate setting custom margins.
           model.set('settings.margins.value', MarginsType.CUSTOM);

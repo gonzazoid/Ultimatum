@@ -6,7 +6,7 @@
 #define CHROME_BROWSER_SPELLCHECKER_SPELLCHECK_FACTORY_H_
 
 #include "base/gtest_prod_util.h"
-#include "base/memory/singleton.h"
+#include "base/no_destructor.h"
 #include "build/build_config.h"
 #include "chrome/browser/profiles/profile_keyed_service_factory.h"
 
@@ -27,13 +27,13 @@ class SpellcheckServiceFactory : public ProfileKeyedServiceFactory {
   SpellcheckServiceFactory& operator=(const SpellcheckServiceFactory&) = delete;
 
  private:
-  friend struct base::DefaultSingletonTraits<SpellcheckServiceFactory>;
+  friend base::NoDestructor<SpellcheckServiceFactory>;
 
   SpellcheckServiceFactory();
   ~SpellcheckServiceFactory() override;
 
   // BrowserContextKeyedServiceFactory:
-  KeyedService* BuildServiceInstanceFor(
+  std::unique_ptr<KeyedService> BuildServiceInstanceForBrowserContext(
       content::BrowserContext* context) const override;
   void RegisterProfilePrefs(
       user_prefs::PrefRegistrySyncable* registry) override;

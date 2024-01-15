@@ -8,34 +8,23 @@
 #include <memory>
 #include <string>
 
+#include "base/files/file.h"
 #include "chrome/browser/ash/file_system_provider/icon_set.h"
 #include "chrome/browser/ash/file_system_provider/provided_file_system_info.h"
+#include "chrome/browser/ash/file_system_provider/request_manager.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/common/extensions/api/file_system_provider_capabilities/file_system_provider_capabilities_handler.h"
 
 class Profile;
 
-namespace ash {
-namespace file_system_provider {
+namespace ash::file_system_provider {
 
 class ProvidedFileSystemInterface;
 class ProviderId;
 
-struct Capabilities {
-  Capabilities(bool configurable,
-               bool watchable,
-               bool multiple_mounts,
-               extensions::FileSystemProviderSource source)
-      : configurable(configurable),
-        watchable(watchable),
-        multiple_mounts(multiple_mounts),
-        source(source) {}
-  Capabilities()
-      : configurable(false),
-        watchable(false),
-        multiple_mounts(false),
-        source(extensions::SOURCE_NETWORK) {}
+typedef base::OnceCallback<void(base::File::Error result)> RequestMountCallback;
 
+struct Capabilities {
   bool configurable;
   bool watchable;
   bool multiple_mounts;
@@ -49,7 +38,7 @@ class ProviderInterface {
     SIZE_32_32,
   };
 
-  virtual ~ProviderInterface() {}
+  virtual ~ProviderInterface() = default;
 
   // Returns a pointer to a created file system.
   virtual std::unique_ptr<ProvidedFileSystemInterface> CreateProvidedFileSystem(
@@ -68,21 +57,16 @@ class ProviderInterface {
   // Returns an icon URL set for the provider.
   virtual const IconSet& GetIconSet() const = 0;
 
+  // The returned request manager is registered per-provider to handle mount
+  // requests.
+  virtual RequestManager* GetRequestManager() = 0;
+
   // Requests mounting a new file system. Returns false if the request could not
   // be created, true otherwise.
-  virtual bool RequestMount(Profile* profile) = 0;
+  virtual bool RequestMount(Profile* profile,
+                            RequestMountCallback callback) = 0;
 };
 
-}  // namespace file_system_provider
-}  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when ChromeOS code migration is done.
-namespace chromeos {
-namespace file_system_provider {
-using ::ash::file_system_provider::Capabilities;
-using ::ash::file_system_provider::ProvidedFileSystemInterface;
-using ::ash::file_system_provider::ProviderInterface;
-}  // namespace file_system_provider
-}  // namespace chromeos
+}  // namespace ash::file_system_provider
 
 #endif  // CHROME_BROWSER_ASH_FILE_SYSTEM_PROVIDER_PROVIDER_INTERFACE_H_

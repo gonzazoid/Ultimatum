@@ -11,7 +11,7 @@
 #include "ash/session/session_controller_impl.h"
 #include "ash/shell.h"
 #include "ash/strings/grit/ash_strings.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/ui_base_types.h"
 #include "ui/views/border.h"
@@ -25,6 +25,7 @@ namespace ash {
 AccessibilityConfirmationDialog::AccessibilityConfirmationDialog(
     const std::u16string& window_title_text,
     const std::u16string& dialog_text,
+    const std::u16string& cancel_text,
     base::OnceClosure on_accept_callback,
     base::OnceClosure on_cancel_callback,
     base::OnceClosure on_close_callback) {
@@ -32,6 +33,7 @@ AccessibilityConfirmationDialog::AccessibilityConfirmationDialog(
   SetTitle(window_title_text);
   SetButtonLabel(ui::DIALOG_BUTTON_OK,
                  l10n_util::GetStringUTF16(IDS_ASH_CONTINUE_BUTTON));
+  SetButtonLabel(ui::DIALOG_BUTTON_CANCEL, cancel_text);
   SetAcceptCallback(std::move(on_accept_callback));
   SetCancelCallback(std::move(on_cancel_callback));
   SetCloseCallback(std::move(on_close_callback));

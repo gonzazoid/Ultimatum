@@ -11,17 +11,23 @@
 #include <iterator>
 #include <map>
 #include <memory>
+#include <utility>
 #include <vector>
 
 #include "base/base64.h"
+#include "base/base_paths.h"
 #include "base/command_line.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/json/json_reader.h"
+#include "base/json/json_writer.h"
 #include "base/memory/raw_ptr.h"
+#include "base/path_service.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_piece.h"
 #include "base/strings/stringprintf.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool/thread_pool_instance.h"
 #include "base/test/trace_event_analyzer.h"
 #include "base/time/default_tick_clock.h"
@@ -30,6 +36,7 @@
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/media/cast_mirroring_service_host.h"
+#include "chrome/browser/media/cast_mirroring_service_host_factory.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/common/chrome_paths.h"
 #include "chrome/common/chrome_switches.h"
@@ -38,7 +45,6 @@
 #include "chrome/test/base/ui_test_utils.h"
 #include "components/media_router/common/providers/cast/channel/cast_message_handler.h"
 #include "components/mirroring/mojom/cast_message_channel.mojom.h"
-#include "components/mirroring/mojom/mirroring_service_host.mojom.h"
 #include "components/mirroring/mojom/session_observer.mojom.h"
 #include "components/mirroring/mojom/session_parameters.mojom.h"
 #include "components/sessions/content/session_tab_helper.h"
@@ -72,12 +78,8 @@
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "testing/perf/perf_result_reporter.h"
-#include "third_party/jsoncpp/source/include/json/reader.h"
-#include "third_party/jsoncpp/source/include/json/value.h"
-#include "third_party/jsoncpp/source/include/json/writer.h"
-#include "third_party/openscreen/src/cast/streaming/answer_messages.h"
-#include "third_party/openscreen/src/cast/streaming/offer_messages.h"
-#include "third_party/openscreen/src/cast/streaming/ssrc.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "third_party/openscreen/src/platform/base/error.h"
 #include "third_party/zlib/google/compression_utils.h"
 #include "ui/gl/gl_switches.h"
 
@@ -156,6 +158,13 @@ std::string VectorToString(const std::vector<double>& values) {
   return csv;
 }
 
+// Utility to get the generated test data directory.
+base::FilePath GetGeneratedTestDataDir() {
+  base::FilePath exe_dir;
+  base::PathService::Get(base::DIR_EXE, &exe_dir);
+  return exe_dir.AppendASCII("gen/chrome/test/data/").NormalizePathSeparators();
+}
+
 void MaybeAddResultList(const perf_test::PerfResultReporter& reporter,
                         const std::string& metric,
                         const std::vector<double>& values) {
@@ -193,8 +202,8 @@ enum TestFlags {
 struct SharedSenderReceiverConfig {
   std::string aes_key;
   std::string aes_iv_mask;
-  openscreen::cast::Ssrc receiver_ssrc;
-  openscreen::cast::Ssrc sender_ssrc;
+  uint32_t receiver_ssrc;
+  uint32_t sender_ssrc;
 };
 
 struct SharedSenderReceiverConfigs {
@@ -216,7 +225,7 @@ media::cast::FrameReceiverConfig WithSharedConfig(
 
 void ContinueBrowserFor(base::TimeDelta duration) {
   base::RunLoop run_loop;
-  base::SequencedTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE, run_loop.QuitClosure(), duration);
   run_loop.Run();
 }
@@ -628,7 +637,7 @@ class CastV2PerformanceTest : public InProcessBrowserTest,
     host_resolver()->AddRule("*", "127.0.0.1");
     https_server_ = std::make_unique<net::EmbeddedTestServer>(
         net::EmbeddedTestServer::TYPE_HTTPS);
-    https_server_->AddDefaultHandlers(GetChromeTestDataDir());
+    https_server_->ServeFilesFromDirectory(GetGeneratedTestDataDir());
     ASSERT_TRUE(https_server_->Start());
   }
 
@@ -872,23 +881,23 @@ class TestTabMirroringSession : public mirroring::mojom::SessionObserver,
 
     receiver_endpoint_ = endpoint;
     udp_port_ = port;
-    mirroring::CastMirroringServiceHost::GetForTab(
-        contents, host_.BindNewPipeAndPassReceiver());
+    host_ = mirroring::CastMirroringServiceHostFactory::GetInstance().GetForTab(
+        contents->GetPrimaryMainFrame()->GetFrameTreeNodeId());
 
     mojo::PendingRemote<mirroring::mojom::SessionObserver> observer_remote;
     observer_receiver_.Bind(observer_remote.InitWithNewPipeAndPassReceiver());
     mojo::PendingRemote<mirroring::mojom::CastMessageChannel> channel_remote;
     channel_receiver_.Bind(channel_remote.InitWithNewPipeAndPassReceiver());
 
-    const std::string receiver_model_name{};
     auto session_params = mirroring::mojom::SessionParameters::New(
         mirroring::mojom::SessionType::AUDIO_AND_VIDEO, endpoint.address(),
-        receiver_model_name, "sender-123", "receiver-456",
-        base::Milliseconds(kTargetPlayoutDelayMs));
-
+        "model_name", "friendly_name", "sender-123", "receiver-456",
+        base::Milliseconds(kTargetPlayoutDelayMs),
+        false /* is_remote_playback */, false /** force_letterboxing */,
+        false /* should_enable_rtcp_reporting */);
     host_->Start(std::move(session_params), std::move(observer_remote),
                  std::move(channel_remote),
-                 channel_to_service_.BindNewPipeAndPassReceiver());
+                 channel_to_service_.BindNewPipeAndPassReceiver(), "Sink Name");
   }
 
   // SessionObserver implementation
@@ -900,27 +909,31 @@ class TestTabMirroringSession : public mirroring::mojom::SessionObserver,
   void DidStop() override {}
   void LogInfoMessage(const std::string& message) override {}
   void LogErrorMessage(const std::string& message) override {}
+  void OnSourceChanged() override {}
+  void OnRemotingStateChanged(bool is_remoting) override {}
 
   // CastMessageChannel implementation (inbound).
   void OnMessage(mirroring::mojom::CastMessagePtr message) override {
-    Json::CharReaderBuilder rb;
-    auto reader = std::unique_ptr<Json::CharReader>(rb.newCharReader());
-    Json::Value root;
+    const absl::optional<base::Value> root_or_error =
+        base::JSONReader::Read(message->json_format_data);
+    ASSERT_TRUE(root_or_error);
+    const base::Value::Dict& root = root_or_error->GetDict();
 
-    const std::string& d = message->json_format_data;
-    ASSERT_TRUE(reader->parse(d.data(), d.data() + d.length(), &root, nullptr));
-
-    // Currently we only handle OFFER messages.
-    if (root["type"].asString() != "OFFER") {
-      return;
+    const int sequence_number = root.FindInt("seqNum").value();
+    const std::string* type = root.FindString("type");
+    ASSERT_TRUE(type);
+    // Currently we only handle OFFER and GET_CAPABILITIES messages.
+    if (*type == "OFFER") {
+      const auto streams = GetStreamsFromOffer(root);
+      SetSharedConfigs(streams);
+      SendAnswer(sequence_number, std::move(message), streams);
+      // The shared configs have been set as part of building the answer,
+      // so we start the receiver now before sending the ANSWER message.
+      parent_->StartReceiver(receiver_endpoint_, shared_configs_);
+    } else if (*type == "GET_CAPABILITIES") {
+      // Send a message to the sender that remoting is not supported.
+      SendCapabilitiesRemotingNotSupported(sequence_number, std::move(message));
     }
-
-    auto streams = GetStreamsFromOffer(root);
-    SetSharedConfigs(streams);
-    SendAnswer(root, std::move(message), streams);
-    // The shared configs have been set as part of building the answer,
-    // so we start the receiver now before sending the ANSWER message.
-    parent_->StartReceiver(receiver_endpoint_, shared_configs_);
   }
 
   const net::IPEndPoint& receiver_endpoint() const {
@@ -928,69 +941,113 @@ class TestTabMirroringSession : public mirroring::mojom::SessionObserver,
   }
 
  private:
-  std::string ToString(const std::array<uint8_t, 16>& key) {
-    return std::string(reinterpret_cast<const char*>(key.data()), key.size());
-  }
-
   // Returns AUDIO + VIDEO
-  std::pair<openscreen::cast::Stream, openscreen::cast::Stream>
-  GetStreamsFromOffer(const Json::Value& offer_message_body) {
-    openscreen::cast::Offer offer;
-    EXPECT_TRUE(
-        openscreen::cast::Offer::TryParse(offer_message_body["offer"], &offer)
-            .ok());
-    EXPECT_LT(0u, offer.audio_streams.size());
-    EXPECT_LT(0u, offer.video_streams.size());
-    return std::make_pair(offer.audio_streams[0].stream,
-                          offer.video_streams[0].stream);
+  std::pair<const base::Value::Dict*, const base::Value::Dict*>
+  GetStreamsFromOffer(const base::Value::Dict& offer_message_body) {
+    const base::Value::Dict* offer = offer_message_body.FindDict("offer");
+    EXPECT_TRUE(offer);
+
+    const base::Value::List* streams = offer->FindList("supportedStreams");
+    EXPECT_TRUE(streams);
+    EXPECT_LE(2u, streams->size());
+
+    const base::Value::Dict* audio_stream = nullptr;
+    const base::Value::Dict* video_stream = nullptr;
+    for (auto& stream : *streams) {
+      if (audio_stream && video_stream) {
+        break;
+      }
+
+      const base::Value::Dict& stream_dict = stream.GetDict();
+      const std::string* stream_type = stream_dict.FindString("type");
+      EXPECT_TRUE(stream_type);
+      const bool is_audio_stream = *stream_type == "audio_source";
+      if (is_audio_stream) {
+        if (!audio_stream) {
+          audio_stream = &stream_dict;
+        }
+      } else {
+        EXPECT_EQ(*stream_type, "video_source");
+        if (!video_stream) {
+          video_stream = &stream_dict;
+        }
+      }
+    }
+    return std::make_pair(audio_stream, video_stream);
   }
 
-  void SetSharedConfigs(const std::pair<openscreen::cast::Stream,
-                                        openscreen::cast::Stream>& streams) {
-    const auto& audio = streams.first;
-    const auto& video = streams.second;
-    shared_configs_.audio.aes_key = ToString(audio.aes_key);
-    shared_configs_.audio.aes_iv_mask = ToString(audio.aes_iv_mask);
-    shared_configs_.audio.sender_ssrc = audio.ssrc;
-    shared_configs_.audio.receiver_ssrc = audio.ssrc + 1;
-    shared_configs_.video.aes_key = ToString(video.aes_key);
-    shared_configs_.video.aes_iv_mask = ToString(video.aes_iv_mask);
-    shared_configs_.video.sender_ssrc = video.ssrc;
-    shared_configs_.video.receiver_ssrc = video.ssrc + 1;
+  void SetSharedConfig(const base::Value::Dict& stream,
+                       SharedSenderReceiverConfig& config) {
+    // The AES key and IV mask are serialized as a hex string, but used
+    // internally as a base64 string.
+    ASSERT_TRUE(
+        base::HexStringToString(*stream.FindString("aesKey"), &config.aes_key));
+    ASSERT_TRUE(base::HexStringToString(*stream.FindString("aesIvMask"),
+                                        &config.aes_iv_mask));
+    config.sender_ssrc = *stream.FindInt("ssrc");
+    config.receiver_ssrc = config.sender_ssrc + 1;
   }
 
-  void SendAnswer(const Json::Value& offer_message_body,
+  void SetSharedConfigs(const std::pair<const base::Value::Dict*,
+                                        const base::Value::Dict*>& streams) {
+    SetSharedConfig(*streams.first, shared_configs_.audio);
+    SetSharedConfig(*streams.second, shared_configs_.video);
+  }
+
+  void SendAnswer(int sequence_number,
                   mirroring::mojom::CastMessagePtr offer_message,
-                  const std::pair<openscreen::cast::Stream,
-                                  openscreen::cast::Stream>& streams) {
-    openscreen::cast::Answer answer;
-    answer.udp_port = udp_port_;
+                  const std::pair<const base::Value::Dict*,
+                                  const base::Value::Dict*>& streams) {
+    base::Value::List sendIndexes;
+    sendIndexes.Append(*streams.first->FindInt("index"));
+    sendIndexes.Append(*streams.second->FindInt("index"));
 
-    answer.ssrcs.push_back(streams.first.ssrc + 1);
-    answer.send_indexes.push_back(streams.first.index);
-    answer.ssrcs.push_back(streams.second.ssrc + 1);
-    answer.send_indexes.push_back(streams.second.index);
+    base::Value::List ssrcs;
+    ssrcs.Append(*streams.first->FindInt("ssrc") + 1);
+    ssrcs.Append(*streams.second->FindInt("ssrc") + 1);
 
-    ASSERT_TRUE(answer.IsValid());
+    base::Value::Dict answer_body;
+    answer_body.Set("udpPort", udp_port_);
+    answer_body.Set("sendIndexes", base::Value(std::move(sendIndexes)));
+    answer_body.Set("ssrcs", base::Value(std::move(ssrcs)));
 
-    Json::StreamWriterBuilder wb;
-    wb["indentation"] = "";
-    std::unique_ptr<Json::StreamWriter> writer(wb.newStreamWriter());
+    base::Value::Dict response_body;
+    response_body.Set("type", "ANSWER");
+    response_body.Set("result", "ok");
+    response_body.Set("answer", std::move(answer_body));
+    response_body.Set("seqNum", sequence_number);
 
-    Json::Value answer_message_body;
-    answer_message_body["type"] = "ANSWER";
-    answer_message_body["result"] = "ok";
-    answer_message_body["answer"] = answer.ToJson();
-    answer_message_body["seqNum"] = offer_message_body["seqNum"];
-    std::ostringstream ssb;
-    writer->write(answer_message_body, &ssb);
+    std::string json_formatted;
+    ASSERT_TRUE(base::JSONWriter::Write(response_body, &json_formatted));
 
-    VLOG(1) << "Sending ANSWER";
-    offer_message->json_format_data = ssb.str();
+    DVLOG(1) << "Sending ANSWER: " << json_formatted;
+    offer_message->json_format_data = json_formatted;
     channel_to_service_->OnMessage(std::move(offer_message));
   }
 
-  mojo::Remote<mirroring::mojom::MirroringServiceHost> host_;
+  void SendCapabilitiesRemotingNotSupported(
+      int sequence_number,
+      mirroring::mojom::CastMessagePtr request_message) {
+    base::Value::Dict error_body;
+    error_body.Set("code", static_cast<int>(
+                               openscreen::Error::Code::kRemotingNotSupported));
+    error_body.Set("description", "Remoting is not supported");
+
+    base::Value::Dict response_body;
+    response_body.Set("type", "CAPABILITIES_RESPONSE");
+    response_body.Set("result", "error");
+    response_body.Set("error", std::move(error_body));
+    response_body.Set("seqNum", sequence_number);
+
+    std::string json_formatted;
+    ASSERT_TRUE(base::JSONWriter::Write(response_body, &json_formatted));
+
+    DVLOG(1) << "Sending error CAPABILITIES_RESPONSE: " << json_formatted;
+    request_message->json_format_data = json_formatted;
+    channel_to_service_->OnMessage(std::move(request_message));
+  }
+
+  std::unique_ptr<mirroring::MirroringServiceHost> host_;
   mojo::Remote<mirroring::mojom::CastMessageChannel> channel_to_service_;
   mojo::Receiver<mirroring::mojom::SessionObserver> observer_receiver_{this};
   mojo::Receiver<mirroring::mojom::CastMessageChannel> channel_receiver_{this};

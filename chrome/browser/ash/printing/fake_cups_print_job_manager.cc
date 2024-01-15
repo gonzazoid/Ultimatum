@@ -5,9 +5,11 @@
 #include "chrome/browser/ash/printing/fake_cups_print_job_manager.h"
 
 #include <utility>
+#include <vector>
 
-#include "base/bind.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/task/sequenced_task_runner.h"
 #include "chrome/browser/ash/printing/cups_print_job.h"
 #include "chrome/browser/ash/printing/cups_print_job_manager.h"
 #include "content/public/browser/browser_context.h"
@@ -25,7 +27,7 @@ FakeCupsPrintJobManager::~FakeCupsPrintJobManager() = default;
 bool FakeCupsPrintJobManager::CreatePrintJob(
     const std::string& printer_id,
     const std::string& title,
-    int job_id,
+    uint32_t job_id,
     int total_page_number,
     ::printing::PrintJob::Source source,
     const std::string& source_id,
@@ -38,7 +40,7 @@ bool FakeCupsPrintJobManager::CreatePrintJob(
       printer, job_id, title, total_page_number, source, source_id, settings));
 
   // Show the waiting-for-printing notification immediately.
-  base::SequencedTaskRunnerHandle::Get()->PostNonNestableDelayedTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostNonNestableDelayedTask(
       FROM_HERE,
       base::BindOnce(&FakeCupsPrintJobManager::ChangePrintJobState,
                      weak_ptr_factory_.GetWeakPtr(), print_jobs_.back().get()),
@@ -52,12 +54,8 @@ void FakeCupsPrintJobManager::CancelPrintJob(CupsPrintJob* job) {
   NotifyJobCanceled(job->GetWeakPtr());
 
   // Note: |job| is deleted here.
-  for (auto iter = print_jobs_.begin(); iter != print_jobs_.end(); ++iter) {
-    if (iter->get() == job) {
-      print_jobs_.erase(iter);
-      break;
-    }
-  }
+  std::erase_if(print_jobs_,
+                [&](const auto& print_job) { return print_job.get() == job; });
 }
 
 bool FakeCupsPrintJobManager::SuspendPrintJob(CupsPrintJob* job) {
@@ -70,7 +68,7 @@ bool FakeCupsPrintJobManager::ResumePrintJob(CupsPrintJob* job) {
   job->set_state(CupsPrintJob::State::STATE_RESUMED);
   NotifyJobResumed(job->GetWeakPtr());
 
-  base::SequencedTaskRunnerHandle::Get()->PostNonNestableDelayedTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostNonNestableDelayedTask(
       FROM_HERE,
       base::BindOnce(&FakeCupsPrintJobManager::ChangePrintJobState,
                      weak_ptr_factory_.GetWeakPtr(), job),
@@ -81,14 +79,8 @@ bool FakeCupsPrintJobManager::ResumePrintJob(CupsPrintJob* job) {
 
 void FakeCupsPrintJobManager::ChangePrintJobState(CupsPrintJob* job) {
   // |job| might have been deleted.
-  bool found = false;
-  for (auto iter = print_jobs_.begin(); iter != print_jobs_.end(); ++iter) {
-    if (iter->get() == job) {
-      found = true;
-      break;
-    }
-  }
-
+  const bool found =
+      base::Contains(print_jobs_, job, &std::unique_ptr<CupsPrintJob>::get);
   if (!found || job->state() == CupsPrintJob::State::STATE_SUSPENDED ||
       job->state() == CupsPrintJob::State::STATE_FAILED) {
     return;
@@ -121,27 +113,19 @@ void FakeCupsPrintJobManager::ChangePrintJobState(CupsPrintJob* job) {
       break;
     case CupsPrintJob::State::STATE_DOCUMENT_DONE:
       // Delete |job| since it's completed.
-      for (auto iter = print_jobs_.begin(); iter != print_jobs_.end(); ++iter) {
-        if (iter->get() == job) {
-          print_jobs_.erase(iter);
-          break;
-        }
-      }
+      std::erase_if(print_jobs_, [&](const auto& print_job) {
+        return print_job.get() == job;
+      });
       break;
     default:
       break;
   }
 
-  base::SequencedTaskRunnerHandle::Get()->PostNonNestableDelayedTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostNonNestableDelayedTask(
       FROM_HERE,
       base::BindOnce(&FakeCupsPrintJobManager::ChangePrintJobState,
                      weak_ptr_factory_.GetWeakPtr(), job),
       base::Milliseconds(3000));
-}
-
-// static
-CupsPrintJobManager* CupsPrintJobManager::CreateInstance(Profile* profile) {
-  return new FakeCupsPrintJobManager(profile);
 }
 
 }  // namespace ash

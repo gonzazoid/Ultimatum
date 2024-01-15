@@ -134,7 +134,6 @@ class LayerTreeHostTilesTestPartialInvalidation
         // layer should only re-raster the stuff in the rect. If it doesn't do
         // partial raster it would re-raster the whole thing instead.
         client_.set_blue_top(false);
-        Finish();
         picture_layer_->SetNeedsDisplayRect(gfx::Rect(50, 50, 100, 100));
 
         // Add a copy request to see what happened!
@@ -209,7 +208,6 @@ class LayerTreeHostTilesTestRasterColorSpace
 
   void DidCommitAndDrawFrame() override {
     if (layer_tree_host()->SourceFrameNumber() == 1) {
-      Finish();
       DoReadback();
     }
   }
@@ -229,9 +227,12 @@ std::vector<RasterTestConfig> const kTestCases = {
 #if BUILDFLAG(ENABLE_VULKAN_BACKEND_TESTS)
     {viz::RendererType::kSkiaVk, TestRasterType::kGpu},
 #endif  // BUILDFLAG(ENABLE_VULKAN_BACKEND_TESTS)
-#if BUILDFLAG(ENABLE_DAWN_BACKEND_TESTS)
-    {viz::RendererType::kSkiaDawn, TestRasterType::kGpu},
-#endif  // BUILDFLAG(ENABLE_DAWN_BACKEND_TESTS)
+#if BUILDFLAG(ENABLE_SKIA_GRAPHITE_TESTS)
+    {viz::RendererType::kSkiaGraphiteDawn, TestRasterType::kGpu},
+#if BUILDFLAG(IS_IOS)
+    {viz::RendererType::kSkiaGraphiteMetal, TestRasterType::kGpu},
+#endif  // BUILDFLAG(IS_IOS)
+#endif  // BUILDFLAG(ENABLE_SKIA_GRAPHITE_TESTS)
 };
 
 INSTANTIATE_TEST_SUITE_P(All,
@@ -240,7 +241,7 @@ INSTANTIATE_TEST_SUITE_P(All,
                          ::testing::PrintToStringParamName());
 
 #if BUILDFLAG(IS_CHROMEOS_ASH) || defined(MEMORY_SANITIZER) || \
-    defined(ADDRESS_SANITIZER) || BUILDFLAG(IS_FUCHSIA)
+    defined(ADDRESS_SANITIZER)
 // TODO(crbug.com/1045521): Flakes on all slower bots.
 #define MAYBE_PartialRaster DISABLED_PartialRaster
 #else
@@ -248,16 +249,22 @@ INSTANTIATE_TEST_SUITE_P(All,
 #endif
 TEST_P(LayerTreeHostTilesTestPartialInvalidation, MAYBE_PartialRaster) {
   use_partial_raster_ = true;
-  RunSingleThreadedPixelTest(
-      picture_layer_,
-      base::FilePath(FILE_PATH_LITERAL("blue_yellow_partial_flipped.png")));
+  base::FilePath expected_result =
+      base::FilePath(FILE_PATH_LITERAL("blue_yellow_partial_flipped.png"));
+  if (use_skia_graphite()) {
+    expected_result = expected_result.InsertBeforeExtensionASCII("_graphite");
+  }
+  RunSingleThreadedPixelTest(picture_layer_, expected_result);
 }
 #undef MAYBE_PartialRaster
 
 TEST_P(LayerTreeHostTilesTestPartialInvalidation, FullRaster) {
-  RunSingleThreadedPixelTest(
-      picture_layer_,
-      base::FilePath(FILE_PATH_LITERAL("blue_yellow_flipped.png")));
+  base::FilePath expected_result =
+      base::FilePath(FILE_PATH_LITERAL("blue_yellow_flipped.png"));
+  if (use_skia_graphite()) {
+    expected_result = expected_result.InsertBeforeExtensionASCII("_graphite");
+  }
+  RunSingleThreadedPixelTest(picture_layer_, expected_result);
 }
 
 std::vector<RasterTestConfig> const kTestCasesMultiThread = {
@@ -269,9 +276,12 @@ std::vector<RasterTestConfig> const kTestCasesMultiThread = {
     // Vulkan in these tests.
     {viz::RendererType::kSkiaVk, TestRasterType::kGpu},
 #endif  // BUILDFLAG(ENABLE_VULKAN_BACKEND_TESTS)
-#if BUILDFLAG(ENABLE_DAWN_BACKEND_TESTS)
-    {viz::RendererType::kSkiaDawn, TestRasterType::kGpu},
-#endif  // BUILDFLAG(ENABLE_DAWN_BACKEND_TESTS)
+#if BUILDFLAG(ENABLE_SKIA_GRAPHITE_TESTS)
+    {viz::RendererType::kSkiaGraphiteDawn, TestRasterType::kGpu},
+#if BUILDFLAG(IS_IOS)
+    {viz::RendererType::kSkiaGraphiteMetal, TestRasterType::kGpu},
+#endif  // BUILDFLAG(IS_IOS)
+#endif  // BUILDFLAG(ENABLE_SKIA_GRAPHITE_TESTS)
 };
 
 using LayerTreeHostTilesTestPartialInvalidationMultiThread =
@@ -290,7 +300,7 @@ GTEST_ALLOW_UNINSTANTIATED_PARAMETERIZED_TEST(
 // Flaky on Linux TSAN. https://crbug.com/707711
 #define MAYBE_PartialRaster DISABLED_PartialRaster
 #elif BUILDFLAG(IS_CHROMEOS_ASH) || defined(MEMORY_SANITIZER) || \
-    defined(ADDRESS_SANITIZER) || BUILDFLAG(IS_FUCHSIA)
+    defined(ADDRESS_SANITIZER)
 // TODO(crbug.com/1045521): Flakes on all slower bots.
 #define MAYBE_PartialRaster DISABLED_PartialRaster
 #else
@@ -299,15 +309,22 @@ GTEST_ALLOW_UNINSTANTIATED_PARAMETERIZED_TEST(
 TEST_P(LayerTreeHostTilesTestPartialInvalidationMultiThread,
        MAYBE_PartialRaster) {
   use_partial_raster_ = true;
-  RunPixelTest(
-      picture_layer_,
-      base::FilePath(FILE_PATH_LITERAL("blue_yellow_partial_flipped.png")));
+  base::FilePath expected_result =
+      base::FilePath(FILE_PATH_LITERAL("blue_yellow_partial_flipped.png"));
+  if (use_skia_graphite()) {
+    expected_result = expected_result.InsertBeforeExtensionASCII("_graphite");
+  }
+  RunPixelTest(picture_layer_, expected_result);
 }
 #undef MAYBE_PartialRaster
 
 TEST_P(LayerTreeHostTilesTestPartialInvalidationMultiThread, FullRaster) {
-  RunPixelTest(picture_layer_,
-               base::FilePath(FILE_PATH_LITERAL("blue_yellow_flipped.png")));
+  base::FilePath expected_result =
+      base::FilePath(FILE_PATH_LITERAL("blue_yellow_flipped.png"));
+  if (use_skia_graphite()) {
+    expected_result = expected_result.InsertBeforeExtensionASCII("_graphite");
+  }
+  RunPixelTest(picture_layer_, expected_result);
 }
 
 INSTANTIATE_TEST_SUITE_P(All,
@@ -326,6 +343,9 @@ TEST_P(LayerTreeHostTilesTestRasterColorSpace, sRGB) {
 }
 
 TEST_P(LayerTreeHostTilesTestRasterColorSpace, GenericRGB) {
+#if BUILDFLAG(IS_IOS)
+  pixel_comparator_ = std::make_unique<FuzzyPixelOffByOneComparator>();
+#endif
   SetColorSpace(gfx::ColorSpace(gfx::ColorSpace::PrimaryID::APPLE_GENERIC_RGB,
                                 gfx::ColorSpace::TransferID::GAMMA18));
 
@@ -339,7 +359,7 @@ TEST_P(LayerTreeHostTilesTestRasterColorSpace, GenericRGB) {
 
 TEST_P(LayerTreeHostTilesTestRasterColorSpace, CustomColorSpace) {
 #if BUILDFLAG(IS_FUCHSIA)
-  pixel_comparator_ = std::make_unique<FuzzyPixelOffByOneComparator>(false);
+  pixel_comparator_ = std::make_unique<FuzzyPixelOffByOneComparator>();
 #endif
   // Create a color space with a different blue point.
   SkColorSpacePrimaries primaries;

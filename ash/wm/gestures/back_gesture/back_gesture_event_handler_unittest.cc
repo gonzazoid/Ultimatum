@@ -342,17 +342,15 @@ TEST_F(BackGestureEventHandlerTest, DragFromSplitViewDivider) {
 
   auto* split_view_controller =
       SplitViewController::Get(Shell::GetPrimaryRootWindow());
-  split_view_controller->SnapWindow(
-      window1.get(), SplitViewController::SnapPosition::kPrimary);
-  split_view_controller->SnapWindow(
-      window2.get(), SplitViewController::SnapPosition::kSecondary);
+  split_view_controller->SnapWindow(window1.get(), SnapPosition::kPrimary);
+  split_view_controller->SnapWindow(window2.get(), SnapPosition::kSecondary);
   ASSERT_TRUE(split_view_controller->InSplitViewMode());
   ASSERT_EQ(SplitViewController::State::kBothSnapped,
             split_view_controller->state());
 
   gfx::Rect divider_bounds =
       split_view_controller->split_view_divider()->GetDividerBoundsInScreen(
-          false);
+          /*is_dragging=*/false);
   ui::test::EventGenerator* generator = GetEventGenerator();
   // Drag from the splitview divider's non-resizable area with larger than
   // |kSwipingDistanceForGoingBack| distance should trigger back gesture. The
@@ -360,18 +358,18 @@ TEST_F(BackGestureEventHandlerTest, DragFromSplitViewDivider) {
   // be changed.
   gfx::Point start(divider_bounds.x(), 10);
   gfx::Point end(start.x() + kSwipingDistanceForGoingBack + 10, 10);
-  EXPECT_GT(split_view_controller->divider_position(),
+  EXPECT_GT(split_view_controller->GetDividerPosition(),
             0.33f * display_bounds.width());
-  EXPECT_LE(split_view_controller->divider_position(),
+  EXPECT_LE(split_view_controller->GetDividerPosition(),
             0.5f * display_bounds.width());
   generator->GestureScrollSequence(start, end, base::Milliseconds(100), 3);
   EXPECT_EQ(SplitViewController::State::kBothSnapped,
             split_view_controller->state());
   EXPECT_EQ(1, target_back_press.accelerator_count());
   EXPECT_EQ(1, target_back_release.accelerator_count());
-  EXPECT_GT(split_view_controller->divider_position(),
+  EXPECT_GT(split_view_controller->GetDividerPosition(),
             0.33f * display_bounds.width());
-  EXPECT_LE(split_view_controller->divider_position(),
+  EXPECT_LE(split_view_controller->GetDividerPosition(),
             0.5f * display_bounds.width());
 
   // Drag from the divider's resizable area should trigger splitview resizing.
@@ -382,17 +380,17 @@ TEST_F(BackGestureEventHandlerTest, DragFromSplitViewDivider) {
   generator->GestureScrollSequence(start, end, base::Milliseconds(100), 3);
   EXPECT_EQ(1, target_back_press.accelerator_count());
   EXPECT_EQ(1, target_back_release.accelerator_count());
-  EXPECT_GT(split_view_controller->divider_position(),
+  EXPECT_GT(split_view_controller->GetDividerPosition(),
             0.5f * display_bounds.width());
-  EXPECT_LE(split_view_controller->divider_position(),
+  EXPECT_LE(split_view_controller->GetDividerPosition(),
             0.67f * display_bounds.width());
   split_view_controller->EndSplitView();
 }
 
-// Tests that in different screen orientations should always activate the
-// snapped window in splitview that is underneath the finger. And should be the
-// snapped window that is underneath to go back to the previous page.
-TEST_F(BackGestureEventHandlerTest, BackInSplitViewMode) {
+// Tests that back gesture should always activate the snapped window in split
+// view that is underneath the finger in different screen orientations. And that
+// the snapped window that is underneath should go back to the previous page.
+TEST_F(BackGestureEventHandlerTest, BackGestureInSplitViewMode) {
   int64_t display_id = display::Screen::GetScreen()->GetPrimaryDisplay().id();
   display::DisplayManager* display_manager = Shell::Get()->display_manager();
   display::test::ScopedSetInternalDisplayId set_internal(display_manager,
@@ -410,10 +408,9 @@ TEST_F(BackGestureEventHandlerTest, BackInSplitViewMode) {
   EnterOverview();
   auto* split_view_controller =
       SplitViewController::Get(Shell::GetPrimaryRootWindow());
-  split_view_controller->SnapWindow(
-      left_window.get(), SplitViewController::SnapPosition::kPrimary);
-  split_view_controller->SnapWindow(
-      right_window.get(), SplitViewController::SnapPosition::kSecondary);
+  split_view_controller->SnapWindow(left_window.get(), SnapPosition::kPrimary);
+  split_view_controller->SnapWindow(right_window.get(),
+                                    SnapPosition::kSecondary);
 
   // Set the screen orientation to LANDSCAPE_PRIMARY.
   test_api.SetDisplayRotation(display::Display::ROTATE_0,
@@ -436,7 +433,7 @@ TEST_F(BackGestureEventHandlerTest, BackInSplitViewMode) {
 
   gfx::Rect divider_bounds =
       split_view_controller->split_view_divider()->GetDividerBoundsInScreen(
-          false);
+          /*is_dragging=*/false);
   start = gfx::Point(divider_bounds.x(), 10);
   update_and_end =
       gfx::Point(divider_bounds.x() + kSwipingDistanceForGoingBack + 10, 10);
@@ -663,8 +660,8 @@ TEST_F(BackGestureEventHandlerTest, BackGestureWithCrosKeyboardTest) {
   EXPECT_EQ(1, target_back_release.accelerator_count());
 }
 
-// Tests when back performs on the split view divider bar inside or outside of
-// virtual keyboard.
+// Tests that the back gesture works properly on the split view divider bar both
+// inside and outside of cros virtual keyboard.
 TEST_F(BackGestureEventHandlerTest,
        BackGestureWithCrosKeyboardInSplitViewTest) {
   ui::TestAcceleratorTarget target_back_press, target_back_release;
@@ -674,10 +671,9 @@ TEST_F(BackGestureEventHandlerTest,
   std::unique_ptr<aura::Window> right_window = CreateTestWindow();
   auto* split_view_controller =
       SplitViewController::Get(Shell::GetPrimaryRootWindow());
-  split_view_controller->SnapWindow(
-      left_window.get(), SplitViewController::SnapPosition::kPrimary);
-  split_view_controller->SnapWindow(
-      right_window.get(), SplitViewController::SnapPosition::kSecondary);
+  split_view_controller->SnapWindow(left_window.get(), SnapPosition::kPrimary);
+  split_view_controller->SnapWindow(right_window.get(),
+                                    SnapPosition::kSecondary);
   EXPECT_EQ(SplitViewController::State::kBothSnapped,
             split_view_controller->state());
 
@@ -695,11 +691,13 @@ TEST_F(BackGestureEventHandlerTest,
   EXPECT_TRUE(keyboard_ui_controller->IsKeyboardVisible());
   gfx::Rect keyboard_bounds = keyboard_ui_controller->GetVisualBoundsInScreen();
 
-  // Start drag from splitview divider bar position outside VK bounds.
+  // Start dragging from a position that is right outside the divider bar bounds
+  // and outside the VK bounds.
   gfx::Rect divider_bounds =
       split_view_controller->split_view_divider()->GetDividerBoundsInScreen(
           false);
   gfx::Point start = gfx::Point(divider_bounds.CenterPoint().x(), 10);
+  EXPECT_FALSE(keyboard_bounds.Contains(start));
   gfx::Point end =
       gfx::Point(start.x() + kSwipingDistanceForGoingBack + 10, start.y());
   GetEventGenerator()->GestureScrollSequence(start, end,
@@ -711,11 +709,13 @@ TEST_F(BackGestureEventHandlerTest,
   EXPECT_EQ(0, target_back_press.accelerator_count());
   EXPECT_EQ(0, target_back_release.accelerator_count());
 
-  // Start drag from splitview divider bar position inside VK bounds.
+  // Start dragging from the split view divider bar position that is inside the
+  // VK bounds.
   keyboard_controller->ShowKeyboard();
   EXPECT_TRUE(keyboard_controller->IsKeyboardVisible());
   start = gfx::Point(divider_bounds.CenterPoint().x(),
                      keyboard_bounds.CenterPoint().y());
+  EXPECT_TRUE(keyboard_bounds.Contains(start));
   end = gfx::Point(start.x() + kSwipingDistanceForGoingBack + 10, start.y());
   GetEventGenerator()->GestureScrollSequence(start, end,
                                              base::Milliseconds(100), 3);
@@ -753,8 +753,8 @@ TEST_F(BackGestureEventHandlerTest, BackGestureWithAndroidKeyboardTest) {
   EXPECT_FALSE(window_state->IsMinimized());
 }
 
-// Tests when back performs on the split view divider bar inside or outside of
-// android virtual keyboard.
+// Tests that the back gesture works properly on the split view divider bar both
+// inside and outside of Android virtual keyboard.
 TEST_F(BackGestureEventHandlerTest,
        BackGestureWithAndroidKeyboardInSplitViewTest) {
   UpdateDisplay("800x600");
@@ -765,10 +765,9 @@ TEST_F(BackGestureEventHandlerTest,
   std::unique_ptr<aura::Window> right_window = CreateTestWindow();
   auto* split_view_controller =
       SplitViewController::Get(Shell::GetPrimaryRootWindow());
-  split_view_controller->SnapWindow(
-      left_window.get(), SplitViewController::SnapPosition::kPrimary);
-  split_view_controller->SnapWindow(
-      right_window.get(), SplitViewController::SnapPosition::kSecondary);
+  split_view_controller->SnapWindow(left_window.get(), SnapPosition::kPrimary);
+  split_view_controller->SnapWindow(right_window.get(),
+                                    SnapPosition::kSecondary);
   EXPECT_EQ(SplitViewController::State::kBothSnapped,
             split_view_controller->state());
 
@@ -784,11 +783,13 @@ TEST_F(BackGestureEventHandlerTest,
   keyboard->OnArcInputMethodBoundsChanged(keyboard_bounds);
   EXPECT_TRUE(keyboard->arc_keyboard_visible());
 
-  // Start drag from splitview divider bar position outside VK bounds.
+  // Start dragging from the split view divider bar position that is outside the
+  // VK bounds.
   gfx::Rect divider_bounds =
       split_view_controller->split_view_divider()->GetDividerBoundsInScreen(
           false);
   gfx::Point start = gfx::Point(divider_bounds.CenterPoint().x(), 10);
+  EXPECT_FALSE(keyboard_bounds.Contains(start));
   gfx::Point end =
       gfx::Point(start.x() + kSwipingDistanceForGoingBack + 10, start.y());
   GetEventGenerator()->GestureScrollSequence(start, end,
@@ -802,13 +803,15 @@ TEST_F(BackGestureEventHandlerTest,
   EXPECT_EQ(SplitViewController::State::kBothSnapped,
             split_view_controller->state());
 
-  // Start drag from splitview divider bar position inside VK bounds.
+  // Start dragging from the split view divider bar position that is inside the
+  // VK bounds.
   target_back_press.ResetCounts();
   target_back_release.ResetCounts();
   keyboard->OnArcInputMethodBoundsChanged(keyboard_bounds);
   EXPECT_TRUE(keyboard->arc_keyboard_visible());
   start = gfx::Point(divider_bounds.CenterPoint().x(),
                      keyboard_bounds.CenterPoint().y());
+  EXPECT_TRUE(keyboard_bounds.Contains(start));
   end = gfx::Point(start.x() + kSwipingDistanceForGoingBack + 10, start.y());
   GetEventGenerator()->GestureScrollSequence(start, end,
                                              base::Milliseconds(100), 3);
@@ -828,7 +831,7 @@ TEST_F(BackGestureEventHandlerTest, IgnoreSecondFinger) {
 
   // Scenario 1:
   ui::test::EventGenerator* generator = GetEventGenerator();
-  generator->PressTouchId(0, absl::make_optional(start_point));
+  generator->PressTouchId(0, std::make_optional(start_point));
   generator->MoveTouch(end_point);
   // Without releasing the first finger, now press and release the second
   // finger.
@@ -841,7 +844,7 @@ TEST_F(BackGestureEventHandlerTest, IgnoreSecondFinger) {
 
   // Scenario 2:
   wm::ActivateWindow(top_window());
-  generator->PressTouchId(0, absl::make_optional(start_point));
+  generator->PressTouchId(0, std::make_optional(start_point));
   generator->MoveTouch(end_point);
   // Without releasing the first finger, now press the second finger.
   generator->PressTouchId(1);
@@ -856,7 +859,7 @@ TEST_F(BackGestureEventHandlerTest, IgnoreSecondFinger) {
   wm::ActivateWindow(top_window());
   GetShellDelegate()->SetShouldWaitForTouchAck(
       /*should_wait_for_touch_ack=*/true);
-  generator->PressTouchId(0, absl::make_optional(start_point));
+  generator->PressTouchId(0, std::make_optional(start_point));
   generator->MoveTouch(end_point);
   // Without releasing the first finger, now press and release the second
   // finger.
@@ -869,7 +872,7 @@ TEST_F(BackGestureEventHandlerTest, IgnoreSecondFinger) {
 
   // Scenario 4:
   wm::ActivateWindow(top_window());
-  generator->PressTouchId(0, absl::make_optional(start_point));
+  generator->PressTouchId(0, std::make_optional(start_point));
   generator->MoveTouch(end_point);
   // Without releasing the first finger, now press the second finger.
   generator->PressTouchId(1);
@@ -889,7 +892,7 @@ TEST_F(BackGestureEventHandlerTest, CancelledEventOnSecondFinger) {
   const gfx::Point end_point(200, 100);
 
   ui::test::EventGenerator* generator = GetEventGenerator();
-  generator->PressTouchId(0, absl::make_optional(start_point));
+  generator->PressTouchId(0, std::make_optional(start_point));
   generator->MoveTouch(end_point);
   // Without releasing the first finger, now press the second finger.
   generator->PressTouchId(1);
@@ -909,7 +912,7 @@ TEST_F(BackGestureEventHandlerTest, CancelledEventOnSecondFinger) {
   Shell::Get()->back_gesture_event_handler()->OnTouchEvent(&event);
 
   wm::ActivateWindow(top_window());
-  generator->PressTouchId(0, absl::make_optional(start_point));
+  generator->PressTouchId(0, std::make_optional(start_point));
   generator->MoveTouch(end_point);
   generator->ReleaseTouchId(0);
   // Test that back should still be able to be performed.

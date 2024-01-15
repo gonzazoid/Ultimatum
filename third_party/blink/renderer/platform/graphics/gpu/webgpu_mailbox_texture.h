@@ -7,7 +7,7 @@
 
 #include <dawn/webgpu.h>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/scoped_refptr.h"
 #include "gpu/command_buffer/common/mailbox.h"
 #include "gpu/command_buffer/common/sync_token.h"
@@ -16,6 +16,7 @@
 #include "third_party/blink/renderer/platform/graphics/gpu/webgpu_resource_provider_cache.h"
 #include "third_party/blink/renderer/platform/platform_export.h"
 #include "third_party/blink/renderer/platform/wtf/ref_counted.h"
+#include "ui/gfx/geometry/rect.h"
 
 namespace media {
 class VideoFrame;
@@ -35,7 +36,9 @@ class PLATFORM_EXPORT WebGPUMailboxTexture
       WGPUDevice device,
       WGPUTextureUsage usage,
       scoped_refptr<StaticBitmapImage> image,
-      SkColorType color_type);
+      const SkImageInfo& info,
+      const gfx::Rect& image_sub_rect,
+      bool is_dummy_mailbox_texture);
 
   static scoped_refptr<WebGPUMailboxTexture> FromCanvasResource(
       scoped_refptr<DawnControlClientHolder> dawn_control_client,

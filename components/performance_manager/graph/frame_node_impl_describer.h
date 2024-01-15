@@ -5,10 +5,13 @@
 #ifndef COMPONENTS_PERFORMANCE_MANAGER_GRAPH_FRAME_NODE_IMPL_DESCRIBER_H_
 #define COMPONENTS_PERFORMANCE_MANAGER_GRAPH_FRAME_NODE_IMPL_DESCRIBER_H_
 
+#include "base/values.h"
 #include "components/performance_manager/public/graph/graph.h"
 #include "components/performance_manager/public/graph/node_data_describer.h"
 
 namespace performance_manager {
+
+class FrameNode;
 
 class FrameNodeImplDescriber : public GraphOwned,
                                public NodeDataDescriberDefaultImpl {
@@ -23,7 +26,7 @@ class FrameNodeImplDescriber : public GraphOwned,
   void OnTakenFromGraph(Graph* graph) override;
 
   // NodeDataDescriberDefaultImpl impl:
-  base::Value DescribeFrameNodeData(const FrameNode* node) const override;
+  base::Value::Dict DescribeFrameNodeData(const FrameNode* node) const override;
 };
 
 }  // namespace performance_manager

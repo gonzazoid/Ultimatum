@@ -10,6 +10,7 @@
 
 #include "base/base64.h"
 #include "base/command_line.h"
+#include "base/memory/raw_ptr.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/task_environment.h"
 #include "chrome/browser/enterprise/connectors/device_trust/key_management/core/network/mock_key_network_delegate.h"
@@ -17,6 +18,7 @@
 #include "chrome/browser/enterprise/connectors/device_trust/key_management/core/persistence/scoped_key_persistence_delegate_factory.h"
 #include "chrome/browser/enterprise/connectors/device_trust/key_management/core/shared_command_constants.h"
 #include "chrome/browser/enterprise/connectors/device_trust/key_management/installer/key_rotation_manager.h"
+#include "chrome/browser/enterprise/connectors/device_trust/key_management/installer/key_rotation_types.h"
 #include "chrome/browser/enterprise/connectors/device_trust/key_management/installer/management_service/metrics_utils.h"
 #include "components/version_info/channel.h"
 #include "testing/gmock/include/gmock/gmock.h"
@@ -54,6 +56,7 @@ constexpr char kInvalidDmServerUrl[] =
     "7C1.2.3&request=browser_public_key_upload";
 constexpr HttpResponseCode kSuccessCode = 200;
 constexpr HttpResponseCode kFailureCode = 400;
+constexpr HttpResponseCode kConflictCode = 409;
 
 }  // namespace
 
@@ -85,8 +88,9 @@ class RotateUtilTest : public testing::Test {
     return command_line;
   }
 
-  MockKeyNetworkDelegate* mock_network_delegate_;
-  MockKeyPersistenceDelegate* mock_persistence_delegate_;
+  raw_ptr<MockKeyNetworkDelegate, DanglingUntriaged> mock_network_delegate_;
+  raw_ptr<MockKeyPersistenceDelegate, DanglingUntriaged>
+      mock_persistence_delegate_;
   std::unique_ptr<KeyRotationManager> key_rotation_manager_;
   test::ScopedKeyPersistenceDelegateFactory scoped_factory_;
   base::test::TaskEnvironment task_environment_;
@@ -111,10 +115,12 @@ TEST_F(RotateUtilTest, RotateDTKeySuccess) {
         std::move(callback).Run(kSuccessCode);
       }));
 
-  EXPECT_TRUE(RotateDeviceTrustKey(
-      std::move(key_rotation_manager_),
-      GetCommandLine(kEncodedFakeDMToken, kEncodedNonce, kFakeDmServerUrl),
-      version_info::Channel::STABLE));
+  EXPECT_EQ(
+      RotateDeviceTrustKey(
+          std::move(key_rotation_manager_),
+          GetCommandLine(kEncodedFakeDMToken, kEncodedNonce, kFakeDmServerUrl),
+          version_info::Channel::STABLE),
+      KeyRotationResult::kSucceeded);
 
   histogram_tester.ExpectTotalCount(kChromeManagementServiceStatusHistogramName,
                                     0);
@@ -125,10 +131,11 @@ TEST_F(RotateUtilTest, RotateDTKeySuccess) {
 TEST_F(RotateUtilTest, RotateDTKeyFailure_InvalidDmToken) {
   base::HistogramTester histogram_tester;
 
-  EXPECT_FALSE(RotateDeviceTrustKey(
-      std::move(key_rotation_manager_),
-      GetCommandLine(kFakeDMToken, kEncodedNonce, kFakeDmServerUrl),
-      version_info::Channel::STABLE));
+  EXPECT_EQ(RotateDeviceTrustKey(
+                std::move(key_rotation_manager_),
+                GetCommandLine(kFakeDMToken, kEncodedNonce, kFakeDmServerUrl),
+                version_info::Channel::STABLE),
+            KeyRotationResult::kFailed);
 
   histogram_tester.ExpectUniqueSample(
       kChromeManagementServiceStatusHistogramName,
@@ -140,10 +147,11 @@ TEST_F(RotateUtilTest, RotateDTKeyFailure_InvalidDmToken) {
 TEST_F(RotateUtilTest, RotateDTKeyFailure_InvalidNonce) {
   base::HistogramTester histogram_tester;
 
-  EXPECT_FALSE(RotateDeviceTrustKey(
-      std::move(key_rotation_manager_),
-      GetCommandLine(kEncodedFakeDMToken, kNonce, kFakeDmServerUrl),
-      version_info::Channel::STABLE));
+  EXPECT_EQ(RotateDeviceTrustKey(
+                std::move(key_rotation_manager_),
+                GetCommandLine(kEncodedFakeDMToken, kNonce, kFakeDmServerUrl),
+                version_info::Channel::STABLE),
+            KeyRotationResult::kFailed);
 
   histogram_tester.ExpectUniqueSample(
       kChromeManagementServiceStatusHistogramName,
@@ -155,10 +163,11 @@ TEST_F(RotateUtilTest, RotateDTKeyFailure_InvalidNonce) {
 TEST_F(RotateUtilTest, RotateDTKeyFailure_NoDMServerUrl) {
   base::HistogramTester histogram_tester;
 
-  EXPECT_FALSE(RotateDeviceTrustKey(
-      std::move(key_rotation_manager_),
-      GetCommandLine(kEncodedFakeDMToken, kEncodedNonce, ""),
-      version_info::Channel::DEV));
+  EXPECT_EQ(RotateDeviceTrustKey(
+                std::move(key_rotation_manager_),
+                GetCommandLine(kEncodedFakeDMToken, kEncodedNonce, ""),
+                version_info::Channel::DEV),
+            KeyRotationResult::kFailed);
 
   histogram_tester.ExpectUniqueSample(
       kChromeManagementServiceStatusHistogramName,
@@ -170,10 +179,12 @@ TEST_F(RotateUtilTest, RotateDTKeyFailure_NoDMServerUrl) {
 TEST_F(RotateUtilTest, RotateDTKeyFailure_InvalidDMServerUrl) {
   base::HistogramTester histogram_tester;
 
-  EXPECT_FALSE(RotateDeviceTrustKey(
-      std::move(key_rotation_manager_),
-      GetCommandLine(kEncodedFakeDMToken, kEncodedNonce, kInvalidDmServerUrl),
-      version_info::Channel::DEV));
+  EXPECT_EQ(
+      RotateDeviceTrustKey(std::move(key_rotation_manager_),
+                           GetCommandLine(kEncodedFakeDMToken, kEncodedNonce,
+                                          kInvalidDmServerUrl),
+                           version_info::Channel::DEV),
+      KeyRotationResult::kFailed);
 
   histogram_tester.ExpectUniqueSample(
       kChromeManagementServiceStatusHistogramName,
@@ -185,10 +196,12 @@ TEST_F(RotateUtilTest, RotateDTKeyFailure_InvalidDMServerUrl) {
 TEST_F(RotateUtilTest, RotateDTKeyFailure_InvalidCommand) {
   base::HistogramTester histogram_tester;
 
-  EXPECT_FALSE(RotateDeviceTrustKey(
-      std::move(key_rotation_manager_),
-      GetCommandLine(kEncodedFakeDMToken, kEncodedNonce, kInvalidDmServerUrl),
-      version_info::Channel::STABLE));
+  EXPECT_EQ(
+      RotateDeviceTrustKey(std::move(key_rotation_manager_),
+                           GetCommandLine(kEncodedFakeDMToken, kEncodedNonce,
+                                          kInvalidDmServerUrl),
+                           version_info::Channel::STABLE),
+      KeyRotationResult::kFailed);
 
   histogram_tester.ExpectUniqueSample(
       kChromeManagementServiceStatusHistogramName,
@@ -203,10 +216,12 @@ TEST_F(RotateUtilTest, RotateDTKeyFailure_PermissionsFailed) {
   EXPECT_CALL(*mock_persistence_delegate_, CheckRotationPermissions())
       .WillOnce(Return(false));
 
-  EXPECT_FALSE(RotateDeviceTrustKey(
-      std::move(key_rotation_manager_),
-      GetCommandLine(kEncodedFakeDMToken, kEncodedNonce, kFakeDmServerUrl),
-      version_info::Channel::STABLE));
+  EXPECT_EQ(
+      RotateDeviceTrustKey(
+          std::move(key_rotation_manager_),
+          GetCommandLine(kEncodedFakeDMToken, kEncodedNonce, kFakeDmServerUrl),
+          version_info::Channel::STABLE),
+      KeyRotationResult::kInsufficientPermissions);
 
   histogram_tester.ExpectTotalCount(kChromeManagementServiceStatusHistogramName,
                                     0);
@@ -223,10 +238,12 @@ TEST_F(RotateUtilTest, RotateDTKeyFailure_StoreKeyFailed) {
   EXPECT_CALL(*mock_persistence_delegate_, StoreKeyPair(_, _))
       .WillOnce(Return(false));
 
-  EXPECT_FALSE(RotateDeviceTrustKey(
-      std::move(key_rotation_manager_),
-      GetCommandLine(kEncodedFakeDMToken, kEncodedNonce, kFakeDmServerUrl),
-      version_info::Channel::STABLE));
+  EXPECT_EQ(
+      RotateDeviceTrustKey(
+          std::move(key_rotation_manager_),
+          GetCommandLine(kEncodedFakeDMToken, kEncodedNonce, kFakeDmServerUrl),
+          version_info::Channel::STABLE),
+      KeyRotationResult::kFailed);
 
   histogram_tester.ExpectTotalCount(kChromeManagementServiceStatusHistogramName,
                                     0);
@@ -253,10 +270,44 @@ TEST_F(RotateUtilTest, RotateDTKeyFailure_UploadKeyFailed) {
         std::move(callback).Run(kFailureCode);
       }));
 
-  EXPECT_FALSE(RotateDeviceTrustKey(
-      std::move(key_rotation_manager_),
-      GetCommandLine(kEncodedFakeDMToken, kEncodedNonce, kFakeDmServerUrl),
-      version_info::Channel::STABLE));
+  EXPECT_EQ(
+      RotateDeviceTrustKey(
+          std::move(key_rotation_manager_),
+          GetCommandLine(kEncodedFakeDMToken, kEncodedNonce, kFakeDmServerUrl),
+          version_info::Channel::STABLE),
+      KeyRotationResult::kFailed);
+
+  histogram_tester.ExpectTotalCount(kChromeManagementServiceStatusHistogramName,
+                                    0);
+}
+
+// Tests when the chrome management services key rotation failed due to
+// an upload key conflict.
+TEST_F(RotateUtilTest, RotateDTKeyFailure_UploadKeyConflict) {
+  base::HistogramTester histogram_tester;
+
+  EXPECT_CALL(*mock_persistence_delegate_, CheckRotationPermissions())
+      .WillOnce(Return(true));
+
+  EXPECT_CALL(*mock_persistence_delegate_, StoreKeyPair(_, _))
+      .Times(2)
+      .WillRepeatedly(Return(true));
+
+  EXPECT_CALL(
+      *mock_network_delegate_,
+      SendPublicKeyToDmServer(GURL(kFakeDmServerUrl), kFakeDMToken, _, _))
+      .WillOnce(Invoke([](const GURL& url, const std::string& dm_token,
+                          const std::string& body,
+                          base::OnceCallback<void(int)> callback) {
+        std::move(callback).Run(kConflictCode);
+      }));
+
+  EXPECT_EQ(
+      RotateDeviceTrustKey(
+          std::move(key_rotation_manager_),
+          GetCommandLine(kEncodedFakeDMToken, kEncodedNonce, kFakeDmServerUrl),
+          version_info::Channel::STABLE),
+      KeyRotationResult::kFailedKeyConflict);
 
   histogram_tester.ExpectTotalCount(kChromeManagementServiceStatusHistogramName,
                                     0);

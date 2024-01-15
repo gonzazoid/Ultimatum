@@ -20,14 +20,14 @@
  */
 
 import '//resources/polymer/v3_0/iron-icon/iron-icon.js';
-import './common_styles/common_styles.m.js';
+import './common_styles/oobe_common_styles.css.js';
 
 import {html, PolymerElement} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 /**
  * @polymer
  */
-class HdIronIcon extends PolymerElement {
+export class HdIronIcon extends PolymerElement {
   static get is() {
     return 'hd-iron-icon';
   }

@@ -10,6 +10,7 @@
 
 #include "ash/public/cpp/external_arc/message_center/arc_notification_item.h"
 #include "ash/public/cpp/external_arc/message_center/arc_notification_manager.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/threading/thread_checker.h"
@@ -39,9 +40,11 @@ class ArcNotificationItemImpl : public ArcNotificationItem {
                             const std::string& app_id) override;
   void Close(bool by_user) override;
   void Click() override;
+  void ClickButton(const int button_index, const std::string& input) override;
   void OpenSettings() override;
   void OpenSnooze() override;
   void ToggleExpansion() override;
+  void SetExpandState(bool expanded) override;
   void OnWindowActivated(bool activated) override;
   void OnRemoteInputActivationChanged(bool activated) override;
   void AddObserver(Observer* observer) override;
@@ -58,8 +61,8 @@ class ArcNotificationItemImpl : public ArcNotificationItem {
   void CancelPress() override;
 
  private:
-  ArcNotificationManager* const manager_;
-  message_center::MessageCenter* const message_center_;
+  const raw_ptr<ArcNotificationManager> manager_;
+  const raw_ptr<message_center::MessageCenter> message_center_;
 
   // The snapshot of the latest notification.
   gfx::ImageSkia snapshot_;

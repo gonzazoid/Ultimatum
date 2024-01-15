@@ -14,9 +14,7 @@
 #include "net/cert/x509_certificate.h"
 #include "ui/base/l10n/l10n_util.h"
 
-namespace security_interstitials {
-
-namespace common_string_util {
+namespace security_interstitials::common_string_util {
 
 std::u16string GetFormattedHostName(const GURL& gurl) {
   std::u16string host = url_formatter::IDNToUnicode(gurl.host());
@@ -65,26 +63,4 @@ void PopulateSSLDebuggingStrings(const net::SSLInfo ssl_info,
   load_time_data.Set("pem", base::StrCat(encoded_chain));
 }
 
-void PopulateLegacyTLSStrings(base::Value* load_time_data,
-                              const std::u16string& hostname) {
-  load_time_data->SetStringKey("tabTitle",
-                               l10n_util::GetStringUTF16(IDS_SSL_V2_TITLE));
-  load_time_data->SetStringKey(
-      "heading", l10n_util::GetStringUTF16(IDS_LEGACY_TLS_HEADING));
-  load_time_data->SetStringKey(
-      "primaryButtonText",
-      l10n_util::GetStringUTF16(IDS_SSL_OVERRIDABLE_SAFETY_BUTTON));
-  load_time_data->SetStringKey(
-      "primaryParagraph",
-      l10n_util::GetStringUTF16(IDS_LEGACY_TLS_PRIMARY_PARAGRAPH));
-  load_time_data->SetStringKey(
-      "explanationParagraph",
-      l10n_util::GetStringUTF16(IDS_LEGACY_TLS_EXPLANATION));
-  load_time_data->SetStringKey(
-      "finalParagraph", l10n_util::GetStringFUTF16(
-                            IDS_SSL_OVERRIDABLE_PROCEED_PARAGRAPH, hostname));
-}
-
-}  // namespace common_string_util
-
-}  // namespace security_interstitials
+}  // namespace security_interstitials::common_string_util

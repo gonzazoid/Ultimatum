@@ -35,10 +35,8 @@ NetworkingPrivateEventRouterFactory::NetworkingPrivateEventRouterFactory()
   DependsOn(NetworkingPrivateDelegateFactory::GetInstance());
 }
 
-NetworkingPrivateEventRouterFactory::~NetworkingPrivateEventRouterFactory() {
-}
-
-KeyedService* NetworkingPrivateEventRouterFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+NetworkingPrivateEventRouterFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
   return NetworkingPrivateEventRouter::Create(context);
 }
@@ -46,8 +44,8 @@ KeyedService* NetworkingPrivateEventRouterFactory::BuildServiceInstanceFor(
 content::BrowserContext*
 NetworkingPrivateEventRouterFactory::GetBrowserContextToUse(
     content::BrowserContext* context) const {
-  return ExtensionsBrowserClient::Get()->GetRedirectedContextInIncognito(
-      context, /*force_guest_profile=*/true, /*force_system_profile=*/false);
+  return ExtensionsBrowserClient::Get()->GetContextRedirectedToOriginal(
+      context, /*force_guest_profile=*/true);
 }
 
 bool NetworkingPrivateEventRouterFactory::ServiceIsCreatedWithBrowserContext()

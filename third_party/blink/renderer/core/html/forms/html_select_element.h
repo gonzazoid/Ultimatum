@@ -83,6 +83,8 @@ class CORE_EXPORT HTMLSelectElement final
   unsigned ListBoxSize() const;
   bool IsMultiple() const { return is_multiple_; }
 
+  void showPicker(ExceptionState&);
+
   bool UsesMenuList() const { return uses_menu_list_; }
 
   void add(const V8UnionHTMLOptGroupElementOrHTMLOptionElement* element,
@@ -133,7 +135,7 @@ class CORE_EXPORT HTMLSelectElement final
 
   void SetOption(unsigned index, HTMLOptionElement*, ExceptionState&);
 
-  Element* namedItem(const AtomicString& name);
+  HTMLOptionElement* namedItem(const AtomicString& name);
   HTMLOptionElement* item(unsigned index);
 
   bool CanSelectAll() const;
@@ -143,6 +145,7 @@ class CORE_EXPORT HTMLSelectElement final
 
   // For use in the implementation of HTMLOptionElement.
   void OptionSelectionStateChanged(HTMLOptionElement*, bool option_is_selected);
+  void ElementInserted(Node& node);
   void OptionInserted(HTMLOptionElement&, bool option_is_selected);
   void OptionRemoved(HTMLOptionElement&);
   IndexedPropertySetterResult AnonymousIndexedSetter(unsigned,
@@ -189,7 +192,7 @@ class CORE_EXPORT HTMLSelectElement final
 
   void Trace(Visitor*) const override;
   void CloneNonAttributePropertiesFrom(const Element&,
-                                       CloneChildrenFlag) override;
+                                       NodeCloningData&) override;
 
   // These should be called only if UsesMenuList().
   Element& InnerElement() const;
@@ -197,8 +200,12 @@ class CORE_EXPORT HTMLSelectElement final
 
   bool IsRichlyEditableForAccessibility() const override { return false; }
 
+  bool HandleInvokeInternal(HTMLElement& invoker,
+                            AtomicString& action) override;
+
  private:
-  const AtomicString& FormControlType() const override;
+  mojom::blink::FormControlType FormControlType() const override;
+  const AtomicString& FormControlTypeAsString() const override;
 
   bool MayTriggerVirtualKeyboard() const override;
 
@@ -226,10 +233,10 @@ class CORE_EXPORT HTMLSelectElement final
   void ParseAttribute(const AttributeModificationParams&) override;
   bool IsPresentationAttribute(const QualifiedName&) const override;
 
-  LayoutObject* CreateLayoutObject(const ComputedStyle&, LegacyLayout) override;
+  LayoutObject* CreateLayoutObject(const ComputedStyle&) override;
   void DidRecalcStyle(const StyleRecalcChange) override;
   void AttachLayoutTree(AttachContext&) override;
-  void DetachLayoutTree(bool performing_reattach = false) override;
+  void DetachLayoutTree(bool performing_reattach) override;
   void AppendToFormData(FormData&) override;
   void DidAddUserAgentShadowRoot(ShadowRoot&) override;
   void ManuallyAssignSlots() override;

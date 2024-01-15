@@ -9,23 +9,36 @@
 #include <string>
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/timer/timer.h"
 #include "chrome/browser/ash/input_method/assistive_suggester_switch.h"
 #include "chrome/browser/ash/input_method/emoji_suggester.h"
+#include "chrome/browser/ash/input_method/longpress_control_v_suggester.h"
 #include "chrome/browser/ash/input_method/longpress_diacritics_suggester.h"
 #include "chrome/browser/ash/input_method/multi_word_suggester.h"
-#include "chrome/browser/ash/input_method/personal_info_suggester.h"
 #include "chrome/browser/ash/input_method/suggester.h"
 #include "chrome/browser/ash/input_method/suggestion_enums.h"
 #include "chrome/browser/ash/input_method/suggestion_handler_interface.h"
 #include "chrome/browser/ash/input_method/suggestions_source.h"
 #include "chromeos/ash/services/ime/public/cpp/assistive_suggestions.h"
-#include "components/autofill/core/browser/personal_data_manager.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
-namespace ash {
-namespace input_method {
+namespace ash::input_method {
+
+enum class AssistiveSuggesterKeyResult {
+  // The key event was not handled by the assistive suggester.
+  // The key event should be handled via normal key event flow.
+  kNotHandled,
+  // The key event was handled by the assistive suggester.
+  // The key event should not be propagated as-is. Instead, it should be
+  // dispatched as a PROCESS key to prevent the client from triggering the
+  // default behaviour for the key.
+  kHandled,
+  // Same as not kNotHandled, except the key event should not trigger
+  // autorepeat.
+  kNotHandledSuppressAutoRepeat,
+};
 
 // An agent to suggest assistive information when the user types, and adopt or
 // dismiss the suggestion according to the user action.
@@ -36,16 +49,12 @@ class AssistiveSuggester : public SuggestionsSource {
     kUnknown,  // Includes features not handled by assistive suggester.
     kEmojiSuggestion,
     kMultiWordSuggestion,
-    kPersonalInfoSuggestion,
   };
 
-  // personal_data_manager is only used for testing to override the default
-  // autofill data for PersonalInfoSuggester.
-  AssistiveSuggester(SuggestionHandlerInterface* suggestion_handler,
-                     Profile* profile,
-                     std::unique_ptr<AssistiveSuggesterSwitch> suggester_switch,
-                     autofill::PersonalDataManager*
-                         personal_data_manager_for_testing = nullptr);
+  AssistiveSuggester(
+      SuggestionHandlerInterface* suggestion_handler,
+      Profile* profile,
+      std::unique_ptr<AssistiveSuggesterSwitch> suggester_switch);
 
   ~AssistiveSuggester() override;
 
@@ -63,7 +72,7 @@ class AssistiveSuggester : public SuggestionsSource {
   void OnActivate(const std::string& engine_id);
 
   // Called when a text field gains focus, and suggester starts working.
-  void OnFocus(int context_id);
+  void OnFocus(int context_id, const TextInputMethod::InputContext& context);
 
   // Called when a text field loses focus, and suggester stops working.
   void OnBlur();
@@ -72,16 +81,15 @@ class AssistiveSuggester : public SuggestionsSource {
   // Returns true if it changes the surrounding text, e.g. a suggestion is
   // generated or dismissed.
   void OnSurroundingTextChanged(const std::u16string& text,
-                                int cursor_pos,
-                                int anchor_pos);
+                                gfx::Range selection_range);
 
   // Called when the user pressed a key.
-  // Returns true if it should stop further processing of event.
-  bool OnKeyEvent(const ui::KeyEvent& event);
+  AssistiveSuggesterKeyResult OnKeyEvent(const ui::KeyEvent& event);
 
   // Called when suggestions are generated outside of the assistive framework.
   void OnExternalSuggestionsUpdated(
-      const std::vector<ime::AssistiveSuggestion>& suggestions);
+      const std::vector<ime::AssistiveSuggestion>& suggestions,
+      const absl::optional<ime::SuggestionsTextContext>& context);
 
   // Accepts the suggestion at a given index if a suggester is currently
   // active.
@@ -103,21 +111,17 @@ class AssistiveSuggester : public SuggestionsSource {
   // Callback that is run after enabled_suggestions is received.
   void ProcessOnSurroundingTextChanged(
       const std::u16string& text,
-      int cursor_pos,
-      int anchor_pos,
+      gfx::Range selection_range,
       const AssistiveSuggesterSwitch::EnabledSuggestions& enabled_suggestions);
 
   // Returns if any suggestion text should be displayed according to the
   // surrounding text information.
   bool TrySuggestWithSurroundingText(
       const std::u16string& text,
-      int cursor_pos,
-      int anchor_pos,
+      gfx::Range selection_range,
       const AssistiveSuggesterSwitch::EnabledSuggestions& enabled_suggestions);
 
   void DismissSuggestion();
-
-  bool IsAssistPersonalInfoEnabled();
 
   bool IsEmojiSuggestAdditionEnabled();
 
@@ -133,8 +137,7 @@ class AssistiveSuggester : public SuggestionsSource {
   // matched.
   void RecordAssistiveMatchMetrics(
       const std::u16string& text,
-      int cursor_pos,
-      int anchor_pos,
+      gfx::Range selection_range,
       const AssistiveSuggesterSwitch::EnabledSuggestions& enabled_suggestions);
 
   void RecordAssistiveMatchMetricsForAssistiveType(
@@ -143,10 +146,6 @@ class AssistiveSuggester : public SuggestionsSource {
 
   // Only the first applicable reason in DisabledReason enum is returned.
   DisabledReason GetDisabledReasonForEmoji(
-      const AssistiveSuggesterSwitch::EnabledSuggestions& enabled_suggestions);
-
-  // Only the first applicable reason in DisabledReason enum is returned.
-  DisabledReason GetDisabledReasonForPersonalInfo(
       const AssistiveSuggesterSwitch::EnabledSuggestions& enabled_suggestions);
 
   // Only the first applicable reason in DisabledReason enum is returned.
@@ -161,10 +160,11 @@ class AssistiveSuggester : public SuggestionsSource {
       AssistiveType type,
       const AssistiveSuggesterSwitch::EnabledSuggestions& enabled_suggestions);
 
-  bool WithinGrammarFragment(int cursor_pos, int anchor_pos);
+  bool WithinGrammarFragment();
 
   void ProcessExternalSuggestions(
       const std::vector<ime::AssistiveSuggestion>& suggestions,
+      const absl::optional<ime::SuggestionsTextContext>& context,
       const AssistiveSuggesterSwitch::EnabledSuggestions& enabled_suggestions);
 
   // This records any text input state metrics for each relevant assistive
@@ -176,18 +176,23 @@ class AssistiveSuggester : public SuggestionsSource {
   // Returns true if we block the keyevent from passing to IME, and stop
   // dispatch.
   // Returns false, if we want IME to process the event and dispatch it.
-  bool HandleLongpressEnabledKeyEvent(const ui::KeyEvent& key_character);
+  AssistiveSuggesterKeyResult HandleLongpressEnabledKeyEvent(
+      const ui::KeyEvent& key_character);
 
   void HandleEnabledSuggestionsOnFocus(
       const AssistiveSuggesterSwitch::EnabledSuggestions& enabled_suggestions);
 
   void OnLongpressDetected();
 
-  Profile* profile_;
-  PersonalInfoSuggester personal_info_suggester_;
+  // Accepts or dismisses a Ctrl+V long-press suggestion based on the exit
+  // status of the clipboard history menu, as indicated by `will_paste_item`.
+  void OnClipboardHistoryMenuClosing(bool will_paste_item);
+
+  raw_ptr<Profile> profile_;
   EmojiSuggester emoji_suggester_;
   MultiWordSuggester multi_word_suggester_;
   LongpressDiacriticsSuggester longpress_diacritics_suggester_;
+  LongpressControlVSuggester longpress_control_v_suggester_;
   std::unique_ptr<AssistiveSuggesterSwitch> suggester_switch_;
 
   // The id of the currently active input engine.
@@ -205,19 +210,24 @@ class AssistiveSuggester : public SuggestionsSource {
   base::OneShotTimer longpress_timer_;
 
   // The current suggester in use, nullptr means no suggestion is shown.
-  Suggester* current_suggester_ = nullptr;
+  raw_ptr<Suggester> current_suggester_ = nullptr;
 
   absl::optional<AssistiveSuggesterSwitch::EnabledSuggestions>
       enabled_suggestions_from_last_onfocus_;
 
   std::u16string last_surrounding_text_ = u"";
 
+  // Keeps track if there is a key being held down currently which was already
+  // recorded for the auto repeat suppressed metric.
+  bool auto_repeat_suppress_metric_emitted_ = false;
+
   int last_cursor_pos_ = 0;
+
+  TextInputMethod::InputContext context_;
 
   base::WeakPtrFactory<AssistiveSuggester> weak_ptr_factory_{this};
 };
 
-}  // namespace input_method
-}  // namespace ash
+}  // namespace ash::input_method
 
 #endif  // CHROME_BROWSER_ASH_INPUT_METHOD_ASSISTIVE_SUGGESTER_H_

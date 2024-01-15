@@ -10,8 +10,8 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/time/time.h"
@@ -39,7 +39,8 @@ class CheckClientDownloadRequest : public CheckClientDownloadRequestBase,
       CheckDownloadRepeatingCallback callback,
       DownloadProtectionService* service,
       scoped_refptr<SafeBrowsingDatabaseManager> database_manager,
-      scoped_refptr<BinaryFeatureExtractor> binary_feature_extractor);
+      scoped_refptr<BinaryFeatureExtractor> binary_feature_extractor,
+      base::optional_ref<const std::string> password = absl::nullopt);
 
   CheckClientDownloadRequest(const CheckClientDownloadRequest&) = delete;
   CheckClientDownloadRequest& operator=(const CheckClientDownloadRequest&) =
@@ -54,6 +55,8 @@ class CheckClientDownloadRequest : public CheckClientDownloadRequestBase,
   static bool IsSupportedDownload(const download::DownloadItem& item,
                                   const base::FilePath& target_path,
                                   DownloadCheckResultReason* reason);
+
+  download::DownloadItem* item() const override;
 
  private:
   // CheckClientDownloadRequestBase overrides:
@@ -71,6 +74,12 @@ class CheckClientDownloadRequest : public CheckClientDownloadRequestBase,
                                   bool upload_requested,
                                   const std::string& request_data,
                                   const std::string& response_body) override;
+  bool ShouldPromptForDeepScanning(bool server_requests_prompt) const override;
+  bool ShouldPromptForLocalDecryption(
+      bool server_requests_prompt) const override;
+  bool ShouldPromptForIncorrectPassword() const override;
+  bool ShouldShowScanFailure() const override;
+  void LogDeepScanningPrompt(bool did_prompt) const override;
 
   // Uploads the binary for deep scanning if the reason and policies indicate
   // it should be. ShouldUploadBinary will returns the settings to apply for
@@ -86,9 +95,6 @@ class CheckClientDownloadRequest : public CheckClientDownloadRequestBase,
   void NotifyRequestFinished(DownloadCheckResult result,
                              DownloadCheckResultReason reason) override;
 
-  // Called when finishing the download, to decide whether to prompt the user
-  // for deep scanning or not.
-  bool ShouldPromptForDeepScanning(bool server_requests_prompt) const override;
 
   bool IsAllowlistedByPolicy() const override;
 
@@ -97,6 +103,7 @@ class CheckClientDownloadRequest : public CheckClientDownloadRequestBase,
   // The DownloadItem we are checking. Will be NULL if the request has been
   // canceled. Must be accessed only on UI thread.
   raw_ptr<download::DownloadItem> item_;
+  absl::optional<std::string> password_;
   CheckDownloadRepeatingCallback callback_;
 
   // Upload start time used for UMA duration histograms.

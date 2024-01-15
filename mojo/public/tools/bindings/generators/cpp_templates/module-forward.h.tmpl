@@ -2,33 +2,10 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-{%- if variant -%}
-{%-   set variant_path = "%s-%s"|format(module.path, variant) -%}
-{%- else -%}
-{%-   set variant_path = module.path -%}
-{%- endif -%}
+{%- from 'cpp_macros.tmpl' import
+  include_guard, namespace_begin, namespace_end %}
 
-{%- set header_guard = "%s_FORWARD_H_"|format(
-        variant_path|upper|replace("/","_")|replace(".","_")|
-            replace("-", "_")) %}
-
-{%- macro namespace_begin() %}
-{%-   for namespace in namespaces_as_array %}
-namespace {{namespace}} {
-{%-   endfor %}
-{%-   if variant %}
-namespace {{variant}} {
-{%-   endif %}
-{%- endmacro %}
-
-{%- macro namespace_end() %}
-{%-   if variant %}
-}  // namespace {{variant}}
-{%-   endif %}
-{%-   for namespace in namespaces_as_array|reverse %}
-}  // namespace {{namespace}}
-{%-   endfor %}
-{%- endmacro %}
+{%- set header_guard = include_guard('FORWARD', module.path, variant) %}
 
 {%- macro kythe_annotation(name) %}
 {%- if enable_kythe_annotations %}
@@ -72,9 +49,7 @@ enum class NativeEnum;
 {%- endif %}
 
 {%- if variant %}
-{%-   for namespace in namespaces_as_array %}
-namespace {{namespace}} {
-{%-   endfor %}
+{{namespace_begin(namespaces_as_array)}}
 
 {%- from "enum_macros.tmpl" import enum_forward%}
 {%- for enum in all_enums %}
@@ -89,12 +64,10 @@ using {{enum|get_name_for_kind(flatten_nested_kind=True)}} = mojo::NativeEnum;
 class {{interface.name}}InterfaceBase;
 {%- endfor %}
 
-{%-   for namespace in namespaces_as_array %}
-}  // namespace {{namespace}}
-{%-   endfor %}
+{{namespace_end(namespaces_as_array)}}
 {%- endif %}
 
-{{namespace_begin()}}
+{{namespace_begin(namespaces_as_array, variant)}}
 
 {%- set module_prefix = "%s"|format(namespaces_as_array|join(".")) %}
 
@@ -180,7 +153,7 @@ class {{interface.name}};
 {%  endfor %}
 
 
-{{namespace_end()}}
+{{namespace_end(namespaces_as_array, variant)}}
 
 {#- TODO(tikuta): Use forward declaration of native enum/struct here. #}
 

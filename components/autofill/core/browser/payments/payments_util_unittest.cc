@@ -6,7 +6,6 @@
 
 #include <string>
 
-#include "base/guid.h"
 #include "base/strings/utf_string_conversions.h"
 #include "components/autofill/core/browser/autofill_test_utils.h"
 #include "components/autofill/core/browser/payments/payments_customer_data.h"
@@ -18,12 +17,12 @@ namespace payments {
 
 class PaymentsUtilTest : public testing::Test {
  public:
-  PaymentsUtilTest() {}
+  PaymentsUtilTest() = default;
 
   PaymentsUtilTest(const PaymentsUtilTest&) = delete;
   PaymentsUtilTest& operator=(const PaymentsUtilTest&) = delete;
 
-  ~PaymentsUtilTest() override {}
+  ~PaymentsUtilTest() override = default;
 
  protected:
   TestPersonalDataManager personal_data_manager_;

@@ -68,7 +68,6 @@ function computeStep(route: Routes): string {
     // </if>
     default:
       assertNotReached();
-      return '';
   }
 }
 

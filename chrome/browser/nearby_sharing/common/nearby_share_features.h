@@ -9,12 +9,13 @@
 
 namespace features {
 
+BASE_DECLARE_FEATURE(kIsNameEnabled);
+bool IsNameEnabled();
 BASE_DECLARE_FEATURE(kNearbySharing);
-BASE_DECLARE_FEATURE(kNearbySharingChildAccounts);
 BASE_DECLARE_FEATURE(kNearbySharingDeviceContacts);
 BASE_DECLARE_FEATURE(kNearbySharingOnePageOnboarding);
-BASE_DECLARE_FEATURE(kNearbySharingSelfShareAutoAccept);
-BASE_DECLARE_FEATURE(kNearbySharingSelfShareUI);
+BASE_DECLARE_FEATURE(kNearbySharingSelfShare);
+bool IsSelfShareEnabled();
 BASE_DECLARE_FEATURE(kNearbySharingVisibilityReminder);
 BASE_DECLARE_FEATURE(kNearbySharingWebRtc);
 BASE_DECLARE_FEATURE(kNearbySharingWifiLan);

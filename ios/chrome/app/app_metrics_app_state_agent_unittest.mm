@@ -7,25 +7,20 @@
 #import "base/test/task_environment.h"
 #import "ios/chrome/app/application_delegate/app_state.h"
 #import "ios/chrome/app/application_delegate/metrics_mediator.h"
-#import "ios/chrome/browser/browser_state/test_chrome_browser_state.h"
-#import "ios/chrome/browser/metrics/ios_profile_session_durations_service.h"
-#import "ios/chrome/browser/metrics/ios_profile_session_durations_service_factory.h"
-#import "ios/chrome/browser/ui/main/scene_state.h"
+#import "ios/chrome/browser/metrics/model/ios_profile_session_durations_service.h"
+#import "ios/chrome/browser/metrics/model/ios_profile_session_durations_service_factory.h"
+#import "ios/chrome/browser/shared/coordinator/scene/scene_state.h"
+#import "ios/chrome/browser/shared/model/browser_state/test_chrome_browser_state.h"
 #import "testing/platform_test.h"
 #import "third_party/ocmock/OCMock/OCMock.h"
 #import "third_party/ocmock/gtest_support.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace {
 
 class FakeProfileSessionDurationsService
     : public IOSProfileSessionDurationsService {
  public:
-  FakeProfileSessionDurationsService()
-      : IOSProfileSessionDurationsService(nullptr, nullptr) {}
+  FakeProfileSessionDurationsService() = default;
 
   FakeProfileSessionDurationsService(
       const FakeProfileSessionDurationsService&) = delete;
@@ -94,9 +89,7 @@ class AppMetricsAppStateAgentTest : public PlatformTest {
         base::BindRepeating(&FakeProfileSessionDurationsService::Create));
     browser_state_ = test_cbs_builder.Build();
 
-    app_state_ = [[FakeAppState alloc] initWithBrowserLauncher:nil
-                                            startupInformation:nil
-                                           applicationDelegate:nil];
+    app_state_ = [[FakeAppState alloc] initWithStartupInformation:nil];
   }
 
   void SetUp() override {
@@ -218,12 +211,14 @@ TEST_F(AppMetricsAppStateAgentTest, CountSessionDurationSafeMode) {
   EXPECT_EQ(1, getProfileSessionDurationsService()->session_ended_count());
 }
 
-// Tests that -logStartupDuration: is called and only once for a regular
-// startup (no safe mode).
+// Tests that -logStartupDuration: and -createStartupTrackingTask are called
+// once and in the right order for a regular startup (no safe mode).
 TEST_F(AppMetricsAppStateAgentTest, logStartupDuration) {
   id metricsMediator = [OCMockObject mockForClass:[MetricsMediator class]];
 
-  [[metricsMediator expect] logStartupDuration:nil connectionInformation:nil];
+  [[metricsMediator expect] createStartupTrackingTask];
+  [[metricsMediator expect] logStartupDuration:nil];
+  [metricsMediator setExpectationOrderMatters:YES];
 
   SceneState* sceneA = [[SceneState alloc] initWithAppState:app_state_];
   SceneState* sceneB = [[SceneState alloc] initWithAppState:app_state_];
@@ -254,12 +249,13 @@ TEST_F(AppMetricsAppStateAgentTest, logStartupDuration) {
   EXPECT_OCMOCK_VERIFY(metricsMediator);
 }
 
-// Tests that -logStartupDuration: is not called when there is safe mode
-// during startup.
+// Tests that -logStartupDuration: and  and -createStartupTrackingTask are not
+// called when there is safe mode during startup.
 TEST_F(AppMetricsAppStateAgentTest, logStartupDurationWhenSafeMode) {
   id metricsMediator = [OCMockObject mockForClass:[MetricsMediator class]];
 
-  [[metricsMediator reject] logStartupDuration:nil connectionInformation:nil];
+  [[metricsMediator reject] createStartupTrackingTask];
+  [[metricsMediator reject] logStartupDuration:nil];
 
   app_state_.initStageForTesting = GetMaximalInitStageThatDontAllowLogging();
 

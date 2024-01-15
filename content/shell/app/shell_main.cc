@@ -13,6 +13,15 @@
 #include "sandbox/win/src/sandbox_types.h"
 #endif
 
+#if BUILDFLAG(IS_IOS)
+#include "base/at_exit.h"                                 // nogncheck
+#include "base/command_line.h"                            // nogncheck
+#include "content/public/common/content_switches.h"       // nogncheck
+#include "content/shell/app/ios/shell_application_ios.h"
+#include "content/shell/app/ios/web_tests_support_ios.h"
+#include "content/shell/common/shell_switches.h"
+#endif
+
 #if BUILDFLAG(IS_WIN)
 
 #if !defined(WIN_CONSOLE_APP)
@@ -35,6 +44,36 @@ int main() {
   params.instance = instance;
   params.sandbox_info = &sandbox_info;
   return content::ContentMain(std::move(params));
+}
+
+#elif BUILDFLAG(IS_IOS)
+
+int main(int argc, const char** argv) {
+  // Create this here since it's needed to start the crash handler.
+  base::AtExitManager at_exit;
+
+  // Check if this is the browser process or a subprocess. Only the browser
+  // browser should run UIApplicationMain.
+  base::CommandLine::Init(argc, argv);
+  auto type = base::CommandLine::ForCurrentProcess()->GetSwitchValueASCII(
+      switches::kProcessType);
+
+  // The browser process has no --process-type argument.
+  if (type.empty()) {
+    if (switches::IsRunWebTestsSwitchPresent()) {
+      // We create a simple UIApplication to run the web tests.
+      return RunWebTestsFromIOSApp(argc, argv);
+    } else {
+      // We will create the ContentMainRunner once the UIApplication is ready.
+      return RunShellApplication(argc, argv);
+    }
+  } else {
+    content::ShellMainDelegate delegate;
+    content::ContentMainParams params(&delegate);
+    params.argc = argc;
+    params.argv = argv;
+    return content::ContentMain(std::move(params));
+  }
 }
 
 #else

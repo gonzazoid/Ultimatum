@@ -4,23 +4,18 @@
 
 #import "ios/chrome/browser/ui/find_bar/find_bar_coordinator.h"
 
-#import "ios/chrome/browser/browser_state/chrome_browser_state.h"
-#import "ios/chrome/browser/find_in_page/find_tab_helper.h"
-#import "ios/chrome/browser/main/browser.h"
-#import "ios/chrome/browser/ui/commands/browser_commands.h"
-#import "ios/chrome/browser/ui/commands/command_dispatcher.h"
-#import "ios/chrome/browser/ui/commands/find_in_page_commands.h"
+#import "ios/chrome/browser/find_in_page/model/abstract_find_tab_helper.h"
+#import "ios/chrome/browser/shared/model/browser/browser.h"
+#import "ios/chrome/browser/shared/model/browser_state/chrome_browser_state.h"
+#import "ios/chrome/browser/shared/model/web_state_list/web_state_list.h"
+#import "ios/chrome/browser/shared/public/commands/command_dispatcher.h"
+#import "ios/chrome/browser/shared/public/commands/find_in_page_commands.h"
 #import "ios/chrome/browser/ui/find_bar/find_bar_controller_ios.h"
 #import "ios/chrome/browser/ui/find_bar/find_bar_mediator.h"
 #import "ios/chrome/browser/ui/find_bar/find_bar_view_controller.h"
 #import "ios/chrome/browser/ui/presenters/contained_presenter_delegate.h"
 #import "ios/chrome/browser/ui/toolbar/accessory/toolbar_accessory_coordinator_delegate.h"
 #import "ios/chrome/browser/ui/toolbar/accessory/toolbar_accessory_presenter.h"
-#import "ios/chrome/browser/web_state_list/web_state_list.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 @interface FindBarCoordinator () <ContainedPresenterDelegate>
 
@@ -48,7 +43,7 @@
   self.mediator.consumer = self.findBarController;
 
   DCHECK(self.currentWebState);
-  FindTabHelper* helper = FindTabHelper::FromWebState(self.currentWebState);
+  auto* helper = GetConcreteFindTabHelperFromWebState(self.currentWebState);
   helper->SetResponseDelegate(self.mediator);
   // If the FindUI is already active, just reshow it.
   if (helper->IsFindUIActive()) {
@@ -69,7 +64,7 @@
   // the UI will be brought back later.
   BOOL animated;
   if (self.currentWebState) {
-    FindTabHelper* helper = FindTabHelper::FromWebState(self.currentWebState);
+    auto* helper = GetConcreteFindTabHelperFromWebState(self.currentWebState);
     animated = helper && !helper->IsFindUIActive();
   } else {
     animated = true;
@@ -94,7 +89,7 @@
   if (!self.currentWebState) {
     return;
   }
-  FindTabHelper* helper = FindTabHelper::FromWebState(self.currentWebState);
+  auto* helper = GetConcreteFindTabHelperFromWebState(self.currentWebState);
   DCHECK(helper && helper->IsFindUIActive());
   if (!self.browser->GetBrowserState()->IsOffTheRecord()) {
     helper->RestoreSearchTerm();
@@ -106,7 +101,7 @@
 }
 
 - (void)defocusFindBar {
-  FindTabHelper* helper = FindTabHelper::FromWebState(self.currentWebState);
+  auto* helper = GetConcreteFindTabHelperFromWebState(self.currentWebState);
   if (helper && helper->IsFindUIActive()) {
     [self.findBarController updateView:helper->GetFindResult()
                          initialUpdate:NO
@@ -117,10 +112,12 @@
 #pragma mark - ContainedPresenterDelegate
 
 - (void)containedPresenterDidPresent:(id<ContainedPresenter>)presenter {
+  [self.presentationDelegate findBarDidAppearForFindBarCoordinator:self];
   [self.findBarController selectAllText];
 }
 
 - (void)containedPresenterDidDismiss:(id<ContainedPresenter>)presenter {
+  [self.presentationDelegate findBarDidDisappearForFindBarCoordinator:self];
   [self.findBarController findBarViewDidHide];
   [self.delegate toolbarAccessoryCoordinatorDidDismissUI:self];
 }

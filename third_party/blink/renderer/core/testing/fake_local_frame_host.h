@@ -47,7 +47,7 @@ class FakeLocalFrameHost : public mojom::blink::LocalFrameHost {
       ui::mojom::blink::VirtualKeyboardMode mode) override;
   void VisibilityChanged(mojom::blink::FrameVisibility visibility) override;
   void DidChangeThemeColor(absl::optional<::SkColor> theme_color) override;
-  void DidChangeBackgroundColor(SkColor background_color,
+  void DidChangeBackgroundColor(const SkColor4f& background_color,
                                 bool color_adjust) override;
   void DidFailLoadWithError(const ::blink::KURL& url,
                             int32_t error_code) override;
@@ -66,20 +66,29 @@ class FakeLocalFrameHost : public mojom::blink::LocalFrameHost {
   void BubbleLogicalScrollInParentFrame(
       blink::mojom::blink::ScrollDirection direction,
       ui::ScrollGranularity granularity) override;
+  void StartLoadingForAsyncNavigationApiCommit() override {}
   void DidBlockNavigation(const KURL& blocked_url,
                           const KURL& initiator_url,
                           mojom::NavigationBlockedReason reason) override;
   void DidChangeLoadProgress(double load_progress) override;
   void DidFinishLoad(const KURL& validated_url) override;
   void DispatchLoad() override;
-  void GoToEntryAtOffset(int32_t offset, bool has_user_gesture) override;
-  void NavigateToNavigationApiKey(const WTF::String& key,
-                                  bool has_user_gesture) override {}
+  void GoToEntryAtOffset(
+      int32_t offset,
+      bool has_user_gesture,
+      absl::optional<blink::scheduler::TaskAttributionId>) override;
+  void NavigateToNavigationApiKey(
+      const WTF::String& key,
+      bool has_user_gesture,
+      absl::optional<blink::scheduler::TaskAttributionId> task_id) override {}
+  void NavigateEventHandlerPresenceChanged(bool present) override {}
   void UpdateTitle(const WTF::String& title,
                    base::i18n::TextDirection title_direction) override;
+  void UpdateAppTitle(const WTF::String& app_title) override;
   void UpdateUserActivationState(
       mojom::blink::UserActivationUpdateType update_type,
       mojom::UserActivationNotificationType notification_type) override;
+  void DidConsumeHistoryUserActivation() override {}
   void HandleAccessibilityFindInPageResult(
       mojom::blink::FindInPageResultAXParamsPtr params) override;
   void HandleAccessibilityFindInPageTermination() override;
@@ -103,6 +112,7 @@ class FakeLocalFrameHost : public mojom::blink::LocalFrameHost {
       WTF::Vector<blink::mojom::blink::FaviconURLPtr> favicon_urls) override;
   void DownloadURL(mojom::blink::DownloadURLParamsPtr params) override;
   void FocusedElementChanged(bool is_editable_element,
+                             bool is_richly_editable_element,
                              const gfx::Rect& bounds_in_frame_widget,
                              blink::mojom::FocusType focus_type) override;
   void TextSelectionChanged(const WTF::String& text,
@@ -161,26 +171,44 @@ class FakeLocalFrameHost : public mojom::blink::LocalFrameHost {
       blink::mojom::PreferredColorScheme preferred_color_scheme) override;
   void DidChangeSrcDoc(const blink::FrameToken& child_frame_token,
                        const WTF::String& srcdoc_value) override;
-  void DidChangeBaseURL(const ::blink::KURL& url) override;
   void ReceivedDelegatedCapability(
       blink::mojom::DelegatedCapability delegated_capability) override;
-  void CreatePortal(
-      mojo::PendingAssociatedReceiver<mojom::blink::Portal> portal,
-      mojo::PendingAssociatedRemote<mojom::blink::PortalClient> client,
-      mojom::blink::RemoteFrameInterfacesFromRendererPtr
-          remote_frame_interfaces,
-      CreatePortalCallback callback) override;
-  void AdoptPortal(const PortalToken& portal_token,
-                   mojom::blink::RemoteFrameInterfacesFromRendererPtr
-                       remote_frame_interfaces,
-                   AdoptPortalCallback callback) override;
+  void SendFencedFrameReportingBeacon(
+      const WTF::String& event_data,
+      const WTF::String& event_type,
+      const WTF::Vector<blink::FencedFrame::ReportingDestination>& destinations)
+      override;
+  void SendFencedFrameReportingBeaconToCustomURL(
+      const blink::KURL& destination_url) override;
+  void SetFencedFrameAutomaticBeaconReportEventData(
+      blink::mojom::AutomaticBeaconType event_type,
+      const WTF::String& event_data,
+      const WTF::Vector<blink::FencedFrame::ReportingDestination>& destinations,
+      bool once,
+      bool cross_origin_exposed) override;
+  void DisableUntrustedNetworkInFencedFrame(
+      DisableUntrustedNetworkInFencedFrameCallback callback) override;
+  void SendLegacyTechEvent(
+      const WTF::String& type,
+      mojom::blink::LegacyTechEventCodeLocationPtr code_location) override;
+  void SendPrivateAggregationRequestsForFencedFrameEvent(
+      const WTF::String& event_type) override;
+  void SetAttributionReportingRuntimeFeatures(
+      network::AttributionReportingRuntimeFeatures features) override;
   void CreateFencedFrame(
       mojo::PendingAssociatedReceiver<mojom::blink::FencedFrameOwnerHost>,
-      mojom::blink::FencedFrameMode,
       mojom::blink::RemoteFrameInterfacesFromRendererPtr
           remote_frame_interfaces,
       const RemoteFrameToken& frame_token,
       const base::UnguessableToken& devtools_frame_token) override;
+  void OnViewTransitionOptInChanged(
+      mojom::blink::ViewTransitionSameOriginOptIn) override {}
+  void StartDragging(const blink::WebDragData& drag_data,
+                     blink::DragOperationsMask operations_allowed,
+                     const SkBitmap& bitmap,
+                     const gfx::Vector2d& cursor_offset_in_dip,
+                     const gfx::Rect& drag_obj_rect_in_dip,
+                     mojom::blink::DragEventSourceInfoPtr event_info) override;
 
  private:
   void BindFrameHostReceiver(mojo::ScopedInterfaceEndpointHandle handle);

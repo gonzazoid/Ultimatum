@@ -22,8 +22,6 @@
 #include "components/site_isolation/site_isolation_policy.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
-#include "content/public/browser/client_hints_controller_delegate.h"
-#include "content/public/browser/resource_context.h"
 #include "fuchsia_web/webengine/browser/web_engine_net_log_observer.h"
 #include "fuchsia_web/webengine/switches.h"
 #include "media/capabilities/in_memory_video_decode_stats_db_impl.h"
@@ -48,17 +46,6 @@ std::unique_ptr<WebEngineNetLogObserver> CreateNetLogObserver() {
 
 }  // namespace
 
-class WebEngineBrowserContext::ResourceContext
-    : public content::ResourceContext {
- public:
-  ResourceContext() = default;
-
-  ResourceContext(const ResourceContext&) = delete;
-  ResourceContext& operator=(const ResourceContext&) = delete;
-
-  ~ResourceContext() override = default;
-};
-
 // static
 std::unique_ptr<WebEngineBrowserContext>
 WebEngineBrowserContext::CreatePersistent(
@@ -80,11 +67,6 @@ WebEngineBrowserContext::~WebEngineBrowserContext() {
   SimpleKeyMap::GetInstance()->Dissociate(this);
   NotifyWillBeDestroyed();
 
-  if (resource_context_) {
-    content::GetIOThreadTaskRunner({})->DeleteSoon(
-        FROM_HERE, std::move(resource_context_));
-  }
-
   BrowserContextDependencyManager::GetInstance()->DestroyBrowserContextServices(
       this);
 
@@ -103,10 +85,6 @@ base::FilePath WebEngineBrowserContext::GetPath() {
 
 bool WebEngineBrowserContext::IsOffTheRecord() {
   return data_dir_path_.empty();
-}
-
-content::ResourceContext* WebEngineBrowserContext::GetResourceContext() {
-  return resource_context_.get();
 }
 
 content::DownloadManagerDelegate*
@@ -151,9 +129,7 @@ WebEngineBrowserContext::GetPermissionControllerDelegate() {
 
 content::ClientHintsControllerDelegate*
 WebEngineBrowserContext::GetClientHintsControllerDelegate() {
-  // TODO(crbug.com/1356277): Temporarily disable Client Hints as it is causing
-  // several apps to fail. Re-enable Client Hints after breakage is fixed.
-  return nullptr;
+  return &client_hints_delegate_;
 }
 
 content::BackgroundFetchDelegate*
@@ -209,7 +185,6 @@ WebEngineBrowserContext::WebEngineBrowserContext(
     : data_dir_path_(std::move(data_directory)),
       net_log_observer_(CreateNetLogObserver()),
       simple_factory_key_(GetPath(), IsOffTheRecord()),
-      resource_context_(std::make_unique<ResourceContext>()),
       client_hints_delegate_(network_quality_tracker,
                              IsJavaScriptAllowedCallback(),
                              AreThirdPartyCookiesBlockedCallback(),

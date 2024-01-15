@@ -9,18 +9,19 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/strings/string_number_conversions.h"
+#include "base/task/bind_post_task.h"
+#include "base/task/sequenced_task_runner.h"
 #include "gpu/config/gpu_driver_bug_workarounds.h"
 #include "gpu/config/gpu_preferences.h"
-#include "media/base/bind_to_current_loop.h"
 #include "media/base/bitrate.h"
 #include "media/base/media_log.h"
 #include "media/gpu/gpu_video_encode_accelerator_factory.h"
 #include "media/gpu/macros.h"
 #include "media/gpu/test/bitstream_helpers.h"
-#include "media/gpu/test/video.h"
+#include "media/gpu/test/raw_video.h"
 #include "media/gpu/test/video_test_helpers.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -28,6 +29,14 @@ namespace media {
 namespace test {
 
 namespace {
+
+// Minimum number of bitstream buffers we need to make sure we don't risk a
+// deadlock. See crrev/c/2340653.
+// FFmpeg decoder buffers until its thread pool is full. The number of desired
+// threads is 12 in 4k.
+// https://source.chromium.org/chromium/chromium/src/+/main:media/filters/ffmpeg_video_decoder.cc;l=94;drc=002c0bc1ac64f33a327a42a54afb87500943a3b3
+// Therefore, we need to have the number of bitstream buffers. See b/277368164.
+static unsigned int kMinInFlightFrames = 12;
 
 // TODO(crbug.com/1045825): Support encoding parameter changes.
 
@@ -48,24 +57,29 @@ void CallbackThunk(
 }  // namespace
 
 VideoEncoderClientConfig::VideoEncoderClientConfig(
-    const Video* video,
+    const RawVideo* video,
     VideoCodecProfile output_profile,
     const std::vector<VideoEncodeAccelerator::Config::SpatialLayer>&
         spatial_layers,
+    SVCInterLayerPredMode inter_layer_pred_mode,
     const VideoBitrateAllocation& bitrate_allocation,
     bool reverse)
     : output_profile(output_profile),
       output_resolution(video->Resolution()),
+      spatial_layers(spatial_layers),
       num_temporal_layers(spatial_layers.empty()
                               ? 1
                               : spatial_layers[0].num_of_temporal_layers),
       num_spatial_layers(
           std::max(spatial_layers.size(), static_cast<size_t>(1u))),
-      spatial_layers(spatial_layers),
+      inter_layer_pred_mode(inter_layer_pred_mode),
       bitrate_allocation(bitrate_allocation),
       framerate(video->FrameRate()),
       num_frames_to_encode(video->NumFrames()),
-      reverse(reverse) {}
+      reverse(reverse) {
+  CHECK(inter_layer_pred_mode == SVCInterLayerPredMode::kOff ||
+        inter_layer_pred_mode == SVCInterLayerPredMode::kOnKeyPic);
+}
 
 VideoEncoderClientConfig::VideoEncoderClientConfig(
     const VideoEncoderClientConfig&) = default;
@@ -186,7 +200,7 @@ std::unique_ptr<VideoEncoderClient> VideoEncoderClient::Create(
       event_cb, std::move(bitstream_processors), config));
 }
 
-bool VideoEncoderClient::Initialize(const Video* video) {
+bool VideoEncoderClient::Initialize(const RawVideo* video) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(test_sequence_checker_);
   DCHECK(video);
 
@@ -287,6 +301,8 @@ void VideoEncoderClient::RequireBitstreamBuffers(
   ASSERT_GT(output_buffer_size, 0UL);
   DVLOGF(4);
 
+  input_count = std::max(kMinInFlightFrames, input_count);
+
   gfx::Size coded_size = input_coded_size;
   if (video_->Resolution() != encoder_client_config_.output_resolution) {
     // Scaling case. Scaling is currently only supported when using Dmabufs.
@@ -306,12 +322,9 @@ void VideoEncoderClient::RequireBitstreamBuffers(
   // Follow the behavior of the chrome capture stack; |natural_size| is the
   // dimension to be encoded.
   aligned_data_helper_ = std::make_unique<AlignedDataHelper>(
-      video_->Data(), video_->NumFrames(),
-      encoder_client_config_.num_frames_to_encode,
-      encoder_client_config_.reverse, video_->PixelFormat(),
-      /*src_coded_size=*/video_->Resolution(),
+      video_, encoder_client_config_.num_frames_to_encode,
+      encoder_client_config_.reverse,
       /*dst_coded_size=*/coded_size,
-      /*visible_rect=*/video_->VisibleRect(),
       /*natural_size=*/encoder_client_config_.output_resolution, frame_rate,
       encoder_client_config_.input_storage_type ==
               VideoEncodeAccelerator::Config::StorageType::kGpuMemoryBuffer
@@ -345,18 +358,24 @@ VideoEncoderClient::CreateBitstreamRef(
   DCHECK_CALLED_ON_VALID_SEQUENCE(encoder_client_sequence_checker_);
   auto it = bitstream_buffers_.find(bitstream_buffer_id);
   LOG_ASSERT(it != bitstream_buffers_.end());
-  auto decoder_buffer = DecoderBuffer::FromSharedMemoryRegion(
-      it->second.Duplicate(), 0u /* offset */, metadata.payload_size_bytes);
-  if (!decoder_buffer)
-    return nullptr;
-  decoder_buffer->set_timestamp(base::Microseconds(frame_index_));
+
+  scoped_refptr<DecoderBuffer> decoder_buffer;
+  if (!metadata.dropped_frame()) {
+    decoder_buffer = DecoderBuffer::FromSharedMemoryRegion(
+        it->second.Duplicate(), 0u /* offset */, metadata.payload_size_bytes);
+    if (!decoder_buffer) {
+      return nullptr;
+    }
+    decoder_buffer->set_timestamp(base::Microseconds(frame_index_));
+  }
+
   auto source_timestamp_it = source_timestamps_.find(metadata.timestamp);
   LOG_ASSERT(source_timestamp_it != source_timestamps_.end());
 
   return BitstreamProcessor::BitstreamRef::Create(
       std::move(decoder_buffer), metadata, bitstream_buffer_id,
       source_timestamp_it->second,
-      BindToCurrentLoop(
+      base::BindPostTaskToCurrentDefault(
           base::BindOnce(&VideoEncoderClient::BitstreamBufferProcessed,
                          weak_this_, bitstream_buffer_id)));
 }
@@ -366,11 +385,17 @@ void VideoEncoderClient::BitstreamBufferReady(
     const BitstreamBufferMetadata& metadata) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(encoder_client_sequence_checker_);
   DVLOGF(4) << "frame_index=" << frame_index_
-            << ", encoded image size=" << metadata.payload_size_bytes;
+            << ", encoded image size=" << metadata.payload_size_bytes
+            << (metadata.dropped_frame() ? " (Drop Frame)" : "");
   {
+    // |metadata.payload_size_bytes| can be zero here, but counts the dropped
+    // frame to compute a bitrate from the network point of view.
     base::AutoLock auto_lock(stats_lock_);
     current_stats_.total_num_encoded_frames++;
     current_stats_.total_encoded_frames_size += metadata.payload_size_bytes;
+    if (metadata.dropped_frame()) {
+      current_stats_.num_dropped_frames++;
+    }
     if (metadata.vp9.has_value()) {
       uint8_t temporal_id = metadata.vp9->temporal_idx;
       uint8_t spatial_id = metadata.vp9->spatial_idx;
@@ -457,15 +482,18 @@ void VideoEncoderClient::BitstreamBufferProcessed(int32_t bitstream_buffer_id) {
   encoder_->UseOutputBitstreamBuffer(std::move(bitstream_buffer));
 }
 
-void VideoEncoderClient::NotifyError(VideoEncodeAccelerator::Error error) {
-  LOG(ERROR) << "NotifyError() is called: " << static_cast<int>(error);
+void VideoEncoderClient::NotifyErrorStatus(const EncoderStatus& status) {
+  ASSERT_FALSE(status.is_ok());
+  LOG(ERROR) << "NotifyErrorStatus() is called, code="
+             << static_cast<int>(status.code())
+             << ", message=" << status.message();
   FireEvent(VideoEncoder::EncoderEvent::kError);
 }
 
 void VideoEncoderClient::NotifyEncoderInfoChange(const VideoEncoderInfo& info) {
 }
 
-void VideoEncoderClient::CreateEncoderTask(const Video* video,
+void VideoEncoderClient::CreateEncoderTask(const RawVideo* video,
                                            bool* success,
                                            base::WaitableEvent* done) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(encoder_client_sequence_checker_);
@@ -475,15 +503,18 @@ void VideoEncoderClient::CreateEncoderTask(const Video* video,
 
   video_ = video;
 
-  const VideoEncodeAccelerator::Config config(
+  VideoEncodeAccelerator::Config config(
       video_->PixelFormat(), encoder_client_config_.output_resolution,
       encoder_client_config_.output_profile,
-      encoder_client_config_.bitrate_allocation.GetSumBitrate(),
-      encoder_client_config_.framerate, absl::nullopt /* gop_length */,
-      absl::nullopt /* h264_output_level*/, false /* is_constrained_h264 */,
-      encoder_client_config_.input_storage_type,
-      VideoEncodeAccelerator::Config::ContentType::kCamera,
-      encoder_client_config_.spatial_layers);
+      encoder_client_config_.bitrate_allocation.GetSumBitrate());
+
+  config.initial_framerate = encoder_client_config_.framerate;
+  config.storage_type = encoder_client_config_.input_storage_type;
+  config.content_type = VideoEncodeAccelerator::Config::ContentType::kCamera;
+  config.drop_frame_thresh_percentage =
+      encoder_client_config_.drop_frame_thresh;
+  config.spatial_layers = encoder_client_config_.spatial_layers;
+  config.inter_layer_pred = encoder_client_config_.inter_layer_pred_mode;
 
   encoder_ = GpuVideoEncodeAcceleratorFactory::CreateVEA(
       config, this, gpu::GpuPreferences(), gpu::GpuDriverBugWorkarounds(),
@@ -592,7 +623,7 @@ void VideoEncoderClient::UpdateBitrateTask(
   DCHECK_CALLED_ON_VALID_SEQUENCE(encoder_client_sequence_checker_);
   DVLOGF(4);
   aligned_data_helper_->UpdateFrameRate(framerate);
-  encoder_->RequestEncodingParametersChange(bitrate, framerate);
+  encoder_->RequestEncodingParametersChange(bitrate, framerate, absl::nullopt);
   base::AutoLock auto_lcok(stats_lock_);
   current_stats_.framerate = framerate;
 }

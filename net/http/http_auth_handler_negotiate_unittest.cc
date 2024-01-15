@@ -7,7 +7,7 @@
 #include <memory>
 #include <string>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/strings/string_util.h"
@@ -270,13 +270,14 @@ class HttpAuthHandlerNegotiateTest : public PlatformTest,
 #elif BUILDFLAG(IS_ANDROID)
   std::unique_ptr<MockAuthLibrary> auth_library_for_android_;
 #endif
+  std::unique_ptr<MockCachingHostResolver> resolver_;
+  std::unique_ptr<MockAllowHttpAuthPreferences> http_auth_preferences_;
+  std::unique_ptr<HttpAuthHandlerNegotiate::Factory> factory_;
+
   // |auth_library_| is passed to |factory_|, which assumes ownership of it, but
   // can't be a scoped pointer to it since the tests need access when they set
   // up the mocks after passing ownership.
   raw_ptr<MockAuthLibrary> auth_library_;
-  std::unique_ptr<MockCachingHostResolver> resolver_;
-  std::unique_ptr<MockAllowHttpAuthPreferences> http_auth_preferences_;
-  std::unique_ptr<HttpAuthHandlerNegotiate::Factory> factory_;
 };
 
 TEST_F(HttpAuthHandlerNegotiateTest, DisableCname) {
@@ -471,8 +472,8 @@ TEST_F(HttpAuthHandlerNegotiateTest, MissingGSSAPI) {
 }
 #endif  // BUILDFLAG(USE_EXTERNAL_GSSAPI)
 
-// AllowGssapiLibraryLoad() is only supported on ChromeOS.
-#if BUILDFLAG(IS_CHROMEOS)
+// AllowGssapiLibraryLoad() is only supported on ChromeOS and Linux.
+#if BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_LINUX)
 TEST_F(HttpAuthHandlerNegotiateTest, AllowGssapiLibraryLoad) {
   // Disabling allow_gssapi_library_load should prevent handler creation.
   SetupMocks(AuthLibrary());
@@ -488,7 +489,7 @@ TEST_F(HttpAuthHandlerNegotiateTest, AllowGssapiLibraryLoad) {
   EXPECT_EQ(OK, rv);
   EXPECT_TRUE(auth_handler);
 }
-#endif  // BUILDFLAG(IS_CHROMEOS)
+#endif  // BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_LINUX)
 
 #endif  // BUILDFLAG(IS_POSIX)
 

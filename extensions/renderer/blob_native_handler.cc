@@ -4,7 +4,7 @@
 
 #include "extensions/renderer/blob_native_handler.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "extensions/renderer/script_context.h"
 #include "third_party/blink/public/platform/web_url.h"
 #include "third_party/blink/public/web/web_blob.h"
@@ -16,7 +16,7 @@ namespace {
 // Expects a single Blob argument. Returns the Blob's UUID.
 void GetBlobUuid(const v8::FunctionCallbackInfo<v8::Value>& args) {
   CHECK_EQ(1, args.Length());
-  blink::WebBlob blob = blink::WebBlob::FromV8Value(args[0]);
+  blink::WebBlob blob = blink::WebBlob::FromV8Value(args.GetIsolate(), args[0]);
   args.GetReturnValue().Set(
       v8::String::NewFromUtf8(args.GetIsolate(), blob.Uuid().Utf8().data())
           .ToLocalChecked());

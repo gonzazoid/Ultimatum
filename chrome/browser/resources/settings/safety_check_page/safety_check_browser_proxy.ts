@@ -3,7 +3,7 @@
 // found in the LICENSE file.
 
 // clang-format off
-import {sendWithPromise} from 'chrome://resources/js/cr.m.js';
+import {sendWithPromise} from 'chrome://resources/js/cr.js';
 // clang-format on
 
 /**
@@ -22,7 +22,6 @@ export enum SafetyCheckCallbackConstants {
   PASSWORDS_CHANGED = 'safety-check-passwords-status-changed',
   SAFE_BROWSING_CHANGED = 'safety-check-safe-browsing-status-changed',
   EXTENSIONS_CHANGED = 'safety-check-extensions-status-changed',
-  CHROME_CLEANER_CHANGED = 'safety-check-chrome-cleaner-status-changed',
 }
 
 /**
@@ -38,8 +37,8 @@ export enum SafetyCheckParentStatus {
 
 /**
  * States of the safety check updates element.
- * Needs to be kept in sync with UpdatesStatus in
- * chrome/browser/ui/webui/settings/safety_check_handler.h
+ * Needs to be kept in sync with UpdateStatus in
+ * components/safety_check/safety_check.h
  */
 export enum SafetyCheckUpdatesStatus {
   CHECKING = 0,
@@ -50,6 +49,9 @@ export enum SafetyCheckUpdatesStatus {
   FAILED_OFFLINE = 5,
   FAILED = 6,
   UNKNOWN = 7,
+  // Only used in Android but listed here to keep enum in sync.
+  OUTDATED = 8,
+  UPDATE_TO_ROLLBACK_VERSION_DISALLOWED = 9,
 }
 
 /**
@@ -60,6 +62,8 @@ export enum SafetyCheckUpdatesStatus {
 export enum SafetyCheckPasswordsStatus {
   CHECKING = 0,
   SAFE = 1,
+  // Indicates that at least one compromised password exists. Weak, reused or
+  // muted compromised password warnings may exist as well.
   COMPROMISED = 2,
   OFFLINE = 3,
   NO_PASSWORDS = 4,
@@ -67,7 +71,17 @@ export enum SafetyCheckPasswordsStatus {
   QUOTA_LIMIT = 6,
   ERROR = 7,
   FEATURE_UNAVAILABLE = 8,
+  // Indicates that no compromised or reused passwords exist, but there is at
+  // least one weak password.
   WEAK_PASSWORDS_EXIST = 9,
+  // Indicates that no compromised passwords exist, but there is at least one
+  // reused password.
+  // Not yet supported on Desktop.
+  REUSED_PASSWORDS_EXIST = 10,
+  // Indicates no weak or reused passwords exist, but there is
+  // at least one compromised password warning that has been muted by the user.
+  // Not yet supported on Desktop.
+  MUTED_COMPROMISED_EXIST = 11,
 }
 
 /**
@@ -100,24 +114,6 @@ export enum SafetyCheckExtensionsStatus {
   BLOCKLISTED_REENABLED_ALL_BY_USER = 4,
   BLOCKLISTED_REENABLED_SOME_BY_USER = 5,
   BLOCKLISTED_REENABLED_ALL_BY_ADMIN = 6,
-}
-
-/**
- * States of the safety check Chrome cleaner element.
- * Needs to be kept in sync with ChromeCleanerStatus in
- * chrome/browser/ui/webui/settings/safety_check_handler.h
- */
-export enum SafetyCheckChromeCleanerStatus {
-  HIDDEN = 0,
-  CHECKING = 1,
-  INFECTED = 2,
-  REBOOT_REQUIRED = 3,
-  SCANNING_FOR_UWS = 4,
-  REMOVING_UWS = 5,
-  DISABLED_BY_ADMIN = 6,
-  ERROR = 7,
-  NO_UWS_FOUND_WITH_TIMESTAMP = 8,
-  NO_UWS_FOUND_WITHOUT_TIMESTAMP = 9,
 }
 
 export interface SafetyCheckBrowserProxy {

@@ -4,21 +4,19 @@
 
 #include "chrome/browser/ash/login/saml/lockscreen_reauth_dialog_test_helper.h"
 
-#include "base/run_loop.h"
+#include "base/test/test_future.h"
 #include "chrome/browser/ash/login/login_pref_names.h"
-#include "chrome/browser/ash/login/saml/in_session_password_sync_manager.h"
-#include "chrome/browser/ash/login/saml/in_session_password_sync_manager_factory.h"
 #include "chrome/browser/ash/login/test/js_checker.h"
 #include "chrome/browser/ash/login/test/test_condition_waiter.h"
-#include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_manager.h"
-#include "chrome/browser/ui/webui/ash/in_session_password_change/lock_screen_captive_portal_dialog.h"
-#include "chrome/browser/ui/webui/ash/in_session_password_change/lock_screen_network_dialog.h"
-#include "chrome/browser/ui/webui/ash/in_session_password_change/lock_screen_network_ui.h"
-#include "chrome/browser/ui/webui/ash/in_session_password_change/lock_screen_reauth_dialogs.h"
-#include "chrome/browser/ui/webui/ash/in_session_password_change/lock_screen_start_reauth_ui.h"
+#include "chrome/browser/ui/webui/ash/lock_screen_reauth/lock_screen_captive_portal_dialog.h"
+#include "chrome/browser/ui/webui/ash/lock_screen_reauth/lock_screen_network_dialog.h"
+#include "chrome/browser/ui/webui/ash/lock_screen_reauth/lock_screen_network_ui.h"
+#include "chrome/browser/ui/webui/ash/lock_screen_reauth/lock_screen_reauth_dialogs.h"
+#include "chrome/browser/ui/webui/ash/lock_screen_reauth/lock_screen_start_reauth_ui.h"
 #include "chrome/browser/ui/webui/signin/signin_utils.h"
+#include "components/prefs/pref_service.h"
 #include "components/session_manager/core/session_manager.h"
 #include "content/public/test/browser_test_utils.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -26,8 +24,9 @@
 namespace ash {
 
 namespace {
+
 // Main dialog
-const test::UIPath kSamlContainer = {"main-element", "body"};
+const test::UIPath kWebviewContainer = {"main-element", "body"};
 const test::UIPath kMainVerifyButton = {"main-element",
                                         "nextButtonVerifyScreen"};
 const test::UIPath kMainCancelButton = {"main-element",
@@ -35,6 +34,8 @@ const test::UIPath kMainCancelButton = {"main-element",
 const test::UIPath kErrorCancelButton = {"main-element",
                                          "cancelButtonErrorScreen"};
 const test::UIPath kSamlCancelButton = {"main-element", "saml-close-button"};
+const test::UIPath kChangeIdPButton = {"main-element", "change-account"};
+const test::UIPath kGaiaButtons = {"main-element", "gaia-buttons"};
 const test::UIPath kMainScreen = {"main-element", "verifyAccountScreen"};
 const test::UIPath kErrorScreen = {"main-element", "errorScreen"};
 const test::UIPath kSamlConfirmPasswordScreen = {"main-element",
@@ -49,6 +50,7 @@ const char kSigninFrame[] = "signin-frame";
 // Network dialog
 const test::UIPath kNetworkDialog = {"network-ui", "dialog"};
 const test::UIPath kNetworkCancelButton = {"network-ui", "cancelButton"};
+
 }  // namespace
 
 LockScreenReauthDialogTestHelper::LockScreenReauthDialogTestHelper() = default;
@@ -61,21 +63,21 @@ LockScreenReauthDialogTestHelper& LockScreenReauthDialogTestHelper::operator=(
     LockScreenReauthDialogTestHelper&& other) = default;
 
 // static
-absl::optional<LockScreenReauthDialogTestHelper>
+std::optional<LockScreenReauthDialogTestHelper>
 LockScreenReauthDialogTestHelper::ShowDialogAndWait() {
   LockScreenReauthDialogTestHelper dialog_test_helper;
   if (!dialog_test_helper.ShowDialogAndWaitImpl())
-    return absl::nullopt;
+    return std::nullopt;
   return dialog_test_helper;
 }
 
 // static
-absl::optional<LockScreenReauthDialogTestHelper>
+std::optional<LockScreenReauthDialogTestHelper>
 LockScreenReauthDialogTestHelper::StartSamlAndWaitForIdpPageLoad() {
-  absl::optional<LockScreenReauthDialogTestHelper> reauth_dialog_helper =
+  std::optional<LockScreenReauthDialogTestHelper> reauth_dialog_helper =
       LockScreenReauthDialogTestHelper::ShowDialogAndWait();
   if (!reauth_dialog_helper.has_value()) {
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   reauth_dialog_helper->ForceSamlRedirect();
@@ -85,10 +87,12 @@ LockScreenReauthDialogTestHelper::StartSamlAndWaitForIdpPageLoad() {
   reauth_dialog_helper->WaitForVerifyAccountScreen();
   reauth_dialog_helper->ClickVerifyButton();
 
-  reauth_dialog_helper->WaitForSamlScreen();
+  reauth_dialog_helper->WaitForSigninWebview();
   reauth_dialog_helper->ExpectVerifyAccountScreenHidden();
 
   reauth_dialog_helper->WaitForIdpPageLoad();
+  reauth_dialog_helper->ExpectGaiaButtonsHidden();
+
   return reauth_dialog_helper;
 }
 
@@ -99,24 +103,14 @@ bool LockScreenReauthDialogTestHelper::ShowDialogAndWaitImpl() {
     return false;
   }
 
-  // The screen can only be locked if there is an active user session, so
-  // ProfileManager::GetActiveUserProfile() must return a non-null Profile.
-  Profile* profile = ProfileManager::GetActiveUserProfile();
-  CHECK(profile);
-  password_sync_manager_ =
-      InSessionPasswordSyncManagerFactory::GetForProfile(profile);
-  if (!password_sync_manager_) {
-    ADD_FAILURE() << "Could not retrieve InSessionPasswordSyncManager";
-    return false;
-  }
   ProfileManager::GetActiveUserProfile()->GetPrefs()->SetBoolean(
       prefs::kLockScreenReauthenticationEnabled, true);
-  password_sync_manager_->CreateAndShowDialog();
 
-  WaitForReauthDialogToLoad();
+  LockScreenStartReauthDialog::Show();
 
   // Fetch the dialog, WebUi controller and main message handler.
-  reauth_dialog_ = password_sync_manager_->get_reauth_dialog_for_testing();
+  reauth_dialog_ = LockScreenStartReauthDialog::GetInstance();
+  WaitForReauthDialogToLoad();
   if (!reauth_dialog_ || !reauth_dialog_->GetWebUIForTest()) {
     ADD_FAILURE() << "Could not retrieve LockScreenStartReauthDialog";
     return false;
@@ -163,14 +157,28 @@ void LockScreenReauthDialogTestHelper::ClickCancelButtonOnErrorScreen() {
 }
 
 void LockScreenReauthDialogTestHelper::ClickCancelButtonOnSamlScreen() {
-  ExpectSamlScreenVisible();
+  ExpectSigninWebviewVisible();
   DialogJS().TapOnPath(kSamlCancelButton);
 }
 
-void LockScreenReauthDialogTestHelper::WaitForSamlScreen() {
+void LockScreenReauthDialogTestHelper::ClickChangeIdPButtonOnSamlScreen() {
+  ExpectSigninWebviewVisible();
+  DialogJS().TapOnPath(kChangeIdPButton);
+}
+
+void LockScreenReauthDialogTestHelper::ExpectGaiaButtonsVisible() {
+  ExpectSigninWebviewVisible();
+  DialogJS().ExpectVisiblePath(kGaiaButtons);
+}
+
+void LockScreenReauthDialogTestHelper::ExpectGaiaButtonsHidden() {
+  DialogJS().ExpectHiddenPath(kGaiaButtons);
+}
+
+void LockScreenReauthDialogTestHelper::WaitForSigninWebview() {
   WaitForAuthenticatorToLoad();
-  DialogJS().CreateVisibilityWaiter(true, kSamlContainer)->Wait();
-  DialogJS().ExpectVisiblePath(kSamlContainer);
+  DialogJS().CreateVisibilityWaiter(true, kWebviewContainer)->Wait();
+  DialogJS().ExpectVisiblePath(kWebviewContainer);
 }
 
 void LockScreenReauthDialogTestHelper::ExpectVerifyAccountScreenVisible() {
@@ -186,12 +194,16 @@ void LockScreenReauthDialogTestHelper::ExpectErrorScreenVisible() {
   DialogJS().ExpectVisiblePath(kErrorScreen);
 }
 
-void LockScreenReauthDialogTestHelper::ExpectSamlScreenVisible() {
-  DialogJS().ExpectVisiblePath(kSamlContainer);
+void LockScreenReauthDialogTestHelper::ExpectSigninWebviewVisible() {
+  DialogJS().ExpectVisiblePath(kWebviewContainer);
 }
 
-void LockScreenReauthDialogTestHelper::ExpectSamlScreenHidden() {
-  DialogJS().ExpectHiddenPath(kSamlContainer);
+void LockScreenReauthDialogTestHelper::ExpectSigninWebviewHidden() {
+  DialogJS().ExpectHiddenPath(kWebviewContainer);
+}
+
+void LockScreenReauthDialogTestHelper::ExpectGaiaScreenVisible() {
+  DialogJS().ExpectAttributeEQ("isDefaultSsoProvider", {"main-element"}, false);
 }
 
 void LockScreenReauthDialogTestHelper::ExpectSamlConfirmPasswordVisible() {
@@ -262,42 +274,39 @@ test::JSChecker LockScreenReauthDialogTestHelper::SigninFrameJS() {
 }
 
 void LockScreenReauthDialogTestHelper::WaitForAuthenticatorToLoad() {
-  base::RunLoop run_loop;
-  if (!main_handler_->IsAuthenticatorLoaded(run_loop.QuitClosure())) {
-    run_loop.Run();
+  base::test::TestFuture<void> future;
+  if (!main_handler_->IsAuthenticatorLoaded(future.GetCallback())) {
+    EXPECT_TRUE(future.Wait());
   }
 }
 
 void LockScreenReauthDialogTestHelper::WaitForReauthDialogToClose() {
-  base::RunLoop run_loop;
-  if (!password_sync_manager_->IsReauthDialogClosedForTesting(
-          run_loop.QuitClosure())) {
-    run_loop.Run();
+  base::test::TestFuture<void> future;
+  if (!reauth_dialog_->IsClosedForTesting(future.GetCallback())) {
+    EXPECT_TRUE(future.Wait());
   }
 }
 
 void LockScreenReauthDialogTestHelper::WaitForReauthDialogToLoad() {
-  base::RunLoop run_loop;
-  if (!password_sync_manager_->IsReauthDialogLoadedForTesting(
-          run_loop.QuitClosure())) {
-    run_loop.Run();
+  base::test::TestFuture<void> future;
+  if (!reauth_dialog_->IsLoadedForTesting(future.GetCallback())) {
+    EXPECT_TRUE(future.Wait());
   }
 }
 
 void LockScreenReauthDialogTestHelper::WaitForNetworkDialogToLoad() {
   CHECK(reauth_dialog_);
-  base::RunLoop run_loop;
-  if (!reauth_dialog_->IsNetworkDialogLoadedForTesting(
-          run_loop.QuitClosure())) {
-    run_loop.Run();
+  base::test::TestFuture<void> future;
+  if (!reauth_dialog_->IsNetworkDialogLoadedForTesting(future.GetCallback())) {
+    EXPECT_TRUE(future.Wait());
   }
 }
 
 void LockScreenReauthDialogTestHelper::WaitForCaptivePortalDialogToLoad() {
-  base::RunLoop run_loop;
+  base::test::TestFuture<void> future;
   if (!reauth_dialog_->IsCaptivePortalDialogLoadedForTesting(
-          run_loop.QuitClosure())) {
-    run_loop.Run();
+          future.GetCallback())) {
+    EXPECT_TRUE(future.Wait());
   }
 
   captive_portal_dialog_ =
@@ -305,18 +314,16 @@ void LockScreenReauthDialogTestHelper::WaitForCaptivePortalDialogToLoad() {
 }
 
 void LockScreenReauthDialogTestHelper::WaitForCaptivePortalDialogToShow() {
-  base::RunLoop run_loop;
-  if (!captive_portal_dialog_->IsDialogShownForTesting(
-          run_loop.QuitClosure())) {
-    run_loop.Run();
+  base::test::TestFuture<void> future;
+  if (!captive_portal_dialog_->IsDialogShownForTesting(future.GetCallback())) {
+    EXPECT_TRUE(future.Wait());
   }
 }
 
 void LockScreenReauthDialogTestHelper::WaitForCaptivePortalDialogToClose() {
-  base::RunLoop run_loop;
-  if (!captive_portal_dialog_->IsDialogClosedForTesting(
-          run_loop.QuitClosure())) {
-    run_loop.Run();
+  base::test::TestFuture<void> future;
+  if (!captive_portal_dialog_->IsDialogClosedForTesting(future.GetCallback())) {
+    EXPECT_TRUE(future.Wait());
   }
 }
 

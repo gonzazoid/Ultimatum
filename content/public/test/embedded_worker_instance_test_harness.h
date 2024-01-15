@@ -14,11 +14,13 @@
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/mojom/hid/hid.mojom.h"
+#include "third_party/blink/public/mojom/usb/web_usb_service.mojom.h"
 
 namespace content {
 
 class EmbeddedWorkerInstance;
 class EmbeddedWorkerTestHelper;
+class ServiceWorkerVersion;
 
 // EmbeddedWorkerInstanceTestHarness provides helper functions to set up a test
 // environment with an EmbeddedWorkerInstance, and allow a test to test the
@@ -77,6 +79,10 @@ class EmbeddedWorkerInstanceTestHarness : public testing::Test {
       mojo::PendingReceiver<blink::mojom::HidService> receiver);
 #endif
 
+  void BindUsbServiceToWorker(
+      const GURL& origin,
+      mojo::PendingReceiver<blink::mojom::WebUsbService> receiver);
+
  protected:
   // The template constructor has to be in the header but it delegates to this
   // constructor to initialize all other members out-of-line.
@@ -86,7 +92,7 @@ class EmbeddedWorkerInstanceTestHarness : public testing::Test {
 
  private:
   std::unique_ptr<BrowserTaskEnvironment> task_environment_;
-  std::unique_ptr<EmbeddedWorkerInstance> worker_;
+  scoped_refptr<content::ServiceWorkerVersion> worker_version_;
 };
 
 }  // namespace content

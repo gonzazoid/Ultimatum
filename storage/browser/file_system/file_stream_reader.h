@@ -12,7 +12,11 @@
 #include "base/compiler_specific.h"
 #include "base/component_export.h"
 #include "base/files/file.h"
+#include "base/functional/callback_forward.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/weak_ptr.h"
+#include "components/file_access/scoped_file_access.h"
+#include "components/file_access/scoped_file_access_delegate.h"
 #include "components/services/storage/public/cpp/filesystem/filesystem_proxy.h"
 #include "net/base/completion_once_callback.h"
 
@@ -45,28 +49,9 @@ class FileStreamReader {
       scoped_refptr<base::TaskRunner> task_runner,
       const base::FilePath& file_path,
       int64_t initial_offset,
-      const base::Time& expected_modification_time);
-
-  // Creates a new FileReader for a local file |file_path|, which is a
-  // relative path into |filesystem_proxy|.  This function's behavior
-  // is otherwise identical to CreateForLocalFile other than all file operations
-  // going through |filesystem_proxy|.
-  COMPONENT_EXPORT(STORAGE_BROWSER)
-  static std::unique_ptr<FileStreamReader> CreateForFilesystemProxy(
-      scoped_refptr<base::TaskRunner> task_runner,
-      const base::FilePath& file_path,
-      std::unique_ptr<storage::FilesystemProxy> filesystem_proxy,
-      int64_t initial_offset,
-      const base::Time& expected_modification_time);
-
-  // The same as CreateForFilesystemProxy, but will emit diagnostic metrics.
-  COMPONENT_EXPORT(STORAGE_BROWSER)
-  static std::unique_ptr<FileStreamReader> CreateForIndexedDBDataItemReader(
-      scoped_refptr<base::TaskRunner> task_runner,
-      const base::FilePath& file_path,
-      std::unique_ptr<storage::FilesystemProxy> filesystem_proxy,
-      int64_t initial_offset,
-      const base::Time& expected_modification_time);
+      const base::Time& expected_modification_time,
+      file_access::ScopedFileAccessDelegate::RequestFilesAccessIOCallback
+          file_access = base::NullCallback());
 
   // Verify if the underlying file has not been modified.
   COMPONENT_EXPORT(STORAGE_BROWSER)

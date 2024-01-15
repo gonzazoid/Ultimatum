@@ -2,7 +2,6 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-USE_PYTHON3 = True
 
 
 def _CommonChecks(input_api, output_api):
@@ -14,7 +13,6 @@ def _CommonChecks(input_api, output_api):
   EXCLUDE_PATH_SUFFIXES = [
       '_browsertest.js',
       '_interactive_ui_tests.js',
-      '_accessibility_test.js',
   ]
 
   def allow_js(f):

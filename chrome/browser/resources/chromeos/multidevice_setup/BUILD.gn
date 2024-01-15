@@ -7,7 +7,7 @@ import("//third_party/closure_compiler/compile_js.gni")
 import("//tools/grit/preprocess_if_expr.gni")
 import("//tools/polymer/html_to_js.gni")
 import("//ui/webui/resources/tools/generate_grd.gni")
-import("../../tools/optimize_webui.gni")
+import("//ui/webui/resources/tools/optimize_webui.gni")
 
 preprocess_folder = "preprocessed"
 preprocess_manifest = "preprocessed_manifest.json"
@@ -18,27 +18,25 @@ if (optimize_webui) {
 
   optimize_webui("build") {
     host = "multidevice-setup"
-    js_out_files = [ "multidevice_setup_post_oobe.rollup.js" ]
     js_module_in_files = [ "multidevice_setup_post_oobe.js" ]
     input = rebase_path("$target_gen_dir/$preprocess_folder", root_build_dir)
 
     out_manifest = "$target_gen_dir/$build_manifest"
     excludes = [
-      "chrome://resources/mojo/mojo/public/js/mojo_bindings_lite.js",
-      "chrome://resources/mojo/mojo/public/mojom/base/time.mojom-lite.js",
-      "chrome://resources/mojo/chromeos/ash/components/multidevice/mojom/multidevice_types.mojom-lite.js",
       "chrome://resources/mojo/chromeos/ash/components/multidevice/mojom/multidevice_types.mojom-webui.js",
-      "chrome://resources/mojo/ash/services/device_sync/public/mojom/device_sync.mojom-lite.js",
-      "chrome://resources/mojo/ash/services/device_sync/public/mojom/device_sync.mojom-webui.js",
-      "chrome://resources/mojo/chromeos/ash/services/multidevice_setup/public/mojom/multidevice_setup.mojom-lite.js",
+      "chrome://resources/mojo/chromeos/ash/services/device_sync/public/mojom/device_sync.mojom-webui.js",
       "chrome://resources/mojo/chromeos/ash/services/multidevice_setup/public/mojom/multidevice_setup.mojom-webui.js",
     ]
 
     deps = [
       ":preprocess",
       ":preprocess_generated",
-      "../../../../../ui/webui/resources:library",
-      "../../../../../ui/webui/resources:preprocess",
+      "//ash/webui/common/resources:css_wrapper_files",
+      "//ash/webui/common/resources:html_wrapper_files",
+      "//ash/webui/common/resources:preprocess",
+      "//third_party/cros-components:cros_components_ts",
+      "//third_party/material_web_components:library",
+      "//ui/webui/resources/cr_elements:build_ts",
     ]
   }
 }
@@ -90,11 +88,18 @@ js_type_check("closure_compile") {
 }
 
 js_library("multidevice_setup_post_oobe") {
+  extra_deps = [
+    "//third_party/cros-components:cros_components_ts",
+    "//third_party/material_web_components:library",
+  ]
   deps = [
     ":post_oobe_delegate",
     "//ash/webui/common/resources/multidevice_setup:multidevice_setup",
     "//ash/webui/common/resources/multidevice_setup:multidevice_setup_delegate",
     "//third_party/polymer/v3_0/components-chromium/polymer:polymer_bundled",
+  ]
+  externs_list = [
+    "//third_party/cros-components/externs/cros_lottie_renderer_externs.js",
   ]
 }
 

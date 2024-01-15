@@ -2,16 +2,20 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {TestRunner} from 'test_runner';
+
+import * as Common from 'devtools/core/common/common.js';
+
 (async function() {
   TestRunner.addResult(`Tests that focus emulation works.\n`);
   await dumpPageFocus();
 
   TestRunner.addResult('\nEmulating page focus');
-  Common.settings.moduleSetting('emulatePageFocus').set(true);
+  Common.Settings.moduleSetting('emulatePageFocus').set(true);
   await dumpPageFocus();
 
   TestRunner.addResult('\nDisabling focus emulation');
-  Common.settings.moduleSetting('emulatePageFocus').set(false);
+  Common.Settings.moduleSetting('emulatePageFocus').set(false);
   await dumpPageFocus();
 
 

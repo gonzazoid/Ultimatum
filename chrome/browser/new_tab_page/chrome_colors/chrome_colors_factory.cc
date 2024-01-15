@@ -19,20 +19,30 @@ ChromeColorsService* ChromeColorsFactory::GetForProfile(Profile* profile) {
 
 // static
 ChromeColorsFactory* ChromeColorsFactory::GetInstance() {
-  return base::Singleton<ChromeColorsFactory>::get();
+  static base::NoDestructor<ChromeColorsFactory> instance;
+  return instance.get();
 }
 
 ChromeColorsFactory::ChromeColorsFactory()
-    : ProfileKeyedServiceFactory("ChromeColorsService") {
+    : ProfileKeyedServiceFactory(
+          "ChromeColorsService",
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOriginalOnly)
+              .Build()) {
   DependsOn(ThemeServiceFactory::GetInstance());
   DependsOn(TemplateURLServiceFactory::GetInstance());
 }
 
-ChromeColorsFactory::~ChromeColorsFactory() {}
+ChromeColorsFactory::~ChromeColorsFactory() = default;
 
-KeyedService* ChromeColorsFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+ChromeColorsFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
-  return new ChromeColorsService(Profile::FromBrowserContext(context));
+  return std::make_unique<ChromeColorsService>(
+      Profile::FromBrowserContext(context));
 }
 
 }  // namespace chrome_colors

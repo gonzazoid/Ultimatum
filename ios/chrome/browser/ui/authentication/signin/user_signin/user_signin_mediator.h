@@ -8,7 +8,7 @@
 #import <Foundation/Foundation.h>
 #import "base/ios/block_types.h"
 #import "components/signin/public/base/signin_metrics.h"
-#include "components/sync/driver/sync_service.h"
+#include "components/sync/service/sync_service.h"
 #import "ios/chrome/browser/ui/authentication/signin/signin_constants.h"
 
 @class AuthenticationFlow;
@@ -30,7 +30,7 @@ class UnifiedConsentService;
 }
 
 // Delegate that handles interactions with unified consent screen.
-@protocol UserSigninMediatorDelegate
+@protocol UserSigninMediatorDelegate <NSObject>
 
 // Returns the state of the `settingsLinkWasTapped` parameter in
 // UnifiedConsentCoordinator.
@@ -91,8 +91,8 @@ class UnifiedConsentService;
 
 // Cancels and dismisses with animation if `animated` the authentication flow
 // when sign-in is in progress.
-- (void)cancelAndDismissAuthenticationFlowAnimated:(BOOL)animated
-                                        completion:(ProceduralBlock)completion;
+- (void)interruptWithAction:(SigninCoordinatorInterrupt)action
+                 completion:(ProceduralBlock)completion;
 
 // Called when signin is finished and advanced settings link was tapped.
 - (void)onAccountSigninCompletionForAdvancedSettingsWithSuccess:(BOOL)success;

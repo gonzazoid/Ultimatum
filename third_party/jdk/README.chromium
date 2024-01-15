@@ -1,26 +1,39 @@
 Name: Java Development Kit
 Short Name: JDK
 URL: https://openjdk.java.net/
-Version: 11.0.15+10.cr0
+Version: 17
 License: GPL v2
-License File: NOT_SHIPPED
 Security Critical: no
+Shipped: no
 
 Description:
 The Java Development Kit (JDK) is a software development environment used for
 developing Java applications and applets. (linux-x64)
 
-How to update:
-For the `jdk` directory:
-1. Find the specific version you want to update from
-   https://wiki.openjdk.java.net/display/JDKUpdates/JDK11u#JDK11u-Releases
-2. Click the link "[Binaries]" for the specific version.
-3. Copy the link address of the asset "OpenJDK11U-jre_x64_linux_<specific_version>.tar.gz"
-4. Update the "download_url" and "version" in 3pp/3pp.pb with the desired values.
-5. Upload and land the CL.
-6. Wait for the 3pp packager (https://ci.chromium.org/p/chromium/builders/ci/3pp-linux-amd64-packager)
-   to create the new instance at https://chrome-infra-packages.appspot.com/p/chromium/third_party/jdk/+/
-7. Update instance ID in //DEPS
+Check Current Version:
+ * run ./print_version.sh
+ * Find the tag that looks like `version:2@<jdk version>.<md5 hash>`
+ * The version is the <jdk version> part of the tag.
+
+This Package is Auto-Rolled:
+ * Minor versions are auto-rolled.
+ * New instances are uploaded by the packager bot:
+   https://ci.chromium.org/p/chromium/builders/ci/3pp-linux-amd64-packager
+ * The bot autoruns every 6 hours. Ping a trooper or a clank-build-core@ dev to
+   trigger it if you need it sooner:
+   https://luci-scheduler.appspot.com/jobs/chromium/3pp-linux-amd64-packager
+ * New packages are rolled automatically by:
+   https://autoroll.skia.org/r/jdk-chromium
+
+To roll to a new JDK major version:
+ * Test locally that builds (with Errorprone enabled) work.
+ * Get confiramtion from chops-source-team@google.com that Kythe supports the new version.
+ * Change the package in 3pp/fetch.py
+ * Pause the auto-roller
+ * Wait for the 3pp packager to create a new package
+ * Land a manual roll:
+   * Update Instance ID in //DEPS
+   * Update Version: at the top of this file.
 
 Local Modifications:
 None

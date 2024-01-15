@@ -11,8 +11,8 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/i18n/message_formatter.h"
 #include "base/memory/raw_ptr.h"
 #include "base/strings/string_number_conversions.h"
@@ -318,7 +318,7 @@ class PaymentSheetRowBuilder {
       bool button_enabled) {
     auto button = std::make_unique<views::MdTextButton>(GetPressedCallback(),
                                                         button_string);
-    button->SetProminent(true);
+    button->SetStyle(ui::ButtonStyle::kProminent);
     button->SetID(id_);
     button->SetFocusBehavior(views::View::FocusBehavior::ALWAYS);
     button->SetEnabled(button_enabled);
@@ -347,11 +347,19 @@ PaymentSheetViewController::PaymentSheetViewController(
     base::WeakPtr<PaymentRequestSpec> spec,
     base::WeakPtr<PaymentRequestState> state,
     base::WeakPtr<PaymentRequestDialogView> dialog)
-    : PaymentRequestSheetController(spec, state, dialog) {
+    : PaymentRequestSheetController(spec, state, dialog),
+      input_protector_(
+          std::make_unique<views::InputEventActivationProtector>()) {
   DCHECK(spec);
   DCHECK(state);
   spec->AddObserver(this);
   state->AddObserver(this);
+
+  // This class is constructed as the view is being shown, so we mark it as
+  // visible now. The view may become hidden again in the future (if the user
+  // clicks into a sub-view), but we only need to defend the initial showing
+  // against acccidental clicks on [Continue] and so this location suffices.
+  input_protector_->VisibilityChanged(/*is_visible=*/true);
 }
 
 PaymentSheetViewController::~PaymentSheetViewController() {
@@ -381,6 +389,15 @@ void PaymentSheetViewController::ButtonPressed(base::RepeatingClosure closure) {
     spec()->reset_retry_error_message();
     UpdateContentView();
   }
+}
+
+PaymentRequestSheetController::ButtonCallback
+PaymentSheetViewController::GetPrimaryButtonCallback() {
+  PaymentRequestSheetController::ButtonCallback parent_callback =
+      PaymentRequestSheetController::GetPrimaryButtonCallback();
+  return base::BindRepeating(
+      &PaymentSheetViewController::PossiblyIgnorePrimaryButtonPress,
+      weak_ptr_factory_.GetWeakPtr(), std::move(parent_callback));
 }
 
 std::u16string PaymentSheetViewController::GetSecondaryButtonLabel() {
@@ -461,6 +478,16 @@ void PaymentSheetViewController::FillContentView(views::View* content_view) {
 std::unique_ptr<views::View>
 PaymentSheetViewController::CreateExtraFooterView() {
   return CreateProductLogoFooterView();
+}
+
+bool PaymentSheetViewController::GetSheetId(DialogViewID* sheet_id) {
+  *sheet_id = DialogViewID::PAYMENT_REQUEST_SHEET;
+  return true;
+}
+
+base::WeakPtr<PaymentRequestSheetController>
+PaymentSheetViewController::GetWeakPtr() {
+  return weak_ptr_factory_.GetWeakPtr();
 }
 
 // Creates the Order Summary row, which contains an "Order Summary" label,
@@ -732,7 +759,7 @@ PaymentSheetViewController::CreateContactInfoRow() {
                                     l10n_util::GetStringUTF16(IDS_ADD),
                                     /*button_enabled=*/true);
   }
-  static constexpr autofill::ServerFieldType kLabelFields[] = {
+  static constexpr autofill::FieldType kLabelFields[] = {
       autofill::NAME_FULL, autofill::PHONE_HOME_WHOLE_NUMBER,
       autofill::EMAIL_ADDRESS};
   const std::u16string preview =
@@ -891,6 +918,15 @@ void PaymentSheetViewController::AddContactInfoButtonPressed() {
       base::BindRepeating(&PaymentRequestState::AddAutofillContactProfile,
                           state(), true),
       nullptr);
+}
+
+void PaymentSheetViewController::PossiblyIgnorePrimaryButtonPress(
+    PaymentRequestSheetController::ButtonCallback callback,
+    const ui::Event& event) {
+  if (input_protector_->IsPossiblyUnintendedInteraction(event)) {
+    return;
+  }
+  callback.Run(event);
 }
 
 }  // namespace payments

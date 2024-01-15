@@ -4,7 +4,6 @@
 
 #include "gpu/ipc/service/image_transport_surface.h"
 
-#include "gpu/ipc/service/pass_through_image_transport_surface.h"
 #include "ui/gl/gl_surface.h"
 #include "ui/gl/gl_surface_stub.h"
 #include "ui/gl/init/gl_factory.h"
@@ -12,7 +11,15 @@
 namespace gpu {
 
 // static
-scoped_refptr<gl::GLSurface> ImageTransportSurface::CreateNativeSurface(
+scoped_refptr<gl::Presenter> ImageTransportSurface::CreatePresenter(
+    gl::GLDisplay* display,
+    base::WeakPtr<ImageTransportSurfaceDelegate> delegate,
+    SurfaceHandle surface_handle) {
+  return nullptr;
+}
+
+// static
+scoped_refptr<gl::GLSurface> ImageTransportSurface::CreateNativeGLSurface(
     gl::GLDisplay* display,
     base::WeakPtr<ImageTransportSurfaceDelegate> delegate,
     SurfaceHandle surface_handle,
@@ -22,13 +29,7 @@ scoped_refptr<gl::GLSurface> ImageTransportSurface::CreateNativeSurface(
     return new gl::GLSurfaceStub;
   }
 
-  scoped_refptr<gl::GLSurface> surface =
-      gl::init::CreateViewGLSurface(display, surface_handle);
-
-  if (!surface)
-    return surface;
-  return base::MakeRefCounted<PassThroughImageTransportSurface>(
-      delegate, surface.get(), false);
+  return gl::init::CreateViewGLSurface(display, surface_handle);
 }
 
 }  // namespace gpu

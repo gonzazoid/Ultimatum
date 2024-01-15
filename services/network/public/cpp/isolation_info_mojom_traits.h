@@ -44,10 +44,7 @@ struct COMPONENT_EXPORT(NETWORK_CPP_BASE)
 
   static const absl::optional<url::Origin>& frame_origin(
       const net::IsolationInfo& input) {
-    return base::FeatureList::IsEnabled(
-               net::features::kForceIsolationInfoFrameOriginToTopLevelFrame)
-               ? input.top_frame_origin()
-               : input.frame_origin();
+    return input.frame_origin();
   }
 
   static const absl::optional<base::UnguessableToken>& nonce(
@@ -58,11 +55,6 @@ struct COMPONENT_EXPORT(NETWORK_CPP_BASE)
   static const net::SiteForCookies& site_for_cookies(
       const net::IsolationInfo& input) {
     return input.site_for_cookies();
-  }
-
-  static const absl::optional<std::set<net::SchemefulSite>>& party_context(
-      const net::IsolationInfo& input) {
-    return input.party_context_;
   }
 
   static bool Read(network::mojom::IsolationInfoDataView data,

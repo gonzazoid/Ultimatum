@@ -2,9 +2,9 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-// #import {OOBE_UI_STATE} from '../display_manager_types.m.js';
-// #import {OobeTypes} from '../oobe_types.m.js';
-// #import {Oobe} from '../../cr_ui.m.js';
+import {Oobe} from '../../cr_ui.js';
+import {OOBE_UI_STATE} from '../display_manager_types.js';
+import {OobeTypes} from '../oobe_types.js';
 
 /**
  * @fileoverview
@@ -14,7 +14,7 @@
 const CALLBACK_USER_ACTED = 'userActed';
 
 /** @polymerBehavior */
-/* #export */ var LoginScreenBehavior = {
+export const LoginScreenBehavior = {
   // List of methods exported to login.screenName.<method> API.
   // This is expected to be overridden by the Polymer object using this
   // behavior.
@@ -74,29 +74,13 @@ const CALLBACK_USER_ACTED = 'userActed';
   },
 
   /**
-   * Returns minimal size that screen prefers to have. Default implementation
-   * returns current screen size.
-   * @return {{width: number, height: number}}
-   */
-  getPreferredSize() {
-    return {width: this.offsetWidth, height: this.offsetHeight};
-  },
-
-  /**
    * Returns UI state to be used when showing this screen. Default
    * implementation returns OOBE_UI_STATE.HIDDEN.
-   * @return number} The state (see OOBE_UI_STATE) of the OOBE UI.
+   * @return {OOBE_UI_STATE} The state of the OOBE UI.
    */
   getOobeUIInitialState() {
     return OOBE_UI_STATE.HIDDEN;
   },
-
-  /**
-   * If defined, invoked for the currently active screen when screen size
-   * changes.
-   * @type {function()|undefined}
-   */
-  onWindowResize: undefined,
 
   /**
    * If defined, invoked when tablet mode is changed.
@@ -139,32 +123,21 @@ const CALLBACK_USER_ACTED = 'userActed';
   },
 };
 
-/**
- * TODO(alemate): Replace with an interface. b/24294625
- * @typedef {{
- *   attached: function()
- * }}
- */
-LoginScreenBehavior.Proto;
-
 /** @interface */
-/* #export */ class LoginScreenBehaviorInterface {
-  /**
-   * @param {string} screenName
-   */
+export class LoginScreenBehaviorInterface {
+  /** @param {string} screenName */
   initializeLoginScreen(screenName) {}
-
+  /** @param {string|Array<?>} action_id */
   userActed(action_id) {}
-
-  /** return {!Array<string>} */
-  get EXTERNAL_API() {
-    return [];
-  }
-
-  /**
-   * @return {Object}
-   */
-  get defaultControl() {
-    return this;
-  }
+  /** @return {OOBE_UI_STATE} */
+  getOobeUIInitialState() {}
+  /** @return {!Array<string>} */
+  get EXTERNAL_API() {}
+  /** @return {HTMLElement|null} */
+  get defaultControl() {}
+  /** @param {boolean} isInTabletMode */
+  setTabletModeState(isInTabletMode) {}
+  updateLocalizedContent() {}
+  /** @param {!OobeTypes.OobeConfiguration} configuration */
+  updateOobeConfiguration(configuration) {}
 }

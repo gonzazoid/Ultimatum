@@ -8,14 +8,15 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/containers/adapters.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/strings/string_piece.h"
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
 #include "base/task/sequenced_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
+#include "components/safe_browsing/core/common/features.h"
 #include "net/base/url_util.h"
 #include "url/url_util.h"
 
@@ -183,14 +184,16 @@ AwSafeBrowsingAllowlistManager::AwSafeBrowsingAllowlistManager(
     const scoped_refptr<base::SequencedTaskRunner>& io_task_runner)
     : background_task_runner_(background_task_runner),
       io_task_runner_(io_task_runner),
-      ui_task_runner_(base::ThreadTaskRunnerHandle::Get()),
+      ui_task_runner_(base::SingleThreadTaskRunner::GetCurrentDefault()),
       allowlist_(std::make_unique<TrieNode>()) {}
 
 AwSafeBrowsingAllowlistManager::~AwSafeBrowsingAllowlistManager() {}
 
 void AwSafeBrowsingAllowlistManager::SetAllowlist(
     std::unique_ptr<TrieNode> allowlist) {
-  DCHECK(io_task_runner_->RunsTasksInCurrentSequence());
+  DCHECK(base::FeatureList::IsEnabled(safe_browsing::kSafeBrowsingOnUIThread)
+             ? ui_task_runner_->RunsTasksInCurrentSequence()
+             : io_task_runner_->RunsTasksInCurrentSequence());
   allowlist_ = std::move(allowlist);
 }
 
@@ -209,9 +212,13 @@ void AwSafeBrowsingAllowlistManager::BuildAllowlist(
                             base::BindOnce(std::move(callback), success));
 
   if (success) {
+    auto task_runner =
+        base::FeatureList::IsEnabled(safe_browsing::kSafeBrowsingOnUIThread)
+            ? ui_task_runner_
+            : io_task_runner_;
     // use base::Unretained as AwSafeBrowsingAllowlistManager is a singleton and
     // not cleaned.
-    io_task_runner_->PostTask(
+    task_runner->PostTask(
         FROM_HERE,
         base::BindOnce(&AwSafeBrowsingAllowlistManager::SetAllowlist,
                        base::Unretained(this), std::move(allowlist)));
@@ -231,7 +238,9 @@ void AwSafeBrowsingAllowlistManager::SetAllowlistOnUIThread(
 }
 
 bool AwSafeBrowsingAllowlistManager::IsUrlAllowed(const GURL& url) const {
-  DCHECK(io_task_runner_->RunsTasksInCurrentSequence());
+  DCHECK(base::FeatureList::IsEnabled(safe_browsing::kSafeBrowsingOnUIThread)
+             ? ui_task_runner_->RunsTasksInCurrentSequence()
+             : io_task_runner_->RunsTasksInCurrentSequence());
   if (!url.has_host()) {
     return false;
   }

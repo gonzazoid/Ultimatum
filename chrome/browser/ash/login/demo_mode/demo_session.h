@@ -9,13 +9,14 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_multi_source_observation.h"
 #include "base/scoped_observation.h"
 #include "base/values.h"
 #include "chrome/browser/ash/login/demo_mode/demo_extensions_external_loader.h"
+#include "chrome/browser/ash/login/demo_mode/demo_mode_window_closer.h"
 #include "chrome/browser/component_updater/cros_component_manager.h"
 #include "chromeos/dbus/power/power_manager_client.h"
 #include "components/services/app_service/public/cpp/app_registry_cache.h"
@@ -44,7 +45,6 @@ class DemoComponents;
 class DemoSession : public session_manager::SessionManagerObserver,
                     public user_manager::UserManager::UserSessionStateObserver,
                     public extensions::AppWindowRegistry::Observer,
-                    public apps::AppRegistryCache::Observer,
                     public chromeos::PowerManagerClient::Observer {
  public:
   // Type of demo mode configuration.
@@ -120,9 +120,6 @@ class DemoSession : public session_manager::SessionManagerObserver,
   // instance has not yet been initialized (either by calling
   // StartIfInDemoMode() or PreloadOfflineResourcesIfInDemoMode()).
   static DemoSession* Get();
-
-  // Returns an additional comma-separated language list for demo mode.
-  static std::string GetAdditionalLanguageList();
 
   // Returns the id of the screensaver app based on the board name.
   static std::string GetScreensaverAppId();
@@ -202,10 +199,6 @@ class DemoSession : public session_manager::SessionManagerObserver,
   // as apps and media.
   void InstallDemoResources();
 
-  // Installs the CRX file from an update URL. Observes `AppRegistryCache` to
-  // launch the app upon installation.
-  void InstallAppFromUpdateUrl(const std::string& id);
-
   // Find image path then show the splash screen.
   void ConfigureAndStartSplashScreen();
 
@@ -223,15 +216,14 @@ class DemoSession : public session_manager::SessionManagerObserver,
   // session_manager::SessionManagerObserver:
   void OnSessionStateChanged() override;
 
-  // apps::AppRegistryCache::Observer:
-  void OnAppUpdate(const apps::AppUpdate& update) override;
-  void OnAppRegistryCacheWillBeDestroyed(
-      apps::AppRegistryCache* cache) override;
-
   // Once received the keyboard brightness percentage, increase the keyboard
   // brightness to the max level.
   void SetKeyboardBrightnessToOneHundredPercentFromCurrentLevel(
-      absl::optional<double> keyboard_brightness_percentage);
+      std::optional<double> keyboard_brightness_percentage);
+
+  // Allocate the device to a group in the experiment and register the
+  // synthetic field trial.
+  void RegisterDemoModeAAExperiment();
 
   // Whether demo session has been started.
   bool started_ = false;
@@ -250,15 +242,14 @@ class DemoSession : public session_manager::SessionManagerObserver,
                                      extensions::AppWindowRegistry::Observer>
       app_window_registry_observations_{this};
 
-  base::ScopedMultiSourceObservation<apps::AppRegistryCache,
-                                     apps::AppRegistryCache::Observer>
-      app_registry_cache_observation_{this};
-
   scoped_refptr<DemoExtensionsExternalLoader> extensions_external_loader_;
 
   // The fallback timer that ensures the splash screen is removed in case the
   // screensaver app takes an extra long time to be shown.
   std::unique_ptr<base::OneShotTimer> remove_splash_screen_fallback_timer_;
+
+  // Constructed when the demo mode user session starts.
+  std::unique_ptr<DemoModeWindowCloser> window_closer_;
 
   bool splash_screen_removed_ = false;
   bool screensaver_activated_ = false;
@@ -267,11 +258,5 @@ class DemoSession : public session_manager::SessionManagerObserver,
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove after the //chrome/browser/chromeos
-// source migration is finished.
-namespace chromeos {
-using ::ash::DemoSession;
-}
 
 #endif  // CHROME_BROWSER_ASH_LOGIN_DEMO_MODE_DEMO_SESSION_H_

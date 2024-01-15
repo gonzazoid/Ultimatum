@@ -7,9 +7,9 @@
 #include <limits>
 #include <utility>
 
+#include "components/viz/test/test_in_process_context_provider.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
-#include "ui/compositor/test/in_process_context_provider.h"
 
 namespace content {
 namespace {
@@ -55,19 +55,8 @@ void TestImageTransportFactory::CreateLayerTreeFrameSink(
 
 scoped_refptr<viz::ContextProvider>
 TestImageTransportFactory::SharedMainThreadContextProvider() {
-  if (shared_main_context_provider_ &&
-      shared_main_context_provider_->ContextGL()->GetGraphicsResetStatusKHR() ==
-          GL_NO_ERROR)
-    return shared_main_context_provider_;
-
-  constexpr bool kSupportsLocking = false;
-  shared_main_context_provider_ = ui::InProcessContextProvider::CreateOffscreen(
-      &gpu_memory_buffer_manager_, &image_factory_, kSupportsLocking);
-  auto result = shared_main_context_provider_->BindToCurrentSequence();
-  if (result != gpu::ContextResult::kSuccess)
-    shared_main_context_provider_ = nullptr;
-
-  return shared_main_context_provider_;
+  NOTIMPLEMENTED();
+  return nullptr;
 }
 
 scoped_refptr<viz::RasterContextProvider>

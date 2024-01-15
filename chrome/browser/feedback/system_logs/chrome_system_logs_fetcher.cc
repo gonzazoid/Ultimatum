@@ -11,6 +11,7 @@
 #include "chrome/browser/feedback/system_logs/log_sources/chrome_internal_log_source.h"
 #include "chrome/browser/feedback/system_logs/log_sources/crash_ids_source.h"
 #include "chrome/browser/feedback/system_logs/log_sources/memory_details_log_source.h"
+#include "chrome/browser/feedback/system_logs/log_sources/performance_log_source.h"
 #include "chrome/common/extensions/extension_constants.h"
 #include "components/feedback/system_logs/system_logs_fetcher.h"
 
@@ -18,13 +19,15 @@
 #include "base/files/file_path.h"
 #include "chrome/browser/ash/crosapi/browser_manager.h"
 #include "chrome/browser/ash/crosapi/browser_util.h"
+#include "chrome/browser/ash/system_logs/app_service_log_source.h"
 #include "chrome/browser/ash/system_logs/bluetooth_log_source.h"
 #include "chrome/browser/ash/system_logs/command_line_log_source.h"
 #include "chrome/browser/ash/system_logs/connected_input_devices_log_source.h"
 #include "chrome/browser/ash/system_logs/crosapi_system_log_source.h"
 #include "chrome/browser/ash/system_logs/dbus_log_source.h"
 #include "chrome/browser/ash/system_logs/debug_daemon_log_source.h"
-#include "chrome/browser/ash/system_logs/device_event_log_source.h"
+#include "chrome/browser/ash/system_logs/device_data_manager_input_devices_log_source.h"
+#include "chrome/browser/ash/system_logs/input_event_converter_log_source.h"
 #include "chrome/browser/ash/system_logs/iwlwifi_dump_log_source.h"
 #include "chrome/browser/ash/system_logs/network_health_source.h"
 #include "chrome/browser/ash/system_logs/reven_log_source.h"
@@ -33,6 +36,7 @@
 #include "chrome/browser/ash/system_logs/traffic_counters_log_source.h"
 #include "chrome/browser/ash/system_logs/ui_hierarchy_log_source.h"
 #include "chrome/browser/ash/system_logs/virtual_keyboard_log_source.h"
+#include "chrome/browser/feedback/system_logs/log_sources/device_event_log_source.h"
 #endif
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
@@ -56,6 +60,7 @@ SystemLogsFetcher* BuildChromeSystemLogsFetcher(bool scrub_data) {
   fetcher->AddSource(std::make_unique<ChromeInternalLogSource>());
   fetcher->AddSource(std::make_unique<CrashIdsSource>());
   fetcher->AddSource(std::make_unique<MemoryDetailsLogSource>());
+  fetcher->AddSource(std::make_unique<PerformanceLogSource>());
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   // These sources rely on scrubbing in SystemLogsFetcher.
@@ -65,14 +70,19 @@ SystemLogsFetcher* BuildChromeSystemLogsFetcher(bool scrub_data) {
   fetcher->AddSource(std::make_unique<DeviceEventLogSource>());
   fetcher->AddSource(std::make_unique<IwlwifiDumpChecker>());
   fetcher->AddSource(std::make_unique<TouchLogSource>());
+  fetcher->AddSource(std::make_unique<InputEventConverterLogSource>());
   fetcher->AddSource(std::make_unique<ConnectedInputDevicesLogSource>());
+  fetcher->AddSource(
+      std::make_unique<DeviceDataManagerInputDevicesLogSource>());
   fetcher->AddSource(std::make_unique<TrafficCountersLogSource>());
 
   // Data sources that directly scrub itentifiable information.
   fetcher->AddSource(std::make_unique<DebugDaemonLogSource>(scrub_data));
-  fetcher->AddSource(std::make_unique<NetworkHealthSource>(scrub_data));
+  fetcher->AddSource(std::make_unique<NetworkHealthSource>(
+      scrub_data, /*include_guid_when_not_scrub=*/false));
 
   fetcher->AddSource(std::make_unique<VirtualKeyboardLogSource>());
+  fetcher->AddSource(std::make_unique<AppServiceLogSource>());
 #if BUILDFLAG(IS_CHROMEOS_WITH_HW_DETAILS)
   fetcher->AddSource(std::make_unique<RevenLogSource>());
 #endif

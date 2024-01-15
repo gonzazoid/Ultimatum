@@ -4,8 +4,10 @@
 
 #include "chrome/browser/web_applications/isolated_web_apps/policy/isolated_web_app_external_install_options.h"
 
-#include "base/strings/stringprintf.h"
+#include <utility>
+
 #include "base/types/expected.h"
+#include "base/types/expected_macros.h"
 #include "base/values.h"
 #include "chrome/browser/web_applications/isolated_web_apps/policy/isolated_web_app_policy_constants.h"
 #include "components/web_package/signed_web_bundles/signed_web_bundle_id.h"
@@ -19,6 +21,9 @@ IsolatedWebAppExternalInstallOptions::IsolatedWebAppExternalInstallOptions(
   DCHECK(update_manifest_url_.is_valid());
 }
 
+IsolatedWebAppExternalInstallOptions::IsolatedWebAppExternalInstallOptions(
+    const IsolatedWebAppExternalInstallOptions& other) = default;
+
 IsolatedWebAppExternalInstallOptions::~IsolatedWebAppExternalInstallOptions() =
     default;
 
@@ -30,8 +35,10 @@ IsolatedWebAppExternalInstallOptions::FromPolicyPrefValue(
     return base::unexpected("Policy entry is not dictionary");
   }
 
+  const base::Value::Dict& entry_dict = entry.GetDict();
+
   const std::string* const update_manifest_url_raw =
-      entry.FindStringKey(kUpdateManifestUrlKey);
+      entry_dict.FindString(kPolicyUpdateManifestUrlKey);
   if (!update_manifest_url_raw) {
     return base::unexpected(
         "Update manifest URL value is not found or has the wrong type");
@@ -43,27 +50,25 @@ IsolatedWebAppExternalInstallOptions::FromPolicyPrefValue(
   }
 
   const std::string* const web_bundle_id_raw =
-      entry.FindStringKey(kWebBundleIdKey);
+      entry_dict.FindString(kPolicyWebBundleIdKey);
   if (!web_bundle_id_raw) {
     return base::unexpected(
         "Web Bundle ID value is not found or has the wrong type");
   }
 
-  const base::expected<web_package::SignedWebBundleId, std::string>
-      web_bundle_id =
-          web_package::SignedWebBundleId::Create(*web_bundle_id_raw);
-  if (!web_bundle_id.has_value()) {
-    return base::unexpected(base::StringPrintf("Wrong Web Bundle ID value: %s",
-                                               web_bundle_id.error().c_str()));
-  }
+  ASSIGN_OR_RETURN(auto web_bundle_id,
+                   web_package::SignedWebBundleId::Create(*web_bundle_id_raw),
+                   [](std::string error) {
+                     return "Wrong Web Bundle ID value: " + std::move(error);
+                   });
 
-  if (web_bundle_id->type() !=
+  if (web_bundle_id.type() !=
       web_package::SignedWebBundleId::Type::kEd25519PublicKey) {
     return base::unexpected("The Wed Bundle Id is not Ed25519 public key");
   }
 
   return IsolatedWebAppExternalInstallOptions(update_manifest_url,
-                                              web_bundle_id.value());
+                                              web_bundle_id);
 }
 
 }  // namespace web_app

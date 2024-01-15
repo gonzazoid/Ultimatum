@@ -8,7 +8,8 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "chrome/browser/ash/settings/cros_settings.h"
@@ -45,7 +46,7 @@ namespace system {
 //   2) If a session is in progress, the session is terminated. After Chrome has
 //      restarted on the login screen, the disabled screen is shown per 1).
 //   This ensures that when a device is disabled, there is never any user
-//   session running in the backround.
+//   session running in the background.
 //   When the device is re-enabled, Chrome is restarted once more to resume the
 //   regular login screen flows from a known-good point.
 class DeviceDisablingManager {
@@ -124,10 +125,10 @@ class DeviceDisablingManager {
 
   void UpdateFromCrosSettings();
 
-  Delegate* delegate_;
-  policy::BrowserPolicyConnectorAsh* browser_policy_connector_;
-  CrosSettings* cros_settings_;
-  user_manager::UserManager* user_manager_;
+  raw_ptr<Delegate> delegate_;
+  raw_ptr<policy::BrowserPolicyConnectorAsh> browser_policy_connector_;
+  raw_ptr<CrosSettings> cros_settings_;
+  raw_ptr<user_manager::UserManager> user_manager_;
 
   base::ObserverList<Observer>::Unchecked observers_;
 
@@ -152,13 +153,5 @@ class DeviceDisablingManager {
 
 }  // namespace system
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when Chrome OS code migration is
-// done.
-namespace chromeos {
-namespace system {
-using ::ash::system::DeviceDisablingManager;
-}  // namespace system
-}  // namespace chromeos
 
 #endif  // CHROME_BROWSER_ASH_SYSTEM_DEVICE_DISABLING_MANAGER_H_

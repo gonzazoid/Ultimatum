@@ -5,6 +5,7 @@
 #include "components/ntp_tiles/features.h"
 
 #include "base/feature_list.h"
+#include "base/metrics/field_trial_params.h"
 #include "build/build_config.h"
 #include "ui/base/ui_base_features.h"
 

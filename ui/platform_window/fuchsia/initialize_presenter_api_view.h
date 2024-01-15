@@ -8,8 +8,8 @@
 #include <fuchsia/element/cpp/fidl.h>
 #include <fuchsia/ui/views/cpp/fidl.h>
 
-#include "base/callback.h"
 #include "base/component_export.h"
+#include "base/functional/callback.h"
 #include "ui/platform_window/platform_window_init_properties.h"
 
 namespace ui {
@@ -23,12 +23,6 @@ using ScenicPresentViewCallback =
 using FlatlandPresentViewCallback =
     base::RepeatingCallback<::fuchsia::element::ViewControllerPtr(
         ::fuchsia::ui::views::ViewportCreationToken)>;
-
-// Generates and sets the view tokens that are required to utilize the
-// Presenter API. |window_properties_out| must be a valid value.
-COMPONENT_EXPORT(PLATFORM_WINDOW)
-void InitializeViewTokenAndPresentView(
-    ui::PlatformWindowInitProperties* window_properties_out);
 
 // Register and exposes an API that let OzonePlatformScenic present new views.
 // TODO(1241868): Once workstation offers the right FIDL API to open new

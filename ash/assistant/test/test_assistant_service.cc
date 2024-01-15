@@ -8,7 +8,7 @@
 #include <utility>
 #include <vector>
 
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
 #include "base/unguessable_token.h"
 #include "chromeos/ash/services/assistant/public/cpp/assistant_service.h"
@@ -112,16 +112,16 @@ class CurrentInteractionSubscriber : public AssistantInteractionSubscriber {
 
   void OnInteractionFinished(
       AssistantInteractionResolution resolution) override {
-    current_interaction_ = absl::nullopt;
+    current_interaction_ = std::nullopt;
   }
 
-  absl::optional<AssistantInteractionMetadata> current_interaction() {
+  std::optional<AssistantInteractionMetadata> current_interaction() {
     return current_interaction_;
   }
 
  private:
-  absl::optional<AssistantInteractionMetadata> current_interaction_ =
-      absl::nullopt;
+  std::optional<AssistantInteractionMetadata> current_interaction_ =
+      std::nullopt;
 };
 
 class InteractionResponse::Response {
@@ -205,16 +205,13 @@ void TestAssistantService::SetInteractionResponse(
   interaction_response_ = std::move(response);
 }
 
-absl::optional<AssistantInteractionMetadata>
+std::optional<AssistantInteractionMetadata>
 TestAssistantService::current_interaction() {
   return current_interaction_subscriber_->current_interaction();
 }
 
 void TestAssistantService::StartEditReminderInteraction(
     const std::string& client_id) {}
-
-void TestAssistantService::StartScreenContextInteraction(
-    const std::vector<uint8_t>& assistant_screenshot) {}
 
 void TestAssistantService::StartTextInteraction(
     const std::string& query,
@@ -288,7 +285,7 @@ void TestAssistantService::StartInteraction(
   }
 
   // Pretend to respond asynchronously.
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&TestAssistantService::InteractionStarted,
                      weak_factory_.GetWeakPtr(), type, source, query));

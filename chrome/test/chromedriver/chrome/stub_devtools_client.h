@@ -24,10 +24,11 @@ class StubDevToolsClient : public DevToolsClient {
   const std::string& SessionId() const override;
   const std::string& TunnelSessionId() const override;
   Status SetTunnelSessionId(std::string session_id) override;
-  Status StartBidiServer(std::string bidi_mapper_script) override;
+  Status StartBidiServer(std::string bidi_mapper_script,
+                         const base::Value::Dict& mapper_options) override;
   bool IsNull() const override;
   bool WasCrashed() override;
-  Status ConnectIfNecessary() override;
+  bool IsConnected() const override;
   Status PostBidiCommand(base::Value::Dict command) override;
   Status SendCommand(const std::string& method,
                      const base::Value::Dict& params) override;
@@ -41,14 +42,15 @@ class StubDevToolsClient : public DevToolsClient {
                           const base::Value::Dict& params) override;
   Status SendCommandAndGetResult(const std::string& method,
                                  const base::Value::Dict& params,
-                                 base::Value* result) override;
+                                 base::Value::Dict* result) override;
   Status SendCommandAndGetResultWithTimeout(const std::string& method,
                                             const base::Value::Dict& params,
                                             const Timeout* timeout,
-                                            base::Value* result) override;
+                                            base::Value::Dict* result) override;
   Status SendCommandAndIgnoreResponse(const std::string& method,
                                       const base::Value::Dict& params) override;
   void AddListener(DevToolsEventListener* listener) override;
+  void RemoveListener(DevToolsEventListener* listener) override;
   Status HandleEventsUntil(const ConditionalFunc& conditional_func,
                            const Timeout& timeout) override;
   Status HandleReceivedEvents() override;
@@ -64,6 +66,8 @@ class StubDevToolsClient : public DevToolsClient {
   std::string session_id_;
   std::string tunnel_session_id_;
   std::list<DevToolsEventListener*> listeners_;
+  raw_ptr<WebViewImpl> owner_ = nullptr;
+  bool is_connected_ = false;
 };
 
 #endif  // CHROME_TEST_CHROMEDRIVER_CHROME_STUB_DEVTOOLS_CLIENT_H_

@@ -29,6 +29,7 @@ class SANDBOX_EXPORT SyscallSets {
   // a new file descriptor or otherwise perform an operation directly
   // via a path.
   static bool IsFileSystem(int sysno);
+  static bool IsTruncate(int sysno);
   static bool IsAllowedFileSystemAccessViaFd(int sysno);
   static bool IsDeniedFileSystemAccessViaFd(int sysno);
   static bool IsGetSimpleId(int sysno);
@@ -42,7 +43,6 @@ class SANDBOX_EXPORT SyscallSets {
   // It's difficult to restrict those, but there is attack surface here.
   static bool IsAllowedFutex(int sysno);
   static bool IsAllowedEpoll(int sysno);
-  static bool IsAllowedGetOrModifySocket(int sysno);
   static bool IsDeniedGetOrModifySocket(int sysno);
 
 #if defined(__i386__) || \

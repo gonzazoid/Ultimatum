@@ -11,8 +11,8 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/compiler_specific.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/strings/string_number_conversions.h"
@@ -20,7 +20,6 @@
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/bind.h"
 #include "base/time/time.h"
-#include "chrome/browser/chrome_notification_types.h"
 #include "chrome/browser/sessions/chrome_tab_restore_service_client.h"
 #include "chrome/browser/sessions/exit_type_service.h"
 #include "chrome/browser/sessions/session_service.h"
@@ -45,8 +44,6 @@
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/navigation_controller.h"
 #include "content/public/browser/navigation_entry.h"
-#include "content/public/browser/notification_service.h"
-#include "content/public/browser/notification_types.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/test/render_view_test.h"
 #include "content/public/test/test_utils.h"
@@ -342,7 +339,7 @@ class TabRestoreServiceImplTest : public ChromeRenderViewHostTestHarness {
   blink::UserAgentOverride user_agent_override_;
   std::unique_ptr<sessions::LiveTab> live_tab_;
   std::unique_ptr<sessions::TabRestoreServiceImpl> service_;
-  raw_ptr<TabRestoreTimeFactory> time_factory_;
+  raw_ptr<TabRestoreTimeFactory, DanglingUntriaged> time_factory_;
   SessionID window_id_;
   SessionID tab_id_;
 };
@@ -365,7 +362,8 @@ class TabRestoreServiceImplWithMockClientTest
         std::move(service_client), profile()->GetPrefs(), time_factory_);
   }
 
-  raw_ptr<MockTabRestoreServiceClient> mock_tab_restore_service_client_;
+  raw_ptr<MockTabRestoreServiceClient, DanglingUntriaged>
+      mock_tab_restore_service_client_;
 };
 
 TEST_F(TabRestoreServiceImplTest, Basic) {

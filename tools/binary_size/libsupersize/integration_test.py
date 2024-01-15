@@ -21,6 +21,7 @@ import data_quality
 import describe
 import diff
 import file_format
+import json_config_parser
 import models
 import pakfile
 import test_util
@@ -63,9 +64,13 @@ _TEST_APK_OTHER_FILE_PATH = 'assets/icudtl.dat'
 _TEST_APK_RES_FILE_PATH = 'res/drawable-v13/test.xml'
 
 _TEST_CONFIG_JSON = os.path.join(_TEST_DATA_DIR, 'supersize.json')
+_TEST_JSON_CONFIG = json_config_parser.Parse(_TEST_CONFIG_JSON, None)
 _TEST_PATH_DEFAULTS = {
     'assets/icudtl.dat': '../../third_party/icu/android/icudtl.dat',
 }
+
+_TEST_DEX_AFTER_PATH = os.path.join(_TEST_DATA_DIR,
+                                    'mock_dex/after/classes.dex')
 
 
 def _CompareWithGolden(name=None):
@@ -147,9 +152,7 @@ class IntegrationTest(unittest.TestCase):
       apk_file.write(_TEST_APK_LOCALE_PAK_PATH, locale_pak_rel_path)
       pak_rel_path = os.path.relpath(_TEST_APK_PAK_PATH, _TEST_APK_ROOT_DIR)
       apk_file.write(_TEST_APK_PAK_PATH, pak_rel_path)
-      # Exactly 8MB of data (2^23).
-      apk_file.writestr(
-          _TEST_APK_DEX_PATH, IntegrationTest._CreateBlankData(23))
+      apk_file.write(_TEST_DEX_AFTER_PATH, _TEST_APK_DEX_PATH)
 
     with zipfile.ZipFile(_TEST_NOT_ON_DEMAND_SPLIT_APK_PATH, 'w') as z:
       z.write(_TEST_ALWAYS_INSTALLED_MANIFEST_PATH, 'AndroidManifest.xml')
@@ -303,7 +306,7 @@ class IntegrationTest(unittest.TestCase):
                                                  _TEST_SOURCE_DIR)
         container_specs = list(iter_specs())
         size_info = archive.CreateSizeInfo(container_specs, build_config,
-                                           apk_file_manager)
+                                           _TEST_JSON_CONFIG, apk_file_manager)
         IntegrationTest.cached_size_info[cache_key] = size_info
 
     return copy.deepcopy(IntegrationTest.cached_size_info[cache_key])
@@ -320,8 +323,7 @@ class IntegrationTest(unittest.TestCase):
                  use_pak=False,
                  use_aux_elf=None,
                  ignore_linker_map=False,
-                 debug_measures=False,
-                 include_padding=False):
+                 debug_measures=False):
     args = [
         archive_path,
         '--source-directory',
@@ -360,10 +362,23 @@ class IntegrationTest(unittest.TestCase):
 
     if use_aux_elf:
       args += ['--aux-elf-file', _TEST_ELF_PATH]
-    if include_padding:
-      args += ['--include-padding']
 
     _RunApp('archive', args, debug_measures=debug_measures)
+
+  def _FixupExpectedSizeInfoForMinimalApks(self, expected_size_info):
+    # DEX string symbols "actual" size_info have object_path assigned to
+    # '$SYSTEM/base-master.apk', which is from the value written to minimal
+    # apks file. Meanwhile, the correpsonding symbols in "expected" are
+    # '$SYSTEM/test.apk' because that's the file passed.
+    # * Changing both to "test.apk" is bad because SuperSize has code to
+    #   handle '-master.apk' filename.
+    # * Changing both to "base-master.apk" is bad because the name "test.apk"
+    #   is engrained in the test.
+    # As a kludge, here we mutate "expected" values for the affected symbols.
+    for sym in expected_size_info.raw_symbols:
+      if (sym.section_name == models.SECTION_DEX
+          and sym.object_path == '$SYSTEM/test.apk'):
+        sym.object_path = '$SYSTEM/base-master.apk'
 
   def _DoArchiveTest(self,
                      *,
@@ -375,8 +390,7 @@ class IntegrationTest(unittest.TestCase):
                      use_pak=False,
                      use_aux_elf=False,
                      ignore_linker_map=False,
-                     debug_measures=False,
-                     include_padding=False):
+                     debug_measures=False):
     with tempfile.NamedTemporaryFile(suffix='.size') as temp_file:
       self._DoArchive(temp_file.name,
                       use_output_directory=use_output_directory,
@@ -387,8 +401,7 @@ class IntegrationTest(unittest.TestCase):
                       use_pak=use_pak,
                       use_aux_elf=use_aux_elf,
                       ignore_linker_map=ignore_linker_map,
-                      debug_measures=debug_measures,
-                      include_padding=include_padding)
+                      debug_measures=debug_measures)
       size_info = archive.LoadAndPostProcessSizeInfo(temp_file.name)
     # Check that saving & loading is the same as directly parsing.
     expected_size_info = self._CloneSizeInfo(
@@ -399,6 +412,8 @@ class IntegrationTest(unittest.TestCase):
         use_pak=use_pak,
         use_aux_elf=use_aux_elf,
         ignore_linker_map=ignore_linker_map)
+    if use_minimal_apks:
+      self._FixupExpectedSizeInfoForMinimalApks(expected_size_info)
     self.assertEqual(_AllMetadata(expected_size_info), _AllMetadata(size_info))
     # Don't cluster.
     expected_size_info.symbols = expected_size_info.raw_symbols
@@ -450,12 +465,6 @@ class IntegrationTest(unittest.TestCase):
   def test_Archive_Elf_DebugMeasures(self):
     return self._DoArchiveTest(use_elf=True, debug_measures=True)
 
-  @_CompareWithGolden(name='Archive_Apk')
-  def test_ArchiveSparse(self):
-    return self._DoArchiveTest(use_apk=True,
-                               use_aux_elf=True,
-                               include_padding=True)
-
   def test_SaveDeltaSizeInfo(self):
     # Check that saving & loading is the same as directly parsing.
     orig_info1 = self._CloneSizeInfo(use_apk=True, use_aux_elf=True)
@@ -469,10 +478,6 @@ class IntegrationTest(unittest.TestCase):
       new_info1, new_info2 = archive.LoadAndPostProcessDeltaSizeInfo(
           sizediff_file.name)
     new_delta = diff.Diff(new_info1, new_info2)
-
-    # File format discards unchanged symbols.
-    orig_delta.raw_symbols = orig_delta.raw_symbols.WhereDiffStatusIs(
-        models.DIFF_STATUS_UNCHANGED).Inverted()
 
     self.assertEqual(list(describe.GenerateLines(orig_delta, verbose=True)),
                      list(describe.GenerateLines(new_delta, verbose=True)))
@@ -626,14 +631,12 @@ class IntegrationTest(unittest.TestCase):
     metadata = itertools.chain.from_iterable(
         itertools.chain([c.name], describe.DescribeDict(c.metadata))
         for c in size_info.containers)
-    return itertools.chain(
-        ['BuildConfig:'],
-        build_config,
-        ['Metadata:'],
-        metadata,
-        ['Symbols:'],
-        sym_strs,
-    )
+    metrics_by_file = itertools.chain.from_iterable(
+        itertools.chain([c.name], describe.DescribeDict(c.metrics_by_file))
+        for c in size_info.containers)
+    return itertools.chain(['BuildConfig:'], build_config, ['Metadata:'],
+                           metadata, ['Symbols:'], sym_strs, ['MetricsByFile:'],
+                           metrics_by_file)
 
 
 def main():

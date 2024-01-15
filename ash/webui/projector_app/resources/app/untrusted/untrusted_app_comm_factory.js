@@ -2,12 +2,11 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {PostMessageAPIClient} from '//resources/ash/common/post_message_api/post_message_api_client.js';
-import {RequestHandler} from '//resources/ash/common/post_message_api/post_message_api_request_handler.js';
 import {PromiseResolver} from '//resources/js/promise_resolver.js';
 import {ProjectorError} from 'chrome-untrusted://projector/common/message_types.js';
 
-const TARGET_URL = 'chrome://projector/';
+import {installLaunchHandler} from './launch.js';
+import {browserProxy} from './untrusted_projector_browser_proxy.js';
 
 // Maps video file id to promises of video files.
 const loadingFiles = new Map /*<string, PromiseResolver>*/ ();
@@ -62,8 +61,7 @@ const CLIENT_DELEGATE = {
    * @return {Promise<Array<!projectorApp.Account>>}
    */
   getAccounts() {
-    return AppUntrustedCommFactory.getPostMessageAPIClient().callApiFn(
-        'getAccounts', []);
+    return browserProxy.getAccounts();
   },
 
   /**
@@ -71,8 +69,7 @@ const CLIENT_DELEGATE = {
    * @return {!Promise<!projectorApp.NewScreencastPreconditionState>}
    */
   getNewScreencastPreconditionState() {
-    return AppUntrustedCommFactory.getPostMessageAPIClient().callApiFn(
-        'getNewScreencastPreconditionState', []);
+    return browserProxy.getNewScreencastPreconditionState();
   },
 
   /**
@@ -82,8 +79,7 @@ const CLIENT_DELEGATE = {
    * @return {Promise<boolean>}
    */
   startProjectorSession(storageDir) {
-    return AppUntrustedCommFactory.getPostMessageAPIClient().callApiFn(
-        'startProjectorSession', [storageDir]);
+    return browserProxy.startProjectorSession(storageDir);
   },
 
   /**
@@ -92,8 +88,7 @@ const CLIENT_DELEGATE = {
    * @return {!Promise<!projectorApp.OAuthToken>}
    */
   getOAuthTokenForAccount(account) {
-    return AppUntrustedCommFactory.getPostMessageAPIClient().callApiFn(
-        'getOAuthTokenForAccount', [account]);
+    return Promise.reject('Unsupported method getOauthTokenForAccount');
   },
 
   /**
@@ -103,8 +98,7 @@ const CLIENT_DELEGATE = {
    * @param {!Array<ProjectorError>} msg Error messages.
    */
   onError(msg) {
-    AppUntrustedCommFactory.getPostMessageAPIClient().callApiFn(
-        'onError', [msg]);
+    console.error('Received error messages:', msg);
   },
 
   /**
@@ -113,8 +107,7 @@ const CLIENT_DELEGATE = {
    * @return {Promise<Array<projectorApp.PendingScreencast>>}
    */
   getPendingScreencasts() {
-    return AppUntrustedCommFactory.getPostMessageAPIClient().callApiFn(
-        'getPendingScreencasts', []);
+    return browserProxy.getPendingScreencasts();
   },
 
   /*
@@ -133,16 +126,9 @@ const CLIENT_DELEGATE = {
   sendXhr(
       url, method, requestBody, useCredentials, useApiKey, headers,
       accountEmail) {
-    return AppUntrustedCommFactory.getPostMessageAPIClient().callApiFn(
-        'sendXhr', [
-          url,
-          method,
-          requestBody ? requestBody : '',
-          !!useCredentials,
-          !!useApiKey,
-          headers,
-          accountEmail,
-        ]);
+    return browserProxy.sendXhr(
+        url, method, requestBody, !!useCredentials, !!useApiKey, headers,
+        accountEmail);
   },
 
   /**
@@ -150,8 +136,7 @@ const CLIENT_DELEGATE = {
    * @return {!Promise<boolean>}
    */
   shouldDownloadSoda() {
-    return AppUntrustedCommFactory.getPostMessageAPIClient().callApiFn(
-        'shouldDownloadSoda', []);
+    return browserProxy.shouldDownloadSoda();
   },
 
   /**
@@ -161,8 +146,7 @@ const CLIENT_DELEGATE = {
    * @return {!Promise<boolean>}
    */
   installSoda() {
-    return AppUntrustedCommFactory.getPostMessageAPIClient().callApiFn(
-        'installSoda', []);
+    return browserProxy.installSoda();
   },
 
   /**
@@ -173,8 +157,7 @@ const CLIENT_DELEGATE = {
    * @return {!Promise<Object>}
    */
   getUserPref(userPref) {
-    return AppUntrustedCommFactory.getPostMessageAPIClient().callApiFn(
-        'getUserPref', [userPref]);
+    return browserProxy.getUserPref(userPref);
   },
 
   /**
@@ -186,8 +169,7 @@ const CLIENT_DELEGATE = {
    * @return {!Promise} Promise resolved when the request was handled.
    */
   setUserPref(userPref, value) {
-    return AppUntrustedCommFactory.getPostMessageAPIClient().callApiFn(
-        'setUserPref', [userPref, value]);
+    return browserProxy.setUserPref(userPref, value);
   },
 
   /**
@@ -195,8 +177,7 @@ const CLIENT_DELEGATE = {
    * @return {!Promise}
    */
   openFeedbackDialog() {
-    return AppUntrustedCommFactory.getPostMessageAPIClient().callApiFn(
-        'openFeedbackDialog', []);
+    return browserProxy.openFeedbackDialog();
   },
 
   /**
@@ -208,15 +189,16 @@ const CLIENT_DELEGATE = {
    */
   async getVideo(videoFileId, resourceKey) {
     try {
-      const video =
-          await AppUntrustedCommFactory.getPostMessageAPIClient().callApiFn(
-              'getVideo', [videoFileId, resourceKey]);
+      const video = await browserProxy.getVideo(videoFileId, resourceKey);
       const videoFile = await getOrCreateLoadFilePromise(videoFileId).promise;
-      // The streaming url must be generated in the untrusted context.
-      // The corresponding cleanup call to URL.revokeObjectURL() happens in
-      // ProjectorViewer::maybeResetUI() in Google3.
-      video.srcUrl = URL.createObjectURL(videoFile);
-      return video;
+      return {
+        fileId: videoFileId,
+        durationMillis: video.durationMillis.toString(),
+        // The streaming url must be generated in the untrusted context.
+        // The corresponding cleanup call to URL.revokeObjectURL() happens in
+        // ProjectorViewer::maybeResetUI() in Google3.
+        srcUrl: URL.createObjectURL(videoFile),
+      };
     } catch (e) {
       return Promise.reject(e);
     } finally {
@@ -227,108 +209,56 @@ const CLIENT_DELEGATE = {
   },
 };
 
-/**
- * Class that implements the RequestHandler inside the Projector untrusted
- * scheme for projector app.
- */
-export class UntrustedAppRequestHandler extends RequestHandler {
-  /**
-   * @param {!Window} parentWindow  The embedder window from which requests
-   *     come.
-   */
-  constructor(parentWindow) {
-    super(null, TARGET_URL, TARGET_URL);
-    this.targetWindow_ = parentWindow;
 
-    this.registerMethod('onNewScreencastPreconditionChanged', (args) => {
-      if (args.length !== 1) {
-        console.error(
-            'Invalid argument to onNewScreencastPreconditionChanged', args);
-        return;
-      }
-
-      getAppElement().onNewScreencastPreconditionChanged(args[0]);
-    });
-    this.registerMethod('onSodaInstallProgressUpdated', (args) => {
-      if (args.length !== 1 || isNaN(args[0])) {
-        return;
-      }
-
-      getAppElement().onSodaInstallProgressUpdated(args[0]);
-    });
-    this.registerMethod('onSodaInstalled', (args) => {
-      getAppElement().onSodaInstalled();
-    });
-    this.registerMethod('onSodaInstallError', (args) => {
-      getAppElement().onSodaInstallError();
-    });
-    this.registerMethod('onScreencastsStateChange', (pendingScreencasts) => {
-      getAppElement().onScreencastsStateChange(pendingScreencasts);
-    });
-    this.registerMethod('onFileLoaded', (args) => {
-      if (args.length !== 3) {
-        console.error('Invalid argument to onFileLoaded', args);
-        return;
-      }
-      const fileId = args[0];
-      const file = args[1];
-      const error = args[2];
-      const resolver = getOrCreateLoadFilePromise(fileId);
-      if (!file || error) {
-        resolver.reject(error);
-        return;
-      }
-      resolver.resolve(file);
-    });
+let initialized = false;
+function initCommunication() {
+  if (initialized) {
+    return;
   }
+  initialized = true;
 
-  /** @override */
-  targetWindow() {
-    return this.targetWindow_;
-  }
-}
+  // Set the client delegate to the app element.
+  getAppElement().setClientDelegate(CLIENT_DELEGATE);
 
-/**
- * This is a class that is used to setup the duplex communication channels
- * between this origin, chrome-untrusted://projector/* and the embedder content.
- */
-export class AppUntrustedCommFactory {
-  /**
-   * Creates the instances of PostMessageAPIClient and Requesthandler.
-   */
-  static maybeCreateInstances() {
-    if (AppUntrustedCommFactory.client_ ||
-        AppUntrustedCommFactory.requestHandler_) {
+  // Install launch handler to observe files sent from
+  // Drivefs.
+  installLaunchHandler((fileId, file, error) => {
+    const resolver = getOrCreateLoadFilePromise(fileId);
+    if (!file || error) {
+      resolver.reject(error);
       return;
     }
+    resolver.resolve(file);
+  });
 
-    AppUntrustedCommFactory.client_ =
-        new PostMessageAPIClient(TARGET_URL, window.parent);
-
-    AppUntrustedCommFactory.requestHandler_ =
-        new UntrustedAppRequestHandler(window.parent);
-
-    getAppElement().setClientDelegate(CLIENT_DELEGATE);
-  }
-
-  /**
-   * In order to use this class, please do the following (e.g. to check if it is
-   * possible to start a new ProjectorSession):
-   * const canStart = await AppUntrustedCommFactory. getPostMessageAPIClient().
-   *     canStartProjectorSession();
-   * @return {!PostMessageAPIClient}
-   */
-  static getPostMessageAPIClient() {
-    // .AppUntrustedCommFactory.client_ should be available. However to be on
-    // the cautious side create an instance here if getPostMessageAPIClient is
-    // triggered before the page finishes loading.
-    AppUntrustedCommFactory.maybeCreateInstances();
-    return AppUntrustedCommFactory.client_;
-  }
+  const callbackRouter = browserProxy.getProjectorCallbackRouter();
+  // Setup the callback routers to handle requests from browser process.
+  callbackRouter.onNewScreencastPreconditionChanged.addListener(
+      (precondition) => {
+        try {
+          getAppElement().onNewScreencastPreconditionChanged(precondition);
+        } catch (error) {
+          console.error(
+              'Unable to notify onNewScreencastPreconditionChanged method',
+              error);
+        }
+      });
+  callbackRouter.onSodaInstallProgressUpdated.addListener((progress) => {
+    getAppElement().onSodaInstallProgressUpdated(progress);
+  });
+  callbackRouter.onSodaInstallError.addListener(() => {
+    getAppElement().onSodaInstallError();
+  });
+  callbackRouter.onSodaInstalled.addListener(() => {
+    getAppElement().onSodaInstalled();
+  });
+  callbackRouter.onScreencastsStateChange.addListener((pendingScreencasts) => {
+    getAppElement().onScreencastsStateChange(pendingScreencasts);
+  });
 }
 
 waitForAppElement().then(() => {
   // Create instances of the singletons (PostMessageAPIClient and
   // RequestHandler) when the document has finished loading.
-  AppUntrustedCommFactory.maybeCreateInstances();
+  initCommunication();
 });

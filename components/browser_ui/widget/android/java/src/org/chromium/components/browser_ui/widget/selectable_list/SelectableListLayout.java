@@ -12,11 +12,11 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewStub;
 import android.widget.FrameLayout;
+import android.widget.ImageView;
 import android.widget.TextView;
 
 import androidx.annotation.Nullable;
 import androidx.annotation.StringRes;
-import androidx.annotation.VisibleForTesting;
 import androidx.appcompat.widget.Toolbar.OnMenuItemClickListener;
 import androidx.core.view.ViewCompat;
 import androidx.recyclerview.widget.LinearLayoutManager;
@@ -25,6 +25,8 @@ import androidx.recyclerview.widget.RecyclerView.AdapterDataObserver;
 import androidx.recyclerview.widget.RecyclerView.ItemAnimator;
 import androidx.recyclerview.widget.RecyclerView.OnScrollListener;
 
+import org.chromium.base.supplier.ObservableSupplier;
+import org.chromium.base.supplier.ObservableSupplierImpl;
 import org.chromium.components.browser_ui.widget.FadingShadow;
 import org.chromium.components.browser_ui.widget.FadingShadowView;
 import org.chromium.components.browser_ui.widget.R;
@@ -32,30 +34,35 @@ import org.chromium.components.browser_ui.widget.displaystyle.DisplayStyleObserv
 import org.chromium.components.browser_ui.widget.displaystyle.HorizontalDisplayStyle;
 import org.chromium.components.browser_ui.widget.displaystyle.UiConfig;
 import org.chromium.components.browser_ui.widget.displaystyle.UiConfig.DisplayStyle;
+import org.chromium.components.browser_ui.widget.gesture.BackPressHandler;
 import org.chromium.components.browser_ui.widget.selectable_list.SelectionDelegate.SelectionObserver;
 import org.chromium.ui.widget.LoadingView;
 
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Contains UI elements common to selectable list views: a loading view, empty view, selection
  * toolbar, shadow, and RecyclerView.
  *
- * After the SelectableListLayout is inflated, it should be initialized through calls to
- * #initializeRecyclerView(), #initializeToolbar(), and #initializeEmptyView().
+ * <p>After the SelectableListLayout is inflated, it should be initialized through calls to
+ * #initializeRecyclerView(), #initializeToolbar(), and #initializeEmptyStateView().
  *
- * Must call #onDestroyed() to destroy SelectableListLayout properly, otherwise this would cause
+ * <p>Must call #onDestroyed() to destroy SelectableListLayout properly, otherwise this would cause
  * memory leak consistently.
  *
  * @param <E> The type of the selectable items this layout holds.
  */
-public class SelectableListLayout<E>
-        extends FrameLayout implements DisplayStyleObserver, SelectionObserver<E> {
+public class SelectableListLayout<E> extends FrameLayout
+        implements DisplayStyleObserver, SelectionObserver<E>, BackPressHandler {
     private static final int WIDE_DISPLAY_MIN_PADDING_DP = 16;
     private RecyclerView.Adapter mAdapter;
     private ViewStub mToolbarStub;
     private TextView mEmptyView;
+    private TextView mEmptyStateSubHeadingView;
     private View mEmptyViewWrapper;
+    private ImageView mEmptyImageView;
     private LoadingView mLoadingView;
     private RecyclerView mRecyclerView;
     private ItemAnimator mItemAnimator;
@@ -66,34 +73,42 @@ public class SelectableListLayout<E>
 
     private UiConfig mUiConfig;
 
-    private final AdapterDataObserver mAdapterObserver = new AdapterDataObserver() {
-        @Override
-        public void onChanged() {
-            super.onChanged();
-            updateLayout();
-            // At inflation, the RecyclerView is set to gone, and the loading view is visible. As
-            // long as the adapter data changes, we show the recycler view, and hide loading view.
-            mLoadingView.hideLoadingUI();
-        }
+    private final ObservableSupplierImpl<Boolean> mBackPressStateSupplier =
+            new ObservableSupplierImpl<>();
+    private final Set<Integer> mIgnoredTypesForEmptyState = new HashSet<>();
 
-        @Override
-        public void onItemRangeInserted(int positionStart, int itemCount) {
-            super.onItemRangeInserted(positionStart, itemCount);
-            updateLayout();
-            // At inflation, the RecyclerView is set to gone, and the loading view is visible. As
-            // long as the adapter data changes, we show the recycler view, and hide loading view.
-            mLoadingView.hideLoadingUI();
-        }
+    private final AdapterDataObserver mAdapterObserver =
+            new AdapterDataObserver() {
+                @Override
+                public void onChanged() {
+                    super.onChanged();
+                    updateLayout();
+                    // At inflation, the RecyclerView is set to gone, and the loading view is
+                    // visible. As long as the adapter data changes, we show the recycler view,
+                    // and hide loading view.
+                    mLoadingView.hideLoadingUI();
+                }
 
-        @Override
-        public void onItemRangeRemoved(int positionStart, int itemCount) {
-            super.onItemRangeRemoved(positionStart, itemCount);
-            updateLayout();
-        }
-    };
+                @Override
+                public void onItemRangeInserted(int positionStart, int itemCount) {
+                    super.onItemRangeInserted(positionStart, itemCount);
+                    updateLayout();
+                    // At inflation, the RecyclerView is set to gone, and the loading view is
+                    // visible. As long as the adapter data changes, we show the recycler view,
+                    // and hide loading view.
+                    mLoadingView.hideLoadingUI();
+                }
+
+                @Override
+                public void onItemRangeRemoved(int positionStart, int itemCount) {
+                    super.onItemRangeRemoved(positionStart, itemCount);
+                    updateLayout();
+                }
+            };
 
     public SelectableListLayout(Context context, AttributeSet attrs) {
         super(context, attrs);
+        onBackPressStateChanged(); // Initialize back press state.
     }
 
     @Override
@@ -166,12 +181,25 @@ public class SelectableListLayout<E>
         mAdapter.registerAdapterDataObserver(mAdapterObserver);
 
         mRecyclerView.setHasFixedSize(true);
-        mRecyclerView.addOnScrollListener(new OnScrollListener() {
-            @Override
-            public void onScrolled(RecyclerView recyclerView, int dx, int dy) {
-                setToolbarShadowVisibility();
-            }
-        });
+        mRecyclerView.addOnScrollListener(
+                new OnScrollListener() {
+                    @Override
+                    public void onScrolled(RecyclerView recyclerView, int dx, int dy) {
+                        setToolbarShadowVisibility();
+                    }
+                });
+        mRecyclerView.addOnLayoutChangeListener(
+                (View v,
+                        int left,
+                        int top,
+                        int right,
+                        int bottom,
+                        int oldLeft,
+                        int oldTop,
+                        int oldRight,
+                        int oldBottom) -> {
+                    setToolbarShadowVisibility();
+                });
 
         mItemAnimator = mRecyclerView.getItemAnimator();
     }
@@ -194,9 +222,13 @@ public class SelectableListLayout<E>
      *                             the current device fully supports theming and is on Android M+.
      * @return The initialized SelectionToolbar.
      */
-    public SelectableListToolbar<E> initializeToolbar(int toolbarLayoutId,
-            SelectionDelegate<E> delegate, int titleResId, int normalGroupResId,
-            int selectedGroupResId, @Nullable OnMenuItemClickListener listener,
+    public SelectableListToolbar<E> initializeToolbar(
+            int toolbarLayoutId,
+            SelectionDelegate<E> delegate,
+            int titleResId,
+            int normalGroupResId,
+            int selectedGroupResId,
+            @Nullable OnMenuItemClickListener listener,
             boolean updateStatusBarColor) {
         mToolbarStub.setLayoutResource(toolbarLayoutId);
         @SuppressWarnings("unchecked")
@@ -228,10 +260,44 @@ public class SelectableListLayout<E>
     public TextView initializeEmptyView(int emptyStringResId) {
         setEmptyViewText(emptyStringResId);
 
-        // Dummy listener to have the touch events dispatched to this view tree for navigation UI.
+        // Empty listener to have the touch events dispatched to this view tree for navigation UI.
         mEmptyViewWrapper.setOnTouchListener((v, event) -> true);
 
         return mEmptyView;
+    }
+
+    /**
+     * Initializes the empty state view with an image, heading, and subheading.
+     * @param imageResId Image view to show when the selectable list is empty.
+     * @param emptyHeadingStringResId Heading string to show when the selectable list is empty.
+     * @param emptySubheadingStringResId SubString to show when the selectable list is empty.
+     * @return The {@link TextView} displayed when the list is empty.
+     */
+    // @TODO: (crbugs.com/1443648) Refactor return value for ForTesting method
+    public TextView initializeEmptyStateView(
+            int imageResId, int emptyHeadingStringResId, int emptySubheadingStringResId) {
+        // Initialize and inflate empty state view stub.
+        ViewStub emptyViewStub = findViewById(R.id.empty_state_view_stub);
+        View emptyStateView = emptyViewStub.inflate();
+
+        // Initialize empty state resource.
+        mEmptyView = emptyStateView.findViewById(R.id.empty_state_text_title);
+        mEmptyStateSubHeadingView = emptyStateView.findViewById(R.id.empty_state_text_description);
+        mEmptyImageView = emptyStateView.findViewById(R.id.empty_state_icon);
+        mEmptyViewWrapper = emptyStateView.findViewById(R.id.empty_state_container);
+
+        // Set empty state properties.
+        setEmptyStateImageRes(imageResId);
+        setEmptyStateViewText(emptyHeadingStringResId, emptySubheadingStringResId);
+        return mEmptyView;
+    }
+
+    /**
+     * Sets the empty state view image when the selectable list is empty.
+     * @param imageResId The image view to show when the selectable list is empty.
+     */
+    public void setEmptyStateImageRes(int imageResId) {
+        mEmptyImageView.setImageResource(imageResId);
     }
 
     /**
@@ -245,8 +311,26 @@ public class SelectableListLayout<E>
     }
 
     /**
-     * Called when the view that owns the SelectableListLayout is destroyed.
+     * Sets the view text when the selectable list is empty.
+     * @param emptyStringResId Heading string to show when the selectable list is empty.
+     * @param emptySubheadingStringResId SubString to show when the selectable list is empty.
      */
+    public void setEmptyStateViewText(int emptyHeadingStringResId, int emptySubheadingStringResId) {
+        mEmptyStringResId = emptyHeadingStringResId;
+
+        mEmptyView.setText(mEmptyStringResId);
+        mEmptyStateSubHeadingView.setText(emptySubheadingStringResId);
+    }
+
+    /**
+     * Adds the given type to the set of ignored item types. Items of this type in the adapter won't
+     * be counted when deciding to show the empty state view.
+     */
+    public void ignoreItemTypeForEmptyState(int type) {
+        mIgnoredTypesForEmptyState.add(type);
+    }
+
+    /** Called when the view that owns the SelectableListLayout is destroyed. */
     public void onDestroyed() {
         mAdapter.unregisterAdapterDataObserver(mAdapterObserver);
         mToolbar.getSelectionDelegate().removeObserver(this);
@@ -269,9 +353,7 @@ public class SelectableListLayout<E>
         mUiConfig.addObserver(this);
     }
 
-    /**
-     * @return The {@link UiConfig} associated with this View if one has been created, or null.
-     */
+    /** @return The {@link UiConfig} associated with this View if one has been created, or null. */
     @Nullable
     public UiConfig getUiConfig() {
         return mUiConfig;
@@ -281,12 +363,17 @@ public class SelectableListLayout<E>
     public void onDisplayStyleChanged(DisplayStyle newDisplayStyle) {
         int padding = getPaddingForDisplayStyle(newDisplayStyle, getResources());
 
-        ViewCompat.setPaddingRelative(mRecyclerView, padding, mRecyclerView.getPaddingTop(),
-                padding, mRecyclerView.getPaddingBottom());
+        ViewCompat.setPaddingRelative(
+                mRecyclerView,
+                padding,
+                mRecyclerView.getPaddingTop(),
+                padding,
+                mRecyclerView.getPaddingBottom());
     }
 
     @Override
     public void onSelectionStateChange(List<E> selectedItems) {
+        onBackPressStateChanged();
         setToolbarShadowVisibility();
     }
 
@@ -308,15 +395,15 @@ public class SelectableListLayout<E>
         mRecyclerView.setItemAnimator(null);
         mToolbarShadow.setVisibility(View.VISIBLE);
         mEmptyView.setText(searchEmptyString);
+        onBackPressStateChanged();
     }
 
-    /**
-     * Called when a search has ended.
-     */
+    /** Called when a search has ended. */
     public void onEndSearch() {
         mRecyclerView.setItemAnimator(mItemAnimator);
         setToolbarShadowVisibility();
         mEmptyView.setText(mEmptyStringResId);
+        onBackPressStateChanged();
     }
 
     /**
@@ -329,8 +416,10 @@ public class SelectableListLayout<E>
         if (displayStyle.horizontal == HorizontalDisplayStyle.WIDE) {
             int screenWidthDp = resources.getConfiguration().screenWidthDp;
             float dpToPx = resources.getDisplayMetrics().density;
-            padding = (int) (((screenWidthDp - UiConfig.WIDE_DISPLAY_STYLE_MIN_WIDTH_DP) / 2.f)
-                    * dpToPx);
+            padding =
+                    (int)
+                            (((screenWidthDp - UiConfig.WIDE_DISPLAY_STYLE_MIN_WIDTH_DP) / 2.f)
+                                    * dpToPx);
             padding = (int) Math.max(WIDE_DISPLAY_MIN_PADDING_DP * dpToPx, padding);
         }
         return padding;
@@ -348,9 +437,27 @@ public class SelectableListLayout<E>
      * view implementation. We need to check it ourselves.
      */
     private void updateEmptyViewVisibility() {
-        int visible = mAdapter.getItemCount() == 0 ? View.VISIBLE : View.GONE;
+        int visible = isListEffectivelyEmpty() ? View.VISIBLE : View.GONE;
         mEmptyView.setVisibility(visible);
         mEmptyViewWrapper.setVisibility(visible);
+    }
+
+    /**
+     * For efficiency, only loop over the items if there are ignored types present in the set and
+     * bail on the loop as soon as one is detected.
+     */
+    private boolean isListEffectivelyEmpty() {
+        if (mIgnoredTypesForEmptyState.isEmpty()) {
+            return mAdapter.getItemCount() == 0;
+        }
+
+        for (int i = 0; i < mAdapter.getItemCount(); i++) {
+            if (!mIgnoredTypesForEmptyState.contains(mAdapter.getItemViewType(i))) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private void updateLayout() {
@@ -364,7 +471,6 @@ public class SelectableListLayout<E>
         mToolbar.setSearchEnabled(mAdapter.getItemCount() != 0);
     }
 
-    @VisibleForTesting
     public View getToolbarShadowForTests() {
         return mToolbarShadow;
     }
@@ -388,5 +494,26 @@ public class SelectableListLayout<E>
         }
 
         return false;
+    }
+
+    @Override
+    public @BackPressResult int handleBackPress() {
+        var ret = onBackPressed();
+        assert ret;
+        return ret ? BackPressResult.SUCCESS : BackPressResult.FAILURE;
+    }
+
+    @Override
+    public ObservableSupplier<Boolean> getHandleBackPressChangedSupplier() {
+        return mBackPressStateSupplier;
+    }
+
+    private void onBackPressStateChanged() {
+        if (mToolbar == null) {
+            mBackPressStateSupplier.set(false);
+            return;
+        }
+        mBackPressStateSupplier.set(
+                mToolbar.getSelectionDelegate().isSelectionEnabled() || mToolbar.isSearching());
     }
 }

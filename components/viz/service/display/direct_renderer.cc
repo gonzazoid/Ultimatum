@@ -29,45 +29,23 @@
 #include "components/viz/common/quads/draw_quad.h"
 #include "components/viz/common/quads/solid_color_draw_quad.h"
 #include "components/viz/common/resources/platform_color.h"
+#include "components/viz/common/resources/shared_image_format.h"
+#include "components/viz/common/resources/shared_image_format_utils.h"
 #include "components/viz/common/viz_utils.h"
 #include "components/viz/service/display/bsp_tree.h"
 #include "components/viz/service/display/bsp_walk_action.h"
 #include "components/viz/service/display/output_surface.h"
+#include "components/viz/service/display/render_pass_alpha_type.h"
 #include "components/viz/service/display/skia_output_surface.h"
 #include "gpu/command_buffer/common/capabilities.h"
 #include "media/base/video_util.h"
+#include "ui/gfx/buffer_types.h"
+#include "ui/gfx/display_color_spaces.h"
 #include "ui/gfx/geometry/quad_f.h"
 #include "ui/gfx/geometry/rect_conversions.h"
 #include "ui/gfx/geometry/size.h"
 #include "ui/gfx/geometry/transform.h"
 #include "ui/gfx/geometry/transform_util.h"
-
-namespace {
-
-// Returns the bounding box that contains the specified rounded corner.
-gfx::RectF ComputeRoundedCornerBoundingBox(const gfx::RRectF& rrect,
-                                           const gfx::RRectF::Corner corner) {
-  auto radii = rrect.GetCornerRadii(corner);
-  gfx::RectF bounding_box(radii.x(), radii.y());
-  switch (corner) {
-    case gfx::RRectF::Corner::kUpperLeft:
-      bounding_box.Offset(rrect.rect().x(), rrect.rect().y());
-      break;
-    case gfx::RRectF::Corner::kUpperRight:
-      bounding_box.Offset(rrect.rect().right() - radii.x(), rrect.rect().y());
-      break;
-    case gfx::RRectF::Corner::kLowerRight:
-      bounding_box.Offset(rrect.rect().right() - radii.x(),
-                          rrect.rect().bottom() - radii.y());
-      break;
-    case gfx::RRectF::Corner::kLowerLeft:
-      bounding_box.Offset(rrect.rect().x(), rrect.rect().bottom() - radii.y());
-      break;
-  }
-  return bounding_box;
-}
-
-}  // namespace
 
 namespace viz {
 
@@ -99,9 +77,6 @@ DirectRenderer::~DirectRenderer() = default;
 
 void DirectRenderer::Initialize() {
   use_partial_swap_ = settings_->partial_swap_enabled && CanPartialSwap();
-  allow_empty_swap_ =
-      use_partial_swap_ ||
-      output_surface_->capabilities().supports_commit_overlay_planes;
 
   initialized_ = true;
 }
@@ -165,6 +140,10 @@ const DrawQuad* DirectRenderer::CanPassBeDrawnDirectly(
   return nullptr;
 }
 
+void DirectRenderer::SetOutputSurfaceClipRect(const gfx::Rect& clip_rect) {
+  output_surface_clip_rect_ = clip_rect;
+}
+
 void DirectRenderer::SetVisible(bool visible) {
   DCHECK(initialized_);
   if (visible_ == visible)
@@ -191,9 +170,31 @@ void DirectRenderer::DecideRenderPassAllocationsForFrame(
   base::flat_map<AggregatedRenderPassId, RenderPassRequirements>
       render_passes_in_frame;
   for (const auto& pass : render_passes_in_draw_order) {
+    const bool is_root = pass == root_render_pass;
+
+#if BUILDFLAG(IS_WIN)
+    // For delegated compositing the root pass is preserved, but not rendered.
+    // If a previous frame fell out of delegated compositing we want to make
+    // sure that we deallocate its backing when switching back to delegated
+    // compositing.
+    if (is_root && output_surface_->IsDisplayedAsOverlayPlane() &&
+        !current_frame()->output_surface_plane) {
+      // We expect to be in delegated compositing mode, which means the root
+      // damage rect has been cleared.
+      CHECK(current_frame()->root_damage_rect.IsEmpty());
+      continue;
+    }
+#else
+    // TODO(crbug.com/1322528): Consider deallocating the primary plane in this
+    // case.
+    // Non-Windows platforms use BufferQueue, which are not owned by the render
+    // pass backing. ChromeOS must hold on to the root surface buffers to ensure
+    // overlay-ability and macOS wants to just discard the underlying surfaces
+    // for performance.
+#endif
+
     // If there's a copy request, we need an explicit renderpass backing so
     // only try to draw directly if there are no copy requests.
-    bool is_root = pass == root_render_pass;
     if (!is_root && pass->copy_requests.empty()) {
       if (const DrawQuad* quad = CanPassBeDrawnDirectly(pass.get())) {
         // If the render pass is drawn directly, it will not be drawn from as
@@ -202,17 +203,9 @@ void DirectRenderer::DecideRenderPassAllocationsForFrame(
         continue;
       }
     }
-    gfx::Size size = pass->output_rect.size();
-    // We should not change the buffer size for the root render pass.
-    // The requirement is used for non-root render pass only.
-    if (!is_root) {
-      size = CalculateTextureSizeForRenderPass(pass.get());
-    }
-    auto color_space = RenderPassColorSpace(pass.get());
-    auto format = GetColorSpaceResourceFormat(color_space);
 
-    render_passes_in_frame[pass->id] = {size, pass->generate_mipmap, format,
-                                        color_space};
+    render_passes_in_frame[pass->id] =
+        CalculateRenderPassRequirements(pass.get());
   }
   UMA_HISTOGRAM_COUNTS_1000(
       "Compositing.Display.FlattenedRenderPassCount",
@@ -229,9 +222,6 @@ void DirectRenderer::DrawFrame(
     SurfaceDamageRectList surface_damage_rect_list) {
   DCHECK(visible_);
   TRACE_EVENT0("viz,benchmark", "DirectRenderer::DrawFrame");
-  UMA_HISTOGRAM_COUNTS_1M(
-      "Renderer4.renderPassCount",
-      base::saturated_cast<int>(render_passes_in_draw_order->size()));
 
   auto* root_render_pass = render_passes_in_draw_order->back().get();
   DCHECK(root_render_pass);
@@ -263,11 +253,6 @@ void DirectRenderer::DrawFrame(
   current_frame()->root_damage_rect.Intersect(gfx::Rect(device_viewport_size));
   current_frame()->device_viewport_size = device_viewport_size;
   current_frame()->display_color_spaces = display_color_spaces;
-
-  // DecideRenderPassAllocationsForFrame needs
-  // current_frame()->display_color_spaces to decide the color space
-  // of each render pass.
-  DecideRenderPassAllocationsForFrame(*render_passes_in_draw_order);
 
   output_surface_->SetNeedsMeasureNextDrawLatency();
   BeginDrawingFrame();
@@ -364,10 +349,9 @@ void DirectRenderer::DrawFrame(
   reshape_params.size = surface_resource_size;
   reshape_params.device_scale_factor = device_scale_factor;
   reshape_params.color_space = frame_color_space;
-  reshape_params.sdr_white_level = CurrentFrameSDRWhiteLevel();
   reshape_params.format = frame_buffer_format;
-  reshape_params.alpha_type =
-      frame_has_alpha ? kPremul_SkAlphaType : kOpaque_SkAlphaType;
+  reshape_params.alpha_type = frame_has_alpha ? RenderPassAlphaType::kPremul
+                                              : RenderPassAlphaType::kOpaque;
   if (next_frame_needs_full_frame_redraw_ ||
       reshape_params != reshape_params_ ||
       display_transform != reshape_display_transform_) {
@@ -381,11 +365,26 @@ void DirectRenderer::DrawFrame(
     // TODO(penghuang): verify this logic with SkiaRenderer.
     if (!output_surface_->capabilities().supports_surfaceless)
       needs_full_frame_redraw = true;
+#elif BUILDFLAG(IS_CHROMEOS_LACROS) || BUILDFLAG(IS_WIN)
+    // If compositing is delegated, then there will be no output_surface_plane,
+    // and we should not trigger a redraw of the root render pass.
+    // Pixel tests will not be displayed as overlay planes, so they need redraw.
+    if (current_frame()->output_surface_plane ||
+        !output_surface_->IsDisplayedAsOverlayPlane()) {
+      needs_full_frame_redraw = true;
+    }
 #else
     // The entire surface has to be redrawn if reshape is requested.
     needs_full_frame_redraw = true;
 #endif
   }
+
+  // DecideRenderPassAllocationsForFrame needs
+  // current_frame()->display_color_spaces to decide the color space
+  // of each render pass. Overlay processing is also allowed to modify the
+  // render pass backing requirements due to e.g. a underlay promotion. On
+  // Windows, the root render pass' size is based on the |reshape_params_|.
+  DecideRenderPassAllocationsForFrame(*render_passes_in_draw_order);
 
   // Draw all non-root render passes except for the root render pass.
   for (const auto& pass : *render_passes_in_draw_order) {
@@ -395,7 +394,7 @@ void DirectRenderer::DrawFrame(
   }
 
   bool skip_drawing_root_render_pass =
-      current_frame()->root_damage_rect.IsEmpty() && allow_empty_swap_ &&
+      current_frame()->root_damage_rect.IsEmpty() && use_partial_swap_ &&
       !needs_full_frame_redraw;
 
   // If partial swap is not used, and the frame can not be skipped, the whole
@@ -480,10 +479,24 @@ bool DirectRenderer::ShouldSkipQuad(const DrawQuad& quad,
   if (render_pass_scissor.IsEmpty())
     return true;
 
-  gfx::Rect target_rect = cc::MathUtil::MapEnclosingClippedRect(
-      quad.shared_quad_state->quad_to_target_transform, quad.visible_rect);
-  if (quad.shared_quad_state->clip_rect)
+  gfx::Rect target_rect = quad.visible_rect;
+
+  auto* rpdq = quad.DynamicCast<AggregatedRenderPassDrawQuad>();
+  if (rpdq) {
+    // Render pass draw quads can have pixel-moving filters that expand their
+    // visible bounds.
+    auto filter_it = render_pass_filters_.find(rpdq->render_pass_id);
+    if (filter_it != render_pass_filters_.end()) {
+      target_rect = filter_it->second->ExpandRectForPixelMovement(target_rect);
+    }
+  }
+
+  target_rect = cc::MathUtil::MapEnclosingClippedRect(
+      quad.shared_quad_state->quad_to_target_transform, target_rect);
+
+  if (quad.shared_quad_state->clip_rect) {
     target_rect.Intersect(*quad.shared_quad_state->clip_rect);
+  }
 
   target_rect.Intersect(render_pass_scissor);
   return target_rect.IsEmpty();
@@ -551,6 +564,11 @@ const absl::optional<gfx::RRectF> DirectRenderer::BackdropFilterBoundsForPass(
   return it == render_pass_backdrop_filter_bounds_.end()
              ? absl::optional<gfx::RRectF>()
              : it->second;
+}
+
+bool DirectRenderer::SupportsBGRA() const {
+  // TODO(penghuang): check supported format correctly.
+  return true;
 }
 
 void DirectRenderer::FlushPolygons(
@@ -632,6 +650,12 @@ void DirectRenderer::DrawRenderPass(const AggregatedRenderPass* render_pass) {
 
   if (can_skip_rp) {
     skipped_render_pass_ids_.insert(render_pass->id);
+
+    int pixel_size =
+        render_pass->output_rect.width() * render_pass->output_rect.height();
+    UMA_HISTOGRAM_COUNTS_10M(
+        "Compositing.DirectRenderer.SkippedNonRootRenderPassOutputSize",
+        pixel_size);
     return;
   }
 
@@ -655,6 +679,10 @@ void DirectRenderer::DrawRenderPass(const AggregatedRenderPass* render_pass) {
         ComputeScissorRectForRenderPass(current_frame()->current_render_pass));
   }
 
+  if (is_root_render_pass && output_surface_clip_rect_) {
+    render_pass_scissor_in_draw_space.Intersect(*output_surface_clip_rect_);
+  }
+
   const bool render_pass_is_clipped =
       !render_pass_scissor_in_draw_space.Contains(surface_rect_in_draw_space);
 
@@ -670,17 +698,10 @@ void DirectRenderer::DrawRenderPass(const AggregatedRenderPass* render_pass) {
   const bool should_clear_surface =
       !is_root_render_pass || settings_->should_clear_root_render_pass;
 
-  SurfaceInitializationMode mode;
-  if (should_clear_surface && render_pass_requires_scissor) {
-    mode = SURFACE_INITIALIZATION_MODE_SCISSORED_CLEAR;
-  } else if (should_clear_surface) {
-    mode = SURFACE_INITIALIZATION_MODE_FULL_SURFACE_CLEAR;
-  } else {
-    mode = SURFACE_INITIALIZATION_MODE_PRESERVE;
-  }
-
-  PrepareSurfaceForPass(
-      mode, MoveFromDrawToWindowSpace(render_pass_scissor_in_draw_space));
+  const gfx::Rect render_pass_update_rect = MoveFromDrawToWindowSpace(
+      render_pass_requires_scissor ? render_pass_scissor_in_draw_space
+                                   : surface_rect_in_draw_space);
+  BeginDrawingRenderPass(should_clear_surface, render_pass_update_rect);
 
   if (is_root_render_pass)
     last_root_render_pass_scissor_rect_ = render_pass_scissor_in_draw_space;
@@ -694,8 +715,9 @@ void DirectRenderer::DrawRenderPass(const AggregatedRenderPass* render_pass) {
        ++it) {
     const DrawQuad& quad = **it;
 
-    if (render_pass_is_clipped &&
-        ShouldSkipQuad(quad, render_pass_scissor_in_draw_space)) {
+    if (ShouldSkipQuad(quad, render_pass_is_clipped
+                                 ? render_pass_scissor_in_draw_space
+                                 : surface_rect_in_draw_space)) {
       continue;
     }
 
@@ -723,21 +745,11 @@ void DirectRenderer::DrawRenderPass(const AggregatedRenderPass* render_pass) {
     SetScissorStateForQuad(quad, render_pass_scissor_in_draw_space,
                            render_pass_requires_scissor);
 
-    if (OverlayCandidate::RequiresOverlay(&quad)) {
-      // We cannot composite this quad properly, replace it with solid black.
-      SolidColorDrawQuad solid_black;
-      solid_black.SetAll(quad.shared_quad_state, quad.rect, quad.rect,
-                         /*needs_blending=*/false, SkColors::kBlack,
-                         /*force_anti_aliasing_off=*/true);
-      DoDrawQuad(&solid_black, nullptr);
-      continue;
-    }
-
     DoDrawQuad(&quad, nullptr);
   }
   FlushPolygons(&poly_list, render_pass_scissor_in_draw_space,
                 render_pass_requires_scissor);
-  FinishDrawingQuadList();
+  FinishDrawingRenderPass();
 
   if (render_pass->generate_mipmap)
     GenerateMipmap();
@@ -766,6 +778,49 @@ bool DirectRenderer::CanSkipRenderPass(
   return false;
 }
 
+DirectRenderer::RenderPassRequirements
+DirectRenderer::CalculateRenderPassRequirements(
+    const AggregatedRenderPass* render_pass) const {
+  bool is_root = render_pass == current_frame()->root_render_pass;
+
+  RenderPassRequirements requirements;
+
+  if (is_root) {
+    requirements.size = surface_size_for_swap_buffers();
+    requirements.generate_mipmap = false;
+    requirements.color_space = reshape_color_space();
+    requirements.format =
+        GetSinglePlaneSharedImageFormat(reshape_buffer_format());
+    requirements.alpha_type = reshape_alpha_type();
+
+    // All root render pass backings allocated by the renderer needs to
+    // eventually go into some composition tree. Other things that own/allocate
+    // the root pass backing include the output device and buffer queue.
+    requirements.is_scanout = true;
+
+#if BUILDFLAG(IS_WIN)
+    requirements.scanout_dcomp_surface =
+        render_pass->needs_synchronous_dcomp_commit;
+#endif
+    CHECK_EQ(requirements.alpha_type == RenderPassAlphaType::kOpaque,
+             !render_pass->has_transparent_background);
+  } else {
+    requirements.size = CalculateTextureSizeForRenderPass(render_pass);
+    requirements.generate_mipmap = render_pass->generate_mipmap;
+    requirements.color_space = RenderPassColorSpace(render_pass);
+    requirements.format =
+        GetColorSpaceSharedImageFormat(requirements.color_space);
+    requirements.alpha_type = RenderPassAlphaType::kPremul;
+  }
+
+  if (render_pass->has_transparent_background) {
+    CHECK(requirements.format.HasAlpha());
+    CHECK_EQ(requirements.alpha_type, RenderPassAlphaType::kPremul);
+  }
+
+  return requirements;
+}
+
 void DirectRenderer::UseRenderPass(const AggregatedRenderPass* render_pass) {
   bool is_root = render_pass == current_frame()->root_render_pass;
   current_frame()->current_render_pass = render_pass;
@@ -784,20 +839,14 @@ void DirectRenderer::UseRenderPass(const AggregatedRenderPass* render_pass) {
     return;
   }
 
-  gfx::Size size = render_pass->output_rect.size();
+  DirectRenderer::RenderPassRequirements requirements =
+      CalculateRenderPassRequirements(render_pass);
   // We should not change the buffer size for the root render pass.
   if (!is_root) {
-    size = CalculateTextureSizeForRenderPass(render_pass);
-    size.Enlarge(enlarge_pass_texture_amount_.width(),
-                 enlarge_pass_texture_amount_.height());
+    requirements.size.Enlarge(enlarge_pass_texture_amount_.width(),
+                              enlarge_pass_texture_amount_.height());
   }
-
-  auto color_space = CurrentRenderPassColorSpace();
-  auto format = GetColorSpaceResourceFormat(color_space);
-
-  AllocateRenderPassResourceIfNeeded(
-      render_pass->id,
-      {size, render_pass->generate_mipmap, format, color_space});
+  AllocateRenderPassResourceIfNeeded(render_pass->id, requirements);
 
   // TODO(crbug.com/582554): This change applies only when Vulkan is enabled and
   // it will be removed once SkiaRenderer has complete support for Vulkan.
@@ -857,9 +906,7 @@ gfx::Rect DirectRenderer::ComputeScissorRectForRenderPass(
           // Sanity check: we should not have a Compositor
           // CompositorRenderPassDrawQuad here.
           DCHECK_NE(quad->material, DrawQuad::Material::kCompositorRenderPass);
-          if (quad->material == DrawQuad::Material::kAggregatedRenderPass) {
-            const auto* rpdq = AggregatedRenderPassDrawQuad::MaterialCast(quad);
-
+          if (auto* rpdq = quad->DynamicCast<AggregatedRenderPassDrawQuad>()) {
             // For render pass with pixel moving backdrop filters.
             if (auto iter =
                     backdrop_filter_output_rects_.find(rpdq->render_pass_id);
@@ -877,6 +924,15 @@ gfx::Rect DirectRenderer::ComputeScissorRectForRenderPass(
               gfx::Rect expanded_rect =
                   GetExpandedRectWithPixelMovingForegroundFilter(
                       *rpdq, *foreground_filters);
+
+              // Expanding damage outside of the 'clip_rect' can cause parts of
+              // the root to be rendered that may never have been included due
+              // to 'aggregate_only_damaged_' in SurfaceAggregator. See
+              // crbug.com/1492891
+              if (rpdq->shared_quad_state->clip_rect) {
+                expanded_rect.Intersect(*rpdq->shared_quad_state->clip_rect);
+              }
+
               if (root_damage_rect.Intersects(expanded_rect))
                 root_damage_rect.Union(expanded_rect);
             }
@@ -915,7 +971,7 @@ gfx::Rect DirectRenderer::ComputeScissorRectForRenderPass(
   // For the non-root render pass.
   gfx::Rect damage_rect = render_pass->damage_rect;
   if (!frame_buffer_damage.IsEmpty()) {
-    gfx::Transform inverse_transform(gfx::Transform::kSkipInitialization);
+    gfx::Transform inverse_transform;
     if (render_pass->transform_to_root_target.GetInverse(&inverse_transform)) {
       // |frame_buffer_damage| is in the root target space. Transform the damage
       // from the root to the non-root space before it's added.
@@ -930,7 +986,7 @@ gfx::Rect DirectRenderer::ComputeScissorRectForRenderPass(
 }
 
 gfx::Size DirectRenderer::CalculateTextureSizeForRenderPass(
-    const AggregatedRenderPass* render_pass) {
+    const AggregatedRenderPass* render_pass) const {
   // Round the size of the render pass backings to a multiple of 64 pixels. This
   // reduces memory fragmentation. https://crbug.com/146070. This also allows
   // backings to be more easily reused during a resize operation.
@@ -1017,29 +1073,11 @@ bool DirectRenderer::HasAllocatedResourcesForTesting(
 }
 
 bool DirectRenderer::ShouldApplyRoundedCorner(const DrawQuad* quad) const {
-  const SharedQuadState* sqs = quad->shared_quad_state;
-  const gfx::MaskFilterInfo& mask_filter_info = sqs->mask_filter_info;
-
-  // There is no rounded corner set.
-  if (!mask_filter_info.HasRoundedCorners())
-    return false;
-
-  const gfx::RRectF& rounded_corner_bounds =
-      mask_filter_info.rounded_corner_bounds();
-
   const gfx::RectF target_quad = cc::MathUtil::MapClippedRect(
-      sqs->quad_to_target_transform, gfx::RectF(quad->visible_rect));
+      quad->shared_quad_state->quad_to_target_transform,
+      gfx::RectF(quad->visible_rect));
 
-  const gfx::RRectF::Corner corners[] = {
-      gfx::RRectF::Corner::kUpperLeft, gfx::RRectF::Corner::kUpperRight,
-      gfx::RRectF::Corner::kLowerRight, gfx::RRectF::Corner::kLowerLeft};
-  for (auto c : corners) {
-    if (ComputeRoundedCornerBoundingBox(rounded_corner_bounds, c)
-            .Intersects(target_quad)) {
-      return true;
-    }
-  }
-  return false;
+  return QuadRoundedCornersBoundsIntersects(quad, target_quad);
 }
 
 float DirectRenderer::CurrentFrameSDRWhiteLevel() const {
@@ -1054,9 +1092,11 @@ bool DirectRenderer::ShouldApplyGradientMask(const DrawQuad* quad) const {
 }
 
 gfx::ColorSpace DirectRenderer::RootRenderPassColorSpace() const {
-  return current_frame()->display_color_spaces.GetOutputColorSpace(
-      current_frame()->root_render_pass->content_color_usage,
-      current_frame()->root_render_pass->has_transparent_background);
+  auto root_color_space =
+      current_frame()->display_color_spaces.GetOutputColorSpace(
+          current_frame()->root_render_pass->content_color_usage,
+          current_frame()->root_render_pass->has_transparent_background);
+  return root_color_space.GetWithSdrWhiteLevel(CurrentFrameSDRWhiteLevel());
 }
 
 gfx::ColorSpace DirectRenderer::RenderPassColorSpace(
@@ -1064,29 +1104,34 @@ gfx::ColorSpace DirectRenderer::RenderPassColorSpace(
   if (render_pass == current_frame()->root_render_pass) {
     return RootRenderPassColorSpace();
   }
-  return current_frame()->display_color_spaces.GetCompositingColorSpace(
-      render_pass->has_transparent_background,
-      render_pass->content_color_usage);
+  return current_frame()
+      ->display_color_spaces
+      .GetCompositingColorSpace(render_pass->has_transparent_background,
+                                render_pass->content_color_usage)
+      .GetWithSdrWhiteLevel(CurrentFrameSDRWhiteLevel());
 }
 
 gfx::ColorSpace DirectRenderer::CurrentRenderPassColorSpace() const {
   return RenderPassColorSpace(current_frame()->current_render_pass);
 }
 
-ResourceFormat DirectRenderer::GetColorSpaceResourceFormat(
+SharedImageFormat DirectRenderer::GetColorSpaceSharedImageFormat(
     gfx::ColorSpace color_space) const {
-  // TODO(penghuang): check supported format correctly.
   gpu::Capabilities caps;
-  caps.texture_format_bgra8888 = true;
-
+  caps.texture_format_bgra8888 = SupportsBGRA();
 #if BUILDFLAG(IS_CHROMEOS_LACROS)
-  // TODO(crbug.com/1317015): add support RGBA_F16 in LaCrOS.
+  auto gfx_hdr_format =
+      current_frame()->display_color_spaces.GetOutputBufferFormat(
+          gfx::ContentColorUsage::kHDR, /*needs_alpha=*/true);
+  auto viz_hdr_format = gfx_hdr_format == gfx::BufferFormat::RGBA_F16
+                            ? SinglePlaneFormat::kRGBA_F16
+                            : SinglePlaneFormat::kRGBA_1010102;
   auto format = color_space.IsHDR()
-                    ? RGBA_1010102
+                    ? viz_hdr_format
                     : PlatformColor::BestSupportedTextureFormat(caps);
 #else
   auto format = color_space.IsHDR()
-                    ? RGBA_F16
+                    ? SinglePlaneFormat::kRGBA_F16
                     : PlatformColor::BestSupportedTextureFormat(caps);
 #endif
   return format;

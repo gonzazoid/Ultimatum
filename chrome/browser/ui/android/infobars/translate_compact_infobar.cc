@@ -12,14 +12,14 @@
 #include "base/android/jni_array.h"
 #include "base/android/jni_string.h"
 #include "base/android/jni_weak_ref.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/metrics/field_trial_params.h"
 #include "base/types/cxx23_to_underlying.h"
 #include "chrome/android/chrome_jni_headers/TranslateCompactInfoBar_jni.h"
 #include "chrome/browser/android/tab_android.h"
 #include "components/infobars/content/content_infobar_manager.h"
 #include "components/translate/core/browser/translate_infobar_delegate.h"
 #include "components/translate/core/browser/translate_metrics_logger.h"
-#include "components/variations/variations_associated_data.h"
 #include "content/public/browser/browser_context.h"
 
 using base::android::JavaParamRef;
@@ -126,15 +126,13 @@ void TranslateCompactInfoBar::ApplyStringTranslateOption(
   if (option == translate::TranslateUtils::OPTION_SOURCE_CODE) {
     std::string source_code =
         base::android::ConvertJavaStringToUTF8(env, value);
-    if (delegate->source_language_code().compare(source_code) != 0)
-      delegate->UpdateSourceLanguage(source_code);
+    delegate->UpdateSourceLanguage(source_code);
     delegate->ReportUIInteraction(
         translate::UIInteraction::kChangeSourceLanguage);
   } else if (option == translate::TranslateUtils::OPTION_TARGET_CODE) {
     std::string target_code =
         base::android::ConvertJavaStringToUTF8(env, value);
-    if (delegate->target_language_code().compare(target_code) != 0)
-      delegate->UpdateTargetLanguage(target_code);
+    delegate->UpdateTargetLanguage(target_code);
     delegate->ReportUIInteraction(
         translate::UIInteraction::kChangeTargetLanguage);
   } else {
@@ -153,8 +151,6 @@ void TranslateCompactInfoBar::ApplyBoolTranslateOption(
       action_flags_ |= FLAG_ALWAYS_TRANSLATE;
       delegate->ToggleAlwaysTranslate();
     }
-    delegate->ReportUIInteraction(
-        translate::UIInteraction::kAlwaysTranslateLanguage);
   } else if (option == translate::TranslateUtils::OPTION_NEVER_TRANSLATE) {
     if (delegate->ShouldNeverTranslateLanguage() != value) {
       action_flags_ |= FLAG_NEVER_LANGUAGE;
@@ -164,8 +160,6 @@ void TranslateCompactInfoBar::ApplyBoolTranslateOption(
         delegate->RevertTranslation();
         delegate->OnInfoBarClosedByUser();
       }
-      delegate->ReportUIInteraction(
-          translate::UIInteraction::kNeverTranslateLanguage);
     }
   } else if (option == translate::TranslateUtils::OPTION_NEVER_TRANSLATE_SITE) {
     if (delegate->IsSiteOnNeverPromptList() != value) {
@@ -176,8 +170,6 @@ void TranslateCompactInfoBar::ApplyBoolTranslateOption(
         RemoveSelf();
         delegate->OnInfoBarClosedByUser();
       }
-      delegate->ReportUIInteraction(
-          translate::UIInteraction::kNeverTranslateSite);
     }
   } else {
     DCHECK(false);
@@ -220,9 +212,10 @@ TranslateCompactInfoBar::GetContentLanguagesCodes(
 int TranslateCompactInfoBar::GetParam(const std::string& paramName,
                                       int default_value) {
   std::map<std::string, std::string> params;
-  if (!variations::GetVariationParams(translate::kTranslateCompactUI.name,
-                                      &params))
+  if (!base::GetFieldTrialParams(translate::kTranslateCompactUI.name,
+                                 &params)) {
     return default_value;
+  }
   int value = 0;
   base::StringToInt(params[paramName], &value);
   return value <= 0 ? default_value : value;

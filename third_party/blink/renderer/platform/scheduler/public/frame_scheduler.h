@@ -12,8 +12,6 @@
 #include "base/unguessable_token.h"
 #include "services/metrics/public/cpp/ukm_source_id.h"
 #include "third_party/blink/public/mojom/loader/pause_subresource_loading_handle.mojom-blink.h"
-#include "third_party/blink/public/platform/scheduler/web_resource_loading_task_runner_handle.h"
-#include "third_party/blink/public/platform/scheduler/web_scoped_virtual_time_pauser.h"
 #include "third_party/blink/public/platform/task_type.h"
 #include "third_party/blink/renderer/platform/platform_export.h"
 #include "third_party/blink/renderer/platform/scheduler/public/frame_or_worker_scheduler.h"
@@ -42,6 +40,10 @@ class FrameScheduler : public FrameOrWorkerScheduler {
     virtual void UpdateTaskTime(base::TimeDelta time) = 0;
 
     virtual const base::UnguessableToken& GetAgentClusterId() const = 0;
+
+    virtual void OnTaskCompleted(base::TimeTicks start_time,
+                                 base::TimeTicks end_time) = 0;
+    virtual void MainFrameInteractive() {}
   };
 
   ~FrameScheduler() override = default;
@@ -61,6 +63,16 @@ class FrameScheduler : public FrameOrWorkerScheduler {
   // The scheduler may throttle tasks associated with offscreen frames.
   virtual void SetFrameVisible(bool) = 0;
   virtual bool IsFrameVisible() const = 0;
+
+  // The scheduler may throttle tasks associated with cross origin frames using
+  // small proportion of the page's visible area.
+  virtual void SetVisibleAreaLarge(bool) = 0;
+  virtual bool IsVisibleAreaLarge() const = 0;
+
+  // The scheduler may throttle tasks associated with cross origin frames
+  // without user activation.
+  virtual void SetHadUserActivation(bool) = 0;
+  virtual bool HadUserActivation() const = 0;
 
   // Query the page visibility state for the page associated with this frame.
   // The scheduler may throttle tasks associated with pages that are not
@@ -106,35 +118,11 @@ class FrameScheduler : public FrameOrWorkerScheduler {
   virtual scoped_refptr<base::SingleThreadTaskRunner> GetTaskRunner(
       TaskType) = 0;
 
-  // Returns a WebResourceLoadingTaskRunnerHandle which is intended to be used
-  // by the loading stack to post resource loading tasks to the renderer's main
-  // thread and to notify the main thread of any change in the resource's fetch
-  // (net) priority.
-  virtual std::unique_ptr<scheduler::WebResourceLoadingTaskRunnerHandle>
-  CreateResourceLoadingTaskRunnerHandle() = 0;
-
-  // Returns a WebResourceLoadingTaskRunnerHandle which is intended to be used
-  // by the loading stack, same as CreateResourceLoadingTaskRunnerHandle(), but
-  // the task type of this runner is unfreezable if kLoadingTasksUnfreezable
-  // feature is on.
-  virtual std::unique_ptr<scheduler::WebResourceLoadingTaskRunnerHandle>
-  CreateResourceLoadingMaybeUnfreezableTaskRunnerHandle() = 0;
-
   // Returns the parent PageScheduler.
   virtual PageScheduler* GetPageScheduler() const = 0;
 
   // Returns the parent AgentGroupScheduler.
   virtual AgentGroupScheduler* GetAgentGroupScheduler() = 0;
-
-  // Returns a WebScopedVirtualTimePauser which can be used to vote for pausing
-  // virtual time. Virtual time will be paused if any WebScopedVirtualTimePauser
-  // votes to pause it, and only unpaused only if all
-  // WebScopedVirtualTimePausers are either destroyed or vote to unpause.  Note
-  // the WebScopedVirtualTimePauser returned by this method is initially
-  // unpaused.
-  virtual WebScopedVirtualTimePauser CreateWebScopedVirtualTimePauser(
-      const String& name,
-      WebScopedVirtualTimePauser::VirtualTaskDuration) = 0;
 
   // Tells the scheduler that a provisional load has started, the scheduler may
   // reset the task cost estimators and the UserModel. Must be called from the
@@ -142,21 +130,35 @@ class FrameScheduler : public FrameOrWorkerScheduler {
   virtual void DidStartProvisionalLoad() = 0;
 
   // Tells the scheduler that a provisional load has committed, the scheduler
-  // may reset the task cost estimators and the UserModel. Must be called from
-  // the main thread.
-  virtual void DidCommitProvisionalLoad(bool is_web_history_inert_commit,
-                                        NavigationType navigation_type) = 0;
+  // may reset the task cost estimators and the UserModel.
+  // `DidCommitProvisionalLoadParams` contains information from the old
+  // FrameScheduler that this one's replacing (if it exists) that the new one
+  // might carry over, e.g. the unreported task time, which is aggregated
+  // per-frame and thus needs to be carried over after cross-document
+  // navigations.
+  // Must be called from the main thread.
+  struct DidCommitProvisionalLoadParams {
+    base::TimeDelta previous_document_unreported_task_time;
+  };
+  virtual void DidCommitProvisionalLoad(
+      bool is_web_history_inert_commit,
+      NavigationType navigation_type,
+      DidCommitProvisionalLoadParams params = {base::TimeDelta()}) = 0;
 
   // Tells the scheduler that the first contentful paint has occurred for this
   // frame. Only for main frames.
   virtual void OnFirstContentfulPaintInMainFrame() = 0;
 
+  // Tells the scheduler the Frame's Document is interactive. Only for main
+  // frames.
+  virtual void OnMainFrameInteractive() = 0;
+
   // Tells the scheduler that the first meaningful paint has occurred for this
   // frame.
-  virtual void OnFirstMeaningfulPaint() = 0;
+  virtual void OnFirstMeaningfulPaint(base::TimeTicks timestamp) = 0;
 
-  // Tells the scheduler that the "onload" event has occurred for this frame.
-  virtual void OnLoad() = 0;
+  // Tells the scheduler that the load event has been dispatched for this frame.
+  virtual void OnDispatchLoadEvent() = 0;
 
   // Returns true if this frame is should not throttled (e.g. due to an active
   // connection).

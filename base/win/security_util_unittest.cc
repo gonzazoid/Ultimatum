@@ -8,8 +8,11 @@
 #include <sddl.h>
 #include <windows.h>
 
+#include <utility>
+
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/strings/string_number_conversions_win.h"
 #include "base/win/scoped_handle.h"
 #include "base/win/scoped_localalloc.h"
 #include "base/win/sid.h"
@@ -94,6 +97,15 @@ TEST(SecurityUtilTest, GrantAccessToPathErrorCase) {
       GrantAccessToPath(path, *sids, FILE_GENERIC_READ, NO_INHERITANCE, true));
   EXPECT_TRUE(
       GrantAccessToPath(path, *sids, FILE_GENERIC_READ, NO_INHERITANCE, false));
+  std::vector<Sid> large_sid_list;
+  while (large_sid_list.size() < 0x10000) {
+    auto sid = Sid::FromSddlString(L"S-1-5-1234-" +
+                                   NumberToWString(large_sid_list.size()));
+    ASSERT_TRUE(sid);
+    large_sid_list.emplace_back(std::move(*sid));
+  }
+  EXPECT_FALSE(GrantAccessToPath(path, large_sid_list, FILE_GENERIC_READ,
+                                 NO_INHERITANCE, false));
   path = temp_dir.GetPath().Append(L"test_nowritedac");
   ASSERT_TRUE(CreateWithDacl(path, kNoWriteDacDacl, false));
   EXPECT_FALSE(
@@ -126,6 +138,9 @@ TEST(SecurityUtilTest, GrantAccessToPathFileNoInherit) {
   FilePath path = temp_dir.GetPath().Append(L"test");
   ASSERT_TRUE(CreateWithDacl(path, kBaseDacl, false));
   EXPECT_EQ(kBaseDacl, GetFileDacl(path));
+  EXPECT_TRUE(
+      GrantAccessToPath(path, {}, FILE_GENERIC_READ, NO_INHERITANCE, false));
+  EXPECT_EQ(kBaseDacl, GetFileDacl(path));
   auto sids = Sid::FromSddlStringVector({kAuthenticatedUsersSid});
   ASSERT_TRUE(sids);
   EXPECT_TRUE(
@@ -144,8 +159,29 @@ TEST(SecurityUtilTest, DenyAccessToPathFile) {
   FilePath path = temp_dir.GetPath().Append(L"test");
   ASSERT_TRUE(CreateWithDacl(path, kBaseDacl, false));
   EXPECT_EQ(kBaseDacl, GetFileDacl(path));
+  EXPECT_TRUE(
+      DenyAccessToPath(path, {}, FILE_GENERIC_READ, NO_INHERITANCE, true));
+  EXPECT_EQ(kBaseDacl, GetFileDacl(path));
   auto sids = Sid::FromSddlStringVector({kLocalGuestSid});
   ASSERT_TRUE(sids);
+  EXPECT_TRUE(
+      DenyAccessToPath(path, *sids, FILE_GENERIC_READ, NO_INHERITANCE, true));
+  EXPECT_EQ(kTest1DenyDacl, GetFileDacl(path));
+}
+
+TEST(SecurityUtilTest, DenyAccessToPathFileMultiple) {
+  ScopedTempDir temp_dir;
+  ASSERT_TRUE(temp_dir.CreateUniqueTempDir());
+  FilePath path = temp_dir.GetPath().Append(L"test");
+  ASSERT_TRUE(CreateWithDacl(path, kBaseDacl, false));
+  EXPECT_EQ(kBaseDacl, GetFileDacl(path));
+  auto sids = Sid::FromSddlStringVector({kLocalGuestSid});
+  ASSERT_TRUE(sids);
+  EXPECT_TRUE(
+      DenyAccessToPath(path, *sids, FILE_GENERIC_READ, NO_INHERITANCE, true));
+  // Verify setting same ACE on same file does not change the ACL.
+  EXPECT_TRUE(
+      DenyAccessToPath(path, *sids, FILE_GENERIC_READ, NO_INHERITANCE, true));
   EXPECT_TRUE(
       DenyAccessToPath(path, *sids, FILE_GENERIC_READ, NO_INHERITANCE, true));
   EXPECT_EQ(kTest1DenyDacl, GetFileDacl(path));
@@ -199,7 +235,7 @@ TEST(SecurityUtilTest, GrantAccessToPathDirectoryNoInherit) {
 
 TEST(SecurityUtilTest, CloneSidVector) {
   std::vector<Sid> sids =
-      *Sid::FromKnownSidVector({WellKnownSid::kNull, WellKnownSid::kWorld});
+      Sid::FromKnownSidVector({WellKnownSid::kNull, WellKnownSid::kWorld});
   std::vector<Sid> clone = CloneSidVector(sids);
   ASSERT_EQ(sids.size(), clone.size());
   for (size_t index = 0; index < sids.size(); ++index) {
@@ -211,13 +247,13 @@ TEST(SecurityUtilTest, CloneSidVector) {
 
 TEST(SecurityUtilTest, AppendSidVector) {
   std::vector<Sid> sids =
-      *Sid::FromKnownSidVector({WellKnownSid::kNull, WellKnownSid::kWorld});
+      Sid::FromKnownSidVector({WellKnownSid::kNull, WellKnownSid::kWorld});
 
   std::vector<Sid> total_sids;
   AppendSidVector(total_sids, sids);
   EXPECT_EQ(total_sids.size(), sids.size());
 
-  std::vector<Sid> sids2 = *Sid::FromKnownSidVector(
+  std::vector<Sid> sids2 = Sid::FromKnownSidVector(
       {WellKnownSid::kCreatorOwner, WellKnownSid::kNetwork});
   AppendSidVector(total_sids, sids2);
   EXPECT_EQ(total_sids.size(), sids.size() + sids2.size());
@@ -233,6 +269,16 @@ TEST(SecurityUtilTest, AppendSidVector) {
     ASSERT_NE(sid_interator->GetPSID(), sids2[index].GetPSID());
     sid_interator++;
   }
+}
+
+TEST(SecurityUtilTest, GetGrantedAccess) {
+  EXPECT_FALSE(GetGrantedAccess(nullptr));
+  ScopedHandle handle(::CreateMutexEx(nullptr, nullptr, 0, MUTEX_MODIFY_STATE));
+  EXPECT_EQ(GetGrantedAccess(handle.get()), DWORD{MUTEX_MODIFY_STATE});
+  handle.Set(::CreateMutexEx(nullptr, nullptr, 0, READ_CONTROL));
+  EXPECT_EQ(GetGrantedAccess(handle.get()), DWORD{READ_CONTROL});
+  handle.Set(::CreateMutexEx(nullptr, nullptr, 0, GENERIC_ALL));
+  EXPECT_EQ(GetGrantedAccess(handle.get()), DWORD{MUTEX_ALL_ACCESS});
 }
 
 }  // namespace win

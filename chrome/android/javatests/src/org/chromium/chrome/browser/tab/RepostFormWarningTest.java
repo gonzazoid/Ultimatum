@@ -4,10 +4,9 @@
 
 package org.chromium.chrome.browser.tab;
 
-import android.support.test.InstrumentationRegistry;
-
 import androidx.test.filters.MediumTest;
 import androidx.test.filters.SmallTest;
+import androidx.test.platform.app.InstrumentationRegistry;
 
 import org.hamcrest.Matchers;
 import org.junit.Assert;
@@ -22,10 +21,10 @@ import org.chromium.base.test.util.CommandLineFlags;
 import org.chromium.base.test.util.Criteria;
 import org.chromium.base.test.util.CriteriaHelper;
 import org.chromium.base.test.util.Feature;
-import org.chromium.chrome.R;
 import org.chromium.chrome.browser.flags.ChromeSwitches;
 import org.chromium.chrome.test.ChromeJUnit4ClassRunner;
 import org.chromium.chrome.test.ChromeTabbedActivityTestRule;
+import org.chromium.chrome.test.R;
 import org.chromium.chrome.test.batch.BlankCTATabInitialStateRule;
 import org.chromium.content_public.browser.LoadUrlParams;
 import org.chromium.content_public.browser.test.util.TestCallbackHelperContainer;
@@ -133,9 +132,7 @@ public class RepostFormWarningTest {
         waitForNoReportFormWarningDialog();
     }
 
-    /**
-     * Verifies that destroying the Tab dismisses the form resubmission dialog.
-     */
+    /** Verifies that destroying the Tab dismisses the form resubmission dialog. */
     @Test
     @SmallTest
     @Feature({"Navigation"})
@@ -149,36 +146,45 @@ public class RepostFormWarningTest {
         waitForRepostFormWarningDialog();
 
         TestThreadUtils.runOnUiThreadBlocking(
-                (Runnable) ()
-                        -> sActivityTestRule.getActivity().getCurrentTabModel().closeTab(mTab));
+                (Runnable)
+                        () -> sActivityTestRule.getActivity().getCurrentTabModel().closeTab(mTab));
 
         waitForNoReportFormWarningDialog();
     }
 
     private PropertyModel getCurrentModalDialog() {
         return TestThreadUtils.runOnUiThreadBlockingNoException(
-                ()
-                        -> sActivityTestRule.getActivity()
-                                   .getModalDialogManager()
-                                   .getCurrentDialogForTest());
+                () ->
+                        sActivityTestRule
+                                .getActivity()
+                                .getModalDialogManager()
+                                .getCurrentDialogForTest());
     }
 
     private void waitForNoReportFormWarningDialog() {
-        CriteriaHelper.pollUiThread(() -> {
-            Criteria.checkThat("Form resubmission dialog not dismissed correctly",
-                    getCurrentModalDialog(), Matchers.nullValue());
-        });
+        CriteriaHelper.pollUiThread(
+                () -> {
+                    Criteria.checkThat(
+                            "Form resubmission dialog not dismissed correctly",
+                            getCurrentModalDialog(),
+                            Matchers.nullValue());
+                });
     }
 
     private PropertyModel waitForRepostFormWarningDialog() {
-        CriteriaHelper.pollUiThread(() -> {
-            PropertyModel dialogModel = getCurrentModalDialog();
-            Criteria.checkThat("No modal dialog shown", dialogModel, Matchers.notNullValue());
-            Criteria.checkThat("Modal dialog is not a HTTP post dialog",
-                    dialogModel.get(ModalDialogProperties.TITLE),
-                    Matchers.is(sActivityTestRule.getActivity().getString(
-                            R.string.http_post_warning_title)));
-        });
+        CriteriaHelper.pollUiThread(
+                () -> {
+                    PropertyModel dialogModel = getCurrentModalDialog();
+                    Criteria.checkThat(
+                            "No modal dialog shown", dialogModel, Matchers.notNullValue());
+                    Criteria.checkThat(
+                            "Modal dialog is not a HTTP post dialog",
+                            dialogModel.get(ModalDialogProperties.TITLE),
+                            Matchers.is(
+                                    sActivityTestRule
+                                            .getActivity()
+                                            .getString(R.string.http_post_warning_title)));
+                });
         return getCurrentModalDialog();
     }
 
@@ -187,10 +193,12 @@ public class RepostFormWarningTest {
         final String url = "/chrome/test/data/android/test.html";
         final byte[] postData = new byte[] {42};
 
-        InstrumentationRegistry.getInstrumentation().runOnMainSync(
-                ()
-                        -> mTab.loadUrl(LoadUrlParams.createLoadHttpPostParams(
-                                mTestServer.getURL(url), postData)));
+        InstrumentationRegistry.getInstrumentation()
+                .runOnMainSync(
+                        () ->
+                                mTab.loadUrl(
+                                        LoadUrlParams.createLoadHttpPostParams(
+                                                mTestServer.getURL(url), postData)));
     }
 
     /** Reloads mTab. */
@@ -200,7 +208,8 @@ public class RepostFormWarningTest {
 
     /** Clicks the given button in the given dialog. */
     private void clickButton(final PropertyModel dialog, final @ButtonType int type) {
-        InstrumentationRegistry.getInstrumentation().runOnMainSync(
-                () -> dialog.get(ModalDialogProperties.CONTROLLER).onClick(dialog, type));
+        InstrumentationRegistry.getInstrumentation()
+                .runOnMainSync(
+                        () -> dialog.get(ModalDialogProperties.CONTROLLER).onClick(dialog, type));
     }
 }

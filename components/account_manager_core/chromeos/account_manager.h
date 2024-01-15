@@ -12,9 +12,9 @@
 #include <utility>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/component_export.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
@@ -227,6 +227,18 @@ class COMPONENT_EXPORT(ACCOUNT_MANAGER_CORE) AccountManager {
           void(const std::vector<std::pair<::account_manager::Account, bool>>&)>
           callback);
 
+  // Returns the Base16 encoded SHA1 hash for the token stored against
+  // `account_key`. This hash is meant only for debugging purposes and is not
+  // meant be used as a cryptographically secure hash. Do not persist this
+  // outside the user's cryptohome.
+  // Returns an empty string if `account_key` is not available in
+  // `AccountManager`.
+  // TODO(http://b/297484217): Remove this API.
+  void GetTokenHash(const ::account_manager::AccountKey& account_key,
+                    base::OnceCallback<void(const std::string&)> callback);
+
+  base::WeakPtr<AccountManager> GetWeakPtr();
+
  private:
   enum InitializationState {
     kNotStarted,   // Initialize has not been called
@@ -347,7 +359,7 @@ class COMPONENT_EXPORT(ACCOUNT_MANAGER_CORE) AccountManager {
   DelayNetworkCallRunner delay_network_call_runner_;
 
   // Non-owning pointer.
-  raw_ptr<PrefService> pref_service_ = nullptr;
+  raw_ptr<PrefService, DanglingUntriaged> pref_service_ = nullptr;
 
   // A task runner for disk I/O.
   // Will be |nullptr| if |AccountManager| is operating in ephemeral mode.

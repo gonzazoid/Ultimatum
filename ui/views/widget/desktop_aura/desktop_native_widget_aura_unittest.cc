@@ -7,11 +7,10 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "ui/aura/client/aura_constants.h"
@@ -45,8 +44,7 @@
 #include "ui/views/win/hwnd_util.h"
 #endif
 
-namespace views {
-namespace test {
+namespace views::test {
 
 using DesktopNativeWidgetAuraTest = DesktopWidgetTest;
 
@@ -137,30 +135,6 @@ TEST_F(DesktopNativeWidgetAuraTest, WidgetNotVisibleOnlyWindowTreeHostShown) {
   EXPECT_FALSE(widget.IsVisible());
 }
 #endif
-
-TEST_F(DesktopNativeWidgetAuraTest, DesktopAuraWindowShowFrameless) {
-  Widget widget;
-  Widget::InitParams init_params =
-      CreateParams(Widget::InitParams::TYPE_WINDOW_FRAMELESS);
-  init_params.ownership = Widget::InitParams::WIDGET_OWNS_NATIVE_WIDGET;
-  widget.Init(std::move(init_params));
-
-  // Make sure that changing frame type doesn't crash when there's no non-client
-  // view.
-  ASSERT_EQ(nullptr, widget.non_client_view());
-  widget.DebugToggleFrameType();
-  widget.Show();
-
-#if BUILDFLAG(IS_WIN)
-  // On Windows also make sure that handling WM_SYSCOMMAND doesn't crash with
-  // custom frame. Frame type needs to be toggled again if Aero Glass is
-  // disabled.
-  if (widget.ShouldUseNativeFrame())
-    widget.DebugToggleFrameType();
-  SendMessage(widget.GetNativeWindow()->GetHost()->GetAcceleratedWidget(),
-              WM_SYSCOMMAND, SC_RESTORE, 0);
-#endif  // BUILDFLAG(IS_WIN)
-}
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 // TODO(crbug.com/916272): investigate fixing and enabling on Chrome OS.
@@ -364,17 +338,35 @@ TEST_F(DesktopNativeWidgetAuraTest, WidgetCanBeDestroyedFromNestedLoop) {
   // task will be executed from the nested loop initiated with the call to
   // |RunWithDispatcher()| below.
   base::RunLoop run_loop;
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&QuitNestedLoopAndCloseWidget,
                                 std::move(widget), run_loop.QuitClosure()));
   run_loop.Run();
 }
 
+// DesktopNativeWidgetAura::CloseNow is protected.
+// Create a new object to override CloseNow so we can test deleting
+// the native widget.
+class TestDesktopNativeWidgetAura : public DesktopNativeWidgetAura {
+ public:
+  explicit TestDesktopNativeWidgetAura(internal::NativeWidgetDelegate* delegate)
+      : DesktopNativeWidgetAura(delegate) {}
+
+  TestDesktopNativeWidgetAura(const TestDesktopNativeWidgetAura&) = delete;
+  TestDesktopNativeWidgetAura& operator=(const TestDesktopNativeWidgetAura&) =
+      delete;
+
+  ~TestDesktopNativeWidgetAura() override = default;
+
+  void CloseNow() override { DesktopNativeWidgetAura::CloseNow(); }
+};
+
+// Series of tests that verifies a null NativeWidgetDelegate does not cause
+// a crash.
 class DesktopNativeWidgetAuraWithNoDelegateTest
     : public DesktopNativeWidgetAuraTest {
  public:
-  DesktopNativeWidgetAuraWithNoDelegateTest()
-      : widget(std::make_unique<Widget>()) {}
+  DesktopNativeWidgetAuraWithNoDelegateTest() = default;
 
   DesktopNativeWidgetAuraWithNoDelegateTest(
       const DesktopNativeWidgetAuraWithNoDelegateTest&) = delete;
@@ -386,31 +378,137 @@ class DesktopNativeWidgetAuraWithNoDelegateTest
   // testing::Test overrides:
   void SetUp() override {
     DesktopNativeWidgetAuraTest::SetUp();
-    // This gets destroyed by Widget.
-    desktop_native_widget = new DesktopNativeWidgetAura(widget.get());
+    Widget widget;
+    desktop_native_widget_ = new TestDesktopNativeWidgetAura(&widget);
     Widget::InitParams params = CreateParams(Widget::InitParams::TYPE_WINDOW);
-    params.ownership = views::Widget::InitParams::WIDGET_OWNS_NATIVE_WIDGET;
-    params.native_widget = desktop_native_widget;
-    widget->Init(std::move(params));
-    desktop_native_widget->set_delegate_for_testing(nullptr);
+    params.ownership = views::Widget::InitParams::CLIENT_OWNS_WIDGET;
+    params.native_widget = desktop_native_widget_;
+    widget.Init(std::move(params));
+    widget.Show();
+    // Notify all widget observers that the widget is destroying so they can
+    // unregister properly and clear the pointer to the widget.
+    widget.OnNativeWidgetDestroying();
+    // Widget will create a DefaultWidgetDelegate if no delegates are provided.
+    // Call Widget::OnNativeWidgetDestroyed() to destroy
+    // the WidgetDelegate properly.
+    widget.OnNativeWidgetDestroyed();
   }
 
   void TearDown() override {
-    desktop_native_widget->set_delegate_for_testing(widget.get());
-    widget.reset();
+    desktop_native_widget_->CloseNow();
     ViewsTestBase::TearDown();
   }
 
-  std::unique_ptr<Widget> widget;
-  raw_ptr<DesktopNativeWidgetAura> desktop_native_widget = nullptr;
+  raw_ptr<TestDesktopNativeWidgetAura, AcrossTasksDanglingUntriaged>
+      desktop_native_widget_;
 };
 
-// Verifies having a null NativeWidgetDelegate doesn't crash.
-TEST_F(DesktopNativeWidgetAuraWithNoDelegateTest, OnCaptureLostTest) {
-  static_cast<aura::WindowDelegate*>(desktop_native_widget)->OnCaptureLost();
+TEST_F(DesktopNativeWidgetAuraWithNoDelegateTest, GetHitTestMaskTest) {
+  SkPath mask;
+  static_cast<aura::WindowDelegate*>(desktop_native_widget_)
+      ->GetHitTestMask(&mask);
 }
 
-using DesktopAuraWidgetTest = DesktopWidgetTest;
+TEST_F(DesktopNativeWidgetAuraWithNoDelegateTest, GetMaximumSizeTest) {
+  static_cast<aura::WindowDelegate*>(desktop_native_widget_)->GetMaximumSize();
+}
+
+TEST_F(DesktopNativeWidgetAuraWithNoDelegateTest, GetMinimumSizeTest) {
+  static_cast<aura::WindowDelegate*>(desktop_native_widget_)->GetMinimumSize();
+}
+
+TEST_F(DesktopNativeWidgetAuraWithNoDelegateTest, GetNonClientComponentTest) {
+  static_cast<aura::WindowDelegate*>(desktop_native_widget_)
+      ->GetNonClientComponent(gfx::Point());
+}
+
+TEST_F(DesktopNativeWidgetAuraWithNoDelegateTest, GetWidgetTest) {
+  static_cast<internal::NativeWidgetPrivate*>(desktop_native_widget_)
+      ->GetWidget();
+}
+
+TEST_F(DesktopNativeWidgetAuraWithNoDelegateTest, HasHitTestMaskTest) {
+  static_cast<aura::WindowDelegate*>(desktop_native_widget_)->HasHitTestMask();
+}
+
+TEST_F(DesktopNativeWidgetAuraWithNoDelegateTest, OnCaptureLostTest) {
+  static_cast<aura::WindowDelegate*>(desktop_native_widget_)->OnCaptureLost();
+}
+
+TEST_F(DesktopNativeWidgetAuraWithNoDelegateTest, OnGestureEventTest) {
+  ui::GestureEvent gesture(0, 0, 0, ui::EventTimeForNow(),
+                           ui::GestureEventDetails(ui::ET_GESTURE_TAP_DOWN));
+  static_cast<ui::EventHandler*>(desktop_native_widget_)
+      ->OnGestureEvent(&gesture);
+}
+
+TEST_F(DesktopNativeWidgetAuraWithNoDelegateTest, OnHostMovedInPixelsTest) {
+  static_cast<aura::WindowTreeHostObserver*>(desktop_native_widget_)
+      ->OnHostMovedInPixels(nullptr);
+}
+
+TEST_F(DesktopNativeWidgetAuraWithNoDelegateTest, OnHostResizedTest) {
+  static_cast<aura::WindowTreeHostObserver*>(desktop_native_widget_)
+      ->OnHostResized(nullptr);
+}
+
+TEST_F(DesktopNativeWidgetAuraWithNoDelegateTest, OnHostWorkspaceChangedTest) {
+  static_cast<aura::WindowTreeHostObserver*>(desktop_native_widget_)
+      ->OnHostWorkspaceChanged(nullptr);
+}
+
+TEST_F(DesktopNativeWidgetAuraWithNoDelegateTest, OnKeyEventTest) {
+  ui::KeyEvent key(ui::ET_KEY_PRESSED, ui::VKEY_0, ui::EF_NONE);
+  static_cast<ui::EventHandler*>(desktop_native_widget_)->OnKeyEvent(&key);
+}
+
+TEST_F(DesktopNativeWidgetAuraWithNoDelegateTest, OnMouseEventTest) {
+  ui::MouseEvent move(ui::ET_MOUSE_MOVED, gfx::Point(), gfx::Point(),
+                      ui::EventTimeForNow(), ui::EF_NONE, ui::EF_NONE);
+  static_cast<ui::EventHandler*>(desktop_native_widget_)->OnMouseEvent(&move);
+}
+
+TEST_F(DesktopNativeWidgetAuraWithNoDelegateTest, OnPaintTest) {
+  static_cast<aura::WindowDelegate*>(desktop_native_widget_)
+      ->OnPaint(ui::PaintContext(nullptr, 0, gfx::Rect(), false));
+}
+
+TEST_F(DesktopNativeWidgetAuraWithNoDelegateTest, OnScrollEventTest) {
+  ui::ScrollEvent scroll(ui::ET_SCROLL, gfx::Point(), ui::EventTimeForNow(), 0,
+                         0, 0, 0, 0, 0);
+  static_cast<ui::EventHandler*>(desktop_native_widget_)
+      ->OnScrollEvent(&scroll);
+}
+
+TEST_F(DesktopNativeWidgetAuraWithNoDelegateTest, OnWindowActivatedTest) {
+  static_cast<wm::ActivationChangeObserver*>(desktop_native_widget_)
+      ->OnWindowActivated(
+          wm::ActivationChangeObserver::ActivationReason::ACTIVATION_CLIENT,
+          static_cast<internal::NativeWidgetPrivate*>(desktop_native_widget_)
+              ->GetNativeView(),
+          nullptr);
+}
+
+TEST_F(DesktopNativeWidgetAuraWithNoDelegateTest, OnWindowFocusedTest) {
+  static_cast<aura::client::FocusChangeObserver*>(desktop_native_widget_)
+      ->OnWindowFocused(nullptr, nullptr);
+}
+
+TEST_F(DesktopNativeWidgetAuraWithNoDelegateTest, ShouldActivateTest) {
+  static_cast<wm::ActivationDelegate*>(desktop_native_widget_)
+      ->ShouldActivate();
+}
+
+TEST_F(DesktopNativeWidgetAuraWithNoDelegateTest,
+       ShouldDescendIntoChildForEventHandlingTest) {
+  static_cast<aura::WindowDelegate*>(desktop_native_widget_)
+      ->ShouldDescendIntoChildForEventHandling(nullptr, gfx::Point());
+}
+
+TEST_F(DesktopNativeWidgetAuraWithNoDelegateTest, UpdateVisualStateTest) {
+  static_cast<aura::WindowDelegate*>(desktop_native_widget_)
+      ->UpdateVisualState();
+}
 
 #if !BUILDFLAG(IS_FUCHSIA)
 // TODO(crbug.com/1236997): Under Fuchsia pop-up and fullscreen windows are not
@@ -460,7 +558,7 @@ class DesktopAuraTopLevelWindowTest : public aura::WindowObserver {
     owned_window_->Init(ui::LAYER_TEXTURED);
     aura::client::ParentWindowWithContext(
         owned_window_, widget_.GetNativeView()->GetRootWindow(),
-        gfx::Rect(0, 0, 1900, 1600));
+        gfx::Rect(0, 0, 1900, 1600), display::kInvalidDisplayId);
     owned_window_->Show();
     owned_window_->AddObserver(this);
 
@@ -508,8 +606,9 @@ class DesktopAuraTopLevelWindowTest : public aura::WindowObserver {
 
  private:
   views::Widget widget_;
-  raw_ptr<views::Widget> top_level_widget_ = nullptr;
-  raw_ptr<aura::Window> owned_window_ = nullptr;
+  raw_ptr<views::Widget, AcrossTasksDanglingUntriaged> top_level_widget_ =
+      nullptr;
+  raw_ptr<aura::Window, AcrossTasksDanglingUntriaged> owned_window_ = nullptr;
   bool owner_destroyed_ = false;
   bool owned_window_destroyed_ = false;
   aura::test::TestWindowDelegate child_window_delegate_;
@@ -518,7 +617,7 @@ class DesktopAuraTopLevelWindowTest : public aura::WindowObserver {
   bool use_async_mode_ = true;
 };
 
-TEST_F(DesktopAuraWidgetTest, FullscreenWindowDestroyedBeforeOwnerTest) {
+TEST_F(DesktopNativeWidgetAuraTest, FullscreenWindowDestroyedBeforeOwnerTest) {
   DesktopAuraTopLevelWindowTest fullscreen_window;
   ASSERT_NO_FATAL_FAILURE(
       fullscreen_window.CreateTopLevelWindow(gfx::Rect(0, 0, 200, 200), true));
@@ -528,7 +627,7 @@ TEST_F(DesktopAuraWidgetTest, FullscreenWindowDestroyedBeforeOwnerTest) {
   RunPendingMessages();
 }
 
-TEST_F(DesktopAuraWidgetTest, FullscreenWindowOwnerDestroyed) {
+TEST_F(DesktopNativeWidgetAuraTest, FullscreenWindowOwnerDestroyed) {
   DesktopAuraTopLevelWindowTest fullscreen_window;
   ASSERT_NO_FATAL_FAILURE(
       fullscreen_window.CreateTopLevelWindow(gfx::Rect(0, 0, 200, 200), true));
@@ -538,7 +637,7 @@ TEST_F(DesktopAuraWidgetTest, FullscreenWindowOwnerDestroyed) {
   RunPendingMessages();
 }
 
-TEST_F(DesktopAuraWidgetTest, TopLevelOwnedPopupTest) {
+TEST_F(DesktopNativeWidgetAuraTest, TopLevelOwnedPopupTest) {
   DesktopAuraTopLevelWindowTest popup_window;
   ASSERT_NO_FATAL_FAILURE(
       popup_window.CreateTopLevelWindow(gfx::Rect(0, 0, 200, 200), false));
@@ -550,7 +649,7 @@ TEST_F(DesktopAuraWidgetTest, TopLevelOwnedPopupTest) {
 
 // This test validates that when a top level owned popup Aura window is
 // resized, the widget is resized as well.
-TEST_F(DesktopAuraWidgetTest, TopLevelOwnedPopupResizeTest) {
+TEST_F(DesktopNativeWidgetAuraTest, TopLevelOwnedPopupResizeTest) {
   DesktopAuraTopLevelWindowTest popup_window;
 
   popup_window.set_use_async_mode(false);
@@ -569,7 +668,7 @@ TEST_F(DesktopAuraWidgetTest, TopLevelOwnedPopupResizeTest) {
 
 // This test validates that when a top level owned popup Aura window is
 // repositioned, the widget is repositioned as well.
-TEST_F(DesktopAuraWidgetTest, TopLevelOwnedPopupRepositionTest) {
+TEST_F(DesktopNativeWidgetAuraTest, TopLevelOwnedPopupRepositionTest) {
   DesktopAuraTopLevelWindowTest popup_window;
 
   popup_window.set_use_async_mode(false);
@@ -647,12 +746,12 @@ void RunCloseWidgetDuringDispatchTest(WidgetTest* test,
 }
 
 // Verifies deleting the widget from a mouse pressed event doesn't crash.
-TEST_F(DesktopAuraWidgetTest, CloseWidgetDuringMousePress) {
+TEST_F(DesktopNativeWidgetAuraTest, CloseWidgetDuringMousePress) {
   RunCloseWidgetDuringDispatchTest(this, ui::ET_MOUSE_PRESSED);
 }
 
 // Verifies deleting the widget from a mouse released event doesn't crash.
-TEST_F(DesktopAuraWidgetTest, CloseWidgetDuringMouseReleased) {
+TEST_F(DesktopNativeWidgetAuraTest, CloseWidgetDuringMouseReleased) {
   RunCloseWidgetDuringDispatchTest(this, ui::ET_MOUSE_RELEASED);
 }
 
@@ -664,8 +763,8 @@ TEST_F(DesktopAuraWidgetTest, CloseWidgetDuringMouseReleased) {
 #endif
 
 // This test verifies that whether mouse events when a modal dialog is
-// displayed are eaten or recieved by the dialog.
-TEST_F(DesktopWidgetTest, MAYBE_WindowMouseModalityTest) {
+// displayed are eaten or received by the dialog.
+TEST_F(DesktopNativeWidgetAuraTest, MAYBE_WindowMouseModalityTest) {
   // Create a top level widget.
   Widget top_level_widget;
   Widget::InitParams init_params =
@@ -737,7 +836,7 @@ TEST_F(DesktopWidgetTest, MAYBE_WindowMouseModalityTest) {
 #if BUILDFLAG(IS_WIN)
 // Tests whether we can activate the top level widget when a modal dialog is
 // active.
-TEST_F(DesktopWidgetTest, WindowModalityActivationTest) {
+TEST_F(DesktopNativeWidgetAuraTest, WindowModalityActivationTest) {
   TestDesktopWidgetDelegate widget_delegate;
   widget_delegate.InitWidget(CreateParams(Widget::InitParams::TYPE_WINDOW));
 
@@ -773,7 +872,8 @@ TEST_F(DesktopWidgetTest, WindowModalityActivationTest) {
 // messages via the WindowEventTarget interface implemented by the
 // HWNDMessageHandler class does not cause a crash due to an unprocessed
 // event
-TEST_F(DesktopWidgetTest, CharMessagesAsKeyboardMessagesDoesNotCrash) {
+TEST_F(DesktopNativeWidgetAuraTest,
+       CharMessagesAsKeyboardMessagesDoesNotCrash) {
   Widget widget;
   Widget::InitParams params = CreateParams(Widget::InitParams::TYPE_WINDOW);
   params.ownership = Widget::InitParams::WIDGET_OWNS_NATIVE_WIDGET;
@@ -794,5 +894,26 @@ TEST_F(DesktopWidgetTest, CharMessagesAsKeyboardMessagesDoesNotCrash) {
 
 #endif  // BUILDFLAG(IS_WIN)
 
-}  // namespace test
-}  // namespace views
+// Tests that reparenting a destkop widget to another desktop widget does not
+// crash.
+TEST_F(DesktopNativeWidgetAuraTest, Reparent) {
+  Widget root, widget;
+  Widget::InitParams root_params =
+      CreateParams(Widget::InitParams::TYPE_WINDOW);
+  root_params.ownership = Widget::InitParams::WIDGET_OWNS_NATIVE_WIDGET;
+  Widget::InitParams widget_params =
+      CreateParams(Widget::InitParams::TYPE_WINDOW);
+  widget_params.ownership = Widget::InitParams::WIDGET_OWNS_NATIVE_WIDGET;
+  root.Init(std::move(root_params));
+  widget.Init(std::move(widget_params));
+
+  // Reparent.
+  Widget::ReparentNativeView(widget.GetNativeView(), root.GetNativeView());
+
+  // Destroying root should eventually destroy its child.
+  WidgetDestroyedWaiter destroy_waiter(&widget);
+  root.Close();
+  destroy_waiter.Wait();
+}
+
+}  // namespace views::test

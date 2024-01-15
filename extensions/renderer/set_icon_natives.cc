@@ -10,7 +10,7 @@
 #include <limits>
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/strings/string_number_conversions.h"
 #include "extensions/renderer/script_context.h"
 #include "gin/data_object_builder.h"
@@ -75,9 +75,6 @@ SetIconNatives::SetIconNatives(ScriptContext* context)
     : ObjectBackedNativeHandler(context) {}
 
 void SetIconNatives::AddRoutes() {
-  RouteHandlerFunction("IsInServiceWorker",
-                       base::BindRepeating(&SetIconNatives::IsInServiceWorker,
-                                           base::Unretained(this)));
   RouteHandlerFunction("SetIconCommon",
                        base::BindRepeating(&SetIconNatives::SetIconCommon,
                                            base::Unretained(this)));
@@ -151,8 +148,8 @@ bool SetIconNatives::ConvertImageDataToBitmapValue(
   std::vector<uint8_t> s = skia::mojom::InlineBitmap::Serialize(&bitmap);
   blink::WebArrayBuffer buffer = blink::WebArrayBuffer::Create(s.size(), 1);
   memcpy(buffer.Data(), s.data(), s.size());
-  *image_data_bitmap = blink::WebArrayBufferConverter::ToV8Value(
-      &buffer, context()->v8_context()->Global(), isolate);
+  *image_data_bitmap =
+      blink::WebArrayBufferConverter::ToV8Value(&buffer, isolate);
 
   return true;
 }
@@ -204,14 +201,6 @@ bool SetIconNatives::ConvertImageDataSetToBitmapValueSet(
         .FromMaybe(false);
   }
   return true;
-}
-
-void SetIconNatives::IsInServiceWorker(
-    const v8::FunctionCallbackInfo<v8::Value>& args) {
-  CHECK_EQ(0, args.Length());
-  const bool is_in_service_worker = context()->IsForServiceWorker();
-  args.GetReturnValue().Set(
-      v8::Boolean::New(args.GetIsolate(), is_in_service_worker));
 }
 
 void SetIconNatives::SetIconCommon(

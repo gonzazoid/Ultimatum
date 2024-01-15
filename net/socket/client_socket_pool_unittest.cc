@@ -56,8 +56,8 @@ TEST(ClientSocketPool, GroupIdOperators) {
   const SchemefulSite kSiteA(GURL("http://a.test/"));
   const SchemefulSite kSiteB(GURL("http://b.test/"));
   const NetworkAnonymizationKey kNetworkAnonymizationKeys[] = {
-      NetworkAnonymizationKey(kSiteA, kSiteA, /*is_cross_site=*/false),
-      NetworkAnonymizationKey(kSiteB, kSiteB, /*is_cross_site=*/false),
+      NetworkAnonymizationKey::CreateSameSite(kSiteA),
+      NetworkAnonymizationKey::CreateSameSite(kSiteB),
   };
 
   const SecureDnsPolicy kDisableSecureDnsValues[] = {SecureDnsPolicy::kAllow,
@@ -110,55 +110,54 @@ TEST(ClientSocketPool, GroupIdToString) {
   feature_list.InitAndEnableFeature(
       features::kPartitionConnectionsByNetworkIsolationKey);
 
-  EXPECT_EQ("http://foo <null null>",
+  EXPECT_EQ("http://foo <null>",
             ClientSocketPool::GroupId(
                 url::SchemeHostPort(url::kHttpScheme, "foo", 80),
                 PrivacyMode::PRIVACY_MODE_DISABLED, NetworkAnonymizationKey(),
                 SecureDnsPolicy::kAllow)
                 .ToString());
-  EXPECT_EQ("http://bar:443 <null null>",
+  EXPECT_EQ("http://bar:443 <null>",
             ClientSocketPool::GroupId(
                 url::SchemeHostPort(url::kHttpScheme, "bar", 443),
                 PrivacyMode::PRIVACY_MODE_DISABLED, NetworkAnonymizationKey(),
                 SecureDnsPolicy::kAllow)
                 .ToString());
-  EXPECT_EQ("pm/http://bar <null null>",
+  EXPECT_EQ("pm/http://bar <null>",
             ClientSocketPool::GroupId(
                 url::SchemeHostPort(url::kHttpScheme, "bar", 80),
                 PrivacyMode::PRIVACY_MODE_ENABLED, NetworkAnonymizationKey(),
                 SecureDnsPolicy::kAllow)
                 .ToString());
 
-  EXPECT_EQ("https://foo:80 <null null>",
+  EXPECT_EQ("https://foo:80 <null>",
             ClientSocketPool::GroupId(
                 url::SchemeHostPort(url::kHttpsScheme, "foo", 80),
                 PrivacyMode::PRIVACY_MODE_DISABLED, NetworkAnonymizationKey(),
                 SecureDnsPolicy::kAllow)
                 .ToString());
-  EXPECT_EQ("https://bar <null null>",
+  EXPECT_EQ("https://bar <null>",
             ClientSocketPool::GroupId(
                 url::SchemeHostPort(url::kHttpsScheme, "bar", 443),
                 PrivacyMode::PRIVACY_MODE_DISABLED, NetworkAnonymizationKey(),
                 SecureDnsPolicy::kAllow)
                 .ToString());
-  EXPECT_EQ("pm/https://bar:80 <null null>",
+  EXPECT_EQ("pm/https://bar:80 <null>",
             ClientSocketPool::GroupId(
                 url::SchemeHostPort(url::kHttpsScheme, "bar", 80),
                 PrivacyMode::PRIVACY_MODE_ENABLED, NetworkAnonymizationKey(),
                 SecureDnsPolicy::kAllow)
                 .ToString());
 
-  EXPECT_EQ("https://foo <https://foo.test https://bar.test>",
+  EXPECT_EQ("https://foo <https://foo.test cross_site>",
             ClientSocketPool::GroupId(
                 url::SchemeHostPort(url::kHttpsScheme, "foo", 443),
                 PrivacyMode::PRIVACY_MODE_DISABLED,
-                NetworkAnonymizationKey(SchemefulSite(GURL("https://foo.test")),
-                                        SchemefulSite(GURL("https://bar.test")),
-                                        /*is_cross_site=*/true),
+                NetworkAnonymizationKey::CreateCrossSite(
+                    SchemefulSite(GURL("https://foo.test"))),
                 SecureDnsPolicy::kAllow)
                 .ToString());
 
-  EXPECT_EQ("dsd/pm/https://bar:80 <null null>",
+  EXPECT_EQ("dsd/pm/https://bar:80 <null>",
             ClientSocketPool::GroupId(
                 url::SchemeHostPort(url::kHttpsScheme, "bar", 80),
                 PrivacyMode::PRIVACY_MODE_ENABLED, NetworkAnonymizationKey(),
@@ -176,13 +175,13 @@ TEST(ClientSocketPool, PartitionConnectionsByNetworkIsolationKeyDisabled) {
   ClientSocketPool::GroupId group_id1(
       url::SchemeHostPort(url::kHttpsScheme, "foo", 443),
       PrivacyMode::PRIVACY_MODE_DISABLED,
-      NetworkAnonymizationKey(kSiteFoo, kSiteFoo, /*is_cross_site=*/false),
+      NetworkAnonymizationKey::CreateSameSite(kSiteFoo),
       SecureDnsPolicy::kAllow);
 
   ClientSocketPool::GroupId group_id2(
       url::SchemeHostPort(url::kHttpsScheme, "foo", 443),
       PrivacyMode::PRIVACY_MODE_DISABLED,
-      NetworkAnonymizationKey(kSiteBar, kSiteBar, /*is_cross_site=*/false),
+      NetworkAnonymizationKey::CreateSameSite(kSiteBar),
       SecureDnsPolicy::kAllow);
 
   EXPECT_FALSE(group_id1.network_anonymization_key().IsFullyPopulated());

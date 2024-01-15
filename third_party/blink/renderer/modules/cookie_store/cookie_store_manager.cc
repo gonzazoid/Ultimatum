@@ -127,7 +127,8 @@ ScriptPromise CookieStoreManager::subscribe(
     backend_subscriptions.push_back(std::move(backend_subscription));
   }
 
-  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
+  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(
+      script_state, exception_state.GetContext());
   backend_->AddSubscriptions(
       registration_->RegistrationId(), std::move(backend_subscriptions),
       WTF::BindOnce(&CookieStoreManager::OnSubscribeResult,
@@ -152,7 +153,8 @@ ScriptPromise CookieStoreManager::unsubscribe(
     backend_subscriptions.push_back(std::move(backend_subscription));
   }
 
-  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
+  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(
+      script_state, exception_state.GetContext());
   backend_->RemoveSubscriptions(
       registration_->RegistrationId(), std::move(backend_subscriptions),
       WTF::BindOnce(&CookieStoreManager::OnSubscribeResult,
@@ -169,7 +171,8 @@ ScriptPromise CookieStoreManager::getSubscriptions(
     return ScriptPromise();
   }
 
-  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
+  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(
+      script_state, exception_state.GetContext());
   backend_->GetSubscriptions(
       registration_->RegistrationId(),
       WTF::BindOnce(&CookieStoreManager::OnGetSubscriptionsResult,
@@ -194,7 +197,7 @@ void CookieStoreManager::OnSubscribeResult(ScriptPromiseResolver* resolver,
   if (!backend_success) {
     resolver->Reject(V8ThrowDOMException::CreateOrEmpty(
         script_state->GetIsolate(), DOMExceptionCode::kUnknownError,
-        "An unknown error occured while subscribing to cookie changes."));
+        "An unknown error occurred while subscribing to cookie changes."));
     return;
   }
   resolver->Resolve();
@@ -212,7 +215,7 @@ void CookieStoreManager::OnGetSubscriptionsResult(
   if (!backend_success) {
     resolver->Reject(V8ThrowDOMException::CreateOrEmpty(
         script_state->GetIsolate(), DOMExceptionCode::kUnknownError,
-        "An unknown error occured while subscribing to cookie changes."));
+        "An unknown error occurred while subscribing to cookie changes."));
     return;
   }
 

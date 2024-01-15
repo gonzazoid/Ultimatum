@@ -8,7 +8,12 @@
 #include "ash/style/system_shadow.h"
 #include "ui/compositor/layer.h"
 #include "ui/compositor/layer_delegate.h"
+#include "ui/compositor_extra/shadow.h"
 #include "ui/gfx/shadow_value.h"
+
+namespace ui {
+class ColorProvider;
+}  // namespace ui
 
 namespace ash {
 
@@ -34,9 +39,11 @@ class SystemShadowOnTextureLayer : public SystemShadow,
   void SetType(SystemShadow::Type type) override;
   void SetContentBounds(const gfx::Rect& bounds) override;
   void SetRoundedCornerRadius(int corner_radius) override;
+  void SetRoundedCorners(const gfx::RoundedCornersF& rounded_corners) override;
   const gfx::Rect& GetContentBounds() override;
   ui::Layer* GetLayer() override;
   ui::Layer* GetNinePatchLayer() override;
+  const gfx::ShadowValues GetShadowValuesForTesting() const override;
 
  private:
   // Calculate layer bounds according to the content bounds and shadow values.
@@ -45,18 +52,27 @@ class SystemShadowOnTextureLayer : public SystemShadow,
   // Repaint the layer after the shadow attributes change.
   void UpdateLayer();
 
+  // Update shadow values when the type or color provider source change.
+  void UpdateShadowValues();
+
   // ui::LayerDelegate:
   void OnPaintLayer(const ui::PaintContext& context) override;
   void OnDeviceScaleFactorChanged(float old_device_scale_factor,
                                   float new_device_scale_factor) override;
 
+  // SystemShadow:
+  void UpdateShadowColors(const ui::ColorProvider* color_provider) override;
+
+  SystemShadow::Type type_;
   // The texture layer on which the shadow is painted.
   ui::Layer layer_;
   // Shadow values generated according to the shadow type.
   gfx::ShadowValues shadow_values_;
   // The bounds of the content area.
   gfx::Rect content_bounds_;
-  int corner_radius_ = 0;
+  gfx::RoundedCornersF rounded_corners_;
+  // The shadow colors map.
+  ui::Shadow::ElevationToColorsMap colors_map_;
 };
 
 }  // namespace ash

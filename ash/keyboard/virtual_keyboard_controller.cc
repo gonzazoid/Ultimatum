@@ -16,10 +16,11 @@
 #include "ash/shell.h"
 #include "ash/system/tray/system_tray_notifier.h"
 #include "ash/wm/tablet_mode/tablet_mode_controller.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/strings/string_util.h"
+#include "base/task/single_thread_task_runner.h"
 #include "ui/base/emoji/emoji_panel_helper.h"
 #include "ui/display/display.h"
 #include "ui/display/screen.h"
@@ -46,7 +47,12 @@ void ResetVirtualKeyboard() {
 }  // namespace
 
 VirtualKeyboardController::VirtualKeyboardController()
-    : ignore_external_keyboard_(false), ignore_internal_keyboard_(false) {
+    : ignore_external_keyboard_(false),
+      ignore_internal_keyboard_(false),
+      bluetooth_devices_observer_(
+          std::make_unique<BluetoothDevicesObserver>(base::BindRepeating(
+              &VirtualKeyboardController::OnBluetoothAdapterOrDeviceChanged,
+              base::Unretained(this)))) {
   Shell::Get()->tablet_mode_controller()->AddObserver(this);
   Shell::Get()->session_controller()->AddObserver(this);
   ui::DeviceDataManager::GetInstance()->AddObserver(this);
@@ -57,11 +63,6 @@ VirtualKeyboardController::VirtualKeyboardController()
       &VirtualKeyboardController::ForceShowKeyboardWithKeyset,
       base::Unretained(this), input_method::ImeKeyset::kEmoji));
   keyboard::KeyboardUIController::Get()->AddObserver(this);
-
-  bluetooth_devices_observer_ =
-      std::make_unique<BluetoothDevicesObserver>(base::BindRepeating(
-          &VirtualKeyboardController::OnBluetoothAdapterOrDeviceChanged,
-          base::Unretained(this)));
 }
 
 VirtualKeyboardController::~VirtualKeyboardController() {
@@ -117,7 +118,7 @@ void VirtualKeyboardController::UpdateDevices() {
     if ((type == ui::InputDeviceType::INPUT_DEVICE_USB ||
          (type == ui::InputDeviceType::INPUT_DEVICE_BLUETOOTH &&
           bluetooth_devices_observer_->IsConnectedBluetoothDevice(device))) &&
-        !device.suspected_imposter) {
+        !device.suspected_keyboard_imposter) {
       external_keyboards_.push_back(device);
     }
   }
@@ -169,7 +170,7 @@ void VirtualKeyboardController::OnKeyboardHidden(bool is_temporary_hide) {
     return;
 
   // Post a task to reset the virtual keyboard to its original state.
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(ResetVirtualKeyboard));
 }
 
@@ -190,7 +191,7 @@ void VirtualKeyboardController::OnBluetoothAdapterOrDeviceChanged(
   }
 }
 
-const absl::optional<std::string>&
+const std::optional<std::string>&
 VirtualKeyboardController::GetInternalKeyboardName() const {
   return internal_keyboard_name_;
 }

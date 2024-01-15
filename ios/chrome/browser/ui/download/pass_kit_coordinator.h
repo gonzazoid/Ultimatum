@@ -7,12 +7,7 @@
 
 #import <PassKit/PassKit.h>
 
-#import "ios/chrome/browser/download/pass_kit_tab_helper_delegate.h"
-#import "ios/chrome/browser/ui/coordinators/chrome_coordinator.h"
-
-namespace web {
-class WebState;
-}  // namespace web
+#import "ios/chrome/browser/shared/coordinator/chrome_coordinator/chrome_coordinator.h"
 
 // Key of the UMA Download.IOSPresentAddPassesDialogResult histogram. Exposed
 // only for testing.
@@ -42,16 +37,12 @@ enum class PresentAddPassesDialogResult {
 };
 
 // Coordinates presentation of "Add pkpass UI" and "failed to add pkpass UI".
-@interface PassKitCoordinator : ChromeCoordinator<PassKitTabHelperDelegate>
-
-// Must be set before calling `start` method. Set to null when stop method is
-// called or web state is destroyed.
-@property(nonatomic) web::WebState* webState;
+@interface PassKitCoordinator : ChromeCoordinator
 
 // If the PKPass is a valid pass, then the coordinator will present the "Add
 // pkpass UI". Otherwise, the coordinator will present the "failed to add
 // pkpass UI". Is set to null when the stop method is called.
-@property(nonatomic) PKPass* pass;
+@property(nonatomic) NSArray<PKPass*>* passes;
 
 @end
 

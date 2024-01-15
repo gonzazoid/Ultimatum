@@ -5,6 +5,7 @@
 #include "chrome/browser/ui/ash/sharesheet/sharesheet_header_view.h"
 
 #include <algorithm>
+#include <optional>
 #include <string>
 #include <utility>
 
@@ -12,12 +13,13 @@
 #include "ash/public/cpp/image_util.h"
 #include "ash/public/cpp/rounded_image_view.h"
 #include "ash/public/cpp/style/color_provider.h"
-#include "ash/public/cpp/style/scoped_light_mode_as_default.h"
 #include "ash/style/ash_color_provider.h"
 #include "ash/style/color_util.h"
 #include "ash/style/dark_light_mode_controller_impl.h"
-#include "base/bind.h"
+#include "ash/style/typography.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_util.h"
 #include "chrome/app/vector_icons/vector_icons.h"
@@ -31,18 +33,19 @@
 #include "chrome/browser/ui/views/chrome_typography.h"
 #include "chrome/common/chrome_features.h"
 #include "chrome/grit/generated_resources.h"
+#include "chromeos/constants/chromeos_features.h"
 #include "chromeos/ui/base/file_icon_util.h"
 #include "chromeos/ui/vector_icons/vector_icons.h"
 #include "components/services/app_service/public/cpp/intent_util.h"
 #include "components/url_formatter/elide_url.h"
 #include "components/url_formatter/url_formatter.h"
+#include "components/vector_icons/vector_icons.h"
 #include "storage/browser/file_system/file_system_url.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/accessibility/ax_enums.mojom.h"
-#include "ui/accessibility/ax_node_data.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/chromeos/styles/cros_styles.h"
+#include "ui/chromeos/styles/cros_tokens_color_mappings.h"
 #include "ui/color/color_id.h"
 #include "ui/color/color_provider.h"
 #include "ui/gfx/color_palette.h"
@@ -55,6 +58,8 @@
 #include "ui/views/controls/label.h"
 #include "ui/views/layout/box_layout.h"
 #include "ui/views/layout/layout_provider.h"
+#include "ui/views/style/typography.h"
+#include "ui/views/style/typography_provider.h"
 #include "ui/views/view.h"
 #include "ui/views/view_class_properties.h"
 
@@ -101,7 +106,6 @@ class SharesheetHeaderView::SharesheetImagePreview : public views::View {
  public:
   METADATA_HEADER(SharesheetImagePreview);
   explicit SharesheetImagePreview(size_t file_count) {
-    ScopedLightModeAsDefault scoped_light_mode_as_default;
     auto* color_provider = AshColorProvider::Get();
     const bool is_dark_mode_enabled =
         DarkLightModeControllerImpl::Get()->IsDarkModeEnabled();
@@ -165,10 +169,7 @@ class SharesheetHeaderView::SharesheetImagePreview : public views::View {
   SharesheetImagePreview(const SharesheetImagePreview&) = delete;
   SharesheetImagePreview& operator=(const SharesheetImagePreview&) = delete;
 
-  ~SharesheetImagePreview() override {
-    ::sharesheet::SharesheetMetrics::RecordSharesheetImagePreviewPressed(
-        was_pressed_);
-  }
+  ~SharesheetImagePreview() override = default;
 
   RoundedImageView* GetImageViewAt(size_t index) {
     if (index >= image_views_.size()) {
@@ -188,25 +189,16 @@ class SharesheetHeaderView::SharesheetImagePreview : public views::View {
 
  private:
   // views::View:
-  bool OnMousePressed(const ui::MouseEvent& event) override {
-    was_pressed_ = true;
-    return false;
-  }
-
-  void OnGestureEvent(ui::GestureEvent* event) override {
-    if (event->type() == ui::ET_GESTURE_TAP)
-      was_pressed_ = true;
-  }
-
   void OnThemeChanged() override {
     View::OnThemeChanged();
-    ScopedLightModeAsDefault scoped_light_mode_as_default;
     SetBorder(views::CreateRoundedRectBorder(
         /*thickness=*/1,
         views::LayoutProvider::Get()->GetCornerRadiusMetric(
             views::Emphasis::kMedium),
-        AshColorProvider::Get()->GetContentLayerColor(
-            AshColorProvider::ContentLayerType::kSeparatorColor)));
+        chromeos::features::IsJellyEnabled()
+            ? GetColorProvider()->GetColor(cros_tokens::kCrosSysOutline)
+            : AshColorProvider::Get()->GetContentLayerColor(
+                  AshColorProvider::ContentLayerType::kSeparatorColor)));
   }
 
   void AddRowToImageContainerView() {
@@ -245,11 +237,7 @@ class SharesheetHeaderView::SharesheetImagePreview : public views::View {
     AddImageViewTo(parent_view, size);
   }
 
-  std::vector<RoundedImageView*> image_views_;
-
-  // Used for recording UMA to indicate whether or not a user tried to interact
-  // with the image preview.
-  bool was_pressed_ = false;
+  std::vector<raw_ptr<RoundedImageView, VectorExperimental>> image_views_;
 };
 
 BEGIN_METADATA(SharesheetHeaderView, SharesheetImagePreview, views::View)
@@ -258,8 +246,7 @@ END_METADATA
 // SharesheetHeaderView --------------------------------------------------------
 
 SharesheetHeaderView::SharesheetHeaderView(apps::IntentPtr intent,
-                                           Profile* profile,
-                                           bool show_content_previews)
+                                           Profile* profile)
     : profile_(profile),
       intent_(std::move(intent)),
       thumbnail_loader_(profile) {
@@ -275,14 +262,18 @@ SharesheetHeaderView::SharesheetHeaderView(apps::IntentPtr intent,
   layout->set_cross_axis_alignment(
       views::BoxLayout::CrossAxisAlignment::kCenter);
   SetFocusBehavior(View::FocusBehavior::ACCESSIBLE_ONLY);
+  SetAccessibilityProperties(ax::mojom::Role::kGenericContainer,
+                             /*name=*/std::u16string(),
+                             /*description=*/std::nullopt,
+                             /*role_description=*/std::nullopt,
+                             ax::mojom::NameFrom::kAttributeExplicitlyEmpty);
 
   const bool has_files = !intent_->files.empty();
   // The image view is initialised first to ensure its left most placement.
-  if (show_content_previews) {
-    auto file_count = intent_->files.size();
-    image_preview_ =
-        AddChildView(std::make_unique<SharesheetImagePreview>(file_count));
-  }
+  auto file_count = intent_->files.size();
+  image_preview_ =
+      AddChildView(std::make_unique<SharesheetImagePreview>(file_count));
+
   // A separate view is created for the share title and preview string views.
   text_view_ = AddChildView(std::make_unique<views::View>());
   text_view_->SetID(HEADER_VIEW_TEXT_PREVIEW_ID);
@@ -290,37 +281,36 @@ SharesheetHeaderView::SharesheetHeaderView(apps::IntentPtr intent,
       views::BoxLayout::Orientation::kVertical,
       /* inside_border_insets */ gfx::Insets(),
       /* between_child_spacing */ 0, /* collapse_margins_spacing */ true));
-  ScopedLightModeAsDefault scoped_light_mode_as_default;
-  text_view_->AddChildView(CreateShareLabel(
-      l10n_util::GetStringUTF16(IDS_SHARESHEET_TITLE_LABEL),
-      CONTEXT_SHARESHEET_BUBBLE_TITLE, kTitleTextLineHeight,
-      AshColorProvider::Get()->GetContentLayerColor(
-          AshColorProvider::ContentLayerType::kTextColorPrimary),
-      gfx::ALIGN_LEFT));
-  if (show_content_previews) {
-    ShowTextPreview();
-    if (has_files) {
-      ResolveImages();
-    } else {
-      DCHECK_GT(image_preview_->GetImageViewCount(), 0u);
-      const auto icon_color = ColorProvider::Get()->GetContentLayerColor(
-          ColorProvider::ContentLayerType::kIconColorProminent);
-      gfx::ImageSkia file_type_icon = gfx::CreateVectorIcon(
-          GetTextVectorIcon(),
-          sharesheet::kImagePreviewPlaceholderIconContentSize, icon_color);
-      image_preview_->GetImageViewAt(0)->SetImage(
-          CreateMimeTypeIcon(file_type_icon, kImagePreviewFullSize));
-      image_preview_->SetBackgroundColorForIndex(0, icon_color);
-    }
+  text_view_->AddChildView(
+      chromeos::features::IsJellyEnabled()
+          ? CreateShareLabel(
+                l10n_util::GetStringUTF16(IDS_SHARESHEET_TITLE_LABEL),
+                TypographyToken::kCrosTitle1, cros_tokens::kCrosSysOnSurface,
+                gfx::ALIGN_LEFT)
+          : CreateShareLabel(
+                l10n_util::GetStringUTF16(IDS_SHARESHEET_TITLE_LABEL),
+                CONTEXT_SHARESHEET_BUBBLE_TITLE, kTitleTextLineHeight,
+                AshColorProvider::Get()->GetContentLayerColor(
+                    AshColorProvider::ContentLayerType::kTextColorPrimary),
+                gfx::ALIGN_LEFT));
+
+  ShowTextPreview();
+  if (has_files) {
+    ResolveImages();
+  } else {
+    DCHECK_GT(image_preview_->GetImageViewCount(), 0u);
+    const auto icon_color = ColorProvider::Get()->GetContentLayerColor(
+        ColorProvider::ContentLayerType::kIconColorProminent);
+    gfx::ImageSkia file_type_icon = gfx::CreateVectorIcon(
+        GetTextVectorIcon(),
+        sharesheet::kImagePreviewPlaceholderIconContentSize, icon_color);
+    image_preview_->GetImageViewAt(0)->SetImage(
+        CreateMimeTypeIcon(file_type_icon, kImagePreviewFullSize));
+    image_preview_->SetBackgroundColorForIndex(0, icon_color);
   }
 }
 
 SharesheetHeaderView::~SharesheetHeaderView() = default;
-
-void SharesheetHeaderView::GetAccessibleNodeData(ui::AXNodeData* node_data) {
-  node_data->role = ax::mojom::Role::kGenericContainer;
-  node_data->SetNameExplicitlyEmpty();
-}
 
 void SharesheetHeaderView::ShowTextPreview() {
   std::vector<std::unique_ptr<views::Label>> preview_labels =
@@ -399,8 +389,8 @@ SharesheetHeaderView::ExtractShareText() {
       // Format URL to be elided correctly to prevent origin spoofing.
       auto elided_url = url_formatter::ElideUrl(
           extracted_text.url,
-          views::style::GetFont(CONTEXT_SHARESHEET_BUBBLE_BODY,
-                                views::style::STYLE_PRIMARY),
+          views::TypographyProvider::Get().GetFont(
+              CONTEXT_SHARESHEET_BUBBLE_BODY, views::style::STYLE_PRIMARY),
           available_width);
       auto url_label = CreatePreviewLabel(elided_url);
 
@@ -432,21 +422,23 @@ SharesheetHeaderView::ExtractShareText() {
 
 std::unique_ptr<views::Label> SharesheetHeaderView::CreatePreviewLabel(
     const std::u16string& text) {
-  ScopedLightModeAsDefault scoped_light_mode_as_default;
-  auto label = CreateShareLabel(
-      text, CONTEXT_SHARESHEET_BUBBLE_BODY, kPrimaryTextLineHeight,
-      AshColorProvider::Get()->GetContentLayerColor(
-          AshColorProvider::ContentLayerType::kTextColorPrimary),
-      gfx::ALIGN_LEFT, views::style::STYLE_PRIMARY);
-  return label;
+  return chromeos::features::IsJellyEnabled()
+             ? CreateShareLabel(text, TypographyToken::kCrosBody2,
+                                cros_tokens::kCrosSysOnSurfaceVariant,
+                                gfx::ALIGN_LEFT)
+             : CreateShareLabel(
+                   text, CONTEXT_SHARESHEET_BUBBLE_BODY, kPrimaryTextLineHeight,
+                   AshColorProvider::Get()->GetContentLayerColor(
+                       AshColorProvider::ContentLayerType::kTextColorPrimary),
+                   gfx::ALIGN_LEFT, views::style::STYLE_PRIMARY);
 }
 
 const gfx::VectorIcon& SharesheetHeaderView::GetTextVectorIcon() {
   switch (text_icon_) {
     case (TextPlaceholderIcon::kGenericText):
-      return kSharesheetTextIcon;
+      return chromeos::kTextIcon;
     case (TextPlaceholderIcon::kLink):
-      return kSharesheetLinkIcon;
+      return vector_icons::kLinkIcon;
   }
 }
 
@@ -468,7 +460,6 @@ void SharesheetHeaderView::ResolveImage(size_t index) {
       HoldingSpaceImage::CreateDefaultPlaceholderImageSkiaResolver(
           /*use_light_mode_as_default=*/true));
   DCHECK_GT(image_preview_->GetImageViewCount(), index);
-  ScopedLightModeAsDefault scoped_light_mode_as_default;
   const bool is_dark_mode_enabled =
       DarkLightModeControllerImpl::Get()->IsDarkModeEnabled();
   image_preview_->GetImageViewAt(index)->SetImage(
@@ -496,7 +487,6 @@ void SharesheetHeaderView::LoadImage(
 
 void SharesheetHeaderView::OnImageLoaded(const gfx::Size& size, size_t index) {
   DCHECK_GT(image_preview_->GetImageViewCount(), index);
-  ScopedLightModeAsDefault scoped_light_mode_as_default;
   image_preview_->GetImageViewAt(index)->SetImage(images_[index]->GetImageSkia(
       size, DarkLightModeControllerImpl::Get()->IsDarkModeEnabled()));
   // TODO(crbug.com/1293668): Investigate why this SchedulePaint is needed.

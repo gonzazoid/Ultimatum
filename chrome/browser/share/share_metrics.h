@@ -23,11 +23,6 @@ enum class ShareSourceDesktop {
 
 void LogShareSourceDesktop(ShareSourceDesktop source);
 
-// Sharing hub metrics logging functions:
-void RecordSharingHubTimeToShow(base::TimeDelta time);
-void RecordSharingHubTimeToFetchHQPreviewImage(base::TimeDelta time);
-void RecordSharingHubTimeToFetchFaviconPreviewImage(base::TimeDelta time);
-
 }  // namespace share
 
 #endif  // CHROME_BROWSER_SHARE_SHARE_METRICS_H_

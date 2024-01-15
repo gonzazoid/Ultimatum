@@ -4,15 +4,16 @@
 
 #include "components/policy/core/common/cloud/encrypted_reporting_job_configuration.h"
 
+#include <initializer_list>
+#include <string>
 #include <utility>
 
-#include "base/base64.h"
 #include "base/containers/contains.h"
+#include "base/containers/flat_set.h"
 #include "base/no_destructor.h"
 #include "base/strings/string_number_conversions.h"
-#include "base/strings/string_util.h"
-#include "components/policy/core/common/cloud/cloud_policy_client.h"
 #include "components/reporting/proto/synced/record_constants.pb.h"
+#include "components/reporting/util/encrypted_reporting_json_keys.h"
 #include "net/base/backoff_entry.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -20,16 +21,6 @@
 namespace policy {
 
 namespace {
-
-// EncryptedReportingJobConfiguration strings
-constexpr char kEncryptedRecordListKey[] = "encryptedRecord";
-constexpr char kSequenceInformationKey[] = "sequenceInformation";
-constexpr char kSequenceId[] = "sequencingId";
-constexpr char kGenerationId[] = "generationId";
-constexpr char kPriority[] = "priority";
-constexpr char kAttachEncryptionSettingsKey[] = "attachEncryptionSettings";
-constexpr char kDeviceKey[] = "device";
-constexpr char kBrowserKey[] = "browser";
 
 // Generate new backoff entry.
 std::unique_ptr<::net::BackoffEntry> GetBackoffEntry(
@@ -140,16 +131,26 @@ UploadState* AccessState(::reporting::Priority priority,
 }  // namespace
 
 EncryptedReportingJobConfiguration::EncryptedReportingJobConfiguration(
-    CloudPolicyClient* client,
+    scoped_refptr<network::SharedURLLoaderFactory> factory,
+    DMAuth auth_data,
     const std::string& server_url,
     base::Value::Dict merging_payload,
+    CloudPolicyClient* cloud_policy_client,
     UploadCompleteCallback complete_cb)
     : ReportingJobConfigurationBase(TYPE_UPLOAD_ENCRYPTED_REPORT,
-                                    client->GetURLLoaderFactory(),
-                                    client,
+                                    factory,
+                                    std::move(auth_data),
                                     server_url,
-                                    /*include_device_info*/ true,
-                                    std::move(complete_cb)) {
+                                    std::move(complete_cb)),
+      is_device_managed_(cloud_policy_client != nullptr) {
+  if (is_device_managed_) {
+    // Payload for managed device
+    InitializePayloadWithDeviceInfo(cloud_policy_client->dm_token(),
+                                    cloud_policy_client->client_id());
+  } else {
+    // Payload for unmanaged device
+    InitializePayloadWithoutDeviceInfo();
+  }
   // Merge it into the base class payload.
   payload_.Merge(std::move(merging_payload));
   // Retrieve priorities and figure out maximum sequence id for each.
@@ -160,22 +161,25 @@ EncryptedReportingJobConfiguration::EncryptedReportingJobConfiguration(
   // TODO(b/232455728): if test_request_payload is moved to components/
   // we would be able to use it here.
   const auto* const encrypted_record_list =
-      payload_.FindList(kEncryptedRecordListKey);
+      payload_.FindList(reporting::json_keys::kEncryptedRecordList);
   // If there are no records, assume UNDEFINED priority and seq_id = -1.
   priority_ = ::reporting::UNDEFINED_PRIORITY;
   generation_id_ = -1;
   sequence_id_ = -1;
   if (encrypted_record_list != nullptr && !encrypted_record_list->empty()) {
+    record_count_ = encrypted_record_list->size();
     const auto sequence_information_it =
         std::prev(encrypted_record_list->cend());
     const auto* const sequence_information =
-        sequence_information_it->GetDict().FindDict(kSequenceInformationKey);
+        sequence_information_it->GetDict().FindDict(
+            reporting::json_keys::kSequenceInformation);
     if (sequence_information != nullptr) {
-      const auto maybe_priority = sequence_information->FindInt(kPriority);
+      const auto maybe_priority =
+          sequence_information->FindInt(reporting::json_keys::kPriority);
       auto* const generation_id_ptr =
-          sequence_information->FindString(kGenerationId);
+          sequence_information->FindString(reporting::json_keys::kGenerationId);
       auto* const sequence_id_ptr =
-          sequence_information->FindString(kSequenceId);
+          sequence_information->FindString(reporting::json_keys::kSequencingId);
       if (maybe_priority.has_value() &&
           ::reporting::Priority_IsValid(maybe_priority.value())) {
         priority_ = static_cast<::reporting::Priority>(maybe_priority.value());
@@ -222,6 +226,10 @@ base::TimeDelta EncryptedReportingJobConfiguration::WhenIsAllowedToProceed()
   // Now pick up the state.
   const auto* const state =
       AccessState(priority_, generation_id_, sequence_id_);
+  // If there are no records, allow upload (it will not overload the server).
+  if (record_count_ == 0u) {
+    return base::TimeDelta();  // 0 - allowed right away.
+  }
   // Use and update previously recorded state, base upload decision on it.
   if (state->last_sequence_id > sequence_id_) {
     // Sequence id decreased, the upload is outdated, reject it forever.
@@ -304,15 +312,24 @@ void EncryptedReportingJobConfiguration::OnURLLoadComplete(
 }
 
 std::string EncryptedReportingJobConfiguration::GetUmaString() const {
-  return "Enterprise.EncryptedReportingSuccess";
+  if (is_device_managed_) {
+    return "Browser.ERP.Managed";
+  }
+  return "Browser.ERP.Unmanaged";
 }
 
-std::set<std::string>
+// static
+const base::flat_set<std::string>&
 EncryptedReportingJobConfiguration::GetTopLevelKeyAllowList() {
-  static std::set<std::string> kTopLevelKeyAllowList{
-      kEncryptedRecordListKey, kAttachEncryptionSettingsKey, kDeviceKey,
-      kBrowserKey};
-  return kTopLevelKeyAllowList;
+  static const base::NoDestructor<base::flat_set<std::string>>
+      kTopLevelKeyAllowList{std::initializer_list<std::string>{
+          reporting::json_keys::kAttachEncryptionSettings,
+          reporting::json_keys::kBrowser,
+          reporting::json_keys::kConfigurationFileVersion,
+          reporting::json_keys::kDevice,
+          reporting::json_keys::kEncryptedRecordList,
+          reporting::json_keys::kRequestId, reporting::json_keys::kSource}};
+  return *kTopLevelKeyAllowList;
 }
 
 // static

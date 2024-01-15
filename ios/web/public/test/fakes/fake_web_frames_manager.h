@@ -7,7 +7,9 @@
 
 #import "ios/web/public/js_messaging/web_frames_manager.h"
 
-#include <map>
+#import <map>
+
+#import "base/observer_list.h"
 
 namespace web {
 class WebFrame;
@@ -17,15 +19,16 @@ class WebFrame;
 //   2. Create FakeWebFramesManager;
 //   3. Call TestWebState::SetWebFramesManager with FakeWebFramesManager;
 //   4. Manipulate WebFrames:
-//     a. Call FakeWebFramesManager::AddWebFrame then
-//        TestWebState::OnWebFrameDidBecomeAvailable;
-//     b. Call TestWebState::OnWebFrameWillBecomeUnavailable then
-//        FakeWebFramesManager::RemoveWebFrame.
+//     a. Call FakeWebFramesManager::AddWebFrame
+//     b. Call FakeWebFramesManager::RemoveWebFrame.
 class FakeWebFramesManager : public WebFramesManager {
  public:
   FakeWebFramesManager();
   ~FakeWebFramesManager() override;
 
+  // Adds and removes observers of WebFrame availability.
+  void AddObserver(Observer* observer) override;
+  void RemoveObserver(Observer* observer) override;
   std::set<WebFrame*> GetAllWebFrames() override;
   WebFrame* GetMainWebFrame() override;
   WebFrame* GetFrameWithId(const std::string& frame_id) override;
@@ -38,6 +41,7 @@ class FakeWebFramesManager : public WebFramesManager {
   std::map<std::string, std::unique_ptr<WebFrame>> web_frames_;
   // Reference to the current main web frame.
   WebFrame* main_web_frame_ = nullptr;
+  base::ObserverList<Observer, /*check_empty=*/false> observers_;
 };
 
 }  // namespace web

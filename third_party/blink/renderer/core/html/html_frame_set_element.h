@@ -27,6 +27,7 @@
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
+#include "third_party/blink/renderer/core/frame/window_event_handlers.h"
 #include "third_party/blink/renderer/core/html/html_dimension.h"
 #include "third_party/blink/renderer/core/html/html_element.h"
 
@@ -35,7 +36,8 @@ namespace blink {
 class FrameEdgeInfo;
 class MouseEvent;
 
-class HTMLFrameSetElement final : public HTMLElement {
+class HTMLFrameSetElement final : public HTMLElement,
+                                  public WindowEventHandlers {
   DEFINE_WRAPPERTYPEINFO();
 
  public:
@@ -89,13 +91,17 @@ class HTMLFrameSetElement final : public HTMLElement {
       MutableCSSPropertyValueSet*) override;
 
   void AttachLayoutTree(AttachContext&) override;
-  bool LayoutObjectIsNeeded(const ComputedStyle&) const override;
-  LayoutObject* CreateLayoutObject(const ComputedStyle&, LegacyLayout) override;
+  bool LayoutObjectIsNeeded(const DisplayStyle&) const override;
+  LayoutObject* CreateLayoutObject(const ComputedStyle&) override;
 
   void DefaultEventHandler(Event&) override;
 
   InsertionNotificationRequest InsertedInto(ContainerNode&) override;
   void WillRecalcStyle(const StyleRecalcChange) override;
+
+  Document& GetDocumentForWindowEventHandler() const override {
+    return GetDocument();
+  }
 
   void ResizeChildrenData();
 

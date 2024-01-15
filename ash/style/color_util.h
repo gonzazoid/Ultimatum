@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,6 +14,10 @@ class Window;
 
 namespace ash {
 
+// Note: Please stop adding functions to this file. Adding them to
+// ash/style/style_util.h file instead. As we are going to merge this class to
+// StyleUtil soon.
+// TODO(b/279613862): Merging this file to ash/style/style_util.h.
 class ASH_EXPORT ColorUtil {
  public:
   // Returns the color provider source for the given `window` if it has
@@ -21,13 +25,11 @@ class ASH_EXPORT ColorUtil {
   static ui::ColorProviderSource* GetColorProviderSourceForWindow(
       const aura::Window* window);
 
-  // Returns the background themed color that's calculated based on the color
-  // extracted from wallpaper. For dark mode, it will be dark muted wallpaper
-  // prominent color + SK_ColorBLACK 50%. For light mode, it will be light
-  // muted wallpaper prominent color + SK_ColorWHITE 50%. Extracts the color on
-  // dark mode if `use_dark_color` is true.
-  static SkColor GetBackgroundThemedColor(SkColor default_color,
-                                          bool use_dark_color);
+  // Returns an adjusted k means color. For dark mode, it will be dark muted
+  // wallpaper prominent color + SK_ColorBLACK 50%. For light mode, it will be
+  // light muted wallpaper prominent color + SK_ColorWHITE 50%. Extracts the
+  // color on dark mode if `use_dark_color` is true.
+  static SkColor AdjustKMeansColor(SkColor k_means_color, bool use_dark_color);
 
   // Gets the disabled color on |enabled_color|. It can be a disabled
   // background, disabled icon, etc.

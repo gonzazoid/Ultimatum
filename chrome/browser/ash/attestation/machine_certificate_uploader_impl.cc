@@ -5,11 +5,13 @@
 #include "chrome/browser/ash/attestation/machine_certificate_uploader_impl.h"
 
 #include <memory>
+#include <optional>
 #include <string>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/check_is_test.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "chrome/browser/ash/attestation/attestation_ca_client.h"
 #include "chrome/browser/ash/attestation/attestation_key_payload.pb.h"
@@ -19,6 +21,7 @@
 #include "chromeos/ash/components/cryptohome/cryptohome_parameters.h"
 #include "chromeos/ash/components/dbus/attestation/attestation_client.h"
 #include "chromeos/ash/components/dbus/attestation/interface.pb.h"
+#include "chromeos/ash/components/dbus/constants/attestation_constants.h"
 #include "chromeos/ash/components/dbus/dbus_thread_manager.h"
 #include "chromeos/dbus/common/dbus_method_call_status.h"
 #include "components/account_id/account_id.h"
@@ -26,8 +29,8 @@
 #include "components/user_manager/known_user.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
-#include "content/public/browser/notification_details.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+
+namespace ash::attestation {
 
 namespace {
 
@@ -42,12 +45,11 @@ const int kRetryLimit = 100;
 
 void DBusPrivacyCACallback(
     const base::RepeatingCallback<void(const std::string&)> on_success,
-    const base::RepeatingCallback<void(ash::attestation::AttestationStatus)>
-        on_failure,
+    const base::RepeatingCallback<void(AttestationStatus)> on_failure,
     const base::Location& from_here,
-    ash::attestation::AttestationStatus status,
+    AttestationStatus status,
     const std::string& data) {
-  if (status == ash::attestation::ATTESTATION_SUCCESS) {
+  if (status == ATTESTATION_SUCCESS) {
     on_success.Run(data);
     return;
   }
@@ -58,9 +60,6 @@ void DBusPrivacyCACallback(
 }
 
 }  // namespace
-
-namespace ash {
-namespace attestation {
 
 MachineCertificateUploaderImpl::MachineCertificateUploaderImpl(
     policy::CloudPolicyClient* policy_client)
@@ -108,6 +107,14 @@ void MachineCertificateUploaderImpl::Start() {
     return;
   }
 
+  // We always expect a valid attestation client, except for testing scenarios.
+  if (!AttestationClient::Get()) {
+    CHECK_IS_TEST();
+    certificate_uploaded_ = false;
+    RunCallbacks(certificate_uploaded_.value());
+    return;
+  }
+
   if (!attestation_flow_) {
     std::unique_ptr<ServerProxy> attestation_ca_client(
         new AttestationCAClient());
@@ -134,12 +141,14 @@ void MachineCertificateUploaderImpl::Start() {
 void MachineCertificateUploaderImpl::GetNewCertificate() {
   // We can reuse the dbus callback handler logic.
   attestation_flow_->GetCertificate(
-      PROFILE_ENTERPRISE_MACHINE_CERTIFICATE,
-      EmptyAccountId(),  // Not used.
-      std::string(),     // Not used.
-      true,              // Force a new key to be generated.
-      ::attestation::KEY_TYPE_RSA,
-      std::string(),  // Leave key name empty to generate a default name.
+      /*certificate_profile=*/PROFILE_ENTERPRISE_MACHINE_CERTIFICATE,
+      /*account_id=*/EmptyAccountId(),   // Not used.
+      /*request_origin=*/std::string(),  // Not used.
+      /*force_new_key=*/true,            // Force a new key to be generated.
+      /*key_crypto_type=*/::attestation::KEY_TYPE_RSA,
+      /*key_name=*/ash::attestation::kEnterpriseMachineKey,
+      /*profile_specific_data=*/std::nullopt,
+      /*callback=*/
       base::BindOnce(
           [](const base::RepeatingCallback<void(const std::string&)> on_success,
              const base::RepeatingCallback<void(AttestationStatus)> on_failure,
@@ -232,8 +241,9 @@ void MachineCertificateUploaderImpl::CheckIfUploaded(
   UploadCertificate(reply.certificate());
 }
 
-void MachineCertificateUploaderImpl::OnUploadComplete(bool status) {
-  if (status) {
+void MachineCertificateUploaderImpl::OnUploadComplete(
+    policy::CloudPolicyClient::Result result) {
+  if (result.IsSuccess()) {
     VLOG(1) << "Enterprise Machine Certificate uploaded to DMServer.";
     ::attestation::GetKeyInfoRequest request;
     request.set_username("");
@@ -242,7 +252,7 @@ void MachineCertificateUploaderImpl::OnUploadComplete(bool status) {
         request, base::BindOnce(&MachineCertificateUploaderImpl::MarkAsUploaded,
                                 weak_factory_.GetWeakPtr()));
   }
-  certificate_uploaded_ = status;
+  certificate_uploaded_ = result.IsSuccess();
   RunCallbacks(certificate_uploaded_.value());
 }
 
@@ -280,11 +290,19 @@ void MachineCertificateUploaderImpl::MarkAsUploaded(
 
 void MachineCertificateUploaderImpl::HandleGetCertificateFailure(
     AttestationStatus status) {
-  if (status != ATTESTATION_SERVER_BAD_REQUEST_FAILURE) {
-    Reschedule();
-  } else {
-    certificate_uploaded_ = false;
-    RunCallbacks(certificate_uploaded_.value());
+  switch (status) {
+    case ATTESTATION_UNSPECIFIED_FAILURE:
+      Reschedule();
+      break;
+
+    case ATTESTATION_SERVER_BAD_REQUEST_FAILURE:
+    case ATTESTATION_NOT_AVAILABLE:
+      certificate_uploaded_ = false;
+      RunCallbacks(certificate_uploaded_.value());
+      break;
+
+    case ATTESTATION_SUCCESS:
+      NOTREACHED();
   }
 }
 
@@ -313,5 +331,4 @@ void MachineCertificateUploaderImpl::RunCallbacks(bool status) {
   }
 }
 
-}  // namespace attestation
-}  // namespace ash
+}  // namespace ash::attestation

@@ -39,6 +39,7 @@
   },
   "chromium": {
     "exclusions": [
+      "build/config/siso/.*",
       "buildtools/checkdeps/.*",
       "chrome/android/profiles/newest.txt",
       "chrome/browser/resources/.*(css|html|js)",
@@ -58,12 +59,10 @@
       "sql/test/data/.*",
       "third_party/accessibility-audit/axs_testing.js",
       "third_party/angle/DEPS",
-      "third_party/chaijs/.*(css|html|js)",
       "third_party/closure_compiler/.*(css|html|js)",
       "third_party/dawn/DEPS",
       "third_party/hunspell_dictionaries/.*",
       "third_party/jstemplate/.*(css|html|js)",
-      "third_party/mocha/.*(css|html|js)",
       "third_party/openscreen/src/DEPS",
       "third_party/polymer/v1_0/components-chromium/.*(css|html|js)",
       "third_party/vulkan-deps/DEPS",
@@ -71,6 +70,7 @@
       "third_party/zlib/google/test/data/.*",
       "tools/android/avd/proto/creation/.*",
       "tools/clang/scripts/update.py",
+      "tools/rust/update_rust.py",
       "tools/grit/.*",
       "tools/mb/.*",
       "tools/metrics/histograms/histograms.xml",

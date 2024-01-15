@@ -5,14 +5,15 @@
 #include "chromeos/ash/services/multidevice_setup/wifi_sync_notification_controller.h"
 
 #include <memory>
+#include <optional>
 
 #include "ash/constants/ash_features.h"
-#include "ash/services/device_sync/public/cpp/fake_device_sync_client.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
 #include "chromeos/ash/components/multidevice/remote_device_test_util.h"
 #include "chromeos/ash/components/multidevice/software_feature.h"
 #include "chromeos/ash/components/multidevice/software_feature_state.h"
+#include "chromeos/ash/services/device_sync/public/cpp/fake_device_sync_client.h"
 #include "chromeos/ash/services/multidevice_setup/fake_account_status_change_delegate.h"
 #include "chromeos/ash/services/multidevice_setup/fake_account_status_change_delegate_notifier.h"
 #include "chromeos/ash/services/multidevice_setup/fake_global_state_feature_manager.h"
@@ -22,7 +23,6 @@
 #include "components/session_manager/core/session_manager.h"
 #include "components/sync_preferences/testing_pref_service_syncable.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace ash {
 
@@ -50,8 +50,6 @@ class MultiDeviceSetupWifiSyncNotificationControllerTest
 
   // testing::Test:
   void SetUp() override {
-    scoped_feature_list_.InitAndEnableFeature(
-        chromeos::features::kWifiSyncAndroid);
     SetWifiSyncSupportedInDeviceSyncClient();
 
     fake_host_status_provider_ = std::make_unique<FakeHostStatusProvider>();
@@ -86,10 +84,10 @@ class MultiDeviceSetupWifiSyncNotificationControllerTest
   void TearDown() override {}
 
   void SetHostInDeviceSyncClient(
-      const absl::optional<multidevice::RemoteDeviceRef>& host_device) {
+      const std::optional<multidevice::RemoteDeviceRef>& host_device) {
     for (const auto& remote_device : test_devices_) {
       bool should_be_host =
-          host_device != absl::nullopt &&
+          host_device != std::nullopt &&
           ((!remote_device.instance_id().empty() &&
             host_device->instance_id() == remote_device.instance_id()) ||
            (!remote_device.GetDeviceId().empty() &&
@@ -113,7 +111,7 @@ class MultiDeviceSetupWifiSyncNotificationControllerTest
   }
 
   void CreateDelegate(
-      const absl::optional<multidevice::RemoteDeviceRef>& initial_host) {
+      const std::optional<multidevice::RemoteDeviceRef>& initial_host) {
     SetHostInDeviceSyncClient(initial_host);
     SetHostWithStatus(initial_host);
 
@@ -125,10 +123,10 @@ class MultiDeviceSetupWifiSyncNotificationControllerTest
   }
 
   void SetHostWithStatus(
-      const absl::optional<multidevice::RemoteDeviceRef>& host_device) {
+      const std::optional<multidevice::RemoteDeviceRef>& host_device) {
     mojom::HostStatus host_status =
-        (host_device == absl::nullopt ? mojom::HostStatus::kNoEligibleHosts
-                                      : mojom::HostStatus::kHostVerified);
+        (host_device == std::nullopt ? mojom::HostStatus::kNoEligibleHosts
+                                     : mojom::HostStatus::kHostVerified);
     fake_host_status_provider_->SetHostWithStatus(host_status, host_device);
   }
 

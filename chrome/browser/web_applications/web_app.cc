@@ -4,32 +4,70 @@
 
 #include "chrome/browser/web_applications/web_app.h"
 
+#include <array>
+#include <bitset>
 #include <ostream>
+#include <string>
 #include <tuple>
 #include <utility>
 
+#include "base/check.h"
+#include "base/check_is_test.h"
 #include "base/check_op.h"
-#include "base/containers/contains.h"
+#include "base/containers/flat_tree.h"
 #include "base/notreached.h"
+#include "base/numerics/clamped_math.h"
 #include "base/strings/strcat.h"
-#include "base/strings/string_split.h"
-#include "base/strings/string_util.h"
-#include "chrome/browser/web_applications/user_display_mode.h"
+#include "base/strings/string_number_conversions.h"
+#include "base/strings/to_string.h"
+#include "base/types/optional_util.h"
+#include "base/values.h"
+#include "chrome/browser/web_applications/generated_icon_fix_util.h"
+#include "chrome/browser/web_applications/mojom/user_display_mode.mojom-shared.h"
+#include "chrome/browser/web_applications/proto/web_app_os_integration_state.pb.h"
+#include "chrome/browser/web_applications/proto/web_app_proto_package.pb.h"
 #include "chrome/browser/web_applications/web_app_chromeos_data.h"
 #include "chrome/browser/web_applications/web_app_constants.h"
 #include "chrome/browser/web_applications/web_app_helpers.h"
-#include "chrome/browser/web_applications/web_app_sources.h"
 #include "chrome/browser/web_applications/web_app_utils.h"
 #include "components/sync/base/time.h"
+#include "components/webapps/browser/installable/installable_metrics.h"
+#include "third_party/abseil-cpp/absl/types/variant.h"
 #include "third_party/blink/public/common/manifest/manifest_util.h"
 #include "third_party/blink/public/common/permissions_policy/origin_with_possible_wildcards.h"
 #include "third_party/blink/public/common/permissions_policy/policy_helper_public.h"
-#include "third_party/blink/public/mojom/manifest/manifest.mojom.h"
+#include "third_party/blink/public/common/safe_url_pattern.h"
+#include "third_party/blink/public/mojom/manifest/manifest.mojom-shared.h"
+#include "third_party/blink/public/mojom/manifest/manifest_launch_handler.mojom-shared.h"
+#include "third_party/liburlpattern/options.h"
+#include "third_party/liburlpattern/pattern.h"
+#include "third_party/protobuf/src/google/protobuf/repeated_field.h"
 #include "ui/gfx/color_utils.h"
+#include "ui/gfx/geometry/size.h"
+#include "url/origin.h"
 
 namespace web_app {
 
 namespace {
+
+// Converts an optional to a string wrapped in a `Value`, or an empty `Value` if
+// absent.
+template <typename T>
+base::Value OptionalToStringValue(const absl::optional<T>& optional) {
+  if (optional.has_value()) {
+    return base::Value(base::ToString(optional.value()));
+  }
+  return base::Value();
+}
+
+// Converts an optional to a debug `Value`, or an empty `Value` if absent.
+template <typename T>
+base::Value OptionalAsDebugValue(const absl::optional<T>& optional) {
+  if (optional.has_value()) {
+    return optional.value().AsDebugValue();
+  }
+  return base::Value();
+}
 
 std::string ColorToString(absl::optional<SkColor> color) {
   return color.has_value() ? color_utils::SkColorToRgbaString(color.value())
@@ -56,9 +94,218 @@ std::string OsIntegrationStateToString(OsIntegrationState state) {
   }
 }
 
+std::string GetRunOnOsLoginMode(const proto::RunOnOsLoginMode& mode) {
+  switch (mode) {
+    case proto::RunOnOsLoginMode::RUN_ON_OS_LOGIN_MODE_UNSPECIFIED:
+      return "unspecified";
+    case proto::RunOnOsLoginMode::NOT_RUN:
+      return "not_run";
+    case proto::RunOnOsLoginMode::WINDOWED:
+      return "windowed";
+    case proto::RunOnOsLoginMode::MINIMIZED:
+      return "minimized";
+  }
+}
+
+base::Value OsStatesDebugValue(
+    const proto::WebAppOsIntegrationState& current_states) {
+  base::Value::Dict debug_dict;
+
+  if (current_states.has_shortcut()) {
+    base::Value::Dict shortcut_data;
+    shortcut_data.Set("title", current_states.shortcut().title());
+    shortcut_data.Set("description", current_states.shortcut().description());
+    base::Value::Dict icon_data;
+    for (const auto& data : current_states.shortcut().icon_data_any()) {
+      icon_data.Set(base::NumberToString(data.icon_size()),
+                    base::ToString(syncer::ProtoTimeToTime(data.timestamp())));
+    }
+    shortcut_data.Set("icon_size_to_timestamp_map",
+                      base::Value(std::move(icon_data)));
+    debug_dict.Set("shortcut_descriptions",
+                   base::Value(std::move(shortcut_data)));
+  }
+
+  if (current_states.has_protocols_handled()) {
+    base::Value::Dict protocol_data;
+    for (const auto& data : current_states.protocols_handled().protocols()) {
+      protocol_data.Set(data.protocol(), data.url());
+    }
+    debug_dict.Set("protocols_handled", base::Value(std::move(protocol_data)));
+  }
+
+  if (current_states.has_run_on_os_login() &&
+      current_states.run_on_os_login().has_run_on_os_login_mode()) {
+    debug_dict.Set(
+        "run_on_os_login",
+        GetRunOnOsLoginMode(
+            current_states.run_on_os_login().run_on_os_login_mode()));
+  }
+
+  if (current_states.has_uninstall_registration()) {
+    base::Value::Dict state;
+    proto::OsUninstallRegistration os_uninstall =
+        current_states.uninstall_registration();
+    if (os_uninstall.has_registered_with_os()) {
+      state.Set("registered_with_os", os_uninstall.registered_with_os());
+    }
+    if (os_uninstall.has_display_name()) {
+      state.Set("display_name", os_uninstall.display_name());
+    }
+    debug_dict.Set("uninstall_registration", std::move(state));
+  }
+
+  if (current_states.has_shortcut_menus()) {
+    base::Value::List shortcut_menus_list;
+    for (const auto& shortcut_menu :
+         current_states.shortcut_menus().shortcut_menu_info()) {
+      base::Value::Dict icon_data_any_dict;
+      base::Value::Dict icon_data_maskable_dict;
+      base::Value::Dict icon_data_monochrome_dict;
+      for (const auto& icon_data_any : shortcut_menu.icon_data_any()) {
+        icon_data_any_dict.Set(
+            base::NumberToString(icon_data_any.icon_size()),
+            base::ToString(syncer::ProtoTimeToTime(icon_data_any.timestamp())));
+      }
+      for (const auto& icon_data_maskable : shortcut_menu.icon_data_any()) {
+        icon_data_maskable_dict.Set(
+            base::NumberToString(icon_data_maskable.icon_size()),
+            base::ToString(
+                syncer::ProtoTimeToTime(icon_data_maskable.timestamp())));
+      }
+      for (const auto& icon_data_monochrome : shortcut_menu.icon_data_any()) {
+        icon_data_monochrome_dict.Set(
+            base::NumberToString(icon_data_monochrome.icon_size()),
+            base::ToString(
+                syncer::ProtoTimeToTime(icon_data_monochrome.timestamp())));
+      }
+      base::Value::Dict shortcut_menu_dict;
+      shortcut_menu_dict.Set("shortcut_name", shortcut_menu.shortcut_name());
+      shortcut_menu_dict.Set("shortcut_launch_url",
+                             shortcut_menu.shortcut_launch_url());
+      shortcut_menu_dict.Set("icon_data_any",
+                             base::Value(std::move(icon_data_any_dict)));
+      shortcut_menu_dict.Set("icon_data_maskable",
+                             base::Value(std::move(icon_data_maskable_dict)));
+      shortcut_menu_dict.Set("icon_data_monochrome",
+                             base::Value(std::move(icon_data_monochrome_dict)));
+      shortcut_menus_list.Append(std::move(shortcut_menu_dict));
+    }
+    debug_dict.Set("shortcut_menus",
+                   base::Value(std::move(shortcut_menus_list)));
+  }
+
+  if (current_states.has_file_handling()) {
+    base::Value::List file_handlers_list;
+    for (const auto& file_handler :
+         current_states.file_handling().file_handlers()) {
+      base::Value::Dict file_handler_dict;
+      file_handler_dict.Set("action", base::Value(file_handler.action()));
+      file_handler_dict.Set("display_name", file_handler.display_name());
+      base::Value::List accept_list;
+      for (const auto& accept : file_handler.accept()) {
+        base::Value::Dict accept_dict;
+        accept_dict.Set("mimetype", accept.mimetype());
+        base::Value::List file_extensions_list;
+        for (const auto& file_extension : accept.file_extensions()) {
+          file_extensions_list.Append(file_extension);
+        }
+        accept_dict.Set("file_extensions", std::move(file_extensions_list));
+        accept_list.Append(std::move(accept_dict));
+      }
+      file_handler_dict.Set("accept", std::move(accept_list));
+      file_handlers_list.Append(std::move(file_handler_dict));
+    }
+    debug_dict.Set("file_handling", std::move(file_handlers_list));
+  }
+
+  return base::Value(std::move(debug_dict));
+}
+
+base::Value::Dict ImageResourceDebugDict(
+    const blink::Manifest::ImageResource& icon) {
+  const char* const kPurposeStrings[] = {"Any", "Monochrome", "Maskable"};
+
+  base::Value::Dict root;
+  root.Set("src", icon.src.spec());
+  root.Set("type", icon.type);
+
+  base::Value::List sizes_json;
+  for (const auto& size : icon.sizes) {
+    std::string size_formatted = base::NumberToString(size.width()) + "x" +
+                                 base::NumberToString(size.height());
+    sizes_json.Append(base::Value(size_formatted));
+  }
+  root.Set("sizes", std::move(sizes_json));
+
+  base::Value::List purpose_json;
+  for (const auto& purpose : icon.purpose) {
+    purpose_json.Append(kPurposeStrings[static_cast<int>(purpose)]);
+  }
+  root.Set("purpose", std::move(purpose_json));
+  return root;
+}
+
+base::Value::Dict UrlPatternDebugValue(const blink::SafeUrlPattern& pattern) {
+  liburlpattern::Options options = {.delimiter_list = "/",
+                                    .prefix_list = "/",
+                                    .sensitive = true,
+                                    .strict = false};
+  liburlpattern::Pattern pathname(pattern.pathname, options, "[^/]+?");
+
+  base::Value::Dict pattern_dict;
+  pattern_dict.Set("pathname", pathname.GeneratePatternString());
+  return pattern_dict;
+}
+
+base::Value OptTabStripToDebugValue(
+    absl::optional<blink::Manifest::TabStrip> tab_strip) {
+  if (!tab_strip.has_value()) {
+    return base::Value();
+  }
+
+  base::Value::Dict result;
+
+  base::Value::Dict new_tab_button_json;
+  new_tab_button_json.Set(
+      "url", base::ToString(tab_strip->new_tab_button.url.value_or(GURL(""))));
+  result.Set("new_tab_button", std::move(new_tab_button_json));
+
+  if (absl::holds_alternative<TabStrip::Visibility>(tab_strip->home_tab)) {
+    result.Set(
+        "home_tab",
+        base::ToString(absl::get<TabStrip::Visibility>(tab_strip->home_tab)));
+  } else {
+    base::Value::Dict home_tab_json;
+    const blink::Manifest::HomeTabParams& home_tab_params =
+        absl::get<blink::Manifest::HomeTabParams>(tab_strip->home_tab);
+
+    base::Value::List icons_json;
+    absl::optional<std::vector<blink::Manifest::ImageResource>> icons =
+        home_tab_params.icons;
+
+    for (auto& icon : *icons) {
+      icons_json.Append(ImageResourceDebugDict(icon));
+    }
+
+    base::Value::List scope_patterns_json;
+    const std::vector<blink::SafeUrlPattern>& scope_patterns =
+        home_tab_params.scope_patterns;
+
+    for (const auto& scope_pattern : scope_patterns) {
+      scope_patterns_json.Append(UrlPatternDebugValue(scope_pattern));
+    }
+
+    home_tab_json.Set("icons", std::move(icons_json));
+    home_tab_json.Set("scope_patterns", std::move(scope_patterns_json));
+    result.Set("home_tab", std::move(home_tab_json));
+  }
+  return base::Value(std::move(result));
+}
+
 }  // namespace
 
-WebApp::WebApp(const AppId& app_id)
+WebApp::WebApp(const webapps::AppId& app_id)
     : app_id_(app_id),
       chromeos_data_(IsChromeOsDataMandatory()
                          ? absl::make_optional<WebAppChromeOsData>()
@@ -81,55 +328,69 @@ const SortedSizesPx& WebApp::downloaded_icon_sizes(IconPurpose purpose) const {
   }
 }
 
+webapps::ManifestId WebApp::manifest_id() const {
+  // Almost all production use-cases should have the manifest_id set, but in
+  // some test it is not. If the manifest id is not set, then fall back to the
+  // start_url, as per the algorithm in
+  // https://www.w3.org/TR/appmanifest/#id-member.
+  if (manifest_id_.is_empty()) {
+    CHECK_IS_TEST();
+    // This is why the function must return a value instead of a const ref, as
+    // this object would be temporary.
+    return GenerateManifestIdFromStartUrlOnly(start_url_);
+  }
+  return manifest_id_;
+}
+
 void WebApp::AddSource(WebAppManagement::Type source) {
-  sources_[source] = true;
+  sources_.Put(source);
 }
 
 void WebApp::RemoveSource(WebAppManagement::Type source) {
-  sources_[source] = false;
+  sources_.Remove(source);
   management_to_external_config_map_.erase(source);
 }
 
 bool WebApp::HasAnySources() const {
-  return sources_.any();
+  return !sources_.Empty();
 }
 
 bool WebApp::HasOnlySource(WebAppManagement::Type source) const {
-  WebAppSources specified_sources;
-  specified_sources[source] = true;
+  WebAppManagementTypes specified_sources;
+  specified_sources.Put(source);
   return HasAnySpecifiedSourcesAndNoOtherSources(sources_, specified_sources);
 }
 
-WebAppSources WebApp::GetSources() const {
+WebAppManagementTypes WebApp::GetSources() const {
   return sources_;
 }
 
 bool WebApp::IsSynced() const {
-  return sources_[WebAppManagement::kSync];
+  return sources_.Has(WebAppManagement::kSync);
 }
 
 bool WebApp::IsPreinstalledApp() const {
-  return sources_[WebAppManagement::kDefault];
+  return sources_.Has(WebAppManagement::kDefault);
 }
 
 bool WebApp::IsPolicyInstalledApp() const {
-  return sources_[WebAppManagement::kPolicy];
+  return sources_.Has(WebAppManagement::kPolicy);
 }
 
 bool WebApp::IsSystemApp() const {
-  return sources_[WebAppManagement::kSystem];
+  return sources_.Has(WebAppManagement::kSystem);
 }
 
 bool WebApp::IsWebAppStoreInstalledApp() const {
-  return sources_[WebAppManagement::kWebAppStore];
+  return sources_.Has(WebAppManagement::kWebAppStore);
 }
 
 bool WebApp::IsSubAppInstalledApp() const {
-  return sources_[WebAppManagement::kSubApp];
+  return sources_.Has(WebAppManagement::kSubApp);
 }
 
 bool WebApp::IsKioskInstalledApp() const {
-  return sources_[WebAppManagement::kKiosk];
+  return sources_.Has(WebAppManagement::kKiosk);
 }
 
 bool WebApp::CanUserUninstallWebApp() const {
@@ -137,18 +398,18 @@ bool WebApp::CanUserUninstallWebApp() const {
 }
 
 bool WebApp::WasInstalledByUser() const {
-  return sources_[WebAppManagement::kSync] ||
-         sources_[WebAppManagement::kWebAppStore];
+  return sources_.Has(WebAppManagement::kSync) ||
+         sources_.Has(WebAppManagement::kWebAppStore) ||
+         sources_.Has(WebAppManagement::kOneDriveIntegration);
 }
 
 WebAppManagement::Type WebApp::GetHighestPrioritySource() const {
-  // Enumerators in Source enum are declaretd in the order of priority.
-  // Top priority sources are declared first.
-  for (int i = WebAppManagement::kMinValue; i <= WebAppManagement::kMaxValue;
-       ++i) {
-    auto source = static_cast<WebAppManagement::Type>(i);
-    if (sources_[source])
+  // `WebAppManagementTypes` is iterated in order of priority.
+  // Top priority sources are iterated first.
+  for (WebAppManagement::Type source : WebAppManagementTypes::All()) {
+    if (sources_.Has(source)) {
       return source;
+    }
   }
 
   NOTREACHED();
@@ -164,7 +425,13 @@ void WebApp::SetDescription(const std::string& description) {
 }
 
 void WebApp::SetStartUrl(const GURL& start_url) {
-  DCHECK(start_url.is_valid());
+  CHECK(start_url.is_valid());
+  if (manifest_id_.is_empty()) {
+    manifest_id_ = GenerateManifestIdFromStartUrlOnly(start_url);
+  }
+  CHECK(url::Origin::Create(manifest_id())
+            .IsSameOriginWith(url::Origin::Create(start_url)))
+      << manifest_id().spec() << " " << start_url.spec();
   start_url_ = start_url;
 }
 
@@ -196,7 +463,7 @@ void WebApp::SetDisplayMode(DisplayMode display_mode) {
   display_mode_ = display_mode;
 }
 
-void WebApp::SetUserDisplayMode(UserDisplayMode user_display_mode) {
+void WebApp::SetUserDisplayMode(mojom::UserDisplayMode user_display_mode) {
   user_display_mode_ = user_display_mode;
 }
 
@@ -294,6 +561,16 @@ void WebApp::SetUrlHandlers(apps::UrlHandlers url_handlers) {
   url_handlers_ = std::move(url_handlers);
 }
 
+void WebApp::SetScopeExtensions(
+    base::flat_set<ScopeExtensionInfo> scope_extensions) {
+  scope_extensions_ = std::move(scope_extensions);
+}
+
+void WebApp::SetValidatedScopeExtensions(
+    base::flat_set<ScopeExtensionInfo> validated_scope_extensions) {
+  validated_scope_extensions_ = std::move(validated_scope_extensions);
+}
+
 void WebApp::SetLockScreenStartUrl(const GURL& lock_screen_start_url) {
   DCHECK(lock_screen_start_url.is_empty() || lock_screen_start_url.is_valid());
   lock_screen_start_url_ = lock_screen_start_url;
@@ -305,14 +582,9 @@ void WebApp::SetNoteTakingNewNoteUrl(const GURL& note_taking_new_note_url) {
   note_taking_new_note_url_ = note_taking_new_note_url;
 }
 
-void WebApp::SetShortcutsMenuItemInfos(
+void WebApp::SetShortcutsMenuInfo(
     std::vector<WebAppShortcutsMenuItemInfo> shortcuts_menu_item_infos) {
   shortcuts_menu_item_infos_ = std::move(shortcuts_menu_item_infos);
-}
-
-void WebApp::SetDownloadedShortcutsMenuIconsSizes(
-    std::vector<IconSizes> sizes) {
-  downloaded_shortcuts_menu_icons_sizes_ = std::move(sizes);
 }
 
 void WebApp::SetLastBadgingTime(const base::Time& time) {
@@ -323,8 +595,8 @@ void WebApp::SetLastLaunchTime(const base::Time& time) {
   last_launch_time_ = time;
 }
 
-void WebApp::SetInstallTime(const base::Time& time) {
-  install_time_ = time;
+void WebApp::SetFirstInstallTime(const base::Time& time) {
+  first_install_time_ = time;
 }
 
 void WebApp::SetManifestUpdateTime(const base::Time& time) {
@@ -356,7 +628,12 @@ void WebApp::SetManifestUrl(const GURL& manifest_url) {
   manifest_url_ = manifest_url;
 }
 
-void WebApp::SetManifestId(const absl::optional<std::string>& manifest_id) {
+void WebApp::SetManifestId(const webapps::ManifestId& manifest_id) {
+  CHECK(manifest_id.is_valid());
+  CHECK(start_url_.is_empty() ||
+        url::Origin::Create(start_url_)
+            .IsSameOriginWith(url::Origin::Create(manifest_id)))
+      << start_url_.spec() << " vs " << manifest_id.spec();
   manifest_id_ = manifest_id;
 }
 
@@ -364,15 +641,12 @@ void WebApp::SetWindowControlsOverlayEnabled(bool enabled) {
   window_controls_overlay_enabled_ = enabled;
 }
 
-void WebApp::SetStorageIsolated(bool is_storage_isolated) {
-  is_storage_isolated_ = is_storage_isolated;
-}
-
 void WebApp::SetLaunchHandler(absl::optional<LaunchHandler> launch_handler) {
   launch_handler_ = std::move(launch_handler);
 }
 
-void WebApp::SetParentAppId(const absl::optional<AppId>& parent_app_id) {
+void WebApp::SetParentAppId(
+    const absl::optional<webapps::AppId>& parent_app_id) {
   parent_app_id_ = parent_app_id;
 }
 
@@ -381,9 +655,9 @@ void WebApp::SetPermissionsPolicy(
   permissions_policy_ = std::move(permissions_policy);
 }
 
-void WebApp::SetInstallSourceForMetrics(
-    absl::optional<webapps::WebappInstallSource> install_source) {
-  install_source_for_metrics_ = install_source;
+void WebApp::SetLatestInstallSource(
+    absl::optional<webapps::WebappInstallSource> latest_install_source) {
+  latest_install_source_ = latest_install_source;
 }
 
 void WebApp::SetAppSizeInBytes(absl::optional<int64_t> app_size_in_bytes) {
@@ -405,13 +679,25 @@ void WebApp::SetTabStrip(absl::optional<blink::Manifest::TabStrip> tab_strip) {
 }
 
 void WebApp::SetCurrentOsIntegrationStates(
-    absl::optional<proto::WebAppOsIntegrationState>
-        current_os_integration_states) {
+    proto::WebAppOsIntegrationState current_os_integration_states) {
   current_os_integration_states_ = std::move(current_os_integration_states);
 }
 
 void WebApp::SetIsolationData(IsolationData isolation_data) {
   isolation_data_ = isolation_data;
+}
+
+void WebApp::SetLinkCapturingUserPreference(
+    proto::LinkCapturingUserPreference user_link_capturing_preference) {
+  user_link_capturing_preference_ = user_link_capturing_preference;
+}
+
+void WebApp::SetSupportedLinksOfferIgnoreCount(int ignore_count) {
+  supported_links_offer_ignore_count_ = ignore_count;
+}
+
+void WebApp::SetSupportedLinksOfferDismissCount(int dismiss_count) {
+  supported_links_offer_dismiss_count_ = dismiss_count;
 }
 
 void WebApp::AddPlaceholderInfoToManagementExternalConfigMap(
@@ -426,18 +712,28 @@ void WebApp::AddInstallURLToManagementExternalConfigMap(
     GURL install_url) {
   DCHECK_NE(type, WebAppManagement::Type::kSync);
   DCHECK(install_url.is_valid());
-  management_to_external_config_map_[type].install_urls.emplace(install_url);
+  management_to_external_config_map_[type].install_urls.emplace(
+      std::move(install_url));
+}
+
+void WebApp::AddPolicyIdToManagementExternalConfigMap(
+    WebAppManagement::Type type,
+    std::string policy_id) {
+  DCHECK_NE(type, WebAppManagement::Type::kSync);
+  DCHECK(!policy_id.empty());
+  management_to_external_config_map_[type].additional_policy_ids.emplace(
+      std::move(policy_id));
 }
 
 void WebApp::AddExternalSourceInformation(WebAppManagement::Type type,
                                           GURL install_url,
                                           bool is_placeholder) {
-  AddInstallURLToManagementExternalConfigMap(type, install_url);
+  AddInstallURLToManagementExternalConfigMap(type, std::move(install_url));
   AddPlaceholderInfoToManagementExternalConfigMap(type, is_placeholder);
 }
 
 bool WebApp::RemoveInstallUrlForSource(WebAppManagement::Type type,
-                                       GURL install_url) {
+                                       const GURL& install_url) {
   if (!management_to_external_config_map_.count(type))
     return false;
 
@@ -453,6 +749,17 @@ void WebApp::SetAlwaysShowToolbarInFullscreen(bool show) {
   always_show_toolbar_in_fullscreen_ = show;
 }
 
+void WebApp::SetLatestInstallTime(const base::Time& latest_install_time) {
+  latest_install_time_ = latest_install_time;
+}
+
+void WebApp::SetGeneratedIconFix(
+    absl::optional<GeneratedIconFix> generated_icon_fix) {
+  CHECK(!generated_icon_fix.has_value() ||
+        generated_icon_fix_util::IsValid(*generated_icon_fix));
+  generated_icon_fix_ = generated_icon_fix;
+}
+
 WebApp::ClientData::ClientData() = default;
 
 WebApp::ClientData::~ClientData() = default;
@@ -460,11 +767,11 @@ WebApp::ClientData::~ClientData() = default;
 WebApp::ClientData::ClientData(const ClientData& client_data) = default;
 
 base::Value WebApp::ClientData::AsDebugValue() const {
-  base::Value root(base::Value::Type::DICTIONARY);
-  root.SetKey("system_web_app_data", system_web_app_data
-                                         ? system_web_app_data->AsDebugValue()
-                                         : base::Value());
-  return root;
+  base::Value::Dict root;
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+  root.Set("system_web_app_data", OptionalAsDebugValue(system_web_app_data));
+#endif
+  return base::Value(std::move(root));
 }
 
 WebApp::SyncFallbackData::SyncFallbackData() = default;
@@ -481,18 +788,25 @@ WebApp::SyncFallbackData& WebApp::SyncFallbackData::operator=(
     SyncFallbackData&& sync_fallback_data) = default;
 
 base::Value WebApp::SyncFallbackData::AsDebugValue() const {
-  base::Value root(base::Value::Type::DICTIONARY);
-  root.SetStringKey("name", name);
-  root.SetStringKey("theme_color", ColorToString(theme_color));
-  root.SetStringKey("scope", scope.spec());
-  base::Value& manifest_icons_json =
-      *root.SetKey("manifest_icons", base::Value(base::Value::Type::LIST));
+  base::Value::Dict root;
+  root.Set("name", name);
+  root.Set("theme_color", ColorToString(theme_color));
+  root.Set("scope", scope.spec());
+  base::Value::List manifest_icons_json;
   for (const apps::IconInfo& icon_info : icon_infos)
     manifest_icons_json.Append(icon_info.AsDebugValue());
-  return root;
+  root.Set("manifest_icons", std::move(manifest_icons_json));
+  return base::Value(std::move(root));
 }
 
 WebApp::ExternalManagementConfig::ExternalManagementConfig() = default;
+WebApp::ExternalManagementConfig::ExternalManagementConfig(
+    bool is_placeholder,
+    const base::flat_set<GURL>& install_urls,
+    const base::flat_set<std::string>& additional_policy_ids)
+    : is_placeholder(is_placeholder),
+      install_urls(install_urls),
+      additional_policy_ids(additional_policy_ids) {}
 
 WebApp::ExternalManagementConfig::~ExternalManagementConfig() = default;
 
@@ -505,18 +819,110 @@ WebApp::ExternalManagementConfig& WebApp::ExternalManagementConfig::operator=(
 base::Value::Dict WebApp::ExternalManagementConfig::AsDebugValue() const {
   base::Value::Dict root;
   base::Value::List urls;
-  for (auto it : install_urls) {
-    urls.Append(it.spec());
+  for (const auto& install_url : install_urls) {
+    urls.Append(install_url.spec());
+  }
+  base::Value::List policy_ids;
+  for (const auto& policy_id : additional_policy_ids) {
+    policy_ids.Append(policy_id);
   }
   root.Set("install_urls", std::move(urls));
+  root.Set("additional_policy_ids", std::move(policy_ids));
   root.Set("is_placeholder", is_placeholder);
   return root;
 }
 
+WebApp::IsolationData::IsolationData(IsolatedWebAppLocation location,
+                                     base::Version version)
+    : location(location), version(std::move(version)) {}
+WebApp::IsolationData::IsolationData(
+    IsolatedWebAppLocation location,
+    base::Version version,
+    const std::set<std::string>& controlled_frame_partitions,
+    const absl::optional<PendingUpdateInfo>& pending_update_info)
+    : location(location),
+      version(std::move(version)),
+      controlled_frame_partitions(controlled_frame_partitions) {
+  SetPendingUpdateInfo(pending_update_info);
+}
+WebApp::IsolationData::~IsolationData() = default;
+WebApp::IsolationData::IsolationData(const WebApp::IsolationData&) = default;
+WebApp::IsolationData& WebApp::IsolationData::operator=(
+    const WebApp::IsolationData&) = default;
+WebApp::IsolationData::IsolationData(WebApp::IsolationData&&) = default;
+WebApp::IsolationData& WebApp::IsolationData::operator=(
+    WebApp::IsolationData&&) = default;
+
+bool WebApp::IsolationData::operator==(
+    const WebApp::IsolationData& other) const {
+  return location == other.location && version == other.version &&
+         controlled_frame_partitions == other.controlled_frame_partitions &&
+         pending_update_info_ == other.pending_update_info_;
+}
+bool WebApp::IsolationData::operator!=(
+    const WebApp::IsolationData& other) const {
+  return !(*this == other);
+}
+
+base::Value WebApp::IsolationData::AsDebugValue() const {
+  auto value = base::Value::Dict()
+                   .Set("isolated_web_app_location",
+                        IsolatedWebAppLocationAsDebugValue(location))
+                   .Set("version", version.GetString());
+  base::Value::List* partitions =
+      value.EnsureList("controlled_frame_partitions (on-disk)");
+  for (const std::string& partition : controlled_frame_partitions) {
+    partitions->Append(partition);
+  }
+
+  value.Set("pending_update_info", OptionalAsDebugValue(pending_update_info_));
+
+  return base::Value(std::move(value));
+}
+
+WebApp::IsolationData::PendingUpdateInfo::PendingUpdateInfo(
+    IsolatedWebAppLocation location,
+    base::Version version)
+    : location(std::move(location)), version(std::move(version)) {}
+WebApp::IsolationData::PendingUpdateInfo::~PendingUpdateInfo() = default;
+
+WebApp::IsolationData::PendingUpdateInfo::PendingUpdateInfo(
+    const PendingUpdateInfo&) = default;
+WebApp::IsolationData::PendingUpdateInfo&
+WebApp::IsolationData::PendingUpdateInfo::operator=(const PendingUpdateInfo&) =
+    default;
+
+base::Value WebApp::IsolationData::PendingUpdateInfo::AsDebugValue() const {
+  auto value = base::Value::Dict()
+                   .Set("isolated_web_app_location",
+                        IsolatedWebAppLocationAsDebugValue(location))
+                   .Set("version", version.GetString());
+  return base::Value(std::move(value));
+}
+
+void WebApp::IsolationData::SetPendingUpdateInfo(
+    const absl::optional<PendingUpdateInfo>& pending_update_info) {
+  if (pending_update_info.has_value()) {
+    CHECK_EQ(pending_update_info->location.index(), location.index());
+  }
+  pending_update_info_ = pending_update_info;
+}
+
+const absl::optional<GeneratedIconFix>& WebApp::generated_icon_fix() const {
+  CHECK(!generated_icon_fix_.has_value() ||
+        generated_icon_fix_util::IsValid(generated_icon_fix_.value()));
+  return generated_icon_fix_;
+}
+
+bool WebApp::IsolationData::PendingUpdateInfo::operator==(
+    const WebApp::IsolationData::PendingUpdateInfo& other) const = default;
+bool WebApp::IsolationData::PendingUpdateInfo::operator!=(
+    const WebApp::IsolationData::PendingUpdateInfo& other) const = default;
+
 bool WebApp::operator==(const WebApp& other) const {
   auto AsTuple = [](const WebApp& app) {
     // Keep in order declared in web_app.h.
-    return std::make_tuple(
+    return std::tie(
         // Disable clang-format so diffs are clearer when fields are added.
         // clang-format off
         app.app_id_,
@@ -545,7 +951,6 @@ bool WebApp::operator==(const WebApp& other) const {
         app.downloaded_icon_sizes_maskable_,
         app.is_generated_icon_,
         app.shortcuts_menu_item_infos_,
-        app.downloaded_shortcuts_menu_icons_sizes_,
         app.file_handlers_,
         app.share_target_,
         app.additional_search_terms_,
@@ -553,11 +958,13 @@ bool WebApp::operator==(const WebApp& other) const {
         app.allowed_launch_protocols_,
         app.disallowed_launch_protocols_,
         app.url_handlers_,
+        app.scope_extensions_,
+        app.validated_scope_extensions_,
         app.lock_screen_start_url_,
         app.note_taking_new_note_url_,
         app.last_badging_time_,
         app.last_launch_time_,
-        app.install_time_,
+        app.first_install_time_,
         app.manifest_update_time_,
         app.run_on_os_login_mode_,
         app.run_on_os_login_os_integration_state_,
@@ -565,44 +972,50 @@ bool WebApp::operator==(const WebApp& other) const {
         app.capture_links_,
         app.manifest_url_,
         app.manifest_id_,
+#if BUILDFLAG(IS_CHROMEOS_ASH)
         app.client_data_.system_web_app_data,
+#endif
         app.file_handler_approval_state_,
         app.file_handler_os_integration_state_,
         app.window_controls_overlay_enabled_,
-        app.is_storage_isolated_,
         app.launch_handler_,
         app.parent_app_id_,
         app.permissions_policy_,
-        app.install_source_for_metrics_,
+        app.latest_install_source_,
         app.app_size_in_bytes_,
         app.data_size_in_bytes_,
         app.management_to_external_config_map_,
         app.tab_strip_,
         app.always_show_toolbar_in_fullscreen_,
-        app.current_os_integration_states_.value_or(proto::WebAppOsIntegrationState()).SerializeAsString(),
-        app.isolation_data_
+        app.current_os_integration_states_,
+        app.isolation_data_,
+        app.user_link_capturing_preference_,
+        app.latest_install_time_,
+        app.generated_icon_fix_,
+        app.supported_links_offer_ignore_count_,
+        app.supported_links_offer_dismiss_count_
         // clang-format on
     );
   };
-  return (AsTuple(*this) == AsTuple(other));
+  return AsTuple(*this) == AsTuple(other);
 }
 
 bool WebApp::operator!=(const WebApp& other) const {
   return !(*this == other);
 }
 
-base::Value WebApp::AsDebugValue() const {
-  base::Value root(base::Value::Type::DICTIONARY);
+base::Value WebApp::AsDebugValueWithOnlyPlatformAgnosticFields() const {
+  base::Value::Dict root;
 
   auto ConvertList = [](const auto& list) {
-    base::Value list_json(base::Value::Type::LIST);
+    base::Value::List list_json;
     for (const auto& item : list)
       list_json.Append(item);
     return list_json;
   };
 
   auto ConvertDebugValueList = [](const auto& list) {
-    base::Value list_json(base::Value::Type::LIST);
+    base::Value::List list_json;
     for (const auto& item : list)
       list_json.Append(item.AsDebugValue());
     return list_json;
@@ -613,282 +1026,209 @@ base::Value WebApp::AsDebugValue() const {
   };
 
   // Prefix with a ! so these fields appear at the top when serialized.
-  root.SetStringKey("!app_id", app_id_);
+  root.Set("!app_id", app_id_);
 
-  root.SetStringKey("!name", name_);
+  root.Set("!name", name_);
 
-  root.SetKey("additional_search_terms", ConvertList(additional_search_terms_));
+  root.Set("additional_search_terms", ConvertList(additional_search_terms_));
 
-  root.SetStringKey("app_service_icon_url",
-                    base::StrCat({"chrome://app-icon/", app_id_, "/32"}));
+  root.Set("app_service_icon_url",
+           base::StrCat({"chrome://app-icon/", app_id_, "/32"}));
 
-  if (app_size_in_bytes_.has_value()) {
-    root.SetStringKey("app_size_in_bytes",
-                      base::NumberToString(app_size_in_bytes_.value()));
-  } else {
-    root.SetStringKey("app_size_in_bytes", "");
-  }
+  root.Set("app_size_in_bytes", OptionalToStringValue(app_size_in_bytes_));
 
-  root.SetKey("allowed_launch_protocols",
-              ConvertList(allowed_launch_protocols_));
+  root.Set("allowed_launch_protocols", ConvertList(allowed_launch_protocols_));
 
-  if (data_size_in_bytes_.has_value()) {
-    root.SetStringKey("data_size_in_bytes",
-                      base::NumberToString(data_size_in_bytes_.value()));
-  } else {
-    root.SetStringKey("data_size_in_bytes", "");
-  }
+  root.Set("background_color", ColorToString(background_color_));
 
-  root.SetKey("disallowed_launch_protocols",
-              ConvertList(disallowed_launch_protocols_));
+  root.Set("capture_links", base::ToString(capture_links_));
 
-  root.SetStringKey("background_color", ColorToString(background_color_));
+  root.Set("data_size_in_bytes", OptionalToStringValue(data_size_in_bytes_));
 
-  root.SetStringKey("dark_mode_theme_color",
-                    ColorToString(dark_mode_theme_color_));
+  root.Set("dark_mode_background_color",
+           ColorToString(dark_mode_background_color_));
 
-  root.SetStringKey("dark_mode_background_color",
-                    ColorToString(dark_mode_background_color_));
+  root.Set("dark_mode_theme_color", ColorToString(dark_mode_theme_color_));
 
-  root.SetStringKey("capture_links", base::StreamableToString(capture_links_));
+  root.Set("disallowed_launch_protocols",
+           ConvertList(disallowed_launch_protocols_));
 
-  root.SetKey("chromeos_data",
-              chromeos_data_ ? chromeos_data_->AsDebugValue() : base::Value());
+  root.Set("description", description_);
 
-  root.SetKey("client_data", client_data_.AsDebugValue());
+  root.Set("display_mode", blink::DisplayModeToString(display_mode_));
 
-  if (data_size_in_bytes_.has_value()) {
-    root.SetStringKey("data_size_in_bytes",
-                      base::NumberToString(data_size_in_bytes_.value()));
-  } else {
-    root.SetStringKey("data_size_in_bytes", "");
-  }
-
-  root.SetStringKey("description", description_);
-
-  root.SetStringKey("display_mode", blink::DisplayModeToString(display_mode_));
-
-  base::Value& display_override =
-      *root.SetKey("display_override", base::Value(base::Value::Type::LIST));
+  base::Value::List display_override;
   for (const DisplayMode& mode : display_mode_override_)
     display_override.Append(blink::DisplayModeToString(mode));
+  root.Set("display_override", std::move(display_override));
 
-  base::Value& downloaded_icon_sizes_json = *root.SetKey(
-      "downloaded_icon_sizes", base::Value(base::Value::Type::DICTIONARY));
+  base::Value::Dict downloaded_icon_sizes_json;
   for (IconPurpose purpose : kIconPurposes) {
-    downloaded_icon_sizes_json.SetKey(
-        base::StreamableToString(purpose),
-        ConvertList(downloaded_icon_sizes(purpose)));
+    downloaded_icon_sizes_json.Set(base::ToString(purpose),
+                                   ConvertList(downloaded_icon_sizes(purpose)));
   }
+  root.Set("downloaded_icon_sizes", std::move(downloaded_icon_sizes_json));
 
-  base::Value& downloaded_shortcuts_menu_icons_sizes =
-      *root.SetKey("downloaded_shortcuts_menu_icons_sizes",
-                   base::Value(base::Value::Type::LIST));
-  for (size_t i = 0; i < downloaded_shortcuts_menu_icons_sizes_.size(); ++i) {
-    const IconSizes& icon_sizes = downloaded_shortcuts_menu_icons_sizes_[i];
-    base::Value entry(base::Value::Type::DICTIONARY);
-    entry.SetIntKey("index", i);
-    for (IconPurpose purpose : kIconPurposes) {
-      entry.SetKey(base::StreamableToString(purpose),
-                   ConvertList(icon_sizes.GetSizesForPurpose(purpose)));
-    }
-    downloaded_shortcuts_menu_icons_sizes.Append(std::move(entry));
-  }
+  root.Set("file_handler_approval_state",
+           ApiApprovalStateToString(file_handler_approval_state_));
 
-  root.SetStringKey("file_handler_approval_state",
-                    ApiApprovalStateToString(file_handler_approval_state_));
+  root.Set("file_handler_os_integration_state",
+           OsIntegrationStateToString(file_handler_os_integration_state_));
 
-  root.SetStringKey(
-      "file_handler_os_integration_state",
-      OsIntegrationStateToString(file_handler_os_integration_state_));
+  root.Set("file_handlers", ConvertDebugValueList(file_handlers_));
 
-  root.SetKey("file_handlers", ConvertDebugValueList(file_handlers_));
+  root.Set("manifest_icons", ConvertDebugValueList(manifest_icons_));
 
-  root.SetKey("manifest_icons", ConvertDebugValueList(manifest_icons_));
-
-  if (install_source_for_metrics_) {
-    root.SetIntKey("install_source_for_metrics",
-                   static_cast<int>(*install_source_for_metrics_));
-  } else {
-    root.SetStringKey("install_source_for_metrics", "not set");
-  }
+  root.Set("latest_install_source",
+           OptionalToStringValue(latest_install_source_));
 
   base::Value::Dict external_map;
   for (auto it : management_to_external_config_map_) {
-    external_map.Set(base::StreamableToString(it.first),
-                     it.second.AsDebugValue());
+    external_map.Set(base::ToString(it.first), it.second.AsDebugValue());
   }
 
-  root.SetKey("management_type_to_external_configuration_map",
-              base::Value(std::move(external_map)));
+  root.Set("management_type_to_external_configuration_map",
+           std::move(external_map));
 
-  root.SetStringKey("install_time", base::StreamableToString(install_time_));
+  root.Set("first_install_time", base::ToString(first_install_time_));
 
-  root.SetBoolKey("is_generated_icon", is_generated_icon_);
+  root.Set("is_generated_icon", is_generated_icon_);
 
-  root.SetBoolKey("is_from_sync_and_pending_installation",
-                  is_from_sync_and_pending_installation_);
+  root.Set("is_from_sync_and_pending_installation",
+           is_from_sync_and_pending_installation_);
 
-  root.SetBoolKey("is_locally_installed", is_locally_installed_);
+  root.Set("is_locally_installed", is_locally_installed_);
 
-  root.SetBoolKey("is_storage_isolated", is_storage_isolated_);
+  root.Set("is_uninstalling", is_uninstalling_);
 
-  root.SetBoolKey("is_uninstalling", is_uninstalling_);
+  root.Set("last_badging_time", base::ToString(last_badging_time_));
 
-  root.SetStringKey("last_badging_time",
-                    base::StreamableToString(last_badging_time_));
-
-  root.SetStringKey("last_launch_time",
-                    base::StreamableToString(last_launch_time_));
+  root.Set("last_launch_time", base::ToString(last_launch_time_));
 
   if (launch_handler_) {
-    base::Value& launch_handler_json = *root.SetKey(
-        "launch_handler", base::Value(base::Value::Type::DICTIONARY));
-    launch_handler_json.SetStringKey(
-        "client_mode", base::StreamableToString(launch_handler_->client_mode));
+    base::Value::Dict launch_handler_json;
+    launch_handler_json.Set("client_mode",
+                            base::ToString(launch_handler_->client_mode));
+    root.Set("launch_handler", std::move(launch_handler_json));
   } else {
-    root.SetKey("launch_handler", base::Value());
+    root.Set("launch_handler", base::Value());
   }
 
-  root.SetKey("launch_query_params", ConvertOptional(launch_query_params_));
+  root.Set("launch_query_params", ConvertOptional(launch_query_params_));
 
-  root.SetKey("manifest_id", ConvertOptional(manifest_id_));
+  root.Set("manifest_update_time", base::ToString(manifest_update_time_));
 
-  root.SetStringKey("manifest_update_time",
-                    base::StreamableToString(manifest_update_time_));
+  root.Set("manifest_url", base::ToString(manifest_url_));
 
-  root.SetStringKey("manifest_url", base::StreamableToString(manifest_url_));
+  root.Set("lock_screen_start_url", base::ToString(lock_screen_start_url_));
 
-  root.SetStringKey("lock_screen_start_url",
-                    base::StreamableToString(lock_screen_start_url_));
+  root.Set("note_taking_new_note_url",
+           base::ToString(note_taking_new_note_url_));
 
-  root.SetStringKey("note_taking_new_note_url",
-                    base::StreamableToString(note_taking_new_note_url_));
-
-  root.SetStringKey("parent_app_id",
-                    parent_app_id_ ? *parent_app_id_ : AppId());
+  root.Set("parent_app_id", OptionalToStringValue(parent_app_id_));
 
   if (!permissions_policy_.empty()) {
-    base::Value& policy_list = *root.SetKey(
-        "permissions_policy", base::Value(base::Value::Type::LIST));
+    base::Value::List policy_list;
     const auto& feature_to_name_map =
         blink::GetPermissionsPolicyFeatureToNameMap();
     for (const auto& decl : permissions_policy_) {
-      base::Value json_decl(base::Value::Type::DICTIONARY);
+      base::Value::Dict json_decl;
       const auto& feature_name = feature_to_name_map.find(decl.feature);
       if (feature_name == feature_to_name_map.end()) {
         continue;
       }
-      json_decl.SetStringKey("feature", feature_name->second);
-      base::Value& allowlist_json = *json_decl.SetKey(
-          "allowed_origins", base::Value(base::Value::Type::LIST));
-      for (const auto& origin_with_possible_wildcards : decl.allowed_origins) {
-        allowlist_json.Append(origin_with_possible_wildcards.Serialize());
+      json_decl.Set("feature", feature_name->second);
+      base::Value::List allowlist_json;
+      for (const auto& allowlist_item : GetSerializedAllowedOrigins(decl)) {
+        allowlist_json.Append(allowlist_item);
       }
-      json_decl.SetBoolKey("matches_all_origins", decl.matches_all_origins);
-      json_decl.SetBoolKey("matches_opaque_src", decl.matches_opaque_src);
+      json_decl.Set("allowed_origins", std::move(allowlist_json));
+      json_decl.Set("matches_all_origins", decl.matches_all_origins);
+      json_decl.Set("matches_opaque_src", decl.matches_opaque_src);
       policy_list.Append(std::move(json_decl));
     }
+    root.Set("permissions_policy", std::move(policy_list));
   }
 
-  root.SetKey("protocol_handlers", ConvertDebugValueList(protocol_handlers_));
+  root.Set("protocol_handlers", ConvertDebugValueList(protocol_handlers_));
 
-  root.SetStringKey("run_on_os_login_mode",
-                    RunOnOsLoginModeToString(run_on_os_login_mode_));
-  root.SetStringKey(
-      "run_on_os_login_os_integration_state",
-      run_on_os_login_os_integration_state_
-          ? RunOnOsLoginModeToString(*run_on_os_login_os_integration_state_)
-          : "not set");
+  root.Set("run_on_os_login_mode", base::ToString(run_on_os_login_mode_));
+  root.Set("run_on_os_login_os_integration_state",
+           OptionalToStringValue(run_on_os_login_os_integration_state_));
 
-  root.SetStringKey("scope", base::StreamableToString(scope_));
+  root.Set("scope", base::ToString(scope_));
 
-  root.SetKey("share_target",
-              share_target_ ? share_target_->AsDebugValue() : base::Value());
+  root.Set("share_target", OptionalAsDebugValue(share_target_));
 
-  root.SetKey("shortcuts_menu_item_infos",
-              ConvertDebugValueList(shortcuts_menu_item_infos_));
+  root.Set("shortcuts_menu_item_infos",
+           ConvertDebugValueList(shortcuts_menu_item_infos_));
 
-  base::Value& sources =
-      *root.SetKey("sources", base::Value(base::Value::Type::LIST));
-  for (int i = WebAppManagement::Type::kMinValue;
-       i <= WebAppManagement::Type::kMaxValue; ++i) {
-    if (sources_[i]) {
-      sources.Append(
-          base::StreamableToString(static_cast<WebAppManagement::Type>(i)));
+  base::Value::List sources;
+  for (WebAppManagement::Type source : WebAppManagementTypes::All()) {
+    if (sources_.Has(source)) {
+      sources.Append(base::ToString(source));
     }
   }
+  root.Set("sources", std::move(sources));
 
-  root.SetStringKey("start_url", base::StreamableToString(start_url_));
+  root.Set("start_url", base::ToString(start_url_));
 
-  root.SetKey("sync_fallback_data", sync_fallback_data_.AsDebugValue());
+  root.Set("sync_fallback_data", sync_fallback_data_.AsDebugValue());
 
-  root.SetStringKey("theme_color", ColorToString(theme_color_));
+  root.Set("theme_color", ColorToString(theme_color_));
 
-  root.SetStringKey("unhashed_app_id",
-                    GenerateAppIdUnhashed(manifest_id_, start_url_));
+  root.Set("manifest_id", manifest_id_.spec());
 
-  root.SetKey("url_handlers", ConvertDebugValueList(url_handlers_));
+  root.Set("url_handlers", ConvertDebugValueList(url_handlers_));
 
-  root.SetStringKey("user_display_mode",
-                    user_display_mode_.has_value()
-                        ? ConvertUserDisplayModeToString(*user_display_mode_)
-                        : "");
+  root.Set("scope_extensions", ConvertDebugValueList(scope_extensions_));
 
-  root.SetStringKey("user_launch_ordinal",
-                    user_launch_ordinal_.ToDebugString());
+  root.Set("scope_extensions_validated",
+           ConvertDebugValueList(validated_scope_extensions_));
 
-  root.SetStringKey("user_page_ordinal", user_page_ordinal_.ToDebugString());
+  root.Set("user_display_mode", OptionalToStringValue(user_display_mode_));
 
-  root.SetBoolKey("window_controls_overlay_enabled",
-                  window_controls_overlay_enabled_);
+  root.Set("user_launch_ordinal", user_launch_ordinal_.ToDebugString());
 
-  if (tab_strip_.has_value()) {
-    base::Value& tab_strip_json =
-        *root.SetKey("tab_strip", base::Value(base::Value::Type::DICTIONARY));
-    if (absl::holds_alternative<TabStrip::Visibility>(
-            tab_strip_.value().new_tab_button)) {
-      tab_strip_json.SetStringKey(
-          "new_tab_button",
-          base::StreamableToString(absl::get<TabStrip::Visibility>(
-              tab_strip_.value().new_tab_button)));
-    } else {
-      base::Value& new_tab_button_json = *tab_strip_json.SetKey(
-          "new_tab_button", base::Value(base::Value::Type::DICTIONARY));
-      new_tab_button_json.SetStringKey(
-          "url", base::StreamableToString(
-                     absl::get<blink::Manifest::NewTabButtonParams>(
-                         tab_strip_.value().new_tab_button)
-                         .url.value_or(GURL(""))));
-    }
+  root.Set("user_page_ordinal", user_page_ordinal_.ToDebugString());
 
-    if (absl::holds_alternative<TabStrip::Visibility>(
-            tab_strip_.value().home_tab)) {
-      tab_strip_json.SetStringKey(
-          "home_tab", base::StreamableToString(absl::get<TabStrip::Visibility>(
-                          tab_strip_.value().home_tab)));
-    } else {
-      tab_strip_json.SetKey("home_tab",
-                            base::Value(base::Value::Type::DICTIONARY));
-      // TODO(crbug.com/897314): Add debug info for home tab icons.
-    }
-  } else {
-    root.SetKey("tab_strip", base::Value());
-  }
+  root.Set("window_controls_overlay_enabled", window_controls_overlay_enabled_);
 
-  root.SetBoolKey("always_show_toolbar_in_fullscreen",
-                  always_show_toolbar_in_fullscreen_);
+  root.Set("tab_strip", OptTabStripToDebugValue(tab_strip_));
 
-  if (current_os_integration_states_.has_value()) {
-    root.SetKey("current_os_integration_states", base::Value());
-    // TODO(crbug.com/1295044) : Add logic to parse and show data.
-  }
+  root.Set("always_show_toolbar_in_fullscreen",
+           always_show_toolbar_in_fullscreen_);
 
-  if (isolation_data_.has_value()) {
-    root.SetKey("isolation_data", isolation_data_->AsDebugValue());
-  }
+  root.Set("current_os_integration_states",
+           OsStatesDebugValue(current_os_integration_states_));
 
-  return root;
+  root.Set("isolation_data", OptionalAsDebugValue(isolation_data_));
+
+  root.Set("user_link_capturing_preference",
+           base::ToString(user_link_capturing_preference_));
+
+  root.Set("latest_install_time", base::ToString(latest_install_time_));
+
+  root.Set("generated_icon_fix", generated_icon_fix_util::ToDebugValue(
+                                     base::OptionalToPtr(generated_icon_fix_)));
+
+  root.Set("supported_links_offer_ignore_count",
+           supported_links_offer_ignore_count_);
+  root.Set("supported_links_offer_dismiss_count",
+           supported_links_offer_dismiss_count_);
+
+  return base::Value(std::move(root));
+}
+
+base::Value WebApp::AsDebugValue() const {
+  base::Value value = AsDebugValueWithOnlyPlatformAgnosticFields();
+  auto& root = value.GetDict();
+
+  root.Set("chromeos_data", OptionalAsDebugValue(chromeos_data_));
+
+  root.Set("client_data", client_data_.AsDebugValue());
+
+  return value;
 }
 
 std::ostream& operator<<(std::ostream& out, const WebApp& app) {
@@ -908,15 +1248,56 @@ bool operator!=(const WebApp::SyncFallbackData& sync_fallback_data1,
   return !(sync_fallback_data1 == sync_fallback_data2);
 }
 
+std::ostream& operator<<(
+    std::ostream& out,
+    const WebApp::ExternalManagementConfig& management_config) {
+  return out << management_config.AsDebugValue().DebugString();
+}
+
 bool operator==(const WebApp::ExternalManagementConfig& management_config1,
                 const WebApp::ExternalManagementConfig& management_config2) {
-  return management_config1.install_urls == management_config2.install_urls &&
-         management_config1.is_placeholder == management_config2.is_placeholder;
+  return std::tie(management_config1.install_urls,
+                  management_config1.is_placeholder,
+                  management_config1.additional_policy_ids) ==
+         std::tie(management_config2.install_urls,
+                  management_config2.is_placeholder,
+                  management_config2.additional_policy_ids);
 }
 
 bool operator!=(const WebApp::ExternalManagementConfig& management_config1,
                 const WebApp::ExternalManagementConfig& management_config2) {
   return !(management_config1 == management_config2);
+}
+
+namespace proto {
+
+bool operator==(const WebAppOsIntegrationState& os_integration_state1,
+                const WebAppOsIntegrationState& os_integration_state2) {
+  return os_integration_state1.SerializeAsString() ==
+         os_integration_state2.SerializeAsString();
+}
+
+bool operator!=(const WebAppOsIntegrationState& os_integration_state1,
+                const WebAppOsIntegrationState& os_integration_state2) {
+  return !(os_integration_state1 == os_integration_state2);
+}
+
+}  // namespace proto
+
+std::vector<std::string> GetSerializedAllowedOrigins(
+    const blink::ParsedPermissionsPolicyDeclaration
+        permissions_policy_declaration) {
+  std::vector<std::string> allowed_origins;
+  if (permissions_policy_declaration.self_if_matches) {
+    CHECK(!permissions_policy_declaration.self_if_matches->opaque());
+    allowed_origins.push_back(
+        permissions_policy_declaration.self_if_matches->Serialize());
+  }
+  for (const auto& origin_with_possible_wildcards :
+       permissions_policy_declaration.allowed_origins) {
+    allowed_origins.push_back(origin_with_possible_wildcards.Serialize());
+  }
+  return allowed_origins;
 }
 
 }  // namespace web_app

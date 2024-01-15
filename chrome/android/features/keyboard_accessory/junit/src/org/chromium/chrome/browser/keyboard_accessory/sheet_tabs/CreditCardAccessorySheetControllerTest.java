@@ -4,27 +4,25 @@
 
 package org.chromium.chrome.browser.keyboard_accessory.sheet_tabs;
 
+import static androidx.test.espresso.matcher.ViewMatchers.assertThat;
+
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.Matchers.equalTo;
 import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
-import static org.chromium.chrome.browser.keyboard_accessory.ManualFillingMetricsRecorder.getHistogramForType;
-import static org.chromium.chrome.browser.keyboard_accessory.sheet_tabs.AccessorySheetTabMetricsRecorder.UMA_KEYBOARD_ACCESSORY_SHEET_SUGGESTIONS;
-import static org.chromium.chrome.browser.keyboard_accessory.sheet_tabs.AccessorySheetTabModel.AccessorySheetDataPiece.Type.CREDIT_CARD_INFO;
-import static org.chromium.chrome.browser.keyboard_accessory.sheet_tabs.AccessorySheetTabModel.AccessorySheetDataPiece.Type.PROMO_CODE_INFO;
-import static org.chromium.chrome.browser.keyboard_accessory.sheet_tabs.AccessorySheetTabModel.AccessorySheetDataPiece.Type.TITLE;
-import static org.chromium.chrome.browser.keyboard_accessory.sheet_tabs.AccessorySheetTabModel.AccessorySheetDataPiece.getType;
+import static org.chromium.chrome.browser.keyboard_accessory.sheet_tabs.AccessorySheetTabItemsModel.AccessorySheetDataPiece.Type.CREDIT_CARD_INFO;
+import static org.chromium.chrome.browser.keyboard_accessory.sheet_tabs.AccessorySheetTabItemsModel.AccessorySheetDataPiece.Type.PROMO_CODE_INFO;
+import static org.chromium.chrome.browser.keyboard_accessory.sheet_tabs.AccessorySheetTabItemsModel.AccessorySheetDataPiece.Type.TITLE;
+import static org.chromium.chrome.browser.keyboard_accessory.sheet_tabs.AccessorySheetTabItemsModel.AccessorySheetDataPiece.getType;
 
 import android.graphics.drawable.Drawable;
 
-import androidx.recyclerview.widget.RecyclerView;
-
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -35,11 +33,9 @@ import org.mockito.MockitoAnnotations;
 import org.robolectric.RuntimeEnvironment;
 import org.robolectric.annotation.Config;
 
-import org.chromium.base.metrics.RecordHistogram;
 import org.chromium.base.metrics.UmaRecorderHolder;
 import org.chromium.base.task.test.CustomShadowAsyncTask;
 import org.chromium.base.test.BaseRobolectricTestRunner;
-import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.keyboard_accessory.AccessoryTabType;
 import org.chromium.chrome.browser.keyboard_accessory.data.KeyboardAccessoryData;
 import org.chromium.chrome.browser.keyboard_accessory.data.KeyboardAccessoryData.AccessorySheetData;
@@ -47,25 +43,22 @@ import org.chromium.chrome.browser.keyboard_accessory.data.KeyboardAccessoryData
 import org.chromium.chrome.browser.keyboard_accessory.data.KeyboardAccessoryData.UserInfo;
 import org.chromium.chrome.browser.keyboard_accessory.data.PropertyProvider;
 import org.chromium.chrome.browser.keyboard_accessory.data.UserInfoField;
+import org.chromium.chrome.browser.util.ChromeAccessibilityUtil;
 import org.chromium.chrome.test.util.browser.Features;
 import org.chromium.ui.modelutil.ListObservable;
 
-/**
- * Controller tests for the credit card accessory sheet.
- */
+/** Controller tests for the credit card accessory sheet. */
 @RunWith(BaseRobolectricTestRunner.class)
-@Config(manifest = Config.NONE, shadows = {CustomShadowAsyncTask.class})
-@Features.EnableFeatures(ChromeFeatureList.AUTOFILL_KEYBOARD_ACCESSORY)
+@Config(
+        manifest = Config.NONE,
+        shadows = {CustomShadowAsyncTask.class})
 public class CreditCardAccessorySheetControllerTest {
-    @Rule
-    public TestRule mFeaturesProcessorRule = new Features.JUnitProcessor();
-    @Mock
-    private RecyclerView mMockView;
-    @Mock
-    private ListObservable.ListObserver<Void> mMockItemListObserver;
+    @Rule public TestRule mFeaturesProcessorRule = new Features.JUnitProcessor();
+    @Mock private AccessorySheetTabView mMockView;
+    @Mock private ListObservable.ListObserver<Void> mMockItemListObserver;
 
     private CreditCardAccessorySheetCoordinator mCoordinator;
-    private AccessorySheetTabModel mSheetDataPieces;
+    private AccessorySheetTabItemsModel mSheetDataPieces;
 
     @Before
     public void setUp() {
@@ -76,6 +69,11 @@ public class CreditCardAccessorySheetControllerTest {
                 new CreditCardAccessorySheetCoordinator(RuntimeEnvironment.application, null);
         assertNotNull(mCoordinator);
         mSheetDataPieces = mCoordinator.getSheetDataPiecesForTesting();
+    }
+
+    @After
+    public void tearDown() {
+        ChromeAccessibilityUtil.get().setAccessibilityEnabledForTesting(false);
     }
 
     @Test
@@ -94,6 +92,18 @@ public class CreditCardAccessorySheetControllerTest {
         assertNotNull(tab.getListener());
         tab.getListener().onTabCreated(mMockView);
         verify(mMockView).setAdapter(any());
+    }
+
+    @Test
+    public void testRequestDefaultFocus() {
+        ChromeAccessibilityUtil.get().setAccessibilityEnabledForTesting(true);
+
+        when(mMockView.getParent()).thenReturn(mMockView);
+        KeyboardAccessoryData.Tab tab = mCoordinator.getTab();
+        tab.getListener().onTabCreated(mMockView);
+        tab.getListener().onTabShown();
+
+        verify(mMockView).requestDefaultA11yFocus();
     }
 
     @Test
@@ -131,15 +141,21 @@ public class CreditCardAccessorySheetControllerTest {
         final AccessorySheetData testData =
                 new AccessorySheetData(AccessoryTabType.CREDIT_CARDS, "Payments", "");
         testData.getUserInfoList().add(new UserInfo("", false));
-        testData.getUserInfoList().get(0).addField(
-                new UserInfoField("Todd", "Todd", "", false, field -> {}));
-        testData.getUserInfoList().get(0).addField(
-                new UserInfoField("**** 9219", "**** 9219", "", true, field -> {}));
+        testData.getUserInfoList()
+                .get(0)
+                .addField(new UserInfoField("Todd", "Todd", "", false, field -> {}));
+        testData.getUserInfoList()
+                .get(0)
+                .addField(new UserInfoField("**** 9219", "**** 9219", "", true, field -> {}));
         testData.getPromoCodeInfoList().add(new PromoCodeInfo());
-        testData.getPromoCodeInfoList().get(0).setPromoCode(
-                new UserInfoField("50$OFF", "Promo Code for Todd Tester", "", false, field -> {}));
-        testData.getPromoCodeInfoList().get(0).setDetailsText(
-                "Get $50 off when you use this code at checkout.");
+        testData.getPromoCodeInfoList()
+                .get(0)
+                .setPromoCode(
+                        new UserInfoField(
+                                "50$OFF", "Promo Code for Todd Tester", "", false, field -> {}));
+        testData.getPromoCodeInfoList()
+                .get(0)
+                .setDetailsText("Get $50 off when you use this code at checkout.");
 
         mCoordinator.registerDataProvider(testProvider);
         testProvider.notifyObservers(testData);
@@ -168,10 +184,12 @@ public class CreditCardAccessorySheetControllerTest {
 
         // As soon UserInfo is available, discard the title.
         testData.getUserInfoList().add(new UserInfo("", false));
-        testData.getUserInfoList().get(0).addField(
-                new UserInfoField("Todd", "Todd", "", false, field -> {}));
-        testData.getUserInfoList().get(0).addField(
-                new UserInfoField("**** 9219", "**** 9219", "", true, field -> {}));
+        testData.getUserInfoList()
+                .get(0)
+                .addField(new UserInfoField("Todd", "Todd", "", false, field -> {}));
+        testData.getUserInfoList()
+                .get(0)
+                .addField(new UserInfoField("**** 9219", "**** 9219", "", true, field -> {}));
         testProvider.notifyObservers(testData);
 
         assertThat(mSheetDataPieces.size(), is(1));
@@ -185,10 +203,14 @@ public class CreditCardAccessorySheetControllerTest {
                 new AccessorySheetData(AccessoryTabType.CREDIT_CARDS, "No payment methods", "");
 
         testData.getPromoCodeInfoList().add(new PromoCodeInfo());
-        testData.getPromoCodeInfoList().get(0).setPromoCode(
-                new UserInfoField("50$OFF", "Promo Code for Todd Tester", "", false, field -> {}));
-        testData.getPromoCodeInfoList().get(0).setDetailsText(
-                "Get $50 off when you use this code at checkout.");
+        testData.getPromoCodeInfoList()
+                .get(0)
+                .setPromoCode(
+                        new UserInfoField(
+                                "50$OFF", "Promo Code for Todd Tester", "", false, field -> {}));
+        testData.getPromoCodeInfoList()
+                .get(0)
+                .setDetailsText("Get $50 off when you use this code at checkout.");
 
         mCoordinator.registerDataProvider(testProvider);
         testProvider.notifyObservers(testData);
@@ -198,57 +220,5 @@ public class CreditCardAccessorySheetControllerTest {
         assertThat(getType(mSheetDataPieces.get(0)), is(PROMO_CODE_INFO));
         assertThat(getType(mSheetDataPieces.get(1)), is(TITLE));
         assertThat(mSheetDataPieces.get(1).getDataPiece(), is(equalTo("No payment methods")));
-    }
-
-    @Test
-    public void testRecordsNoSuggestionsImpressionsWithoutInteractiveElements() {
-        final PropertyProvider<AccessorySheetData> testProvider = new PropertyProvider<>();
-        mCoordinator.registerDataProvider(testProvider);
-        assertThat(RecordHistogram.getHistogramTotalCountForTesting(
-                           UMA_KEYBOARD_ACCESSORY_SHEET_SUGGESTIONS),
-                is(0));
-        assertThat(getSuggestionsImpressions(AccessoryTabType.CREDIT_CARDS, 0), is(0));
-        assertThat(getSuggestionsImpressions(AccessoryTabType.ALL, 0), is(0));
-
-        // If the tab is shown without interactive item, log "0" samples.
-        AccessorySheetData accessorySheetData =
-                new AccessorySheetData(AccessoryTabType.CREDIT_CARDS, "Payments", "");
-        testProvider.notifyObservers(accessorySheetData);
-        mCoordinator.onTabShown();
-
-        assertThat(getSuggestionsImpressions(AccessoryTabType.CREDIT_CARDS, 0), is(1));
-        assertThat(getSuggestionsImpressions(AccessoryTabType.ALL, 0), is(1));
-    }
-
-    @Test
-    public void testRecordsSelectableSuggestionsImpressionsWhenShown() {
-        final PropertyProvider<AccessorySheetData> testProvider = new PropertyProvider<>();
-        mCoordinator.registerDataProvider(testProvider);
-        assertThat(RecordHistogram.getHistogramTotalCountForTesting(
-                           UMA_KEYBOARD_ACCESSORY_SHEET_SUGGESTIONS),
-                is(0));
-        assertThat(getSuggestionsImpressions(AccessoryTabType.CREDIT_CARDS, 1), is(0));
-        assertThat(getSuggestionsImpressions(AccessoryTabType.ALL, 1), is(0));
-
-        // Add only two interactive items - the third one should not be recorded.
-        AccessorySheetData accessorySheetData =
-                new AccessorySheetData(AccessoryTabType.CREDIT_CARDS, "Payments", "");
-        accessorySheetData.getUserInfoList().add(new UserInfo("", false));
-        accessorySheetData.getUserInfoList().get(0).addField(
-                new UserInfoField("Todd Tester", "Todd Tester", "0", false, result -> {}));
-        accessorySheetData.getUserInfoList().get(0).addField(
-                new UserInfoField("**** 9219", "Card for Todd Tester", "1", false, result -> {}));
-        accessorySheetData.getUserInfoList().get(0).addField(
-                new UserInfoField("Unselectable", "Unselectable", "-1", false, null));
-        testProvider.notifyObservers(accessorySheetData);
-        mCoordinator.onTabShown();
-
-        assertThat(getSuggestionsImpressions(AccessoryTabType.CREDIT_CARDS, 2), is(1));
-        assertThat(getSuggestionsImpressions(AccessoryTabType.ALL, 2), is(1));
-    }
-
-    private int getSuggestionsImpressions(@AccessoryTabType int type, int sample) {
-        return RecordHistogram.getHistogramValueCountForTesting(
-                getHistogramForType(UMA_KEYBOARD_ACCESSORY_SHEET_SUGGESTIONS, type), sample);
     }
 }

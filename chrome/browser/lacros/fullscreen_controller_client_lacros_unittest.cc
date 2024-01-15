@@ -4,7 +4,8 @@
 
 #include "chrome/browser/lacros/fullscreen_controller_client_lacros.h"
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/test/test_future.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/profiles/profile.h"
@@ -116,10 +117,10 @@ class FullscreenControllerClientLacrosTest : public BrowserWithTestWindowTest {
 
   void SetKeepFullscreenWithoutNotificationAllowList(
       const std::string& pattern) {
-    base::Value list(base::Value::Type::LIST);
-    list.Append(base::Value(pattern));
-    profile_->GetPrefs()->Set(
-        prefs::kKeepFullscreenWithoutNotificationUrlAllowList, list);
+    base::Value::List list;
+    list.Append(pattern);
+    profile_->GetPrefs()->SetList(
+        prefs::kKeepFullscreenWithoutNotificationUrlAllowList, std::move(list));
   }
 
   void RunTest(bool expect_should_exit_fullscreen) {
@@ -135,7 +136,7 @@ class FullscreenControllerClientLacrosTest : public BrowserWithTestWindowTest {
   }
 
  protected:
-  Profile* profile_ = nullptr;
+  raw_ptr<Profile> profile_ = nullptr;
   testing::StrictMock<MockRemote> mock_;
 };
 
@@ -212,7 +213,7 @@ class FullscreenControllerClientLacrosWebContentsTest
   }
 
  protected:
-  extensions::AppWindow* app_window_ = nullptr;
+  raw_ptr<extensions::AppWindow> app_window_ = nullptr;
 };
 
 // Test that ShouldExitFullscreenBeforeLock() returns true if the allow list
@@ -236,11 +237,11 @@ TEST_P(FullscreenControllerClientLacrosWebContentsTest,
 TEST_P(FullscreenControllerClientLacrosWebContentsTest,
        KeepFullscreenIfMatchingPref) {
   // Set up the URL exempt list with one matching and one non-matching pattern.
-  base::Value list(base::Value::Type::LIST);
-  list.Append(base::Value(kNonMatchingPattern));
-  list.Append(base::Value(kMatchingPattern));
-  profile_->GetPrefs()->Set(
-      prefs::kKeepFullscreenWithoutNotificationUrlAllowList, list);
+  base::Value::List list;
+  list.Append(kNonMatchingPattern);
+  list.Append(kMatchingPattern);
+  profile_->GetPrefs()->SetList(
+      prefs::kKeepFullscreenWithoutNotificationUrlAllowList, std::move(list));
 
   RunTest(/*expect_should_exit_fullscreen=*/false);
 }

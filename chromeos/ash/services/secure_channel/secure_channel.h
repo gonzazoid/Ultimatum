@@ -5,8 +5,8 @@
 #ifndef CHROMEOS_ASH_SERVICES_SECURE_CHANNEL_SECURE_CHANNEL_H_
 #define CHROMEOS_ASH_SERVICES_SECURE_CHANNEL_SECURE_CHANNEL_H_
 
-#include "base/callback.h"
 #include "base/containers/queue.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "chromeos/ash/components/multidevice/remote_device_ref.h"
 #include "chromeos/ash/services/secure_channel/authenticator.h"
@@ -111,13 +111,13 @@ class SecureChannel : public ConnectionObserver {
   virtual void RemoveObserver(Observer* observer);
 
   // Returns the RSSI of the connection; if no derived class overrides this
-  // function, absl::nullopt is returned.
+  // function, std::nullopt is returned.
   virtual void GetConnectionRssi(
-      base::OnceCallback<void(absl::optional<int32_t>)> callback);
+      base::OnceCallback<void(std::optional<int32_t>)> callback);
 
   // The |responder_auth| message. Returns null if |secure_context_| is null or
   // status() != AUTHENTICATED.
-  virtual absl::optional<std::string> GetChannelBindingData();
+  virtual std::optional<std::string> GetChannelBindingData();
 
   Status status() const { return status_; }
 

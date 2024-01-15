@@ -6,19 +6,11 @@
 
 #include <vector>
 
-#include "base/bind.h"
-#include "chrome/browser/vr/audio_delegate.h"
+#include "base/functional/bind.h"
+#include "base/task/single_thread_task_runner.h"
 #include "chrome/browser/vr/browser_renderer.h"
-#include "chrome/browser/vr/content_input_delegate.h"
-#include "chrome/browser/vr/keyboard_delegate.h"
-#include "chrome/browser/vr/model/location_bar_state.h"
-#include "chrome/browser/vr/text_input_delegate.h"
 #include "chrome/browser/vr/ui.h"
-#include "chrome/browser/vr/ui_browser_interface.h"
-#include "chrome/browser/vr/ui_initial_state.h"
 #include "chrome/browser/vr/win/graphics_delegate_win.h"
-#include "chrome/browser/vr/win/input_delegate_win.h"
-#include "chrome/browser/vr/win/scheduler_delegate_win.h"
 #include "gpu/command_buffer/client/gles2_interface.h"
 #include "gpu/command_buffer/client/gles2_lib.h"
 #include "ui/gfx/geometry/quaternion.h"
@@ -49,7 +41,7 @@ VRBrowserRendererThreadWin* VRBrowserRendererThreadWin::instance_for_testing_ =
 VRBrowserRendererThreadWin::VRBrowserRendererThreadWin(
     device::mojom::XRCompositorHost* compositor)
     : compositor_(compositor),
-      task_runner_(base::ThreadTaskRunnerHandle::Get()) {
+      task_runner_(base::SingleThreadTaskRunner::GetCurrentDefault()) {
   DCHECK(instance_for_testing_ == nullptr);
   instance_for_testing_ = this;
 }
@@ -62,10 +54,8 @@ VRBrowserRendererThreadWin::~VRBrowserRendererThreadWin() {
 
 void VRBrowserRendererThreadWin::StopOverlay() {
   browser_renderer_ = nullptr;
-  initializing_graphics_ = nullptr;
   started_ = false;
   graphics_ = nullptr;
-  scheduler_ = nullptr;
   ui_ = nullptr;
   scheduler_ui_ = nullptr;
 }
@@ -82,10 +72,6 @@ void VRBrowserRendererThreadWin::SetDefaultXrViews(
       default_views_.push_back(view.Clone());
     }
   }
-}
-
-void VRBrowserRendererThreadWin::SetLocationInfo(GURL gurl) {
-  gurl_ = gurl;
 }
 
 void VRBrowserRendererThreadWin::SetWebXrPresenting(bool presenting) {
@@ -255,96 +241,31 @@ void VRBrowserRendererThreadWin::DisableFrameTimeoutForTesting() {
   g_frame_timeout_ui_disabled_for_testing_ = true;
 }
 
-class VRUiBrowserInterface : public UiBrowserInterface {
- public:
-  ~VRUiBrowserInterface() override = default;
-
-  void ExitPresent() override {}
-  void ExitFullscreen() override {}
-  void Navigate(GURL gurl, NavigationMethod method) override {}
-  void NavigateBack() override {}
-  void NavigateForward() override {}
-  void ReloadTab() override {}
-  void OpenNewTab(bool incognito) override {}
-  void OpenBookmarks() override {}
-  void OpenRecentTabs() override {}
-  void OpenHistory() override {}
-  void OpenDownloads() override {}
-  void OpenShare() override {}
-  void OpenSettings() override {}
-  void CloseAllIncognitoTabs() override {}
-  void OpenFeedback() override {}
-  void CloseHostedDialog() override {}
-  void OnUnsupportedMode(UiUnsupportedMode mode) override {}
-  void OnExitVrPromptResult(ExitVrPromptChoice choice,
-                            UiUnsupportedMode reason) override {}
-  void OnContentScreenBoundsChanged(const gfx::SizeF& bounds) override {}
-  void SetVoiceSearchActive(bool active) override {}
-  void StartAutocomplete(const AutocompleteRequest& request) override {}
-  void StopAutocomplete() override {}
-  void ShowPageInfo() override {}
-};
-
 void VRBrowserRendererThreadWin::StartOverlay() {
   if (started_)
     return;
 
-  initializing_graphics_ = std::make_unique<GraphicsDelegateWin>();
-  if (!initializing_graphics_->InitializeOnMainThread()) {
-    return;
-  }
+  // The graphics delegate will eventually be owned by the browser_renderer_,
+  // but we need to keep a raw pointer to it.
+  std::unique_ptr<GraphicsDelegateWin> initializing_graphics =
+      std::make_unique<GraphicsDelegateWin>();
+  graphics_ = initializing_graphics.get();
 
   // We should have received valid views from the ui host before rendering.
   DCHECK(!default_views_.empty());
-  initializing_graphics_->SetXrViews(default_views_);
+  graphics_->SetXrViews(default_views_);
 
-  initializing_graphics_->InitializeOnGLThread();
-  initializing_graphics_->BindContext();
+  graphics_->BindContext();
 
   // Create a vr::Ui
-  ui_browser_interface_ = std::make_unique<VRUiBrowserInterface>();
-  UiInitialState ui_initial_state = {};
-  ui_initial_state.in_web_vr = true;
-  ui_initial_state.browsing_disabled = true;
-  ui_initial_state.supports_selection = false;
-  std::unique_ptr<Ui> ui = std::make_unique<Ui>(
-      ui_browser_interface_.get(), nullptr /*input*/,
-      nullptr /*keyboard_delegate*/, nullptr /*text_input_delegate*/,
-      nullptr /*audio_delegate*/, ui_initial_state);
-  static_cast<UiInterface*>(ui.get())->OnGlInitialized(
-      kGlTextureLocationLocal,
-      0 /* content_texture_id - we don't support content */,
-      0 /* content_overlay_texture_id - we don't support content overlays */,
-      0 /* platform_ui_texture_id - we don't support platform UI */);
+  std::unique_ptr<Ui> ui = std::make_unique<Ui>();
+  static_cast<UiInterface*>(ui.get())->OnGlInitialized();
   ui_ = static_cast<BrowserUiInterface*>(ui.get());
-  ui_->SetWebVrMode(true);
   scheduler_ui_ = static_cast<UiInterface*>(ui.get())->GetSchedulerUiPtr();
-
-  if (gurl_.is_valid()) {
-    // TODO(https://crbug.com/905375): Set more of this state.  Only the GURL is
-    // currently used, so its the only thing we are setting correctly. See
-    // VRUiHostImpl::SetLocationInfoOnUi also.
-    LocationBarState state(gurl_, security_state::SecurityLevel::SECURE,
-                           nullptr /* vector icon */, true /* display url */,
-                           false /* offline */);
-    ui_->SetLocationBarState(state);
-  }
-
-  // Create the delegates, and keep raw pointers to them.  They are owned by
-  // browser_renderer_.
-  std::unique_ptr<SchedulerDelegateWin> scheduler_delegate =
-      std::make_unique<SchedulerDelegateWin>();
-  scheduler_ = scheduler_delegate.get();
-  graphics_ = initializing_graphics_.get();
-  std::unique_ptr<InputDelegateWin> input_delegate =
-      std::make_unique<InputDelegateWin>();
-  input_ = input_delegate.get();
 
   // Create the BrowserRenderer to drive UI rendering based on the delegates.
   browser_renderer_ = std::make_unique<BrowserRenderer>(
-      std::move(ui), std::move(scheduler_delegate),
-      std::move(initializing_graphics_), std::move(input_delegate),
-      nullptr /*browser_renderer_interface*/, kSlidingAverageSize);
+      std::move(ui), std::move(initializing_graphics), kSlidingAverageSize);
 
   graphics_->ClearContext();
 
@@ -458,14 +379,19 @@ void VRBrowserRendererThreadWin::OnPose(int request_id,
   gfx::Transform head_from_world =
       head_from_unoriented_head * unoriented_head_from_world;
 
-  input_->OnPose(head_from_world);
+  base::TimeTicks now = base::TimeTicks::Now();
+  bool need_submit = false;
+  if (draw_state_.ShouldDrawWebXR()) {
+    browser_renderer_->DrawWebXrFrame(now, head_from_world);
+    need_submit = true;
+  } else if (draw_state_.ShouldDrawUI()) {
+    browser_renderer_->DrawBrowserFrame(now, head_from_world);
+    need_submit = true;
+  }
 
-  // base::Unretained is safe because scheduler_ will be destroyed without
-  // calling the callback if we are destroyed.
-  scheduler_->OnPose(base::BindOnce(&VRBrowserRendererThreadWin::SubmitFrame,
-                                    base::Unretained(this), data->frame_id),
-                     head_from_world, draw_state_.ShouldDrawWebXR(),
-                     draw_state_.ShouldDrawUI());
+  if (need_submit) {
+    SubmitFrame(data->frame_id);
+  }
 }
 
 bool VRBrowserRendererThreadWin::PreRender() {

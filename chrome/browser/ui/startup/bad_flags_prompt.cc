@@ -15,12 +15,14 @@
 #include "base/trace_event/memory_dump_manager.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
+#include "cc/base/switches.h"
 #include "chrome/browser/infobars/simple_alert_infobar_creator.h"
 #include "chrome/browser/ui/simple_message_box.h"
 #include "chrome/browser/webauthn/webauthn_switches.h"
+#include "chrome/common/chrome_features.h"
 #include "chrome/common/chrome_paths.h"
 #include "chrome/common/chrome_switches.h"
-#include "chrome/grit/chromium_strings.h"
+#include "chrome/grit/branded_strings.h"
 #include "chrome/grit/generated_resources.h"
 #include "components/autofill/core/common/autofill_switches.h"
 #include "components/history_clusters/core/file_clustering_backend.h"
@@ -42,12 +44,17 @@
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/resource/resource_bundle.h"
 #include "ui/base/resource/scoped_startup_resource_bundle.h"
+#include "ui/views/views_switches.h"
 
 #if BUILDFLAG(IS_ANDROID)
 #include "chrome/browser/android/flags/bad_flags_snackbar_manager.h"
 #include "chrome/browser/flags/android/chrome_feature_list.h"
 #else
 #include "chrome/browser/ui/browser.h"
+#endif
+
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+#include "chromeos/constants/chromeos_features.h"
 #endif
 
 namespace chrome {
@@ -57,8 +64,11 @@ namespace {
 #if !BUILDFLAG(IS_ANDROID)
 // Dangerous command line flags for which to display a warning that "stability
 // and security will suffer".
-static const char* kBadFlags[] = {
-    network::switches::kIgnoreCertificateErrorsSPKIList,
+const char* const kBadFlags[] = {
+    // These flags allow redirecting user traffic.
+    network::switches::kHostResolverRules,
+    switches::kHostRules,
+
     // These flags disable sandbox-related security.
     sandbox::policy::switches::kDisableGpuSandbox,
     sandbox::policy::switches::kDisableSeccompFilterSandbox,
@@ -77,6 +87,7 @@ static const char* kBadFlags[] = {
     // These flags undermine HTTPS / connection security.
     switches::kDisableWebRtcEncryption,
     switches::kIgnoreCertificateErrors,
+    network::switches::kIgnoreCertificateErrorsSPKIList,
 
     // This flag could prevent QuotaChange events from firing or cause the event
     // to fire too often, potentially impacting web application behavior.
@@ -134,17 +145,8 @@ static const char* kBadFlags[] = {
     // be possible to read GPU data for other Chromium processes.
     switches::kEnableUnsafeWebGPU,
 
-    // A flag to support local file based WebBundle loading, only for testing
-    // purpose.
-    switches::kTrustableWebBundleFileUrl,
-
     // A flag to bypass the WebHID blocklist for testing purposes.
     switches::kDisableHidBlocklist,
-
-    // This flag enables restricted APIs (which unlock capabilities
-    // with a high potential for security / privacy abuse) for specified
-    // origins.
-    switches::kIsolatedAppOrigins,
 
     // This flag tells Chrome to automatically install an Isolated Web App in
     // developer mode. The flag should contain the path to an unsigned Web
@@ -166,20 +168,33 @@ static const char* kBadFlags[] = {
     // learning model output used by the History Clusters service and should
     // only be used for testing purposes.
     history_clusters::switches::kClustersOverrideFile,
+
+    // This flag disables protection against potentially unintentional user
+    // interaction with certain UI elements.
+    views::switches::kDisableInputEventActivationProtectionForTesting,
+
+    // This flag enables injecting synthetic input. It is meant to be used only
+    // in tests and performance benchmarks. Using it could allow faking user
+    // interaction across origins.
+    cc::switches::kEnableGpuBenchmarking,
 };
 #endif  // !BUILDFLAG(IS_ANDROID)
 
 // Dangerous feature flags in about:flags for which to display a warning that
 // "stability and security will suffer".
 static const base::Feature* kBadFeatureFlagsInAboutFlags[] = {
-    // This feature enables experimental support for isolated web apps, which
+    // These features enables experimental support for isolated web apps, which
     // unlock capabilities with a high potential for security / privacy abuse.
     &features::kIsolatedWebApps,
+    &features::kIsolatedWebAppDevMode,
 
-    &features::kWebBundlesFromNetwork,
 #if BUILDFLAG(IS_ANDROID)
     &chrome::android::kCommandLineOnNonRooted,
 #endif
+
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+    &chromeos::features::kBlinkExtensionDiagnostics,
+#endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
 };
 
 void ShowBadFlagsInfoBarHelper(content::WebContents* web_contents,
@@ -242,7 +257,7 @@ void MaybeShowInvalidUserDataDirWarningDialog() {
   if (user_data_dir.empty())
     return;
 
-  startup_metric_utils::SetNonBrowserUIDisplayed();
+  startup_metric_utils::GetBrowser().SetNonBrowserUIDisplayed();
 
   // Ensure there is an instance of ResourceBundle that is initialized for
   // localized string resource accesses.

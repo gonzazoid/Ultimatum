@@ -9,13 +9,10 @@ import androidx.annotation.Nullable;
 import java.util.HashMap;
 import java.util.Map;
 
-/**
- * Provides information about whether the interest feed is enabled for use in feedback reports.
- */
+/** Provides information about whether the interest feed is enabled for use in feedback reports. */
 public class InterestFeedFeedbackSource implements FeedbackSource {
     private static final String KEY = "Interest Feed";
     private static final String ENABLED_VALUE = "Enabled";
-    private static final String DISABLED_VALUE = "Disabled";
 
     private final HashMap<String, String> mMap;
 

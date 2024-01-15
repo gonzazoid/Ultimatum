@@ -58,7 +58,7 @@ class EventLogsUploadManager {
         : event_id(id), created_ts(ts), data(data), severity_level(level) {}
 
     // Converts to dictionary in a base::Value.
-    void ToValue(base::Value& dict) const;
+    base::Value::Dict ToValue() const;
   };
 
  protected:
@@ -75,9 +75,10 @@ class EventLogsUploadManager {
   // Makes the upload HTTP request using the provided |access_token| for
   // the upload chunk with id |chunk_id| and the log entries specified
   // as a list in |log_entries|.
-  HRESULT MakeUploadLogChunkRequest(const std::string& access_token,
-                                    uint64_t chunk_id,
-                                    std::unique_ptr<base::Value> log_entries);
+  HRESULT MakeUploadLogChunkRequest(
+      const std::string& access_token,
+      uint64_t chunk_id,
+      std::unique_ptr<base::Value::List> log_entries);
 };
 
 }  // namespace credential_provider

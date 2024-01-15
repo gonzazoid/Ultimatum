@@ -4,12 +4,11 @@
 
 #include "third_party/blink/renderer/modules/direct_sockets/udp_writable_stream_wrapper.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/notreached.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "net/base/net_errors.h"
-#include "third_party/blink/public/mojom/direct_sockets/direct_sockets.mojom-blink-forward.h"
-#include "third_party/blink/public/mojom/direct_sockets/direct_sockets.mojom-blink.h"
+#include "services/network/public/mojom/restricted_udp_socket.mojom-blink.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise_tester.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_binding_for_testing.h"
@@ -27,26 +26,37 @@
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/heap/persistent.h"
+#include "third_party/blink/renderer/platform/mojo/heap_mojo_receiver.h"
+#include "third_party/blink/renderer/platform/testing/task_environment.h"
 #include "third_party/blink/renderer/platform/testing/unit_test_helpers.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
+#include "third_party/blink/renderer/platform/wtf/gc_plugin.h"
 #include "third_party/googletest/src/googlemock/include/gmock/gmock-matchers.h"
 
 namespace blink {
 
 namespace {
 
-class FakeDirectUDPSocket : public blink::mojom::blink::DirectUDPSocket {
+class FakeRestrictedUDPSocket
+    : public GarbageCollected<FakeRestrictedUDPSocket>,
+      public network::mojom::blink::RestrictedUDPSocket {
  public:
   void Send(base::span<const uint8_t> data, SendCallback callback) override {
     data_.Append(data.data(), static_cast<uint32_t>(data.size_bytes()));
     std::move(callback).Run(net::Error::OK);
   }
 
+  void SendTo(base::span<const uint8_t> data,
+              const net::HostPortPair& dest_addr,
+              net::DnsQueryType dns_query_type,
+              SendToCallback callback) override {
+    NOTREACHED();
+  }
+
   void ReceiveMore(uint32_t num_additional_datagrams) override { NOTREACHED(); }
 
-  void Close() override { NOTREACHED(); }
-
   const Vector<uint8_t>& GetReceivedData() const { return data_; }
+  void Trace(cppgc::Visitor* visitor) const {}
 
  private:
   Vector<uint8_t> data_;
@@ -54,41 +64,42 @@ class FakeDirectUDPSocket : public blink::mojom::blink::DirectUDPSocket {
 
 class StreamCreator : public GarbageCollected<StreamCreator> {
  public:
-  StreamCreator()
-      : fake_udp_socket_{std::make_unique<FakeDirectUDPSocket>()},
-        receiver_{fake_udp_socket_.get()} {}
+  explicit StreamCreator(const V8TestingScope& scope)
+      : StreamCreator(scope, MakeGarbageCollected<FakeRestrictedUDPSocket>()) {}
 
-  explicit StreamCreator(std::unique_ptr<FakeDirectUDPSocket> socket)
-      : fake_udp_socket_(std::move(socket)),
-        receiver_{fake_udp_socket_.get()} {}
+  StreamCreator(const V8TestingScope& scope, FakeRestrictedUDPSocket* socket)
+      : fake_udp_socket_(socket),
+        receiver_{fake_udp_socket_.Get(), scope.GetExecutionContext()} {}
 
   ~StreamCreator() = default;
 
   UDPWritableStreamWrapper* Create(const V8TestingScope& scope) {
+    scoped_refptr<base::SingleThreadTaskRunner> task_runner =
+        scope.GetExecutionContext()->GetTaskRunner(TaskType::kNetworking);
     auto* udp_socket =
         MakeGarbageCollected<UDPSocketMojoRemote>(scope.GetExecutionContext());
-    udp_socket->get().Bind(
-        receiver_.BindNewPipeAndPassRemote(),
-        scope.GetExecutionContext()->GetTaskRunner(TaskType::kNetworking));
+    udp_socket->get().Bind(receiver_.BindNewPipeAndPassRemote(task_runner),
+                           task_runner);
 
     auto* script_state = scope.GetScriptState();
     stream_wrapper_ = MakeGarbageCollected<UDPWritableStreamWrapper>(
         script_state,
         WTF::BindOnce(&StreamCreator::Close, WrapWeakPersistent(this)),
-        udp_socket);
-    return stream_wrapper_;
+        udp_socket, network::mojom::RestrictedUDPSocketMode::CONNECTED);
+    return stream_wrapper_.Get();
   }
 
-  void Trace(Visitor* visitor) const { visitor->Trace(stream_wrapper_); }
+  void Trace(Visitor* visitor) const {
+    visitor->Trace(fake_udp_socket_);
+    visitor->Trace(receiver_);
+    visitor->Trace(stream_wrapper_);
+  }
 
-  FakeDirectUDPSocket* fake_udp_socket() { return fake_udp_socket_.get(); }
+  FakeRestrictedUDPSocket* fake_udp_socket() { return fake_udp_socket_.Get(); }
 
   bool CloseCalledWith(bool error) { return close_called_with_ == error; }
 
-  void Cleanup() {
-    fake_udp_socket_.reset();
-    receiver_.reset();
-  }
+  void Cleanup() { receiver_.reset(); }
 
  private:
   void Close(ScriptValue exception) {
@@ -96,8 +107,10 @@ class StreamCreator : public GarbageCollected<StreamCreator> {
   }
 
   absl::optional<bool> close_called_with_;
-  std::unique_ptr<FakeDirectUDPSocket> fake_udp_socket_;
-  mojo::Receiver<blink::mojom::blink::DirectUDPSocket> receiver_;
+  Member<FakeRestrictedUDPSocket> fake_udp_socket_;
+  HeapMojoReceiver<network::mojom::blink::RestrictedUDPSocket,
+                   FakeRestrictedUDPSocket>
+      receiver_;
   Member<UDPWritableStreamWrapper> stream_wrapper_;
 };
 
@@ -115,18 +128,22 @@ class ScopedStreamCreator {
 };
 
 TEST(UDPWritableStreamWrapperTest, Create) {
+  test::TaskEnvironment task_environment;
   V8TestingScope scope;
 
-  ScopedStreamCreator stream_creator(MakeGarbageCollected<StreamCreator>());
+  ScopedStreamCreator stream_creator(
+      MakeGarbageCollected<StreamCreator>(scope));
   auto* udp_writable_stream_wrapper = stream_creator->Create(scope);
 
   EXPECT_TRUE(udp_writable_stream_wrapper->Writable());
 }
 
 TEST(UDPWritableStreamWrapperTest, WriteUdpMessage) {
+  test::TaskEnvironment task_environment;
   V8TestingScope scope;
 
-  ScopedStreamCreator stream_creator(MakeGarbageCollected<StreamCreator>());
+  ScopedStreamCreator stream_creator(
+      MakeGarbageCollected<StreamCreator>(scope));
   auto* udp_writable_stream_wrapper = stream_creator->Create(scope);
 
   auto* script_state = scope.GetScriptState();
@@ -153,9 +170,11 @@ TEST(UDPWritableStreamWrapperTest, WriteUdpMessage) {
 }
 
 TEST(UDPWritableStreamWrapperTest, WriteUdpMessageFromTypedArray) {
+  test::TaskEnvironment task_environment;
   V8TestingScope scope;
 
-  ScopedStreamCreator stream_creator(MakeGarbageCollected<StreamCreator>());
+  ScopedStreamCreator stream_creator(
+      MakeGarbageCollected<StreamCreator>(scope));
   auto* udp_writable_stream_wrapper = stream_creator->Create(scope);
 
   auto* script_state = scope.GetScriptState();
@@ -185,9 +204,11 @@ TEST(UDPWritableStreamWrapperTest, WriteUdpMessageFromTypedArray) {
 }
 
 TEST(UDPWritableStreamWrapperTest, WriteUdpMessageWithEmptyDataField) {
+  test::TaskEnvironment task_environment;
   V8TestingScope scope;
 
-  ScopedStreamCreator stream_creator(MakeGarbageCollected<StreamCreator>());
+  ScopedStreamCreator stream_creator(
+      MakeGarbageCollected<StreamCreator>(scope));
   auto* udp_writable_stream_wrapper = stream_creator->Create(scope);
 
   auto* script_state = scope.GetScriptState();
@@ -216,42 +237,12 @@ TEST(UDPWritableStreamWrapperTest, WriteUdpMessageWithEmptyDataField) {
   EXPECT_THAT(fake_udp_socket->GetReceivedData(), ::testing::ElementsAre());
 }
 
-TEST(UDPWritableStreamWrapperTest, WriteUdpMessageWithoutDataField) {
-  V8TestingScope scope;
-
-  ScopedStreamCreator stream_creator(MakeGarbageCollected<StreamCreator>());
-  auto* udp_writable_stream_wrapper = stream_creator->Create(scope);
-
-  auto* script_state = scope.GetScriptState();
-
-  auto* writer = udp_writable_stream_wrapper->Writable()->getWriter(
-      script_state, ASSERT_NO_EXCEPTION);
-
-  // Create empty message (without 'data' field).
-  auto* message = UDPMessage::Create();
-
-  ScriptPromise result =
-      writer->write(script_state, ScriptValue::From(script_state, message),
-                    ASSERT_NO_EXCEPTION);
-
-  ScriptPromiseTester tester(script_state, result);
-  tester.WaitUntilSettled();
-
-  // Should be rejected due to missing 'data' field.
-  ASSERT_TRUE(tester.IsRejected());
-
-  DOMException* exception = V8DOMException::ToImplWithTypeCheck(
-      scope.GetIsolate(), tester.Value().V8Value());
-
-  ASSERT_TRUE(exception);
-  ASSERT_EQ(exception->name(), "DataError");
-  ASSERT_TRUE(exception->message().Contains("missing 'data' field"));
-}
-
 TEST(UDPWritableStreamWrapperTest, WriteAfterFinishedWrite) {
+  test::TaskEnvironment task_environment;
   V8TestingScope scope;
 
-  ScopedStreamCreator stream_creator(MakeGarbageCollected<StreamCreator>());
+  ScopedStreamCreator stream_creator(
+      MakeGarbageCollected<StreamCreator>(scope));
   auto* udp_writable_stream_wrapper = stream_creator->Create(scope);
 
   auto* script_state = scope.GetScriptState();
@@ -281,9 +272,11 @@ TEST(UDPWritableStreamWrapperTest, WriteAfterFinishedWrite) {
 }
 
 TEST(UDPWritableStreamWrapperTest, WriteAfterClose) {
+  test::TaskEnvironment task_environment;
   V8TestingScope scope;
 
-  ScopedStreamCreator stream_creator(MakeGarbageCollected<StreamCreator>());
+  ScopedStreamCreator stream_creator(
+      MakeGarbageCollected<StreamCreator>(scope));
   auto* udp_writable_stream_wrapper = stream_creator->Create(scope);
 
   auto* script_state = scope.GetScriptState();
@@ -324,17 +317,18 @@ TEST(UDPWritableStreamWrapperTest, WriteAfterClose) {
 }
 
 TEST(UDPWritableStreamWrapperTest, WriteFailed) {
-  class FailingFakeDirectUDPSocket : public FakeDirectUDPSocket {
+  class FailingFakeRestrictedUDPSocket : public FakeRestrictedUDPSocket {
    public:
     void Send(base::span<const uint8_t> data, SendCallback callback) override {
       std::move(callback).Run(net::ERR_UNEXPECTED);
     }
   };
 
+  test::TaskEnvironment task_environment;
   V8TestingScope scope;
 
   ScopedStreamCreator stream_creator(MakeGarbageCollected<StreamCreator>(
-      std::make_unique<FailingFakeDirectUDPSocket>()));
+      scope, MakeGarbageCollected<FailingFakeRestrictedUDPSocket>()));
   auto* udp_writable_stream_wrapper = stream_creator->Create(scope);
 
   auto* script_state = scope.GetScriptState();

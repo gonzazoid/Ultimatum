@@ -3,14 +3,14 @@
 // found in the LICENSE file.
 
 // Include test fixture.
-GEN_INCLUDE(['../testing/chromevox_next_e2e_test_base.js']);
+GEN_INCLUDE(['../testing/chromevox_e2e_test_base.js']);
 
 GEN_INCLUDE(['../testing/mock_feedback.js', '../testing/fake_objects.js']);
 
 /**
  * Test fixture involving settings pages.
  */
-ChromeVoxSettingsPagesTest = class extends ChromeVoxNextE2ETest {
+ChromeVoxSettingsPagesTest = class extends ChromeVoxE2ETest {
   /** @override */
   testGenCppIncludes() {
     super.testGenCppIncludes();
@@ -23,7 +23,7 @@ ChromeVoxSettingsPagesTest = class extends ChromeVoxNextE2ETest {
   /** @override */
   testGenPreamble() {
     GEN(`
-    ash::SystemWebAppManager::GetForTest(browser()->profile())
+    ash::SystemWebAppManager::GetForTest(GetProfile())
         ->InstallSystemAppsForTesting();
   `);
     super.testGenPreamble();
@@ -33,8 +33,11 @@ ChromeVoxSettingsPagesTest = class extends ChromeVoxNextE2ETest {
   async setUpDeferred() {
     await super.setUpDeferred();
 
-    // Alphabetical based on file path.
-    await importModule('AbstractTts', '/chromevox/common/abstract_tts.js');
+    await Promise.all([
+      // Alphabetical based on file path.
+      importModule('ChromeVox', '/chromevox/background/chromevox.js'),
+      importModule('TtsSettings', '/chromevox/common/tts_types.js'),
+    ]);
   }
 };
 
@@ -45,9 +48,9 @@ AX_TEST_F(
       const mockFeedback = this.createMockFeedback();
       await this.runWithLoadedTree(`unused`);
       const increaseRate = realTts.increaseOrDecreaseProperty.bind(
-          realTts, AbstractTts.RATE, true);
+          realTts, TtsSettings.RATE, true);
       const decreaseRate = realTts.increaseOrDecreaseProperty.bind(
-          realTts, AbstractTts.RATE, false);
+          realTts, TtsSettings.RATE, false);
 
       mockFeedback.call(doCmd('showTtsSettings'))
           .expectSpeech(

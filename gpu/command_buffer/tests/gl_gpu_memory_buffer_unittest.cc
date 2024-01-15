@@ -10,7 +10,7 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ref_counted.h"
 #include "base/process/process_handle.h"
 #include "build/build_config.h"
@@ -25,8 +25,7 @@
 #include "ui/gfx/buffer_format_util.h"
 #include "ui/gfx/gpu_memory_buffer.h"
 #include "ui/gfx/half_float.h"
-#include "ui/gl/gl_image.h"
-#include "ui/gl/test/gl_image_test_support.h"
+#include "ui/gl/test/gl_test_support.h"
 
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
 #include "gpu/ipc/common/gpu_memory_buffer_impl_native_pixmap.h"
@@ -151,7 +150,7 @@ TEST_P(GpuMemoryBufferTest, MapUnmap) {
 
   const size_t num_planes = NumberOfPlanesForLinearBufferFormat(buffer_format);
   for (size_t plane = 0; plane < num_planes; ++plane) {
-    gl::GLImageTestSupport::SetBufferDataToColor(
+    gl::GLTestSupport::SetBufferDataToColor(
         kImageWidth, kImageHeight, buffer->stride(plane), plane, buffer_format,
         color_rgba, static_cast<uint8_t*>(buffer->memory(plane)));
   }

@@ -8,8 +8,8 @@
 
 #include "ash/components/arc/compat_mode/metrics.h"
 #include "ash/shell.h"
-#include "base/bind.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/functional/bind.h"
+#include "base/task/sequenced_task_runner.h"
 #include "ui/aura/window_tree_host.h"
 #include "ui/events/base_event_utils.h"
 
@@ -109,10 +109,6 @@ ui::EventDispatchDetails TouchModeMouseRewriter::RewriteEvent(
   const ui::MouseEvent& mouse_event = *event.AsMouseEvent();
   if (mouse_event.IsRightMouseButton() || mouse_event.IsLeftMouseButton()) {
     if (!in_resize_locked) {
-      if (mouse_event.IsRightMouseButton()) {
-        RecordRightClickConversionResultHistogram(
-            RightClickConversionResultHistogramResult::kNotConverted);
-      }
       return SendEvent(continuation, &event);
     }
 
@@ -157,7 +153,7 @@ void TouchModeMouseRewriter::SendScrollEvent(
                                       ui::EventTimeForNow(), 0, 0, 0, 0, 0, 0);
     std::ignore = SendEvent(continuation, &fling_start_event);
   } else {
-    base::SequencedTaskRunnerHandle::Get()->PostDelayedTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE,
         base::BindOnce(&TouchModeMouseRewriter::SendScrollEvent,
                        weak_ptr_factory_.GetWeakPtr(), original_event,
@@ -177,7 +173,7 @@ ui::EventDispatchDetails TouchModeMouseRewriter::RewriteMouseWheelEvent(
     ui::ScrollEvent fling_cancel_event(
         ui::ET_SCROLL_FLING_CANCEL, event.location_f(), event.root_location_f(),
         event.time_stamp(), 0, 0, 0, 0, 0, 0);
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(&TouchModeMouseRewriter::SendScrollEvent,
                        weak_ptr_factory_.GetWeakPtr(), event, continuation));
@@ -200,14 +196,11 @@ ui::EventDispatchDetails TouchModeMouseRewriter::RewriteMouseClickEvent(
     }
     // Schedule the release event after |kLongPressInterval|.
     release_event_scheduled_ = true;
-    base::SequencedTaskRunnerHandle::Get()->PostDelayedTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE,
         base::BindOnce(&TouchModeMouseRewriter::SendReleaseEvent,
                        weak_ptr_factory_.GetWeakPtr(), event, continuation),
         kLongPressInterval);
-
-    RecordRightClickConversionResultHistogram(
-        RightClickConversionResultHistogramResult::kConverted);
 
     // Send the press event now.
     ui::MouseEvent press_event(

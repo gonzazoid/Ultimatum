@@ -7,8 +7,10 @@
 #include <memory>
 #include <utility>
 
+#include "base/i18n/rtl.h"
 #include "base/memory/raw_ptr.h"
 #include "base/strings/utf_string_conversions.h"
+#include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/accessibility/ax_action_data.h"
 #include "ui/accessibility/ax_enums.mojom.h"
@@ -22,8 +24,7 @@
 
 using base::ASCIIToUTF16;
 
-namespace views {
-namespace test {
+namespace views::test {
 namespace {
 
 std::u16string DefaultTabTitle() {
@@ -72,6 +73,27 @@ TEST_F(TabbedPaneTest, TabStripHighlightStyle) {
       std::make_unique<TabbedPane>(TabbedPane::Orientation::kVertical,
                                    TabbedPane::TabStripStyle::kHighlight);
   EXPECT_EQ(tabbed_pane->GetStyle(), TabbedPane::TabStripStyle::kHighlight);
+}
+
+TEST_F(TabbedPaneTest, ScrollingDisabled) {
+  auto tabbed_pane = std::make_unique<TabbedPane>(
+      TabbedPane::Orientation::kVertical, TabbedPane::TabStripStyle::kBorder);
+  EXPECT_EQ(tabbed_pane->GetScrollView(), nullptr);
+}
+
+TEST_F(TabbedPaneTest, ScrollingEnabled) {
+  auto tabbed_pane_vertical =
+      std::make_unique<TabbedPane>(TabbedPane::Orientation::kVertical,
+                                   TabbedPane::TabStripStyle::kBorder, true);
+  ASSERT_NE(tabbed_pane_vertical->GetScrollView(), nullptr);
+  EXPECT_THAT(tabbed_pane_vertical->GetScrollView(), testing::A<ScrollView*>());
+
+  auto tabbed_pane_horizontal =
+      std::make_unique<TabbedPane>(TabbedPane::Orientation::kHorizontal,
+                                   TabbedPane::TabStripStyle::kBorder, true);
+  ASSERT_NE(tabbed_pane_horizontal->GetScrollView(), nullptr);
+  EXPECT_THAT(tabbed_pane_horizontal->GetScrollView(),
+              testing::A<ScrollView*>());
 }
 
 // Tests the preferred size and layout when tabs are aligned vertically..
@@ -242,6 +264,44 @@ TEST_F(TabbedPaneWithWidgetTest, ArrowKeyBindings) {
   EXPECT_EQ(0u, tabbed_pane_->GetSelectedTabIndex());
 }
 
+TEST_F(TabbedPaneWithWidgetTest, ArrowKeyBindingsWithRTL) {
+  // Add several tabs; only the first should be selected automatically.
+  base::i18n::SetRTLForTesting(true);
+  EXPECT_TRUE(base::i18n::IsRTL());
+  for (size_t i = 0; i < 3; ++i) {
+    tabbed_pane_->AddTab(DefaultTabTitle(), std::make_unique<View>());
+    EXPECT_EQ(i + 1, tabbed_pane_->GetTabCount());
+  }
+
+  EXPECT_EQ(0u, tabbed_pane_->GetSelectedTabIndex());
+
+  // Left arrow should select tab 1:
+  SendKeyPressToSelectedTab(ui::VKEY_LEFT);
+  EXPECT_EQ(1u, tabbed_pane_->GetSelectedTabIndex());
+
+  // Left arrow should select tab 2:
+  SendKeyPressToSelectedTab(ui::VKEY_LEFT);
+  EXPECT_EQ(2u, tabbed_pane_->GetSelectedTabIndex());
+
+  // Left arrow again should wrap to tab 0:
+  SendKeyPressToSelectedTab(ui::VKEY_LEFT);
+  EXPECT_EQ(0u, tabbed_pane_->GetSelectedTabIndex());
+
+  // Right arrow again should wrap to tab 2:
+  SendKeyPressToSelectedTab(ui::VKEY_RIGHT);
+  EXPECT_EQ(2u, tabbed_pane_->GetSelectedTabIndex());
+
+  // Right arrow again should wrap to tab 1:
+  SendKeyPressToSelectedTab(ui::VKEY_RIGHT);
+  EXPECT_EQ(1u, tabbed_pane_->GetSelectedTabIndex());
+
+  // Right arrow again should wrap to tab 0:
+  SendKeyPressToSelectedTab(ui::VKEY_RIGHT);
+  EXPECT_EQ(0u, tabbed_pane_->GetSelectedTabIndex());
+
+  base::i18n::SetRTLForTesting(false);
+}
+
 // Use TabbedPane::HandleAccessibleAction() to select tabs and make sure their
 // a11y information is correct.
 TEST_F(TabbedPaneWithWidgetTest, SelectTabWithAccessibleAction) {
@@ -368,5 +428,4 @@ TEST_F(TabbedPaneWithWidgetTest, AccessibleEvents) {
   EXPECT_EQ(0, counter.GetCount(ax::mojom::Event::kSelectedChildrenChanged));
 }
 
-}  // namespace test
-}  // namespace views
+}  // namespace views::test

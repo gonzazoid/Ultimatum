@@ -11,37 +11,51 @@
 #include <memory>
 #include <string_view>
 
+#include <optional>
 #include "fuchsia_web/common/test/fake_feedback_service.h"
 #include "fuchsia_web/runners/cast/test/cast_runner_features.h"
 #include "fuchsia_web/runners/cast/test/fake_cast_agent.h"
-#include "media/fuchsia/audio/fake_audio_device_enumerator_local_component.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace test {
 
-// A launcher for CastRunnerIntegrationTestBase that uses
-// component_testing.RealmBuilder to start the cast runner component.
+// Test helper that arranges to launch an isolated `cast_runner.cm` instance
+// with the specified features enabled.  The instance will start only when
+// one of the capabilities that it offers is actually connected-to, via the
+// `exposed_services()`.
 class CastRunnerLauncher {
  public:
+  // Name of a component collection defined under this launcher's `Realm`,
+  // into which Cast activities may be launched using the `cast_runner`
+  // managed by this launcher.
+  static constexpr char kTestCollectionName[] = "cast-test-collection";
+
+  // Name of the CastRunner's Realm protocol, as exposed via the returned
+  // service directory.
+  static constexpr char kCastRunnerRealmProtocol[] =
+      "fuchsia.component.Realm-runner";
+
   explicit CastRunnerLauncher(CastRunnerFeatures runner_features);
-  CastRunnerLauncher(const CastRunnerLauncher&) = delete;
-  CastRunnerLauncher& operator=(const CastRunnerLauncher&) = delete;
   ~CastRunnerLauncher();
 
-  std::unique_ptr<sys::ServiceDirectory> StartCastRunner();
+  CastRunnerLauncher(const CastRunnerLauncher&) = delete;
+  CastRunnerLauncher& operator=(const CastRunnerLauncher&) = delete;
 
-  // May only be called after StartCastRunner().
+  // Returns a reference to the set of services exposed by the launcher, which
+  // includes both the capabilities exposed by the `cast_runner` component, and
+  // a `Realm` containing the test collection into which Cast activities may
+  // be launched.
+  sys::ServiceDirectory& exposed_services() { return *exposed_services_; }
+
+  // Returns a fake through which Cast-specific services such as the
+  // ApplicationConfigManager may be configured by tests.
   FakeCastAgent& fake_cast_agent() { return *fake_cast_agent_; }
 
  private:
-  const CastRunnerFeatures runner_features_;
+  std::optional<::component_testing::RealmRoot> realm_root_;
 
-  absl::optional<media::FakeAudioDeviceEnumeratorLocalComponent>
-      fake_audio_device_enumerator_;
-  absl::optional<FakeCastAgent> fake_cast_agent_;
-  absl::optional<FakeFeedbackService> fake_feedback_service_;
+  std::unique_ptr<sys::ServiceDirectory> exposed_services_;
 
-  absl::optional<::component_testing::RealmRoot> realm_root_;
+  raw_ptr<FakeCastAgent> fake_cast_agent_ = nullptr;
 };
 
 }  // namespace test

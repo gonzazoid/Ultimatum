@@ -5,9 +5,10 @@
 #ifndef CHROME_BROWSER_NET_NET_ERROR_TAB_HELPER_H_
 #define CHROME_BROWSER_NET_NET_ERROR_TAB_HELPER_H_
 
+#include <memory>
 #include <string>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/net/dns_probe_service.h"
 #include "chrome/common/net/net_error_page_support.mojom.h"
@@ -92,6 +93,9 @@ class NetErrorTabHelper
   void SetIsShowingDownloadButtonInErrorPage(
       bool showing_download_button) override;
 #endif  // BUILDFLAG(ENABLE_OFFLINE_PAGES)
+#if BUILDFLAG(IS_CHROMEOS)
+  void ShowPortalSignin() override;
+#endif
 
  protected:
   // |contents| is the WebContents of the tab this NetErrorTabHelper is

@@ -16,6 +16,7 @@
 #include <algorithm>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <utility>
 
 #include "base/containers/contains.h"
@@ -24,11 +25,12 @@
 #include "base/scoped_observation.h"
 #include "base/sequence_checker.h"
 #include "base/strings/string_number_conversions.h"
-#include "base/strings/string_piece.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/sys_string_conversions.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/scoped_blocking_call.h"
 #include "base/win/registry.h"
 #include "base/win/scoped_devinfo.h"
@@ -94,8 +96,9 @@ absl::optional<std::string> GetPortName(HDEVINFO dev_info,
 base::FilePath GetPath(std::string port_name) {
   // For COM numbers less than 9, CreateFile is called with a string such as
   // "COM1". For numbers greater than 9, a prefix of "\\.\" must be added.
-  if (port_name.length() > base::StringPiece("COM9").length())
+  if (port_name.length() > std::string_view("COM9").length()) {
     return base::FilePath(LR"(\\.\)").AppendASCII(port_name);
+  }
 
   return base::FilePath::FromUTF8Unsafe(port_name);
 }
@@ -148,8 +151,16 @@ absl::optional<uint32_t> GetProductID(const std::string& instance_id) {
 class SerialDeviceEnumeratorWin::UiThreadHelper
     : public DeviceMonitorWin::Observer {
  public:
-  UiThreadHelper() : task_runner_(base::SequencedTaskRunnerHandle::Get()) {
-    DETACH_FROM_SEQUENCE(sequence_checker_);
+  UiThreadHelper(base::WeakPtr<SerialDeviceEnumeratorWin> enumerator,
+                 scoped_refptr<base::SequencedTaskRunner> task_runner)
+      : enumerator_(std::move(enumerator)),
+        task_runner_(std::move(task_runner)) {
+    // Note that this uses GUID_DEVINTERFACE_COMPORT even though we use
+    // GUID_DEVINTERFACE_SERENUM_BUS_ENUMERATOR for enumeration because it
+    // doesn't seem to make a difference and ports which aren't enumerable by
+    // device interface don't generate WM_DEVICECHANGE events.
+    device_observation_.Observe(
+        DeviceMonitorWin::GetForDeviceInterface(GUID_DEVINTERFACE_COMPORT));
   }
 
   // Disallow copy and assignment.
@@ -158,17 +169,6 @@ class SerialDeviceEnumeratorWin::UiThreadHelper
 
   virtual ~UiThreadHelper() {
     DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  }
-
-  void Initialize(base::WeakPtr<SerialDeviceEnumeratorWin> enumerator) {
-    DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-    enumerator_ = std::move(enumerator);
-    // Note that this uses GUID_DEVINTERFACE_COMPORT even though we use
-    // GUID_DEVINTERFACE_SERENUM_BUS_ENUMERATOR for enumeration because it
-    // doesn't seem to make a difference and ports which aren't enumerable by
-    // device interface don't generate WM_DEVICECHANGE events.
-    device_observation_.Observe(
-        DeviceMonitorWin::GetForDeviceInterface(GUID_DEVINTERFACE_COMPORT));
   }
 
   void OnDeviceAdded(const GUID& class_guid,
@@ -200,14 +200,10 @@ class SerialDeviceEnumeratorWin::UiThreadHelper
 };
 
 SerialDeviceEnumeratorWin::SerialDeviceEnumeratorWin(
-    scoped_refptr<base::SingleThreadTaskRunner> ui_task_runner)
-    : helper_(new UiThreadHelper(), base::OnTaskRunnerDeleter(ui_task_runner)) {
-  // Passing a raw pointer to |helper_| is safe here because this task will
-  // reach the UI thread before any task to delete |helper_|.
-  ui_task_runner->PostTask(FROM_HERE,
-                           base::BindOnce(&UiThreadHelper::Initialize,
-                                          base::Unretained(helper_.get()),
-                                          weak_factory_.GetWeakPtr()));
+    scoped_refptr<base::SingleThreadTaskRunner> ui_task_runner) {
+  helper_ = base::SequenceBound<UiThreadHelper>(
+      std::move(ui_task_runner), weak_factory_.GetWeakPtr(),
+      base::SequencedTaskRunner::GetCurrentDefault());
 
   DoInitialEnumeration();
 }
@@ -328,7 +324,7 @@ void SerialDeviceEnumeratorWin::EnumeratePort(HDEVINFO dev_info,
   // Some versions of Windows pad this string with a variable number of NUL
   // bytes for no discernible reason.
   instance_id = std::string(base::TrimString(
-      *instance_id, base::StringPiece("\0", 1), base::TRIM_TRAILING));
+      *instance_id, std::string_view("\0", 1), base::TRIM_TRAILING));
 
   base::UnguessableToken token = base::UnguessableToken::Create();
   auto info = mojom::SerialPortInfo::New();
@@ -346,7 +342,7 @@ void SerialDeviceEnumeratorWin::EnumeratePort(HDEVINFO dev_info,
     // This string is also sometimes padded with a variable number of NUL bytes
     // for no discernible reason.
     info->display_name = std::string(base::TrimString(
-        *info->display_name, base::StringPiece("\0", 1), base::TRIM_TRAILING));
+        *info->display_name, std::string_view("\0", 1), base::TRIM_TRAILING));
   } else {
     // Fall back to the "friendly name" if no "bus reported device description"
     // is available. This name will likely be the same for all devices using the

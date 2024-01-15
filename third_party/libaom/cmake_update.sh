@@ -21,9 +21,9 @@
 # Toolchain for arm64:
 # - gcc-aarch64-linux-gnu
 # - g++-aarch64-linux-gnu
-# 32bit build environment for cmake. Including but potentially not limited to:
-# - lib32gcc-11-dev
-# - lib32stdc++-11-dev
+# Toolchain for x86:
+# - gcc-i686-linux-gnu
+# - g++-i686-linux-gnu
 # Alternatively: treat 32bit builds like Windows and manually tweak aom_config.h
 
 set -eE
@@ -80,21 +80,15 @@ function gen_config_files() {
 }
 
 function update_readme() {
-  local IFS=$'\n'
-  # Split git log output '<date>\n<commit hash>' on the newline to produce 2
-  # array entries.
-  local vals=($(git -C "${SRC}" --no-pager log -1 --format="%cd%n%H" \
-    --date=format:"%A %B %d %Y"))
+  local revision=$(git -C "${SRC}" --no-pager log -1 --format="%H")
   sed -E -i.bak \
-    -e "s/^(Date:)[[:space:]]+.*$/\1 ${vals[0]}/" \
-    -e "s/^(Revision:)[[:space:]]+[a-f0-9]{40}/\1 ${vals[1]}/" \
+    -e "s/^(Revision:)[[:space:]]+[a-f0-9]{40}/\1 ${revision}/" \
     ${BASE}/README.chromium
   rm ${BASE}/README.chromium.bak
   cat <<EOF
 
 README.chromium updated with:
-Date: ${vals[0]}
-Revision: ${vals[1]}
+Revision: ${revision}
 EOF
 }
 
@@ -112,6 +106,9 @@ function convert_to_windows() {
     "${1}"
   rm "${1}.bak"
 }
+
+# Fetch the latest tags; used in creating aom_version.h.
+git -C "${SRC}" fetch --tags
 
 # Scope 'trap' error reporting to configuration generation.
 (
@@ -143,12 +140,16 @@ gen_config_files linux/generic "-DAOM_TARGET_CPU=generic ${all_platforms}"
 # Strip .pl files from gni
 sed -i.bak '/\.pl",$/d' libaom_srcs.gni
 rm libaom_srcs.gni.bak
-# libaom_srcs.gni and aom_version.h are shared.
+# libaom_srcs.gni, libaom_test_srcs.gni, usage_exit.c
+# and aom_version.h are shared.
 cp libaom_srcs.gni "${BASE}"
+cp libaom_test_srcs.gni "${BASE}"
+cp gen_src/usage_exit.c "${BASE}/source/gen_src"
 cp config/aom_version.h "${CFG}/config/"
 
 reset_dirs linux/ia32
-gen_config_files linux/ia32 "${toolchain}/x86-linux.cmake ${all_platforms} \
+gen_config_files linux/ia32 "${toolchain}/i686-linux-gcc.cmake \
+  ${all_platforms} \
   -DCONFIG_PIC=1 \
   -DAOM_RTCD_FLAGS=--require-mmx;--require-sse;--require-sse2"
 
@@ -177,27 +178,24 @@ gen_config_files linux/arm \
 
 reset_dirs linux/arm-neon
 gen_config_files linux/arm-neon \
-  "${toolchain}/armv7-linux-gcc.cmake ${all_platforms}"
+  "${toolchain}/armv7-linux-gcc.cmake -DCONFIG_RUNTIME_CPU_DETECT=0 \
+   ${all_platforms}"
 
 reset_dirs linux/arm-neon-cpu-detect
 gen_config_files linux/arm-neon-cpu-detect \
   "${toolchain}/armv7-linux-gcc.cmake -DCONFIG_RUNTIME_CPU_DETECT=1 \
    ${all_platforms}"
 
-reset_dirs linux/arm64
-gen_config_files linux/arm64 \
-  "${toolchain}/arm64-linux-gcc.cmake ${all_platforms}"
-
-reset_dirs ios/arm-neon
-gen_config_files ios/arm-neon "${toolchain}/armv7-ios.cmake ${all_platforms}"
-
-reset_dirs ios/arm64
-gen_config_files ios/arm64 "${toolchain}/arm64-ios.cmake ${all_platforms}"
+reset_dirs linux/arm64-cpu-detect
+gen_config_files linux/arm64-cpu-detect \
+  "${toolchain}/arm64-linux-gcc.cmake -DCONFIG_RUNTIME_CPU_DETECT=1 \
+   ${all_platforms}"
 
 # Copy linux configurations and modify for Windows.
-reset_dirs win/arm64
-cp "${CFG}/linux/arm64/config"/* "${CFG}/win/arm64/config/"
-convert_to_windows "${CFG}/win/arm64/config/aom_config.h"
+reset_dirs win/arm64-cpu-detect
+cp "${CFG}/linux/arm64-cpu-detect/config"/* \
+  "${CFG}/win/arm64-cpu-detect/config/"
+convert_to_windows "${CFG}/win/arm64-cpu-detect/config/aom_config.h"
 )
 
 update_readme

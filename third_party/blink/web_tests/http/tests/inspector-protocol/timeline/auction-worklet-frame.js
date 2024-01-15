@@ -37,7 +37,7 @@
 
   const auctionJs = `
     navigator.runAdAuction({
-      decisionLogicUrl: "${base}fledge_decision_logic.js.php",
+      decisionLogicURL: "${base}fledge_decision_logic.js.php",
       seller: "https://a.test:8443",
       interestGroupBuyers: ["https://a.test:8443"]})`;
 
@@ -49,6 +49,10 @@
   await session.evaluateAsync(makeFrameJS);
   const frameTarget = await frameTargetPromise;
   const frameSession = session.createChild(frameTarget.params.sessionId);
+  // Enable auto-attach for the frame, so we attach to auction worklet.
+  frameSession.protocol.Target.setAutoAttach(
+      {autoAttach: true, waitForDebuggerOnStart: false, flatten: true});
+
   const winner = await frameSession.evaluateAsync(auctionJs);
   testRunner.log('Auction winner:' + handleUrn(winner));
 

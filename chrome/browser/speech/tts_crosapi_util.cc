@@ -8,6 +8,7 @@
 #include "base/values.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/profiles/profile_manager.h"
+#include "content/public/browser/tts_controller.h"
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 #include "ash/constants/ash_features.h"
@@ -73,7 +74,8 @@ crosapi::mojom::TtsEventType ToMojo(content::TtsEventType event_type) {
 content::VoiceData FromMojo(const crosapi::mojom::TtsVoicePtr& mojo_voice) {
   content::VoiceData voice_data;
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-  voice_data.from_crosapi = true;
+  // The mojo_voice is from the remote TTS engine in Lacros.
+  voice_data.from_remote_tts_engine = true;
 #endif
   voice_data.name = mojo_voice->voice_name;
   voice_data.lang = mojo_voice->lang;
@@ -136,14 +138,14 @@ crosapi::mojom::TtsUtterancePtr ToMojo(content::TtsUtterance* utterance) {
   return mojo_utterance;
 }
 
-std::unique_ptr<content::TtsUtterance> FromMojo(
-    crosapi::mojom::TtsUtterancePtr& mojo_utterance) {
+std::unique_ptr<content::TtsUtterance> CreateUtteranceFromMojo(
+    crosapi::mojom::TtsUtterancePtr& mojo_utterance,
+    bool should_always_be_spoken) {
   // Construct TtsUtterance object.
   content::BrowserContext* browser_context =
       ProfileManager::GetPrimaryUserProfile();
   std::unique_ptr<content::TtsUtterance> utterance =
-      content::TtsUtterance::Create(browser_context,
-                                    /*should_always_be_spoken=*/true);
+      content::TtsUtterance::Create(browser_context, should_always_be_spoken);
 
   utterance->SetText(mojo_utterance->text);
   utterance->SetLang(mojo_utterance->lang);
@@ -173,7 +175,7 @@ std::unique_ptr<content::TtsUtterance> FromMojo(
 bool ShouldEnableLacrosTtsSupport() {
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   bool lacros_tts_support_enabled =
-      crosapi::browser_util::IsLacrosPrimaryBrowser() &&
+      crosapi::browser_util::IsLacrosEnabled() &&
       !base::FeatureList::IsEnabled(ash::features::kDisableLacrosTtsSupport);
   return lacros_tts_support_enabled;
 #else  // IS_CHROMEOS_LACROS
@@ -186,6 +188,14 @@ void GetAllVoicesForTesting(content::BrowserContext* browser_context,
                             std::vector<content::VoiceData>* out_voices) {
   content::TtsController::GetInstance()->GetVoices(
       ProfileManager::GetActiveUserProfile(), GURL(), out_voices);
+}
+
+void SpeakForTesting(std::unique_ptr<content::TtsUtterance> utterance) {
+  content::TtsController::GetInstance()->SpeakOrEnqueue(std::move(utterance));
+}
+
+int GetTtsUtteranceQueueSizeForTesting() {
+  return content::TtsController::GetInstance()->QueueSize();
 }
 
 }  // namespace tts_crosapi_util

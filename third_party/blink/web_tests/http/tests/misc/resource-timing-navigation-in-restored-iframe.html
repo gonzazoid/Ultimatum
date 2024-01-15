@@ -13,14 +13,16 @@ function runTest() {
         }, 0);
     } else {
         delete sessionStorage.didNav;
+      const iframe = document.getElementById('target-iframe')
         window.addEventListener('message', (event) => {
             resources = performance.getEntriesByType('resource');
-            shouldBe('resources.length', '1');
+          shouldBe('resources.length', '2');
             shouldBeEqualToString('resources[0].name', 'http://127.0.0.1:8000/js-test-resources/js-test.js');
+          shouldBeEqualToString('resources[1].name', iframe.src);
             if (window.testRunner)
                 finishJSTest();
         });
-        document.getElementById('target-iframe').contentWindow.postMessage('navigate', '*');
+      iframe.contentWindow.postMessage('post-message-to-parent.html', '*');
     }
 }
 

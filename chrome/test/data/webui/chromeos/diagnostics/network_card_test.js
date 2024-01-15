@@ -2,22 +2,26 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// Strings needs to be imported before network_card to ensure assert is not
+// triggered during test.
+import 'chrome://diagnostics/strings.m.js';
 import 'chrome://diagnostics/network_card.js';
+import 'chrome://webui-test/chromeos/mojo_webui_test_support.js';
 
 import {fakeCellularDisabledNetwork, fakeCellularDisconnectedNetwork, fakeCellularNetwork, fakeCellularWithIpConfigNetwork, fakeConnectingEthernetNetwork, fakeDisconnectedEthernetNetwork, fakeDisconnectedWifiNetwork, fakeEthernetNetwork, fakeNetworkGuidInfoList, fakePortalWifiNetwork, fakeWifiNetwork, fakeWifiNetworkDisabled, fakeWifiNetworkInvalidNameServers, fakeWifiNetworkNoIpAddress} from 'chrome://diagnostics/fake_data.js';
 import {FakeNetworkHealthProvider} from 'chrome://diagnostics/fake_network_health_provider.js';
 import {IpConfigInfoDrawerElement} from 'chrome://diagnostics/ip_config_info_drawer.js';
 import {setNetworkHealthProviderForTesting} from 'chrome://diagnostics/mojo_interface_provider.js';
 import {NetworkCardElement} from 'chrome://diagnostics/network_card.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
+import {loadTimeData} from 'chrome://resources/ash/common/load_time_data.m.js';
+import {assertDeepEquals, assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chromeos/chai_assert.js';
 import {flushTasks} from 'chrome://webui-test/polymer_test_util.js';
 
-import {assertDeepEquals, assertEquals, assertFalse, assertTrue} from '../../chai_assert.js';
-import {isVisible} from '../../test_util.js';
+import {isVisible} from '../test_util.js';
 
 import * as dx_utils from './diagnostics_test_utils.js';
 
-export function networkCardTestSuite() {
+suite('networkCardTestSuite', function() {
   /** @type {?NetworkCardElement} */
   let networkCardElement = null;
 
@@ -30,7 +34,7 @@ export function networkCardTestSuite() {
   });
 
   setup(() => {
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes.emptyHTML;
   });
 
   teardown(() => {
@@ -74,7 +78,7 @@ export function networkCardTestSuite() {
     networkCardElement.guid = guid;
     if (timeout || timeout === 0) {
       /** @suppress {visibility} */
-      networkCardElement.timeoutInMs_ = timeout;
+      networkCardElement.timeoutInMs = timeout;
     }
     document.body.appendChild(networkCardElement);
 
@@ -166,7 +170,7 @@ export function networkCardTestSuite() {
    * @return {number}
    */
   function getTimerId() {
-    return networkCardElement.timerId_;
+    return networkCardElement.timerId;
   }
 
   /** @return {string} */
@@ -185,7 +189,7 @@ export function networkCardTestSuite() {
    * @return {boolean}
    */
   function getUnableToObtainIpAddress() {
-    return networkCardElement.unableToObtainIpAddress_;
+    return networkCardElement.unableToObtainIpAddress;
   }
 
   test('CardTitleWiFiConnectedInitializedCorrectly', () => {
@@ -318,15 +322,17 @@ export function networkCardTestSuite() {
   test('TimerResetsOnNetworkChange', () => {
     return initializeNetworkCard('wifiGuidNoIpAddress')
         .then(() => {
+          assertEquals('wifiGuidNoIpAddress', networkCardElement.guid);
           // Timer should be in progress since this network is missing an
           // IP Address.
           assertTrue(getTimerId() !== -1);
         })
         .then(() => changeGuid('ethernetGuid'))
         .then(() => {
+          assertEquals('ethernetGuid', networkCardElement.guid);
           // After a network change event, the timer should have been cleared
           // and reset.
-          assertTrue(getTimerId() === -1);
+          assertEquals(-1, getTimerId());
         });
   });
 
@@ -398,4 +404,4 @@ export function networkCardTestSuite() {
           getTroubleshootingLinkText());
     });
   });
-}
+});

@@ -4,10 +4,11 @@
 
 #include "cc/paint/record_paint_canvas.h"
 
+#include <limits>
 #include <utility>
 
-#include "cc/paint/display_item_list.h"
 #include "cc/paint/paint_image_builder.h"
+#include "cc/paint/paint_op.h"
 #include "cc/paint/paint_record.h"
 #include "cc/paint/paint_recorder.h"
 #include "cc/paint/skottie_frame_data.h"
@@ -18,20 +19,19 @@
 
 namespace cc {
 
-RecordPaintCanvas::RecordPaintCanvas(DisplayItemList* list,
-                                     const SkRect& bounds)
-    : list_(list), recording_bounds_(bounds) {
-  DCHECK(list_);
-}
-
+RecordPaintCanvas::RecordPaintCanvas() = default;
 RecordPaintCanvas::~RecordPaintCanvas() = default;
 
-SkImageInfo RecordPaintCanvas::imageInfo() const {
-  return GetCanvas()->imageInfo();
+PaintRecord RecordPaintCanvas::ReleaseAsRecord() {
+  // Some users expect that their saves are automatically closed for them.
+  // Maybe we could remove this assumption and just have callers do it.
+  restoreToCount(1);
+  needs_flush_ = false;
+  return buffer_.ReleaseAsRecord();
 }
 
 template <typename T, typename... Args>
-size_t RecordPaintCanvas::push(Args&&... args) {
+void RecordPaintCanvas::push(Args&&... args) {
 #if DCHECK_IS_ON()
   // The following check fails if client code does not check and handle
   // NeedsFlush() before issuing draw calls.
@@ -43,7 +43,7 @@ size_t RecordPaintCanvas::push(Args&&... args) {
          (std::is_same<T, RestoreOp>::value) ||
          (std::is_same<T, SetNodeIdOp>::value));
 #endif
-  return list_->push<T>(std::forward<Args>(args)...);
+  buffer_.push<T>(std::forward<Args>(args)...);
 }
 
 void* RecordPaintCanvas::accessTopLayerPixels(SkImageInfo* info,
@@ -58,9 +58,9 @@ void RecordPaintCanvas::flush() {
   // pipeline. So instead we make note of the flush request so that it can be
   // handled by code that owns the recording.
   //
-  // Note: The value of needs_flush_ never gets reset. That is because
-  // flushing a recording implies closing this RecordPaintCanvas and starting a
-  // new one.
+  // Note: The value of needs_flush_ never gets reset until the end of
+  // recording. That is because flushing a recording implies ReleaseAsRecord()
+  // and starting a new recording.
   needs_flush_ = true;
 }
 
@@ -70,52 +70,43 @@ bool RecordPaintCanvas::NeedsFlush() const {
 
 int RecordPaintCanvas::save() {
   push<SaveOp>();
-  return GetCanvas()->save();
+  return save_count_++;
 }
 
-int RecordPaintCanvas::saveLayer(const SkRect* bounds,
-                                 const PaintFlags* flags) {
-  if (flags) {
-    if (flags->IsSimpleOpacity()) {
-      // TODO(enne): maybe more callers should know this and call
-      // saveLayerAlpha instead of needing to check here.
-      uint8_t alpha = SkColorGetA(flags->getColor());
-      return saveLayerAlpha(bounds, alpha);
-    }
+int RecordPaintCanvas::saveLayer(const PaintFlags& flags) {
+  push<SaveLayerOp>(flags);
+  return save_count_++;
+}
 
-    // TODO(enne): it appears that image filters affect matrices and color
-    // matrices affect transparent flags on SkCanvas layers, but it's not clear
-    // whether those are actually needed and we could just skip ToSkPaint here.
-    push<SaveLayerOp>(bounds, flags);
-    SkPaint paint = flags->ToSkPaint();
-    return GetCanvas()->saveLayer(bounds, &paint);
-  }
+int RecordPaintCanvas::saveLayer(const SkRect& bounds,
+                                 const PaintFlags& flags) {
   push<SaveLayerOp>(bounds, flags);
-  return GetCanvas()->saveLayer(bounds, nullptr);
+  return save_count_++;
 }
 
-int RecordPaintCanvas::saveLayerAlpha(const SkRect* bounds, uint8_t alpha) {
-  push<SaveLayerAlphaOp>(bounds, static_cast<float>(alpha / 255.0f));
-  return GetCanvas()->saveLayerAlpha(bounds, alpha);
+int RecordPaintCanvas::saveLayerAlphaf(float alpha) {
+  push<SaveLayerAlphaOp>(alpha);
+  return save_count_++;
+}
+
+int RecordPaintCanvas::saveLayerAlphaf(const SkRect& bounds, float alpha) {
+  push<SaveLayerAlphaOp>(bounds, alpha);
+  return save_count_++;
 }
 
 void RecordPaintCanvas::restore() {
   push<RestoreOp>();
-  GetCanvas()->restore();
+  --save_count_;
+  DCHECK_GE(save_count_, 1);
 }
 
 int RecordPaintCanvas::getSaveCount() const {
-  return GetCanvas()->getSaveCount();
+  return save_count_;
 }
 
 void RecordPaintCanvas::restoreToCount(int save_count) {
-  if (!canvas_) {
-    DCHECK_EQ(save_count, 1);
-    return;
-  }
-
   DCHECK_GE(save_count, 1);
-  int diff = GetCanvas()->getSaveCount() - save_count;
+  int diff = getSaveCount() - save_count;
   DCHECK_GE(diff, 0);
   for (int i = 0; i < diff; ++i)
     restore();
@@ -123,68 +114,51 @@ void RecordPaintCanvas::restoreToCount(int save_count) {
 
 void RecordPaintCanvas::translate(SkScalar dx, SkScalar dy) {
   push<TranslateOp>(dx, dy);
-  GetCanvas()->translate(dx, dy);
 }
 
 void RecordPaintCanvas::scale(SkScalar sx, SkScalar sy) {
   push<ScaleOp>(sx, sy);
-  GetCanvas()->scale(sx, sy);
 }
 
 void RecordPaintCanvas::rotate(SkScalar degrees) {
   push<RotateOp>(degrees);
-  GetCanvas()->rotate(degrees);
-}
-
-void RecordPaintCanvas::concat(const SkMatrix& matrix) {
-  SkM44 m = SkM44(matrix);
-  push<ConcatOp>(m);
-  GetCanvas()->concat(m);
 }
 
 void RecordPaintCanvas::concat(const SkM44& matrix) {
   push<ConcatOp>(matrix);
-  GetCanvas()->concat(matrix);
-}
-
-void RecordPaintCanvas::setMatrix(const SkMatrix& matrix) {
-  SkM44 m = SkM44(matrix);
-  push<SetMatrixOp>(m);
-  GetCanvas()->setMatrix(m);
 }
 
 void RecordPaintCanvas::setMatrix(const SkM44& matrix) {
   push<SetMatrixOp>(matrix);
-  GetCanvas()->setMatrix(matrix);
 }
 
 void RecordPaintCanvas::clipRect(const SkRect& rect,
                                  SkClipOp op,
                                  bool antialias) {
   push<ClipRectOp>(rect, op, antialias);
-  GetCanvas()->clipRect(rect, op, antialias);
 }
 
 void RecordPaintCanvas::clipRRect(const SkRRect& rrect,
                                   SkClipOp op,
                                   bool antialias) {
-  // TODO(enne): does this happen? Should the caller know this?
   if (rrect.isRect()) {
     clipRect(rrect.getBounds(), op, antialias);
     return;
   }
+  clipRRectInternal(rrect, op, antialias);
+}
+
+void RecordPaintCanvas::clipRRectInternal(const SkRRect& rrect,
+                                          SkClipOp op,
+                                          bool antialias) {
   push<ClipRRectOp>(rrect, op, antialias);
-  GetCanvas()->clipRRect(rrect, op, antialias);
 }
 
 void RecordPaintCanvas::clipPath(const SkPath& path,
                                  SkClipOp op,
                                  bool antialias,
                                  UsePaintCache use_paint_cache) {
-  if (!path.isInverseFillType() &&
-      GetCanvas()->getTotalMatrix().rectStaysRect()) {
-    // TODO(enne): do these cases happen? should the caller know that this isn't
-    // a path?
+  if (!path.isInverseFillType()) {
     SkRect rect;
     if (path.isRect(&rect)) {
       clipRect(rect, op, antialias);
@@ -201,30 +175,34 @@ void RecordPaintCanvas::clipPath(const SkPath& path,
       return;
     }
   }
-
-  push<ClipPathOp>(path, op, antialias, use_paint_cache);
-  GetCanvas()->clipPath(path, op, antialias);
-  return;
+  clipPathInternal(path, op, antialias, use_paint_cache);
 }
 
-SkRect RecordPaintCanvas::getLocalClipBounds() const {
-  DCHECK(InitializedWithRecordingBounds());
-  return GetCanvas()->getLocalClipBounds();
+void RecordPaintCanvas::clipPathInternal(const SkPath& path,
+                                         SkClipOp op,
+                                         bool antialias,
+                                         UsePaintCache use_paint_cache) {
+  push<ClipPathOp>(path, op, antialias, use_paint_cache);
+}
+
+SkImageInfo RecordPaintCanvas::imageInfo() const {
+  NOTREACHED();
+  return SkImageInfo();
 }
 
 bool RecordPaintCanvas::getLocalClipBounds(SkRect* bounds) const {
-  DCHECK(InitializedWithRecordingBounds());
-  return GetCanvas()->getLocalClipBounds(bounds);
-}
-
-SkIRect RecordPaintCanvas::getDeviceClipBounds() const {
-  DCHECK(InitializedWithRecordingBounds());
-  return GetCanvas()->getDeviceClipBounds();
+  NOTREACHED();
+  return false;
 }
 
 bool RecordPaintCanvas::getDeviceClipBounds(SkIRect* bounds) const {
-  DCHECK(InitializedWithRecordingBounds());
-  return GetCanvas()->getDeviceClipBounds(bounds);
+  NOTREACHED();
+  return false;
+}
+
+SkM44 RecordPaintCanvas::getLocalToDevice() const {
+  NOTREACHED();
+  return SkM44();
 }
 
 void RecordPaintCanvas::drawColor(SkColor4f color, SkBlendMode mode) {
@@ -240,7 +218,17 @@ void RecordPaintCanvas::drawLine(SkScalar x0,
                                  SkScalar x1,
                                  SkScalar y1,
                                  const PaintFlags& flags) {
-  push<DrawLineOp>(x0, y0, x1, y1, flags);
+  if (draw_line_count_ != std::numeric_limits<uint32_t>::max()) {
+    ++draw_line_count_;
+    // If a bunch of paths have been drawn, only switch to drawing lines
+    // after a number of lines have been drawn.
+    if (draw_line_count_ > 4) {
+      draw_path_count_ = 0;
+    }
+  }
+  // Render lines as paths if there have been a number of drawPaths() recently.
+  // See description in header for more details.
+  push<DrawLineOp>(x0, y0, x1, y1, flags, draw_path_count_ > 4);
 }
 
 void RecordPaintCanvas::drawRect(const SkRect& rect, const PaintFlags& flags) {
@@ -290,6 +278,12 @@ void RecordPaintCanvas::drawRoundRect(const SkRect& rect,
 void RecordPaintCanvas::drawPath(const SkPath& path,
                                  const PaintFlags& flags,
                                  UsePaintCache use_paint_cache) {
+  if (draw_path_count_ != std::numeric_limits<uint32_t>::max()) {
+    ++draw_path_count_;
+    if (draw_path_count_ > 4) {
+      draw_line_count_ = 0;
+    }
+  }
   push<DrawPathOp>(path, flags, use_paint_cache);
 }
 
@@ -309,6 +303,15 @@ void RecordPaintCanvas::drawImageRect(const PaintImage& image,
                                       const PaintFlags* flags,
                                       SkCanvas::SrcRectConstraint constraint) {
   push<DrawImageRectOp>(image, src, dst, sampling, flags, constraint);
+}
+
+void RecordPaintCanvas::drawVertices(
+    scoped_refptr<RefCountedBuffer<SkPoint>> vertices,
+    scoped_refptr<RefCountedBuffer<SkPoint>> uvs,
+    scoped_refptr<RefCountedBuffer<uint16_t>> indices,
+    const PaintFlags& flags) {
+  push<DrawVerticesOp>(std::move(vertices), std::move(uvs), std::move(indices),
+                       flags);
 }
 
 void RecordPaintCanvas::drawSkottie(scoped_refptr<SkottieWrapper> skottie,
@@ -336,22 +339,9 @@ void RecordPaintCanvas::drawTextBlob(sk_sp<SkTextBlob> blob,
   push<DrawTextBlobOp>(std::move(blob), x, y, node_id, flags);
 }
 
-void RecordPaintCanvas::drawPicture(sk_sp<const PaintRecord> record) {
+void RecordPaintCanvas::drawPicture(PaintRecord record) {
   // TODO(enne): If this is small, maybe flatten it?
-  push<DrawRecordOp>(record);
-}
-
-bool RecordPaintCanvas::isClipEmpty() const {
-  DCHECK(InitializedWithRecordingBounds());
-  return GetCanvas()->isClipEmpty();
-}
-
-SkMatrix RecordPaintCanvas::getTotalMatrix() const {
-  return GetCanvas()->getTotalMatrix();
-}
-
-SkM44 RecordPaintCanvas::getLocalToDevice() const {
-  return GetCanvas()->getLocalToDevice();
+  push<DrawRecordOp>(std::move(record));
 }
 
 void RecordPaintCanvas::Annotate(AnnotationType type,
@@ -368,34 +358,115 @@ void RecordPaintCanvas::setNodeId(int node_id) {
   push<SetNodeIdOp>(node_id);
 }
 
-const SkNoDrawCanvas* RecordPaintCanvas::GetCanvas() const {
-  return const_cast<RecordPaintCanvas*>(this)->GetCanvas();
+InspectableRecordPaintCanvas::InspectableRecordPaintCanvas(
+    const gfx::Size& size)
+    : canvas_(size.width(), size.height()) {}
+
+InspectableRecordPaintCanvas::~InspectableRecordPaintCanvas() = default;
+
+int InspectableRecordPaintCanvas::save() {
+  return CheckSaveCount(RecordPaintCanvas::save(), canvas_.save());
 }
 
-SkNoDrawCanvas* RecordPaintCanvas::GetCanvas() {
-  if (canvas_)
-    return &*canvas_;
-
-  // Size the canvas to be large enough to contain the |recording_bounds|, which
-  // may not be positioned at the origin.
-  SkIRect enclosing_rect = recording_bounds_.roundOut();
-  canvas_.emplace(enclosing_rect.right(), enclosing_rect.bottom());
-
-  // This is part of the "recording canvases have a size, but why" dance.
-  // By creating a canvas of size (right x bottom) and then clipping it,
-  // It makes getDeviceClipBounds return the original cull rect, which code
-  // in GraphicsContextCanvas on Mac expects.  (Just creating an SkNoDrawCanvas
-  // with the recording_bounds_ makes a canvas of size (width x height) instead
-  // which is incorrect.  SkRecorder cheats with private resetForNextCanvas.
-  canvas_->clipRect(recording_bounds_, SkClipOp::kIntersect, false);
-  return &*canvas_;
+int InspectableRecordPaintCanvas::saveLayer(const PaintFlags& flags) {
+  SkPaint paint = flags.ToSkPaint();
+  return CheckSaveCount(RecordPaintCanvas::saveLayer(flags),
+                        canvas_.saveLayer(nullptr, &paint));
 }
 
-bool RecordPaintCanvas::InitializedWithRecordingBounds() const {
-  // If the RecordPaintCanvas is initialized with an empty bounds then
-  // the various clip related functions are not valid and should not
-  // be called.
-  return !recording_bounds_.isEmpty();
+int InspectableRecordPaintCanvas::saveLayer(const SkRect& bounds,
+                                            const PaintFlags& flags) {
+  SkPaint paint = flags.ToSkPaint();
+  return CheckSaveCount(RecordPaintCanvas::saveLayer(bounds, flags),
+                        canvas_.saveLayer(&bounds, &paint));
+}
+
+int InspectableRecordPaintCanvas::saveLayerAlphaf(float alpha) {
+  return CheckSaveCount(RecordPaintCanvas::saveLayerAlphaf(alpha),
+                        canvas_.saveLayerAlphaf(nullptr, alpha));
+}
+
+int InspectableRecordPaintCanvas::saveLayerAlphaf(const SkRect& bounds,
+                                                  float alpha) {
+  return CheckSaveCount(RecordPaintCanvas::saveLayerAlphaf(bounds, alpha),
+                        canvas_.saveLayerAlphaf(&bounds, alpha));
+}
+
+void InspectableRecordPaintCanvas::restore() {
+  RecordPaintCanvas::restore();
+  canvas_.restore();
+  DCHECK_EQ(getSaveCount(), canvas_.getSaveCount());
+}
+
+int InspectableRecordPaintCanvas::CheckSaveCount(int super_prev_save_count,
+                                                 int canvas_prev_save_count) {
+  DCHECK_EQ(super_prev_save_count, canvas_prev_save_count);
+  DCHECK_EQ(getSaveCount(), canvas_.getSaveCount());
+  return super_prev_save_count;
+}
+
+void InspectableRecordPaintCanvas::translate(SkScalar dx, SkScalar dy) {
+  RecordPaintCanvas::translate(dx, dy);
+  canvas_.translate(dx, dy);
+}
+
+void InspectableRecordPaintCanvas::scale(SkScalar sx, SkScalar sy) {
+  RecordPaintCanvas::scale(sx, sy);
+  canvas_.scale(sx, sy);
+}
+
+void InspectableRecordPaintCanvas::rotate(SkScalar degrees) {
+  RecordPaintCanvas::rotate(degrees);
+  canvas_.rotate(degrees);
+}
+
+void InspectableRecordPaintCanvas::concat(const SkM44& matrix) {
+  RecordPaintCanvas::concat(matrix);
+  canvas_.concat(matrix);
+}
+
+void InspectableRecordPaintCanvas::setMatrix(const SkM44& matrix) {
+  RecordPaintCanvas::setMatrix(matrix);
+  canvas_.setMatrix(matrix);
+}
+
+void InspectableRecordPaintCanvas::clipRect(const SkRect& rect,
+                                            SkClipOp op,
+                                            bool antialias) {
+  RecordPaintCanvas::clipRect(rect, op, antialias);
+  canvas_.clipRect(rect, op, antialias);
+}
+
+void InspectableRecordPaintCanvas::clipRRectInternal(const SkRRect& rrect,
+                                                     SkClipOp op,
+                                                     bool antialias) {
+  RecordPaintCanvas::clipRRectInternal(rrect, op, antialias);
+  canvas_.clipRRect(rrect, op, antialias);
+}
+
+void InspectableRecordPaintCanvas::clipPathInternal(
+    const SkPath& path,
+    SkClipOp op,
+    bool antialias,
+    UsePaintCache use_paint_cache) {
+  RecordPaintCanvas::clipPathInternal(path, op, antialias, use_paint_cache);
+  canvas_.clipPath(path, op, antialias);
+}
+
+SkImageInfo InspectableRecordPaintCanvas::imageInfo() const {
+  return canvas_.imageInfo();
+}
+
+bool InspectableRecordPaintCanvas::getLocalClipBounds(SkRect* bounds) const {
+  return canvas_.getLocalClipBounds(bounds);
+}
+
+bool InspectableRecordPaintCanvas::getDeviceClipBounds(SkIRect* bounds) const {
+  return canvas_.getDeviceClipBounds(bounds);
+}
+
+SkM44 InspectableRecordPaintCanvas::getLocalToDevice() const {
+  return canvas_.getLocalToDevice();
 }
 
 }  // namespace cc

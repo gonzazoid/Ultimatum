@@ -43,8 +43,32 @@ class CSSUnitValues {
     return CSSUnitValue::Create(value, CSSPrimitiveValue::UnitType::kLhs);
   }
 
+  static CSSUnitValue* rlh(double value) {
+    return CSSUnitValue::Create(value, CSSPrimitiveValue::UnitType::kRlhs);
+  }
+
   static CSSUnitValue* rem(double value) {
     return CSSUnitValue::Create(value, CSSPrimitiveValue::UnitType::kRems);
+  }
+
+  static CSSUnitValue* cap(double value) {
+    return CSSUnitValue::Create(value, CSSPrimitiveValue::UnitType::kCaps);
+  }
+
+  static CSSUnitValue* rcap(double value) {
+    return CSSUnitValue::Create(value, CSSPrimitiveValue::UnitType::kRcaps);
+  }
+
+  static CSSUnitValue* rex(double value) {
+    return CSSUnitValue::Create(value, CSSPrimitiveValue::UnitType::kRexs);
+  }
+
+  static CSSUnitValue* rch(double value) {
+    return CSSUnitValue::Create(value, CSSPrimitiveValue::UnitType::kRchs);
+  }
+
+  static CSSUnitValue* ric(double value) {
+    return CSSUnitValue::Create(value, CSSPrimitiveValue::UnitType::kRics);
   }
 
   static CSSUnitValue* vw(double value) {
@@ -275,6 +299,10 @@ class CSSUnitValues {
         value, CSSPrimitiveValue::UnitType::kDotsPerCentimeter);
   }
 
+  static CSSUnitValue* x(double value) {
+    return CSSUnitValue::Create(value, CSSPrimitiveValue::UnitType::kX);
+  }
+
   static CSSUnitValue* dppx(double value) {
     return CSSUnitValue::Create(value,
                                 CSSPrimitiveValue::UnitType::kDotsPerPixel);
@@ -282,7 +310,7 @@ class CSSUnitValues {
 
   // <flex>
   static CSSUnitValue* fr(double value) {
-    return CSSUnitValue::Create(value, CSSPrimitiveValue::UnitType::kFraction);
+    return CSSUnitValue::Create(value, CSSPrimitiveValue::UnitType::kFlex);
   }
 };
 

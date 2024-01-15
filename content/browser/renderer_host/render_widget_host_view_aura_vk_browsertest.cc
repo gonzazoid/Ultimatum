@@ -2,8 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "base/memory/raw_ptr.h"
 #include "base/observer_list.h"
-#include "base/win/windows_version.h"
 #include "build/build_config.h"
 #include "content/browser/accessibility/browser_accessibility.h"
 #include "content/browser/accessibility/browser_accessibility_manager.h"
@@ -200,11 +200,6 @@ class RenderWidgetHostViewAuraBrowserMockIMETest : public ContentBrowserTest {
 #if BUILDFLAG(IS_WIN)
 IN_PROC_BROWSER_TEST_F(RenderWidgetHostViewAuraBrowserMockIMETest,
                        VirtualKeyboardAccessibilityFocusTest) {
-  // The keyboard input pane events are not supported on Win7.
-  if (base::win::GetVersion() <= base::win::Version::WIN7) {
-    return;
-  }
-
   LoadInitialAccessibilityTreeFromHtml(R"HTML(
       <div><button>Before</button></div>
       <div contenteditable>Editable text</div>
@@ -232,11 +227,6 @@ IN_PROC_BROWSER_TEST_F(RenderWidgetHostViewAuraBrowserMockIMETest,
 
 IN_PROC_BROWSER_TEST_F(RenderWidgetHostViewAuraBrowserMockIMETest,
                        VirtualKeyboardShowVKTest) {
-  // The keyboard input pane events are not supported on Win7.
-  if (base::win::GetVersion() <= base::win::Version::WIN7) {
-    return;
-  }
-
   GURL start_url = server_.GetURL("a.test", "/virtual-keyboard.html");
   ASSERT_TRUE(NavigateToURL(shell(), start_url));
 
@@ -265,11 +255,6 @@ IN_PROC_BROWSER_TEST_F(RenderWidgetHostViewAuraBrowserMockIMETest,
 
 IN_PROC_BROWSER_TEST_F(RenderWidgetHostViewAuraBrowserMockIMETest,
                        DontShowVKOnJSFocus) {
-  // The keyboard input pane events are not supported on Win7.
-  if (base::win::GetVersion() <= base::win::Version::WIN7) {
-    return;
-  }
-
   WebContentsImpl* web_contents =
       static_cast<WebContentsImpl*>(shell()->web_contents());
   TextInputManagerShowImeIfNeededObserver show_ime_observer_false(web_contents,
@@ -298,11 +283,6 @@ IN_PROC_BROWSER_TEST_F(RenderWidgetHostViewAuraBrowserMockIMETest,
 
 IN_PROC_BROWSER_TEST_F(RenderWidgetHostViewAuraBrowserMockIMETest,
                        ShowAndThenHideVK) {
-  // The keyboard input pane events are not supported on Win7.
-  if (base::win::GetVersion() <= base::win::Version::WIN7) {
-    return;
-  }
-
   GURL start_url = server_.GetURL("a.test", "/virtual-keyboard.html");
   ASSERT_TRUE(NavigateToURL(shell(), start_url));
 
@@ -336,11 +316,6 @@ IN_PROC_BROWSER_TEST_F(RenderWidgetHostViewAuraBrowserMockIMETest,
 
 IN_PROC_BROWSER_TEST_F(RenderWidgetHostViewAuraBrowserMockIMETest,
                        ShowAndThenHideVKInEditContext) {
-  // The keyboard input pane events are not supported on Win7.
-  if (base::win::GetVersion() <= base::win::Version::WIN7) {
-    return;
-  }
-
   GURL start_url = server_.GetURL("a.test", "/virtual-keyboard.html");
   ASSERT_TRUE(NavigateToURL(shell(), start_url));
 
@@ -374,11 +349,6 @@ IN_PROC_BROWSER_TEST_F(RenderWidgetHostViewAuraBrowserMockIMETest,
 
 IN_PROC_BROWSER_TEST_F(RenderWidgetHostViewAuraBrowserMockIMETest,
                        VKVisibilityRequestInDeletedDocument) {
-  // The keyboard input pane events are not supported on Win7.
-  if (base::win::GetVersion() <= base::win::Version::WIN7) {
-    return;
-  }
-
   const char kVirtualKeyboardDataURL[] =
       "data:text/html,<!DOCTYPE html>"
       "<body>"
@@ -451,13 +421,13 @@ class TextInputManagerStateObserver : public TextInputManagerObserverBase {
     last_updated_active_view_ = active_view;
     RenderWidgetHostImpl* widget_host =
         static_cast<RenderWidgetHostImpl*>(active_view->GetRenderWidgetHost());
-    EXPECT_EQ(widget_host->frame_tree()->type(), FrameTree::Type::kPrimary);
+    EXPECT_TRUE(widget_host->frame_tree()->is_primary());
     OnSuccess();
     if (quit_callback_)
       std::move(quit_callback_).Run();
   }
 
-  RenderWidgetHostView* last_updated_active_view_ = nullptr;
+  raw_ptr<RenderWidgetHostView> last_updated_active_view_ = nullptr;
   base::OnceClosure quit_callback_;
 };
 

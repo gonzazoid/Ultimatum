@@ -13,18 +13,19 @@
 
 #include <memory>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
 #include "base/logging.h"
 #include "base/memory/raw_ptr.h"
 #include "base/strings/string_number_conversions.h"
-#include "base/strings/utf_string_conversions.h"
 #include "dbus/bus.h"
 #include "dbus/message.h"
 #include "dbus/object_path.h"
 #include "dbus/object_proxy.h"
 #include "services/device/geolocation/wifi_data_provider_handle.h"
+#include "services/device/public/mojom/geolocation_internals.mojom.h"
 
 namespace device {
 namespace {
@@ -101,7 +102,7 @@ int frquency_in_khz_to_channel(int frequency_khz) {
   if (frequency_khz > 5000000 && frequency_khz < 6000000)  // .11a bands.
     return (frequency_khz - 5000000) / 5000;
   // Ignore everything else.
-  return AccessPointData().channel;  // invalid channel
+  return mojom::kInvalidChannel;
 }
 
 NetworkManagerWlanApi::NetworkManagerWlanApi() {}
@@ -154,8 +155,11 @@ bool NetworkManagerWlanApi::GetAccessPointData(
     dbus::MessageWriter builder(&method_call);
     builder.AppendString("org.freedesktop.NetworkManager.Device");
     builder.AppendString("DeviceType");
-    std::unique_ptr<dbus::Response> response(device_proxy->CallMethodAndBlock(
-        &method_call, dbus::ObjectProxy::TIMEOUT_USE_DEFAULT));
+    std::unique_ptr<dbus::Response> response(
+        device_proxy
+            ->CallMethodAndBlock(&method_call,
+                                 dbus::ObjectProxy::TIMEOUT_USE_DEFAULT)
+            .value_or(nullptr));
     if (!response) {
       LOG(WARNING) << "Failed to get the device type for "
                    << device_path.value();
@@ -185,8 +189,10 @@ bool NetworkManagerWlanApi::GetAdapterDeviceList(
     std::vector<dbus::ObjectPath>* device_paths) {
   dbus::MethodCall method_call(kNetworkManagerInterface, "GetDevices");
   std::unique_ptr<dbus::Response> response(
-      network_manager_proxy_->CallMethodAndBlock(
-          &method_call, dbus::ObjectProxy::TIMEOUT_USE_DEFAULT));
+      network_manager_proxy_
+          ->CallMethodAndBlock(&method_call,
+                               dbus::ObjectProxy::TIMEOUT_USE_DEFAULT)
+          .value_or(nullptr));
   if (!response) {
     LOG(WARNING) << "Failed to get the device list";
     return false;
@@ -209,8 +215,11 @@ bool NetworkManagerWlanApi::GetAccessPointsForAdapter(
       system_bus_->GetObjectProxy(kNetworkManagerServiceName, adapter_path);
   dbus::MethodCall method_call("org.freedesktop.NetworkManager.Device.Wireless",
                                "GetAccessPoints");
-  std::unique_ptr<dbus::Response> response(device_proxy->CallMethodAndBlock(
-      &method_call, dbus::ObjectProxy::TIMEOUT_USE_DEFAULT));
+  std::unique_ptr<dbus::Response> response(
+      device_proxy
+          ->CallMethodAndBlock(&method_call,
+                               dbus::ObjectProxy::TIMEOUT_USE_DEFAULT)
+          .value_or(nullptr));
   if (!response) {
     LOG(WARNING) << "Failed to get access points data for "
                  << adapter_path.value();
@@ -233,31 +242,7 @@ bool NetworkManagerWlanApi::GetAccessPointsForAdapter(
     dbus::ObjectProxy* access_point_proxy = system_bus_->GetObjectProxy(
         kNetworkManagerServiceName, access_point_path);
 
-    AccessPointData access_point_data;
-    {
-      std::unique_ptr<dbus::Response> ssid_response(
-          GetAccessPointProperty(access_point_proxy, "Ssid"));
-      if (!ssid_response)
-        continue;
-      // The response should contain a variant that contains an array of bytes.
-      dbus::MessageReader ssid_reader(ssid_response.get());
-      dbus::MessageReader variant_reader(ssid_response.get());
-      if (!ssid_reader.PopVariant(&variant_reader)) {
-        LOG(WARNING) << "Unexpected response for " << access_point_path.value()
-                     << ": " << ssid_response->ToString();
-        continue;
-      }
-      const uint8_t* ssid_bytes = nullptr;
-      size_t ssid_length = 0;
-      if (!variant_reader.PopArrayOfBytes(&ssid_bytes, &ssid_length)) {
-        LOG(WARNING) << "Unexpected response for " << access_point_path.value()
-                     << ": " << ssid_response->ToString();
-        continue;
-      }
-      std::string ssid(ssid_bytes, ssid_bytes + ssid_length);
-      access_point_data.ssid = base::UTF8ToUTF16(ssid);
-    }
-
+    mojom::AccessPointData access_point_data;
     {  // Read the mac address
       std::unique_ptr<dbus::Response> mac_response(
           GetAccessPointProperty(access_point_proxy, "HwAddress"));
@@ -271,14 +256,14 @@ bool NetworkManagerWlanApi::GetAccessPointsForAdapter(
         continue;
       }
 
-      base::ReplaceSubstringsAfterOffset(&mac, 0U, ":", base::StringPiece());
+      base::ReplaceSubstringsAfterOffset(&mac, 0U, ":", std::string_view());
       std::vector<uint8_t> mac_bytes;
       if (!base::HexStringToBytes(mac, &mac_bytes) || mac_bytes.size() != 6) {
         LOG(WARNING) << "Can't parse mac address (found " << mac_bytes.size()
                      << " bytes) so using raw string: " << mac;
-        access_point_data.mac_address = base::UTF8ToUTF16(mac);
+        access_point_data.mac_address = mac;
       } else {
-        access_point_data.mac_address = MacAddressAsString16(&mac_bytes[0]);
+        access_point_data.mac_address = MacAddressAsString(&mac_bytes[0]);
       }
     }
 
@@ -315,7 +300,6 @@ bool NetworkManagerWlanApi::GetAccessPointsForAdapter(
       access_point_data.channel = frquency_in_khz_to_channel(frequency * 1000);
     }
     VLOG(1) << "Access point data of " << access_point_path.value() << ": "
-            << "SSID: " << access_point_data.ssid << ", "
             << "MAC: " << access_point_data.mac_address << ", "
             << "Strength: " << access_point_data.radio_signal_strength << ", "
             << "Channel: " << access_point_data.channel;
@@ -333,8 +317,10 @@ std::unique_ptr<dbus::Response> NetworkManagerWlanApi::GetAccessPointProperty(
   builder.AppendString("org.freedesktop.NetworkManager.AccessPoint");
   builder.AppendString(property_name);
   std::unique_ptr<dbus::Response> response =
-      access_point_proxy->CallMethodAndBlock(
-          &method_call, dbus::ObjectProxy::TIMEOUT_USE_DEFAULT);
+      access_point_proxy
+          ->CallMethodAndBlock(&method_call,
+                               dbus::ObjectProxy::TIMEOUT_USE_DEFAULT)
+          .value_or(nullptr);
   if (!response) {
     LOG(WARNING) << "Failed to get property for " << property_name;
   }

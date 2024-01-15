@@ -4,18 +4,26 @@
 
 #include "net/websockets/websocket_stream.h"
 
+#include <ostream>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/check.h"
+#include "base/check_op.h"
+#include "base/functional/bind.h"
+#include "base/location.h"
 #include "base/logging.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/metrics/histogram_functions.h"
+#include "base/notreached.h"
+#include "base/strings/strcat.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
-#include "net/base/ip_endpoint.h"
+#include "net/base/auth.h"
 #include "net/base/isolation_info.h"
 #include "net/base/load_flags.h"
+#include "net/base/net_errors.h"
+#include "net/base/request_priority.h"
 #include "net/base/url_util.h"
 #include "net/http/http_request_headers.h"
 #include "net/http/http_response_headers.h"
@@ -27,17 +35,22 @@
 #include "net/url_request/url_request_context.h"
 #include "net/url_request/websocket_handshake_userdata_key.h"
 #include "net/websockets/websocket_basic_handshake_stream.h"
-#include "net/websockets/websocket_errors.h"
 #include "net/websockets/websocket_event_interface.h"
 #include "net/websockets/websocket_handshake_constants.h"
+#include "net/websockets/websocket_handshake_response_info.h"
 #include "net/websockets/websocket_handshake_stream_base.h"
 #include "net/websockets/websocket_handshake_stream_create_helper.h"
 #include "net/websockets/websocket_http2_handshake_stream.h"
+#include "net/websockets/websocket_http3_handshake_stream.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
 #include "url/origin.h"
 
 namespace net {
+class SSLCertRequestInfo;
+class SSLInfo;
+class SiteForCookies;
+
 namespace {
 
 // The timeout duration of WebSocket handshake.
@@ -88,6 +101,7 @@ class WebSocketStreamRequestImpl : public WebSocketStreamRequestAPI {
       const URLRequestContext* context,
       const url::Origin& origin,
       const SiteForCookies& site_for_cookies,
+      bool has_storage_access,
       const IsolationInfo& isolation_info,
       const HttpRequestHeaders& additional_headers,
       NetworkTrafficAnnotationTag traffic_annotation,
@@ -120,6 +134,7 @@ class WebSocketStreamRequestImpl : public WebSocketStreamRequestAPI {
     url_request_->SetExtraRequestHeaders(headers);
     url_request_->set_initiator(origin);
     url_request_->set_site_for_cookies(site_for_cookies);
+    url_request_->set_has_storage_access(has_storage_access);
     url_request_->set_isolation_info(isolation_info);
 
     auto create_helper = std::make_unique<WebSocketHandshakeStreamCreateHelper>(
@@ -146,6 +161,14 @@ class WebSocketStreamRequestImpl : public WebSocketStreamRequestAPI {
       WebSocketHttp2HandshakeStream* handshake_stream) override {
     if (api_delegate_) {
       api_delegate_->OnHttp2HandshakeStreamCreated(handshake_stream);
+    }
+    OnHandshakeStreamCreated(handshake_stream);
+  }
+
+  void OnHttp3HandshakeStreamCreated(
+      WebSocketHttp3HandshakeStream* handshake_stream) override {
+    if (api_delegate_) {
+      api_delegate_->OnHttp3HandshakeStreamCreated(handshake_stream);
     }
     OnHandshakeStreamCreated(handshake_stream);
   }
@@ -184,6 +207,12 @@ class WebSocketStreamRequestImpl : public WebSocketStreamRequestAPI {
       return;
     }
 
+    if (!handshake_stream_->CanReadFromStream()) {
+      ReportFailureWithMessage("Handshake stream is not readable.",
+                               ERR_CONNECTION_CLOSED, absl::nullopt);
+      return;
+    }
+
     std::unique_ptr<URLRequest> url_request = std::move(url_request_);
     WebSocketHandshakeStreamBase* handshake_stream = handshake_stream_.get();
     handshake_stream_.reset();
@@ -207,8 +236,8 @@ class WebSocketStreamRequestImpl : public WebSocketStreamRequestAPI {
       // in HttpResponseInfo when a ERR_TUNNEL_CONNECTION_FAILED error happens.
       return "Establishing a tunnel via proxy server failed.";
     } else {
-      return std::string("Error in connection establishment: ") +
-             ErrorToString(net_error);
+      return base::StrCat(
+          {"Error in connection establishment: ", ErrorToString(net_error)});
     }
   }
 
@@ -271,10 +300,10 @@ class WebSocketStreamRequestImpl : public WebSocketStreamRequestAPI {
 
   // This is owned by the caller of
   // WebsocketHandshakeStreamCreateHelper::CreateBasicStream() or
-  // CreateHttp2Stream().  Both the stream and this object will be destroyed
-  // during the destruction of the URLRequest object associated with the
-  // handshake. This is only guaranteed to be a valid pointer if the handshake
-  // succeeded.
+  // CreateHttp2Stream() or CreateHttp3Stream().  Both the stream and this
+  // object will be destroyed during the destruction of the URLRequest object
+  // associated with the handshake. This is only guaranteed to be a valid
+  // pointer if the handshake succeeded.
   base::WeakPtr<WebSocketHandshakeStreamBase> handshake_stream_;
 
   // The failure information supplied by WebSocketBasicHandshakeStream, if any.
@@ -341,9 +370,16 @@ void Delegate::OnReceivedRedirect(URLRequest* request,
 
 void Delegate::OnResponseStarted(URLRequest* request, int net_error) {
   DCHECK_NE(ERR_IO_PENDING, net_error);
+
+  const bool is_http2 =
+      request->response_info().connection_info == HttpConnectionInfo::kHTTP2;
+
   // All error codes, including OK and ABORTED, as with
   // Net.ErrorCodesForMainFrame4
   base::UmaHistogramSparse("Net.WebSocket.ErrorCodes", -net_error);
+  if (is_http2) {
+    base::UmaHistogramSparse("Net.WebSocket.ErrorCodes.Http2", -net_error);
+  }
   if (net::IsLocalhost(request->url())) {
     base::UmaHistogramSparse("Net.WebSocket.ErrorCodes_Localhost", -net_error);
   } else {
@@ -359,8 +395,7 @@ void Delegate::OnResponseStarted(URLRequest* request, int net_error) {
   const int response_code = request->GetResponseCode();
   DVLOG(3) << "OnResponseStarted (response code " << response_code << ")";
 
-  if (request->response_info().connection_info ==
-      HttpResponseInfo::CONNECTION_INFO_HTTP2) {
+  if (is_http2) {
     if (response_code == HTTP_OK) {
       owner_->PerformUpgrade();
       return;
@@ -460,6 +495,7 @@ std::unique_ptr<WebSocketStreamRequest> WebSocketStream::CreateAndConnectStream(
     const std::vector<std::string>& requested_subprotocols,
     const url::Origin& origin,
     const SiteForCookies& site_for_cookies,
+    bool has_storage_access,
     const IsolationInfo& isolation_info,
     const HttpRequestHeaders& additional_headers,
     URLRequestContext* url_request_context,
@@ -468,8 +504,8 @@ std::unique_ptr<WebSocketStreamRequest> WebSocketStream::CreateAndConnectStream(
     std::unique_ptr<ConnectDelegate> connect_delegate) {
   auto request = std::make_unique<WebSocketStreamRequestImpl>(
       socket_url, requested_subprotocols, url_request_context, origin,
-      site_for_cookies, isolation_info, additional_headers, traffic_annotation,
-      std::move(connect_delegate), nullptr);
+      site_for_cookies, has_storage_access, isolation_info, additional_headers,
+      traffic_annotation, std::move(connect_delegate), nullptr);
   request->Start(std::make_unique<base::OneShotTimer>());
   return std::move(request);
 }
@@ -480,6 +516,7 @@ WebSocketStream::CreateAndConnectStreamForTesting(
     const std::vector<std::string>& requested_subprotocols,
     const url::Origin& origin,
     const SiteForCookies& site_for_cookies,
+    bool has_storage_access,
     const IsolationInfo& isolation_info,
     const HttpRequestHeaders& additional_headers,
     URLRequestContext* url_request_context,
@@ -490,8 +527,8 @@ WebSocketStream::CreateAndConnectStreamForTesting(
     std::unique_ptr<WebSocketStreamRequestAPI> api_delegate) {
   auto request = std::make_unique<WebSocketStreamRequestImpl>(
       socket_url, requested_subprotocols, url_request_context, origin,
-      site_for_cookies, isolation_info, additional_headers, traffic_annotation,
-      std::move(connect_delegate), std::move(api_delegate));
+      site_for_cookies, has_storage_access, isolation_info, additional_headers,
+      traffic_annotation, std::move(connect_delegate), std::move(api_delegate));
   request->Start(std::move(timer));
   return std::move(request);
 }

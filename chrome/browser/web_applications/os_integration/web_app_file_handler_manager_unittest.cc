@@ -8,11 +8,11 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/run_loop.h"
 #include "base/test/bind.h"
-#include "base/test/scoped_feature_list.h"
 #include "chrome/browser/web_applications/os_integration/web_app_file_handler_registration.h"
+#include "chrome/browser/web_applications/test/fake_os_integration_manager.h"
 #include "chrome/browser/web_applications/test/fake_web_app_file_handler_manager.h"
 #include "chrome/browser/web_applications/test/fake_web_app_provider.h"
 #include "chrome/browser/web_applications/test/web_app_install_test_utils.h"
@@ -24,7 +24,6 @@
 #include "components/services/app_service/public/cpp/file_handler.h"
 #include "testing/gmock/include/gmock/gmock-matchers.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/blink/public/common/features.h"
 #include "url/gurl.h"
 
 namespace web_app {
@@ -161,50 +160,43 @@ TEST(FileHandlerUtilsTest, GetMimeTypesFromFileHandlers) {
 }
 
 class WebAppFileHandlerManagerTest : public WebAppTest {
- public:
-  WebAppFileHandlerManagerTest() {
-    // |features_| needs to be initialized before SetUp kicks off tasks that
-    // check if a feature is enabled.
-    features_.InitAndEnableFeature(blink::features::kFileHandlingAPI);
-  }
-
  protected:
   void SetUp() override {
     WebAppTest::SetUp();
 
-    provider_ = FakeWebAppProvider::Get(profile());
-    test::AwaitStartWebAppProviderAndSubsystems(profile());
-
-    // This is not a WebAppProvider subsystem, so this can be
-    // set after the WebAppProvider has been initialized.
-    file_handler_manager_ =
+    auto file_handler_manager =
         std::make_unique<FakeWebAppFileHandlerManager>(profile());
-    file_handler_manager_->SetSubsystems(&sync_bridge());
+    file_handler_manager_ = file_handler_manager.get();
+    fake_provider()
+        .os_integration_manager()
+        .AsTestOsIntegrationManager()
+        ->SetFileHandlerManager(std::move(file_handler_manager));
+    test::AwaitStartWebAppProviderAndSubsystems(profile());
 
     auto web_app = test::CreateWebApp();
     app_id_ = web_app->app_id();
     {
-      ScopedRegistryUpdate update(&sync_bridge());
+      ScopedRegistryUpdate update =
+          fake_provider().sync_bridge_unsafe().BeginUpdate();
       update->CreateApp(std::move(web_app));
     }
+  }
+
+  void TearDown() override {
+    file_handler_manager_ = nullptr;
+    WebAppTest::TearDown();
   }
 
   FakeWebAppFileHandlerManager& file_handler_manager() {
     return *file_handler_manager_;
   }
 
-  WebAppProvider& provider() { return *provider_; }
-
-  WebAppSyncBridge& sync_bridge() { return provider_->sync_bridge(); }
-
-  const AppId& app_id() const { return app_id_; }
+  const webapps::AppId& app_id() const { return app_id_; }
 
  private:
-  raw_ptr<FakeWebAppProvider> provider_;
-  std::unique_ptr<FakeWebAppFileHandlerManager> file_handler_manager_;
+  raw_ptr<FakeWebAppFileHandlerManager> file_handler_manager_ = nullptr;
 
-  base::test::ScopedFeatureList features_;
-  AppId app_id_;
+  webapps::AppId app_id_;
 };
 
 TEST_F(WebAppFileHandlerManagerTest, FileHandlersAreNotAvailableUnlessEnabled) {
@@ -291,6 +283,20 @@ TEST_F(WebAppFileHandlerManagerTest,
 
   // Matches on single valid extension.
   const base::FilePath path(FILE_PATH_LITERAL("file.foo"));
+  WebAppFileHandlerManager::LaunchInfos launch_infos =
+      file_handler_manager().GetMatchingFileHandlerUrls(app_id(), {path});
+  ASSERT_EQ(1u, launch_infos.size());
+  EXPECT_EQ(url, std::get<GURL>(launch_infos[0]));
+}
+
+TEST_F(WebAppFileHandlerManagerTest, ExtensionCaseInsensitive) {
+  const GURL url("https://app.site/handle-foo");
+
+  file_handler_manager().InstallFileHandler(
+      app_id(), url, {{"application/foo", {".foo"}}}, absl::nullopt);
+
+  // Matches on single valid extension.
+  const base::FilePath path(FILE_PATH_LITERAL("file.FOO"));
   WebAppFileHandlerManager::LaunchInfos launch_infos =
       file_handler_manager().GetMatchingFileHandlerUrls(app_id(), {path});
   ASSERT_EQ(1u, launch_infos.size());

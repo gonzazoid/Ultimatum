@@ -9,8 +9,8 @@
 #include <string>
 #include <tuple>
 
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/memory/raw_ptr.h"
 #include "base/no_destructor.h"
@@ -19,6 +19,7 @@
 #include "base/unguessable_token.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
+#include "content/browser/media/cdm_storage_common.h"
 #include "content/browser/renderer_host/render_frame_host_delegate.h"
 #include "content/browser/renderer_host/render_frame_host_impl.h"
 #include "content/public/browser/media_service.h"
@@ -49,6 +50,7 @@
 #if BUILDFLAG(ENABLE_LIBRARY_CDMS)
 #include "base/feature_list.h"
 #include "base/metrics/histogram_macros.h"
+#include "content/browser/media/cdm_storage_manager.h"
 #include "content/browser/media/media_license_manager.h"
 #include "media/base/key_system_names.h"
 #include "media/mojo/mojom/cdm_service.mojom.h"
@@ -73,10 +75,10 @@
 #include "media/mojo/services/mojo_renderer_service.h"  // nogncheck
 #endif
 
-#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
+#if BUILDFLAG(ALLOW_OOP_VIDEO_DECODER)
 #include "content/public/browser/stable_video_decoder_factory.h"
 #include "media/base/media_switches.h"
-#endif  // BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
+#endif  // BUILDFLAG(ALLOW_OOP_VIDEO_DECODER)
 
 namespace content {
 
@@ -168,17 +170,33 @@ class FrameInterfaceFactoryImpl : public media::mojom::FrameInterfaceFactory,
     if (cdm_type_.is_zero())
       return;
 
-    MediaLicenseManager* media_license_manager =
-        static_cast<StoragePartitionImpl*>(
-            render_frame_host_->GetStoragePartition())
-            ->GetMediaLicenseManager();
-    DCHECK(media_license_manager);
-
     auto storage_key =
-        static_cast<RenderFrameHostImpl*>(render_frame_host_)->storage_key();
-    media_license_manager->OpenCdmStorage(
-        MediaLicenseManager::BindingContext(storage_key, cdm_type_),
-        std::move(receiver));
+        static_cast<RenderFrameHostImpl*>(render_frame_host_)->GetStorageKey();
+
+    // When 'kCdmStorageDatabase' is enabled, we forgo using the Media License
+    // Manager fully in favor of the Cdm Storage Manager. We have to make sure
+    // that the 'kCdmStorageDatabaseMigration' flag is not enabled since if it
+    // is, we should proceed with opening in MediaLicenseManager.
+    if (base::FeatureList::IsEnabled(features::kCdmStorageDatabase) &&
+        !base::FeatureList::IsEnabled(features::kCdmStorageDatabaseMigration)) {
+      CdmStorageManager* cdm_storage_manager =
+          static_cast<StoragePartitionImpl*>(
+              render_frame_host_->GetStoragePartition())
+              ->GetCdmStorageManager();
+
+      cdm_storage_manager->OpenCdmStorage(
+          CdmStorageBindingContext(storage_key, cdm_type_),
+          std::move(receiver));
+    } else {
+      MediaLicenseManager* media_license_manager =
+          static_cast<StoragePartitionImpl*>(
+              render_frame_host_->GetStoragePartition())
+              ->GetMediaLicenseManager();
+
+      media_license_manager->OpenCdmStorage(
+          CdmStorageBindingContext(storage_key, cdm_type_),
+          std::move(receiver));
+    }
 #endif
   }
 
@@ -286,12 +304,12 @@ void MediaInterfaceProxy::CreateVideoDecoder(
 
   mojo::PendingRemote<media::stable::mojom::StableVideoDecoder>
       oop_video_decoder;
-#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
-  if (base::FeatureList::IsEnabled(media::kUseOutOfProcessVideoDecoding)) {
+#if BUILDFLAG(ALLOW_OOP_VIDEO_DECODER)
+  if (media::IsOutOfProcessVideoDecodingEnabled()) {
     render_frame_host().GetProcess()->CreateStableVideoDecoder(
         oop_video_decoder.InitWithNewPipeAndPassReceiver());
   }
-#endif  // BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
+#endif  // BUILDFLAG(ALLOW_OOP_VIDEO_DECODER)
   factory->CreateVideoDecoder(std::move(receiver),
                               std::move(oop_video_decoder));
 }

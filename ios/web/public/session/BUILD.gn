@@ -3,9 +3,9 @@
 # found in the LICENSE file.
 
 source_set("session") {
-  configs += [ "//build/config/compiler:enable_arc" ]
   deps = [
     "//base",
+    "//components/sessions:session_id",
     "//ios/web/common:user_agent",
     "//ios/web/public",
     "//ios/web/public/navigation",
@@ -17,6 +17,7 @@ source_set("session") {
     "crw_navigation_item_storage.h",
     "crw_session_certificate_policy_cache_storage.h",
     "crw_session_storage.h",
+    "crw_session_user_data.h",
     "serializable_user_data_manager.h",
     "session_certificate_policy_cache.h",
     "session_certificate_policy_cache.mm",

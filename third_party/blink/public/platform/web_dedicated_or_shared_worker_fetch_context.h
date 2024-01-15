@@ -7,9 +7,11 @@
 
 #include <memory>
 
+#include "base/task/single_thread_task_runner.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
 #include "third_party/blink/public/common/renderer_preferences/renderer_preferences.h"
+#include "third_party/blink/public/common/tokens/tokens.h"
 #include "third_party/blink/public/mojom/loader/resource_load_info_notifier.mojom-forward.h"
 #include "third_party/blink/public/mojom/renderer_preference_watcher.mojom-shared.h"
 #include "third_party/blink/public/mojom/worker/subresource_loader_updater.mojom-shared.h"
@@ -19,7 +21,6 @@
 
 namespace blink {
 
-class WebFrameRequestBlocker;
 class WebString;
 template <typename T>
 class WebVector;
@@ -92,9 +93,7 @@ class BLINK_PLATFORM_EXPORT WebDedicatedOrSharedWorkerFetchContext
   //
   // TODO(nhiroki): Add more comments about security/privacy implications to
   // each property, for example, site_for_cookies and top_frame_origin.
-  virtual void set_ancestor_frame_id(int id) = 0;
-  virtual void set_frame_request_blocker(
-      scoped_refptr<WebFrameRequestBlocker> frame_request_blocker) = 0;
+  virtual void SetAncestorFrameToken(const LocalFrameToken&) = 0;
   virtual void set_site_for_cookies(
       const net::SiteForCookies& site_for_cookies) = 0;
   virtual void set_top_frame_origin(

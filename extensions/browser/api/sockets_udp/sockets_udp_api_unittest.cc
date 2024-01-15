@@ -6,7 +6,7 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/values.h"
 #include "extensions/browser/api/api_resource_manager.h"
 #include "extensions/browser/api/socket/socket.h"
@@ -40,9 +40,10 @@ TEST_F(SocketsUdpUnitTest, Create) {
   SocketsUdpCreateFunction* function = new SocketsUdpCreateFunction();
 
   // Run tests
-  std::unique_ptr<base::DictionaryValue> result(RunFunctionAndReturnDictionary(
-      function, "[{\"persistent\": true, \"name\": \"foo\"}]"));
-  ASSERT_TRUE(result.get());
+  std::optional<base::Value> result = RunFunctionAndReturnValue(
+      function, "[{\"persistent\": true, \"name\": \"foo\"}]");
+  ASSERT_TRUE(result);
+  ASSERT_TRUE(result->is_dict());
 }
 
 }  // namespace api

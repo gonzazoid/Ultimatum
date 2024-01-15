@@ -8,12 +8,12 @@
 
 #include <memory>
 
-#include "base/callback.h"
 #include "base/command_line.h"
 #include "base/containers/contains.h"
 #include "base/fuchsia/fuchsia_logging.h"
 #include "base/fuchsia/process_context.h"
 #include "base/fuchsia/scheduler.h"
+#include "base/functional/callback.h"
 #include "base/time/time.h"
 #include "media/audio/fuchsia/audio_input_stream_fuchsia.h"
 #include "media/audio/fuchsia/audio_output_stream_fuchsia.h"
@@ -146,8 +146,7 @@ const char* AudioManagerFuchsia::GetName() {
 AudioOutputStream* AudioManagerFuchsia::MakeLinearOutputStream(
     const AudioParameters& params,
     const LogCallback& log_callback) {
-  NOTREACHED();
-  return nullptr;
+  NOTREACHED_NORETURN();
 }
 
 AudioOutputStream* AudioManagerFuchsia::MakeLowLatencyOutputStream(

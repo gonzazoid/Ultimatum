@@ -15,7 +15,7 @@ namespace feed {
 /**
  * Interface for logging reliability-related timestamps and status codes. See
  * chrome/browser/xsurface/android/java/src/org/chromium/chrome/browser/
- * xsurface/FeedLaunchReliabilityLogger.java.
+ * xsurface/feed/FeedLaunchReliabilityLogger.java.
  */
 class ReliabilityLoggingBridge {
  public:
@@ -33,6 +33,8 @@ class ReliabilityLoggingBridge {
                                             base::TimeTicks timestamp) = 0;
   virtual void LogWebFeedRequestStart(NetworkRequestId id,
                                       base::TimeTicks timestamp) = 0;
+  virtual void LogSingleWebFeedRequestStart(NetworkRequestId id,
+                                            base::TimeTicks timestamp) = 0;
   virtual void LogRequestSent(NetworkRequestId id,
                               base::TimeTicks timestamp) = 0;
   virtual void LogResponseReceived(
@@ -52,6 +54,15 @@ class ReliabilityLoggingBridge {
 
   virtual void LogLaunchFinishedAfterStreamUpdate(
       feedwire::DiscoverLaunchResult result) = 0;
+
+  virtual void LogLoadMoreStarted() = 0;
+  virtual void LogLoadMoreActionUploadRequestStarted() = 0;
+  virtual void LogLoadMoreRequestSent() = 0;
+  virtual void LogLoadMoreResponseReceived(
+      int64_t server_receive_timestamp_ns,
+      int64_t server_send_timestamp_ns) = 0;
+  virtual void LogLoadMoreRequestFinished(int canonical_status) = 0;
+  virtual void LogLoadMoreEnded(bool success) = 0;
 
   virtual ~ReliabilityLoggingBridge() = default;
 };

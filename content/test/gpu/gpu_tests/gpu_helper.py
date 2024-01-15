@@ -33,10 +33,33 @@ REMOTE_BROWSER_TYPES = [
     'cast-streaming-shell',
 ]
 
-TAG_REPLACEMENTS = {
+TAG_SUBSTRING_REPLACEMENTS = {
     # nvidia on desktop, nvidia-coproration on Android.
     'nvidia-corporation': 'nvidia',
 }
+
+ENTIRE_TAG_REPLACEMENTS = {
+    # Includes a Vulkan and LLVM version.
+    re.compile('google-vulkan.*swiftshader-device.*', re.IGNORECASE):
+    'google-vulkan',
+}
+
+VENDOR_AMD = 0x1002
+VENDOR_INTEL = 0x8086
+VENDOR_NVIDIA = 0x10DE
+# ACPI ID as opposed to a PCI-E ID like other vendors.
+VENDOR_QUALCOMM = 0x4D4F4351
+
+VENDOR_NAMES_BY_ID = {
+    VENDOR_AMD: 'amd',
+    VENDOR_INTEL: 'intel',
+    VENDOR_NVIDIA: 'nvidia',
+    VENDOR_QUALCOMM: 'qualcomm',
+}
+
+INTEL_DEVICE_ID_MASK = 0xFF00
+INTEL_GEN_9 = {0x1900, 0x3100, 0x3E00, 0x5900, 0x5A00, 0x9B00}
+INTEL_GEN_12 = {0x4C00, 0x9A00, 0x4900, 0x4600, 0x4F00, 0x5600, 0xA700, 0x7D00}
 
 
 def _ParseANGLEGpuVendorString(device_string: str) -> Optional[str]:
@@ -51,7 +74,7 @@ def _ParseANGLEGpuVendorString(device_string: str) -> Optional[str]:
   return None
 
 
-def _GetANGLEGpuDeviceId(device_string: str) -> Optional[str]:
+def GetANGLEGpuDeviceId(device_string: str) -> Optional[str]:
   if not device_string:
     return None
   # ANGLE's device (renderer) string is of the form:
@@ -63,7 +86,7 @@ def _GetANGLEGpuDeviceId(device_string: str) -> Optional[str]:
   return None
 
 
-def GetGpuVendorString(gpu_info: tgi.GPUInfo, index: int) -> str:
+def GetGpuVendorString(gpu_info: Optional[tgi.GPUInfo], index: int) -> str:
   if gpu_info:
     primary_gpu = gpu_info.devices[index]
     if primary_gpu:
@@ -71,12 +94,8 @@ def GetGpuVendorString(gpu_info: tgi.GPUInfo, index: int) -> str:
       angle_vendor_string = _ParseANGLEGpuVendorString(
           primary_gpu.device_string)
       vendor_id = primary_gpu.vendor_id
-      if vendor_id == 0x10DE:
-        return 'nvidia'
-      if vendor_id == 0x1002:
-        return 'amd'
-      if vendor_id == 0x8086:
-        return 'intel'
+      if vendor_id in VENDOR_NAMES_BY_ID:
+        return VENDOR_NAMES_BY_ID[vendor_id]
       if angle_vendor_string:
         return angle_vendor_string.lower()
       if vendor_string:
@@ -84,17 +103,31 @@ def GetGpuVendorString(gpu_info: tgi.GPUInfo, index: int) -> str:
   return 'unknown_gpu'
 
 
-def GetGpuDeviceId(gpu_info: tgi.GPUInfo, index: int) -> Union[int, str]:
+def GetGpuDeviceId(gpu_info: Optional[tgi.GPUInfo],
+                   index: int) -> Union[int, str]:
   if gpu_info:
     primary_gpu = gpu_info.devices[index]
     if primary_gpu:
       return (primary_gpu.device_id
-              or _GetANGLEGpuDeviceId(primary_gpu.device_string)
+              or GetANGLEGpuDeviceId(primary_gpu.device_string)
               or primary_gpu.device_string)
   return 0
 
 
-def GetGpuDriverVendor(gpu_info: tgi.GPUInfo) -> Optional[str]:
+def IsIntel(vendor_id: int) -> bool:
+  return vendor_id == VENDOR_INTEL
+
+
+# Intel GPU architectures
+def IsIntelGen9(gpu_device_id: int) -> bool:
+  return gpu_device_id & INTEL_DEVICE_ID_MASK in INTEL_GEN_9
+
+
+def IsIntelGen12(gpu_device_id: int) -> bool:
+  return gpu_device_id & INTEL_DEVICE_ID_MASK in INTEL_GEN_12
+
+
+def GetGpuDriverVendor(gpu_info: Optional[tgi.GPUInfo]) -> Optional[str]:
   if gpu_info:
     primary_gpu = gpu_info.devices[0]
     if primary_gpu:
@@ -102,7 +135,7 @@ def GetGpuDriverVendor(gpu_info: tgi.GPUInfo) -> Optional[str]:
   return None
 
 
-def GetGpuDriverVersion(gpu_info: tgi.GPUInfo) -> Optional[str]:
+def GetGpuDriverVersion(gpu_info: Optional[tgi.GPUInfo]) -> Optional[str]:
   if gpu_info:
     primary_gpu = gpu_info.devices[0]
     if primary_gpu:
@@ -110,7 +143,7 @@ def GetGpuDriverVersion(gpu_info: tgi.GPUInfo) -> Optional[str]:
   return None
 
 
-def GetANGLERenderer(gpu_info: tgi.GPUInfo) -> str:
+def GetANGLERenderer(gpu_info: Optional[tgi.GPUInfo]) -> str:
   retval = 'angle-disabled'
   if gpu_info and gpu_info.aux_attributes:
     gl_renderer = gpu_info.aux_attributes.get('gl_renderer')
@@ -133,28 +166,37 @@ def GetANGLERenderer(gpu_info: tgi.GPUInfo) -> str:
   return retval
 
 
-def GetCommandDecoder(gpu_info: tgi.GPUInfo) -> str:
+def GetCommandDecoder(gpu_info: Optional[tgi.GPUInfo]) -> str:
   if gpu_info and gpu_info.aux_attributes and \
       gpu_info.aux_attributes.get('passthrough_cmd_decoder', False):
     return 'passthrough'
   return 'no_passthrough'
 
 
-def GetSkiaRenderer(gpu_feature_status: Dict[str, str],
+def GetSkiaGraphiteStatus(gpu_info: Optional[tgi.GPUInfo]) -> str:
+  if gpu_info and gpu_info.feature_status and gpu_info.feature_status.get(
+      'skia_graphite') == 'enabled':
+    return 'graphite-enabled'
+  return 'graphite-disabled'
+
+
+def GetSkiaRenderer(gpu_info: Optional[tgi.GPUInfo],
                     extra_browser_args: List[str]) -> str:
   retval = 'renderer-software'
-  skia_renderer_enabled = (
-      gpu_feature_status
-      and gpu_feature_status.get('gpu_compositing') == 'enabled')
-  if skia_renderer_enabled:
-    if HasDawnSkiaRenderer(extra_browser_args):
-      retval = 'renderer-skia-dawn'
-    elif HasVulkanSkiaRenderer(gpu_feature_status):
-      retval = 'renderer-skia-vulkan'
-    # The check for GL must come after Vulkan since the 'opengl' feature can be
-    # enabled for WebGL and interop even if SkiaRenderer is using Vulkan.
-    elif HasGlSkiaRenderer(gpu_feature_status):
-      retval = 'renderer-skia-gl'
+  if gpu_info:
+    gpu_feature_status = gpu_info.feature_status
+    skia_renderer_enabled = (
+        gpu_feature_status
+        and gpu_feature_status.get('gpu_compositing') == 'enabled')
+    if skia_renderer_enabled:
+      if HasDawnSkiaRenderer(extra_browser_args):
+        retval = 'renderer-skia-dawn'
+      elif HasVulkanSkiaRenderer(gpu_feature_status):
+        retval = 'renderer-skia-vulkan'
+      # The check for GL must come after Vulkan since the 'opengl' feature can
+      # be enabled for WebGL and interop even if SkiaRenderer is using Vulkan.
+      elif HasGlSkiaRenderer(gpu_feature_status):
+        retval = 'renderer-skia-gl'
   return retval
 
 
@@ -171,22 +213,31 @@ def GetDisplayServer(browser_type: str) -> Optional[str]:
   return None
 
 
-def GetOOPCanvasStatus(gpu_feature_status: Dict[str, str]) -> str:
-  if gpu_feature_status and gpu_feature_status.get(
+def GetOOPCanvasStatus(gpu_info: Optional[tgi.GPUInfo]) -> str:
+  if gpu_info and gpu_info.feature_status and gpu_info.feature_status.get(
       'canvas_oop_rasterization') == 'enabled_on':
     return 'oop-c'
   return 'no-oop-c'
 
 
-def GetAsanStatus(gpu_info: tgi.GPUInfo) -> str:
-  if gpu_info.aux_attributes.get('is_asan', False):
+def GetAsanStatus(gpu_info: Optional[tgi.GPUInfo]) -> str:
+  if gpu_info and gpu_info.aux_attributes.get('is_asan', False):
     return 'asan'
   return 'no-asan'
 
 
-def GetTargetCpuStatus(gpu_info):
-  return 'target-cpu-%s' % (gpu_info.aux_attributes.get('target_cpu_bits',
-                                                        'unknown'), )
+def GetTargetCpuStatus(gpu_info: Optional[tgi.GPUInfo]) -> str:
+  suffix = 'unknown'
+  if gpu_info:
+    suffix = gpu_info.aux_attributes.get('target_cpu_bits', 'unknown')
+  return 'target-cpu-%s' % suffix
+
+
+def GetClangCoverage(gpu_info: Optional[tgi.GPUInfo]) -> str:
+  if gpu_info and gpu_info.aux_attributes.get('is_clang_coverage', False):
+    return 'clang-coverage'
+  return 'no-clang-coverage'
+
 
 # TODO(rivr): Use GPU feature status for Dawn instead of command line.
 def HasDawnSkiaRenderer(extra_browser_args: List[str]) -> bool:
@@ -214,12 +265,28 @@ def ReplaceTags(tags: List[str]) -> List[str]:
     tags: A list of strings containing expectation tags.
 
   Returns:
-    |tags| but potentially with some substrings replaced.
+    |tags| but potentially with some elements replaced.
   """
   replaced_tags = []
   for t in tags:
-    for original, replacement in TAG_REPLACEMENTS.items():
-      replaced_tags.append(t.replace(original, replacement))
+    continue_to_next_tag = False
+    for regex, replacement in ENTIRE_TAG_REPLACEMENTS.items():
+      if regex.match(t):
+        replaced_tags.append(replacement)
+        continue_to_next_tag = True
+        break
+    if continue_to_next_tag:
+      continue
+
+    for original, replacement in TAG_SUBSTRING_REPLACEMENTS.items():
+      if original in t:
+        replaced_tags.append(t.replace(original, replacement))
+        continue_to_next_tag = True
+        break
+    if continue_to_next_tag:
+      continue
+
+    replaced_tags.append(t)
   return replaced_tags
 
 

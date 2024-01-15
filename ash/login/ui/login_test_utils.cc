@@ -40,8 +40,8 @@ const char* AuthTargetToString(AuthTarget target) {
   return "";
 }
 
-LockContentsView::TestApi MakeLockContentsViewTestApi(LockContentsView* view) {
-  return LockContentsView::TestApi(view);
+LockContentsViewTestApi MakeLockContentsViewTestApi(LockContentsView* view) {
+  return LockContentsViewTestApi(view);
 }
 
 LoginAuthUserView::TestApi MakeLoginAuthTestApi(LockContentsView* view,
@@ -89,7 +89,7 @@ LoginUserInfo CreatePublicAccountUser(const std::string& email) {
 
 bool HasFocusInAnyChildView(const views::View* view) {
   return view->HasFocus() ||
-         base::ranges::any_of(view->children(), [](const auto* v) {
+         base::ranges::any_of(view->children(), [](const views::View* v) {
            return HasFocusInAnyChildView(v);
          });
 }
@@ -105,8 +105,9 @@ bool TabThroughView(ui::test::EventGenerator* event_generator,
   for (int i = 0; i < 50; ++i) {
     event_generator->PressKey(ui::KeyboardCode::VKEY_TAB,
                               reverse ? ui::EF_SHIFT_DOWN : 0);
-    if (!HasFocusInAnyChildView(view))
+    if (!HasFocusInAnyChildView(view)) {
       return true;
+    }
   }
 
   return false;
@@ -115,13 +116,15 @@ bool TabThroughView(ui::test::EventGenerator* event_generator,
 // Performs a DFS for the first button in the views hierarchy
 // The last child is on the top of the z layer stack
 views::View* FindTopButton(views::View* current_view) {
-  for (auto* child : base::Reversed(current_view->children())) {
-    if (views::Button::AsButton(child))
+  for (views::View* child : base::Reversed(current_view->children())) {
+    if (views::Button::AsButton(child)) {
       return child;
+    }
     if (!child->children().empty()) {
       views::View* child_button = FindTopButton(child);
-      if (child_button)
+      if (child_button) {
         return child_button;
+      }
     }
   }
   return nullptr;

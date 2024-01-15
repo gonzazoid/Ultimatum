@@ -11,9 +11,10 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ref.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/time/time.h"
 #include "base/trace_event/trace_event.h"
@@ -55,16 +56,17 @@ class PageClearCriteria {
     // If the cached pages exceed the storage limit, we need to clear more than
     // just expired pages to make the storage usage below the threshold.
     const bool quota_based_clearing =
-        stats_.temporary_archives_size >=
-        (stats_.temporary_archives_size + stats_.internal_free_disk_space) *
+        stats_->temporary_archives_size >=
+        (stats_->temporary_archives_size + stats_->internal_free_disk_space) *
             kOfflinePageStorageLimit;
     const int64_t max_allowed_size =
-        (stats_.temporary_archives_size + stats_.internal_free_disk_space) *
+        (stats_->temporary_archives_size + stats_->internal_free_disk_space) *
         kOfflinePageStorageClearThreshold;
 
     // If the page is expired, put it in the list to delete later.
-    if (start_time_ - page.last_access_time >= expiration_period)
+    if (start_time_ - page.last_access_time >= expiration_period) {
       return true;
+    }
 
     // If the namespace of the page already has more pages than limit, this page
     // needs to be deleted.
@@ -74,8 +76,9 @@ class PageClearCriteria {
     }
 
     // Pages with no file can be removed.
-    if (!base::PathExists(page.file_path))
+    if (!base::PathExists(page.file_path)) {
       return true;
+    }
 
     // If there's no quota, remove the pages.
     if (quota_based_clearing &&
@@ -92,7 +95,7 @@ class PageClearCriteria {
 
  private:
   base::Time start_time_;
-  const ArchiveManager::StorageStats& stats_;
+  const raw_ref<const ArchiveManager::StorageStats> stats_;
 
   int64_t remaining_size_ = 0;
   std::map<std::string, size_t> namespace_page_count_;
@@ -130,11 +133,6 @@ std::pair<size_t, DeletePageResult> ClearPagesSync(
     if (!base::PathExists(page.file_path) || base::DeleteFile(page.file_path)) {
       if (DeletePageTask::DeletePageFromDbSync(page.offline_id, db)) {
         pages_cleared++;
-        // Reports the time since creation in minutes.
-        base::TimeDelta time_since_creation = start_time - page.creation_time;
-        UMA_HISTOGRAM_CUSTOM_COUNTS(
-            "OfflinePages.ClearTemporaryPages.TimeSinceCreation",
-            time_since_creation.InMinutes(), 1, base::Days(30).InMinutes(), 50);
       }
     }
   }
@@ -184,8 +182,9 @@ void ClearStorageTask::OnClearPagesDone(
   }
 
   ClearStorageResult clear_result = ClearStorageResult::SUCCESS;
-  if (result.second != DeletePageResult::SUCCESS)
+  if (result.second != DeletePageResult::SUCCESS) {
     clear_result = ClearStorageResult::DELETE_FAILURE;
+  }
   InformClearStorageDone(result.first, clear_result);
 }
 

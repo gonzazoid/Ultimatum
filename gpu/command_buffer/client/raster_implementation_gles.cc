@@ -17,8 +17,8 @@
 #include "cc/paint/paint_op_buffer_serializer.h"
 #include "cc/paint/transfer_cache_entry.h"
 #include "cc/paint/transfer_cache_serialize_helper.h"
-#include "components/viz/common/resources/resource_format_utils.h"
 #include "gpu/GLES2/gl2extchromium.h"
+#include "gpu/command_buffer/client/client_shared_image.h"
 #include "gpu/command_buffer/client/gl_helper.h"
 #include "gpu/command_buffer/client/gles2_implementation.h"
 #include "gpu/command_buffer/client/gles2_interface.h"
@@ -32,15 +32,23 @@ namespace raster {
 
 namespace {
 
-GLenum SkColorTypeToGLDataFormat(SkColorType color_type) {
+GLenum SkColorTypeToGLDataFormat(SkColorType color_type, bool supports_rg) {
   switch (color_type) {
     case kRGBA_8888_SkColorType:
       return GL_RGBA;
     case kBGRA_8888_SkColorType:
       return GL_BGRA_EXT;
     case kR8G8_unorm_SkColorType:
+    case kR16G16_unorm_SkColorType:
       return GL_RG_EXT;
     case kGray_8_SkColorType:
+      return supports_rg ? GL_RED : GL_LUMINANCE;
+    case kAlpha_8_SkColorType:
+    case kA16_unorm_SkColorType:
+      return supports_rg ? GL_RED : GL_ALPHA;
+    // kA16_float_SkColorType is only used by LUMINANCE_F16 format and hence
+    // should only support GL_LUMINANCE.
+    case kA16_float_SkColorType:
       return GL_LUMINANCE;
     default:
       DLOG(ERROR) << "Unknown SkColorType " << color_type;
@@ -55,7 +63,13 @@ GLenum SkColorTypeToGLDataType(SkColorType color_type) {
     case kBGRA_8888_SkColorType:
     case kR8G8_unorm_SkColorType:
     case kGray_8_SkColorType:
+    case kAlpha_8_SkColorType:
       return GL_UNSIGNED_BYTE;
+    case kA16_unorm_SkColorType:
+    case kR16G16_unorm_SkColorType:
+      return GL_UNSIGNED_SHORT;
+    case kA16_float_SkColorType:
+      return GL_HALF_FLOAT_OES;
     default:
       DLOG(ERROR) << "Unknown SkColorType " << color_type;
   }
@@ -67,8 +81,9 @@ GLenum SkColorTypeToGLDataType(SkColorType color_type) {
 
 RasterImplementationGLES::RasterImplementationGLES(
     gles2::GLES2Interface* gl,
-    ContextSupport* context_support)
-    : gl_(gl), context_support_(context_support) {}
+    ContextSupport* context_support,
+    const gpu::Capabilities& caps)
+    : gl_(gl), context_support_(context_support), capabilities_(caps) {}
 
 RasterImplementationGLES::~RasterImplementationGLES() = default;
 
@@ -134,7 +149,7 @@ void RasterImplementationGLES::GetQueryObjectui64vEXT(GLuint id,
   gl_->GetQueryObjectui64vEXT(id, pname, params);
 }
 
-void RasterImplementationGLES::CopySubTexture(
+void RasterImplementationGLES::CopySharedImage(
     const gpu::Mailbox& source_mailbox,
     const gpu::Mailbox& dest_mailbox,
     GLenum dest_target,
@@ -146,36 +161,61 @@ void RasterImplementationGLES::CopySubTexture(
     GLsizei height,
     GLboolean unpack_flip_y,
     GLboolean unpack_premultiply_alpha) {
-  GLuint texture_ids[2] = {
-      CreateAndConsumeForGpuRaster(source_mailbox),
-      CreateAndConsumeForGpuRaster(dest_mailbox),
-  };
-  DCHECK(texture_ids[0]);
-  DCHECK(texture_ids[1]);
+  // CopySharedImage does not support legacy mailboxes so fallback to
+  // CopySubTexture.
+  // We don't know if this would require rgb to yuv or yuv to rgb conversion, so
+  // we check for both flags, but in reality validating command decoder doesn't
+  // support either and passthrough command decoder always supports both.
+  if (capabilities_.supports_yuv_to_rgb_conversion &&
+      capabilities_.supports_rgb_to_yuv_conversion &&
+      source_mailbox.IsSharedImage() && dest_mailbox.IsSharedImage()) {
+    if (width < 0) {
+      LOG(ERROR) << "GL_INVALID_VALUE, glCopySharedImage, width < 0";
+      return;
+    }
+    if (height < 0) {
+      LOG(ERROR) << "GL_INVALID_VALUE, glCopySharedImage, height < 0";
+      return;
+    }
+    GLbyte mailboxes[sizeof(source_mailbox.name) * 2];
+    memcpy(mailboxes, source_mailbox.name, sizeof(source_mailbox.name));
+    memcpy(mailboxes + sizeof(source_mailbox.name), dest_mailbox.name,
+           sizeof(dest_mailbox.name));
+    gl_->CopySharedImageINTERNAL(xoffset, yoffset, x, y, width, height,
+                                 unpack_flip_y, mailboxes);
+  } else {
+    GLuint texture_ids[2] = {
+        CreateAndConsumeForGpuRaster(source_mailbox),
+        CreateAndConsumeForGpuRaster(dest_mailbox),
+    };
+    DCHECK(texture_ids[0]);
+    DCHECK(texture_ids[1]);
 
-  BeginSharedImageAccessDirectCHROMIUM(
-      texture_ids[0], GL_SHARED_IMAGE_ACCESS_MODE_READ_CHROMIUM);
-  BeginSharedImageAccessDirectCHROMIUM(
-      texture_ids[1], GL_SHARED_IMAGE_ACCESS_MODE_READWRITE_CHROMIUM);
+    BeginSharedImageAccessDirectCHROMIUM(
+        texture_ids[0], GL_SHARED_IMAGE_ACCESS_MODE_READ_CHROMIUM);
+    BeginSharedImageAccessDirectCHROMIUM(
+        texture_ids[1], GL_SHARED_IMAGE_ACCESS_MODE_READWRITE_CHROMIUM);
 
-  gl_->CopySubTextureCHROMIUM(texture_ids[0], 0, dest_target, texture_ids[1], 0,
-                              xoffset, yoffset, x, y, width, height,
-                              unpack_flip_y, unpack_premultiply_alpha,
-                              false /* upack_unmultiply_alpha */);
+    gl_->CopySubTextureCHROMIUM(texture_ids[0], 0, dest_target, texture_ids[1],
+                                0, xoffset, yoffset, x, y, width, height,
+                                unpack_flip_y, unpack_premultiply_alpha,
+                                false /* upack_unmultiply_alpha */);
 
-  EndSharedImageAccessDirectCHROMIUM(texture_ids[0]);
-  EndSharedImageAccessDirectCHROMIUM(texture_ids[1]);
-  gl_->DeleteTextures(2, texture_ids);
+    EndSharedImageAccessDirectCHROMIUM(texture_ids[0]);
+    EndSharedImageAccessDirectCHROMIUM(texture_ids[1]);
+    gl_->DeleteTextures(2, texture_ids);
+  }
 }
 
 void RasterImplementationGLES::WritePixels(const gpu::Mailbox& dest_mailbox,
                                            int dst_x_offset,
                                            int dst_y_offset,
+                                           int dst_plane_index,
                                            GLenum texture_target,
-                                           GLuint row_bytes,
-                                           const SkImageInfo& src_info,
-                                           const void* src_pixels) {
-  DCHECK_GE(row_bytes, src_info.minRowBytes());
+                                           const SkPixmap& src_sk_pixmap) {
+  const auto& src_info = src_sk_pixmap.info();
+  const auto& src_row_bytes = src_sk_pixmap.rowBytes();
+  DCHECK_GE(src_row_bytes, src_info.minRowBytes());
   GLuint texture_id = CreateAndConsumeForGpuRaster(dest_mailbox);
   BeginSharedImageAccessDirectCHROMIUM(
       texture_id, GL_SHARED_IMAGE_ACCESS_MODE_READWRITE_CHROMIUM);
@@ -183,12 +223,14 @@ void RasterImplementationGLES::WritePixels(const gpu::Mailbox& dest_mailbox,
   GLint old_align = 0;
   gl_->GetIntegerv(GL_UNPACK_ALIGNMENT, &old_align);
   gl_->PixelStorei(GL_UNPACK_ALIGNMENT, 1);
-  gl_->PixelStorei(GL_UNPACK_ROW_LENGTH, row_bytes / src_info.bytesPerPixel());
+  gl_->PixelStorei(GL_UNPACK_ROW_LENGTH,
+                   src_row_bytes / src_info.bytesPerPixel());
   gl_->BindTexture(texture_target, texture_id);
-  gl_->TexSubImage2D(texture_target, 0, dst_x_offset, dst_y_offset,
-                     src_info.width(), src_info.height(),
-                     SkColorTypeToGLDataFormat(src_info.colorType()),
-                     SkColorTypeToGLDataType(src_info.colorType()), src_pixels);
+  gl_->TexSubImage2D(
+      texture_target, 0, dst_x_offset, dst_y_offset, src_info.width(),
+      src_info.height(),
+      SkColorTypeToGLDataFormat(src_info.colorType(), capabilities_.texture_rg),
+      SkColorTypeToGLDataType(src_info.colorType()), src_sk_pixmap.addr());
   gl_->BindTexture(texture_target, 0);
   gl_->PixelStorei(GL_UNPACK_ROW_LENGTH, 0);
   gl_->PixelStorei(GL_UNPACK_ALIGNMENT, old_align);
@@ -197,14 +239,74 @@ void RasterImplementationGLES::WritePixels(const gpu::Mailbox& dest_mailbox,
   DeleteGpuRasterTexture(texture_id);
 }
 
+void RasterImplementationGLES::WritePixelsYUV(
+    const gpu::Mailbox& dest_mailbox,
+    const SkYUVAPixmaps& src_yuv_pixmap) {
+  const auto& src_yuv_info = src_yuv_pixmap.yuvaInfo();
+  const auto& src_yuv_pixmap_info = src_yuv_pixmap.pixmapsInfo();
+  const std::array<SkPixmap, SkYUVAInfo::kMaxPlanes>& src_sk_pixmaps =
+      src_yuv_pixmap.planes();
+
+  gl_->WritePixelsYUVINTERNAL(
+      dest_mailbox.name, src_sk_pixmaps[0].computeByteSize(),
+      src_sk_pixmaps[1].computeByteSize(), src_sk_pixmaps[2].computeByteSize(),
+      src_sk_pixmaps[3].computeByteSize(), src_yuv_info.width(),
+      src_yuv_info.height(), static_cast<int>(src_yuv_info.planeConfig()),
+      static_cast<int>(src_yuv_info.subsampling()),
+      static_cast<int>(src_yuv_pixmap_info.dataType()),
+      src_sk_pixmaps[0].rowBytes(), src_sk_pixmaps[1].rowBytes(),
+      src_sk_pixmaps[2].rowBytes(), src_sk_pixmaps[3].rowBytes(),
+      src_sk_pixmaps[0].addr(), src_sk_pixmaps[1].addr(),
+      src_sk_pixmaps[2].addr(), src_sk_pixmaps[3].addr());
+}
+
 void RasterImplementationGLES::ConvertYUVAMailboxesToRGB(
     const gpu::Mailbox& dest_mailbox,
+    GLint src_x,
+    GLint src_y,
+    GLsizei width,
+    GLsizei height,
     SkYUVColorSpace planes_yuv_color_space,
     const SkColorSpace* planes_rgb_color_space,
     SkYUVAInfo::PlaneConfig plane_config,
     SkYUVAInfo::Subsampling subsampling,
     const gpu::Mailbox yuva_plane_mailboxes[]) {
-  NOTREACHED();
+  skcms_Matrix3x3 primaries = {{{0}}};
+  skcms_TransferFunction transfer = {0};
+  if (planes_rgb_color_space) {
+    planes_rgb_color_space->toXYZD50(&primaries);
+    planes_rgb_color_space->transferFn(&transfer);
+  } else {
+    // Specify an invalid transfer function exponent, to ensure that when
+    // SkColorSpace::MakeRGB is called in the decoder, the result is nullptr.
+    transfer.g = -99;
+  }
+
+  constexpr size_t kByteSize =
+      sizeof(gpu::Mailbox) * (SkYUVAInfo::kMaxPlanes + 1) +
+      sizeof(skcms_TransferFunction) + sizeof(skcms_Matrix3x3);
+  // 144 is the count in build_gles2_cmd_buffer.py for GL_MAILBOX_SIZE_CHROMIUM
+  // x5 + 16 floats.
+  static_assert(kByteSize == 144);
+  GLbyte bytes[kByteSize] = {0};
+  size_t offset = 0;
+  for (int i = 0; i < SkYUVAInfo::NumPlanes(plane_config); ++i) {
+    memcpy(bytes + offset, yuva_plane_mailboxes + i, sizeof(gpu::Mailbox));
+    offset += sizeof(gpu::Mailbox);
+  }
+  offset = SkYUVAInfo::kMaxPlanes * sizeof(gpu::Mailbox);
+  memcpy(bytes + offset, &dest_mailbox, sizeof(gpu::Mailbox));
+  offset += sizeof(gpu::Mailbox);
+  memcpy(bytes + offset, &transfer, sizeof(transfer));
+  offset += sizeof(transfer);
+  memcpy(bytes + offset, &primaries, sizeof(primaries));
+  offset += sizeof(primaries);
+  DCHECK_EQ(offset, kByteSize);
+
+  gl_->ConvertYUVAMailboxesToRGBINTERNAL(
+      src_x, src_y, width, height, planes_yuv_color_space,
+      static_cast<GLenum>(plane_config), static_cast<GLenum>(subsampling),
+      reinterpret_cast<GLbyte*>(bytes));
 }
 
 void RasterImplementationGLES::ConvertRGBAToYUVAMailboxes(
@@ -213,7 +315,14 @@ void RasterImplementationGLES::ConvertRGBAToYUVAMailboxes(
     SkYUVAInfo::Subsampling subsampling,
     const gpu::Mailbox yuva_plane_mailboxes[],
     const gpu::Mailbox& source_mailbox) {
-  NOTREACHED();
+  gpu::Mailbox mailboxes[SkYUVAInfo::kMaxPlanes + 1];
+  for (int i = 0; i < SkYUVAInfo::NumPlanes(plane_config); ++i) {
+    mailboxes[i] = yuva_plane_mailboxes[i];
+  }
+  mailboxes[SkYUVAInfo::kMaxPlanes] = source_mailbox;
+  gl_->ConvertRGBAToYUVAMailboxesINTERNAL(
+      planes_yuv_color_space, static_cast<GLenum>(plane_config),
+      static_cast<GLenum>(subsampling), reinterpret_cast<GLbyte*>(mailboxes));
 }
 
 void RasterImplementationGLES::BeginRasterCHROMIUM(
@@ -224,6 +333,7 @@ void RasterImplementationGLES::BeginRasterCHROMIUM(
     GLboolean can_use_lcd_text,
     GLboolean visible,
     const gfx::ColorSpace& color_space,
+    float hdr_headroom,
     const GLbyte* mailbox) {
   NOTREACHED();
 }
@@ -237,8 +347,7 @@ void RasterImplementationGLES::RasterCHROMIUM(
     const gfx::Vector2dF& post_translate,
     const gfx::Vector2dF& post_scale,
     bool requires_clear,
-    size_t* max_op_size_hint,
-    bool preserve_recording) {
+    size_t* max_op_size_hint) {
   NOTREACHED();
 }
 
@@ -264,6 +373,8 @@ void RasterImplementationGLES::ReadbackARGBPixelsAsync(
     const gpu::Mailbox& source_mailbox,
     GLenum source_target,
     GrSurfaceOrigin src_origin,
+    const gfx::Size& source_size,
+    const gfx::Point& source_starting_point,
     const SkImageInfo& dst_info,
     GLuint dst_row_bytes,
     unsigned char* out,
@@ -281,18 +392,30 @@ void RasterImplementationGLES::ReadbackARGBPixelsAsync(
   // Convert bottom-left GL coordinates to top-left coordinates expected
   // by RI clients.
   bool flip_y;
+  gfx::Point starting_point(source_starting_point);
   switch (src_origin) {
     case kTopLeft_GrSurfaceOrigin:
       flip_y = false;
       break;
     case kBottomLeft_GrSurfaceOrigin:
+      // Since RI clients always expect top-left origin, two things need to be
+      // done when texture's origin is bottom-left.
+
+      // 1. Rows in the output buffer need to be switched vertically.
       flip_y = true;
+
+      // 2. Starting of a target rectangle needs to be adjusted from top-left
+      //    to bottom-left. That's how glReadPixels expects it.
+      // It's okay if we accidentally go negative here, glReadPixels checks
+      // its input.
+      starting_point.set_y(source_size.height() - starting_point.y() -
+                           dst_gfx_size.height());
       break;
   }
 
   GetGLHelper()->ReadbackTextureAsync(
-      texture_id, source_target, dst_gfx_size, out, dst_row_bytes, flip_y,
-      format,
+      texture_id, source_target, starting_point, dst_gfx_size, out,
+      dst_row_bytes, flip_y, format,
       base::BindOnce(&RasterImplementationGLES::OnReadARGBPixelsAsync,
                      weak_ptr_factory_.GetWeakPtr(), texture_id,
                      std::move(readback_done)));
@@ -402,8 +525,23 @@ void RasterImplementationGLES::ReadbackImagePixels(
     GLuint dst_row_bytes,
     int src_x,
     int src_y,
+    int plane_index,
     void* dst_pixels) {
-  NOTREACHED();
+  DCHECK_GE(dst_row_bytes, dst_info.minRowBytes());
+
+  sk_sp<SkData> dst_color_space_data;
+  if (dst_info.colorSpace()) {
+    dst_color_space_data = dst_info.colorSpace()->serialize();
+  }
+
+  GLuint dst_size = dst_info.computeByteSize(dst_row_bytes);
+  gl_->ReadbackARGBImagePixelsINTERNAL(
+      source_mailbox.name,
+      dst_color_space_data ? dst_color_space_data->data() : nullptr,
+      dst_color_space_data ? dst_color_space_data->size() : 0, dst_size,
+      dst_info.width(), dst_info.height(), dst_info.colorType(),
+      dst_info.alphaType(), dst_row_bytes, src_x, src_y, plane_index,
+      dst_pixels);
 }
 
 GLuint RasterImplementationGLES::CreateAndConsumeForGpuRaster(
@@ -411,6 +549,12 @@ GLuint RasterImplementationGLES::CreateAndConsumeForGpuRaster(
   return mailbox.IsSharedImage()
              ? gl_->CreateAndTexStorage2DSharedImageCHROMIUM(mailbox.name)
              : gl_->CreateAndConsumeTextureCHROMIUM(mailbox.name);
+}
+
+GLuint RasterImplementationGLES::CreateAndConsumeForGpuRaster(
+    const scoped_refptr<gpu::ClientSharedImage>& shared_image) {
+  CHECK(shared_image);
+  return CreateAndConsumeForGpuRaster(shared_image->mailbox());
 }
 
 void RasterImplementationGLES::DeleteGpuRasterTexture(GLuint texture) {

@@ -4,9 +4,10 @@
 
 #include "base/win/com_init_util.h"
 
+#include <stdint.h>
 #include <windows.h>
-
 #include <winternl.h>
+
 #include "base/logging.h"
 #include "base/notreached.h"
 
@@ -27,8 +28,8 @@ struct OleTlsData {
     MTA = 0x140,
   };
 
-  void* thread_base;
-  void* sm_allocator;
+  uintptr_t thread_base;
+  uintptr_t sm_allocator;
   DWORD apartment_id;
   DWORD apartment_flags;
   // There are many more fields than this, but for our purposes, we only care

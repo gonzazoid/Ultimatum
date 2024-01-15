@@ -3,8 +3,9 @@
 # found in the LICENSE file.
 """Custom data types for the web test stale expectation remover."""
 
+import datetime
 import fnmatch
-from typing import Any, Dict, Union
+from typing import Any, Dict, List, Union
 
 from unexpected_passes_common import data_types
 
@@ -39,6 +40,9 @@ class WebTestExpectation(data_types.BaseExpectation):
             success = result_test_name == self.test
         return success
 
+    def _ProcessTagsForFileUse(self) -> List[str]:
+        return [t.capitalize() for t in self.tags]
+
 
 class WebTestResult(data_types.BaseResult):
     """Web test-specific container for a test result.
@@ -48,16 +52,16 @@ class WebTestResult(data_types.BaseResult):
     """
     def __init__(self, *args, **kwargs):
         super(WebTestResult, self).__init__(*args, **kwargs)
-        self._duration = 0
+        self._duration = datetime.timedelta(0)
         self.is_slow_result = False
 
-    def SetDuration(self, duration: Union[float, str],
-                    timeout: Union[float, str]) -> None:
-        self._duration = float(duration)
+    def SetDuration(self, duration: datetime.timedelta,
+                    timeout: datetime.timedelta) -> None:
+        self._duration = duration
         # According to //third_party/blink/web_tests/SlowTests, as tests is
         # considered slow if it is slower than ~30% of its timeout since test
         # times can vary by up to 3x.
-        threshold = 0.3 * float(timeout)
+        threshold = 0.3 * timeout
         self.is_slow_result = (self._duration > threshold)
 
 
@@ -80,10 +84,11 @@ class WebTestBuildStats(data_types.BaseBuildStats):
 
     def AddSlowBuild(self, build_id: str) -> None:
         # Don't increment total builds since the corresponding build should
-        # already be added as a passed/failed build.
+        # already be added as a passed/failed build. Similarly, we don't take
+        # tags as an argument since those will already be passed to
+        # AddPassedBuild/AddFailedBuild.
         self.slow_builds += 1
-        build_link = data_types.BuildLinkFromBuildId(build_id)
-        self.failure_links = frozenset([build_link]) | self.failure_links
+        self.failure_links.add(data_types.BuildLinkFromBuildId(build_id))
 
     def GetStatsAsString(self) -> str:
         s = super(WebTestBuildStats, self).GetStatsAsString()

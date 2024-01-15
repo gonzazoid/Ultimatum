@@ -11,13 +11,14 @@
 
 #include "ash/constants/ash_switches.h"
 #include "ash/public/ash_interfaces.h"
-#include "ash/public/cpp/tablet_mode.h"
 #include "ash/public/cpp/test/shell_test_api.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
 #include "base/path_service.h"
 #include "base/strings/safe_sprintf.h"
+#include "base/test/test_future.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "cc/base/math_util.h"
@@ -46,6 +47,8 @@
 #include "net/dns/mock_host_resolver.h"
 #include "ui/aura/window.h"
 #include "ui/aura/window_tree_host.h"
+#include "ui/base/metadata/metadata_header_macros.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/compositor/layer.h"
 #include "ui/display/display.h"
 #include "ui/display/display_switches.h"
@@ -94,6 +97,8 @@ void SynchronizeBrowserWithRenderer(content::WebContents* contents) {
 // A test view that will be added as a child to the BrowserView to verify how
 // many times it's laid out while sliding is in progress.
 class LayoutTestView : public views::View {
+  METADATA_HEADER(LayoutTestView, views::View)
+
  public:
   explicit LayoutTestView(BrowserView* parent) {
     DCHECK(parent);
@@ -118,6 +123,9 @@ class LayoutTestView : public views::View {
  private:
   int layout_count_ = 0;
 };
+
+BEGIN_METADATA(LayoutTestView)
+END_METADATA
 
 class TestControllerObserver {
  public:
@@ -252,7 +260,7 @@ class TopControlsShownRatioWaiter : public TestControllerObserver {
     return false;
   }
 
-  TestController* controller_;
+  raw_ptr<TestController> controller_;
 
   std::unique_ptr<base::RunLoop> run_loop_;
 
@@ -298,7 +306,7 @@ class GestureScrollInProgressChangeWaiter : public TestControllerObserver {
   }
 
  private:
-  TestController* controller_;
+  raw_ptr<TestController> controller_;
 
   std::unique_ptr<base::RunLoop> run_loop_;
 
@@ -345,7 +353,8 @@ class TopControlsSlideControllerTest : public InProcessBrowserTest {
 
     // Add content/test/data so we can use cross_site_iframe_factory.html
     base::FilePath test_data_dir;
-    ASSERT_TRUE(base::PathService::Get(base::DIR_SOURCE_ROOT, &test_data_dir));
+    ASSERT_TRUE(
+        base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &test_data_dir));
     embedded_test_server()->ServeFilesFromDirectory(
         test_data_dir.AppendASCII("chrome/test/data/top_controls_scroll"));
     ASSERT_TRUE(embedded_test_server()->Start());
@@ -379,7 +388,7 @@ class TopControlsSlideControllerTest : public InProcessBrowserTest {
   }
 
   bool GetTabletModeEnabled() const {
-    return ash::TabletMode::Get()->InTabletMode();
+    return display::Screen::GetScreen()->InTabletMode();
   }
 
   void CheckBrowserLayout(BrowserView* browser_view,
@@ -557,7 +566,8 @@ class TopControlsSlideControllerTest : public InProcessBrowserTest {
     return std::move(controller);
   }
 
-  TestController* test_controller_ = nullptr;  // Not owned.
+  raw_ptr<TestController, DanglingUntriaged> test_controller_ =
+      nullptr;  // Not owned.
 };
 
 namespace {
@@ -827,16 +837,15 @@ IN_PROC_BROWSER_TEST_F(TopControlsSlideControllerTest,
     char buffer[kBufferSize];
     base::strings::SafeSPrintf(
         buffer,
-        "domAutomationController.send("
-        "    ((function() {"
-        "        var editableElement ="
-        "            document.getElementById('editable-element');"
-        "        if (editableElement) {"
-        "          editableElement.%s();"
-        "          return true;"
-        "        }"
-        "        return false;"
-        "      })()));",
+        "((function() {"
+        "    var editableElement ="
+        "        document.getElementById('editable-element');"
+        "    if (editableElement) {"
+        "      editableElement.%s();"
+        "      return true;"
+        "    }"
+        "    return false;"
+        "  })());",
         should_focus ? "focus" : "blur");
     return std::string(buffer);
   };
@@ -846,10 +855,8 @@ IN_PROC_BROWSER_TEST_F(TopControlsSlideControllerTest,
   SCOPED_TRACE("Focus an editable element in the page.");
   TopControlsShownRatioWaiter waiter(top_controls_slide_controller());
   content::WebContents* contents = browser_view()->GetActiveWebContents();
-  bool bool_result = false;
-  ASSERT_TRUE(content::ExecuteScriptAndExtractBool(
-      contents, get_js_function_body(true /* should_focus */), &bool_result));
-  EXPECT_TRUE(bool_result);
+  EXPECT_EQ(true, content::EvalJs(
+                      contents, get_js_function_body(true /* should_focus */)));
   waiter.WaitForRatio(1.f);
   EXPECT_FLOAT_EQ(top_controls_slide_controller()->GetShownRatio(), 1.f);
   CheckBrowserLayout(browser_view(), TopChromeShownState::kFullyShown);
@@ -863,11 +870,9 @@ IN_PROC_BROWSER_TEST_F(TopControlsSlideControllerTest,
 
   // Now blur the focused editable element. Expect that top-chrome can now be
   // hidden with gesture scrolls.
-  bool_result = false;
   SCOPED_TRACE("Bluring the focus away from the editable element.");
-  ASSERT_TRUE(content::ExecuteScriptAndExtractBool(
-      contents, get_js_function_body(false /* should_focus */), &bool_result));
-  EXPECT_TRUE(bool_result);
+  EXPECT_EQ(true, content::EvalJs(contents, get_js_function_body(
+                                                false /* should_focus */)));
   // Evaluate an empty sentence to make sure that the event processing is done
   // in the content.
   std::ignore = content::EvalJs(contents, ";");
@@ -909,7 +914,7 @@ class BrowserViewLayoutWaiter : public views::ViewObserver {
   }
 
  private:
-  BrowserView* browser_view_;
+  raw_ptr<BrowserView> browser_view_;
 
   bool view_bounds_changed_ = false;
 
@@ -960,10 +965,12 @@ IN_PROC_BROWSER_TEST_F(TopControlsSlideControllerTest, MAYBE_DisplayRotation) {
   mojo::Remote<crosapi::mojom::CrosDisplayConfigController> cros_display_config;
   ash::BindCrosDisplayConfigController(
       cros_display_config.BindNewPipeAndPassReceiver());
-  crosapi::mojom::CrosDisplayConfigControllerAsyncWaiter waiter_for(
-      cros_display_config.get());
-  std::vector<crosapi::mojom::DisplayUnitInfoPtr> info_list;
-  waiter_for.GetDisplayUnitInfoList(false /* single_unified */, &info_list);
+
+  base::test::TestFuture<std::vector<crosapi::mojom::DisplayUnitInfoPtr>>
+      info_list_future;
+  cros_display_config->GetDisplayUnitInfoList(false /* single_unified */,
+                                              info_list_future.GetCallback());
+  auto info_list = info_list_future.Take();
   for (const crosapi::mojom::DisplayUnitInfoPtr& display_unit_info :
        info_list) {
     const std::string display_id = display_unit_info->id;
@@ -972,11 +979,13 @@ IN_PROC_BROWSER_TEST_F(TopControlsSlideControllerTest, MAYBE_DisplayRotation) {
       auto config_properties = crosapi::mojom::DisplayConfigProperties::New();
       config_properties->rotation =
           crosapi::mojom::DisplayRotation::New(rotation);
-      crosapi::mojom::DisplayConfigResult result;
-      waiter_for.SetDisplayProperties(
+      base::test::TestFuture<crosapi::mojom::DisplayConfigResult> result_future;
+      cros_display_config->SetDisplayProperties(
           display_id, std::move(config_properties),
-          crosapi::mojom::DisplayConfigSource::kUser, &result);
-      EXPECT_EQ(result, crosapi::mojom::DisplayConfigResult::kSuccess);
+          crosapi::mojom::DisplayConfigSource::kUser,
+          result_future.GetCallback());
+      EXPECT_EQ(result_future.Take(),
+                crosapi::mojom::DisplayConfigResult::kSuccess);
 
       // Wait for the browser view to change its bounds as a result of display
       // rotation.
@@ -1197,7 +1206,7 @@ class IntermediateShownRatioWaiter : public TestControllerObserver {
   }
 
  private:
-  TestController* controller_;
+  raw_ptr<TestController> controller_;
 
   std::unique_ptr<base::RunLoop> run_loop_;
 
@@ -1401,10 +1410,10 @@ IN_PROC_BROWSER_TEST_F(TopControlsSlideControllerTest,
 
   // Fire a geolocation permission request, which should show a permission
   // request bubble resulting in top chrome unhiding.
-  auto decided = [](ContentSetting, bool) {};
+  auto decided = [](ContentSetting, bool, bool) {};
   permissions::PermissionRequest permission_request(
       url, permissions::RequestType::kGeolocation, true /* user_gesture */,
-      base::BindOnce(decided), base::DoNothing() /* delete_callback */);
+      base::BindRepeating(decided), base::DoNothing() /* delete_callback */);
   auto* permission_manager =
       permissions::PermissionRequestManager::FromWebContents(active_contents);
   TopControlsShownRatioWaiter waiter(top_controls_slide_controller());

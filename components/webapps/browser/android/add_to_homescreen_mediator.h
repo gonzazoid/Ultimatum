@@ -15,6 +15,7 @@
 #include "components/webapps/browser/android/add_to_homescreen_installer.h"
 #include "components/webapps/browser/android/add_to_homescreen_params.h"
 #include "components/webapps/browser/banners/app_banner_manager.h"
+#include "components/webapps/browser/banners/app_banner_settings_helper.h"
 #include "components/webapps/browser/installable/installable_logging.h"
 #include "third_party/skia/include/core/SkBitmap.h"
 #include "url/gurl.h"
@@ -27,6 +28,8 @@ namespace webapps {
 
 struct ShortcutInfo;
 class AddToHomescreenInstaller;
+
+using AppType = AddToHomescreenParams::AppType;
 
 // AddToHomescreenMediator is the C++ counterpart of
 // org.chromium.components.webapps.addtohomescreen.AddToHomescreenMediator
@@ -54,9 +57,9 @@ class AddToHomescreenMediator : public AddToHomescreenDataFetcher::Observer {
 
   // Called from the Java side when the user accepts app installation from the
   // dialog.
-  void AddToHomescreen(
-      JNIEnv* env,
-      const base::android::JavaParamRef<jstring>& j_user_title);
+  void AddToHomescreen(JNIEnv* env,
+                       const base::android::JavaParamRef<jstring>& j_user_title,
+                       jint j_app_type);
 
   // Called from the Java side when the installation UI is dismissed.
   void OnUiDismissed(JNIEnv* env);
@@ -72,7 +75,7 @@ class AddToHomescreenMediator : public AddToHomescreenDataFetcher::Observer {
 
   // Called immediatedly after |params_| is available. Displays |display_icon|
   // in the installation UI.
-  void SetIcon(const SkBitmap& display_icon, bool need_to_add_padding);
+  void SetIcon(const SkBitmap& display_icon);
 
   // Sends the Web App info to the Java side.
   void SetWebAppInfo(const std::u16string& user_title,
@@ -86,6 +89,7 @@ class AddToHomescreenMediator : public AddToHomescreenDataFetcher::Observer {
 
   void OnDataAvailable(const ShortcutInfo& info,
                        const SkBitmap& display_icon,
+                       AddToHomescreenParams::AppType app_type,
                        InstallableStatusCode status_code) override;
 
   void RecordEventForAppMenu(AddToHomescreenInstaller::Event event,
@@ -107,7 +111,7 @@ class AddToHomescreenMediator : public AddToHomescreenDataFetcher::Observer {
                                const AddToHomescreenParams&)>
       event_callback_;
 
-  int title_id_ = -1;
+  int app_menu_type_ = AppBannerSettingsHelper::APP_MENU_OPTION_UNKNOWN;
 
   AddToHomescreenMediator(const AddToHomescreenMediator&) = delete;
   AddToHomescreenMediator& operator=(const AddToHomescreenMediator&) = delete;

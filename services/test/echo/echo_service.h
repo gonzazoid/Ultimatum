@@ -31,6 +31,11 @@ class EchoService : public mojom::EchoService {
   void Crash() override;
 #if BUILDFLAG(IS_WIN)
   void DelayLoad() override;
+  void LoadNativeLibrary(const ::base::FilePath& library,
+                         bool call_sec32_fn,
+                         LoadNativeLibraryCallback callback) override;
+  void CallUser32(const std::string& lower,
+                  CallUser32Callback callback) override;
 #endif
 
   mojo::Receiver<mojom::EchoService> receiver_;

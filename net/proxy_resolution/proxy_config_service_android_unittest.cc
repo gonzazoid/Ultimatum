@@ -8,12 +8,12 @@
 #include <memory>
 #include <string>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/compiler_specific.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/run_loop.h"
-#include "base/threading/thread_task_runner_handle.h"
-#include "net/net_test_jni_headers/AndroidProxyConfigServiceTestUtil_jni.h"
+#include "base/task/single_thread_task_runner.h"
+#include "net/android/net_tests_jni/AndroidProxyConfigServiceTestUtil_jni.h"
 #include "net/proxy_resolution/proxy_config_with_annotation.h"
 #include "net/proxy_resolution/proxy_info.h"
 #include "net/test/test_with_task_environment.h"
@@ -68,8 +68,8 @@ class ProxyConfigServiceAndroidTestBase : public TestWithTaskEnvironment {
       const StringMap& initial_configuration)
       : configuration_(initial_configuration),
         service_(
-            base::ThreadTaskRunnerHandle::Get(),
-            base::ThreadTaskRunnerHandle::Get(),
+            base::SingleThreadTaskRunner::GetCurrentDefault(),
+            base::SingleThreadTaskRunner::GetCurrentDefault(),
             base::BindRepeating(&ProxyConfigServiceAndroidTestBase::GetProperty,
                                 base::Unretained(this))) {}
 
@@ -118,7 +118,7 @@ class ProxyConfigServiceAndroidTestBase : public TestWithTaskEnvironment {
     EXPECT_EQ(ProxyConfigService::CONFIG_VALID, availability);
     ProxyInfo proxy_info;
     proxy_config.value().proxy_rules().Apply(GURL(url), &proxy_info);
-    EXPECT_EQ(expected, proxy_info.ToPacString());
+    EXPECT_EQ(expected, proxy_info.ToDebugString());
   }
 
   void SetProxyOverride(

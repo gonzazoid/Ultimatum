@@ -6,9 +6,15 @@
 
 #include <memory>
 
+#include "ash/constants/ash_features.h"
+#include "ash/public/cpp/window_properties.h"
+#include "ash/wm/desks/desks_controller.h"
+#include "ash/wm/desks/desks_util.h"
+#include "base/feature_list.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/trace_event/trace_event.h"
-#include "build/chromeos_buildflags.h"
+#include "chromeos/ui/base/window_properties.h"
+#include "components/exo/client_controlled_shell_surface.h"
 #include "components/exo/permission.h"
 #include "components/exo/shell_surface_base.h"
 #include "components/exo/surface.h"
@@ -21,16 +27,9 @@
 #include "ui/aura/window_targeter.h"
 #include "ui/events/base_event_utils.h"
 #include "ui/events/event.h"
+#include "ui/events/ozone/events_ozone.h"
 #include "ui/views/widget/widget.h"
 #include "ui/wm/core/window_util.h"
-
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "ash/public/cpp/window_properties.h"
-#include "ash/wm/desks/desks_controller.h"
-#include "ash/wm/desks/desks_util.h"
-#include "chromeos/ui/base/window_properties.h"
-#include "components/exo/client_controlled_shell_surface.h"
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
 namespace exo {
 
@@ -41,12 +40,10 @@ DEFINE_UI_CLASS_PROPERTY_KEY(Surface*, kRootSurfaceKey, nullptr)
 // Startup Id set by the client.
 DEFINE_OWNED_UI_CLASS_PROPERTY_KEY(std::string, kStartupIdKey, nullptr)
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
 // A property key containing the client controlled shell surface.
 DEFINE_UI_CLASS_PROPERTY_KEY(ClientControlledShellSurface*,
                              kClientControlledShellSurface,
                              nullptr)
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
 // Returns true if the component for a located event should be taken care of
 // by the window system.
@@ -107,16 +104,12 @@ const std::string* GetShellStartupId(const aura::Window* window) {
 }
 
 void SetShellUseImmersiveForFullscreen(aura::Window* window, bool value) {
-#if BUILDFLAG(IS_CHROMEOS_ASH)
   window->SetProperty(chromeos::kImmersiveImpliedByFullscreen, value);
 
   // Ensure the shelf is fully hidden in plain fullscreen, but shown
   // (auto-hides based on mouse movement) when in immersive fullscreen.
   window->SetProperty(chromeos::kHideShelfWhenFullscreenKey, !value);
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 }
-
-#if BUILDFLAG(IS_CHROMEOS_ASH)
 
 void SetShellClientAccessibilityId(aura::Window* window,
                                    const absl::optional<int32_t>& id) {
@@ -165,8 +158,6 @@ int GetWindowDeskStateChanged(const aura::Window* window) {
   return workspace;
 }
 
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
-
 void SetShellRootSurface(ui::PropertyHandler* property_handler,
                          Surface* surface) {
   property_handler->SetProperty(kRootSurfaceKey, surface);
@@ -176,11 +167,13 @@ Surface* GetShellRootSurface(const aura::Window* window) {
   return window->GetProperty(kRootSurfaceKey);
 }
 
-ShellSurfaceBase* GetShellSurfaceBaseForWindow(aura::Window* window) {
+ShellSurfaceBase* GetShellSurfaceBaseForWindow(const aura::Window* window) {
   // Only windows with a surface can have a shell surface.
   if (!GetShellRootSurface(window))
     return nullptr;
-  views::Widget* widget = views::Widget::GetWidgetForNativeWindow(window);
+  // This is safe to const-cast for Aura.
+  const views::Widget* widget = views::Widget::GetWidgetForNativeWindow(
+      const_cast<aura::Window*>(window));
   if (!widget)
     return nullptr;
   ShellSurfaceBase* shell_surface_base =
@@ -197,12 +190,25 @@ Surface* GetTargetSurfaceForLocatedEvent(
     const ui::LocatedEvent* original_event) {
   aura::Window* window =
       WMHelper::GetInstance()->GetCaptureClient()->GetCaptureWindow();
+  Surface* root_surface = nullptr;
+
   if (!window) {
-    return Surface::AsSurface(
-        static_cast<aura::Window*>(original_event->target()));
+    auto* target_window = static_cast<aura::Window*>(original_event->target());
+    auto* target_surface = Surface::AsSurface(target_window);
+    if (target_surface) {
+      return target_surface;
+    }
+    // The target can be a window of the shell surface, if it was
+    // capture but released during event dispatching.
+    root_surface = GetShellRootSurface(target_window);
+    if (!root_surface) {
+      return nullptr;
+    }
+    window = target_window;
+  } else {
+    root_surface = GetShellRootSurface(window);
   }
 
-  Surface* root_surface = GetShellRootSurface(window);
   // Skip if the event is captured by non exo windows.
   if (!root_surface) {
     auto* widget = views::Widget::GetTopLevelWidgetForNativeView(window);
@@ -225,7 +231,6 @@ Surface* GetTargetSurfaceForLocatedEvent(
   // search.
   auto cloned = original_event->Clone();
   ui::LocatedEvent* event = cloned->AsLocatedEvent();
-
   while (true) {
     gfx::PointF location_in_target_f = event->location_f();
     gfx::Point location_in_target = event->location();
@@ -293,14 +298,14 @@ void GrantPermissionToActivate(aura::Window* window, base::TimeDelta timeout) {
   // owns the Permission object.
   window->SetProperty(
       kPermissionKey,
-      new Permission(Permission::Capability::kActivate, timeout));
+      std::make_unique<Permission>(Permission::Capability::kActivate, timeout));
 }
 
 void GrantPermissionToActivateIndefinitely(aura::Window* window) {
   // Activation is the only permission, so just set the property. The window
   // owns the Permission object.
-  window->SetProperty(kPermissionKey,
-                      new Permission(Permission::Capability::kActivate));
+  window->SetProperty(kPermissionKey, std::make_unique<Permission>(
+                                          Permission::Capability::kActivate));
 }
 
 void RevokePermissionToActivate(aura::Window* window) {
@@ -313,63 +318,8 @@ bool HasPermissionToActivate(aura::Window* window) {
   return permission && permission->Check(Permission::Capability::kActivate);
 }
 
-bool ConsumedByIme(aura::Window* window, const ui::KeyEvent& event) {
-  // Check if IME consumed the event, to avoid it to be doubly processed.
-  // First let us see whether IME is active and is in text input mode.
-  views::Widget* widget = views::Widget::GetTopLevelWidgetForNativeView(window);
-  ui::InputMethod* ime = widget ? widget->GetInputMethod() : nullptr;
-  if (!ime || ime->GetTextInputType() == ui::TEXT_INPUT_TYPE_NONE ||
-      ime->GetTextInputType() == ui::TEXT_INPUT_TYPE_NULL) {
-    return false;
-  }
-
-  // Case 1:
-  // When IME ate a key event but did not emit character insertion event yet
-  // (e.g., when it is still showing a candidate list UI to the user,) the
-  // consumed key event is re-sent after masked |key_code| by VKEY_PROCESSKEY.
-  if (event.key_code() == ui::VKEY_PROCESSKEY)
-    return true;
-
-  // Except for PROCESSKEY, never discard "key-up" events. A keydown not paired
-  // by a keyup can trigger a never-ending key repeat in the client, which can
-  // never be desirable.
-  if (event.type() == ui::ET_KEY_RELEASED)
-    return false;
-
-  // Case 2:
-  // When IME ate a key event and generated a single character input, it leaves
-  // the key event as-is, and in addition calls the active ui::TextInputClient's
-  // InsertChar() method. (In our case, arc::ArcImeService::InsertChar()).
-  //
-  // In Chrome OS (and Web) convention, the two calls won't cause duplicates,
-  // because key-down events do not mean any character inputs there.
-  // (InsertChar issues a DOM "keypress" event, which is distinct from keydown.)
-  // Unfortunately, this is not necessary the case for our clients that may
-  // treat keydown as a trigger of text inputs. We need suppression for keydown.
-  //
-  // Same condition as ash/components/arc/ime/arc_ime_service.cc#InsertChar.
-  const char16_t ch = event.GetCharacter();
-  const bool is_control_char =
-      (0x00 <= ch && ch <= 0x1f) || (0x7f <= ch && ch <= 0x9f);
-  if (!is_control_char && !ui::IsSystemKeyModifier(event.flags()))
-    return true;
-
-  // Case 3:
-  // Workaround for apps that doesn't handle hardware keyboard events well.
-  // Keys typically on software keyboard and lack of them are fatal, namely,
-  // unmodified enter and backspace keys, are sent through IME.
-  constexpr int kModifierMask = ui::EF_SHIFT_DOWN | ui::EF_CONTROL_DOWN |
-                                ui::EF_ALT_DOWN | ui::EF_COMMAND_DOWN |
-                                ui::EF_ALTGR_DOWN | ui::EF_MOD3_DOWN;
-  // Same condition as ash/components/arc/ime/arc_ime_service.cc#InsertChar.
-  if ((event.flags() & kModifierMask) == 0) {
-    if (event.key_code() == ui::VKEY_RETURN ||
-        event.key_code() == ui::VKEY_BACK) {
-      return true;
-    }
-  }
-
-  return false;
+bool ConsumedByIme(const ui::KeyEvent& event) {
+  return ui::GetKeyboardImeFlags(event) & ui::kPropertyKeyboardImeHandledFlag;
 }
 
 void SetSkipImeProcessingToDescendentSurfaces(aura::Window* window,

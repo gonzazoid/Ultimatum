@@ -13,6 +13,7 @@
 #include "chrome/browser/ui/views/send_tab_to_self/send_tab_to_self_device_picker_bubble_view.h"
 #include "chrome/grit/generated_resources.h"
 #include "components/omnibox/browser/omnibox_edit_model.h"
+#include "components/omnibox/browser/omnibox_field_trial.h"
 #include "components/omnibox/browser/omnibox_view.h"
 #include "components/send_tab_to_self/features.h"
 #include "ui/base/l10n/l10n_util.h"
@@ -34,6 +35,9 @@ SendTabToSelfIconView::SendTabToSelfIconView(
   SetVisible(false);
   SetLabel(l10n_util::GetStringUTF16(IDS_OMNIBOX_ICON_SEND_TAB_TO_SELF));
   SetUpForInOutAnimation();
+  SetAccessibilityProperties(
+      /*role*/ std::nullopt,
+      l10n_util::GetStringUTF16(IDS_OMNIBOX_TOOLTIP_SEND_TAB_TO_SELF));
 }
 
 SendTabToSelfIconView::~SendTabToSelfIconView() {}
@@ -93,7 +97,7 @@ void SendTabToSelfIconView::UpdateImpl() {
       // Set label ahead of time to avoid announcing a useless alert (i.e.
       // "alert Send") to screenreaders.
       SetLabel(l10n_util::GetStringUTF16(IDS_OMNIBOX_ICON_SEND_TAB_TO_SELF));
-      AnimateIn(absl::nullopt);
+      AnimateIn(std::nullopt);
       initial_animation_state_ = AnimationState::kShowing;
       controller->SetInitialSendAnimationShown(true);
     }
@@ -107,12 +111,9 @@ void SendTabToSelfIconView::OnExecuting(
     PageActionIconView::ExecuteSource execute_source) {}
 
 const gfx::VectorIcon& SendTabToSelfIconView::GetVectorIcon() const {
-  return kLaptopAndSmartphoneIcon;
-}
-
-std::u16string SendTabToSelfIconView::GetTextForTooltipAndAccessibleName()
-    const {
-  return l10n_util::GetStringUTF16(IDS_OMNIBOX_TOOLTIP_SEND_TAB_TO_SELF);
+  return OmniboxFieldTrial::IsChromeRefreshIconsEnabled()
+             ? kDevicesChromeRefreshIcon
+             : kDevicesIcon;
 }
 
 SendTabToSelfBubbleController* SendTabToSelfIconView::GetController() const {

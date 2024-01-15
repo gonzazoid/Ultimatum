@@ -4,7 +4,6 @@
 
 #include "third_party/nearby/src/internal/platform/implementation/platform.h"
 
-#include "base/guid.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/task/thread_pool.h"
 #include "chrome/services/sharing/nearby/nearby_connections.h"
@@ -12,10 +11,12 @@
 #include "chrome/services/sharing/nearby/platform/atomic_boolean.h"
 #include "chrome/services/sharing/nearby/platform/atomic_uint32.h"
 #include "chrome/services/sharing/nearby/platform/ble_medium.h"
+#include "chrome/services/sharing/nearby/platform/ble_v2_medium.h"
 #include "chrome/services/sharing/nearby/platform/bluetooth_adapter.h"
 #include "chrome/services/sharing/nearby/platform/bluetooth_classic_medium.h"
 #include "chrome/services/sharing/nearby/platform/condition_variable.h"
 #include "chrome/services/sharing/nearby/platform/count_down_latch.h"
+#include "chrome/services/sharing/nearby/platform/credential_storage.h"
 #include "chrome/services/sharing/nearby/platform/input_file.h"
 #include "chrome/services/sharing/nearby/platform/log_message.h"
 #include "chrome/services/sharing/nearby/platform/mutex.h"
@@ -38,6 +39,7 @@
 #include "third_party/nearby/src/internal/platform/implementation/bluetooth_classic.h"
 #include "third_party/nearby/src/internal/platform/implementation/condition_variable.h"
 #include "third_party/nearby/src/internal/platform/implementation/count_down_latch.h"
+#include "third_party/nearby/src/internal/platform/implementation/credential_storage.h"
 #include "third_party/nearby/src/internal/platform/implementation/log_message.h"
 #include "third_party/nearby/src/internal/platform/implementation/mutex.h"
 #include "third_party/nearby/src/internal/platform/implementation/scheduled_executor.h"
@@ -46,9 +48,10 @@
 #include "third_party/nearby/src/internal/platform/implementation/submittable_executor.h"
 #include "third_party/nearby/src/internal/platform/implementation/webrtc.h"
 #include "third_party/nearby/src/internal/platform/implementation/wifi.h"
+#include "third_party/nearby/src/internal/platform/implementation/wifi_direct.h"
 #include "third_party/nearby/src/internal/platform/implementation/wifi_hotspot.h"
 
-namespace location::nearby::api {
+namespace nearby::api {
 
 int GetCurrentTid() {
   // SubmittableExecutor and ScheduledExecutor does not own a thread pool
@@ -56,14 +59,24 @@ int GetCurrentTid() {
   return 0;
 }
 
+std::string ImplementationPlatform::GetCustomSavePath(
+    const std::string& parent_folder,
+    const std::string& file_name) {
+  // This should return the <saved_custom_path>/file_name. For now we will
+  // just return an empty string, since chrome doesn't call this yet.
+  // TODO(b/223710122): Eventually chrome should implement this method.
+  NOTIMPLEMENTED();
+  return std::string();
+}
+
 std::string ImplementationPlatform::GetDownloadPath(
-    absl::string_view parent_folder,
-    absl::string_view file_name) {
+    const std::string& parent_folder,
+    const std::string& file_name) {
   // This should return the <download_path>/parent_folder/file_name. For now we
   // will just return an empty string, since chrome doesn't call this yet.
   // TODO(b/223710122): Eventually chrome should implement this method.
   NOTIMPLEMENTED();
-  return std::string("");
+  return std::string();
 }
 
 OSName ImplementationPlatform::GetCurrentOS() {
@@ -103,8 +116,8 @@ std::unique_ptr<AtomicUint32> ImplementationPlatform::CreateAtomicUint32(
 
 std::unique_ptr<BluetoothAdapter>
 ImplementationPlatform::CreateBluetoothAdapter() {
-  location::nearby::NearbySharedRemotes* nearby_shared_remotes =
-      location::nearby::NearbySharedRemotes::GetInstance();
+  nearby::NearbySharedRemotes* nearby_shared_remotes =
+      nearby::NearbySharedRemotes::GetInstance();
   if (nearby_shared_remotes &&
       nearby_shared_remotes->bluetooth_adapter.is_bound()) {
     return std::make_unique<chrome::BluetoothAdapter>(
@@ -133,7 +146,7 @@ std::unique_ptr<InputFile> ImplementationPlatform::CreateInputFile(
 }
 
 std::unique_ptr<InputFile> ImplementationPlatform::CreateInputFile(
-    absl::string_view file_path,
+    const std::string& file_path,
     size_t size) {
   // This constructor is not called by Chrome. Returning nullptr, just in case.
   // TODO(b/223710122): Eventually chrome should implement and use this
@@ -151,7 +164,7 @@ std::unique_ptr<OutputFile> ImplementationPlatform::CreateOutputFile(
 }
 
 std::unique_ptr<OutputFile> ImplementationPlatform::CreateOutputFile(
-    absl::string_view file_path) {
+    const std::string& file_path) {
   // This constructor is not called by Chrome. Returning nullptr, just in case.
   // TODO(b/223710122): Eventually chrome should implement and use this
   // constructor exclusively.
@@ -169,8 +182,8 @@ std::unique_ptr<LogMessage> ImplementationPlatform::CreateLogMessage(
 std::unique_ptr<BluetoothClassicMedium>
 ImplementationPlatform::CreateBluetoothClassicMedium(
     api::BluetoothAdapter& adapter) {
-  location::nearby::NearbySharedRemotes* nearby_shared_remotes =
-      location::nearby::NearbySharedRemotes::GetInstance();
+  nearby::NearbySharedRemotes* nearby_shared_remotes =
+      nearby::NearbySharedRemotes::GetInstance();
   // Ignore the provided |adapter| argument; it is a reference to the object
   // created by ImplementationPlatform::CreateBluetoothAdapter(). Instead,
   // directly use the cached bluetooth::mojom::Adapter.
@@ -184,8 +197,8 @@ ImplementationPlatform::CreateBluetoothClassicMedium(
 
 std::unique_ptr<BleMedium> ImplementationPlatform::CreateBleMedium(
     api::BluetoothAdapter& adapter) {
-  location::nearby::NearbySharedRemotes* nearby_shared_remotes =
-      location::nearby::NearbySharedRemotes::GetInstance();
+  nearby::NearbySharedRemotes* nearby_shared_remotes =
+      nearby::NearbySharedRemotes::GetInstance();
   // Ignore the provided |adapter| argument; it is a reference to the object
   // created by ImplementationPlatform::CreateBluetoothAdapter(). Instead,
   // directly use the cached bluetooth::mojom::Adapter.
@@ -199,7 +212,28 @@ std::unique_ptr<BleMedium> ImplementationPlatform::CreateBleMedium(
 
 std::unique_ptr<ble_v2::BleMedium> ImplementationPlatform::CreateBleV2Medium(
     api::BluetoothAdapter& adapter) {
-  // Do nothing. ble_v2::BleMedium is not yet supported in Chrome Nearby.
+  nearby::NearbySharedRemotes* nearby_shared_remotes =
+      nearby::NearbySharedRemotes::GetInstance();
+  // Ignore the provided |adapter| argument; it is a reference to the object
+  // created by ImplementationPlatform::CreateBluetoothAdapter(). Instead,
+  // directly use the cached bluetooth::mojom::Adapter.
+  if (nearby_shared_remotes &&
+      nearby_shared_remotes->bluetooth_adapter.is_bound()) {
+    return std::make_unique<chrome::BleV2Medium>(
+        nearby_shared_remotes->bluetooth_adapter);
+  }
+  return nullptr;
+}
+
+std::unique_ptr<api::CredentialStorage>
+ImplementationPlatform::CreateCredentialStorage() {
+  nearby::NearbySharedRemotes* nearby_shared_remotes =
+      nearby::NearbySharedRemotes::GetInstance();
+  if (nearby_shared_remotes &&
+      nearby_shared_remotes->nearby_presence_credential_storage.is_bound()) {
+    return std::make_unique<nearby::chrome::CredentialStorage>(
+        nearby_shared_remotes->nearby_presence_credential_storage);
+  }
   return nullptr;
 }
 
@@ -212,14 +246,19 @@ std::unique_ptr<WifiMedium> ImplementationPlatform::CreateWifiMedium() {
   return nullptr;
 }
 
+std::unique_ptr<WifiDirectMedium>
+ImplementationPlatform::CreateWifiDirectMedium() {
+  return nullptr;
+}
+
 std::unique_ptr<WifiHotspotMedium>
 ImplementationPlatform::CreateWifiHotspotMedium() {
   return nullptr;
 }
 
 std::unique_ptr<WifiLanMedium> ImplementationPlatform::CreateWifiLanMedium() {
-  location::nearby::NearbySharedRemotes* nearby_shared_remotes =
-      location::nearby::NearbySharedRemotes::GetInstance();
+  nearby::NearbySharedRemotes* nearby_shared_remotes =
+      nearby::NearbySharedRemotes::GetInstance();
   if (!nearby_shared_remotes) {
     return nullptr;
   }
@@ -256,8 +295,8 @@ std::unique_ptr<WifiLanMedium> ImplementationPlatform::CreateWifiLanMedium() {
 }
 
 std::unique_ptr<WebRtcMedium> ImplementationPlatform::CreateWebRtcMedium() {
-  location::nearby::NearbySharedRemotes* nearby_shared_remotes =
-      location::nearby::NearbySharedRemotes::GetInstance();
+  nearby::NearbySharedRemotes* nearby_shared_remotes =
+      nearby::NearbySharedRemotes::GetInstance();
 
   if (!nearby_shared_remotes) {
     LOG(ERROR) << "No NearbySharedRemotes instance. Returning null medium.";
@@ -320,4 +359,4 @@ ImplementationPlatform::CreateConditionVariable(Mutex* mutex) {
       static_cast<chrome::Mutex*>(mutex));
 }
 
-}  // namespace location::nearby::api
+}  // namespace nearby::api

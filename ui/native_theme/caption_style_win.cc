@@ -14,7 +14,6 @@
 #include "base/numerics/safe_conversions.h"
 #include "base/trace_event/trace_event.h"
 #include "base/win/core_winrt_util.h"
-#include "base/win/windows_version.h"
 #include "skia/ext/skia_utils_win.h"
 #include "ui/base/ui_base_features.h"
 #include "ui/gfx/color_utils.h"
@@ -173,16 +172,7 @@ std::string GetCssColorWithAlpha(CC::ClosedCaptionColor caption_color,
 
 absl::optional<CaptionStyle> InitializeFromSystemSettings() {
   TRACE_EVENT0("ui", "InitializeFromSystemSettings");
-  DCHECK_GE(base::win::GetVersion(), base::win::Version::WIN10);
   DCHECK(base::FeatureList::IsEnabled(features::kSystemCaptionStyle));
-
-  // Need to do this check before using ScopedHString.
-  bool can_use_scoped_hstring =
-      base::win::ResolveCoreWinRTDelayload() &&
-      base::win::ScopedHString::ResolveCoreWinRTStringDelayload();
-
-  if (!can_use_scoped_hstring)
-    return absl::nullopt;
 
   base::win::ScopedHString closed_caption_properties_string =
       base::win::ScopedHString::Create(
@@ -280,12 +270,10 @@ absl::optional<CaptionStyle> InitializeFromSystemSettings() {
 }  // namespace
 
 absl::optional<CaptionStyle> CaptionStyle::FromSystemSettings() {
-  if (base::win::GetVersion() >= base::win::Version::WIN10 &&
-      base::FeatureList::IsEnabled(features::kSystemCaptionStyle)) {
+  if (base::FeatureList::IsEnabled(features::kSystemCaptionStyle)) {
     return InitializeFromSystemSettings();
   }
-  // Return default CaptionStyle for pre Win10 versions since system settings
-  // don't allow caption styling.
+  // Return default CaptionStyle if kSystemCaptionStyle is not enabled.
   return absl::nullopt;
 }
 

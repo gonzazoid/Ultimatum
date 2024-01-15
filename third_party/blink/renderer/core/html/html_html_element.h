@@ -25,6 +25,7 @@
 #define THIRD_PARTY_BLINK_RENDERER_CORE_HTML_HTML_HTML_ELEMENT_H_
 
 #include "third_party/blink/renderer/core/core_export.h"
+#include "third_party/blink/renderer/core/html/blocking_attribute.h"
 #include "third_party/blink/renderer/core/html/html_element.h"
 
 namespace blink {
@@ -39,8 +40,7 @@ class CORE_EXPORT HTMLHtmlElement final : public HTMLElement {
 
   bool HasNonInBodyInsertionMode() const override { return true; }
   void PropagateWritingModeAndDirectionFromBody();
-  scoped_refptr<const ComputedStyle> LayoutStyleForElement(
-      scoped_refptr<const ComputedStyle> style);
+  const ComputedStyle* LayoutStyleForElement(const ComputedStyle* style);
 
  private:
   bool IsURLAttribute(const Attribute&) const override;

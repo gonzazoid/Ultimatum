@@ -7,8 +7,7 @@
 
 #include "build/build_config.h"
 
-namespace password_manager {
-namespace prefs {
+namespace password_manager::prefs {
 
 // Alphabetical list of preference names specific to the PasswordManager
 // component.
@@ -45,6 +44,10 @@ extern const char kCredentialProviderEnabledOnStartup[];
 // migration steps, it should not be modified in Chrome.
 extern const char kAutoSignInEnabledGMS[];
 
+// A cache of whether the profile LoginDatabase is empty, so that can be checked
+// early on startup.
+extern const char kEmptyProfileStoreLoginDatabase[];
+
 // Boolean controlling whether the password manager offers to save passwords.
 // If false, the password manager will not save credentials, but it will still
 // fill previously saved ones. This pref is not synced. Its value is set
@@ -66,9 +69,10 @@ extern const char kOfferToSavePasswordsEnabledGMS[];
 // can only be stricter than any policy applied
 extern const char kSavePasswordsSuspendedByError[];
 
-// Boolean value indicating whether the regular prefs were migrated to UPM
-// settings.
-extern const char kSettingsMigratedToUPM[];
+// Boolean value indicating whether the regular prefs that apply to the local
+// password store were migrated to UPM settings. It will be set to true
+// automatically if there is nothing to migrate.
+extern const char kSettingsMigratedToUPMLocal[];
 
 // Integer value which indicates the version used to migrate passwords from
 // built in storage to Google Mobile Services.
@@ -78,15 +82,27 @@ extern const char kCurrentMigrationVersionToGoogleMobileServices[];
 // last time migrated, in microseconds since Windows epoch.
 extern const char kTimeOfLastMigrationAttempt[];
 
+// Integer pref indicating whether the client is ready to use UPM for local
+// passwords and settings and split password stores for syncing users.
+// The preconditions for the pref to be set to true:
+// - M2: For users syncing passwords, the profile store contents have been
+// moved to the account store. For the users who are not syncing passwords, the
+// login database is empty and prefs are default.
+// - M3: For the users who are not syncing passwords, the passwords have been
+// successfully copied to GMS Core. The settings will be migrated as well, but
+// their migration doesn't impact this pref.
+//
+// Do not renumber UseUpmLocalAndSeparateStoresState, values are persisted.
+enum class UseUpmLocalAndSeparateStoresState {
+  kOff = 0,
+  kOffAndMigrationPending = 1,
+  kOn = 2,
+};
+extern const char kPasswordsUseUPMLocalAndSeparateStores[];
+
 // Boolean value that indicated the need of data migration between the two
 // backends due to sync settings change.
 extern const char kRequiresMigrationAfterSyncStatusChange[];
-
-// Boolean value indicating if the user has clicked on the "Password Manager"
-// item in settings after switching to the Unified Password Manager. A "New"
-// label is shown for the users who have not clicked on this item yet.
-// TODO(crbug.com/1217070): Remove this once the feature is rolled out.
-extern const char kPasswordsPrefWithNewLabelUsed[];
 
 // Boolean value indicating if the user should not get UPM experience because
 // of user-unresolvable errors received on communication with Google Mobile
@@ -120,11 +136,26 @@ extern const char kTimesReenrolledToGoogleMobileServices[];
 // after a successful reenrollment.
 extern const char kTimesAttemptedToReenrollToGoogleMobileServices[];
 
-// Integer value indicating the number of consecutive times the password manager
-// auth error UI was displayed to the user. Reset once the error is resolved
-// (detected by a successful backend request) or when the user is unenrolled
-// from UPM.
-extern const char kTimesUPMAuthErrorShown[];
+// Boolean value meant to record in the prefs if the user clicked "Got it" in
+// the UPM local passwords migration warning. When set to true, the warning
+// should not be displayed again.
+extern const char kUserAcknowledgedLocalPasswordsMigrationWarning[];
+
+// The timestamp at which the last UPM local passwords migration warning was
+// shown to the user in microseconds since Windows epoch. This is needed to
+// ensure that the UI is prompted only once per given time interval (currently
+// one month).
+extern const char kLocalPasswordsMigrationWarningShownTimestamp[];
+
+// Whether the local password migration warning was already shown at startup.
+extern const char kLocalPasswordMigrationWarningShownAtStartup[];
+
+// The version of the password migration warning prefs.
+extern const char kLocalPasswordMigrationWarningPrefsVersion[];
+
+// How many times the password generation bottom sheet was dismissed by the user
+// in a row. The counter resets when the user applies password generation.
+extern const char kPasswordGenerationBottomSheetDismissCount[];
 #endif
 
 #if BUILDFLAG(IS_WIN)
@@ -153,10 +184,12 @@ extern const char kWasAutoSignInFirstRunExperienceShown[];
 // performed.
 extern const char kWereOldGoogleLoginsRemoved[];
 
+#if !BUILDFLAG(IS_IOS) && !BUILDFLAG(IS_ANDROID)
 // A dictionary of account-storage-related settings that exist per Gaia account
 // (e.g. whether that user has opted in). It maps from hash of Gaia ID to
 // dictionary of key-value pairs.
 extern const char kAccountStoragePerAccountSettings[];
+#endif  // !BUILDFLAG(IS_IOS) && !BUILDFLAG(IS_ANDROID)
 
 // String that represents the sync password hash.
 extern const char kSyncPasswordHash[];
@@ -177,10 +210,6 @@ extern const char kLastTimePasswordCheckCompleted[];
 // microseconds since Windows epoch.
 extern const char kLastTimePasswordStoreMetricsReported[];
 
-// The last time the password check has run to completion synced across devices.
-// It's used on passwords.google.com and not in Chrome.
-extern const char kSyncedLastTimePasswordCheckCompleted[];
-
 // List that contains captured password hashes.
 extern const char kPasswordHashDataList[];
 
@@ -192,19 +221,19 @@ extern const char kPasswordLeakDetectionEnabled[];
 // compromised credentials that were submitted by the user.
 extern const char kPasswordDismissCompromisedAlertEnabled[];
 
+// Boolean value indicating if the user has clicked on the "Password Manager"
+// item in settings after switching to the Unified Password Manager. A "New"
+// label is shown for the users who have not clicked on this item yet.
+// TODO(crbug.com/1217070): Remove this on Android once the feature is rolled
+// out.
+// TODO(crbug.com/1420597): Remove this for desktop once the feature is rolled
+// out.
+extern const char kPasswordsPrefWithNewLabelUsed[];
+
 // Timestamps of when credentials from the profile / account store were last
 // used to fill a form, in microseconds since Windows epoch.
 extern const char kProfileStoreDateLastUsedForFilling[];
 extern const char kAccountStoreDateLastUsedForFilling[];
-
-// A list of ongoing PasswordChangeSuccessTracker flows that is persisted in
-// case Chrome is temporarily shut down while, e.g., a user retrieves a
-// password reset email.
-extern const char kPasswordChangeSuccessTrackerFlows[];
-
-// Integer indicating the format version of the list saved under
-// |kPasswordChangeSuccessTrackerFlows|.
-extern const char kPasswordChangeSuccessTrackerVersion[];
 
 #if BUILDFLAG(IS_MAC) || BUILDFLAG(IS_WIN)
 // Integer indicating how many times user saw biometric authentication before
@@ -221,7 +250,36 @@ extern const char kBiometricAuthenticationBeforeFilling[];
 extern const char kHadBiometricsAvailable[];
 #endif
 
-}  // namespace prefs
-}  // namespace password_manager
+#if BUILDFLAG(IS_IOS)
+// Boolean pref indicating if the one-time notice for account storage was shown.
+// The notice informs passwords will start being saved to the signed-in account.
+extern const char kAccountStorageNoticeShown[];
+
+// Integer value indicating the number of times the "new feature icon" was
+// displayed with the account storage opt-out toggle.
+extern const char kAccountStorageNewFeatureIconImpressions[];
+#endif  // BUILDFLAG(IS_IOS)
+
+#if !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_IOS)  // Desktop
+// How many times in a row the password generation popup in `kNudgePassword`
+// experiment was dismissed by the user. The counter resets when the user
+// accepts password generation.
+extern const char kPasswordGenerationNudgePasswordDismissCount[];
+
+// A list of available promo cards with related information which are displayed
+// in the Password Manager UI.
+extern const char kPasswordManagerPromoCardsList[];
+#endif
+
+// Boolean pref indicating whether password sharing is enabled. Enables both
+// sending and receiving passwords.
+extern const char kPasswordSharingEnabled[];
+
+#if BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX)
+// Integer pref indicating how many times relaunch Chrome bubble was dismissed.
+extern const char kRelaunchChromeBubbleDismissedCounter[];
+#endif
+
+}  // namespace password_manager::prefs
 
 #endif  // COMPONENTS_PASSWORD_MANAGER_CORE_COMMON_PASSWORD_MANAGER_PREF_NAMES_H_

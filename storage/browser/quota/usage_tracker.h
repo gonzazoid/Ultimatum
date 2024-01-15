@@ -13,9 +13,9 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/component_export.h"
 #include "base/containers/flat_map.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/sequence_checker.h"
@@ -78,7 +78,7 @@ class COMPONENT_EXPORT(STORAGE_BROWSER) UsageTracker
   // Updates usage for `bucket` in the ClientUsageTracker for `client_type`.
   void UpdateBucketUsageCache(QuotaClientType client_type,
                               const BucketLocator& bucket,
-                              int64_t delta);
+                              std::optional<int64_t> delta);
 
   // Deletes `bucket` from the cache for `client_type` if it exists.
   // Called by QuotaManagerImpl::BucketDataDeleter.
@@ -96,6 +96,9 @@ class COMPONENT_EXPORT(STORAGE_BROWSER) UsageTracker
   // Returns all cached usage organized by StorageKey. Used for histogram
   // recording.
   std::map<blink::StorageKey, int64_t> GetCachedStorageKeysUsage() const;
+
+  // Returns all cached usage organized by bucket. Used for eviction.
+  std::map<BucketLocator, int64_t> GetCachedBucketsUsage() const;
 
   // Checks if there are ongoing tasks to get usage. Used to prevent a
   // UsageTracker reset from happening before a task is complete.
@@ -119,9 +122,6 @@ class COMPONENT_EXPORT(STORAGE_BROWSER) UsageTracker
   void DidGetBucketsForType(QuotaErrorOr<std::set<BucketInfo>> result);
   void DidGetBucketsForStorageKey(const blink::StorageKey& storage_key,
                                   QuotaErrorOr<std::set<BucketInfo>> result);
-  void DidGetBucketForUsage(QuotaClientType client_type,
-                            int64_t delta,
-                            QuotaErrorOr<BucketInfo> result);
 
   void AccumulateClientGlobalUsage(base::OnceClosure barrier_callback,
                                    AccumulateInfo* info,
@@ -140,16 +140,16 @@ class COMPONENT_EXPORT(STORAGE_BROWSER) UsageTracker
   void FinallySendBucketUsageWithBreakdown(std::unique_ptr<AccumulateInfo> info,
                                            const BucketLocator& bucket);
 
+  ClientUsageTracker& GetClient(QuotaClientType type);
+
   SEQUENCE_CHECKER(sequence_checker_);
 
   // Raw pointer usage is safe because `quota_manager_impl_` owns `this` and
   // is therefore valid throughout its lifetime.
   const raw_ptr<QuotaManagerImpl> quota_manager_impl_;
   const blink::mojom::StorageType type_;
-  base::flat_map<QuotaClientType,
-                 std::vector<std::unique_ptr<ClientUsageTracker>>>
+  base::flat_map<QuotaClientType, std::unique_ptr<ClientUsageTracker>>
       client_tracker_map_;
-  int client_tracker_count_ = 0;
 
   std::vector<UsageCallback> global_usage_callbacks_;
   std::map<blink::StorageKey, std::vector<UsageWithBreakdownCallback>>

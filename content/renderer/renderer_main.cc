@@ -3,22 +3,28 @@
 // found in the LICENSE file.
 
 #include <stddef.h>
+
+#include <optional>
 #include <utility>
 
+#include "base/allocator/partition_alloc_support.h"
 #include "base/base_switches.h"
 #include "base/command_line.h"
 #include "base/debug/debugger.h"
 #include "base/debug/leak_annotations.h"
+#include "base/feature_list.h"
 #include "base/i18n/rtl.h"
 #include "base/message_loop/message_pump.h"
 #include "base/message_loop/message_pump_type.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/pending_task.h"
+#include "base/process/current_process.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/system/sys_info.h"
 #include "base/task/sequence_manager/sequence_manager.h"
+#include "base/threading/hang_watcher.h"
 #include "base/threading/platform_thread.h"
 #include "base/timer/hi_res_timer_manager.h"
 #include "base/trace_event/trace_event.h"
@@ -26,8 +32,9 @@
 #include "build/chromeos_buildflags.h"
 #include "content/common/content_constants_internal.h"
 #include "content/common/content_switches_internal.h"
-#include "content/common/partition_alloc_support.h"
+#include "content/common/features.h"
 #include "content/common/skia_utils.h"
+#include "content/public/common/content_features.h"
 #include "content/public/common/content_switches.h"
 #include "content/public/common/main_function_params.h"
 #include "content/public/renderer/content_renderer_client.h"
@@ -40,13 +47,16 @@
 #include "ppapi/buildflags/buildflags.h"
 #include "sandbox/policy/switches.h"
 #include "services/tracing/public/cpp/trace_startup.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/platform/platform.h"
 #include "third_party/blink/public/platform/scheduler/web_thread_scheduler.h"
 #include "third_party/icu/source/common/unicode/unistr.h"
 #include "third_party/icu/source/i18n/unicode/timezone.h"
 #include "third_party/webrtc_overrides/init_webrtc.h"  // nogncheck
 #include "ui/base/ui_base_switches.h"
+
+#if BUILDFLAG(IS_WIN)
+#include "components/startup_metric_utils/renderer/startup_metric_utils.h"
+#endif  // BUILDFLAG(IS_WIN)
 
 #if BUILDFLAG(IS_ANDROID)
 #include "base/android/library_loader/library_loader_hooks.h"
@@ -57,8 +67,8 @@
 #include <signal.h>
 #include <unistd.h>
 
-#include "base/mac/scoped_nsautorelease_pool.h"
-#include "base/message_loop/message_pump_mac.h"
+#include "base/apple/scoped_nsautorelease_pool.h"
+#include "base/message_loop/message_pump_apple.h"
 #include "third_party/blink/public/web/web_view.h"
 #endif  // BUILDFLAG(IS_MAC)
 
@@ -71,6 +81,10 @@
 #if BUILDFLAG(IS_CHROMEOS)
 #include "chromeos/system/core_scheduling.h"
 #endif  // BUILDFLAG(IS_CHROMEOS)
+
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
+#include "content/child/sandboxed_process_thread_type_handler.h"
+#endif
 
 #if BUILDFLAG(ENABLE_PPAPI)
 #include "content/renderer/pepper/pepper_plugin_registry.h"
@@ -94,12 +108,7 @@ void HandleRendererErrorTestParameters(const base::CommandLine& command_line) {
 }
 
 std::unique_ptr<base::MessagePump> CreateMainThreadMessagePump() {
-#if BUILDFLAG(IS_MAC)
-  // As long as scrollbars on Mac are painted with Cocoa, the message pump
-  // needs to be backed by a Foundation-level loop to process NSTimers. See
-  // http://crbug.com/306348#c24 for details.
-  return base::MessagePump::Create(base::MessagePumpType::NS_RUNLOOP);
-#elif BUILDFLAG(IS_FUCHSIA)
+#if BUILDFLAG(IS_FUCHSIA)
   // Allow FIDL APIs on renderer main thread.
   return base::MessagePump::Create(base::MessagePumpType::IO);
 #else
@@ -109,8 +118,13 @@ std::unique_ptr<base::MessagePump> CreateMainThreadMessagePump() {
 
 void LogTimeToStartRunLoop(const base::CommandLine& command_line,
                            base::TimeTicks run_loop_start_time) {
-  if (!command_line.HasSwitch(switches::kRendererProcessLaunchTimeTicks))
+#if BUILDFLAG(IS_WIN)
+  startup_metric_utils::GetRenderer().RecordRunLoopStart(run_loop_start_time);
+#endif
+
+  if (!command_line.HasSwitch(switches::kRendererProcessLaunchTimeTicks)) {
     return;
+  }
 
   const std::string launch_time_delta_micro_as_string =
       command_line.GetSwitchValueASCII(
@@ -133,14 +147,23 @@ int RendererMain(MainFunctionParams parameters) {
   // expect synchronous events around the main loop of a thread.
   TRACE_EVENT_INSTANT0("startup", "RendererMain", TRACE_EVENT_SCOPE_THREAD);
 
-  base::trace_event::TraceLog::GetInstance()->set_process_name("Renderer");
+#if BUILDFLAG(IS_MAC)
+  // Declare that this process has CPU security mitigations enabled (see
+  // RendererSandboxedProcessLauncherDelegate::EnableCpuSecurityMitigations).
+  // This must be done before the first call to
+  // base::SysInfo::NumberOfProcessors().
+  base::SysInfo::SetCpuSecurityMitigationsEnabled();
+#endif
+
+  base::CurrentProcess::GetInstance().SetProcessType(
+      base::CurrentProcessType::PROCESS_RENDERER);
   base::trace_event::TraceLog::GetInstance()->SetProcessSortIndex(
       kTraceEventRendererProcessSortIndex);
 
   const base::CommandLine& command_line = *parameters.command_line;
 
 #if BUILDFLAG(IS_MAC)
-  base::mac::ScopedNSAutoreleasePool* pool = parameters.autorelease_pool;
+  base::apple::ScopedNSAutoreleasePool* pool = parameters.autorelease_pool;
 #endif  // BUILDFLAG(IS_MAC)
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
@@ -155,25 +178,17 @@ int RendererMain(MainFunctionParams parameters) {
   }
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-  // Turn on core scheduling for ash renderers only if kLacrosOnly is not
-  // enabled. If kLacrosOnly is enabled, ash renderers don't run user code. This
-  // means they don't need core scheduling. Lacros renderers will get core
-  // scheduling in this case.
-  if (!command_line.HasSwitch(switches::kAshWebBrowserDisabled)) {
-    chromeos::system::EnableCoreSchedulingIfAvailable();
-  }
-#elif BUILDFLAG(IS_CHROMEOS_LACROS)
-  // Turn on core scheduling for lacros renderers since they run user code in
-  // most cases.
+#if BUILDFLAG(IS_CHROMEOS)
+  // When we start the renderer on ChromeOS if the system has core scheduling
+  // available we want to turn it on.
   chromeos::system::EnableCoreSchedulingIfAvailable();
-#endif
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 #if defined(ARCH_CPU_X86_64)
   using UserspaceSwapInit =
       ash::memory::userspace_swap::UserspaceSwapRendererInitializationImpl;
-  absl::optional<UserspaceSwapInit> swap_init;
+  std::optional<UserspaceSwapInit> swap_init;
   if (UserspaceSwapInit::UserspaceSwapSupportedAndEnabled()) {
     swap_init.emplace();
 
@@ -249,6 +264,34 @@ int RendererMain(MainFunctionParams parameters) {
     }
 #endif
 
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
+    // Thread type delegate of the process should be registered before
+    // first thread type change in ChildProcess constructor.
+    // It also needs to be registered before the process has multiple threads,
+    // which may race with application of the sandbox.
+    if (base::FeatureList::IsEnabled(
+            features::kHandleChildThreadTypeChangesInBrowser)) {
+      SandboxedProcessThreadTypeHandler::Create();
+
+      // Change the main thread type. On Linux and ChromeOS this needs to be
+      // done only if kHandleRendererThreadTypeChangesInBrowser is enabled to
+      // avoid child threads inheriting the main thread settings.
+      if (base::FeatureList::IsEnabled(
+              features::kMainThreadCompositingPriority)) {
+        base::PlatformThread::SetCurrentThreadType(
+            base::ThreadType::kCompositing);
+      }
+    }
+#else
+    if (base::FeatureList::IsEnabled(
+            features::kMainThreadCompositingPriority)) {
+      base::PlatformThread::SetCurrentThreadType(
+          base::ThreadType::kCompositing);
+    } else {
+      base::PlatformThread::SetCurrentThreadType(base::ThreadType::kDefault);
+    }
+#endif
+
     std::unique_ptr<RenderProcess> render_process = RenderProcessImpl::Create();
     // It's not a memory leak since RenderThread has the same lifetime
     // as a renderer process.
@@ -272,17 +315,14 @@ int RendererMain(MainFunctionParams parameters) {
     }
 #endif
 
-#if BUILDFLAG(IS_POSIX) && !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_MAC)
-    // Startup tracing is usually enabled earlier, but if we forked from a
-    // zygote, we can only enable it after mojo IPC support is brought up
-    // initialized by RenderThreadImpl, because the mojo broker has to create
-    // the tracing SMB on our behalf due to the zygote sandbox.
-    if (parameters.zygote_child) {
+    // Mojo IPC support is brought up by RenderThreadImpl, so startup tracing
+    // is enabled here if it needs to start after mojo init (normally so the
+    // mojo broker can bypass the sandbox to allocate startup tracing's SMB).
+    if (parameters.needs_startup_tracing_after_mojo_init) {
       tracing::EnableStartupTracingIfNeeded();
       TRACE_EVENT_INSTANT1("startup", "RendererMain", TRACE_EVENT_SCOPE_THREAD,
-                           "zygote_child", true);
+                           "needs_startup_tracing_after_mojo_init", true);
     }
-#endif
 
     if (need_sandbox) {
       should_run_loop = platform.EnableSandbox();
@@ -291,12 +331,26 @@ int RendererMain(MainFunctionParams parameters) {
       }
     }
 
+    // Start the HangWatcher now that the sandbox is engaged, if it hasn't
+    // already been started.
+    if (base::HangWatcher::IsEnabled() &&
+        !base::HangWatcher::GetInstance()->IsStarted()) {
+      DCHECK(parameters.hang_watcher_not_started_time.has_value());
+      base::TimeDelta uncovered_hang_watcher_time =
+          base::TimeTicks::Now() -
+          parameters.hang_watcher_not_started_time.value();
+      base::UmaHistogramTimes(
+          "HangWatcher.RendererProcess.UncoveredStartupTime",
+          uncovered_hang_watcher_time);
+      base::HangWatcher::GetInstance()->Start();
+    }
+
 #if BUILDFLAG(MOJO_RANDOM_DELAYS_ENABLED)
     mojo::BeginRandomMojoDelays();
 #endif
 
-    internal::PartitionAllocSupport::Get()->ReconfigureAfterTaskRunnerInit(
-        switches::kRendererProcess);
+    base::allocator::PartitionAllocSupport::Get()
+        ->ReconfigureAfterTaskRunnerInit(switches::kRendererProcess);
 
     base::HighResolutionTimerManager hi_res_timer_manager;
 

@@ -11,14 +11,15 @@
 #include <utility>
 #include <vector>
 
+#include <optional>
 #include "base/gtest_prod_util.h"
 #include "base/memory/ref_counted.h"
 #include "cc/base/rtree.h"
 #include "cc/paint/discardable_image_map.h"
 #include "cc/paint/image_id.h"
 #include "cc/paint/paint_export.h"
+#include "cc/paint/paint_op.h"
 #include "cc/paint/paint_op_buffer.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/skia/include/core/SkPicture.h"
 #include "ui/gfx/color_space.h"
 #include "ui/gfx/geometry/rect.h"
@@ -49,11 +50,7 @@ namespace cc {
 class CC_PAINT_EXPORT DisplayItemList
     : public base::RefCountedThreadSafe<DisplayItemList> {
  public:
-  // TODO(vmpstr): It would be cool if we didn't need this, and instead used
-  // PaintOpBuffer directly when we needed to release this as a paint op buffer.
-  enum UsageHint { kTopLevelDisplayItemList, kToBeReleasedAsPaintOpBuffer };
-
-  explicit DisplayItemList(UsageHint = kTopLevelDisplayItemList);
+  DisplayItemList();
   DisplayItemList(const DisplayItemList&) = delete;
   DisplayItemList& operator=(const DisplayItemList&) = delete;
 
@@ -85,8 +82,7 @@ class CC_PAINT_EXPORT DisplayItemList
     DCHECK(IsPainting());
 #endif
     size_t offset = paint_op_buffer_.next_op_offset();
-    if (usage_hint_ == kTopLevelDisplayItemList)
-      offsets_.push_back(offset);
+    offsets_.push_back(offset);
     const T& op = paint_op_buffer_.push<T>(std::forward<Args>(args)...);
     DCHECK(op.IsValid());
     return offset;
@@ -105,9 +101,6 @@ class CC_PAINT_EXPORT DisplayItemList
     DCHECK(IsPainting());
     current_range_start_ = kNotPainting;
 #endif
-    if (usage_hint_ == kToBeReleasedAsPaintOpBuffer)
-      return;
-
     visual_rects_.resize(paint_op_buffer_.size(), visual_rect);
     GrowCurrentBeginItemVisualRect(visual_rect);
   }
@@ -118,9 +111,6 @@ class CC_PAINT_EXPORT DisplayItemList
     DCHECK_LT(current_range_start_, paint_op_buffer_.size());
     current_range_start_ = kNotPainting;
 #endif
-    if (usage_hint_ == kToBeReleasedAsPaintOpBuffer)
-      return;
-
     DCHECK_LT(visual_rects_.size(), paint_op_buffer_.size());
     size_t count = paint_op_buffer_.size() - visual_rects_.size();
     paired_begin_stack_.push_back({visual_rects_.size(), count});
@@ -132,10 +122,9 @@ class CC_PAINT_EXPORT DisplayItemList
   // Called after all items are appended, to process the items.
   void Finalize();
 
-  // Combination of Finalize() and ReleaseAsRecord(). Differs from from calling
-  // the two individualy in so far as the backing buffer of PaintOpBuffer may
-  // be retained.
-  sk_sp<PaintRecord> FinalizeAndReleaseAsRecord();
+  // Calls Finalize(), and returns a PaintRecord from this DisplayItemList,
+  // leaving |this| in an empty state.
+  PaintRecord FinalizeAndReleaseAsRecord();
 
   struct DirectlyCompositedImageResult {
     // See PictureLayerImpl::direct_composited_image_default_raster_scale_.
@@ -147,7 +136,7 @@ class CC_PAINT_EXPORT DisplayItemList
   // rasterized at the intrinsic size of the image), return the intrinsic size
   // of the image and whether or not to use nearest neighbor filtering when
   // scaling the layer.
-  absl::optional<DirectlyCompositedImageResult>
+  std::optional<DirectlyCompositedImageResult>
   GetDirectlyCompositedImageResult() const;
 
   int num_slow_paths_up_to_min_for_MSAA() const {
@@ -165,24 +154,32 @@ class CC_PAINT_EXPORT DisplayItemList
   }
   size_t OpBytesUsed() const { return paint_op_buffer_.paint_ops_size(); }
 
+  DiscardableImageMap& discardable_image_map() {
+    base::AutoLock lock(image_generation_lock_);
+    if (!image_map_) {
+      GenerateDiscardableImagesMetadata();
+    }
+    return *image_map_;
+  }
+
   const DiscardableImageMap& discardable_image_map() const {
-    return image_map_;
+    base::AutoLock lock(image_generation_lock_);
+    if (!image_map_) {
+      GenerateDiscardableImagesMetadata();
+    }
+    return *image_map_;
   }
   base::flat_map<PaintImage::Id, PaintImage::DecodingMode>
   TakeDecodingModeMap() {
-    return image_map_.TakeDecodingModeMap();
+    return discardable_image_map().TakeDecodingModeMap();
   }
 
   void EmitTraceSnapshot() const;
-  void GenerateDiscardableImagesMetadata();
+  void GenerateDiscardableImagesMetadataForTesting() const;
 
   gfx::Rect VisualRectForTesting(int index) {
     return visual_rects_[static_cast<size_t>(index)];
   }
-
-  // Generate a PaintRecord from this DisplayItemList, leaving |this| in
-  // an empty state.
-  sk_sp<PaintRecord> ReleaseAsRecord();
 
   // If a rectangle is solid color, returns that color. |max_ops_to_analyze|
   // indicates the maximum number of draw ops we consider when determining if a
@@ -223,7 +220,6 @@ class CC_PAINT_EXPORT DisplayItemList
   // If we're currently within a paired display item block, unions the
   // given visual rect with the begin display item's visual rect.
   void GrowCurrentBeginItemVisualRect(const gfx::Rect& visual_rect) {
-    DCHECK_EQ(usage_hint_, kTopLevelDisplayItemList);
     if (!paired_begin_stack_.empty())
       visual_rects_[paired_begin_stack_.back().first_index].Union(visual_rect);
   }
@@ -232,10 +228,15 @@ class CC_PAINT_EXPORT DisplayItemList
   // `paint_op_buffer_`.
   void FinalizeImpl();
 
+  void GenerateDiscardableImagesMetadata() const;
+
+  mutable std::optional<DiscardableImageMap> image_map_
+      GUARDED_BY_CONTEXT(image_generation_lock_);
+  mutable base::Lock image_generation_lock_;
+
   // RTree stores indices into the paint op buffer.
   // TODO(vmpstr): Update the rtree to store offsets instead.
   RTree<size_t> rtree_;
-  DiscardableImageMap image_map_;
   PaintOpBuffer paint_op_buffer_;
 
   // The visual rects associated with each of the display items in the
@@ -261,8 +262,6 @@ class CC_PAINT_EXPORT DisplayItemList
   const size_t kNotPainting = static_cast<size_t>(-1);
   size_t current_range_start_ = kNotPainting;
 #endif
-
-  UsageHint usage_hint_;
 
   friend class base::RefCountedThreadSafe<DisplayItemList>;
   FRIEND_TEST_ALL_PREFIXES(DisplayItemListTest, BytesUsed);

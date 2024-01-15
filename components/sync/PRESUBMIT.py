@@ -11,8 +11,6 @@ for more details about the presubmit API built into depot_tools.
 import os
 import re
 
-USE_PYTHON3 = True
-
 # Some definitions don't follow all the conventions we want to enforce.
 # It's either difficult or impossible to fix this, so we ignore the problem(s).
 EXCEPTION_MODEL_TYPES = [
@@ -197,6 +195,7 @@ def ParseEntitySpecificsProtoFieldIdentifiers(input_api, proto_path):
   start_pattern = input_api.re.compile(PROTO_DEFINITION_START_PATTERN)
   end_pattern = input_api.re.compile(PROTO_DEFINITION_END_PATTERN)
   in_proto_def = False
+  split_proto_line = []
   for line in proto_file_contents:
     if start_pattern.match(line):
       in_proto_def = True
@@ -204,10 +203,16 @@ def ParseEntitySpecificsProtoFieldIdentifiers(input_api, proto_path):
     if in_proto_def:
       if end_pattern.match(line):
         break
+      # Clean up last line on the end of the definition.
+      if len(split_proto_line) > 0 and (';' in split_proto_line[-1]):
+        split_proto_line.clear()
       line = line.strip()
-      split_proto_line = line.split(' ')
-      # ignore comments and lines that don't contain definitions.
-      if '//' in line or len(split_proto_line) < 3:
+      # Ignore comments.
+      if '//' in line:
+        continue
+      split_proto_line.extend(line.split(' '))
+      # Ignore lines that don't contain definitions.
+      if len(split_proto_line) < 3:
         continue
 
       field_typename = split_proto_line[0]

@@ -8,12 +8,12 @@
 #include <memory>
 #include <utility>
 
+#include <optional>
 #include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
 #include "cc/input/browser_controls_state.h"
 #include "cc/layers/layer_impl.h"
 #include "cc/trees/browser_controls_params.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/gfx/geometry/size.h"
 #include "ui/gfx/geometry/vector2d_f.h"
 
@@ -25,9 +25,9 @@ class BrowserControlsOffsetManagerClient;
 class CC_EXPORT BrowserControlsOffsetManager {
  public:
   enum class AnimationDirection {
-    NO_ANIMATION,
-    SHOWING_CONTROLS,
-    HIDING_CONTROLS
+    kNoAnimation,
+    kShowingControls,
+    kHidingControls
   };
 
   static std::unique_ptr<BrowserControlsOffsetManager> Create(
@@ -81,6 +81,11 @@ class CC_EXPORT BrowserControlsOffsetManager {
   std::pair<float, float> BottomControlsShownRatioRange();
 
   bool HasAnimation();
+  bool IsAnimatingToShowControls() const {
+    return top_controls_animation_.IsInitialized() &&
+           top_controls_animation_.Direction() ==
+               AnimationDirection::kShowingControls;
+  }
 
   void UpdateBrowserControlsState(BrowserControlsState constraints,
                                   BrowserControlsState current,
@@ -108,6 +113,12 @@ class CC_EXPORT BrowserControlsOffsetManager {
   void PinchEnd();
 
   gfx::Vector2dF Animate(base::TimeTicks monotonic_time);
+
+  // Predict what the outer viewport container bounds delta will be as browser
+  // controls are shown or hidden during a scroll gesture before the Blink
+  // WebView is resized to reflect the new state.
+  double PredictViewportBoundsDelta(double current_bounds_delta,
+                                    gfx::Vector2dF scroll_distance);
 
  protected:
   BrowserControlsOffsetManager(BrowserControlsOffsetManagerClient* client,
@@ -170,12 +181,20 @@ class CC_EXPORT BrowserControlsOffsetManager {
 
   // Minimum and maximum values |top_controls_min_height_offset_| can take
   // during the current min-height change animation.
-  absl::optional<std::pair<float, float>>
-      top_min_height_offset_animation_range_;
+  std::optional<std::pair<float, float>> top_min_height_offset_animation_range_;
   // Minimum and maximum values |bottom_controls_min_height_offset_| can take
   // during the current min-height change animation.
-  absl::optional<std::pair<float, float>>
+  std::optional<std::pair<float, float>>
       bottom_min_height_offset_animation_range_;
+
+  // Should ScrollEnd() animate the controls into view?  This is used if there's
+  // a race between chrome starting an animation to show the controls while the
+  // user is doing a scroll gesture, which would cancel animations.  We want to
+  // err on the side of showing the controls, so that the user realizes that
+  // they're an option. If we have started, but not yet completed an animation
+  // to show the controls when the scroll starts, or if one starts during the
+  // gesture, then we reorder the animation until after the scroll.
+  bool show_controls_when_scroll_completes_ = false;
 
   // Class that holds and manages the state of the controls animations.
   class Animation {
@@ -184,22 +203,22 @@ class CC_EXPORT BrowserControlsOffsetManager {
 
     // Whether the animation is initialized with a direction and start and stop
     // values.
-    bool IsInitialized() { return initialized_; }
-    AnimationDirection Direction() { return direction_; }
+    bool IsInitialized() const { return initialized_; }
+    AnimationDirection Direction() const { return direction_; }
     void Initialize(AnimationDirection direction,
                     float start_value,
                     float stop_value,
                     int64_t duration,
                     bool jump_to_end_on_reset);
     // Returns the animated value for the given monotonic time tick if the
-    // animation is initialized. Otherwise, returns |absl::nullopt|.
-    absl::optional<float> Tick(base::TimeTicks monotonic_time);
+    // animation is initialized. Otherwise, returns |std::nullopt|.
+    std::optional<float> Tick(base::TimeTicks monotonic_time);
     // Set the minimum and maximum values the animation can have.
     void SetBounds(float min, float max);
     // Reset the properties. If |skip_to_end_on_reset_| is false, this function
-    // will return |absl::nullopt|. Otherwise, it will return the end value
+    // will return |std::nullopt|. Otherwise, it will return the end value
     // (clamped to min-max).
-    absl::optional<float> Reset();
+    std::optional<float> Reset();
 
     // Returns the value the animation will end on. This will be the stop_value
     // passed to the constructor clamped by the currently configured bounds.
@@ -217,7 +236,7 @@ class CC_EXPORT BrowserControlsOffsetManager {
     // Whether the animation is initialized by setting start and stop time and
     // values.
     bool initialized_ = false;
-    AnimationDirection direction_ = AnimationDirection::NO_ANIMATION;
+    AnimationDirection direction_ = AnimationDirection::kNoAnimation;
     // Monotonic start and stop times.
     base::TimeTicks start_time_;
     base::TimeTicks stop_time_;

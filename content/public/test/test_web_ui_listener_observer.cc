@@ -4,8 +4,8 @@
 
 #include "content/public/test/test_web_ui_listener_observer.h"
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "content/public/test/test_web_ui.h"
 
 namespace content {
@@ -45,13 +45,13 @@ void TestWebUIListenerObserver::OnJavascriptFunctionCalled(
   // different accessor. arg1() is the listener name for WebUI listeners (see
   // above).
   if (call_data.arg2()) {
-    call_args_.value().push_back(call_data.arg2()->Clone());
+    call_args_->Append(call_data.arg2()->Clone());
   }
   if (call_data.arg3()) {
-    call_args_.value().push_back(call_data.arg3()->Clone());
+    call_args_->Append(call_data.arg3()->Clone());
   }
   if (call_data.arg4()) {
-    call_args_.value().push_back(call_data.arg4()->Clone());
+    call_args_->Append(call_data.arg4()->Clone());
   }
   run_loop_.Quit();
 }

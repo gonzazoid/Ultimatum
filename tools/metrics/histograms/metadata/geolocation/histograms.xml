@@ -22,6 +22,16 @@ chromium-metrics-reviews@google.com.
 
 <histograms>
 
+<histogram name="Geolocation.Android.LocationPermissionState"
+    enum="AndroidLocationPermissionState" expires_after="2024-05-12">
+  <owner>mattreynolds@chromium.org</owner>
+  <owner>device-dev@chromium.org</owner>
+  <summary>
+    Android location permission state, recorded when the geolocation permission
+    context is initialized.
+  </summary>
+</histogram>
+
 <histogram name="Geolocation.AuthorizationActionExistingUser"
     enum="GeolocationAuthorizationAction" expires_after="2022-10-16">
   <owner>mattreynolds@chromium.org</owner>
@@ -32,73 +42,8 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
-<histogram base="true" name="Geolocation.Header.LocationAge" units="seconds"
-    expires_after="M85">
-  <obsolete>
-    Code for recording this histogram was removed in July 2022. Recording this
-    long-expired histogram was slowing down navigations.
-  </obsolete>
-  <owner>kcarattini@chromium.org</owner>
-  <owner>dominickn@chromium.org</owner>
-  <summary>
-    For Geolocation requests from the omnibox on Android, the time since the
-    location was most recently acquired. If no location has been acquired, the
-    maximum bucket is incremented.
-  </summary>
-</histogram>
-
-<histogram name="Geolocation.Header.PermissionState"
-    enum="GeolocationHeaderPermissionState" expires_after="M85">
-  <obsolete>
-    Code for recording this histogram was removed in July 2022. Recording this
-    long-expired histogram was slowing down navigations.
-  </obsolete>
-  <owner>kcarattini@chromium.org</owner>
-  <owner>dominickn@chromium.org</owner>
-  <summary>
-    Counts Geolocation requests for omnibox searches sliced by various
-    permission combinations. The location mode abbreviations indicate one of:
-    High Accuracy, Battery Saving, GPS On or Location Mode Off.
-  </summary>
-</histogram>
-
-<histogram base="true" name="Geolocation.Header.TimeListening" units="ms"
-    expires_after="M85">
-  <obsolete>
-    Code for recording this histogram was removed in July 2022. Recording this
-    long-expired histogram was slowing down navigations.
-  </obsolete>
-  <owner>kcarattini@chromium.org</owner>
-  <owner>dominickn@chromium.org</owner>
-  <summary>
-    For Geolocation requests from the omnibox on Android, the time since the
-    location was first acquired. If no location has been acquired, the minimum
-    bucket is incremented.
-  </summary>
-</histogram>
-
-<histogram name="Geolocation.HeaderSentOrNot" enum="GeolocationHeaderSentOrNot"
-    expires_after="M85">
-  <owner>kiyun@google.com</owner>
-  <owner>mvanouwerkerk@chromium.org</owner>
-  <owner>newt@chromium.org</owner>
-  <summary>
-    Reason why the X-Geo header was or was not included in a Google search from
-    the omnibox.
-  </summary>
-</histogram>
-
-<histogram name="Geolocation.NetworkLocationRequest.AccessPoints" units="units"
-    expires_after="M85">
-  <owner>mattreynolds@chromium.org</owner>
-  <owner>device-dev@chromium.org</owner>
-  <summary>
-    The number of WiFi access points used to determine geolocation.
-  </summary>
-</histogram>
-
 <histogram name="Geolocation.NetworkLocationRequest.Event"
-    enum="NetworkLocationRequestEvent" expires_after="2023-04-16">
+    enum="NetworkLocationRequestEvent" expires_after="2024-06-30">
   <owner>mattreynolds@chromium.org</owner>
   <owner>device-dev@chromium.org</owner>
   <summary>
@@ -109,15 +54,19 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
-<histogram name="Geolocation.NetworkLocationRequest.NetError"
-    enum="NetErrorCodes" expires_after="2023-04-16">
-  <owner>JamesHollyer@chromium.org</owner>
+<histogram name="Geolocation.NetworkLocationRequest.RequestInterval"
+    units="mins" expires_after="2024-05-05">
+  <owner>alvinji@chromium.org</owner>
   <owner>device-dev@chromium.org</owner>
-  <summary>Network errors in NetworkLocationRequest.</summary>
+  <summary>
+    For recording the time gap between each HTTP request to geolocation service.
+    The maximum bucket is 10 minutes because that is the maxium interval between
+    wifi data polls.
+  </summary>
 </histogram>
 
 <histogram name="Geolocation.NetworkLocationRequest.ResponseCode"
-    enum="HttpResponseCode" expires_after="2023-04-16">
+    enum="HttpResponseCode" expires_after="2024-06-30">
   <owner>mattreynolds@chromium.org</owner>
   <owner>device-dev@chromium.org</owner>
   <summary>
@@ -125,101 +74,6 @@ chromium-metrics-reviews@google.com.
 
     Warning: this histogram was expired after M85 and brought back 2021-05-21;
     data may be missing.
-  </summary>
-</histogram>
-
-<histogram name="Geolocation.PositionCache.CacheHit" enum="BooleanCacheHit"
-    expires_after="2022-10-04">
-  <owner>mattreynolds@chromium.org</owner>
-  <owner>deviceapi-team@google.com</owner>
-  <summary>
-    For each query into the position cache used by the network location
-    provider, records whether a position was returned from the cache.
-  </summary>
-</histogram>
-
-<histogram name="Geolocation.PositionCache.CacheSize" units="count"
-    expires_after="2022-05-22">
-  <owner>mattreynolds@chromium.org</owner>
-  <owner>deviceapi-team@google.com</owner>
-  <summary>
-    For each query into the position cache used by the network location
-    provider, records the number of items in the cache.
-
-    Warning: this histogram was expired after 2021-03-10 and brought back
-    2021-05-21; data may be missing.
-  </summary>
-</histogram>
-
-<histogram base="true" name="Geolocation.SettingsDialog.AcceptEvent"
-    enum="GeolocationSettingsDialogBackOff" expires_after="M89">
-  <owner>engedy@chromium.org</owner>
-  <owner>src/components/permissions/PERMISSIONS_OWNERS</owner>
-  <summary>
-    Records the backoff level when the Location Settings Dialog is accepted by
-    the user.
-  </summary>
-</histogram>
-
-<histogram base="true" name="Geolocation.SettingsDialog.DenyEvent"
-    enum="GeolocationSettingsDialogBackOff" expires_after="M89">
-  <owner>engedy@chromium.org</owner>
-  <owner>src/components/permissions/PERMISSIONS_OWNERS</owner>
-  <summary>
-    Records the backoff level when the Location Settings Dialog is rejected by
-    the user.
-  </summary>
-</histogram>
-
-<histogram base="true" name="Geolocation.SettingsDialog.ShowEvent"
-    enum="GeolocationSettingsDialogBackOff" expires_after="M89">
-  <owner>engedy@chromium.org</owner>
-  <owner>src/components/permissions/PERMISSIONS_OWNERS</owner>
-  <summary>
-    Records the backoff level when the Location Settings Dialog is shown to the
-    user.
-  </summary>
-</histogram>
-
-<histogram base="true" name="Geolocation.SettingsDialog.SuppressEvent"
-    enum="GeolocationSettingsDialogBackOff" expires_after="M89">
-  <owner>engedy@chromium.org</owner>
-  <owner>src/components/permissions/PERMISSIONS_OWNERS</owner>
-  <summary>
-    Records the backoff level when the Location Settings Dialog is suppressed
-    due to backoff.
-  </summary>
-</histogram>
-
-<histogram name="Geolocation.Timeout" units="ms" expires_after="M85">
-  <owner>mattreynolds@chromium.org</owner>
-  <owner>deviceapi-team@google.com</owner>
-  <summary>
-    Counts Geolocation request timeout values, bucketing by timeout duration.
-    This is recorded for all requests upon creation, see
-    Geolocation.TimeoutExpired for timeouts that actually expired.
-  </summary>
-</histogram>
-
-<histogram name="Geolocation.TimeoutExpired" units="ms"
-    expires_after="2020-02-01">
-  <owner>mattreynolds@chromium.org</owner>
-  <owner>deviceapi-team@google.com</owner>
-  <summary>
-    Counts Geolocation request timeout expirations, bucketing by timeout
-    duration. This means no position was received within the allowed time from
-    the browser process due to e.g. a slow network or an unresponsive system
-    location provider.
-  </summary>
-</histogram>
-
-<histogram name="Geolocation.WifiDataProviderCommon.WifiScanTaskTime"
-    units="ms" expires_after="2023-07-15">
-  <owner>reillyg@chromium.org</owner>
-  <owner>deviceapi-team@google.com</owner>
-  <summary>
-    Records the time taken on Windows, macOS and Linux to query the operating
-    system for nearby access points.
   </summary>
 </histogram>
 

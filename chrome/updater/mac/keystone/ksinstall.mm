@@ -4,30 +4,32 @@
 
 #include "chrome/updater/mac/keystone/ksinstall.h"
 
-#include "base/memory/raw_ptr.h"
-
 #import <Foundation/Foundation.h>
 #import <getopt.h>
-
 #import <stdio.h>
+
+#include <optional>
 #include <string>
 
 #include "base/at_exit.h"
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/message_loop/message_pump_type.h"
 #include "base/task/single_thread_task_executor.h"
 #include "base/task/thread_pool.h"
 #include "base/task/thread_pool/thread_pool_instance.h"
 #include "chrome/updater/app/app.h"
+#include "chrome/updater/updater_branding.h"
 #include "chrome/updater/updater_scope.h"
-#include "chrome/updater/util.h"
+#include "chrome/updater/util/mac_util.h"
+#include "chrome/updater/util/util.h"
 
 namespace updater {
 namespace {
@@ -50,16 +52,19 @@ class KSInstallApp : public App {
 };
 
 void KSInstallApp::Uninstall(base::OnceCallback<void(int)> callback) {
-  const absl::optional<base::FilePath>& keystone_path = GetKeystoneFolderPath(
-      (geteuid() == 0) ? UpdaterScope::kSystem : UpdaterScope::kUser);
-
-  if (!keystone_path) {
-    PLOG(ERROR) << "Couldn't find Keystone path.";
-    std::move(callback).Run(1);
-  }
   base::ThreadPool::PostTaskAndReplyWithResult(
-      FROM_HERE, {base::MayBlock()},
-      base::BindOnce(&base::DeletePathRecursively, *keystone_path),
+      FROM_HERE, {base::MayBlock()}, base::BindOnce([] {
+        const std::optional<base::FilePath>& keystone_path =
+            GetKeystoneFolderPath((geteuid() == 0) ? UpdaterScope::kSystem
+                                                   : UpdaterScope::kUser);
+        if (!keystone_path ||
+            !base::DeletePathRecursively(
+                keystone_path->AppendASCII(KEYSTONE_NAME ".bundle"))) {
+          PLOG(ERROR) << "Couldn't find/delete Keystone path.";
+          return false;
+        }
+        return true;
+      }),
       base::BindOnce(
           [](base::OnceCallback<void(int)> cb, bool result) {
             if (result) {
@@ -116,7 +121,7 @@ int KSInstallMain(int argc, char* argv[]) {
   updater::InitLogging(GetUpdaterScope());
   InitializeThreadPool("keystone");
   const base::ScopedClosureRunner shutdown_thread_pool(
-      base::BindOnce([]() { base::ThreadPoolInstance::Get()->Shutdown(); }));
+      base::BindOnce([] { base::ThreadPoolInstance::Get()->Shutdown(); }));
   base::SingleThreadTaskExecutor main_task_executor(base::MessagePumpType::UI);
   return MakeKSInstallApp(argc, argv)->Run();
 }

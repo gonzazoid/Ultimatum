@@ -17,6 +17,7 @@ more levels:
   Chrome, nor could a user be easily convinced to perform by a persuasive web page.
 * Requiring profile destruction or browser shutdown will normally reduce
   severity by one level.
+* [MiraclePtr protection](#TOC-MiraclePtr)
 
 Bugs that require implausible interaction, interactions a user would not
 realistically be convinced to perform, will generally be downgraded to a
@@ -35,7 +36,7 @@ exhausted or in other exceptional circumstances.
 ## Critical severity {#TOC-Critical-severity}
 
 Critical severity issues allow an attacker to read or write arbitrary resources
-(including but not limited to the file system, registry, network, et c.) on the
+(including but not limited to the file system, registry, network, etc.) on the
 underlying platform, with the user's full privileges.
 
 They are normally assigned priority **Pri-0** and assigned to the current stable
@@ -54,6 +55,9 @@ if there is evidence of active exploitation.
 Example bugs:
 
 * Memory corruption in the browser process ([319125](https://crbug.com/319125#c10)).
+* Memory corruption in the GPU process when it is reachable directly from web
+  content without compromising the renderer.
+  ([1420130](https://crbug.com/1420130), [1427865](https://crbug.com/1427865))
 * Exploit chains made up of multiple bugs that can lead to code execution
   outside of the sandbox ([416449](https://crbug.com/416449)).
 * A bug that enables web content to read local files
@@ -94,17 +98,19 @@ Example bugs:
 bugs fall into this category, as they allow script execution in the context of
 an arbitrary origin ([534923](https://crbug.com/534923)).
 * A bug that allows arbitrary code execution within the confines of the sandbox,
-such as renderer, network, or GPU process memory corruption
+such as memory corruption in the renderer process
 ([570427](https://crbug.com/570427), [468936](https://crbug.com/468936)).
 * Complete control over the apparent origin in the omnibox
 ([76666](https://crbug.com/76666)).
-* Memory corruption in the browser process that can only be triggered from a
-compromised renderer, leading to a sandbox escape
-([469152](https://crbug.com/469152)).
+* Memory corruption in the browser or another high privileged process (e.g. GPU
+  or network process), that can only be triggered from a compromised renderer,
+  leading to a sandbox escape ([1393177](https://crbug.com/1393177),
+  [1421268](crbug.com/1421268)).
 * Kernel memory corruption that could be used as a sandbox escape from a
 compromised renderer ([377392](https://crbug.com/377392)).
-* Memory corruption in the browser process that requires specific user
-interaction, such as granting a permission ([455735](https://crbug.com/455735)).
+* Memory corruption in the browser or another high privileged process (e.g. GPU
+  or network process) that requires specific user interaction, such as granting
+  a permission ([455735](https://crbug.com/455735)).
 * Site Isolation bypasses:
     - Cross-site execution contexts unexpectedly sharing a renderer process
       ([863069](https://crbug.com/863069), [886976](https://crbug.com/886976)).
@@ -173,6 +179,12 @@ Example bugs:
 * An uncontrolled single-byte out-of-bounds read
 ([128163](https://crbug.com/128163)).
 
+## Priority for in the wild vulnerabilities {#TOC-itw-pri}
+
+If there is evidence of a weaponized exploit or active exploitation in the wild,
+the vulnerability is considered a Pri-0 - regardless of the severity rating -
+with a SLO of 7 days or faster. Our goal is to release a fix in a Stable
+channel update of Chrome as soon as possible.
 
 ## Can't impact Chrome users by default {#TOC-No-impact}
 
@@ -190,7 +202,7 @@ be security bugs, such as [denial of service](faq.md#TOC-Are-denial-of-service-i
 and, in particular, null pointer dereferences with consistent fixed offsets.
 
 
-## "MiraclePtr" protection against use-after-free
+## "MiraclePtr" protection against use-after-free {#TOC-MiraclePtr}
 
 ["MiraclePtr"](../../base/memory/raw_ptr.md) is a technology designed to
 deterministically prevent exploitation of use-after-free bugs. Address
@@ -210,7 +222,9 @@ The crash occurred while a raw_ptr<T> object containing a dangling pointer was b
 MiraclePtr should make this crash non-exploitable in regular builds.
 ```
 
-For now, ignore these messages while determining severity, because MiraclePtr
-is not yet active on all Chromium platforms. In the future, we'll use this
-protection to reduce the severity of these bugs or even (once we have a lot of
-practical experience) reclassify them as non-security bugs.
+MiraclePtr is now active on all Chrome platforms in non-renderer processes as of 118.
+Severity assessments are made with consideration of all active release channels (Dev, Beta, Stable, and Extended Stable);
+BRP is now enabled in all active release channels.
+
+If a bug is marked `MiraclePtr Status:PROTECTED`, it should be downgraded by one severity level.
+(For example, a bug that would previously be High severity would now be only Medium severity).

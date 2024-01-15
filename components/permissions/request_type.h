@@ -7,9 +7,9 @@
 
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
+#include "components/content_settings/core/common/content_settings_types.h"
+#include "printing/buildflags/buildflags.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
-
-enum class ContentSettingsType;
 
 namespace gfx {
 struct VectorIcon;
@@ -26,14 +26,22 @@ enum class RequestType {
   kCameraPanTiltZoom,
 #endif
   kCameraStream,
+#if !BUILDFLAG(IS_ANDROID)
+  kCapturedSurfaceControl,
+#endif
   kClipboard,
+  kTopLevelStorageAccess,
   kDiskQuota,
 #if !BUILDFLAG(IS_ANDROID)
-  kLocalFonts,
+  kFileSystemAccess,
 #endif
   kGeolocation,
   kIdleDetection,
+#if !BUILDFLAG(IS_ANDROID)
+  kLocalFonts,
+#endif
   kMicStream,
+  kMidi,
   kMidiSysex,
   kMultipleDownloads,
 #if BUILDFLAG(IS_ANDROID)
@@ -45,13 +53,15 @@ enum class RequestType {
 #endif
 #if !BUILDFLAG(IS_ANDROID)
   kRegisterProtocolHandler,
-  kSecurityAttestation,
+#endif
+#if BUILDFLAG(IS_CHROMEOS)
+  kSmartCard,
 #endif
   kStorageAccess,
-#if !BUILDFLAG(IS_ANDROID)
-  kU2fApiRequest,
-#endif
   kVrSession,
+#if BUILDFLAG(IS_CHROMEOS) && BUILDFLAG(USE_CUPS)
+  kWebPrinting,
+#endif
 #if !BUILDFLAG(IS_ANDROID)
   kWindowManagement,
   kMaxValue = kWindowManagement
@@ -69,6 +79,9 @@ typedef const gfx::VectorIcon& IconId;
 #endif
 
 bool IsRequestablePermissionType(ContentSettingsType content_settings_type);
+
+absl::optional<RequestType> ContentSettingsTypeToRequestTypeIfExists(
+    ContentSettingsType content_settings_type);
 
 RequestType ContentSettingsTypeToRequestType(
     ContentSettingsType content_settings_type);

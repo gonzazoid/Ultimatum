@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "base/files/file_path.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
 #include "components/segmentation_platform/internal/database/ukm_database.h"
 #include "components/segmentation_platform/internal/database/ukm_types.h"
@@ -23,21 +24,23 @@ class UkmDatabaseBackend;
 
 class UkmDatabaseImpl : public UkmDatabase {
  public:
-  explicit UkmDatabaseImpl(const base::FilePath& database_path);
+  explicit UkmDatabaseImpl(const base::FilePath& database_path, bool in_memory);
   ~UkmDatabaseImpl() override;
 
-  UkmDatabaseImpl(UkmDatabaseImpl&) = delete;
-  UkmDatabaseImpl& operator=(UkmDatabaseImpl&) = delete;
+  UkmDatabaseImpl(const UkmDatabaseImpl&) = delete;
+  UkmDatabaseImpl& operator=(const UkmDatabaseImpl&) = delete;
 
   void InitDatabase(SuccessCallback callback) override;
   void StoreUkmEntry(ukm::mojom::UkmEntryPtr ukm_entry) override;
   void UpdateUrlForUkmSource(ukm::SourceId source_id,
                              const GURL& url,
-                             bool is_validated) override;
-  void OnUrlValidated(const GURL& url) override;
+                             bool is_validated,
+                             const std::string& profile_id) override;
+  void OnUrlValidated(const GURL& url, const std::string& profile_id) override;
   void RemoveUrls(const std::vector<GURL>& urls, bool all_urls) override;
   void RunReadonlyQueries(QueryList&& queries, QueryCallback callback) override;
   void DeleteEntriesOlderThan(base::Time time) override;
+  void CommitTransactionForTesting() override;
 
  private:
   scoped_refptr<base::SequencedTaskRunner> task_runner_;

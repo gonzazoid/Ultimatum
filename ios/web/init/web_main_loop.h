@@ -7,8 +7,7 @@
 
 #include <memory>
 
-#include "base/callback_helpers.h"
-#include "base/memory/ref_counted.h"
+#include "base/functional/callback_helpers.h"
 
 namespace web {
 class CookieNotificationBridge;
@@ -49,6 +48,9 @@ class WebMainLoop {
 
   // Creates all secondary threads.
   int CreateThreads();
+
+  // Called after creating the threads
+  int PostCreateThreads();
 
   // Called right after the web threads have been started.
   int WebThreadsStarted();

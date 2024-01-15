@@ -9,9 +9,9 @@
 
 #include <string>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/component_export.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/observer_list_types.h"
 #include "chromeos/ash/components/dbus/dlcservice/dlcservice.pb.h"
 #include "chromeos/dbus/common/dbus_client.h"
@@ -25,7 +25,7 @@ namespace ash {
 // manages DLC (Downloadable Content) modules. DlcserviceClient will allow for
 // CrOS features to be installed and uninstalled at runtime of the system. If
 // more details about dlcservice are required, please consult
-// https://chromium.git.corp.google.com/chromiumos/platform2/+/HEAD/dlcservice
+// https://chromium.googlesource.com/chromiumos/platform2/+/HEAD/dlcservice
 class COMPONENT_EXPORT(DLCSERVICE_CLIENT) DlcserviceClient {
  public:
   // Observer class for objects that need to know the change in the state of
@@ -92,17 +92,13 @@ class COMPONENT_EXPORT(DLCSERVICE_CLIENT) DlcserviceClient {
                        ProgressCallback progress_callback) = 0;
 
   // Uninstalls a single DLC and calls the callback with indication of
-  // success/failure. Uninstalling disables the DLC but does not remove the DLC
-  // from disk. After each uninstallation, a refcount to the DLC is decremented.
-  // Once the refcount reaches 0, the DLC will remain in cache. However, if
-  // the DLC is not installed within a window of time after reaching a
-  // refcount of 0, the DLC will be purged automatically.
+  // success/failure. Uninstall is the same as `Purge()`.
   virtual void Uninstall(const std::string& dlc_id,
                          UninstallCallback callback) = 0;
 
   // Purges a single DLC and calls the callback with indication of
   // success/failure. Purging removes the DLC entirely from disk, regardless if
-  // the DLC has been uninstalled or if there is a nonzero installed refcount.
+  // the DLC has been uninstalled already.
   virtual void Purge(const std::string& dlc_id,
                      PurgeCallback purge_callback) = 0;
 
@@ -150,10 +146,5 @@ class COMPONENT_EXPORT(DLCSERVICE_CLIENT) DlcserviceClient {
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when the migration is finished.
-namespace chromeos {
-using ::ash::DlcserviceClient;
-}
 
 #endif  // CHROMEOS_ASH_COMPONENTS_DBUS_DLCSERVICE_DLCSERVICE_CLIENT_H_

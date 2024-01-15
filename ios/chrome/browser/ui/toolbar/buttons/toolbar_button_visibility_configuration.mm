@@ -5,13 +5,7 @@
 #import "ios/chrome/browser/ui/toolbar/buttons/toolbar_button_visibility_configuration.h"
 
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 @implementation ToolbarButtonVisibilityConfiguration
-
-@synthesize type = _type;
 
 - (instancetype)initWithType:(ToolbarType)type {
   self = [super init];
@@ -23,106 +17,106 @@
 
 - (ToolbarComponentVisibility)backButtonVisibility {
   switch (self.type) {
-    case PRIMARY:
+    case ToolbarType::kPrimary:
       return ToolbarComponentVisibilityAlways &
              ~ToolbarComponentVisibilitySplit;
-    case SECONDARY:
+    case ToolbarType::kSecondary:
       return ToolbarComponentVisibilitySplit;
   }
 }
 
 - (ToolbarComponentVisibility)forwardButtonVisibility {
   switch (self.type) {
-    case PRIMARY:
+    case ToolbarType::kPrimary:
       return ToolbarComponentVisibilityAlways &
              ~ToolbarComponentVisibilitySplit;
-    case SECONDARY:
+    case ToolbarType::kSecondary:
       return ToolbarComponentVisibilitySplit;
   }
 }
 
 - (ToolbarComponentVisibility)tabGridButtonVisibility {
   switch (self.type) {
-    case PRIMARY:
+    case ToolbarType::kPrimary:
       return ToolbarComponentVisibilityAlways &
              ~ToolbarComponentVisibilitySplit;
-    case SECONDARY:
+    case ToolbarType::kSecondary:
       return ToolbarComponentVisibilitySplit;
   }
 }
 
 - (ToolbarComponentVisibility)toolsMenuButtonVisibility {
   switch (self.type) {
-    case PRIMARY:
+    case ToolbarType::kPrimary:
       return ToolbarComponentVisibilityAlways &
              ~ToolbarComponentVisibilitySplit;
-    case SECONDARY:
+    case ToolbarType::kSecondary:
       return ToolbarComponentVisibilitySplit;
   }
 }
 
 - (ToolbarComponentVisibility)shareButtonVisibility {
   switch (self.type) {
-    case PRIMARY:
+    case ToolbarType::kPrimary:
       return ToolbarComponentVisibilityAlways &
              ~ToolbarComponentVisibilitySplit;
-    case SECONDARY:
+    case ToolbarType::kSecondary:
       return ToolbarComponentVisibilityNone;
   }
 }
 
 - (ToolbarComponentVisibility)reloadButtonVisibility {
   switch (self.type) {
-    case PRIMARY:
+    case ToolbarType::kPrimary:
       return ToolbarComponentVisibilityAlways &
              ~ToolbarComponentVisibilitySplit;
-    case SECONDARY:
+    case ToolbarType::kSecondary:
       return ToolbarComponentVisibilityNone;
   }
 }
 
 - (ToolbarComponentVisibility)stopButtonVisibility {
   switch (self.type) {
-    case PRIMARY:
+    case ToolbarType::kPrimary:
       return ToolbarComponentVisibilityAlways &
              ~ToolbarComponentVisibilitySplit;
-    case SECONDARY:
+    case ToolbarType::kSecondary:
       return ToolbarComponentVisibilityNone;
   }
 }
 
 - (ToolbarComponentVisibility)voiceSearchButtonVisibility {
   switch (self.type) {
-    case PRIMARY:
+    case ToolbarType::kPrimary:
       return ToolbarComponentVisibilityRegularWidthRegularHeight;
-    case SECONDARY:
+    case ToolbarType::kSecondary:
       return ToolbarComponentVisibilityNone;
   }
 }
 
 - (ToolbarComponentVisibility)contractButtonVisibility {
   switch (self.type) {
-    case PRIMARY:
+    case ToolbarType::kPrimary:
       return ToolbarComponentVisibilityNone;
-    case SECONDARY:
+    case ToolbarType::kSecondary:
       return ToolbarComponentVisibilityNone;
   }
 }
 
-- (ToolbarComponentVisibility)searchButtonVisibility {
+- (ToolbarComponentVisibility)newTabButtonVisibility {
   switch (self.type) {
-    case PRIMARY:
+    case ToolbarType::kPrimary:
       return ToolbarComponentVisibilityNone;
-    case SECONDARY:
+    case ToolbarType::kSecondary:
       return ToolbarComponentVisibilitySplit;
   }
 }
 
 - (ToolbarComponentVisibility)locationBarLeadingButtonVisibility {
   switch (self.type) {
-    case PRIMARY:
+    case ToolbarType::kPrimary:
       return ToolbarComponentVisibilityAlways;
-    case SECONDARY:
+    case ToolbarType::kSecondary:
       return ToolbarComponentVisibilityNone;
   }
 }

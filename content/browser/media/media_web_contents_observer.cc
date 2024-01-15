@@ -7,12 +7,12 @@
 #include <memory>
 #include <tuple>
 
-#include "base/bind.h"
 #include "base/containers/cxx20_erase.h"
 #include "base/debug/crash_logging.h"
 #include "base/debug/dump_without_crashing.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "build/build_config.h"
 #include "content/browser/media/audible_metrics.h"
 #include "content/browser/media/media_devices_util.h"
@@ -85,6 +85,8 @@ class MediaWebContentsObserver::PlayerInfo {
   }
 
   bool IsAudible() const { return has_audio_ && is_playing_ && !muted_; }
+
+  GlobalRenderFrameHostId GetHostId() { return id_.frame_routing_id; }
 
  private:
   void NotifyPlayerStarted() {
@@ -251,7 +253,7 @@ bool MediaWebContentsObserver::IsPictureInPictureAllowedForFullscreenVideo()
   return *picture_in_picture_allowed_in_fullscreen_;
 }
 
-const absl::optional<MediaPlayerId>&
+const std::optional<MediaPlayerId>&
 MediaWebContentsObserver::GetFullscreenVideoMediaPlayerId() const {
   return fullscreen_player_;
 }
@@ -304,7 +306,7 @@ MediaWebContentsObserver::MediaPlayerHostImpl::MediaPlayerHostImpl(
 
 MediaWebContentsObserver::MediaPlayerHostImpl::~MediaPlayerHostImpl() = default;
 
-void MediaWebContentsObserver::MediaPlayerHostImpl::BindMediaPlayerHostReceiver(
+void MediaWebContentsObserver::MediaPlayerHostImpl::AddMediaPlayerHostReceiver(
     mojo::PendingAssociatedReceiver<media::mojom::MediaPlayerHost> receiver) {
   receivers_.Add(this, std::move(receiver));
 }
@@ -402,32 +404,16 @@ void MediaWebContentsObserver::MediaPlayerObserverHostImpl::
       RenderFrameHost::FromID(media_player_id_.frame_routing_id);
   DCHECK(render_frame_host);
 
-  auto salt_and_origin = content::GetMediaDeviceSaltAndOrigin(
-      render_frame_host->GetProcess()->GetID(),
-      render_frame_host->GetRoutingID());
-
-  content::GetIOThreadTaskRunner({})->PostTask(
-      FROM_HERE,
-      base::BindOnce(
-          // TODO(dcheng): GetMediaDeviceIDForHMAC should not be overloaded,
-          // which would avoid the need for static_casts / wrapper lambdas
-          // (which are not zero cost).
-          static_cast<void (*)(
-              blink::mojom::MediaDeviceType, std::string, url::Origin,
-              std::string, scoped_refptr<base::SequencedTaskRunner>,
-              base::OnceCallback<void(const absl::optional<std::string>&)>)>(
-              &MediaStreamManager::GetMediaDeviceIDForHMAC),
-          blink::mojom::MediaDeviceType::MEDIA_AUDIO_OUTPUT,
-          salt_and_origin.device_id_salt, std::move(salt_and_origin.origin),
-          hashed_device_id, content::GetUIThreadTaskRunner({}),
-          base::BindOnce(
-              &MediaPlayerObserverHostImpl::OnReceivedTranslatedDeviceId,
-              weak_factory_.GetWeakPtr())));
+  content::GetRawDeviceIdFromHMAC(
+      render_frame_host->GetGlobalId(), hashed_device_id,
+      blink::mojom::MediaDeviceType::kMediaAudioOuput,
+      base::BindOnce(&MediaPlayerObserverHostImpl::OnReceivedTranslatedDeviceId,
+                     weak_factory_.GetWeakPtr()));
 }
 
 void MediaWebContentsObserver::MediaPlayerObserverHostImpl::
     OnReceivedTranslatedDeviceId(
-        const absl::optional<std::string>& translated_id) {
+        const std::optional<std::string>& translated_id) {
   if (!translated_id)
     return;
 
@@ -500,7 +486,8 @@ void MediaWebContentsObserver::MediaPlayerObserverHostImpl::
       media_web_contents_observer_->web_contents_impl()->audio_stream_monitor();
 
   if (should_add_client && !audio_client_registration_) {
-    audio_client_registration_ = audio_stream_monitor->RegisterAudibleClient();
+    audio_client_registration_ =
+        audio_stream_monitor->RegisterAudibleClient(player_info->GetHostId());
   } else if (!should_add_client && audio_client_registration_) {
     audio_client_registration_.reset();
   }
@@ -637,13 +624,15 @@ void MediaWebContentsObserver::BindMediaPlayerHost(
     GlobalRenderFrameHostId frame_routing_id,
     mojo::PendingAssociatedReceiver<media::mojom::MediaPlayerHost>
         player_receiver) {
-  if (!media_player_hosts_.contains(frame_routing_id)) {
-    media_player_hosts_[frame_routing_id] =
-        std::make_unique<MediaPlayerHostImpl>(frame_routing_id, this);
+  auto it = media_player_hosts_.find(frame_routing_id);
+  if (it == media_player_hosts_.end()) {
+    it = media_player_hosts_
+             .try_emplace(
+                 frame_routing_id,
+                 std::make_unique<MediaPlayerHostImpl>(frame_routing_id, this))
+             .first;
   }
-
-  media_player_hosts_[frame_routing_id]->BindMediaPlayerHostReceiver(
-      std::move(player_receiver));
+  it->second->AddMediaPlayerHostReceiver(std::move(player_receiver));
 }
 
 void MediaWebContentsObserver::OnMediaPlayerAdded(
@@ -651,22 +640,17 @@ void MediaWebContentsObserver::OnMediaPlayerAdded(
     mojo::PendingAssociatedReceiver<media::mojom::MediaPlayerObserver>
         media_player_observer,
     MediaPlayerId player_id) {
-  auto* const rfh = RenderFrameHost::FromID(player_id.frame_routing_id);
-  DCHECK(rfh);
-
-  if (media_player_remotes_.contains(player_id)) {
-    // Original remote associated with |player_id| will be overridden. If the
-    // original player is still alive, this will break our ability to control
-    // it from the browser process. We don't know that the original player is
-    // actually still alive.
-    // TODO(https://crbug.com/1172882): Determine the root cause of duplication
-    // and/or refactor to make ID purely a browser-side concept.
-    LOG(ERROR) << __func__ << " Duplicate media player id ("
-               << player_id.delegate_id << ")";
+  if (!RenderFrameHost::FromID(player_id.frame_routing_id) ||
+      media_player_remotes_.contains(player_id) ||
+      media_player_observer_hosts_.contains(player_id)) {
+    // If you see this, it's likely due to https://crbug.com/1392441
+    mojo::ReportBadMessage("Bad MediaPlayer request.");
+    return;
   }
 
-  media_player_remotes_[player_id].Bind(std::move(player_remote));
-  media_player_remotes_[player_id].set_disconnect_handler(base::BindOnce(
+  auto remote_it = media_player_remotes_.try_emplace(player_id);
+  remote_it.first->second.Bind(std::move(player_remote));
+  remote_it.first->second.set_disconnect_handler(base::BindOnce(
       [](MediaWebContentsObserver* observer, const MediaPlayerId& player_id) {
         observer->player_info_map_.erase(player_id);
         observer->media_player_remotes_.erase(player_id);
@@ -679,14 +663,10 @@ void MediaWebContentsObserver::OnMediaPlayerAdded(
       },
       base::Unretained(this), player_id));
 
-  // Create a new MediaPlayerObserverHostImpl for |player_id|, implementing the
-  // media::mojom::MediaPlayerObserver mojo interface, to handle messages sent
-  // from the MediaPlayer element in the renderer process.
-  if (!media_player_observer_hosts_.contains(player_id)) {
-    media_player_observer_hosts_[player_id] =
-        std::make_unique<MediaPlayerObserverHostImpl>(player_id, this);
-  }
-  media_player_observer_hosts_[player_id]->BindMediaPlayerObserverReceiver(
+  auto observer_it = media_player_observer_hosts_.try_emplace(
+      player_id,
+      std::make_unique<MediaPlayerObserverHostImpl>(player_id, this));
+  observer_it.first->second->BindMediaPlayerObserverReceiver(
       std::move(media_player_observer));
 }
 

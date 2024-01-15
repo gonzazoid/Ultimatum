@@ -36,13 +36,22 @@ struct SimpleEntry: TimelineEntry {
 
 @main
 struct ChromeWidgets: WidgetBundle {
+  init() {
+    CrashHelper.configure()
+  }
   @WidgetBundleBuilder
   var body: some Widget {
     QuickActionsWidget()
     SearchWidget()
+    #if IOS_ENABLE_SHORTCUTS_WIDGET
+      ShortcutsWidget()
+    #endif
+    #if IOS_ENABLE_SEARCH_PASSWORDS_WIDGET
+      SearchPasswordsWidget()
+    #endif
     DinoGameWidget()
-    #if IOS_ENABLE_LOCKSCREEN_EXTENSION
-      #if IOS_AVAILABLE_LOCKSCREEN_EXTENSION
+    #if IOS_ENABLE_LOCKSCREEN_WIDGET
+      #if IOS_AVAILABLE_LOCKSCREEN_WIDGET
         LockscreenLauncherSearchWidget()
         LockscreenLauncherIncognitoWidget()
         LockscreenLauncherVoiceSearchWidget()

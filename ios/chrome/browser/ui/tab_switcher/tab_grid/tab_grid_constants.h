@@ -5,8 +5,17 @@
 #ifndef IOS_CHROME_BROWSER_UI_TAB_SWITCHER_TAB_GRID_TAB_GRID_CONSTANTS_H_
 #define IOS_CHROME_BROWSER_UI_TAB_SWITCHER_TAB_GRID_TAB_GRID_CONSTANTS_H_
 
-#include <CoreGraphics/CoreGraphics.h>
+#import <CoreGraphics/CoreGraphics.h>
 #import <Foundation/Foundation.h>
+
+namespace base {
+class TimeDelta;
+}  // namespace base
+
+// Keys of UMA IOS.TabSwitcher.Idle histograms.
+extern const char kUMATabSwitcherIdleIncognitoTabGridPageHistogram[];
+extern const char kUMATabSwitcherIdleRecentTabsHistogram[];
+extern const char kUMATabSwitcherIdleRegularTabGridPageHistogram[];
 
 // Accessibility identifiers for automated testing.
 extern NSString* const kTabGridIncognitoTabsPageButtonIdentifier;
@@ -22,6 +31,8 @@ extern NSString* const kTabGridRegularTabsEmptyStateIdentifier;
 extern NSString* const kTabGridScrollViewIdentifier;
 extern NSString* const kRegularTabGridIdentifier;
 extern NSString* const kIncognitoTabGridIdentifier;
+extern NSString* const kInactiveTabGridIdentifier;
+extern NSString* const kInactiveTabGridCloseAllButtonIdentifier;
 
 extern NSString* const kTabGridEditButtonIdentifier;
 extern NSString* const kTabGridEditCloseTabsButtonIdentifier;
@@ -68,12 +79,10 @@ extern const CGFloat kTabGridSearchBarHeight;
 // The Search bar width ratio modifier for non-compact orientation.
 extern const CGFloat kTabGridSearchBarNonCompactWidthRatioModifier;
 
-// The distance travelled by the thumb strip thumbnails during the slide-in
-// animation of the thumb strip reveal transition.
-extern const CGFloat kThumbStripSlideInHeight;
+// Alpha of the background color of the toolbar.
+extern const CGFloat kToolbarBackgroundAlpha;
 
-// The distance travelled by the thumb strip's plus sign button during the
-// slide-out animation of the transition from Peeked to Revealed state.
-extern const CGFloat kThumbStripPlusSignButtonSlideOutDistance;
+// Duration for animations in the tab grid.
+extern const base::TimeDelta kAnimationDuration;
 
 #endif  // IOS_CHROME_BROWSER_UI_TAB_SWITCHER_TAB_GRID_TAB_GRID_CONSTANTS_H_

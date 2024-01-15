@@ -9,7 +9,7 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/test/task_environment.h"
 #include "base/values.h"
@@ -160,7 +160,7 @@ TEST_F(BaseRequestsTest, ParseValidJson) {
   base::Value::Dict* root_dict = json->GetIfDict();
   ASSERT_TRUE(root_dict);
 
-  absl::optional<int> int_value = root_dict->FindInt("test");
+  std::optional<int> int_value = root_dict->FindInt("test");
   ASSERT_TRUE(int_value.has_value());
   EXPECT_EQ(123, *int_value);
 }
@@ -196,6 +196,14 @@ TEST_F(BaseRequestsTest, UrlFetchRequestBaseResponseCodeOverride) {
 
   // HTTP_FORBIDDEN (403) is overridden by the error reason.
   EXPECT_EQ(HTTP_SERVICE_UNAVAILABLE, error);
+}
+
+TEST(BaseRequestsHttpRequestMethodEnumTest, ConvertsToString) {
+  EXPECT_EQ(HttpRequestMethodToString(HttpRequestMethod::kGet), "GET");
+  EXPECT_EQ(HttpRequestMethodToString(HttpRequestMethod::kPost), "POST");
+  EXPECT_EQ(HttpRequestMethodToString(HttpRequestMethod::kPut), "PUT");
+  EXPECT_EQ(HttpRequestMethodToString(HttpRequestMethod::kPatch), "PATCH");
+  EXPECT_EQ(HttpRequestMethodToString(HttpRequestMethod::kDelete), "DELETE");
 }
 
 }  // namespace google_apis

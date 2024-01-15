@@ -7,7 +7,6 @@
 
 #import <UIKit/UIKit.h>
 
-@class CRWContextMenuItem;
 @class CRWWebViewScrollViewProxy;
 
 // Provides an interface for embedders to access the WebState's web view in a
@@ -44,11 +43,8 @@
 // Returns the webview's gesture recognizers.
 @property(nonatomic, readonly) NSArray* gestureRecognizers;
 
-// Adds a webview gesture recognizers.
-- (void)addGestureRecognizer:(UIGestureRecognizer*)gestureRecognizer;
-
-// Removes a webview gesture recognizers.
-- (void)removeGestureRecognizer:(UIGestureRecognizer*)gestureRecognizer;
+// A Boolean value indicating whether or not the web page is in fullscreen mode.
+@property(nonatomic, readonly) BOOL isWebPageInFullscreenMode;
 
 // Whether or not the content view should use the content inset when setting
 // `contentInset`. Implementations may or may not respect the setting of this
@@ -64,8 +60,8 @@
 // Wrapper around the addSubview method of the webview.
 - (void)addSubview:(UIView*)view;
 
-// Returns the currently visible keyboard accessory, or nil.
-- (UIView*)keyboardAccessory;
+// YES if the keyboard is currently visible for use in the web view.
+@property(nonatomic, readonly, getter=isKeyboardVisible) BOOL keyboardVisible;
 
 // Wrapper around the becomeFirstResponder method of the webview.
 - (BOOL)becomeFirstResponder;
@@ -73,11 +69,6 @@
 // Notifies the web view controller that the surface size has changed due to
 // multiwindow action or orientation change.
 - (void)surfaceSizeChanged;
-
-// Shows a custom iOS context menu with the given `items` for options targeted
-// to the data visible in given window `rect`.
-- (void)showMenuWithItems:(NSArray<CRWContextMenuItem*>*)items
-                     rect:(CGRect)rect;
 
 @end
 

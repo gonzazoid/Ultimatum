@@ -45,6 +45,8 @@ AudioCodec ToAudioCodec(const ::media::AudioCodec audio_codec) {
       return kCodecDTS;
     case ::media::AudioCodec::kDTSXP2:
       return kCodecDTSXP2;
+    case ::media::AudioCodec::kDTSE:
+      return kCodecDTSE;
     default:
       LOG(ERROR) << "Unsupported audio codec " << audio_codec;
   }
@@ -60,6 +62,7 @@ SampleFormat ToSampleFormat(const ::media::SampleFormat sample_format) {
     case ::media::kSampleFormatDtsxP2:
     case ::media::kSampleFormatMpegHAudio:
     case ::media::kSampleFormatIECDts:
+    case ::media::kSampleFormatDtse:
       return kUnknownSampleFormat;
     case ::media::kSampleFormatU8:
       return kSampleFormatU8;
@@ -141,6 +144,8 @@ SampleFormat ToSampleFormat(const ::media::SampleFormat sample_format) {
       return ::media::AudioCodec::kDTS;
     case kCodecDTSXP2:
       return ::media::AudioCodec::kDTSXP2;
+    case kCodecDTSE:
+      return ::media::AudioCodec::kDTSE;
     default:
       return ::media::AudioCodec::kUnknown;
   }
@@ -347,27 +352,36 @@ VideoConfig DecoderConfigAdapter::ToCastVideoConfig(
   video_config.matrix = static_cast<MatrixID>(config.color_space_info().matrix);
   video_config.range = static_cast<RangeID>(config.color_space_info().range);
 
-  absl::optional<::gfx::HDRMetadata> hdr_metadata = config.hdr_metadata();
+  std::optional<::gfx::HDRMetadata> hdr_metadata = config.hdr_metadata();
   if (hdr_metadata) {
     video_config.have_hdr_metadata = true;
-    video_config.hdr_metadata.max_content_light_level =
-        hdr_metadata->max_content_light_level;
-    video_config.hdr_metadata.max_frame_average_light_level =
-        hdr_metadata->max_frame_average_light_level;
 
-    const auto& mm1 = hdr_metadata->color_volume_metadata;
-    auto& mm2 = video_config.hdr_metadata.color_volume_metadata;
-    mm2.primary_r_chromaticity_x = mm1.primary_r.x();
-    mm2.primary_r_chromaticity_y = mm1.primary_r.y();
-    mm2.primary_g_chromaticity_x = mm1.primary_g.x();
-    mm2.primary_g_chromaticity_y = mm1.primary_g.y();
-    mm2.primary_b_chromaticity_x = mm1.primary_b.x();
-    mm2.primary_b_chromaticity_y = mm1.primary_b.y();
-    mm2.white_point_chromaticity_x = mm1.white_point.x();
-    mm2.white_point_chromaticity_y = mm1.white_point.y();
-    mm2.luminance_max = mm1.luminance_max;
-    mm2.luminance_min = mm1.luminance_min;
+    if (const auto& cta_861_3 = hdr_metadata->cta_861_3) {
+      video_config.hdr_metadata.max_content_light_level =
+          cta_861_3->max_content_light_level;
+      video_config.hdr_metadata.max_frame_average_light_level =
+          cta_861_3->max_frame_average_light_level;
+    }
+
+    if (const auto& mm1 = hdr_metadata->smpte_st_2086) {
+      auto& mm2 = video_config.hdr_metadata.color_volume_metadata;
+      mm2.primary_r_chromaticity_x = mm1->primaries.fRX;
+      mm2.primary_r_chromaticity_y = mm1->primaries.fRY;
+      mm2.primary_g_chromaticity_x = mm1->primaries.fGX;
+      mm2.primary_g_chromaticity_y = mm1->primaries.fGY;
+      mm2.primary_b_chromaticity_x = mm1->primaries.fBX;
+      mm2.primary_b_chromaticity_y = mm1->primaries.fBY;
+      mm2.white_point_chromaticity_x = mm1->primaries.fWX;
+      mm2.white_point_chromaticity_y = mm1->primaries.fWY;
+      mm2.luminance_max = mm1->luminance_max;
+      mm2.luminance_min = mm1->luminance_min;
+    }
   }
+
+  const gfx::Size aspect_ratio =
+      config.aspect_ratio().GetNaturalSize(config.visible_rect());
+  video_config.width = aspect_ratio.width();
+  video_config.height = aspect_ratio.height();
 
   return video_config;
 }

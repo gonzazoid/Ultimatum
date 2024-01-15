@@ -10,7 +10,6 @@
 #include "base/test/mock_callback.h"
 #include "base/test/task_environment.h"
 #include "components/signin/core/browser/account_reconcilor.h"
-#include "components/signin/public/base/account_consistency_method.h"
 #include "components/signin/public/base/test_signin_client.h"
 #include "components/signin/public/identity_manager/identity_test_environment.h"
 #include "components/signin/public/identity_manager/set_accounts_in_cookie_result.h"
@@ -56,12 +55,6 @@ class StubAccountReconcilor : public AccountReconcilor {
     OnLogOutFromCookieCompleted(GoogleServiceAuthError::AuthErrorNone());
   }
 
-  void SimulateSetCookiesFinished() {
-    EXPECT_TRUE(perform_set_cookies_called_);
-    perform_set_cookies_called_ = false;
-    OnSetAccountsInCookieCompleted(signin::SetAccountsInCookieResult::kSuccess);
-  }
-
  private:
   bool perform_set_cookies_called_ = false;
   bool perform_logout_all_accounts_called_ = false;
@@ -71,10 +64,7 @@ class WebSigninBridgeTest : public ::testing::Test {
  public:
   WebSigninBridgeTest()
       : signin_client_(&prefs_),
-        identity_test_env_(nullptr,
-                           &prefs_,
-                           signin::AccountConsistencyMethod::kDisabled,
-                           &signin_client_) {
+        identity_test_env_(nullptr, &prefs_, &signin_client_) {
     account_reconcilor_ = std::make_unique<StubAccountReconcilor>(
         identity_test_env_.identity_manager(), &signin_client_);
   }
@@ -125,8 +115,9 @@ TEST_F(
       CreateWebSigninBridge(account, callback.Get());
 
   EXPECT_CALL(callback,
-              Run(GoogleServiceAuthError(
-                  GoogleServiceAuthError::State::INVALID_GAIA_CREDENTIALS)));
+              Run(GoogleServiceAuthError::FromInvalidGaiaCredentialsReason(
+                  GoogleServiceAuthError::InvalidGaiaCredentialsReason::
+                      CREDENTIALS_REJECTED_BY_SERVER)));
   identity_test_env_.SetPrimaryAccount(account.email,
                                        signin::ConsentLevel::kSync);
   identity_test_env_.SetInvalidRefreshTokenForAccount(account.account_id);
@@ -135,7 +126,7 @@ TEST_F(
       GoogleServiceAuthError(
           GoogleServiceAuthError::State::INVALID_GAIA_CREDENTIALS));
   account_reconcilor_->EnableReconcile();
-  EXPECT_EQ(signin_metrics::AccountReconcilorState::ACCOUNT_RECONCILOR_ERROR,
+  EXPECT_EQ(signin_metrics::AccountReconcilorState::kError,
             account_reconcilor_->GetState());
 
   EXPECT_CALL(callback, Run(GoogleServiceAuthError()));
@@ -170,8 +161,9 @@ TEST_F(WebSigninBridgeTest, ReconcilorErrorShouldTriggerOnSigninFailed) {
   std::unique_ptr<WebSigninBridge> web_signin_bridge =
       CreateWebSigninBridge(account, callback.Get());
   EXPECT_CALL(callback,
-              Run(GoogleServiceAuthError(
-                  GoogleServiceAuthError::State::INVALID_GAIA_CREDENTIALS)));
+              Run(GoogleServiceAuthError::FromInvalidGaiaCredentialsReason(
+                  GoogleServiceAuthError::InvalidGaiaCredentialsReason::
+                      CREDENTIALS_REJECTED_BY_SERVER)));
 
   identity_test_env_.SetPrimaryAccount(account.email,
                                        signin::ConsentLevel::kSync);
@@ -187,7 +179,7 @@ TEST_F(WebSigninBridgeTest, ReconcilorErrorShouldTriggerOnSigninFailed) {
       identity_test_env_.identity_manager()
           ->HasAccountWithRefreshTokenInPersistentErrorState(account_id1));
   account_reconcilor_->EnableReconcile();
-  EXPECT_EQ(signin_metrics::AccountReconcilorState::ACCOUNT_RECONCILOR_ERROR,
+  EXPECT_EQ(signin_metrics::AccountReconcilorState::kError,
             account_reconcilor_->GetState());
   CoreAccountId account_id2 =
       identity_test_env_.identity_manager()->GetPrimaryAccountId(

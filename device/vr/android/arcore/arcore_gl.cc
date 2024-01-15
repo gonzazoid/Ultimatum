@@ -10,26 +10,26 @@
 #include <utility>
 #include "base/android/android_hardware_buffer_compat.h"
 #include "base/android/jni_android.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/containers/contains.h"
 #include "base/containers/queue.h"
-#include "base/cxx17_backports.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ptr_util.h"
 #include "base/metrics/histogram_macros.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "base/trace_event/trace_event.h"
 #include "base/trace_event/traced_value.h"
 #include "device/vr/android/arcore/ar_image_transport.h"
 #include "device/vr/android/arcore/arcore.h"
 #include "device/vr/android/arcore/arcore_math_utils.h"
-#include "device/vr/android/arcore/arcore_session_utils.h"
-#include "device/vr/android/arcore/type_converters.h"
+#include "device/vr/android/arcore/vr_service_type_converters.h"
 #include "device/vr/android/web_xr_presentation_state.h"
+#include "device/vr/android/xr_java_coordinator.h"
 #include "device/vr/public/cpp/xr_frame_sink_client.h"
 #include "device/vr/public/mojom/pose.h"
 #include "device/vr/public/mojom/vr_service.mojom.h"
+#include "device/vr/public/mojom/xr_session.mojom.h"
 #include "device/vr/util/transform_utils.h"
 #include "ui/display/display.h"
 #include "ui/display/screen.h"
@@ -131,7 +131,7 @@ ArCoreGlInitializeResult::~ArCoreGlInitializeResult() = default;
 
 // The ArCompositor is currently only supported if we're using shared buffers.
 ArCoreGl::ArCoreGl(std::unique_ptr<ArImageTransport> ar_image_transport)
-    : gl_thread_task_runner_(base::ThreadTaskRunnerHandle::Get()),
+    : gl_thread_task_runner_(base::SingleThreadTaskRunner::GetCurrentDefault()),
       ar_image_transport_(std::move(ar_image_transport)),
       use_ar_compositor_(ArImageTransport::UseSharedBuffer()),
       webxr_(std::make_unique<WebXrPresentationState>()),
@@ -151,7 +151,8 @@ ArCoreGl::~ArCoreGl() {
   // If anyone is still waiting for our initialization to finish, let them know
   // that it failed.
   if (initialized_callback_)
-    std::move(initialized_callback_).Run(absl::nullopt);
+    std::move(initialized_callback_)
+        .Run(base::unexpected(ArCoreGlInitializeError::kFailure));
 
   // Make sure mojo bindings are closed before proceeding with member
   // destruction. Specifically, destroying pending_getframedata_
@@ -165,7 +166,7 @@ bool ArCoreGl::CanRenderDOMContent() {
 }
 
 void ArCoreGl::Initialize(
-    ArCoreSessionUtils* session_utils,
+    XrJavaCoordinator* session_utils,
     ArCoreFactory* arcore_factory,
     XrFrameSinkClient* xr_frame_sink_client,
     gfx::AcceleratedWidget drawing_widget,
@@ -214,16 +215,18 @@ void ArCoreGl::Initialize(
     drawing_widget = gfx::kNullAcceleratedWidget;
   }
   if (!InitializeGl(drawing_widget)) {
-    std::move(callback).Run(absl::nullopt);
+    std::move(callback).Run(
+        base::unexpected(ArCoreGlInitializeError::kFailure));
     return;
   }
 
   // Get the activity context.
   base::android::ScopedJavaLocalRef<jobject> application_context =
-      session_utils->GetApplicationContext();
+      session_utils->GetCurrentActivityContext();
   if (!application_context.obj()) {
     DLOG(ERROR) << "Unable to retrieve the Java context/activity!";
-    std::move(callback).Run(absl::nullopt);
+    std::move(callback).Run(
+        base::unexpected(ArCoreGlInitializeError::kFailure));
     return;
   }
 
@@ -252,7 +255,8 @@ void ArCoreGl::Initialize(
                           std::move(depth_sensing_config));
   if (!maybe_initialize_result) {
     DLOG(ERROR) << "ARCore failed to initialize";
-    std::move(callback).Run(absl::nullopt);
+    std::move(callback).Run(
+        base::unexpected(ArCoreGlInitializeError::kFailure));
     return;
   }
 
@@ -331,8 +335,13 @@ void ArCoreGl::InitializeArCompositor(gpu::SurfaceHandle surface_handle,
                      weak_ptr_factory_.GetWeakPtr()));
 }
 
-void ArCoreGl::OnArImageTransportReady() {
-  DVLOG(1) << __func__;
+void ArCoreGl::OnArImageTransportReady(bool success) {
+  DVLOG(1) << __func__ << ": success=" << success;
+  if (!success) {
+    std::move(initialized_callback_)
+        .Run(base::unexpected(ArCoreGlInitializeError::kRetryableFailure));
+    return;
+  }
   is_image_transport_ready_ = true;
   OnInitialized();
 }
@@ -340,7 +349,8 @@ void ArCoreGl::OnArImageTransportReady() {
 void ArCoreGl::OnArCompositorInitialized(bool initialized) {
   DVLOG(1) << __func__ << " intialized=" << initialized;
   if (!initialized) {
-    std::move(initialized_callback_).Run(absl::nullopt);
+    std::move(initialized_callback_)
+        .Run(base::unexpected(ArCoreGlInitializeError::kFailure));
     return;
   }
 
@@ -440,7 +450,8 @@ bool ArCoreGl::InitializeGl(gfx::AcceleratedWidget drawing_widget) {
 
   gl::GLDisplay* display = nullptr;
   if (gl::GetGLImplementation() == gl::kGLImplementationNone) {
-    display = gl::init::InitializeGLOneOff(/*system_device_id=*/0);
+    display = gl::init::InitializeGLOneOff(
+        /*gpu_preference=*/gl::GpuPreference::kDefault);
     if (!display) {
       DLOG(ERROR) << "gl::init::InitializeGLOneOff failed";
       return false;
@@ -457,8 +468,7 @@ bool ArCoreGl::InitializeGl(gfx::AcceleratedWidget drawing_widget) {
   if (drawing_widget != gfx::kNullAcceleratedWidget) {
     surface = gl::init::CreateViewGLSurface(display, drawing_widget);
   } else {
-    surface = gl::init::CreateOffscreenGLSurfaceWithFormat(
-        display, {0, 0}, gl::GLSurfaceFormat());
+    surface = gl::init::CreateOffscreenGLSurface(display, {0, 0});
   }
   DVLOG(3) << "surface=" << surface.get();
   if (!surface.get()) {
@@ -574,11 +584,11 @@ void ArCoreGl::RecalculateUvsAndProjection() {
   float bottom =
       depth_near * (projection_.rc(2, 1) - 1.f) / projection_.rc(1, 1);
   float top = depth_near * (projection_.rc(2, 1) + 1.f) / projection_.rc(1, 1);
+  DVLOG(3) << __func__ << ": projection_=" << projection_.ToString();
 
   // Also calculate the inverse projection which is needed for converting
   // screen touches to world rays.
-  bool has_inverse = projection_.GetInverse(&inverse_projection_);
-  DCHECK(has_inverse);
+  inverse_projection_ = projection_.GetCheckedInverse();
 
   // VRFieldOfView wants positive angles.
   mojom::VRFieldOfViewPtr field_of_view = mojom::VRFieldOfView::New();
@@ -823,9 +833,8 @@ void ArCoreGl::CopyCameraImageToFramebuffer() {
   // Draw the current camera texture to the output default framebuffer now, if
   // available.
   if (have_camera_image_) {
-    glBindFramebufferEXT(GL_DRAW_FRAMEBUFFER, 0);
-    ar_image_transport_->CopyCameraImageToFramebuffer(screen_size_,
-                                                      uv_transform_);
+    ar_image_transport_->CopyCameraImageToFramebuffer(
+        /*framebuffer=*/0, screen_size_, uv_transform_);
     have_camera_image_ = false;
   }
 
@@ -862,7 +871,7 @@ base::TimeDelta ArCoreGl::EstimatedArCoreFrameTime() {
   // Ensure that the returned value is within ARCore's nominal frame time range.
   // This helps avoid underestimating the frame rate if the app is too slow
   // to reach the minimum target FPS value.
-  return base::clamp(frametime, min_frametime, max_frametime);
+  return std::clamp(frametime, min_frametime, max_frametime);
 }
 
 base::TimeDelta ArCoreGl::WaitTimeForArCoreUpdate() {
@@ -1049,7 +1058,7 @@ void ArCoreGl::FinishFrame(int16_t frame_index) {
 
   TRACE_EVENT1("gpu", __func__, "frame", frame_index);
   DVLOG(3) << __func__;
-  surface_->SwapBuffers(base::DoNothing(), gl::FrameData());
+  surface_->SwapBuffers(base::DoNothing(), gfx::FrameData());
 
   // If we have a rendering frame (we don't if the app didn't submit one),
   // update statistics.
@@ -1069,9 +1078,13 @@ void ArCoreGl::GetRenderedFrameStats(WebXrFrame* frame) {
   base::TimeTicks now = base::TimeTicks::Now();
 
   // Get the time when rendering completed from the render completion fence.
-  // TODO(klausw): This is an overestimate in AR compositor mode, the fence
+  //
+  // This is an overestimate in AR compositor mode because the fence
   // completes one frame late. The average_render_time_ calculation should use
-  // the WritesDone time reported via OnBeginFrame's timing_data instead.
+  // the WritesDone time reported via OnBeginFrame's timing_data instead, but
+  // those aren't guaranteed to be available. See also the GPU load
+  // estimate in rendering_time_ratio_ which uses a different calculation.
+  // TODO(https://crbug.com/1382589): revisit this calculation?
   base::TimeTicks completion_time = now;
   DCHECK(frame->render_completion_fence);
   completion_time = static_cast<gl::GLFenceAndroidNativeFenceSync*>(
@@ -1292,9 +1305,8 @@ void ArCoreGl::OnTransportFrameAvailable(const gfx::Transform& uv_transform) {
   // Don't use the viewport bounds here, those already got applied
   // when copying the mailbox image to the transfer Surface
   // in ProcessFrameFromMailbox.
-  glBindFramebufferEXT(GL_DRAW_FRAMEBUFFER, 0);
-  ar_image_transport_->CopyDrawnImageToFramebuffer(webxr_.get(), screen_size_,
-                                                   uv_transform);
+  ar_image_transport_->CopyDrawnImageToFramebuffer(
+      webxr_.get(), /*framebuffer=*/0, screen_size_, uv_transform);
 
   FinishFrame(frame_index);
 
@@ -1320,8 +1332,7 @@ void ArCoreGl::SubmitFrameDrawnIntoTexture(int16_t frame_index,
 
   // The previous sync token has been consumed by the renderer process, if we
   // want to use this buffer again, we need to wait on this token.
-  webxr_->GetAnimatingFrame()->shared_buffer->mailbox_holder.sync_token =
-      sync_token;
+  webxr_->GetAnimatingFrame()->shared_buffer->sync_token = sync_token;
 
   // Start processing the frame now if possible. If there's already a current
   // processing frame, defer it until that frame calls TryDeferredProcessing.
@@ -1408,13 +1419,6 @@ void ArCoreGl::GetEnvironmentIntegrationProvider(
   environment_receiver_.Bind(std::move(environment_provider));
   environment_receiver_.set_disconnect_handler(base::BindOnce(
       &ArCoreGl::OnBindingDisconnect, weak_ptr_factory_.GetWeakPtr()));
-}
-
-void ArCoreGl::SetInputSourceButtonListener(
-    mojo::PendingAssociatedRemote<device::mojom::XRInputSourceButtonListener>) {
-  // Input eventing is not supported. This call should not
-  // be made on this device.
-  frame_data_receiver_.ReportBadMessage("Input eventing is not supported.");
 }
 
 void ArCoreGl::SubscribeToHitTest(

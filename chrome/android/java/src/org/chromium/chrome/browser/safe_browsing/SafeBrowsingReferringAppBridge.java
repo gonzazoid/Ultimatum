@@ -11,27 +11,27 @@ import android.provider.Browser;
 import androidx.annotation.IntDef;
 import androidx.annotation.VisibleForTesting;
 
+import org.jni_zero.CalledByNative;
+
 import org.chromium.base.IntentUtils;
-import org.chromium.base.annotations.CalledByNative;
 import org.chromium.chrome.browser.IntentHandler;
 import org.chromium.chrome.browser.IntentHandler.ExternalAppId;
 import org.chromium.ui.base.WindowAndroid;
 
-/**
- * Bridge between Java and native SafeBrowsing code to get referring app information.
- */
+/** Bridge between Java and native SafeBrowsing code to get referring app information. */
 public class SafeBrowsingReferringAppBridge {
     private SafeBrowsingReferringAppBridge() {}
 
-    /**
-     * A helper class to store referring app information.
-     */
+    /** A helper class to store referring app information. */
     static class ReferringAppInfo {
         // The source of referring app name. These values must be aligned with the
         // ReferringAppSource enum defined in csd.proto.
-        @IntDef({ReferringAppSource.REFERRING_APP_SOURCE_UNSPECIFIED,
-                ReferringAppSource.KNOWN_APP_ID, ReferringAppSource.UNKNOWN_APP_ID,
-                ReferringAppSource.ACTIVITY_REFERRER})
+        @IntDef({
+            ReferringAppSource.REFERRING_APP_SOURCE_UNSPECIFIED,
+            ReferringAppSource.KNOWN_APP_ID,
+            ReferringAppSource.UNKNOWN_APP_ID,
+            ReferringAppSource.ACTIVITY_REFERRER
+        })
         public @interface ReferringAppSource {
             int REFERRING_APP_SOURCE_UNSPECIFIED = 0;
             int KNOWN_APP_ID = 1;
@@ -72,10 +72,10 @@ public class SafeBrowsingReferringAppBridge {
             return getEmptyReferringInfo();
         }
 
-        @ExternalAppId
-        int externalId = IntentHandler.determineExternalIntentSource(intent);
+        @ExternalAppId int externalId = IntentHandler.determineExternalIntentSource(intent);
         if (externalId != ExternalAppId.OTHER) {
-            return new ReferringAppInfo(ReferringAppInfo.ReferringAppSource.KNOWN_APP_ID,
+            return new ReferringAppInfo(
+                    ReferringAppInfo.ReferringAppSource.KNOWN_APP_ID,
                     externalAppIdToString(externalId));
         }
 
@@ -86,24 +86,24 @@ public class SafeBrowsingReferringAppBridge {
         }
 
         // If appId is empty, fallback to EXTRA_REFERRER;
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP_MR1) {
-            // If the activity is launched through launcher activity, the referrer is set through
-            // intent extra.
-            String activity_referrer =
-                    IntentUtils.safeGetStringExtra(intent, IntentHandler.EXTRA_ACTIVITY_REFERRER);
-            if (activity_referrer != null) {
-                return new ReferringAppInfo(
-                        ReferringAppInfo.ReferringAppSource.ACTIVITY_REFERRER, activity_referrer);
-            }
-
-            // If the activity referrer is not found in intent extra, get it from the activity
-            // directly.
-            Uri extraReferrer = activity.getReferrer();
-            if (extraReferrer != null) {
-                return new ReferringAppInfo(ReferringAppInfo.ReferringAppSource.ACTIVITY_REFERRER,
-                        extraReferrer.toString());
-            }
+        // If the activity is launched through launcher activity, the referrer is set through
+        // intent extra.
+        String activity_referrer =
+                IntentUtils.safeGetStringExtra(intent, IntentHandler.EXTRA_ACTIVITY_REFERRER);
+        if (activity_referrer != null) {
+            return new ReferringAppInfo(
+                    ReferringAppInfo.ReferringAppSource.ACTIVITY_REFERRER, activity_referrer);
         }
+
+        // If the activity referrer is not found in intent extra, get it from the activity
+        // directly.
+        Uri extraReferrer = activity.getReferrer();
+        if (extraReferrer != null) {
+            return new ReferringAppInfo(
+                    ReferringAppInfo.ReferringAppSource.ACTIVITY_REFERRER,
+                    extraReferrer.toString());
+        }
+
         return getEmptyReferringInfo();
     }
 

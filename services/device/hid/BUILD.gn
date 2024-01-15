@@ -20,10 +20,11 @@ source_set("hid") {
     "hid_device_info.h",
     "hid_manager_impl.cc",
     "hid_manager_impl.h",
-    "hid_report_type.h",
     "hid_service.cc",
     "hid_service.h",
   ]
+
+  configs += [ "//build/config/compiler:wexit_time_destructors" ]
 
   deps = [
     "//base",

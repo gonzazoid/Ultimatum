@@ -12,7 +12,7 @@
 
 namespace ui {
 
-class AX_EXPORT AXPlatformNodeTestHelper {
+class AXPlatformNodeTestHelper {
  public:
   static int GetTreeSize(AXPlatformNode* ax_node);
   static AXPlatformNode* FindChildByName(AXPlatformNode* ax_node,

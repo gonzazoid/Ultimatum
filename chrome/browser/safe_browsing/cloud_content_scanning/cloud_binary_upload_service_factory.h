@@ -5,7 +5,7 @@
 #ifndef CHROME_BROWSER_SAFE_BROWSING_CLOUD_CONTENT_SCANNING_CLOUD_BINARY_UPLOAD_SERVICE_FACTORY_H_
 #define CHROME_BROWSER_SAFE_BROWSING_CLOUD_CONTENT_SCANNING_CLOUD_BINARY_UPLOAD_SERVICE_FACTORY_H_
 
-#include "base/memory/singleton.h"
+#include "base/no_destructor.h"
 #include "chrome/browser/profiles/profile_keyed_service_factory.h"
 
 class KeyedService;
@@ -33,16 +33,16 @@ class CloudBinaryUploadServiceFactory : public ProfileKeyedServiceFactory {
       const CloudBinaryUploadServiceFactory&) = delete;
 
  private:
-  friend struct base::DefaultSingletonTraits<CloudBinaryUploadServiceFactory>;
+  friend base::NoDestructor<CloudBinaryUploadServiceFactory>;
 
   CloudBinaryUploadServiceFactory();
   ~CloudBinaryUploadServiceFactory() override = default;
 
   // CloudBrowserContextKeyedServiceFactory:
-  KeyedService* BuildServiceInstanceFor(
+  std::unique_ptr<KeyedService> BuildServiceInstanceForBrowserContext(
       content::BrowserContext* context) const override;
 };
 
 }  // namespace safe_browsing
 
-#endif  // CHROME_BROWSER_SAFE_BROWSING_CLOUD_CONTENT_SCANNING_BINARY_CLOUD_UPLOAD_SERVICE_FACTORY_H_
+#endif  // CHROME_BROWSER_SAFE_BROWSING_CLOUD_CONTENT_SCANNING_CLOUD_BINARY_UPLOAD_SERVICE_FACTORY_H_

@@ -7,6 +7,7 @@
 #include <memory>
 
 #include "base/feature_list.h"
+#include "base/task/single_thread_task_runner.h"
 #include "third_party/blink/public/common/features.h"
 #include "third_party/blink/public/mojom/script/script_type.mojom-blink.h"
 #include "third_party/blink/renderer/platform/network/content_security_policy_parsers.h"
@@ -30,14 +31,14 @@ GlobalScopeCreationParams::GlobalScopeCreationParams(
     HttpsState starter_https_state,
     WorkerClients* worker_clients,
     std::unique_ptr<WebContentSettingsClient> content_settings_client,
-    const Vector<OriginTrialFeature>* inherited_trial_features,
+    const Vector<mojom::blink::OriginTrialFeature>* inherited_trial_features,
     const base::UnguessableToken& parent_devtools_token,
     std::unique_ptr<WorkerSettings> worker_settings,
     mojom::blink::V8CacheOptions v8_cache_options,
     WorkletModuleResponsesMap* module_responses_map,
     mojo::PendingRemote<mojom::blink::BrowserInterfaceBroker>
         browser_interface_broker,
-    mojo::PendingRemote<blink::mojom::CodeCacheHost> code_cache_host_interface,
+    mojo::PendingRemote<mojom::blink::CodeCacheHost> code_cache_host_interface,
     mojo::PendingRemote<mojom::blink::BlobURLStore> blob_url_store,
     BeginFrameProviderParams begin_frame_provider_params,
     const PermissionsPolicy* parent_permissions_policy,
@@ -48,7 +49,9 @@ GlobalScopeCreationParams::GlobalScopeCreationParams(
     bool parent_is_isolated_context,
     InterfaceRegistry* interface_registry,
     scoped_refptr<base::SingleThreadTaskRunner>
-        agent_group_scheduler_compositor_task_runner)
+        agent_group_scheduler_compositor_task_runner,
+    const SecurityOrigin* top_level_frame_security_origin,
+    bool parent_has_storage_access)
     : script_url(script_url),
       script_type(script_type),
       global_scope_name(global_scope_name),
@@ -75,10 +78,15 @@ GlobalScopeCreationParams::GlobalScopeCreationParams(
       begin_frame_provider_params(std::move(begin_frame_provider_params)),
       // At the moment, workers do not support their container policy being set,
       // so it will just be an empty ParsedPermissionsPolicy for now.
+      // Shared storage worklets have a null `parent_permissions_policy` and
+      // `starter_origin`.
+      // TODO(crbug.com/1419253): Pass non-null `parent_permissions_policy` and
+      // `starter_origin`. Also, we could ensure `starter_origin` is never null
+      // after that.
       worker_permissions_policy(PermissionsPolicy::CreateFromParentPolicy(
           parent_permissions_policy,
           ParsedPermissionsPolicy() /* container_policy */,
-          starter_origin->ToUrlOrigin())),
+          starter_origin ? starter_origin->ToUrlOrigin() : url::Origin())),
       agent_cluster_id(agent_cluster_id),
       ukm_source_id(ukm_source_id),
       parent_context_token(parent_context_token),
@@ -87,12 +95,18 @@ GlobalScopeCreationParams::GlobalScopeCreationParams(
       parent_is_isolated_context(parent_is_isolated_context),
       interface_registry(interface_registry),
       agent_group_scheduler_compositor_task_runner(
-          std::move(agent_group_scheduler_compositor_task_runner)) {
+          std::move(agent_group_scheduler_compositor_task_runner)),
+      top_level_frame_security_origin(
+          top_level_frame_security_origin
+              ? top_level_frame_security_origin->IsolatedCopy()
+              : nullptr),
+      parent_has_storage_access(parent_has_storage_access) {
   this->inherited_trial_features =
-      std::make_unique<Vector<OriginTrialFeature>>();
+      std::make_unique<Vector<mojom::blink::OriginTrialFeature>>();
   if (inherited_trial_features) {
-    for (OriginTrialFeature feature : *inherited_trial_features)
+    for (mojom::blink::OriginTrialFeature feature : *inherited_trial_features) {
       this->inherited_trial_features->push_back(feature);
+    }
   }
 }
 

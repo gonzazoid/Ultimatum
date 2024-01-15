@@ -6,23 +6,31 @@
 #define UI_VIEWS_CONTROLS_BUTTON_BUTTON_H_
 
 #include <memory>
+#include <optional>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/gtest_prod_util.h"
+#include "base/memory/raw_ptr.h"
+#include "base/memory/weak_ptr.h"
 #include "build/build_config.h"
+#include "third_party/abseil-cpp/absl/types/variant.h"
+#include "ui/actions/actions.h"
 #include "ui/events/event_constants.h"
 #include "ui/gfx/animation/throb_animation.h"
 #include "ui/native_theme/native_theme.h"
+#include "ui/views/action_view_controller.h"
 #include "ui/views/animation/animation_delegate_views.h"
-#include "ui/views/animation/ink_drop_host_view.h"
+#include "ui/views/animation/ink_drop_host.h"
 #include "ui/views/animation/ink_drop_state.h"
 #include "ui/views/controls/button/button_controller_delegate.h"
 #include "ui/views/controls/focus_ring.h"
 #include "ui/views/metadata/view_factory.h"
 #include "ui/views/painter.h"
+#include "ui/views/view.h"
 
 namespace views {
+
 namespace test {
 class ButtonTestApi;
 }
@@ -34,6 +42,8 @@ class Event;
 // A View representing a button. A Button is focusable by default and will
 // be part of the focus chain.
 class VIEWS_EXPORT Button : public View, public AnimationDelegateViews {
+  METADATA_HEADER(Button, View)
+
  public:
   // Button states for various button sub-types.
   enum ButtonState {
@@ -78,8 +88,9 @@ class VIEWS_EXPORT Button : public View, public AnimationDelegateViews {
   };
 
   // PressedCallback wraps a one-arg callback type with multiple constructors to
-  // allow callers to specify a RepeatingClosure if they don't care about the
-  // callback arg.
+  // allow callers to specify a OnceClosure or RepeatingClosure if they don't
+  // care about the callback arg.
+  //
   // TODO(crbug.com/772945): Re-evaluate if this class can/should be converted
   // to a type alias + various helpers or overloads to support the
   // RepeatingClosure case.
@@ -90,27 +101,48 @@ class VIEWS_EXPORT Button : public View, public AnimationDelegateViews {
     // Allow providing callbacks that expect either zero or one args, since many
     // callers don't care about the argument and can avoid adapter functions
     // this way.
+    PressedCallback(base::OnceClosure closure);       // NOLINT
     PressedCallback(Callback callback = Callback());  // NOLINT
     PressedCallback(base::RepeatingClosure closure);  // NOLINT
-    PressedCallback(const PressedCallback&);
     PressedCallback(PressedCallback&&);
-    PressedCallback& operator=(const PressedCallback&);
     PressedCallback& operator=(PressedCallback&&);
     ~PressedCallback();
 
-    explicit operator bool() const { return !!callback_; }
+    // Returns true if `callback_` holds a non-null callback, regardless if the
+    // callback is once or repeating.
+    explicit operator bool() const;
 
-    void Run(const ui::Event& event) { callback_.Run(event); }
+    // Precondition:
+    // `operator bool()` must be true (i.e. callback_ must be a non-null
+    // callback).
+    //
+    // Postcondition:
+    // If `callback_` holds a `base::OnceClosure`, `operator bool()` will be
+    // false.
+    void Run(const ui::Event& event);
 
    private:
-    Callback callback_;
+    absl::variant<base::OnceClosure, base::RepeatingClosure, Callback>
+        callback_;
+  };
+
+  // This is used to ensure that multiple overlapping elements anchored on this
+  // button correctly handle highlighting.
+  class VIEWS_EXPORT ScopedAnchorHighlight {
+   public:
+    explicit ScopedAnchorHighlight(base::WeakPtr<Button> button);
+    ~ScopedAnchorHighlight();
+
+    ScopedAnchorHighlight(ScopedAnchorHighlight&&);
+    ScopedAnchorHighlight& operator=(ScopedAnchorHighlight&&);
+
+   private:
+    base::WeakPtr<Button> button_;
   };
 
   static constexpr ButtonState kButtonStates[STATE_COUNT] = {
       ButtonState::STATE_NORMAL, ButtonState::STATE_HOVERED,
       ButtonState::STATE_PRESSED, ButtonState::STATE_DISABLED};
-
-  METADATA_HEADER(Button);
 
   Button(const Button&) = delete;
   Button& operator=(const Button&) = delete;
@@ -123,7 +155,7 @@ class VIEWS_EXPORT Button : public View, public AnimationDelegateViews {
   static ButtonState GetButtonStateFrom(ui::NativeTheme::State state);
 
   void SetTooltipText(const std::u16string& tooltip_text);
-  std::u16string GetTooltipText() const;
+  const std::u16string& GetTooltipText() const;
 
   // Tag is now a property. These accessors are deprecated. Use GetTag() and
   // SetTag() below or even better, use SetID()/GetID() from the ancestor.
@@ -132,8 +164,8 @@ class VIEWS_EXPORT Button : public View, public AnimationDelegateViews {
 
   virtual void SetCallback(PressedCallback callback);
 
-  void SetAccessibleName(const std::u16string& name);
-  const std::u16string& GetAccessibleName() const;
+  void AdjustAccessibleName(std::u16string& new_name,
+                            ax::mojom::NameFrom& name_from) override;
 
   // Get/sets the current display state of the button.
   ButtonState GetState() const;
@@ -142,13 +174,6 @@ class VIEWS_EXPORT Button : public View, public AnimationDelegateViews {
   // like event dispatching, focus traversals, etc. Calling SetEnabled(false)
   // will also set the state of |this| to STATE_DISABLED.
   void SetState(ButtonState state);
-
-  // Starts throbbing. See HoverAnimation for a description of cycles_til_stop.
-  // This method does nothing if |animate_on_state_change_| is false.
-  void StartThrobbing(int cycles_til_stop);
-
-  // Stops throbbing immediately.
-  void StopThrobbing();
 
   // Set how long the hover animation will last for.
   void SetAnimationDuration(base::TimeDelta duration);
@@ -190,6 +215,12 @@ class VIEWS_EXPORT Button : public View, public AnimationDelegateViews {
   // Highlights the ink drop for the button.
   void SetHighlighted(bool highlighted);
 
+  // Menus, bubbles, and IPH should call this when they anchor. This ensures
+  // that highlighting is handled correctly with multiple anchored elements.
+  // TODO(crbug/1428097): Migrate callers of SetHighlighted to this function,
+  // where appropriate.
+  ScopedAnchorHighlight AddAnchorHighlight();
+
   base::CallbackListSubscription AddStateChangedCallback(
       PropertyChangedCallback callback);
 
@@ -219,6 +250,7 @@ class VIEWS_EXPORT Button : public View, public AnimationDelegateViews {
       const ViewHierarchyChangedDetails& details) override;
   void OnFocus() override;
   void OnBlur() override;
+  std::unique_ptr<ActionViewInterface> GetActionViewInterface() override;
 
   // Overridden from views::AnimationDelegateViews:
   void AnimationProgressed(const gfx::Animation* animation) override;
@@ -236,6 +268,9 @@ class VIEWS_EXPORT Button : public View, public AnimationDelegateViews {
   void SetButtonController(std::unique_ptr<ButtonController> button_controller);
 
   gfx::Point GetMenuPosition() const;
+
+  View* ink_drop_view() const { return ink_drop_view_; }
+  void SetInkDropView(View* view);
 
  protected:
   explicit Button(PressedCallback callback = PressedCallback());
@@ -296,17 +331,19 @@ class VIEWS_EXPORT Button : public View, public AnimationDelegateViews {
   // Getter used by metadata only.
   const PressedCallback& GetCallback() const { return callback_; }
 
+  base::WeakPtr<Button> GetWeakPtr();
+
  private:
   friend class test::ButtonTestApi;
+  friend class ScopedAnchorHighlight;
   FRIEND_TEST_ALL_PREFIXES(BlueButtonTest, Border);
 
   void OnEnabledChanged();
 
+  void ReleaseAnchorHighlight();
+
   // The text shown in a tooltip.
   std::u16string tooltip_text_;
-
-  // Accessibility data.
-  std::u16string accessible_name_;
 
   // The button's listener. Notified when clicked.
   PressedCallback callback_;
@@ -321,9 +358,6 @@ class VIEWS_EXPORT Button : public View, public AnimationDelegateViews {
 
   // Should we animate when the state changes?
   bool animate_on_state_change_ = false;
-
-  // Is the hover animation running because StartThrob was invoked?
-  bool is_throbbing_ = false;
 
   // Mouse event flags which can trigger button actions.
   int triggerable_event_flags_ = ui::EF_LEFT_MOUSE_BUTTON;
@@ -343,6 +377,11 @@ class VIEWS_EXPORT Button : public View, public AnimationDelegateViews {
   // tracked with SetHotTracked().
   bool show_ink_drop_when_hot_tracked_ = false;
 
+  // |ink_drop_view_| is generally the button, but can be overridden for special
+  // cases (e.g. Checkbox) where the InkDrop may be more appropriately installed
+  // on a child view of the button.
+  raw_ptr<View> ink_drop_view_ = this;
+
   std::unique_ptr<Painter> focus_painter_;
 
   // ButtonController is responsible for handling events sent to the Button and
@@ -354,10 +393,27 @@ class VIEWS_EXPORT Button : public View, public AnimationDelegateViews {
   base::CallbackListSubscription enabled_changed_subscription_{
       AddEnabledChangedCallback(base::BindRepeating(&Button::OnEnabledChanged,
                                                     base::Unretained(this)))};
+
+  size_t anchor_count_ = 0;
+
+  base::WeakPtrFactory<Button> weak_ptr_factory_{this};
+};
+
+class VIEWS_EXPORT ButtonActionViewInterface : public BaseActionViewInterface {
+ public:
+  explicit ButtonActionViewInterface(Button* action_view);
+  ~ButtonActionViewInterface() override = default;
+
+  // BaseActionViewInterface:
+  void ActionItemChangedImpl(actions::ActionItem* action_item) override;
+  void LinkActionInvocationToView(
+      base::RepeatingClosure invoke_action_callback) override;
+
+ private:
+  raw_ptr<Button> action_view_;
 };
 
 BEGIN_VIEW_BUILDER(VIEWS_EXPORT, Button, View)
-VIEW_BUILDER_PROPERTY(std::u16string, AccessibleName)
 VIEW_BUILDER_PROPERTY(Button::PressedCallback, Callback)
 VIEW_BUILDER_PROPERTY(base::TimeDelta, AnimationDuration)
 VIEW_BUILDER_PROPERTY(bool, AnimateOnStateChange)

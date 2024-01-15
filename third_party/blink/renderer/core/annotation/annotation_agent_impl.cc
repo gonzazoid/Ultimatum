@@ -5,25 +5,112 @@
 #include "third_party/blink/renderer/core/annotation/annotation_agent_impl.h"
 
 #include "base/memory/scoped_refptr.h"
+#include "base/task/single_thread_task_runner.h"
+#include "base/trace_event/typed_macros.h"
 #include "third_party/blink/public/mojom/scroll/scroll_into_view_params.mojom-blink.h"
 #include "third_party/blink/renderer/core/annotation/annotation_agent_container_impl.h"
 #include "third_party/blink/renderer/core/annotation/annotation_selector.h"
+#include "third_party/blink/renderer/core/display_lock/display_lock_utilities.h"
 #include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/dom/node.h"
 #include "third_party/blink/renderer/core/editing/ephemeral_range.h"
 #include "third_party/blink/renderer/core/editing/markers/document_marker_controller.h"
+#include "third_party/blink/renderer/core/editing/markers/text_fragment_marker.h"
 #include "third_party/blink/renderer/core/editing/range_in_flat_tree.h"
 #include "third_party/blink/renderer/core/editing/visible_units.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
+#include "third_party/blink/renderer/core/frame/local_frame.h"
+#include "third_party/blink/renderer/core/frame/web_feature.h"
+#include "third_party/blink/renderer/core/highlight/highlight_style_utils.h"
+#include "third_party/blink/renderer/core/html/html_details_element.h"
 #include "third_party/blink/renderer/core/layout/geometry/physical_rect.h"
 #include "third_party/blink/renderer/core/layout/layout_object.h"
+#include "third_party/blink/renderer/core/layout/layout_text.h"
+#include "third_party/blink/renderer/core/layout/layout_view.h"
 #include "third_party/blink/renderer/core/scroll/scroll_alignment.h"
 #include "third_party/blink/renderer/core/scroll/scroll_into_view_util.h"
 #include "third_party/blink/renderer/core/scroll/scrollable_area.h"
 #include "third_party/blink/renderer/platform/heap/persistent.h"
 #include "third_party/blink/renderer/platform/heap/visitor.h"
+#include "third_party/blink/renderer/platform/instrumentation/use_counter.h"
 
 namespace blink {
+
+namespace {
+bool IsValidRange(const RangeInFlatTree* range) {
+  // An attached range may have !IsCollapsed but converting to EphemeralRange
+  // results in IsCollapsed. For an example, see
+  // AnnotationAgentImplTest.ScrollIntoViewCollapsedRange.
+  return range && range->IsConnected() && !range->IsCollapsed() &&
+         !range->ToEphemeralRange().IsCollapsed();
+}
+
+// There are several cases where text isn't visible/presented to the user but
+// does appear findable to FindBuffer. The TextFinder use case wants to prevent
+// offering scrolls to these sections as its confusing (in fact, document
+// Markers will avoid creating a highlight for these, despite the fact we can
+// scroll to it). We probably want to do this for general SharedHighlights as
+// well but that will require some more thought and spec changes but we can
+// experiment with this for TextFinder to see how it works.
+bool IsValidRangeForTextFinder(const RangeInFlatTree* range) {
+  if (!IsValidRange(range)) {
+    return false;
+  }
+
+  EphemeralRangeInFlatTree ephemeral_range = range->ToEphemeralRange();
+
+  // Technically, the text could span multiple Elements, each of which could
+  // hide overflow. However, that doesn't seem to be common so do the more
+  // performant thing and check the common ancestor.
+  Node* common_node = ephemeral_range.CommonAncestorContainer();
+
+  LayoutObject* object = common_node->GetLayoutObject();
+  CHECK(object);
+
+  for (; !object->IsLayoutView(); object = object->Parent()) {
+    LayoutBox* box = DynamicTo<LayoutBox>(object);
+    if (!box) {
+      continue;
+    }
+
+    // It's common for collapsible sections to be implemented by hiding
+    // collapsed text within a `height:0; overflow: hidden` box. However,
+    // FindBuffer does find this text (as typically overflow: hidden can still
+    // be programmatically scrolled).
+    if (box->HasNonVisibleOverflow()) {
+      if (box->StyleRef().OverflowX() != EOverflow::kVisible &&
+          box->Size().width.RawValue() <= 0) {
+        return false;
+      }
+
+      if (box->StyleRef().OverflowY() != EOverflow::kVisible &&
+          box->Size().height.RawValue() <= 0) {
+        return false;
+      }
+    }
+
+    // If an ancestor is set to opacity 0, consider the target invisible.
+    if (box->StyleRef().Opacity() == 0) {
+      return false;
+    }
+
+    // If the range is in a fixed subtree, scrolling the view won't change its
+    // viewport-relative location so report the range as unfindable if its
+    // currently offscreen.
+    if (box->StyleRef().GetPosition() == EPosition::kFixed) {
+      PhysicalRect view_rect =
+          PhysicalRect::EnclosingRect(box->View()->AbsoluteBoundingBoxRectF());
+      if (!view_rect.Intersects(
+              common_node->GetLayoutObject()
+                  ->AbsoluteBoundingBoxRectForScrollIntoView())) {
+        return false;
+      }
+    }
+  }
+
+  return true;
+}
+}  // namespace
 
 AnnotationAgentImpl::AnnotationAgentImpl(
     AnnotationAgentContainerImpl& owning_container,
@@ -46,6 +133,7 @@ void AnnotationAgentImpl::Trace(Visitor* visitor) const {
   visitor->Trace(owning_container_);
   visitor->Trace(selector_);
   visitor->Trace(attached_range_);
+  visitor->Trace(pending_range_);
 }
 
 void AnnotationAgentImpl::Bind(
@@ -66,18 +154,32 @@ void AnnotationAgentImpl::Bind(
       WTF::BindOnce(&AnnotationAgentImpl::Remove, WrapWeakPersistent(this)));
 }
 
-void AnnotationAgentImpl::Attach() {
-  DCHECK(!IsRemoved());
-  did_try_attach_ = true;
+void AnnotationAgentImpl::Attach(AnnotationAgentContainerImpl::PassKey) {
+  TRACE_EVENT("blink", "AnnotationAgentImpl::Attach");
+  CHECK(!IsRemoved());
+  CHECK(!IsAttached());
+  CHECK(!pending_range_);
+  CHECK(owning_container_->IsLifecycleCleanForAttachment());
+
+  // We may still have an old range despite the CHECK above if the range become
+  // collapsed due to DOM changes.
+  attached_range_.Clear();
+
+  needs_attachment_ = false;
   Document& document = *owning_container_->GetSupplementable();
   selector_->FindRange(document, AnnotationSelector::kSynchronous,
-                       WTF::BindOnce(&AnnotationAgentImpl::DidFinishAttach,
+                       WTF::BindOnce(&AnnotationAgentImpl::DidFinishFindRange,
                                      WrapWeakPersistent(this)));
 }
 
 bool AnnotationAgentImpl::IsAttached() const {
-  return attached_range_ && attached_range_->IsConnected() &&
-         !attached_range_->IsCollapsed();
+  return IsValidRange(attached_range_);
+}
+
+bool AnnotationAgentImpl::IsAttachmentPending() const {
+  // This can be an invalid range but still returns true because the attachment
+  // is still in progress until the DomMutation task runs in the next rAF.
+  return pending_range_ != nullptr;
 }
 
 bool AnnotationAgentImpl::IsBoundForTesting() const {
@@ -95,12 +197,19 @@ void AnnotationAgentImpl::Remove() {
     Document* document = attached_range_->StartPosition().GetDocument();
     DCHECK(document);
 
-    // TODO(bokan): Base marker type on `type_`.
-    document->Markers().RemoveMarkersInRange(
-        dom_range, DocumentMarker::MarkerTypes::TextFragment());
+    if (LocalFrame* frame = document->GetFrame()) {
+      // Markers require that layout is up to date if we're making any
+      // modifications.
+      frame->GetDocument()->UpdateStyleAndLayout(
+          DocumentUpdateReason::kFindInPage);
 
-    attached_range_.Clear();
+      document->Markers().RemoveMarkersInRange(
+          dom_range, DocumentMarker::MarkerTypes::TextFragment());
+    }
   }
+
+  attached_range_.Clear();
+  pending_range_.Clear();
 
   agent_host_.reset();
   receiver_.reset();
@@ -117,15 +226,22 @@ void AnnotationAgentImpl::ScrollIntoView() const {
     return;
 
   EphemeralRangeInFlatTree range = attached_range_->ToEphemeralRange();
-
-  DCHECK(range.Nodes().begin() != range.Nodes().end());
-
+  CHECK(range.Nodes().begin() != range.Nodes().end());
   Node& first_node = *range.Nodes().begin();
 
-  // TODO(bokan): Bring in all the autoexpand details and BeforeMatch logic
-  // from TextFragmentAnchor.
-  // TODO(bokan): This probably requires we perform layout.
-  DCHECK(first_node.GetLayoutObject());
+  Document& document = *owning_container_->GetSupplementable();
+  document.EnsurePaintLocationDataValidForNode(
+      &first_node, DocumentUpdateReason::kFindInPage);
+
+  // TODO(bokan): Text can be attached without having a LayoutObject since it
+  // may be inside an unexpanded <details> element or inside a
+  // `content-visibility: auto` subtree. In those cases we should make sure we
+  // expand/make-visible the node. This is implemented in TextFragmentAnchor
+  // but that doesn't cover all cases we can get here so we should migrate that
+  // code here.
+  if (!first_node.GetLayoutObject()) {
+    return;
+  }
 
   // Set the bounding box height to zero because we want to center the top of
   // the text range.
@@ -142,41 +258,133 @@ void AnnotationAgentImpl::ScrollIntoView() const {
                                              bounding_box, std::move(params));
 }
 
-void AnnotationAgentImpl::DidFinishAttach(const RangeInFlatTree* range) {
-  if (IsRemoved())
+void AnnotationAgentImpl::DidFinishFindRange(const RangeInFlatTree* range) {
+  TRACE_EVENT("blink", "AnnotationAgentImpl::DidFinishFindRange",
+              "bound_to_host", agent_host_.is_bound());
+  if (IsRemoved()) {
+    TRACE_EVENT_INSTANT("blink", "Removed");
     return;
+  }
 
-  attached_range_ = range;
+  pending_range_ = range;
 
-  if (IsAttached()) {
+  // In some cases, attaching to text can lead to DOM mutation. For example,
+  // expanding <details> elements or unhiding an hidden=until-found element.
+  // That needs to be done before processing the attachment (i.e. adding a
+  // highlight). However, DOM/layout may not be safe to do here so we'll post a
+  // task in that case.  However, if we don't need to perform those actions we
+  // can avoid the extra post and just process the attachment now.
+  if (!NeedsDOMMutationToAttach()) {
+    ProcessAttachmentFinished();
+  } else {
+    // TODO(bokan): We may need to force an animation frame e.g. if we're in a
+    // throttled iframe.
+    Document& document = *owning_container_->GetSupplementable();
+    document.EnqueueAnimationFrameTask(
+        WTF::BindOnce(&AnnotationAgentImpl::PerformPreAttachDOMMutation,
+                      WrapPersistent(this)));
+  }
+}
+
+bool AnnotationAgentImpl::NeedsDOMMutationToAttach() const {
+  if (!IsValidRange(pending_range_)) {
+    return false;
+  }
+
+  // TextFinder type is used only to determine whether a given text can be
+  // found in the page, it should have no side-effects.
+  if (type_ == mojom::blink::AnnotationType::kTextFinder) {
+    return false;
+  }
+
+  EphemeralRangeInFlatTree range = pending_range_->ToEphemeralRange();
+
+  // TODO(crbug.com/1252872): Only |first_node| is considered in the range, but
+  // we should be considering the entire range of selected text for ancestor
+  // unlocking as well.
+  if (DisplayLockUtilities::NeedsActivationForFindInPage(range)) {
+    return true;
+  }
+
+  return false;
+}
+
+void AnnotationAgentImpl::PerformPreAttachDOMMutation() {
+  if (IsValidRange(pending_range_)) {
+    // TODO(crbug.com/1252872): Only |first_node| is considered for the below
+    // ancestor expanding code, but we should be considering the entire range
+    // of selected text for ancestor unlocking as well.
+    Node& first_node = *pending_range_->ToEphemeralRange().Nodes().begin();
+
+    // Activate content-visibility:auto subtrees if needed.
+    DisplayLockUtilities::ActivateFindInPageMatchRangeIfNeeded(
+        pending_range_->ToEphemeralRange());
+
+    // If the active match is hidden inside a <details> element, then we should
+    // expand it so we can scroll to it.
+    if (HTMLDetailsElement::ExpandDetailsAncestors(first_node)) {
+      UseCounter::Count(
+          first_node.GetDocument(),
+          WebFeature::kAutoExpandedDetailsForScrollToTextFragment);
+    }
+
+    // If the active match is hidden inside a hidden=until-found element, then
+    // we should reveal it so we can scroll to it.
+    DisplayLockUtilities::RevealHiddenUntilFoundAncestors(first_node);
+
+    // Ensure we leave clean layout since we'll be applying markers after this.
+    first_node.GetDocument().UpdateStyleAndLayout(
+        DocumentUpdateReason::kFindInPage);
+  }
+
+  ProcessAttachmentFinished();
+}
+
+void AnnotationAgentImpl::ProcessAttachmentFinished() {
+  CHECK(!attached_range_);
+
+  // See IsValidRangeForTextFinder for why we treat kTextFinder differently
+  // here.
+  bool pending_range_valid = type_ == mojom::blink::AnnotationType::kTextFinder
+                                 ? IsValidRangeForTextFinder(pending_range_)
+                                 : IsValidRange(pending_range_);
+
+  if (pending_range_valid) {
+    attached_range_ = pending_range_;
+
+    TRACE_EVENT_INSTANT("blink", "IsAttached");
+
     EphemeralRange dom_range =
         EphemeralRange(ToPositionInDOMTree(attached_range_->StartPosition()),
                        ToPositionInDOMTree(attached_range_->EndPosition()));
     Document* document = attached_range_->StartPosition().GetDocument();
     DCHECK(document);
 
-    // TODO(bokan): DocumentMarkers don't support overlapping markers. We could
-    // be smarter about how we construct markers so they don't overlap - or we
-    // could make DocumentMarkerController allow overlaps.
-    // https://crbug.com/1327370.
-    if (!document->Markers()
-             .MarkersIntersectingRange(
-                 attached_range_->ToEphemeralRange(),
-                 DocumentMarker::MarkerTypes::TextFragment())
-             .empty()) {
-      return;
+    // TextFinder type is used only to determine whether a given text can be
+    // found in the page, it should have no side-effects.
+    if (type_ != mojom::blink::AnnotationType::kTextFinder) {
+      document->Markers().AddTextFragmentMarker(dom_range);
+      document->Markers().MergeOverlappingMarkers(
+          DocumentMarker::kTextFragment);
     }
 
-    // TODO(bokan): Add new marker types based on `type_`.
-    document->Markers().AddTextFragmentMarker(dom_range);
+    if (type_ != mojom::blink::AnnotationType::kUserNote) {
+      Node* anchor_node = attached_range_->StartPosition().AnchorNode();
+      CHECK(anchor_node);
+      if (anchor_node->IsInShadowTree()) {
+        UseCounter::Count(document, WebFeature::kTextDirectiveInShadowDOM);
+      }
+    }
   } else {
-    attached_range_.Clear();
+    TRACE_EVENT_INSTANT("blink", "NotAttached");
   }
+
+  pending_range_.Clear();
 
   // If we're bound to one, let the host know we've finished attempting to
   // attach.
   // TODO(bokan): Perhaps we should keep track of whether we've called
-  // DidFinishAttach and, if set, call the host method when binding.
+  // DidFinishFindRange and, if set, call the host method when binding.
   if (agent_host_.is_bound()) {
     gfx::Rect range_rect_in_document;
     if (IsAttached()) {

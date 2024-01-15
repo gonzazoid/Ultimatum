@@ -16,6 +16,8 @@
 #include "ash/system/time/calendar_utils.h"
 #include "ash/system/time/calendar_view_controller.h"
 #include "ash/test/ash_test_base.h"
+#include "base/memory/raw_ptr.h"
+#include "base/test/metrics/histogram_tester.h"
 #include "base/time/time.h"
 #include "base/time/time_override.h"
 #include "chromeos/ash/components/settings/scoped_timezone_settings.h"
@@ -285,6 +287,37 @@ TEST_F(CalendarMonthViewTest, TodayInMonth) {
   EXPECT_EQ(3, bottom / (bottom - top));
 }
 
+// Regression test for b/276840405.
+// Test the `CalendarMonthView` with time zone Central European Summer Time
+// (Oslo) on a DST starting month.
+TEST_F(CalendarMonthViewTest, OsloTimeDSTMonth) {
+  // Create a monthview based on Apr,1st 2023. DST starts from 02:00 on Mar
+  // 26th in 2023 with Central European Summer Time (Oslo).
+  //
+  // 26, 27, 28, 29, 30, 31, 1
+  //  2,  3,  4,  5,  6,  7,  8
+  //  9, 10, 11, 12, 13, 14, 15
+  // 16, 17, 18, 19, 20, 21, 22
+  // 23, 24, 25, 26, 27, 28, 29
+  // 30,  1,  2,  3,  4,  5,  6
+  base::Time date;
+  ASSERT_TRUE(base::Time::FromString("1 Apr 2023 10:00 GMT", &date));
+
+  // Sets the timezone to "Oslo";
+  ash::system::ScopedTimezoneSettings timezone_settings(u"Europe/Oslo");
+  CreateMonthView(date);
+
+  // Check some dates in this month view.
+  EXPECT_EQ(
+      u"26",
+      static_cast<views::LabelButton*>(month_view()->children()[0])->GetText());
+  EXPECT_EQ(u"25",
+            static_cast<views::LabelButton*>(month_view()->children()[30])
+                ->GetText());
+  EXPECT_EQ(u"1", static_cast<views::LabelButton*>(month_view()->children()[36])
+                      ->GetText());
+}
+
 class CalendarMonthViewFetchTest : public AshTestBase {
  public:
   CalendarMonthViewFetchTest()
@@ -343,15 +376,17 @@ class CalendarMonthViewFetchTest : public AshTestBase {
   int EventsNumberOfDay(const char* day, SingleDayEventList* events) {
     base::Time day_base = calendar_test_utils::GetTimeFromString(day);
 
-    if (events)
+    if (events) {
       events->clear();
+    }
 
     return calendar_model_->EventsNumberOfDay(day_base, events);
   }
 
   int EventsNumberOfDay(base::Time day, SingleDayEventList* events) {
-    if (events)
+    if (events) {
       events->clear();
+    }
 
     return calendar_model_->EventsNumberOfDay(day, events);
   }
@@ -392,9 +427,9 @@ class CalendarMonthViewFetchTest : public AshTestBase {
   std::unique_ptr<base::subtle::ScopedTimeClockOverrides> time_overrides_;
 
   std::unique_ptr<views::Widget> widget_;
-  CalendarModel* calendar_model_;
+  raw_ptr<CalendarModel, DanglingUntriaged> calendar_model_;
   std::unique_ptr<calendar_test_utils::CalendarClientTestImpl> calendar_client_;
-  CalendarMonthView* calendar_month_view_;
+  raw_ptr<CalendarMonthView, DanglingUntriaged> calendar_month_view_;
   std::unique_ptr<CalendarViewController> controller_;
   AccountId account_id_;
 };
@@ -524,6 +559,41 @@ TEST_F(CalendarMonthViewFetchTest, UpdateEvents) {
       u"Wednesday, August 18, 2021, 4 events",
       static_cast<CalendarDateCellView*>(calendar_month_view_->children()[17])
           ->GetTooltipText());
+}
+
+TEST_F(CalendarMonthViewFetchTest, RecordEventsDisplayedToUserOnce) {
+  base::HistogramTester histogram_tester;
+  // Create a monthview based on Aug,1st 2021. Today is set to 18th.
+  base::Time date;
+  ASSERT_TRUE(base::Time::FromString("1 Aug 2021 10:00 GMT", &date));
+  base::Time today;
+  ASSERT_TRUE(base::Time::FromString("18 Aug 2021 10:00 GMT", &today));
+  SetTodayFromTime(today);
+  ash::system::ScopedTimezoneSettings timezone_settings(u"America/Los_Angeles");
+
+  CreateMonthView(date);
+  WaitUntilPainted();
+
+  // Nothing logged before we've fetched events.
+  histogram_tester.ExpectTotalCount("Ash.Calendar.EventsDisplayedToUser", 0);
+
+  // Sets the event list response and fetches the events.
+  auto event_list = CreateMockEventList();
+  SetEventList(std::move(event_list));
+  calendar_model_->FetchEvents(calendar_utils::GetStartOfMonthUTC(today));
+  WaitUntilFetched();
+
+  // After fetching, we expect the metric to be logged.
+  histogram_tester.ExpectTotalCount("Ash.Calendar.EventsDisplayedToUser", 1);
+
+  // Fetch new events.
+  auto event_list_2 = CreateMockEventList();
+  SetEventList(std::move(event_list_2));
+  calendar_model_->FetchEvents(calendar_utils::GetStartOfMonthUTC(today));
+  WaitUntilFetched();
+
+  // After fetching again, we don't expect any additional logs of the metric.
+  histogram_tester.ExpectTotalCount("Ash.Calendar.EventsDisplayedToUser", 1);
 }
 
 TEST_F(CalendarMonthViewFetchTest, TimeZone) {

@@ -58,7 +58,7 @@ IMPL_FILE_TEMPLATE = """\
 // Generated from gen_events.py. DO NOT EDIT!
 // source: structured.xml
 
-#include "components/metrics/structured/structured_events.h"
+#include "components/metrics/structured/{file.rootname}.h"
 
 #include "base/strings/string_number_conversions.h"
 #include "base/values.h"
@@ -86,8 +86,10 @@ namespace {project.namespace} {{
 IMPL_EVENT_TEMPLATE = """\
 {event.name}::{event.name}() :
   ::metrics::structured::Event(\"{event.project_name}\",
-                               \"{event.name}\") {{}}
+                               \"{event.name}\",
+                               {event.is_event_sequence}) {{}}
 {event.name}::~{event.name}() = default;
+
 {metric_code}\
 """
 

@@ -4,9 +4,10 @@
 
 #include "content/browser/payments/payment_manager.h"
 
+#include <optional>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/strings/string_util.h"
 #include "content/browser/payments/payment_app.pb.h"
 #include "content/browser/payments/payment_app_context_impl.h"
@@ -15,7 +16,6 @@
 #include "content/browser/service_worker/service_worker_registration.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/service_worker_context.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace content {
 

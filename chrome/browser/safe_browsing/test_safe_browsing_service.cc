@@ -7,9 +7,6 @@
 #include "base/strings/string_util.h"
 #include "chrome/browser/safe_browsing/chrome_safe_browsing_blocking_page_factory.h"
 #include "chrome/browser/safe_browsing/chrome_ui_manager_delegate.h"
-#include "chrome/browser/safe_browsing/download_protection/download_protection_service.h"
-#include "chrome/browser/safe_browsing/download_protection/download_protection_util.h"
-#include "chrome/browser/safe_browsing/incident_reporting/incident_reporting_service.h"
 #include "chrome/browser/safe_browsing/services_delegate.h"
 #include "chrome/common/url_constants.h"
 #include "components/safe_browsing/buildflags.h"
@@ -19,13 +16,18 @@
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
 
+#if BUILDFLAG(FULL_SAFE_BROWSING)
+#include "chrome/browser/safe_browsing/download_protection/download_protection_service.h"
+#include "chrome/browser/safe_browsing/download_protection/download_protection_util.h"
+#include "chrome/browser/safe_browsing/incident_reporting/incident_reporting_service.h"
+#endif
+
 namespace safe_browsing {
 
 // TestSafeBrowsingService functions:
 TestSafeBrowsingService::TestSafeBrowsingService()
     : test_shared_loader_factory_(
-          base::MakeRefCounted<network::WeakWrapperSharedURLLoaderFactory>(
-              &test_url_loader_factory_)) {
+          test_url_loader_factory_.GetSafeWeakWrapper()) {
 #if BUILDFLAG(FULL_SAFE_BROWSING)
   services_delegate_ = ServicesDelegate::CreateForTest(this, this);
 #endif  // BUILDFLAG(FULL_SAFE_BROWSING)
@@ -62,7 +64,7 @@ base::CallbackListSubscription TestSafeBrowsingService::RegisterStateCallback(
   return {};
 }
 
-std::string TestSafeBrowsingService::serilized_download_report() {
+std::string TestSafeBrowsingService::serialized_download_report() {
   return serialized_download_report_;
 }
 

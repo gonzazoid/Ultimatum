@@ -18,6 +18,7 @@ import org.junit.runners.model.Statement;
 
 import org.chromium.base.ApiCompatibilityUtils;
 import org.chromium.base.Log;
+import org.chromium.base.StrictModeContext;
 import org.chromium.base.test.util.CallbackHelper;
 import org.chromium.chrome.browser.download.items.OfflineContentAggregatorFactory;
 import org.chromium.chrome.browser.profiles.ProfileKey;
@@ -40,11 +41,10 @@ import java.util.concurrent.TimeoutException;
 /**
  * Custom TestRule for tests that need to download a file.
  *
- * This has to be a base class because some classes (like BrowserEvent) are exposed only
- * to children of ChromeActivityTestCaseBase. It is a very broken approach to sharing
- * but the only other option is to refactor the ChromeActivityTestCaseBase implementation
- * and all of our test cases.
- *
+ * <p>This has to be a base class because some classes (like BrowserEvent) are exposed only to
+ * children of ChromeActivityTestCaseBase. It is a very broken approach to sharing but the only
+ * other option is to refactor the ChromeActivityTestCaseBase implementation and all of our test
+ * cases.
  */
 public class DownloadTestRule extends ChromeTabbedActivityTestRule {
     private static final String TAG = "DownloadTestBase";
@@ -60,23 +60,43 @@ public class DownloadTestRule extends ChromeTabbedActivityTestRule {
     }
 
     /**
-     * Check the download exists in DownloadManager by matching the local file
-     * path.
+     * Checks if a file has downloaded. Is agnostic to the mechanism by which the file has
+     * downloaded.
      *
-     * @param fileName Expected file name. Path is built by appending filename to
-     * the system downloads path.
-     *
+     * @param fileName Expected file name. Path is built by appending filename to the system
+     *     downloads path.
      * @param expectedContents Expected contents of the file, or null if the contents should not be
-     * checked.
+     *     checked.
      */
-    public boolean hasDownload(String fileName, String expectedContents) throws IOException {
-        File downloadedFile = new File(DOWNLOAD_DIRECTORY, fileName);
-        if (!downloadedFile.exists()) {
-            Log.d(TAG, "The file " + fileName + " does not exist");
+    public boolean hasDownloaded(String fileName, String expectedContents) {
+        try (StrictModeContext ignored = StrictModeContext.allowDiskReads()) {
+            File downloadedFile = getDownloadedPath(fileName);
+            if (!downloadedFile.exists()) {
+                return false;
+            }
+            if (expectedContents != null) {
+                checkFileContents(downloadedFile.getAbsolutePath(), expectedContents);
+            }
+            return true;
+        } catch (IOException e) {
+            Assert.fail("IOException when opening file " + fileName);
             return false;
         }
+    }
 
-        String fullPath = downloadedFile.getAbsolutePath();
+    /**
+     * Check the download exists in DownloadManager by matching the local file path.
+     *
+     * @param fileName Expected file name. Path is built by appending filename to the system
+     *     downloads path.
+     * @param expectedContents Expected contents of the file, or null if the contents should not be
+     *     checked.
+     */
+    public boolean hasDownload(String fileName, String expectedContents) throws IOException {
+        File downloadedFile = getDownloadedPath(fileName);
+        if (!downloadedFile.exists()) {
+            return false;
+        }
 
         DownloadManager manager =
                 (DownloadManager) getActivity().getSystemService(Context.DOWNLOAD_SERVICE);
@@ -87,16 +107,7 @@ public class DownloadTestRule extends ChromeTabbedActivityTestRule {
         while (!cursor.isAfterLast()) {
             if (fileName.equals(getTitleFromCursor(cursor))) {
                 if (expectedContents != null) {
-                    FileInputStream stream = new FileInputStream(new File(fullPath));
-                    byte[] data =
-                            new byte[ApiCompatibilityUtils.getBytesUtf8(expectedContents).length];
-                    try {
-                        Assert.assertEquals(stream.read(data), data.length);
-                        String contents = new String(data);
-                        Assert.assertEquals(expectedContents, contents);
-                    } finally {
-                        stream.close();
-                    }
+                    checkFileContents(downloadedFile.getAbsolutePath(), expectedContents);
                 }
                 result = true;
                 break;
@@ -107,18 +118,28 @@ public class DownloadTestRule extends ChromeTabbedActivityTestRule {
         return result;
     }
 
-    /**
-     * Check the last download matches the given name and exists in DownloadManager.
-     */
-    public void checkLastDownload(String fileName) throws IOException {
-        String lastDownload = getLastDownloadFile();
-        Assert.assertTrue(isSameDownloadFile(fileName, lastDownload));
-        Assert.assertTrue(hasDownload(lastDownload, null));
+    private static File getDownloadedPath(String fileName) {
+        File downloadedFile = new File(DOWNLOAD_DIRECTORY, fileName);
+        if (!downloadedFile.exists()) {
+            Log.d(TAG, "The file " + fileName + " does not exist");
+        }
+        return downloadedFile;
     }
 
-    /**
-     * Delete all download entries in DownloadManager and delete the corresponding files.
-     */
+    private static void checkFileContents(String fullPath, String expectedContents)
+            throws IOException {
+        FileInputStream stream = new FileInputStream(new File(fullPath));
+        byte[] data = new byte[ApiCompatibilityUtils.getBytesUtf8(expectedContents).length];
+        try {
+            Assert.assertEquals(stream.read(data), data.length);
+            String contents = new String(data);
+            Assert.assertEquals(expectedContents, contents);
+        } finally {
+            stream.close();
+        }
+    }
+
+    /** Delete all download entries in DownloadManager and delete the corresponding files. */
     private void cleanUpAllDownloads() {
         DownloadManager manager =
                 (DownloadManager) getActivity().getSystemService(Context.DOWNLOAD_SERVICE);
@@ -152,36 +173,21 @@ public class DownloadTestRule extends ChromeTabbedActivityTestRule {
     }
 
     private String mLastDownloadFilePath;
-    private final CallbackHelper mHttpDownloadFinished = new CallbackHelper();
+    private CallbackHelper mHttpDownloadFinished = new CallbackHelper();
     private TestDownloadManagerServiceObserver mDownloadManagerServiceObserver;
-
-    public String getLastDownloadFile() {
-        return new File(mLastDownloadFilePath).getName();
-    }
-
-    // The Android DownloadManager sometimes appends a number to a file name when it downloads it
-    // ex: google.png becomes google-23.png
-    // This happens even when there is no other prior download with that name, it could be a bug.
-    // TODO(jcivelli): investigate if we can isolate that behavior and file a bug to Android.
-    public boolean isSameDownloadFile(String originalName, String downloadName) {
-        String fileName = originalName;
-        String extension = "";
-        int dotIndex = originalName.lastIndexOf('.');
-        if (dotIndex != -1 && dotIndex < originalName.length()) {
-            fileName = originalName.substring(0, dotIndex);
-            extension = originalName.substring(dotIndex); // We include the '.'
-        }
-        return downloadName.startsWith(fileName) && downloadName.endsWith(extension);
-    }
 
     public int getChromeDownloadCallCount() {
         return mHttpDownloadFinished.getCallCount();
     }
 
+    protected void resetCallbackHelper() {
+        mHttpDownloadFinished = new CallbackHelper();
+    }
+
     public boolean waitForChromeDownloadToFinish(int currentCallCount) {
         boolean eventReceived = true;
         try {
-            mHttpDownloadFinished.waitForCallback(currentCallCount, 1, 5, TimeUnit.SECONDS);
+            mHttpDownloadFinished.waitForCallback(currentCallCount, 1, 10, TimeUnit.SECONDS);
         } catch (TimeoutException e) {
             eventReceived = false;
         }
@@ -189,9 +195,10 @@ public class DownloadTestRule extends ChromeTabbedActivityTestRule {
     }
 
     public List<DownloadItem> getAllDownloads() {
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            DownloadManagerService.getDownloadManagerService().getAllDownloads(null);
-        });
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    DownloadManagerService.getDownloadManagerService().getAllDownloads(null);
+                });
         return mAllDownloads;
     }
 
@@ -239,39 +246,46 @@ public class DownloadTestRule extends ChromeTabbedActivityTestRule {
 
     @Override
     public Statement apply(final Statement base, Description description) {
-        return super.apply(new Statement() {
-            @Override
-            public void evaluate() throws Throwable {
-                setUp();
-                base.evaluate();
-                tearDown();
-            }
-        }, description);
+        return super.apply(
+                new Statement() {
+                    @Override
+                    public void evaluate() throws Throwable {
+                        setUp();
+                        base.evaluate();
+                        tearDown();
+                    }
+                },
+                description);
     }
 
     private void setUp() throws Exception {
         mActivityStart.customMainActivityStart();
 
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            DownloadDialogBridge.setPromptForDownloadAndroid(DownloadPromptStatus.DONT_SHOW);
-        });
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    DownloadDialogBridge.setPromptForDownloadAndroid(
+                            DownloadPromptStatus.DONT_SHOW);
+                });
 
         cleanUpAllDownloads();
 
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            mDownloadManagerServiceObserver = new TestDownloadManagerServiceObserver();
-            DownloadManagerService.getDownloadManagerService().addDownloadObserver(
-                    mDownloadManagerServiceObserver);
-            OfflineContentAggregatorFactory.get().addObserver(new TestDownloadBackendObserver());
-        });
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    mDownloadManagerServiceObserver = new TestDownloadManagerServiceObserver();
+                    DownloadManagerService.getDownloadManagerService()
+                            .addDownloadObserver(mDownloadManagerServiceObserver);
+                    OfflineContentAggregatorFactory.get()
+                            .addObserver(new TestDownloadBackendObserver());
+                });
     }
 
     private void tearDown() {
         cleanUpAllDownloads();
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            DownloadManagerService.getDownloadManagerService().removeDownloadObserver(
-                    mDownloadManagerServiceObserver);
-        });
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    DownloadManagerService.getDownloadManagerService()
+                            .removeDownloadObserver(mDownloadManagerServiceObserver);
+                });
     }
 
     public void deleteFilesInDownloadDirectory(String... filenames) {
@@ -301,9 +315,9 @@ public class DownloadTestRule extends ChromeTabbedActivityTestRule {
     /**
      * Interface for Download tests to define actions that starts the activity.
      *
-     * This method will be called in DownloadTestRule's setUp process, which means
-     * it would happen before Test class' own setUp() call
-     **/
+     * <p>This method will be called in DownloadTestRule's setUp process, which means it would
+     * happen before Test class' own setUp() call
+     */
     public interface CustomMainActivityStart {
         void customMainActivityStart() throws InterruptedException;
     }

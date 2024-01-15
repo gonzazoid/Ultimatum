@@ -6,7 +6,7 @@
 #include <memory>
 #include <string>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
@@ -729,7 +729,7 @@ TEST_P(WebrtcVideoPerfHistoryParamTest, SmoothIsTrueForUntrackedCodecProfiles) {
   // not smooth at 60Hz.
   constexpr float kP99ProcessingTimeMsNotSmoothAt60Hz = 40.0f;
   SavePerfRecord(
-      Features(kIsDecode, DOLBYVISION_PROFILE4, kPixelsHd, kSoftware),
+      Features(kIsDecode, DOLBYVISION_PROFILE5, kPixelsHd, kSoftware),
       VideoStats(kFramesProcessed, kKeyFramesProcessed,
                  kP99ProcessingTimeMsNotSmoothAt60Hz),
       /*expect_callback=*/false);
@@ -742,7 +742,7 @@ TEST_P(WebrtcVideoPerfHistoryParamTest, SmoothIsTrueForUntrackedCodecProfiles) {
   // Verify perf history returns is_smooth = true anyway.
   EXPECT_CALL(*this, MockGetPerfInfoCB(kIsSmooth));
   perf_history_->GetPerfInfo(
-      Features::New(kIsDecode, DOLBYVISION_PROFILE4, kPixelsHd, kSoftware),
+      Features::New(kIsDecode, DOLBYVISION_PROFILE5, kPixelsHd, kSoftware),
       /*frames_per_second=*/60,
       base::BindOnce(&WebrtcVideoPerfHistoryParamTest::MockGetPerfInfoCB,
                      base::Unretained(this)));

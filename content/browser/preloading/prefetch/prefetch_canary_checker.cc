@@ -9,9 +9,8 @@
 #include <cmath>
 
 #include "base/base64.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
-#include "base/guid.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/metrics/histogram.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/strings/string_number_conversions.h"
@@ -81,15 +80,7 @@ std::string NameForClient(PrefetchCanaryChecker::CheckType name) {
   return std::string();
 }
 
-std::string GenerateNetworkID(
-    network::NetworkConnectionTracker* network_connection_tracker) {
-  network::mojom::ConnectionType connection_type =
-      network::mojom::ConnectionType::CONNECTION_UNKNOWN;
-  if (network_connection_tracker) {
-    network_connection_tracker->GetConnectionType(&connection_type,
-                                                  base::DoNothing());
-  }
-
+std::string GenerateNetworkID(network::mojom::ConnectionType connection_type) {
   std::string id = base::NumberToString(static_cast<int>(connection_type));
   bool is_cellular =
       network::NetworkConnectionTracker::IsConnectionCellular(connection_type);
@@ -113,6 +104,28 @@ std::string GenerateNetworkID(
 #endif
 
   return id;
+}
+
+void UpdateCacheWithNetworkID(
+    network::NetworkConnectionTracker* network_connection_tracker,
+    base::OnceCallback<void(std::string key)> updateCallBack) {
+  base::OnceCallback<void(network::mojom::ConnectionType connection_type)>
+      connectionTypeCallback = base::BindOnce(
+          [](base::OnceCallback<void(std::string key)> updateCallBack,
+             network::mojom::ConnectionType connection_type) {
+            base::ThreadPool::PostTaskAndReplyWithResult(
+                FROM_HERE, base::BindOnce(GenerateNetworkID, connection_type),
+                std::move(updateCallBack));
+          },
+          std::move(updateCallBack));
+
+  auto split = base::SplitOnceCallback(std::move(connectionTypeCallback));
+  network::mojom::ConnectionType connection_type =
+      network::mojom::ConnectionType::CONNECTION_UNKNOWN;
+  if (network_connection_tracker->GetConnectionType(&connection_type,
+                                                    std::move(split.first))) {
+    std::move(split.second).Run(connection_type);
+  }
 }
 
 }  // namespace
@@ -191,8 +204,8 @@ void PrefetchCanaryChecker::OnCheckEnd(bool success) {
   // network might have changed since we completed the check. Fortunately, the
   // impact of using the wrong key is limited: we might simply filter probe when
   // we don't have to or fail to filter probe when we should.
-  base::ThreadPool::PostTaskAndReplyWithResult(
-      FROM_HERE, base::BindOnce(GenerateNetworkID, network_connection_tracker_),
+  UpdateCacheWithNetworkID(
+      network_connection_tracker_,
       base::BindOnce(&PrefetchCanaryChecker::UpdateCacheEntry, GetWeakPtr(),
                      entry));
 
@@ -223,7 +236,7 @@ void PrefetchCanaryChecker::OnCheckEnd(bool success) {
 }
 
 void PrefetchCanaryChecker::ResetState() {
-  time_when_set_active_ = absl::nullopt;
+  time_when_set_active_ = std::nullopt;
   resolver_control_handle_.reset();
   retry_timer_.reset();
   timeout_timer_.reset();
@@ -295,8 +308,8 @@ void PrefetchCanaryChecker::ProcessSuccess() {
   OnCheckEnd(true);
 }
 
-absl::optional<bool> PrefetchCanaryChecker::CanaryCheckSuccessful() {
-  absl::optional<bool> result = LookupAndRunChecksIfNeeded();
+std::optional<bool> PrefetchCanaryChecker::CanaryCheckSuccessful() {
+  std::optional<bool> result = LookupAndRunChecksIfNeeded();
   CanaryCheckLookupResult result_enum;
   if (!result.has_value()) {
     result_enum = CanaryCheckLookupResult::kCacheMiss;
@@ -318,21 +331,22 @@ void PrefetchCanaryChecker::RunChecksIfNeeded() {
   LookupAndRunChecksIfNeeded();
 }
 
-absl::optional<bool> PrefetchCanaryChecker::LookupAndRunChecksIfNeeded() {
+std::optional<bool> PrefetchCanaryChecker::LookupAndRunChecksIfNeeded() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   // Asynchronously update the network cache key. On Android, getting the
   // network cache key can be very slow, so we don't want to block the main
   // thread.
-  base::ThreadPool::PostTaskAndReplyWithResult(
-      FROM_HERE, base::BindOnce(GenerateNetworkID, network_connection_tracker_),
+  UpdateCacheWithNetworkID(
+      network_connection_tracker_,
       base::BindOnce(&PrefetchCanaryChecker::UpdateCacheKey, GetWeakPtr()));
+
   // Assume the cache key has not changed since last time we checked it. Note
   // that if we have never set latest_cache_key_, |it| will be cache_.end().
   auto it = cache_.Get(latest_cache_key_);
   if (it == cache_.end()) {
     SendNowIfInactive();
-    return absl::optional<bool>();
+    return std::optional<bool>();
   }
 
   const PrefetchCanaryChecker::CacheEntry& entry = it->second;
@@ -400,7 +414,7 @@ void PrefetchCanaryChecker::StartDNSResolution(const GURL& url) {
 
 void PrefetchCanaryChecker::OnDNSResolved(
     int net_error,
-    const absl::optional<net::AddressList>& resolved_addresses) {
+    const std::optional<net::AddressList>& resolved_addresses) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   timeout_timer_.reset();

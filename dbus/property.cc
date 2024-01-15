@@ -8,7 +8,7 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 
 #include "dbus/message.h"
@@ -137,15 +137,15 @@ bool PropertySet::GetAndBlock(PropertyBase* property) {
   writer.AppendString(property->name());
 
   DCHECK(object_proxy_);
-  std::unique_ptr<dbus::Response> response(object_proxy_->CallMethodAndBlock(
-      &method_call, ObjectProxy::TIMEOUT_USE_DEFAULT));
+  auto result = object_proxy_->CallMethodAndBlock(
+      &method_call, ObjectProxy::TIMEOUT_USE_DEFAULT);
 
-  if (!response.get()) {
+  if (!result.has_value()) {
     LOG(WARNING) << property->name() << ": GetAndBlock: failed.";
     return false;
   }
 
-  MessageReader reader(response.get());
+  MessageReader reader(result->get());
   if (property->PopValueFromReader(&reader)) {
     property->set_valid(true);
     NotifyPropertyChanged(property->name());
@@ -203,11 +203,9 @@ bool PropertySet::SetAndBlock(PropertyBase* property) {
   property->AppendSetValueToWriter(&writer);
 
   DCHECK(object_proxy_);
-  std::unique_ptr<dbus::Response> response(object_proxy_->CallMethodAndBlock(
-      &method_call, ObjectProxy::TIMEOUT_USE_DEFAULT));
-  if (response.get())
-    return true;
-  return false;
+  return object_proxy_
+      ->CallMethodAndBlock(&method_call, ObjectProxy::TIMEOUT_USE_DEFAULT)
+      .has_value();
 }
 
 void PropertySet::OnSet(PropertyBase* property,
@@ -550,7 +548,7 @@ void Property<std::vector<uint8_t>>::AppendSetValueToWriter(
     MessageWriter* writer) {
   MessageWriter variant_writer(nullptr);
   writer->OpenVariant("ay", &variant_writer);
-  variant_writer.AppendArrayOfBytes(set_value_.data(), set_value_.size());
+  variant_writer.AppendArrayOfBytes(set_value_);
   writer->CloseContainer(&variant_writer);
 }
 
@@ -642,8 +640,7 @@ void Property<std::vector<std::pair<std::vector<uint8_t>, uint16_t>>>::
   for (const auto& pair : set_value_) {
     dbus::MessageWriter struct_writer(nullptr);
     array_writer.OpenStruct(&struct_writer);
-    struct_writer.AppendArrayOfBytes(std::get<0>(pair).data(),
-                                     std::get<0>(pair).size());
+    struct_writer.AppendArrayOfBytes(std::get<0>(pair));
     struct_writer.AppendUint16(std::get<1>(pair));
     array_writer.CloseContainer(&struct_writer);
   }
@@ -712,8 +709,7 @@ void Property<std::map<std::string, std::vector<uint8_t>>>::
 
     MessageWriter value_varient_writer(nullptr);
     entry_writer.OpenVariant("ay", &value_varient_writer);
-    value_varient_writer.AppendArrayOfBytes(pair.second.data(),
-                                            pair.second.size());
+    value_varient_writer.AppendArrayOfBytes(pair.second);
     entry_writer.CloseContainer(&value_varient_writer);
 
     dict_writer.CloseContainer(&entry_writer);
@@ -784,8 +780,7 @@ void Property<std::map<uint16_t, std::vector<uint8_t>>>::AppendSetValueToWriter(
 
     MessageWriter value_varient_writer(nullptr);
     entry_writer.OpenVariant("ay", &value_varient_writer);
-    value_varient_writer.AppendArrayOfBytes(pair.second.data(),
-                                            pair.second.size());
+    value_varient_writer.AppendArrayOfBytes(pair.second);
     entry_writer.CloseContainer(&value_varient_writer);
 
     dict_writer.CloseContainer(&entry_writer);

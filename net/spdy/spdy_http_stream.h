@@ -11,7 +11,8 @@
 #include <set>
 
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/raw_ptr_exclusion.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/strings/string_piece.h"
 #include "base/timer/timer.h"
@@ -39,7 +40,6 @@ class NET_EXPORT_PRIVATE SpdyHttpStream : public SpdyStream::Delegate,
   static const size_t kRequestBodyBufferSize;
   // |spdy_session| must not be NULL.
   SpdyHttpStream(const base::WeakPtr<SpdySession>& spdy_session,
-                 spdy::SpdyStreamId pushed_stream_id,
                  NetLogSource source_dependency,
                  std::set<std::string> dns_aliases);
 
@@ -96,8 +96,7 @@ class NET_EXPORT_PRIVATE SpdyHttpStream : public SpdyStream::Delegate,
   void OnHeadersSent() override;
   void OnEarlyHintsReceived(const spdy::Http2HeaderBlock& headers) override;
   void OnHeadersReceived(
-      const spdy::Http2HeaderBlock& response_headers,
-      const spdy::Http2HeaderBlock* pushed_request_headers) override;
+      const spdy::Http2HeaderBlock& response_headers) override;
   void OnDataReceived(std::unique_ptr<SpdyBuffer> buffer) override;
   void OnDataSent() override;
   void OnTrailers(const spdy::Http2HeaderBlock& trailers) override;
@@ -153,11 +152,6 @@ class NET_EXPORT_PRIVATE SpdyHttpStream : public SpdyStream::Delegate,
 
   const base::WeakPtr<SpdySession> spdy_session_;
 
-  // The ID of the pushed stream if one is claimed by this request.
-  // In this case, the request fails if it cannot use that pushed stream.
-  // Otherwise set to kNoPushedStreamFound.
-  const spdy::SpdyStreamId pushed_stream_id_;
-
   bool is_reused_;
   SpdyStreamRequest stream_request_;
   const NetLogSource source_dependency_;
@@ -167,7 +161,7 @@ class NET_EXPORT_PRIVATE SpdyHttpStream : public SpdyStream::Delegate,
   // After InitializeStream() is called but before OnClose() is called,
   //   |*stream_| is guaranteed to be valid.
   // After OnClose() is called, stream_ == nullptr.
-  SpdyStream* stream_ = nullptr;
+  raw_ptr<SpdyStream> stream_ = nullptr;
 
   // False before OnClose() is called, true after.
   bool stream_closed_ = false;
@@ -193,10 +187,8 @@ class NET_EXPORT_PRIVATE SpdyHttpStream : public SpdyStream::Delegate,
 
   // |response_info_| is the HTTP response data object which is filled in
   // when a response HEADERS comes in for the stream.
-  // It is not owned by this stream object, or point to |push_response_info_|.
+  // It is not owned by this stream object.
   raw_ptr<HttpResponseInfo> response_info_ = nullptr;
-
-  std::unique_ptr<HttpResponseInfo> push_response_info_;
 
   bool response_headers_complete_ = false;
 
@@ -219,13 +211,15 @@ class NET_EXPORT_PRIVATE SpdyHttpStream : public SpdyStream::Delegate,
   // Timer to execute DoBufferedReadCallback() with a delay.
   base::OneShotTimer buffered_read_timer_;
 
-  bool was_alpn_negotiated_ = false;
-
   // Stores any DNS aliases for the remote endpoint. Includes all known aliases,
   // e.g. from A, AAAA, or HTTPS, not just from the address used for the
   // connection, in no particular order. These are stored in the stream instead
   // of the session due to complications related to IP-pooling.
   std::set<std::string> dns_aliases_;
+
+  // Keep track of the priority of the request for setting the priority header
+  // right before sending the request.
+  RequestPriority priority_ = RequestPriority::DEFAULT_PRIORITY;
 
   base::WeakPtrFactory<SpdyHttpStream> weak_factory_{this};
 };

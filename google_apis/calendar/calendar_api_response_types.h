@@ -14,7 +14,6 @@
 
 #include "base/compiler_specific.h"
 #include "base/gtest_prod_util.h"
-#include "base/strings/string_piece.h"
 #include "base/time/time.h"
 #include "url/gurl.h"
 
@@ -27,6 +26,87 @@ class JSONValueConverter;
 namespace google_apis {
 
 namespace calendar {
+
+// Parses a calendar list item from the response.
+class SingleCalendar {
+ public:
+  SingleCalendar();
+  SingleCalendar(const SingleCalendar&);
+  SingleCalendar& operator=(const SingleCalendar&);
+  ~SingleCalendar();
+
+  // Registers the mapping between JSON field names and the members in this
+  // class.
+  static void RegisterJSONConverter(
+      base::JSONValueConverter<SingleCalendar>* converter);
+
+  // The Calendar ID
+  const std::string& id() const { return id_; }
+  void set_id(const std::string& id) { id_ = id; }
+
+  // The color ID of the calendar
+  const std::string& color_id() const { return color_id_; }
+  void set_color_id(const std::string& color_id) { color_id_ = color_id; }
+
+  // Indicates whether or not the calendar is selected.
+  bool selected() const { return selected_; }
+  void set_selected(bool selected) { selected_ = selected; }
+
+  // Indicates whether or not the calendar is the primary calendar.
+  bool primary() const { return primary_; }
+  void set_primary(bool primary) { primary_ = primary; }
+
+  // Return the approximate size of this calendar list item in bytes.
+  int GetApproximateSizeInBytes() const;
+
+ private:
+  std::string id_;
+  std::string color_id_;
+  bool selected_ = false;
+  bool primary_ = false;
+};
+
+// Parses a list of calendars.
+class CalendarList {
+ public:
+  CalendarList();
+  CalendarList(const CalendarList&) = delete;
+  CalendarList& operator=(const CalendarList&) = delete;
+  ~CalendarList();
+
+  // Registers the mapping between JSON field names and the members in this
+  // class.
+  static void RegisterJSONConverter(
+      base::JSONValueConverter<CalendarList>* converter);
+
+  // Creates CalendarList from parsed JSON.
+  static std::unique_ptr<CalendarList> CreateFrom(const base::Value& value);
+
+  // Returns ETag for this calendar list.
+  const std::string& etag() const { return etag_; }
+
+  // Returns the kind.
+  const std::string& kind() const { return kind_; }
+
+  void set_etag(const std::string& etag) { etag_ = etag; }
+  void set_kind(const std::string& kind) { kind_ = kind; }
+
+  // Returns a set of calendars.
+  const std::vector<std::unique_ptr<SingleCalendar>>& items() const {
+    return items_;
+  }
+  std::vector<std::unique_ptr<SingleCalendar>>* mutable_items() {
+    return &items_;
+  }
+
+  void InjectItemForTesting(std::unique_ptr<SingleCalendar> item);
+
+ private:
+  std::string etag_;
+  std::string kind_;
+
+  std::vector<std::unique_ptr<SingleCalendar>> items_;
+};
 
 // Parses the time field in the calendar Events.list response.
 class DateTime {
@@ -82,9 +162,6 @@ class CalendarEvent {
   static void RegisterJSONConverter(
       base::JSONValueConverter<CalendarEvent>* converter);
 
-  // Creates CalendarEvent from parsed JSON.
-  static std::unique_ptr<CalendarEvent> CreateFrom(const base::Value& value);
-
   // The ID of this Calendar Event.
   const std::string& id() const { return id_; }
   void set_id(const std::string& id) { id_ = id; }
@@ -122,6 +199,12 @@ class CalendarEvent {
     all_day_event_ = all_day_event;
   }
 
+  // Video conference URL, if one is attached to the event and using the
+  // conferenceData.uri field. This could be 1P like Google Meet or any 3P
+  // provider as long as they have integrated with the calendar API correctly.
+  GURL conference_data_uri() const { return conference_data_uri_; }
+  void set_conference_data_uri(const GURL& uri) { conference_data_uri_ = uri; }
+
   // Return the approximate size of this event, in bytes.
   int GetApproximateSizeInBytes() const;
 
@@ -134,7 +217,8 @@ class CalendarEvent {
   ResponseStatus self_response_status_ = ResponseStatus::kUnknown;
   DateTime start_time_;
   DateTime end_time_;
-  bool all_day_event_;
+  bool all_day_event_ = false;
+  GURL conference_data_uri_;
 };
 
 // Parses a list of calendar events.

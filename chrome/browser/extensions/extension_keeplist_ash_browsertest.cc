@@ -4,8 +4,10 @@
 
 #include <vector>
 
+#include "ash/constants/ash_switches.h"
 #include "base/containers/contains.h"
 #include "base/strings/string_piece.h"
+#include "base/test/test_future.h"
 #include "chrome/browser/ash/crosapi/ash_requires_lacros_extension_apitest.h"
 #include "chrome/browser/extensions/extension_keeplist_chromeos.h"
 #include "chromeos/crosapi/mojom/test_controller.mojom-test-utils.h"
@@ -47,10 +49,10 @@ IN_PROC_BROWSER_TEST_F(ExtensionKeeplistTest,
     return;
 
   // Get the Ash extension keeplist data from Lacros.
-  crosapi::mojom::StandaloneBrowserTestControllerAsyncWaiter waiter(
-      GetStandaloneBrowserTestController());
-  auto mojo_keeplist = crosapi::mojom::ExtensionKeepList::New();
-  waiter.GetExtensionKeeplist(&mojo_keeplist);
+  base::test::TestFuture<crosapi::mojom::ExtensionKeepListPtr> future;
+  GetStandaloneBrowserTestController()->GetExtensionKeeplist(
+      future.GetCallback());
+  auto mojo_keeplist = future.Take();
 
   // Verify the ash extension keeplist data from Ash and Lacros are identical.
 
@@ -77,4 +79,49 @@ IN_PROC_BROWSER_TEST_F(ExtensionKeeplistTest,
                               mojo_keeplist->extension_apps_run_in_os_only));
 }
 
+IN_PROC_BROWSER_TEST_F(ExtensionKeeplistTest, PerfettoNotInKeepListByDefault) {
+  ASSERT_FALSE(ash::switches::IsAshDebugBrowserEnabled());
+  ASSERT_FALSE(
+      base::Contains(extensions::GetExtensionsRunInOSAndStandaloneBrowser(),
+                     extension_misc::kPerfettoUIExtensionId));
+  ASSERT_FALSE(base::Contains(
+      extensions::GetExtensionsAndAppsRunInOSAndStandaloneBrowser(),
+      extension_misc::kPerfettoUIExtensionId));
+}
+
+class ExtensionKeeplistAllowPerfettoTest
+    : public AshRequiresLacrosExtensionApiTest {
+ protected:
+  void SetUpCommandLine(base::CommandLine* command_line) override {
+    InProcessBrowserTest::SetUpDefaultCommandLine(command_line);
+    command_line->AppendSwitch(ash::switches::kEnableAshDebugBrowser);
+  }
+  test::AshBrowserTestStarter ash_starter_;
+};
+
+IN_PROC_BROWSER_TEST_F(ExtensionKeeplistAllowPerfettoTest, PerfettoInKeepList) {
+  if (!ash_starter_.HasLacrosArgument()) {
+    return;
+  }
+
+  ASSERT_TRUE(ash::switches::IsAshDebugBrowserEnabled());
+  ASSERT_TRUE(
+      base::Contains(extensions::GetExtensionsRunInOSAndStandaloneBrowser(),
+                     extension_misc::kPerfettoUIExtensionId));
+  ASSERT_TRUE(base::Contains(
+      extensions::GetExtensionsAndAppsRunInOSAndStandaloneBrowser(),
+      extension_misc::kPerfettoUIExtensionId));
+
+  // Get the Ash extension keeplist data from Lacros.
+  base::test::TestFuture<crosapi::mojom::ExtensionKeepListPtr> future;
+  GetStandaloneBrowserTestController()->GetExtensionKeeplist(
+      future.GetCallback());
+  auto mojo_keeplist = future.Take();
+
+  ASSERT_EQ(extensions::GetExtensionsRunInOSAndStandaloneBrowser().size(),
+            ExtensionsRunInOSAndStandaloneBrowserAllowlistSizeForTest());
+  ASSERT_TRUE(IsIdenticalList(
+      extensions::GetExtensionsRunInOSAndStandaloneBrowser(),
+      mojo_keeplist->extensions_run_in_os_and_standalonebrowser));
+}
 }  // namespace extensions

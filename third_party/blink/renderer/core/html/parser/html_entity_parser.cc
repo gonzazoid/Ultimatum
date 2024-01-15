@@ -52,7 +52,7 @@ static UChar AdjustEntity(UChar32 value) {
   return kWindowsLatin1ExtensionArray[value - 0x80];
 }
 
-static void AppendLegalEntityFor(UChar32 c, DecodedHTMLEntity& decoded_entity) {
+void AppendLegalEntityFor(UChar32 c, DecodedHTMLEntity& decoded_entity) {
   // FIXME: A number of specific entity values generate parse errors.
   if (c <= 0 || c > 0x10FFFF || (c >= 0xD800 && c <= 0xDFFF)) {
     decoded_entity.Append(0xFFFD);
@@ -112,7 +112,10 @@ static bool ConsumeNamedEntity(SegmentedString& source,
     consumed_characters.push_back(cc);
     source.AdvanceAndASSERT(cc);
   }
-  not_enough_characters = source.IsEmpty();
+  // Character reference ends in ';', so if the last character is ';' then
+  // don't treat it as not enough characters (because no additional characters
+  // will change the result).
+  not_enough_characters = source.IsEmpty() && cc != u';';
   if (not_enough_characters) {
     // We can't decide on an entity because there might be a longer entity
     // that we could match if we had more data.

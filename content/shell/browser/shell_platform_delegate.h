@@ -9,21 +9,31 @@
 #include <string>
 
 #include "base/containers/flat_map.h"
+#include "base/memory/scoped_refptr.h"
 #include "build/build_config.h"
+#include "third_party/blink/public/mojom/choosers/color_chooser.mojom-forward.h"
+#include "third_party/blink/public/mojom/choosers/file_chooser.mojom-forward.h"
+#include "third_party/skia/include/core/SkColor.h"
 #include "ui/gfx/geometry/size.h"
 #include "ui/gfx/native_widget_types.h"
 
 #if BUILDFLAG(IS_MAC)
-#include "content/public/browser/native_web_keyboard_event.h"
+#include "content/public/common/input/native_web_keyboard_event.h"
+#endif
+
+#if BUILDFLAG(IS_APPLE)
 #include "ui/display/screen.h"
 #endif
 
 class GURL;
 
 namespace content {
+class ColorChooser;
+class FileSelectListener;
 class JavaScriptDialogManager;
 class Shell;
 class ShellPlatformDataAura;
+class RenderFrameHost;
 class WebContents;
 
 class ShellPlatformDelegate {
@@ -98,6 +108,21 @@ class ShellPlatformDelegate {
   // destruction. Returns false if the Shell should destroy itself.
   virtual bool DestroyShell(Shell* shell);
 
+  // Called when color chooser should open. Returns the opened color chooser.
+  // Returns nullptr if we failed to open the color chooser. The color chooser
+  // is supported/required for Android or iOS.
+  virtual std::unique_ptr<ColorChooser> OpenColorChooser(
+      WebContents* web_contents,
+      SkColor color,
+      const std::vector<blink::mojom::ColorSuggestionPtr>& suggestions);
+
+  // Called when a file selection is to be done.
+  // This function is responsible for calling listener->FileSelected() or
+  // listener->FileSelectionCanceled().
+  virtual void RunFileChooser(RenderFrameHost* render_frame_host,
+                              scoped_refptr<FileSelectListener> listener,
+                              const blink::mojom::FileChooserParams& params);
+
 #if !BUILDFLAG(IS_ANDROID)
   // Returns the native window. Valid after calling CreatePlatformWindow().
   virtual gfx::NativeWindow GetNativeWindow(Shell* shell);
@@ -115,14 +140,16 @@ class ShellPlatformDelegate {
                                    const NativeWebKeyboardEvent& event);
 #endif
 
-#if BUILDFLAG(IS_ANDROID)
+#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_IOS)
   void ToggleFullscreenModeForTab(Shell* shell,
                                   WebContents* web_contents,
                                   bool enter_fullscreen);
 
   bool IsFullscreenForTabOrPending(Shell* shell,
                                    const WebContents* web_contents) const;
+#endif
 
+#if BUILDFLAG(IS_ANDROID)
   // Forwarded from WebContentsDelegate.
   void SetOverlayMode(Shell* shell, bool use_overlay_mode);
 
@@ -140,7 +167,7 @@ class ShellPlatformDelegate {
 #endif
 
  private:
-#if BUILDFLAG(IS_MAC)
+#if BUILDFLAG(IS_APPLE)
   std::unique_ptr<display::ScopedNativeScreen> screen_;
 #endif
   // Data held for each Shell instance, since there is one ShellPlatformDelegate

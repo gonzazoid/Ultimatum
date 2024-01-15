@@ -7,7 +7,12 @@
 #ifndef CHROME_BROWSER_LACROS_BROWSER_TEST_UTIL_H_
 #define CHROME_BROWSER_LACROS_BROWSER_TEST_UTIL_H_
 
+#include <stdint.h>
+
 #include <string>
+
+#include "base/location.h"
+#include "chromeos/crosapi/mojom/test_controller.mojom.h"
 
 namespace aura {
 class Window;
@@ -16,7 +21,8 @@ class Window;
 namespace browser_test_util {
 
 // Waits for an element to be created.
-void WaitForElementCreation(const std::string& element_name);
+// Returns false if the operation times out.
+[[nodiscard]] bool WaitForElementCreation(const std::string& element_name);
 
 // Some crosapi methods rely on the assumption that ash/exo are aware of the
 // existence of a Lacros Window. Wayland is an async protocol that uses a
@@ -24,14 +30,33 @@ void WaitForElementCreation(const std::string& element_name);
 // synchronization mechanism for window creation and destruction.
 //
 // Waits for the Window to be created. |id| comes from |GetWindowId|.
-void WaitForWindowCreation(const std::string& id);
+// Returns false if the operation times out.
+[[nodiscard]] bool WaitForWindowCreation(const std::string& id);
 
 // Waits for the window to be destroyed. |id| comes from |GetWindowId|.
-void WaitForWindowDestruction(const std::string& id);
+// WaitForWindowDestruction requires the window to be already completely closed,
+// or visible/minimized on the Ash side (but about to close) for it to work.
+// This means that you need to ensure that the information about the window
+// existence and its state has reached the Ash side, for example by calling
+// WaitForWindowCreation first. Without this, WaitForWindowDestruction may
+// return immediately if e.g. the information about the window's existence
+// hasn't reached Ash yet.
+// Returns false if the operation times out.
+[[nodiscard]] bool WaitForWindowDestruction(const std::string& id);
 
 // Waits for the shelf item to either be created or destroyed, matching
 // |exists|.
-void WaitForShelfItem(const std::string& id, bool exists);
+// Returns false if the operation times out.
+[[nodiscard]] bool WaitForShelfItem(const std::string& id, bool exists);
+
+// Waits for the app to be closed, running or active, matching |state|,
+// a bitmask of |crosapi::mojom::ShelfItemState| values.
+// Returns false if Ash lacks the required TestController functionality,
+// or if the operation times out.
+[[nodiscard]] bool WaitForShelfItemState(
+    const std::string& id,
+    uint32_t state,
+    const base::Location& location = base::Location::Current());
 
 // This function relies on |window| already being available in ash. It prompts
 // ash to send the Wayland events associated with a mouse click to the |window|.
@@ -42,7 +67,8 @@ void WaitForShelfItem(const std::string& id, bool exists);
 // events. This serial_id is a required input to Wayland clipboard APIs.
 //
 // |window| must be a root window.
-void SendAndWaitForMouseClick(aura::Window* window);
+// Returns false if the operation times out.
+[[nodiscard]] bool SendAndWaitForMouseClick(aura::Window* window);
 
 }  // namespace browser_test_util
 

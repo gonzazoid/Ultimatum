@@ -6,9 +6,11 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
+#include "base/memory/raw_ptr.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
 #include "media/base/cdm_context.h"
 #include "media/base/media_resource.h"
@@ -59,10 +61,10 @@ void MojoRenderer::Initialize(MediaResource* media_resource,
   init_cb_ = std::move(init_cb);
 
   switch (media_resource_->GetType()) {
-    case MediaResource::Type::STREAM:
+    case MediaResource::Type::kStream:
       InitializeRendererFromStreams(client);
       break;
-    case MediaResource::Type::URL:
+    case MediaResource::Type::KUrl:
       InitializeRendererFromUrl(client);
       break;
   }
@@ -75,10 +77,11 @@ void MojoRenderer::InitializeRendererFromStreams(
 
   // Create mojom::DemuxerStream for each demuxer stream and bind its lifetime
   // to the pipe.
-  std::vector<DemuxerStream*> streams = media_resource_->GetAllStreams();
+  std::vector<raw_ptr<DemuxerStream, VectorExperimental>> streams =
+      media_resource_->GetAllStreams();
   std::vector<mojo::PendingRemote<mojom::DemuxerStream>> stream_proxies;
 
-  for (auto* stream : streams) {
+  for (media::DemuxerStream* stream : streams) {
     mojo::PendingRemote<mojom::DemuxerStream> stream_proxy;
     auto mojo_stream = std::make_unique<MojoDemuxerStreamImpl>(
         stream, stream_proxy.InitWithNewPipeAndPassReceiver());
@@ -117,8 +120,8 @@ void MojoRenderer::InitializeRendererFromUrl(media::RendererClient* client) {
   // |remote_renderer_| is destroyed.
   mojom::MediaUrlParamsPtr media_url_params = mojom::MediaUrlParams::New(
       url_params.media_url, url_params.site_for_cookies,
-      url_params.top_frame_origin, url_params.allow_credentials,
-      url_params.is_hls);
+      url_params.top_frame_origin, url_params.has_storage_access,
+      url_params.allow_credentials, url_params.is_hls, url_params.headers);
   remote_renderer_->Initialize(client_receiver_.BindNewEndpointAndPassRemote(),
                                absl::nullopt, std::move(media_url_params),
                                base::BindOnce(&MojoRenderer::OnInitialized,
@@ -222,6 +225,10 @@ void MojoRenderer::SetVolume(float volume) {
 base::TimeDelta MojoRenderer::GetMediaTime() {
   base::AutoLock auto_lock(lock_);
   return media_time_interpolator_.GetInterpolatedTime();
+}
+
+RendererType MojoRenderer::GetRendererType() {
+  return RendererType::kMojo;
 }
 
 void MojoRenderer::OnTimeUpdate(base::TimeDelta time,

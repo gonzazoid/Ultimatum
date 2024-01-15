@@ -3,9 +3,8 @@
 // found in the LICENSE file.
 
 #include "chromeos/ash/components/tether/fake_wifi_hotspot_connector.h"
+#include "chromeos/ash/components/network/network_handler.h"
 
-#include "base/memory/ptr_util.h"
-#include "chromeos/ash/components/network/network_state_handler.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace ash {
@@ -13,9 +12,8 @@ namespace ash {
 namespace tether {
 
 FakeWifiHotspotConnector::FakeWifiHotspotConnector(
-    NetworkStateHandler* network_state_handler)
-    : WifiHotspotConnector(network_state_handler,
-                           nullptr /* network_connect */) {}
+    NetworkHandler* network_handler)
+    : WifiHotspotConnector(network_handler, nullptr /* network_connect */) {}
 
 FakeWifiHotspotConnector::~FakeWifiHotspotConnector() = default;
 

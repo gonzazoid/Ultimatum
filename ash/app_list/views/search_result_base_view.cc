@@ -12,18 +12,26 @@
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 
 namespace ash {
 
 SearchResultBaseView::SearchResultBaseView() {
   SetGroup(kSearchResultViewGroup);
-  SetFocusBehavior(FocusBehavior::ACCESSIBLE_ONLY);
   SetInstallFocusRingOnFocus(false);
+
+  // Result views are not expected to be focused - while the results UI is shown
+  // the focus is kept within the `SearchBoxView`, which manages result
+  // selection state in response to keyboard navigation keys, and forwards
+  // all relevant key events (e.g. ENTER key for result activation) to search
+  // result views as needed.
+  SetFocusBehavior(FocusBehavior::ACCESSIBLE_ONLY);
 }
 
 SearchResultBaseView::~SearchResultBaseView() {
-  if (result_)
+  if (result_) {
     result_->RemoveObserver(this);
+  }
   result_ = nullptr;
 }
 
@@ -34,14 +42,11 @@ bool SearchResultBaseView::SkipDefaultKeyEventProcessing(
   return false;
 }
 
-const char* SearchResultBaseView::GetClassName() const {
-  return "SearchResultBaseView";
-}
-
 void SearchResultBaseView::SetSelected(bool selected,
-                                       absl::optional<bool> reverse_tab_order) {
-  if (selected_ == selected)
+                                       std::optional<bool> reverse_tab_order) {
+  if (selected_ == selected) {
     return;
+  }
 
   selected_ = selected;
 
@@ -55,11 +60,13 @@ void SearchResultBaseView::SetSelected(bool selected,
 }
 
 bool SearchResultBaseView::SelectNextResultAction(bool reverse_tab_order) {
-  if (!selected() || !actions_view_)
+  if (!selected() || !actions_view_) {
     return false;
+  }
 
-  if (!actions_view_->SelectNextAction(reverse_tab_order))
+  if (!actions_view_->SelectNextAction(reverse_tab_order)) {
     return false;
+  }
 
   SchedulePaint();
   return true;
@@ -72,27 +79,27 @@ views::View* SearchResultBaseView::GetSelectedView() {
 }
 
 void SearchResultBaseView::SetResult(SearchResult* result) {
-  OnResultChanging(result);
   ClearResult();
   result_ = result;
-  if (result_)
+  if (result_) {
     result_->AddObserver(this);
+  }
   OnResultChanged();
 }
 
 void SearchResultBaseView::OnResultDestroying() {
-  // Uses |SetResult| to ensure that the |OnResultChanging()| and
-  // |OnResultChanged()| logic gets run.
-  SetResult(nullptr);
+  ClearResult();
 }
 
 std::u16string SearchResultBaseView::ComputeAccessibleName() const {
-  if (!result())
+  if (!result()) {
     return u"";
+  }
 
   std::u16string accessible_name;
-  if (!result()->accessible_name().empty())
+  if (!result()->accessible_name().empty()) {
     return result()->accessible_name();
+  }
 
   std::u16string title = result()->title();
   if (result()->result_type() == AppListSearchResultType::kPlayStoreApp ||
@@ -124,25 +131,55 @@ std::u16string SearchResultBaseView::ComputeAccessibleName() const {
   return accessible_name;
 }
 
+void SearchResultBaseView::GetAccessibleNodeData(ui::AXNodeData* node_data) {
+  if (!GetVisible()) {
+    return;
+  }
+
+  // Mark the result is a list item in the list of search results.
+  // Also avoids an issue with the nested button case(append and remove
+  // button are child button of SearchResultView), which is not supported by
+  // ChromeVox. see details in crbug.com/924776.
+  node_data->role = ax::mojom::Role::kListBoxOption;
+  node_data->SetDefaultActionVerb(ax::mojom::DefaultActionVerb::kClick);
+
+  // It is possible for the view to be visible but lack a result. When this
+  // happens, GetAccessibleName() will return an empty string. Because the
+  // focusable state is set in the constructor and not updated when the
+  // result is removed, the accessibility paint checks will fail.
+  if (!result()) {
+    node_data->SetNameExplicitlyEmpty();
+    return;
+  }
+
+  node_data->SetName(GetAccessibleName());
+}
+
 void SearchResultBaseView::UpdateAccessibleName() {
   SetAccessibleName(ComputeAccessibleName());
 }
 
 void SearchResultBaseView::ClearResult() {
-  if (result_)
+  if (result_) {
     result_->RemoveObserver(this);
-  SetSelected(false, absl::nullopt);
+  }
+  SetSelected(false, std::nullopt);
   result_ = nullptr;
 }
 
 void SearchResultBaseView::SelectInitialResultAction(bool reverse_tab_order) {
-  if (actions_view_)
+  if (actions_view_) {
     actions_view_->SelectInitialAction(reverse_tab_order);
+  }
 }
 
 void SearchResultBaseView::ClearSelectedResultAction() {
-  if (actions_view_)
+  if (actions_view_) {
     actions_view_->ClearSelectedAction();
+  }
 }
+
+BEGIN_METADATA(SearchResultBaseView, views::Button)
+END_METADATA
 
 }  // namespace ash

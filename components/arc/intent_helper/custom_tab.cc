@@ -8,7 +8,7 @@
 #include <string>
 #include <utility>
 
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "components/exo/shell_surface_util.h"
 #include "components/exo/surface.h"
 #include "ui/aura/window.h"
@@ -20,7 +20,7 @@ namespace arc {
 
 CustomTab::CustomTab(aura::Window* arc_app_window)
     : arc_app_window_(arc_app_window) {
-  arc_app_window_observation_.Observe(arc_app_window_);
+  arc_app_window_observation_.Observe(arc_app_window_.get());
   host_->set_owned_by_client();
   auto* const widget = views::Widget::GetWidgetForNativeWindow(arc_app_window_);
   DCHECK(widget);
@@ -65,7 +65,7 @@ void CustomTab::OnWindowStackingChanged(aura::Window* window) {
     // orders later. Changing order here synchronously leads to inconsistent
     // window/layer ordering and causes weird graphical effects.
     // TODO(hashimoto): fix the views ordering and remove this handling.
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(&CustomTab::EnsureWindowOrders,
                                   weak_ptr_factory_.GetWeakPtr()));
   }

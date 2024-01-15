@@ -6,8 +6,9 @@
 
 #include <string>
 
-#include "base/bind.h"
-#include "base/callback_forward.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_forward.h"
+#include "base/task/sequenced_task_runner.h"
 
 namespace ash::libassistant {
 

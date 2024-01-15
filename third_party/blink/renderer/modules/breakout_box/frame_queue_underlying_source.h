@@ -6,6 +6,7 @@
 #define THIRD_PARTY_BLINK_RENDERER_MODULES_BREAKOUT_BOX_FRAME_QUEUE_UNDERLYING_SOURCE_H_
 
 #include "base/synchronization/lock.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/threading/thread_checker.h"
 #include "media/base/audio_buffer.h"
 #include "media/base/video_frame.h"
@@ -19,10 +20,7 @@
 namespace blink {
 
 template <typename NativeFrameType>
-class FrameQueueUnderlyingSource
-    : public UnderlyingSourceBase,
-      public ActiveScriptWrappable<
-          FrameQueueUnderlyingSource<NativeFrameType>> {
+class FrameQueueUnderlyingSource : public UnderlyingSourceBase {
  public:
   using TransferFramesCB = CrossThreadFunction<void(NativeFrameType)>;
 
@@ -41,12 +39,11 @@ class FrameQueueUnderlyingSource
       delete;
 
   // UnderlyingSourceBase
-  ScriptPromise pull(ScriptState*) override;
-  ScriptPromise Start(ScriptState*) override;
-  ScriptPromise Cancel(ScriptState*, ScriptValue reason) override;
-
-  // ScriptWrappable interface
-  bool HasPendingActivity() const final;
+  ScriptPromise Pull(ScriptState*, ExceptionState&) override;
+  ScriptPromise Start(ScriptState*, ExceptionState&) override;
+  ScriptPromise Cancel(ScriptState*,
+                       ScriptValue reason,
+                       ExceptionState&) override;
 
   // ExecutionLifecycleObserver
   void ContextDestroyed() override;
@@ -108,7 +105,7 @@ class FrameQueueUnderlyingSource
 
   base::Lock& GetMonitorLock();
 
-  void MaybeMonitorPopFrameId(int frame_id);
+  void MaybeMonitorPopFrameId(media::VideoFrame::ID frame_id);
   void MonitorPopFrameLocked(const NativeFrameType& media_frame)
       EXCLUSIVE_LOCKS_REQUIRED(GetMonitorLock());
   void MonitorPushFrameLocked(const NativeFrameType& media_frame)
@@ -122,6 +119,8 @@ class FrameQueueUnderlyingSource
   // Creates a JS frame (VideoFrame or AudioData) backed by |media_frame|.
   // Must be called on |realm_task_runner_|.
   ScriptWrappable* MakeBlinkFrame(NativeFrameType media_frame);
+
+  void EnqueueBlinkFrame(ScriptWrappable* blink_frame) const;
 
   bool is_closed_ = false;
 

@@ -4,7 +4,7 @@
 
 #include "ash/system/accessibility/floating_accessibility_view.h"
 
-#include "ash/accessibility/accessibility_controller_impl.h"
+#include "ash/accessibility/accessibility_controller.h"
 #include "ash/ime/ime_controller_impl.h"
 #include "ash/keyboard/ui/keyboard_ui_controller.h"
 #include "ash/public/cpp/keyboard/keyboard_controller.h"
@@ -20,9 +20,11 @@
 #include "ash/system/accessibility/floating_menu_button.h"
 #include "ash/system/accessibility/select_to_speak/select_to_speak_tray.h"
 #include "ash/system/ime_menu/ime_menu_tray.h"
+#include "ash/system/tray/system_tray_notifier.h"
+#include "ash/system/tray/tray_bubble_view.h"
 #include "ash/system/tray/tray_constants.h"
 #include "ash/system/virtual_keyboard/virtual_keyboard_tray.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/color/color_id.h"
@@ -49,7 +51,7 @@ class DynamicRowView : public views::View {
   // views::View:
   void ChildVisibilityChanged(views::View* child) override {
     bool any_visible = false;
-    for (auto* view : children()) {
+    for (views::View* view : children()) {
       any_visible |= view->GetVisible();
     }
     SetVisible(any_visible);
@@ -124,6 +126,14 @@ bool FloatingAccessibilityBubbleView::AcceleratorPressed(
   return true;
 }
 
+void FloatingAccessibilityBubbleView::GetAccessibleNodeData(
+    ui::AXNodeData* node_data) {
+  // Preset values to avoid AccessibilityPaintChecks.
+  node_data->role = ax::mojom::Role::kWindow;
+  node_data->SetNameExplicitlyEmpty();
+  TrayBubbleView::GetAccessibleNodeData(node_data);
+}
+
 BEGIN_METADATA(FloatingAccessibilityBubbleView, TrayBubbleView)
 END_METADATA
 
@@ -178,6 +188,7 @@ FloatingAccessibilityView::FloatingAccessibilityView(Delegate* delegate)
     ime_button_ = ime_button_container->AddChildView(
         std::make_unique<ImeMenuTray>(shelf));
     ime_button_container->SetVisible(true);
+    ime_button_->SetVisiblePreferred(true);
 
     AddChildView(std::move(ime_button_container));
     AddChildView(CreateSeparator());
@@ -201,12 +212,17 @@ FloatingAccessibilityView::FloatingAccessibilityView(Delegate* delegate)
 
 FloatingAccessibilityView::~FloatingAccessibilityView() {
   KeyboardController::Get()->RemoveObserver(this);
+  Shell::Get()->system_tray_notifier()->RemoveSystemTrayObserver(this);
 }
 
 void FloatingAccessibilityView::Initialize() {
+  Shell::Get()->system_tray_notifier()->AddSystemTrayObserver(this);
   KeyboardController::Get()->AddObserver(this);
-  for (auto* feature_view :
-       {dictation_button_, select_to_speak_button_, virtual_keyboard_button_}) {
+  for (TrayBackgroundView* feature_view : {
+           dictation_button_,
+           select_to_speak_button_,
+           virtual_keyboard_button_,
+       }) {
     feature_view->Initialize();
     feature_view->CalculateTargetBounds();
     feature_view->UpdateLayout();
@@ -290,6 +306,12 @@ void FloatingAccessibilityView::OnViewVisibilityChanged(
   if (observed_view != starting_view)
     return;
   delegate_->OnLayoutChanged();
+}
+
+void FloatingAccessibilityView::OnFocusLeavingSystemTray(bool reverse) {}
+
+void FloatingAccessibilityView::OnImeMenuTrayBubbleShown() {
+  delegate_->OnDetailedMenuEnabled(false);
 }
 
 void FloatingAccessibilityView::OnKeyboardVisibilityChanged(bool visible) {

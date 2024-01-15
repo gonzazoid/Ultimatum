@@ -10,7 +10,7 @@
 #include <memory>
 #include <string>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/ref_counted.h"
 #include "base/time/time.h"
 #include "content/browser/background_sync/background_sync_manager.h"
@@ -41,7 +41,7 @@ class TestBackgroundSyncManager : public BackgroundSyncManager {
 
   TestBackgroundSyncManager(
       scoped_refptr<ServiceWorkerContextWrapper> service_worker_context,
-      scoped_refptr<DevToolsBackgroundServicesContextImpl> devtools_context);
+      DevToolsBackgroundServicesContextImpl& devtools_context);
 
   TestBackgroundSyncManager(const TestBackgroundSyncManager&) = delete;
   TestBackgroundSyncManager& operator=(const TestBackgroundSyncManager&) =

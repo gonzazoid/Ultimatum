@@ -56,13 +56,14 @@ class CORE_EXPORT HTMLViewSourceParser final
   void PumpTokenizer();
   void UpdateTokenizerState();
 
-  void StartTracker(SegmentedString&, HTMLTokenizer*, HTMLToken&);
-  void EndTracker(SegmentedString&, HTMLTokenizer*, HTMLToken&);
+  void StartTracker(SegmentedString&, HTMLTokenizer*, HTMLToken*);
+  void EndTracker(SegmentedString&, HTMLTokenizer*);
   String SourceForToken(const HTMLToken&);
   bool NeedToCheckTokenizerBuffer(HTMLTokenizer*);
 
   HTMLInputStream input_;
-  HTMLToken token_;
+  // Owned by `tokenizer_`.
+  HTMLToken* token_ = nullptr;
   std::unique_ptr<HTMLTokenizer> tokenizer_;
   bool tracker_is_started_;
 
@@ -70,6 +71,12 @@ class CORE_EXPORT HTMLViewSourceParser final
   SegmentedString current_source_;
 
   String cached_source_for_token_;
+
+  // Offset into `current_source_` that the current token starts at.
+  int token_start_ = 0;
+
+  // Offset into `current_source_` that the current token ends at.
+  int token_end_ = 0;
 };
 
 }  // namespace blink

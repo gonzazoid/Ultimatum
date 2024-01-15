@@ -2,17 +2,20 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {assert} from 'chrome://resources/js/assert_ts.js';
+import {SeaPenActionName, SeaPenActions} from 'chrome://resources/ash/common/sea_pen/sea_pen_actions.js';
+import {seaPenReducer} from 'chrome://resources/ash/common/sea_pen/sea_pen_reducer.js';
+import {SeaPenState} from 'chrome://resources/ash/common/sea_pen/sea_pen_state';
+import {isImageDataUrl, isNonEmptyArray, isNonEmptyFilePath} from 'chrome://resources/ash/common/sea_pen/sea_pen_utils.js';
+import {assert} from 'chrome://resources/js/assert.js';
 import {FilePath} from 'chrome://resources/mojo/mojo/public/mojom/base/file_path.mojom-webui.js';
 
+import {WallpaperCollection} from '../../personalization_app.mojom-webui.js';
 import {Actions} from '../personalization_actions.js';
-import {WallpaperCollection} from '../personalization_app.mojom-webui.js';
 import {ReducerFunction} from '../personalization_reducers.js';
 import {PersonalizationState} from '../personalization_state.js';
-import {isImageDataUrl, isNonEmptyArray} from '../utils.js';
 
 import {DefaultImageSymbol, kDefaultImageSymbol} from './constants.js';
-import {isDefaultImage, isFilePath} from './utils.js';
+import {findAlbumById, isDefaultImage, isImageEqualToSelected} from './utils.js';
 import {WallpaperActionName} from './wallpaper_actions.js';
 import {DailyRefreshType, WallpaperState} from './wallpaper_state.js';
 
@@ -43,7 +46,7 @@ function backdropReducer(
 
 function loadingReducer(
     state: WallpaperState['loading'], action: Actions,
-    _: PersonalizationState): WallpaperState['loading'] {
+    globalState: PersonalizationState): WallpaperState['loading'] {
   switch (action.name) {
     case WallpaperActionName.BEGIN_LOAD_IMAGES_FOR_COLLECTIONS:
       return {
@@ -61,7 +64,7 @@ function loadingReducer(
         local: {...state.local, data: {...state.local.data, [action.id]: true}},
       };
     case WallpaperActionName.BEGIN_LOAD_SELECTED_IMAGE:
-      return {...state, selected: true};
+      return {...state, selected: {attribution: true, image: true}};
     case WallpaperActionName.BEGIN_SELECT_IMAGE:
       return {...state, setImage: state.setImage + 1};
     case WallpaperActionName.END_SELECT_IMAGE:
@@ -118,7 +121,7 @@ function loadingReducer(
         local: {
           data: imagesToKeep.reduce(
               (result, next) => {
-                const path = isFilePath(next) ? next.path : next;
+                const path = isNonEmptyFilePath(next) ? next.path : next;
                 if (state.local.data.hasOwnProperty(path)) {
                   result[path] = state.local.data[path];
                 }
@@ -141,10 +144,17 @@ function loadingReducer(
         },
       };
     case WallpaperActionName.SET_SELECTED_IMAGE:
-      if (state.setImage === 0) {
-        return {...state, selected: false};
+      if (globalState.wallpaper.pendingSelected && action.image &&
+          !isImageEqualToSelected(
+              globalState.wallpaper.pendingSelected, action.image)) {
+        // If the user is in the process of selecting a new image, but the
+        // received image does not match what the user last selected, make sure
+        // loading.selected stays true.
+        return state;
       }
-      return state;
+      return {...state, selected: {...state.selected, image: false}};
+    case WallpaperActionName.SET_ATTRIBUTION:
+      return {...state, selected: {...state.selected, attribution: false}};
     case WallpaperActionName.BEGIN_UPDATE_DAILY_REFRESH_IMAGE:
       return {...state, refreshWallpaper: true};
     case WallpaperActionName.SET_UPDATED_DAILY_REFRESH_IMAGE:
@@ -189,6 +199,24 @@ function loadingReducer(
         googlePhotos: {
           ...state.googlePhotos,
           albums: false,
+        },
+      };
+    case WallpaperActionName.BEGIN_LOAD_GOOGLE_PHOTOS_SHARED_ALBUMS:
+      assert(state.googlePhotos.albumsShared === false);
+      return {
+        ...state,
+        googlePhotos: {
+          ...state.googlePhotos,
+          albumsShared: true,
+        },
+      };
+    case WallpaperActionName.APPEND_GOOGLE_PHOTOS_SHARED_ALBUMS:
+      assert(state.googlePhotos.albumsShared === true);
+      return {
+        ...state,
+        googlePhotos: {
+          ...state.googlePhotos,
+          albumsShared: false,
         },
       };
     case WallpaperActionName.BEGIN_LOAD_GOOGLE_PHOTOS_ENABLED:
@@ -241,7 +269,7 @@ function localReducer(
         return {
           images: [
             kDefaultImageSymbol,
-            ...(state.images || []).filter(img => isFilePath(img)),
+            ...(state.images || []).filter(img => isNonEmptyFilePath(img)),
           ],
           data: {
             ...state.data,
@@ -251,7 +279,7 @@ function localReducer(
       }
       return {
         images: Array.isArray(state.images) ?
-            state.images.filter(img => isFilePath(img)) :
+            state.images.filter(img => isNonEmptyFilePath(img)) :
             null,
         data: {...state.data, [kDefaultImageSymbol]: {url: ''}},
       };
@@ -277,7 +305,7 @@ function localReducer(
         // Only keep image thumbnails if the image is still in |images|.
         data: newImages.reduce(
             (result, next) => {
-              const key = isFilePath(next) ? next.path : next;
+              const key = isNonEmptyFilePath(next) ? next.path : next;
               if (state.data.hasOwnProperty(key)) {
                 result[key] = state.data[key];
               }
@@ -295,6 +323,17 @@ function localReducer(
           [action.id]: action.data,
         },
       };
+    default:
+      return state;
+  }
+}
+
+function attributionReducer(
+    state: WallpaperState['attribution'], action: Actions,
+    _: PersonalizationState): WallpaperState['attribution'] {
+  switch (action.name) {
+    case WallpaperActionName.SET_ATTRIBUTION:
+      return action.attribution;
     default:
       return state;
   }
@@ -391,6 +430,16 @@ function fullscreenReducer(
   }
 }
 
+function shouldShowTimeOfDayWallpaperDialogReducer(
+    state: boolean, action: Actions, _: PersonalizationState): boolean {
+  switch (action.name) {
+    case WallpaperActionName.SET_SHOULD_SHOW_TIME_OF_DAY_WALLPAPER_DIALOG:
+      return action.shouldShowDialog;
+    default:
+      return state;
+  }
+}
+
 function googlePhotosReducer(
     state: WallpaperState['googlePhotos'], action: Actions,
     _: PersonalizationState): WallpaperState['googlePhotos'] {
@@ -398,17 +447,24 @@ function googlePhotosReducer(
     case WallpaperActionName.BEGIN_LOAD_GOOGLE_PHOTOS_ALBUM:
       // The list of photos for an album should be loaded only while additional
       // photos exist.
-      assert(!!state.albums);
-      assert(state.albums.some(album => album.id === action.albumId));
+      assert(
+          findAlbumById(action.albumId, state.albums) ||
+              findAlbumById(action.albumId, state.albumsShared),
+          'No matching album id found in Google Photos albums.');
       assert(
           !state.photosByAlbumId[action.albumId] ||
-          state.resumeTokens.photosByAlbumId[action.albumId]);
+              state.resumeTokens.photosByAlbumId[action.albumId],
+          'No photos available in the given Google Photos album.');
       return state;
     case WallpaperActionName.APPEND_GOOGLE_PHOTOS_ALBUM:
-      assert(!!state.albums);
-      assert(state.albums.some(album => album.id === action.albumId));
-      assert(action.albumId !== undefined);
-      assert(action.photos !== undefined);
+      assert(action.albumId !== undefined, 'Album id is undefined.');
+      assert(
+          action.photos !== undefined,
+          'List of Google Photos photos is undefined.');
+      assert(
+          findAlbumById(action.albumId, state.albums) ||
+              findAlbumById(action.albumId, state.albumsShared),
+          'No matching album id found in Google Photos albums.');
       // Case: First batch of photos.
       if (!Array.isArray(state.photosByAlbumId[action.albumId])) {
         return {
@@ -457,10 +513,12 @@ function googlePhotosReducer(
       };
     case WallpaperActionName.BEGIN_LOAD_GOOGLE_PHOTOS_ALBUMS:
       // The list of albums should be loaded only while additional albums exist.
-      assert(!state.albums || state.resumeTokens.albums);
+      assert(
+          !state.albums || state.resumeTokens.albums,
+          'Additional owned albums do not exist.');
       return state;
     case WallpaperActionName.APPEND_GOOGLE_PHOTOS_ALBUMS:
-      assert(action.albums !== undefined);
+      assert(action.albums !== undefined, 'No owned albums fetched.');
       // Case: First batch of albums.
       if (!Array.isArray(state.albums)) {
         return {
@@ -489,6 +547,43 @@ function googlePhotosReducer(
         resumeTokens: {
           ...state.resumeTokens,
           albums: action.resumeToken,
+        },
+      };
+    case WallpaperActionName.BEGIN_LOAD_GOOGLE_PHOTOS_SHARED_ALBUMS:
+      assert(
+          !state.albumsShared || state.resumeTokens.albumsShared,
+          'Additional shared albums do not exist.');
+      return state;
+    case WallpaperActionName.APPEND_GOOGLE_PHOTOS_SHARED_ALBUMS:
+      assert(action.albums !== undefined, 'No shared albums fetched.');
+      // Case: First batch of albums.
+      if (!Array.isArray(state.albumsShared)) {
+        return {
+          ...state,
+          albumsShared: action.albums,
+          resumeTokens: {
+            ...state.resumeTokens,
+            albumsShared: action.resumeToken,
+          },
+        };
+      }
+      // Case: Subsequent batches of albums.
+      if (Array.isArray(action.albums)) {
+        return {
+          ...state,
+          albumsShared: [...state.albumsShared, ...action.albums],
+          resumeTokens: {
+            ...state.resumeTokens,
+            albumsShared: action.resumeToken,
+          },
+        };
+      }
+      // Case: Error.
+      return {
+        ...state,
+        resumeTokens: {
+          ...state.resumeTokens,
+          albumsShared: action.resumeToken,
         },
       };
     case WallpaperActionName.BEGIN_LOAD_GOOGLE_PHOTOS_ENABLED:
@@ -543,14 +638,33 @@ function googlePhotosReducer(
   }
 }
 
+const allSeaPenActionNames =
+    new Set<Actions['name']>(Object.values(SeaPenActionName));
+
+function actionIsSeaPenAction(action: Actions): action is SeaPenActions {
+  return allSeaPenActionNames.has(action.name);
+}
+
+function seaPenReducerAdapter(
+    state: SeaPenState, action: Actions, _: PersonalizationState): SeaPenState {
+  if (actionIsSeaPenAction(action)) {
+    return seaPenReducer(state, action);
+  }
+  return state;
+}
+
 export const wallpaperReducers:
     {[K in keyof WallpaperState]: ReducerFunction<WallpaperState[K]>} = {
       backdrop: backdropReducer,
       loading: loadingReducer,
       local: localReducer,
+      attribution: attributionReducer,
       currentSelected: currentSelectedReducer,
       pendingSelected: pendingSelectedReducer,
       dailyRefresh: dailyRefreshReducer,
       fullscreen: fullscreenReducer,
+      shouldShowTimeOfDayWallpaperDialog:
+          shouldShowTimeOfDayWallpaperDialogReducer,
       googlePhotos: googlePhotosReducer,
+      seaPen: seaPenReducerAdapter,
     };

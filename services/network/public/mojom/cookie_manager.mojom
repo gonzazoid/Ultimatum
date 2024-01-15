@@ -5,7 +5,9 @@
 module network.mojom;
 
 import "components/content_settings/core/common/content_settings.mojom";
+import "components/content_settings/core/common/content_settings_types.mojom";
 import "mojo/public/mojom/base/time.mojom";
+import "sandbox/policy/mojom/context.mojom";
 import "services/network/public/mojom/cookie_partition_key.mojom";
 import "services/network/public/mojom/first_party_sets.mojom";
 import "services/network/public/mojom/schemeful_site.mojom";
@@ -16,8 +18,25 @@ struct CookieManagerParams {
   // Whether or not third party cookies should be blocked.
   bool block_third_party_cookies = false;
 
-  // Content settings for cookies.
-  array<content_settings.mojom.ContentSettingPatternSource> settings;
+  // Whether or not truncated cookies should be ignored. Defaults to true but
+  // can be overridden in cases such as when the feature has been disabled via
+  // Enterprise Policy. Regardless of whether this value is true, the blocking
+  // of truncated cookies will not occur if the kBlockTruncatedCookies feature
+  // is disabled (thus, this default value is acceptable for WebView and other
+  // non-Chrome platforms where the feature flag is the primary means to control
+  // the value).
+  bool block_truncated_cookies = true;
+
+  // Whether tracking protection for 3PCD (prefs + UX) is enabled.
+  bool tracking_protection_enabled_for_3pcd = false;
+
+  // Whether Third Party Cookie Deprecation mitigations efforts such as Third
+  // Party Cookie Deprecation Metadata grants are permitted.
+  bool mitigations_enabled_for_3pcd = false;
+
+  // Content settings for CookieManager.
+  map<content_settings.mojom.ContentSettingsType,
+    array<content_settings.mojom.ContentSettingPatternSource>> content_settings;
 
   // Schemes that unconditionally allow cookies from secure origins.
   array<string> secure_origin_cookies_allowed_schemes;
@@ -31,16 +50,6 @@ struct CookieManagerParams {
   // Whether or not to allow cookies for file:// URLs. Can be overridden by
   // CookieManager.AllowFileSchemeCookies().
   bool allow_file_scheme_cookies = false;
-
-  // Content settings for which domains are allowed to use legacy cookie
-  // access rules.
-  array<content_settings.mojom.ContentSettingPatternSource>
-      settings_for_legacy_cookie_access;
-
-  // Content settings for which storage access grants have been set using
-  // the Storage Access API.
-  array<content_settings.mojom.ContentSettingPatternSource>
-      settings_for_storage_access;
 
   // The type of CookieAccessDelegate to pass to the underlying CookieStore.
   // If these params are not present, CookieManager defaults to using
@@ -113,10 +122,25 @@ enum ContextRedirectTypeBug1221316 {
   kAllSameSiteRedirect,
 };
 
+enum HttpMethod {
+  kUnset,
+  kUnknown,
+  kGet,
+  kHead,
+  kPost,
+  KPut,
+  kDelete,
+  kConnect,
+  kOptions,
+  kTrace,
+  kPatch,
+};
+
 // Keep defaults here in sync with net/cookies/cookie_options.h.
 struct CookieSameSiteContextMetadata {
   CookieSameSiteContextMetadataDowngradeType cross_site_redirect_downgrade = kNoDowngrade;
   ContextRedirectTypeBug1221316 redirect_type_bug_1221316 = kUnset;
+  HttpMethod http_method_bug_1221316 = kUnset;
 };
 
 // Keep defaults here in sync with net/cookies/cookie_options.h.
@@ -142,12 +166,6 @@ struct CookieOptions {
   CookieSameSiteContext same_site_cookie_context;
   bool update_access_time = true;
   bool return_excluded_cookies = false;
-  SamePartyContext same_party_context;
-  // The size of the isolation_info.party_context plus the top-frame site for
-  // logging purposes.
-  uint32 full_party_context_size = 0;
-  // Whether the site is a member of a nontrivial First-Party Set.
-  bool is_in_nontrivial_first_party_set = false;
 };
 
 // See net/cookies/canonical_cookie.{h,cc} for documentation.
@@ -166,7 +184,6 @@ struct CanonicalCookie {
   CookieSameSite site_restrictions = NO_RESTRICTION;
   CookiePriority priority = MEDIUM;
   CookieSourceScheme source_scheme = kUnset;
-  bool same_party = false;
   CookiePartitionKey? partition_key;
   // -1 because of url::PORT_UNSPECIFIED
   // url/third_party/mozilla/url_parse.h
@@ -309,7 +326,15 @@ struct CookieDeletionFilter {
   // Only delete partitioned cookies contained in this
   // CookiePartitionKeyCollection.
   // See net/cookies/cookie_partition_key_collection.h for documentation.
-  CookiePartitionKeyCollection cookie_partition_key_collection;
+  // If the field is not set, then we delete cookies from all partitions. This
+  // is equivalent to setting the field to
+  // CookiePartitionKeyCollection::ContainsAll.
+  CookiePartitionKeyCollection? cookie_partition_key_collection;
+
+  // If true, it indicates that third-party cookie blocking would apply to the
+  // context triggering the deletion. In these cases, we should only delete
+  // partitioned cookies.
+  bool partitioned_state_only;
 };
 
 interface CookieChangeListener {
@@ -317,6 +342,11 @@ interface CookieChangeListener {
   OnCookieChange(CookieChangeInfo change);
 };
 
+// CookieManager is a privileged interface that should only be used in trusted
+// processes.
+//
+// Untrusted processes like renderers should use RestrictedCookieManager.
+[RequireContext=sandbox.mojom.Context.kBrowser]
 interface CookieManager {
   // TODO(rdsmith): Worthwhile specifying a sort order for the getters?
 
@@ -411,6 +441,7 @@ interface CookieManager {
   // Clone the interface for use somewhere else.  After this call,
   // requests to the same implementation may be posted to the other side
   // of the pipe new_interface was configured on.
+  [AllowedContext=sandbox.mojom.Context.kBrowser]
   CloneInterface(pending_receiver<CookieManager> new_interface);
 
   // Flush the backing store (if any) to disk.
@@ -424,9 +455,11 @@ interface CookieManager {
   AllowFileSchemeCookies(bool allow) => (bool success);
 
   // Sets content settings for cookies. These are used to determine cookie
-  // access and cookie deletion behavior.
+  // access and cookie deletion behavior. Will
+  // ack the caller with a callback when settings have been updated.
   SetContentSettings(
-      array<content_settings.mojom.ContentSettingPatternSource> settings);
+      content_settings.mojom.ContentSettingsType content_settings_type,
+      array<content_settings.mojom.ContentSettingPatternSource> settings) => ();
 
   // Instructs the cookie store to not discard session only cookies on shutdown.
   SetForceKeepSessionState();
@@ -434,17 +467,19 @@ interface CookieManager {
   // Enables/Disables blocking of third-party cookies.
   BlockThirdPartyCookies(bool block);
 
-  // Sets content settings for which domains are allowed to use legacy cookie
-  // access rules.
-  SetContentSettingsForLegacyCookieAccess(
-      array<content_settings.mojom.ContentSettingPatternSource> settings);
+  // Enables/Disables blocking of truncated cookies. This provides a way to
+  // change the setting at runtime, which allows the corresponding enterprise
+  // policy to not require a restart to take affect.
+  BlockTruncatedCookies(bool block);
 
-  // Sets content settings for which storage access grants exist. Will ack
-  // the caller with a callback when settings have been updated.
-  SetStorageAccessGrantSettings(
-      array<content_settings.mojom.ContentSettingPatternSource> settings) => ();
+  // Enables/Disables mitigations for third-party cookies deprecation.
+  SetMitigationsEnabledFor3pcd(bool enable);
 
-  // TODO(crbug.com/1296161): Delete this method when the partitioned cookies
-  // Origin Trial is over.
-  ConvertPartitionedCookiesToUnpartitioned(url.mojom.Url url);
+  // Enables/Disables tracking protection for 3PCD (prefs + UX).
+  SetTrackingProtectionEnabledFor3pcd(bool enable);
+
+  // Adds a pre-commit delay to the cookie database sqlite persistent store.
+  // This delay occurs before every commit and blocks the background task
+  // runner.
+  SetPreCommitCallbackDelayForTesting(mojo_base.mojom.TimeDelta delay);
 };

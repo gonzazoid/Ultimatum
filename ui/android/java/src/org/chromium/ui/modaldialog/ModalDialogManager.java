@@ -9,7 +9,6 @@ import android.util.SparseArray;
 import androidx.annotation.IntDef;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import androidx.annotation.VisibleForTesting;
 
 import org.chromium.base.Callback;
 import org.chromium.base.CommandLine;
@@ -26,9 +25,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-/**
- * Manager for managing the display of a queue of {@link PropertyModel}s.
- */
+/** Manager for managing the display of a queue of {@link PropertyModel}s. */
 public class ModalDialogManager {
     /**
      * An observer of the ModalDialogManager intended to broadcast notifications about any dialog
@@ -51,9 +48,7 @@ public class ModalDialogManager {
         default void onLastDialogDismissed() {}
     }
 
-    /**
-     * Present a {@link PropertyModel} in a container.
-     */
+    /** Present a {@link PropertyModel} in a container. */
     public abstract static class Presenter {
         private Callback<Integer> mDismissCallback;
         private PropertyModel mDialogModel;
@@ -69,17 +64,15 @@ public class ModalDialogManager {
                 mDialogModel = null;
                 mDismissCallback = null;
             } else {
-                assert mDialogModel
-                        == null : "Should call setDialogModel(null) before setting a dialog model.";
+                assert mDialogModel == null
+                        : "Should call setDialogModel(null) before setting a dialog model.";
                 mDialogModel = model;
                 mDismissCallback = dismissCallback;
                 addDialogView(model);
             }
         }
 
-        /**
-         * Run the cached cancel callback and reset the cached callback.
-         */
+        /** Run the cached cancel callback and reset the cached callback. */
         public final void dismissCurrentDialog(@DialogDismissalCause int dismissalCause) {
             if (mDismissCallback == null) return;
 
@@ -187,14 +180,10 @@ public class ModalDialogManager {
      */
     private @ModalDialogType int mCurrentType;
 
-    /**
-     * The priority of the current dialog.
-     */
+    /** The priority of the current dialog. */
     private @ModalDialogPriority int mCurrentPriority;
 
-    /**
-     * True if the current dialog is in the process of being dismissed.
-     */
+    /** True if the current dialog is in the process of being dismissed. */
     private boolean mDismissingCurrentDialog;
 
     /** Observers of this manager. */
@@ -219,9 +208,11 @@ public class ModalDialogManager {
         mDefaultPresenter = defaultPresenter;
         registerPresenter(defaultPresenter, defaultType);
 
-        mTokenHolders.put(ModalDialogType.APP,
+        mTokenHolders.put(
+                ModalDialogType.APP,
                 new TokenHolder(() -> resumeTypeInternal(ModalDialogType.APP)));
-        mTokenHolders.put(ModalDialogType.TAB,
+        mTokenHolders.put(
+                ModalDialogType.TAB,
                 new TokenHolder(() -> resumeTypeInternal(ModalDialogType.TAB)));
     }
 
@@ -254,8 +245,8 @@ public class ModalDialogManager {
      * @param dialogType The type of the dialog shown by the specified presenter.
      */
     public void registerPresenter(Presenter presenter, @ModalDialogType int dialogType) {
-        assert mPresenters.get(dialogType)
-                == null : "Only one presenter can be registered for each type.";
+        assert mPresenters.get(dialogType) == null
+                : "Only one presenter can be registered for each type.";
         mPresenters.put(dialogType, presenter);
     }
 
@@ -264,6 +255,13 @@ public class ModalDialogManager {
      */
     public boolean isShowing() {
         return mCurrentPresenter != null;
+    }
+
+    /**
+     * @return Whether dialogs of the specified type are suspended.
+     */
+    public boolean isSuspended(@ModalDialogType int dialogType) {
+        return mSuspendedTypes.contains(dialogType);
     }
 
     /**
@@ -292,7 +290,9 @@ public class ModalDialogManager {
      * @param dialogType The type of the dialog to be shown.
      * @param dialogPriority The priority of the dialog to be shown.
      */
-    public void showDialog(PropertyModel model, @ModalDialogType int dialogType,
+    public void showDialog(
+            PropertyModel model,
+            @ModalDialogType int dialogType,
             @ModalDialogPriority int dialogPriority) {
         showDialog(model, dialogType, dialogPriority, false);
     }
@@ -323,8 +323,11 @@ public class ModalDialogManager {
      * @param dialogPriority The priority of the dialog to be shown.
      * @param showAsNext Whether the specified dialog should be set highest priority of its type.
      */
-    public void showDialog(PropertyModel model, @ModalDialogType int dialogType,
-            @ModalDialogPriority int dialogPriority, boolean showAsNext) {
+    public void showDialog(
+            PropertyModel model,
+            @ModalDialogType int dialogType,
+            @ModalDialogPriority int dialogPriority,
+            boolean showAsNext) {
         if (CommandLine.getInstance().hasSwitch(UiSwitches.ENABLE_SCREENSHOT_UI_MODE)) {
             return;
         }
@@ -335,8 +338,8 @@ public class ModalDialogManager {
             // We only put the requested dialog in pending list if the currently shown dialog
             // also has a VERY_HIGH priority.
             if (isShowing() && mCurrentPriority >= dialogPriority) {
-                assert mCurrentPriority
-                        == ModalDialogPriority.VERY_HIGH : "Higher priority is not supported.";
+                assert mCurrentPriority == ModalDialogPriority.VERY_HIGH
+                        : "Higher priority is not supported.";
                 mPendingDialogContainer.put(dialogType, dialogPriority, model, showAsNext);
                 return;
             }
@@ -405,7 +408,8 @@ public class ModalDialogManager {
      */
     public void dismissAllDialogs(@DialogDismissalCause int dismissalCause) {
         for (@ModalDialogType int dialogType = ModalDialogType.RANGE_MIN;
-                dialogType <= ModalDialogType.RANGE_MAX; ++dialogType) {
+                dialogType <= ModalDialogType.RANGE_MAX;
+                ++dialogType) {
             dismissPendingDialogsOfType(dialogType, dismissalCause);
         }
 
@@ -447,13 +451,15 @@ public class ModalDialogManager {
     /** Helper method to dismiss pending dialogs of the specified type. */
     private void dismissPendingDialogsOfType(
             @ModalDialogType int dialogType, @DialogDismissalCause int dismissalCause) {
-        mPendingDialogContainer.remove(dialogType, model -> {
-            ModalDialogProperties.Controller controller =
-                    model.get(ModalDialogProperties.CONTROLLER);
-            controller.onDismiss(model, dismissalCause);
-            for (ModalDialogManagerObserver o : mObserverList) o.onDialogDismissed(model);
-            dispatchOnLastDialogDismissedIfEmpty();
-        });
+        mPendingDialogContainer.remove(
+                dialogType,
+                model -> {
+                    ModalDialogProperties.Controller controller =
+                            model.get(ModalDialogProperties.CONTROLLER);
+                    controller.onDismiss(model, dismissalCause);
+                    for (ModalDialogManagerObserver o : mObserverList) o.onDialogDismissed(model);
+                    dispatchOnLastDialogDismissedIfEmpty();
+                });
     }
 
     /**
@@ -470,7 +476,8 @@ public class ModalDialogManager {
      */
     public int suspendType(@ModalDialogType int dialogType) {
         mSuspendedTypes.add(dialogType);
-        if (isShowing() && dialogType == mCurrentType
+        if (isShowing()
+                && dialogType == mCurrentType
                 && mCurrentPriority != ModalDialogPriority.VERY_HIGH) {
             suspendCurrentDialog();
             showNextDialog();
@@ -505,7 +512,7 @@ public class ModalDialogManager {
         mCurrentPresenter.setDialogModel(null, null);
         mCurrentPresenter = null;
         mPendingDialogContainer.put(
-                mCurrentType, mCurrentPriority, dialogView, /*showAsNext=*/true);
+                mCurrentType, mCurrentPriority, dialogView, /* showAsNext= */ true);
     }
 
     /** Helper method for showing the next available dialog in the pending dialog list. */
@@ -537,24 +544,19 @@ public class ModalDialogManager {
         }
     }
 
-    @VisibleForTesting
     public PropertyModel getCurrentDialogForTest() {
         return mCurrentPresenter == null ? null : mCurrentPresenter.getDialogModel();
     }
 
-    @VisibleForTesting
     public @Nullable List<PropertyModel> getPendingDialogsForTest(@ModalDialogType int dialogType) {
-        @ModalDialogPriority
-        int priority = getDefaultPriorityByType(dialogType);
+        @ModalDialogPriority int priority = getDefaultPriorityByType(dialogType);
         return mPendingDialogContainer.get(dialogType, priority);
     }
 
-    @VisibleForTesting
     public Presenter getPresenterForTest(@ModalDialogType int dialogType) {
         return mPresenters.get(dialogType);
     }
 
-    @VisibleForTesting
     public Presenter getCurrentPresenterForTest() {
         return mCurrentPresenter;
     }

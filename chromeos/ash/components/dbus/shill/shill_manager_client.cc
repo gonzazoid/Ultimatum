@@ -7,8 +7,9 @@
 #include <ios>
 #include <memory>
 
-#include "base/bind.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/values.h"
 #include "chromeos/ash/components/dbus/shill/fake_shill_manager_client.h"
 #include "chromeos/ash/components/dbus/shill/shill_property_changed_observer.h"
@@ -49,21 +50,17 @@ class ShillManagerClientImpl : public ShillManagerClient {
   }
 
   void GetProperties(
-      chromeos::DBusMethodCallback<base::Value> callback) override {
+      chromeos::DBusMethodCallback<base::Value::Dict> callback) override {
     dbus::MethodCall method_call(shill::kFlimflamManagerInterface,
                                  shill::kGetPropertiesFunction);
-    helper_->CallValueMethod(
-        &method_call,
-        base::BindOnce(&ShillClientHelper::OnGetProperties,
-                       dbus::ObjectPath(shill::kFlimflamServicePath),
-                       std::move(callback)));
+    helper_->CallDictValueMethod(&method_call, std::move(callback));
   }
 
   void GetNetworksForGeolocation(
-      chromeos::DBusMethodCallback<base::Value> callback) override {
+      chromeos::DBusMethodCallback<base::Value::Dict> callback) override {
     dbus::MethodCall method_call(shill::kFlimflamManagerInterface,
                                  shill::kGetNetworksForGeolocation);
-    helper_->CallValueMethod(&method_call, std::move(callback));
+    helper_->CallDictValueMethod(&method_call, std::move(callback));
   }
 
   void SetProperty(const std::string& name,
@@ -73,7 +70,7 @@ class ShillManagerClientImpl : public ShillManagerClient {
     // This property is read-only and can only be mutated by the specialized
     // method exposed in DBus API.
     if (name == shill::kDNSProxyDOHProvidersProperty) {
-      SetDNSProxyDOHProviders(value, std::move(callback),
+      SetDNSProxyDOHProviders(value.GetDict(), std::move(callback),
                               std::move(error_callback));
       return;
     }
@@ -82,7 +79,7 @@ class ShillManagerClientImpl : public ShillManagerClient {
                                  shill::kSetPropertyFunction);
     dbus::MessageWriter writer(&method_call);
     writer.AppendString(name);
-    ShillClientHelper::AppendValueDataAsVariant(&writer, value);
+    ShillClientHelper::AppendValueDataAsVariant(&writer, name, value);
     helper_->CallVoidMethodWithErrorCallback(&method_call, std::move(callback),
                                              std::move(error_callback));
   }
@@ -133,7 +130,7 @@ class ShillManagerClientImpl : public ShillManagerClient {
                                              std::move(error_callback));
   }
 
-  void ConfigureService(const base::Value& properties,
+  void ConfigureService(const base::Value::Dict& properties,
                         chromeos::ObjectPathCallback callback,
                         ErrorCallback error_callback) override {
     dbus::MethodCall method_call(shill::kFlimflamManagerInterface,
@@ -145,7 +142,7 @@ class ShillManagerClientImpl : public ShillManagerClient {
   }
 
   void ConfigureServiceForProfile(const dbus::ObjectPath& profile_path,
-                                  const base::Value& properties,
+                                  const base::Value::Dict& properties,
                                   chromeos::ObjectPathCallback callback,
                                   ErrorCallback error_callback) override {
     dbus::MethodCall method_call(shill::kFlimflamManagerInterface,
@@ -157,7 +154,7 @@ class ShillManagerClientImpl : public ShillManagerClient {
         &method_call, std::move(callback), std::move(error_callback));
   }
 
-  void GetService(const base::Value& properties,
+  void GetService(const base::Value::Dict& properties,
                   chromeos::ObjectPathCallback callback,
                   ErrorCallback error_callback) override {
     dbus::MethodCall method_call(shill::kFlimflamManagerInterface,
@@ -177,7 +174,7 @@ class ShillManagerClientImpl : public ShillManagerClient {
   }
 
   void AddPasspointCredentials(const dbus::ObjectPath& profile_path,
-                               const base::Value& properties,
+                               const base::Value::Dict& properties,
                                base::OnceClosure callback,
                                ErrorCallback error_callback) override {
     dbus::MethodCall method_call(shill::kFlimflamManagerInterface,
@@ -190,7 +187,7 @@ class ShillManagerClientImpl : public ShillManagerClient {
   }
 
   void RemovePasspointCredentials(const dbus::ObjectPath& profile_path,
-                                  const base::Value& properties,
+                                  const base::Value::Dict& properties,
                                   base::OnceClosure callback,
                                   ErrorCallback error_callback) override {
     dbus::MethodCall method_call(shill::kFlimflamManagerInterface,
@@ -203,14 +200,14 @@ class ShillManagerClientImpl : public ShillManagerClient {
   }
 
   void SetTetheringEnabled(bool enabled,
-                           base::OnceClosure callback,
+                           StringCallback callback,
                            ErrorCallback error_callback) override {
     dbus::MethodCall method_call(shill::kFlimflamManagerInterface,
                                  shill::kSetTetheringEnabledFunction);
     dbus::MessageWriter writer(&method_call);
     writer.AppendBool(enabled);
-    helper_->CallVoidMethodWithErrorCallback(&method_call, std::move(callback),
-                                             std::move(error_callback));
+    helper_->CallStringMethodWithErrorCallback(
+        &method_call, std::move(callback), std::move(error_callback));
   }
 
   void CheckTetheringReadiness(StringCallback callback,
@@ -219,6 +216,17 @@ class ShillManagerClientImpl : public ShillManagerClient {
                                  shill::kCheckTetheringReadinessFunction);
     helper_->CallStringMethodWithErrorCallback(
         &method_call, std::move(callback), std::move(error_callback));
+  }
+
+  void SetLOHSEnabled(bool enabled,
+                      base::OnceClosure callback,
+                      ErrorCallback error_callback) override {
+    dbus::MethodCall method_call(shill::kFlimflamManagerInterface,
+                                 shill::kSetLOHSEnabledFunction);
+    dbus::MessageWriter writer(&method_call);
+    writer.AppendBool(enabled);
+    helper_->CallVoidMethodWithErrorCallback(&method_call, std::move(callback),
+                                             std::move(error_callback));
   }
 
   TestInterface* GetTestInterface() override { return nullptr; }
@@ -233,7 +241,7 @@ class ShillManagerClientImpl : public ShillManagerClient {
  private:
   // Used by SetProperty call to reroute kDNSProxyDOHProviders to the underlying
   // specialized method in the DBus API.
-  void SetDNSProxyDOHProviders(const base::Value& providers,
+  void SetDNSProxyDOHProviders(const base::Value::Dict& providers,
                                base::OnceClosure callback,
                                ErrorCallback error_callback) {
     dbus::MethodCall method_call(shill::kFlimflamManagerInterface,
@@ -244,7 +252,7 @@ class ShillManagerClientImpl : public ShillManagerClient {
                                              std::move(error_callback));
   }
 
-  dbus::ObjectProxy* proxy_ = nullptr;
+  raw_ptr<dbus::ObjectProxy> proxy_ = nullptr;
   std::unique_ptr<ShillClientHelper> helper_;
 };
 

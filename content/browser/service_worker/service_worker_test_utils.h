@@ -7,10 +7,10 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/command_line.h"
 #include "base/containers/queue.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "base/run_loop.h"
 #include "components/services/storage/public/mojom/service_worker_storage_control.mojom.h"
@@ -43,8 +43,11 @@ class ServiceWorkerStorage;
 class ServiceWorkerVersion;
 
 base::OnceCallback<void(blink::ServiceWorkerStatusCode)>
-ReceiveServiceWorkerStatus(absl::optional<blink::ServiceWorkerStatusCode>* out,
+ReceiveServiceWorkerStatus(std::optional<blink::ServiceWorkerStatusCode>* out,
                            base::OnceClosure quit_closure);
+
+blink::ServiceWorkerStatusCode WarmUpServiceWorker(
+    ServiceWorkerVersion* version);
 
 blink::ServiceWorkerStatusCode StartServiceWorker(
     ServiceWorkerVersion* version);

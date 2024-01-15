@@ -67,7 +67,6 @@ enum WilcoDtcSupportdEvent {
 // correspondingly).
 //
 // NextMinVersion: 1, NextIndex: 1
-[Stable]
 interface WilcoDtcSupportdServiceFactory {
   // Returns an interface to WilcoDtcSupportdService in response to the passed
   // interface to WilcoDtcSupportdClient.

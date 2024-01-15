@@ -4,14 +4,15 @@
 
 #include "chrome/browser/ui/test/test_browser_dialog.h"
 
-#include "base/bind.h"
-#include "base/containers/cxx20_erase.h"
+#include <set>
+
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/stl_util.h"
 #include "base/strings/utf_string_conversions.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -25,7 +26,7 @@
 #endif
 
 #if defined(TOOLKIT_VIEWS)
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/strings/strcat.h"
 #include "ui/display/display.h"
 #include "ui/display/screen.h"
@@ -39,7 +40,7 @@ namespace {
 class WidgetCloser {
  public:
   WidgetCloser(views::Widget* widget, bool async) : widget_(widget) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(&WidgetCloser::CloseWidget,
                                   weak_ptr_factory_.GetWeakPtr(), async));
   }
@@ -55,7 +56,7 @@ class WidgetCloser {
       widget_->CloseNow();
   }
 
-  raw_ptr<views::Widget, DanglingUntriaged> widget_;
+  raw_ptr<views::Widget, AcrossTasksDanglingUntriaged> widget_;
 
   base::WeakPtrFactory<WidgetCloser> weak_ptr_factory_{this};
 };
@@ -96,7 +97,7 @@ bool TestBrowserDialog::VerifyUi() {
   auto added =
       base::STLSetDifference<views::Widget::Widgets>(widgets_, widgets_before);
   std::string name = GetNonDialogName();
-  base::EraseIf(added, [&](views::Widget* widget) {
+  std::erase_if(added, [&](views::Widget* widget) {
     return !widget->widget_delegate()->AsDialogDelegate() &&
            (name.empty() || widget->GetName() != name);
   });
@@ -115,10 +116,6 @@ bool TestBrowserDialog::VerifyUi() {
   }
 
   views::Widget* dialog_widget = *(added.begin());
-// TODO(https://crbug.com/958242) support Mac for pixel tests.
-// TODO(crbug.com/1052397): Revisit the macro expression once build flag switch
-// of lacros-chrome is complete.
-#if BUILDFLAG(IS_WIN) || (BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS_LACROS))
   dialog_widget->SetBlockCloseForTesting(true);
   // Deactivate before taking screenshot. Deactivated dialog pixel outputs
   // is more predictable than activated dialog.
@@ -131,14 +128,15 @@ bool TestBrowserDialog::VerifyUi() {
 
   auto* test_info = testing::UnitTest::GetInstance()->current_test_info();
   const std::string screenshot_name = base::StrCat(
-      {test_info->test_case_name(), "_", test_info->name(), "_", baseline_});
-  if (!VerifyPixelUi(dialog_widget, "BrowserUiDialog", screenshot_name)) {
+      {test_info->test_suite_name(), "_", test_info->name(), "_", baseline_});
+
+  if (VerifyPixelUi(dialog_widget, "BrowserUiDialog", screenshot_name) ==
+      ui::test::ActionResult::kFailed) {
     LOG(INFO) << "VerifyUi(): Pixel compare failed.";
     return false;
   }
   if (is_active)
     dialog_widget->Activate();
-#endif  // BUILDFLAG(IS_MAC)
 
   if (!should_verify_dialog_bounds_)
     return true;

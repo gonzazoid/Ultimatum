@@ -27,15 +27,6 @@ namespace {
 const char* const kFilterlist[] = {"www.reddit.com", "tools.usps.com",
                                    "old.reddit.com"};
 
-enum RejectionBuckets {
-  NOT_ARTICLE = 0,
-  MOBILE_FRIENDLY,
-  FILTERED,
-  TOO_SHORT,
-  NOT_REJECTED,
-  REJECTION_BUCKET_BOUNDARY
-};
-
 // Returns whether it is necessary to send updates back to the browser.
 // The number of updates can be from 0 to 2. See the tests in
 // "distillable_page_utils_browsertest.cc".
@@ -103,7 +94,7 @@ void DumpDistillability(content::RenderFrame* render_frame,
   raw_features.Set("moz_score_all_linear", features.moz_score_all_linear);
   dict.Set("features", std::move(raw_features));
 
-  base::ListValue derived_features;
+  base::Value::List derived_features;
   for (double value : derived) {
     derived_features.Append(value);
   }
@@ -126,6 +117,7 @@ bool IsDistillablePageAdaboost(blink::WebDocument& doc,
                                const DistillablePageDetector* detector,
                                const DistillablePageDetector* long_page,
                                bool is_last,
+                               bool& is_long_article,
                                bool& is_mobile_friendly,
                                content::RenderFrame* render_frame,
                                bool dump_info) {
@@ -142,72 +134,23 @@ bool IsDistillablePageAdaboost(blink::WebDocument& doc,
   double score = detector->Score(derived) - detector->GetThreshold();
   double long_score = long_page->Score(derived) - long_page->GetThreshold();
   bool distillable = score > 0;
-  bool long_article = long_score > 0;
+  is_long_article = long_score > 0;
   bool filtered = IsFiltered(parsed_url);
 
   if (dump_info) {
     DumpDistillability(render_frame, features, derived, score, distillable,
-                       long_score, long_article, filtered);
-  }
-
-  if (!features.is_mobile_friendly) {
-    int score_int = std::round(score * 100);
-    if (score > 0) {
-      UMA_HISTOGRAM_COUNTS_1000("DomDistiller.DistillabilityScoreNMF.Positive",
-                                score_int);
-    } else {
-      UMA_HISTOGRAM_COUNTS_1000("DomDistiller.DistillabilityScoreNMF.Negative",
-                                -score_int);
-    }
-    if (distillable) {
-      // The long-article model is trained with pages that are
-      // non-mobile-friendly, and distillable (deemed by the first model), so
-      // only record on that type of pages.
-      int long_score_int = std::round(long_score * 100);
-      if (long_score > 0) {
-        UMA_HISTOGRAM_COUNTS_1000("DomDistiller.LongArticleScoreNMF.Positive",
-                                  long_score_int);
-      } else {
-        UMA_HISTOGRAM_COUNTS_1000("DomDistiller.LongArticleScoreNMF.Negative",
-                                  -long_score_int);
-      }
-    }
-  }
-
-  int bucket = static_cast<unsigned>(features.is_mobile_friendly) |
-               (static_cast<unsigned>(distillable) << 1);
-  if (is_last) {
-    UMA_HISTOGRAM_ENUMERATION("DomDistiller.PageDistillableAfterLoading",
-                              bucket, 4);
-  } else {
-    UMA_HISTOGRAM_ENUMERATION("DomDistiller.PageDistillableAfterParsing",
-                              bucket, 4);
-    if (!distillable) {
-      UMA_HISTOGRAM_ENUMERATION("DomDistiller.DistillabilityRejection",
-                                NOT_ARTICLE, REJECTION_BUCKET_BOUNDARY);
-    } else if (features.is_mobile_friendly) {
-      UMA_HISTOGRAM_ENUMERATION("DomDistiller.DistillabilityRejection",
-                                MOBILE_FRIENDLY, REJECTION_BUCKET_BOUNDARY);
-    } else if (filtered) {
-      UMA_HISTOGRAM_ENUMERATION("DomDistiller.DistillabilityRejection",
-                                FILTERED, REJECTION_BUCKET_BOUNDARY);
-    } else if (!long_article) {
-      UMA_HISTOGRAM_ENUMERATION("DomDistiller.DistillabilityRejection",
-                                TOO_SHORT, REJECTION_BUCKET_BOUNDARY);
-    } else {
-      UMA_HISTOGRAM_ENUMERATION("DomDistiller.DistillabilityRejection",
-                                NOT_REJECTED, REJECTION_BUCKET_BOUNDARY);
-    }
+                       long_score, is_long_article, filtered);
   }
 
   if (filtered) {
     return false;
   }
-  return distillable && long_article;
+  return distillable && is_long_article;
 }
 
 bool IsDistillablePage(blink::WebDocument& doc,
                        bool is_last,
+                       bool& is_long_article,
                        bool& is_mobile_friendly,
                        content::RenderFrame* render_frame,
                        bool dump_info) {
@@ -220,7 +163,7 @@ bool IsDistillablePage(blink::WebDocument& doc,
     case DistillerHeuristicsType::ALL_ARTICLES:
       return IsDistillablePageAdaboost(
           doc, DistillablePageDetector::GetNewModel(),
-          DistillablePageDetector::GetLongPageModel(), is_last,
+          DistillablePageDetector::GetLongPageModel(), is_last, is_long_article,
           is_mobile_friendly, render_frame, dump_info);
     case DistillerHeuristicsType::NONE:
     default:
@@ -262,11 +205,13 @@ void DistillabilityAgent::DidMeaningfulLayout(
       distillability_service.BindNewPipeAndPassReceiver());
   if (!distillability_service.is_bound())
     return;
+  bool is_long_article = false;
   bool is_mobile_friendly = false;
-  bool is_distillable = IsDistillablePage(doc, is_last, is_mobile_friendly,
-                                          render_frame(), dump_info_);
-  distillability_service->NotifyIsDistillable(is_distillable, is_last,
-                                              is_mobile_friendly);
+  bool is_distillable =
+      IsDistillablePage(doc, is_last, is_long_article, is_mobile_friendly,
+                        render_frame(), dump_info_);
+  distillability_service->NotifyIsDistillable(
+      is_distillable, is_last, is_long_article, is_mobile_friendly);
 }
 
 DistillabilityAgent::~DistillabilityAgent() {}

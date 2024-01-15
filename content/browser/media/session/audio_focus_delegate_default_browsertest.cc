@@ -2,8 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/unguessable_token.h"
 #include "build/build_config.h"
@@ -63,7 +63,7 @@ class AudioFocusDelegateDefaultBrowserTest : public ContentBrowserTest {
            bool use_separate_group_id) {
     std::unique_ptr<MockMediaSessionPlayerObserver> player_observer(
         new MockMediaSessionPlayerObserver(
-            nullptr, media::MediaContentType::Persistent));
+            nullptr, media::MediaContentType::kPersistent));
 
     MediaSessionImpl* media_session = MediaSessionImpl::Get(start_contents);
     EXPECT_TRUE(media_session);

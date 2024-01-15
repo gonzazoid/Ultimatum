@@ -5,13 +5,13 @@
 #ifndef CHROMEOS_ASH_COMPONENTS_DBUS_SHILL_SHILL_DEVICE_CLIENT_H_
 #define CHROMEOS_ASH_COMPONENTS_DBUS_SHILL_SHILL_DEVICE_CLIENT_H_
 
+#include <optional>
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/component_export.h"
+#include "base/functional/callback.h"
 #include "chromeos/ash/components/dbus/shill/shill_client_helper.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace base {
 class TimeDelta;
@@ -44,6 +44,8 @@ class COMPONENT_EXPORT(SHILL_CLIENT) ShillDeviceClient {
                            const std::string& name) = 0;
     virtual void RemoveDevice(const std::string& device_path) = 0;
     virtual void ClearDevices() = 0;
+    virtual base::Value* GetDeviceProperty(const std::string& device_path,
+                                           const std::string& name) = 0;
     virtual void SetDeviceProperty(const std::string& device_path,
                                    const std::string& name,
                                    const base::Value& value,
@@ -66,10 +68,14 @@ class COMPONENT_EXPORT(SHILL_CLIENT) ShillDeviceClient {
     // Adds a delay before a SetProperty call will result in property value
     // change.
     virtual void SetPropertyChangeDelay(
-        absl::optional<base::TimeDelta> time_delay) = 0;
+        std::optional<base::TimeDelta> time_delay) = 0;
+    // Sets a SetProperty error. If set, the next SetProperty call will
+    // fail with the given |error_name|
+    virtual void SetErrorForNextSetPropertyAttempt(
+        const std::string& error_name) = 0;
 
    protected:
-    virtual ~TestInterface() {}
+    virtual ~TestInterface() = default;
   };
 
   // Creates and initializes the global instance. |bus| must not be null.
@@ -102,7 +108,7 @@ class COMPONENT_EXPORT(SHILL_CLIENT) ShillDeviceClient {
   // success or nullopt on failure.
   virtual void GetProperties(
       const dbus::ObjectPath& device_path,
-      chromeos::DBusMethodCallback<base::Value> callback) = 0;
+      chromeos::DBusMethodCallback<base::Value::Dict> callback) = 0;
 
   // Calls SetProperty method.
   // |callback| is called after the method call finishes.

@@ -10,31 +10,29 @@
 #import "components/prefs/testing_pref_service.h"
 #import "ios/chrome/app/application_delegate/app_state.h"
 #import "ios/chrome/app/application_delegate/app_state_observer.h"
-#import "ios/chrome/browser/application_context/application_context.h"
-#import "ios/chrome/browser/browser_state/test_chrome_browser_state.h"
-#import "ios/chrome/browser/prefs/pref_names.h"
 #import "ios/chrome/browser/promos_manager/constants.h"
 #import "ios/chrome/browser/promos_manager/mock_promos_manager.h"
 #import "ios/chrome/browser/promos_manager/promos_manager.h"
-#import "ios/chrome/browser/signin/authentication_service.h"
-#import "ios/chrome/browser/signin/authentication_service_delegate_fake.h"
-#import "ios/chrome/browser/signin/authentication_service_factory.h"
-#import "ios/chrome/browser/signin/signin_util.h"
-#import "ios/chrome/browser/ui/post_restore_signin/features.h"
+#import "ios/chrome/browser/shared/model/application_context/application_context.h"
+#import "ios/chrome/browser/shared/model/browser_state/test_chrome_browser_state.h"
+#import "ios/chrome/browser/shared/model/prefs/pref_names.h"
+#import "ios/chrome/browser/signin/model/authentication_service.h"
+#import "ios/chrome/browser/signin/model/authentication_service_factory.h"
+#import "ios/chrome/browser/signin/model/fake_authentication_service_delegate.h"
+#import "ios/chrome/browser/signin/model/fake_system_identity.h"
+#import "ios/chrome/browser/signin/model/fake_system_identity_manager.h"
+#import "ios/chrome/browser/signin/model/identity_manager_factory.h"
+#import "ios/chrome/browser/signin/model/signin_util.h"
 #import "ios/chrome/test/ios_chrome_scoped_testing_local_state.h"
 #import "ios/web/public/test/web_task_environment.h"
 #import "testing/gmock/include/gmock/gmock.h"
 #import "testing/platform_test.h"
-#import "third_party/abseil-cpp/absl/types/optional.h"
 #import "third_party/ocmock/OCMock/OCMock.h"
 #import "third_party/ocmock/gtest_support.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 using ::testing::_;
 using ::testing::AnyNumber;
+using testing::NiceMock;
 
 namespace {
 const char kFakePreRestoreAccountEmail[] = "person@example.org";
@@ -45,26 +43,18 @@ class PostRestoreAppAgentTest : public PlatformTest {
  public:
   explicit PostRestoreAppAgentTest() { CreateAppAgent(); }
 
-  IOSChromeScopedTestingLocalState local_state_;
-  web::WebTaskEnvironment task_environment_;
-  std::unique_ptr<TestChromeBrowserState> browser_state_;
-  PostRestoreAppAgent* appAgent_;
-  std::unique_ptr<MockPromosManager> promos_manager_;
-  AuthenticationService* auth_service_;
-  base::test::ScopedFeatureList scoped_feature_list_;
-  id mockAppState_;
-
   void CreateAppAgent() {
-    appAgent_ =
+    app_agent_ =
         [[PostRestoreAppAgent alloc] initWithPromosManager:CreatePromosManager()
                                      authenticationService:CreateAuthService()
+                                           identityManager:GetIdentityManager()
                                                 localState:local_state_.Get()];
     mockAppState_ = OCMClassMock([AppState class]);
-    [appAgent_ setAppState:mockAppState_];
+    [app_agent_ setAppState:mockAppState_];
   }
 
   MockPromosManager* CreatePromosManager() {
-    promos_manager_ = std::make_unique<MockPromosManager>();
+    promos_manager_ = std::make_unique<NiceMock<MockPromosManager>>();
 
     return promos_manager_.get();
   }
@@ -77,40 +67,52 @@ class PostRestoreAppAgentTest : public PlatformTest {
     browser_state_ = builder.Build();
     AuthenticationServiceFactory::CreateAndInitializeForBrowserState(
         browser_state_.get(),
-        std::make_unique<AuthenticationServiceDelegateFake>());
+        std::make_unique<FakeAuthenticationServiceDelegate>());
     auth_service_ =
         AuthenticationServiceFactory::GetForBrowserState(browser_state_.get());
     return auth_service_;
   }
 
+  signin::IdentityManager* GetIdentityManager() {
+    return IdentityManagerFactory::GetForBrowserState(browser_state_.get());
+  }
+
   void MockAppStateChange(InitStage initStage) {
     OCMStub([mockAppState_ initStage]).andReturn(initStage);
-    [appAgent_ appState:mockAppState_
+    [app_agent_ appState:mockAppState_
         didTransitionFromInitStage:InitStageStart];
   }
 
   void SetFakePreRestoreAccountInfo() {
     AccountInfo accountInfo;
     accountInfo.email = kFakePreRestoreAccountEmail;
-    StorePreRestoreIdentity(local_state_.Get(), accountInfo);
+    StorePreRestoreIdentity(local_state_.Get(), accountInfo,
+                            /*history_sync_enabled=*/false);
   }
 
-  void EnableFeatureVariationFullscreen() {
-    scoped_feature_list_.InitAndEnableFeature(
-        post_restore_signin::features::kIOSNewPostRestoreExperience);
+  // Signs in a fake identity.
+  void SignIn() {
+    FakeSystemIdentity* fake_identity = [FakeSystemIdentity fakeIdentity1];
+    FakeSystemIdentityManager* system_identity_manager =
+        FakeSystemIdentityManager::FromSystemIdentityManager(
+            GetApplicationContext()->GetSystemIdentityManager());
+    system_identity_manager->AddIdentity(fake_identity);
+    auth_service_->SignIn(fake_identity,
+                          signin_metrics::AccessPoint::ACCESS_POINT_UNKNOWN);
   }
 
-  void EnableFeatureVariationAlert() {
-    scoped_feature_list_.InitWithFeaturesAndParameters(
-        {base::test::FeatureRefAndParams(
-            post_restore_signin::features::kIOSNewPostRestoreExperience,
-            {{post_restore_signin::features::kIOSNewPostRestoreExperienceParam,
-              "true"}})},
-        {});
-  }
+ protected:
+  IOSChromeScopedTestingLocalState local_state_;
+  web::WebTaskEnvironment task_environment_;
+  std::unique_ptr<TestChromeBrowserState> browser_state_;
+  std::unique_ptr<MockPromosManager> promos_manager_;
+  AuthenticationService* auth_service_;
+  id mockAppState_;
+  PostRestoreAppAgent* app_agent_;
 };
 
-TEST_F(PostRestoreAppAgentTest, maybeRegisterPromo) {
+// Tests the logic of whether a promo should be registered.
+TEST_F(PostRestoreAppAgentTest, MaybeRegisterPromo) {
   EXPECT_CALL(*promos_manager_.get(), RegisterPromoForSingleDisplay(_))
       .Times(0);
   EXPECT_CALL(*promos_manager_.get(), RegisterPromoForContinuousDisplay(_))
@@ -124,34 +126,22 @@ TEST_F(PostRestoreAppAgentTest, maybeRegisterPromo) {
   MockAppStateChange(InitStageFinal);
 
   ClearPreRestoreIdentity(local_state_.Get());
-  EnableFeatureVariationFullscreen();
   MockAppStateChange(InitStageFinal);
 }
 
-TEST_F(PostRestoreAppAgentTest, registerPromoFullscreen) {
-  EXPECT_CALL(*promos_manager_.get(),
-              RegisterPromoForSingleDisplay(
-                  promos_manager::Promo::PostRestoreSignInFullscreen))
-      .Times(1);
-
-  EnableFeatureVariationFullscreen();
-  SetFakePreRestoreAccountInfo();
-  MockAppStateChange(InitStageFinal);
-}
-
-TEST_F(PostRestoreAppAgentTest, registerPromoAlert) {
+// Tests that the alert promo is registered.
+TEST_F(PostRestoreAppAgentTest, RegisterPromoAlert) {
   EXPECT_CALL(*promos_manager_.get(),
               RegisterPromoForSingleDisplay(
                   promos_manager::Promo::PostRestoreSignInAlert))
       .Times(1);
 
-  EnableFeatureVariationAlert();
   SetFakePreRestoreAccountInfo();
   MockAppStateChange(InitStageFinal);
 }
 
-TEST_F(PostRestoreAppAgentTest, registerPromoDisablesReauthPrompt) {
-  EnableFeatureVariationFullscreen();
+// Tests that the reauth prompt is disabled.
+TEST_F(PostRestoreAppAgentTest, RegisterPromoDisablesReauthPrompt) {
   SetFakePreRestoreAccountInfo();
   auth_service_->SetReauthPromptForSignInAndSync();
   EXPECT_TRUE(auth_service_->ShouldReauthPromptForSignInAndSync());
@@ -159,51 +149,27 @@ TEST_F(PostRestoreAppAgentTest, registerPromoDisablesReauthPrompt) {
   EXPECT_FALSE(auth_service_->ShouldReauthPromptForSignInAndSync());
 }
 
-TEST_F(PostRestoreAppAgentTest, deregisterPromoFullscreen) {
-  EXPECT_CALL(*promos_manager_.get(), DeregisterPromo(_)).Times(1);
-  EXPECT_CALL(
-      *promos_manager_.get(),
-      DeregisterPromo(promos_manager::Promo::PostRestoreSignInFullscreen))
-      .Times(1);
-
-  EnableFeatureVariationAlert();
-  SetFakePreRestoreAccountInfo();
-  ClearPreRestoreIdentity(local_state_.Get());
-  MockAppStateChange(InitStageFinal);
-}
-
-TEST_F(PostRestoreAppAgentTest, deregisterPromoAlert) {
+// Tests that the alert promo is deregistered with the right conditions.
+TEST_F(PostRestoreAppAgentTest, DeregisterPromoAlert) {
   EXPECT_CALL(*promos_manager_.get(), DeregisterPromo(_)).Times(1);
   EXPECT_CALL(*promos_manager_.get(),
               DeregisterPromo(promos_manager::Promo::PostRestoreSignInAlert))
       .Times(1);
 
-  EnableFeatureVariationFullscreen();
   SetFakePreRestoreAccountInfo();
   ClearPreRestoreIdentity(local_state_.Get());
   MockAppStateChange(InitStageFinal);
 }
 
-TEST_F(PostRestoreAppAgentTest, featureVariationSwitchToFullscreen) {
+// Tests that if a signin occurs, the promo is deregistered.
+TEST_F(PostRestoreAppAgentTest, DeregisterPromoOnSignin) {
+  SetFakePreRestoreAccountInfo();
+  MockAppStateChange(InitStageFinal);
+
+  EXPECT_CALL(*promos_manager_.get(), DeregisterPromo(_)).Times(1);
   EXPECT_CALL(*promos_manager_.get(),
-              RegisterPromoForSingleDisplay(
-                  promos_manager::Promo::PostRestoreSignInFullscreen))
+              DeregisterPromo(promos_manager::Promo::PostRestoreSignInAlert))
       .Times(1);
 
-  EnableFeatureVariationFullscreen();
-  SetFakePreRestoreAccountInfo();
-
-  MockAppStateChange(InitStageFinal);
-}
-
-TEST_F(PostRestoreAppAgentTest, featureVariationSwitchToAlert) {
-  EXPECT_CALL(*promos_manager_.get(),
-              RegisterPromoForSingleDisplay(
-                  promos_manager::Promo::PostRestoreSignInAlert))
-      .Times(1);
-
-  EnableFeatureVariationAlert();
-  SetFakePreRestoreAccountInfo();
-
-  MockAppStateChange(InitStageFinal);
+  SignIn();
 }

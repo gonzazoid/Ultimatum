@@ -10,8 +10,8 @@
 #include "base/logging.h"
 #include "base/notreached.h"
 #include "base/path_service.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_restrictions.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "chromeos/ash/components/dbus/cryptohome/rpc.pb.h"
 #include "chromeos/dbus/constants/dbus_paths.h"
 #include "components/policy/proto/install_attributes.pb.h"
@@ -37,8 +37,9 @@ FakeInstallAttributesClient::FakeInstallAttributesClient() {
   locked_ = base::PathService::Get(
                 chromeos::dbus_paths::FILE_INSTALL_ATTRIBUTES, &cache_path) &&
             base::PathExists(cache_path);
-  if (locked_)
+  if (locked_) {
     LoadInstallAttributes();
+  }
 }
 
 FakeInstallAttributesClient::~FakeInstallAttributesClient() {
@@ -64,15 +65,16 @@ void FakeInstallAttributesClient::InstallAttributesFinalize(
 void FakeInstallAttributesClient::InstallAttributesGetStatus(
     const ::user_data_auth::InstallAttributesGetStatusRequest& request,
     InstallAttributesGetStatusCallback callback) {
-  absl::optional<::user_data_auth::InstallAttributesGetStatusReply> reply =
+  std::optional<::user_data_auth::InstallAttributesGetStatusReply> reply =
       BlockingInstallAttributesGetStatus(request);
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), reply));
 }
 void FakeInstallAttributesClient::RemoveFirmwareManagementParameters(
     const ::user_data_auth::RemoveFirmwareManagementParametersRequest& request,
     RemoveFirmwareManagementParametersCallback callback) {
   remove_firmware_management_parameters_from_tpm_call_count_++;
+  fwmp_flags_ = std::nullopt;
   ReturnProtobufMethodCallback(
       ::user_data_auth::RemoveFirmwareManagementParametersReply(),
       std::move(callback));
@@ -80,11 +82,27 @@ void FakeInstallAttributesClient::RemoveFirmwareManagementParameters(
 void FakeInstallAttributesClient::SetFirmwareManagementParameters(
     const ::user_data_auth::SetFirmwareManagementParametersRequest& request,
     SetFirmwareManagementParametersCallback callback) {
+  if (request.has_fwmp()) {
+    fwmp_flags_ = request.fwmp().flags();
+  }
   ReturnProtobufMethodCallback(
       ::user_data_auth::SetFirmwareManagementParametersReply(),
       std::move(callback));
 }
-absl::optional<::user_data_auth::InstallAttributesGetReply>
+void FakeInstallAttributesClient::GetFirmwareManagementParameters(
+    const ::user_data_auth::GetFirmwareManagementParametersRequest& request,
+    GetFirmwareManagementParametersCallback callback) {
+  auto reply = ::user_data_auth::GetFirmwareManagementParametersReply();
+  if (fwmp_flags_) {
+    reply.mutable_fwmp()->set_flags(*fwmp_flags_);
+  } else {
+    reply.set_error(
+        user_data_auth::
+            CRYPTOHOME_ERROR_FIRMWARE_MANAGEMENT_PARAMETERS_INVALID);
+  }
+  ReturnProtobufMethodCallback(reply, std::move(callback));
+}
+std::optional<::user_data_auth::InstallAttributesGetReply>
 FakeInstallAttributesClient::BlockingInstallAttributesGet(
     const ::user_data_auth::InstallAttributesGetRequest& request) {
   ::user_data_auth::InstallAttributesGetReply reply;
@@ -96,14 +114,14 @@ FakeInstallAttributesClient::BlockingInstallAttributesGet(
   }
   return reply;
 }
-absl::optional<::user_data_auth::InstallAttributesSetReply>
+std::optional<::user_data_auth::InstallAttributesSetReply>
 FakeInstallAttributesClient::BlockingInstallAttributesSet(
     const ::user_data_auth::InstallAttributesSetRequest& request) {
   ::user_data_auth::InstallAttributesSetReply reply;
   install_attrs_[request.name()] = request.value();
   return reply;
 }
-absl::optional<::user_data_auth::InstallAttributesFinalizeReply>
+std::optional<::user_data_auth::InstallAttributesFinalizeReply>
 FakeInstallAttributesClient::BlockingInstallAttributesFinalize(
     const ::user_data_auth::InstallAttributesFinalizeRequest& request) {
   locked_ = true;
@@ -136,11 +154,11 @@ FakeInstallAttributesClient::BlockingInstallAttributesFinalize(
   // The real implementation does a blocking wait on the dbus call; the fake
   // implementation must have this file written before returning.
   base::ScopedAllowBlockingForTesting allow_io;
-  base::WriteFile(cache_path, result.data(), result.size());
+  base::WriteFile(cache_path, result);
 
   return reply;
 }
-absl::optional<::user_data_auth::InstallAttributesGetStatusReply>
+std::optional<::user_data_auth::InstallAttributesGetStatusReply>
 FakeInstallAttributesClient::BlockingInstallAttributesGetStatus(
     const ::user_data_auth::InstallAttributesGetStatusRequest& request) {
   ::user_data_auth::InstallAttributesGetStatusReply reply;
@@ -155,7 +173,7 @@ FakeInstallAttributesClient::BlockingInstallAttributesGetStatus(
 void FakeInstallAttributesClient::WaitForServiceToBeAvailable(
     chromeos::WaitForServiceToBeAvailableCallback callback) {
   if (service_is_available_ || service_reported_not_available_) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(callback), service_is_available_));
   } else {
     pending_wait_for_service_to_be_available_callbacks_.push_back(
@@ -165,13 +183,15 @@ void FakeInstallAttributesClient::WaitForServiceToBeAvailable(
 
 void FakeInstallAttributesClient::SetServiceIsAvailable(bool is_available) {
   service_is_available_ = is_available;
-  if (!is_available)
+  if (!is_available) {
     return;
+  }
 
   std::vector<chromeos::WaitForServiceToBeAvailableCallback> callbacks;
   callbacks.swap(pending_wait_for_service_to_be_available_callbacks_);
-  for (auto& callback : callbacks)
+  for (auto& callback : callbacks) {
     std::move(callback).Run(true);
+  }
 }
 
 void FakeInstallAttributesClient::ReportServiceIsNotAvailable() {
@@ -180,15 +200,16 @@ void FakeInstallAttributesClient::ReportServiceIsNotAvailable() {
 
   std::vector<chromeos::WaitForServiceToBeAvailableCallback> callbacks;
   callbacks.swap(pending_wait_for_service_to_be_available_callbacks_);
-  for (auto& callback : callbacks)
+  for (auto& callback : callbacks) {
     std::move(callback).Run(false);
+  }
 }
 
 template <typename ReplyType>
 void FakeInstallAttributesClient::ReturnProtobufMethodCallback(
     const ReplyType& reply,
     chromeos::DBusMethodCallback<ReplyType> callback) {
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), reply));
 }
 

@@ -68,7 +68,7 @@ bool GLSurfaceCast::SupportsSwapBuffersWithBounds() {
 gfx::SwapResult GLSurfaceCast::SwapBuffersWithBounds(
     const std::vector<gfx::Rect>& rects,
     PresentationCallback callback,
-    gl::FrameData data) {
+    gfx::FrameData data) {
   DCHECK(supports_swap_buffer_with_bounds_);
 
   // TODO(halliwell): Request new EGL extension so we're not abusing
@@ -82,7 +82,7 @@ gfx::SwapResult GLSurfaceCast::SwapBuffersWithBounds(
   }
 
   return NativeViewGLSurfaceEGL::SwapBuffersWithDamage(
-      rects_data, std::move(callback), std::move(data));
+      rects_data, std::move(callback), data);
 }
 
 bool GLSurfaceCast::Resize(const gfx::Size& size,

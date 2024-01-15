@@ -44,6 +44,8 @@ class MODULES_EXPORT MediaStreamDeviceObserver
       WebMediaStreamDeviceObserver::OnDeviceChangedCb on_device_changed_cb,
       WebMediaStreamDeviceObserver::OnDeviceRequestStateChangeCb
           on_device_request_state_change_cb,
+      WebMediaStreamDeviceObserver::OnDeviceCaptureConfigurationChangeCb
+          on_device_capture_configuration_change_cb,
       WebMediaStreamDeviceObserver::OnDeviceCaptureHandleChangeCb
           on_device_capture_handle_change_cb);
   void AddStream(const String& label, const blink::MediaStreamDevice& device);
@@ -85,6 +87,8 @@ class MODULES_EXPORT MediaStreamDeviceObserver
     WebMediaStreamDeviceObserver::OnDeviceChangedCb on_device_changed_cb;
     WebMediaStreamDeviceObserver::OnDeviceRequestStateChangeCb
         on_device_request_state_change_cb;
+    WebMediaStreamDeviceObserver::OnDeviceCaptureConfigurationChangeCb
+        on_device_capture_configuration_change_cb;
     WebMediaStreamDeviceObserver::OnDeviceCaptureHandleChangeCb
         on_device_capture_handle_change_cb;
     MediaStreamDevices audio_devices;
@@ -103,6 +107,9 @@ class MODULES_EXPORT MediaStreamDeviceObserver
       const String& label,
       const MediaStreamDevice& device,
       const mojom::blink::MediaStreamStateChange new_state) override;
+  void OnDeviceCaptureConfigurationChange(
+      const String& label,
+      const MediaStreamDevice& device) override;
   void OnDeviceCaptureHandleChange(const String& label,
                                    const MediaStreamDevice& device) override;
 
@@ -116,6 +123,7 @@ class MODULES_EXPORT MediaStreamDeviceObserver
 
   using LabelStreamMap = HashMap<String, Vector<Stream>>;
   LabelStreamMap label_stream_map_;
+  base::WeakPtrFactory<MediaStreamDeviceObserver> weak_factory_{this};
 };
 
 }  // namespace blink

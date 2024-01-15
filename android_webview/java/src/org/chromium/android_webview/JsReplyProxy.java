@@ -6,11 +6,13 @@ package org.chromium.android_webview;
 
 import androidx.annotation.NonNull;
 
-import org.chromium.base.annotations.CalledByNative;
-import org.chromium.base.annotations.JNINamespace;
-import org.chromium.base.annotations.NativeMethods;
+import org.jni_zero.CalledByNative;
+import org.jni_zero.JNINamespace;
+import org.jni_zero.NativeMethods;
+
 import org.chromium.base.task.PostTask;
-import org.chromium.content_public.browser.UiThreadTaskTraits;
+import org.chromium.base.task.TaskTraits;
+import org.chromium.content_public.browser.MessagePayload;
 
 /**
  * Used for Js Java interaction, to receive postMessage back to the injected JavaScript object.
@@ -31,10 +33,14 @@ public class JsReplyProxy extends AwSupportLibIsomorphic {
      *
      * @param message a non-null String message post to the JavaScript object.
      */
-    public void postMessage(@NonNull final String message) {
+    public void postMessage(@NonNull final MessagePayload payload) {
         if (mNativeJsReplyProxy == 0) return;
-        PostTask.runOrPostTask(UiThreadTaskTraits.USER_VISIBLE,
-                () -> JsReplyProxyJni.get().postMessage(mNativeJsReplyProxy, message));
+        PostTask.runOrPostTask(
+                TaskTraits.UI_USER_VISIBLE,
+                () -> {
+                    if (mNativeJsReplyProxy == 0) return;
+                    JsReplyProxyJni.get().postMessage(mNativeJsReplyProxy, payload);
+                });
     }
 
     @CalledByNative
@@ -49,6 +55,6 @@ public class JsReplyProxy extends AwSupportLibIsomorphic {
 
     @NativeMethods
     interface Natives {
-        void postMessage(long nativeJsReplyProxy, String message);
+        void postMessage(long nativeJsReplyProxy, MessagePayload payload);
     }
 }

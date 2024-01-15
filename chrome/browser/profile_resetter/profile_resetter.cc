@@ -9,7 +9,7 @@
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/synchronization/atomic_flag.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
@@ -254,9 +254,6 @@ void ProfileResetter::ResetCookiesAndSiteData() {
   PrefService* prefs = profile_->GetPrefs();
   DCHECK(prefs);
 
-  // Don't try to clear LSO data if it's not supported.
-  if (!prefs->GetBoolean(prefs::kClearPluginLSODataEnabled))
-    remove_mask &= ~chrome_browsing_data_remover::DATA_TYPE_PLUGIN_DATA;
   cookies_remover_->RemoveAndReply(
       base::Time(), base::Time::Max(), remove_mask,
       content::BrowsingDataRemover::ORIGIN_TYPE_UNPROTECTED_WEB, this);
@@ -316,7 +313,7 @@ void ProfileResetter::ResetStartupPages() {
 
 void ProfileResetter::ResetPinnedTabs() {
   // Unpin all the tabs.
-  for (auto* browser : *BrowserList::GetInstance()) {
+  for (Browser* browser : *BrowserList::GetInstance()) {
     if (browser->is_type_normal() && browser->profile() == profile_) {
       TabStripModel* tab_model = browser->tab_strip_model();
       // Here we assume that indexof(any mini tab) < indexof(any normal tab).

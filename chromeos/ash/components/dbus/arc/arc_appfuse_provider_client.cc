@@ -6,11 +6,12 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
 #include "chromeos/ash/components/dbus/arc/fake_arc_appfuse_provider_client.h"
 #include "dbus/bus.h"
 #include "dbus/message.h"
@@ -98,20 +99,20 @@ class ArcAppfuseProviderClientImpl : public ArcAppfuseProviderClient {
   void OnFDMethod(chromeos::DBusMethodCallback<base::ScopedFD> callback,
                   dbus::Response* response) {
     if (!response) {
-      std::move(callback).Run(absl::nullopt);
+      std::move(callback).Run(std::nullopt);
       return;
     }
     dbus::MessageReader reader(response);
     base::ScopedFD fd;
     if (!reader.PopFileDescriptor(&fd)) {
       LOG(ERROR) << "Failed to pop FD.";
-      std::move(callback).Run(absl::nullopt);
+      std::move(callback).Run(std::nullopt);
       return;
     }
     std::move(callback).Run(std::move(fd));
   }
 
-  dbus::ObjectProxy* proxy_ = nullptr;
+  raw_ptr<dbus::ObjectProxy> proxy_ = nullptr;
 
   base::WeakPtrFactory<ArcAppfuseProviderClientImpl> weak_ptr_factory_{this};
 };

@@ -5,7 +5,6 @@
 #include "chrome/browser/hid/hid_chooser_context.h"
 
 #include "base/barrier_closure.h"
-#include "base/guid.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/scoped_observation.h"
@@ -14,6 +13,7 @@
 #include "base/test/scoped_feature_list.h"
 #include "base/test/test_future.h"
 #include "base/test/values_test_util.h"
+#include "base/uuid.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/content_settings/host_content_settings_map_factory.h"
@@ -37,6 +37,7 @@
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 #include "chrome/browser/ash/login/users/fake_chrome_user_manager.h"
+#include "chromeos/ash/components/browser_context_helper/browser_context_types.h"
 #include "components/account_id/account_id.h"
 #include "components/user_manager/scoped_user_manager.h"
 #endif
@@ -51,7 +52,9 @@ constexpr uint16_t kTestVendorId = 0x1234;
 constexpr uint16_t kTestProductId = 0xabcd;
 constexpr char kTestSerialNumber[] = "serial-number";
 constexpr char kTestProductName[] = "product-name";
-constexpr char kTestPhysicalDeviceId[] = "physical-device-id";
+const char* const kTestPhysicalDeviceIds[] = {"physical-device-id-1",
+                                              "physical-device-id-2"};
+constexpr char kTestUserEmail[] = "user@example.com";
 
 // The HID usages assigned to the top-level collection of the simulated device.
 constexpr uint16_t kTestUsagePage = device::mojom::kPageGenericDesktop;
@@ -66,25 +69,29 @@ class HidChooserContextTestBase {
       delete;
   ~HidChooserContextTestBase() = default;
 
-  void DoSetUp(bool is_affiliated) {
-    constexpr char kTestUserEmail[] = "user@example.com";
+  void DoSetUp(bool is_affiliated, bool login_user) {
+    auto* profile_name = kTestUserEmail;
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-    constexpr char kTestUserGaiaId[] = "1111111111";
-    auto fake_user_manager = std::make_unique<ash::FakeChromeUserManager>();
-    auto* fake_user_manager_ptr = fake_user_manager.get();
-    scoped_user_manager_ = std::make_unique<user_manager::ScopedUserManager>(
-        std::move(fake_user_manager));
+    if (login_user) {
+      constexpr char kTestUserGaiaId[] = "1111111111";
+      auto fake_user_manager = std::make_unique<ash::FakeChromeUserManager>();
+      auto* fake_user_manager_ptr = fake_user_manager.get();
+      scoped_user_manager_ = std::make_unique<user_manager::ScopedUserManager>(
+          std::move(fake_user_manager));
 
-    auto account_id =
-        AccountId::FromUserEmailGaiaId(kTestUserEmail, kTestUserGaiaId);
-    fake_user_manager_ptr->AddUserWithAffiliation(account_id, is_affiliated);
-    fake_user_manager_ptr->LoginUser(account_id);
+      auto account_id =
+          AccountId::FromUserEmailGaiaId(kTestUserEmail, kTestUserGaiaId);
+      fake_user_manager_ptr->AddUserWithAffiliation(account_id, is_affiliated);
+      fake_user_manager_ptr->LoginUser(account_id);
+    } else {
+      profile_name = ash::kSigninBrowserContextBaseName;
+    }
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
     testing_profile_manager_ = std::make_unique<TestingProfileManager>(
         TestingBrowserProcess::GetGlobal());
     ASSERT_TRUE(testing_profile_manager_->SetUp());
-    profile_ = testing_profile_manager_->CreateTestingProfile(kTestUserEmail);
+    profile_ = testing_profile_manager_->CreateTestingProfile(profile_name);
     ASSERT_TRUE(profile_);
 
     mojo::PendingRemote<device::mojom::HidManager> hid_manager;
@@ -120,7 +127,8 @@ class HidChooserContextTestBase {
   MockHidDeviceObserver& device_observer() { return device_observer_; }
 
   device::mojom::HidDeviceInfoPtr CreateDevice(
-      base::StringPiece serial_number) {
+      base::StringPiece serial_number,
+      const std::string& physical_device_id = kTestPhysicalDeviceIds[0]) {
     auto collection = device::mojom::HidCollectionInfo::New();
     collection->usage =
         device::mojom::HidUsageAndPage::New(kTestUsage, kTestUsagePage);
@@ -129,8 +137,8 @@ class HidChooserContextTestBase {
         device::mojom::HidReportDescription::New());
 
     auto device = device::mojom::HidDeviceInfo::New();
-    device->guid = base::GenerateGUID();
-    device->physical_device_id = kTestPhysicalDeviceId;
+    device->guid = base::Uuid::GenerateRandomV4().AsLowercaseString();
+    device->physical_device_id = physical_device_id;
     device->vendor_id = kTestVendorId;
     device->product_id = kTestProductId;
     device->product_name = kTestProductName;
@@ -218,7 +226,7 @@ class HidChooserContextTestBase {
   }
 
   void RevokeObjectPermissionBlocking(const url::Origin& origin,
-                                      const base::Value& object) {
+                                      const base::Value::Dict& object) {
     base::RunLoop loop;
     EXPECT_CALL(permission_observer_,
                 OnObjectPermissionChanged(
@@ -269,6 +277,12 @@ class HidChooserContextTestBase {
         prefs::kManagedWebHidAllowDevicesForUrls, ParseJson(policy));
   }
 
+  void SetAllowDevicesForUrlsOnLoginScreenPolicy(base::StringPiece policy) {
+    testing_profile_manager_->local_state()->Get()->SetManagedPref(
+        prefs::kManagedWebHidAllowDevicesForUrlsOnLoginScreen,
+        ParseJson(policy));
+  }
+
   void SetAllowDevicesWithHidUsagesForUrlsPolicy(base::StringPiece policy) {
     testing_profile_manager_->local_state()->Get()->SetManagedPref(
         prefs::kManagedWebHidAllowDevicesWithHidUsagesForUrls,
@@ -298,17 +312,16 @@ class HidChooserContextTestBase {
       permissions::ObjectPermissionContextBase::PermissionObserver>
       scoped_permission_observation_{&permission_observer_};
   MockHidDeviceObserver device_observer_;
-  base::ScopedObservation<HidChooserContext,
-                          HidChooserContext::DeviceObserver,
-                          &HidChooserContext::AddDeviceObserver,
-                          &HidChooserContext::RemoveDeviceObserver>
+  base::ScopedObservation<HidChooserContext, HidChooserContext::DeviceObserver>
       scoped_device_observation_{&device_observer_};
 };
 
 class HidChooserContextTest : public HidChooserContextTestBase,
                               public testing::Test {
  public:
-  void SetUp() override { DoSetUp(/*is_affiliated=*/true); }
+  void SetUp() override {
+    DoSetUp(/*is_affiliated=*/true, /*login_user=*/true);
+  }
   void TearDown() override { DoTearDown(); }
 };
 
@@ -370,16 +383,12 @@ TEST_F(HidChooserContextTest, GrantAndForgetEphemeralDevice) {
 
   // Forget the ephemeral device.
   base::RunLoop permissions_revoked_loop;
-  auto permissions_revoked_barrier =
-      base::BarrierClosure(2, permissions_revoked_loop.QuitClosure());
   EXPECT_CALL(permission_observer(), OnPermissionRevoked(kOrigin))
-      .Times(2)
-      .WillRepeatedly(RunClosure(permissions_revoked_barrier));
+      .WillOnce(RunClosure(permissions_revoked_loop.QuitClosure()));
   EXPECT_CALL(permission_observer(),
               OnObjectPermissionChanged(
                   absl::make_optional(ContentSettingsType::HID_GUARD),
-                  ContentSettingsType::HID_CHOOSER_DATA))
-      .Times(2);
+                  ContentSettingsType::HID_CHOOSER_DATA));
   context()->RevokeDevicePermission(kOrigin, *device1);
   permissions_revoked_loop.Run();
 
@@ -387,6 +396,44 @@ TEST_F(HidChooserContextTest, GrantAndForgetEphemeralDevice) {
   EXPECT_FALSE(context()->HasDevicePermission(kOrigin, *device2));
   EXPECT_EQ(0u, context()->GetGrantedObjects(kOrigin).size());
   EXPECT_EQ(0u, context()->GetAllGrantedObjects().size());
+}
+
+TEST_F(HidChooserContextTest, GrantTwoEphemeralDevicesForgetOne) {
+  const auto kOrigin = url::Origin::Create(GURL("https://google.com"));
+
+  // Connect two devices that are only eligible for ephemeral permissions.
+  auto device1 = ConnectDeviceBlocking(CreateDevice(
+      /*serial_number=*/"", /*physical_device_id=*/kTestPhysicalDeviceIds[0]));
+  auto device2 = ConnectDeviceBlocking(CreateDevice(
+      /*serial_number=*/"", /*physical_device_id=*/kTestPhysicalDeviceIds[1]));
+  EXPECT_FALSE(context()->HasDevicePermission(kOrigin, *device1));
+  EXPECT_FALSE(context()->HasDevicePermission(kOrigin, *device2));
+  EXPECT_EQ(0u, context()->GetGrantedObjects(kOrigin).size());
+  EXPECT_EQ(0u, context()->GetAllGrantedObjects().size());
+
+  // Grant ephemeral permissions.
+  GrantDevicePermissionBlocking(kOrigin, *device1);
+  GrantDevicePermissionBlocking(kOrigin, *device2);
+  EXPECT_TRUE(context()->HasDevicePermission(kOrigin, *device1));
+  EXPECT_TRUE(context()->HasDevicePermission(kOrigin, *device2));
+  EXPECT_EQ(2u, context()->GetGrantedObjects(kOrigin).size());
+  EXPECT_EQ(2u, context()->GetAllGrantedObjects().size());
+
+  // Forget the first device.
+  base::RunLoop permissions_revoked_loop;
+  EXPECT_CALL(permission_observer(), OnPermissionRevoked(kOrigin))
+      .WillOnce(RunClosure(permissions_revoked_loop.QuitClosure()));
+  EXPECT_CALL(permission_observer(),
+              OnObjectPermissionChanged(
+                  absl::make_optional(ContentSettingsType::HID_GUARD),
+                  ContentSettingsType::HID_CHOOSER_DATA));
+  context()->RevokeDevicePermission(kOrigin, *device1);
+  permissions_revoked_loop.Run();
+
+  EXPECT_FALSE(context()->HasDevicePermission(kOrigin, *device1));
+  EXPECT_TRUE(context()->HasDevicePermission(kOrigin, *device2));
+  EXPECT_EQ(1u, context()->GetGrantedObjects(kOrigin).size());
+  EXPECT_EQ(1u, context()->GetAllGrantedObjects().size());
 }
 
 TEST_F(HidChooserContextTest, GrantAndDisconnectEphemeralDevice) {
@@ -658,7 +705,9 @@ class HidChooserContextBlocklistTest
  public:
   HidChooserContextBlocklistTest() = default;
 
-  void SetUp() override { DoSetUp(/*is_affiliated=*/true); }
+  void SetUp() override {
+    DoSetUp(/*is_affiliated=*/true, /*login_user=*/true);
+  }
   void TearDown() override { DoTearDown(); }
 };
 
@@ -808,7 +857,7 @@ class HidChooserContextAffiliatedTest : public HidChooserContextTestBase,
  public:
   HidChooserContextAffiliatedTest() : is_affiliated_(GetParam()) {}
 
-  void SetUp() override { DoSetUp(is_affiliated_); }
+  void SetUp() override { DoSetUp(is_affiliated_, /*login_user=*/true); }
   void TearDown() override { DoTearDown(); }
 
   bool is_affiliated() const { return is_affiliated_; }
@@ -1215,3 +1264,46 @@ INSTANTIATE_TEST_SUITE_P(
 #endif
     [](const testing::TestParamInfo<HidChooserContextAffiliatedTest::ParamType>&
            info) { return info.param ? "affiliated" : "unaffiliated"; });
+
+namespace {
+
+class HidChooserContextLoginScreenTest : public HidChooserContextTestBase,
+                                         public testing::Test {
+ public:
+  HidChooserContextLoginScreenTest() = default;
+
+  void SetUp() override {
+    DoSetUp(/*is_affiliated=*/false, /*login_user=*/false);
+  }
+  void TearDown() override { DoTearDown(); }
+};
+
+}  // namespace
+
+TEST_F(HidChooserContextLoginScreenTest, ApplyPolicyOnLoginScreen) {
+  const auto kOrigin = url::Origin::Create(GURL("https://google.com"));
+
+  // Connect a device.
+  auto device = ConnectPersistentUsbDeviceBlocking();
+
+  // Set the DeviceLoginScreenWebHidAllowDevicesForUrls policy
+  SetAllowDevicesForUrlsOnLoginScreenPolicy(R"(
+      [
+        {
+          "devices": [{ "vendor_id": 4660, "product_id": 43981 }],
+          "urls": [ "https://google.com" ]
+        }
+      ])");
+
+  // The policy has an effect only for IS_CHROMEOS_ASH build, otherwise it is
+  // ignored.
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+  EXPECT_TRUE(context()->HasDevicePermission(kOrigin, *device));
+  EXPECT_EQ(1u, context()->GetGrantedObjects(kOrigin).size());
+  EXPECT_EQ(1u, context()->GetAllGrantedObjects().size());
+#else
+  EXPECT_FALSE(context()->HasDevicePermission(kOrigin, *device));
+  EXPECT_EQ(0u, context()->GetGrantedObjects(kOrigin).size());
+  EXPECT_EQ(0u, context()->GetAllGrantedObjects().size());
+#endif
+}

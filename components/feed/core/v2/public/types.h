@@ -6,7 +6,6 @@
 #define COMPONENTS_FEED_CORE_V2_PUBLIC_TYPES_H_
 
 #include <iosfwd>
-#include <map>
 #include <string>
 #include <vector>
 
@@ -60,6 +59,7 @@ struct ChromeInfo {
   version_info::Channel channel{};
   base::Version version;
   bool start_surface = false;
+  bool is_new_tab_search_engine_url_android_enabled = false;
 };
 // Device display metrics.
 struct DisplayMetrics {
@@ -72,10 +72,6 @@ struct DisplayMetrics {
 using EphemeralChangeId = base::IdTypeU32<class EphemeralChangeIdClass>;
 using SurfaceId = base::IdTypeU32<class SurfaceIdClass>;
 using ImageFetchId = base::IdTypeU32<class ImageFetchIdClass>;
-
-// A map of trial names (key) and list of group names/IDs (value)
-// sent from the server.
-typedef std::map<std::string, std::vector<std::string>> Experiments;
 
 struct NetworkResponseInfo {
   NetworkResponseInfo();
@@ -98,15 +94,25 @@ struct NetworkResponseInfo {
       AccountTokenFetchStatus::kUnspecified;
   base::TimeTicks fetch_time_ticks;
   base::TimeTicks loader_start_time_ticks;
+  // List of HTTP response header names and values.
+  std::vector<std::string> response_header_names_and_values;
 };
 
 std::ostream& operator<<(std::ostream& os, const NetworkResponseInfo& o);
 
 struct NetworkResponse {
+  NetworkResponse();
+  NetworkResponse(const std::string& response_bytes, int status_code);
+  ~NetworkResponse();
+  NetworkResponse(const NetworkResponse&);
+  NetworkResponse& operator=(const NetworkResponse&);
+
   // HTTP response body.
   std::string response_bytes;
   // HTTP status code if available, or net::Error otherwise.
   int status_code;
+  // List of HTTP response header names and values.
+  std::vector<std::string> response_header_names_and_values;
 };
 
 // For the snippets-internals page.
@@ -220,6 +226,21 @@ enum class WebFeedSubscriptionRequestStatus {
 std::ostream& operator<<(std::ostream& out,
                          WebFeedSubscriptionRequestStatus value);
 
+// This must be kept in sync with WebFeedQueryRequestStatus in
+// enums.xml. These values are persisted to logs. Entries should not be
+// renumbered and numeric values should never be reused.
+// GENERATED_JAVA_ENUM_PACKAGE: org.chromium.chrome.browser.feed.webfeed
+enum class WebFeedQueryRequestStatus {
+  kUnknown = 0,
+  kSuccess = 1,
+  kFailedOffline = 2,
+  kFailedUnknownError = 3,
+  kAbortWebFeedQueryPendingClearAll = 4,
+  kFailedInvalidUrl = 5,
+  kMaxValue = kFailedInvalidUrl,
+};
+std::ostream& operator<<(std::ostream& out, WebFeedQueryRequestStatus value);
+
 using NetworkRequestId = base::IdTypeU32<class NetworkRequestIdClass>;
 
 // Values for the UMA
@@ -248,11 +269,31 @@ enum class StreamKind : int {
   kForYou = 1,
   // Following stream.
   kFollowing = 2,
-  // Channel stream.
-  kChannel = 3,
+  // Single Web Feed (Cormorant) stream.
+  kSingleWebFeed = 3,
+  // Kid-friendly content stream.
+  kSupervisedUser = 4,
 
-  kMaxValue = kChannel,
+  kMaxValue = kSupervisedUser,
 };
+
+// Singe Web entry points
+// GENERATED_JAVA_ENUM_PACKAGE: org.chromium.chrome.browser.feed
+enum class SingleWebFeedEntryPoint : int {
+  // Three dot menu
+  kMenu = 0,
+  // Feed Atteribution
+  kAttribution = 1,
+  // Feed Recomentation
+  kRecommendation = 2,
+  // Feed Recomentation
+  kGroupHeader = 3,
+  // Other
+  kOther = 4,
+
+  kMaxValue = kOther,
+};
+std::ostream& operator<<(std::ostream& out, SingleWebFeedEntryPoint value);
 
 // For testing and debugging only.
 std::ostream& operator<<(std::ostream& out,

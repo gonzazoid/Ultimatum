@@ -4,11 +4,11 @@
 
 #include "chrome/browser/ui/webui/ash/onc_import_message_handler.h"
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/strings/stringprintf.h"
 #include "base/task/bind_post_task.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/values.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/net/nss_service.h"
@@ -75,11 +75,9 @@ void OncImportMessageHandler::OnImportONC(const base::Value::List& list) {
           &GetCertDBOnIOThread,
           NssServiceFactory::GetForContext(Profile::FromWebUI(web_ui()))
               ->CreateNSSCertDatabaseGetterForIOThread(),
-          base::BindPostTask(
-              base::SequencedTaskRunnerHandle::Get(),
-              base::BindOnce(&OncImportMessageHandler::ImportONCToNSSDB,
-                             weak_factory_.GetWeakPtr(), callback_id,
-                             onc_blob))));
+          base::BindPostTaskToCurrentDefault(base::BindOnce(
+              &OncImportMessageHandler::ImportONCToNSSDB,
+              weak_factory_.GetWeakPtr(), callback_id, onc_blob))));
 }
 
 void OncImportMessageHandler::ImportONCToNSSDB(const std::string& callback_id,
@@ -107,8 +105,8 @@ void OncImportMessageHandler::ImportONCToNSSDB(const std::string& callback_id,
   }
 
   std::string import_error;
-  int num_networks_imported = onc::ImportNetworksForUser(
-      user, base::Value(std::move(network_configs)), &import_error);
+  int num_networks_imported =
+      onc::ImportNetworksForUser(user, network_configs, &import_error);
   if (!import_error.empty()) {
     has_error = true;
     result += "Error importing networks: " + import_error + "\n";
@@ -124,8 +122,8 @@ void OncImportMessageHandler::ImportONCToNSSDB(const std::string& callback_id,
 
   auto cert_importer = std::make_unique<onc::CertificateImporterImpl>(
       content::GetIOThreadTaskRunner({}), nssdb);
-  auto certs = std::make_unique<chromeos::onc::OncParsedCertificates>(
-      base::Value(std::move(certificates)));
+  auto certs =
+      std::make_unique<chromeos::onc::OncParsedCertificates>(certificates);
   if (certs->has_error()) {
     has_error = true;
     result += "Some certificates could not be parsed.\n";

@@ -8,10 +8,12 @@
 #include <memory>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/containers/flat_map.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
+#include "components/account_id/account_id.h"
 #include "ui/aura/window_tracker.h"
 
 namespace app_restore {
@@ -43,10 +45,11 @@ class RestoreDataCollector {
 
   // Captures the active desk and returns it as a `DeskTemplate` object via the
   // `callback`.
-  void CaptureActiveDeskAsTemplate(GetDeskTemplateCallback callback,
-                                   DeskTemplateType template_type,
-                                   const std::string& template_name,
-                                   aura::Window* root_window_to_show);
+  void CaptureActiveDeskAsSavedDesk(GetDeskTemplateCallback callback,
+                                    DeskTemplateType template_type,
+                                    const std::string& template_name,
+                                    aura::Window* root_window_to_show,
+                                    AccountId current_account_id);
 
  private:
   // Keeps the state for the asynchronous call for `AppLaunchData` to the apps.
@@ -58,11 +61,12 @@ class RestoreDataCollector {
 
     DeskTemplateType template_type;
     std::string template_name;
-    aura::Window* root_window_to_show;
-    std::vector<aura::Window*> unsupported_apps;
-    size_t incognito_window_count = 0;
+    raw_ptr<aura::Window> root_window_to_show;
+    std::vector<raw_ptr<aura::Window, VectorExperimental>> unsupported_apps;
+    size_t non_persistable_window_count = 0;
     std::unique_ptr<app_restore::RestoreData> data;
     uint32_t pending_request_count = 0;
+    uint64_t lacros_profile_id = 0;
     GetDeskTemplateCallback callback;
   };
 
@@ -71,8 +75,7 @@ class RestoreDataCollector {
   // is collected, invokes the `SendDeskTemplate()` method.
   void OnAppLaunchDataReceived(
       uint32_t serial,
-      const std::string app_id,
-      const int32_t window_id,
+      const std::string& app_id,
       std::unique_ptr<app_restore::WindowInfo> window_info,
       std::unique_ptr<app_restore::AppLaunchInfo> app_launch_info);
 

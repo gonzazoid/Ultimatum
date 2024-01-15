@@ -33,12 +33,13 @@ import org.chromium.base.Callback;
 import org.chromium.base.FakeTimeTestRule;
 import org.chromium.base.TimeUtils;
 import org.chromium.base.metrics.RecordHistogram;
+import org.chromium.base.shared_preferences.SharedPreferencesManager;
 import org.chromium.base.test.BaseRobolectricTestRunner;
 import org.chromium.base.test.util.Features;
 import org.chromium.base.test.util.JniMocker;
 import org.chromium.chrome.browser.preferences.ChromePreferenceKeys;
+import org.chromium.chrome.browser.preferences.ChromeSharedPreferences;
 import org.chromium.chrome.browser.preferences.Pref;
-import org.chromium.chrome.browser.preferences.SharedPreferencesManager;
 import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.signin.services.IdentityServicesProvider;
 import org.chromium.chrome.test.util.browser.signin.AccountManagerTestRule;
@@ -53,45 +54,34 @@ import org.chromium.ui.base.WindowAndroid;
 
 import java.lang.ref.WeakReference;
 
-/**
- * Unit tests for the error message helper bridge.
- * */
+/** Unit tests for the error message helper bridge. */
 @RunWith(BaseRobolectricTestRunner.class)
 @Config(manifest = Config.NONE)
 public class PasswordManagerErrorMessageHelperBridgeTest {
     private final FakeAccountManagerFacade mFakeAccountManagerFacade =
             spy(new FakeAccountManagerFacade());
 
-    @Rule
-    public TestRule mFeaturesProcessorRule = new Features.JUnitProcessor();
+    @Rule public TestRule mFeaturesProcessorRule = new Features.JUnitProcessor();
 
     @Rule
     public AccountManagerTestRule mAccountManagerTestRule =
             new AccountManagerTestRule(mFakeAccountManagerFacade);
 
-    @Rule
-    public JniMocker mJniMocker = new JniMocker();
+    @Rule public JniMocker mJniMocker = new JniMocker();
 
-    @Rule
-    public FakeTimeTestRule mFakeTimeTestRule = new FakeTimeTestRule();
+    @Rule public FakeTimeTestRule mFakeTimeTestRule = new FakeTimeTestRule();
 
-    @Mock
-    private Profile mProfile;
+    @Mock private Profile mProfile;
 
-    @Mock
-    private PrefService mPrefService;
+    @Mock private PrefService mPrefService;
 
-    @Mock
-    private UserPrefs.Natives mUserPrefsJniMock;
+    @Mock private UserPrefs.Natives mUserPrefsJniMock;
 
-    @Mock
-    private IdentityServicesProvider mIdentityServicesProviderMock;
+    @Mock private IdentityServicesProvider mIdentityServicesProviderMock;
 
-    @Mock
-    private WindowAndroid mWindowAndroidMock;
+    @Mock private WindowAndroid mWindowAndroidMock;
 
-    @Mock
-    private IdentityManager mIdentityManagerMock;
+    @Mock private IdentityManager mIdentityManagerMock;
 
     private SharedPreferencesManager mSharedPrefsManager;
 
@@ -102,10 +92,9 @@ public class PasswordManagerErrorMessageHelperBridgeTest {
     @Before
     public void setUp() {
         MockitoAnnotations.initMocks(this);
-        Profile.setLastUsedProfileForTesting(mProfile);
         mJniMocker.mock(UserPrefsJni.TEST_HOOKS, mUserPrefsJniMock);
         when(mUserPrefsJniMock.get(mProfile)).thenReturn(mPrefService);
-        mSharedPrefsManager = SharedPreferencesManager.getInstance();
+        mSharedPrefsManager = ChromeSharedPreferences.getInstance();
         mCoreAccountInfo = mAccountManagerTestRule.addAccount(TEST_EMAIL);
         when(mIdentityServicesProviderMock.getIdentityManager(mProfile))
                 .thenReturn(mIdentityManagerMock);
@@ -116,22 +105,23 @@ public class PasswordManagerErrorMessageHelperBridgeTest {
 
     @After
     public void tearDown() {
-        mSharedPrefsManager.removeKey(ChromePreferenceKeys.SYNC_ERROR_PROMPT_SHOWN_AT_TIME);
+        mSharedPrefsManager.removeKey(ChromePreferenceKeys.SYNC_ERROR_MESSAGE_SHOWN_AT_TIME);
         mFakeTimeTestRule.resetTimes();
     }
 
     @Test
     public void testNotEnoughTimeSinceLastUI() {
         final long timeOfFirstUpmPrompt = TimeUtils.currentTimeMillis();
-        final long timeOfSyncPrompt = timeOfFirstUpmPrompt
-                + PasswordManagerErrorMessageHelperBridge.MINIMAL_INTERVAL_TO_SYNC_ERROR_MS;
+        final long timeOfSyncPrompt =
+                timeOfFirstUpmPrompt
+                        + PasswordManagerErrorMessageHelperBridge.MINIMAL_INTERVAL_TO_SYNC_ERROR_MS;
         when(mPrefService.getString(Pref.UPM_ERROR_UI_SHOWN_TIMESTAMP))
                 .thenReturn(Long.toString(timeOfFirstUpmPrompt));
         mSharedPrefsManager.writeLong(
-                ChromePreferenceKeys.SYNC_ERROR_PROMPT_SHOWN_AT_TIME, timeOfSyncPrompt);
+                ChromePreferenceKeys.SYNC_ERROR_MESSAGE_SHOWN_AT_TIME, timeOfSyncPrompt);
         mFakeTimeTestRule.advanceMillis(
                 PasswordManagerErrorMessageHelperBridge.MINIMAL_INTERVAL_BETWEEN_PROMPTS_MS);
-        assertFalse(PasswordManagerErrorMessageHelperBridge.shouldShowErrorUi());
+        assertFalse(PasswordManagerErrorMessageHelperBridge.shouldShowErrorUi(mProfile));
     }
 
     @Test
@@ -139,28 +129,30 @@ public class PasswordManagerErrorMessageHelperBridgeTest {
         final long timeOfFirstUpmPrompt = TimeUtils.currentTimeMillis();
         mFakeTimeTestRule.advanceMillis(
                 PasswordManagerErrorMessageHelperBridge.MINIMAL_INTERVAL_BETWEEN_PROMPTS_MS + 1);
-        final long timeOfSyncPrompt = TimeUtils.currentTimeMillis()
-                - PasswordManagerErrorMessageHelperBridge.MINIMAL_INTERVAL_TO_SYNC_ERROR_MS;
+        final long timeOfSyncPrompt =
+                TimeUtils.currentTimeMillis()
+                        - PasswordManagerErrorMessageHelperBridge.MINIMAL_INTERVAL_TO_SYNC_ERROR_MS;
         when(mPrefService.getString(Pref.UPM_ERROR_UI_SHOWN_TIMESTAMP))
                 .thenReturn(Long.toString(timeOfFirstUpmPrompt));
         mSharedPrefsManager.writeLong(
-                ChromePreferenceKeys.SYNC_ERROR_PROMPT_SHOWN_AT_TIME, timeOfSyncPrompt);
-        assertFalse(PasswordManagerErrorMessageHelperBridge.shouldShowErrorUi());
+                ChromePreferenceKeys.SYNC_ERROR_MESSAGE_SHOWN_AT_TIME, timeOfSyncPrompt);
+        assertFalse(PasswordManagerErrorMessageHelperBridge.shouldShowErrorUi(mProfile));
     }
 
     @Test
     public void testEnoughTimeSinceBothUis() {
         final long timeOfFirstUpmPrompt = TimeUtils.currentTimeMillis();
-        final long timeOfSyncPrompt = timeOfFirstUpmPrompt
-                + PasswordManagerErrorMessageHelperBridge.MINIMAL_INTERVAL_TO_SYNC_ERROR_MS;
+        final long timeOfSyncPrompt =
+                timeOfFirstUpmPrompt
+                        + PasswordManagerErrorMessageHelperBridge.MINIMAL_INTERVAL_TO_SYNC_ERROR_MS;
 
         when(mPrefService.getString(Pref.UPM_ERROR_UI_SHOWN_TIMESTAMP))
                 .thenReturn(Long.toString(timeOfFirstUpmPrompt));
         mSharedPrefsManager.writeLong(
-                ChromePreferenceKeys.SYNC_ERROR_PROMPT_SHOWN_AT_TIME, timeOfSyncPrompt);
+                ChromePreferenceKeys.SYNC_ERROR_MESSAGE_SHOWN_AT_TIME, timeOfSyncPrompt);
         mFakeTimeTestRule.advanceMillis(
                 PasswordManagerErrorMessageHelperBridge.MINIMAL_INTERVAL_BETWEEN_PROMPTS_MS + 1);
-        assertTrue(PasswordManagerErrorMessageHelperBridge.shouldShowErrorUi());
+        assertTrue(PasswordManagerErrorMessageHelperBridge.shouldShowErrorUi(mProfile));
     }
 
     @Test
@@ -168,9 +160,10 @@ public class PasswordManagerErrorMessageHelperBridgeTest {
         final long currentTimeMs = TimeUtils.currentTimeMillis();
         final long timeIncrementMs = 30;
         mFakeTimeTestRule.advanceMillis(timeIncrementMs);
-        PasswordManagerErrorMessageHelperBridge.saveErrorUiShownTimestamp();
+        PasswordManagerErrorMessageHelperBridge.saveErrorUiShownTimestamp(mProfile);
         verify(mPrefService)
-                .setString(Pref.UPM_ERROR_UI_SHOWN_TIMESTAMP,
+                .setString(
+                        Pref.UPM_ERROR_UI_SHOWN_TIMESTAMP,
                         Long.toString(currentTimeMs + timeIncrementMs));
     }
 
@@ -178,21 +171,26 @@ public class PasswordManagerErrorMessageHelperBridgeTest {
     public void testUpdateCredentialsRecordsSuccessWhenSigningInSucceeds() {
         final Activity activity = mock(Activity.class);
         when(mWindowAndroidMock.getActivity()).thenReturn(new WeakReference<>(activity));
-        doAnswer(invocation -> {
-            Callback<Boolean> callback = invocation.getArgument(2);
-            callback.onResult(true);
-            return null;
-        })
+        doAnswer(
+                        invocation -> {
+                            Callback<Boolean> callback = invocation.getArgument(2);
+                            callback.onResult(true);
+                            return null;
+                        })
                 .when(mFakeAccountManagerFacade)
-                .updateCredentials(eq(CoreAccountInfo.getAndroidAccountFrom(mCoreAccountInfo)),
-                        eq(activity), any());
+                .updateCredentials(
+                        eq(CoreAccountInfo.getAndroidAccountFrom(mCoreAccountInfo)),
+                        eq(activity),
+                        any());
 
         PasswordManagerErrorMessageHelperBridge.startUpdateAccountCredentialsFlow(
-                mWindowAndroidMock);
-        assertEquals(1,
+                mWindowAndroidMock, mProfile);
+        assertEquals(
+                1,
                 RecordHistogram.getHistogramValueCountForTesting(
                         "PasswordManager.UPMUpdateSignInCredentialsSucces", 1));
-        assertEquals(0,
+        assertEquals(
+                0,
                 RecordHistogram.getHistogramValueCountForTesting(
                         "PasswordManager.UPMUpdateSignInCredentialsSucces", 0));
     }
@@ -201,21 +199,26 @@ public class PasswordManagerErrorMessageHelperBridgeTest {
     public void testUpdateCredentialsRecordsSuccessWhenSigningInFailed() {
         final Activity activity = mock(Activity.class);
         when(mWindowAndroidMock.getActivity()).thenReturn(new WeakReference<>(activity));
-        doAnswer(invocation -> {
-            Callback<Boolean> callback = invocation.getArgument(2);
-            callback.onResult(false);
-            return null;
-        })
+        doAnswer(
+                        invocation -> {
+                            Callback<Boolean> callback = invocation.getArgument(2);
+                            callback.onResult(false);
+                            return null;
+                        })
                 .when(mFakeAccountManagerFacade)
-                .updateCredentials(eq(CoreAccountInfo.getAndroidAccountFrom(mCoreAccountInfo)),
-                        eq(activity), any());
+                .updateCredentials(
+                        eq(CoreAccountInfo.getAndroidAccountFrom(mCoreAccountInfo)),
+                        eq(activity),
+                        any());
 
         PasswordManagerErrorMessageHelperBridge.startUpdateAccountCredentialsFlow(
-                mWindowAndroidMock);
-        assertEquals(1,
+                mWindowAndroidMock, mProfile);
+        assertEquals(
+                1,
                 RecordHistogram.getHistogramValueCountForTesting(
                         "PasswordManager.UPMUpdateSignInCredentialsSucces", 0));
-        assertEquals(0,
+        assertEquals(
+                0,
                 RecordHistogram.getHistogramValueCountForTesting(
                         "PasswordManager.UPMUpdateSignInCredentialsSucces", 1));
     }
@@ -223,14 +226,14 @@ public class PasswordManagerErrorMessageHelperBridgeTest {
     @Test
     public void testDontShowMessageWithtoutAccount() {
         when(mIdentityManagerMock.getPrimaryAccountInfo(ConsentLevel.SIGNIN)).thenReturn(null);
-        assertFalse(PasswordManagerErrorMessageHelperBridge.shouldShowErrorUi());
+        assertFalse(PasswordManagerErrorMessageHelperBridge.shouldShowErrorUi(mProfile));
     }
 
     @Test
     public void testDontTryToUpdateCredentialWithNoAccount() {
         when(mIdentityManagerMock.getPrimaryAccountInfo(ConsentLevel.SIGNIN)).thenReturn(null);
         PasswordManagerErrorMessageHelperBridge.startUpdateAccountCredentialsFlow(
-                mWindowAndroidMock);
+                mWindowAndroidMock, mProfile);
         verify(mFakeAccountManagerFacade, never())
                 .updateCredentials(any(Account.class), any(Activity.class), any(Callback.class));
     }

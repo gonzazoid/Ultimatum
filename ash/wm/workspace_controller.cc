@@ -17,9 +17,7 @@
 #include "ash/wm/window_animations.h"
 #include "ash/wm/window_state.h"
 #include "ash/wm/workspace/backdrop_controller.h"
-#include "ash/wm/workspace/workspace_event_handler.h"
 #include "ash/wm/workspace/workspace_layout_manager.h"
-#include "ui/aura/window.h"
 #include "ui/compositor/layer.h"
 #include "ui/compositor/scoped_layer_animation_settings.h"
 #include "ui/wm/core/window_animations.h"
@@ -134,13 +132,15 @@ void WorkspaceController::OnWindowDestroying(aura::Window* window) {
   layout_manager_ = nullptr;
 }
 
-void SetWorkspaceController(aura::Window* desk_container,
-                            WorkspaceController* workspace_controller) {
+void SetWorkspaceController(
+    aura::Window* desk_container,
+    std::unique_ptr<WorkspaceController> workspace_controller) {
   DCHECK(desk_container);
   DCHECK(desks_util::IsDeskContainer(desk_container));
 
   if (workspace_controller)
-    desk_container->SetProperty(kWorkspaceController, workspace_controller);
+    desk_container->SetProperty(kWorkspaceController,
+                                std::move(workspace_controller));
   else
     desk_container->ClearProperty(kWorkspaceController);
 }

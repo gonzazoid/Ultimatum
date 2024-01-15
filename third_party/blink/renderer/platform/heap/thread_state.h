@@ -5,18 +5,18 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_PLATFORM_HEAP_THREAD_STATE_H_
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_HEAP_THREAD_STATE_H_
 
-#include "base/callback_forward.h"
 #include "base/compiler_specific.h"
+#include "base/functional/callback_forward.h"
 #include "build/build_config.h"
 #include "third_party/blink/renderer/platform/heap/forward.h"
 #include "third_party/blink/renderer/platform/heap/thread_state_storage.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
 #include "third_party/blink/renderer/platform/wtf/threading.h"
-#include "v8-profiler.h"
 #include "v8/include/cppgc/common.h"
 #include "v8/include/cppgc/heap-consistency.h"
 #include "v8/include/v8-callbacks.h"
 #include "v8/include/v8-cppgc.h"
+#include "v8/include/v8-profiler.h"
 
 namespace v8 {
 class CppHeap;
@@ -25,6 +25,8 @@ class EmbedderRootsHandler;
 }  // namespace v8
 
 namespace blink {
+
+class BlinkGCMemoryDumpProvider;
 
 using V8BuildEmbedderGraphCallback = void (*)(v8::Isolate*,
                                               v8::EmbedderGraph*,
@@ -37,13 +39,13 @@ class PLATFORM_EXPORT ThreadState final {
 
   using StackState = cppgc::EmbedderStackState;
 
-  static ALWAYS_INLINE ThreadState* Current() {
+  ALWAYS_INLINE static ThreadState* Current() {
     return &ThreadStateStorage::Current()->thread_state();
   }
 
   // Returns true if the current thread is currently sweeping, i.e., whether the
   // caller is invoked from a destructor.
-  static ALWAYS_INLINE bool IsSweepingOnOwningThread(
+  ALWAYS_INLINE static bool IsSweepingOnOwningThread(
       ThreadStateStorage& storage);
 
   // Attaches a ThreadState to the main-thread.
@@ -58,7 +60,6 @@ class PLATFORM_EXPORT ThreadState final {
 
   ALWAYS_INLINE cppgc::HeapHandle& heap_handle() const { return heap_handle_; }
   ALWAYS_INLINE v8::CppHeap& cpp_heap() const { return *cpp_heap_; }
-  ALWAYS_INLINE v8::Isolate* GetIsolate() const { return isolate_; }
 
   void SafePoint(StackState);
 
@@ -98,6 +99,15 @@ class PLATFORM_EXPORT ThreadState final {
   static ThreadState* AttachMainThreadForTesting(v8::Platform*);
   static ThreadState* AttachCurrentThreadForTesting(v8::Platform*);
 
+  // Takes a heap snapshot that can be loaded into DevTools. Requires that
+  // `ThreadState` is attached to a `v8::Isolate`.
+  //
+  // `filename` specifies the path on the system to store the snapshot. If no
+  // filename is provided, the snapshot will be emitted to `stdout`.
+  //
+  // Writing to a file requires a disabled sandbox.
+  void TakeHeapSnapshotForTesting(const char* filename) const;
+
  private:
   explicit ThreadState(v8::Platform*);
   ~ThreadState();
@@ -108,6 +118,8 @@ class PLATFORM_EXPORT ThreadState final {
   v8::Isolate* isolate_ = nullptr;
   base::PlatformThreadId thread_id_;
   bool forced_scheduled_gc_for_testing_ = false;
+
+  friend class BlinkGCMemoryDumpProvider;
 };
 
 // static

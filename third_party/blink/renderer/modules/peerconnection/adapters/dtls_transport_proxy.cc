@@ -6,6 +6,7 @@
 
 #include "base/location.h"
 #include "base/memory/ptr_util.h"
+#include "base/task/single_thread_task_runner.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
 #include "third_party/blink/renderer/modules/peerconnection/adapters/web_rtc_cross_thread_copier.h"
 #include "third_party/blink/renderer/platform/scheduler/public/post_cross_thread_task.h"
@@ -24,8 +25,8 @@ std::unique_ptr<DtlsTransportProxy> DtlsTransportProxy::Create(
   std::unique_ptr<DtlsTransportProxy> proxy =
       base::WrapUnique(new DtlsTransportProxy(frame, proxy_thread, host_thread,
                                               dtls_transport, delegate));
-  // TODO(hta): Delete this thread jump once creation can be initiated
-  // from the host thread (=webrtc signalling thread).
+  // TODO(hta, tommi): Delete this thread jump once creation can be initiated
+  // from the host thread (=webrtc network thread).
   PostCrossThreadTask(
       *host_thread, FROM_HERE,
       CrossThreadBindOnce(&DtlsTransportProxy::StartOnHostThread,
@@ -42,14 +43,15 @@ DtlsTransportProxy::DtlsTransportProxy(
     : proxy_thread_(std::move(proxy_thread)),
       host_thread_(std::move(host_thread)),
       dtls_transport_(dtls_transport),
-      delegate_(delegate) {}
+      delegate_(MakeCrossThreadHandle(delegate)) {}
 
 void DtlsTransportProxy::StartOnHostThread() {
   DCHECK(host_thread_->BelongsToCurrentThread());
   dtls_transport_->RegisterObserver(this);
   PostCrossThreadTask(
       *proxy_thread_, FROM_HERE,
-      CrossThreadBindOnce(&Delegate::OnStartCompleted, delegate_,
+      CrossThreadBindOnce(&Delegate::OnStartCompleted,
+                          MakeUnwrappingCrossThreadHandle(delegate_),
                           dtls_transport_->Information()));
 }
 
@@ -63,9 +65,12 @@ void DtlsTransportProxy::OnStateChange(webrtc::DtlsTransportInformation info) {
   }
   PostCrossThreadTask(
       *proxy_thread_, FROM_HERE,
-      CrossThreadBindOnce(&Delegate::OnStateChange, delegate_, info));
+      CrossThreadBindOnce(&Delegate::OnStateChange,
+                          MakeUnwrappingCrossThreadHandle(delegate_), info));
   if (info.state() == webrtc::DtlsTransportState::kClosed) {
-    delegate_ = nullptr;
+    // This effectively nullifies `delegate_`. We can't just assign nullptr the
+    // normal way, because CrossThreadHandle does not support assignment.
+    CrossThreadHandle<Delegate> expiring_handle = std::move(delegate_);
   }
 }
 

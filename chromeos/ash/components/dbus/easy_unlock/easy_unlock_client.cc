@@ -10,8 +10,9 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "chromeos/ash/components/dbus/easy_unlock/fake_easy_unlock_client.h"
 #include "dbus/bus.h"
 #include "dbus/message.h"
@@ -38,8 +39,7 @@ std::string PopResponseData(dbus::MessageReader* reader) {
 // Converts string to array of bytes and writes it using dbus meddage writer.
 void AppendStringAsByteArray(const std::string& data,
                              dbus::MessageWriter* writer) {
-  writer->AppendArrayOfBytes(reinterpret_cast<const uint8_t*>(data.data()),
-                             data.length());
+  writer->AppendArrayOfBytes(base::as_byte_span(data));
 }
 
 // The EasyUnlockClient used in production.
@@ -171,7 +171,7 @@ class EasyUnlockClientImpl : public EasyUnlockClient {
     std::move(callback).Run(private_key, public_key);
   }
 
-  dbus::ObjectProxy* proxy_;
+  raw_ptr<dbus::ObjectProxy> proxy_;
 
   // Note: This should remain the last member so it'll be destroyed and
   // invalidate its weak pointers before any other members are destroyed.

@@ -5,6 +5,9 @@
 #include "chromeos/ash/services/libassistant/test_support/libassistant_service_tester.h"
 
 #include "base/base_paths.h"
+#include "chromeos/ash/services/libassistant/display_connection.h"
+#include "chromeos/ash/services/libassistant/display_controller.h"
+#include "chromeos/ash/services/libassistant/grpc/services_status_observer.h"
 #include "chromeos/ash/services/libassistant/public/mojom/notification_delegate.mojom-forward.h"
 #include "chromeos/ash/services/libassistant/service_controller.h"
 #include "chromeos/ash/services/libassistant/test_support/fake_libassistant_factory.h"
@@ -46,16 +49,14 @@ LibassistantServiceTester::assistant_manager() {
   return libassistant_factory_->assistant_manager();
 }
 
-chromeos::assistant::FakeAssistantManagerInternal&
-LibassistantServiceTester::assistant_manager_internal() {
-  return libassistant_factory_->assistant_manager_internal();
-}
-
 void LibassistantServiceTester::Start() {
   service_controller_->Initialize(mojom::BootupConfig::New(),
                                   BindURLLoaderFactory());
   service_controller_->Start();
   service_controller_.FlushForTesting();
+  // Simulate gRPC heartbeat of the booting up signal.
+  service_->service_controller().OnServicesStatusChanged(
+      ServicesStatus::ONLINE_BOOTING_UP);
 }
 
 void LibassistantServiceTester::BindControllers() {
@@ -102,6 +103,11 @@ mojo::PendingReceiver<mojom::NotificationDelegate>
 LibassistantServiceTester::GetNotificationDelegatePendingReceiver() {
   DCHECK(pending_notification_delegate_.is_valid());
   return std::move(pending_notification_delegate_);
+}
+
+DisplayConnection& LibassistantServiceTester::GetDisplayConnection() {
+  return service_->GetDisplayControllerForTesting()
+      .GetDisplayConnectionForTesting();
 }
 
 void LibassistantServiceTester::FlushForTesting() {

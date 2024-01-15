@@ -7,7 +7,7 @@
 
 #include "base/component_export.h"
 #include "base/files/file_path.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/task/single_thread_task_runner.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
@@ -16,7 +16,7 @@
 
 namespace ui {
 
-enum class DomCode;
+enum class DomCode : uint32_t;
 class InputDeviceFactoryEvdev;
 struct InputDeviceSettingsEvdev;
 
@@ -48,6 +48,7 @@ class COMPONENT_EXPORT(EVDEV) InputDeviceFactoryEvdevProxy {
   void GetTouchDeviceStatus(InputController::GetTouchDeviceStatusReply reply);
   void GetTouchEventLog(const base::FilePath& out_dir,
                         InputController::GetTouchEventLogReply reply);
+  void DescribeForLog(InputController::DescribeForLogReply reply) const;
   void GetGesturePropertiesService(
       mojo::PendingReceiver<ozone::mojom::GesturePropertiesService> receiver);
   void PlayVibrationEffect(int id, uint8_t amplitude, uint16_t duration_millis);

@@ -6,15 +6,14 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/strings/string_piece.h"
+#include "base/functional/bind.h"
 #include "components/prefs/pref_service.h"
 #include "services/preferences/public/cpp/dictionary_value_update.h"
 
 namespace prefs {
 
 ScopedDictionaryPrefUpdate::ScopedDictionaryPrefUpdate(PrefService* service,
-                                                       base::StringPiece path)
+                                                       std::string_view path)
     : service_(service), path_(path) {}
 
 ScopedDictionaryPrefUpdate::~ScopedDictionaryPrefUpdate() {
@@ -23,12 +22,12 @@ ScopedDictionaryPrefUpdate::~ScopedDictionaryPrefUpdate() {
 }
 
 std::unique_ptr<DictionaryValueUpdate> ScopedDictionaryPrefUpdate::Get() {
+  base::Value::Dict& dict =
+      service_->GetMutableUserPref(path_, base::Value::Type::DICT)->GetDict();
   return std::make_unique<DictionaryValueUpdate>(
       base::BindRepeating(&ScopedDictionaryPrefUpdate::RecordPath,
                           base::Unretained(this)),
-      static_cast<base::DictionaryValue*>(
-          service_->GetMutableUserPref(path_, base::Value::Type::DICTIONARY)),
-      std::vector<std::string>());
+      &dict, std::vector<std::string>());
 }
 
 std::unique_ptr<DictionaryValueUpdate> ScopedDictionaryPrefUpdate::
@@ -36,8 +35,7 @@ operator->() {
   return Get();
 }
 
-void ScopedDictionaryPrefUpdate::RecordPath(
-    const std::vector<std::string>& path) {
+void ScopedDictionaryPrefUpdate::RecordPath(std::vector<std::string> path) {
   updated_paths_.insert(std::move(path));
 }
 

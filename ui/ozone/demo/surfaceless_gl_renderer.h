@@ -12,11 +12,12 @@
 #include "ui/ozone/demo/gl_renderer.h"
 
 namespace gl {
-class GLImage;
+class Presenter;
 }
 
 namespace ui {
 class OverlayCandidatesOzone;
+class NativePixmapGLBinding;
 class PlatformWindowSurface;
 
 static const int kMaxLayers = 8;
@@ -25,7 +26,8 @@ class SurfacelessGlRenderer : public RendererBase {
  public:
   SurfacelessGlRenderer(gfx::AcceleratedWidget widget,
                         std::unique_ptr<PlatformWindowSurface> window_surface,
-                        const scoped_refptr<gl::GLSurface>& surface,
+                        const scoped_refptr<gl::GLSurface>& offscreen_surface,
+                        const scoped_refptr<gl::Presenter>& presenter,
                         const gfx::Size& size);
 
   SurfacelessGlRenderer(const SurfacelessGlRenderer&) = delete;
@@ -57,7 +59,8 @@ class SurfacelessGlRenderer : public RendererBase {
     gfx::AcceleratedWidget widget_ = gfx::kNullAcceleratedWidget;
     gfx::Size size_;
 
-    scoped_refptr<gl::GLImage> image_;
+    scoped_refptr<gfx::NativePixmap> pixmap_;
+    std::unique_ptr<NativePixmapGLBinding> pixmap_gl_binding_;
     unsigned int gl_fb_ = 0;
     unsigned int gl_tex_ = 0;
   };
@@ -78,6 +81,8 @@ class SurfacelessGlRenderer : public RendererBase {
 
   scoped_refptr<gl::GLSurface> gl_surface_;
   scoped_refptr<gl::GLContext> context_;
+
+  scoped_refptr<gl::Presenter> presenter_;
 
   base::WeakPtrFactory<SurfacelessGlRenderer> weak_ptr_factory_{this};
 };

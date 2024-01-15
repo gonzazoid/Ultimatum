@@ -6,7 +6,6 @@ package org.chromium.chrome.browser.ui.signin.fre;
 
 import android.content.Context;
 import android.util.AttributeSet;
-import android.util.Pair;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
@@ -16,7 +15,6 @@ import android.widget.TextView;
 
 import androidx.annotation.Nullable;
 
-import org.chromium.chrome.browser.signin.services.FREMobileIdentityConsistencyFieldTrial;
 import org.chromium.chrome.browser.ui.signin.R;
 import org.chromium.ui.widget.ButtonCompat;
 import org.chromium.ui.widget.TextViewWithClickableSpans;
@@ -26,6 +24,7 @@ public class SigninFirstRunView extends RelativeLayout {
     private TextView mTitle;
     private TextView mSubtitle;
     private View mBrowserManagedHeader;
+    private TextView mPrivacyDisclaimer;
     private ProgressBar mInitialLoadProgressSpinner;
     private ViewGroup mSelectedAccount;
     private ImageView mExpandIcon;
@@ -45,7 +44,7 @@ public class SigninFirstRunView extends RelativeLayout {
 
         mTitle = findViewById(R.id.title);
         mSubtitle = findViewById(R.id.subtitle);
-        mBrowserManagedHeader = findViewById(R.id.fre_browser_managed_by_organization);
+        mBrowserManagedHeader = findViewById(R.id.fre_browser_managed_by);
         mInitialLoadProgressSpinner =
                 findViewById(R.id.fre_native_and_policy_load_progress_spinner);
         mSelectedAccount = findViewById(R.id.signin_fre_selected_account);
@@ -55,14 +54,15 @@ public class SigninFirstRunView extends RelativeLayout {
         mFooter = findViewById(R.id.signin_fre_footer);
         mSigninProgressSpinner = findViewById(R.id.fre_signin_progress_spinner);
         mSigninProgressText = findViewById(R.id.fre_signin_progress_text);
-
-        if (FREMobileIdentityConsistencyFieldTrial.shouldHideTitleUntilPoliciesAreLoaded()) {
-            mTitle.setVisibility(INVISIBLE);
-        }
+        mPrivacyDisclaimer = (TextView) findViewById(R.id.privacy_disclaimer);
     }
 
     View getBrowserManagedHeaderView() {
         return mBrowserManagedHeader;
+    }
+
+    TextView getPrivacyDisclaimer() {
+        return mPrivacyDisclaimer;
     }
 
     ProgressBar getInitialLoadProgressSpinnerView() {
@@ -97,15 +97,7 @@ public class SigninFirstRunView extends RelativeLayout {
         return mSigninProgressText;
     }
 
-    /** Updates the title and the subtitle for UI variations on native and policy load. **/
-    void applyVariationsExperiment() {
-        Pair<Integer, Integer> titleAndSubtitleId =
-                FREMobileIdentityConsistencyFieldTrial.getVariationTitleAndSubtitle();
-        mTitle.setText(titleAndSubtitleId.first);
-        mTitle.setVisibility(VISIBLE);
-        if (titleAndSubtitleId.second != 0) {
-            mSubtitle.setText(titleAndSubtitleId.second);
-            mSubtitle.setVisibility(VISIBLE);
-        }
+    TextView getSubtitle() {
+        return mSubtitle;
     }
 }

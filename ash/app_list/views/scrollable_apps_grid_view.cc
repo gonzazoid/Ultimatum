@@ -11,7 +11,7 @@
 #include "ash/app_list/model/app_list_item.h"
 #include "ash/app_list/views/app_list_item_view.h"
 #include "ash/public/cpp/app_list/app_list_config.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/time/time.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
@@ -56,7 +56,6 @@ ScrollableAppsGridView::ScrollableAppsGridView(
                    keyboard_controller),
       scroll_view_(parent_scroll_view) {
   DCHECK(scroll_view_);
-  view_structure_.Init(PagedViewStructure::Mode::kSinglePage);
 }
 
 ScrollableAppsGridView::~ScrollableAppsGridView() {
@@ -109,13 +108,23 @@ gfx::Insets ScrollableAppsGridView::GetTilePadding(int page) const {
   return gfx::Insets::VH(-kVerticalTilePadding, -horizontal_tile_padding);
 }
 
+bool ScrollableAppsGridView::ShouldContainerHandleDragEvents() {
+  // Apps grid folder view handles its own drag and drop events, otherwise, it
+  // should delegate to the apps grid container.
+  return !IsInFolder();
+}
+
 gfx::Size ScrollableAppsGridView::GetTileGridSize() const {
   // AppListItemList may contain page break items, so use the view_model().
-  size_t items = view_model()->view_size();
+  size_t items = view_model()->view_size() + pulsing_blocks_model().view_size();
   // Tests sometimes start with 0 items. Ensure space for at least 1 item.
   if (items == 0) {
     items = 1;
   }
+
+  if (HasExtraSlotForReorderPlaceholder())
+    ++items;
+
   const bool is_last_row_full = (items % cols() == 0);
   const int rows = is_last_row_full ? items / cols() : items / cols() + 1;
   gfx::Size tile_size = GetTotalTileSize(/*page=*/0);
@@ -130,6 +139,21 @@ int ScrollableAppsGridView::GetTotalPages() const {
 
 int ScrollableAppsGridView::GetSelectedPage() const {
   return 0;
+}
+
+bool ScrollableAppsGridView::IsPageFull(size_t page_index) const {
+  return false;
+}
+
+GridIndex ScrollableAppsGridView::GetGridIndexFromIndexInViewModel(
+    int index) const {
+  return GridIndex(0, index);
+}
+
+int ScrollableAppsGridView::GetNumberOfPulsingBlocksToShow(
+    int item_count) const {
+  const int residue = item_count % cols();
+  return cols() + (residue ? cols() - residue : 0);
 }
 
 bool ScrollableAppsGridView::MaybeAutoScroll() {
@@ -272,10 +296,8 @@ void ScrollableAppsGridView::RecordAppMovingTypeMetrics(
                             kMaxAppListAppMovingType);
 }
 
-int ScrollableAppsGridView::GetMaxRowsInPage(int page) const {
-  // Return an arbitrary large number, chosen to be small enough
-  // that cols*rows_per_page will not overflow.
-  return 100000;
+std::optional<int> ScrollableAppsGridView::GetMaxRowsInPage(int page) const {
+  return std::nullopt;
 }
 
 gfx::Vector2d ScrollableAppsGridView::GetGridCenteringOffset(int page) const {
@@ -292,13 +314,13 @@ void ScrollableAppsGridView::EnsureViewVisible(const GridIndex& index) {
     view->ScrollViewToVisible();
 }
 
-absl::optional<ScrollableAppsGridView::VisibleItemIndexRange>
+std::optional<ScrollableAppsGridView::VisibleItemIndexRange>
 ScrollableAppsGridView::GetVisibleItemIndexRange() const {
   // Indicate the first row on which item views are visible.
-  absl::optional<int> first_visible_row;
+  std::optional<int> first_visible_row;
 
   // Indicate the first invisible row that is right after the last visible row.
-  absl::optional<int> first_invisible_row;
+  std::optional<int> first_invisible_row;
 
   const gfx::Rect scroll_view_visible_rect = scroll_view_->GetVisibleRect();
   for (size_t view_index = 0; view_index < view_model()->view_size();
@@ -335,7 +357,7 @@ ScrollableAppsGridView::GetVisibleItemIndexRange() const {
   }
 
   if (!first_visible_row)
-    return absl::nullopt;
+    return std::nullopt;
 
   VisibleItemIndexRange result;
   result.first_index = *first_visible_row * cols();
@@ -346,11 +368,6 @@ ScrollableAppsGridView::GetVisibleItemIndexRange() const {
                                           : view_model()->view_size() - 1;
 
   return result;
-}
-
-base::ScopedClosureRunner ScrollableAppsGridView::LockAppsGridOpacity() {
-  // Do nothing.
-  return base::ScopedClosureRunner();
 }
 
 const gfx::Vector2d ScrollableAppsGridView::CalculateTransitionOffset(

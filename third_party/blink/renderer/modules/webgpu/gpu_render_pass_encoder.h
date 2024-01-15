@@ -10,7 +10,6 @@
 #include "third_party/blink/renderer/modules/webgpu/dawn_object.h"
 #include "third_party/blink/renderer/modules/webgpu/gpu_programmable_pass_encoder.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
-#include "third_party/blink/renderer/platform/bindings/no_alloc_direct_call_host.h"
 
 namespace blink {
 
@@ -19,8 +18,7 @@ class GPURenderBundle;
 class V8GPUIndexFormat;
 
 class GPURenderPassEncoder : public DawnObject<WGPURenderPassEncoder>,
-                             public GPUProgrammablePassEncoder,
-                             public NoAllocDirectCallHost {
+                             public GPUProgrammablePassEncoder {
   DEFINE_WRAPPERTYPEINFO();
 
  public:
@@ -32,8 +30,9 @@ class GPURenderPassEncoder : public DawnObject<WGPURenderPassEncoder>,
 
   // gpu_render_pass_encoder.idl
   void setBindGroup(uint32_t index, DawnObject<WGPUBindGroup>* bindGroup) {
-    GetProcs().renderPassEncoderSetBindGroup(
-        GetHandle(), index, bindGroup->GetHandle(), 0, nullptr);
+    WGPUBindGroupImpl* bgImpl = bindGroup ? bindGroup->GetHandle() : nullptr;
+    GetProcs().renderPassEncoderSetBindGroup(GetHandle(), index, bgImpl, 0,
+                                             nullptr);
   }
   void setBindGroup(uint32_t index,
                     GPUBindGroup* bindGroup,
@@ -94,15 +93,17 @@ class GPURenderPassEncoder : public DawnObject<WGPURenderPassEncoder>,
   void setVertexBuffer(uint32_t slot,
                        const DawnObject<WGPUBuffer>* buffer,
                        uint64_t offset) {
-    GetProcs().renderPassEncoderSetVertexBuffer(
-        GetHandle(), slot, buffer->GetHandle(), offset, WGPU_WHOLE_SIZE);
+    WGPUBufferImpl* bufferImpl = buffer ? buffer->GetHandle() : nullptr;
+    GetProcs().renderPassEncoderSetVertexBuffer(GetHandle(), slot, bufferImpl,
+                                                offset, WGPU_WHOLE_SIZE);
   }
   void setVertexBuffer(uint32_t slot,
                        const DawnObject<WGPUBuffer>* buffer,
                        uint64_t offset,
                        uint64_t size) {
-    GetProcs().renderPassEncoderSetVertexBuffer(
-        GetHandle(), slot, buffer->GetHandle(), offset, size);
+    WGPUBufferImpl* bufferImpl = buffer ? buffer->GetHandle() : nullptr;
+    GetProcs().renderPassEncoderSetVertexBuffer(GetHandle(), slot, bufferImpl,
+                                                offset, size);
   }
   void draw(uint32_t vertexCount,
             uint32_t instanceCount,
@@ -141,7 +142,6 @@ class GPURenderPassEncoder : public DawnObject<WGPURenderPassEncoder>,
                       uint32_t queryIndex,
                       ExceptionState& exception_state);
   void end() { GetProcs().renderPassEncoderEnd(GetHandle()); }
-  void endPass();
 
   void setLabelImpl(const String& value) override {
     std::string utf8_label = value.Utf8();

@@ -9,7 +9,7 @@
 
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
-#include "chrome/browser/ash/policy/dlp/dlp_files_controller.h"
+#include "chrome/browser/ash/policy/dlp/dlp_files_controller_ash.h"
 #include "chromeos/ash/components/dbus/services/cros_dbus_service.h"
 #include "dbus/exported_object.h"
 
@@ -47,21 +47,9 @@ class DlpFilesPolicyServiceProvider
       dbus::MethodCall* method_call,
       dbus::ExportedObject::ResponseSender response_sender);
 
-  // Called when restricted files sources are obtained.
-  void RespondWithRestrictedFilesTransfer(
-      dbus::MethodCall* method_call,
-      dbus::ExportedObject::ResponseSender response_sender,
-      const std::vector<policy::DlpFilesController::FileDaemonInfo>&
-          restricted_files);
-
   base::WeakPtrFactory<DlpFilesPolicyServiceProvider> weak_ptr_factory_{this};
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when ChromeOS code migration is done.
-namespace chromeos {
-using ::ash::DlpFilesPolicyServiceProvider;
-}  // namespace chromeos
 
 #endif  // CHROME_BROWSER_ASH_DBUS_DLP_FILES_POLICY_SERVICE_PROVIDER_H_

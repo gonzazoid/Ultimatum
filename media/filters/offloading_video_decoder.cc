@@ -6,13 +6,14 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/synchronization/atomic_flag.h"
+#include "base/task/bind_post_task.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool.h"
-#include "media/base/bind_to_current_loop.h"
+#include "media/base/cdm_context.h"
 #include "media/base/decoder_buffer.h"
 #include "media/base/video_frame.h"
 
@@ -127,8 +128,8 @@ void OffloadingVideoDecoder::Initialize(const VideoDecoderConfig& config,
 
   // Offloaded decoders expect asynchronous execution of callbacks; even if we
   // aren't currently using the offload thread.
-  InitCB bound_init_cb = BindToCurrentLoop(std::move(init_cb));
-  OutputCB bound_output_cb = BindToCurrentLoop(output_cb);
+  InitCB bound_init_cb = base::BindPostTaskToCurrentDefault(std::move(init_cb));
+  OutputCB bound_output_cb = base::BindPostTaskToCurrentDefault(output_cb);
 
   // If we're not offloading just pass through to the wrapped decoder.
   if (disable_offloading) {
@@ -141,7 +142,7 @@ void OffloadingVideoDecoder::Initialize(const VideoDecoderConfig& config,
 
   if (!offload_task_runner_) {
     offload_task_runner_ = base::ThreadPool::CreateSequencedTaskRunner(
-        {base::TaskPriority::USER_BLOCKING});
+        {base::MayBlock(), base::TaskPriority::USER_BLOCKING});
   }
 
   offload_task_runner_->PostTask(
@@ -158,7 +159,8 @@ void OffloadingVideoDecoder::Decode(scoped_refptr<DecoderBuffer> buffer,
   DCHECK(buffer);
   DCHECK(decode_cb);
 
-  DecodeCB bound_decode_cb = BindToCurrentLoop(std::move(decode_cb));
+  DecodeCB bound_decode_cb =
+      base::BindPostTaskToCurrentDefault(std::move(decode_cb));
   if (!offload_task_runner_) {
     helper_->decoder()->Decode(std::move(buffer), std::move(bound_decode_cb));
     return;
@@ -173,7 +175,8 @@ void OffloadingVideoDecoder::Decode(scoped_refptr<DecoderBuffer> buffer,
 void OffloadingVideoDecoder::Reset(base::OnceClosure reset_cb) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-  base::OnceClosure bound_reset_cb = BindToCurrentLoop(std::move(reset_cb));
+  base::OnceClosure bound_reset_cb =
+      base::BindPostTaskToCurrentDefault(std::move(reset_cb));
   if (!offload_task_runner_) {
     helper_->Reset(std::move(bound_reset_cb));
   } else {

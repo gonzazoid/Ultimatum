@@ -17,8 +17,8 @@ import '../site_favicon.js';
 
 import {CrActionMenuElement} from '//resources/cr_elements/cr_action_menu/cr_action_menu.js';
 import {CrLazyRenderElement} from 'chrome://resources/cr_elements/cr_lazy_render/cr_lazy_render.js';
-import {assert} from 'chrome://resources/js/assert_ts.js';
-import {FocusRowMixin} from 'chrome://resources/js/focus_row_mixin.js';
+import {FocusRowMixin} from 'chrome://resources/cr_elements/focus_row_mixin.js';
+import {assert} from 'chrome://resources/js/assert.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {getTemplate} from './startup_url_entry.html.js';
@@ -56,13 +56,13 @@ export class SettingsStartupUrlEntryElement extends
   editable: boolean;
   model: StartupPageInfo;
 
-  private onRemoveTap_() {
+  private onRemoveClick_() {
     this.shadowRoot!.querySelector('cr-action-menu')!.close();
     StartupUrlsPageBrowserProxyImpl.getInstance().removeStartupPage(
         this.model.modelIndex);
   }
 
-  private onEditTap_(e: Event) {
+  private onEditClick_(e: Event) {
     e.preventDefault();
     this.shadowRoot!.querySelector('cr-action-menu')!.close();
     this.dispatchEvent(new CustomEvent(EDIT_STARTUP_URL_EVENT, {
@@ -75,7 +75,7 @@ export class SettingsStartupUrlEntryElement extends
     }));
   }
 
-  private onDotsTap_() {
+  private onDotsClick_() {
     const actionMenu =
         this.shadowRoot!
             .querySelector<CrLazyRenderElement<CrActionMenuElement>>(

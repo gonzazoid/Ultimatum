@@ -5,7 +5,7 @@
 #ifndef MEDIA_MOJO_SERVICES_STABLE_VIDEO_DECODER_FACTORY_SERVICE_H_
 #define MEDIA_MOJO_SERVICES_STABLE_VIDEO_DECODER_FACTORY_SERVICE_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/sequence_checker.h"
 #include "media/mojo/mojom/stable/stable_video_decoder.mojom.h"
 #include "media/mojo/services/media_mojo_export.h"
@@ -33,7 +33,8 @@ class MojoMediaClient;
 class MEDIA_MOJO_EXPORT StableVideoDecoderFactoryService
     : public stable::mojom::StableVideoDecoderFactory {
  public:
-  StableVideoDecoderFactoryService();
+  StableVideoDecoderFactoryService(const gpu::GpuFeatureInfo& gpu_feature_info,
+                                   bool enable_direct_video_decoder);
   StableVideoDecoderFactoryService(const StableVideoDecoderFactoryService&) =
       delete;
   StableVideoDecoderFactoryService& operator=(
@@ -52,11 +53,13 @@ class MEDIA_MOJO_EXPORT StableVideoDecoderFactoryService
   }
 
   void BindReceiver(
-      mojo::PendingReceiver<stable::mojom::StableVideoDecoderFactory> receiver);
+      mojo::PendingReceiver<stable::mojom::StableVideoDecoderFactory> receiver,
+      base::OnceClosure disconnect_cb);
 
   // stable::mojom::StableVideoDecoderFactory implementation.
   void CreateStableVideoDecoder(
-      mojo::PendingReceiver<stable::mojom::StableVideoDecoder> receiver)
+      mojo::PendingReceiver<stable::mojom::StableVideoDecoder> receiver,
+      mojo::PendingRemote<stable::mojom::StableVideoDecoderTracker> tracker)
       override;
 
  private:

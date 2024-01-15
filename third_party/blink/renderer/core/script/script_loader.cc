@@ -67,6 +67,7 @@
 #include "third_party/blink/renderer/core/script_type_names.h"
 #include "third_party/blink/renderer/core/speculation_rules/document_speculation_rules.h"
 #include "third_party/blink/renderer/core/speculation_rules/speculation_rule_set.h"
+#include "third_party/blink/renderer/core/speculation_rules/speculation_rules_metrics.h"
 #include "third_party/blink/renderer/core/svg_names.h"
 #include "third_party/blink/renderer/core/trustedtypes/trusted_types_util.h"
 #include "third_party/blink/renderer/platform/bindings/parkable_string.h"
@@ -78,6 +79,7 @@
 #include "third_party/blink/renderer/platform/loader/subresource_integrity.h"
 #include "third_party/blink/renderer/platform/network/mime/mime_type_registry.h"
 #include "third_party/blink/renderer/platform/runtime_enabled_features.h"
+#include "third_party/blink/renderer/platform/scheduler/public/thread_scheduler.h"
 #include "third_party/blink/renderer/platform/weborigin/security_origin.h"
 #include "third_party/blink/renderer/platform/weborigin/security_policy.h"
 #include "third_party/blink/renderer/platform/wtf/std_lib_extras.h"
@@ -85,6 +87,18 @@
 #include "third_party/blink/renderer/platform/wtf/text/string_hash.h"
 #include "third_party/blink/renderer/platform/wtf/text/string_view.h"
 
+namespace {
+blink::scheduler::TaskAttributionInfo* GetRunningTask(
+    blink::ScriptState* script_state) {
+  auto* tracker =
+      blink::ThreadScheduler::Current()->GetTaskAttributionTracker();
+  if (!script_state || !script_state->World().IsMainWorld() || !tracker) {
+    return nullptr;
+  }
+  return tracker->RunningTask(script_state);
+}
+
+}  // namespace
 namespace blink {
 
 ScriptLoader::ScriptLoader(ScriptElementBase* element,
@@ -184,7 +198,6 @@ void ScriptLoader::HandleAsyncAttribute() {
   // <spec href="https://html.spec.whatwg.org/C/#the-script-element"
   // step="1">Set this's force async to false.</spec>
   force_async_ = false;
-  dynamic_async_ = true;
 }
 
 void ScriptLoader::Removed() {
@@ -530,7 +543,7 @@ PendingScript* ScriptLoader::PrepareScript(
   // <spec step="5">Let source text be el's child text content.</spec>
   //
   // Trusted Types additionally requires:
-  // https://w3c.github.io/webappsec-trusted-types/dist/spec/#slot-value-verification
+  // https://w3c.github.io/trusted-types/dist/spec/#slot-value-verification
   // - Step 4: Execute the Prepare the script URL and text algorithm upon the
   //     script element. If that algorithm threw an error, then return. The
   //     script is not executed.
@@ -559,10 +572,6 @@ PendingScript* ScriptLoader::PrepareScript(
       return nullptr;
 
     case ScriptTypeAtPrepare::kSpeculationRules:
-      if (!RuntimeEnabledFeatures::SpeculationRulesEnabled(context_window))
-        return nullptr;
-      break;
-
     case ScriptTypeAtPrepare::kWebBundle:
     case ScriptTypeAtPrepare::kClassic:
     case ScriptTypeAtPrepare::kModule:
@@ -722,12 +731,13 @@ PendingScript* ScriptLoader::PrepareScript(
   // |content_document| is used.
   // TODO(hiroshige): Use a consistent Document everywhere.
   auto* fetch_client_settings_object_fetcher = context_window->Fetcher();
+  ScriptState* script_state =
+      ToScriptStateForMainWorld(context_window->GetFrame());
 
   // https://wicg.github.io/import-maps/#integration-prepare-a-script
   // If the script’s type is "importmap": [spec text]
   if (GetScriptType() == ScriptTypeAtPrepare::kImportMap) {
-    Modulator* modulator =
-        Modulator::From(ToScriptStateForMainWorld(context_window->GetFrame()));
+    Modulator* modulator = Modulator::From(script_state);
     auto aquiring_state = modulator->GetAcquiringImportMapsState();
     switch (aquiring_state) {
       case Modulator::AcquiringImportMapsState::kAfterModuleScriptLoad:
@@ -898,7 +908,7 @@ PendingScript* ScriptLoader::PrepareScript(
         }
         ClassicPendingScript* pending_script = ClassicPendingScript::Fetch(
             url, element_document, options, cross_origin, encoding, element_,
-            defer);
+            defer, GetRunningTask(script_state));
         prepared_pending_script_ = pending_script;
         Resource* resource = pending_script->GetResource();
         resource_keep_alive_ = resource;
@@ -918,8 +928,7 @@ PendingScript* ScriptLoader::PrepareScript(
         //
         // Fetch an external module script graph given url, settings object, and
         // options.</spec>
-        Modulator* modulator = Modulator::From(
-            ToScriptStateForMainWorld(context_window->GetFrame()));
+        Modulator* modulator = Modulator::From(script_state);
         FetchModuleScriptTree(url, fetch_client_settings_object_fetcher,
                               modulator, options);
       } break;
@@ -989,9 +998,6 @@ PendingScript* ScriptLoader::PrepareScript(
           if (error.GetType() == ScriptWebBundleError::Type::kSystemError) {
             element_->DispatchErrorEvent();
           } else {
-            ScriptState* script_state = ToScriptStateForMainWorld(
-                To<LocalDOMWindow>(element_->GetExecutionContext())
-                    ->GetFrame());
             if (script_state->ContextIsValid()) {
               ScriptState::Scope scope(script_state);
               V8ScriptRunner::ReportException(script_state->GetIsolate(),
@@ -1009,22 +1015,14 @@ PendingScript* ScriptLoader::PrepareScript(
         // Set the script’s result to result.
         // If the script’s result is not null, append it to the element’s node
         // document's list of speculation rule sets.
-        DCHECK(RuntimeEnabledFeatures::SpeculationRulesEnabled(context_window));
-        String parse_error;
-        if (auto* rule_set = SpeculationRuleSet::Parse(
-                source_text, base_url, context_window, &parse_error)) {
-          speculation_rule_set_ = rule_set;
-          DocumentSpeculationRules::From(element_document).AddRuleSet(rule_set);
-        }
-        if (!parse_error.IsNull()) {
-          auto* console_message = MakeGarbageCollected<ConsoleMessage>(
-              mojom::ConsoleMessageSource::kOther,
-              mojom::ConsoleMessageLevel::kWarning,
-              "While parsing speculation rules: " + parse_error);
-          console_message->SetNodes(element_document.GetFrame(),
-                                    {element_->GetDOMNodeId()});
-          element_document.AddConsoleMessage(console_message);
-        }
+        auto* source = SpeculationRuleSet::Source::FromInlineScript(
+            source_text, element_document, element_->GetDOMNodeId());
+        speculation_rule_set_ =
+            SpeculationRuleSet::Parse(source, context_window);
+        CHECK(speculation_rule_set_);
+        DocumentSpeculationRules::From(element_document)
+            .AddRuleSet(speculation_rule_set_);
+        speculation_rule_set_->AddConsoleMessageForValidation(*element_);
         return nullptr;
       }
 
@@ -1046,7 +1044,7 @@ PendingScript* ScriptLoader::PrepareScript(
 
         prepared_pending_script_ = ClassicPendingScript::CreateInline(
             element_, position, source_url, base_url, source_text,
-            script_location_type, options);
+            script_location_type, options, GetRunningTask(script_state));
 
         // <spec step="30.2.A.2">Mark as ready el given script.</spec>
         //
@@ -1069,8 +1067,7 @@ PendingScript* ScriptLoader::PrepareScript(
         // scripts, see crbug.com/1338257 for more details.
         if (source_url.HasFragmentIdentifier())
           source_url.RemoveFragmentIdentifier();
-        Modulator* modulator = Modulator::From(
-            ToScriptStateForMainWorld(context_window->GetFrame()));
+        Modulator* modulator = Modulator::From(script_state);
 
         // <spec label="fetch-an-inline-module-script-graph" step="1">Let script
         // be the result of creating a JavaScript module script using source
@@ -1079,7 +1076,7 @@ PendingScript* ScriptLoader::PrepareScript(
         ModuleScriptCreationParams params(
             source_url, base_url, ScriptSourceLocationType::kInline,
             ModuleType::kJavaScript, ParkableString(source_text.Impl()),
-            nullptr);
+            nullptr, network::mojom::ReferrerPolicy::kDefault);
         ModuleScript* module_script =
             JSModuleScript::Create(params, modulator, options, position);
 
@@ -1101,7 +1098,8 @@ PendingScript* ScriptLoader::PrepareScript(
             mojom::blink::RequestContextType::SCRIPT,
             network::mojom::RequestDestination::kScript, module_tree_client);
         prepared_pending_script_ = MakeGarbageCollected<ModulePendingScript>(
-            element_, module_tree_client, is_external_script_);
+            element_, module_tree_client, is_external_script_,
+            GetRunningTask(script_state));
         break;
       }
     }
@@ -1330,7 +1328,8 @@ void ScriptLoader::FetchModuleScriptTree(
                        network::mojom::RequestDestination::kScript, options,
                        ModuleScriptCustomFetchType::kNone, module_tree_client);
   prepared_pending_script_ = MakeGarbageCollected<ModulePendingScript>(
-      element_, module_tree_client, is_external_script_);
+      element_, module_tree_client, is_external_script_,
+      GetRunningTask(modulator->GetScriptState()));
 }
 
 PendingScript* ScriptLoader::TakePendingScript(
@@ -1417,9 +1416,9 @@ bool ScriptLoader::IsScriptForEventSupported() const {
 
 String ScriptLoader::GetScriptText() const {
   // Step 3 of
-  // https://w3c.github.io/webappsec-trusted-types/dist/spec/#abstract-opdef-prepare-the-script-url-and-text
+  // https://w3c.github.io/trusted-types/dist/spec/#abstract-opdef-prepare-the-script-url-and-text
   // called from § 4.1.3.3, step 4 of
-  // https://w3c.github.io/webappsec-trusted-types/dist/spec/#slot-value-verification
+  // https://w3c.github.io/trusted-types/dist/spec/#slot-value-verification
   // This will return the [[ScriptText]] internal slot value after that step,
   // or a null string if the the Trusted Type algorithm threw an error.
   String child_text_content = element_->ChildTextContent();

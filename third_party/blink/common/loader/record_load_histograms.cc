@@ -13,6 +13,10 @@
 
 namespace blink {
 
+namespace {
+constexpr char kIsolatedAppScheme[] = "isolated-app";
+}
+
 void RecordLoadHistograms(const url::Origin& origin,
                           network::mojom::RequestDestination destination,
                           int net_error) {
@@ -27,10 +31,13 @@ void RecordLoadHistograms(const url::Origin& origin,
                                -net_error);
     }
   } else {
-    if (destination == network::mojom::RequestDestination::kImage) {
-      base::UmaHistogramSparse("Net.ErrorCodesForImages2", -net_error);
-    }
     base::UmaHistogramSparse("Net.ErrorCodesForSubresources3", -net_error);
+  }
+
+  // TODO(crbug.com/1384451): This is a temporary metric for monitoring the
+  // launch of Isolated Web Apps over the course of 2023.
+  if (origin.scheme() == kIsolatedAppScheme) {
+    base::UmaHistogramSparse("Net.ErrorCodesForIsolatedAppScheme", -net_error);
   }
 }
 

@@ -7,11 +7,11 @@
 #include <algorithm>
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "mojo/public/cpp/bindings/callback_helpers.h"
 #include "net/base/address_list.h"
 #include "net/base/net_errors.h"
-#include "net/dns/dns_util.h"
+#include "net/dns/dns_names_util.h"
 #include "net/dns/host_resolver_system_task.h"
 #include "net/log/net_log_source_type.h"
 #include "net/log/net_log_with_source.h"
@@ -36,12 +36,12 @@ SystemDnsResolverMojoImpl::SystemDnsResolverMojoImpl() {
 
 // network::mojom::SystemDnsResolver impl:
 void SystemDnsResolverMojoImpl::Resolve(
-    const absl::optional<std::string>& hostname,
+    const std::optional<std::string>& hostname,
     net::AddressFamily addr_family,
     int32_t flags,
     uint64_t network,
     ResolveCallback callback) {
-  if (hostname && !net::IsValidUnrestrictedDNSDomain(*hostname)) {
+  if (hostname && !net::dns_names_util::IsValidDnsName(*hostname)) {
     std::move(callback).Run(net::AddressList(), 0, net::ERR_NAME_NOT_RESOLVED);
     return;
   }

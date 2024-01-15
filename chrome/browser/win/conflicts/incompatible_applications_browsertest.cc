@@ -3,21 +3,19 @@
 // found in the LICENSE file.
 
 #include "base/base_paths.h"
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/path_service.h"
 #include "base/run_loop.h"
 #include "base/scoped_native_library.h"
-#include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/bind.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/test_reg_util_win.h"
 #include "base/threading/thread_restrictions.h"
 #include "base/win/win_util.h"
-#include "base/win/windows_version.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/win/conflicts/incompatible_applications_updater.h"
 #include "chrome/browser/win/conflicts/module_database.h"
@@ -134,9 +132,7 @@ class IncompatibleApplicationsBrowserTest : public InProcessBrowserTest {
 
     std::string contents;
     ASSERT_TRUE(module_list.SerializeToString(&contents));
-    ASSERT_EQ(base::WriteFile(GetModuleListPath(), contents.data(),
-                              static_cast<int>(contents.size())),
-              static_cast<int>(contents.size()));
+    ASSERT_TRUE(base::WriteFile(GetModuleListPath(), contents));
   }
 
   // Registers an uninstallation entry for the third-party application, and
@@ -146,12 +142,11 @@ class IncompatibleApplicationsBrowserTest : public InProcessBrowserTest {
     // should be a build-system dependency or a module that is present on any
     // Windows machine.
     static constexpr wchar_t kTestDllName[] = L"conflicts_dll.dll";
-    static constexpr wchar_t kRegistryKeyPathFormat[] =
-        L"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\%ls";
 
     // Note: Using the application name for the product id.
     const std::wstring registry_key_path =
-        base::StringPrintf(kRegistryKeyPathFormat, kApplicationName);
+        L"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\" +
+        std::wstring(kApplicationName);
     base::win::RegKey registry_key(HKEY_CURRENT_USER, registry_key_path.c_str(),
                                    KEY_WRITE);
 
@@ -204,9 +199,6 @@ constexpr wchar_t IncompatibleApplicationsBrowserTest::kApplicationName[];
 // page is shown after a browser crash.
 IN_PROC_BROWSER_TEST_F(IncompatibleApplicationsBrowserTest,
                        InjectIncompatibleDLL) {
-  if (base::win::GetVersion() < base::win::Version::WIN10)
-    return;
-
   // Create the observer early so the change is guaranteed to be observed.
   auto incompatible_applications_observer =
       std::make_unique<IncompatibleApplicationsObserver>();
@@ -217,9 +209,6 @@ IN_PROC_BROWSER_TEST_F(IncompatibleApplicationsBrowserTest,
       base::BindLambdaForTesting([module_list_path = GetModuleListPath(),
                                   quit_closure = run_loop.QuitClosure()]() {
         ModuleDatabase* module_database = ModuleDatabase::GetInstance();
-
-        // Speed up the test.
-        module_database->ForceStartInspection();
 
         // Simulate the download of the module list component.
         module_database->third_party_conflicts_manager()->LoadModuleList(

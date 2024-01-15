@@ -30,7 +30,7 @@
 #include <string>
 #include <type_traits>
 
-#include "base/threading/platform_thread.h"
+#include "components/gwp_asan/common/allocation_info.h"
 
 namespace gwp_asan {
 namespace internal {
@@ -91,21 +91,6 @@ class AllocatorState {
   struct SlotMetadata {
     SlotMetadata();
 
-    // Information saved for allocations and deallocations.
-    struct AllocationInfo {
-      // (De)allocation thread id or base::kInvalidThreadId if no (de)allocation
-      // occurred.
-      uint64_t tid = base::kInvalidThreadId;
-      // Length used to encode the packed stack trace.
-      uint16_t trace_len = 0;
-      // Whether a stack trace has been collected for this (de)allocation.
-      bool trace_collected = false;
-
-      static_assert(std::numeric_limits<decltype(trace_len)>::max() >=
-                        kMaxPackedTraceLength - 1,
-                    "trace_len can hold all possible length values.");
-    };
-
     // Size of the allocation
     size_t alloc_size = 0;
     // The allocation address.
@@ -117,6 +102,11 @@ class AllocatorState {
     // stack trace is stored immediately after the allocation stack trace to
     // optimize on space.
     uint8_t stack_trace_pool[kMaxPackedTraceLength];
+
+    static_assert(
+        std::numeric_limits<decltype(AllocationInfo::trace_len)>::max() >=
+            kMaxPackedTraceLength,
+        "AllocationInfo::trace_len can hold all possible length values.");
 
     AllocationInfo alloc;
     AllocationInfo dealloc;

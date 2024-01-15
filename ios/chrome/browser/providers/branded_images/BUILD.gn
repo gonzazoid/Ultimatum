@@ -3,7 +3,6 @@
 # found in the LICENSE file.
 
 source_set("chromium_branded_images") {
-  configs += [ "//build/config/compiler:enable_arc" ]
   sources = [ "chromium_branded_images.mm" ]
   deps = [
     "resources:chromium_ios_made",
@@ -13,6 +12,7 @@ source_set("chromium_branded_images") {
     "resources:download_drivium",
     "resources:password_suggestion_key",
     "//ios/chrome/app/theme",
+    "//ios/chrome/browser/shared/ui/symbols",
     "//ios/public/provider/chrome/browser/branded_images:branded_images_api",
     "//ui/base",
   ]

@@ -4,71 +4,76 @@
 
 #include "components/viz/common/gpu/metal_context_provider.h"
 
+#include <Foundation/Foundation.h>
 #import <Metal/Metal.h>
 
-#include "base/bind.h"
+#include <memory>
+
+#include "base/functional/bind.h"
 #include "base/logging.h"
-#include "base/mac/scoped_nsobject.h"
+#include "base/memory/ptr_util.h"
 #include "base/memory/ref_counted.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/synchronization/waitable_event.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "components/metal_util/device.h"
-#include "components/metal_util/test_shader.h"
-#include "components/viz/common/gpu/metal_api_proxy.h"
-#include "third_party/skia/include/gpu/GrDirectContext.h"
+#include "third_party/skia/include/gpu/graphite/Context.h"
+#include "third_party/skia/include/gpu/graphite/mtl/MtlBackendContext.h"
+#include "third_party/skia/include/gpu/graphite/mtl/MtlGraphiteUtils.h"
 
 namespace viz {
 
-namespace {
-
-struct MetalContextProviderImpl : public MetalContextProvider {
- public:
-  explicit MetalContextProviderImpl(id<MTLDevice> device,
-                                    const GrContextOptions& context_options) {
-    device_.reset([[MTLDeviceProxy alloc] initWithDevice:device]);
-    command_queue_.reset([device_ newCommandQueue]);
-
-    gr_context_ =
-        GrDirectContext::MakeMetal(device_, command_queue_, context_options);
-    DCHECK(gr_context_);
-  }
-
-  MetalContextProviderImpl(const MetalContextProviderImpl&) = delete;
-  MetalContextProviderImpl& operator=(const MetalContextProviderImpl&) = delete;
-
-  ~MetalContextProviderImpl() override {
-    // Because there are no guarantees that |device_| will not outlive |this|,
-    // un-set the progress reporter on |device_|.
-    [device_ setProgressReporter:nullptr];
-  }
-  void SetProgressReporter(gl::ProgressReporter* progress_reporter) override {
-    [device_ setProgressReporter:progress_reporter];
-  }
-  GrDirectContext* GetGrContext() override { return gr_context_.get(); }
-  metal::MTLDevicePtr GetMTLDevice() override { return device_.get(); }
-
- private:
-  base::scoped_nsobject<MTLDeviceProxy> device_;
-  base::scoped_nsprotocol<id<MTLCommandQueue>> command_queue_;
-  sk_sp<GrDirectContext> gr_context_;
+struct MetalContextProvider::ObjCStorage {
+  id<MTLDevice> __strong device;
+  std::unique_ptr<skgpu::graphite::Context> graphite_context;
 };
 
-}  // namespace
+MetalContextProvider::MetalContextProvider(id<MTLDevice> device)
+    : objc_storage_(std::make_unique<ObjCStorage>()) {
+  objc_storage_->device = device;
+  CHECK(objc_storage_->device);
+}
+
+MetalContextProvider::~MetalContextProvider() = default;
 
 // static
-std::unique_ptr<MetalContextProvider> MetalContextProvider::Create(
-    const GrContextOptions& context_options) {
+std::unique_ptr<MetalContextProvider> MetalContextProvider::Create() {
   // First attempt to find a low power device to use.
-  base::scoped_nsprotocol<id<MTLDevice>> device_to_use(
-      metal::CreateDefaultDevice());
-  if (!device_to_use) {
+  id<MTLDevice> device = metal::GetDefaultDevice();
+  if (!device) {
     DLOG(ERROR) << "Failed to find MTLDevice.";
     return nullptr;
   }
-  return std::make_unique<MetalContextProviderImpl>(device_to_use.get(),
-                                                    context_options);
+  return base::WrapUnique(new MetalContextProvider(std::move(device)));
+}
+
+bool MetalContextProvider::InitializeGraphiteContext(
+    const skgpu::graphite::ContextOptions& options) {
+  CHECK(!objc_storage_->graphite_context);
+  CHECK(objc_storage_->device);
+
+  skgpu::graphite::MtlBackendContext backend_context = {};
+  // ARC note: MtlBackendContext contains two owning smart pointers of CFTypeRef
+  // so give them owning references.
+  backend_context.fDevice.reset(CFBridgingRetain(objc_storage_->device));
+  backend_context.fQueue.reset(
+      CFBridgingRetain([objc_storage_->device newCommandQueue]));
+  objc_storage_->graphite_context =
+      skgpu::graphite::ContextFactory::MakeMetal(backend_context, options);
+  if (!objc_storage_->graphite_context) {
+    DLOG(ERROR) << "Failed to create Graphite Context for Metal";
+    return false;
+  }
+
+  return true;
+}
+
+skgpu::graphite::Context* MetalContextProvider::GetGraphiteContext() {
+  return objc_storage_->graphite_context.get();
+}
+
+id<MTLDevice> MetalContextProvider::GetMTLDevice() {
+  return objc_storage_->device;
 }
 
 }  // namespace viz

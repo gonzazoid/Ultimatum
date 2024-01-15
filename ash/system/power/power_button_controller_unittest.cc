@@ -14,12 +14,12 @@
 #include "ash/system/power/power_button_controller_test_api.h"
 #include "ash/system/power/power_button_menu_item_view.h"
 #include "ash/system/power/power_button_menu_view.h"
+#include "ash/system/power/power_button_menu_view_util.h"
 #include "ash/system/power/power_button_test_base.h"
 #include "ash/test_media_client.h"
 #include "ash/touch/touch_devices_controller.h"
 #include "ash/wm/lock_state_controller_test_api.h"
-#include "ash/wm/tablet_mode/tablet_mode_controller.h"
-#include "ash/wm/test_session_state_animator.h"
+#include "ash/wm/test/test_session_state_animator.h"
 #include "ash/wm/window_util.h"
 #include "base/command_line.h"
 #include "base/json/json_writer.h"
@@ -28,6 +28,7 @@
 #include "chromeos/dbus/power/fake_power_manager_client.h"
 #include "chromeos/dbus/power_manager/suspend.pb.h"
 #include "ui/compositor/scoped_animation_duration_scale_mode.h"
+#include "ui/display/screen.h"
 #include "ui/display/test/display_manager_test_api.h"
 #include "ui/events/event.h"
 #include "ui/events/test/event_generator.h"
@@ -125,7 +126,7 @@ class PowerButtonControllerTest : public PowerButtonTestBase {
   // Press the power button to show the menu.
   void OpenPowerButtonMenu() {
     PressPowerButton();
-    if (Shell::Get()->tablet_mode_controller()->InTabletMode()) {
+    if (display::Screen::GetScreen()->InTabletMode()) {
       EXPECT_TRUE(power_button_test_api_->PowerButtonMenuTimerIsRunning());
       ASSERT_TRUE(power_button_test_api_->TriggerPowerButtonMenuTimeout());
     }
@@ -1080,34 +1081,66 @@ TEST_F(PowerButtonControllerTest, PartiallyShownMenuInTabletMode) {
   EXPECT_FALSE(power_manager_client()->backlights_forced_off());
 }
 
+TEST_F(PowerButtonControllerTest, PowerMenuItemsInTabletKiosk) {
+  ClearLogin();
+  SimulateKioskMode(user_manager::USER_TYPE_WEB_KIOSK_APP);
+  SetCanLockScreen(false);
+
+  EnableTabletMode(true);
+
+  OpenPowerButtonMenu();
+
+  EXPECT_TRUE(power_button_test_api_->MenuHasPowerOffItem());
+  EXPECT_TRUE(power_button_test_api_->MenuHasSignOutItem());
+  EXPECT_FALSE(power_button_test_api_->MenuHasLockScreenItem());
+  EXPECT_FALSE(power_button_test_api_->MenuHasCaptureModeItem());
+  EXPECT_FALSE(power_button_test_api_->MenuHasFeedbackItem());
+}
+
+TEST_F(PowerButtonControllerTest, PowerMenuItemsInLaptopKiosk) {
+  ClearLogin();
+  SimulateKioskMode(user_manager::USER_TYPE_WEB_KIOSK_APP);
+  SetCanLockScreen(false);
+
+  EnableTabletMode(false);
+
+  OpenPowerButtonMenu();
+
+  EXPECT_TRUE(power_button_test_api_->MenuHasPowerOffItem());
+  EXPECT_TRUE(power_button_test_api_->MenuHasSignOutItem());
+  EXPECT_FALSE(power_button_test_api_->MenuHasLockScreenItem());
+  EXPECT_FALSE(power_button_test_api_->MenuHasCaptureModeItem());
+  EXPECT_FALSE(power_button_test_api_->MenuHasFeedbackItem());
+}
+
 class PowerButtonControllerWithPositionTest
     : public PowerButtonControllerTest,
       public testing::WithParamInterface<PowerButtonPosition> {
  public:
   PowerButtonControllerWithPositionTest() : power_button_position_(GetParam()) {
-    base::DictionaryValue position_info;
+    base::Value::Dict position_info;
     switch (power_button_position_) {
       case PowerButtonPosition::LEFT:
-        position_info.SetStringKey(PowerButtonController::kEdgeField,
-                                   PowerButtonController::kLeftEdge);
+        position_info.Set(PowerButtonController::kEdgeField,
+                          PowerButtonController::kLeftEdge);
         break;
       case PowerButtonPosition::RIGHT:
-        position_info.SetStringKey(PowerButtonController::kEdgeField,
-                                   PowerButtonController::kRightEdge);
+        position_info.Set(PowerButtonController::kEdgeField,
+                          PowerButtonController::kRightEdge);
         break;
       case PowerButtonPosition::TOP:
-        position_info.SetStringKey(PowerButtonController::kEdgeField,
-                                   PowerButtonController::kTopEdge);
+        position_info.Set(PowerButtonController::kEdgeField,
+                          PowerButtonController::kTopEdge);
         break;
       case PowerButtonPosition::BOTTOM:
-        position_info.SetStringKey(PowerButtonController::kEdgeField,
-                                   PowerButtonController::kBottomEdge);
+        position_info.Set(PowerButtonController::kEdgeField,
+                          PowerButtonController::kBottomEdge);
         break;
       default:
         return;
     }
-    position_info.SetDoubleKey(PowerButtonController::kPositionField,
-                               kPowerButtonPercentage);
+    position_info.Set(PowerButtonController::kPositionField,
+                      kPowerButtonPercentage);
 
     std::string json_position_info;
     base::JSONWriter::Write(position_info, &json_position_info);
@@ -1127,7 +1160,7 @@ class PowerButtonControllerWithPositionTest
 
   // Returns true if it is in tablet mode.
   bool IsTabletMode() const {
-    return Shell::Get()->tablet_mode_controller()->InTabletMode();
+    return display::Screen::GetScreen()->InTabletMode();
   }
 
   // Returns true if the menu is at the center of the display.
@@ -1170,7 +1203,7 @@ TEST_P(PowerButtonControllerWithPositionTest,
   EXPECT_TRUE(IsMenuCentered());
   TapToDismissPowerButtonMenu();
 
-  int animation_transform = PowerButtonMenuView::kMenuViewTransformDistanceDp;
+  int animation_transform = kPowerButtonMenuTransformDistanceDp;
   EnableTabletMode(true);
   EXPECT_TRUE(IsTabletMode());
   OpenPowerButtonMenu();
@@ -1363,10 +1396,9 @@ TEST_P(PowerButtonControllerWithPositionTest, AdjustMenuShownForDisplaySize) {
       power_button_test_api_->GetMenuBoundsInScreen()));
 }
 
-// Disabled due to consistent failures. http://crbug.com/1286199
 // Tests that a power button press before the menu is fully shown will not
 // create a new menu.
-TEST_F(PowerButtonControllerTest, DISABLED_LegacyPowerButtonIgnoreExtraPress) {
+TEST_F(PowerButtonControllerTest, LegacyPowerButtonIgnoreExtraPress) {
   Initialize(ButtonType::LEGACY, LoginStatus::USER);
 
   // Enable animations so that we can make sure that they occur.

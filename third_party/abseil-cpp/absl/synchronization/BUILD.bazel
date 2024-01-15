@@ -21,7 +21,14 @@ load(
     "ABSL_TEST_COPTS",
 )
 
-package(default_visibility = ["//visibility:public"])
+package(
+    default_visibility = ["//visibility:private"],
+    features = [
+        "header_modules",
+        "layering_check",
+        "parse_headers",
+    ],
+)
 
 licenses(["notice"])
 
@@ -38,9 +45,6 @@ cc_library(
         "//conditions:default": [],
     }),
     linkopts = ABSL_DEFAULT_LINKOPTS,
-    visibility = [
-        "//absl:__subpackages__",
-    ],
     deps = [
         "//absl/base",
         "//absl/base:base_internal",
@@ -53,16 +57,34 @@ cc_library(
 
 cc_library(
     name = "kernel_timeout_internal",
+    srcs = ["internal/kernel_timeout.cc"],
     hdrs = ["internal/kernel_timeout.h"],
     copts = ABSL_DEFAULT_COPTS,
     linkopts = ABSL_DEFAULT_LINKOPTS,
     visibility = [
-        "//absl/synchronization:__pkg__",
     ],
     deps = [
+        "//absl/base",
+        "//absl/base:config",
         "//absl/base:core_headers",
         "//absl/base:raw_logging_internal",
         "//absl/time",
+    ],
+)
+
+cc_test(
+    name = "kernel_timeout_internal_test",
+    srcs = ["internal/kernel_timeout_test.cc"],
+    copts = ABSL_TEST_COPTS,
+    flaky = 1,
+    linkopts = ABSL_DEFAULT_LINKOPTS,
+    deps = [
+        ":kernel_timeout_internal",
+        "//absl/base:config",
+        "//absl/random",
+        "//absl/time",
+        "@com_google_googletest//:gtest",
+        "@com_google_googletest//:gtest_main",
     ],
 )
 
@@ -72,8 +94,13 @@ cc_library(
         "barrier.cc",
         "blocking_counter.cc",
         "internal/create_thread_identity.cc",
+        "internal/futex_waiter.cc",
         "internal/per_thread_sem.cc",
-        "internal/waiter.cc",
+        "internal/pthread_waiter.cc",
+        "internal/sem_waiter.cc",
+        "internal/stdcpp_waiter.cc",
+        "internal/waiter_base.cc",
+        "internal/win32_waiter.cc",
         "mutex.cc",
         "notification.cc",
     ],
@@ -82,8 +109,14 @@ cc_library(
         "blocking_counter.h",
         "internal/create_thread_identity.h",
         "internal/futex.h",
+        "internal/futex_waiter.h",
         "internal/per_thread_sem.h",
+        "internal/pthread_waiter.h",
+        "internal/sem_waiter.h",
+        "internal/stdcpp_waiter.h",
         "internal/waiter.h",
+        "internal/waiter_base.h",
+        "internal/win32_waiter.h",
         "mutex.h",
         "notification.h",
     ],
@@ -94,11 +127,12 @@ cc_library(
         "//absl:wasm": [],
         "//conditions:default": ["-pthread"],
     }) + ABSL_DEFAULT_LINKOPTS,
+    visibility = ["//visibility:public"],
     deps = [
         ":graphcycles_internal",
         ":kernel_timeout_internal",
-        "//absl/base:atomic_hook",
         "//absl/base",
+        "//absl/base:atomic_hook",
         "//absl/base:base_internal",
         "//absl/base:config",
         "//absl/base:core_headers",
@@ -120,11 +154,12 @@ cc_test(
     copts = ABSL_TEST_COPTS,
     linkopts = ABSL_DEFAULT_LINKOPTS,
     tags = [
-        "no_test_wasm",
+        "no_test_wasm",  # b/122473323
     ],
     deps = [
         ":synchronization",
         "//absl/time",
+        "@com_google_googletest//:gtest",
         "@com_google_googletest//:gtest_main",
     ],
 )
@@ -136,11 +171,12 @@ cc_test(
     copts = ABSL_TEST_COPTS,
     linkopts = ABSL_DEFAULT_LINKOPTS,
     tags = [
-        "no_test_wasm",
+        "no_test_wasm",  # b/122473323
     ],
     deps = [
         ":synchronization",
         "//absl/time",
+        "@com_google_googletest//:gtest",
         "@com_google_googletest//:gtest_main",
     ],
 )
@@ -152,10 +188,10 @@ cc_binary(
     copts = ABSL_TEST_COPTS,
     linkopts = ABSL_DEFAULT_LINKOPTS,
     tags = ["benchmark"],
-    visibility = ["//visibility:private"],
     deps = [
         ":synchronization",
         ":thread_pool",
+        "//absl/base:no_destructor",
         "@com_github_google_benchmark//:benchmark_main",
     ],
 )
@@ -169,7 +205,9 @@ cc_test(
     deps = [
         ":graphcycles_internal",
         "//absl/base:core_headers",
-        "//absl/base:raw_logging_internal",
+        "//absl/log",
+        "//absl/log:check",
+        "@com_google_googletest//:gtest",
         "@com_google_googletest//:gtest_main",
     ],
 )
@@ -186,6 +224,7 @@ cc_test(
         ":graphcycles_internal",
         "//absl/base:raw_logging_internal",
         "@com_github_google_benchmark//:benchmark_main",
+        "@com_google_googletest//:gtest",
     ],
 )
 
@@ -200,6 +239,7 @@ cc_library(
     deps = [
         ":synchronization",
         "//absl/base:core_headers",
+        "//absl/functional:any_invocable",
     ],
 )
 
@@ -208,6 +248,7 @@ cc_test(
     size = "large",
     srcs = ["mutex_test.cc"],
     copts = ABSL_TEST_COPTS,
+    flaky = 1,
     linkopts = ABSL_DEFAULT_LINKOPTS,
     shard_count = 25,
     deps = [
@@ -216,9 +257,24 @@ cc_test(
         "//absl/base",
         "//absl/base:config",
         "//absl/base:core_headers",
-        "//absl/base:raw_logging_internal",
+        "//absl/log",
+        "//absl/log:check",
         "//absl/memory",
         "//absl/time",
+        "@com_google_googletest//:gtest",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_test(
+    name = "mutex_method_pointer_test",
+    srcs = ["mutex_method_pointer_test.cc"],
+    copts = ABSL_TEST_COPTS,
+    linkopts = ABSL_DEFAULT_LINKOPTS,
+    deps = [
+        ":synchronization",
+        "//absl/base:config",
+        "@com_google_googletest//:gtest",
         "@com_google_googletest//:gtest_main",
     ],
 )
@@ -230,13 +286,13 @@ cc_library(
     copts = ABSL_TEST_COPTS,
     linkopts = ABSL_DEFAULT_LINKOPTS,
     visibility = [
-        "//absl/synchronization:__pkg__",
     ],
     deps = [
         ":synchronization",
         ":thread_pool",
         "//absl/base",
         "//absl/base:config",
+        "//absl/base:no_destructor",
         "@com_github_google_benchmark//:benchmark_main",
     ],
     alwayslink = 1,
@@ -247,7 +303,6 @@ cc_binary(
     testonly = 1,
     copts = ABSL_DEFAULT_COPTS,
     linkopts = ABSL_DEFAULT_LINKOPTS,
-    visibility = ["//visibility:private"],
     deps = [
         ":mutex_benchmark_common",
     ],
@@ -258,11 +313,13 @@ cc_test(
     size = "small",
     srcs = ["notification_test.cc"],
     copts = ABSL_TEST_COPTS,
+    flaky = 1,
     linkopts = ABSL_DEFAULT_LINKOPTS,
     tags = ["no_test_lexan"],
     deps = [
         ":synchronization",
         "//absl/time",
+        "@com_google_googletest//:gtest",
         "@com_google_googletest//:gtest_main",
     ],
 )
@@ -273,6 +330,8 @@ cc_library(
     srcs = ["internal/per_thread_sem_test.cc"],
     copts = ABSL_TEST_COPTS,
     linkopts = ABSL_DEFAULT_LINKOPTS,
+    visibility = [
+    ],
     deps = [
         ":synchronization",
         "//absl/base",
@@ -302,6 +361,24 @@ cc_test(
 )
 
 cc_test(
+    name = "waiter_test",
+    srcs = ["internal/waiter_test.cc"],
+    copts = ABSL_TEST_COPTS,
+    flaky = 1,
+    linkopts = ABSL_DEFAULT_LINKOPTS,
+    deps = [
+        ":kernel_timeout_internal",
+        ":synchronization",
+        ":thread_pool",
+        "//absl/base:config",
+        "//absl/random",
+        "//absl/time",
+        "@com_google_googletest//:gtest",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_test(
     name = "lifetime_test",
     srcs = [
         "lifetime_test.cc",
@@ -315,6 +392,6 @@ cc_test(
     deps = [
         ":synchronization",
         "//absl/base:core_headers",
-        "//absl/base:raw_logging_internal",
+        "//absl/log:check",
     ],
 )

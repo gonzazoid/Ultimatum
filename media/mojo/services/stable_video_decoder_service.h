@@ -53,6 +53,8 @@ class MEDIA_MOJO_EXPORT StableVideoDecoderService
       public mojom::MediaLog {
  public:
   StableVideoDecoderService(
+      mojo::PendingRemote<stable::mojom::StableVideoDecoderTracker>
+          tracker_remote,
       std::unique_ptr<mojom::VideoDecoder> dst_video_decoder,
       MojoCdmServiceContext* cdm_service_context);
   StableVideoDecoderService(const StableVideoDecoderService&) = delete;
@@ -94,6 +96,16 @@ class MEDIA_MOJO_EXPORT StableVideoDecoderService
   void AddLogRecord(const MediaLogRecord& event) final;
 
  private:
+  void OnInitializeDone(InitializeCallback init_cb,
+                        bool needs_transcryption,
+                        const DecoderStatus& status,
+                        bool needs_bitstream_conversion,
+                        int32_t max_decode_requests,
+                        VideoDecoderType decoder_type);
+
+  mojo::Remote<stable::mojom::StableVideoDecoderTracker> tracker_remote_
+      GUARDED_BY_CONTEXT(sequence_checker_);
+
   // Incoming calls from the |dst_video_decoder_| to
   // |video_decoder_client_receiver_| are forwarded to
   // |stable_video_decoder_client_remote_|.

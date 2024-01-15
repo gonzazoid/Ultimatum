@@ -4,10 +4,11 @@
 
 #include "extensions/browser/api/web_request/web_request_resource_type.h"
 
+#include <string_view>
+
 #include "base/check_op.h"
 #include "base/notreached.h"
 #include "base/numerics/safe_conversions.h"
-#include "extensions/browser/api/web_request/web_request_info.h"
 #include "services/network/public/mojom/fetch_api.mojom-shared.h"
 #include "url/gurl.h"
 
@@ -98,6 +99,10 @@ WebRequestResourceType ToWebRequestResourceType(
     case network::mojom::RequestDestination::kManifest:
     case network::mojom::RequestDestination::kPaintWorklet:
     case network::mojom::RequestDestination::kWebIdentity:
+    // The compression dictionary has not been exposed to extensions yet.
+    // We could do so if the need arises.
+    case network::mojom::RequestDestination::kDictionary:
+    case network::mojom::RequestDestination::kSpeculationRules:
       return WebRequestResourceType::OTHER;
   }
   NOTREACHED();
@@ -111,7 +116,7 @@ const char* WebRequestResourceTypeToString(WebRequestResourceType type) {
   return kResourceTypes[index].name;
 }
 
-bool ParseWebRequestResourceType(base::StringPiece text,
+bool ParseWebRequestResourceType(std::string_view text,
                                  WebRequestResourceType* type) {
   for (size_t i = 0; i < kResourceTypesLength; ++i) {
     if (text == kResourceTypes[i].name) {

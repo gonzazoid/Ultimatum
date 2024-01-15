@@ -5,10 +5,11 @@
 #ifndef CHROME_BROWSER_UI_VIEWS_SYNC_BUBBLE_SYNC_PROMO_SIGNIN_BUTTON_VIEW_H_
 #define CHROME_BROWSER_UI_VIEWS_SYNC_BUBBLE_SYNC_PROMO_SIGNIN_BUTTON_VIEW_H_
 
+#include <optional>
+
 #include "base/memory/raw_ptr.h"
-#include "chrome/browser/ui/views/hover_button.h"
+#include "chrome/browser/ui/views/controls/hover_button.h"
 #include "components/signin/public/identity_manager/account_info.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/views/controls/button/label_button.h"
 #include "ui/views/metadata/view_factory.h"
@@ -18,15 +19,14 @@
 // account information (avatar image and email) and allows the user to
 // sign in to Chrome or to enable sync.
 class BubbleSyncPromoSigninButtonView : public views::View {
+  METADATA_HEADER(BubbleSyncPromoSigninButtonView, views::View)
+
  public:
-  METADATA_HEADER(BubbleSyncPromoSigninButtonView);
-  // Create a non-personalized sign-in button.
+  // Create a non-personalized sign-in button with |button_style|.
   // |callback| is called every time the user interacts with this button.
-  // The button is prominent by default but can be made non-prominent by setting
-  // |prominent| to false.
   explicit BubbleSyncPromoSigninButtonView(
       views::Button::PressedCallback callback,
-      bool prominent = true);
+      ui::ButtonStyle button_style);
 
   // Creates a sign-in button personalized with the data from |account|.
   // |callback| is called every time the user interacts with this button.
@@ -40,10 +40,10 @@ class BubbleSyncPromoSigninButtonView : public views::View {
       const BubbleSyncPromoSigninButtonView&) = delete;
   ~BubbleSyncPromoSigninButtonView() override;
 
-  absl::optional<AccountInfo> account() const { return account_; }
+  std::optional<AccountInfo> account() const { return account_; }
 
  private:
-  const absl::optional<AccountInfo> account_;
+  const std::optional<AccountInfo> account_;
 };
 
 BEGIN_VIEW_BUILDER(, BubbleSyncPromoSigninButtonView, views::View)

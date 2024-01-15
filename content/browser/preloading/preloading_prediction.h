@@ -5,11 +5,11 @@
 #ifndef CONTENT_BROWSER_PRELOADING_PRELOADING_PREDICTION_H_
 #define CONTENT_BROWSER_PRELOADING_PRELOADING_PREDICTION_H_
 
-#include "content/public/browser/preloading_data.h"
+#include <optional>
 
-#include "base/callback.h"
+#include "base/timer/elapsed_timer.h"
+#include "content/public/browser/preloading_data.h"
 #include "services/metrics/public/cpp/ukm_source_id.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
 
 namespace content {
@@ -35,14 +35,20 @@ class PreloadingPrediction {
   void RecordPreloadingPredictionUKMs(ukm::SourceId navigated_page_source_id);
 
   // Sets `is_accurate_prediction_` to true if `navigated_url` matches the URL
-  // predicate.
+  // predicate. It also records `time_to_next_navigation_`.
   void SetIsAccuratePrediction(const GURL& navigated_url);
 
-  explicit PreloadingPrediction(
+  bool IsAccuratePrediction() const { return is_accurate_prediction_; }
+
+  PreloadingPrediction(
       PreloadingPredictor predictor,
       double confidence,
       ukm::SourceId triggered_primary_page_source_id,
       base::RepeatingCallback<bool(const GURL&)> url_match_predicate);
+
+  // Called by the `PreloadingDataImpl` that owns this prediction, to check the
+  // validity of `predictor_type_`.
+  PreloadingPredictor predictor_type() const { return predictor_type_; }
 
  private:
   // Preloading predictor of this preloading prediction.
@@ -63,6 +69,62 @@ class PreloadingPrediction {
   // Set to true when preloading prediction was correct i.e., when the
   // navigation happens to the same predicted URL.
   bool is_accurate_prediction_ = false;
+
+  // Records when the preloading prediction was first recorded.
+  const base::ElapsedTimer elapsed_timer_;
+
+  // The time between the creation of the prediction and the start of the next
+  // navigation, whether accurate or not. The latency is reported as standard
+  // buckets, of 1.15 spacing.
+  std::optional<base::TimeDelta> time_to_next_navigation_;
+};
+
+// The output of many predictors is a logit/probability score. To use this score
+// for binary classification, we compare it to a threshold. If the score is
+// above the threshold, we classify the instance as positive; otherwise, we
+// classify it as negative. Threshold choice affects classifier precision and
+// recall. There is a trade-off between precision and recall. If we set the
+// threshold too low, we will have high precision but low recall. If we set the
+// threshold too high, we will have high recall but low precision. To choose the
+// best threshold, we can use ROC curves, precision-recall curves, or
+// logit-precision and logit-recall curves. `ExperimentalPreloadingPrediction`
+// helps us collect the UMA data required to achieve this.
+class ExperimentalPreloadingPrediction {
+ public:
+  ExperimentalPreloadingPrediction() = delete;
+  ExperimentalPreloadingPrediction(
+      base::StringPiece name,
+      PreloadingURLMatchCallback url_match_predicate,
+      float score,
+      float min_score,
+      float max_score,
+      size_t buckets);
+  ~ExperimentalPreloadingPrediction();
+
+  base::StringPiece PredictorName() const { return name_; }
+  bool IsAccuratePrediction() const { return is_accurate_prediction_; }
+  float Score() const { return score_; }
+
+  void SetIsAccuratePrediction(const GURL& navigated_url);
+  void RecordToUMA() const;
+
+ private:
+  // Experimental predictor's name
+  base::StringPiece name_;
+  // Set to true when preloading prediction was correct i.e., when the
+  // navigation happens to the same predicted URL.
+  bool is_accurate_prediction_ = false;
+  // The logit or probability score output of the predictor model.
+  float score_;
+  // The minimum value that the `score` can have
+  float min_score_;
+  // The maximum value that the `score` can have
+  float max_score_;
+  // The number of buckets that will be used for UMA aggregation. It must be
+  // less than 101.
+  size_t buckets_;
+  // The callback to verify that the navigated URL is a match.
+  PreloadingURLMatchCallback url_match_predicate_;
 };
 
 }  // namespace content

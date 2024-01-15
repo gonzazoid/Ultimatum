@@ -16,6 +16,7 @@
 #include "third_party/blink/renderer/core/testing/garbage_collected_script_wrappable.h"
 #include "third_party/blink/renderer/core/typed_arrays/dom_array_buffer.h"
 #include "third_party/blink/renderer/platform/bindings/dictionary_base.h"
+#include "third_party/blink/renderer/platform/testing/task_environment.h"
 
 namespace blink {
 
@@ -37,7 +38,8 @@ void TestToV8Traits(const V8TestingScope& scope,
     return;
   }
   String actual_string =
-      ToCoreString(actual->ToString(scope.GetContext()).ToLocalChecked());
+      ToCoreString(scope.GetIsolate(),
+                   actual->ToString(scope.GetContext()).ToLocalChecked());
   if (expected != actual_string) {
     ADD_FAILURE_AT(path, line_number)
         << "ToV8 returns an incorrect value.\n  Actual: "
@@ -47,6 +49,7 @@ void TestToV8Traits(const V8TestingScope& scope,
 }
 
 TEST(ToV8TraitsTest, Any) {
+  test::TaskEnvironment task_environment;
   const V8TestingScope scope;
   ScriptValue value(scope.GetIsolate(),
                     v8::Number::New(scope.GetIsolate(), 1234.0));
@@ -64,12 +67,79 @@ TEST(ToV8TraitsTest, Any) {
 }
 
 TEST(ToV8TraitsTest, Boolean) {
+  test::TaskEnvironment task_environment;
   const V8TestingScope scope;
   TEST_TOV8_TRAITS(scope, IDLBoolean, "true", true);
   TEST_TOV8_TRAITS(scope, IDLBoolean, "false", false);
 }
 
+TEST(ToV8TraitsTest, BigInt) {
+  test::TaskEnvironment task_environment;
+  const V8TestingScope scope;
+  uint64_t words[5];
+
+  // 0
+  TEST_TOV8_TRAITS(
+      scope, IDLBigint, "0",
+      BigInt(v8::BigInt::NewFromWords(scope.GetContext(), 0, 0, words)
+                 .ToLocalChecked()));
+  // +/- 1
+  words[0] = 1;
+  TEST_TOV8_TRAITS(
+      scope, IDLBigint, "1",
+      BigInt(v8::BigInt::NewFromWords(scope.GetContext(), 0, 1, words)
+                 .ToLocalChecked()));
+  TEST_TOV8_TRAITS(
+      scope, IDLBigint, "-1",
+      BigInt(v8::BigInt::NewFromWords(scope.GetContext(), 1, 1, words)
+                 .ToLocalChecked()));
+
+  // +/- 2^64
+  words[0] = 0;
+  words[1] = 1;
+  TEST_TOV8_TRAITS(
+      scope, IDLBigint, "18446744073709551616",
+      BigInt(v8::BigInt::NewFromWords(scope.GetContext(), 0, 2, words)
+                 .ToLocalChecked()));
+  TEST_TOV8_TRAITS(
+      scope, IDLBigint, "-18446744073709551616",
+      BigInt(v8::BigInt::NewFromWords(scope.GetContext(), 1, 2, words)
+                 .ToLocalChecked()));
+
+  // +/- 2^128
+  words[0] = 0;
+  words[1] = 0;
+  words[2] = 1;
+  TEST_TOV8_TRAITS(
+      scope, IDLBigint, "340282366920938463463374607431768211456",
+      BigInt(v8::BigInt::NewFromWords(scope.GetContext(), 0, 3, words)
+                 .ToLocalChecked()));
+  TEST_TOV8_TRAITS(
+      scope, IDLBigint, "-340282366920938463463374607431768211456",
+      BigInt(v8::BigInt::NewFromWords(scope.GetContext(), 1, 3, words)
+                 .ToLocalChecked()));
+
+  // +/- 2^320 - 1
+  uint64_t max = std::numeric_limits<uint64_t>::max();
+  for (int i = 0; i < 5; i++) {
+    words[i] = max;
+  }
+  TEST_TOV8_TRAITS(
+      scope, IDLBigint,
+      "213598703592091008239502170616955211460270452235665276994704160782221972"
+      "5780640550022962086936575",
+      BigInt(v8::BigInt::NewFromWords(scope.GetContext(), 0, 5, words)
+                 .ToLocalChecked()));
+  TEST_TOV8_TRAITS(
+      scope, IDLBigint,
+      "-21359870359209100823950217061695521146027045223566527699470416078222197"
+      "25780640550022962086936575",
+      BigInt(v8::BigInt::NewFromWords(scope.GetContext(), 1, 5, words)
+                 .ToLocalChecked()));
+}
+
 TEST(ToV8TraitsTest, Integer) {
+  test::TaskEnvironment task_environment;
   const V8TestingScope scope;
   // Test type matching
   // Integer
@@ -125,6 +195,7 @@ TEST(ToV8TraitsTest, Integer) {
 }
 
 TEST(ToV8TraitsTest, FloatAndDouble) {
+  test::TaskEnvironment task_environment;
   const V8TestingScope scope;
   TEST_TOV8_TRAITS(scope, IDLFloat, "0.5", static_cast<float>(0.5));
   TEST_TOV8_TRAITS(scope, IDLUnrestrictedFloat, "-0.5",
@@ -141,6 +212,7 @@ TEST(ToV8TraitsTest, FloatAndDouble) {
 }
 
 TEST(ToV8TraitsTest, String) {
+  test::TaskEnvironment task_environment;
   const V8TestingScope scope;
   const String string("string");
   const char* const charptr_string = "charptrString";
@@ -150,8 +222,8 @@ TEST(ToV8TraitsTest, String) {
   // DOMString
   TEST_TOV8_TRAITS(scope, IDLString, "string", string);
   TEST_TOV8_TRAITS(scope, IDLString, "charptrString", charptr_string);
-  TEST_TOV8_TRAITS(scope, IDLStringTreatNullAsEmptyString, "string", string);
-  TEST_TOV8_TRAITS(scope, IDLStringTreatNullAsEmptyString, "charptrString",
+  TEST_TOV8_TRAITS(scope, IDLStringLegacyNullToEmptyString, "string", string);
+  TEST_TOV8_TRAITS(scope, IDLStringLegacyNullToEmptyString, "charptrString",
                    charptr_string);
   // USVString
   TEST_TOV8_TRAITS(scope, IDLUSVString, "string", string);
@@ -161,10 +233,10 @@ TEST(ToV8TraitsTest, String) {
   TEST_TOV8_TRAITS(scope, IDLStringStringContextTrustedHTML, "charptrString",
                    charptr_string);
   TEST_TOV8_TRAITS(scope,
-                   IDLStringStringContextTrustedHTMLTreatNullAsEmptyString,
+                   IDLStringLegacyNullToEmptyStringStringContextTrustedHTML,
                    "string", string);
   TEST_TOV8_TRAITS(scope,
-                   IDLStringStringContextTrustedHTMLTreatNullAsEmptyString,
+                   IDLStringLegacyNullToEmptyStringStringContextTrustedHTML,
                    "charptrString", charptr_string);
   // [StringContext=TrustedScript] DOMString
   TEST_TOV8_TRAITS(scope, IDLStringStringContextTrustedScript, "string",
@@ -172,10 +244,10 @@ TEST(ToV8TraitsTest, String) {
   TEST_TOV8_TRAITS(scope, IDLStringStringContextTrustedScript, "charptrString",
                    charptr_string);
   TEST_TOV8_TRAITS(scope,
-                   IDLStringStringContextTrustedScriptTreatNullAsEmptyString,
+                   IDLStringLegacyNullToEmptyStringStringContextTrustedScript,
                    "string", string);
   TEST_TOV8_TRAITS(scope,
-                   IDLStringStringContextTrustedScriptTreatNullAsEmptyString,
+                   IDLStringLegacyNullToEmptyStringStringContextTrustedScript,
                    "charptrString", charptr_string);
   // [StringContext=TrustedScriptURL] USVString
   TEST_TOV8_TRAITS(scope, IDLUSVStringStringContextTrustedScriptURL, "string",
@@ -185,6 +257,7 @@ TEST(ToV8TraitsTest, String) {
 }
 
 TEST(ToV8TraitsTest, EmptyString) {
+  test::TaskEnvironment task_environment;
   const V8TestingScope scope;
   const String empty_string("");
   TEST_TOV8_TRAITS(scope, IDLString, "", empty_string);
@@ -193,6 +266,7 @@ TEST(ToV8TraitsTest, EmptyString) {
 }
 
 TEST(ToV8TraitsTest, Object) {
+  test::TaskEnvironment task_environment;
   const V8TestingScope scope;
   Vector<String> string_vector;
   string_vector.push_back("hello");
@@ -208,6 +282,7 @@ TEST(ToV8TraitsTest, Object) {
 }
 
 TEST(ToV8TraitsTest, Promise) {
+  test::TaskEnvironment task_environment;
   const V8TestingScope scope;
   ScriptPromise::InternalResolver resolver(scope.GetScriptState());
   ScriptPromise promise = resolver.Promise();
@@ -215,6 +290,7 @@ TEST(ToV8TraitsTest, Promise) {
 }
 
 TEST(ToV8TraitsTest, NotShared) {
+  test::TaskEnvironment task_environment;
   const V8TestingScope scope;
   auto not_shared = NotShared<DOMUint8Array>(DOMUint8Array::Create(2));
   not_shared->Data()[0] = static_cast<uint8_t>(0);
@@ -223,6 +299,7 @@ TEST(ToV8TraitsTest, NotShared) {
 }
 
 TEST(ToV8TraitsTest, MaybeShared) {
+  test::TaskEnvironment task_environment;
   const V8TestingScope scope;
   auto maybe_shared = MaybeShared<DOMInt8Array>(DOMInt8Array::Create(3));
   maybe_shared->Data()[0] = static_cast<int8_t>(-128);
@@ -233,6 +310,7 @@ TEST(ToV8TraitsTest, MaybeShared) {
 }
 
 TEST(ToV8TraitsTest, Vector) {
+  test::TaskEnvironment task_environment;
   const V8TestingScope scope;
   Vector<String> string_vector;
   string_vector.push_back("foo");
@@ -241,6 +319,7 @@ TEST(ToV8TraitsTest, Vector) {
 }
 
 TEST(ToV8TraitsTest, HeapVector) {
+  test::TaskEnvironment task_environment;
   const V8TestingScope scope;
   HeapVector<Member<GarbageCollectedScriptWrappable>> heap_vector;
   heap_vector.push_back(
@@ -253,15 +332,11 @@ TEST(ToV8TraitsTest, HeapVector) {
   const HeapVector<Member<GarbageCollectedScriptWrappable>>*
       const_garbage_collected_heap_vector = &heap_vector;
   TEST_TOV8_TRAITS(scope, IDLSequence<GarbageCollectedScriptWrappable>,
-                   "hoge,fuga", const_garbage_collected_heap_vector);
-
-  HeapVector<Member<GarbageCollectedScriptWrappable>>*
-      garbage_collected_heap_vector = &heap_vector;
-  TEST_TOV8_TRAITS(scope, IDLSequence<GarbageCollectedScriptWrappable>,
-                   "hoge,fuga", garbage_collected_heap_vector);
+                   "hoge,fuga", *const_garbage_collected_heap_vector);
 }
 
 TEST(ToV8TraitsTest, BasicIDLTypeVectors) {
+  test::TaskEnvironment task_environment;
   const V8TestingScope scope;
 
   Vector<int32_t> int32_vector;
@@ -304,6 +379,7 @@ TEST(ToV8TraitsTest, BasicIDLTypeVectors) {
 }
 
 TEST(ToV8TraitsTest, StringVectorVector) {
+  test::TaskEnvironment task_environment;
   const V8TestingScope scope;
 
   Vector<String> string_vector1;
@@ -338,6 +414,7 @@ TEST(ToV8TraitsTest, StringVectorVector) {
 }
 
 TEST(ToV8TraitsTest, ArrayAndSequence) {
+  test::TaskEnvironment task_environment;
   const V8TestingScope scope;
   DOMPointInit* dom_point_init1 = DOMPointInit::Create();
   dom_point_init1->setW(1.0);
@@ -390,6 +467,7 @@ TEST(ToV8TraitsTest, ArrayAndSequence) {
 }
 
 TEST(ToV8TraitsTest, PairVector) {
+  test::TaskEnvironment task_environment;
   const V8TestingScope scope;
   Vector<std::pair<String, int8_t>> pair_vector;
   pair_vector.push_back(std::make_pair("one", 1));
@@ -413,6 +491,7 @@ TEST(ToV8TraitsTest, PairVector) {
 }
 
 TEST(ToV8TraitsTest, PairHeapVector) {
+  test::TaskEnvironment task_environment;
   const V8TestingScope scope;
   HeapVector<std::pair<String, Member<GarbageCollectedScriptWrappable>>>
       pair_heap_vector;
@@ -434,21 +513,19 @@ TEST(ToV8TraitsTest, PairHeapVector) {
           .ToLocalChecked();
   EXPECT_TRUE(one->IsObject());
   EXPECT_EQ(String("foo"),
-            ToCoreString(one->ToString(scope.GetContext()).ToLocalChecked()));
+            ToCoreString(scope.GetIsolate(),
+                         one->ToString(scope.GetContext()).ToLocalChecked()));
   v8::Local<v8::Value> two =
       result->Get(scope.GetContext(), V8String(scope.GetIsolate(), "two"))
           .ToLocalChecked();
   EXPECT_TRUE(two->IsObject());
   EXPECT_EQ(String("bar"),
-            ToCoreString(two->ToString(scope.GetContext()).ToLocalChecked()));
-
-  HeapVector<std::pair<String, Member<GarbageCollectedScriptWrappable>>>*
-      garbage_collected_pair_heap_vector = &pair_heap_vector;
-  TEST_TOV8_TRAITS(scope, HeapRecord, "[object Object]",
-                   garbage_collected_pair_heap_vector);
+            ToCoreString(scope.GetIsolate(),
+                         two->ToString(scope.GetContext()).ToLocalChecked()));
 }
 
 TEST(ToV8TraitsTest, NullStringInputForNoneNullableType) {
+  test::TaskEnvironment task_environment;
   const V8TestingScope scope;
   const String null_string;
   TEST_TOV8_TRAITS(scope, IDLString, "", null_string);
@@ -457,6 +534,7 @@ TEST(ToV8TraitsTest, NullStringInputForNoneNullableType) {
 }
 
 TEST(ToV8TraitsTest, Nullable) {
+  test::TaskEnvironment task_environment;
   const V8TestingScope scope;
   // Nullable Boolean
   TEST_TOV8_TRAITS(scope, IDLNullable<IDLBoolean>, "null", absl::nullopt);
@@ -476,6 +554,7 @@ TEST(ToV8TraitsTest, Nullable) {
 }
 
 TEST(ToV8TraitsTest, NullableString) {
+  test::TaskEnvironment task_environment;
   const V8TestingScope scope;
   TEST_TOV8_TRAITS(scope, IDLNullable<IDLString>, "null", String());
   TEST_TOV8_TRAITS(scope, IDLNullable<IDLString>, "string", String("string"));
@@ -490,6 +569,7 @@ TEST(ToV8TraitsTest, NullableString) {
 }
 
 TEST(ToV8TraitsTest, NullableObject) {
+  test::TaskEnvironment task_environment;
   const V8TestingScope scope;
   TEST_TOV8_TRAITS(
       scope, IDLNullable<IDLObject>, "null",
@@ -510,6 +590,7 @@ TEST(ToV8TraitsTest, NullableObject) {
 }
 
 TEST(ToV8TraitsTest, NullableScriptWrappable) {
+  test::TaskEnvironment task_environment;
   const V8TestingScope scope;
   TEST_TOV8_TRAITS(scope, IDLNullable<EventTarget>, "null", nullptr);
   EventTarget* event_target = EventTarget::Create(scope.GetScriptState());
@@ -518,6 +599,7 @@ TEST(ToV8TraitsTest, NullableScriptWrappable) {
 }
 
 TEST(ToV8TraitsTest, NullableDictionary) {
+  test::TaskEnvironment task_environment;
   const V8TestingScope scope;
   // bindings::DictionaryBase
   TEST_TOV8_TRAITS(scope, IDLNullable<bindings::DictionaryBase>, "null",
@@ -529,6 +611,7 @@ TEST(ToV8TraitsTest, NullableDictionary) {
 }
 
 TEST(ToV8TraitsTest, NullableCallbackFunction) {
+  test::TaskEnvironment task_environment;
   const V8TestingScope scope;
   TEST_TOV8_TRAITS(scope, IDLNullable<V8CreateHTMLCallback>, "null", nullptr);
   V8CreateHTMLCallback* v8_create_html_callback =
@@ -538,6 +621,7 @@ TEST(ToV8TraitsTest, NullableCallbackFunction) {
 }
 
 TEST(ToV8TraitsTest, NullableCallbackInterface) {
+  test::TaskEnvironment task_environment;
   const V8TestingScope scope;
   TEST_TOV8_TRAITS(scope, IDLNullable<V8CreateHTMLCallback>, "null", nullptr);
   V8EventListener* v8_event_listener =
@@ -547,6 +631,7 @@ TEST(ToV8TraitsTest, NullableCallbackInterface) {
 }
 
 TEST(ToV8TraitsTest, NullableEnumeration) {
+  test::TaskEnvironment task_environment;
   const V8TestingScope scope;
   TEST_TOV8_TRAITS(scope, IDLNullable<V8AlignSetting>, "null", absl::nullopt);
   const absl::optional<V8AlignSetting> v8_align_setting =
@@ -556,6 +641,7 @@ TEST(ToV8TraitsTest, NullableEnumeration) {
 }
 
 TEST(ToV8TraitsTest, NullableArray) {
+  test::TaskEnvironment task_environment;
   const V8TestingScope scope;
   TEST_TOV8_TRAITS(scope, IDLNullable<IDLArray<DOMPointInit>>, "null",
                    absl::nullopt);
@@ -570,6 +656,7 @@ TEST(ToV8TraitsTest, NullableArray) {
 }
 
 TEST(ToV8TraitsTest, NullableDate) {
+  test::TaskEnvironment task_environment;
   const V8TestingScope scope;
   TEST_TOV8_TRAITS(scope, IDLNullable<IDLDate>, "null", absl::nullopt);
 
@@ -582,7 +669,8 @@ TEST(ToV8TraitsTest, NullableDate) {
           scope.GetScriptState(), absl::optional<base::Time>(expected_date))
           .ToLocal(&result));
   String actual_string =
-      ToCoreString(result->ToString(scope.GetContext()).ToLocalChecked());
+      ToCoreString(scope.GetIsolate(),
+                   result->ToString(scope.GetContext()).ToLocalChecked());
   base::Time actual_date;
   EXPECT_TRUE(
       base::Time::FromString(actual_string.Ascii().c_str(), &actual_date));
@@ -590,6 +678,7 @@ TEST(ToV8TraitsTest, NullableDate) {
 }
 
 TEST(ToV8TraitsTest, Union) {
+  test::TaskEnvironment task_environment;
   const V8TestingScope scope;
   const auto* usv_string =
       MakeGarbageCollected<V8UnionFileOrFormDataOrUSVString>(
@@ -599,6 +688,7 @@ TEST(ToV8TraitsTest, Union) {
 }
 
 TEST(ToV8TraitsTest, NullableUnion) {
+  test::TaskEnvironment task_environment;
   const V8TestingScope scope;
   TEST_TOV8_TRAITS(scope, IDLNullable<V8UnionFileOrFormDataOrUSVString>, "null",
                    nullptr);
@@ -610,6 +700,7 @@ TEST(ToV8TraitsTest, NullableUnion) {
 }
 
 TEST(ToV8TraitsTest, Optional) {
+  test::TaskEnvironment task_environment;
   const V8TestingScope scope;
   TEST_TOV8_TRAITS(scope, IDLOptional<DOMPointInit>, "undefined", nullptr);
   DOMPointInit* dom_point_init = DOMPointInit::Create();

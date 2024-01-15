@@ -32,10 +32,15 @@ class MockPlatformWindowDelegate : public PlatformWindowDelegate {
   MOCK_METHOD2(OnWindowStateChanged,
                void(PlatformWindowState old_state,
                     PlatformWindowState new_state));
-#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS_LACROS)
+#if BUILDFLAG(IS_LINUX)
   MOCK_METHOD1(OnWindowTiledStateChanged,
                void(WindowTiledEdges new_tiled_edges));
 #endif
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+  MOCK_METHOD2(OnFullscreenTypeChanged,
+               void(PlatformFullscreenType old_type,
+                    PlatformFullscreenType new_type));
+#endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
   MOCK_METHOD0(OnLostCapture, void());
   MOCK_METHOD1(OnAcceleratedWidgetAvailable,
                void(gfx::AcceleratedWidget widget));
@@ -48,6 +53,11 @@ class MockPlatformWindowDelegate : public PlatformWindowDelegate {
   MOCK_METHOD0(GetOwnedWindowAnchorAndRectInDIP,
                absl::optional<OwnedWindowAnchor>());
   MOCK_METHOD0(OnMouseEnter, void());
+  MOCK_METHOD1(OnOverviewModeChanged, void(bool overview));
+  MOCK_METHOD2(OnRotateFocus,
+               bool(PlatformWindowDelegate::RotateDirection, bool));
+  MOCK_METHOD0(CanMaximize, bool());
+  MOCK_METHOD0(CanFullscreen, bool());
 };
 
 bool operator==(const PlatformWindowDelegate::BoundsChange& a,

@@ -22,9 +22,9 @@
 #include "third_party/blink/public/common/mediastream/media_stream_controls.h"
 #include "third_party/blink/public/platform/web_string.h"
 #include "third_party/blink/public/web/modules/mediastream/media_stream_video_source.h"
+#include "third_party/blink/renderer/modules/mediastream/media_constraints.h"
 #include "third_party/blink/renderer/modules/mediastream/media_stream_constraints_util_sets.h"
 #include "third_party/blink/renderer/modules/mediastream/processed_local_audio_source.h"
-#include "third_party/blink/renderer/platform/mediastream/media_constraints.h"
 #include "third_party/blink/renderer/platform/mediastream/media_stream_audio_processor_options.h"
 #include "third_party/blink/renderer/platform/mediastream/media_stream_audio_source.h"
 #include "third_party/blink/renderer/platform/wtf/vector.h"
@@ -36,6 +36,7 @@ using blink::AudioProcessingProperties;
 using ConstraintSet = MediaTrackConstraintSetPlatform;
 using BooleanConstraint = blink::BooleanConstraint;
 using EchoCancellationType = AudioProcessingProperties::EchoCancellationType;
+using VoiceIsolationType = AudioProcessingProperties::VoiceIsolationType;
 using ProcessingType = AudioCaptureSettings::ProcessingType;
 using StringConstraint = blink::StringConstraint;
 
@@ -48,6 +49,8 @@ using BoolSet = blink::media_constraints::DiscreteSet<bool>;
 using DoubleRangeSet = blink::media_constraints::NumericRangeSet<double>;
 using EchoCancellationTypeSet =
     blink::media_constraints::DiscreteSet<EchoCancellationType>;
+using VoiceIsolationTypeSet =
+    blink::media_constraints::DiscreteSet<VoiceIsolationType>;
 using IntRangeSet = blink::media_constraints::NumericRangeSet<int>;
 using StringSet = blink::media_constraints::DiscreteSet<std::string>;
 
@@ -417,12 +420,22 @@ class EchoCancellationContainer {
     if (!has_active_source)
       return;
 
-    // If HW echo cancellation is used, reconfiguration is not supported and
-    // only the current values are allowed. Otherwise, allow all possible values
-    // for echo cancellation.
-    if (is_reconfiguration_allowed &&
+    // If HW echo cancellation is used, reconfiguration is not always supported
+    // and only the current values are allowed. Otherwise, allow all possible
+    // values for echo cancellation.
+    // TODO(crbug.com/1481032): Consider extending to other platforms. It is not
+    // known at the moment what OSes support this behavior.
+    const bool is_aec_reconfiguration_supported =
+#if BUILDFLAG(IS_CHROMEOS)
+        // ChromeOS is currently the only platform where we have confirmed
+        // support for simultaneous streams with and without hardware AEC on the
+        // same device.
+        true;
+#else
         properties.echo_cancellation_type !=
-            EchoCancellationType::kEchoCancellationSystem) {
+        EchoCancellationType::kEchoCancellationSystem;
+#endif
+    if (is_reconfiguration_allowed && is_aec_reconfiguration_supported) {
       return;
     }
 
@@ -479,12 +492,11 @@ class EchoCancellationContainer {
         GetDefaultValueForAudioProperties(echo_cancellation_constraint);
 
     properties->goog_auto_gain_control &= default_audio_processing_value;
-    properties->goog_experimental_auto_gain_control &=
-        default_audio_processing_value;
 
     properties->goog_experimental_echo_cancellation &=
         default_audio_processing_value;
     properties->goog_noise_suppression &= default_audio_processing_value;
+    properties->voice_isolation = VoiceIsolationType::kVoiceIsolationDefault;
     properties->goog_experimental_noise_suppression &=
         default_audio_processing_value;
     properties->goog_highpass_filter &= default_audio_processing_value;
@@ -646,45 +658,76 @@ class AutoGainControlContainer {
   const char* ApplyConstraintSet(const ConstraintSet& constraint_set) {
     BoolSet agc_set = blink::media_constraints::BoolSetFromConstraint(
         constraint_set.goog_auto_gain_control);
-    BoolSet experimentaL_agc_set =
-        blink::media_constraints::BoolSetFromConstraint(
-            constraint_set.goog_experimental_auto_gain_control);
-
     // Apply autoGainControl/googAutoGainControl constraint.
     allowed_values_ = allowed_values_.Intersection(agc_set);
-    if (IsEmpty())
-      return constraint_set.goog_auto_gain_control.GetName();
-    // Apply also googExperimentalAutoGainControl constraint.
-    allowed_values_ = allowed_values_.Intersection(experimentaL_agc_set);
-
-    return IsEmpty()
-               ? constraint_set.goog_experimental_auto_gain_control.GetName()
-               : nullptr;
+    return IsEmpty() ? constraint_set.goog_auto_gain_control.GetName()
+                     : nullptr;
   }
 
   std::tuple<double, bool> SelectSettingsAndScore(
       const ConstraintSet& constraint_set,
       bool default_setting) const {
     BooleanConstraint agc_constraint = constraint_set.goog_auto_gain_control;
-    BooleanConstraint experimental_agc_constraint =
-        constraint_set.goog_experimental_auto_gain_control;
 
-    if (agc_constraint.HasIdeal() || experimental_agc_constraint.HasIdeal()) {
-      bool agc_ideal =
-          agc_constraint.HasIdeal() ? agc_constraint.Ideal() : false;
-      bool experimentaL_agc_ideal = experimental_agc_constraint.HasIdeal()
-                                        ? experimental_agc_constraint.Ideal()
-                                        : false;
-
-      bool combined_ideal = agc_ideal || experimentaL_agc_ideal;
-      if (allowed_values_.Contains(combined_ideal))
-        return std::make_tuple(1.0, combined_ideal);
+    if (agc_constraint.HasIdeal()) {
+      bool agc_ideal = agc_constraint.Ideal();
+      if (allowed_values_.Contains(agc_ideal))
+        return std::make_tuple(1.0, agc_ideal);
     }
 
-    if (allowed_values_.is_universal())
+    if (allowed_values_.is_universal()) {
       return std::make_tuple(0.0, default_setting);
+    }
 
     return std::make_tuple(0.0, allowed_values_.FirstElement());
+  }
+
+  bool IsEmpty() const { return allowed_values_.IsEmpty(); }
+
+ private:
+  BoolSet allowed_values_;
+};
+
+class VoiceIsolationContainer {
+ public:
+  // Default constructor intended to temporarily create an empty object.
+  VoiceIsolationContainer(BoolSet allowed_values = BoolSet())
+      : allowed_values_(std::move(allowed_values)) {}
+
+  const char* ApplyConstraintSet(const ConstraintSet& constraint_set) {
+    BoolSet voice_isolation_set =
+        blink::media_constraints::BoolSetFromConstraint(
+            constraint_set.voice_isolation);
+    // Apply voice isolation constraint.
+    allowed_values_ = allowed_values_.Intersection(voice_isolation_set);
+    return IsEmpty() ? constraint_set.voice_isolation.GetName() : nullptr;
+  }
+
+  std::tuple<double, VoiceIsolationType> SelectSettingsAndScore(
+      const ConstraintSet& constraint_set,
+      VoiceIsolationType default_setting) const {
+    BooleanConstraint voice_isolation_constraint =
+        constraint_set.voice_isolation;
+
+    if (voice_isolation_constraint.HasIdeal()) {
+      VoiceIsolationType voice_isolation_type_ideal =
+          voice_isolation_constraint.Ideal()
+              ? VoiceIsolationType::kVoiceIsolationEnabled
+              : VoiceIsolationType::kVoiceIsolationDisabled;
+
+      return std::make_tuple(1.0, voice_isolation_type_ideal);
+    }
+
+    if (allowed_values_.is_universal()) {
+      return std::make_tuple(0.0, default_setting);
+    }
+
+    VoiceIsolationType voice_isolation_first =
+        allowed_values_.FirstElement()
+            ? VoiceIsolationType::kVoiceIsolationEnabled
+            : VoiceIsolationType::kVoiceIsolationDisabled;
+
+    return std::make_tuple(0.0, voice_isolation_first);
   }
 
   bool IsEmpty() const { return allowed_values_.IsEmpty(); }
@@ -741,6 +784,7 @@ class ProcessingBasedContainer {
         BoolSet(), /* goog_noise_suppression_set */
         BoolSet(), /* goog_experimental_noise_suppression_set */
         BoolSet(), /* goog_highpass_filter_set */
+        BoolSet(), /* voice_isolation_set */
         IntRangeSet::FromValue(GetSampleSize()),    /* sample_size_range */
         GetApmSupportedChannels(device_parameters), /* channels_set */
         IntRangeSet::FromValue(sample_rate_hz),     /* sample_rate_range */
@@ -767,6 +811,7 @@ class ProcessingBasedContainer {
         BoolSet({false}), /* goog_noise_suppression_set */
         BoolSet({false}), /* goog_experimental_noise_suppression_set */
         BoolSet({false}), /* goog_highpass_filter_set */
+        BoolSet(),        /* voice_isolation_set */
         IntRangeSet::FromValue(GetSampleSize()), /* sample_size_range */
         {device_parameters.channels()},          /* channels_set */
         IntRangeSet::FromValue(
@@ -793,6 +838,7 @@ class ProcessingBasedContainer {
         BoolSet({false}), /* goog_noise_suppression_set */
         BoolSet({false}), /* goog_experimental_noise_suppression_set */
         BoolSet({false}), /* goog_highpass_filter_set */
+        BoolSet({false}), /* voice_isolation_set */
         IntRangeSet::FromValue(GetSampleSize()), /* sample_size_range */
         {device_parameters.channels()},          /* channels_set */
         IntRangeSet::FromValue(
@@ -813,6 +859,12 @@ class ProcessingBasedContainer {
         auto_gain_control_container_.ApplyConstraintSet(constraint_set);
     if (failed_constraint_name)
       return failed_constraint_name;
+
+    failed_constraint_name =
+        voice_isolation_container_.ApplyConstraintSet(constraint_set);
+    if (failed_constraint_name) {
+      return failed_constraint_name;
+    }
 
     failed_constraint_name =
         sample_size_container_.ApplyConstraintSet(constraint_set.sample_size);
@@ -909,13 +961,11 @@ class ProcessingBasedContainer {
         auto_gain_control_container_.SelectSettingsAndScore(
             constraint_set, properties.goog_auto_gain_control);
     score += sub_score;
-    // Let goog_experimental_auto_gain_control match the value decided for
-    // goog_auto_gain_control.
-    // TODO(crbug.com/924485): entirely remove
-    // goog_experimental_auto_gain_control in the AudioProcessingProperties
-    // object since no longer needed.
-    properties.goog_experimental_auto_gain_control =
-        properties.goog_auto_gain_control;
+
+    std::tie(sub_score, properties.voice_isolation) =
+        voice_isolation_container_.SelectSettingsAndScore(
+            constraint_set, properties.voice_isolation);
+    score += sub_score;
 
     for (size_t i = 0; i < kNumBooleanContainerIds; ++i) {
       auto& info = kBooleanPropertyContainerInfoMap[i];
@@ -998,6 +1048,7 @@ class ProcessingBasedContainer {
                            BoolSet goog_noise_suppression_set,
                            BoolSet goog_experimental_noise_suppression_set,
                            BoolSet goog_highpass_filter_set,
+                           BoolSet voice_isolation_set,
                            IntRangeSet sample_size_range,
                            Vector<int> channels_set,
                            IntRangeSet sample_rate_range,
@@ -1026,6 +1077,8 @@ class ProcessingBasedContainer {
 
     auto_gain_control_container_ =
         AutoGainControlContainer(auto_gain_control_set);
+
+    voice_isolation_container_ = VoiceIsolationContainer(voice_isolation_set);
 
     boolean_containers_[kGoogAudioMirroring] =
         BooleanContainer(goog_audio_mirroring_set);
@@ -1116,6 +1169,7 @@ class ProcessingBasedContainer {
   std::array<BooleanContainer, kNumBooleanContainerIds> boolean_containers_;
   EchoCancellationContainer echo_cancellation_container_;
   AutoGainControlContainer auto_gain_control_container_;
+  VoiceIsolationContainer voice_isolation_container_;
   IntegerRangeContainer sample_size_container_;
   IntegerDiscreteContainer channels_container_;
   IntegerRangeContainer sample_rate_container_;
@@ -1222,7 +1276,7 @@ class DeviceContainer {
       DCHECK(!it->IsEmpty());
       failed_constraint_name = it->ApplyConstraintSet(constraint_set);
       if (failed_constraint_name)
-        processing_based_containers_.erase(it);
+        it = processing_based_containers_.erase(it);
       else
         ++it;
     }
@@ -1428,7 +1482,7 @@ class CandidatesContainer {
       auto* failed_constraint_name = it->ApplyConstraintSet(constraint_set);
       if (failed_constraint_name) {
         latest_failed_constraint_name = failed_constraint_name;
-        devices_.erase(it);
+        it = devices_.erase(it);
       } else {
         ++it;
       }
@@ -1557,9 +1611,6 @@ AudioCaptureSettings SelectSettingsAudioCapture(
       constraints.Basic(),
       media_stream_source == blink::kMediaStreamSourceDesktop,
       should_disable_hardware_noise_suppression);
-  DCHECK_EQ(settings.audio_processing_properties().goog_auto_gain_control,
-            settings.audio_processing_properties()
-                .goog_experimental_auto_gain_control);
 
   return settings;
 }

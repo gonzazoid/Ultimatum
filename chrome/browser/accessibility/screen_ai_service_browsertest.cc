@@ -21,7 +21,7 @@ class MockAXScreenAIAnnotator : public AXScreenAIAnnotator {
   explicit MockAXScreenAIAnnotator(content::BrowserContext* context)
       : AXScreenAIAnnotator(context) {}
 
-  // TODO(https://1278249): Consider making Screen AI component available for
+  // TODO(b/313384385): Consider making Screen AI component available for
   // tests. The test should refrain from trying to bind to it while it is not
   // available.
   MOCK_METHOD(void,
@@ -31,7 +31,9 @@ class MockAXScreenAIAnnotator : public AXScreenAIAnnotator {
 
   MOCK_METHOD(void,
               OnScreenshotReceived,
-              (const ui::AXTreeID& ax_tree_id, gfx::Image snapshot),
+              (const ui::AXTreeID& ax_tree_id,
+               const base::TimeTicks& start_time,
+               gfx::Image snapshot),
               (override));
 };
 
@@ -39,32 +41,35 @@ class MockAXScreenAIAnnotator : public AXScreenAIAnnotator {
 
 using ScreenAIServiceTest = InProcessBrowserTest;
 
-// TODO(https://crbug.com/1278249): Test is disabled as it requires delayed
+// TODO(b/313384385): Test is disabled as it requires delayed
 // connection to the service, but for PDF use case we need immediate connection
 // or adding extra boilerplate code to trigger it. Since PDF is the primary
 // goal, the test is disabled until the issue is fixed.
 IN_PROC_BROWSER_TEST_F(ScreenAIServiceTest, DISABLED_ScreenshotTest) {
   MockAXScreenAIAnnotator* annotator =
       new MockAXScreenAIAnnotator(browser()->profile());
-  // TODO(https://crbug.com/1278249): Pass |annotator| to
+  // TODO(b/313384385): Pass |annotator| to
   // AXScreenAIAnnotatorFactory to be used for test.
 
   base::RunLoop run_loop;
 
   EXPECT_CALL(*annotator, BindToScreenAIService);
   EXPECT_CALL(*annotator, OnScreenshotReceived)
-      .WillOnce(
-          [&run_loop](const ui::AXTreeID& ax_tree_id, gfx::Image snapshot) {
-            EXPECT_FALSE(snapshot.IsEmpty());
-            EXPECT_GT(snapshot.Size().width(), 0);
-            EXPECT_GT(snapshot.Size().height(), 0);
-            run_loop.Quit();
-          });
+      .WillOnce([&run_loop](const ui::AXTreeID& ax_tree_id,
+                            const base::TimeTicks& start_time,
+                            gfx::Image snapshot) {
+        EXPECT_FALSE(snapshot.IsEmpty());
+        EXPECT_GT(snapshot.Size().width(), 0);
+        EXPECT_GT(snapshot.Size().height(), 0);
+        run_loop.Quit();
+      });
 
-  browser()->RunScreenAIAnnotator();
+  content::WebContents* web_contents =
+      browser()->tab_strip_model()->GetActiveWebContents();
+  annotator->AnnotateScreenshot(web_contents);
   run_loop.Run();
 
-  // TODO(https://crbug.com/1278249): Add a test that mocks
+  // TODO(b/313384385): Add a test that mocks
   // |OnScreenshotReceived| and returns the expected proto, and observe its
   // application on the accessibility tree(s).
 }

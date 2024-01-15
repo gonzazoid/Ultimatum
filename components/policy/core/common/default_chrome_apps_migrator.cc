@@ -14,21 +14,21 @@ namespace {
 std::map<std::string, std::string> GetChromeAppToWebAppMapping() {
   return std::map<std::string, std::string>({
       {"ejjicmeblgpmajnghnpcppodonldlgfn",
-       "https://calendar.google.com/calendar/installwebapp?usp=chrome_default"},
+       "https://calendar.google.com/calendar/installwebapp?usp=admin"},
       {"aohghmighlieiainnegkcijnfilokake",
-       "https://docs.google.com/document/installwebapp?usp=chrome_default"},
+       "https://docs.google.com/document/installwebapp?usp=admin"},
       {"apdfllckaahabafndbhieahigkjlhalf",
-       "https://drive.google.com/drive/installwebapp?usp=chrome_default"},
+       "https://drive.google.com/drive/installwebapp?usp=admin"},
       {"pjkljhegncpnkpknbcohdijeoejaedia",
-       "https://mail.google.com/mail/installwebapp?usp=chrome_default"},
+       "https://mail.google.com/mail/installwebapp?usp=admin"},
       {"felcaaldnbdncclmgdcncolpebgiejap",
-       "https://docs.google.com/spreadsheets/installwebapp?usp=chrome_default"},
+       "https://docs.google.com/spreadsheets/installwebapp?usp=admin"},
       {"aapocclcgogkmnckokdopfmhonfmgoek",
-       "https://docs.google.com/presentation/installwebapp?usp=chrome_default"},
+       "https://docs.google.com/presentation/installwebapp?usp=admin"},
       {"blpcfgokakmgnkcojhhkbfbldkacnbeo",
        "https://www.youtube.com/s/notifications/manifest/cr_install.html"},
       {"hmjkmjkepdijhoojdojkdfohbdgmmhki",
-       "https://keep.google.com/installwebapp?usp=chrome_default"},
+       "https://keep.google.com/installwebapp?usp=admin"},
   });
 }
 
@@ -88,7 +88,7 @@ DefaultChromeAppsMigrator::RemoveChromeAppsFromExtensionForcelist(
     return std::vector<std::string>();
 
   std::vector<std::string> chrome_app_ids;
-  base::Value new_forcelist_value(base::Value::Type::LIST);
+  base::Value::List new_forcelist_value;
   for (const auto& list_entry : forcelist_value->GetList()) {
     if (!list_entry.is_string()) {
       new_forcelist_value.Append(list_entry.Clone());
@@ -105,7 +105,7 @@ DefaultChromeAppsMigrator::RemoveChromeAppsFromExtensionForcelist(
       new_forcelist_value.Append(entry);
   }
 
-  forcelist_entry->set_value(std::move(new_forcelist_value));
+  forcelist_entry->set_value(base::Value(std::move(new_forcelist_value)));
   return chrome_app_ids;
 }
 

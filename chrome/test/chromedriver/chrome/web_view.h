@@ -9,7 +9,7 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/values.h"
 
 namespace base {
@@ -17,15 +17,16 @@ class FilePath;
 class TimeDelta;
 }  // namespace base
 
+class FedCmTracker;
 class FrameTracker;
-struct Geoposition;
 class JavaScriptDialogManager;
-struct KeyEvent;
 class MobileEmulationOverrideManager;
-struct MouseEvent;
-struct NetworkConditions;
 class Status;
 class Timeout;
+struct Geoposition;
+struct KeyEvent;
+struct MouseEvent;
+struct NetworkConditions;
 struct TouchEvent;
 
 class WebView {
@@ -42,9 +43,6 @@ class WebView {
 
   // Return true if the web view was crashed.
   virtual bool WasCrashed() = 0;
-
-  // Make DevToolsCient connect to DevTools if it is disconnected.
-  virtual Status ConnectIfNecessary() = 0;
 
   // Handles events until the given function reports the condition is met
   // and there are no more received events to handle. If the given
@@ -72,7 +70,8 @@ class WebView {
   // Resume the current page.
   virtual Status Resume(const Timeout* timeout) = 0;
 
-  virtual Status StartBidiServer(std::string bidi_mapper_string) = 0;
+  virtual Status StartBidiServer(std::string bidi_mapper_string,
+                                 const base::Value::Dict& mapper_options) = 0;
 
   // Send the BiDi command to the BiDiMapper
   virtual Status PostBidiCommand(base::Value::Dict command) = 0;
@@ -101,12 +100,12 @@ class WebView {
   // the result. |frame| is a frame ID or an empty string for the main frame.
   // If the expression evaluates to a element, it will be bound to a unique ID
   // (per frame) and the ID will be returned.
-  // |awaitPromise| controls awaitPromise parameter for Command
+  // |await_promise| controls awaitPromise parameter for Command
   // send to devtools backend
   // |result| will never be NULL on success.
   virtual Status EvaluateScript(const std::string& frame,
                                 const std::string& expression,
-                                const bool awaitPromise,
+                                const bool await_promise,
                                 std::unique_ptr<base::Value>* result) = 0;
 
   // Calls a JavaScript function in a specified frame with the given args and
@@ -119,17 +118,6 @@ class WebView {
                               const std::string& function,
                               const base::Value::List& args,
                               std::unique_ptr<base::Value>* result) = 0;
-
-  // Calls a JavaScript function in a specified frame with the given args and
-  // two callbacks. The first may be invoked with a value to return to the user.
-  // The second may be used to report an error. This function waits until
-  // one of the callbacks is invoked or the timeout occurs.
-  // |result| will never be NULL on success.
-  virtual Status CallAsyncFunction(const std::string& frame,
-                                   const std::string& function,
-                                   const base::Value::List& args,
-                                   const base::TimeDelta& timeout,
-                                   std::unique_ptr<base::Value>* result) = 0;
 
   // Same as |CallAsyncFunction|, except no additional error callback is passed
   // to the function. Also, |kJavaScriptError| or |kScriptTimeout| is used
@@ -196,9 +184,9 @@ class WebView {
                            const std::string& value,
                            const std::string& domain,
                            const std::string& path,
-                           const std::string& sameSite,
+                           const std::string& same_site,
                            bool secure,
-                           bool httpOnly,
+                           bool http_only,
                            double expiry) = 0;
 
   // Waits until all pending navigations have completed in the given frame.
@@ -275,6 +263,9 @@ class WebView {
   virtual bool IsNonBlocking() const = 0;
 
   virtual FrameTracker* GetFrameTracker() const = 0;
+
+  // On success, sets *tracker to the FedCmTracker.
+  virtual Status GetFedCmTracker(FedCmTracker** out_tracker) = 0;
 
   virtual std::unique_ptr<base::Value> GetCastSinks() = 0;
 

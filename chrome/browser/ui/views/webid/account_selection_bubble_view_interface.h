@@ -10,6 +10,8 @@
 
 #include "chrome/browser/ui/views/webid/identity_provider_display_data.h"
 
+using TokenError = content::IdentityCredentialTokenError;
+
 namespace content {
 struct IdentityRequestAccount;
 }  // namespace content
@@ -20,25 +22,41 @@ class AccountSelectionBubbleViewInterface {
   virtual ~AccountSelectionBubbleViewInterface() = default;
 
   // Updates the FedCM bubble to show the "account picker" sheet.
-  virtual void ShowAccountPicker(
-      const std::vector<IdentityProviderDisplayData>& idp_data_list,
-      bool show_back_button) = 0;
+  virtual void ShowMultiAccountPicker(
+      const std::vector<IdentityProviderDisplayData>& idp_data_list) = 0;
 
   // Updates the FedCM bubble to show the "verifying" sheet.
   virtual void ShowVerifyingSheet(
       const content::IdentityRequestAccount& account,
-      const IdentityProviderDisplayData& idp_data) = 0;
+      const IdentityProviderDisplayData& idp_data,
+      const std::u16string& title) = 0;
 
   // Updates to show single account plus a confirm dialog. Used when showing the
   // account confirmation dialog after the user picks one of multiple accounts.
   virtual void ShowSingleAccountConfirmDialog(
-      const std::u16string& rp_for_display,
+      const std::u16string& top_frame_for_display,
+      const std::optional<std::u16string>& iframe_for_display,
       const content::IdentityRequestAccount& account,
-      const IdentityProviderDisplayData& idp_data) = 0;
+      const IdentityProviderDisplayData& idp_data,
+      bool show_back_button) = 0;
 
   // Updates the FedCM bubble to show the "failure" sheet.
-  virtual void ShowFailureDialog(const std::u16string& rp_for_display,
-                                 const std::u16string& idp_for_display) = 0;
+  virtual void ShowFailureDialog(
+      const std::u16string& top_frame_for_display,
+      const std::optional<std::u16string>& iframe_for_display,
+      const std::u16string& idp_for_display,
+      const content::IdentityProviderMetadata& idp_metadata) = 0;
+
+  // Updates the FedCM bubble to show the "error" sheet.
+  virtual void ShowErrorDialog(
+      const std::u16string& top_frame_for_display,
+      const std::optional<std::u16string>& iframe_for_display,
+      const std::u16string& idp_for_display,
+      const content::IdentityProviderMetadata& idp_metadata,
+      const std::optional<TokenError>& error) = 0;
+
+  virtual std::string GetDialogTitle() const = 0;
+  virtual std::optional<std::string> GetDialogSubtitle() const = 0;
 };
 
 #endif  // CHROME_BROWSER_UI_VIEWS_WEBID_ACCOUNT_SELECTION_BUBBLE_VIEW_INTERFACE_H_

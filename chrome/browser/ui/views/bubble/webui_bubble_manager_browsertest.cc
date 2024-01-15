@@ -4,6 +4,8 @@
 
 #include "chrome/browser/ui/views/bubble/webui_bubble_manager.h"
 
+#include "base/memory/weak_ptr.h"
+#include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/views/bubble/webui_bubble_dialog_view.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
@@ -19,7 +21,9 @@ WEB_UI_CONTROLLER_TYPE_IMPL(TestWebUIController)
 
 template <>
 class BubbleContentsWrapperT<TestWebUIController>
-    : public BubbleContentsWrapper {
+    : public BubbleContentsWrapper,
+      public base::SupportsWeakPtr<
+          BubbleContentsWrapperT<TestWebUIController>> {
  public:
   BubbleContentsWrapperT(const GURL& webui_url,
                          content::BrowserContext* browser_context,
@@ -30,8 +34,12 @@ class BubbleContentsWrapperT<TestWebUIController>
                               browser_context,
                               task_manager_string_id,
                               webui_resizes_host,
-                              esc_closes_ui) {}
+                              esc_closes_ui,
+                              "Test") {}
   void ReloadWebContents() override {}
+  base::WeakPtr<BubbleContentsWrapper> GetWeakPtr() override {
+    return AsWeakPtr();
+  }
 };
 
 class WebUIBubbleManagerBrowserTest : public InProcessBrowserTest {

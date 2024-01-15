@@ -6,7 +6,8 @@
 #define CHROME_BROWSER_PERMISSIONS_ADAPTIVE_QUIET_NOTIFICATION_PERMISSION_UI_ENABLER_H_
 
 #include <memory>
-#include "base/callback.h"
+
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/singleton.h"
 #include "chrome/browser/profiles/profile_keyed_service_factory.h"
@@ -22,6 +23,10 @@ class Profile;
 // prompts to be low.
 class AdaptiveQuietNotificationPermissionUiEnabler : public KeyedService {
  public:
+  // Uses ProfileKeyedServiceFactory instead.
+  explicit AdaptiveQuietNotificationPermissionUiEnabler(Profile* profile);
+  ~AdaptiveQuietNotificationPermissionUiEnabler() override;
+
   class Factory : public ProfileKeyedServiceFactory {
    public:
     static AdaptiveQuietNotificationPermissionUiEnabler* GetForProfile(
@@ -36,7 +41,7 @@ class AdaptiveQuietNotificationPermissionUiEnabler : public KeyedService {
     ~Factory() override;
 
     // BrowserContextKeyedServiceFactory
-    KeyedService* BuildServiceInstanceFor(
+    std::unique_ptr<KeyedService> BuildServiceInstanceForBrowserContext(
         content::BrowserContext* context) const override;
   };
 
@@ -57,16 +62,23 @@ class AdaptiveQuietNotificationPermissionUiEnabler : public KeyedService {
     BackfillEnablingMethodIfMissing();
   }
 
- private:
-  explicit AdaptiveQuietNotificationPermissionUiEnabler(Profile* profile);
-  ~AdaptiveQuietNotificationPermissionUiEnabler() override;
+  // Only used for testing.
+  void MigrateAdaptiveNotificationQuietingToCPSSForTesting() {
+    MigrateAdaptiveNotificationQuietingToCPSS();
+  }
 
+ private:
   // Called when the quiet UI state is updated in preferences.
   void OnQuietUiStateChanged();
 
   // Retroactively backfills the enabling method, which was not populated
   // before M88.
   void BackfillEnablingMethodIfMissing();
+
+  // Users who had manually enabled quiet ui for notification will stay in quiet
+  // ui, others will be migrated to CPSS. Migration logic will be removed in
+  // M127
+  void MigrateAdaptiveNotificationQuietingToCPSS();
 
   raw_ptr<Profile> profile_;
   std::unique_ptr<PrefChangeRegistrar> pref_change_registrar_;

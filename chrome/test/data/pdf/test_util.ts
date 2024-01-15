@@ -4,8 +4,8 @@
 
 // Utilities that are used in multiple tests.
 
-import {DocumentDimensions, LayoutOptions, Viewport} from 'chrome-extension://mhjfbmdgcfjbbpaeojofohoefgiehjai/pdf_viewer_wrapper.js';
-import {html, Polymer} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {Bookmark, DocumentDimensions, LayoutOptions, Viewport} from 'chrome-extension://mhjfbmdgcfjbbpaeojofohoefgiehjai/pdf_viewer_wrapper.js';
+import {html, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 export class MockElement {
   dir: string = '';
@@ -160,7 +160,7 @@ export class MockDocumentDimensions implements DocumentDimensions {
   }
 }
 
-export class MockUnseasonedPdfPluginElement extends HTMLEmbedElement {
+export class MockPdfPluginElement extends HTMLEmbedElement {
   private messages_: any[] = [];
 
   get messages(): any[] {
@@ -180,35 +180,51 @@ export class MockUnseasonedPdfPluginElement extends HTMLEmbedElement {
   }
 }
 customElements.define(
-    'mock-unseasoned-pdf-plugin', MockUnseasonedPdfPluginElement,
-    {extends: 'embed'});
+    'mock-pdf-plugin', MockPdfPluginElement, {extends: 'embed'});
 
 /**
- * Creates a fake element simulating the unseasoned PDF plugin.
+ * Creates a fake element simulating the PDF plugin.
  */
-export function createMockUnseasonedPdfPluginForTest():
-    MockUnseasonedPdfPluginElement {
-  return document.createElement('embed', {is: 'mock-unseasoned-pdf-plugin'}) as
-      MockUnseasonedPdfPluginElement;
+export function createMockPdfPluginForTest(): MockPdfPluginElement {
+  return document.createElement('embed', {is: 'mock-pdf-plugin'}) as
+      MockPdfPluginElement;
 }
+
+class TestBookmarksElement extends PolymerElement {
+  static get is() {
+    return 'test-bookmarks';
+  }
+
+  static get template() {
+    return html`
+      <template is="dom-repeat" items="[[bookmarks]]">
+        <viewer-bookmark bookmark="[[item]]" depth="0"></viewer-bookmark>
+      </template>
+    `;
+  }
+
+  static get properties() {
+    return {
+      bookmarks: Array,
+    };
+  }
+
+  bookmarks: Bookmark[];
+}
+
+declare global {
+  interface HTMLElementTagNameMap {
+    'test-bookmarks': TestBookmarksElement;
+  }
+}
+
+customElements.define(TestBookmarksElement.is, TestBookmarksElement);
 
 /**
  * @return An element containing a dom-repeat of bookmarks, for
  *     testing the bookmarks outside of the toolbar.
  */
-export function createBookmarksForTest(): HTMLElement {
-  Polymer({
-    is: 'test-bookmarks',
-
-    _template: html`
-      <template is="dom-repeat" items="[[bookmarks]]">
-        <viewer-bookmark bookmark="[[item]]" depth="0"></viewer-bookmark>
-      </template>`,
-
-    properties: {
-      bookmarks: Array,
-    },
-  });
+export function createBookmarksForTest(): TestBookmarksElement {
   return document.createElement('test-bookmarks');
 }
 

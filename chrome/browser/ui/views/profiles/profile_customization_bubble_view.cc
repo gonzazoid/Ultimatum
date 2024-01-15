@@ -4,8 +4,9 @@
 
 #include "chrome/browser/ui/views/profiles/profile_customization_bubble_view.h"
 
-#include "base/callback_helpers.h"
 #include "base/feature_list.h"
+#include "base/functional/callback_helpers.h"
+#include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/signin/signin_features.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/signin/dice_web_signin_interceptor_delegate.h"
@@ -35,25 +36,15 @@ ProfileCustomizationBubbleView::~ProfileCustomizationBubbleView() = default;
 ProfileCustomizationBubbleView* ProfileCustomizationBubbleView::CreateBubble(
     Browser* browser,
     views::View* anchor_view) {
-  // With `kSyncPromoAfterSigninIntercept` enabled, the profile customization
-  // should be always displayed in a modal dialog. Once the feature is launched,
-  // `ProfileCustomizationBubbleView` will be removed and all the callers will
-  // migrate to `ShowModalProfileCustomizationDialog()`.
+  // TODO(crbug.com/1459176): With Sync Promo After Signin Intercept launched,
+  // the profile customization is always displayed in a modal dialog. Remove
+  // `ProfileCustomizationBubbleView` and migrate all the callers to
+  // `ShowModalProfileCustomizationDialog()`.
+
   // Return value is only used in tests, so it's fine to return nullptr if a
   // `ProfileCustomizationBubbleView` was not created.
-  if (base::FeatureList::IsEnabled(kSyncPromoAfterSigninIntercept)) {
-    browser->signin_view_controller()->ShowModalProfileCustomizationDialog();
-    return nullptr;
-  }
-
-  ProfileCustomizationBubbleView* bubble_view =
-      new ProfileCustomizationBubbleView(browser->profile(), anchor_view);
-  // The widget is owned by the views system.
-  views::Widget* widget =
-      views::BubbleDialogDelegateView::CreateBubble(bubble_view);
-  // TODO(droger): Delay showing the bubble until the web view is loaded.
-  widget->Show();
-  return bubble_view;
+  browser->signin_view_controller()->ShowModalProfileCustomizationDialog();
+  return nullptr;
 }
 
 ProfileCustomizationBubbleView::ProfileCustomizationBubbleView(
@@ -102,7 +93,7 @@ void ProfileCustomizationBubbleView::OnCompletionButtonClicked(
   browser_view->MaybeShowProfileSwitchIPH();
 }
 
-BEGIN_METADATA(ProfileCustomizationBubbleView, views::BubbleDialogDelegateView)
+BEGIN_METADATA(ProfileCustomizationBubbleView)
 END_METADATA
 
 void DiceWebSigninInterceptorDelegate::ShowProfileCustomizationBubbleInternal(

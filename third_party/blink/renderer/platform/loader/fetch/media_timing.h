@@ -7,6 +7,7 @@
 
 #include "third_party/blink/public/platform/web_url_request.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
+#include "third_party/blink/renderer/platform/wtf/forward.h"
 
 namespace blink {
 
@@ -51,6 +52,24 @@ class MediaTiming : public GarbageCollectedMixin {
 
   // Returns the loading priority used for the image.
   virtual absl::optional<WebURLRequest::Priority> RequestPriority() const = 0;
+
+  virtual bool IsDataUrl() const = 0;
+
+  // Returns the type. For images it would be the specific types like jpg etc.
+  // For video, it would be video.
+  virtual AtomicString MediaType() const = 0;
+
+  virtual bool IsBroken() const = 0;
+
+  virtual base::TimeTicks DiscoveryTime() const = 0;
+
+  virtual base::TimeTicks LoadStart() const = 0;
+
+  virtual base::TimeTicks LoadEnd() const = 0;
+
+  virtual bool IsLoadedFromMemoryCache() const = 0;
+
+  virtual bool IsPreloadedWithEarlyHints() const = 0;
 };
 
 }  // namespace blink

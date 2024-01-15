@@ -6,6 +6,7 @@
 #define COMPONENTS_AUTOFILL_CORE_BROWSER_PAYMENTS_TEST_CREDIT_CARD_FIDO_AUTHENTICATOR_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -13,28 +14,27 @@
 #include "components/autofill/core/browser/autofill_driver.h"
 #include "components/autofill/core/browser/data_model/credit_card.h"
 #include "components/autofill/core/browser/payments/credit_card_fido_authenticator.h"
-#include "components/autofill/core/browser/payments/payments_client.h"
 
 namespace autofill {
 
-// Test class for CreditCardFIDOAuthenticator.
-class TestCreditCardFIDOAuthenticator : public CreditCardFIDOAuthenticator {
+// Test class for CreditCardFidoAuthenticator.
+class TestCreditCardFidoAuthenticator : public CreditCardFidoAuthenticator {
  public:
-  explicit TestCreditCardFIDOAuthenticator(AutofillDriver* driver,
+  explicit TestCreditCardFidoAuthenticator(AutofillDriver* driver,
                                            AutofillClient* client);
 
-  TestCreditCardFIDOAuthenticator(const TestCreditCardFIDOAuthenticator&) =
+  TestCreditCardFidoAuthenticator(const TestCreditCardFidoAuthenticator&) =
       delete;
-  TestCreditCardFIDOAuthenticator& operator=(
-      const TestCreditCardFIDOAuthenticator&) = delete;
+  TestCreditCardFidoAuthenticator& operator=(
+      const TestCreditCardFidoAuthenticator&) = delete;
 
-  ~TestCreditCardFIDOAuthenticator() override;
+  ~TestCreditCardFidoAuthenticator() override;
 
-  // CreditCardFIDOAuthenticator:
-  void Authenticate(const CreditCard* card,
+  // CreditCardFidoAuthenticator:
+  void Authenticate(CreditCard card,
                     base::WeakPtr<Requester> requester,
-                    base::Value request_options,
-                    absl::optional<std::string> context_token) override;
+                    base::Value::Dict request_options,
+                    std::optional<std::string> context_token) override;
   void IsUserVerifiable(base::OnceCallback<void(bool)> callback) override;
   bool IsUserOptedIn() override;
   void GetAssertion(blink::mojom::PublicKeyCredentialRequestOptionsPtr
@@ -44,11 +44,11 @@ class TestCreditCardFIDOAuthenticator : public CreditCardFIDOAuthenticator {
   void OptOut() override;
 
   // Invokes fido_authenticator->OnDidGetAssertion().
-  static void GetAssertion(CreditCardFIDOAuthenticator* fido_authenticator,
+  static void GetAssertion(CreditCardFidoAuthenticator* fido_authenticator,
                            bool did_succeed);
 
   // Invokes fido_authenticator->OnDidMakeCredential().
-  static void MakeCredential(CreditCardFIDOAuthenticator* fido_authenticator,
+  static void MakeCredential(CreditCardFidoAuthenticator* fido_authenticator,
                              bool did_succeed);
 
   // Getter methods to query Request Options.
@@ -66,8 +66,8 @@ class TestCreditCardFIDOAuthenticator : public CreditCardFIDOAuthenticator {
 
   bool IsOptOutCalled() { return opt_out_called_; }
   bool authenticate_invoked() { return authenticate_invoked_; }
-  const CreditCard& card() { return card_; }
-  const absl::optional<std::string>& context_token() { return context_token_; }
+  const CreditCard& card() { return *card_; }
+  const std::optional<std::string>& context_token() { return context_token_; }
 
   // Resets all the testing related states.
   void Reset();
@@ -79,11 +79,11 @@ class TestCreditCardFIDOAuthenticator : public CreditCardFIDOAuthenticator {
   blink::mojom::PublicKeyCredentialRequestOptionsPtr request_options_;
   blink::mojom::PublicKeyCredentialCreationOptionsPtr creation_options_;
   bool is_user_verifiable_ = false;
-  absl::optional<bool> is_user_opted_in_;
+  std::optional<bool> is_user_opted_in_;
   bool opt_out_called_ = false;
   bool authenticate_invoked_ = false;
-  CreditCard card_;
-  absl::optional<std::string> context_token_;
+  std::optional<CreditCard> card_;
+  std::optional<std::string> context_token_;
 };
 
 }  // namespace autofill

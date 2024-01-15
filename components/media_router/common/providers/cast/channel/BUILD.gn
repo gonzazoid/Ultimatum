@@ -7,12 +7,19 @@ import("//third_party/libprotobuf-mutator/fuzzable_proto_library.gni")
 import("//third_party/openscreen/src/build/config/data_headers_template.gni")
 import("//third_party/protobuf/proto_library.gni")
 
+source_set("capability") {
+  public = [ "cast_device_capability.h" ]
+  deps = [ "//base" ]
+}
+
 static_library("channel") {
   sources = [
     "cast_auth_util.cc",
     "cast_auth_util.h",
     "cast_channel_enum.cc",
     "cast_channel_enum.h",
+    "cast_channel_metrics.cc",
+    "cast_channel_metrics.h",
     "cast_framer.cc",
     "cast_framer.h",
     "cast_message_handler.cc",
@@ -31,14 +38,13 @@ static_library("channel") {
     "keep_alive_delegate.h",
     "keep_alive_handler.cc",
     "keep_alive_handler.h",
-    "libcast_socket_service.cc",
-    "libcast_socket_service.h",
     "logger.cc",
     "logger.h",
     "mojo_data_pump.cc",
     "mojo_data_pump.h",
   ]
   deps = [
+    ":capability",
     "//base",
     "//build:chromeos_buildflags",
     "//components/keyed_service/content",
@@ -52,15 +58,13 @@ static_library("channel") {
     "//crypto",
     "//net",
     "//services/data_decoder/public/cpp",
-    "//third_party/openscreen/src/cast/common:channel",
     "//third_party/openscreen/src/cast/common/channel/proto:channel_proto",
-    "//third_party/openscreen/src/cast/sender:channel",
-    "//third_party/openscreen/src/platform",
   ]
   public_deps = [
     "//services/data_decoder/public/cpp",
     "//services/network/public/mojom",
   ]
+  configs += [ "//build/config/compiler:wexit_time_destructors" ]
 }
 
 static_library("test_support") {
@@ -93,7 +97,6 @@ source_set("unit_tests") {
     "cast_transport_unittest.cc",
     "enum_table_unittest.cc",
     "keep_alive_delegate_unittest.cc",
-    "libcast_socket_service_unittest.cc",
     "logger_unittest.cc",
   ]
   deps = [
@@ -103,7 +106,6 @@ source_set("unit_tests") {
     "//components/media_router/common/providers/cast/certificate",
     "//components/media_router/common/providers/cast/certificate:certificate_reader",
     "//components/media_router/common/providers/cast/certificate:test_support",
-    "//components/openscreen_platform",
     "//components/prefs",
     "//components/prefs:test_support",
     "//content/test:test_support",
@@ -112,7 +114,6 @@ source_set("unit_tests") {
     "//services/data_decoder/public/cpp:test_support",
     "//testing/gmock",
     "//testing/gtest",
-    "//third_party/openscreen/src/cast/common:test_helpers",
     "//third_party/openscreen/src/cast/common/certificate/proto:certificate_unittest_proto",
     "//third_party/openscreen/src/cast/common/channel/proto:channel_proto",
   ]

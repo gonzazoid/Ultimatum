@@ -8,10 +8,6 @@
 #include "chrome/browser/accessibility/accessibility_labels_service.h"
 #include "chrome/browser/profiles/profile.h"
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "chrome/browser/ash/profiles/profile_helper.h"
-#endif
-
 // static
 AccessibilityLabelsService* AccessibilityLabelsServiceFactory::GetForProfile(
     Profile* profile) {
@@ -29,7 +25,8 @@ AccessibilityLabelsServiceFactory::GetForProfileIfExists(Profile* profile) {
 // static
 AccessibilityLabelsServiceFactory*
 AccessibilityLabelsServiceFactory::GetInstance() {
-  return base::Singleton<AccessibilityLabelsServiceFactory>::get();
+  static base::NoDestructor<AccessibilityLabelsServiceFactory> instance;
+  return instance.get();
 }
 
 AccessibilityLabelsServiceFactory::AccessibilityLabelsServiceFactory()
@@ -41,21 +38,16 @@ AccessibilityLabelsServiceFactory::AccessibilityLabelsServiceFactory()
               .WithGuest(ProfileSelection::kOffTheRecordOnly)
               // No service for system profile.
               .WithSystem(ProfileSelection::kNone)
+              // ChromeOS creates various profiles (login, lock screen...) that
+              // do not display web content and thus do not need the
+              // accessibility labels service.
+              .WithAshInternals(ProfileSelection::kNone)
               .Build()) {}
 
-AccessibilityLabelsServiceFactory::~AccessibilityLabelsServiceFactory() {}
+AccessibilityLabelsServiceFactory::~AccessibilityLabelsServiceFactory() =
+    default;
 
 KeyedService* AccessibilityLabelsServiceFactory::BuildServiceInstanceFor(
     content::BrowserContext* context) const {
-  Profile* profile = Profile::FromBrowserContext(context);
-
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-  // ChromeOS creates various profiles (login, lock screen...) that do
-  // not display web content and thus do not need the accessibility labels
-  // service.
-  if (!chromeos::ProfileHelper::IsUserProfile(profile))
-    return nullptr;
-#endif
-
-  return new AccessibilityLabelsService(profile);
+  return new AccessibilityLabelsService(Profile::FromBrowserContext(context));
 }

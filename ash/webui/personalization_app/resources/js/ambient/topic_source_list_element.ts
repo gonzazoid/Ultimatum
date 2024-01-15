@@ -7,16 +7,18 @@
  * behaviors similar to a radio button group, e.g. single selection.
  */
 
-import '../../css/common.css.js';
-import './topic_source_item_element.js';
+import 'chrome://resources/ash/common/personalization/common.css.js';
 import 'chrome://resources/polymer/v3_0/iron-list/iron-list.js';
+import './topic_source_item_element.js';
 
-import {TopicSource} from '../personalization_app.mojom-webui.js';
+import {AmbientTheme, TopicSource} from '../../personalization_app.mojom-webui.js';
+import {isTimeOfDayScreenSaverEnabled} from '../load_time_booleans.js';
 import {WithPersonalizationStore} from '../personalization_store.js';
 
 import {getTemplate} from './topic_source_list_element.html.js';
+import {isValidTopicSourceAndTheme} from './utils.js';
 
-export class TopicSourceList extends WithPersonalizationStore {
+export class TopicSourceListElement extends WithPersonalizationStore {
   static get is() {
     return 'topic-source-list';
   }
@@ -29,8 +31,19 @@ export class TopicSourceList extends WithPersonalizationStore {
     return {
       topicSources: {
         type: Array,
-        value: [TopicSource.kGooglePhotos, TopicSource.kArtGallery],
+        value() {
+          const topicSources =
+              [TopicSource.kGooglePhotos, TopicSource.kArtGallery];
+          // Pushes the video image source to the front to highlight exclusive
+          // content.
+          if (isTimeOfDayScreenSaverEnabled()) {
+            topicSources.unshift(TopicSource.kVideo);
+          }
+          return topicSources;
+        },
       },
+
+      selectedAmbientTheme: AmbientTheme,
 
       selectedTopicSource: TopicSource,
 
@@ -39,8 +52,22 @@ export class TopicSourceList extends WithPersonalizationStore {
   }
 
   topicSources: TopicSource[];
+  selectedAmbientTheme: AmbientTheme;
   selectedTopicSource: TopicSource;
   hasGooglePhotosAlbums: boolean;
+
+  override focus() {
+    const elem = this.shadowRoot!.querySelector('topic-source-item[checked]') as
+        HTMLElement;
+    if (elem) {
+      elem.focus();
+    }
+  }
+
+  private isTopicSourceDisabled_(
+      topicSource: TopicSource, selectedAmbientTheme: AmbientTheme): boolean {
+    return !isValidTopicSourceAndTheme(topicSource, selectedAmbientTheme);
+  }
 
   private isSelected_(
       topicSource: TopicSource, selectedTopicSource: TopicSource) {
@@ -48,4 +75,10 @@ export class TopicSourceList extends WithPersonalizationStore {
   }
 }
 
-customElements.define(TopicSourceList.is, TopicSourceList);
+declare global {
+  interface HTMLElementTagNameMap {
+    'topic-source-list': TopicSourceListElement;
+  }
+}
+
+customElements.define(TopicSourceListElement.is, TopicSourceListElement);

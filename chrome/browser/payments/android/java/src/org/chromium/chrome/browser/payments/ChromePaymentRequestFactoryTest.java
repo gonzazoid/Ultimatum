@@ -18,11 +18,13 @@ import org.robolectric.annotation.Config;
 
 import org.chromium.base.test.BaseRobolectricTestRunner;
 import org.chromium.base.test.util.Feature;
+import org.chromium.base.test.util.Features.DisableFeatures;
+import org.chromium.base.test.util.Features.JUnitProcessor;
 import org.chromium.chrome.browser.payments.test_support.ShadowProfile;
 import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.components.payments.InvalidPaymentRequest;
 import org.chromium.components.payments.PaymentFeatureList;
-import org.chromium.components.payments.test_support.ShadowPaymentFeatureList;
+import org.chromium.components.payments.test_support.DefaultPaymentFeatureConfig;
 import org.chromium.components.payments.test_support.ShadowWebContentsStatics;
 import org.chromium.content_public.browser.PermissionsPolicyFeature;
 import org.chromium.content_public.browser.RenderFrameHost;
@@ -32,22 +34,20 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 /** A test for ChromePaymentRequestFactory. */
 @RunWith(BaseRobolectricTestRunner.class)
-@Config(manifest = Config.NONE,
-        shadows = {ShadowPaymentFeatureList.class, ShadowWebContentsStatics.class,
-                ShadowProfile.class})
+@Config(
+        manifest = Config.NONE,
+        shadows = {ShadowWebContentsStatics.class, ShadowProfile.class})
 public class ChromePaymentRequestFactoryTest {
-    @Rule
-    public MockitoRule mMockitoRule = MockitoJUnit.rule().strictness(Strictness.LENIENT);
-    @Mock
-    RenderFrameHost mRenderFrameHost;
-    @Mock
-    WebContents mWebContents;
-    @Mock
-    Profile mProfile;
+    @Rule public MockitoRule mMockitoRule = MockitoJUnit.rule().strictness(Strictness.LENIENT);
+    @Rule public JUnitProcessor mFeaturesProcessor = new JUnitProcessor();
+
+    @Mock RenderFrameHost mRenderFrameHost;
+    @Mock WebContents mWebContents;
+    @Mock Profile mProfile;
 
     @Before
     public void setUp() {
-        ShadowPaymentFeatureList.setDefaultStatuses();
+        DefaultPaymentFeatureConfig.setDefaultFlagConfigurationForTesting();
 
         setWebContentsDestroyed(false);
         ShadowWebContentsStatics.setWebContents(mWebContents);
@@ -75,8 +75,9 @@ public class ChromePaymentRequestFactoryTest {
     @Test
     @Feature({"Payments"})
     public void testNullFrameCausesInvalidPaymentRequest() {
-        Assert.assertTrue(createFactory(/*renderFrameHost=*/null).createImpl()
-                                  instanceof InvalidPaymentRequest);
+        Assert.assertTrue(
+                createFactory(/* renderFrameHost= */ null).createImpl()
+                        instanceof InvalidPaymentRequest);
     }
 
     @Test
@@ -84,10 +85,11 @@ public class ChromePaymentRequestFactoryTest {
     public void testDisabledPolicyCausesBadMessage() {
         setPaymentPermissionsPolicy(false);
         AtomicInteger isKilledReason = new AtomicInteger(0);
-        Mockito.doAnswer(invocation -> {
-                   isKilledReason.set((int) invocation.getArguments()[0]);
-                   return null;
-               })
+        Mockito.doAnswer(
+                        invocation -> {
+                            isKilledReason.set((int) invocation.getArguments()[0]);
+                            return null;
+                        })
                 .when(mRenderFrameHost)
                 .terminateRendererDueToBadMessage(Mockito.anyInt());
         Assert.assertNull(createFactory(mRenderFrameHost).createImpl());
@@ -97,8 +99,8 @@ public class ChromePaymentRequestFactoryTest {
 
     @Test
     @Feature({"Payments"})
+    @DisableFeatures(PaymentFeatureList.WEB_PAYMENTS)
     public void testDisabledFeatureCausesInvalidPaymentRequest() {
-        ShadowPaymentFeatureList.setFeatureEnabled(PaymentFeatureList.WEB_PAYMENTS, false);
         Assert.assertTrue(
                 createFactory(mRenderFrameHost).createImpl() instanceof InvalidPaymentRequest);
     }

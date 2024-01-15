@@ -13,7 +13,6 @@
 #include "base/values.h"
 #include "chrome/browser/ui/webui/webui_util.h"
 #include "chrome/grit/generated_resources.h"
-#include "chrome/grit/oobe_conditional_resources.h"
 #include "components/login/localized_values_builder.h"
 #include "components/strings/grit/components_strings.h"
 #include "content/public/browser/web_ui_data_source.h"
@@ -61,8 +60,11 @@ constexpr webui::LocalizedString kLocalizedStringsWithoutPlaceholders[] = {
     {"eSimProfileDetectDuringActiveCellularConnectionMessage",
      IDS_CELLULAR_SETUP_ESIM_PROFILE_DETECT_DURING_ACTIVE_CELLULAR_CONNECTION_MESSAGE},
     {"scanQRCode", IDS_CELLULAR_SETUP_ESIM_PAGE_SCAN_QR_CODE},
-    {"scanQRCodeEnterActivationCode",
-     IDS_CELLULAR_SETUP_ESIM_PAGE_SCAN_QR_CODE_ENTER_ACTIVATION_CODE},
+    {"scanQRCodeNoProfilesFound",
+     IDS_CELLULAR_SETUP_ESIM_PAGE_SCAN_QR_CODE_NO_PROFILES_FOUND},
+    {"enterActivationCode", IDS_CELLULAR_SETUP_ESIM_PAGE_ENTER_ACTIVATION_CODE},
+    {"enterActivationCodeNoProfilesFound",
+     IDS_CELLULAR_SETUP_ESIM_PAGE_ENTER_ACTIVATION_CODE_NO_PROFILES_FOUND},
     {"switchCamera", IDS_CELLULAR_SETUP_ESIM_PAGE_SWITCH_CAMERA},
     {"qrCodeA11YCameraOn", IDS_CELLULAR_SETUP_ESIM_PAGE_A11Y_QR_CODE_CAMERA_ON},
     {"qrCodeA11YCameraScanSuccess",
@@ -80,19 +82,37 @@ constexpr webui::LocalizedString kLocalizedStringsWithoutPlaceholders[] = {
     {"scanQrCodeInputError",
      IDS_CELLULAR_SETUP_ESIM_PAGE_SCAN_QR_CODE_INPUT_ERROR},
     {"profileListPageMessage", IDS_CELLULAR_SETUP_PROFILE_LIST_PAGE_MESSAGE},
-    {"eidPopupTitle", IDS_CELLULAR_SETUP_EID_POPUP_TITLE},
-    {"eidPopupDescription", IDS_CELLULAR_SETUP_EID_POPUP_DESCRIPTION},
-    {"eidPopupA11yLabel", IDS_CELLULAR_SETUP_EID_POPUP_A11Y_LABEL},
+    {"profileListPageMessageWithLink",
+     IDS_CELLULAR_SETUP_PROFILE_LIST_PAGE_MESSAGE_WITH_LINK},
     {"confirmationCodeMessage",
      IDS_CELLULAR_SETUP_ESIM_PAGE_CONFIRMATION_CODE_MESSAGE},
     {"confirmationCodeInput",
      IDS_CELLULAR_SETUP_ESIM_PAGE_CONFIRMATION_CODE_INPUT},
+    {"confirmationCodeErrorLegacy",
+     IDS_CELLULAR_SETUP_ESIM_PAGE_CONFIRMATION_CODE_ERROR_LEGACY},
     {"confirmationCodeError",
      IDS_CELLULAR_SETUP_ESIM_PAGE_CONFIRMATION_CODE_ERROR},
     {"confirmationCodeLoading",
      IDS_CELLULAR_SETUP_ESIM_PAGE_CONFIRMATION_CODE_LOADING},
-    {"verifyingActivationCode",
-     IDS_CELLULAR_SETUP_ESIM_PAGE_VERIFYING_ACTIVATION_CODE}};
+    {"profileInstallingMessage",
+     IDS_CELLULAR_SETUP_ESIM_PROFILE_INSTALLING_MESSAGE},
+    {"profileDiscoveryConsentTitle",
+     IDS_CELLULAR_SETUP_ESIM_PAGE_PROFILE_DISCOVERY_CONSENT_TITLE},
+    {"profileDiscoveryConsentMessageWithLink",
+     IDS_CELLULAR_SETUP_ESIM_PAGE_PROFILE_DISCOVERY_CONSENT_MESSAGE_WITH_LINK},
+    {"profileDiscoveryConsentScan",
+     IDS_CELLULAR_SETUP_ESIM_PAGE_PROFILE_DISCOVERY_CONSENT_SCAN},
+    {"profileDiscoveryConsentCancel",
+     IDS_CELLULAR_SETUP_ESIM_PAGE_PROFILE_DISCOVERY_CONSENT_CANCEL},
+    {"profileDiscoveryPageTitle",
+     IDS_CELLULAR_SETUP_PROFILE_DISCOVERY_PAGE_TITLE},
+    {"confimationCodePageTitle",
+     IDS_CELLULAR_SETUP_CONFIRMATION_CODE_PAGE_TITLE},
+    {"profileLoadingPageTitle", IDS_CELLULAR_SETUP_ESIM_PROFILE_LOADING_TITLE},
+    {"profileLoadingPageMessage",
+     IDS_CELLULAR_SETUP_ESIM_PROFILE_LOADING_MESSAGE},
+    {"eSimCarrierLockedDevice",
+     IDS_CELLULAR_SETUP_ESIM_PAGE_CARRIER_LOCKED_DEVICE}};
 
 struct NamedBoolean {
   const char* name;
@@ -107,16 +127,10 @@ struct NamedResourceId {
 const std::vector<const NamedBoolean>& GetBooleanValues() {
   static const base::NoDestructor<std::vector<const NamedBoolean>> named_bools(
       {{"useSecondEuicc",
-        base::FeatureList::IsEnabled(features::kCellularUseSecondEuicc)}});
+        base::FeatureList::IsEnabled(features::kCellularUseSecondEuicc)},
+       {"isSmdsSupportEnabled",
+        ash::features::IsSmdsSupportEnabled()}});
   return *named_bools;
-}
-
-const std::vector<const NamedResourceId>& GetResourceIdValues() {
-  static const base::NoDestructor<std::vector<const NamedResourceId>>
-      named_resource_ids(
-          {{"spinner.json", IDR_LOGIN_SPINNER_ANIMATION},
-           {"spinner_dark.json", IDR_LOGIN_SPINNER_DARK_ANIMATION}});
-  return *named_resource_ids;
 }
 
 }  //  namespace
@@ -133,16 +147,10 @@ void AddLocalizedValuesToBuilder(::login::LocalizedValuesBuilder* builder) {
 void AddNonStringLoadTimeData(content::WebUIDataSource* html_source) {
   for (const auto& entry : GetBooleanValues())
     html_source->AddBoolean(entry.name, entry.value);
-
-  for (const auto& entry : GetResourceIdValues())
-    html_source->AddResourcePath(entry.name, entry.value);
 }
 
 void AddNonStringLoadTimeDataToDict(base::Value::Dict* dict) {
   for (const auto& entry : GetBooleanValues())
-    dict->SetByDottedPath(entry.name, entry.value);
-
-  for (const auto& entry : GetResourceIdValues())
     dict->SetByDottedPath(entry.name, entry.value);
 }
 

@@ -7,6 +7,7 @@
 
 #include <stdint.h>
 
+#include "base/memory/raw_ptr.h"
 #include "base/observer_list_types.h"
 #include "ui/display/display_export.h"
 
@@ -29,15 +30,9 @@ class DISPLAY_EXPORT DisplayObserver : public base::CheckedObserver {
     DISPLAY_METRIC_REFRESH_RATE = 1 << 7,
     DISPLAY_METRIC_INTERLACED = 1 << 8,
     DISPLAY_METRIC_LABEL = 1 << 9,
+    DISPLAY_METRIC_VRR = 1 << 10,
+    DISPLAY_METRIC_DETECTED = 1 << 11,
   };
-
-  // This may be called before other methods to signal changes are about to
-  // happen. Not all classes that support DisplayObserver call this.
-  virtual void OnWillProcessDisplayChanges();
-
-  // Called after OnWillProcessDisplayChanges() to indicate display changes have
-  // completed. Not all classes that support DisplayObserver call this.
-  virtual void OnDidProcessDisplayChanges();
 
   // Called when |new_display| has been added.
   virtual void OnDisplayAdded(const Display& new_display);
@@ -53,7 +48,7 @@ class DISPLAY_EXPORT DisplayObserver : public base::CheckedObserver {
   virtual void OnDidRemoveDisplays();
 
   // Called when the metrics of a display change.
-  // |changed_metrics| is a bitmask of DisplayMatric types indicating which
+  // |changed_metrics| is a bitmask of DisplayMetric types indicating which
   // metrics have changed. Eg; if mirroring changes (either from true to false,
   // or false to true), than the DISPLAY_METRIC_MIRROR_STATE bit is set in
   // changed_metrics.
@@ -83,7 +78,7 @@ class DISPLAY_EXPORT ScopedOptionalDisplayObserver {
   ~ScopedOptionalDisplayObserver();
 
  private:
-  DisplayObserver* observer_ = nullptr;
+  raw_ptr<DisplayObserver> observer_ = nullptr;
 };
 
 class DISPLAY_EXPORT ScopedDisplayObserver

@@ -24,12 +24,12 @@
 #include "ash/components/arc/session/connection_holder.h"
 #include "ash/constants/ash_switches.h"
 #include "ash/public/cpp/stylus_utils.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/check.h"
 #include "base/command_line.h"
 #include "base/containers/contains.h"
 #include "base/debug/dump_without_crashing.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/metrics/histogram_base.h"
@@ -38,6 +38,7 @@
 #include "chrome/browser/apps/app_service/app_service_proxy.h"
 #include "chrome/browser/apps/app_service/app_service_proxy_factory.h"
 #include "chrome/browser/apps/app_service/app_service_proxy_forward.h"
+#include "chrome/browser/apps/app_service/launch_utils.h"
 #include "chrome/browser/ash/arc/arc_util.h"
 #include "chrome/browser/ash/arc/session/arc_session_manager.h"
 #include "chrome/browser/ash/lock_screen_apps/lock_screen_apps.h"
@@ -53,12 +54,10 @@
 #include "components/services/app_service/public/cpp/app_registry_cache.h"
 #include "components/services/app_service/public/cpp/app_types.h"
 #include "components/services/app_service/public/cpp/app_update.h"
-#include "components/services/app_service/public/cpp/features.h"
 #include "components/services/app_service/public/cpp/intent.h"
 #include "components/services/app_service/public/cpp/intent_filter.h"
 #include "components/services/app_service/public/cpp/intent_util.h"
 #include "components/services/app_service/public/cpp/types_util.h"
-#include "components/services/app_service/public/mojom/types.mojom-shared.h"
 #include "content/public/browser/browser_thread.h"
 #include "extensions/browser/extension_registry.h"
 #include "extensions/common/api/app_runtime.h"
@@ -66,6 +65,8 @@
 #include "extensions/common/extension_set.h"
 #include "extensions/common/manifest_handlers/action_handlers_handler.h"
 #include "mojo/public/cpp/bindings/struct_ptr.h"
+#include "ui/display/display.h"
+#include "ui/display/util/display_util.h"
 #include "ui/events/event_constants.h"
 #include "url/gurl.h"
 
@@ -215,24 +216,12 @@ NoteTakingHelper::LaunchResult LaunchWebAppInternal(const std::string& app_id,
   // Apps in 'kDefaultAllowedAppIds' might not have a note-taking intent filter.
   // They can just launch without the intent.
   if (has_note_taking_intent_filter) {
-    if (base::FeatureList::IsEnabled(apps::kAppServiceLaunchWithoutMojom)) {
-      apps::AppServiceProxyFactory::GetForProfile(profile)->LaunchAppWithIntent(
-          app_id, ui::EF_NONE, apps_util::CreateCreateNoteIntent(),
-          apps::LaunchSource::kFromShelf, nullptr, base::DoNothing());
-    } else {
-      apps::AppServiceProxyFactory::GetForProfile(profile)->LaunchAppWithIntent(
-          app_id, ui::EF_NONE,
-          apps::ConvertIntentToMojomIntent(apps_util::CreateCreateNoteIntent()),
-          apps::mojom::LaunchSource::kFromShelf, nullptr, {});
-    }
+    apps::AppServiceProxyFactory::GetForProfile(profile)->LaunchAppWithIntent(
+        app_id, ui::EF_NONE, apps_util::CreateCreateNoteIntent(),
+        apps::LaunchSource::kFromShelf, nullptr, base::DoNothing());
   } else {
-    if (base::FeatureList::IsEnabled(apps::kAppServiceLaunchWithoutMojom)) {
-      apps::AppServiceProxyFactory::GetForProfile(profile)->Launch(
-          app_id, ui::EF_NONE, apps::LaunchSource::kFromShelf);
-    } else {
-      apps::AppServiceProxyFactory::GetForProfile(profile)->Launch(
-          app_id, ui::EF_NONE, apps::mojom::LaunchSource::kFromShelf);
-    }
+    apps::AppServiceProxyFactory::GetForProfile(profile)->Launch(
+        app_id, ui::EF_NONE, apps::LaunchSource::kFromShelf);
   }
 
   return NoteTakingHelper::LaunchResult::WEB_APP_SUCCESS;
@@ -401,10 +390,11 @@ void NoteTakingHelper::LaunchAppForNewNote(Profile* profile) {
   // they've chosen, just launch the first one we see.
   result = LaunchResult::NO_APPS_AVAILABLE;
   std::vector<NoteTakingAppInfo> infos = GetAvailableApps(profile);
-  if (infos.empty())
+  if (infos.empty()) {
     LOG(WARNING) << "Unable to launch note-taking app; none available";
-  else
+  } else {
     result = LaunchAppInternal(profile, infos[0].app_id);
+  }
   UMA_HISTOGRAM_ENUMERATION(kDefaultLaunchResultHistogramName,
                             static_cast<int>(result),
                             static_cast<int>(LaunchResult::MAX));
@@ -646,11 +636,19 @@ NoteTakingHelper::LaunchResult NoteTakingHelper::LaunchAppInternal(
     arc::mojom::FileSystemInstance* arc_file_system =
         ARC_GET_INSTANCE_FOR_METHOD(
             arc::ArcServiceManager::Get()->arc_bridge_service()->file_system(),
-            DEPRECATED_OpenUrlsWithPermission);
+            OpenUrlsWithPermissionAndWindowInfo);
     if (!arc_file_system)
       return LaunchResult::ANDROID_NOT_RUNNING;
-    arc_file_system->DEPRECATED_OpenUrlsWithPermission(std::move(request),
-                                                       base::DoNothing());
+
+    if (!display::HasInternalDisplay()) {
+      LOG(WARNING) << "Cannot find an internal display!";
+      return LaunchResult::NO_INTERNAL_DISPLAY_FOUND;
+    }
+    apps::WindowInfoPtr window_info = std::make_unique<apps::WindowInfo>(
+        display::Display::InternalDisplayId());
+    arc_file_system->OpenUrlsWithPermissionAndWindowInfo(
+        std::move(request), apps::MakeArcWindowInfo(std::move(window_info)),
+        base::DoNothing());
 
     arc::ArcMetricsService::RecordArcUserInteraction(
         profile, arc::UserInteractionType::APP_STARTED_FROM_STYLUS_TOOLS);
@@ -672,7 +670,7 @@ NoteTakingHelper::LaunchResult NoteTakingHelper::LaunchAppInternal(
     return LaunchResult::CHROME_APP_MISSING;
   }
   app_runtime::ActionData action_data;
-  action_data.action_type = app_runtime::ActionType::ACTION_TYPE_NEW_NOTE;
+  action_data.action_type = app_runtime::ActionType::kNewNote;
   launch_chrome_app_callback_.Run(profile, app, std::move(action_data));
   return LaunchResult::CHROME_SUCCESS;
 }

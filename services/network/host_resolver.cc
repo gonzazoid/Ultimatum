@@ -6,8 +6,9 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/lazy_instance.h"
+#include "base/functional/bind.h"
+#include "base/no_destructor.h"
+#include "base/task/sequenced_task_runner.h"
 #include "build/build_config.h"
 #include "mojo/public/cpp/bindings/enum_traits.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
@@ -25,18 +26,14 @@
 #include "services/network/resolve_host_request.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
-#if BUILDFLAG(IS_ANDROID)
-#include "net/base/features.h"
-#include "services/network/radio_monitor_android.h"
-#endif
-
 namespace network {
 namespace {
-static base::LazyInstance<HostResolver::ResolveHostCallback>::Leaky
-    resolve_host_callback;
+
+HostResolver::ResolveHostCallback& GetResolveHostCallback() {
+  static base::NoDestructor<HostResolver::ResolveHostCallback> callback;
+  return *callback;
 }
 
-namespace {
 absl::optional<net::HostResolver::ResolveHostParameters>
 ConvertOptionalParameters(
     const mojom::ResolveHostParametersPtr& mojo_parameters) {
@@ -82,7 +79,7 @@ HostResolver::HostResolver(
       net_log_(net_log) {
   // Bind the pending receiver asynchronously to give the resolver a chance
   // to set up (some resolvers need to obtain the system config asynchronously).
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&HostResolver::AsyncSetUp, weak_factory_.GetWeakPtr()));
 }
@@ -109,10 +106,11 @@ void HostResolver::ResolveHost(
          optional_parameters->source != net::HostResolverSource::MULTICAST_DNS);
 #endif  // !BUILDFLAG(ENABLE_MDNS)
 
-  if (resolve_host_callback.Get())
-    resolve_host_callback.Get().Run(host->is_host_port_pair()
-                                        ? host->get_host_port_pair().host()
-                                        : host->get_scheme_host_port().host());
+  if (!GetResolveHostCallback().is_null()) {
+    GetResolveHostCallback().Run(host->is_host_port_pair()
+                                     ? host->get_host_port_pair().host()
+                                     : host->get_scheme_host_port().host());
+  }
 
   auto request = std::make_unique<ResolveHostRequest>(
       internal_resolver_, std::move(host), network_anonymization_key,
@@ -128,12 +126,6 @@ void HostResolver::ResolveHost(
                      base::Unretained(this), request.get()));
   if (rv != net::ERR_IO_PENDING)
     return;
-
-#if BUILDFLAG(IS_ANDROID)
-  if (base::FeatureList::IsEnabled(net::features::kRecordRadioWakeupTrigger)) {
-    MaybeRecordResolveHostForWakeupTrigger(optional_parameters);
-  }
-#endif
 
   // Store the request with the resolver so it can be cancelled on resolver
   // shutdown.
@@ -170,7 +162,7 @@ size_t HostResolver::GetNumOutstandingRequestsForTesting() const {
 
 void HostResolver::SetResolveHostCallbackForTesting(
     ResolveHostCallback callback) {
-  resolve_host_callback.Get() = std::move(callback);
+  GetResolveHostCallback() = std::move(callback);
 }
 
 void HostResolver::AsyncSetUp() {

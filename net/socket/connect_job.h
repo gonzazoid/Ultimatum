@@ -9,10 +9,10 @@
 #include <set>
 #include <string>
 
-#include "base/callback_forward.h"
-#include "base/callback_helpers.h"
+#include "base/functional/callback_forward.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
 #include "net/base/load_states.h"
@@ -21,10 +21,13 @@
 #include "net/base/request_priority.h"
 #include "net/dns/public/host_resolver_results.h"
 #include "net/dns/public/resolve_error_info.h"
+#include "net/http/http_server_properties.h"
 #include "net/log/net_log_with_source.h"
 #include "net/socket/connection_attempts.h"
+#include "net/socket/next_proto.h"
 #include "net/socket/socket_tag.h"
 #include "net/socket/ssl_client_socket.h"
+#include "net/ssl/ssl_config.h"
 #include "net/third_party/quiche/src/quiche/quic/core/quic_versions.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
@@ -71,7 +74,11 @@ struct NET_EXPORT_PRIVATE CommonConnectJobParams {
       SocketPerformanceWatcherFactory* socket_performance_watcher_factory,
       NetworkQualityEstimator* network_quality_estimator,
       NetLog* net_log,
-      WebSocketEndpointLockManager* websocket_endpoint_lock_manager);
+      WebSocketEndpointLockManager* websocket_endpoint_lock_manager,
+      HttpServerProperties* http_server_properties,
+      const NextProtoVector* alpn_protos,
+      const SSLConfig::ApplicationSettings* application_settings,
+      const bool* ignore_certificate_errors);
   CommonConnectJobParams(const CommonConnectJobParams& other);
   ~CommonConnectJobParams();
 
@@ -93,6 +100,12 @@ struct NET_EXPORT_PRIVATE CommonConnectJobParams {
 
   // This must only be non-null for WebSockets.
   raw_ptr<WebSocketEndpointLockManager> websocket_endpoint_lock_manager;
+
+  raw_ptr<HttpServerProperties> http_server_properties;
+
+  raw_ptr<const NextProtoVector> alpn_protos;
+  raw_ptr<const SSLConfig::ApplicationSettings> application_settings;
+  raw_ptr<const bool> ignore_certificate_errors;
 };
 
 // When a host resolution completes, OnHostResolutionCallback() is invoked. If
@@ -110,7 +123,7 @@ enum class OnHostResolutionCallbackResult {
 // ConnectJob synchronously, but may signal the ConnectJob may be destroyed
 // asynchronously. See OnHostResolutionCallbackResult above.
 //
-// |address_list| is the list of addresses the host being connected to was
+// `endpoint_results` is the list of endpoints the host being connected to was
 // resolved to, with the port fields populated to the port being connected to.
 using OnHostResolutionCallback =
     base::RepeatingCallback<OnHostResolutionCallbackResult(
@@ -274,7 +287,10 @@ class NET_EXPORT_PRIVATE ConnectJob {
   WebSocketEndpointLockManager* websocket_endpoint_lock_manager() {
     return common_connect_job_params_->websocket_endpoint_lock_manager;
   }
-  const CommonConnectJobParams* common_connect_job_params() {
+  HttpServerProperties* http_server_properties() {
+    return common_connect_job_params_->http_server_properties;
+  }
+  const CommonConnectJobParams* common_connect_job_params() const {
     return common_connect_job_params_;
   }
 

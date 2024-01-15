@@ -7,12 +7,12 @@
 
 #include "base/files/file_path.h"
 #include "base/run_loop.h"
-#include "chrome/browser/ash/app_mode/kiosk_app_manager.h"
+#include "chrome/browser/ash/app_mode/kiosk_chrome_app_manager.h"
 #include "chrome/browser/ash/login/app_mode/test/test_app_data_load_waiter.h"
 
 namespace ash {
 
-TestAppDataLoadWaiter::TestAppDataLoadWaiter(KioskAppManager* manager,
+TestAppDataLoadWaiter::TestAppDataLoadWaiter(KioskChromeAppManager* manager,
                                              const std::string& app_id,
                                              const std::string& version)
     : runner_(nullptr),
@@ -31,16 +31,18 @@ TestAppDataLoadWaiter::~TestAppDataLoadWaiter() {
 
 void TestAppDataLoadWaiter::Wait() {
   wait_type_ = WAIT_FOR_CRX_CACHE;
-  if (quit_)
+  if (quit_) {
     return;
+  }
   runner_ = std::make_unique<base::RunLoop>();
   runner_->Run();
 }
 
 void TestAppDataLoadWaiter::WaitForAppData() {
   wait_type_ = WAIT_FOR_APP_DATA;
-  if (quit_ || IsAppDataLoaded())
+  if (quit_ || IsAppDataLoaded()) {
     return;
+  }
   runner_ = std::make_unique<base::RunLoop>();
   runner_->Run();
 }
@@ -53,51 +55,60 @@ void TestAppDataLoadWaiter::OnKioskAppDataChanged(const std::string& app_id) {
 
   loaded_ = true;
   quit_ = true;
-  if (runner_.get())
+  if (runner_.get()) {
     runner_->Quit();
+  }
 }
 
 void TestAppDataLoadWaiter::OnKioskAppDataLoadFailure(
     const std::string& app_id) {
-  if (wait_type_ != WAIT_FOR_APP_DATA || app_id != app_id_)
+  if (wait_type_ != WAIT_FOR_APP_DATA || app_id != app_id_) {
     return;
+  }
 
   loaded_ = false;
   quit_ = true;
-  if (runner_.get())
+  if (runner_.get()) {
     runner_->Quit();
+  }
 }
 
 void TestAppDataLoadWaiter::OnKioskExtensionLoadedInCache(
     const std::string& app_id) {
-  if (wait_type_ != WAIT_FOR_CRX_CACHE)
+  if (wait_type_ != WAIT_FOR_CRX_CACHE) {
     return;
+  }
 
   std::string cached_version;
   base::FilePath file_path;
-  if (!manager_->GetCachedCrx(app_id_, &file_path, &cached_version))
+  if (!manager_->GetCachedCrx(app_id_, &file_path, &cached_version)) {
     return;
-  if (version_ != cached_version)
+  }
+  if (version_ != cached_version) {
     return;
+  }
   loaded_ = true;
   quit_ = true;
-  if (runner_.get())
+  if (runner_.get()) {
     runner_->Quit();
+  }
 }
 
 void TestAppDataLoadWaiter::OnKioskExtensionDownloadFailed(
     const std::string& app_id) {
-  if (wait_type_ != WAIT_FOR_CRX_CACHE)
+  if (wait_type_ != WAIT_FOR_CRX_CACHE) {
     return;
+  }
 
   loaded_ = false;
   quit_ = true;
-  if (runner_.get())
+  if (runner_.get()) {
     runner_->Quit();
+  }
 }
 
 bool TestAppDataLoadWaiter::IsAppDataLoaded() {
-  KioskAppManager::App app;
+  KioskChromeAppManager::App app;
   return manager_->GetApp(app_id_, &app) && !app.is_loading;
 }
 

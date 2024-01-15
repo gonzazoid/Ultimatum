@@ -8,8 +8,9 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
 #include "base/values.h"
 #include "chromeos/ash/components/dbus/shill/fake_shill_ipconfig_client.h"
 #include "chromeos/ash/components/dbus/shill/shill_property_changed_observer.h"
@@ -51,7 +52,7 @@ class ShillIPConfigClientImpl : public ShillIPConfigClient {
   }
   void GetProperties(
       const dbus::ObjectPath& ipconfig_path,
-      chromeos::DBusMethodCallback<base::Value> callback) override;
+      chromeos::DBusMethodCallback<base::Value::Dict> callback) override;
   void SetProperty(const dbus::ObjectPath& ipconfig_path,
                    const std::string& name,
                    const base::Value& value,
@@ -83,19 +84,17 @@ class ShillIPConfigClientImpl : public ShillIPConfigClient {
     return helper_ptr;
   }
 
-  dbus::Bus* bus_;
+  raw_ptr<dbus::Bus> bus_;
   HelperMap helpers_;
 };
 
 void ShillIPConfigClientImpl::GetProperties(
     const dbus::ObjectPath& ipconfig_path,
-    chromeos::DBusMethodCallback<base::Value> callback) {
+    chromeos::DBusMethodCallback<base::Value::Dict> callback) {
   dbus::MethodCall method_call(shill::kFlimflamIPConfigInterface,
                                shill::kGetPropertiesFunction);
   GetHelper(ipconfig_path)
-      ->CallValueMethod(&method_call,
-                        base::BindOnce(&ShillClientHelper::OnGetProperties,
-                                       ipconfig_path, std::move(callback)));
+      ->CallDictValueMethod(&method_call, std::move(callback));
 }
 
 void ShillIPConfigClientImpl::SetProperty(

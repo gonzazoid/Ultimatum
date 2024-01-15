@@ -35,9 +35,7 @@ class FakePaintImageGenerator : public PaintImageGenerator {
 
   // PaintImageGenerator implementation.
   sk_sp<SkData> GetEncodedData() const override;
-  bool GetPixels(const SkImageInfo& info,
-                 void* pixels,
-                 size_t row_bytes,
+  bool GetPixels(SkPixmap pixmap,
                  size_t frame_index,
                  PaintImage::GeneratorClientId client_id,
                  uint32_t lazy_pixel_ref) override;
@@ -63,6 +61,7 @@ class FakePaintImageGenerator : public PaintImageGenerator {
   void SetImageHeaderMetadata(const ImageHeaderMetadata& image_metadata) {
     image_metadata_ = image_metadata;
   }
+  SkPixmap& GetPixmap() { return image_pixmap_; }
 
  private:
   std::vector<uint8_t> image_backing_memory_;

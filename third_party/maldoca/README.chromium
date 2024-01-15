@@ -6,6 +6,7 @@ Revision: 3d2b660fe61f97ec4bf9ae6f561b4e016b75db79
 License: Apache 2.0
 License File: src/LICENSE
 Security Critical: yes
+Shipped: yes
 CPEPrefix: unknown
 
 Description:
@@ -19,3 +20,6 @@ Local Modifications:
 - Utilizing features available via protobuf lite
 - Using static variables over ABSL_FLAG
 - Replace FALLTHROUGH macro with C++17 attribute [[fallthrough]]
+- Fix missing absl includes
+- Fix mising libc++ includes
+- Change re2::StringPiece to absl::string_view

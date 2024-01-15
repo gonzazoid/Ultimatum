@@ -12,26 +12,23 @@
 #include "chrome/common/extensions/api/file_system_provider.h"
 #include "chrome/common/extensions/api/file_system_provider_internal.h"
 
-namespace ash {
-namespace file_system_provider {
-namespace operations {
+namespace ash::file_system_provider::operations {
 
-WriteFile::WriteFile(extensions::EventRouter* event_router,
+WriteFile::WriteFile(RequestDispatcher* dispatcher,
                      const ProvidedFileSystemInfo& file_system_info,
                      int file_handle,
                      scoped_refptr<net::IOBuffer> buffer,
                      int64_t offset,
-                     int length,
+                     size_t length,
                      storage::AsyncFileUtil::StatusCallback callback)
-    : Operation(event_router, file_system_info),
+    : Operation(dispatcher, file_system_info),
       file_handle_(file_handle),
       buffer_(buffer),
       offset_(offset),
       length_(length),
       callback_(std::move(callback)) {}
 
-WriteFile::~WriteFile() {
-}
+WriteFile::~WriteFile() = default;
 
 bool WriteFile::Execute(int request_id) {
   TRACE_EVENT0("file_system_provider", "WriteFile::Execute");
@@ -66,7 +63,7 @@ bool WriteFile::Execute(int request_id) {
 }
 
 void WriteFile::OnSuccess(int /* request_id */,
-                          std::unique_ptr<RequestValue> /* result */,
+                          const RequestValue& /* result */,
                           bool /* has_more */) {
   TRACE_EVENT0("file_system_provider", "WriteFile::OnSuccess");
   DCHECK(callback_);
@@ -74,13 +71,11 @@ void WriteFile::OnSuccess(int /* request_id */,
 }
 
 void WriteFile::OnError(int /* request_id */,
-                        std::unique_ptr<RequestValue> /* result */,
+                        const RequestValue& /* result */,
                         base::File::Error error) {
   TRACE_EVENT0("file_system_provider", "WriteFile::OnError");
   DCHECK(callback_);
   std::move(callback_).Run(error);
 }
 
-}  // namespace operations
-}  // namespace file_system_provider
-}  // namespace ash
+}  // namespace ash::file_system_provider::operations

@@ -6,7 +6,7 @@
 
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/notifications/notification_common.h"
@@ -104,6 +104,8 @@ class NotificationDisplayServiceMock : public NotificationDisplayService {
 
   MOCK_METHOD2(Close, void(NotificationHandler::Type, const std::string&));
   MOCK_METHOD1(GetDisplayed, void(DisplayedNotificationsCallback));
+  MOCK_METHOD2(GetDisplayedForOrigin,
+               void(const GURL& origin, DisplayedNotificationsCallback));
   MOCK_METHOD1(AddObserver, void(Observer* observer));
   MOCK_METHOD1(RemoveObserver, void(Observer* observer));
 };
@@ -136,8 +138,9 @@ class DesktopNotificationHandlerTest : public BrowserWithTestWindowTest {
   }
 
  protected:
-  raw_ptr<SendTabToSelfModelMock> model_mock_;
-  raw_ptr<NotificationDisplayServiceMock> display_service_mock_;
+  raw_ptr<SendTabToSelfModelMock, DanglingUntriaged> model_mock_;
+  raw_ptr<NotificationDisplayServiceMock, DanglingUntriaged>
+      display_service_mock_;
 };
 
 TEST_F(DesktopNotificationHandlerTest, DisplayNewEntries) {

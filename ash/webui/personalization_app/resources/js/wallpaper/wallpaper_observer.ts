@@ -2,10 +2,12 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {CurrentWallpaper, WallpaperObserverInterface, WallpaperObserverReceiver, WallpaperProviderInterface, WallpaperType} from '../personalization_app.mojom-webui.js';
+import {setSelectedRecentSeaPenImageAction} from 'chrome://resources/ash/common/sea_pen/sea_pen_actions.js';
+
+import {CurrentAttribution, CurrentWallpaper, WallpaperObserverInterface, WallpaperObserverReceiver, WallpaperProviderInterface, WallpaperType} from '../../personalization_app.mojom-webui.js';
 import {PersonalizationStore} from '../personalization_store.js';
 
-import {setFullscreenEnabledAction, setSelectedImageAction, setUpdatedDailyRefreshImageAction} from './wallpaper_actions.js';
+import {setAttributionAction, setFullscreenEnabledAction, setSelectedImageAction, setUpdatedDailyRefreshImageAction} from './wallpaper_actions.js';
 import {getDailyRefreshState} from './wallpaper_controller.js';
 import {getWallpaperProvider} from './wallpaper_interface_provider.js';
 
@@ -54,6 +56,11 @@ export class WallpaperObserver implements WallpaperObserverInterface {
     store.dispatch(setFullscreenEnabledAction(false));
   }
 
+  onAttributionChanged(attribution: CurrentAttribution|null) {
+    const store = PersonalizationStore.getInstance();
+    store.dispatch(setAttributionAction(attribution));
+  }
+
   onWallpaperChanged(currentWallpaper: CurrentWallpaper|null) {
     // Ignore updates while in fullscreen preview mode. The attribution
     // information is for the old (non-preview) wallpaper. This is because
@@ -70,6 +77,13 @@ export class WallpaperObserver implements WallpaperObserverInterface {
       initialLoadTimeout = null;
     }
     store.dispatch(setSelectedImageAction(currentWallpaper));
+
+    if (currentWallpaper && currentWallpaper.type == WallpaperType.kSeaPen) {
+      store.dispatch(setSelectedRecentSeaPenImageAction(currentWallpaper.key));
+    } else {
+      store.dispatch(setSelectedRecentSeaPenImageAction(null));
+    }
+
     if (currentWallpaper &&
         (currentWallpaper.type == WallpaperType.kDailyGooglePhotos ||
          currentWallpaper.type == WallpaperType.kDaily ||

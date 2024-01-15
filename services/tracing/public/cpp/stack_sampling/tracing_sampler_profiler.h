@@ -10,9 +10,9 @@
 #include <utility>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/component_export.h"
 #include "base/debug/debugging_buildflags.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/profiler/sampling_profiler_thread_token.h"
@@ -108,11 +108,7 @@ class COMPONENT_EXPORT(TRACING_CPP) TracingSamplerProfiler {
    public:
     TracingProfileBuilder(
         base::PlatformThreadId sampled_thread_id,
-#if BUILDFLAG(USE_PERFETTO_CLIENT_LIBRARY)
-        bool is_startup_tracing,
-#else
-        std::unique_ptr<perfetto::TraceWriter> trace_writer,
-#endif
+        std::unique_ptr<perfetto::TraceWriterBase> trace_writer,
         bool should_enable_filtering,
         const base::RepeatingClosure& sample_callback_for_testing =
             base::RepeatingClosure());
@@ -125,13 +121,8 @@ class COMPONENT_EXPORT(TRACING_CPP) TracingSamplerProfiler {
     void OnProfileCompleted(base::TimeDelta profile_duration,
                             base::TimeDelta sampling_period) override {}
 
-#if BUILDFLAG(USE_PERFETTO_CLIENT_LIBRARY)
-    void SetIsStartupTracing(bool is_startup_tracing) {
-      is_startup_tracing_ = is_startup_tracing;
-    }
-#else
-    void SetTraceWriter(std::unique_ptr<perfetto::TraceWriter> trace_writer);
-#endif
+    void SetTraceWriter(
+        std::unique_ptr<perfetto::TraceWriterBase> trace_writer);
 
     void SetUnwinderType(TracingSamplerProfiler::UnwinderType unwinder_type);
 
@@ -168,13 +159,8 @@ class COMPONENT_EXPORT(TRACING_CPP) TracingSamplerProfiler {
 
     base::ModuleCache module_cache_;
     const base::PlatformThreadId sampled_thread_id_;
-#if BUILDFLAG(USE_PERFETTO_CLIENT_LIBRARY)
-    // In non-SDK build, (trace_writer_ == nullptr) is equivalent of this flag.
-    bool is_startup_tracing_ = true;
-#else
     base::Lock trace_writer_lock_;
-    std::unique_ptr<perfetto::TraceWriter> trace_writer_;
-#endif
+    std::unique_ptr<perfetto::TraceWriterBase> trace_writer_;
     StackProfileWriter stack_profile_writer_;
     bool reset_incremental_state_ = true;
     uint32_t last_incremental_state_reset_id_ = 0;
@@ -245,13 +231,8 @@ class COMPONENT_EXPORT(TRACING_CPP) TracingSamplerProfiler {
   void SetSampleCallbackForTesting(
       const base::RepeatingClosure& sample_callback_for_testing);
 
-  void StartTracing(
-#if !BUILDFLAG(USE_PERFETTO_CLIENT_LIBRARY)
-      std::unique_ptr<perfetto::TraceWriter> trace_writer,
-#else
-      bool is_startup_tracing,
-#endif
-      bool should_enable_filtering);
+  void StartTracing(std::unique_ptr<perfetto::TraceWriterBase> trace_writer,
+                    bool should_enable_filtering);
 
   void StopTracing();
 
@@ -269,7 +250,11 @@ class COMPONENT_EXPORT(TRACING_CPP) TracingSamplerProfiler {
 
   base::Lock lock_;
   std::unique_ptr<base::StackSamplingProfiler> profiler_;  // under |lock_|
-  raw_ptr<TracingProfileBuilder> profile_builder_ = nullptr;
+  // This dangling raw_ptr occurred in:
+  // services_unittests: TracingSampleProfilerTest.SamplingChildThread
+  // https://ci.chromium.org/ui/p/chromium/builders/try/win-rel/237204/test-results?q=ExactID%3Aninja%3A%2F%2Fservices%3Aservices_unittests%2FTracingSampleProfilerTest.SamplingChildThread+VHash%3A83af393c6a76b581
+  raw_ptr<TracingProfileBuilder, FlakyDanglingUntriaged> profile_builder_ =
+      nullptr;
   base::RepeatingClosure sample_callback_for_testing_;
 
 #if BUILDFLAG(ENABLE_LOADER_LOCK_SAMPLING)

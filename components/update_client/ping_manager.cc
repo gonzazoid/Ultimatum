@@ -11,10 +11,10 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/check_op.h"
+#include "base/check.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "components/update_client/component.h"
 #include "components/update_client/configurator.h"
 #include "components/update_client/persisted_data.h"
@@ -56,7 +56,7 @@ class PingSender : public base::RefCountedThreadSafe<PingSender> {
                         const std::string& response,
                         int retry_after_sec);
 
-  THREAD_CHECKER(thread_checker_);
+  SEQUENCE_CHECKER(sequence_checker_);
 
   const scoped_refptr<Configurator> config_;
   Callback callback_;
@@ -65,29 +65,28 @@ class PingSender : public base::RefCountedThreadSafe<PingSender> {
 
 PingSender::PingSender(scoped_refptr<Configurator> config) : config_(config) {}
 
-PingSender::~PingSender() {
-  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-}
+PingSender::~PingSender() = default;
 
 void PingSender::SendPing(const Component& component,
                           const PersistedData& metadata,
                           Callback callback) {
-  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   if (component.events().empty()) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(callback), kErrorNoEvents, ""));
     return;
   }
 
-  DCHECK(component.crx_component());
+  CHECK(component.crx_component());
 
   auto urls(config_->PingUrl());
-  if (component.crx_component()->requires_network_encryption)
+  if (component.crx_component()->requires_network_encryption) {
     RemoveUnsecureUrls(&urls);
+  }
 
   if (urls.empty()) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(callback), kErrorNoUrl, ""));
     return;
   }
@@ -127,7 +126,7 @@ void PingSender::SendPing(const Component& component,
 void PingSender::SendPingComplete(int error,
                                   const std::string& response,
                                   int retry_after_sec) {
-  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   std::move(callback_).Run(error, response);
 }
 
@@ -137,13 +136,13 @@ PingManager::PingManager(scoped_refptr<Configurator> config)
     : config_(config) {}
 
 PingManager::~PingManager() {
-  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 }
 
 void PingManager::SendPing(const Component& component,
                            const PersistedData& metadata,
                            Callback callback) {
-  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   auto ping_sender = base::MakeRefCounted<PingSender>(config_);
   ping_sender->SendPing(component, metadata, std::move(callback));

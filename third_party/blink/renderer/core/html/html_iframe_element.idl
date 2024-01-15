@@ -21,7 +21,7 @@
 // https://html.spec.whatwg.org/multipage/iframe-embed-object.html#htmliframeelement
 
 // The `HTMLString` references below are from Trusted Types:
-// https://github.com/WICG/trusted-types/, which is still WIP.
+// https://github.com/w3c/trusted-types/, which is still WIP.
 // https://crbug.com/739170.
 [
     Exposed=Window,
@@ -51,14 +51,20 @@
     // Document Policy
     [RuntimeEnabled=DocumentPolicyNegotiation, CEReactions, Reflect] attribute DOMString policy;
 
-    [RuntimeEnabled=LazyFrameLoading, CEReactions, Reflect, ReflectOnly=("lazy", "eager", "auto"), ReflectMissing="auto", ReflectInvalid="auto"] attribute DOMString loading;
+    [CEReactions, Reflect, ReflectOnly=("lazy", "eager", "auto"), ReflectMissing="auto", ReflectInvalid="auto"] attribute DOMString loading;
 
     // Trust Tokens request parameters (https://github.com/wicg/trust-token-api)
-    [RuntimeEnabled=TrustTokens, SecureContext, Reflect, MeasureAs=TrustTokenIframe] attribute DOMString trustToken;
+    [RuntimeEnabled=PrivateStateTokens, SecureContext, Reflect, MeasureAs=TrustTokenIframe] attribute DOMString privateToken;
 
-    // Anonymous iframes
-    // https://github.com/camillelamy/explainers/blob/master/anonymous_iframes.md
-    [CEReactions, Reflect, RuntimeEnabled=AnonymousIframe] attribute boolean anonymous;
+    // Topics API (https://github.com/patcg-individual-drafts/topics)
+    [RuntimeEnabled=TopicsAPI, SecureContext, CEReactions, Reflect] attribute boolean browsingTopics;
+
+    // Protected Audience (https://wicg.github.io/turtledove)
+    [RuntimeEnabled=FledgeNegativeTargeting, SecureContext, CEReactions, Reflect] attribute boolean adAuctionHeaders;
+
+    // Iframes credentialless
+    // https://github.com/WICG/anonymous-iframe
+    [CEReactions, Reflect, RuntimeEnabled=AnonymousIframe] attribute boolean credentialless;
 
     // obsolete members
     // https://html.spec.whatwg.org/C/#HTMLIFrameElement-partial
@@ -67,6 +73,9 @@
     [CEReactions, Reflect] attribute DOMString frameBorder;
     [CEReactions, Reflect, URL] attribute USVString longDesc;
 
-    [CEReactions, Reflect] attribute [TreatNullAs=EmptyString] DOMString marginHeight;
-    [CEReactions, Reflect] attribute [TreatNullAs=EmptyString] DOMString marginWidth;
+    [CEReactions, Reflect] attribute [LegacyNullToEmptyString] DOMString marginHeight;
+    [CEReactions, Reflect] attribute [LegacyNullToEmptyString] DOMString marginWidth;
 };
+
+// Shared Storage API (https://github.com/WICG/shared-storage#from-response-headers)
+HTMLIFrameElement includes HTMLSharedStorageWritableElementUtils;

@@ -4,8 +4,8 @@
 
 #include "storage/browser/blob/blob_url_store_impl.h"
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/test/bind.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
@@ -158,7 +158,7 @@ class BlobURLStoreImplTestP
                           mojo::PendingRemote<blink::mojom::Blob>* blob_out,
                           const base::UnguessableToken& agent_registered,
                           mojo::PendingRemote<blink::mojom::Blob> blob,
-                          const absl::optional<base::UnguessableToken>&
+                          const std::optional<base::UnguessableToken>&
                               unsafe_agent_cluster_id) {
                          if (blob)
                            EXPECT_EQ(agent_registered, unsafe_agent_cluster_id);
@@ -172,7 +172,8 @@ class BlobURLStoreImplTestP
 
   const std::string kId = "id";
   const url::Origin kOrigin = url::Origin::Create(GURL("https://example.com"));
-  const blink::StorageKey kStorageKey = blink::StorageKey(kOrigin);
+  const blink::StorageKey kStorageKey =
+      blink::StorageKey::CreateFirstParty(kOrigin);
   const GURL kValidUrl = GURL("blob:" + kOrigin.Serialize() + "/id1");
   const GURL kValidUrl2 = GURL("blob:" + kOrigin.Serialize() + "/id2");
   const GURL kInvalidUrl = GURL("bolb:id");
@@ -301,8 +302,8 @@ TEST_P(BlobURLStoreImplTestP, RevokeURLWithFragment) {
 }
 
 TEST_P(BlobURLStoreImplTestP, RevokeWrongStorageKey) {
-  const blink::StorageKey kWrongStorageKey =
-      blink::StorageKey::CreateForTesting(kOrigin, kWrongTopLevelSite);
+  const blink::StorageKey kWrongStorageKey = blink::StorageKey::Create(
+      kOrigin, kWrongTopLevelSite, blink::mojom::AncestorChainBit::kCrossSite);
 
   mojo::PendingRemote<blink::mojom::Blob> blob =
       CreateBlobFromString(kId, "hello world");
@@ -372,9 +373,9 @@ TEST_P(BlobURLStoreImplTestP, ResolveAsURLLoaderFactory) {
       base::BindOnce(
           [](base::OnceClosure done,
              const base::UnguessableToken& agent_registered,
-             const absl::optional<base::UnguessableToken>&
+             const std::optional<base::UnguessableToken>&
                  unsafe_agent_cluster_id,
-             const absl::optional<net::SchemefulSite>& unsafe_top_level_site) {
+             const std::optional<net::SchemefulSite>& unsafe_top_level_site) {
             EXPECT_EQ(agent_registered, unsafe_agent_cluster_id);
             std::move(done).Run();
           },
@@ -410,7 +411,7 @@ TEST_P(BlobURLStoreImplTestP, ResolveForNavigation) {
       base::BindOnce(
           [](base::OnceClosure done,
              const base::UnguessableToken& agent_registered,
-             const absl::optional<base::UnguessableToken>&
+             const std::optional<base::UnguessableToken>&
                  unsafe_agent_cluster_id) {
             EXPECT_EQ(agent_registered, unsafe_agent_cluster_id);
             std::move(done).Run();

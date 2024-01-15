@@ -8,8 +8,9 @@
 #include <ostream>
 #include <sstream>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
 #include "media/base/video_types.h"
@@ -65,23 +66,18 @@ std::unique_ptr<ImageProcessor> ImageProcessor::Create(
     const PortConfig& input_config,
     const PortConfig& output_config,
     OutputMode output_mode,
-    VideoRotation relative_rotation,
     ErrorCB error_cb,
     scoped_refptr<base::SequencedTaskRunner> client_task_runner) {
-  // Note: we use a single thread task runner because the GL context is thread
-  // local, so we need to make sure we run the GLImageProcessorBackend on the
-  // same thread each time.
-  scoped_refptr<base::SequencedTaskRunner> backend_task_runner =
-      base::ThreadPool::CreateSingleThreadTaskRunner({});
   auto wrapped_error_cb = base::BindRepeating(
       base::IgnoreResult(&base::SequencedTaskRunner::PostTask),
       client_task_runner, FROM_HERE, std::move(error_cb));
   std::unique_ptr<ImageProcessorBackend> backend = create_backend_cb.Run(
-      input_config, output_config, output_mode, relative_rotation,
-      std::move(wrapped_error_cb), backend_task_runner);
+      input_config, output_config, output_mode, std::move(wrapped_error_cb));
   if (!backend)
     return nullptr;
 
+  scoped_refptr<base::SequencedTaskRunner> backend_task_runner =
+      backend->task_runner();
   return base::WrapUnique(new ImageProcessor(std::move(backend),
                                              std::move(client_task_runner),
                                              std::move(backend_task_runner)));
@@ -121,9 +117,20 @@ bool ImageProcessor::Process(scoped_refptr<VideoFrame> input_frame,
   DCHECK(input_frame);
   DCHECK(output_frame);
 
-  if (!CheckVideoFrameFormat(input_config(), *input_frame) ||
-      !CheckVideoFrameFormat(output_config(), *output_frame))
+  if (!CheckVideoFrameFormat(input_config(), *input_frame)) {
+    LOG(ERROR) << "Unexpected input VideoFrame format "
+               << input_frame->AsHumanReadableString()
+               << ", expected a compatible one with "
+               << input_config().ToString();
     return false;
+  }
+  if (!CheckVideoFrameFormat(output_config(), *output_frame)) {
+    LOG(ERROR) << "Unexpected output VideoFrame format "
+               << output_frame->AsHumanReadableString()
+               << ", expected a compatible one with "
+               << output_config().ToString();
+    return false;
+  }
 
   int cb_index = StoreCallback(std::move(cb));
   auto ready_cb = base::BindOnce(&ImageProcessor::OnProcessDoneThunk,

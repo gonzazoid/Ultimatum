@@ -4,13 +4,14 @@
 
 #include "services/video_capture/device_media_to_mojo_adapter.h"
 
-#include "base/bind.h"
 #include "base/check.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/functional/bind.h"
+#include "base/task/bind_post_task.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/trace_event/trace_event.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
-#include "media/base/bind_to_current_loop.h"
 #include "media/base/scoped_async_trace.h"
 #include "media/capture/video/video_capture_buffer_pool_impl.h"
 #include "media/capture/video/video_capture_buffer_pool_util.h"
@@ -23,7 +24,6 @@
 #include "media/capture/video/chromeos/scoped_video_capture_jpeg_decoder.h"
 #include "media/capture/video/chromeos/video_capture_jpeg_decoder_impl.h"
 #elif BUILDFLAG(IS_WIN)
-#include "media/capture/video/win/video_capture_buffer_tracker_factory_win.h"
 #include "media/capture/video/win/video_capture_device_factory_win.h"
 #endif
 
@@ -93,16 +93,59 @@ void DeviceMediaToMojoAdapter::Start(
   DCHECK(thread_checker_.CalledOnValidThread());
   TRACE_EVENT0(TRACE_DISABLED_BY_DEFAULT("video_and_image_capture"),
                "DeviceMediaToMojoAdapter::Start");
-  mojo::Remote<mojom::VideoFrameHandler> handler_remote(
-      std::move(video_frame_handler_pending_remote));
-  handler_remote.set_disconnect_handler(
-      base::BindOnce(&DeviceMediaToMojoAdapter::OnClientConnectionErrorOrClose,
-                     weak_factory_.GetWeakPtr()));
+  StartInternal(std::move(requested_settings),
+                std::move(video_frame_handler_pending_remote),
+                /*frame_handler=*/nullptr, /*start_in_process=*/false, {});
+}
 
-  receiver_ =
-      std::make_unique<ReceiverMojoToMediaAdapter>(std::move(handler_remote));
-  auto media_receiver = std::make_unique<media::VideoFrameReceiverOnTaskRunner>(
-      receiver_->GetWeakPtr(), base::ThreadTaskRunnerHandle::Get());
+void DeviceMediaToMojoAdapter::StartInProcess(
+    const media::VideoCaptureParams& requested_settings,
+    const base::WeakPtr<media::VideoFrameReceiver>& frame_handler,
+    mojo::PendingRemote<video_capture::mojom::VideoEffectsManager>
+        video_effects_manager) {
+  DCHECK(thread_checker_.CalledOnValidThread());
+  TRACE_EVENT0(TRACE_DISABLED_BY_DEFAULT("video_and_image_capture"),
+               "DeviceMediaToMojoAdapter::StartInProcess");
+
+  StartInternal(std::move(requested_settings),
+                /*handler_pending_remote=*/absl::nullopt,
+                std::move(frame_handler), /*start_in_process=*/true,
+                std::move(video_effects_manager));
+}
+
+void DeviceMediaToMojoAdapter::StartInternal(
+    const media::VideoCaptureParams& requested_settings,
+    absl::optional<mojo::PendingRemote<mojom::VideoFrameHandler>>
+        handler_pending_remote,
+    const base::WeakPtr<media::VideoFrameReceiver>& frame_handler,
+    bool start_in_process,
+    mojo::PendingRemote<video_capture::mojom::VideoEffectsManager>
+        video_effects_manager) {
+  DCHECK(thread_checker_.CalledOnValidThread());
+  TRACE_EVENT0(TRACE_DISABLED_BY_DEFAULT("video_and_image_capture"),
+               "DeviceMediaToMojoAdapter::StartInternal");
+  std::unique_ptr<media::VideoFrameReceiverOnTaskRunner> media_receiver;
+  base::WeakPtr<media::VideoFrameReceiver> video_frame_receiver;
+  if (start_in_process) {
+    DCHECK(frame_handler);
+    media_receiver = std::make_unique<media::VideoFrameReceiverOnTaskRunner>(
+        frame_handler, base::SingleThreadTaskRunner::GetCurrentDefault());
+    video_frame_receiver = frame_handler;
+  } else {
+    DCHECK(handler_pending_remote);
+    mojo::Remote<mojom::VideoFrameHandler> handler_remote(
+        std::move(*handler_pending_remote));
+    handler_remote.set_disconnect_handler(base::BindOnce(
+        &DeviceMediaToMojoAdapter::OnClientConnectionErrorOrClose,
+        weak_factory_.GetWeakPtr()));
+
+    receiver_ =
+        std::make_unique<ReceiverMojoToMediaAdapter>(std::move(handler_remote));
+    media_receiver = std::make_unique<media::VideoFrameReceiverOnTaskRunner>(
+        receiver_->GetWeakPtr(),
+        base::SingleThreadTaskRunner::GetCurrentDefault());
+    video_frame_receiver = receiver_->GetWeakPtr();
+  }
 
   if (requested_settings.buffer_type !=
           media::VideoCaptureBufferType::kSharedMemory &&
@@ -123,32 +166,38 @@ void DeviceMediaToMojoAdapter::Start(
 #if BUILDFLAG(IS_WIN)
     buffer_pool = base::MakeRefCounted<media::VideoCaptureBufferPoolImpl>(
         requested_settings.buffer_type, max_buffer_pool_buffer_count(),
-        std::make_unique<media::VideoCaptureBufferTrackerFactoryWin>(
+        std::make_unique<media::VideoCaptureBufferTrackerFactoryImpl>(
             dxgi_device_manager_));
-#else
+#else   // BUILDFLAG(IS_WIN)
     buffer_pool = base::MakeRefCounted<media::VideoCaptureBufferPoolImpl>(
         requested_settings.buffer_type, max_buffer_pool_buffer_count());
-#endif
+#endif  // !BUILDFLAG(IS_WIN)
   }
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   auto device_client = std::make_unique<media::VideoCaptureDeviceClient>(
-      requested_settings.buffer_type, std::move(media_receiver), buffer_pool,
+      std::move(media_receiver), buffer_pool,
       base::BindRepeating(
           &CreateGpuJpegDecoder, jpeg_decoder_task_runner_,
           jpeg_decoder_factory_callback_,
-          media::BindToCurrentLoop(base::BindRepeating(
+          base::BindPostTaskToCurrentDefault(base::BindRepeating(
               &media::VideoFrameReceiver::OnFrameReadyInBuffer,
-              receiver_->GetWeakPtr())),
-          media::BindToCurrentLoop(base::BindRepeating(
-              &media::VideoFrameReceiver::OnLog, receiver_->GetWeakPtr()))));
-#else
+              video_frame_receiver)),
+          base::BindPostTaskToCurrentDefault(base::BindRepeating(
+              &media::VideoFrameReceiver::OnLog, video_frame_receiver))));
+#else   // BUILDFLAG(IS_CHROMEOS_ASH)
   auto device_client = std::make_unique<media::VideoCaptureDeviceClient>(
-      requested_settings.buffer_type, std::move(media_receiver), buffer_pool);
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+      std::move(media_receiver), buffer_pool, std::move(video_effects_manager));
+#endif  // !BUILDFLAG(IS_CHROMEOS_ASH)
 
   device_->AllocateAndStart(requested_settings, std::move(device_client));
   device_started_ = true;
+}
+
+void DeviceMediaToMojoAdapter::StopInProcess() {
+  DCHECK(thread_checker_.CalledOnValidThread());
+
+  OnClientConnectionErrorOrClose();
 }
 
 void DeviceMediaToMojoAdapter::MaybeSuspend() {
@@ -166,16 +215,16 @@ void DeviceMediaToMojoAdapter::Resume() {
 void DeviceMediaToMojoAdapter::GetPhotoState(GetPhotoStateCallback callback) {
   media::VideoCaptureDevice::GetPhotoStateCallback scoped_callback =
       mojo::WrapCallbackWithDefaultInvokeIfNotRun(
-          media::BindToCurrentLoop(std::move(callback)), nullptr);
+          base::BindPostTaskToCurrentDefault(std::move(callback)), nullptr);
   device_->GetPhotoState(std::move(scoped_callback));
 }
 
 void DeviceMediaToMojoAdapter::SetPhotoOptions(
     media::mojom::PhotoSettingsPtr settings,
     SetPhotoOptionsCallback callback) {
-  media::mojom::ImageCapture::SetOptionsCallback scoped_callback =
+  media::mojom::ImageCapture::SetPhotoOptionsCallback scoped_callback =
       mojo::WrapCallbackWithDefaultInvokeIfNotRun(
-          media::BindToCurrentLoop(std::move(callback)), false);
+          base::BindPostTaskToCurrentDefault(std::move(callback)), false);
   device_->SetPhotoOptions(std::move(settings), std::move(scoped_callback));
 }
 
@@ -183,9 +232,9 @@ void DeviceMediaToMojoAdapter::TakePhoto(TakePhotoCallback callback) {
   auto scoped_trace = ScopedCaptureTrace::CreateIfEnabled("TakePhoto");
   media::mojom::ImageCapture::TakePhotoCallback scoped_callback =
       mojo::WrapCallbackWithDefaultInvokeIfNotRun(
-          media::BindToCurrentLoop(base::BindOnce(&TakePhotoCallbackTrampoline,
-                                                  std::move(callback),
-                                                  std::move(scoped_trace))),
+          base::BindPostTaskToCurrentDefault(
+              base::BindOnce(&TakePhotoCallbackTrampoline, std::move(callback),
+                             std::move(scoped_trace))),
           nullptr);
   device_->TakePhoto(std::move(scoped_callback));
 }
@@ -209,12 +258,14 @@ void DeviceMediaToMojoAdapter::Stop() {
   device_started_ = false;
   weak_factory_.InvalidateWeakPtrs();
   device_->StopAndDeAllocate();
-  // We need to post the deletion of receiver to the end of the message queue,
-  // because |device_->StopAndDeAllocate()| may post messages (e.g.
-  // OnBufferRetired()) to a WeakPtr to |receiver_| to this queue,
-  // and we need those messages to be sent before we invalidate the WeakPtr.
-  base::ThreadTaskRunnerHandle::Get()->DeleteSoon(FROM_HERE,
-                                                  std::move(receiver_));
+  if (receiver_) {
+    // We need to post the deletion of receiver to the end of the message queue,
+    // because |device_->StopAndDeAllocate()| may post messages (e.g.
+    // OnBufferRetired()) to a WeakPtr to |receiver_| to this queue,
+    // and we need those messages to be sent before we invalidate the WeakPtr.
+    base::SingleThreadTaskRunner::GetCurrentDefault()->DeleteSoon(
+        FROM_HERE, std::move(receiver_));
+  }
 }
 
 void DeviceMediaToMojoAdapter::OnClientConnectionErrorOrClose() {

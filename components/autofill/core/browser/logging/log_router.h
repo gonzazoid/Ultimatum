@@ -9,7 +9,9 @@
 #include <vector>
 
 #include "base/observer_list.h"
+#include "base/scoped_observation_traits.h"
 #include "base/values.h"
+#include "components/autofill/core/browser/logging/text_log_receiver.h"
 #include "components/keyed_service/core/keyed_service.h"
 
 namespace autofill {
@@ -38,6 +40,9 @@ class LogRouter : public KeyedService {
   void ProcessLog(const std::string& text);
   void ProcessLog(const base::Value::Dict& node);
 
+  // Enables recording autofill-internals logs to LOG(INFO).
+  void LogToTerminal();
+
   // All four (Unr|R)egister* methods below are safe to call from the
   // constructor of the registered object, because they do not call that object,
   // and the router only runs on a single thread.
@@ -56,12 +61,29 @@ class LogRouter : public KeyedService {
 
  private:
   // Observer lists for managers and receivers. The |true| in the template
-  // specialisation means that they will check that all observers were removed
+  // specialization means that they will check that all observers were removed
   // on destruction.
   base::ObserverList<RoutingLogManager, true>::Unchecked managers_;
   base::ObserverList<LogReceiver, true>::Unchecked receivers_;
+  TextLogReceiver text_log_receiver_;
 };
 
 }  // namespace autofill
+
+namespace base {
+
+template <>
+struct ScopedObservationTraits<autofill::LogRouter, autofill::LogReceiver> {
+  static void AddObserver(autofill::LogRouter* source,
+                          autofill::LogReceiver* observer) {
+    source->RegisterReceiver(observer);
+  }
+  static void RemoveObserver(autofill::LogRouter* source,
+                             autofill::LogReceiver* observer) {
+    source->UnregisterReceiver(observer);
+  }
+};
+
+}  // namespace base
 
 #endif  // COMPONENTS_AUTOFILL_CORE_BROWSER_LOGGING_LOG_ROUTER_H_

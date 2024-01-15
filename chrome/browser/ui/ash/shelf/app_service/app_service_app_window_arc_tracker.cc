@@ -4,6 +4,7 @@
 
 #include "chrome/browser/ui/ash/shelf/app_service/app_service_app_window_arc_tracker.h"
 
+#include "ash/components/arc/arc_util.h"
 #include "ash/constants/app_types.h"
 #include "ash/public/cpp/multi_user_window_manager.h"
 #include "ash/public/cpp/shelf_item_delegate.h"
@@ -19,14 +20,14 @@
 #include "chrome/browser/apps/app_service/app_icon/app_icon_factory.h"
 #include "chrome/browser/apps/app_service/app_service_proxy.h"
 #include "chrome/browser/apps/app_service/app_service_proxy_factory.h"
+#include "chrome/browser/ash/app_list/arc/arc_app_utils.h"
+#include "chrome/browser/ash/app_list/arc/intent.h"
 #include "chrome/browser/ash/app_restore/app_restore_arc_task_handler.h"
 #include "chrome/browser/ash/app_restore/arc_ghost_window_handler.h"
 #include "chrome/browser/ash/arc/arc_optin_uma.h"
 #include "chrome/browser/ash/arc/arc_util.h"
 #include "chrome/browser/ash/arc/session/arc_session_manager.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/ui/app_list/arc/arc_app_utils.h"
-#include "chrome/browser/ui/app_list/arc/intent.h"
 #include "chrome/browser/ui/ash/multi_user/multi_user_window_manager_helper.h"
 #include "chrome/browser/ui/ash/shelf/app_service/app_service_app_window_shelf_controller.h"
 #include "chrome/browser/ui/ash/shelf/app_service/app_service_app_window_shelf_item_controller.h"
@@ -37,6 +38,7 @@
 #include "chrome/browser/ui/ash/shelf/chrome_shelf_controller.h"
 #include "components/app_restore/full_restore_utils.h"
 #include "components/app_restore/window_properties.h"
+#include "components/exo/window_properties.h"
 #include "extensions/common/constants.h"
 #include "ui/aura/client/aura_constants.h"
 #include "ui/gfx/image/image_skia.h"
@@ -202,6 +204,20 @@ void AppServiceAppWindowArcTracker::CloseWindows(const std::string& app_id) {
     arc::CloseTask(task_id);
 }
 
+void AppServiceAppWindowArcTracker::OnWindowPropertyChanged(
+    aura::Window* window,
+    const void* key,
+    intptr_t old) {
+  if (key != exo::kApplicationIdKey || old == 0)
+    return;
+  const std::string* old_val = reinterpret_cast<std::string*>(old);
+  const auto maybe_session_id = arc::GetSessionIdFromWindowAppId(*old_val);
+  const auto maybe_task_id = arc::GetWindowTaskId(window);
+  if (maybe_session_id.has_value() && maybe_task_id.has_value()) {
+    session_id_to_task_id_map_.erase(maybe_session_id.value());
+  }
+}
+
 void AppServiceAppWindowArcTracker::OnAppStatesChanged(
     const std::string& app_id,
     const ArcAppListPrefs::AppInfo& app_info) {
@@ -232,21 +248,18 @@ void AppServiceAppWindowArcTracker::OnTaskCreated(
   DCHECK(task_id_to_arc_app_window_info_.find(task_id) ==
          task_id_to_arc_app_window_info_.end());
 
-  const std::string arc_app_id =
-      ArcAppListPrefs::GetAppId(package_name, activity_name);
-  const arc::ArcAppShelfId arc_app_shelf_id =
-      arc::ArcAppShelfId::FromIntentAndAppId(intent, arc_app_id);
-  task_id_to_arc_app_window_info_[task_id] = std::make_unique<ArcAppWindowInfo>(
-      arc_app_shelf_id, intent, package_name);
-
   // If there is a ghost window for `session_id`, reuse the ghost window info,
   // and clear the ghost window info from `session_id_to_arc_app_window_info_`,
   // and reset `active_session_id_`.
   auto it = session_id_to_arc_app_window_info_.find(session_id);
   if (it != session_id_to_arc_app_window_info_.end()) {
+    const auto app_shelf_id = it->second->app_shelf_id();
+    task_id_to_arc_app_window_info_[task_id] =
+        std::make_unique<ArcAppWindowInfo>(app_shelf_id, intent, package_name);
+
+    session_id_to_task_id_map_[session_id] = task_id;
     task_id_to_arc_app_window_info_[task_id]->set_window(it->second->window());
 
-    const auto app_shelf_id = it->second->app_shelf_id();
     auto it_controller = app_shelf_group_to_controller_map_.find(app_shelf_id);
     if (it_controller != app_shelf_group_to_controller_map_.end())
       it_controller->second->RemoveSessionId(it->first);
@@ -254,6 +267,14 @@ void AppServiceAppWindowArcTracker::OnTaskCreated(
     session_id_to_arc_app_window_info_.erase(it);
     if (session_id == active_session_id_)
       active_session_id_ = arc::kNoTaskId;
+  } else {
+    const std::string arc_app_id =
+        ArcAppListPrefs::GetAppId(package_name, activity_name);
+    const arc::ArcAppShelfId arc_app_shelf_id =
+        arc::ArcAppShelfId::FromIntentAndAppId(intent, arc_app_id);
+    task_id_to_arc_app_window_info_[task_id] =
+        std::make_unique<ArcAppWindowInfo>(arc_app_shelf_id, intent,
+                                           package_name);
   }
 
   // Hide from shelf if there already is some task representing the window.
@@ -447,9 +468,12 @@ void AppServiceAppWindowArcTracker::AttachControllerToWindow(
   if (!info)
     return;
 
+  window->SetProperty(ash::kArcPackageNameKey, info->package_name());
   window->SetProperty<int>(ash::kShelfItemTypeKey, ash::TYPE_APP);
 
-  // Check if we have set the AppWindowBase for this task.
+  // Check if we have set the AppWindowBase for this task. If it was a session
+  // window (ARC ghost window) and replace by real task window, function will
+  // returen here.
   if (app_service_controller_->GetAppWindow(window))
     return;
 
@@ -463,7 +487,7 @@ void AppServiceAppWindowArcTracker::AttachControllerToWindow(
   if (task_id.has_value())
     AttachControllerToTask(*task_id);
   else if (session_id.has_value())
-    AttachControllerToSession(*session_id);
+    AttachControllerToSession(*session_id, *info);
 
   if (!info->task_hidden_from_shelf())
     app_service_controller_->AddWindowToShelf(window, shelf_id);
@@ -472,7 +496,6 @@ void AppServiceAppWindowArcTracker::AttachControllerToWindow(
     app_window->SetDescription(info->title(), info->icon());
 
   window->SetProperty(ash::kShelfIDKey, shelf_id.Serialize());
-  window->SetProperty(ash::kArcPackageNameKey, info->package_name());
   window->SetProperty(ash::kAppIDKey, shelf_id.app_id);
   window->SetProperty(aura::client::kSkipImeProcessing, true);
 
@@ -551,8 +574,8 @@ void AppServiceAppWindowArcTracker::AttachControllerToTask(int task_id) {
   AppServiceAppWindowShelfItemController* item_controller = controller.get();
 
   if (!app_service_controller_->owner()->GetItem(shelf_id)) {
-    app_service_controller_->owner()->CreateAppItem(std::move(controller),
-                                                    ash::STATUS_RUNNING);
+    app_service_controller_->owner()->CreateAppItem(
+        std::move(controller), ash::STATUS_RUNNING, /*pinned=*/false);
   } else {
     app_service_controller_->owner()->shelf_model()->ReplaceShelfItemDelegate(
         shelf_id, std::move(controller));
@@ -563,10 +586,15 @@ void AppServiceAppWindowArcTracker::AttachControllerToTask(int task_id) {
   app_shelf_group_to_controller_map_[app_shelf_id] = item_controller;
 }
 
-void AppServiceAppWindowArcTracker::AttachControllerToSession(int session_id) {
-  ArcAppWindowInfo* const app_window_info =
-      session_id_to_arc_app_window_info_[session_id].get();
-  const arc::ArcAppShelfId& app_shelf_id = app_window_info->app_shelf_id();
+void AppServiceAppWindowArcTracker::AttachControllerToSession(
+    int session_id,
+    const ArcAppWindowInfo& app_window_info) {
+  // Pass the ArcAppWindowInfo as the parameter, since in some case the window
+  // is the task window but still associated with session id due to async issue.
+  // In that case, we cannot use the info from the
+  // `session_id_to_arc_app_window_info_` directly.
+  // TODO(b/274950968): Add a test for this case.
+  const arc::ArcAppShelfId& app_shelf_id = app_window_info.app_shelf_id();
   if (base::Contains(app_shelf_group_to_controller_map_, app_shelf_id)) {
     app_shelf_group_to_controller_map_[app_shelf_id]->AddSessionId(session_id);
     return;
@@ -579,8 +607,8 @@ void AppServiceAppWindowArcTracker::AttachControllerToSession(int session_id) {
   AppServiceAppWindowShelfItemController* item_controller = controller.get();
 
   if (!app_service_controller_->owner()->GetItem(shelf_id)) {
-    app_service_controller_->owner()->CreateAppItem(std::move(controller),
-                                                    ash::STATUS_RUNNING);
+    app_service_controller_->owner()->CreateAppItem(
+        std::move(controller), ash::STATUS_RUNNING, /*pinned=*/false);
   } else {
     app_service_controller_->owner()->shelf_model()->ReplaceShelfItemDelegate(
         shelf_id, std::move(controller));
@@ -677,6 +705,16 @@ ArcAppWindowInfo* AppServiceAppWindowArcTracker::GetArcAppWindowInfo(
   const auto session_id = arc::GetWindowSessionId(window);
   if (!session_id.has_value())
     return nullptr;
+
+  // Since OnTaskCreated is async with corresponding aura window create, so in
+  // some cases, the task has beend created but window property in aura window
+  // haven't been updated and still kept "session_id". In this case, if the
+  // session's task created, just return the latest task info.
+  if (base::Contains(session_id_to_task_id_map_, *session_id)) {
+    auto mapped_task_id = session_id_to_task_id_map_[*session_id];
+    if (base::Contains(task_id_to_arc_app_window_info_, mapped_task_id))
+      return task_id_to_arc_app_window_info_[mapped_task_id].get();
+  }
 
   const std::string* arc_app_id = window->GetProperty(app_restore::kAppIdKey);
   if (!arc_app_id || arc_app_id->empty())

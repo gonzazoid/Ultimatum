@@ -12,20 +12,22 @@
 
 #include <string>
 
-#include "base/bind.h"
+#include "base/check_is_test.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/memory/singleton.h"
-#include "base/strings/stringprintf.h"
+#include "base/strings/strcat_win.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
 #include "base/threading/scoped_blocking_call.h"
 #include "base/win/registry.h"
 #include "base/win/win_util.h"
 #include "base/win/windows_types.h"
-#include "base/win/windows_version.h"
 
 namespace {
+
+static bool g_has_called_initialize_win_parental_controls_ = false;
 
 // This singleton allows us to attempt to calculate the Platform Parental
 // Controls enabled value on a worker thread before the UI thread needs the
@@ -55,9 +57,21 @@ class WinParentalControlsValue {
   // on Windows 7 and beyond. This function should be called on a COM
   // Initialized thread and is potentially blocking.
   static WinParentalControls GetParentalControlsFromApi() {
-    // Since we can potentially block, make sure the thread is okay with this.
-    base::ScopedBlockingCall scoped_blocking_call(
-        FROM_HERE, base::BlockingType::MAY_BLOCK);
+    // This call may block and be called from the UI thread, which is
+    // unfortunate, but we want to at least make sure that we've attempted to
+    // call InitializeWinParentalControls() in an attempt to load it early so
+    // that we don't need to block.
+    //
+    // Note that this CHECK replaced a previous base::ScopedBlockingCall, which
+    // was incorrect because there were no guarantees that
+    // InitializeWinParentalControls() would finish executing asynchronously
+    // before the value was needed. See https://crbug.com/1411815#c7.
+    if (!g_has_called_initialize_win_parental_controls_) {
+      // This uses CHECK_IS_TEST() to skip verifying that
+      // InitializeWinParentalControls() got called in tests because updating
+      // all test fixtures to call it seemed daunting.
+      CHECK_IS_TEST();
+    }
     Microsoft::WRL::ComPtr<IWindowsParentalControlsCore> parent_controls;
     HRESULT hr = ::CoCreateInstance(__uuidof(WindowsParentalControls), nullptr,
                                     CLSCTX_ALL, IID_PPV_ARGS(&parent_controls));
@@ -97,12 +111,10 @@ class WinParentalControlsValue {
     if (!base::win::GetUserSidString(&user_sid))
       return;
 
-    static constexpr wchar_t kWebFilterRegistryPathFormat[] =
-        L"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Parental "
-        "Controls\\Users\\%ls\\Web";
-
     std::wstring web_filter_key_path =
-        base::StringPrintf(kWebFilterRegistryPathFormat, user_sid.c_str());
+        base::StrCat({L"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Parental "
+                      L"Controls\\Users\\",
+                      user_sid, L"\\Web"});
     base::win::RegKey web_filter_key(
         HKEY_LOCAL_MACHINE, web_filter_key_path.c_str(), KEY_QUERY_VALUE);
     if (!web_filter_key.Valid())
@@ -124,8 +136,7 @@ class WinParentalControlsValue {
 
     // Parental controls APIs are not fully supported in Win10 and beyond, so
     // check registry properties for restictions.
-    if (base::win::GetVersion() >= base::win::Version::WIN10)
-      UpdateParentalControlsFromRegistry(&controls);
+    UpdateParentalControlsFromRegistry(&controls);
 
     return controls;
   }
@@ -136,6 +147,7 @@ class WinParentalControlsValue {
 }  // namespace
 
 void InitializeWinParentalControls() {
+  g_has_called_initialize_win_parental_controls_ = true;
   base::ThreadPool::CreateCOMSTATaskRunner(
       {base::MayBlock(), base::TaskPriority::USER_VISIBLE})
       ->PostTask(FROM_HERE, base::BindOnce(base::IgnoreResult(

@@ -2,11 +2,15 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {TestRunner} from 'test_runner';
+import {BindingsTestRunner} from 'bindings_test_runner';
+import {SourcesTestRunner} from 'sources_test_runner';
+
+import * as BindingsModule from 'devtools/models/bindings/bindings.js';
+
 (async function() {
   TestRunner.addResult(
       `Verify that persistence does not overwrite CSS files when CSS model reports error on getStyleSheetText.\n`);
-  await TestRunner.loadTestModule('bindings_test_runner');
-  await TestRunner.loadLegacyModule('sources'); await TestRunner.loadTestModule('sources_test_runner');
   await TestRunner.loadHTML(`
       <style>
       body {
@@ -62,7 +66,7 @@
       TestRunner.cssModel.setStyleSheetText(styleSheet.id, 'body {color: blue}');
       // Expect StylesSourceMapping to sync styleSheet with network UISourceCode.
       // Persistence acts synchronously.
-      TestRunner.addSniffer(Bindings.StyleFile.prototype, 'styleFileSyncedForTest', next);
+      TestRunner.addSniffer(BindingsModule.StylesSourceMapping.StyleFile.prototype, 'styleFileSyncedForTest', next);
 
       function throwProtocolError(styleSheetId) {
         TestRunner.addResult('Protocol Error: FAKE PROTOCOL ERROR');

@@ -25,7 +25,8 @@ UntrustedEcheAppUIConfig::UntrustedEcheAppUIConfig()
 UntrustedEcheAppUIConfig::~UntrustedEcheAppUIConfig() = default;
 
 std::unique_ptr<content::WebUIController>
-UntrustedEcheAppUIConfig::CreateWebUIController(content::WebUI* web_ui) {
+UntrustedEcheAppUIConfig::CreateWebUIController(content::WebUI* web_ui,
+                                                const GURL& url) {
   return std::make_unique<UntrustedEcheAppUI>(web_ui);
 }
 
@@ -41,9 +42,8 @@ UntrustedEcheAppUI::UntrustedEcheAppUI(content::WebUI* web_ui)
   html_source->AddResourcePath("js/app_bundle.js", IDR_ASH_ECHE_APP_BUNDLE_JS);
   html_source->AddResourcePath("assets/app_bundle.css",
                                IDR_ASH_ECHE_APP_BUNDLE_CSS);
-  html_source->AddResourcePath(
-      "message_pipe.js",
-      IDR_ASH_ECHE_APP_______SYSTEM_APPS_PUBLIC_JS_MESSAGE_PIPE_JS);
+  html_source->AddResourcePath("message_pipe.js",
+                               IDR_ASH_ECHE_APP_MESSAGE_PIPE_JS);
   html_source->AddResourcePath("message_types.js",
                                IDR_ASH_ECHE_APP_MESSAGE_TYPES_JS);
   html_source->AddResourcePath("receiver.js", IDR_ASH_ECHE_APP_RECEIVER_JS);

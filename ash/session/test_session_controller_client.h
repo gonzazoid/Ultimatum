@@ -12,6 +12,7 @@
 
 #include "ash/public/cpp/session/session_controller_client.h"
 #include "ash/public/cpp/session/session_types.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/token.h"
 #include "components/user_manager/user_type.h"
@@ -62,6 +63,9 @@ class TestSessionControllerClient : public SessionControllerClient {
   int attempt_restart_chrome_count() const {
     return attempt_restart_chrome_count_;
   }
+  int request_hide_lock_screen_count() const {
+    return request_hide_lock_screen_count_;
+  }
   int request_sign_out_count() const { return request_sign_out_count_; }
   int request_restart_for_update_count() const {
     return request_restart_for_update_count_;
@@ -95,7 +99,8 @@ class TestSessionControllerClient : public SessionControllerClient {
       user_manager::UserType user_type = user_manager::USER_TYPE_REGULAR,
       bool provide_pref_service = true,
       bool is_new_profile = false,
-      const std::string& given_name = std::string());
+      const std::string& given_name = std::string(),
+      bool is_account_managed = false);
 
   // Adds a user session from a given AccountId.
   void AddUserSession(
@@ -104,7 +109,8 @@ class TestSessionControllerClient : public SessionControllerClient {
       user_manager::UserType user_type = user_manager::USER_TYPE_REGULAR,
       bool provide_pref_service = true,
       bool is_new_profile = false,
-      const std::string& given_name = std::string());
+      const std::string& given_name = std::string(),
+      bool is_account_managed = false);
 
   // Creates a test PrefService and associates it with the user.
   void ProvidePrefServiceForUser(const AccountId& account_id);
@@ -140,7 +146,9 @@ class TestSessionControllerClient : public SessionControllerClient {
   void EmitAshInitialized() override;
   PrefService* GetSigninScreenPrefService() override;
   PrefService* GetUserPrefService(const AccountId& account_id) override;
+  base::FilePath GetProfilePath(const AccountId& account_id) override;
   bool IsEnterpriseManaged() const override;
+  std::optional<int> GetExistingUsersCount() const override;
 
   // By default `LockScreen()` only changes the session state but no UI views
   // will be created.  If your tests requires the lock screen to be created,
@@ -153,16 +161,21 @@ class TestSessionControllerClient : public SessionControllerClient {
     is_enterprise_managed_ = is_enterprise_managed;
   }
 
+  void set_existing_users_count(int existing_users_count) {
+    existing_users_count_ = existing_users_count;
+  }
+
  private:
   void DoSwitchUser(const AccountId& account_id, bool switch_user);
 
-  SessionControllerImpl* const controller_;
-  TestPrefServiceProvider* const prefs_provider_;
+  const raw_ptr<SessionControllerImpl, DanglingUntriaged> controller_;
+  const raw_ptr<TestPrefServiceProvider> prefs_provider_;
 
   int fake_session_id_ = 0;
   SessionInfo session_info_;
 
   bool use_lower_case_user_id_ = true;
+  int request_hide_lock_screen_count_ = 0;
   int request_sign_out_count_ = 0;
   int request_restart_for_update_count_ = 0;
   int attempt_restart_chrome_count_ = 0;
@@ -170,6 +183,8 @@ class TestSessionControllerClient : public SessionControllerClient {
   bool should_show_lock_screen_ = false;
 
   bool is_enterprise_managed_ = false;
+
+  int existing_users_count_ = 0;
 
   std::unique_ptr<views::Widget> multi_profile_login_widget_;
 

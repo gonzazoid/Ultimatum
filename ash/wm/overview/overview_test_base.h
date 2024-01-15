@@ -25,8 +25,8 @@ class CloseButton;
 class OverviewController;
 class OverviewGrid;
 class OverviewItem;
+class OverviewItemBase;
 class OverviewSession;
-class ScopedOverviewTransformWindow;
 class SplitViewController;
 class WindowPreviewView;
 
@@ -44,9 +44,9 @@ class OverviewTestBase : public AshTestBase {
   // which are tablet mode only.
   void EnterTabletMode();
 
-  bool InOverviewSession();
+  bool InOverviewSession() const;
 
-  bool WindowsOverlapping(aura::Window* window1, aura::Window* window2);
+  bool WindowsOverlapping(aura::Window* window1, aura::Window* window2) const;
 
   // Creates a window which cannot be snapped by splitview.
   std::unique_ptr<aura::Window> CreateUnsnappableWindow(
@@ -59,33 +59,38 @@ class OverviewTestBase : public AshTestBase {
 
   SplitViewController* GetSplitViewController();
 
-  gfx::Rect GetTransformedBounds(aura::Window* window);
+  gfx::Rect GetTransformedBounds(aura::Window* window) const;
 
-  gfx::Rect GetTransformedTargetBounds(aura::Window* window);
+  gfx::Rect GetTransformedTargetBounds(aura::Window* window) const;
 
-  gfx::Rect GetTransformedBoundsInRootWindow(aura::Window* window);
+  gfx::Rect GetTransformedBoundsInRootWindow(aura::Window* window) const;
 
-  OverviewItem* GetDropTarget(int grid_index);
+  const OverviewItemBase* GetDropTarget(int grid_index) const;
 
-  CloseButton* GetCloseButton(OverviewItem* item);
+  CloseButton* GetCloseButton(OverviewItemBase* item);
 
-  views::Label* GetLabelView(OverviewItem* item);
+  views::Label* GetLabelView(OverviewItemBase* item);
 
-  views::View* GetBackdropView(OverviewItem* item);
+  views::View* GetBackdropView(OverviewItemBase* item);
 
-  WindowPreviewView* GetPreviewView(OverviewItem* item);
+  WindowPreviewView* GetPreviewView(OverviewItemBase* item);
 
-  float GetCloseButtonOpacity(OverviewItem* item);
+  gfx::Rect GetShadowBounds(const OverviewItemBase* item) const;
 
-  float GetTitlebarOpacity(OverviewItem* item);
-  const ScopedOverviewTransformWindow& GetTransformWindow(
-      OverviewItem* item) const;
-  bool HasRoundedCorner(OverviewItem* item);
+  views::Widget* GetCannotSnapWidget(OverviewItemBase* item);
+
+  void SetAnimatingToClose(OverviewItemBase* item, bool val);
+
+  float GetCloseButtonOpacity(OverviewItemBase* item);
+
+  float GetTitlebarOpacity(OverviewItemBase* item);
+
+  bool HasRoundedCorner(OverviewItemBase* item);
 
   // Tests that a window is contained within a given OverviewItem, and that both
   // the window and its matching close button are within the same screen.
   void CheckWindowAndCloseButtonInScreen(aura::Window* window,
-                                         OverviewItem* window_item);
+                                         OverviewItemBase* window_item);
 
   void CheckOverviewEnterExitHistogram(const std::string& trace,
                                        const std::vector<int>& enter_counts,

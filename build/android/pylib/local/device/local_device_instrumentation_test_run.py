@@ -5,7 +5,6 @@
 
 import collections
 import contextlib
-import copy
 import hashlib
 import json
 import logging
@@ -17,15 +16,12 @@ import sys
 import tempfile
 import time
 
-from six.moves import range  # pylint: disable=redefined-builtin
-from six.moves import zip  # pylint: disable=redefined-builtin
 from devil import base_error
 from devil.android import apk_helper
 from devil.android import crash_handler
 from devil.android import device_errors
 from devil.android import device_temp_file
 from devil.android import flag_changer
-from devil.android.sdk import shared_prefs
 from devil.android.sdk import version_codes
 from devil.android import logcat_monitor
 from devil.android.tools import system_app
@@ -41,10 +37,12 @@ from pylib.instrumentation import instrumentation_test_instance
 from pylib.local.device import local_device_environment
 from pylib.local.device import local_device_test_run
 from pylib.output import remote_output_manager
+from pylib.symbols import stack_symbolizer
 from pylib.utils import chrome_proxy_utils
+from pylib.utils import code_coverage_utils
 from pylib.utils import gold_utils
 from pylib.utils import instrumentation_tracing
-from pylib.utils import shared_preference_utils
+from pylib.utils.device_dependencies import DevicePathComponentsFor
 from py_trace_event import trace_event
 from py_trace_event import trace_time
 from py_utils import contextlib_ext
@@ -56,7 +54,9 @@ with host_paths.SysPath(
   import jinja2  # pylint: disable=import-error
   import markupsafe  # pylint: disable=import-error,unused-import
 
-
+_CHROMIUM_TESTS_ROOT = 'chromium_tests_root'
+_DEVICE_TEMP_DIR_DATA_ROOT = posixpath.join('/data/local/tmp',
+                                            _CHROMIUM_TESTS_ROOT)
 _JINJA_TEMPLATE_DIR = os.path.join(
     host_paths.DIR_SOURCE_ROOT, 'build', 'android', 'pylib', 'instrumentation')
 _JINJA_TEMPLATE_FILENAME = 'render_test.html.jinja'
@@ -88,6 +88,10 @@ MAX_BATCH_TEST_TIMEOUT = 30 * 60
 LOGCAT_FILTERS = ['*:e', 'chromium:v', 'cr_*:v', 'DEBUG:I',
                   'StrictMode:D', '%s:I' % _TAG]
 
+EXTRA_CLANG_COVERAGE_DEVICE_FILE = (
+    'org.chromium.base.test.BaseChromiumAndroidJUnitRunner.'
+    'ClangCoverageDeviceFile')
+
 EXTRA_SCREENSHOT_FILE = (
     'org.chromium.base.test.ScreenshotOnFailureStatement.ScreenshotFile')
 
@@ -95,6 +99,9 @@ EXTRA_UI_CAPTURE_DIR = (
     'org.chromium.base.test.util.Screenshooter.ScreenshotDir')
 
 EXTRA_TRACE_FILE = ('org.chromium.base.test.BaseJUnit4ClassRunner.TraceFile')
+
+_EXTRA_RUN_DISABLED_TEST = (
+    'org.chromium.base.test.util.DisableIfSkipCheck.RunDisabledTest')
 
 _EXTRA_TEST_LIST = (
     'org.chromium.base.test.BaseChromiumAndroidJUnitRunner.TestList')
@@ -115,7 +122,7 @@ _DEVICE_GOLD_DIR = 'skia_gold'
 # A map of Android product models to SDK ints.
 RENDER_TEST_MODEL_SDK_CONFIGS = {
     # Android x86 emulator.
-    'Android SDK built for x86': [23, 24],
+    'Android SDK built for x86': [24, 26],
     # We would like this to be supported, but it is currently too prone to
     # introducing flakiness due to a combination of Gold and Chromium issues.
     # See crbug.com/1233700 and skbug.com/12149 for more information.
@@ -123,7 +130,8 @@ RENDER_TEST_MODEL_SDK_CONFIGS = {
 }
 
 _BATCH_SUFFIX = '_batch'
-_TEST_BATCH_MAX_GROUP_SIZE = 200
+# If the batch is too big it starts to fail for command line length reasons.
+_LOCAL_TEST_BATCH_MAX_GROUP_SIZE = 200
 
 
 @contextlib.contextmanager
@@ -189,32 +197,31 @@ class LocalDeviceInstrumentationTestRun(
     self._chrome_proxy = None
     self._context_managers = collections.defaultdict(list)
     self._flag_changers = {}
+    self._webview_flag_changers = {}
     self._render_tests_device_output_dir = None
-    self._shared_prefs_to_restore = []
     self._skia_gold_session_manager = None
     self._skia_gold_work_dir = None
-    self._target_package = _GetTargetPackageName(test_instance.test_apk)
 
   #override
   def TestPackage(self):
     return self._test_instance.suite
 
-  def _GetDataStorageRootDirectory(self, device):
-    if self._test_instance.store_data_in_app_directory:
-      # TODO(rmhasan): Add check to makes sure api level > 27. Selinux
-      # policy on Oreo does not allow app to read files from app data dir
-      # that were not put there by the app.
-      return device.GetApplicationDataDirectory(self._target_package)
-    return device.GetExternalStoragePath()
-
   #override
   def SetUp(self):
+    target_package = _GetTargetPackageName(self._test_instance.test_apk)
 
     @local_device_environment.handle_shard_failures_with(
         self._env.DenylistDevice)
     @trace_event.traced
     def individual_device_set_up(device, host_device_tuples):
-      steps = []
+      # Functions to run concurrerntly when --concurrent-adb is enabled.
+      install_steps = []
+      post_install_steps = []
+
+      test_data_root_dir = posixpath.join(device.GetExternalStoragePath(),
+                                          _CHROMIUM_TESTS_ROOT)
+      if self._test_instance.store_data_dependencies_in_temp:
+        test_data_root_dir = _DEVICE_TEMP_DIR_DATA_ROOT
 
       if self._test_instance.replace_system_package:
         @trace_event.traced
@@ -228,7 +235,7 @@ class LocalDeviceInstrumentationTestRun(
           # manually invoke its __enter__ and __exit__ methods in setup and
           # teardown.
           system_app_context = system_app.ReplaceSystemApp(
-              dev, replacement_apk=self._test_instance.replace_system_package)
+              dev, self._test_instance.replace_system_package)
           # Pylint is not smart enough to realize that this field has
           # an __enter__ method, and will complain loudly.
           # pylint: disable=no-member
@@ -236,7 +243,7 @@ class LocalDeviceInstrumentationTestRun(
           # pylint: enable=no-member
           self._context_managers[str(dev)].append(system_app_context)
 
-        steps.append(replace_package)
+        install_steps.append(replace_package)
 
       if self._test_instance.system_packages_to_remove:
 
@@ -251,7 +258,7 @@ class LocalDeviceInstrumentationTestRun(
         # This should be at the front in case we're removing the package to make
         # room for another APK installation later on. Since we disallow
         # concurrent adb with this option specified, this should be safe.
-        steps.insert(0, remove_packages)
+        install_steps.insert(0, remove_packages)
 
       def install_helper(apk,
                          modules=None,
@@ -293,11 +300,11 @@ class LocalDeviceInstrumentationTestRun(
 
         return incremental_install_helper_internal
 
-      steps.extend(
+      install_steps.extend(
           install_apex_helper(apex)
           for apex in self._test_instance.additional_apexs)
 
-      steps.extend(
+      install_steps.extend(
           install_helper(apk, instant_app=self._test_instance.IsApkInstant(apk))
           for apk in self._test_instance.additional_apks)
 
@@ -307,13 +314,13 @@ class LocalDeviceInstrumentationTestRun(
           raise Exception('Test APK cannot be installed as an instant '
                           'app if it is incremental')
 
-        steps.append(
+        install_steps.append(
             incremental_install_helper(
                 self._test_instance.test_apk,
                 self._test_instance.test_apk_incremental_install_json,
                 permissions))
       else:
-        steps.append(
+        install_steps.append(
             install_helper(self._test_instance.test_apk,
                            permissions=permissions,
                            instant_app=self._test_instance.test_apk_as_instant))
@@ -348,7 +355,7 @@ class LocalDeviceInstrumentationTestRun(
           # pylint: enable=no-member
           self._context_managers[str(dev)].append(webview_context)
 
-        steps.append(use_webview_provider)
+        install_steps.append(use_webview_provider)
 
       if self._test_instance.use_voice_interaction_service:
 
@@ -364,7 +371,7 @@ class LocalDeviceInstrumentationTestRun(
           self._context_managers[str(device)].append(
               voice_interaction_service_context)
 
-        steps.append(use_voice_interaction_service)
+        post_install_steps.append(use_voice_interaction_service)
 
       # The apk under test needs to be installed last since installing other
       # apks after will unintentionally clear the fake module directory.
@@ -374,17 +381,28 @@ class LocalDeviceInstrumentationTestRun(
             apk_helper.GetPackageName(self._test_instance.apk_under_test))
         permissions = self._test_instance.apk_under_test.GetPermissions()
         if self._test_instance.apk_under_test_incremental_install_json:
-          steps.append(
+          install_steps.append(
               incremental_install_helper(
                   self._test_instance.apk_under_test,
                   self._test_instance.apk_under_test_incremental_install_json,
                   permissions))
         else:
-          steps.append(
+          install_steps.append(
               install_helper(self._test_instance.apk_under_test,
                              self._test_instance.modules,
                              self._test_instance.fake_modules, permissions,
                              self._test_instance.additional_locales))
+
+      # Execute any custom setup shell commands
+      if self._test_instance.run_setup_commands:
+
+        @trace_event.traced
+        def run_setup_commands(dev):
+          for cmd in self._test_instance.run_setup_commands:
+            logging.info('Running custom setup shell command: %s', cmd)
+            dev.RunShellCommand(cmd, shell=True, check_return=True)
+
+        post_install_steps.append(run_setup_commands)
 
       @trace_event.traced
       def set_debug_app(dev):
@@ -393,21 +411,8 @@ class LocalDeviceInstrumentationTestRun(
         cmd = ['am', 'set-debug-app', '--persistent']
         if self._test_instance.wait_for_java_debugger:
           cmd.append('-w')
-        cmd.append(self._target_package)
+        cmd.append(target_package)
         dev.RunShellCommand(cmd, check_return=True)
-
-      @trace_event.traced
-      def edit_shared_prefs(dev):
-        for setting in self._test_instance.edit_shared_prefs:
-          shared_pref = shared_prefs.SharedPrefs(
-              dev, setting['package'], setting['filename'],
-              use_encrypted_path=setting.get('supports_encrypted_path', False))
-          pref_to_restore = copy.copy(shared_pref)
-          pref_to_restore.Load()
-          self._shared_prefs_to_restore.append(pref_to_restore)
-
-          shared_preference_utils.ApplySharedPreferenceSetting(
-              shared_pref, setting)
 
       @trace_event.traced
       def approve_app_links(dev):
@@ -428,59 +433,88 @@ class LocalDeviceInstrumentationTestRun(
 
       @instrumentation_tracing.no_tracing
       def push_test_data(dev):
-        test_data_root_dir = posixpath.join(
-            self._GetDataStorageRootDirectory(dev), 'chromium_tests_root')
+        device_root = test_data_root_dir
+        # Resolve the path only when need to manipulate data through adb shell
+        # commands. Don't resolve if the path is passed to app through flags.
+        if self._env.force_main_user:
+          device_root = device.ResolveSpecialPath(device_root)
         host_device_tuples_substituted = [
-            (h,
-             local_device_test_run.SubstituteDeviceRoot(d, test_data_root_dir))
+            (h, local_device_test_run.SubstituteDeviceRoot(d, device_root))
             for h, d in host_device_tuples
         ]
         logging.info('Pushing data dependencies.')
         for h, d in host_device_tuples_substituted:
           logging.debug('  %r -> %r', h, d)
-
-        as_root = self._test_instance.store_data_in_app_directory
-        local_device_environment.place_nomedia_on_device(dev,
-                                                         test_data_root_dir,
-                                                         as_root=as_root)
+        dev.PlaceNomediaFile(device_root)
         dev.PushChangedFiles(host_device_tuples_substituted,
                              delete_device_stale=True,
-                             as_root=as_root)
-
+                             as_root=self._env.force_main_user)
         if not host_device_tuples_substituted:
-          dev.RunShellCommand(['rm', '-rf', test_data_root_dir],
+          dev.RunShellCommand(['rm', '-rf', device_root],
                               check_return=True,
-                              as_root=as_root)
-          dev.RunShellCommand(['mkdir', '-p', test_data_root_dir],
+                              as_root=self._env.force_main_user)
+          dev.RunShellCommand(['mkdir', '-p', device_root],
                               check_return=True,
-                              as_root=as_root)
+                              as_root=self._env.force_main_user)
 
       @trace_event.traced
       def create_flag_changer(dev):
-        if self._test_instance.flags:
-          self._CreateFlagChangerIfNeeded(dev)
-          logging.debug('Attempting to set flags: %r',
-                        self._test_instance.flags)
-          self._flag_changers[str(dev)].AddFlags(self._test_instance.flags)
+        flags = self._test_instance.flags
+        webview_flags = self._test_instance.webview_flags
+
+        if '--webview-verbose-logging' not in webview_flags:
+          webview_flags.append('--webview-verbose-logging')
+
+        def _get_variations_seed_path_arg(seed_path):
+          seed_path_components = DevicePathComponentsFor(seed_path)
+          test_seed_path = local_device_test_run.SubstituteDeviceRoot(
+              seed_path_components, test_data_root_dir)
+          return '--variations-test-seed-path={0}'.format(test_seed_path)
+
+        if self._test_instance.variations_test_seed_path:
+          flags.append(
+              _get_variations_seed_path_arg(
+                  self._test_instance.variations_test_seed_path))
+
+        if self._test_instance.webview_variations_test_seed_path:
+          webview_flags.append(
+              _get_variations_seed_path_arg(
+                  self._test_instance.webview_variations_test_seed_path))
+
+        if flags or webview_flags:
+          self._CreateFlagChangersIfNeeded(dev)
+
+        if flags:
+          logging.debug('Attempting to set flags: %r', flags)
+          self._flag_changers[str(dev)].AddFlags(flags)
+
+        if webview_flags:
+          logging.debug('Attempting to set WebView flags: %r', webview_flags)
+          self._webview_flag_changers[str(dev)].AddFlags(webview_flags)
 
         valgrind_tools.SetChromeTimeoutScale(
             dev, self._test_instance.timeout_scale)
 
-      steps += [
-          set_debug_app, edit_shared_prefs, approve_app_links, push_test_data,
-          create_flag_changer, set_vega_permissions, DismissCrashDialogs
+      install_steps += [push_test_data, create_flag_changer]
+      post_install_steps += [
+          set_debug_app, approve_app_links, set_vega_permissions,
+          DismissCrashDialogs
       ]
 
       def bind_crash_handler(step, dev):
         return lambda: crash_handler.RetryOnSystemCrash(step, dev)
 
-      steps = [bind_crash_handler(s, device) for s in steps]
+      install_steps = [bind_crash_handler(s, device) for s in install_steps]
+      post_install_steps = [
+          bind_crash_handler(s, device) for s in post_install_steps
+      ]
 
       try:
         if self._env.concurrent_adb:
-          reraiser_thread.RunAsync(steps)
+          reraiser_thread.RunAsync(install_steps)
+          reraiser_thread.RunAsync(post_install_steps)
         else:
-          for step in steps:
+          for step in install_steps + post_install_steps:
             step()
         if self._test_instance.store_tombstones:
           tombstones.ClearAllTombstones(device)
@@ -515,7 +549,7 @@ class LocalDeviceInstrumentationTestRun(
     if self._test_instance.wait_for_java_debugger:
       logging.warning('*' * 80)
       logging.warning('Waiting for debugger to attach to process: %s',
-                      self._target_package)
+                      target_package)
       logging.warning('*' * 80)
 
   #override
@@ -538,17 +572,18 @@ class LocalDeviceInstrumentationTestRun(
       if str(dev) in self._flag_changers:
         self._flag_changers[str(dev)].Restore()
 
+      if self._webview_flag_changers[str(dev)].GetCurrentFlags():
+        self._webview_flag_changers[str(dev)].Restore()
+
       # Remove package-specific configuration
       dev.RunShellCommand(['am', 'clear-debug-app'], check_return=True)
 
-      valgrind_tools.SetChromeTimeoutScale(dev, None)
+      # Execute any custom teardown shell commands
+      for cmd in self._test_instance.run_teardown_commands:
+        logging.info('Running custom teardown shell command: %s', cmd)
+        dev.RunShellCommand(cmd, shell=True, check_return=True)
 
-      # Restore any shared preference files that we stored during setup.
-      # This should be run sometime before the replace package contextmanager
-      # gets exited so we don't have to special case restoring files of
-      # replaced system apps.
-      for pref_to_restore in self._shared_prefs_to_restore:
-        pref_to_restore.Commit(force_commit=True)
+      valgrind_tools.SetChromeTimeoutScale(dev, None)
 
       # If we've force approved app links for a package, undo that now.
       self._ToggleAppLinks(dev, 'STATE_NO_RESPONSE')
@@ -581,7 +616,10 @@ class LocalDeviceInstrumentationTestRun(
     ]
     dev.RunShellCommand(cmd, check_return=True)
 
-  def _CreateFlagChangerIfNeeded(self, device):
+  def _CreateFlagChangersIfNeeded(self, device):
+    self._webview_flag_changers.setdefault(
+        str(device), flag_changer.FlagChanger(device, 'webview-command-line'))
+
     if str(device) not in self._flag_changers:
       cmdline_file = 'test-cmdline-file'
       if self._test_instance.use_apk_under_test_flags_file:
@@ -594,7 +632,16 @@ class LocalDeviceInstrumentationTestRun(
           device, cmdline_file)
 
   #override
-  def _CreateShards(self, tests):
+  def _CreateShardsForDevices(self, tests):
+    """Create shards of tests to run on devices.
+
+    Args:
+      tests: List containing tests or test batches.
+
+    Returns:
+      List of tests or batches.
+    """
+    # Each test or test batch will be a single shard.
     return tests
 
   #override
@@ -647,6 +694,14 @@ class LocalDeviceInstrumentationTestRun(
             batch_name += '|cmd_line_remove:' + ','.join(
                 sorted(annotations['CommandLineFlags$Remove']['value']))
 
+        # WebView tests run in 2 process modes (single and multi). We must
+        # restart the process for each mode, so this means singleprocess tests
+        # and multiprocess tests must not be in the same batch.
+        webview_multiprocess_mode = (
+          base_test_result.MULTIPROCESS_SUFFIX in test['method'])
+        if webview_multiprocess_mode:
+          batch_name += '|multiprocess_mode'
+
         batched_tests.setdefault(batch_name, []).append(test)
       else:
         other_tests.append(test)
@@ -660,13 +715,26 @@ class LocalDeviceInstrumentationTestRun(
         return tuple(dict2list(v) for v in d)
       return d
 
+    test_count = sum(
+        [len(test) - 1 for test in tests if self._CountTestsIndividually(test)])
+    test_count += len(tests)
+    if self._test_instance.total_external_shards > 1:
+      # Calculate suitable test batch max group size based on average partition
+      # size. The batch size should be below partition size to balance between
+      # shards. Choose to divide by 3 as it works fine with most of test suite
+      # without increasing too much setup/teardown time for batch tests.
+      test_batch_max_group_size = \
+        max(1, test_count // self._test_instance.total_external_shards // 3)
+    else:
+      test_batch_max_group_size = _LOCAL_TEST_BATCH_MAX_GROUP_SIZE
+
     all_tests = []
     for _, btests in list(batched_tests.items()):
       # Ensure a consistent ordering across external shards.
       btests.sort(key=dict2list)
       all_tests.extend([
-          btests[i:i + _TEST_BATCH_MAX_GROUP_SIZE]
-          for i in range(0, len(btests), _TEST_BATCH_MAX_GROUP_SIZE)
+          btests[i:i + test_batch_max_group_size]
+          for i in range(0, len(btests), test_batch_max_group_size)
       ])
     all_tests.extend(other_tests)
     # Sort all tests by hash.
@@ -680,6 +748,9 @@ class LocalDeviceInstrumentationTestRun(
   #override
   def _RunTest(self, device, test):
     extras = {}
+
+    if self._test_instance.GetRunDisabledFlag():
+      extras[_EXTRA_RUN_DISABLED_TEST] = 'true'
 
     if self._test_instance.is_unit_test:
       extras[_EXTRA_TEST_IS_UNIT] = 'true'
@@ -696,29 +767,61 @@ class LocalDeviceInstrumentationTestRun(
                                   (test[0]['class'], test[0]['method'])
                                   if isinstance(test, list) else '%s_%s' %
                                   (test['class'], test['method']))
-      extras['coverage'] = 'true'
+      # Note for multi-user: when the main user is a secondary user, the path
+      # like "/sdcard/chrome" can be still used as it is when used by commands
+      # like "am instrument". But it needs to be converted when used by commands
+      # like "mkdir", "ls", "rm", with the method ResolveSpecialPath, and root
+      # permission.
       coverage_directory = os.path.join(
           device.GetExternalStoragePath(), 'chrome', 'test', 'coverage')
-      if not device.PathExists(coverage_directory):
+      # Setting up for jacoco coverage.
+      extras['coverage'] = 'true'
+      jacoco_coverage_device_file = os.path.join(coverage_directory,
+                                                 coverage_basename)
+      jacoco_coverage_device_file += '.exec'
+      extras['coverageFile'] = jacoco_coverage_device_file
+
+      if self._env.force_main_user:
+        coverage_directory = device.ResolveSpecialPath(coverage_directory)
+      if not device.PathExists(coverage_directory,
+                               as_root=self._env.force_main_user):
+        # Root permission is needed when accessing a secondary user's path.
         device.RunShellCommand(['mkdir', '-p', coverage_directory],
-                               check_return=True)
-      coverage_device_file = os.path.join(coverage_directory, coverage_basename)
-      coverage_device_file += '.exec'
-      extras['coverageFile'] = coverage_device_file
+                               check_return=True,
+                               as_root=self._env.force_main_user)
+
+      # Setting up for clang coverage.
+      device_clang_profile_dir = code_coverage_utils.GetDeviceClangCoverageDir(
+          device)
+      # "%2m" is used to expand to 2 raw profiles at runtime. "%p" writes
+      # process ID.
+      # See https://clang.llvm.org/docs/SourceBasedCodeCoverage.html
+      clang_profile_filename = '%s_%s.profraw' % (coverage_basename, '%2m_%p')
+      extras[EXTRA_CLANG_COVERAGE_DEVICE_FILE] = posixpath.join(
+          device_clang_profile_dir, clang_profile_filename)
 
     if self._test_instance.enable_breakpad_dump:
       # Use external storage directory so that the breakpad dump can be accessed
       # by the test APK in addition to the apk_under_test.
       breakpad_dump_directory = os.path.join(device.GetExternalStoragePath(),
                                              'chromium_dumps')
-      if device.PathExists(breakpad_dump_directory):
-        device.RemovePath(breakpad_dump_directory, recursive=True)
       flags_to_add.append('--breakpad-dump-location=' + breakpad_dump_directory)
+      if self._env.force_main_user:
+        breakpad_dump_directory = device.ResolveSpecialPath(
+            breakpad_dump_directory)
+      if device.PathExists(breakpad_dump_directory,
+                           as_root=self._env.force_main_user):
+        device.RemovePath(breakpad_dump_directory,
+                          recursive=True,
+                          as_root=self._env.force_main_user)
 
     # Save screenshot if screenshot dir is specified (save locally) or if
     # a GS bucket is passed (save in cloud).
     screenshot_device_file = device_temp_file.DeviceTempFile(
-        device.adb, suffix='.png', dir=device.GetExternalStoragePath())
+        device.adb,
+        suffix='.png',
+        dir=device.GetExternalStoragePath(),
+        device_utils=device)
     extras[EXTRA_SCREENSHOT_FILE] = screenshot_device_file.name
 
     # Set up the screenshot directory. This needs to be done for each test so
@@ -726,13 +829,15 @@ class LocalDeviceInstrumentationTestRun(
     # external storage since the default location doesn't allow file creation
     # from the instrumentation test app on Android L and M.
     ui_capture_dir = device_temp_file.NamedDeviceTemporaryDirectory(
-        device.adb,
-        dir=device.GetExternalStoragePath())
+        device.adb, dir=device.GetExternalStoragePath(), device_utils=device)
     extras[EXTRA_UI_CAPTURE_DIR] = ui_capture_dir.name
 
     if self._env.trace_output:
       trace_device_file = device_temp_file.DeviceTempFile(
-          device.adb, suffix='.json', dir=device.GetExternalStoragePath())
+          device.adb,
+          suffix='.json',
+          dir=device.GetExternalStoragePath(),
+          device_utils=device)
       extras[EXTRA_TRACE_FILE] = trace_device_file.name
 
     target = '%s/%s' % (self._test_instance.test_package,
@@ -774,11 +879,13 @@ class LocalDeviceInstrumentationTestRun(
     logging.info('preparing to run %s: %s', test_display_name, test)
 
     if _IsRenderTest(test):
-      # TODO(mikecase): Add DeviceTempDirectory class and use that instead.
-      self._render_tests_device_output_dir = posixpath.join(
-          device.GetExternalStoragePath(), 'render_test_output_dir')
+      self._render_tests_device_output_dir = (
+          device_temp_file.NamedDeviceTemporaryDirectory(
+              device.adb,
+              dir=device.GetExternalStoragePath(),
+              device_utils=device))
       flags_to_add.append('--render-test-output-dir=%s' %
-                          self._render_tests_device_output_dir)
+                          self._render_tests_device_output_dir.name)
 
     if _IsWPRRecordReplayTest(test):
       wpr_archive_relative_path = _GetWPRArchivePath(test)
@@ -815,11 +922,8 @@ class LocalDeviceInstrumentationTestRun(
       flags_to_add.extend(self._chrome_proxy.GetFlags())
 
     if flags_to_add:
-      self._CreateFlagChangerIfNeeded(device)
+      self._CreateFlagChangersIfNeeded(device)
       self._flag_changers[str(device)].PushFlags(add=flags_to_add)
-
-    if self._test_instance.store_data_in_app_directory:
-      extras.update({'fetchTestDataFromAppDataDir': 'true'})
 
     time_ms = lambda: int(time.time() * 1e3)
     start_ms = time_ms()
@@ -846,7 +950,6 @@ class LocalDeviceInstrumentationTestRun(
       if self._env.trace_output:
         self._SaveTraceData(trace_device_file, device, test['class'])
 
-
       def restore_flags():
         if flags_to_add:
           self._flag_changers[str(device)].Restore()
@@ -861,14 +964,23 @@ class LocalDeviceInstrumentationTestRun(
           try:
             if not os.path.exists(self._test_instance.coverage_directory):
               os.makedirs(self._test_instance.coverage_directory)
+
+            # Handling Jacoco coverage data.
             # Retries add time to test execution.
-            if device.PathExists(coverage_device_file, retries=0):
-              device.PullFile(coverage_device_file,
+            if device.PathExists(jacoco_coverage_device_file, retries=0):
+              device.PullFile(jacoco_coverage_device_file,
                               self._test_instance.coverage_directory)
-              device.RemovePath(coverage_device_file, True)
+              device.RemovePath(jacoco_coverage_device_file, True)
             else:
-              logging.warning('Coverage file does not exist: %s',
-                              coverage_device_file)
+              logging.warning('Jacoco coverage file does not exist: %s',
+                              jacoco_coverage_device_file)
+
+            # Handling Clang coverage data.
+            # TODO(b/293175593): Use device.ResolveSpecialPath for multi-user
+            code_coverage_utils.PullAndMaybeMergeClangCoverageFiles(
+                device, device_clang_profile_dir,
+                self._test_instance.coverage_directory, coverage_basename)
+
           except (OSError, base_error.BaseError) as e:
             logging.warning('Failed to handle coverage data after tests: %s', e)
 
@@ -880,14 +992,23 @@ class LocalDeviceInstrumentationTestRun(
           try:
             self._ProcessRenderTestResults(device, results)
           finally:
-            device.RemovePath(self._render_tests_device_output_dir,
+            device_output_dir_path = self._render_tests_device_output_dir.name
+            if self._env.force_main_user:
+              device_output_dir_path = device.ResolveSpecialPath(
+                  device_output_dir_path)
+            device.RemovePath(device_output_dir_path,
                               recursive=True,
-                              force=True)
+                              force=True,
+                              as_root=self._env.force_main_user)
             self._render_tests_device_output_dir = None
 
       def pull_ui_screen_captures():
         screenshots = []
-        for filename in device.ListDirectory(ui_capture_dir.name):
+        source_dir = ui_capture_dir.name
+        if self._env.force_main_user:
+          source_dir = device.ResolveSpecialPath(source_dir)
+        for filename in device.ListDirectory(source_dir,
+                                             as_root=self._env.force_main_user):
           if filename.endswith('.json'):
             screenshots.append(pull_ui_screenshot(filename))
         if screenshots:
@@ -903,13 +1024,18 @@ class LocalDeviceInstrumentationTestRun(
 
       def pull_ui_screenshot(filename):
         source_dir = ui_capture_dir.name
+        if self._env.force_main_user:
+          source_dir = device.ResolveSpecialPath(source_dir)
         json_path = posixpath.join(source_dir, filename)
-        json_data = json.loads(device.ReadFile(json_path))
+        json_data = json.loads(
+            device.ReadFile(json_path, as_root=self._env.force_main_user))
         image_file_path = posixpath.join(source_dir, json_data['location'])
         with self._env.output_manager.ArchivedTempfile(
             json_data['location'], 'ui_capture', output_manager.Datatype.PNG
             ) as image_archive:
-          device.PullFile(image_file_path, image_archive.name)
+          device.PullFile(image_file_path,
+                          image_archive.name,
+                          as_root=self._env.force_main_user)
         json_data['image_link'] = image_archive.Link()
         return json_data
 
@@ -922,6 +1048,25 @@ class LocalDeviceInstrumentationTestRun(
                          self._chrome_proxy.wpr_archive_path)
           self._chrome_proxy = None
 
+      def pull_baseline_profile():
+        # Search though status responses for the one with the key we are
+        # looking for.
+        for _, bundle in statuses:
+          baseline_profile_path = bundle.get(
+              'additionalTestOutputFile_baseline-profile-ts')
+          if baseline_profile_path:
+            # Found it.
+            break
+        else:
+          # This test does not generate a baseline profile.
+          return
+        with self._env.output_manager.ArchivedTempfile(
+            'baseline_profile.txt', 'baseline_profile') as baseline_profile:
+          device.PullFile(baseline_profile_path, baseline_profile.name)
+        _SetLinkOnResults(results, test_name, 'baseline_profile',
+                          baseline_profile.Link())
+        logging.warning('Baseline Profile Location %s', baseline_profile.Link())
+
 
       # While constructing the TestResult objects, we can parallelize several
       # steps that involve ADB. These steps should NOT depend on any info in
@@ -929,7 +1074,8 @@ class LocalDeviceInstrumentationTestRun(
       # determined.
       post_test_steps = [
           restore_flags, restore_timeout_scale, stop_chrome_proxy,
-          handle_coverage_data, handle_render_test_data, pull_ui_screen_captures
+          handle_coverage_data, handle_render_test_data,
+          pull_ui_screen_captures, pull_baseline_profile
       ]
       if self._env.concurrent_adb:
         reraiser_thread.RunAsync(post_test_steps)
@@ -946,12 +1092,12 @@ class LocalDeviceInstrumentationTestRun(
         if r.GetName() == test_name:
           r.SetName(test_display_name)
 
-    # Add UNKNOWN results for any missing tests.
+    # Add NOTRUN results for any missing tests.
     iterable_test = test if isinstance(test, list) else [test]
     test_names = set(self._GetUniqueTestName(t) for t in iterable_test)
     results_names = set(r.GetName() for r in results)
     results.extend(
-        base_test_result.BaseTestResult(u, base_test_result.ResultType.UNKNOWN)
+        base_test_result.BaseTestResult(u, base_test_result.ResultType.NOTRUN)
         for u in test_names.difference(results_names))
 
     # Update the result type if we detect a crash.
@@ -1009,7 +1155,9 @@ class LocalDeviceInstrumentationTestRun(
           device.ClearApplicationState(self._test_instance.package_info.package,
                                        permissions=permissions)
         if self._test_instance.enable_breakpad_dump:
-          device.RemovePath(breakpad_dump_directory, recursive=True)
+          device.RemovePath(breakpad_dump_directory,
+                            recursive=True,
+                            as_root=self._env.force_main_user)
     else:
       logging.debug('raw output from %s:', test_display_name)
       for l in output:
@@ -1039,11 +1187,11 @@ class LocalDeviceInstrumentationTestRun(
           # associate with the first test.
           results[0].SetLink('tombstones', tombstone_file.Link())
 
-    unknown_tests = set(r.GetName() for r in results
-                        if r.GetType() == base_test_result.ResultType.UNKNOWN)
+    notrun_tests = set(r.GetName() for r in results
+                       if r.GetType() == base_test_result.ResultType.NOTRUN)
 
     # If a test that is batched crashes, the rest of the tests in that batch
-    # won't be ran and will have their status left as unknown in results,
+    # won't be ran and will have their status left as NOTRUN in results,
     # so rerun the tests. (see crbug/1127935)
     # Need to "unbatch" the tests, so that on subsequent tries, the tests can
     # get ran individually. This prevents an unrecognized crash from preventing
@@ -1052,7 +1200,7 @@ class LocalDeviceInstrumentationTestRun(
     # level.
     tests_to_rerun = []
     for t in iterable_test:
-      if self._GetUniqueTestName(t) in unknown_tests:
+      if self._GetUniqueTestName(t) in notrun_tests:
         prior_attempts = t.get('run_attempts', 0)
         t['run_attempts'] = prior_attempts + 1
         # It's possible every test in the batch could crash, so need to
@@ -1063,11 +1211,9 @@ class LocalDeviceInstrumentationTestRun(
           tests_to_rerun.append(t)
 
     # If we have a crash that isn't recognized as a crash in a batch, the tests
-    # will be marked as unknown. Sometimes a test failure causes a crash, but
+    # will be marked as NOTRUN. Sometimes a test failure causes a crash, but
     # the crash isn't recorded because the failure was detected first.
-    # When the UNKNOWN tests are reran while unbatched and pass,
-    # they'll have an UNKNOWN, PASS status, so will be improperly marked as
-    # flaky, so change status to NOTRUN and don't try rerunning. They will
+    # To avoid useless reruns, don't try rerunning. They will
     # get rerun individually at the local_device_test_run/environment level.
     # as the "Batch" annotation was removed.
     found_crash_or_fail = False
@@ -1080,9 +1226,6 @@ class LocalDeviceInstrumentationTestRun(
       # Don't bother rerunning since the unrecognized crashes in
       # the batch will keep failing.
       tests_to_rerun = None
-      for r in results:
-        if r.GetType() == base_test_result.ResultType.UNKNOWN:
-          r.SetType(base_test_result.ResultType.NOTRUN)
 
     return results, tests_to_rerun if tests_to_rerun else None
 
@@ -1107,18 +1250,16 @@ class LocalDeviceInstrumentationTestRun(
       logging.info('Could not get tests from pickle: %s', e)
     logging.info('Getting tests by having %s list them.',
                  self._test_instance.junit4_runner_class)
-    # We need to use GetAppWritablePath instead of GetExternalStoragePath
-    # here because we will not have applied legacy storage workarounds on R+
-    # yet.
-    # TODO(rmhasan): Figure out how to create the temp file inside the test
-    # app's data directory. Currently when the temp file is created read
-    # permissions are only given to the app's user id. Therefore we can't
-    # pull the file from the device.
     def list_tests(d):
       def _run(dev):
+        # We need to use GetAppWritablePath instead of GetExternalStoragePath
+        # here because we will not have applied legacy storage workarounds on R+
+        # yet.
         with device_temp_file.DeviceTempFile(
-            dev.adb, suffix='.json',
-            dir=dev.GetAppWritablePath()) as dev_test_list_json:
+            dev.adb,
+            suffix='.json',
+            dir=dev.GetAppWritablePath(),
+            device_utils=dev) as dev_test_list_json:
           junit4_runner_class = self._test_instance.junit4_runner_class
           test_package = self._test_instance.test_package
           extras = {
@@ -1140,7 +1281,12 @@ class LocalDeviceInstrumentationTestRun(
               logging.error('  %s', line)
           with tempfile_ext.NamedTemporaryDirectory() as host_dir:
             host_file = os.path.join(host_dir, 'list_tests.json')
-            dev.PullFile(dev_test_list_json.name, host_file)
+            device_file_path = dev_test_list_json.name
+            if self._env.force_main_user:
+              device_file_path = dev.ResolveSpecialPath(device_file_path)
+            dev.PullFile(device_file_path,
+                         host_file,
+                         as_root=self._env.force_main_user)
             with open(host_file, 'r') as host_file:
               return json.load(host_file)
 
@@ -1169,18 +1315,20 @@ class LocalDeviceInstrumentationTestRun(
     logcat_file = None
     logmon = None
     try:
-      with self._env.output_manager.ArchivedTempfile(
-          stream_name, 'logcat') as logcat_file:
-        with logcat_monitor.LogcatMonitor(
-            device.adb,
-            filter_specs=local_device_environment.LOGCAT_FILTERS,
-            output_file=logcat_file.name,
-            transform_func=self._test_instance.MaybeDeobfuscateLines,
-            check_error=False) as logmon:
-          with _LogTestEndpoints(device, test_name):
-            with contextlib_ext.Optional(
-                trace_event.trace(test_name),
-                self._env.trace_output):
+      with self._env.output_manager.ArchivedTempfile(stream_name,
+                                                     'logcat') as logcat_file:
+        symbolizer = stack_symbolizer.PassThroughSymbolizerPool(
+            device.product_cpu_abi)
+        with symbolizer:
+          with logcat_monitor.LogcatMonitor(
+              device.adb,
+              filter_specs=local_device_environment.LOGCAT_FILTERS,
+              output_file=logcat_file.name,
+              transform_func=lambda lines: symbolizer.TransformLines(
+                  self._test_instance.MaybeDeobfuscateLines(lines)),
+              check_error=False) as logmon:
+            with contextlib_ext.Optional(trace_event.trace(test_name),
+                                         self._env.trace_output):
               yield logcat_file
     finally:
       if logmon:
@@ -1191,9 +1339,13 @@ class LocalDeviceInstrumentationTestRun(
   def _SaveTraceData(self, trace_device_file, device, test_class):
     trace_host_file = self._env.trace_output
 
-    if device.FileExists(trace_device_file.name):
+    device_file_path = trace_device_file.name
+    if self._env.force_main_user:
+      device_file_path = device.ResolveSpecialPath(device_file_path)
+    if device.PathExists(device_file_path, as_root=self._env.force_main_user):
       try:
-        java_trace_json = device.ReadFile(trace_device_file.name)
+        java_trace_json = device.ReadFile(device_file_path,
+                                          as_root=self._env.force_main_user)
       except IOError as e:
         raise Exception('error pulling trace file from device') from e
       finally:
@@ -1251,13 +1403,17 @@ class LocalDeviceInstrumentationTestRun(
                       link_name):
     screenshot_filename = '%s-%s.png' % (
         test_name, time.strftime('%Y%m%dT%H%M%S-UTC', time.gmtime()))
-    if device.FileExists(screenshot_device_file.name):
+    device_file_path = screenshot_device_file.name
+    if self._env.force_main_user:
+      device_file_path = device.ResolveSpecialPath(device_file_path)
+    if device.PathExists(device_file_path, as_root=self._env.force_main_user):
       with self._env.output_manager.ArchivedTempfile(
           screenshot_filename, 'screenshot',
           output_manager.Datatype.PNG) as screenshot_host_file:
         try:
-          device.PullFile(screenshot_device_file.name,
-                          screenshot_host_file.name)
+          device.PullFile(device_file_path,
+                          screenshot_host_file.name,
+                          as_root=self._env.force_main_user)
         finally:
           screenshot_device_file.close()
       _SetLinkOnResults(results, test_name, link_name,
@@ -1266,13 +1422,25 @@ class LocalDeviceInstrumentationTestRun(
   def _ProcessRenderTestResults(self, device, results):
     if not self._render_tests_device_output_dir:
       return
+    # TODO(b/295350872): Remove this and other timestamp logging in Gold-related
+    # code once the source of flaky slowness is tracked down.
+    logging.info('Starting render test result processing')
+    start_time = time.time()
     self._ProcessSkiaGoldRenderTestResults(device, results)
+    logging.info('Render test result processing took %fs',
+                 time.time() - start_time)
 
   def _ProcessSkiaGoldRenderTestResults(self, device, results):
-    gold_dir = posixpath.join(self._render_tests_device_output_dir,
+    gold_dir = posixpath.join(self._render_tests_device_output_dir.name,
                               _DEVICE_GOLD_DIR)
-    if not device.FileExists(gold_dir):
-      return
+    logging.info('Starting Gold directory existence check')
+    start_time = time.time()
+    try:
+      if not device.PathExists(gold_dir):
+        return
+    finally:
+      logging.info('Gold directory existence check took %fs',
+                   time.time() - start_time)
 
     gold_properties = self._test_instance.skia_gold_properties
     with tempfile_ext.NamedTemporaryDirectory() as host_dir:
@@ -1283,7 +1451,12 @@ class LocalDeviceInstrumentationTestRun(
       # slightly faster since each command over adb has some overhead compared
       # to doing the same thing locally.
       host_dir = os.path.join(host_dir, _DEVICE_GOLD_DIR)
+
+      logging.info('Starting Gold directory pull')
+      start_time = time.time()
       device.PullFile(gold_dir, host_dir)
+      logging.info('Gold directory pull took %fs', time.time() - start_time)
+
       for image_name in os.listdir(host_dir):
         if not image_name.endswith('.png'):
           continue
@@ -1345,6 +1518,8 @@ class LocalDeviceInstrumentationTestRun(
         gold_session = self._skia_gold_session_manager.GetSkiaGoldSession(
             keys_input=json_path)
 
+        logging.info('Starting Gold comparison')
+        start_time = time.time()
         try:
           status, error = gold_session.RunComparison(
               name=render_name,
@@ -1357,6 +1532,8 @@ class LocalDeviceInstrumentationTestRun(
           _AppendToLog(results, full_test_name,
                        'Skia Gold comparison raised exception: %s' % e)
           continue
+        finally:
+          logging.info('Gold comparison took %fs', time.time() - start_time)
 
         if not status:
           continue
@@ -1459,7 +1636,13 @@ class LocalDeviceInstrumentationTestRun(
     return True
 
   #override
-  def _ShouldShard(self):
+  def _ShouldShardTestsForDevices(self):
+    """Shard tests across several devices.
+
+    Returns:
+      True if tests should be sharded across several devices,
+      False otherwise.
+    """
     return True
 
   @classmethod

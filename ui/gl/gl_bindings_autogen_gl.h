@@ -26,6 +26,9 @@ typedef void(GL_BINDING_CALL* glActiveShaderProgramProc)(GLuint pipeline,
 typedef void(GL_BINDING_CALL* glActiveTextureProc)(GLenum texture);
 typedef void(GL_BINDING_CALL* glAttachShaderProc)(GLuint program,
                                                   GLuint shader);
+typedef void(GL_BINDING_CALL* glBeginPixelLocalStorageANGLEProc)(
+    GLsizei n,
+    const GLenum* loadops);
 typedef void(GL_BINDING_CALL* glBeginQueryProc)(GLenum target, GLuint id);
 typedef void(GL_BINDING_CALL* glBeginTransformFeedbackProc)(
     GLenum primitiveMode);
@@ -166,6 +169,8 @@ typedef GLenum(GL_BINDING_CALL* glClientWaitSyncProc)(GLsync sync,
 typedef GLenum(GL_BINDING_CALL* glClientWaitSyncAPPLEProc)(GLsync sync,
                                                            GLbitfield flags,
                                                            GLuint64 timeout);
+typedef void(GL_BINDING_CALL* glClipControlEXTProc)(GLenum origin,
+                                                    GLenum depth);
 typedef void(GL_BINDING_CALL* glColorMaskProc)(GLboolean red,
                                                GLboolean green,
                                                GLboolean blue,
@@ -314,7 +319,6 @@ typedef void(GL_BINDING_CALL* glCopyTextureCHROMIUMProc)(
     GLboolean unpackFlipY,
     GLboolean unpackPremultiplyAlpha,
     GLboolean unpackUnmultiplyAlpha);
-typedef void(GL_BINDING_CALL* glCoverageModulationNVProc)(GLenum components);
 typedef void(GL_BINDING_CALL* glCoverFillPathInstancedNVProc)(
     GLsizei numPaths,
     GLenum pathNameType,
@@ -472,6 +476,9 @@ typedef void(GL_BINDING_CALL* glEGLImageTargetTexture2DOESProc)(
 typedef void(GL_BINDING_CALL* glEnableProc)(GLenum cap);
 typedef void(GL_BINDING_CALL* glEnableiOESProc)(GLenum target, GLuint index);
 typedef void(GL_BINDING_CALL* glEnableVertexAttribArrayProc)(GLuint index);
+typedef void(GL_BINDING_CALL* glEndPixelLocalStorageANGLEProc)(
+    GLsizei n,
+    const GLenum* storeops);
 typedef void(GL_BINDING_CALL* glEndQueryProc)(GLenum target);
 typedef void(GL_BINDING_CALL* glEndTilingQCOMProc)(GLbitfield preserveMask);
 typedef void(GL_BINDING_CALL* glEndTransformFeedbackProc)(void);
@@ -486,9 +493,25 @@ typedef void(GL_BINDING_CALL* glFlushProc)(void);
 typedef void(GL_BINDING_CALL* glFlushMappedBufferRangeProc)(GLenum target,
                                                             GLintptr offset,
                                                             GLsizeiptr length);
+typedef void(
+    GL_BINDING_CALL* glFramebufferMemorylessPixelLocalStorageANGLEProc)(
+    GLint plane,
+    GLenum internalformat);
 typedef void(GL_BINDING_CALL* glFramebufferParameteriProc)(GLenum target,
                                                            GLenum pname,
                                                            GLint param);
+typedef void(GL_BINDING_CALL* glFramebufferPixelLocalClearValuefvANGLEProc)(
+    GLint plane,
+    const GLfloat* value);
+typedef void(GL_BINDING_CALL* glFramebufferPixelLocalClearValueivANGLEProc)(
+    GLint plane,
+    const GLint* value);
+typedef void(GL_BINDING_CALL* glFramebufferPixelLocalClearValueuivANGLEProc)(
+    GLint plane,
+    const GLuint* value);
+typedef void(
+    GL_BINDING_CALL* glFramebufferPixelLocalStorageInterruptANGLEProc)();
+typedef void(GL_BINDING_CALL* glFramebufferPixelLocalStorageRestoreANGLEProc)();
 typedef void(GL_BINDING_CALL* glFramebufferRenderbufferEXTProc)(
     GLenum target,
     GLenum attachment,
@@ -518,6 +541,11 @@ typedef void(GL_BINDING_CALL* glFramebufferTextureMultiviewOVRProc)(
     GLint level,
     GLint baseViewIndex,
     GLsizei numViews);
+typedef void(GL_BINDING_CALL* glFramebufferTexturePixelLocalStorageANGLEProc)(
+    GLint plane,
+    GLuint backingtexture,
+    GLint level,
+    GLint layer);
 typedef void(GL_BINDING_CALL* glFrontFaceProc)(GLenum mode);
 typedef void(GL_BINDING_CALL* glGenBuffersARBProc)(GLsizei n, GLuint* buffers);
 typedef void(GL_BINDING_CALL* glGenerateMipmapEXTProc)(GLenum target);
@@ -657,6 +685,30 @@ typedef void(GL_BINDING_CALL* glGetFramebufferParameterivProc)(GLenum target,
                                                                GLint* params);
 typedef void(GL_BINDING_CALL* glGetFramebufferParameterivRobustANGLEProc)(
     GLenum target,
+    GLenum pname,
+    GLsizei bufSize,
+    GLsizei* length,
+    GLint* params);
+typedef void(
+    GL_BINDING_CALL* glGetFramebufferPixelLocalStorageParameterfvANGLEProc)(
+    GLint plane,
+    GLenum pname,
+    GLfloat* params);
+typedef void(GL_BINDING_CALL*
+                 glGetFramebufferPixelLocalStorageParameterfvRobustANGLEProc)(
+    GLint plane,
+    GLenum pname,
+    GLsizei bufSize,
+    GLsizei* length,
+    GLfloat* params);
+typedef void(
+    GL_BINDING_CALL* glGetFramebufferPixelLocalStorageParameterivANGLEProc)(
+    GLint plane,
+    GLenum pname,
+    GLint* params);
+typedef void(GL_BINDING_CALL*
+                 glGetFramebufferPixelLocalStorageParameterivRobustANGLEProc)(
+    GLint plane,
     GLenum pname,
     GLsizei bufSize,
     GLsizei* length,
@@ -1201,11 +1253,16 @@ typedef void(GL_BINDING_CALL* glPathStencilFuncNVProc)(GLenum func,
                                                        GLint ref,
                                                        GLuint mask);
 typedef void(GL_BINDING_CALL* glPauseTransformFeedbackProc)(void);
+typedef void(GL_BINDING_CALL* glPixelLocalStorageBarrierANGLEProc)();
 typedef void(GL_BINDING_CALL* glPixelStoreiProc)(GLenum pname, GLint param);
 typedef void(GL_BINDING_CALL* glPointParameteriProc)(GLenum pname, GLint param);
 typedef void(GL_BINDING_CALL* glPolygonModeProc)(GLenum face, GLenum mode);
+typedef void(GL_BINDING_CALL* glPolygonModeANGLEProc)(GLenum face, GLenum mode);
 typedef void(GL_BINDING_CALL* glPolygonOffsetProc)(GLfloat factor,
                                                    GLfloat units);
+typedef void(GL_BINDING_CALL* glPolygonOffsetClampEXTProc)(GLfloat factor,
+                                                           GLfloat units,
+                                                           GLfloat clamp);
 typedef void(GL_BINDING_CALL* glPopDebugGroupProc)();
 typedef void(GL_BINDING_CALL* glPopGroupMarkerEXTProc)(void);
 typedef void(GL_BINDING_CALL* glPrimitiveRestartIndexProc)(GLuint index);
@@ -1378,6 +1435,7 @@ typedef void(GL_BINDING_CALL* glProgramUniformMatrix4x3fvProc)(
     GLsizei count,
     GLboolean transpose,
     const GLfloat* value);
+typedef void(GL_BINDING_CALL* glProvokingVertexANGLEProc)(GLenum provokeMode);
 typedef void(GL_BINDING_CALL* glPushDebugGroupProc)(GLenum source,
                                                     GLuint id,
                                                     GLsizei length,
@@ -1969,10 +2027,14 @@ struct ExtensionsGL {
   bool b_GL_ANGLE_memory_object_flags;
   bool b_GL_ANGLE_memory_object_fuchsia;
   bool b_GL_ANGLE_multi_draw;
+  bool b_GL_ANGLE_polygon_mode;
+  bool b_GL_ANGLE_provoking_vertex;
+  bool b_GL_ANGLE_renderability_validation;
   bool b_GL_ANGLE_request_extension;
   bool b_GL_ANGLE_robust_client_memory;
   bool b_GL_ANGLE_robust_resource_initialization;
   bool b_GL_ANGLE_semaphore_fuchsia;
+  bool b_GL_ANGLE_shader_pixel_local_storage;
   bool b_GL_ANGLE_texture_external_update;
   bool b_GL_ANGLE_translated_shader_source;
   bool b_GL_ANGLE_vulkan_image;
@@ -2006,13 +2068,13 @@ struct ExtensionsGL {
   bool b_GL_ARB_vertex_array_object;
   bool b_GL_CHROMIUM_bind_uniform_location;
   bool b_GL_CHROMIUM_copy_texture;
-  bool b_GL_CHROMIUM_framebuffer_mixed_samples;
   bool b_GL_CHROMIUM_gles_depth_binding_hack;
   bool b_GL_CHROMIUM_glgetstringi_hack;
   bool b_GL_CHROMIUM_path_rendering;
   bool b_GL_EXT_base_instance;
   bool b_GL_EXT_blend_func_extended;
   bool b_GL_EXT_clear_texture;
+  bool b_GL_EXT_clip_control;
   bool b_GL_EXT_debug_marker;
   bool b_GL_EXT_direct_state_access;
   bool b_GL_EXT_discard_framebuffer;
@@ -2029,6 +2091,7 @@ struct ExtensionsGL {
   bool b_GL_EXT_memory_object_win32;
   bool b_GL_EXT_multisampled_render_to_texture;
   bool b_GL_EXT_occlusion_query_boolean;
+  bool b_GL_EXT_polygon_offset_clamp;
   bool b_GL_EXT_robustness;
   bool b_GL_EXT_semaphore;
   bool b_GL_EXT_semaphore_fd;
@@ -2052,7 +2115,6 @@ struct ExtensionsGL {
   bool b_GL_NV_blend_equation_advanced;
   bool b_GL_NV_fence;
   bool b_GL_NV_framebuffer_blit;
-  bool b_GL_NV_framebuffer_mixed_samples;
   bool b_GL_NV_internalformat_sample_query;
   bool b_GL_NV_path_rendering;
   bool b_GL_OES_EGL_image;
@@ -2072,6 +2134,7 @@ struct ProcsGL {
   glActiveShaderProgramProc glActiveShaderProgramFn;
   glActiveTextureProc glActiveTextureFn;
   glAttachShaderProc glAttachShaderFn;
+  glBeginPixelLocalStorageANGLEProc glBeginPixelLocalStorageANGLEFn;
   glBeginQueryProc glBeginQueryFn;
   glBeginTransformFeedbackProc glBeginTransformFeedbackFn;
   glBindAttribLocationProc glBindAttribLocationFn;
@@ -2118,6 +2181,7 @@ struct ProcsGL {
   glClearTexSubImageProc glClearTexSubImageFn;
   glClientWaitSyncProc glClientWaitSyncFn;
   glClientWaitSyncAPPLEProc glClientWaitSyncAPPLEFn;
+  glClipControlEXTProc glClipControlEXTFn;
   glColorMaskProc glColorMaskFn;
   glColorMaskiOESProc glColorMaskiOESFn;
   glCompileShaderProc glCompileShaderFn;
@@ -2137,7 +2201,6 @@ struct ProcsGL {
   glCopyTexSubImage2DProc glCopyTexSubImage2DFn;
   glCopyTexSubImage3DProc glCopyTexSubImage3DFn;
   glCopyTextureCHROMIUMProc glCopyTextureCHROMIUMFn;
-  glCoverageModulationNVProc glCoverageModulationNVFn;
   glCoverFillPathInstancedNVProc glCoverFillPathInstancedNVFn;
   glCoverFillPathNVProc glCoverFillPathNVFn;
   glCoverStrokePathInstancedNVProc glCoverStrokePathInstancedNVFn;
@@ -2199,6 +2262,7 @@ struct ProcsGL {
   glEnableProc glEnableFn;
   glEnableiOESProc glEnableiOESFn;
   glEnableVertexAttribArrayProc glEnableVertexAttribArrayFn;
+  glEndPixelLocalStorageANGLEProc glEndPixelLocalStorageANGLEFn;
   glEndQueryProc glEndQueryFn;
   glEndTilingQCOMProc glEndTilingQCOMFn;
   glEndTransformFeedbackProc glEndTransformFeedbackFn;
@@ -2209,13 +2273,27 @@ struct ProcsGL {
   glFinishFenceNVProc glFinishFenceNVFn;
   glFlushProc glFlushFn;
   glFlushMappedBufferRangeProc glFlushMappedBufferRangeFn;
+  glFramebufferMemorylessPixelLocalStorageANGLEProc
+      glFramebufferMemorylessPixelLocalStorageANGLEFn;
   glFramebufferParameteriProc glFramebufferParameteriFn;
+  glFramebufferPixelLocalClearValuefvANGLEProc
+      glFramebufferPixelLocalClearValuefvANGLEFn;
+  glFramebufferPixelLocalClearValueivANGLEProc
+      glFramebufferPixelLocalClearValueivANGLEFn;
+  glFramebufferPixelLocalClearValueuivANGLEProc
+      glFramebufferPixelLocalClearValueuivANGLEFn;
+  glFramebufferPixelLocalStorageInterruptANGLEProc
+      glFramebufferPixelLocalStorageInterruptANGLEFn;
+  glFramebufferPixelLocalStorageRestoreANGLEProc
+      glFramebufferPixelLocalStorageRestoreANGLEFn;
   glFramebufferRenderbufferEXTProc glFramebufferRenderbufferEXTFn;
   glFramebufferTexture2DEXTProc glFramebufferTexture2DEXTFn;
   glFramebufferTexture2DMultisampleEXTProc
       glFramebufferTexture2DMultisampleEXTFn;
   glFramebufferTextureLayerProc glFramebufferTextureLayerFn;
   glFramebufferTextureMultiviewOVRProc glFramebufferTextureMultiviewOVRFn;
+  glFramebufferTexturePixelLocalStorageANGLEProc
+      glFramebufferTexturePixelLocalStorageANGLEFn;
   glFrontFaceProc glFrontFaceFn;
   glGenBuffersARBProc glGenBuffersARBFn;
   glGenerateMipmapEXTProc glGenerateMipmapEXTFn;
@@ -2262,6 +2340,14 @@ struct ProcsGL {
   glGetFramebufferParameterivProc glGetFramebufferParameterivFn;
   glGetFramebufferParameterivRobustANGLEProc
       glGetFramebufferParameterivRobustANGLEFn;
+  glGetFramebufferPixelLocalStorageParameterfvANGLEProc
+      glGetFramebufferPixelLocalStorageParameterfvANGLEFn;
+  glGetFramebufferPixelLocalStorageParameterfvRobustANGLEProc
+      glGetFramebufferPixelLocalStorageParameterfvRobustANGLEFn;
+  glGetFramebufferPixelLocalStorageParameterivANGLEProc
+      glGetFramebufferPixelLocalStorageParameterivANGLEFn;
+  glGetFramebufferPixelLocalStorageParameterivRobustANGLEProc
+      glGetFramebufferPixelLocalStorageParameterivRobustANGLEFn;
   glGetGraphicsResetStatusARBProc glGetGraphicsResetStatusARBFn;
   glGetInteger64i_vProc glGetInteger64i_vFn;
   glGetInteger64i_vRobustANGLEProc glGetInteger64i_vRobustANGLEFn;
@@ -2409,10 +2495,13 @@ struct ProcsGL {
   glPathParameteriNVProc glPathParameteriNVFn;
   glPathStencilFuncNVProc glPathStencilFuncNVFn;
   glPauseTransformFeedbackProc glPauseTransformFeedbackFn;
+  glPixelLocalStorageBarrierANGLEProc glPixelLocalStorageBarrierANGLEFn;
   glPixelStoreiProc glPixelStoreiFn;
   glPointParameteriProc glPointParameteriFn;
   glPolygonModeProc glPolygonModeFn;
+  glPolygonModeANGLEProc glPolygonModeANGLEFn;
   glPolygonOffsetProc glPolygonOffsetFn;
+  glPolygonOffsetClampEXTProc glPolygonOffsetClampEXTFn;
   glPopDebugGroupProc glPopDebugGroupFn;
   glPopGroupMarkerEXTProc glPopGroupMarkerEXTFn;
   glPrimitiveRestartIndexProc glPrimitiveRestartIndexFn;
@@ -2452,6 +2541,7 @@ struct ProcsGL {
   glProgramUniformMatrix4fvProc glProgramUniformMatrix4fvFn;
   glProgramUniformMatrix4x2fvProc glProgramUniformMatrix4x2fvFn;
   glProgramUniformMatrix4x3fvProc glProgramUniformMatrix4x3fvFn;
+  glProvokingVertexANGLEProc glProvokingVertexANGLEFn;
   glPushDebugGroupProc glPushDebugGroupFn;
   glPushGroupMarkerEXTProc glPushGroupMarkerEXTFn;
   glQueryCounterProc glQueryCounterFn;
@@ -2606,6 +2696,8 @@ class GL_EXPORT GLApi {
   virtual void glActiveShaderProgramFn(GLuint pipeline, GLuint program) = 0;
   virtual void glActiveTextureFn(GLenum texture) = 0;
   virtual void glAttachShaderFn(GLuint program, GLuint shader) = 0;
+  virtual void glBeginPixelLocalStorageANGLEFn(GLsizei n,
+                                               const GLenum* loadops) = 0;
   virtual void glBeginQueryFn(GLenum target, GLuint id) = 0;
   virtual void glBeginTransformFeedbackFn(GLenum primitiveMode) = 0;
   virtual void glBindAttribLocationFn(GLuint program,
@@ -2737,6 +2829,7 @@ class GL_EXPORT GLApi {
   virtual GLenum glClientWaitSyncAPPLEFn(GLsync sync,
                                          GLbitfield flags,
                                          GLuint64 timeout) = 0;
+  virtual void glClipControlEXTFn(GLenum origin, GLenum depth) = 0;
   virtual void glColorMaskFn(GLboolean red,
                              GLboolean green,
                              GLboolean blue,
@@ -2879,7 +2972,6 @@ class GL_EXPORT GLApi {
                                        GLboolean unpackFlipY,
                                        GLboolean unpackPremultiplyAlpha,
                                        GLboolean unpackUnmultiplyAlpha) = 0;
-  virtual void glCoverageModulationNVFn(GLenum components) = 0;
   virtual void glCoverFillPathInstancedNVFn(GLsizei numPaths,
                                             GLenum pathNameType,
                                             const void* paths,
@@ -3004,6 +3096,8 @@ class GL_EXPORT GLApi {
   virtual void glEnableFn(GLenum cap) = 0;
   virtual void glEnableiOESFn(GLenum target, GLuint index) = 0;
   virtual void glEnableVertexAttribArrayFn(GLuint index) = 0;
+  virtual void glEndPixelLocalStorageANGLEFn(GLsizei n,
+                                             const GLenum* storeops) = 0;
   virtual void glEndQueryFn(GLenum target) = 0;
   virtual void glEndTilingQCOMFn(GLbitfield preserveMask) = 0;
   virtual void glEndTransformFeedbackFn(void) = 0;
@@ -3016,9 +3110,23 @@ class GL_EXPORT GLApi {
   virtual void glFlushMappedBufferRangeFn(GLenum target,
                                           GLintptr offset,
                                           GLsizeiptr length) = 0;
+  virtual void glFramebufferMemorylessPixelLocalStorageANGLEFn(
+      GLint plane,
+      GLenum internalformat) = 0;
   virtual void glFramebufferParameteriFn(GLenum target,
                                          GLenum pname,
                                          GLint param) = 0;
+  virtual void glFramebufferPixelLocalClearValuefvANGLEFn(
+      GLint plane,
+      const GLfloat* value) = 0;
+  virtual void glFramebufferPixelLocalClearValueivANGLEFn(
+      GLint plane,
+      const GLint* value) = 0;
+  virtual void glFramebufferPixelLocalClearValueuivANGLEFn(
+      GLint plane,
+      const GLuint* value) = 0;
+  virtual void glFramebufferPixelLocalStorageInterruptANGLEFn() = 0;
+  virtual void glFramebufferPixelLocalStorageRestoreANGLEFn() = 0;
   virtual void glFramebufferRenderbufferEXTFn(GLenum target,
                                               GLenum attachment,
                                               GLenum renderbuffertarget,
@@ -3045,6 +3153,11 @@ class GL_EXPORT GLApi {
                                                   GLint level,
                                                   GLint baseViewIndex,
                                                   GLsizei numViews) = 0;
+  virtual void glFramebufferTexturePixelLocalStorageANGLEFn(
+      GLint plane,
+      GLuint backingtexture,
+      GLint level,
+      GLint layer) = 0;
   virtual void glFrontFaceFn(GLenum mode) = 0;
   virtual void glGenBuffersARBFn(GLsizei n, GLuint* buffers) = 0;
   virtual void glGenerateMipmapEXTFn(GLenum target) = 0;
@@ -3166,6 +3279,26 @@ class GL_EXPORT GLApi {
                                                         GLsizei bufSize,
                                                         GLsizei* length,
                                                         GLint* params) = 0;
+  virtual void glGetFramebufferPixelLocalStorageParameterfvANGLEFn(
+      GLint plane,
+      GLenum pname,
+      GLfloat* params) = 0;
+  virtual void glGetFramebufferPixelLocalStorageParameterfvRobustANGLEFn(
+      GLint plane,
+      GLenum pname,
+      GLsizei bufSize,
+      GLsizei* length,
+      GLfloat* params) = 0;
+  virtual void glGetFramebufferPixelLocalStorageParameterivANGLEFn(
+      GLint plane,
+      GLenum pname,
+      GLint* params) = 0;
+  virtual void glGetFramebufferPixelLocalStorageParameterivRobustANGLEFn(
+      GLint plane,
+      GLenum pname,
+      GLsizei bufSize,
+      GLsizei* length,
+      GLint* params) = 0;
   virtual GLenum glGetGraphicsResetStatusARBFn(void) = 0;
   virtual void glGetInteger64i_vFn(GLenum target,
                                    GLuint index,
@@ -3641,10 +3774,15 @@ class GL_EXPORT GLApi {
   virtual void glPathParameteriNVFn(GLuint path, GLenum pname, GLint value) = 0;
   virtual void glPathStencilFuncNVFn(GLenum func, GLint ref, GLuint mask) = 0;
   virtual void glPauseTransformFeedbackFn(void) = 0;
+  virtual void glPixelLocalStorageBarrierANGLEFn() = 0;
   virtual void glPixelStoreiFn(GLenum pname, GLint param) = 0;
   virtual void glPointParameteriFn(GLenum pname, GLint param) = 0;
   virtual void glPolygonModeFn(GLenum face, GLenum mode) = 0;
+  virtual void glPolygonModeANGLEFn(GLenum face, GLenum mode) = 0;
   virtual void glPolygonOffsetFn(GLfloat factor, GLfloat units) = 0;
+  virtual void glPolygonOffsetClampEXTFn(GLfloat factor,
+                                         GLfloat units,
+                                         GLfloat clamp) = 0;
   virtual void glPopDebugGroupFn() = 0;
   virtual void glPopGroupMarkerEXTFn(void) = 0;
   virtual void glPrimitiveRestartIndexFn(GLuint index) = 0;
@@ -3807,6 +3945,7 @@ class GL_EXPORT GLApi {
                                              GLsizei count,
                                              GLboolean transpose,
                                              const GLfloat* value) = 0;
+  virtual void glProvokingVertexANGLEFn(GLenum provokeMode) = 0;
   virtual void glPushDebugGroupFn(GLenum source,
                                   GLuint id,
                                   GLsizei length,
@@ -4345,6 +4484,8 @@ class GL_EXPORT GLApi {
   ::gl::g_current_gl_context->glActiveShaderProgramFn
 #define glActiveTexture ::gl::g_current_gl_context->glActiveTextureFn
 #define glAttachShader ::gl::g_current_gl_context->glAttachShaderFn
+#define glBeginPixelLocalStorageANGLE \
+  ::gl::g_current_gl_context->glBeginPixelLocalStorageANGLEFn
 #define glBeginQuery ::gl::g_current_gl_context->glBeginQueryFn
 #define glBeginTransformFeedback \
   ::gl::g_current_gl_context->glBeginTransformFeedbackFn
@@ -4405,6 +4546,7 @@ class GL_EXPORT GLApi {
 #define glClientWaitSync ::gl::g_current_gl_context->glClientWaitSyncFn
 #define glClientWaitSyncAPPLE \
   ::gl::g_current_gl_context->glClientWaitSyncAPPLEFn
+#define glClipControlEXT ::gl::g_current_gl_context->glClipControlEXTFn
 #define glColorMask ::gl::g_current_gl_context->glColorMaskFn
 #define glColorMaskiOES ::gl::g_current_gl_context->glColorMaskiOESFn
 #define glCompileShader ::gl::g_current_gl_context->glCompileShaderFn
@@ -4432,8 +4574,6 @@ class GL_EXPORT GLApi {
 #define glCopyTexSubImage3D ::gl::g_current_gl_context->glCopyTexSubImage3DFn
 #define glCopyTextureCHROMIUM \
   ::gl::g_current_gl_context->glCopyTextureCHROMIUMFn
-#define glCoverageModulationNV \
-  ::gl::g_current_gl_context->glCoverageModulationNVFn
 #define glCoverFillPathInstancedNV \
   ::gl::g_current_gl_context->glCoverFillPathInstancedNVFn
 #define glCoverFillPathNV ::gl::g_current_gl_context->glCoverFillPathNVFn
@@ -4518,6 +4658,8 @@ class GL_EXPORT GLApi {
 #define glEnableiOES ::gl::g_current_gl_context->glEnableiOESFn
 #define glEnableVertexAttribArray \
   ::gl::g_current_gl_context->glEnableVertexAttribArrayFn
+#define glEndPixelLocalStorageANGLE \
+  ::gl::g_current_gl_context->glEndPixelLocalStorageANGLEFn
 #define glEndQuery ::gl::g_current_gl_context->glEndQueryFn
 #define glEndTilingQCOM ::gl::g_current_gl_context->glEndTilingQCOMFn
 #define glEndTransformFeedback \
@@ -4530,8 +4672,20 @@ class GL_EXPORT GLApi {
 #define glFlush ::gl::g_current_gl_context->glFlushFn
 #define glFlushMappedBufferRange \
   ::gl::g_current_gl_context->glFlushMappedBufferRangeFn
+#define glFramebufferMemorylessPixelLocalStorageANGLE \
+  ::gl::g_current_gl_context->glFramebufferMemorylessPixelLocalStorageANGLEFn
 #define glFramebufferParameteri \
   ::gl::g_current_gl_context->glFramebufferParameteriFn
+#define glFramebufferPixelLocalClearValuefvANGLE \
+  ::gl::g_current_gl_context->glFramebufferPixelLocalClearValuefvANGLEFn
+#define glFramebufferPixelLocalClearValueivANGLE \
+  ::gl::g_current_gl_context->glFramebufferPixelLocalClearValueivANGLEFn
+#define glFramebufferPixelLocalClearValueuivANGLE \
+  ::gl::g_current_gl_context->glFramebufferPixelLocalClearValueuivANGLEFn
+#define glFramebufferPixelLocalStorageInterruptANGLE \
+  ::gl::g_current_gl_context->glFramebufferPixelLocalStorageInterruptANGLEFn
+#define glFramebufferPixelLocalStorageRestoreANGLE \
+  ::gl::g_current_gl_context->glFramebufferPixelLocalStorageRestoreANGLEFn
 #define glFramebufferRenderbufferEXT \
   ::gl::g_current_gl_context->glFramebufferRenderbufferEXTFn
 #define glFramebufferTexture2DEXT \
@@ -4542,6 +4696,8 @@ class GL_EXPORT GLApi {
   ::gl::g_current_gl_context->glFramebufferTextureLayerFn
 #define glFramebufferTextureMultiviewOVR \
   ::gl::g_current_gl_context->glFramebufferTextureMultiviewOVRFn
+#define glFramebufferTexturePixelLocalStorageANGLE \
+  ::gl::g_current_gl_context->glFramebufferTexturePixelLocalStorageANGLEFn
 #define glFrontFace ::gl::g_current_gl_context->glFrontFaceFn
 #define glGenBuffersARB ::gl::g_current_gl_context->glGenBuffersARBFn
 #define glGenerateMipmapEXT ::gl::g_current_gl_context->glGenerateMipmapEXTFn
@@ -4603,6 +4759,18 @@ class GL_EXPORT GLApi {
   ::gl::g_current_gl_context->glGetFramebufferParameterivFn
 #define glGetFramebufferParameterivRobustANGLE \
   ::gl::g_current_gl_context->glGetFramebufferParameterivRobustANGLEFn
+#define glGetFramebufferPixelLocalStorageParameterfvANGLE \
+  ::gl::g_current_gl_context                              \
+      ->glGetFramebufferPixelLocalStorageParameterfvANGLEFn
+#define glGetFramebufferPixelLocalStorageParameterfvRobustANGLE \
+  ::gl::g_current_gl_context                                    \
+      ->glGetFramebufferPixelLocalStorageParameterfvRobustANGLEFn
+#define glGetFramebufferPixelLocalStorageParameterivANGLE \
+  ::gl::g_current_gl_context                              \
+      ->glGetFramebufferPixelLocalStorageParameterivANGLEFn
+#define glGetFramebufferPixelLocalStorageParameterivRobustANGLE \
+  ::gl::g_current_gl_context                                    \
+      ->glGetFramebufferPixelLocalStorageParameterivRobustANGLEFn
 #define glGetGraphicsResetStatusARB \
   ::gl::g_current_gl_context->glGetGraphicsResetStatusARBFn
 #define glGetInteger64i_v ::gl::g_current_gl_context->glGetInteger64i_vFn
@@ -4825,10 +4993,15 @@ class GL_EXPORT GLApi {
 #define glPathStencilFuncNV ::gl::g_current_gl_context->glPathStencilFuncNVFn
 #define glPauseTransformFeedback \
   ::gl::g_current_gl_context->glPauseTransformFeedbackFn
+#define glPixelLocalStorageBarrierANGLE \
+  ::gl::g_current_gl_context->glPixelLocalStorageBarrierANGLEFn
 #define glPixelStorei ::gl::g_current_gl_context->glPixelStoreiFn
 #define glPointParameteri ::gl::g_current_gl_context->glPointParameteriFn
 #define glPolygonMode ::gl::g_current_gl_context->glPolygonModeFn
+#define glPolygonModeANGLE ::gl::g_current_gl_context->glPolygonModeANGLEFn
 #define glPolygonOffset ::gl::g_current_gl_context->glPolygonOffsetFn
+#define glPolygonOffsetClampEXT \
+  ::gl::g_current_gl_context->glPolygonOffsetClampEXTFn
 #define glPopDebugGroup ::gl::g_current_gl_context->glPopDebugGroupFn
 #define glPopGroupMarkerEXT ::gl::g_current_gl_context->glPopGroupMarkerEXTFn
 #define glPrimitiveRestartIndex \
@@ -4879,6 +5052,8 @@ class GL_EXPORT GLApi {
   ::gl::g_current_gl_context->glProgramUniformMatrix4x2fvFn
 #define glProgramUniformMatrix4x3fv \
   ::gl::g_current_gl_context->glProgramUniformMatrix4x3fvFn
+#define glProvokingVertexANGLE \
+  ::gl::g_current_gl_context->glProvokingVertexANGLEFn
 #define glPushDebugGroup ::gl::g_current_gl_context->glPushDebugGroupFn
 #define glPushGroupMarkerEXT ::gl::g_current_gl_context->glPushGroupMarkerEXTFn
 #define glQueryCounter ::gl::g_current_gl_context->glQueryCounterFn

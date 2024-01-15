@@ -7,14 +7,14 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/strings/string_number_conversions.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/browser_thread.h"
+#include "content/public/browser/child_process_host.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/render_process_host.h"
-#include "content/public/common/child_process_host.h"
 #include "extensions/browser/api/extensions_api_client.h"
 #include "extensions/browser/api/web_request/upload_data_presenter.h"
 #include "extensions/browser/api/web_request/web_request_api_constants.h"
@@ -53,7 +53,8 @@ WebRequestEventDetails::WebRequestEventDetails(const WebRequestInfo& request,
       render_process_id_(content::ChildProcessHost::kInvalidUniqueID) {
   dict_.Set(keys::kMethodKey, request.method);
   dict_.Set(keys::kRequestIdKey, base::NumberToString(request.id));
-  dict_.Set(keys::kTimeStampKey, base::Time::Now().ToDoubleT() * 1000);
+  dict_.Set(keys::kTimeStampKey,
+            base::Time::Now().InMillisecondsFSinceUnixEpoch());
   dict_.Set(keys::kTypeKey,
             WebRequestResourceTypeToString(request.web_request_type));
   dict_.Set(keys::kUrlKey, request.url.spec());
@@ -81,9 +82,9 @@ WebRequestEventDetails::~WebRequestEventDetails() = default;
 void WebRequestEventDetails::SetRequestBody(WebRequestInfo* request) {
   if (!(extra_info_spec_ & ExtraInfoSpec::REQUEST_BODY))
     return;
-  request_body_ = absl::nullopt;
+  request_body_ = std::nullopt;
   if (request->request_body_data) {
-    request_body_ = std::move(*request->request_body_data).TakeDict();
+    request_body_ = std::move(request->request_body_data);
     request->request_body_data.reset();
   }
 }
@@ -149,7 +150,7 @@ void WebRequestEventDetails::SetResponseSource(const WebRequestInfo& request) {
     dict_.Set(keys::kIpKey, request.response_ip);
 }
 
-std::unique_ptr<base::DictionaryValue> WebRequestEventDetails::GetFilteredDict(
+base::Value::Dict WebRequestEventDetails::GetFilteredDict(
     int extra_info_spec,
     PermissionHelper* permission_helper,
     const extensions::ExtensionId& extension_id,
@@ -188,15 +189,11 @@ std::unique_ptr<base::DictionaryValue> WebRequestEventDetails::GetFilteredDict(
       result.Set(keys::kInitiatorKey, initiator_->Serialize());
     }
   }
-  return base::DictionaryValue::From(
-      std::make_unique<base::Value>(std::move(result)));
+  return result;
 }
 
-std::unique_ptr<base::DictionaryValue>
-WebRequestEventDetails::GetAndClearDict() {
-  auto result = std::make_unique<base::DictionaryValue>();
-  std::swap(result->GetDict(), dict_);
-  return result;
+base::Value::Dict WebRequestEventDetails::GetAndClearDict() {
+  return std::move(dict_);
 }
 
 }  // namespace extensions

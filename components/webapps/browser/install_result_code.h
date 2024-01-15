@@ -83,7 +83,20 @@ enum class InstallResultCode {
   // The installation stopped due to an uninstall from sync being scheduled.
   kHaltedBySyncUninstall = 28,
 
-  kMaxValue = kHaltedBySyncUninstall,
+  // Invalid install URL for externally managed apps.
+  kInstallURLInvalid = 29,
+
+  // Downloading failed for all icons in an installation method which requires
+  // non-generated icons.
+  kIconDownloadingFailed = 30,
+
+  kCancelledDueToMainFrameNavigation = 31,
+
+  // No valid icons were provided in the manifest in an installation method
+  // which requires non-generated icons.
+  kNoValidIconsInManifest = 32,
+
+  kMaxValue = kNoValidIconsInManifest,
 };
 
 // Checks if InstallResultCode is not a failure.

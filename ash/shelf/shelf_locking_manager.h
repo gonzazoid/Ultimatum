@@ -9,6 +9,7 @@
 #include "ash/public/cpp/session/session_observer.h"
 #include "ash/public/cpp/shelf_types.h"
 #include "ash/wm/lock_state_observer.h"
+#include "base/memory/raw_ptr.h"
 
 namespace ash {
 
@@ -27,8 +28,13 @@ class ASH_EXPORT ShelfLockingManager : public SessionObserver,
   ~ShelfLockingManager() override;
 
   bool is_locked() const { return session_locked_ || screen_locked_; }
-  void set_stored_alignment(ShelfAlignment value) { stored_alignment_ = value; }
-  ShelfAlignment stored_alignment() const { return stored_alignment_; }
+  void set_in_session_alignment(ShelfAlignment value) {
+    in_session_alignment_ = value;
+  }
+  ShelfAlignment in_session_alignment() const { return in_session_alignment_; }
+  ShelfAutoHideBehavior in_session_auto_hide_behavior() const {
+    return in_session_auto_hide_behavior_;
+  }
 
   // SessionObserver:
   void OnLockStateChanged(bool locked) override;
@@ -41,10 +47,18 @@ class ASH_EXPORT ShelfLockingManager : public SessionObserver,
   // Update the shelf state for session and screen lock changes.
   void UpdateLockedState();
 
-  Shelf* const shelf_;
+  const raw_ptr<Shelf> shelf_;
   bool session_locked_ = false;
   bool screen_locked_ = false;
-  ShelfAlignment stored_alignment_ = ShelfAlignment::kBottomLocked;
+
+  // In session shelf alignment. This is used for setting shelf to/from
+  // temporary `kBottomLocked` alignment.
+  ShelfAlignment in_session_alignment_ = ShelfAlignment::kBottomLocked;
+
+  // In session shelf auto hide behavior. This is used for work area insects
+  // calculation for application windows.
+  ShelfAutoHideBehavior in_session_auto_hide_behavior_ =
+      ShelfAutoHideBehavior::kNever;
 
   ScopedSessionObserver scoped_session_observer_;
 };

@@ -5,14 +5,16 @@
 #ifndef CHROMEOS_ASH_COMPONENTS_SYNC_WIFI_SYNCED_NETWORK_METRICS_LOGGER_H_
 #define CHROMEOS_ASH_COMPONENTS_SYNC_WIFI_SYNCED_NETWORK_METRICS_LOGGER_H_
 
+#include <optional>
+
 #include "base/containers/flat_set.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
 #include "base/values.h"
 #include "chromeos/ash/components/network/network_connection_observer.h"
 #include "chromeos/ash/components/network/network_state_handler_observer.h"
 #include "chromeos/ash/components/sync_wifi/network_eligibility_checker.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace ash {
 
@@ -34,6 +36,8 @@ const char kConnectionResultManualHistogram[] =
 
 const char kApplyFailureReasonHistogram[] =
     "Network.Wifi.Synced.UpdateOperation.FailureReason";
+const char kApplyGenerateLocalNetworkConfigHistogram[] =
+    "Network.Wifi.Synced.UpdateOperation.GenerateLocalNetworkConfig.Result";
 const char kApplyResultHistogram[] =
     "Network.Wifi.Synced.UpdateOperation.Result";
 const char kZeroNetworksSyncedReasonHistogram[] =
@@ -114,6 +118,7 @@ class SyncedNetworkMetricsLogger : public NetworkConnectionObserver,
   void RecordApplyNetworkFailureReason(ApplyNetworkFailureReason error_enum,
                                        const std::string& error_string);
   void RecordApplyNetworkSuccess();
+  void RecordApplyGenerateLocalNetworkConfig(bool success);
   void RecordTotalCount(int count);
   void RecordZeroNetworksEligibleForSync(
       base::flat_set<NetworkEligibilityStatus>
@@ -128,12 +133,14 @@ class SyncedNetworkMetricsLogger : public NetworkConnectionObserver,
   void OnConnectErrorGetProperties(
       const std::string& error_name,
       const std::string& service_path,
-      absl::optional<base::Value> shill_properties);
+      std::optional<base::Value::Dict> shill_properties);
 
   bool IsEligible(const NetworkState* network);
 
-  NetworkStateHandler* network_state_handler_ = nullptr;
-  NetworkConnectionHandler* network_connection_handler_ = nullptr;
+  raw_ptr<NetworkStateHandler> network_state_handler_ = nullptr;
+  raw_ptr<NetworkConnectionHandler> network_connection_handler_ = nullptr;
+
+  NetworkStateHandlerScopedObservation network_state_handler_observer_{this};
 
   // Contains the guids of networks which are currently connecting.
   base::flat_set<std::string> connecting_guids_;

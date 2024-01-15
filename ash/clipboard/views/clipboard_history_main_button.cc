@@ -4,13 +4,13 @@
 
 #include "ash/clipboard/views/clipboard_history_main_button.h"
 
-#include "ash/clipboard/clipboard_history_util.h"
 #include "ash/clipboard/views/clipboard_history_item_view.h"
-#include "ash/constants/ash_features.h"
-#include "ash/public/cpp/style/scoped_light_mode_as_default.h"
 #include "ash/style/ash_color_id.h"
 #include "ash/style/style_util.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "chromeos/constants/chromeos_features.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
+#include "ui/chromeos/styles/cros_tokens_color_mappings.h"
 #include "ui/color/color_provider.h"
 #include "ui/gfx/canvas.h"
 #include "ui/views/accessibility/view_accessibility.h"
@@ -29,7 +29,6 @@ ClipboardHistoryMainButton::ClipboardHistoryMainButton(
       container_(container) {
   SetFocusBehavior(views::View::FocusBehavior::ALWAYS);
   views::InkDrop::Get(this)->SetMode(views::InkDropHost::InkDropMode::ON);
-  SetID(clipboard_history_util::kMainButtonViewID);
 
   // Let the parent handle accessibility features.
   GetViewAccessibility().OverrideIsIgnored(/*value=*/true);
@@ -54,22 +53,6 @@ ClipboardHistoryMainButton::ClipboardHistoryMainButton(
 
 ClipboardHistoryMainButton::~ClipboardHistoryMainButton() = default;
 
-void ClipboardHistoryMainButton::OnHostPseudoFocusUpdated() {
-  SetShouldHighlight(container_->ShouldHighlight());
-}
-
-void ClipboardHistoryMainButton::SetShouldHighlight(bool should_highlight) {
-  if (should_highlight_ == should_highlight)
-    return;
-
-  should_highlight_ = should_highlight;
-  SchedulePaint();
-}
-
-const char* ClipboardHistoryMainButton::GetClassName() const {
-  return "ClipboardHistoryMainButton";
-}
-
 void ClipboardHistoryMainButton::OnClickCanceled(const ui::Event& event) {
   DCHECK(event.IsMouseEvent());
 
@@ -80,11 +63,6 @@ void ClipboardHistoryMainButton::OnClickCanceled(const ui::Event& event) {
 void ClipboardHistoryMainButton::OnThemeChanged() {
   views::Button::OnThemeChanged();
 
-  // Use the light mode as default because the light mode is the default mode
-  // of the native theme which decides the context menu's background color.
-  // TODO(andrewxu): remove this line after https://crbug.com/1143009 is
-  // fixed.
-  ScopedLightModeAsDefault scoped_light_mode_as_default;
   StyleUtil::ConfigureInkDropAttributes(
       this, StyleUtil::kBaseColor | StyleUtil::kInkDropOpacity);
 }
@@ -103,26 +81,25 @@ void ClipboardHistoryMainButton::OnGestureEvent(ui::GestureEvent* event) {
 }
 
 void ClipboardHistoryMainButton::PaintButtonContents(gfx::Canvas* canvas) {
-  if (!should_highlight_)
+  // Only paint a highlight when the button has pseudo focus.
+  if (!container_->IsMainButtonPseudoFocused()) {
     return;
+  }
 
   // Highlight the background when the menu item is selected or pressed.
   cc::PaintFlags flags;
   flags.setAntiAlias(true);
 
-  // Use the color in light mode when dark/light mode is not enabled. As the
-  // background color of the context menu is from NativeTheme when the feature
-  // is not enabled, and light mode is the default color of NativeTheme. If
-  // dark/light mode is enabled, the background color of the context menus
-  // inside SystemUI will be overridden to align with current system color mode.
-  const SkColor color =
-      features::IsDarkLightModeEnabled()
-          ? GetColorProvider()->GetColor(kColorAshInkDrop)
-          : SkColorSetA(SK_ColorBLACK,
-                        StyleUtil::kLightInkDropOpacity * SK_AlphaOPAQUE);
-  flags.setColor(color);
+  const auto color_id =
+      chromeos::features::IsJellyEnabled()
+          ? static_cast<ui::ColorId>(cros_tokens::kCrosSysHoverOnSubtle)
+          : kColorAshInkDrop;
+  flags.setColor(GetColorProvider()->GetColor(color_id));
   flags.setStyle(cc::PaintFlags::kFill_Style);
   canvas->DrawRect(GetLocalBounds(), flags);
 }
+
+BEGIN_METADATA(ClipboardHistoryMainButton, views::Button)
+END_METADATA
 
 }  // namespace ash

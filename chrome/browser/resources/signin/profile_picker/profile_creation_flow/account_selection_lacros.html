@@ -3,6 +3,11 @@
     --account-button-hover-color: var(--md-background-color);
   }
 
+  a {
+    color: var(--cr-link-color);
+    text-decoration: none;
+  }
+
   #accountsContainer {
     --account-container-min-width: 416px;
     --account-container-max-width: 582px;
@@ -36,7 +41,6 @@
 
   .title {
     color: var(--cr-primary-text-color);
-    font-family: 'Google Sans', Roboto, sans-serif;
     font-size: 24px;
     line-height: 32px;
     margin-bottom: 8px;
@@ -45,7 +49,6 @@
 
   .subtitle {
     color: var(--cr-secondary-text-color);
-    font-family: Roboto;
     font-size: 14px;
     line-height: 20px;
     margin-bottom: 24px;
@@ -109,7 +112,6 @@
 
   .account-name {
     color: var(--cr-primary-text-color);
-    font-family: 'Google Sans', Roboto, sans-serif;
     font-size: 15px;
     font-weight: 500;
     line-height: 22px;
@@ -124,7 +126,6 @@
 
   .account-email {
     color: var(--cr-secondary-text-color);
-    font-family: Roboto;
     font-size: 13px;
     line-height: 22px;
     overflow: hidden;
@@ -164,23 +165,23 @@
   }
 </style>
 
-<div id="leftBanner" class="banner"></div>
 <div style$="--theme-frame-color:[[profileThemeInfo.themeFrameColor]];
              --theme-text-color:[[profileThemeInfo.themeFrameTextColor]];">
   <template is="dom-if" if="[[hasPreviousRoute_]]">
     <cr-icon-button id="backButton" iron-icon="cr:arrow-back"
-        on-click="onBackClick_" aria-label$="[[getBackButtonAriaLabel_()]]">
+        on-click="onBackClick_" aria-label$="[[getBackButtonAriaLabel_()]]"
+        title$="[[getBackButtonAriaLabel_()]]">
     </cr-icon-button>
   </template>
 </div>
 <div id="accountsContainer">
-  <img id="product-logo" on-click="onProductLogoTap_"
+  <img id="product-logo" on-click="onProductLogoClick_"
       srcset="chrome://theme/current-channel-logo@1x 1x,
               chrome://theme/current-channel-logo@2x 2x"
       role="presentation">
   <div id="textContainer">
     <h1 class="title">$i18n{accountSelectionLacrosTitle}</h1>
-    <div class="subtitle">$i18n{accountSelectionLacrosSubtitle}</div>
+    <div class="subtitle" inner-h-t-m-l="[[getSubtitle_()]]"></div>
   </div>
   <button id="other-account-button" class="account-button"
           on-click="onOtherAccountClick_" disabled$="[[accountSelected_]]">
@@ -207,5 +208,4 @@
     </template>
   </div>
 </div>
-<div id="rightBanner" class="banner"></div>
 <div id="footer"></div>

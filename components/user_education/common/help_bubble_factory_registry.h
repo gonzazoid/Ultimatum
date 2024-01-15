@@ -9,8 +9,8 @@
 #include <utility>
 #include <vector>
 
-#include "base/callback_forward.h"
 #include "base/callback_list.h"
+#include "base/functional/callback_forward.h"
 #include "components/user_education/common/help_bubble_factory.h"
 #include "components/user_education/common/help_bubble_params.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -25,8 +25,6 @@ namespace user_education {
 // that instances can be created multiple times in a test environment.
 class HelpBubbleFactoryRegistry {
  public:
-  using ToggleFocusCallback = base::RepeatingCallback<void(HelpBubble*)>;
-
   HelpBubbleFactoryRegistry();
   ~HelpBubbleFactoryRegistry();
   HelpBubbleFactoryRegistry(const HelpBubbleFactoryRegistry&) = delete;
@@ -51,10 +49,6 @@ class HelpBubbleFactoryRegistry {
   // bubble or nothing can be focused.
   bool ToggleFocusForAccessibility(ui::ElementContext context);
 
-  // Listens for ToggleFocusForAccessibility() calls for metrics purposes.
-  base::CallbackListSubscription AddToggleFocusCallback(
-      ToggleFocusCallback callback);
-
   // Gets the first visible help bubble in the given context, or null if none
   // exists.
   HelpBubble* GetHelpBubble(ui::ElementContext context);
@@ -74,10 +68,6 @@ class HelpBubbleFactoryRegistry {
 
   // The list of known help bubbles.
   std::map<HelpBubble*, base::CallbackListSubscription> help_bubbles_;
-
-  // For listening
-  base::RepeatingCallbackList<typename ToggleFocusCallback::RunType>
-      toggle_focus_callbacks_;
 };
 
 }  // namespace user_education

@@ -22,11 +22,11 @@
 
 namespace media {
 
-class Video;
 class VideoFrame;
 
 namespace test {
 
+class VideoBitstream;
 class EncodedDataHelper;
 class FrameRendererDummy;
 class VideoFrameProcessor;
@@ -45,6 +45,8 @@ struct DecoderWrapperConfig {
   size_t max_outstanding_decode_requests = 1;
   DecoderImplementation implementation = DecoderImplementation::kVDA;
   bool linear_output = false;
+  // See VP9Decoder for information on this.
+  bool ignore_resolution_changes_to_smaller_vp9 = false;
 };
 
 // This class wraps the VideoDecoder implementation and associated
@@ -78,7 +80,7 @@ class DecoderWrapper {
   // be called multiple times and needs to be called before Play().
   // Initialization is performed asynchronous, upon completion a 'kInitialized'
   // event is thrown.
-  void Initialize(const Video* video);
+  void Initialize(const VideoBitstream* video);
   // Start decoding the video stream, decoder should be idle when this function
   // is called. This function is non-blocking, for each frame decoded a
   // 'kFrameDecoded' event will be thrown.
@@ -113,7 +115,7 @@ class DecoderWrapper {
   void DestroyDecoderTask(base::WaitableEvent* done);
 
   // Methods below are the equivalent of the public homonym ones.
-  void InitializeTask(const Video* video, base::WaitableEvent* done);
+  void InitializeTask(const VideoBitstream* video, base::WaitableEvent* done);
   void PlayTask();
   void FlushTask();
   void ResetTask();

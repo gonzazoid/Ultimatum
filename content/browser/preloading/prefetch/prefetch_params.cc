@@ -4,17 +4,19 @@
 
 #include "content/browser/preloading/prefetch/prefetch_params.h"
 
+#include <string>
+
 #include "base/command_line.h"
 #include "base/metrics/field_trial_params.h"
+#include "base/no_destructor.h"
 #include "base/rand_util.h"
 #include "content/browser/preloading/prefetch/prefetch_features.h"
+#include "content/common/features.h"
 #include "content/public/browser/prefetch_service_delegate.h"
+#include "content/public/common/content_features.h"
+#include "third_party/blink/public/mojom/speculation_rules/speculation_rules.mojom.h"
 
 namespace content {
-
-bool PrefetchContentRefactorIsEnabled() {
-  return base::FeatureList::IsEnabled(features::kPrefetchUseContentRefactor);
-}
 
 GURL PrefetchProxyHost(const GURL& default_proxy_url) {
   // Command line overrides take priority.
@@ -29,22 +31,7 @@ GURL PrefetchProxyHost(const GURL& default_proxy_url) {
     LOG(ERROR) << "--isolated-prerender-tunnel-proxy value is invalid";
   }
 
-  GURL url(base::GetFieldTrialParamValueByFeature(
-      features::kPrefetchUseContentRefactor, "proxy_host"));
-  if (url.is_valid() && url.SchemeIs(url::kHttpsScheme)) {
-    return url;
-  }
-
   return default_proxy_url;
-}
-
-std::string PrefetchProxyHeaderKey() {
-  std::string header = base::GetFieldTrialParamValueByFeature(
-      features::kPrefetchUseContentRefactor, "proxy_header_key");
-  if (!header.empty()) {
-    return header;
-  }
-  return "chrome-tunnel";
 }
 
 std::string PrefetchProxyServerExperimentGroup() {
@@ -67,20 +54,24 @@ bool PrefetchAllowAllDomainsForExtendedPreloading() {
 }
 
 size_t PrefetchServiceMaximumNumberOfConcurrentPrefetches() {
+  // kPrefetchNewLimits requires prefetches to be sequential.
+  if (PrefetchNewLimitsEnabled()) {
+    return 1;
+  }
   return base::GetFieldTrialParamByFeatureAsInt(
       features::kPrefetchUseContentRefactor, "max_concurrent_prefetches", 1);
 }
 
-absl::optional<int> PrefetchServiceMaximumNumberOfPrefetchesPerPage() {
+std::optional<int> PrefetchServiceMaximumNumberOfPrefetchesPerPage() {
   if (base::CommandLine::ForCurrentProcess()->HasSwitch(
           "isolated-prerender-unlimited-prefetches")) {
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   int max = base::GetFieldTrialParamByFeatureAsInt(
       features::kPrefetchUseContentRefactor, "max_srp_prefetches", 5);
   if (max < 0) {
-    return absl::nullopt;
+    return std::nullopt;
   }
   return max;
 }
@@ -154,13 +145,14 @@ bool PrefetchServiceHTMLOnly() {
       features::kPrefetchUseContentRefactor, "html_only", false);
 }
 
-absl::optional<std::string> PrefetchBypassProxyForHost() {
-  absl::optional<std::string> value;
-  auto val_str = base::CommandLine::ForCurrentProcess()->GetSwitchValueASCII(
-      "bypass-prefetch-proxy-for-host");
-  if (val_str.size())
-    value = std::move(val_str);
-  return value;
+bool ShouldPrefetchBypassProxyForTestHost(std::string_view host) {
+  static const base::NoDestructor<std::string> bypass(
+      base::CommandLine::ForCurrentProcess()->GetSwitchValueASCII(
+          "bypass-prefetch-proxy-for-host"));
+  if (bypass->empty()) {
+    return false;
+  }
+  return host == *bypass;
 }
 
 base::TimeDelta PrefetchCacheableDuration() {
@@ -176,13 +168,11 @@ bool PrefetchProbingEnabled() {
 bool PrefetchCanaryCheckEnabled() {
   return base::GetFieldTrialParamByFeatureAsBool(
       features::kPrefetchUseContentRefactor, "do_canary", true);
-  ;
 }
 
 bool PrefetchTLSCanaryCheckEnabled() {
   return base::GetFieldTrialParamByFeatureAsBool(
       features::kPrefetchUseContentRefactor, "do_tls_canary", false);
-  ;
 }
 
 GURL PrefetchTLSCanaryCheckURL(const GURL& default_tls_canary_check_url) {
@@ -217,6 +207,84 @@ base::TimeDelta PrefetchCanaryCheckTimeout() {
 int PrefetchCanaryCheckRetries() {
   return base::GetFieldTrialParamByFeatureAsInt(
       features::kPrefetchUseContentRefactor, "canary_check_retries", 1);
+}
+
+bool PrefetchShouldBlockUntilHead(
+    blink::mojom::SpeculationEagerness prefetch_eagerness) {
+  switch (prefetch_eagerness) {
+    case blink::mojom::SpeculationEagerness::kEager:
+      return base::GetFieldTrialParamByFeatureAsBool(
+          features::kPrefetchUseContentRefactor,
+          "block_until_head_eager_prefetch", true);
+    case blink::mojom::SpeculationEagerness::kModerate:
+      return base::GetFieldTrialParamByFeatureAsBool(
+          features::kPrefetchUseContentRefactor,
+          "block_until_head_moderate_prefetch", true);
+    case blink::mojom::SpeculationEagerness::kConservative:
+      return base::GetFieldTrialParamByFeatureAsBool(
+          features::kPrefetchUseContentRefactor,
+          "block_until_head_conservative_prefetch", true);
+  }
+}
+
+base::TimeDelta PrefetchBlockUntilHeadTimeout(
+    blink::mojom::SpeculationEagerness prefetch_eagerness) {
+  int timeout_in_milliseconds = 0;
+  switch (prefetch_eagerness) {
+    case blink::mojom::SpeculationEagerness::kEager:
+      timeout_in_milliseconds = base::GetFieldTrialParamByFeatureAsInt(
+          features::kPrefetchUseContentRefactor,
+          "block_until_head_timeout_eager_prefetch", 1000);
+      break;
+    case blink::mojom::SpeculationEagerness::kModerate:
+      timeout_in_milliseconds = base::GetFieldTrialParamByFeatureAsInt(
+          features::kPrefetchUseContentRefactor,
+          "block_until_head_timeout_moderate_prefetch", 0);
+      break;
+    case blink::mojom::SpeculationEagerness::kConservative:
+      timeout_in_milliseconds = base::GetFieldTrialParamByFeatureAsInt(
+          features::kPrefetchUseContentRefactor,
+          "block_until_head_timeout_conservative_prefetch", 0);
+      break;
+  }
+  return base::Milliseconds(timeout_in_milliseconds);
+}
+
+std::string GetPrefetchEagernessHistogramSuffix(
+    blink::mojom::SpeculationEagerness eagerness) {
+  switch (eagerness) {
+    case blink::mojom::SpeculationEagerness::kEager:
+      return "Eager";
+    case blink::mojom::SpeculationEagerness::kModerate:
+      return "Moderate";
+    case blink::mojom::SpeculationEagerness::kConservative:
+      return "Conservative";
+  }
+}
+
+bool PrefetchNewLimitsEnabled() {
+  return base::FeatureList::IsEnabled(::features::kPrefetchNewLimits);
+}
+
+size_t MaxNumberOfEagerPrefetchesPerPageForPrefetchNewLimits() {
+  int max = base::GetFieldTrialParamByFeatureAsInt(
+      ::features::kPrefetchNewLimits, "max_eager_prefetches", 50);
+  return std::max(0, max);
+}
+
+size_t MaxNumberOfNonEagerPrefetchesPerPageForPrefetchNewLimits() {
+  int max = base::GetFieldTrialParamByFeatureAsInt(
+      ::features::kPrefetchNewLimits, "max_non_eager_prefetches", 2);
+  return std::max(0, max);
+}
+
+bool PrefetchNIKScopeEnabled() {
+  return base::FeatureList::IsEnabled(features::kPrefetchNIKScope);
+}
+
+bool PrefetchDocumentManagerEarlyCookieCopySkipped() {
+  return base::FeatureList::IsEnabled(
+      features::kPrefetchDocumentManagerEarlyCookieCopySkipped);
 }
 
 }  // namespace content

@@ -28,6 +28,7 @@
 #define THIRD_PARTY_BLINK_RENDERER_BINDINGS_CORE_V8_SCRIPT_REGEXP_H_
 
 #include "third_party/blink/renderer/core/core_export.h"
+#include "third_party/blink/renderer/platform/bindings/script_state.h"
 #include "third_party/blink/renderer/platform/bindings/trace_wrapper_v8_reference.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
@@ -35,21 +36,19 @@
 
 namespace blink {
 
-enum MultilineMode { kMultilineDisabled, kMultilineEnabled };
+enum class MultilineMode { kMultilineDisabled, kMultilineEnabled };
+// Map to, respectively: neither u nor v flags, u flag, v flag.
+enum class UnicodeMode { kBmpOnly, kUnicode, kUnicodeSets };
 
 class CORE_EXPORT ScriptRegexp final : public GarbageCollected<ScriptRegexp> {
  public:
-  enum CharacterMode {
-    BMP,    // NOLINT
-    UTF16,  // NOLINT
-  };
-
   // For TextCaseSensitivity argument, TextCaseASCIIInsensitive and
   // TextCaseUnicodeInsensitive has identical behavior. They just add "i" flag.
-  ScriptRegexp(const String&,
+  ScriptRegexp(v8::Isolate* isolate,
+               const String&,
                TextCaseSensitivity,
-               MultilineMode = kMultilineDisabled,
-               CharacterMode = BMP);
+               MultilineMode = MultilineMode::kMultilineDisabled,
+               UnicodeMode = UnicodeMode::kBmpOnly);
 
   ScriptRegexp(const ScriptRegexp&) = delete;
   ScriptRegexp& operator=(const ScriptRegexp&) = delete;
@@ -73,6 +72,7 @@ class CORE_EXPORT ScriptRegexp final : public GarbageCollected<ScriptRegexp> {
   void Trace(Visitor* visitor) const;
 
  private:
+  Member<ScriptState> script_state_;
   TraceWrapperV8Reference<v8::RegExp> regex_;
   String exception_message_;
 };

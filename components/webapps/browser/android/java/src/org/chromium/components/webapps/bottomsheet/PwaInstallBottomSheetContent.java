@@ -22,8 +22,7 @@ public class PwaInstallBottomSheetContent implements BottomSheetContent {
     private final PwaInstallBottomSheetView mView;
 
     /** The delegate handling the install. */
-    @VisibleForTesting
-    protected final AddToHomescreenViewDelegate mDelegate;
+    @VisibleForTesting protected final AddToHomescreenViewDelegate mDelegate;
 
     /** This content's priority. */
     private @ContentPriority int mPriority = ContentPriority.LOW;
@@ -48,7 +47,12 @@ public class PwaInstallBottomSheetContent implements BottomSheetContent {
     @Nullable
     @Override
     public View getToolbarView() {
-        return mView.getToolbarView();
+        return null;
+    }
+
+    @Override
+    public int getPeekHeight() {
+        return mView.getPeekHeight();
     }
 
     @Override

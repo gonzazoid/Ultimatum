@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env vpython3
 # Copyright 2019 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
@@ -25,7 +25,7 @@ import test_apps
 import xcodebuild_runner
 
 def GetDefaultBuildDir():
-  return os.path.join(GetChromiumSrcDir(), 'out', 'Debug-iphonesimulator')
+  return os.path.join(GetChromiumSrcDir(), 'out', 'Release')
 
 parser=argparse.ArgumentParser(
     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -71,7 +71,8 @@ egtests_app = test_apps.EgtestsApp(
     host_app_path=host_app, inserted_libs=inserted_libs)
 
 launch_command = xcodebuild_runner.LaunchCommand(egtests_app, destination,
-    shards=1, retries=1, readline_timeout=constants.READLINE_TIMEOUT,
-    out_dir=output_directory)
+    clones=1, retries=1, readline_timeout=constants.READLINE_TIMEOUT,
+    out_dir=output_directory,
+    cert_path='../../wpt_tools/wpt/tools/certs/cacert.pem')
 
 launch_command.launch()

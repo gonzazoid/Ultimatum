@@ -9,13 +9,13 @@
 #include <string>
 #include <utility>
 
-#include "base/containers/cxx20_erase.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/ui_features.h"
 #include "chrome/browser/ui/webui/bookmarks/bookmarks_message_handler.h"
 #include "chrome/browser/ui/webui/favicon_source.h"
 #include "chrome/browser/ui/webui/managed_ui_handler.h"
 #include "chrome/browser/ui/webui/metrics_handler.h"
+#include "chrome/browser/ui/webui/page_not_available_for_guest/page_not_available_for_guest_ui.h"
 #include "chrome/browser/ui/webui/plural_string_handler.h"
 #include "chrome/browser/ui/webui/webui_util.h"
 #include "chrome/common/url_constants.h"
@@ -39,16 +39,17 @@ void AddLocalizedString(content::WebUIDataSource* source,
                         const std::string& message,
                         int id) {
   std::u16string str = l10n_util::GetStringUTF16(id);
-  base::Erase(str, '&');
+  std::erase(str, '&');
   source->AddString(message, str);
 }
 
-content::WebUIDataSource* CreateBookmarksUIHTMLSource(Profile* profile) {
-  content::WebUIDataSource* source =
-      content::WebUIDataSource::Create(chrome::kChromeUIBookmarksHost);
+content::WebUIDataSource* CreateAndAddBookmarksUIHTMLSource(Profile* profile) {
+  content::WebUIDataSource* source = content::WebUIDataSource::CreateAndAdd(
+      profile, chrome::kChromeUIBookmarksHost);
   webui::SetupWebUIDataSource(
       source, base::make_span(kBookmarksResources, kBookmarksResourcesSize),
       IDR_BOOKMARKS_BOOKMARKS_HTML);
+  webui::SetupChromeRefresh2023(source);
 
   // Build an Accelerator to describe undo shortcut
   // NOTE: the undo shortcut is also defined in bookmarks/command_manager.js
@@ -133,12 +134,27 @@ content::WebUIDataSource* CreateBookmarksUIHTMLSource(Profile* profile) {
 
 }  // namespace
 
+BookmarksUIConfig::BookmarksUIConfig()
+    : WebUIConfig(content::kChromeUIScheme, chrome::kChromeUIBookmarksHost) {}
+
+BookmarksUIConfig::~BookmarksUIConfig() = default;
+
+std::unique_ptr<content::WebUIController>
+BookmarksUIConfig::CreateWebUIController(content::WebUI* web_ui,
+                                         const GURL& url) {
+  Profile* profile = Profile::FromWebUI(web_ui);
+  if (profile->IsGuestSession()) {
+    return std::make_unique<PageNotAvailableForGuestUI>(
+        web_ui, chrome::kChromeUIBookmarksHost);
+  }
+  return std::make_unique<BookmarksUI>(web_ui);
+}
+
 BookmarksUI::BookmarksUI(content::WebUI* web_ui) : WebUIController(web_ui) {
   // Set up the chrome://bookmarks/ source.
   Profile* profile = Profile::FromWebUI(web_ui);
-  auto* source = CreateBookmarksUIHTMLSource(profile);
+  auto* source = CreateAndAddBookmarksUIHTMLSource(profile);
   ManagedUIHandler::Initialize(web_ui, source);
-  content::WebUIDataSource::Add(profile, source);
 
   content::URLDataSource::Add(
       profile, std::make_unique<FaviconSource>(

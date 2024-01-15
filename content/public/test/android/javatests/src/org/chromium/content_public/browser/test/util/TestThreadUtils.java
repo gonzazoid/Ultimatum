@@ -6,15 +6,13 @@ package org.chromium.content_public.browser.test.util;
 
 import org.chromium.base.ThreadUtils;
 import org.chromium.base.task.PostTask;
-import org.chromium.content_public.browser.UiThreadTaskTraits;
+import org.chromium.base.task.TaskTraits;
 
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.FutureTask;
 
-/**
- * Helper methods to deal with threading related tasks.
- */
+/** Helper methods to deal with threading related tasks. */
 public class TestThreadUtils {
     /**
      * Run the supplied Runnable on the main thread. The method will block until the Runnable
@@ -27,7 +25,7 @@ public class TestThreadUtils {
             r.run();
         } else {
             FutureTask<Void> task = new FutureTask<Void>(r, null);
-            PostTask.postTask(UiThreadTaskTraits.DEFAULT, task);
+            PostTask.postTask(TaskTraits.UI_DEFAULT, task);
             try {
                 task.get();
             } catch (Exception e) {
@@ -61,7 +59,7 @@ public class TestThreadUtils {
      */
     public static <T> T runOnUiThreadBlocking(Callable<T> c) throws ExecutionException {
         FutureTask<T> task = new FutureTask<T>(c);
-        PostTask.runOrPostTask(UiThreadTaskTraits.DEFAULT, task);
+        PostTask.runOrPostTask(TaskTraits.UI_DEFAULT, task);
         try {
             return task.get();
         } catch (InterruptedException e) {

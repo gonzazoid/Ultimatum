@@ -20,13 +20,19 @@ BackgroundSyncControllerImpl* BackgroundSyncControllerFactory::GetForProfile(
 // static
 BackgroundSyncControllerFactory*
 BackgroundSyncControllerFactory::GetInstance() {
-  return base::Singleton<BackgroundSyncControllerFactory>::get();
+  static base::NoDestructor<BackgroundSyncControllerFactory> instance;
+  return instance.get();
 }
 
 BackgroundSyncControllerFactory::BackgroundSyncControllerFactory()
     : ProfileKeyedServiceFactory(
           "BackgroundSyncService",
-          ProfileSelections::BuildForRegularAndIncognito()) {
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOwnInstance)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOwnInstance)
+              .Build()) {
   DependsOn(ukm::UkmBackgroundRecorderFactory::GetInstance());
   DependsOn(site_engagement::SiteEngagementServiceFactory::GetInstance());
 }

@@ -7,10 +7,11 @@
 #include <chrono>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/synchronization/lock.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
 #include "gpu/command_buffer/client/context_support.h"
 #include "third_party/skia/include/gpu/GrDirectContext.h"
@@ -65,8 +66,11 @@ ContextCacheController::ClientBecameVisible() {
   bool became_visible = num_clients_visible_ == 0;
   ++num_clients_visible_;
 
-  if (became_visible)
+  if (became_visible) {
     context_support_->SetAggressivelyFreeResources(false);
+    if (on_clients_visibility_changed_cb_)
+      on_clients_visibility_changed_cb_.Run(became_visible);
+  }
 
   return base::WrapUnique(new ScopedVisibility());
 }
@@ -83,6 +87,15 @@ void ContextCacheController::ClientBecameNotVisible(
   --num_clients_visible_;
 
   if (num_clients_visible_ == 0) {
+    // Call before clearing context. The client is RasterContextProviderWrapper,
+    // which frees image decode controller resources. That needs to be done
+    // before notifying the context_support of intention to aggressively free
+    // resources. This ensures that the imaged decode controller has released
+    // all Skia refs at the time Skia's cleanup executes (within worker
+    // context's cleanup).
+    if (on_clients_visibility_changed_cb_)
+      on_clients_visibility_changed_cb_.Run(/*visible=*/false);
+
     // We are freeing resources now - cancel any pending idle callbacks.
     InvalidatePendingIdleCallbacks();
 
@@ -147,6 +160,13 @@ void ContextCacheController::ClientBecameNotBusy(
       callback_pending_ = true;
     }
   }
+}
+
+void ContextCacheController::SetNotifyAllClientsVisibilityChangedCb(
+    base::RepeatingCallback<void(bool)> on_clients_visibility_changed_cb) {
+  DCHECK(!on_clients_visibility_changed_cb_);
+  on_clients_visibility_changed_cb_ =
+      std::move(on_clients_visibility_changed_cb);
 }
 
 void ContextCacheController::PostIdleCallback(

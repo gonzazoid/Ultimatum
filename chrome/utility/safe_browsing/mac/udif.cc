@@ -13,9 +13,9 @@
 #include <memory>
 #include <utility>
 
+#include "base/apple/foundation_util.h"
+#include "base/apple/scoped_cftyperef.h"
 #include "base/logging.h"
-#include "base/mac/foundation_util.h"
-#include "base/mac/scoped_cftyperef.h"
 #include "base/memory/raw_ptr.h"
 #include "base/notreached.h"
 #include "base/numerics/ostream_operators.h"
@@ -451,31 +451,33 @@ bool UDIFParser::ParseBlkx() {
   if (stream_->Seek(trailer.plist_offset, SEEK_SET) == -1)
     return false;
 
-  if (!stream_->ReadExact(&plist_bytes[0], trailer.plist_length)) {
+  if (trailer.plist_length == 0 ||
+      !stream_->ReadExact(plist_bytes.data(), trailer.plist_length)) {
     DLOG(ERROR) << "Failed to read blkx plist data";
     return false;
   }
 
-  base::ScopedCFTypeRef<CFDataRef> plist_data(
-      CFDataCreateWithBytesNoCopy(kCFAllocatorDefault,
-          &plist_bytes[0], plist_bytes.size(), kCFAllocatorNull));
+  base::apple::ScopedCFTypeRef<CFDataRef> plist_data(
+      CFDataCreateWithBytesNoCopy(kCFAllocatorDefault, plist_bytes.data(),
+                                  plist_bytes.size(), kCFAllocatorNull));
   if (!plist_data) {
     DLOG(ERROR) << "Failed to create data from bytes";
     return false;
   }
 
   CFErrorRef error = nullptr;
-  base::ScopedCFTypeRef<CFPropertyListRef> plist(
-      CFPropertyListCreateWithData(kCFAllocatorDefault, plist_data,
+  base::apple::ScopedCFTypeRef<CFPropertyListRef> plist(
+      CFPropertyListCreateWithData(kCFAllocatorDefault, plist_data.get(),
                                    kCFPropertyListImmutable, nullptr, &error));
 
-  CFDictionaryRef plist_dict = base::mac::CFCast<CFDictionaryRef>(plist.get());
-  base::ScopedCFTypeRef<CFErrorRef> error_ref(error);
+  CFDictionaryRef plist_dict =
+      base::apple::CFCast<CFDictionaryRef>(plist.get());
+  base::apple::ScopedCFTypeRef<CFErrorRef> error_ref(error);
   if (error) {
-    base::ScopedCFTypeRef<CFStringRef> error_string(
+    base::apple::ScopedCFTypeRef<CFStringRef> error_string(
         CFErrorCopyDescription(error));
     DLOG(ERROR) << "Failed to parse XML plist: "
-                << base::SysCFStringRefToUTF8(error_string);
+                << base::SysCFStringRefToUTF8(error_string.get());
     return false;
   }
 
@@ -484,15 +486,15 @@ bool UDIFParser::ParseBlkx() {
     return false;
   }
 
-  auto* resource_fork = base::mac::GetValueFromDictionary<CFDictionaryRef>(
+  auto* resource_fork = base::apple::GetValueFromDictionary<CFDictionaryRef>(
       plist_dict, CFSTR("resource-fork"));
   if (!resource_fork) {
     DLOG(ERROR) << "No resource-fork entry in plist";
     return false;
   }
 
-  auto* blkx = base::mac::GetValueFromDictionary<CFArrayRef>(resource_fork,
-                                                             CFSTR("blkx"));
+  auto* blkx = base::apple::GetValueFromDictionary<CFArrayRef>(resource_fork,
+                                                               CFSTR("blkx"));
   if (!blkx) {
     DLOG(ERROR) << "No blkx entry in resource-fork";
     return false;
@@ -500,15 +502,15 @@ bool UDIFParser::ParseBlkx() {
 
   for (CFIndex i = 0; i < CFArrayGetCount(blkx); ++i) {
     auto* block_dictionary =
-        base::mac::CFCast<CFDictionaryRef>(CFArrayGetValueAtIndex(blkx, i));
+        base::apple::CFCast<CFDictionaryRef>(CFArrayGetValueAtIndex(blkx, i));
     if (!block_dictionary) {
       DLOG(ERROR) << "Skipping block " << i
                   << " because it is not a CFDictionary";
       continue;
     }
 
-    auto* data = base::mac::GetValueFromDictionary<CFDataRef>(block_dictionary,
-                                                              CFSTR("Data"));
+    auto* data = base::apple::GetValueFromDictionary<CFDataRef>(
+        block_dictionary, CFSTR("Data"));
     if (!data) {
       DLOG(ERROR) << "Skipping block " << i
                   << " because it has no Data section";
@@ -536,7 +538,7 @@ bool UDIFParser::ParseBlkx() {
       continue;
     }
 
-    CFStringRef partition_name_cf = base::mac::CFCast<CFStringRef>(
+    CFStringRef partition_name_cf = base::apple::CFCast<CFStringRef>(
         CFDictionaryGetValue(block_dictionary, CFSTR("Name")));
     if (!partition_name_cf) {
       DLOG(ERROR) << "Skipping block " << i << " because it has no name";

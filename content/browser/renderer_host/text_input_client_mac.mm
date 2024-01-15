@@ -4,10 +4,9 @@
 
 #import "content/browser/renderer_host/text_input_client_mac.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/singleton.h"
 #include "base/metrics/histogram_macros.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "base/threading/thread_restrictions.h"
 #include "base/time/time.h"
 #include "content/browser/renderer_host/frame_tree.h"
@@ -15,6 +14,7 @@
 #include "content/browser/renderer_host/render_frame_host_impl.h"
 #include "content/browser/renderer_host/render_widget_host_delegate.h"
 #include "content/browser/renderer_host/render_widget_host_impl.h"
+#include "content/common/features.h"
 #include "ui/base/mojom/attributed_string.mojom.h"
 
 namespace content {
@@ -31,7 +31,10 @@ RenderFrameHostImpl* GetFocusedRenderFrameHostImpl(RenderWidgetHost* widget) {
 }  // namespace
 
 TextInputClientMac::TextInputClientMac()
-    : character_index_(UINT32_MAX), lock_(), condition_(&lock_) {}
+    : character_index_(UINT32_MAX),
+      lock_(),
+      condition_(&lock_),
+      wait_timeout_(features::kTextInputClientIPCTimeout.Get()) {}
 
 TextInputClientMac::~TextInputClientMac() {
 }

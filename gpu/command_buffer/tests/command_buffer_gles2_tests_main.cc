@@ -2,12 +2,12 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/message_loop/message_pump_type.h"
 #include "base/task/single_thread_task_executor.h"
 #include "build/build_config.h"
 #if BUILDFLAG(IS_MAC)
-#include "base/mac/scoped_nsautorelease_pool.h"
+#include "base/apple/scoped_nsautorelease_pool.h"
 #endif
 #include "base/test/launcher/unit_test_launcher.h"
 #include "base/test/test_suite.h"
@@ -21,7 +21,7 @@ namespace {
 
 int RunHelper(base::TestSuite* testSuite) {
   base::MessagePumpType pump_type = base::MessagePumpType::IO;
-#if defined(USE_OZONE)
+#if BUILDFLAG(IS_OZONE)
   pump_type = base::MessagePumpType::UI;
 #endif
   base::SingleThreadTaskExecutor executor(pump_type);
@@ -61,7 +61,7 @@ int main(int argc, char** argv) {
 
   base::TestSuite test_suite(argc, argv);
 #if BUILDFLAG(IS_MAC)
-  base::mac::ScopedNSAutoreleasePool pool;
+  base::apple::ScopedNSAutoreleasePool pool;
 #endif
   testing::InitGoogleMock(&argc, argv);
   return base::LaunchUnitTestsSerially(

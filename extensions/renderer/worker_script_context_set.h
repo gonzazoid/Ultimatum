@@ -7,9 +7,7 @@
 
 #include <memory>
 #include <string>
-#include <vector>
 
-#include "base/threading/thread_local.h"
 #include "content/public/renderer/worker_thread.h"
 #include "extensions/renderer/script_context_set_iterable.h"
 #include "url/gurl.h"
@@ -20,6 +18,8 @@ namespace extensions {
 class ScriptContext;
 
 // A set of ScriptContexts owned by worker threads. Thread safe.
+// There should only be a single instance of this class, owned by the
+// Dispatcher.
 class WorkerScriptContextSet : public ScriptContextSetIterable,
                                public content::WorkerThread::Observer {
  public:
@@ -36,9 +36,15 @@ class WorkerScriptContextSet : public ScriptContextSetIterable,
 
   // ScriptContextSetIterable:
   void ForEach(
-      const std::string& extension_id,
+      const mojom::HostID& host_id,
       content::RenderFrame* render_frame,
       const base::RepeatingCallback<void(ScriptContext*)>& callback) override;
+
+  // Runs |callback| with the given |context|.
+  void ExecuteCallbackWithContext(
+      ScriptContext* context,
+      const base::RepeatingCallback<void(ScriptContext*)>& callback);
+
   // Inserts |context| into the set. Contexts are stored in TLS.
   void Insert(std::unique_ptr<ScriptContext> context);
 
@@ -49,10 +55,6 @@ class WorkerScriptContextSet : public ScriptContextSetIterable,
  private:
   // WorkerThread::Observer:
   void WillStopCurrentWorkerThread() override;
-
-  // Implement thread safety by storing each ScriptContext in TLS.
-  base::ThreadLocalPointer<std::vector<std::unique_ptr<ScriptContext>>>
-      contexts_tls_;
 };
 
 }  // namespace extensions

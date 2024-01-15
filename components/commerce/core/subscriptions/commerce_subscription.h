@@ -5,6 +5,8 @@
 #ifndef COMPONENTS_COMMERCE_CORE_SUBSCRIPTIONS_COMMERCE_SUBSCRIPTION_H_
 #define COMPONENTS_COMMERCE_CORE_SUBSCRIPTIONS_COMMERCE_SUBSCRIPTION_H_
 
+#include <stdint.h>
+
 #include <string>
 
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -22,6 +24,8 @@
 namespace commerce {
 
 // The type of subscription.
+// A Java counterpart will be generated for this enum.
+// GENERATED_JAVA_ENUM_PACKAGE: org.chromium.components.commerce.core
 enum class SubscriptionType {
   // Unspecified type.
   kTypeUnspecified = 0,
@@ -30,6 +34,8 @@ enum class SubscriptionType {
 };
 
 // The type of subscription identifier.
+// A Java counterpart will be generated for this enum.
+// GENERATED_JAVA_ENUM_PACKAGE: org.chromium.components.commerce.core
 enum class IdentifierType {
   // Unspecified identifier type.
   kIdentifierTypeUnspecified = 0,
@@ -40,6 +46,8 @@ enum class IdentifierType {
 };
 
 // The type of subscription management.
+// A Java counterpart will be generated for this enum.
+// GENERATED_JAVA_ENUM_PACKAGE: org.chromium.components.commerce.core
 enum class ManagementType {
   // Unspecified management type.
   kTypeUnspecified = 0,
@@ -68,6 +76,7 @@ struct UserSeenOffer {
 };
 
 extern const int64_t kUnknownSubscriptionTimestamp;
+extern const uint64_t kInvalidSubscriptionId;
 
 struct CommerceSubscription {
   // The CommerceSubscription instantiation outside of this subscriptions/
@@ -100,6 +109,11 @@ std::string SubscriptionIdTypeToString(IdentifierType type);
 IdentifierType StringToSubscriptionIdType(const std::string& s);
 std::string SubscriptionManagementTypeToString(ManagementType type);
 ManagementType StringToSubscriptionManagementType(const std::string& s);
+
+// Gets a key for the provided subscription that can be used for storage or
+// caching.
+std::string GetStorageKeyForSubscription(
+    const CommerceSubscription& subscription);
 
 }  // namespace commerce
 

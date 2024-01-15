@@ -6,7 +6,7 @@
 
 #import <WebKit/WebKit.h>
 
-#import "base/bind.h"
+#import "base/functional/bind.h"
 #import "base/run_loop.h"
 #import "base/test/ios/wait_util.h"
 #import "ios/net/cookies/cookie_store_ios_test_util.h"
@@ -16,10 +16,6 @@
 #import "ios/web/public/test/web_test.h"
 #import "testing/gtest/include/gtest/gtest.h"
 #import "testing/platform_test.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 using base::test::ios::WaitUntilConditionOrTimeout;
 using base::test::ios::kWaitForCookiesTimeout;

@@ -15,9 +15,9 @@
 #include "ui/android/window_android_observer.h"
 #include "ui/gfx/geometry/size.h"
 
-namespace cc {
+namespace cc::slim {
 class SurfaceLayer;
-}  // namespace cc
+}
 
 namespace thin_webview {
 namespace android {
@@ -40,6 +40,8 @@ class OverlayWindowAndroid : public content::VideoOverlayWindow,
   void TogglePlayPause(JNIEnv* env, bool toggleOn);
   void NextTrack(JNIEnv* env);
   void PreviousTrack(JNIEnv* env);
+  void NextSlide(JNIEnv* env);
+  void PreviousSlide(JNIEnv* env);
   void ToggleMicrophone(JNIEnv* env, bool toggleOn);
   void ToggleCamera(JNIEnv* env, bool toggleOn);
   void HangUp(JNIEnv* env);
@@ -57,17 +59,14 @@ class OverlayWindowAndroid : public content::VideoOverlayWindow,
   void OnActivityStopped() override;
   void OnActivityStarted() override {}
 
-  // OverlayWindow implementation.
-  bool IsActive() override;
+  // VideoOverlayWindow implementation.
+  bool IsActive() const override;
   void Close() override;
   void ShowInactive() override {}
   void Hide() override;
-  bool IsVisible() override;
-  bool IsAlwaysOnTop() override;
+  bool IsVisible() const override;
   gfx::Rect GetBounds() override;
   void UpdateNaturalSize(const gfx::Size& natural_size) override;
-
-  // VideoOverlayWindow implementation
   void SetPlaybackState(PlaybackState playback_state) override;
   void SetPlayPauseButtonVisibility(bool is_visible) override;
   void SetSkipAdButtonVisibility(bool is_visible) override {}
@@ -78,8 +77,9 @@ class OverlayWindowAndroid : public content::VideoOverlayWindow,
   void SetToggleMicrophoneButtonVisibility(bool is_visible) override;
   void SetToggleCameraButtonVisibility(bool is_visible) override;
   void SetHangUpButtonVisibility(bool is_visible) override;
+  void SetNextSlideButtonVisibility(bool is_visible) override;
+  void SetPreviousSlideButtonVisibility(bool is_visible) override;
   void SetSurfaceId(const viz::SurfaceId& surface_id) override;
-  cc::Layer* GetLayerForTesting() override;
 
  private:
   // Notify PictureInPictureActivity that visible actions have changed.
@@ -95,7 +95,7 @@ class OverlayWindowAndroid : public content::VideoOverlayWindow,
   JavaObjectWeakGlobalRef java_ref_;
   raw_ptr<ui::WindowAndroid> window_android_;
   raw_ptr<thin_webview::android::CompositorView> compositor_view_;
-  scoped_refptr<cc::SurfaceLayer> surface_layer_;
+  scoped_refptr<cc::slim::SurfaceLayer> surface_layer_;
   gfx::Rect bounds_;
   gfx::Size video_size_;
 

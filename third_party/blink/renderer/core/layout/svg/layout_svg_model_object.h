@@ -52,7 +52,7 @@ class LayoutSVGModelObject : public LayoutObject {
 
   gfx::RectF VisualRectInLocalSVGCoordinates() const override {
     NOT_DESTROYED();
-    return StrokeBoundingBox();
+    return DecoratedBoundingBox();
   }
 
   void AbsoluteQuads(Vector<gfx::QuadF>&,
@@ -72,28 +72,28 @@ class LayoutSVGModelObject : public LayoutObject {
     return To<SVGElement>(LayoutObject::GetNode());
   }
 
-  bool IsOfType(LayoutObjectType type) const override {
+  bool IsSVG() const final {
     NOT_DESTROYED();
-    return type == kLayoutObjectSVG || LayoutObject::IsOfType(type);
+    return true;
   }
 
  protected:
+  void ImageChanged(WrappedImagePtr, CanDeferInvalidation) override;
   void WillBeDestroyed() override;
 
   void InsertedIntoTree() override;
   void WillBeRemovedFromTree() override;
 
-  AffineTransform CalculateLocalTransform() const;
   bool CheckForImplicitTransformChange(bool bbox_changed) const;
 
  private:
   // LayoutSVGModelObject subclasses should use GetElement() instead.
   void GetNode() const = delete;
 
-  void AddOutlineRects(Vector<PhysicalRect>&,
+  void AddOutlineRects(OutlineRectCollector&,
                        OutlineInfo*,
                        const PhysicalOffset& additional_offset,
-                       NGOutlineType) const final;
+                       OutlineType) const final;
 };
 
 }  // namespace blink

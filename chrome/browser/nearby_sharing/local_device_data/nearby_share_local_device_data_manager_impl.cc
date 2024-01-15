@@ -7,7 +7,8 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/notreached.h"
 #include "base/rand_util.h"
@@ -15,11 +16,12 @@
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/nearby_sharing/common/nearby_share_prefs.h"
 #include "chrome/browser/nearby_sharing/common/nearby_share_profile_info_provider.h"
+#include "chrome/browser/nearby_sharing/common/nearby_share_switches.h"
 #include "chrome/browser/nearby_sharing/local_device_data/nearby_share_device_data_updater.h"
 #include "chrome/browser/nearby_sharing/local_device_data/nearby_share_device_data_updater_impl.h"
-#include "chrome/browser/nearby_sharing/scheduling/nearby_share_scheduler.h"
-#include "chrome/browser/nearby_sharing/scheduling/nearby_share_scheduler_factory.h"
 #include "chrome/grit/generated_resources.h"
+#include "chromeos/ash/components/nearby/common/scheduling/nearby_scheduler.h"
+#include "chromeos/ash/components/nearby/common/scheduling/nearby_scheduler_factory.h"
 #include "components/prefs/pref_service.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/chromeos/devicetype_utils.h"
@@ -95,7 +97,7 @@ NearbyShareLocalDeviceDataManagerImpl::NearbyShareLocalDeviceDataManagerImpl(
           kUpdateDeviceDataTimeout,
           http_client_factory)),
       download_device_data_scheduler_(
-          NearbyShareSchedulerFactory::CreatePeriodicScheduler(
+          ash::nearby::NearbySchedulerFactory::CreatePeriodicScheduler(
               kDeviceDataDownloadPeriod,
               /*retry_failures=*/true,
               /*require_connectivity=*/true,
@@ -114,8 +116,13 @@ std::string NearbyShareLocalDeviceDataManagerImpl::GetId() {
   if (!id.empty())
     return id;
 
-  for (size_t i = 0; i < kDeviceIdLength; ++i)
-    id += kAlphaNumericChars[base::RandGenerator(kAlphaNumericChars.size())];
+  base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();
+  if (command_line->HasSwitch(switches::kNearbyShareDeviceID)) {
+    id = command_line->GetSwitchValueASCII(switches::kNearbyShareDeviceID);
+  } else {
+    for (size_t i = 0; i < kDeviceIdLength; ++i)
+      id += kAlphaNumericChars[base::RandGenerator(kAlphaNumericChars.size())];
+  }
 
   pref_service_->SetString(prefs::kNearbySharingDeviceIdPrefName, id);
 
@@ -196,7 +203,7 @@ void NearbyShareLocalDeviceDataManagerImpl::DownloadDeviceData() {
 }
 
 void NearbyShareLocalDeviceDataManagerImpl::UploadContacts(
-    std::vector<nearbyshare::proto::Contact> contacts,
+    std::vector<nearby::sharing::proto::Contact> contacts,
     UploadCompleteCallback callback) {
   device_data_updater_->UpdateDeviceData(
       std::move(contacts),
@@ -207,7 +214,7 @@ void NearbyShareLocalDeviceDataManagerImpl::UploadContacts(
 }
 
 void NearbyShareLocalDeviceDataManagerImpl::UploadCertificates(
-    std::vector<nearbyshare::proto::PublicCertificate> certificates,
+    std::vector<nearby::sharing::proto::PublicCertificate> certificates,
     UploadCompleteCallback callback) {
   device_data_updater_->UpdateDeviceData(
       /*contacts=*/absl::nullopt, std::move(certificates),
@@ -257,7 +264,8 @@ void NearbyShareLocalDeviceDataManagerImpl::OnDownloadDeviceDataRequested() {
 }
 
 void NearbyShareLocalDeviceDataManagerImpl::OnDownloadDeviceDataFinished(
-    const absl::optional<nearbyshare::proto::UpdateDeviceResponse>& response) {
+    const absl::optional<nearby::sharing::proto::UpdateDeviceResponse>&
+        response) {
   if (response)
     HandleUpdateDeviceResponse(response);
 
@@ -267,7 +275,8 @@ void NearbyShareLocalDeviceDataManagerImpl::OnDownloadDeviceDataFinished(
 
 void NearbyShareLocalDeviceDataManagerImpl::OnUploadContactsFinished(
     UploadCompleteCallback callback,
-    const absl::optional<nearbyshare::proto::UpdateDeviceResponse>& response) {
+    const absl::optional<nearby::sharing::proto::UpdateDeviceResponse>&
+        response) {
   // NOTE(http://crbug.com/1211189): Only process the UpdateDevice response for
   // DownloadDeviceData() calls. We want avoid infinite loops if the full name
   // or icon URL unexpectedly change.
@@ -277,7 +286,8 @@ void NearbyShareLocalDeviceDataManagerImpl::OnUploadContactsFinished(
 
 void NearbyShareLocalDeviceDataManagerImpl::OnUploadCertificatesFinished(
     UploadCompleteCallback callback,
-    const absl::optional<nearbyshare::proto::UpdateDeviceResponse>& response) {
+    const absl::optional<nearby::sharing::proto::UpdateDeviceResponse>&
+        response) {
   // NOTE(http://crbug.com/1211189): Only process the UpdateDevice response for
   // DownloadDeviceData() calls. We want avoid infinite loops if the full name
   // or icon URL unexpectedly change.
@@ -286,7 +296,8 @@ void NearbyShareLocalDeviceDataManagerImpl::OnUploadCertificatesFinished(
 }
 
 void NearbyShareLocalDeviceDataManagerImpl::HandleUpdateDeviceResponse(
-    const absl::optional<nearbyshare::proto::UpdateDeviceResponse>& response) {
+    const absl::optional<nearby::sharing::proto::UpdateDeviceResponse>&
+        response) {
   if (!response)
     return;
 

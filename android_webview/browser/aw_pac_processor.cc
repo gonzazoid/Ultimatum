@@ -17,16 +17,17 @@
 #include "base/android/jni_android.h"
 #include "base/android/jni_array.h"
 #include "base/android/jni_string.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/memory/raw_ptr.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/task/thread_pool/thread_pool_instance.h"
 #include "base/threading/thread_restrictions.h"
 #include "net/base/address_list.h"
 #include "net/base/completion_once_callback.h"
 #include "net/base/net_errors.h"
-#include "net/base/network_isolation_key.h"
 #include "net/base/network_anonymization_key.h"
+#include "net/base/network_isolation_key.h"
 #include "net/proxy_resolution/pac_file_data.h"
 #include "net/proxy_resolution/proxy_info.h"
 
@@ -443,6 +444,10 @@ jboolean AwPacProcessor::SetProxyScript(JNIEnv* env,
 bool AwPacProcessor::MakeProxyRequest(std::string url, std::string* result) {
   MakeProxyRequestJob job(this, url);
   if (job.ExecSync()) {
+    if (job.proxy_info().ContainsMultiProxyChain()) {
+      // Multi-proxy chains cannot be represented as a PAC string.
+      return false;
+    }
     *result = job.proxy_info().ToPacString();
     return true;
   } else {

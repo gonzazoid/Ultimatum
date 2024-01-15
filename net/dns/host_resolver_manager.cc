@@ -5,6 +5,7 @@
 #include "net/dns/host_resolver_manager.h"
 
 #include <cmath>
+#include <cstdint>
 #include <iterator>
 #include <limits>
 #include <memory>
@@ -16,19 +17,18 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
 #include "base/check_op.h"
 #include "base/compiler_specific.h"
 #include "base/containers/circular_deque.h"
 #include "base/containers/contains.h"
-#include "base/containers/cxx20_erase.h"
 #include "base/containers/flat_set.h"
 #include "base/containers/linked_list.h"
 #include "base/debug/debugger.h"
 #include "base/feature_list.h"
-#include "base/functional/identity.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
+#include "base/location.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
@@ -50,13 +50,12 @@
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "base/threading/scoped_blocking_call.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/default_tick_clock.h"
 #include "base/time/time.h"
-#include "base/trace_event/trace_event.h"
 #include "base/types/optional_util.h"
 #include "base/values.h"
 #include "build/build_config.h"
@@ -69,25 +68,30 @@
 #include "net/base/ip_endpoint.h"
 #include "net/base/net_errors.h"
 #include "net/base/network_anonymization_key.h"
+#include "net/base/network_change_notifier.h"
 #include "net/base/network_interfaces.h"
 #include "net/base/prioritized_dispatcher.h"
 #include "net/base/request_priority.h"
 #include "net/base/trace_constants.h"
+#include "net/base/tracing.h"
 #include "net/base/url_util.h"
 #include "net/dns/address_sorter.h"
 #include "net/dns/dns_alias_utility.h"
 #include "net/dns/dns_client.h"
+#include "net/dns/dns_names_util.h"
 #include "net/dns/dns_response.h"
 #include "net/dns/dns_response_result_extractor.h"
 #include "net/dns/dns_transaction.h"
 #include "net/dns/dns_util.h"
 #include "net/dns/host_cache.h"
+#include "net/dns/host_resolver_internal_result.h"
 #include "net/dns/host_resolver_mdns_listener_impl.h"
 #include "net/dns/host_resolver_mdns_task.h"
 #include "net/dns/host_resolver_nat64_task.h"
 #include "net/dns/host_resolver_proc.h"
 #include "net/dns/host_resolver_system_task.h"
 #include "net/dns/httpssvc_metrics.h"
+#include "net/dns/loopback_only.h"
 #include "net/dns/mdns_client.h"
 #include "net/dns/public/dns_protocol.h"
 #include "net/dns/public/dns_query_type.h"
@@ -99,6 +103,7 @@
 #include "net/dns/record_parsed.h"
 #include "net/dns/resolve_context.h"
 #include "net/dns/test_dns_config_service.h"
+#include "net/http/http_network_session.h"
 #include "net/log/net_log.h"
 #include "net/log/net_log_capture_mode.h"
 #include "net/log/net_log_event_type.h"
@@ -106,7 +111,7 @@
 #include "net/log/net_log_source_type.h"
 #include "net/log/net_log_with_source.h"
 #include "net/socket/client_socket_factory.h"
-#include "net/socket/datagram_client_socket.h"
+#include "net/url_request/url_request_context.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/abseil-cpp/absl/types/variant.h"
 #include "url/scheme_host_port.h"
@@ -126,7 +131,6 @@
 #include "net/base/sys_addrinfo.h"
 #if BUILDFLAG(IS_ANDROID)
 #include "base/android/build_info.h"
-#include "net/android/network_library.h"
 #else  // !BUILDFLAG(IS_ANDROID)
 #include <ifaddrs.h>
 #endif  // BUILDFLAG(IS_ANDROID)
@@ -181,16 +185,7 @@ bool ContainsIcannNameCollisionIp(const std::vector<IPEndPoint>& endpoints) {
 
 // True if |hostname| ends with either ".local" or ".local.".
 bool ResemblesMulticastDNSName(base::StringPiece hostname) {
-  const char kSuffix[] = ".local.";
-  const size_t kSuffixLen = sizeof(kSuffix) - 1;
-  const size_t kSuffixLenTrimmed = kSuffixLen - 1;
-  if (!hostname.empty() && hostname.back() == '.') {
-    return hostname.size() > kSuffixLen &&
-           !hostname.compare(hostname.size() - kSuffixLen, kSuffixLen, kSuffix);
-  }
-  return hostname.size() > kSuffixLenTrimmed &&
-         !hostname.compare(hostname.size() - kSuffixLenTrimmed,
-                           kSuffixLenTrimmed, kSuffix, kSuffixLenTrimmed);
+  return hostname.ends_with(".local") || hostname.ends_with(".local.");
 }
 
 bool ConfigureAsyncDnsNoFallbackFieldTrial() {
@@ -209,67 +204,28 @@ bool ConfigureAsyncDnsNoFallbackFieldTrial() {
   return kDefault;
 }
 
-//-----------------------------------------------------------------------------
-
-// Returns true if it can determine that only loopback addresses are configured.
-// i.e. if only 127.0.0.1 and ::1 are routable.
-// Also returns false if it cannot determine this.
-bool HaveOnlyLoopbackAddresses() {
-  base::ScopedBlockingCall scoped_blocking_call(FROM_HERE,
-                                                base::BlockingType::WILL_BLOCK);
-#if BUILDFLAG(IS_WIN)
-  // TODO(wtc): implement with the GetAdaptersAddresses function.
-  NOTIMPLEMENTED();
-  return false;
-#elif BUILDFLAG(IS_ANDROID)
-  return android::HaveOnlyLoopbackAddresses();
-#elif BUILDFLAG(IS_POSIX) || BUILDFLAG(IS_FUCHSIA)
-  struct ifaddrs* interface_addr = nullptr;
-  int rv = getifaddrs(&interface_addr);
-  if (rv != 0) {
-    DVPLOG(1) << "getifaddrs() failed";
-    return false;
-  }
-
-  bool result = true;
-  for (struct ifaddrs* interface = interface_addr; interface != nullptr;
-       interface = interface->ifa_next) {
-    if (!(IFF_UP & interface->ifa_flags))
-      continue;
-    if (IFF_LOOPBACK & interface->ifa_flags)
-      continue;
-    const struct sockaddr* addr = interface->ifa_addr;
-    if (!addr)
-      continue;
-    if (addr->sa_family == AF_INET6) {
-      // Safe cast since this is AF_INET6.
-      const struct sockaddr_in6* addr_in6 =
-          reinterpret_cast<const struct sockaddr_in6*>(addr);
-      const struct in6_addr* sin6_addr = &addr_in6->sin6_addr;
-      if (IN6_IS_ADDR_LOOPBACK(sin6_addr) || IN6_IS_ADDR_LINKLOCAL(sin6_addr))
-        continue;
-    }
-    if (addr->sa_family != AF_INET6 && addr->sa_family != AF_INET)
-      continue;
-
-    result = false;
-    break;
-  }
-  freeifaddrs(interface_addr);
-  return result;
-#endif  // defined(various platforms)
+// Returns true if NAT64 can be used in place of an IPv4 address during host
+// resolution.
+bool MayUseNAT64ForIPv4Literal(HostResolverFlags flags,
+                               HostResolverSource source,
+                               const IPAddress& ip_address) {
+  return !(flags & HOST_RESOLVER_DEFAULT_FAMILY_SET_DUE_TO_NO_IPV6) &&
+         ip_address.IsValid() && ip_address.IsIPv4() &&
+         base::FeatureList::IsEnabled(features::kUseNAT64ForIPv4Literal) &&
+         (source != HostResolverSource::LOCAL_ONLY);
 }
 
+//-----------------------------------------------------------------------------
+
 // Creates NetLog parameters when the DnsTask failed.
-base::Value NetLogDnsTaskFailedParams(
+base::Value::Dict NetLogDnsTaskFailedParams(
     int net_error,
     absl::optional<DnsQueryType> failed_transaction_type,
     absl::optional<base::TimeDelta> ttl,
     const HostCache::Entry* saved_results) {
   base::Value::Dict dict;
   if (failed_transaction_type) {
-    dict.Set("dns_query_type",
-             base::strict_cast<int>(failed_transaction_type.value()));
+    dict.Set("dns_query_type", kDnsQueryTypes.at(*failed_transaction_type));
   }
   if (ttl)
     dict.Set("error_ttl_sec",
@@ -277,34 +233,32 @@ base::Value NetLogDnsTaskFailedParams(
   dict.Set("net_error", net_error);
   if (saved_results)
     dict.Set("saved_results", saved_results->NetLogParams());
-  return base::Value(std::move(dict));
+  return dict;
 }
 
-base::Value NetLogDnsTaskExtractionFailureParams(
+base::Value::Dict NetLogDnsTaskExtractionFailureParams(
     DnsResponseResultExtractor::ExtractionError extraction_error,
-    DnsQueryType dns_query_type,
-    const HostCache::Entry& results) {
+    DnsQueryType dns_query_type) {
   base::Value::Dict dict;
   dict.Set("extraction_error", base::strict_cast<int>(extraction_error));
-  dict.Set("dns_query_type", base::strict_cast<int>(dns_query_type));
-  dict.Set("results", results.NetLogParams());
-  return base::Value(std::move(dict));
+  dict.Set("dns_query_type", kDnsQueryTypes.at(dns_query_type));
+  return dict;
 }
 
 // Creates NetLog parameters for HOST_RESOLVER_MANAGER_JOB_ATTACH/DETACH events.
-base::Value NetLogJobAttachParams(const NetLogSource& source,
-                                  RequestPriority priority) {
+base::Value::Dict NetLogJobAttachParams(const NetLogSource& source,
+                                        RequestPriority priority) {
   base::Value::Dict dict;
   source.AddToEventParameters(dict);
   dict.Set("priority", RequestPriorityToString(priority));
-  return base::Value(std::move(dict));
+  return dict;
 }
 
-base::Value NetLogIPv6AvailableParams(bool ipv6_available, bool cached) {
+base::Value::Dict NetLogIPv6AvailableParams(bool ipv6_available, bool cached) {
   base::Value::Dict dict;
   dict.Set("ipv6_available", ipv6_available);
   dict.Set("cached", cached);
-  return base::Value(std::move(dict));
+  return dict;
 }
 
 // The logging routines are defined here because some requests are resolved
@@ -413,10 +367,10 @@ class PriorityTracker {
   size_t counts_[NUM_PRIORITIES] = {};
 };
 
-base::Value NetLogResults(const HostCache::Entry& results) {
+base::Value::Dict NetLogResults(const HostCache::Entry& results) {
   base::Value::Dict dict;
   dict.Set("results", results.NetLogParams());
-  return base::Value(std::move(dict));
+  return dict;
 }
 
 base::Value ToLogStringValue(
@@ -468,10 +422,12 @@ absl::variant<url::SchemeHostPort, std::string> CreateHostForJobKey(
 
 DnsResponse CreateFakeEmptyResponse(base::StringPiece hostname,
                                     DnsQueryType query_type) {
-  std::string qname;
-  CHECK(DNSDomainFromDot(hostname, &qname));
+  absl::optional<std::vector<uint8_t>> qname =
+      dns_names_util::DottedNameToNetwork(
+          hostname, /*require_valid_internet_hostname=*/true);
+  CHECK(qname.has_value());
   return DnsResponse::CreateEmptyNoDataResponse(
-      /*id=*/0u, /*is_authoritative=*/true, qname,
+      /*id=*/0u, /*is_authoritative=*/true, qname.value(),
       DnsQueryTypeToQtype(query_type));
 }
 
@@ -496,6 +452,51 @@ std::vector<IPEndPoint> FilterAddresses(std::vector<IPEndPoint> addresses,
   return addresses;
 }
 
+void RecordResolveTimeDiffForBucket(const char* histogram_variant,
+                                    const char* histogram_bucket,
+                                    base::TimeDelta diff) {
+  base::UmaHistogramTimes(
+      base::StrCat({"Net.Dns.ResolveTimeDiff.", histogram_variant,
+                    ".FirstRecord", histogram_bucket}),
+      diff);
+}
+
+void RecordResolveTimeDiff(const char* histogram_variant,
+                           base::TimeTicks start_time,
+                           base::TimeTicks first_record_end_time,
+                           base::TimeTicks second_record_end_time) {
+  CHECK_LE(start_time, first_record_end_time);
+  CHECK_LE(first_record_end_time, second_record_end_time);
+  base::TimeDelta first_elapsed = first_record_end_time - start_time;
+  base::TimeDelta diff = second_record_end_time - first_record_end_time;
+
+  if (first_elapsed < base::Milliseconds(10)) {
+    RecordResolveTimeDiffForBucket(histogram_variant, "FasterThan10ms", diff);
+  } else if (first_elapsed < base::Milliseconds(25)) {
+    RecordResolveTimeDiffForBucket(histogram_variant, "10msTo25ms", diff);
+  } else if (first_elapsed < base::Milliseconds(50)) {
+    RecordResolveTimeDiffForBucket(histogram_variant, "25msTo50ms", diff);
+  } else if (first_elapsed < base::Milliseconds(100)) {
+    RecordResolveTimeDiffForBucket(histogram_variant, "50msTo100ms", diff);
+  } else if (first_elapsed < base::Milliseconds(250)) {
+    RecordResolveTimeDiffForBucket(histogram_variant, "100msTo250ms", diff);
+  } else if (first_elapsed < base::Milliseconds(500)) {
+    RecordResolveTimeDiffForBucket(histogram_variant, "250msTo500ms", diff);
+  } else if (first_elapsed < base::Seconds(1)) {
+    RecordResolveTimeDiffForBucket(histogram_variant, "500msTo1s", diff);
+  } else {
+    RecordResolveTimeDiffForBucket(histogram_variant, "SlowerThan1s", diff);
+  }
+}
+
+int GetPortForGloballyReachableCheck() {
+  if (!base::FeatureList::IsEnabled(
+          features::kUseAlternativePortForGloballyReachableCheck)) {
+    return 443;
+  }
+  return features::kAlternativePortForGloballyReachableCheck.Get();
+}
+
 }  // namespace
 
 //-----------------------------------------------------------------------------
@@ -511,6 +512,57 @@ bool ResolveLocalHostname(base::StringPiece host,
 
   return true;
 }
+
+struct HostResolverManager::JobKey {
+  explicit JobKey(ResolveContext* resolve_context)
+      : resolve_context(resolve_context->GetWeakPtr()) {}
+
+  bool operator<(const JobKey& other) const {
+    return std::forward_as_tuple(query_types.ToEnumBitmask(), flags, source,
+                                 secure_dns_mode, &*resolve_context, host,
+                                 network_anonymization_key) <
+           std::forward_as_tuple(other.query_types.ToEnumBitmask(), other.flags,
+                                 other.source, other.secure_dns_mode,
+                                 &*other.resolve_context, other.host,
+                                 other.network_anonymization_key);
+  }
+
+  bool operator==(const JobKey& other) const {
+    return !(*this < other || other < *this);
+  }
+
+  absl::variant<url::SchemeHostPort, std::string> host;
+  NetworkAnonymizationKey network_anonymization_key;
+  DnsQueryTypeSet query_types;
+  HostResolverFlags flags;
+  HostResolverSource source;
+  SecureDnsMode secure_dns_mode;
+  base::WeakPtr<ResolveContext> resolve_context;
+
+  HostCache::Key ToCacheKey(bool secure) const {
+    if (query_types.Size() != 1) {
+      // This function will produce identical cache keys for `JobKey` structs
+      // that differ only in their (non-singleton) `query_types` fields. When we
+      // enable new query types, this behavior could lead to subtle bugs. That
+      // is why the following DCHECK restricts the allowable query types.
+      DCHECK(Difference(query_types, {DnsQueryType::A, DnsQueryType::AAAA,
+                                      DnsQueryType::HTTPS})
+                 .Empty());
+    }
+    const DnsQueryType query_type_for_key = query_types.Size() == 1
+                                                ? *query_types.begin()
+                                                : DnsQueryType::UNSPECIFIED;
+    HostCache::Key key(host, query_type_for_key, flags, source,
+                       network_anonymization_key);
+    key.secure = secure;
+    return key;
+  }
+
+  handles::NetworkHandle GetTargetNetwork() const {
+    return resolve_context ? resolve_context->GetTargetNetwork()
+                           : handles::kInvalidNetworkHandle;
+  }
+};
 
 // Holds the callback and request parameters for an outstanding request.
 //
@@ -531,23 +583,21 @@ class HostResolverManager::RequestImpl
               NetworkAnonymizationKey network_anonymization_key,
               absl::optional<ResolveHostParameters> optional_parameters,
               base::WeakPtr<ResolveContext> resolve_context,
-              HostCache* host_cache,
               base::WeakPtr<HostResolverManager> resolver,
               const base::TickClock* tick_clock)
       : source_net_log_(std::move(source_net_log)),
         request_host_(std::move(request_host)),
         network_anonymization_key_(
-            base::FeatureList::IsEnabled(
-                features::kSplitHostCacheByNetworkIsolationKey)
+            NetworkAnonymizationKey::IsPartitioningEnabled()
                 ? std::move(network_anonymization_key)
                 : NetworkAnonymizationKey()),
         parameters_(optional_parameters ? std::move(optional_parameters).value()
                                         : ResolveHostParameters()),
         resolve_context_(std::move(resolve_context)),
-        host_cache_(host_cache),
         host_resolver_flags_(
             HostResolver::ParametersToHostResolverFlags(parameters_)),
         priority_(parameters_.initial_priority),
+        job_key_(JobKey(resolve_context_.get())),
         resolver_(std::move(resolver)),
         tick_clock_(tick_clock) {}
 
@@ -574,18 +624,149 @@ class HostResolverManager::RequestImpl
     }
 
     LogStartRequest();
-    int rv = resolver_->Resolve(this);
-    DCHECK(!complete_);
-    if (rv == ERR_IO_PENDING) {
-      CHECK(job_.has_value());
-      callback_ = std::move(callback);
-    } else {
-      CHECK(!job_.has_value());
-      complete_ = true;
-      LogFinishRequest(rv, false /* async_completion */);
-    }
-    resolver_.reset();
 
+    next_state_ = STATE_IPV6_REACHABILITY;
+    callback_ = std::move(callback);
+
+    int rv = OK;
+    rv = DoLoop(rv);
+    return rv;
+  }
+
+  int DoLoop(int rv) {
+    do {
+      ResolveState state = next_state_;
+      next_state_ = STATE_NONE;
+      switch (state) {
+        case STATE_IPV6_REACHABILITY:
+          rv = DoIPv6Reachability();
+          break;
+        case STATE_GET_PARAMETERS:
+          DCHECK_EQ(OK, rv);
+          rv = DoGetParameters();
+          break;
+        case STATE_GET_PARAMETERS_COMPLETE:
+          rv = DoGetParametersComplete(rv);
+          break;
+        case STATE_RESOLVE_LOCALLY:
+          rv = DoResolveLocally();
+          break;
+        case STATE_START_JOB:
+          rv = DoStartJob();
+          break;
+        case STATE_FINISH_REQUEST:
+          rv = DoFinishRequest(rv);
+          break;
+        default:
+          NOTREACHED() << "next_state_: " << next_state_;
+          break;
+      }
+    } while (next_state_ != STATE_NONE && rv != ERR_IO_PENDING);
+
+    return rv;
+  }
+
+  void OnIOComplete(int rv) {
+    rv = DoLoop(rv);
+    if (rv != ERR_IO_PENDING && !callback_.is_null()) {
+      std::move(callback_).Run(rv);
+    }
+  }
+
+  int DoIPv6Reachability() {
+    next_state_ = STATE_GET_PARAMETERS;
+    // If a single reachability probe has not been completed, and the latest
+    // probe will return asynchronously, return ERR_NAME_NOT_RESOLVED when the
+    // request source is LOCAL_ONLY. This is due to LOCAL_ONLY requiring a
+    // synchronous response, so it cannot wait on an async probe result and
+    // cannot make assumptions about reachability.
+    if (parameters_.source == HostResolverSource::LOCAL_ONLY) {
+      int rv = resolver_->StartIPv6ReachabilityCheck(
+          source_net_log_, GetClientSocketFactory(),
+          base::DoNothingAs<void(int)>());
+      if (rv == ERR_IO_PENDING) {
+        next_state_ = STATE_FINISH_REQUEST;
+        return ERR_NAME_NOT_RESOLVED;
+      }
+      return OK;
+    }
+    return resolver_->StartIPv6ReachabilityCheck(
+        source_net_log_, GetClientSocketFactory(),
+        base::BindOnce(&RequestImpl::OnIOComplete,
+                       weak_ptr_factory_.GetWeakPtr()));
+  }
+
+  int DoGetParameters() {
+    job_key_.host =
+        CreateHostForJobKey(request_host_, parameters_.dns_query_type,
+                            resolver_->https_svcb_options_.enable);
+    job_key_.network_anonymization_key = network_anonymization_key_;
+    job_key_.source = parameters_.source;
+
+    bool is_ip = ip_address_.AssignFromIPLiteral(GetHostname(job_key_.host));
+
+    resolver_->GetEffectiveParametersForRequest(
+        job_key_.host, parameters_.dns_query_type, host_resolver_flags_,
+        parameters_.secure_dns_policy, is_ip, source_net_log_,
+        &job_key_.query_types, &job_key_.flags, &job_key_.secure_dns_mode);
+
+    // A reachability probe to determine if the network is only reachable on
+    // IPv6 will be scheduled if the parameters are met for using NAT64 in place
+    // of an IPv4 address.
+    if (MayUseNAT64ForIPv4Literal(job_key_.flags, parameters_.source,
+                                  ip_address_) &&
+        resolver_->last_ipv6_probe_result_) {
+      next_state_ = STATE_GET_PARAMETERS_COMPLETE;
+      return resolver_->StartGloballyReachableCheck(
+          ip_address_, source_net_log_, GetClientSocketFactory(),
+          base::BindOnce(&RequestImpl::OnIOComplete,
+                         weak_ptr_factory_.GetWeakPtr()));
+    }
+    next_state_ = STATE_RESOLVE_LOCALLY;
+    return OK;
+  }
+
+  int DoGetParametersComplete(int rv) {
+    next_state_ = STATE_RESOLVE_LOCALLY;
+    only_ipv6_reachable_ = (rv == ERR_FAILED) ? true : false;
+    return OK;
+  }
+
+  int DoResolveLocally() {
+    absl::optional<HostCache::EntryStaleness> stale_info;
+    HostCache::Entry results = resolver_->ResolveLocally(
+        only_ipv6_reachable_, job_key_, ip_address_, parameters_.cache_usage,
+        parameters_.secure_dns_policy, parameters_.source, source_net_log_,
+        host_cache(), &tasks_, &stale_info);
+    if (results.error() != ERR_DNS_CACHE_MISS ||
+        parameters_.source == HostResolverSource::LOCAL_ONLY ||
+        tasks_.empty()) {
+      if (results.error() == OK && !parameters_.is_speculative) {
+        set_results(results.CopyWithDefaultPort(request_host_.GetPort()));
+      }
+      if (stale_info && !parameters_.is_speculative) {
+        set_stale_info(std::move(stale_info).value());
+      }
+      next_state_ = STATE_FINISH_REQUEST;
+      return results.error();
+    }
+    next_state_ = STATE_START_JOB;
+    return OK;
+  }
+
+  int DoStartJob() {
+    resolver_->CreateAndStartJob(std::move(job_key_), std::move(tasks_), this);
+    DCHECK(!complete_);
+    resolver_.reset();
+    return ERR_IO_PENDING;
+  }
+
+  int DoFinishRequest(int rv) {
+    CHECK(!job_.has_value());
+    complete_ = true;
+    set_error_info(rv, /*is_secure_network_error=*/false);
+    rv = HostResolver::SquashErrorCode(rv);
+    LogFinishRequest(rv, /*async_completion=*/false);
     return rv;
   }
 
@@ -600,20 +781,14 @@ class HostResolverManager::RequestImpl
     return base::OptionalToPtr(endpoint_results_);
   }
 
-  const absl::optional<std::vector<std::string>>& GetTextResults()
-      const override {
+  const std::vector<std::string>* GetTextResults() const override {
     DCHECK(complete_);
-    static const base::NoDestructor<absl::optional<std::vector<std::string>>>
-        nullopt_result;
-    return results_ ? results_.value().text_records() : *nullopt_result;
+    return results_ ? &results_.value().text_records() : nullptr;
   }
 
-  const absl::optional<std::vector<HostPortPair>>& GetHostnameResults()
-      const override {
+  const std::vector<HostPortPair>* GetHostnameResults() const override {
     DCHECK(complete_);
-    static const base::NoDestructor<absl::optional<std::vector<HostPortPair>>>
-        nullopt_result;
-    return results_ ? results_.value().hostnames() : *nullopt_result;
+    return results_ ? &results_.value().hostnames() : nullptr;
   }
 
   const std::set<std::string>* GetDnsAliasResults() const override {
@@ -638,7 +813,7 @@ class HostResolverManager::RequestImpl
 
   const std::vector<bool>* GetExperimentalResultsForTesting() const override {
     DCHECK(complete_);
-    return results_ ? results_.value().https_record_compatibility() : nullptr;
+    return results_ ? &results_.value().https_record_compatibility() : nullptr;
   }
 
   net::ResolveErrorInfo GetResolveErrorInfo() const override {
@@ -712,16 +887,26 @@ class HostResolverManager::RequestImpl
 
   ResolveContext* resolve_context() const { return resolve_context_.get(); }
 
-  HostCache* host_cache() const { return host_cache_; }
+  HostCache* host_cache() const {
+    return resolve_context_ ? resolve_context_->host_cache() : nullptr;
+  }
 
   HostResolverFlags host_resolver_flags() const { return host_resolver_flags_; }
 
   RequestPriority priority() const { return priority_; }
   void set_priority(RequestPriority priority) { priority_ = priority; }
 
-  bool complete() const { return complete_; }
-
  private:
+  enum ResolveState {
+    STATE_IPV6_REACHABILITY,
+    STATE_GET_PARAMETERS,
+    STATE_GET_PARAMETERS_COMPLETE,
+    STATE_RESOLVE_LOCALLY,
+    STATE_START_JOB,
+    STATE_FINISH_REQUEST,
+    STATE_NONE,
+  };
+
   void FixUpEndpointAndAliasResults() {
     DCHECK(results_.has_value());
     DCHECK(!legacy_address_results_.has_value());
@@ -730,15 +915,15 @@ class HostResolverManager::RequestImpl
 
     endpoint_results_ = results_.value().GetEndpoints();
     if (endpoint_results_.has_value()) {
-      DCHECK(results_.value().aliases());
-      fixed_up_dns_alias_results_ = *results_.value().aliases();
+      fixed_up_dns_alias_results_ = results_.value().aliases();
+
+      // Skip fixups for `include_canonical_name` requests. Just use the
+      // canonical name exactly as it was received from the system resolver.
       if (parameters().include_canonical_name) {
         DCHECK_LE(fixed_up_dns_alias_results_.value().size(), 1u);
       } else {
-        // Expect `aliases()` results to already be fixed up.
-        DCHECK(dns_alias_utility::FixUpDnsAliases(
-                   fixed_up_dns_alias_results_.value()) ==
-               fixed_up_dns_alias_results_.value());
+        fixed_up_dns_alias_results_ = dns_alias_utility::FixUpDnsAliases(
+            fixed_up_dns_alias_results_.value());
       }
 
       legacy_address_results_ = HostResolver::EndpointResultToAddressList(
@@ -756,7 +941,7 @@ class HostResolverManager::RequestImpl
           base::Value::Dict dict;
           dict.Set("host", request_host_.ToString());
           dict.Set("dns_query_type",
-                   base::strict_cast<int>(parameters_.dns_query_type));
+                   kDnsQueryTypes.at(parameters_.dns_query_type));
           dict.Set("allow_cached_response",
                    parameters_.cache_usage !=
                        ResolveHostParameters::CacheUsage::DISALLOWED);
@@ -765,7 +950,7 @@ class HostResolverManager::RequestImpl
                    network_anonymization_key_.ToDebugString());
           dict.Set("secure_dns_policy",
                    base::strict_cast<int>(parameters_.secure_dns_policy));
-          return base::Value(std::move(dict));
+          return dict;
         });
   }
 
@@ -791,17 +976,31 @@ class HostResolverManager::RequestImpl
     source_net_log_.EndEvent(NetLogEventType::HOST_RESOLVER_MANAGER_REQUEST);
   }
 
+  ClientSocketFactory* GetClientSocketFactory() {
+    if (resolve_context_->url_request_context()) {
+      return resolve_context_->url_request_context()
+          ->GetNetworkSessionContext()
+          ->client_socket_factory;
+    } else {
+      return ClientSocketFactory::GetDefaultFactory();
+    }
+  }
+
   const NetLogWithSource source_net_log_;
 
   const HostResolver::Host request_host_;
   const NetworkAnonymizationKey network_anonymization_key_;
   ResolveHostParameters parameters_;
   base::WeakPtr<ResolveContext> resolve_context_;
-  const raw_ptr<HostCache> host_cache_;
   const HostResolverFlags host_resolver_flags_;
 
   RequestPriority priority_;
 
+  ResolveState next_state_;
+  JobKey job_key_;
+  IPAddress ip_address_;
+
+  std::deque<TaskType> tasks_;
   // The resolve job that this request is dependent on.
   absl::optional<base::SafeRef<Job>> job_;
   base::WeakPtr<HostResolverManager> resolver_ = nullptr;
@@ -810,6 +1009,7 @@ class HostResolverManager::RequestImpl
   CompletionOnceCallback callback_;
 
   bool complete_ = false;
+  bool only_ipv6_reachable_ = false;
   absl::optional<HostCache::Entry> results_;
   absl::optional<HostCache::EntryStaleness> stale_info_;
   absl::optional<AddressList> legacy_address_results_;
@@ -821,6 +1021,8 @@ class HostResolverManager::RequestImpl
   base::TimeTicks request_time_;
 
   SEQUENCE_CHECKER(sequence_checker_);
+
+  base::WeakPtrFactory<RequestImpl> weak_ptr_factory_{this};
 };
 
 class HostResolverManager::ProbeRequestImpl
@@ -859,7 +1061,7 @@ class HostResolverManager::ProbeRequestImpl
   void OnDohServerUnavailable(bool network_change) override {
     // Start the runner asynchronously, as this may trigger reentrant calls into
     // HostResolverManager, which are not allowed during notification handling.
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(&ProbeRequestImpl::StartRunner,
                        weak_ptr_factory_.GetWeakPtr(), network_change));
@@ -995,6 +1197,8 @@ class HostResolverManager::DnsTask : public base::SupportsWeakPtr<DnsTask> {
   }
 
  private:
+  using Results = std::set<std::unique_ptr<HostResolverInternalResult>>;
+
   enum class TransactionErrorBehavior {
     // Errors lead to task fallback (immediately unless another pending/started
     // transaction has the `kFatalOrEmpty` behavior).
@@ -1030,30 +1234,29 @@ class HostResolverManager::DnsTask : public base::SupportsWeakPtr<DnsTask> {
     std::unique_ptr<DnsTransaction> transaction;
   };
 
-  base::Value NetLogDnsTaskCreationParams() {
+  base::Value::Dict NetLogDnsTaskCreationParams() {
     base::Value::Dict dict;
     dict.Set("secure", secure());
 
     base::Value::List transactions_needed_value;
     for (const TransactionInfo& info : transactions_needed_) {
       base::Value::Dict transaction_dict;
-      transaction_dict.Set("dns_query_type", base::strict_cast<int>(info.type));
+      transaction_dict.Set("dns_query_type", kDnsQueryTypes.at(info.type));
       transactions_needed_value.Append(std::move(transaction_dict));
     }
     dict.Set("transactions_needed", std::move(transactions_needed_value));
 
-    return base::Value(std::move(dict));
+    return dict;
   }
 
-  base::Value NetLogDnsTaskTimeoutParams() {
+  base::Value::Dict NetLogDnsTaskTimeoutParams() {
     base::Value::Dict dict;
 
     if (!transactions_in_progress_.empty()) {
       base::Value::List list;
       for (const TransactionInfo& info : transactions_in_progress_) {
         base::Value::Dict transaction_dict;
-        transaction_dict.Set("dns_query_type",
-                             base::strict_cast<int>(info.type));
+        transaction_dict.Set("dns_query_type", kDnsQueryTypes.at(info.type));
         list.Append(std::move(transaction_dict));
       }
       dict.Set("started_transactions", std::move(list));
@@ -1063,14 +1266,13 @@ class HostResolverManager::DnsTask : public base::SupportsWeakPtr<DnsTask> {
       base::Value::List list;
       for (const TransactionInfo& info : transactions_needed_) {
         base::Value::Dict transaction_dict;
-        transaction_dict.Set("dns_query_type",
-                             base::strict_cast<int>(info.type));
+        transaction_dict.Set("dns_query_type", kDnsQueryTypes.at(info.type));
         list.Append(std::move(transaction_dict));
       }
       dict.Set("queued_transactions", std::move(list));
     }
 
-    return base::Value(std::move(dict));
+    return dict;
   }
 
   DnsQueryTypeSet MaybeDisableAdditionalQueries(DnsQueryTypeSet types) {
@@ -1103,9 +1305,9 @@ class HostResolverManager::DnsTask : public base::SupportsWeakPtr<DnsTask> {
           DnsQueryType::HTTPS, TransactionErrorBehavior::kFatalOrEmpty);
     }
 
-    // Give some queries a head start by pushing them to the queue first.
-    constexpr DnsQueryType kHighPriorityQueries[] = {DnsQueryType::A,
-                                                     DnsQueryType::AAAA};
+    // Give AAAA/A queries a head start by pushing them to the queue first.
+    constexpr DnsQueryType kHighPriorityQueries[] = {DnsQueryType::AAAA,
+                                                     DnsQueryType::A};
     for (DnsQueryType high_priority_query : kHighPriorityQueries) {
       if (query_types.Has(high_priority_query)) {
         query_types.Remove(high_priority_query);
@@ -1157,7 +1359,7 @@ class HostResolverManager::DnsTask : public base::SupportsWeakPtr<DnsTask> {
     // object).
     transaction_info_it->transaction->Start(base::BindOnce(
         &DnsTask::OnDnsTransactionComplete, base::Unretained(this),
-        tick_clock_->NowTicks(), transaction_info_it, request_port));
+        transaction_info_it, request_port));
   }
 
   void OnTimeout() {
@@ -1198,14 +1400,12 @@ class HostResolverManager::DnsTask : public base::SupportsWeakPtr<DnsTask> {
   // of all work for the individual transaction in this task (see
   // `OnTransactionsFinished()`).
   void OnDnsTransactionComplete(
-      const base::TimeTicks& start_time,
       std::set<TransactionInfo>::iterator transaction_info_it,
       uint16_t request_port,
       int net_error,
       const DnsResponse* response) {
     DCHECK(transaction_info_it != transactions_in_progress_.end());
-    DCHECK(transactions_in_progress_.find(*transaction_info_it) !=
-           transactions_in_progress_.end());
+    DCHECK(base::Contains(transactions_in_progress_, *transaction_info_it));
 
     // Pull the TransactionInfo out of `transactions_in_progress_` now, so it
     // and its underlying DnsTransaction will be deleted on completion of
@@ -1216,7 +1416,8 @@ class HostResolverManager::DnsTask : public base::SupportsWeakPtr<DnsTask> {
     TransactionInfo transaction_info = std::move(
         transactions_in_progress_.extract(transaction_info_it).value());
 
-    base::TimeDelta elapsed_time = tick_clock_->NowTicks() - task_start_time_;
+    const base::TimeTicks now = tick_clock_->NowTicks();
+    base::TimeDelta elapsed_time = now - task_start_time_;
     enum HttpssvcDnsRcode rcode_for_httpssvc = HttpssvcDnsRcode::kNoError;
     if (httpssvc_metrics_) {
       if (net_error == ERR_DNS_TIMED_OUT) {
@@ -1259,21 +1460,23 @@ class HostResolverManager::DnsTask : public base::SupportsWeakPtr<DnsTask> {
       }
     }
 
-    HostCache::Entry results(ERR_FAILED, HostCache::Entry::SOURCE_UNKNOWN);
-    DnsResponseResultExtractor extractor(response);
-    DnsResponseResultExtractor::ExtractionError extraction_error =
+    DCHECK(response);
+
+    DnsResponseResultExtractor extractor(*response);
+    DnsResponseResultExtractor::ResultsOrError results =
         extractor.ExtractDnsResults(transaction_info.type,
                                     /*original_domain_name=*/GetHostname(host_),
-                                    request_port, &results);
-    DCHECK_NE(extraction_error,
-              DnsResponseResultExtractor::ExtractionError::kUnexpected);
+                                    request_port);
+    DCHECK_NE(
+        results.error_or(DnsResponseResultExtractor::ExtractionError::kOk),
+        DnsResponseResultExtractor::ExtractionError::kUnexpected);
 
-    if (results.error() != OK && results.error() != ERR_NAME_NOT_RESOLVED) {
+    if (!results.has_value()) {
       net_log_.AddEvent(
           NetLogEventType::HOST_RESOLVER_MANAGER_DNS_TASK_EXTRACTION_FAILURE,
           [&] {
-            return NetLogDnsTaskExtractionFailureParams(
-                extraction_error, transaction_info.type, results);
+            return NetLogDnsTaskExtractionFailureParams(results.error(),
+                                                        transaction_info.type);
           });
       if (transaction_info.error_behavior ==
               TransactionErrorBehavior::kFatalOrEmpty ||
@@ -1283,22 +1486,31 @@ class HostResolverManager::DnsTask : public base::SupportsWeakPtr<DnsTask> {
         // would need to be a call to some sort of
         // IsFatalTransactionExtractionError() function.
         DCHECK(!fatal_error);
-        results = DnsResponseResultExtractor::CreateEmptyResult(
-            transaction_info.type);
+        DCHECK_EQ(transaction_info.type, DnsQueryType::HTTPS);
+        results = Results();
       } else {
-        OnFailure(results.error(), /*allow_fallback=*/true,
-                  results.GetOptionalTtl(), transaction_info.type);
+        OnFailure(ERR_DNS_MALFORMED_RESPONSE, /*allow_fallback=*/true,
+                  /*ttl=*/absl::nullopt, transaction_info.type);
         return;
       }
     }
+    CHECK(results.has_value());
 
     if (httpssvc_metrics_) {
       if (transaction_info.type == DnsQueryType::HTTPS) {
-        const std::vector<bool>* record_compatibility =
-            results.https_record_compatibility();
-        CHECK(record_compatibility);
-        httpssvc_metrics_->SaveForHttps(rcode_for_httpssvc,
-                                        *record_compatibility, elapsed_time);
+        bool has_compatible_https = base::ranges::any_of(
+            results.value(),
+            [](const std::unique_ptr<HostResolverInternalResult>& result) {
+              return result->type() ==
+                     HostResolverInternalResult::Type::kMetadata;
+            });
+        if (has_compatible_https) {
+          httpssvc_metrics_->SaveForHttps(
+              rcode_for_httpssvc, std::vector<bool>{true}, elapsed_time);
+        } else {
+          httpssvc_metrics_->SaveForHttps(rcode_for_httpssvc,
+                                          std::vector<bool>(), elapsed_time);
+        }
       } else {
         httpssvc_metrics_->SaveForAddressQuery(elapsed_time,
                                                rcode_for_httpssvc);
@@ -1308,15 +1520,50 @@ class HostResolverManager::DnsTask : public base::SupportsWeakPtr<DnsTask> {
     // Trigger HTTP->HTTPS upgrade if an HTTPS record is received for an "http"
     // or "ws" request.
     if (transaction_info.type == DnsQueryType::HTTPS &&
-        ShouldTriggerHttpToHttpsUpgrade(results)) {
+        ShouldTriggerHttpToHttpsUpgrade(results.value())) {
       // Disallow fallback. Otherwise DNS could be reattempted without HTTPS
       // queries, and that would hide this error instead of triggering upgrade.
-      OnFailure(ERR_DNS_NAME_HTTPS_ONLY, /*allow_fallback=*/false,
-                results.GetOptionalTtl(), transaction_info.type);
+      OnFailure(
+          ERR_DNS_NAME_HTTPS_ONLY, /*allow_fallback=*/false,
+          HostCache::Entry::TtlFromInternalResults(
+              results.value(), base::Time::Now(), tick_clock_->NowTicks()),
+          transaction_info.type);
       return;
     }
 
-    HideMetadataResultsIfNotDesired(results);
+    switch (transaction_info.type) {
+      case DnsQueryType::A:
+        a_record_end_time_ = now;
+        if (!aaaa_record_end_time_.is_null()) {
+          RecordResolveTimeDiff("AAAABeforeA", task_start_time_,
+                                aaaa_record_end_time_, a_record_end_time_);
+        }
+        break;
+      case DnsQueryType::AAAA:
+        aaaa_record_end_time_ = now;
+        if (!a_record_end_time_.is_null()) {
+          RecordResolveTimeDiff("ABeforeAAAA", task_start_time_,
+                                a_record_end_time_, aaaa_record_end_time_);
+        }
+        break;
+      case DnsQueryType::HTTPS: {
+        base::TimeTicks first_address_end_time =
+            std::min(a_record_end_time_, aaaa_record_end_time_);
+        if (!first_address_end_time.is_null()) {
+          RecordResolveTimeDiff("AddressRecordBeforeHTTPS", task_start_time_,
+                                first_address_end_time, now);
+        }
+        break;
+      }
+      default:
+        break;
+    }
+
+    // TODO(crbug.com/1381506): Use new results type directly instead of
+    // converting to HostCache::Entry.
+    HostCache::Entry legacy_results(std::move(results).value(),
+                                    base::Time::Now(), tick_clock_->NowTicks(),
+                                    HostCache::Entry::SOURCE_DNS);
 
     // Merge results with saved results from previous transactions.
     if (saved_results_) {
@@ -1332,19 +1579,19 @@ class HostResolverManager::DnsTask : public base::SupportsWeakPtr<DnsTask> {
         case DnsQueryType::A:
           // Canonical names from A results have lower priority than those
           // from AAAA results, so merge to the back.
-          results = HostCache::Entry::MergeEntries(
-              std::move(saved_results_).value(), std::move(results));
+          legacy_results = HostCache::Entry::MergeEntries(
+              std::move(saved_results_).value(), std::move(legacy_results));
           break;
         case DnsQueryType::AAAA:
           // Canonical names from AAAA results take priority over those
           // from A results, so merge to the front.
-          results = HostCache::Entry::MergeEntries(
-              std::move(results), std::move(saved_results_).value());
+          legacy_results = HostCache::Entry::MergeEntries(
+              std::move(legacy_results), std::move(saved_results_).value());
           break;
         case DnsQueryType::HTTPS:
           // No particular importance to order.
-          results = HostCache::Entry::MergeEntries(
-              std::move(results), std::move(saved_results_).value());
+          legacy_results = HostCache::Entry::MergeEntries(
+              std::move(legacy_results), std::move(saved_results_).value());
           break;
         default:
           // Only expect address query types with multiple transactions.
@@ -1352,7 +1599,7 @@ class HostResolverManager::DnsTask : public base::SupportsWeakPtr<DnsTask> {
       }
     }
 
-    saved_results_ = std::move(results);
+    saved_results_ = std::move(legacy_results);
     OnTransactionsFinished();
   }
 
@@ -1421,26 +1668,23 @@ class HostResolverManager::DnsTask : public base::SupportsWeakPtr<DnsTask> {
 
     timeout_timer_.Stop();
 
-    absl::optional<std::vector<IPEndPoint>> ip_endpoints;
-    ip_endpoints = base::OptionalFromPtr(results.ip_endpoints());
+    std::vector<IPEndPoint> ip_endpoints = results.ip_endpoints();
 
-    if (ip_endpoints.has_value()) {
-      // If there are multiple addresses, and at least one is IPv6, need to
-      // sort them.
-      bool at_least_one_ipv6_address = base::ranges::any_of(
-          ip_endpoints.value(),
-          [](auto& e) { return e.GetFamily() == ADDRESS_FAMILY_IPV6; });
+    // If there are multiple addresses, and at least one is IPv6, need to
+    // sort them.
+    bool at_least_one_ipv6_address = base::ranges::any_of(
+        ip_endpoints,
+        [](auto& e) { return e.GetFamily() == ADDRESS_FAMILY_IPV6; });
 
-      if (at_least_one_ipv6_address) {
-        // Sort addresses if needed.  Sort could complete synchronously.
-        client_->GetAddressSorter()->Sort(
-            ip_endpoints.value(),
-            base::BindOnce(&DnsTask::OnSortComplete, AsWeakPtr(),
-                           tick_clock_->NowTicks(), std::move(results),
-                           secure_));
-        return;
-      }
+    if (at_least_one_ipv6_address) {
+      // Sort addresses if needed.  Sort could complete synchronously.
+      client_->GetAddressSorter()->Sort(
+          ip_endpoints,
+          base::BindOnce(&DnsTask::OnSortComplete, AsWeakPtr(),
+                         tick_clock_->NowTicks(), std::move(results), secure_));
+      return;
     }
+
     OnSuccess(std::move(results));
   }
 
@@ -1449,7 +1693,6 @@ class HostResolverManager::DnsTask : public base::SupportsWeakPtr<DnsTask> {
                       bool secure,
                       bool success,
                       std::vector<IPEndPoint> sorted) {
-    DCHECK(results.ip_endpoints());
     results.set_ip_endpoints(std::move(sorted));
 
     if (!success) {
@@ -1459,9 +1702,8 @@ class HostResolverManager::DnsTask : public base::SupportsWeakPtr<DnsTask> {
     }
 
     // AddressSorter prunes unusable destinations.
-    if ((!results.ip_endpoints() || results.ip_endpoints()->empty()) &&
-        results.text_records().value_or(std::vector<std::string>()).empty() &&
-        results.hostnames().value_or(std::vector<HostPortPair>()).empty()) {
+    if (results.ip_endpoints().empty() && results.text_records().empty() &&
+        results.hostnames().empty()) {
       LOG(WARNING) << "Address list empty after RFC3484 sort";
       OnFailure(ERR_NAME_NOT_RESOLVED, /*allow_fallback=*/true,
                 results.GetOptionalTtl());
@@ -1489,7 +1731,7 @@ class HostResolverManager::DnsTask : public base::SupportsWeakPtr<DnsTask> {
     };
 
     base::EraseIf(transactions_needed_, has_non_fatal_or_empty_error);
-    base::EraseIf(transactions_in_progress_, has_non_fatal_or_empty_error);
+    std::erase_if(transactions_in_progress_, has_non_fatal_or_empty_error);
   }
 
   void OnFailure(
@@ -1626,33 +1868,20 @@ class HostResolverManager::DnsTask : public base::SupportsWeakPtr<DnsTask> {
           base::BindOnce(&DnsTask::OnTimeout, base::Unretained(this)));
   }
 
-  bool ShouldTriggerHttpToHttpsUpgrade(const HostCache::Entry& results) {
+  bool ShouldTriggerHttpToHttpsUpgrade(const Results& results) {
     // Upgrade if at least one HTTPS record was compatible, and the host uses an
     // upgradable scheme.
-    return results.https_record_compatibility() &&
-           base::ranges::any_of(*results.https_record_compatibility(),
-                                base::identity()) &&
+    return base::ranges::any_of(
+               results,
+               [](const std::unique_ptr<HostResolverInternalResult>& result) {
+                 return result->type() ==
+                        HostResolverInternalResult::Type::kMetadata;
+               }) &&
            (GetScheme(host_) == url::kHttpScheme ||
             GetScheme(host_) == url::kWsScheme);
   }
 
-  // Only keep metadata results (from HTTPS records) for appropriate schemes.
-  // This is needed to ensure metadata isn't included in results if the current
-  // Feature setup allows querying HTTPS for http:// or ws:// but doesn't enable
-  // scheme upgrade to error out on finding an HTTPS record.
-  //
-  // TODO(crbug.com/1206455): Remove once all requests that query HTTPS will
-  // either allow metadata results or error out.
-  void HideMetadataResultsIfNotDesired(HostCache::Entry& results) {
-    if (GetScheme(host_) == url::kHttpsScheme ||
-        GetScheme(host_) == url::kWssScheme) {
-      return;
-    }
-
-    results.ClearMetadatas();
-  }
-
-  raw_ptr<DnsClient> client_;
+  const raw_ptr<DnsClient> client_;
 
   absl::variant<url::SchemeHostPort, std::string> host_;
 
@@ -1663,7 +1892,7 @@ class HostResolverManager::DnsTask : public base::SupportsWeakPtr<DnsTask> {
   const SecureDnsMode secure_dns_mode_;
 
   // The listener to the results of this DnsTask.
-  raw_ptr<Delegate> delegate_;
+  const raw_ptr<Delegate> delegate_;
   const NetLogWithSource net_log_;
 
   bool any_transaction_started_ = false;
@@ -1673,10 +1902,14 @@ class HostResolverManager::DnsTask : public base::SupportsWeakPtr<DnsTask> {
   // cancellation of the transaction.
   std::set<TransactionInfo> transactions_in_progress_;
 
+  // For histograms.
+  base::TimeTicks a_record_end_time_;
+  base::TimeTicks aaaa_record_end_time_;
+
   absl::optional<HostCache::Entry> saved_results_;
   bool saved_results_is_failure_ = false;
 
-  raw_ptr<const base::TickClock> tick_clock_;
+  const raw_ptr<const base::TickClock> tick_clock_;
   base::TimeTicks task_start_time_;
 
   absl::optional<HttpssvcMetrics> httpssvc_metrics_;
@@ -1694,57 +1927,6 @@ class HostResolverManager::DnsTask : public base::SupportsWeakPtr<DnsTask> {
 };
 
 //-----------------------------------------------------------------------------
-
-struct HostResolverManager::JobKey {
-  explicit JobKey(ResolveContext* resolve_context)
-      : resolve_context(resolve_context->AsSafeRef()) {}
-
-  bool operator<(const JobKey& other) const {
-    return std::forward_as_tuple(query_types.ToEnumBitmask(), flags, source,
-                                 secure_dns_mode, &*resolve_context, host,
-                                 network_anonymization_key) <
-           std::forward_as_tuple(other.query_types.ToEnumBitmask(), other.flags,
-                                 other.source, other.secure_dns_mode,
-                                 &*other.resolve_context, other.host,
-                                 other.network_anonymization_key);
-  }
-
-  bool operator==(const JobKey& other) const {
-    return !(*this < other || other < *this);
-  }
-
-  absl::variant<url::SchemeHostPort, std::string> host;
-  NetworkAnonymizationKey network_anonymization_key;
-  DnsQueryTypeSet query_types;
-  HostResolverFlags flags;
-  HostResolverSource source;
-  SecureDnsMode secure_dns_mode;
-  base::SafeRef<ResolveContext> resolve_context;
-
-  HostCache::Key ToCacheKey(bool secure) const {
-    if (query_types.Size() != 1) {
-      // This function will produce identical cache keys for `JobKey` structs
-      // that differ only in their (non-singleton) `query_types` fields. When we
-      // enable new query types, this behavior could lead to subtle bugs. That
-      // is why the following DCHECK restricts the allowable query types.
-      DCHECK(Difference(query_types,
-                        DnsQueryTypeSet(DnsQueryType::A, DnsQueryType::AAAA,
-                                        DnsQueryType::HTTPS))
-                 .Empty());
-    }
-    const DnsQueryType query_type_for_key = query_types.Size() == 1
-                                                ? *query_types.begin()
-                                                : DnsQueryType::UNSPECIFIED;
-    HostCache::Key key(host, query_type_for_key, flags, source,
-                       network_anonymization_key);
-    key.secure = secure;
-    return key;
-  }
-
-  handles::NetworkHandle GetTargetNetwork() const {
-    return resolve_context->GetTargetNetwork();
-  }
-};
 
 // Aggregates all Requests for the same Key. Dispatched via
 // PrioritizedDispatcher.
@@ -1955,7 +2137,7 @@ class HostResolverManager::Job : public PrioritizedDispatcher::Job,
     // Otherwise the job will be destroyed with requests silently cancelled
     // before completion runs.
     DCHECK(self_iterator_);
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(&Job::CompleteRequestsWithError,
                                   weak_ptr_factory_.GetWeakPtr(),
                                   ERR_HOST_RESOLVER_QUEUE_TOO_LARGE,
@@ -2088,7 +2270,7 @@ class HostResolverManager::Job : public PrioritizedDispatcher::Job,
   }
 
  private:
-  base::Value NetLogJobCreationParams(const NetLogSource& source) {
+  base::Value::Dict NetLogJobCreationParams(const NetLogSource& source) {
     base::Value::Dict dict;
     source.AddToEventParameters(dict);
     dict.Set("host", ToLogStringValue(key_.host));
@@ -2099,7 +2281,7 @@ class HostResolverManager::Job : public PrioritizedDispatcher::Job,
     dict.Set("secure_dns_mode", base::strict_cast<int>(key_.secure_dns_mode));
     dict.Set("network_anonymization_key",
              key_.network_anonymization_key.ToDebugString());
-    return base::Value(std::move(dict));
+    return dict;
   }
 
   void Finish() {
@@ -2240,10 +2422,6 @@ class HostResolverManager::Job : public PrioritizedDispatcher::Job,
     auto aliases = std::set<std::string>(addr_list.dns_aliases().begin(),
                                          addr_list.dns_aliases().end());
 
-    if (!(key_.flags & HOST_RESOLVER_CANONNAME)) {
-      aliases = dns_alias_utility::FixUpDnsAliases(aliases);
-    }
-
     // Source unknown because the system resolver could have gotten it from a
     // hosts file, its own cache, a DNS lookup or somewhere else.
     // Don't store the |ttl| in cache since it's not obtained from the server.
@@ -2316,14 +2494,8 @@ class HostResolverManager::Job : public PrioritizedDispatcher::Job,
                         bool secure) {
     DCHECK_NE(OK, failure_results.error());
 
-    if (key_.secure_dns_mode == SecureDnsMode::kSecure) {
-      DCHECK(secure);
-      UMA_HISTOGRAM_LONG_TIMES_100(
-          "Net.DNS.SecureDnsTask.DnsModeSecure.FailureTime", duration);
-    } else if (key_.secure_dns_mode == SecureDnsMode::kAutomatic && secure) {
-      UMA_HISTOGRAM_LONG_TIMES_100(
-          "Net.DNS.SecureDnsTask.DnsModeAutomatic.FailureTime", duration);
-    } else {
+    if (!secure) {
+      DCHECK_NE(key_.secure_dns_mode, SecureDnsMode::kSecure);
       UMA_HISTOGRAM_LONG_TIMES_100("Net.DNS.InsecureDnsTask.FailureTime",
                                    duration);
     }
@@ -2362,7 +2534,7 @@ class HostResolverManager::Job : public PrioritizedDispatcher::Job,
     // transaction, e.g. a supplemental HTTPS transaction, finds results.
     DCHECK(!key_.query_types.Has(DnsQueryType::UNSPECIFIED));
     if (HasAddressType(key_.query_types) && results.error() == OK &&
-        (!results.ip_endpoints() || results.ip_endpoints()->empty())) {
+        results.ip_endpoints().empty()) {
       results.set_error(ERR_NAME_NOT_RESOLVED);
     }
 
@@ -2386,8 +2558,7 @@ class HostResolverManager::Job : public PrioritizedDispatcher::Job,
     base::TimeDelta bounded_ttl =
         std::max(results.ttl(), base::Seconds(kMinimumTTLSeconds));
 
-    if ((results.ip_endpoints() &&
-         ContainsIcannNameCollisionIp(*results.ip_endpoints()))) {
+    if (ContainsIcannNameCollisionIp(results.ip_endpoints())) {
       CompleteRequestsWithError(ERR_ICANN_NAME_COLLISION,
                                 secure ? TaskType::SECURE_DNS : TaskType::DNS);
       return;
@@ -2449,7 +2620,7 @@ class HostResolverManager::Job : public PrioritizedDispatcher::Job,
     } else {
       // Could not create an mDNS client. Since we cannot complete synchronously
       // from here, post a failure without starting the task.
-      base::SequencedTaskRunnerHandle::Get()->PostTask(
+      base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE, base::BindOnce(&Job::OnMdnsImmediateFailure,
                                     weak_ptr_factory_.GetWeakPtr(), rv));
     }
@@ -2461,8 +2632,7 @@ class HostResolverManager::Job : public PrioritizedDispatcher::Job,
 
     HostCache::Entry results = mdns_task_->GetResults();
 
-    if ((results.ip_endpoints() &&
-         ContainsIcannNameCollisionIp(*results.ip_endpoints()))) {
+    if (ContainsIcannNameCollisionIp(results.ip_endpoints())) {
       CompleteRequestsWithError(ERR_ICANN_NAME_COLLISION, TaskType::MDNS);
       return;
     }
@@ -2484,8 +2654,7 @@ class HostResolverManager::Job : public PrioritizedDispatcher::Job,
     RequestImpl* req = requests_.head()->value();
     nat64_task_ = std::make_unique<HostResolverNat64Task>(
         std::string{GetHostname(key_.host)}, req->network_anonymization_key(),
-        req->source_net_log(), req->resolve_context(), req->host_cache(),
-        resolver_);
+        req->source_net_log(), req->resolve_context(), resolver_);
     nat64_task_->Start(base::BindOnce(&Job::OnNat64TaskComplete,
                                       weak_ptr_factory_.GetWeakPtr()));
   }
@@ -2545,21 +2714,20 @@ class HostResolverManager::Job : public PrioritizedDispatcher::Job,
         base::UmaHistogramSparse("Net.DNS.ResolveError.Slow", std::abs(error));
     }
 
-    if (had_non_speculative_request_) {
-      UmaHistogramMediumTimes(
-          base::StringPrintf(
-              "Net.DNS.SecureDnsMode.%s.ResolveTime",
-              SecureDnsModeToString(key_.secure_dns_mode).c_str()),
-          duration);
-    }
-
     if (error == OK) {
       DCHECK(task_type.has_value());
-      if (IsGoogleHostWithAlpnH3(GetHostname(key_.host))) {
-        bool has_metadata =
-            results.GetMetadatas() && !results.GetMetadatas()->empty();
+      // Record, for HTTPS-capable queries to a host known to serve HTTPS
+      // records, whether the HTTPS record was successfully received.
+      if (key_.query_types.Has(DnsQueryType::HTTPS) &&
+          // Skip http- and ws-schemed hosts. Although they query HTTPS records,
+          // successful queries are reported as errors, which would skew the
+          // metrics.
+          (GetScheme(key_.host) == url::kHttpsScheme ||
+           GetScheme(key_.host) == url::kWssScheme) &&
+          IsGoogleHostWithAlpnH3(GetHostname(key_.host))) {
+        bool has_metadata = !results.GetMetadatas().empty();
         base::UmaHistogramExactLinear(
-            "Net.DNS.H3SupportedGoogleHost.TaskTypeMetadataAvailability",
+            "Net.DNS.H3SupportedGoogleHost.TaskTypeMetadataAvailability2",
             static_cast<int>(task_type.value()) * 2 + (has_metadata ? 1 : 0),
             (static_cast<int>(TaskType::kMaxValue) + 1) * 2);
       }
@@ -2627,7 +2795,7 @@ class HostResolverManager::Job : public PrioritizedDispatcher::Job,
       }
       req->OnJobCompleted(
           key_, results.error(),
-          secure && results.error() != OK /* is_secure_network_error */);
+          /*is_secure_network_error=*/secure && results.error() != OK);
 
       // Check if the resolver was destroyed as a result of running the
       // callback. If it was, we could continue, but we choose to bail.
@@ -2770,6 +2938,8 @@ HostResolverManager::HostResolverManager(
       system_dns_config_notifier_(system_dns_config_notifier),
       target_network_(target_network),
       check_ipv6_on_wifi_(options.check_ipv6_on_wifi),
+      ipv6_reachability_override_(base::FeatureList::IsEnabled(
+          features::kEnableIPv6ReachabilityOverride)),
       tick_clock_(base::DefaultTickClock::GetInstance()),
       https_svcb_options_(
           options.https_svcb_options
@@ -2855,12 +3025,10 @@ HostResolverManager::CreateRequest(
     NetworkAnonymizationKey network_anonymization_key,
     NetLogWithSource net_log,
     absl::optional<ResolveHostParameters> optional_parameters,
-    ResolveContext* resolve_context,
-    HostCache* host_cache) {
+    ResolveContext* resolve_context) {
   return CreateRequest(HostResolver::Host(std::move(host)),
                        std::move(network_anonymization_key), std::move(net_log),
-                       std::move(optional_parameters), resolve_context,
-                       host_cache);
+                       std::move(optional_parameters), resolve_context);
 }
 
 std::unique_ptr<HostResolver::ResolveHostRequest>
@@ -2869,8 +3037,7 @@ HostResolverManager::CreateRequest(
     NetworkAnonymizationKey network_anonymization_key,
     NetLogWithSource net_log,
     absl::optional<ResolveHostParameters> optional_parameters,
-    ResolveContext* resolve_context,
-    HostCache* host_cache) {
+    ResolveContext* resolve_context) {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
   DCHECK(!invalidation_in_progress_);
 
@@ -2881,7 +3048,7 @@ HostResolverManager::CreateRequest(
 
   return std::make_unique<RequestImpl>(
       std::move(net_log), std::move(host), std::move(network_anonymization_key),
-      std::move(optional_parameters), resolve_context->GetWeakPtr(), host_cache,
+      std::move(optional_parameters), resolve_context->GetWeakPtr(),
       weak_ptr_factory_.GetWeakPtr(), tick_clock_);
 }
 
@@ -2941,10 +3108,10 @@ void HostResolverManager::SetInsecureDnsClientEnabled(
   }
 }
 
-base::Value HostResolverManager::GetDnsConfigAsValue() const {
+base::Value::Dict HostResolverManager::GetDnsConfigAsValue() const {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
   return dns_client_ ? dns_client_->GetDnsConfigAsValueForNetLog()
-                     : base::Value(base::Value::Dict());
+                     : base::Value::Dict();
 }
 
 void HostResolverManager::SetDnsConfigOverrides(DnsConfigOverrides overrides) {
@@ -2993,6 +3160,11 @@ void HostResolverManager::DeregisterResolveContext(
 void HostResolverManager::SetTickClockForTesting(
     const base::TickClock* tick_clock) {
   tick_clock_ = tick_clock;
+}
+
+void HostResolverManager::SetIPv6ReachabilityOverride(
+    bool reachability_override) {
+  ipv6_reachability_override_ = reachability_override;
 }
 
 void HostResolverManager::SetMaxQueuedJobsForTesting(size_t value) {
@@ -3052,61 +3224,8 @@ bool HostResolverManager::IsLocalTask(TaskType task) {
   }
 }
 
-int HostResolverManager::Resolve(RequestImpl* request) {
-  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-  // Request should not yet have a scheduled Job.
-  DCHECK(!request->HasJob());
-  // Request may only be resolved once.
-  DCHECK(!request->complete());
-  // MDNS requests do not support skipping cache or stale lookups.
-  // TODO(crbug.com/926300): Either add support for skipping the MDNS cache, or
-  // merge to use the normal host cache for MDNS requests.
-  DCHECK(request->parameters().source != HostResolverSource::MULTICAST_DNS ||
-         request->parameters().cache_usage ==
-             ResolveHostParameters::CacheUsage::ALLOWED);
-  DCHECK(!invalidation_in_progress_);
-
-  const auto& parameters = request->parameters();
-  JobKey job_key(request->resolve_context());
-  job_key.host =
-      CreateHostForJobKey(request->request_host(), parameters.dns_query_type,
-                          https_svcb_options_.enable);
-  job_key.network_anonymization_key = request->network_anonymization_key();
-  job_key.source = parameters.source;
-
-  IPAddress ip_address;
-  bool is_ip = ip_address.AssignFromIPLiteral(GetHostname(job_key.host));
-
-  GetEffectiveParametersForRequest(
-      job_key.host, parameters.dns_query_type, request->host_resolver_flags(),
-      parameters.secure_dns_policy, is_ip, request->source_net_log(),
-      &job_key.query_types, &job_key.flags, &job_key.secure_dns_mode);
-
-  std::deque<TaskType> tasks;
-  absl::optional<HostCache::EntryStaleness> stale_info;
-  HostCache::Entry results = ResolveLocally(
-      job_key, ip_address, parameters.cache_usage, parameters.secure_dns_policy,
-      parameters.source, request->source_net_log(), request->host_cache(),
-      &tasks, &stale_info);
-  if (results.error() != ERR_DNS_CACHE_MISS ||
-      request->parameters().source == HostResolverSource::LOCAL_ONLY ||
-      tasks.empty()) {
-    if (results.error() == OK && !request->parameters().is_speculative) {
-      request->set_results(
-          results.CopyWithDefaultPort(request->request_host().GetPort()));
-    }
-    if (stale_info && !request->parameters().is_speculative)
-      request->set_stale_info(std::move(stale_info).value());
-    request->set_error_info(results.error(),
-                            false /* is_secure_network_error */);
-    return HostResolver::SquashErrorCode(results.error());
-  }
-
-  CreateAndStartJob(std::move(job_key), std::move(tasks), request);
-  return ERR_IO_PENDING;
-}
-
 HostCache::Entry HostResolverManager::ResolveLocally(
+    bool only_ipv6_reachable,
     const JobKey& job_key,
     const IPAddress& ip_address,
     ResolveHostParameters::CacheUsage cache_usage,
@@ -3128,8 +3247,8 @@ HostCache::Entry HostResolverManager::ResolveLocally(
     // than implicitly based on |source|.
     const bool is_valid_hostname =
         job_key.source == HostResolverSource::MULTICAST_DNS
-            ? IsValidUnrestrictedDNSDomain(GetHostname(job_key.host))
-            : IsValidDNSDomain(GetHostname(job_key.host));
+            ? dns_names_util::IsValidDnsName(GetHostname(job_key.host))
+            : IsCanonicalizedHostCompliant(GetHostname(job_key.host));
     if (!is_valid_hostname) {
       return HostCache::Entry(ERR_NAME_NOT_RESOLVED,
                               HostCache::Entry::SOURCE_UNKNOWN);
@@ -3151,10 +3270,8 @@ HostCache::Entry HostResolverManager::ResolveLocally(
 
   if (ip_address.IsValid()) {
     // Use NAT64Task for IPv4 literal when the network is IPv6 only.
-    if (!default_family_due_to_no_ipv6 && ip_address.IsIPv4() &&
-        base::FeatureList::IsEnabled(features::kUseNAT64ForIPv4Literal) &&
-        !IsGloballyReachable(IPAddress(ip_address), source_net_log) &&
-        source != HostResolverSource::LOCAL_ONLY) {
+    if (MayUseNAT64ForIPv4Literal(job_key.flags, source, ip_address) &&
+        only_ipv6_reachable) {
       out_tasks->push_front(TaskType::NAT64);
       return HostCache::Entry(ERR_DNS_CACHE_MISS,
                               HostCache::Entry::SOURCE_UNKNOWN);
@@ -3391,14 +3508,16 @@ absl::optional<HostCache::Entry> HostResolverManager::ServeFromHosts(
   std::vector<IPEndPoint> addresses;
   if (query_types.Has(DnsQueryType::AAAA)) {
     auto it = hosts->find(DnsHostsKey(effective_hostname, ADDRESS_FAMILY_IPV6));
-    if (it != hosts->end())
-      addresses.push_back(IPEndPoint(it->second, 0));
+    if (it != hosts->end()) {
+      addresses.emplace_back(it->second, 0);
+    }
   }
 
   if (query_types.Has(DnsQueryType::A)) {
     auto it = hosts->find(DnsHostsKey(effective_hostname, ADDRESS_FAMILY_IPV4));
-    if (it != hosts->end())
-      addresses.push_back(IPEndPoint(it->second, 0));
+    if (it != hosts->end()) {
+      addresses.emplace_back(it->second, 0);
+    }
   }
 
   // If got only loopback addresses and the family was restricted, resolve
@@ -3694,11 +3813,11 @@ void HostResolverManager::GetEffectiveParametersForRequest(
   *out_effective_flags = flags | additional_resolver_flags_;
 
   if (dns_query_type != DnsQueryType::UNSPECIFIED) {
-    *out_effective_types = dns_query_type;
+    *out_effective_types = {dns_query_type};
     return;
   }
 
-  DnsQueryTypeSet effective_types(DnsQueryType::A, DnsQueryType::AAAA);
+  DnsQueryTypeSet effective_types = {DnsQueryType::A, DnsQueryType::AAAA};
 
   // Disable AAAA queries when we cannot do anything with the results.
   bool use_local_ipv6 = true;
@@ -3712,7 +3831,8 @@ void HostResolverManager::GetEffectiveParametersForRequest(
   // resolution based on a probe. Prior logic ensures that this is an automatic
   // query, so the code requesting the resolution should be amenable to
   // receiving an IPv6 resolution.
-  if (!use_local_ipv6 && !is_ip && !IsIPv6Reachable(net_log)) {
+  if (!use_local_ipv6 && !is_ip && !last_ipv6_probe_result_ &&
+      !ipv6_reachability_override_) {
     *out_effective_flags |= HOST_RESOLVER_DEFAULT_FAMILY_SET_DUE_TO_NO_IPV6;
     effective_types.Remove(DnsQueryType::AAAA);
   }
@@ -3746,66 +3866,130 @@ bool RequestWillUseWiFi(handles::NetworkHandle network) {
 
 }  // namespace
 
-bool HostResolverManager::IsIPv6Reachable(const NetLogWithSource& net_log) {
+void HostResolverManager::FinishIPv6ReachabilityCheck(
+    CompletionOnceCallback callback,
+    int rv) {
+  SetLastIPv6ProbeResult((rv == OK) ? true : false);
+  std::move(callback).Run(OK);
+  if (!ipv6_request_callbacks_.empty()) {
+    std::vector<CompletionOnceCallback> tmp_request_callbacks;
+    ipv6_request_callbacks_.swap(tmp_request_callbacks);
+    for (auto& request_callback : tmp_request_callbacks) {
+      std::move(request_callback).Run(OK);
+    }
+  }
+}
+
+int HostResolverManager::StartIPv6ReachabilityCheck(
+    const NetLogWithSource& net_log,
+    ClientSocketFactory* client_socket_factory,
+    CompletionOnceCallback callback) {
   // Don't bother checking if the request will use WiFi and IPv6 is assumed to
   // not work on WiFi.
-  if (!check_ipv6_on_wifi_ && RequestWillUseWiFi(target_network_))
-    return false;
+  if (!check_ipv6_on_wifi_ && RequestWillUseWiFi(target_network_)) {
+    probing_ipv6_ = false;
+    last_ipv6_probe_result_ = false;
+    last_ipv6_probe_time_ = base::TimeTicks();
+    return OK;
+  }
 
+  if (probing_ipv6_) {
+    ipv6_request_callbacks_.push_back(std::move(callback));
+    return ERR_IO_PENDING;
+  }
   // Cache the result for kIPv6ProbePeriodMs (measured from after
-  // IsGloballyReachable() completes).
+  // StartGloballyReachableCheck() completes).
+  int rv = OK;
   bool cached = true;
   if (last_ipv6_probe_time_.is_null() ||
       (tick_clock_->NowTicks() - last_ipv6_probe_time_).InMilliseconds() >
           kIPv6ProbePeriodMs) {
-    SetLastIPv6ProbeResult(
-        IsGloballyReachable(IPAddress(kIPv6ProbeAddress), net_log));
+    probing_ipv6_ = true;
+    rv = StartGloballyReachableCheck(
+        IPAddress(kIPv6ProbeAddress), net_log, client_socket_factory,
+        base::BindOnce(&HostResolverManager::FinishIPv6ReachabilityCheck,
+                       weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
+    if (rv != ERR_IO_PENDING) {
+      SetLastIPv6ProbeResult((rv == OK) ? true : false);
+      rv = OK;
+    }
     cached = false;
   }
   net_log.AddEvent(
       NetLogEventType::HOST_RESOLVER_MANAGER_IPV6_REACHABILITY_CHECK, [&] {
         return NetLogIPv6AvailableParams(last_ipv6_probe_result_, cached);
       });
-  return last_ipv6_probe_result_;
+  return rv;
 }
 
 void HostResolverManager::SetLastIPv6ProbeResult(bool last_ipv6_probe_result) {
+  probing_ipv6_ = false;
   last_ipv6_probe_result_ = last_ipv6_probe_result;
   last_ipv6_probe_time_ = tick_clock_->NowTicks();
 }
 
-bool HostResolverManager::IsGloballyReachable(const IPAddress& dest,
-                                              const NetLogWithSource& net_log) {
-  std::unique_ptr<DatagramClientSocket> socket(
-      ClientSocketFactory::GetDefaultFactory()->CreateDatagramClientSocket(
-          DatagramSocket::DEFAULT_BIND, net_log.net_log(), net_log.source()));
-  int rv = socket->Connect(IPEndPoint(dest, 53));
-  if (rv != OK)
+int HostResolverManager::StartGloballyReachableCheck(
+    const IPAddress& dest,
+    const NetLogWithSource& net_log,
+    ClientSocketFactory* client_socket_factory,
+    CompletionOnceCallback callback) {
+  std::unique_ptr<DatagramClientSocket> probing_socket =
+      client_socket_factory->CreateDatagramClientSocket(
+          DatagramSocket::DEFAULT_BIND, net_log.net_log(), net_log.source());
+  DatagramClientSocket* probing_socket_ptr = probing_socket.get();
+  auto refcounted_socket = base::MakeRefCounted<
+      base::RefCountedData<std::unique_ptr<DatagramClientSocket>>>(
+      std::move(probing_socket));
+  int rv = probing_socket_ptr->ConnectAsync(
+      IPEndPoint(dest, GetPortForGloballyReachableCheck()),
+      base::BindOnce(&HostResolverManager::RunFinishGloballyReachableCheck,
+                     weak_ptr_factory_.GetWeakPtr(), refcounted_socket,
+                     std::move(callback)));
+  if (rv != ERR_IO_PENDING) {
+    rv = FinishGloballyReachableCheck(probing_socket_ptr, rv) ? OK : ERR_FAILED;
+  }
+  return rv;
+}
+
+bool HostResolverManager::FinishGloballyReachableCheck(
+    DatagramClientSocket* socket,
+    int rv) {
+  if (rv != OK) {
     return false;
+  }
   IPEndPoint endpoint;
   rv = socket->GetLocalAddress(&endpoint);
-  if (rv != OK)
+
+  if (rv != OK) {
     return false;
+  }
   const IPAddress& address = endpoint.address();
 
-  if (address.IsLinkLocal())
+  if (address.IsLinkLocal()) {
     return false;
+  }
 
   if (address.IsIPv6()) {
     const uint8_t kTeredoPrefix[] = {0x20, 0x01, 0, 0};
-    if (IPAddressStartsWith(address, kTeredoPrefix))
+    if (IPAddressStartsWith(address, kTeredoPrefix)) {
       return false;
+    }
   }
+
   return true;
 }
 
+void HostResolverManager::RunFinishGloballyReachableCheck(
+    scoped_refptr<base::RefCountedData<std::unique_ptr<DatagramClientSocket>>>
+        socket,
+    CompletionOnceCallback callback,
+    int rv) {
+  bool is_reachable = FinishGloballyReachableCheck(socket->data.get(), rv);
+  std::move(callback).Run(is_reachable ? OK : ERR_FAILED);
+}
+
 void HostResolverManager::RunLoopbackProbeJob() {
-  // Run this asynchronously as it can take 40-100ms and should not block
-  // initialization.
-  base::ThreadPool::PostTaskAndReplyWithResult(
-      FROM_HERE,
-      {base::MayBlock(), base::TaskShutdownBehavior::CONTINUE_ON_SHUTDOWN},
-      base::BindOnce(&HaveOnlyLoopbackAddresses),
+  RunHaveOnlyLoopbackAddressesJob(
       base::BindOnce(&HostResolverManager::SetHaveOnlyLoopbackAddresses,
                      weak_ptr_factory_.GetWeakPtr()));
 }
@@ -4046,8 +4230,9 @@ std::unique_ptr<DnsProbeRunner> HostResolverManager::CreateDohProbeRunner(
     ResolveContext* resolve_context) {
   DCHECK(resolve_context);
   DCHECK(registered_contexts_.HasObserver(resolve_context));
-  if (!dns_client_->CanUseSecureDnsTransactions())
+  if (!dns_client_ || !dns_client_->CanUseSecureDnsTransactions()) {
     return nullptr;
+  }
 
   return dns_client_->GetTransactionFactory()->CreateDohProbeRunner(
       resolve_context);
@@ -4065,7 +4250,10 @@ HostResolverManager::RequestImpl::~RequestImpl() {
 void HostResolverManager::RequestImpl::ChangeRequestPriority(
     RequestPriority priority) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  CHECK(job_.has_value());
+  if (!job_.has_value()) {
+    priority_ = priority;
+    return;
+  }
   job_.value()->ChangeRequestPriority(this, priority);
 }
 

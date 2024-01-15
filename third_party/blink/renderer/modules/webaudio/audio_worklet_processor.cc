@@ -4,6 +4,8 @@
 
 #include "third_party/blink/renderer/modules/webaudio/audio_worklet_processor.h"
 
+#include <memory>
+
 #include "third_party/blink/renderer/bindings/core/v8/worker_or_worklet_script_controller.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_blink_audio_worklet_process_callback.h"
 #include "third_party/blink/renderer/core/messaging/message_port.h"
@@ -12,20 +14,29 @@
 #include "third_party/blink/renderer/modules/webaudio/audio_worklet_global_scope.h"
 #include "third_party/blink/renderer/modules/webaudio/audio_worklet_processor_definition.h"
 #include "third_party/blink/renderer/platform/audio/audio_bus.h"
+#include "third_party/blink/renderer/platform/instrumentation/instance_counters.h"
 #include "third_party/blink/renderer/platform/instrumentation/tracing/trace_event.h"
 
 namespace blink {
 
 AudioWorkletProcessor* AudioWorkletProcessor::Create(
-    ExecutionContext* context) {
+    ExecutionContext* context,
+    ExceptionState& exception_state) {
   AudioWorkletGlobalScope* global_scope = To<AudioWorkletGlobalScope>(context);
   DCHECK(global_scope);
   DCHECK(global_scope->IsContextThread());
 
   // Get the stored initialization parameter from the global scope.
-  ProcessorCreationParams* params = global_scope->GetProcessorCreationParams();
-  DCHECK(params);
+  std::unique_ptr<ProcessorCreationParams> params =
+      global_scope->GetProcessorCreationParams();
 
+  // `params` can be null if there's no matching AudioWorkletNode instance.
+  // (e.g. invoking AudioWorkletProcessor directly in AudioWorkletGlobalScope)
+  if (!params) {
+    exception_state.ThrowTypeError(
+        "Illegal invocation of AudioWorkletProcessor constructor.");
+    return nullptr;
+  }
   auto* port = MakeGarbageCollected<MessagePort>(*global_scope);
   port->Entangle(std::move(params->PortChannel()));
   return MakeGarbageCollected<AudioWorkletProcessor>(global_scope,
@@ -36,7 +47,15 @@ AudioWorkletProcessor::AudioWorkletProcessor(
     AudioWorkletGlobalScope* global_scope,
     const String& name,
     MessagePort* port)
-    : global_scope_(global_scope), processor_port_(port), name_(name) {}
+    : global_scope_(global_scope), processor_port_(port), name_(name) {
+  InstanceCounters::IncrementCounter(
+      InstanceCounters::kAudioWorkletProcessorCounter);
+}
+
+AudioWorkletProcessor::~AudioWorkletProcessor() {
+  InstanceCounters::DecrementCounter(
+      InstanceCounters::kAudioWorkletProcessorCounter);
+}
 
 bool AudioWorkletProcessor::Process(
     const Vector<scoped_refptr<AudioBus>>& inputs,
@@ -357,6 +376,12 @@ void AudioWorkletProcessor::CopyArrayBuffersToPort(
 
   for (uint32_t bus_index = 0; bus_index < audio_port.size(); ++bus_index) {
     const scoped_refptr<AudioBus>& audio_bus = audio_port[bus_index];
+
+    // nullptr indicates the output bus is not connected. Do not proceed.
+    if (!audio_bus) {
+      break;
+    }
+
     for (uint32_t channel_index = 0;
          channel_index < audio_bus->NumberOfChannels(); ++channel_index) {
       auto backing_store = array_buffers[bus_index][channel_index]

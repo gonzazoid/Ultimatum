@@ -44,8 +44,8 @@ enum OverviewAnimationType {
   OVERVIEW_ANIMATION_NO_RECENTS_FADE,
   // Used to fade in all windows when window drag starts or during window drag.
   OVERVIEW_ANIMATION_OPACITY_ON_WINDOW_DRAG,
-  // Used to fade out the desks templates grid when exiting overview mode.
-  OVERVIEW_ANIMATION_EXIT_OVERVIEW_MODE_DESKS_TEMPLATES_GRID_FADE_OUT,
+  // Used to fade out the saved desk grid when exiting overview mode.
+  OVERVIEW_ANIMATION_EXIT_OVERVIEW_MODE_SAVED_DESK_GRID_FADE_OUT,
 };
 
 enum class OverviewTransition {
@@ -58,7 +58,8 @@ enum class OverviewTransition {
 enum class OverviewEnterExitType {
   // The default way, window(s) animate from their initial bounds to the grid
   // bounds. Window(s) that are not visible to the user do not get animated.
-  // This should always be the type when in clamshell mode.
+  // This should always be the type when in clamshell mode, with the exception
+  // of the `kPine` case.
   kNormal,
   // Used only when it's desired to enter overview mode immediately without
   // animations. It's used when entering overview by dragging a window from
@@ -85,7 +86,18 @@ enum class OverviewEnterExitType {
   // windows are minimized). This will minimize windows on exit if needed, so
   // that we do not need to add a delayed observer to handle minimizing the
   // windows after overview exit animations are finished.
-  kFadeOutExit
+  kFadeOutExit,
+  // Allows for a smooth transition to and from overview mode. When this type
+  // is used, overview mode will be entered immediately. However, the windows
+  // will stay in their current position/state. As the user scrolls up and down
+  // on the trackpad, each window will be put in an "in-between" state, between
+  // their current and final state, according to the scroll offset.
+  kContinuousAnimationEnterOnScrollUpdate,
+  // Used when the user starts a session, and has chosen the "ask me every time"
+  // option for full restore. This will bring up an overview session that has
+  // the pine contents view. The transitions will be the same as `kNormal`
+  // otherwise.
+  kPine,
 };
 
 // Overview items have certain properties if their aspect ratio exceeds a

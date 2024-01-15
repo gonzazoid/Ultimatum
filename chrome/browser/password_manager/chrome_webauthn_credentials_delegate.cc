@@ -4,17 +4,14 @@
 
 #include "chrome/browser/password_manager/chrome_webauthn_credentials_delegate.h"
 
+#include <optional>
+
 #include "base/base64.h"
-#include "base/callback.h"
-#include "base/feature_list.h"
-#include "base/strings/utf_string_conversions.h"
+#include "base/functional/callback.h"
 #include "build/build_config.h"
+#include "components/password_manager/core/browser/passkey_credential.h"
 #include "components/password_manager/core/browser/password_ui_utils.h"
-#include "components/strings/grit/components_strings.h"
 #include "content/public/browser/web_contents.h"
-#include "content/public/common/content_features.h"
-#include "device/fido/discoverable_credential_metadata.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/base/l10n/l10n_util.h"
 
 #if !BUILDFLAG(IS_ANDROID)
@@ -23,8 +20,10 @@
 #endif  // !BUILDFLAG(IS_ANDROID)
 
 #if BUILDFLAG(IS_ANDROID)
-#include "chrome/browser/webauthn/android/conditional_ui_delegate_android.h"
+#include "chrome/browser/webauthn/android/webauthn_request_delegate_android.h"
 #endif
+
+using password_manager::PasskeyCredential;
 
 ChromeWebAuthnCredentialsDelegate::ChromeWebAuthnCredentialsDelegate(
     content::WebContents* web_contents)
@@ -32,10 +31,6 @@ ChromeWebAuthnCredentialsDelegate::ChromeWebAuthnCredentialsDelegate(
 
 ChromeWebAuthnCredentialsDelegate::~ChromeWebAuthnCredentialsDelegate() =
     default;
-
-bool ChromeWebAuthnCredentialsDelegate::IsWebAuthnAutofillEnabled() const {
-  return base::FeatureList::IsEnabled(features::kWebAuthConditionalUI);
-}
 
 void ChromeWebAuthnCredentialsDelegate::LaunchWebAuthnFlow() {
 #if !BUILDFLAG(IS_ANDROID)
@@ -48,21 +43,21 @@ void ChromeWebAuthnCredentialsDelegate::LaunchWebAuthnFlow() {
 #endif  // !BUILDFLAG(IS_ANDROID)
 }
 
-void ChromeWebAuthnCredentialsDelegate::SelectWebAuthnCredential(
-    std::string backend_id) {
-  // `backend_id` is the base64-encoded credential ID. See
-  // `OnCredentialsReceived()` for where these are encoded.
-  absl::optional<std::vector<uint8_t>> selected_credential_id =
+void ChromeWebAuthnCredentialsDelegate::SelectPasskey(
+    const std::string& backend_id) {
+  // `backend_id` is the base64-encoded credential ID. See `PasskeyCredential`
+  // for where these are encoded.
+  std::optional<std::vector<uint8_t>> selected_credential_id =
       base::Base64Decode(backend_id);
   DCHECK(selected_credential_id);
 
 #if BUILDFLAG(IS_ANDROID)
-  auto* credentials_delegate =
-      ConditionalUiDelegateAndroid::GetConditionalUiDelegate(web_contents_);
-  if (!credentials_delegate) {
+  auto* request_delegate =
+      WebAuthnRequestDelegateAndroid::GetRequestDelegate(web_contents_);
+  if (!request_delegate) {
     return;
   }
-  credentials_delegate->OnWebAuthnAccountSelected(*selected_credential_id);
+  request_delegate->OnWebAuthnAccountSelected(*selected_credential_id);
 #else
   ChromeAuthenticatorRequestDelegate* authenticator_delegate =
       AuthenticatorRequestScheduler::GetRequestDelegate(web_contents_);
@@ -74,57 +69,63 @@ void ChromeWebAuthnCredentialsDelegate::SelectWebAuthnCredential(
 #endif  // BUILDFLAG(IS_ANDROID)
 }
 
-const absl::optional<std::vector<autofill::Suggestion>>&
-ChromeWebAuthnCredentialsDelegate::GetWebAuthnSuggestions() const {
-  return suggestions_;
+const std::optional<std::vector<PasskeyCredential>>&
+ChromeWebAuthnCredentialsDelegate::GetPasskeys() const {
+  return passkeys_;
 }
 
-void ChromeWebAuthnCredentialsDelegate::RetrieveWebAuthnSuggestions(
+base::WeakPtr<password_manager::WebAuthnCredentialsDelegate>
+ChromeWebAuthnCredentialsDelegate::AsWeakPtr() {
+  return weak_ptr_factory_.GetWeakPtr();
+}
+
+bool ChromeWebAuthnCredentialsDelegate::OfferPasskeysFromAnotherDeviceOption()
+    const {
+  return offer_passkey_from_another_device_;
+}
+
+void ChromeWebAuthnCredentialsDelegate::RetrievePasskeys(
     base::OnceClosure callback) {
-  if (suggestions_.has_value()) {
+  if (passkeys_.has_value()) {
     // Entries were already populated from the WebAuthn request.
     std::move(callback).Run();
     return;
   }
 
-  retrieve_suggestions_callback_ = std::move(callback);
+  retrieve_passkeys_callback_ = std::move(callback);
 }
 
 void ChromeWebAuthnCredentialsDelegate::OnCredentialsReceived(
-    const std::vector<device::DiscoverableCredentialMetadata>& credentials) {
-  std::vector<autofill::Suggestion> suggestions;
-
-  for (const auto& credential : credentials) {
-    std::u16string name;
-    if (credential.user.name && !credential.user.name->empty()) {
-      name = base::UTF8ToUTF16(*credential.user.name);
-    } else {
-      name = l10n_util::GetStringUTF16(IDS_PASSWORD_MANAGER_EMPTY_LOGIN);
-    }
-    autofill::Suggestion suggestion(std::move(name));
-
-    std::u16string label = l10n_util::GetStringUTF16(
-        password_manager::GetPlatformAuthenticatorLabel());
-    if (!label.empty()) {
-      suggestion.labels = {{autofill::Suggestion::Text(label)}};
-    }
-    suggestion.icon = "globeIcon";
-    suggestion.frontend_id = autofill::POPUP_ITEM_ID_WEBAUTHN_CREDENTIAL;
-    suggestion.payload =
-        autofill::Suggestion::BackendId(base::Base64Encode(credential.cred_id));
-    suggestions.push_back(std::move(suggestion));
-  }
-
-  suggestions_ = std::move(suggestions);
-
-  if (retrieve_suggestions_callback_) {
-    std::move(retrieve_suggestions_callback_).Run();
+    std::vector<PasskeyCredential> credentials,
+    bool offer_passkey_from_another_device) {
+  passkeys_ = std::move(credentials);
+  offer_passkey_from_another_device_ = offer_passkey_from_another_device;
+  if (retrieve_passkeys_callback_) {
+    std::move(retrieve_passkeys_callback_).Run();
   }
 }
 
 void ChromeWebAuthnCredentialsDelegate::NotifyWebAuthnRequestAborted() {
-  suggestions_ = absl::nullopt;
-  if (retrieve_suggestions_callback_) {
-    std::move(retrieve_suggestions_callback_).Run();
+  passkeys_ = std::nullopt;
+  if (retrieve_passkeys_callback_) {
+    std::move(retrieve_passkeys_callback_).Run();
   }
 }
+
+#if BUILDFLAG(IS_ANDROID)
+void ChromeWebAuthnCredentialsDelegate::ShowAndroidHybridSignIn() {
+  if (WebAuthnRequestDelegateAndroid* delegate =
+          WebAuthnRequestDelegateAndroid::GetRequestDelegate(web_contents_)) {
+    delegate->ShowHybridSignIn();
+  }
+}
+
+bool ChromeWebAuthnCredentialsDelegate::IsAndroidHybridAvailable() const {
+  return android_hybrid_available_.value();
+}
+
+void ChromeWebAuthnCredentialsDelegate::SetAndroidHybridAvailable(
+    AndroidHybridAvailable available) {
+  android_hybrid_available_ = available;
+}
+#endif

@@ -7,8 +7,8 @@
 #include <cstring>
 #include <utility>
 
-#include "base/callback.h"
 #include "base/check_op.h"
+#include "base/functional/callback.h"
 #include "base/trace_event/memory_usage_estimator.h"
 #include "net/base/io_buffer.h"
 #include "net/third_party/quiche/src/quiche/spdy/core/spdy_protocol.h"
@@ -44,7 +44,7 @@ class SpdyBuffer::SharedFrameIOBuffer : public IOBuffer {
  public:
   SharedFrameIOBuffer(const scoped_refptr<SharedFrame>& shared_frame,
                       size_t offset)
-      : IOBuffer(shared_frame->data->data() + offset),
+      : IOBuffer(base::make_span(*shared_frame->data).subspan(offset)),
         shared_frame_(shared_frame) {}
 
   SharedFrameIOBuffer(const SharedFrameIOBuffer&) = delete;
@@ -52,7 +52,8 @@ class SpdyBuffer::SharedFrameIOBuffer : public IOBuffer {
 
  private:
   ~SharedFrameIOBuffer() override {
-    // Prevent ~IOBuffer() from trying to delete |data_|.
+    // Prevent `data_` from dangling should this destructor remove the
+    // last reference to `shared_frame`.
     data_ = nullptr;
   }
 

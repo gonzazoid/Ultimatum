@@ -4,10 +4,12 @@
 //
 #include "ash/system/network/unified_vpn_detailed_view_controller.h"
 
+#include <memory>
+
 #include "ash/session/session_controller_impl.h"
 #include "ash/shell.h"
 #include "ash/strings/grit/ash_strings.h"
-#include "ash/system/network/vpn_list_view.h"
+#include "ash/system/network/vpn_detailed_view.h"
 #include "ash/system/tray/detailed_view_delegate.h"
 #include "ui/base/l10n/l10n_util.h"
 
@@ -21,12 +23,14 @@ UnifiedVPNDetailedViewController::UnifiedVPNDetailedViewController(
 
 UnifiedVPNDetailedViewController::~UnifiedVPNDetailedViewController() = default;
 
-views::View* UnifiedVPNDetailedViewController::CreateView() {
+std::unique_ptr<views::View> UnifiedVPNDetailedViewController::CreateView() {
   DCHECK(!view_);
-  view_ = new VPNListView(detailed_view_delegate_.get(),
-                          Shell::Get()->session_controller()->login_status());
+  auto view = std::make_unique<VpnDetailedView>(
+      detailed_view_delegate_.get(),
+      Shell::Get()->session_controller()->login_status());
+  view_ = view.get();
   view_->Init();
-  return view_;
+  return view;
 }
 
 std::u16string UnifiedVPNDetailedViewController::GetAccessibleName() const {

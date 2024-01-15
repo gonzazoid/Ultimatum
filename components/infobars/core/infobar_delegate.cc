@@ -7,6 +7,7 @@
 #include "build/build_config.h"
 #include "components/infobars/core/infobar.h"
 #include "components/infobars/core/infobar_manager.h"
+#include "ui/base/models/image_model.h"
 #include "ui/base/resource/resource_bundle.h"
 #include "ui/gfx/vector_icon_types.h"
 
@@ -40,7 +41,8 @@ ui::ImageModel InfoBarDelegate::GetIcon() const {
 #if !BUILDFLAG(IS_IOS) && !BUILDFLAG(IS_ANDROID)
   const gfx::VectorIcon& vector_icon = GetVectorIcon();
   if (!vector_icon.is_empty())
-    return ui::ImageModel::FromVectorIcon(vector_icon, ui::kColorAccent, 20);
+    return ui::ImageModel::FromVectorIcon(vector_icon, ui::kColorInfoBarIcon,
+                                          20);
 #endif
 
   int icon_id = GetIconId();

@@ -5,6 +5,7 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_FRAGMENT_DIRECTIVE_TEXT_FRAGMENT_SELECTOR_GENERATOR_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_FRAGMENT_DIRECTIVE_TEXT_FRAGMENT_SELECTOR_GENERATOR_H_
 
+#include "base/gtest_prod_util.h"
 #include "base/time/time.h"
 #include "components/shared_highlighting/core/common/shared_highlighting_metrics.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -63,7 +64,7 @@ class CORE_EXPORT TextFragmentSelectorGenerator final
   // other metrics.
   void RecordSelectorStateUma() const;
 
-  LocalFrame* GetFrame() { return frame_; }
+  LocalFrame* GetFrame() { return frame_.Get(); }
 
   // Returns the text value of the range this generator is attempting to
   // generate a selector for. Returns empty string if the range is invalid or
@@ -202,10 +203,6 @@ class CORE_EXPORT TextFragmentSelectorGenerator final
   int num_context_words_ = 0;
 
   int num_range_words_ = 0;
-
-  // Indicates the Max Context Words allowed for the
-  // SharedHighlightsMaxContextWords experiment
-  int max_context_words_ = 10;
 
   int iteration_ = 0;
   base::TimeTicks generation_start_time_;

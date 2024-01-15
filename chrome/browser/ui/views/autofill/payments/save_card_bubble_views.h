@@ -43,6 +43,8 @@ class SaveCardBubbleViews : public AutofillBubbleBase,
   void Hide() override;
 
   // LocationBarBubbleDelegateView:
+  void OnBeforeBubbleWidgetInit(views::Widget::InitParams* params,
+                                views::Widget* widget) const override;
   void AddedToWidget() override;
   std::u16string GetWindowTitle() const override;
   void WindowClosing() override;
@@ -70,12 +72,13 @@ class SaveCardBubbleViews : public AutofillBubbleBase,
   void Init() override;
 
   void OnDialogAccepted();
-  void OnDialogCancelled();
 
   ~SaveCardBubbleViews() override;
 
  private:
   friend class SaveCardBubbleViewsFullFormBrowserTest;
+
+  std::unique_ptr<views::View> GetCardIdentifierView();
 
   raw_ptr<views::View> footnote_view_ = nullptr;
 

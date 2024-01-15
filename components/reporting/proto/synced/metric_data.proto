@@ -4,6 +4,7 @@
 
 syntax = "proto2";
 
+import "components/reporting/proto/synced/session_affiliated_user.proto";
 import "components/services/app_service/public/protos/app_types.proto";
 
 option optimize_for = LITE_RUNTIME;
@@ -124,6 +125,15 @@ message NetworkConnectionStateChangeEventData {
   optional NetworkConnectionState connection_state = 2;
 }
 
+// Message describing the WIFI_SIGNAL_STRENGTH_LOW and
+// WIFI_SIGNAL_STRENGTH_RECOVERED events.
+message SignalStrengthEventData {
+  // Unique identifier of the network.
+  optional string guid = 1;
+  // Signal strength value in dBm.
+  optional int32 signal_strength_dbm = 2;
+}
+
 // Configured networks telemetry data.
 message NetworksTelemetry {
   // List of each network telemetry.
@@ -136,6 +146,9 @@ message NetworksTelemetry {
   // event.
   optional NetworkConnectionStateChangeEventData
       network_connection_change_event_data = 4;
+  // Signal strength data describing the WIFI_SIGNAL_STRENGTH_LOW and
+  // WIFI_SIGNAL_STRENGTH_RECOVERED events.
+  optional SignalStrengthEventData signal_strength_event_data = 5;
 }
 
 // Security level of the thunderbolt bus.
@@ -394,9 +407,21 @@ message DisplayStatus {
   optional bool is_internal = 5;
 }
 
+// deliberately left empty as there is no payload for Heartbeat messages.
+// It just implicitly indicates that the sender is still alive.
+message KioskHeartbeatTelemetry {
+  // No payload
+}
+
 // Data that can change over time, collected and reported every specific period
 // of time or when an event occur.
+// IMPORTANT: Do not add additional non-message fields (bool, int, string,
+// etc.) to `TelemetryData` -- they will be ignored by the server and not
+// written to the telemetry database.
 message TelemetryData {
+  // Indicates whether the telemetry data was collected in response to an event.
+  optional bool is_event_driven = 8;
+
   // At least one of the following telemetry should be present.
 
   // Networks telemetry data.
@@ -413,30 +438,42 @@ message TelemetryData {
   optional DisplaysTelemetry displays_telemetry = 6;
   // App telemetry data.
   optional AppTelemetry app_telemetry = 7;
+  // Fatal crash data.
+  optional FatalCrashTelemetry fatal_crash_telemetry = 9;
+  // Runtime counter data.
+  optional RuntimeCountersTelemetry runtime_counters_telemetry = 10;
+  // Website telemetry data.
+  optional WebsiteTelemetry website_telemetry = 11;
+  // Kiosk Heartbeats as telemetry data
+  optional KioskHeartbeatTelemetry heartbeat_telemetry = 12;
 }
 
+// Type of event metric being reported.
+// This must be kept in sync with //tools/metrics/histograms/enums.xml's
+// EnterpriseCloudReportingMetricEventType in the Chromium repo.
 enum MetricEventType {
   EVENT_TYPE_UNSPECIFIED = 0;
   NETWORK_HTTPS_LATENCY_CHANGE = 1;
-  NETWORK_CONNECTION_STATE_CHANGE = 2;
-  NETWORK_SIGNAL_STRENGTH_CHANGE = 3;
   AUDIO_SEVERE_UNDERRUN = 4;
   USB_ADDED = 5;
   USB_REMOVED = 6;
   APP_INSTALLED = 7;
   APP_UNINSTALLED = 8;
   APP_LAUNCHED = 9;
-  NETWORK_SIGNAL_STRENGTH_LOW = 10;
-  NETWORK_SIGNAL_STRENGTH_RECOVERED = 11;
+  WIFI_SIGNAL_STRENGTH_LOW = 13;
+  WIFI_SIGNAL_STRENGTH_RECOVERED = 14;
+  NETWORK_STATE_CHANGE = 15;
+  VPN_CONNECTION_STATE_CHANGE = 16;
+  FATAL_CRASH = 17;
+  URL_OPENED = 18;
+  URL_CLOSED = 19;
+  KIOSK_HEARTBEAT = 20;
+
+  reserved 2, 3, 10, 11, 12;
 }
 
 // App telemetry data.
 message AppTelemetry {
-  // App id.
-  optional string app_id = 1;
-  // Type of app being observed.
-  optional apps.ApplicationType app_type = 2;
-
   oneof app_metric_data {
     // App installation data.
     AppInstallData app_install_data = 3;
@@ -444,9 +481,11 @@ message AppTelemetry {
     AppUninstallData app_uninstall_data = 4;
     // App launch data.
     AppLaunchData app_launch_data = 5;
-    // App usage data
+    // App usage data.
     AppUsageData app_usage_data = 6;
   }
+
+  reserved 1, 2;
 }
 
 // App installation data.
@@ -457,30 +496,102 @@ message AppInstallData {
   optional apps.ApplicationInstallReason app_install_reason = 2;
   // App installation time depending on the app lifecycle.
   optional apps.ApplicationInstallTime app_install_time = 3;
+  // App id.
+  optional string app_id = 4;
+  // Type of app.
+  optional apps.ApplicationType app_type = 5;
 }
 
 // App launch data.
 message AppLaunchData {
   // App launch source.
   optional apps.ApplicationLaunchSource app_launch_source = 1;
+  // App id.
+  optional string app_id = 2;
+  // Type of app.
+  optional apps.ApplicationType app_type = 3;
 }
 
 // App usage data.
 message AppUsageData {
-  // App foreground running time (in milliseconds).
-  optional int64 running_time_ms = 1;
+  message AppUsage {
+    // App foreground running time (in milliseconds).
+    optional int64 running_time_ms = 1;
+    // App id.
+    optional string app_id = 2;
+    // Type of app.
+    optional apps.ApplicationType app_type = 3;
+    // Application instance id. This will be unique per window/instance.
+    optional string app_instance_id = 4;
+  }
+
+  // Usage data that also includes other app metadata.
+  repeated AppUsage app_usage = 2;
+
+  reserved 1;
 }
 
 // App uninstall data.
 message AppUninstallData {
   // App uninstall source.
   optional apps.ApplicationUninstallSource app_uninstall_source = 1;
+  // App id.
+  optional string app_id = 2;
+  // Type of app.
+  optional apps.ApplicationType app_type = 3;
 }
 
+// Website telemetry data.
+message WebsiteTelemetry {
+  oneof website_metric_data {
+    // Website opened data.
+    WebsiteOpenedData website_opened_data = 1;
+    // Website closed data.
+    WebsiteClosedData website_closed_data = 2;
+    // Website usage data.
+    WebsiteUsageData website_usage_data = 3;
+  }
+}
+
+// Website opened data.
+message WebsiteOpenedData {
+  // Website URL.
+  optional string url = 1;
+  // Render process host id.
+  optional int32 render_process_host_id = 2;
+  // Render frame routing id.
+  optional int32 render_frame_routing_id = 3;
+}
+
+// Website closed data.
+message WebsiteClosedData {
+  // Website URL.
+  optional string url = 1;
+  // Render process host id.
+  optional int32 render_process_host_id = 2;
+  // Render frame routing id.
+  optional int32 render_frame_routing_id = 3;
+}
+
+// Website usage data.
+message WebsiteUsageData {
+  message WebsiteUsage {
+    // Website URL.
+    optional string url = 1;
+    // Website foreground running time (in milliseconds).
+    optional int64 running_time_ms = 2;
+  }
+
+  // Usage data that includes other website metadata.
+  repeated WebsiteUsage website_usage = 3;
+}
+
+// Peripherals data.
 message PeripheralsTelemetry {
   repeated UsbTelemetry usb_telemetry = 1;
 }
 
+// Usb data.
 message UsbTelemetry {
   // Vendor name
   optional string vendor = 1;
@@ -503,8 +614,92 @@ message UsbTelemetry {
   optional string firmware_version = 8;
 }
 
+// Fatal crash data.
+message FatalCrashTelemetry {
+  enum CrashType {
+    // Unknown crashes.
+    CRASH_TYPE_UNSPECIFIED = 0;
+    // Kernel crashes.
+    CRASH_TYPE_KERNEL = 1;
+    // EC crashes.
+    CRASH_TYPE_EMBEDDED_CONTROLLER = 2;
+    // More is expected to be added in the future.
+  }
+  // The session types follow user_manager::UserType. The server side will
+  // translate to the types described below.
+  enum SessionType {
+    // Including when a crash occurs on the login screen.
+    SESSION_TYPE_UNSPECIFIED = 0;
+    // When presenting to the admin, the following will be SIGNED_IN_USER
+    SESSION_TYPE_REGULAR = 1;
+    SESSION_TYPE_CHILD = 2;
+
+    // When presenting to the admin, the following will be KIOSK
+    SESSION_TYPE_KIOSK_APP = 3;
+    SESSION_TYPE_ARC_KIOSK_APP = 4;
+    SESSION_TYPE_WEB_KIOSK_APP = 5;
+
+    // When presenting to the admin, the following will be MANAGED_GUEST
+    SESSION_TYPE_GUEST = 6;
+    SESSION_TYPE_PUBLIC_ACCOUNT = 7;
+
+    // When presenting to the admin, the following will be ACTIVE_DIRECTORY
+    SESSION_TYPE_ACTIVE_DIRECTORY = 8;
+  }
+  // required
+  optional CrashType type = 1;
+  // required
+  optional SessionType session_type = 2;
+  // required
+  optional int64 timestamp_us = 3;
+  // Absent if not signed in or the user is not affiliated. Currently only
+  // contains user email.
+  optional SessionAffiliatedUser affiliated_user = 4;
+  // Absent if the crash has not been uploaded by crash_sender yet.
+  optional string crash_report_id = 5;
+  // required
+  optional string local_id = 6;
+  // If crash report ID is available, has this event been reported without ID
+  // once before?
+  // The optionality of crash_report_id is not sufficient because we need to
+  // distinguish the two cases: (a) A crash is reported for the first time with
+  // a crash report ID and (b) a crash is reported for the first time without a
+  // crash report ID and only has a crash report ID when it is reported for the
+  // second time.
+  optional bool been_reported_without_crash_report_id = 7;
+}
+
+// Runtime counters retrieved from CPU. Currently the runtime counters telemetry
+// is only supported by Intel vPro PSR on Gen 14+.
+message RuntimeCountersTelemetry {
+  // All fields below are currently required since Intel vPro is the only
+  // supported source, but we reserve the possibility that absence of a field
+  // implies that it is unavailable on the device in the future.
+
+  // Hardly any of the following fields can be beyond the size of int32.
+  // However, we use int64 because: (a) healthD retrieves uint32 integers from
+  // the hardware, and therefore using int32 here risks overflow. (b) Server
+  // side requires signed integers and therefore uint32 is not an option.
+
+  // Total lifetime runtime. Currently always S0 runtime from Intel vPro PSR.
+  optional int64 uptime_runtime_seconds = 1;
+  // Number of times that the device has entered into the sleep state. Currently
+  // obtained via the PSR, count from S0->S3. As of Oct 2023, this number is
+  // expected to be always zero as ChromeOS devices do not use this state.
+  optional int64 counter_enter_sleep = 2;
+  // Number of times that the device has entered into the hibernation state.
+  // Currently obtained via the PSR, count from S0->S4. As of Oct 2023, this
+  // number is expected to be always zero, unless the ChromeOS device is
+  // equipped with Intel KeyLocker.
+  optional int64 counter_enter_hibernation = 3;
+  // Number of times that the device has entered into the power-off state.
+  // Currently obtained via the PSR, count from S0->S5.
+  optional int64 counter_enter_poweroff = 4;
+}
+
 // Indicates one of the following conditions occurred on the device, data
 // associated with the event will be reported as TelemetryData.
+// IMPORTANT: DO NOT add any additional fields to `EventData`.
 message EventData {
   optional MetricEventType type = 1;
 }

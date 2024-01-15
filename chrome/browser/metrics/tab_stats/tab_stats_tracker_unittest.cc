@@ -61,7 +61,6 @@ class TestTabStatsTracker : public TabStatsTracker {
  public:
   using TabStatsTracker::OnHeartbeatEvent;
   using TabStatsTracker::OnInitialOrInsertedTab;
-  using TabStatsTracker::OnInterval;
   using TabStatsTracker::TabChangedAt;
   using UmaStatsReportingDelegate = TabStatsTracker::UmaStatsReportingDelegate;
 
@@ -152,8 +151,6 @@ class TestTabStatsTracker : public TabStatsTracker {
 class TestUmaStatsReportingDelegate
     : public TestTabStatsTracker::UmaStatsReportingDelegate {
  public:
-  using TestTabStatsTracker::UmaStatsReportingDelegate::
-      GetIntervalHistogramName;
   TestUmaStatsReportingDelegate() {}
 
   TestUmaStatsReportingDelegate(const TestUmaStatsReportingDelegate&) = delete;
@@ -219,10 +216,6 @@ TestTabStatsTracker::TestTabStatsTracker(PrefService* pref_service)
   // while running the tests.
   EXPECT_TRUE(daily_event_timer_for_testing()->IsRunning());
   daily_event_timer_for_testing()->Stop();
-
-  // Stop the usage interval timers so they don't trigger while running the
-  // tests.
-  usage_interval_timers_for_testing()->clear();
 
   reset_reporting_delegate_for_testing(new TestUmaStatsReportingDelegate());
 
@@ -426,8 +419,10 @@ TEST_F(TabStatsTrackerTest, DailyDiscards) {
 
   constexpr size_t kExpectedDiscardsExternal = 3;
   constexpr size_t kExpectedDiscardsUrgent = 5;
+  constexpr size_t kExpectedDiscardsProactive = 11;
   constexpr size_t kExpectedReloadsExternal = 7;
   constexpr size_t kExpectedReloadsUrgent = 9;
+  constexpr size_t kExpectedReloadsProactive = 10;
   for (size_t i = 0; i < kExpectedDiscardsExternal; ++i) {
     tab_stats_tracker_->DiscardedStateChange(
         this, LifecycleUnitDiscardReason::EXTERNAL, /*is_discarded*/ true);
@@ -436,6 +431,10 @@ TEST_F(TabStatsTrackerTest, DailyDiscards) {
     tab_stats_tracker_->DiscardedStateChange(
         this, LifecycleUnitDiscardReason::URGENT, /*is_discarded*/ true);
   }
+  for (size_t i = 0; i < kExpectedDiscardsProactive; ++i) {
+    tab_stats_tracker_->DiscardedStateChange(
+        this, LifecycleUnitDiscardReason::PROACTIVE, /*is_discarded*/ true);
+  }
   for (size_t i = 0; i < kExpectedReloadsExternal; ++i) {
     tab_stats_tracker_->DiscardedStateChange(
         this, LifecycleUnitDiscardReason::EXTERNAL, /*is_discarded*/ false);
@@ -443,6 +442,10 @@ TEST_F(TabStatsTrackerTest, DailyDiscards) {
   for (size_t i = 0; i < kExpectedReloadsUrgent; ++i) {
     tab_stats_tracker_->DiscardedStateChange(
         this, LifecycleUnitDiscardReason::URGENT, /*is_discarded*/ false);
+  }
+  for (size_t i = 0; i < kExpectedReloadsProactive; ++i) {
+    tab_stats_tracker_->DiscardedStateChange(
+        this, LifecycleUnitDiscardReason::PROACTIVE, /*is_discarded*/ false);
   }
 
   // Triggers the daily event.
@@ -456,17 +459,25 @@ TEST_F(TabStatsTrackerTest, DailyDiscards) {
       UmaStatsReportingDelegate::kDailyDiscardsUrgentHistogramName,
       kExpectedDiscardsUrgent, 1);
   histogram_tester_.ExpectUniqueSample(
+      UmaStatsReportingDelegate::kDailyDiscardsProactiveHistogramName,
+      kExpectedDiscardsProactive, 1);
+  histogram_tester_.ExpectUniqueSample(
       UmaStatsReportingDelegate::kDailyReloadsExternalHistogramName,
       kExpectedReloadsExternal, 1);
   histogram_tester_.ExpectUniqueSample(
       UmaStatsReportingDelegate::kDailyReloadsUrgentHistogramName,
       kExpectedReloadsUrgent, 1);
+  histogram_tester_.ExpectUniqueSample(
+      UmaStatsReportingDelegate::kDailyReloadsProactiveHistogramName,
+      kExpectedReloadsProactive, 1);
 
   // Checks that the second report also updates the histograms properly.
   constexpr size_t kExpectedDiscardsExternal2 = 15;
   constexpr size_t kExpectedDiscardsUrgent2 = 25;
+  constexpr size_t kExpectedDiscardsProactive2 = 55;
   constexpr size_t kExpectedReloadsExternal2 = 35;
   constexpr size_t kExpectedReloadsUrgent2 = 45;
+  constexpr size_t kExpectedReloadsProactive2 = 40;
   for (size_t i = 0; i < kExpectedDiscardsExternal2; ++i) {
     tab_stats_tracker_->DiscardedStateChange(
         this, LifecycleUnitDiscardReason::EXTERNAL, /*is_discarded=*/true);
@@ -475,6 +486,10 @@ TEST_F(TabStatsTrackerTest, DailyDiscards) {
     tab_stats_tracker_->DiscardedStateChange(
         this, LifecycleUnitDiscardReason::URGENT, /*is_discarded=*/true);
   }
+  for (size_t i = 0; i < kExpectedDiscardsProactive2; ++i) {
+    tab_stats_tracker_->DiscardedStateChange(
+        this, LifecycleUnitDiscardReason::PROACTIVE, /*is_discarded=*/true);
+  }
   for (size_t i = 0; i < kExpectedReloadsExternal2; ++i) {
     tab_stats_tracker_->DiscardedStateChange(
         this, LifecycleUnitDiscardReason::EXTERNAL, /*is_discarded=*/false);
@@ -482,6 +497,10 @@ TEST_F(TabStatsTrackerTest, DailyDiscards) {
   for (size_t i = 0; i < kExpectedReloadsUrgent2; ++i) {
     tab_stats_tracker_->DiscardedStateChange(
         this, LifecycleUnitDiscardReason::URGENT, /*is_discarded=*/false);
+  }
+  for (size_t i = 0; i < kExpectedReloadsProactive2; ++i) {
+    tab_stats_tracker_->DiscardedStateChange(
+        this, LifecycleUnitDiscardReason::PROACTIVE, /*is_discarded=*/false);
   }
 
   // Triggers the daily event again.
@@ -495,131 +514,17 @@ TEST_F(TabStatsTrackerTest, DailyDiscards) {
       UmaStatsReportingDelegate::kDailyDiscardsUrgentHistogramName,
       kExpectedDiscardsUrgent2, 1);
   histogram_tester_.ExpectBucketCount(
+      UmaStatsReportingDelegate::kDailyDiscardsProactiveHistogramName,
+      kExpectedDiscardsProactive2, 1);
+  histogram_tester_.ExpectBucketCount(
       UmaStatsReportingDelegate::kDailyReloadsExternalHistogramName,
       kExpectedReloadsExternal2, 1);
   histogram_tester_.ExpectBucketCount(
       UmaStatsReportingDelegate::kDailyReloadsUrgentHistogramName,
       kExpectedReloadsUrgent2, 1);
-}
-
-TEST_F(TabStatsTrackerTest, TabUsageGetsReported) {
-  constexpr base::TimeDelta kValidLongInterval = base::Hours(12);
-  TabStatsDataStore::TabsStateDuringIntervalMap* interval_map =
-      tab_stats_tracker_->data_store()->AddInterval();
-
-  std::vector<std::unique_ptr<content::WebContents>> web_contentses;
-  for (size_t i = 0; i < 4; ++i) {
-    web_contentses.emplace_back(CreateTestWebContents());
-    // Make sure that these WebContents are initially not visible.
-    web_contentses[i]->WasHidden();
-    tab_stats_tracker_->OnInitialOrInsertedTab(web_contentses[i].get());
-  }
-
-  tab_stats_tracker_->OnInterval(kValidLongInterval, interval_map);
-
-  histogram_tester_.ExpectUniqueSample(
-      TestUmaStatsReportingDelegate::GetIntervalHistogramName(
-          UmaStatsReportingDelegate::
-              kUnusedAndClosedInIntervalHistogramNameBase,
-          kValidLongInterval),
-      0, 1);
-  histogram_tester_.ExpectUniqueSample(
-      TestUmaStatsReportingDelegate::GetIntervalHistogramName(
-          UmaStatsReportingDelegate::kUnusedTabsInIntervalHistogramNameBase,
-          kValidLongInterval),
-      web_contentses.size(), 1);
-  histogram_tester_.ExpectUniqueSample(
-      TestUmaStatsReportingDelegate::GetIntervalHistogramName(
-          UmaStatsReportingDelegate::kUsedAndClosedInIntervalHistogramNameBase,
-          kValidLongInterval),
-      0, 1);
-  histogram_tester_.ExpectUniqueSample(
-      TestUmaStatsReportingDelegate::GetIntervalHistogramName(
-          UmaStatsReportingDelegate::kUsedTabsInIntervalHistogramNameBase,
-          kValidLongInterval),
-      0, 1);
-
-  // Mark one tab as visible and make sure that it get reported properly.
-  web_contentses[0]->WasShown();
-  tab_stats_tracker_->OnInterval(kValidLongInterval, interval_map);
   histogram_tester_.ExpectBucketCount(
-      TestUmaStatsReportingDelegate::GetIntervalHistogramName(
-          UmaStatsReportingDelegate::
-              kUnusedAndClosedInIntervalHistogramNameBase,
-          kValidLongInterval),
-      0, 2);
-  histogram_tester_.ExpectBucketCount(
-      TestUmaStatsReportingDelegate::GetIntervalHistogramName(
-          UmaStatsReportingDelegate::kUnusedTabsInIntervalHistogramNameBase,
-          kValidLongInterval),
-      web_contentses.size() - 1, 1);
-  histogram_tester_.ExpectBucketCount(
-      TestUmaStatsReportingDelegate::GetIntervalHistogramName(
-          UmaStatsReportingDelegate::kUsedAndClosedInIntervalHistogramNameBase,
-          kValidLongInterval),
-      0, 2);
-  histogram_tester_.ExpectBucketCount(
-      TestUmaStatsReportingDelegate::GetIntervalHistogramName(
-          UmaStatsReportingDelegate::kUsedTabsInIntervalHistogramNameBase,
-          kValidLongInterval),
-      1, 1);
-
-  // Mark a tab as audible and make sure that we now have 2 tabs marked as used.
-  content::WebContentsTester::For(web_contentses[1].get())
-      ->SetIsCurrentlyAudible(true);
-  tab_stats_tracker_->TabChangedAt(web_contentses[1].get(), 1,
-                                   TabChangeType::kAll);
-  tab_stats_tracker_->OnInterval(kValidLongInterval, interval_map);
-  histogram_tester_.ExpectBucketCount(
-      TestUmaStatsReportingDelegate::GetIntervalHistogramName(
-          UmaStatsReportingDelegate::kUnusedTabsInIntervalHistogramNameBase,
-          kValidLongInterval),
-      web_contentses.size() - 2, 1);
-  histogram_tester_.ExpectBucketCount(
-      TestUmaStatsReportingDelegate::GetIntervalHistogramName(
-          UmaStatsReportingDelegate::kUsedTabsInIntervalHistogramNameBase,
-          kValidLongInterval),
-      2, 1);
-
-  // Simulate an interaction on a tab, we should now see 3 tabs being marked as
-  // used.
-  content::WebContentsTester::For(web_contentses[2].get())
-      ->TestDidReceiveMouseDownEvent();
-  tab_stats_tracker_->OnInterval(kValidLongInterval, interval_map);
-  histogram_tester_.ExpectBucketCount(
-      TestUmaStatsReportingDelegate::GetIntervalHistogramName(
-          UmaStatsReportingDelegate::kUnusedTabsInIntervalHistogramNameBase,
-          kValidLongInterval),
-      web_contentses.size() - 3, 1);
-  histogram_tester_.ExpectBucketCount(
-      TestUmaStatsReportingDelegate::GetIntervalHistogramName(
-          UmaStatsReportingDelegate::kUsedTabsInIntervalHistogramNameBase,
-          kValidLongInterval),
-      3, 1);
-
-  // Remove the last WebContents, which should be reported as an unused tab.
-  web_contentses.pop_back();
-  tab_stats_tracker_->OnInterval(kValidLongInterval, interval_map);
-  histogram_tester_.ExpectBucketCount(
-      TestUmaStatsReportingDelegate::GetIntervalHistogramName(
-          UmaStatsReportingDelegate::
-              kUnusedAndClosedInIntervalHistogramNameBase,
-          kValidLongInterval),
-      1, 1);
-
-  // Remove an active WebContents and make sure that this get reported properly.
-  //
-  // We need to re-interact with the WebContents as each call to |OnInterval|
-  // reset the interval and clear the interaction bit.
-  content::WebContentsTester::For(web_contentses.back().get())
-      ->TestDidReceiveMouseDownEvent();
-  web_contentses.pop_back();
-  tab_stats_tracker_->OnInterval(kValidLongInterval, interval_map);
-  histogram_tester_.ExpectBucketCount(
-      TestUmaStatsReportingDelegate::GetIntervalHistogramName(
-          UmaStatsReportingDelegate::kUsedAndClosedInIntervalHistogramNameBase,
-          kValidLongInterval),
-      1, 1);
+      UmaStatsReportingDelegate::kDailyReloadsProactiveHistogramName,
+      kExpectedReloadsProactive2, 1);
 }
 
 TEST_F(TabStatsTrackerTest, HeartbeatMetrics) {

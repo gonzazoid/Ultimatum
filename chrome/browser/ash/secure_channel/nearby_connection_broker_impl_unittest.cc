@@ -10,6 +10,7 @@
 #include "ash/constants/ash_features.h"
 #include "base/containers/span.h"
 #include "base/files/file_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/test/bind.h"
 #include "base/test/metrics/histogram_tester.h"
@@ -30,20 +31,20 @@ namespace ash {
 namespace secure_channel {
 namespace {
 
-using ::location::nearby::connections::mojom::BytesPayload;
-using ::location::nearby::connections::mojom::ConnectionInfo;
-using ::location::nearby::connections::mojom::ConnectionLifecycleListener;
-using ::location::nearby::connections::mojom::ConnectionOptionsPtr;
-using ::location::nearby::connections::mojom::DiscoveredEndpointInfo;
-using ::location::nearby::connections::mojom::FilePayload;
-using ::location::nearby::connections::mojom::Payload;
-using ::location::nearby::connections::mojom::PayloadContent;
-using ::location::nearby::connections::mojom::PayloadListener;
-using ::location::nearby::connections::mojom::PayloadPtr;
-using ::location::nearby::connections::mojom::PayloadStatus;
-using ::location::nearby::connections::mojom::PayloadTransferUpdate;
-using ::location::nearby::connections::mojom::PayloadTransferUpdatePtr;
-using ::location::nearby::connections::mojom::Status;
+using ::nearby::connections::mojom::BytesPayload;
+using ::nearby::connections::mojom::ConnectionInfo;
+using ::nearby::connections::mojom::ConnectionLifecycleListener;
+using ::nearby::connections::mojom::ConnectionOptionsPtr;
+using ::nearby::connections::mojom::DiscoveredEndpointInfo;
+using ::nearby::connections::mojom::FilePayload;
+using ::nearby::connections::mojom::Payload;
+using ::nearby::connections::mojom::PayloadContent;
+using ::nearby::connections::mojom::PayloadListener;
+using ::nearby::connections::mojom::PayloadPtr;
+using ::nearby::connections::mojom::PayloadStatus;
+using ::nearby::connections::mojom::PayloadTransferUpdate;
+using ::nearby::connections::mojom::PayloadTransferUpdatePtr;
+using ::nearby::connections::mojom::Status;
 using ::testing::_;
 using ::testing::Invoke;
 
@@ -426,7 +427,7 @@ class NearbyConnectionBrokerImplTest : public testing::Test,
 
   std::unique_ptr<NearbyConnectionBroker> broker_;
 
-  base::MockOneShotTimer* mock_timer_ = nullptr;
+  raw_ptr<base::MockOneShotTimer> mock_timer_ = nullptr;
 
   base::OnceClosure on_connected_closure_;
   base::OnceClosure on_disconnected_closure_;

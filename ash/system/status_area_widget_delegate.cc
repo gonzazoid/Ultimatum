@@ -6,19 +6,20 @@
 
 #include "ash/focus_cycler.h"
 #include "ash/login/ui/lock_screen.h"
+#include "ash/public/cpp/ash_view_ids.h"
 #include "ash/public/cpp/login_screen.h"
+#include "ash/public/cpp/shelf_config.h"
 #include "ash/public/cpp/shell_window_ids.h"
 #include "ash/root_window_controller.h"
 #include "ash/shelf/shelf.h"
 #include "ash/shelf/shelf_layout_manager.h"
 #include "ash/shelf/shelf_widget.h"
 #include "ash/shell.h"
-#include "ash/system/notification_center/notification_center_tray.h"
 #include "ash/system/status_area_widget.h"
 #include "ash/system/tray/tray_constants.h"
-#include "ash/system/unified/date_tray.h"
 #include "ash/wm/tablet_mode/tablet_mode_controller.h"
 #include "base/containers/adapters.h"
+#include "base/memory/raw_ptr.h"
 #include "base/ranges/algorithm.h"
 #include "ui/compositor/layer.h"
 #include "ui/compositor/scoped_layer_animation_settings.h"
@@ -35,8 +36,10 @@ namespace ash {
 
 namespace {
 
-constexpr int kPaddingBetweenItems = 8;
-constexpr int kSystemTraysRightPaddingOffset = -4;
+constexpr int kPaddingBetweenTrayItems = 8;
+constexpr int kPaddingBetweenTrayItemsTabletMode = 6;
+constexpr int kPaddingBetweenPrimaryTraySetItems = kPaddingBetweenTrayItems - 4;
+constexpr int kPaddingBetweenPrimaryTraySetItemsInApp = -4;
 
 class StatusAreaWidgetDelegateAnimationSettings
     : public ui::ScopedLayerAnimationSettings {
@@ -81,8 +84,26 @@ class OverflowGradientBackground : public views::Background {
   }
 
  private:
-  Shelf* shelf_;
+  raw_ptr<Shelf> shelf_;
 };
+
+int PaddingBetweenTrayItems(const bool is_in_primary_tray_set) {
+  if (is_in_primary_tray_set) {
+    // In in-app mode, a negative padding is set. This is because it is set to 6
+    // in `TrayContainer`, and this is easier then rewriting TrayContainer to
+    // react to `ShelfLayoutManager` state changes. See https://b/310272268.
+    return (ShelfConfig::Get()->in_tablet_mode() &&
+            ShelfConfig::Get()->is_in_app())
+               ? kPaddingBetweenPrimaryTraySetItemsInApp
+               : kPaddingBetweenPrimaryTraySetItems;
+  }
+
+  if (ShelfConfig::Get()->in_tablet_mode()) {
+    return kPaddingBetweenTrayItemsTabletMode;
+  }
+
+  return kPaddingBetweenTrayItems;
+}
 
 }  // namespace
 
@@ -186,7 +207,7 @@ bool StatusAreaWidgetDelegate::CanActivate() const {
   // We don't want mouse clicks to activate us, but we need to allow
   // activation when the user is using the keyboard (FocusCycler).
   const FocusCycler* focus_cycler = focus_cycler_for_testing_
-                                        ? focus_cycler_for_testing_
+                                        ? focus_cycler_for_testing_.get()
                                         : Shell::Get()->focus_cycler();
   return focus_cycler->widget_activating() == GetWidget();
 }
@@ -197,7 +218,7 @@ void StatusAreaWidgetDelegate::CalculateTargetBounds() {
   const View* last_visible_child = it == children().crend() ? nullptr : *it;
 
   // Set the border for each child, with a different border for the edge child.
-  for (auto* child : children()) {
+  for (views::View* child : children()) {
     if (!child->GetVisible())
       continue;
     SetBorderOnChild(child, last_visible_child == child);
@@ -251,6 +272,8 @@ void StatusAreaWidgetDelegate::ChildVisibilityChanged(View* child) {
 
 void StatusAreaWidgetDelegate::SetBorderOnChild(views::View* child,
                                                 bool is_child_on_edge) {
+  // TODO(https://b/310272268): Setting padding both here and in `TrayContainer`
+  // is a bit confusing. This is fragile, and we should rewrite this.
   const int vertical_padding =
       (ShelfConfig::Get()->shelf_size() - kTrayItemSize) / 2;
 
@@ -258,24 +281,22 @@ void StatusAreaWidgetDelegate::SetBorderOnChild(views::View* child,
   int top_edge = vertical_padding;
   int left_edge = 0;
   int bottom_edge = vertical_padding;
+
   // Add some extra space so that borders don't overlap. This padding between
-  // items also takes care of padding at the edge of the shelf (unless hotseat
-  // is enabled).
-  int right_edge = kPaddingBetweenItems;
-
-  // TODO(crbug/1354354): Refactor this hack to make it more efficient and less
-  // of a hack.
-  // If this view is `DateTray` or `NotificationCenterTray`, apply
-  // the offset `kSystemTraysRightPaddingOffset` between it and the tray on it's
-  // right.
-  if (child->GetClassName() == DateTray::kViewClassName ||
-      child->GetClassName() == NotificationCenterTray::kViewClassName) {
-    right_edge += kSystemTraysRightPaddingOffset;
-  }
-
+  // items also takes care of padding at the edge of the shelf.
+  int right_edge;
   if (is_child_on_edge) {
     right_edge = ShelfConfig::Get()->control_button_edge_spacing(
         true /* is_primary_axis_edge */);
+  } else {
+    // The primary tray set contains the notification tray, the date tray and
+    // the status tray. The status tray is always on the edge, so that case is
+    // covered in the `if` condition.
+    const bool is_in_primary_tray_set =
+        child->GetID() == VIEW_ID_SA_DATE_TRAY ||
+        child->GetID() == VIEW_ID_SA_NOTIFICATION_TRAY;
+
+    right_edge = PaddingBetweenTrayItems(is_in_primary_tray_set);
   }
 
   // Swap edges if alignment is not horizontal (bottom-to-top).

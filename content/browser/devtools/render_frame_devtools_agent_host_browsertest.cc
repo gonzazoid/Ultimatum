@@ -4,8 +4,10 @@
 
 #include "content/browser/devtools/render_frame_devtools_agent_host.h"
 
+#include "build/build_config.h"
 #include "content/browser/renderer_host/frame_tree_node.h"
 #include "content/browser/web_contents/web_contents_impl.h"
+#include "content/common/content_navigation_policy.h"
 #include "content/public/browser/devtools_agent_host.h"
 #include "content/public/browser/devtools_agent_host_client.h"
 #include "content/public/browser/render_process_host.h"
@@ -61,8 +63,16 @@ class StubDevToolsAgentHostClient : public content::DevToolsAgentHostClient {
 // is tracking while a cross-site navigation is canceled after having reached
 // the ReadyToCommit stage.
 // See https://crbug.com/695203.
+// TODO(crbug.com/1452098): Re-enable this test
+#if BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX)
+#define MAYBE_CancelCrossOriginNavigationAfterReadyToCommit \
+  DISABLED_CancelCrossOriginNavigationAfterReadyToCommit
+#else
+#define MAYBE_CancelCrossOriginNavigationAfterReadyToCommit \
+  CancelCrossOriginNavigationAfterReadyToCommit
+#endif
 IN_PROC_BROWSER_TEST_F(RenderFrameDevToolsAgentHostBrowserTest,
-                       CancelCrossOriginNavigationAfterReadyToCommit) {
+                       MAYBE_CancelCrossOriginNavigationAfterReadyToCommit) {
   net::test_server::ControllableHttpResponse response_b(embedded_test_server(),
                                                         "/response_b");
   net::test_server::ControllableHttpResponse response_c(embedded_test_server(),
@@ -115,30 +125,45 @@ IN_PROC_BROWSER_TEST_F(RenderFrameDevToolsAgentHostBrowserTest,
   if (AreDefaultSiteInstancesEnabled())
     EXPECT_TRUE(speculative_rfh_b->GetSiteInstance()->IsDefaultSiteInstance());
 
-  // 4) Navigate elsewhere, it will cancel the previous navigation.
+  // 4) Navigate elsewhere, it will cancel the previous navigation if navigation
+  // queueing is not enabled.
 
   // 4.a) Navigation: Start.
   GURL url_c(embedded_test_server()->GetURL("c.com", "/response_c"));
   TestNavigationManager observer_c(shell()->web_contents(), url_c);
   shell()->LoadURL(url_c);
   EXPECT_TRUE(observer_c.WaitForRequestStart());
-  RenderFrameHostImpl* speculative_rfh_c =
-      root->render_manager()->speculative_frame_host();
-  EXPECT_TRUE(speculative_rfh_c);
-  auto speculative_rfh_c_site_id =
-      speculative_rfh_c->GetSiteInstance()->GetId();
-  if (AreDefaultSiteInstancesEnabled()) {
-    // Verify that this new URL also belongs to the default SiteInstance and
-    // therefore the RenderFrameHost from the previous navigation could be
-    // reused.
-    EXPECT_TRUE(speculative_rfh_c->GetSiteInstance()->IsDefaultSiteInstance());
-    EXPECT_EQ(speculative_rfh_c, rfh_devtools_agent->GetFrameHostForTesting());
-    EXPECT_EQ(speculative_rfh_b_site_id, speculative_rfh_c_site_id);
+
+  RenderFrameHostImpl* speculative_rfh_c = nullptr;
+
+  if (ShouldQueueNavigationsWhenPendingCommitRFHExists()) {
+    // When navigation queueing is enabled, starting a new navigation won't
+    // cancel an existing pending commit navigation, so wait for the first
+    // navigation to finish first before continuing.
+    EXPECT_EQ(speculative_rfh_b,
+              root->render_manager()->speculative_frame_host());
+    EXPECT_EQ(speculative_rfh_b, rfh_devtools_agent->GetFrameHostForTesting());
+    ASSERT_TRUE(observer_b.WaitForNavigationFinished());
   } else {
-    // Verify that the RenderFrameHost is restored because the new URL required
-    // a new SiteInstance.
-    EXPECT_EQ(current_rfh, rfh_devtools_agent->GetFrameHostForTesting());
-    EXPECT_NE(speculative_rfh_b_site_id, speculative_rfh_c_site_id);
+    speculative_rfh_c = root->render_manager()->speculative_frame_host();
+    EXPECT_TRUE(speculative_rfh_c);
+    auto speculative_rfh_c_site_id =
+        speculative_rfh_c->GetSiteInstance()->GetId();
+    if (AreDefaultSiteInstancesEnabled()) {
+      // Verify that this new URL also belongs to the default SiteInstance and
+      // therefore the RenderFrameHost from the previous navigation could be
+      // reused.
+      EXPECT_TRUE(
+          speculative_rfh_c->GetSiteInstance()->IsDefaultSiteInstance());
+      EXPECT_EQ(speculative_rfh_c,
+                rfh_devtools_agent->GetFrameHostForTesting());
+      EXPECT_EQ(speculative_rfh_b_site_id, speculative_rfh_c_site_id);
+    } else {
+      // Verify that the RenderFrameHost is restored because the new URL
+      // required a new SiteInstance.
+      EXPECT_EQ(current_rfh, rfh_devtools_agent->GetFrameHostForTesting());
+      EXPECT_NE(speculative_rfh_b_site_id, speculative_rfh_c_site_id);
+    }
   }
 
   // 4.b) Navigation: ReadyToCommit.
@@ -150,12 +175,13 @@ IN_PROC_BROWSER_TEST_F(RenderFrameDevToolsAgentHostBrowserTest,
       "\r\n");
   EXPECT_TRUE(observer_c.WaitForResponse());  // Headers are received.
   observer_c.ResumeNavigation();  // ReadyToCommitNavigation is called.
+  speculative_rfh_c = root->render_manager()->speculative_frame_host();
   EXPECT_EQ(speculative_rfh_c, rfh_devtools_agent->GetFrameHostForTesting());
 
   // 4.c) Navigation: Commit.
   response_c.Send("<html><body> response's body </body></html>");
   response_c.Done();
-  observer_c.WaitForNavigationFinished();
+  ASSERT_TRUE(observer_c.WaitForNavigationFinished());
   EXPECT_EQ(speculative_rfh_c, root->render_manager()->current_frame_host());
   EXPECT_EQ(speculative_rfh_c, rfh_devtools_agent->GetFrameHostForTesting());
 }
@@ -183,6 +209,23 @@ IN_PROC_BROWSER_TEST_F(RenderFrameDevToolsAgentHostBrowserTest,
       &devtools_agent_host_client,
       base::as_bytes(base::make_span(kMsg, strlen(kMsg))));
   reload_observer.Wait();
+  devtools_agent_host->DetachClient(&devtools_agent_host_client);
+}
+
+IN_PROC_BROWSER_TEST_F(RenderFrameDevToolsAgentHostBrowserTest,
+                       CheckDebuggerAttachedToTabTarget) {
+  EXPECT_TRUE(embedded_test_server()->Start());
+  GURL url_a(embedded_test_server()->GetURL("a.com", "/title1.html"));
+  EXPECT_TRUE(NavigateToURL(shell(), url_a));
+
+  WebContents* web_contents = shell()->web_contents();
+
+  scoped_refptr<DevToolsAgentHost> devtools_agent_host =
+      DevToolsAgentHost::GetOrCreateForTab(web_contents);
+  StubDevToolsAgentHostClient devtools_agent_host_client;
+  devtools_agent_host->AttachClient(&devtools_agent_host_client);
+
+  EXPECT_TRUE(DevToolsAgentHost::IsDebuggerAttached(web_contents));
   devtools_agent_host->DetachClient(&devtools_agent_host_client);
 }
 

@@ -7,9 +7,9 @@
 #include <memory>
 
 #include "base/containers/contains.h"
+#include "base/memory/raw_ptr.h"
 #include "components/password_manager/core/browser/password_form.h"
 #include "components/password_manager/core/browser/password_manager_util.h"
-#include "components/password_manager/core/browser/statistics_table.h"
 
 namespace password_manager {
 
@@ -38,17 +38,18 @@ const std::vector<InteractionsStats>& FakeFormFetcher::GetInteractionsStats()
   return stats_;
 }
 
-std::vector<const PasswordForm*> FakeFormFetcher::GetInsecureCredentials()
-    const {
+std::vector<raw_ptr<const PasswordForm, VectorExperimental>>
+FakeFormFetcher::GetInsecureCredentials() const {
   return insecure_credentials_;
 }
 
-std::vector<const PasswordForm*> FakeFormFetcher::GetNonFederatedMatches()
-    const {
+std::vector<raw_ptr<const PasswordForm, VectorExperimental>>
+FakeFormFetcher::GetNonFederatedMatches() const {
   return non_federated_;
 }
 
-std::vector<const PasswordForm*> FakeFormFetcher::GetFederatedMatches() const {
+std::vector<raw_ptr<const PasswordForm, VectorExperimental>>
+FakeFormFetcher::GetFederatedMatches() const {
   return federated_;
 }
 
@@ -56,12 +57,12 @@ bool FakeFormFetcher::IsBlocklisted() const {
   return is_blocklisted_;
 }
 
-bool FakeFormFetcher::IsMovingBlocked(const autofill::GaiaIdHash& destination,
+bool FakeFormFetcher::IsMovingBlocked(const signin::GaiaIdHash& destination,
                                       const std::u16string& username) const {
   // This is analogous to the implementation in
   // MultiStoreFormFetcher::IsMovingBlocked().
-  for (const std::vector<const PasswordForm*>& matches_vector :
-       {federated_, non_federated_}) {
+  for (const std::vector<raw_ptr<const PasswordForm, VectorExperimental>>&
+           matches_vector : {federated_, non_federated_}) {
     for (const PasswordForm* form : matches_vector) {
       // Only local entries can be moved to the account store (though
       // account store matches should never have |moving_blocked_for_list|
@@ -82,18 +83,21 @@ bool FakeFormFetcher::IsMovingBlocked(const autofill::GaiaIdHash& destination,
   return false;
 }
 
-const std::vector<const PasswordForm*>& FakeFormFetcher::GetAllRelevantMatches()
-    const {
+const std::vector<raw_ptr<const PasswordForm, VectorExperimental>>&
+FakeFormFetcher::GetAllRelevantMatches() const {
   return non_federated_same_scheme_;
 }
 
-const std::vector<const PasswordForm*>& FakeFormFetcher::GetBestMatches()
-    const {
+const std::vector<raw_ptr<const PasswordForm, VectorExperimental>>&
+FakeFormFetcher::GetBestMatches() const {
   return best_matches_;
 }
 
 const PasswordForm* FakeFormFetcher::GetPreferredMatch() const {
-  return preferred_match_;
+  if (best_matches_.empty()) {
+    return nullptr;
+  }
+  return *best_matches_.begin();
 }
 
 std::unique_ptr<FormFetcher> FakeFormFetcher::Clone() {
@@ -101,11 +105,11 @@ std::unique_ptr<FormFetcher> FakeFormFetcher::Clone() {
 }
 
 void FakeFormFetcher::SetNonFederated(
-    const std::vector<const PasswordForm*>& non_federated) {
+    const std::vector<raw_ptr<const PasswordForm, VectorExperimental>>&
+        non_federated) {
   non_federated_ = non_federated;
-  password_manager_util::FindBestMatches(non_federated_, scheme_,
-                                         &non_federated_same_scheme_,
-                                         &best_matches_, &preferred_match_);
+  password_manager_util::FindBestMatches(
+      non_federated_, scheme_, &non_federated_same_scheme_, &best_matches_);
 }
 
 void FakeFormFetcher::SetBlocklisted(bool is_blocklisted) {
@@ -118,14 +122,24 @@ void FakeFormFetcher::NotifyFetchCompleted() {
     consumer.OnFetchCompleted();
 }
 
-absl::optional<PasswordStoreBackendError>
+std::optional<PasswordStoreBackendError>
 FakeFormFetcher::GetProfileStoreBackendError() const {
   return profile_store_backend_error_;
 }
 
+absl::optional<PasswordStoreBackendError>
+FakeFormFetcher::GetAccountStoreBackendError() const {
+  return account_store_backend_error_;
+}
+
 void FakeFormFetcher::SetProfileStoreBackendError(
-    absl::optional<PasswordStoreBackendError> error) {
+    std::optional<PasswordStoreBackendError> error) {
   profile_store_backend_error_ = error;
+}
+
+void FakeFormFetcher::SetAccountStoreBackendError(
+    std::optional<PasswordStoreBackendError> error) {
+  account_store_backend_error_ = error;
 }
 
 }  // namespace password_manager

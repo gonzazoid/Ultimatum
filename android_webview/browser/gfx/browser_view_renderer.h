@@ -10,20 +10,21 @@
 #include <map>
 #include <set>
 
+#include <optional>
 #include "android_webview/browser/gfx/begin_frame_source_webview.h"
 #include "android_webview/browser/gfx/child_frame.h"
 #include "android_webview/browser/gfx/compositor_frame_producer.h"
 #include "android_webview/browser/gfx/parent_compositor_draw_constraints.h"
 #include "android_webview/browser/gfx/root_frame_sink_proxy.h"
-#include "base/callback.h"
 #include "base/cancelable_callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/trace_event/trace_event.h"
 #include "components/viz/common/surfaces/frame_sink_id.h"
 #include "content/public/browser/android/synchronous_compositor.h"
 #include "content/public/browser/android/synchronous_compositor_client.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/skia/include/core/SkRefCnt.h"
 #include "ui/gfx/geometry/point_f.h"
 #include "ui/gfx/geometry/rect.h"
@@ -46,6 +47,8 @@ class RootFrameSinkProxy;
 
 // Interface for all the WebView-specific content rendering operations.
 // Provides software and hardware rendering and the Capture Picture API.
+//
+// Lifetime: WebView
 class BrowserViewRenderer : public content::SynchronousCompositorClient,
                             public CompositorFrameProducer,
                             public RootFrameSinkProxyClient {
@@ -208,6 +211,7 @@ class BrowserViewRenderer : public content::SynchronousCompositorClient,
   void ReleaseHardware();
   bool DoUpdateParentDrawData();
   void UpdateBeginFrameSource();
+  void UpdateForegroundForGpuResources();
 
   gfx::Point max_scroll_offset() const;
 
@@ -247,6 +251,8 @@ class BrowserViewRenderer : public content::SynchronousCompositorClient,
   bool on_new_picture_enable_;
   bool clear_view_;
 
+  bool foreground_for_gpu_resources_ = false;
+
   // Used for metrics, indicates if we called invalidate since last draw.
   bool did_invalidate_since_last_draw_ = false;
 
@@ -276,7 +282,7 @@ class BrowserViewRenderer : public content::SynchronousCompositorClient,
   gfx::Vector2dF overscroll_rounding_error_;
 
   // The scroll to apply after the next scroll state update.
-  absl::optional<gfx::Point> scroll_on_scroll_state_update_;
+  std::optional<gfx::Point> scroll_on_scroll_state_update_;
 
   ParentCompositorDrawConstraints external_draw_constraints_;
 

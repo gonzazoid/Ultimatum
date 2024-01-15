@@ -4,19 +4,25 @@
 
 import("//build/config/chromeos/ui_mode.gni")
 import("//build/config/features.gni")
+import("//chrome/browser/resources/accessibility/tools/manifest.gni")
 import("//chrome/common/features.gni")
-import("//chrome/test/base/js2gtest.gni")
+import("//chrome/test/base/ash/js2gtest.gni")
+import("//tools/typescript/ts_library.gni")
 import("strings/accessibility_strings.gni")
+import("tools/run_jsbundler.gni")
 
 assert(is_chromeos_ash)
 
 accessibility_out_dir = "$root_out_dir/resources/chromeos/accessibility/"
+tsc_preprocess_folder = "$root_gen_dir/chrome/browser/resources/chromeos/accessibility/tsc_preprocessed"
+tsc_out_dir = "$target_gen_dir/tsc"
 
 group("build") {
   deps = [
     ":accessibility_strings",
     ":chromevox_guest_manifest",
     ":chromevox_manifest",
+    "braille_ime:build",
     "chromevox:build",
     "common:build",
   ]
@@ -24,12 +30,12 @@ group("build") {
     deps += [
       ":accessibility_common_guest_manifest",
       ":accessibility_common_manifest",
+      ":copied_loader_files",
       ":enhanced_network_tts_guest_manifest",
       ":enhanced_network_tts_manifest",
       ":select_to_speak_guest_manifest",
       ":select_to_speak_manifest",
-      ":switch_access_guest_manifest",
-      ":switch_access_manifest",
+      ":switch_access_manifests",
       "accessibility_common:build",
       "enhanced_network_tts:build",
       "select_to_speak:build",
@@ -38,30 +44,34 @@ group("build") {
   }
 }
 
-template("manifest") {
-  version_file = "//chrome/VERSION"
-  version_script = "//build/util/version.py"
-  template_file = invoker.input_file
-  output_file = invoker.output_file
-  key = invoker.key
-  action(target_name) {
-    script = "//chrome/browser/resources/chromeos/accessibility/chromevox/tools/generate_manifest.py"
-    inputs = [
-      version_file,
-      version_script,
-    ]
-    sources = [ template_file ]
-    outputs = [ output_file ]
-    args = [
-      "--key=$key",
-      "--version_file=" + rebase_path(version_file, root_build_dir),
-      "--output_manifest=" + rebase_path(output_file, root_build_dir),
-    ]
-    if (defined(invoker.is_guest_manifest) && invoker.is_guest_manifest) {
-      args += [ "--is_guest_manifest=1" ]
-    }
-    args += rebase_path(sources, root_build_dir)
-  }
+ts_library("ts_build") {
+  out_dir = tsc_out_dir
+  definitions = [
+    "definitions/accessibility_private_mv2.d.ts",
+    "definitions/automation.d.ts",
+    "definitions/command_line_private.d.ts",
+    "definitions/extension_types.d.ts",
+    "definitions/extensions.d.ts",
+    "definitions/runtime.d.ts",
+    "definitions/settings_private_mv2.d.ts",
+    "definitions/tabs.d.ts",
+    "//tools/typescript/definitions/windows.d.ts",
+  ]
+
+  in_files = [ "switch_access_loader.ts" ]
+
+  tsconfig_base = "tsconfig.base.json"
+}
+
+run_jsbundler("copied_loader_files") {
+  mode = "copy"
+  deps = [ ":ts_build" ]
+  dest_dir = accessibility_out_dir
+  sources = filter_include(get_target_outputs(":ts_build"), [ "*.js" ])
+  rewrite_rules = [
+    rebase_path(tsc_out_dir, root_build_dir) + ":",
+    rebase_path(".", root_build_dir) + ":",
+  ]
 }
 
 manifest("accessibility_common_manifest") {
@@ -118,17 +128,15 @@ manifest("select_to_speak_guest_manifest") {
   is_guest_manifest = true
 }
 
-manifest("switch_access_manifest") {
-  input_file = "switch_access_manifest.json.jinja2"
-  output_file = "$accessibility_out_dir/switch_access_manifest.json"
-  key = "MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDVWTYdXNGhIG6FJKIhaohRRrYYGwg9cR2jea2NRBSEg+T7E3EvUyFy0ouez0N0omeSAL/xlvQtCjZJ72eCqDBgON/49SRtUdLS5TQ2U9cHYcIwI86llKMqqws6uMSwlWXldyNwKx5LVT1nR0+x3J744E2mymCSip2Y+NrGEA2yCUFL8D+O/uS+d5pVFb3NNjPTVbNOlhIs5ZUVX3FBij86ILivoSfRZMIZqK7MU8XDT1zolpFPiSYvDh1Qivwqar0pVYmNbCSjEgbGIuQh7zMaMdHC1HtvjbI20XFzWHyP/cW2YKszlfqawH+kdHSp4ANIjc7GCAjGJNxm33iMNwcFAgMBAAECggEAL47YakkzjZheKp3U6mAGDSAXHV6BQrkBY1yPXGstq7B/DZzy4RrF3QOkDf2jys8dCUXTg7YjrhqVqXuNdmmphvmGq8dxnFDeDxb6wZWE3GdlUzfYK77rdGp2cVuYtMhI05LwOmPSN/bDXk9eK4bDhTTy+lgomOH/aYcntXkEpIfVQ1kVs7RLvBs3tF3QfsL7t+aqphUlbyVRxCzogK3EDnLD0NODrydx5xB2UMKcxrQD8mVl8IhyBUeluWmcqVkIv7z9C9Y6s9HgcQdxsxhClymAsXtjkZVyP/xst9iwIxOyTijffcqbQOPtB9w1d7GWUrdpwCys0TveJslU7zo6jQKBgQD3VOJSiJuENck71q2Sg4yP0ytBNWVO7xLeTDc6OPEuhqtennWYFeprdplL8aejHqPFiNi7L2QVguP1JDLWPPu+RHHsZDtvG+stssE9Z+oVzBowDJZO1EvBH7nvqgxFz4utoDIrQmkbCcsBqOqwv1i7UdJ0DPIofZE/u0G8wONriwKBgQDc02xS5HZ8ysxEdhL9dC8FSvd12lHocEuBML5ufCkK4SUo8EFeg8k+2UVwd0xXwFNv3nKRPfr/yOQ0CRlKTo3IXXj4Uie+ww3j1jWIMPzC5Oo7IUHRd69KfLvG5N9byGv4wdsPKsXsGrUlvP4meD1U9fujxJdE9RC9evZss33prwKBgAQE7BydPbG7UgbX6UAtRRZ9PwGzRW8v8WWNZYRbsoeoBpbmClErYgDXD4ytY6UB9XVbUPJRxdWXp+6u5OiYWxrvb86AnnqiwIKgmgVOb/5kr7RCMBsd1hFQW6wqXkKwKbvrk4UiciTPVu4y+YVfxqhcnwflwfWofLjFaT8Q/2EbAoGANkdtr+5iRYhfr1BKmKwvRqDHtNtGGNlJZecCWAwC1p7C0I5FsyK3m9AyJlPcmxE2MSA/jv3qLWdG2JeH9ODcLuzy6C7hgB1X07H6lJBeANXd0Uz6ba96kdeZHGlzkY7xI0MbQl4kKkXiUvVijzgs8y5HfVi8SgHm7HxGCDASehcCgYEAnw1yu4eaWqsq7ECyjEBM7sQcMVGypiG3VupzLKA75iPkg/E+peUZyDRg7LPCiX/UcW22bliUw1ASRzY+thuVlGWC2CPah95Z4m+H4cJVSEEqKUbYRGfsDlDIJNxPihGvhoTniKZwvpUacbAhop7rbiAVGx+RJ+tFG8P56AbvBVE="
-}
+switch_access_key = "MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDVWTYdXNGhIG6FJKIhaohRRrYYGwg9cR2jea2NRBSEg+T7E3EvUyFy0ouez0N0omeSAL/xlvQtCjZJ72eCqDBgON/49SRtUdLS5TQ2U9cHYcIwI86llKMqqws6uMSwlWXldyNwKx5LVT1nR0+x3J744E2mymCSip2Y+NrGEA2yCUFL8D+O/uS+d5pVFb3NNjPTVbNOlhIs5ZUVX3FBij86ILivoSfRZMIZqK7MU8XDT1zolpFPiSYvDh1Qivwqar0pVYmNbCSjEgbGIuQh7zMaMdHC1HtvjbI20XFzWHyP/cW2YKszlfqawH+kdHSp4ANIjc7GCAjGJNxm33iMNwcFAgMBAAECggEAL47YakkzjZheKp3U6mAGDSAXHV6BQrkBY1yPXGstq7B/DZzy4RrF3QOkDf2jys8dCUXTg7YjrhqVqXuNdmmphvmGq8dxnFDeDxb6wZWE3GdlUzfYK77rdGp2cVuYtMhI05LwOmPSN/bDXk9eK4bDhTTy+lgomOH/aYcntXkEpIfVQ1kVs7RLvBs3tF3QfsL7t+aqphUlbyVRxCzogK3EDnLD0NODrydx5xB2UMKcxrQD8mVl8IhyBUeluWmcqVkIv7z9C9Y6s9HgcQdxsxhClymAsXtjkZVyP/xst9iwIxOyTijffcqbQOPtB9w1d7GWUrdpwCys0TveJslU7zo6jQKBgQD3VOJSiJuENck71q2Sg4yP0ytBNWVO7xLeTDc6OPEuhqtennWYFeprdplL8aejHqPFiNi7L2QVguP1JDLWPPu+RHHsZDtvG+stssE9Z+oVzBowDJZO1EvBH7nvqgxFz4utoDIrQmkbCcsBqOqwv1i7UdJ0DPIofZE/u0G8wONriwKBgQDc02xS5HZ8ysxEdhL9dC8FSvd12lHocEuBML5ufCkK4SUo8EFeg8k+2UVwd0xXwFNv3nKRPfr/yOQ0CRlKTo3IXXj4Uie+ww3j1jWIMPzC5Oo7IUHRd69KfLvG5N9byGv4wdsPKsXsGrUlvP4meD1U9fujxJdE9RC9evZss33prwKBgAQE7BydPbG7UgbX6UAtRRZ9PwGzRW8v8WWNZYRbsoeoBpbmClErYgDXD4ytY6UB9XVbUPJRxdWXp+6u5OiYWxrvb86AnnqiwIKgmgVOb/5kr7RCMBsd1hFQW6wqXkKwKbvrk4UiciTPVu4y+YVfxqhcnwflwfWofLjFaT8Q/2EbAoGANkdtr+5iRYhfr1BKmKwvRqDHtNtGGNlJZecCWAwC1p7C0I5FsyK3m9AyJlPcmxE2MSA/jv3qLWdG2JeH9ODcLuzy6C7hgB1X07H6lJBeANXd0Uz6ba96kdeZHGlzkY7xI0MbQl4kKkXiUvVijzgs8y5HfVi8SgHm7HxGCDASehcCgYEAnw1yu4eaWqsq7ECyjEBM7sQcMVGypiG3VupzLKA75iPkg/E+peUZyDRg7LPCiX/UcW22bliUw1ASRzY+thuVlGWC2CPah95Z4m+H4cJVSEEqKUbYRGfsDlDIJNxPihGvhoTniKZwvpUacbAhop7rbiAVGx+RJ+tFG8P56AbvBVE="
 
-manifest("switch_access_guest_manifest") {
+manifest_variants("switch_access_manifests") {
   input_file = "switch_access_manifest.json.jinja2"
-  output_file = "$accessibility_out_dir/switch_access_manifest_guest.json"
-  key = "MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDVWTYdXNGhIG6FJKIhaohRRrYYGwg9cR2jea2NRBSEg+T7E3EvUyFy0ouez0N0omeSAL/xlvQtCjZJ72eCqDBgON/49SRtUdLS5TQ2U9cHYcIwI86llKMqqws6uMSwlWXldyNwKx5LVT1nR0+x3J744E2mymCSip2Y+NrGEA2yCUFL8D+O/uS+d5pVFb3NNjPTVbNOlhIs5ZUVX3FBij86ILivoSfRZMIZqK7MU8XDT1zolpFPiSYvDh1Qivwqar0pVYmNbCSjEgbGIuQh7zMaMdHC1HtvjbI20XFzWHyP/cW2YKszlfqawH+kdHSp4ANIjc7GCAjGJNxm33iMNwcFAgMBAAECggEAL47YakkzjZheKp3U6mAGDSAXHV6BQrkBY1yPXGstq7B/DZzy4RrF3QOkDf2jys8dCUXTg7YjrhqVqXuNdmmphvmGq8dxnFDeDxb6wZWE3GdlUzfYK77rdGp2cVuYtMhI05LwOmPSN/bDXk9eK4bDhTTy+lgomOH/aYcntXkEpIfVQ1kVs7RLvBs3tF3QfsL7t+aqphUlbyVRxCzogK3EDnLD0NODrydx5xB2UMKcxrQD8mVl8IhyBUeluWmcqVkIv7z9C9Y6s9HgcQdxsxhClymAsXtjkZVyP/xst9iwIxOyTijffcqbQOPtB9w1d7GWUrdpwCys0TveJslU7zo6jQKBgQD3VOJSiJuENck71q2Sg4yP0ytBNWVO7xLeTDc6OPEuhqtennWYFeprdplL8aejHqPFiNi7L2QVguP1JDLWPPu+RHHsZDtvG+stssE9Z+oVzBowDJZO1EvBH7nvqgxFz4utoDIrQmkbCcsBqOqwv1i7UdJ0DPIofZE/u0G8wONriwKBgQDc02xS5HZ8ysxEdhL9dC8FSvd12lHocEuBML5ufCkK4SUo8EFeg8k+2UVwd0xXwFNv3nKRPfr/yOQ0CRlKTo3IXXj4Uie+ww3j1jWIMPzC5Oo7IUHRd69KfLvG5N9byGv4wdsPKsXsGrUlvP4meD1U9fujxJdE9RC9evZss33prwKBgAQE7BydPbG7UgbX6UAtRRZ9PwGzRW8v8WWNZYRbsoeoBpbmClErYgDXD4ytY6UB9XVbUPJRxdWXp+6u5OiYWxrvb86AnnqiwIKgmgVOb/5kr7RCMBsd1hFQW6wqXkKwKbvrk4UiciTPVu4y+YVfxqhcnwflwfWofLjFaT8Q/2EbAoGANkdtr+5iRYhfr1BKmKwvRqDHtNtGGNlJZecCWAwC1p7C0I5FsyK3m9AyJlPcmxE2MSA/jv3qLWdG2JeH9ODcLuzy6C7hgB1X07H6lJBeANXd0Uz6ba96kdeZHGlzkY7xI0MbQl4kKkXiUvVijzgs8y5HfVi8SgHm7HxGCDASehcCgYEAnw1yu4eaWqsq7ECyjEBM7sQcMVGypiG3VupzLKA75iPkg/E+peUZyDRg7LPCiX/UcW22bliUw1ASRzY+thuVlGWC2CPah95Z4m+H4cJVSEEqKUbYRGfsDlDIJNxPihGvhoTniKZwvpUacbAhop7rbiAVGx+RJ+tFG8P56AbvBVE="
-  is_guest_manifest = true
+  output_dir = accessibility_out_dir
+  output_name = "switch_access_manifest"
+  key = "$switch_access_key"
+  make_guest = true
+  make_v3 = true
 }
 
 accessibility_strings("accessibility_strings") {
@@ -152,10 +160,7 @@ group("browser_tests") {
 group("unit_tests_js") {
   testonly = true
   if (is_chromeos_ash) {
-    deps = [
-      ":misc_unit_tests_js",
-      "chromevox:chromevox_unit_js_tests",
-    ]
+    deps = [ ":misc_unit_tests_js" ]
   }
 }
 
@@ -164,4 +169,12 @@ js2gtest("misc_unit_tests_js") {
   sources = [ "braille_ime/braille_ime_unittest.js" ]
   gen_include_files = [ "common/testing/accessibility_test_base.js" ]
   extra_js_files = [ "braille_ime/braille_ime.js" ]
+}
+
+# Copy definitions from the main typescript folder into our local definitions
+# folder. This can only be done once, otherwise we will get collisions, so do
+# this at the very top-level of the build structure.
+copy("preprocess_files_for_ts_build") {
+  sources = [ "//tools/typescript/definitions/chrome_event.d.ts" ]
+  outputs = [ "$tsc_preprocess_folder/definitions/chrome_event.d.ts" ]
 }

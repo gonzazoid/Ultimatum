@@ -13,8 +13,8 @@
 #include <vector>
 
 #include "base/containers/flat_set.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
-#include "base/memory/weak_ptr.h"
 #include "components/safe_browsing/core/browser/db/database_manager.h"
 #include "services/network/public/mojom/fetch_api.mojom.h"
 #include "url/gurl.h"
@@ -28,7 +28,7 @@ struct V4ProtocolConfig;
 class RemoteSafeBrowsingDatabaseManager : public SafeBrowsingDatabaseManager {
  public:
   // Construct RemoteSafeBrowsingDatabaseManager.
-  // Must be initialized by calling StartOnIOThread() before using.
+  // Must be initialized by calling StartOnSBThread() before using.
   RemoteSafeBrowsingDatabaseManager();
 
   RemoteSafeBrowsingDatabaseManager(const RemoteSafeBrowsingDatabaseManager&) =
@@ -45,43 +45,55 @@ class RemoteSafeBrowsingDatabaseManager : public SafeBrowsingDatabaseManager {
       network::mojom::RequestDestination request_destination) const override;
   bool CanCheckUrl(const GURL& url) const override;
   bool ChecksAreAlwaysAsync() const override;
-  bool CheckBrowseUrl(const GURL& url,
-                      const SBThreatTypeSet& threat_types,
-                      Client* client) override;
+  bool CheckBrowseUrl(
+      const GURL& url,
+      const SBThreatTypeSet& threat_types,
+      Client* client,
+      CheckBrowseUrlType check_type) override;
   bool CheckDownloadUrl(const std::vector<GURL>& url_chain,
                         Client* client) override;
   bool CheckExtensionIDs(const std::set<std::string>& extension_ids,
                          Client* client) override;
   AsyncMatch CheckCsdAllowlistUrl(const GURL& url, Client* client) override;
   bool CheckResourceUrl(const GURL& url, Client* client) override;
-  AsyncMatch CheckUrlForHighConfidenceAllowlist(const GURL& url,
-                                                Client* client) override;
-  bool CheckUrlForAccuracyTips(const GURL& url, Client* client) override;
+  void CheckUrlForHighConfidenceAllowlist(
+      const GURL& url,
+      const std::string& metric_variation,
+      base::OnceCallback<void(bool)> callback) override;
   bool CheckUrlForSubresourceFilter(const GURL& url, Client* client) override;
-  bool MatchDownloadAllowlistUrl(const GURL& url) override;
-  bool MatchMalwareIP(const std::string& ip_address) override;
-  safe_browsing::ThreatSource GetThreatSource() const override;
+  void MatchDownloadAllowlistUrl(
+      const GURL& url,
+      base::OnceCallback<void(bool)> callback) override;
+  safe_browsing::ThreatSource GetBrowseUrlThreatSource(
+      CheckBrowseUrlType check_type) const override;
+  safe_browsing::ThreatSource GetNonBrowseUrlThreatSource() const override;
   bool IsDownloadProtectionEnabled() const override;
-  void StartOnIOThread(
+  void StartOnSBThread(
       scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
       const V4ProtocolConfig& config) override;
-  void StopOnIOThread(bool shutdown) override;
+  void StopOnSBThread(bool shutdown) override;
+  bool IsDatabaseReady() const override;
 
   //
   // RemoteSafeBrowsingDatabaseManager implementation
   //
 
  private:
-  ~RemoteSafeBrowsingDatabaseManager() override;
   class ClientRequest;  // Per-request tracker.
+  friend class base::RefCountedThreadSafe<RemoteSafeBrowsingDatabaseManager>;
+
+  ~RemoteSafeBrowsingDatabaseManager() override;
 
   // Requests currently outstanding.  This owns the ptrs.
-  std::vector<ClientRequest*> current_requests_;
+  std::vector<raw_ptr<ClientRequest, VectorExperimental>> current_requests_;
 
   base::flat_set<network::mojom::RequestDestination>
       request_destinations_to_check_;
 
-  friend class base::RefCountedThreadSafe<RemoteSafeBrowsingDatabaseManager>;
+  // Whether the service is running. 'enabled_' is used by the
+  // RemoteSafeBrowsingDatabaseManager on the IO thread during normal
+  // operations.
+  bool enabled_;
 };  // class RemoteSafeBrowsingDatabaseManager
 
 }  // namespace safe_browsing

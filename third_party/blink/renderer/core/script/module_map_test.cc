@@ -4,6 +4,7 @@
 
 #include "third_party/blink/renderer/core/script/module_map.h"
 
+#include "base/task/single_thread_task_runner.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/platform/platform.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_source_location_type.h"
@@ -46,7 +47,7 @@ class TestSingleModuleClient final : public SingleModuleClient {
   }
 
   bool WasNotifyFinished() const { return was_notify_finished_; }
-  ModuleScript* GetModuleScript() { return module_script_; }
+  ModuleScript* GetModuleScript() { return module_script_.Get(); }
 
  private:
   bool was_notify_finished_ = false;
@@ -105,7 +106,7 @@ class ModuleMapTestModulator final : public DummyModulator {
   ModuleRecordResolver* GetModuleRecordResolver() override {
     return resolver_.Get();
   }
-  ScriptState* GetScriptState() override { return script_state_; }
+  ScriptState* GetScriptState() override { return script_state_.Get(); }
 
   class TestModuleScriptFetcher final
       : public GarbageCollected<TestModuleScriptFetcher>,
@@ -151,7 +152,7 @@ class ModuleMapTestModulator final : public DummyModulator {
       client_->NotifyFetchFinishedSuccess(ModuleScriptCreationParams(
           url_, url_, ScriptSourceLocationType::kExternalFile,
           ModuleType::kJavaScript, ParkableString(String("").ReleaseImpl()),
-          nullptr));
+          nullptr, network::mojom::ReferrerPolicy::kDefault));
     }
     void Trace(Visitor* visitor) const { visitor->Trace(client_); }
 

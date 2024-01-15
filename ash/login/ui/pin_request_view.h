@@ -5,16 +5,25 @@
 #ifndef ASH_LOGIN_UI_PIN_REQUEST_VIEW_H_
 #define ASH_LOGIN_UI_PIN_REQUEST_VIEW_H_
 
+#include <memory>
 #include <string>
 
 #include "ash/ash_export.h"
 #include "ash/login/ui/access_code_input.h"
 #include "ash/public/cpp/login_types.h"
 #include "ash/public/cpp/tablet_mode_observer.h"
+#include "ash/style/system_shadow.h"
 #include "ash/wm/tablet_mode/tablet_mode_controller.h"
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
 #include "base/scoped_observation.h"
+#include "ui/display/display_observer.h"
+#include "ui/views/controls/button/button.h"
 #include "ui/views/window/dialog_delegate.h"
+
+namespace display {
+enum class TabletState;
+}  // namespace display
 
 namespace views {
 class Label;
@@ -23,7 +32,6 @@ class Textfield;
 }  // namespace views
 
 namespace ash {
-class ArrowButtonView;
 class LoginButton;
 class LoginPinView;
 
@@ -48,7 +56,7 @@ struct ASH_EXPORT PinRequest {
   // Whether the help button is displayed.
   bool help_button_enabled = false;
 
-  absl::optional<int> pin_length;
+  std::optional<int> pin_length;
 
   // When |pin_keyboard_always_enabled| is set, the PIN keyboard is displayed at
   // all times. Otherwise, it is only displayed when the device is in tablet
@@ -72,7 +80,7 @@ struct ASH_EXPORT PinRequest {
 
 // The view that allows for input of pins to authorize certain actions.
 class ASH_EXPORT PinRequestView : public views::DialogDelegateView,
-                                  public TabletModeObserver {
+                                  public display::DisplayObserver {
  public:
   enum class SubmissionResult {
     // Closes the UI and calls |on_pin_request_done_|.
@@ -103,20 +111,15 @@ class ASH_EXPORT PinRequestView : public views::DialogDelegateView,
     views::Label* description_label();
     views::View* access_code_view();
     views::LabelButton* help_button();
-    ArrowButtonView* submit_button();
+    views::Button* submit_button();
     LoginPinView* pin_keyboard_view();
 
     views::Textfield* GetInputTextField(int index);
     PinRequestViewState state() const;
 
    private:
-    PinRequestView* const view_;
+    const raw_ptr<PinRequestView, DanglingUntriaged> view_;
   };
-
-  // Returns color used for dialog and UI elements specific for child user.
-  // |using_blur| should be true if the UI element is using background blur
-  // (color transparency depends on it).
-  static SkColor GetChildUserDialogColor(bool using_blur);
 
   // Creates pin request view that will enable the user to enter a pin.
   // |request| is used to configure callbacks and UI details.
@@ -128,20 +131,16 @@ class ASH_EXPORT PinRequestView : public views::DialogDelegateView,
   ~PinRequestView() override;
 
   // views::View:
-  void OnPaint(gfx::Canvas* canvas) override;
   void RequestFocus() override;
   gfx::Size CalculatePreferredSize() const override;
   void GetAccessibleNodeData(ui::AXNodeData* node_data) override;
-  void OnThemeChanged() override;
 
   // views::DialogDelegateView:
   views::View* GetInitiallyFocusedView() override;
   std::u16string GetAccessibleWindowTitle() const override;
 
-  // TabletModeObserver:
-  void OnTabletModeStarted() override;
-  void OnTabletModeEnded() override;
-  void OnTabletControllerDestroyed() override;
+  // display::Observer:
+  void OnDisplayTabletStateChanged(display::TabletState state) override;
 
   // Sets whether the user can enter a PIN. Other buttons (back, submit etc.)
   // are unaffected.
@@ -184,7 +183,7 @@ class ASH_EXPORT PinRequestView : public views::DialogDelegateView,
   PinRequestViewState state_ = PinRequestViewState::kNormal;
 
   // Unowned pointer to the delegate. The delegate should outlive this instance.
-  Delegate* delegate_;
+  raw_ptr<Delegate> delegate_;
 
   // Callback to close the UI.
   PinRequest::OnPinRequestDone on_pin_request_done_;
@@ -200,16 +199,17 @@ class ASH_EXPORT PinRequestView : public views::DialogDelegateView,
   std::u16string default_description_;
   std::u16string default_accessible_title_;
 
-  views::Label* title_label_ = nullptr;
-  views::Label* description_label_ = nullptr;
-  AccessCodeInput* access_code_view_ = nullptr;
-  LoginPinView* pin_keyboard_view_ = nullptr;
-  LoginButton* back_button_ = nullptr;
-  FocusableLabelButton* help_button_ = nullptr;
-  ArrowButtonView* submit_button_ = nullptr;
+  raw_ptr<views::Label> title_label_ = nullptr;
+  raw_ptr<views::Label> description_label_ = nullptr;
+  raw_ptr<AccessCodeInput> access_code_view_ = nullptr;
+  raw_ptr<LoginPinView> pin_keyboard_view_ = nullptr;
+  raw_ptr<LoginButton> back_button_ = nullptr;
+  raw_ptr<FocusableLabelButton> help_button_ = nullptr;
+  raw_ptr<views::Button> submit_button_ = nullptr;
 
-  base::ScopedObservation<TabletModeController, TabletModeObserver>
-      tablet_mode_observation_{this};
+  std::unique_ptr<SystemShadow> shadow_;
+
+  display::ScopedDisplayObserver display_observer_{this};
 
   base::WeakPtrFactory<PinRequestView> weak_ptr_factory_{this};
 };

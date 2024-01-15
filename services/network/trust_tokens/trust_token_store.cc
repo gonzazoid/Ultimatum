@@ -12,6 +12,7 @@
 #include "net/base/registry_controlled_domains/registry_controlled_domain.h"
 #include "services/network/public/cpp/is_potentially_trustworthy.h"
 #include "services/network/public/cpp/trust_token_parameterization.h"
+#include "services/network/public/mojom/clear_data_filter.mojom.h"
 #include "services/network/public/mojom/trust_tokens.mojom-forward.h"
 #include "services/network/trust_tokens/in_memory_trust_token_persister.h"
 #include "services/network/trust_tokens/proto/public.pb.h"
@@ -66,7 +67,8 @@ void TrustTokenStore::RecordIssuance(const SuitableTrustTokenOrigin& issuer) {
       persister_->GetIssuerConfig(issuer);
   if (!config)
     config = std::make_unique<TrustTokenIssuerConfig>();
-  config->set_last_issuance(internal::TimeToString(base::Time::Now()));
+  *config->mutable_last_issuance() =
+      internal::TimeToTimestamp(base::Time::Now());
   persister_->SetIssuerConfig(issuer, std::move(config));
 }
 
@@ -78,28 +80,13 @@ absl::optional<base::TimeDelta> TrustTokenStore::TimeSinceLastIssuance(
     return absl::nullopt;
   if (!config->has_last_issuance())
     return absl::nullopt;
-  absl::optional<base::Time> maybe_last_issuance =
-      internal::StringToTime(config->last_issuance());
-  if (!maybe_last_issuance)
-    return absl::nullopt;
 
-  base::TimeDelta ret = base::Time::Now() - *maybe_last_issuance;
+  base::Time last_issuance = internal::TimestampToTime(config->last_issuance());
+  base::TimeDelta ret = base::Time::Now() - last_issuance;
   if (ret.is_negative())
     return absl::nullopt;
 
   return ret;
-}
-
-void TrustTokenStore::RecordRedemption(
-    const SuitableTrustTokenOrigin& issuer,
-    const SuitableTrustTokenOrigin& top_level) {
-  std::unique_ptr<TrustTokenIssuerToplevelPairConfig> config =
-      persister_->GetIssuerToplevelPairConfig(issuer, top_level);
-  if (!config)
-    config = std::make_unique<TrustTokenIssuerToplevelPairConfig>();
-  config->set_penultimate_redemption(config->last_redemption());
-  config->set_last_redemption(internal::TimeToString(base::Time::Now()));
-  persister_->SetIssuerToplevelPairConfig(issuer, top_level, std::move(config));
 }
 
 bool TrustTokenStore::IsRedemptionLimitHit(
@@ -112,12 +99,10 @@ bool TrustTokenStore::IsRedemptionLimitHit(
     return false;
   if (!config->has_penultimate_redemption())
     return false;
-  absl::optional<base::Time> maybe_penultimate_redemption =
-      internal::StringToTime(config->penultimate_redemption());
-  if (!maybe_penultimate_redemption)
-    return false;
 
-  base::TimeDelta ret = base::Time::Now() - *maybe_penultimate_redemption;
+  base::Time penultimate_redemption =
+      internal::TimestampToTime(config->penultimate_redemption());
+  base::TimeDelta ret = base::Time::Now() - penultimate_redemption;
   if (ret.is_negative())
     return false;
   if (ret > base::Seconds(
@@ -134,14 +119,10 @@ absl::optional<base::TimeDelta> TrustTokenStore::TimeSinceLastRedemption(
     return absl::nullopt;
   if (!config->has_last_redemption())
     return absl::nullopt;
-  absl::optional<base::Time> maybe_last_redemption =
-      internal::StringToTime(config->last_redemption());
-  // internal::StringToTime can fail in the case of data corruption (or writer
-  // error).
-  if (!maybe_last_redemption)
-    return absl::nullopt;
 
-  base::TimeDelta ret = base::Time::Now() - *maybe_last_redemption;
+  base::Time last_redemption =
+      internal::TimestampToTime(config->last_redemption());
+  base::TimeDelta ret = base::Time::Now() - last_redemption;
   if (ret.is_negative())
     return absl::nullopt;
   return ret;
@@ -183,9 +164,9 @@ void TrustTokenStore::PruneStaleIssuerState(
     const SuitableTrustTokenOrigin& issuer,
     const std::vector<mojom::TrustTokenVerificationKeyPtr>& keys) {
   DCHECK([&keys]() {
-    std::set<base::StringPiece> unique_keys;
+    std::set<std::string_view> unique_keys;
     for (const auto& key : keys)
-      unique_keys.insert(base::StringPiece(key->body));
+      unique_keys.insert(std::string_view(key->body));
     return unique_keys.size() == keys.size();
   }());
 
@@ -209,7 +190,7 @@ void TrustTokenStore::PruneStaleIssuerState(
 
 void TrustTokenStore::AddTokens(const SuitableTrustTokenOrigin& issuer,
                                 base::span<const std::string> token_bodies,
-                                base::StringPiece issuing_key) {
+                                std::string_view issuing_key) {
   auto config = persister_->GetIssuerConfig(issuer);
   if (!config)
     config = std::make_unique<TrustTokenIssuerConfig>();
@@ -221,6 +202,8 @@ void TrustTokenStore::AddTokens(const SuitableTrustTokenOrigin& issuer,
     TrustToken* entry = config->add_tokens();
     entry->set_body(*it);
     entry->set_signing_key(std::string(issuing_key));
+    *entry->mutable_creation_time() =
+        internal::TimeToTimestamp(base::Time::Now());
   }
 
   persister_->SetIssuerConfig(issuer, std::move(config));
@@ -272,12 +255,15 @@ void TrustTokenStore::SetRedemptionRecord(
     const SuitableTrustTokenOrigin& top_level,
     const TrustTokenRedemptionRecord& record) {
   auto config = persister_->GetIssuerToplevelPairConfig(issuer, top_level);
-  if (!config)
+  if (!config) {
     config = std::make_unique<TrustTokenIssuerToplevelPairConfig>();
+    *config->mutable_last_redemption() =
+        internal::TimeToTimestamp(base::Time::UnixEpoch());
+  }
   *config->mutable_redemption_record() = record;
-  *config->mutable_redemption_record() = record;
-  config->set_penultimate_redemption(config->last_redemption());
-  config->set_last_redemption(internal::TimeToString(base::Time::Now()));
+  *config->mutable_penultimate_redemption() = config->last_redemption();
+  *config->mutable_last_redemption() =
+      internal::TimeToTimestamp(base::Time::Now());
   persister_->SetIssuerToplevelPairConfig(issuer, top_level, std::move(config));
 }
 
@@ -306,15 +292,22 @@ TrustTokenStore::RetrieveNonstaleRedemptionRecord(
 }
 
 bool TrustTokenStore::ClearDataForFilter(mojom::ClearDataFilterPtr filter) {
+  const base::Time windows_epoch =
+      base::Time::FromDeltaSinceWindowsEpoch(base::Microseconds(0));
+  const base::Time beginning_of_time = windows_epoch;
+  const base::Time end_of_time = base::Time::Now();
   if (!filter) {
-    return persister_->DeleteForOrigins(base::BindRepeating(
-        [](const SuitableTrustTokenOrigin&) { return true; }));
+    const auto key_matcher = base::BindRepeating(
+        [](const SuitableTrustTokenOrigin&) { return true; });
+    const auto time_matcher =
+        base::BindRepeating([](const base::Time&) { return true; });
+    return persister_->DeleteForOrigins(std::move(key_matcher),
+                                        std::move(time_matcher));
   }
-
   // Returns whether |storage_key|'s data should be deleted, based on the logic
   // |filter| specifies. (Default to deleting everything, because a null
   // |filter| is a wildcard.)
-  auto matcher = base::BindRepeating(
+  auto key_matcher = base::BindRepeating(
       [](const mojom::ClearDataFilter& filter,
          const SuitableTrustTokenOrigin& storage_key) -> bool {
         // Match an origin if
@@ -343,7 +336,49 @@ bool TrustTokenStore::ClearDataForFilter(mojom::ClearDataFilterPtr filter) {
       },
       *filter);
 
-  return persister_->DeleteForOrigins(std::move(matcher));
+  auto time_matcher = base::BindRepeating(
+      [](const base::Time& begin_time, const base::Time& end_time,
+         const base::Time& creation_time) -> bool {
+        const base::TimeDelta creation_delta =
+            creation_time.ToDeltaSinceWindowsEpoch();
+        const base::TimeDelta begin_delta =
+            begin_time.ToDeltaSinceWindowsEpoch();
+        const base::TimeDelta end_delta = end_time.ToDeltaSinceWindowsEpoch();
+        if ((creation_delta < begin_delta) || (creation_delta > end_delta)) {
+          return false;
+        }
+        return true;
+      },
+      beginning_of_time, end_of_time);
+  return persister_->DeleteForOrigins(std::move(key_matcher),
+                                      std::move(time_matcher));
+}
+
+// Assumes predicate is created from
+// CookieSettings::CreateDeleteCookieOnExitPredicate and matches PST
+// storage key hosts.
+//
+// Some inputs and the resulting data clearing decisions.
+//
+// Serialized storage key    | Clear on exit list includes | will get cleared
+// https://a.com:1443        | a.com                       | yes
+// https://a.com:1443        | https://a.com               | yes
+// https://a.b.com:1443      | a.b.com                     | yes
+// https://a.b.com:1443      | b.com                       | no
+// https://b.com:1443        | a.b.com                     | no
+//
+bool TrustTokenStore::ClearDataForPredicate(
+    base::RepeatingCallback<bool(const std::string&)> predicate) {
+  auto time_matcher = base::BindRepeating(
+      [](const base::Time& creation_time) -> bool { return true; });
+  auto key_matcher = base::BindRepeating(
+      [](base::RepeatingCallback<bool(const std::string&)> pred,
+         const SuitableTrustTokenOrigin& storage_key) -> bool {
+        return pred.Run(storage_key.origin().host());
+      },
+      predicate);
+  return persister_->DeleteForOrigins(std::move(key_matcher),
+                                      std::move(time_matcher));
 }
 
 bool TrustTokenStore::DeleteStoredTrustTokens(

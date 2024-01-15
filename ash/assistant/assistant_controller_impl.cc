@@ -7,29 +7,45 @@
 #include <algorithm>
 #include <utility>
 
-#include "ash/accessibility/accessibility_controller_impl.h"
+#include "ash/accessibility/accessibility_controller.h"
 #include "ash/assistant/util/deep_link_util.h"
 #include "ash/capture_mode/capture_mode_controller.h"
 #include "ash/constants/ash_features.h"
 #include "ash/public/cpp/android_intent_helper.h"
+#include "ash/public/cpp/assistant/assistant_state.h"
 #include "ash/public/cpp/new_window_delegate.h"
+#include "ash/public/cpp/session/session_types.h"
 #include "ash/public/mojom/assistant_volume_control.mojom.h"
 #include "ash/session/session_controller_impl.h"
 #include "ash/shell.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/scoped_refptr.h"
 #include "chromeos/ash/services/assistant/public/cpp/assistant_browser_delegate.h"
+#include "chromeos/ash/services/assistant/public/cpp/assistant_enums.h"
 #include "chromeos/ash/services/assistant/public/cpp/assistant_prefs.h"
 #include "chromeos/ash/services/assistant/public/cpp/assistant_service.h"
 #include "chromeos/ash/services/assistant/public/cpp/features.h"
 #include "chromeos/ash/services/libassistant/public/cpp/assistant_feedback.h"
+#include "components/account_id/account_id.h"
 #include "components/prefs/pref_registry_simple.h"
 #include "net/traffic_annotation/network_traffic_annotation.h"
 #include "url/gurl.h"
 
 namespace ash {
 
+namespace {
+
+const AccountId& GetActiveUserAccountId() {
+  const UserSession* active_user_session =
+      Shell::Get()->session_controller()->GetUserSession(0);
+  DCHECK(active_user_session);
+  return active_user_session->user_info.account_id;
+}
+
+}  // namespace
+
 AssistantControllerImpl::AssistantControllerImpl() {
+  Shell::Get()->AddShellObserver(this);
   assistant_state_controller_.AddObserver(this);
   CrasAudioHandler::Get()->AddAudioObserver(this);
   AddObserver(this);
@@ -44,14 +60,7 @@ AssistantControllerImpl::AssistantControllerImpl() {
   NotifyConstructed();
 }
 
-AssistantControllerImpl::~AssistantControllerImpl() {
-  NotifyDestroying();
-
-  CrasAudioHandler::Get()->RemoveAudioObserver(this);
-  Shell::Get()->accessibility_controller()->RemoveObserver(this);
-  assistant_state_controller_.RemoveObserver(this);
-  RemoveObserver(this);
-}
+AssistantControllerImpl::~AssistantControllerImpl() = default;
 
 // static
 void AssistantControllerImpl::RegisterProfilePrefs(
@@ -62,6 +71,9 @@ void AssistantControllerImpl::RegisterProfilePrefs(
 
 void AssistantControllerImpl::BindReceiver(
     mojo::PendingReceiver<mojom::AssistantVolumeControl> receiver) {
+  if (assistant_volume_control_receiver_.is_bound()) {
+    assistant_volume_control_receiver_.reset();
+  }
   assistant_volume_control_receiver_.Bind(std::move(receiver));
 }
 
@@ -74,9 +86,6 @@ void AssistantControllerImpl::SetAssistant(assistant::Assistant* assistant) {
   assistant_notification_controller_.SetAssistant(assistant);
   assistant_ui_controller_.SetAssistant(assistant);
 
-  OnAccessibilityStatusChanged();
-  OnColorModeChanged(DarkLightModeControllerImpl::Get()->IsDarkModeEnabled());
-
   if (assistant) {
     for (AssistantControllerObserver& observer : observers_)
       observer.OnAssistantReady();
@@ -87,6 +96,10 @@ void AssistantControllerImpl::SendAssistantFeedback(
     bool assistant_debug_info_allowed,
     const std::string& feedback_description,
     const std::string& screenshot_png) {
+  if (!IsAssistantReady()) {
+    return;
+  }
+
   assistant::AssistantFeedback assistant_feedback;
   assistant_feedback.assistant_debug_info_allowed =
       assistant_debug_info_allowed;
@@ -130,6 +143,7 @@ void AssistantControllerImpl::DownloadImage(
             })");
 
   ImageDownloader::Get()->Download(url, kNetworkTrafficAnnotationTag,
+                                   GetActiveUserAccountId(),
                                    std::move(callback));
 }
 
@@ -148,7 +162,7 @@ void AssistantControllerImpl::OpenUrl(const GURL& url,
                                       bool from_server) {
   // app_list search result will be opened by `OpenUrl()`. However, the
   // `assistant_` may not be ready. Show a toast to indicate it.
-  if (!assistant_) {
+  if (!IsAssistantReady()) {
     assistant_ui_controller_.ShowUnboundErrorToast();
     return;
   }
@@ -266,8 +280,9 @@ void AssistantControllerImpl::OnOutputNodeVolumeChanged(uint64_t node,
 }
 
 void AssistantControllerImpl::OnAccessibilityStatusChanged() {
-  if (!assistant_)
+  if (!IsAssistantReady()) {
     return;
+  }
 
   // The Assistant service needs to be informed of changes to accessibility
   // state so that it can turn on/off A11Y features appropriately.
@@ -276,14 +291,33 @@ void AssistantControllerImpl::OnAccessibilityStatusChanged() {
 }
 
 void AssistantControllerImpl::OnColorModeChanged(bool dark_mode_enabled) {
-  if (!assistant_)
+  if (!IsAssistantReady()) {
     return;
+  }
 
   assistant_->OnColorModeChanged(dark_mode_enabled);
 }
 
+void AssistantControllerImpl::OnShellDestroying() {
+  NotifyDestroying();
+  CrasAudioHandler::Get()->RemoveAudioObserver(this);
+  Shell::Get()->accessibility_controller()->RemoveObserver(this);
+  assistant_state_controller_.RemoveObserver(this);
+  Shell::Get()->RemoveShellObserver(this);
+  RemoveObserver(this);
+}
+
 bool AssistantControllerImpl::IsAssistantReady() const {
-  return !!assistant_;
+  if (!assistant_) {
+    return false;
+  }
+
+  if (AssistantState::Get()->assistant_status() ==
+      assistant::AssistantStatus::NOT_READY) {
+    return false;
+  }
+
+  return true;
 }
 
 void AssistantControllerImpl::NotifyConstructed() {
@@ -323,9 +357,18 @@ void AssistantControllerImpl::NotifyUrlOpened(const GURL& url,
 
 void AssistantControllerImpl::OnAssistantStatusChanged(
     assistant::AssistantStatus status) {
-  if (status == assistant::AssistantStatus::NOT_READY)
-    assistant_ui_controller_.CloseUi(
-        assistant::AssistantExitPoint::kUnspecified);
+  switch (status) {
+    case assistant::AssistantStatus::NOT_READY:
+      assistant_volume_control_receiver_.reset();
+      assistant_ui_controller_.CloseUi(
+          assistant::AssistantExitPoint::kUnspecified);
+      break;
+    case assistant::AssistantStatus::READY:
+      OnAccessibilityStatusChanged();
+      OnColorModeChanged(
+          DarkLightModeControllerImpl::Get()->IsDarkModeEnabled());
+      break;
+  }
 }
 
 void AssistantControllerImpl::OnLockedFullScreenStateChanged(bool enabled) {

@@ -4,12 +4,11 @@
 
 #include "components/translate/ios/browser/ios_translate_driver.h"
 
-#include "base/bind.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
 #include "base/no_destructor.h"
 #include "base/strings/sys_string_conversions.h"
 #include "base/task/thread_pool.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "components/translate/core/browser/translate_client.h"
 #include "components/translate/core/browser/translate_manager.h"
@@ -23,6 +22,7 @@
 #include "components/translate/ios/browser/language_detection_model_service.h"
 #import "components/translate/ios/browser/translate_controller.h"
 #include "components/ukm/ios/ukm_url_recorder.h"
+#import "ios/web/public/annotations/annotations_text_manager.h"
 #include "ios/web/public/browser_state.h"
 #include "ios/web/public/navigation/navigation_context.h"
 #include "ios/web/public/navigation/navigation_item.h"
@@ -34,10 +34,6 @@
 #include "ui/base/page_transition_types.h"
 #include "ui/base/window_open_disposition.h"
 #include "url/gurl.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace translate {
 
@@ -116,6 +112,16 @@ void IOSTranslateDriver::IOSLanguageDetectionTabHelperWasDestroyed(
 
 // web::WebStateObserver methods
 
+void IOSTranslateDriver::DidStartNavigation(
+    web::WebState* web_state,
+    web::NavigationContext* navigation_context) {
+  DCHECK_EQ(web_state_, web_state);
+  if (!navigation_context->IsSameDocument()) {
+    pending_page_seq_no_ = -1;
+    timeout_timer_.Stop();
+  }
+}
+
 void IOSTranslateDriver::DidFinishNavigation(
     web::WebState* web_state,
     web::NavigationContext* navigation_context) {
@@ -127,8 +133,6 @@ void IOSTranslateDriver::DidFinishNavigation(
   if (!navigation_context->IsSameDocument()) {
     ++page_seq_no_;
     translate_manager_->set_current_seq_no(page_seq_no_);
-    pending_page_seq_no_ = -1;
-    timeout_timer_.Stop();
   }
 
   // TODO(crbug.com/925320): support navigation types, like content/ does.
@@ -175,6 +179,11 @@ void IOSTranslateDriver::PrepareToTranslatePage(
   timeout_timer_.Start(FROM_HERE, kTimeoutDelay,
                        BindOnce(&IOSTranslateDriver::OnTranslationTimeout,
                                 weak_ptr_factory_.GetWeakPtr(), page_seq_no));
+  // Remove annotations before replacing translated data.
+  auto* manager = web::AnnotationsTextManager::FromWebState(web_state_);
+  if (manager) {
+    manager->RemoveDecorations();
+  }
 }
 
 void IOSTranslateDriver::TranslatePage(int page_seq_no,
@@ -206,7 +215,7 @@ void IOSTranslateDriver::RevertTranslation(int page_seq_no) {
   TranslateController::FromWebState(web_state_)->RevertTranslation();
 }
 
-bool IOSTranslateDriver::IsIncognito() {
+bool IOSTranslateDriver::IsIncognito() const {
   return web_state_->GetBrowserState()->IsOffTheRecord();
 }
 
@@ -214,7 +223,7 @@ const std::string& IOSTranslateDriver::GetContentsMimeType() {
   return web_state_->GetContentsMimeType();
 }
 
-const GURL& IOSTranslateDriver::GetLastCommittedURL() {
+const GURL& IOSTranslateDriver::GetLastCommittedURL() const {
   return web_state_->GetLastCommittedURL();
 }
 
@@ -226,7 +235,7 @@ ukm::SourceId IOSTranslateDriver::GetUkmSourceId() {
   return ukm::GetSourceIdForWebStateDocument(web_state_);
 }
 
-bool IOSTranslateDriver::HasCurrentPage() {
+bool IOSTranslateDriver::HasCurrentPage() const {
   DCHECK(web_state_->IsRealized());
   return (web_state_->GetNavigationManager()->GetVisibleItem() != nullptr);
 }
@@ -292,7 +301,7 @@ void IOSTranslateDriver::OnTranslateScriptReady(TranslateErrors error_type,
                            ? source_language_
                            : kAutoDetectionLanguage;
   TranslateController::FromWebState(web_state_)
-      ->StartTranslation(source_language_, target_language_);
+      ->StartTranslation(source, target_language_);
 }
 
 void IOSTranslateDriver::OnTranslateComplete(TranslateErrors error_type,
@@ -311,6 +320,7 @@ void IOSTranslateDriver::OnTranslateComplete(TranslateErrors error_type,
                         pending_page_seq_no_, source_language,
                         translation_time);
   pending_page_seq_no_ = -1;
+  timeout_timer_.Stop();
 }
 
 void IOSTranslateDriver::StopObservingWebState() {

@@ -11,19 +11,18 @@
 #include "ash/public/cpp/shelf_model.h"
 #include "ash/public/cpp/shelf_types.h"
 #include "base/task/sequenced_task_runner.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "chrome/browser/apps/app_service/app_service_proxy.h"
 #include "chrome/browser/apps/app_service/app_service_proxy_factory.h"
 #include "chrome/browser/apps/app_service/extension_apps_utils.h"
 #include "chrome/browser/ash/accessibility/accessibility_manager.h"
+#include "chrome/browser/ash/app_list/app_list_client_impl.h"
 #include "chrome/browser/profiles/profile_manager.h"
-#include "chrome/browser/ui/app_list/app_list_client_impl.h"
 #include "chrome/browser/ui/ash/shelf/chrome_shelf_controller.h"
 #include "chrome/browser/ui/ash/shelf/chrome_shelf_controller_util.h"
 #include "chrome/browser/ui/ash/shelf/chrome_shelf_prefs.h"
 #include "chrome/browser/ui/ash/shelf/standalone_browser_extension_app_shelf_item_controller.h"
 #include "chrome/browser/ui/chrome_pages.h"
-#include "chrome/browser/ui/webui/settings/ash/app_management/app_management_uma.h"
+#include "chrome/browser/ui/webui/ash/settings/app_management/app_management_uma.h"
 #include "chrome/grit/generated_resources.h"
 #include "components/services/app_service/public/cpp/app_types.h"
 #include "ui/base/models/image_model.h"
@@ -51,7 +50,7 @@ StandaloneBrowserExtensionAppContextMenu::
 void StandaloneBrowserExtensionAppContextMenu::GetMenuModel(
     GetMenuModelCallback callback) {
   // Always invoke the callback asynchronously to avoid re-entrancy.
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&StandaloneBrowserExtensionAppContextMenu::OnGetMenuModel,
                      weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
@@ -135,10 +134,8 @@ void StandaloneBrowserExtensionAppContextMenu::OnGetMenuModel(
         allow_uninstall = update.AllowUninstall().value_or(false);
       });
 
-  std::string sync_id =
-      ChromeShelfController::instance()->shelf_prefs()->GetSyncId(app_id_);
   bool allow_pin_unpin =
-      GetPinnableForAppID(sync_id, ProfileManager::GetPrimaryUserProfile()) ==
+      GetPinnableForAppID(app_id_, ProfileManager::GetPrimaryUserProfile()) ==
       AppListControllerDelegate::PIN_EDITABLE;
 
   auto menu_model = std::make_unique<ui::SimpleMenuModel>(this);

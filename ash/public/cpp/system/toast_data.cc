@@ -32,17 +32,27 @@ ToastData::ToastData(std::string id,
                      base::TimeDelta duration,
                      bool visible_on_lock_screen,
                      bool has_dismiss_button,
-                     const std::u16string& custom_dismiss_text)
+                     const std::u16string& custom_dismiss_text,
+                     base::RepeatingClosure dismiss_callback,
+                     const gfx::VectorIcon& leading_icon)
     : id(std::move(id)),
       catalog_name(catalog_name),
       text(text),
       duration(std::max(duration, kMinimumDuration)),
       visible_on_lock_screen(visible_on_lock_screen),
       dismiss_text(GetDismissText(custom_dismiss_text, has_dismiss_button)),
+      dismiss_callback(std::move(dismiss_callback)),
+      leading_icon(&leading_icon),
       time_created(base::TimeTicks::Now()) {}
 
-ToastData::ToastData(const ToastData& other) = default;
+ToastData::ToastData(ToastData&& other) = default;
+ToastData& ToastData::operator=(ToastData&& other) = default;
 
-ToastData::~ToastData() = default;
+ToastData::~ToastData() {
+  // The toast can get cancelled before it shows, so we only want to run
+  // `expired_callback` if the toast actually did show.
+  if (!time_start_showing.is_null() && expired_callback)
+    std::move(expired_callback).Run();
+}
 
 }  // namespace ash

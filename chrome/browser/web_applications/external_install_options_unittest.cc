@@ -7,7 +7,7 @@
 #include <string>
 
 #include "base/strings/utf_string_conversions.h"
-#include "chrome/browser/web_applications/user_display_mode.h"
+#include "chrome/browser/web_applications/mojom/user_display_mode.mojom.h"
 #include "chrome/browser/web_applications/web_app_install_params.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -38,8 +38,6 @@ ExternalInstallOptions ConvertParamsToExternalInstallOptions(
   install_options.add_to_management = install_params.add_to_management;
   install_options.is_disabled = install_params.is_disabled;
 
-  install_options.bypass_service_worker_check =
-      install_params.bypass_service_worker_check;
   install_options.require_manifest = install_params.require_manifest;
 
   install_options.additional_search_terms =
@@ -47,7 +45,9 @@ ExternalInstallOptions ConvertParamsToExternalInstallOptions(
 
   install_options.launch_query_params = install_params.launch_query_params;
 
+#if BUILDFLAG(IS_CHROMEOS_ASH)
   install_options.system_app_type = install_params.system_app_type;
+#endif
 
   install_options.oem_installed = install_params.oem_installed;
 
@@ -60,7 +60,7 @@ TEST(WebAppExternalInstallOptions,
      ConvertExternalInstallOptionsToParams_DefaultConstructor) {
   ExternalInstallOptions install_options(
       /*install_url=*/GURL{"https://example.org"},
-      /*user_display_mode=*/UserDisplayMode::kStandalone,
+      /*user_display_mode=*/mojom::UserDisplayMode::kStandalone,
       /*install_source=*/ExternalInstallSource::kExternalDefault);
 
   WebAppInstallParams install_params =
@@ -76,14 +76,14 @@ TEST(WebAppExternalInstallOptions,
      ConvertExternalInstallOptionsToParams_NotDefaultConstructor) {
   ExternalInstallOptions install_options(
       /*install_url=*/GURL{"https://example.com"},
-      /*user_display_mode=*/UserDisplayMode::kStandalone,
+      /*user_display_mode=*/mojom::UserDisplayMode::kStandalone,
       /*install_source=*/ExternalInstallSource::kExternalDefault);
 
   // The values below are deliberately different from default
   // ExternalInstallOptions constructor values.
 
   install_options.force_reinstall = true;
-  install_options.user_display_mode = UserDisplayMode::kStandalone;
+  install_options.user_display_mode = mojom::UserDisplayMode::kStandalone;
   install_options.fallback_app_name = "Fallback App Name";
 
   install_options.add_to_applications_menu = false;
@@ -93,14 +93,15 @@ TEST(WebAppExternalInstallOptions,
   install_options.add_to_management = false;
   install_options.is_disabled = true;
 
-  install_options.bypass_service_worker_check = true;
   install_options.require_manifest = true;
 
   install_options.additional_search_terms = {"str1", "str2"};
 
   install_options.launch_query_params = "param";
 
+#if BUILDFLAG(IS_CHROMEOS_ASH)
   install_options.system_app_type = ash::SystemWebAppType::SAMPLE;
+#endif
 
   install_options.oem_installed = true;
 

@@ -276,6 +276,10 @@ TEST(EquivalenceMapTest, PruneEquivalencesAndSortBySource) {
   EXPECT_EQ(std::deque<Equivalence>({{0, 10, 3}, {3, 16, 2}}),
             PruneEquivalencesAndSortBySourceTest(
                 {{0, 10, 3}, {1, 13, 3}, {3, 16, 2}}));  // Pruning is greedy
+  // Test for crbug.com/1432457.
+  EXPECT_EQ(std::deque<Equivalence>({{0, 10, +6}, {6, 23, +2}}),
+            PruneEquivalencesAndSortBySourceTest(
+                {{0, 10, +6}, {3, 20, +5}, {3, 30, +1}}));
 
   // Consider following pattern that may cause O(n^2) behavior if not handled
   // properly.
@@ -297,6 +301,26 @@ TEST(EquivalenceMapTest, PruneEquivalencesAndSortBySource) {
               equivalenses.push_back({300000, 30, +300000});
               return equivalenses;
             }()));
+
+  // Test sorting stability when multiple equivalences share |src_offset|.
+  {
+    std::vector<Equivalence> sorted_equivalences({
+        {0, 10, +2},
+        {0, 19, +2},
+        {0, 24, +2},
+        {0, 26, +2},
+    });
+    std::vector<size_t> order({0, 1, 2, 3});
+    ASSERT_EQ(sorted_equivalences.size(), order.size());
+    do {
+      std::deque<Equivalence> equivalences;
+      for (size_t i : order) {
+        equivalences.push_back(sorted_equivalences[i]);
+      }
+      EXPECT_EQ(std::deque<Equivalence>({{0, 10, +2}}),
+                PruneEquivalencesAndSortBySourceTest(std::move(equivalences)));
+    } while (std::next_permutation(order.begin(), order.end()));
+  }
 }
 
 TEST(EquivalenceMapTest, NaiveExtendedForwardProject) {

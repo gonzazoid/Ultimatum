@@ -114,8 +114,8 @@ TEST_F(AudioBufferConverterTest, Upsample) {
 
 // Test resampling a buffer smaller than the SincResampler's kernel size.
 TEST_F(AudioBufferConverterTest, Resample_TinyBuffer) {
-  AddInput(MakeTestBuffer(
-      48000, CHANNEL_LAYOUT_STEREO, 2, SincResampler::kKernelSize - 1));
+  AddInput(MakeTestBuffer(48000, CHANNEL_LAYOUT_STEREO, 2,
+                          SincResampler::kMinKernelSize - 1));
   ConsumeAllOutput();
 }
 
@@ -227,7 +227,7 @@ TEST_F(AudioBufferConverterTest, LargeBuffersResampling) {
   const int kInputFrameSize = 8192;
   ASSERT_NE(kInputSampleRate, kOutSampleRate);
 
-  const int kInputBuffers = 3;
+  const int kInputBuffers = 4;
   for (int i = 0; i < kInputBuffers; ++i) {
     AddInput(MakeTestBuffer(kInputSampleRate,
                             kOutChannelLayout,

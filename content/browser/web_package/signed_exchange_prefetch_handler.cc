@@ -4,16 +4,17 @@
 
 #include "content/browser/web_package/signed_exchange_prefetch_handler.h"
 
-#include "base/callback.h"
 #include "base/feature_list.h"
+#include "base/functional/callback.h"
 #include "content/browser/web_package/prefetched_signed_exchange_cache_entry.h"
 #include "content/browser/web_package/signed_exchange_devtools_proxy.h"
 #include "content/browser/web_package/signed_exchange_loader.h"
-#include "content/browser/web_package/signed_exchange_prefetch_metric_recorder.h"
 #include "content/browser/web_package/signed_exchange_reporter.h"
 #include "content/public/common/content_features.h"
 #include "mojo/public/cpp/bindings/self_owned_receiver.h"
+#include "net/base/network_anonymization_key.h"
 #include "services/network/public/cpp/features.h"
+#include "services/network/public/cpp/record_ontransfersizeupdate_utils.h"
 #include "services/network/public/cpp/weak_wrapper_shared_url_loader_factory.h"
 #include "services/network/public/mojom/early_hints.mojom.h"
 #include "services/network/public/mojom/url_loader_factory.mojom.h"
@@ -33,7 +34,6 @@ SignedExchangePrefetchHandler::SignedExchangePrefetchHandler(
     URLLoaderThrottlesGetter loader_throttles_getter,
     network::mojom::URLLoaderClient* forwarding_client,
     const net::NetworkAnonymizationKey& network_anonymization_key,
-    scoped_refptr<SignedExchangePrefetchMetricRecorder> metric_recorder,
     const std::string& accept_langs,
     bool keep_entry_for_prefetch_cache)
     : forwarding_client_(forwarding_client) {
@@ -48,7 +48,7 @@ SignedExchangePrefetchHandler::SignedExchangePrefetchHandler(
       network_anonymization_key, frame_tree_node_id);
   auto devtools_proxy = std::make_unique<SignedExchangeDevToolsProxy>(
       resource_request.url, response_head.Clone(), frame_tree_node_id,
-      absl::nullopt /* devtools_navigation_token */,
+      std::nullopt /* devtools_navigation_token */,
       resource_request.devtools_request_id.has_value());
   signed_exchange_loader_ = std::make_unique<SignedExchangeLoader>(
       resource_request, std::move(response_head), std::move(response_body),
@@ -57,7 +57,7 @@ SignedExchangePrefetchHandler::SignedExchangePrefetchHandler(
       false /* should_redirect_to_fallback */, std::move(devtools_proxy),
       std::move(reporter), std::move(url_loader_factory),
       loader_throttles_getter, network_anonymization_key, frame_tree_node_id,
-      std::move(metric_recorder), accept_langs, keep_entry_for_prefetch_cache);
+      accept_langs, keep_entry_for_prefetch_cache);
 }
 
 SignedExchangePrefetchHandler::~SignedExchangePrefetchHandler() = default;
@@ -88,7 +88,7 @@ void SignedExchangePrefetchHandler::OnReceiveEarlyHints(
 void SignedExchangePrefetchHandler::OnReceiveResponse(
     network::mojom::URLResponseHeadPtr head,
     mojo::ScopedDataPipeConsumerHandle body,
-    absl::optional<mojo_base::BigBuffer> cached_metadata) {
+    std::optional<mojo_base::BigBuffer> cached_metadata) {
   NOTREACHED();
 }
 
@@ -107,6 +107,8 @@ void SignedExchangePrefetchHandler::OnUploadProgress(
 
 void SignedExchangePrefetchHandler::OnTransferSizeUpdated(
     int32_t transfer_size_diff) {
+  network::RecordOnTransferSizeUpdatedUMA(
+      network::OnTransferSizeUpdatedFrom::kSignedExchangePrefetchHandler);
   NOTREACHED();
 }
 

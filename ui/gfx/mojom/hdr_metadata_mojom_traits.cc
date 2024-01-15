@@ -6,30 +6,58 @@
 
 namespace mojo {
 
-bool StructTraits<gfx::mojom::ColorVolumeMetadataDataView,
-                  gfx::ColorVolumeMetadata>::
-    Read(gfx::mojom::ColorVolumeMetadataDataView data,
-         gfx::ColorVolumeMetadata* output) {
+bool StructTraits<gfx::mojom::HdrMetadataCta861_3DataView,
+                  gfx::HdrMetadataCta861_3>::
+    Read(gfx::mojom::HdrMetadataCta861_3DataView data,
+         gfx::HdrMetadataCta861_3* output) {
+  output->max_content_light_level = data.max_content_light_level();
+  output->max_frame_average_light_level = data.max_frame_average_light_level();
+  return true;
+}
+
+bool StructTraits<gfx::mojom::HdrMetadataSmpteSt2086DataView,
+                  gfx::HdrMetadataSmpteSt2086>::
+    Read(gfx::mojom::HdrMetadataSmpteSt2086DataView data,
+         gfx::HdrMetadataSmpteSt2086* output) {
   output->luminance_max = data.luminance_max();
   output->luminance_min = data.luminance_min();
-  if (!data.ReadPrimaryR(&output->primary_r))
+  if (!data.ReadPrimaries(&output->primaries))
     return false;
-  if (!data.ReadPrimaryG(&output->primary_g))
-    return false;
-  if (!data.ReadPrimaryB(&output->primary_b))
-    return false;
-  if (!data.ReadWhitePoint(&output->white_point))
-    return false;
+  return true;
+}
+
+bool StructTraits<gfx::mojom::HdrMetadataNdwlDataView, gfx::HdrMetadataNdwl>::
+    Read(gfx::mojom::HdrMetadataNdwlDataView data,
+         gfx::HdrMetadataNdwl* output) {
+  output->nits = data.nits();
+  return true;
+}
+
+bool StructTraits<gfx::mojom::HdrMetadataExtendedRangeDataView,
+                  gfx::HdrMetadataExtendedRange>::
+    Read(gfx::mojom::HdrMetadataExtendedRangeDataView data,
+         gfx::HdrMetadataExtendedRange* output) {
+  output->current_headroom = data.current_headroom();
+  output->desired_headroom = data.desired_headroom();
   return true;
 }
 
 bool StructTraits<gfx::mojom::HDRMetadataDataView, gfx::HDRMetadata>::Read(
     gfx::mojom::HDRMetadataDataView data,
     gfx::HDRMetadata* output) {
-  output->max_content_light_level = data.max_content_light_level();
-  output->max_frame_average_light_level = data.max_frame_average_light_level();
-  if (!data.ReadColorVolumeMetadata(&output->color_volume_metadata))
+  if (!data.ReadCta8613(&output->cta_861_3)) {
     return false;
+  }
+  if (!data.ReadSmpteSt2086(&output->smpte_st_2086)) {
+    return false;
+  }
+  if (!data.ReadNdwl(&output->ndwl)) {
+    return false;
+  }
+  if (!data.ReadExtendedRange(&output->extended_range)) {
+    return false;
+  }
   return true;
 }
+
 }  // namespace mojo

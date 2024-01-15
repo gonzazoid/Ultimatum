@@ -32,10 +32,13 @@ const char kForceRasterColorProfile[] = "force-raster-color-profile";
 // Overrides the device scale factor for the browser UI and the contents.
 const char kForceDeviceScaleFactor[] = "force-device-scale-factor";
 
-// Sets a window size, optional position, and optional scale factor.
+// Sets a window size, optional position, optional scale factor and optional
+// panel radii.
 // "1024x768" creates a window of size 1024x768.
 // "100+200-1024x768" positions the window at 100,200.
 // "1024x768*2" sets the scale factor to 2 for a high DPI display.
+// "1024x768~15|15|12|12" sets the radii of the panel corners as
+// (upper_left=15px,upper_right=15px, lower_right=12px, upper_left=12px)
 // "800,0+800-800x800" for two displays at 800x800 resolution.
 // "800,0+800-800x800,0+1600-800x800" for three displays at 800x800 resolution.
 const char kHostWindowBounds[] = "ash-host-window-bounds";
@@ -55,11 +58,15 @@ const char kScreenConfig[] = "screen-config";
 const char kUseFirstDisplayAsInternal[] = "use-first-display-as-internal";
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
+
+// Additional display properties are provided through this switch that are
+// beyond what is available via EDID encoded as JSON. Please see
+// `https://chromium.googlesource.com/chromiumos/platform2/+/dd10a5ae3618bb9dc5fb47ac415ebef6e9a3827d/chromeos-config/README.md#displays`
+// for the data format.
+const char kDisplayProperties[] = "display-properties";
+
 // Enables unified desktop mode.
 const char kEnableUnifiedDesktop[] = "ash-enable-unified-desktop";
-
-// Used to find the test that uses square display.
-const char kRejectSquareDisplay[] = "reject-square-display";
 #endif
 
 }  // namespace switches

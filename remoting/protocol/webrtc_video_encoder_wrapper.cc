@@ -6,24 +6,25 @@
 
 #include <stdint.h>
 
+#include <algorithm>
 #include <functional>
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/cxx17_backports.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/task/bind_post_task.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "remoting/base/constants.h"
 #include "remoting/base/session_options.h"
 #include "remoting/codec/webrtc_video_encoder_av1.h"
 #include "remoting/codec/webrtc_video_encoder_vpx.h"
-#include "remoting/protocol/video_channel_state_observer.h"
+#include "remoting/protocol/video_stream_event_router.h"
 #include "remoting/protocol/webrtc_video_frame_adapter.h"
 #include "third_party/webrtc/api/video_codecs/av1_profile.h"
 #include "third_party/webrtc/api/video_codecs/sdp_video_format.h"
@@ -73,8 +74,9 @@ const int kEstimatedBytesPerMegapixel = 100000;
 // processing and rendering lots of identical frames.
 constexpr base::TimeDelta kKeepAliveInterval = base::Seconds(2);
 
-// SDP format parameter name used to set the maximum framerate for an encoder.
-constexpr char kMaxFramerateKey[] = "max-fr";
+// Used to clamp the calculated frame durations to a set of reasonable values.
+constexpr auto kMinFrameDuration = base::Hertz(120);
+constexpr auto kMaxFrameDuration = base::Hertz(15);
 
 std::string EncodeResultToString(WebrtcVideoEncoder::EncodeResult result) {
   using EncodeResult = WebrtcVideoEncoder::EncodeResult;
@@ -91,25 +93,6 @@ std::string EncodeResultToString(WebrtcVideoEncoder::EncodeResult result) {
   return "";
 }
 
-int GetFrameRateFromSdpFormatParam(const std::string& param_value) {
-  int conversion_result;
-  if (!base::StringToInt(param_value, &conversion_result)) {
-    LOG(ERROR) << "Failed to convert max-fr value to an int: " << param_value;
-    return kTargetFrameRate;
-  }
-
-  // Clamp the range to prevent a bad experience in case of a client bug.
-  // 1000 is the maximum allowable frame rate as capturing at a higher rate will
-  // cause problems in several components which expect at least 1 millisecond
-  // between frames. In reality, very few applications update their window
-  // faster than the current monitor refresh rate which is likely 60Hz - 144Hz
-  // so value > ~150 won't provide much value.
-  // A lower bound of 1 millisecond is needed because the framerate is used as
-  // the denominator when determining the period between frames so 0 will lead
-  // to divide by 0 bugs.
-  return base::clamp<int>(conversion_result, 1, 1000);
-}
-
 }  // namespace
 
 WebrtcVideoEncoderWrapper::WebrtcVideoEncoderWrapper(
@@ -117,10 +100,10 @@ WebrtcVideoEncoderWrapper::WebrtcVideoEncoderWrapper(
     const SessionOptions& session_options,
     scoped_refptr<base::SingleThreadTaskRunner> main_task_runner,
     scoped_refptr<base::SingleThreadTaskRunner> encode_task_runner,
-    base::WeakPtr<VideoChannelStateObserver> video_channel_state_observer)
+    base::WeakPtr<VideoStreamEventRouter> video_stream_event_router)
     : main_task_runner_(main_task_runner),
       encode_task_runner_(encode_task_runner),
-      video_channel_state_observer_(video_channel_state_observer) {
+      video_stream_event_router_(video_stream_event_router) {
   codec_type_ = webrtc::PayloadStringToCodecType(format.name);
   switch (codec_type_) {
     case webrtc::kVideoCodecVP8:
@@ -128,7 +111,7 @@ WebrtcVideoEncoderWrapper::WebrtcVideoEncoderWrapper(
       encoder_ = WebrtcVideoEncoderVpx::CreateForVP8();
       break;
     case webrtc::kVideoCodecVP9: {
-      absl::optional<webrtc::VP9Profile> profile =
+      std::optional<webrtc::VP9Profile> profile =
           webrtc::ParseSdpForVP9Profile(format.parameters);
       bool lossless_color = profile.has_value() &&
                             profile.value() == webrtc::VP9Profile::kProfile1;
@@ -136,7 +119,7 @@ WebrtcVideoEncoderWrapper::WebrtcVideoEncoderWrapper(
               << (lossless_color ? "true" : "false");
       encoder_ = WebrtcVideoEncoderVpx::CreateForVP9();
       encoder_->SetLosslessColor(lossless_color);
-      absl::optional<int> encoder_speed =
+      std::optional<int> encoder_speed =
           session_options.GetInt("Vp9-Encoder-Speed");
       if (encoder_speed) {
         VLOG(0) << "Setting VP9 encoder speed to " << encoder_speed.value();
@@ -145,7 +128,7 @@ WebrtcVideoEncoderWrapper::WebrtcVideoEncoderWrapper(
       break;
     }
     case webrtc::kVideoCodecAV1: {
-      absl::optional<webrtc::AV1Profile> profile =
+      std::optional<webrtc::AV1Profile> profile =
           webrtc::ParseSdpForAV1Profile(format.parameters);
       bool lossless_color = profile.has_value() &&
                             profile.value() == webrtc::AV1Profile::kProfile1;
@@ -153,6 +136,12 @@ WebrtcVideoEncoderWrapper::WebrtcVideoEncoderWrapper(
               << (lossless_color ? "true" : "false");
       encoder_ = std::make_unique<WebrtcVideoEncoderAV1>();
       encoder_->SetLosslessColor(lossless_color);
+      std::optional<int> encoder_speed =
+          session_options.GetInt("Av1-Encoder-Speed");
+      if (encoder_speed) {
+        VLOG(0) << "Setting AV1 encoder speed to " << encoder_speed.value();
+        encoder_->SetEncoderSpeed(encoder_speed.value());
+      }
       break;
     }
     case webrtc::kVideoCodecH264:
@@ -166,12 +155,6 @@ WebrtcVideoEncoderWrapper::WebrtcVideoEncoderWrapper(
     default:
       LOG(FATAL) << "Unknown codec type: " << codec_type_;
   }
-
-  auto iter = format.parameters.find(kMaxFramerateKey);
-  if (iter != format.parameters.end()) {
-    target_frame_rate_ = GetFrameRateFromSdpFormatParam(iter->second);
-  }
-  target_frame_interval_ = base::Hertz(target_frame_rate_);
 }
 
 WebrtcVideoEncoderWrapper::~WebrtcVideoEncoderWrapper() {
@@ -205,15 +188,6 @@ int32_t WebrtcVideoEncoderWrapper::InitEncode(
     DCHECK_EQ(1, codec_settings->VP9().numberOfSpatialLayers);
   }
 
-  // If the client has requested a specific framerate for this encoder then
-  // update the target framerate on the RtpSender for this video streams.
-  if (target_frame_rate_ != kTargetFrameRate) {
-    main_task_runner_->PostTask(
-        FROM_HERE,
-        base::BindOnce(&VideoChannelStateObserver::OnTargetFramerateChanged,
-                       video_channel_state_observer_, target_frame_rate_));
-  }
-
   return WEBRTC_VIDEO_CODEC_OK;
 }
 
@@ -237,7 +211,17 @@ int32_t WebrtcVideoEncoderWrapper::Encode(
     const std::vector<webrtc::VideoFrameType>* frame_types) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-  auto now = base::TimeTicks::Now();
+  // Include all of the pre-processing steps in the total encode time.
+  auto encode_start = base::TimeTicks::Now();
+
+  // Calculate the frame interval before dropping or queueing frames.
+  base::Time frame_timestamp = base::Time::NowFromSystemTime();
+  if (!last_frame_received_timestamp_.is_null()) {
+    current_frame_interval_ = std::clamp(
+        base::TimeDelta(frame_timestamp - last_frame_received_timestamp_),
+        kMinFrameDuration, kMaxFrameDuration);
+  }
+  last_frame_received_timestamp_ = frame_timestamp;
 
   // Simulcast is unsupported, so only the first vector element is needed.
   bool key_frame_requested =
@@ -265,7 +249,7 @@ int32_t WebrtcVideoEncoderWrapper::Encode(
     if (pending_frame_) {
       accumulated_update_rect_.Union(pending_frame_->update_rect());
 
-      base::SequencedTaskRunnerHandle::Get()->PostTask(
+      base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE,
           base::BindOnce(&WebrtcVideoEncoderWrapper::NotifyFrameDropped,
                          weak_factory_.GetWeakPtr()));
@@ -297,7 +281,14 @@ int32_t WebrtcVideoEncoderWrapper::Encode(
     return WEBRTC_VIDEO_CODEC_ERROR;
   }
 
-  frame_stats_->encode_started_time = now;
+  if (!screen_id_.has_value()) {
+    // Save the screen_id from the first encoded frame, otherwise we won't know
+    // which screen_id this encoder is associated with due to the current WebRTC
+    // architecture.
+    screen_id_ = frame_stats_->screen_id;
+  }
+
+  frame_stats_->encode_started_time = encode_start;
 
   auto desktop_frame = video_frame_adapter->TakeDesktopFrame();
 
@@ -340,27 +331,24 @@ int32_t WebrtcVideoEncoderWrapper::Encode(
   // This is done to save on network bandwidth and CPU usage.
   if (desktop_frame->updated_region().is_empty() && !top_off_active_ &&
       !pending_key_frame_request_ &&
-      (now - latest_frame_encode_start_time_ < kKeepAliveInterval)) {
+      (encode_start - latest_frame_encode_start_time_ < kKeepAliveInterval)) {
     // Drop the frame. There is no need to track the update-rect as the
     // frame being dropped is empty.
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(&WebrtcVideoEncoderWrapper::NotifyFrameDropped,
                        weak_factory_.GetWeakPtr()));
     return WEBRTC_VIDEO_CODEC_OK;
   }
-  latest_frame_encode_start_time_ = now;
+  latest_frame_encode_start_time_ = encode_start;
 
   WebrtcVideoEncoder::FrameParams frame_params;
 
   // SetRates() must be called prior to Encode(), with a non-zero bitrate.
   DCHECK_NE(0, bitrate_kbps_);
   frame_params.bitrate_kbps = bitrate_kbps_;
-  frame_params.duration = target_frame_interval_;
-
-  // TODO(crbug.com/1192865): Copy the FPS estimator from the scheduler,
-  // instead of hard-coding this value here.
-  frame_params.fps = target_frame_rate_;
+  frame_params.duration = current_frame_interval_;
+  frame_params.fps = current_frame_interval_.ToHz();
 
   frame_params.vpx_min_quantizer =
       ShouldDropQualityForLargeFrame(*desktop_frame) ? kMaxQuantizer
@@ -373,10 +361,8 @@ int32_t WebrtcVideoEncoderWrapper::Encode(
 
   encode_pending_ = true;
 
-  auto encode_callback = base::BindPostTask(
-      base::SequencedTaskRunnerHandle::Get(),
-      base::BindOnce(&WebrtcVideoEncoderWrapper::OnFrameEncoded,
-                     weak_factory_.GetWeakPtr()));
+  auto encode_callback = base::BindPostTaskToCurrentDefault(base::BindOnce(
+      &WebrtcVideoEncoderWrapper::OnFrameEncoded, weak_factory_.GetWeakPtr()));
   encode_task_runner_->PostTask(
       FROM_HERE,
       base::BindOnce(&WebrtcVideoEncoder::Encode,
@@ -389,14 +375,7 @@ void WebrtcVideoEncoderWrapper::SetRates(
     const RateControlParameters& parameters) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-  int bitrate_kbps = parameters.bitrate.get_sum_kbps();
-  if (bitrate_kbps_ != bitrate_kbps) {
-    bitrate_kbps_ = bitrate_kbps;
-    main_task_runner_->PostTask(
-        FROM_HERE,
-        base::BindOnce(&VideoChannelStateObserver::OnTargetBitrateChanged,
-                       video_channel_state_observer_, bitrate_kbps));
-  }
+  bitrate_kbps_ = parameters.bitrate.get_sum_kbps();
 }
 
 void WebrtcVideoEncoderWrapper::OnRttUpdate(int64_t rtt_ms) {
@@ -426,9 +405,8 @@ WebrtcVideoEncoderWrapper::ReturnEncodedFrame(
   encoded_image._frameType = frame.key_frame
                                  ? webrtc::VideoFrameType::kVideoFrameKey
                                  : webrtc::VideoFrameType::kVideoFrameDelta;
-  encoded_image.SetTimestamp(frame.rtp_timestamp);
-  encoded_image.playout_delay_.min_ms = 0;
-  encoded_image.playout_delay_.max_ms = 0;
+  encoded_image.SetRtpTimestamp(frame.rtp_timestamp);
+  encoded_image.SetPlayoutDelay(webrtc::VideoPlayoutDelay::Minimal());
   encoded_image.content_type_ = webrtc::VideoContentType::SCREENSHARE;
 
   webrtc::CodecSpecificInfo codec_specific_info;
@@ -454,7 +432,6 @@ WebrtcVideoEncoderWrapper::ReturnEncodedFrame(
     vp9_info->temporal_up_switch = true;
     vp9_info->inter_layer_predicted = false;
     vp9_info->first_frame_in_picture = true;
-    vp9_info->end_of_picture = true;
     vp9_info->spatial_layer_resolution_present = false;
   } else if (frame.codec == webrtc::kVideoCodecH264) {
 #if defined(USE_H264_ENCODER)
@@ -498,15 +475,13 @@ void WebrtcVideoEncoderWrapper::OnFrameEncoded(
     frame_stats_->encode_ended_time = base::TimeTicks::Now();
     frame_stats_->rtt_estimate = rtt_estimate_;
     frame_stats_->bandwidth_estimate_kbps = bitrate_kbps_;
+    // WebrtcFrameSchedulerConstantRate cannot estimate this delay. Set it to 0
+    // so the client can still calculate the derived stats.
+    frame_stats_->send_pending_delay = base::TimeDelta();
     frame->stats = std::move(frame_stats_);
 
     frame->rtp_timestamp = rtp_timestamp_;
   }
-
-  main_task_runner_->PostTask(
-      FROM_HERE, base::BindOnce(&VideoChannelStateObserver::OnFrameEncoded,
-                                video_channel_state_observer_, encode_result,
-                                frame.get()));
 
   if (encode_result != WebrtcVideoEncoder::EncodeResult::SUCCEEDED) {
     // TODO(crbug.com/1192865): Store this error and communicate it to WebRTC
@@ -548,9 +523,9 @@ void WebrtcVideoEncoderWrapper::OnFrameEncoded(
   // base::OnTaskRunnerDeleter posts the frame-deleter task to run after this
   // task has executed.
   main_task_runner_->PostTask(
-      FROM_HERE, base::BindOnce(&VideoChannelStateObserver::OnEncodedFrameSent,
-                                video_channel_state_observer_, send_result,
-                                std::ref(*frame)));
+      FROM_HERE, base::BindOnce(&VideoStreamEventRouter::OnEncodedFrameSent,
+                                video_stream_event_router_, *screen_id_,
+                                send_result, std::ref(*frame)));
 }
 
 void WebrtcVideoEncoderWrapper::NotifyFrameDropped() {
@@ -579,7 +554,7 @@ bool WebrtcVideoEncoderWrapper::ShouldDropQualityForLargeFrame(
         updated_area * kEstimatedBytesPerMegapixel / kPixelsPerMegapixel;
     base::TimeDelta expected_send_delay =
         base::Seconds(expected_frame_size * 8 / (bitrate_kbps_ * 1000.0));
-    if (expected_send_delay > target_frame_interval_) {
+    if (expected_send_delay > current_frame_interval_) {
       should_drop_quality = true;
     }
   }

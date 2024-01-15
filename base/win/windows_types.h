@@ -111,6 +111,8 @@ typedef struct tagNMHDR NMHDR;
 typedef struct _SP_DEVINFO_DATA SP_DEVINFO_DATA;
 
 typedef PVOID PSID;
+typedef PVOID PSECURITY_DESCRIPTOR;
+typedef DWORD SECURITY_INFORMATION;
 
 typedef HANDLE HLOCAL;
 
@@ -129,6 +131,8 @@ typedef UINT_PTR SOCKET;
 typedef struct _PROCESS_INFORMATION PROCESS_INFORMATION;
 typedef struct _SECURITY_CAPABILITIES SECURITY_CAPABILITIES;
 typedef struct _ACL ACL;
+typedef struct _SECURITY_DESCRIPTOR SECURITY_DESCRIPTOR;
+typedef struct _GENERIC_MAPPING GENERIC_MAPPING;
 
 // Declare Chrome versions of some Windows structures. These are needed for
 // when we need a concrete type but don't want to pull in Windows.h. We can't
@@ -208,7 +212,10 @@ struct CHROME_MSG {
 #define REG_BINARY ( 3ul )
 #define REG_NONE ( 0ul )
 
+#ifndef STATUS_PENDING
+// Allow people to include ntstatus.h
 #define STATUS_PENDING ((DWORD   )0x00000103L)
+#endif  // STATUS_PENDING
 #define STILL_ACTIVE STATUS_PENDING
 #define SUCCEEDED(hr) (((HRESULT)(hr)) >= 0)
 #define FAILED(hr) (((HRESULT)(hr)) < 0)
@@ -260,7 +267,9 @@ struct CHROME_MSG {
 
 // The trailing white-spaces after this macro are required, for compatibility
 // with the definition in winnt.h.
+// clang-format off
 #define RTL_SRWLOCK_INIT {0}                            // NOLINT
+// clang-format on
 #define SRWLOCK_INIT RTL_SRWLOCK_INIT
 
 // clang-format on

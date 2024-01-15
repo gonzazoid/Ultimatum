@@ -7,7 +7,7 @@
 
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "chrome/browser/profiles/profile_observer.h"
 #include "device/fido/discoverable_credential_metadata.h"
 #include "third_party/icu/source/i18n/unicode/coll.h"
@@ -71,7 +71,8 @@ class LocalCredentialManagement {
                       base::OnceCallback<void(bool)> callback) = 0;
 
   // Edit credential metadata's username field. The callback returns false if
-  // the credential was not updated to |new_username| in the mac keychain.
+  // the credential was not updated to |new_username| in the mac keychain. The
+  // callback will never be invoked before the function returns.
   virtual void Edit(base::span<uint8_t> credential_id,
                     std::string new_username,
                     base::OnceCallback<void(bool)> callback) = 0;

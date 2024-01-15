@@ -4,9 +4,8 @@
 
 #include "remoting/host/file_transfer/buffered_file_writer.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/test/task_environment.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "remoting/host/file_transfer/fake_file_operations.h"
 #include "remoting/host/file_transfer/test_byte_vector_utils.h"
 #include "remoting/protocol/file_transfer_helpers.h"
@@ -36,7 +35,7 @@ class BufferedFileWriterTest : public testing::Test {
   void OnError(protocol::FileTransfer_Error error);
 
   bool complete_called_ = false;
-  absl::optional<protocol::FileTransfer_Error> error_ = absl::nullopt;
+  std::optional<protocol::FileTransfer_Error> error_ = std::nullopt;
 
   base::test::TaskEnvironment task_environment_;
 };

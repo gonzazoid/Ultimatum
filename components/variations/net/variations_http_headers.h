@@ -30,9 +30,9 @@ namespace variations {
 // Denotes whether the top frame of a request-initiating frame is a Google-
 // owned web property, e.g. YouTube.
 //
-// kUnknownFromRenderer is used only in WebURLLoaderImpl::Context::Start() on
-// the render thread and kUnknown is used elsewhere. This distinction allows us
-// to tell how many non-render-thread-initiated subframe requests, if any, lack
+// kUnknownFromRenderer is used only in URLLoader::Context::Start() on the
+// render thread and kUnknown is used elsewhere. This distinction allows us to
+// tell how many non-render-thread-initiated subframe requests, if any, lack
 // TrustedParams.
 //
 // This enum is used to record UMA histogram values, and should not be
@@ -116,8 +116,13 @@ CreateSimpleURLLoaderWithVariationsHeaderUnknownSignedIn(
     InIncognito incognito,
     const net::NetworkTrafficAnnotationTag& annotation_tag);
 
-// Checks if |request| contains the variations header.
+// Returns if |request| contains the variations header.
 bool HasVariationsHeader(const network::ResourceRequest& request);
+
+// Checks if |request| contains the variations header. If found, returns true
+// and writes the value to |out|.
+bool GetVariationsHeader(const network::ResourceRequest& request,
+                         std::string* out);
 
 // Calls the internal ShouldAppendVariationsHeader() for testing.
 bool ShouldAppendVariationsHeaderForTesting(

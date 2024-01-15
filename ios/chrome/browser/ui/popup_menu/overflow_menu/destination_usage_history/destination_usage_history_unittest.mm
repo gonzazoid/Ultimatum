@@ -3,25 +3,36 @@
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/ui/popup_menu/overflow_menu/destination_usage_history/destination_usage_history.h"
+
 #import "base/strings/string_number_conversions.h"
+#import "base/strings/sys_string_conversions.h"
 #import "base/time/time.h"
 #import "base/values.h"
 #import "components/prefs/pref_registry_simple.h"
+#import "components/prefs/scoped_user_pref_update.h"
 #import "components/prefs/testing_pref_service.h"
-#import "ios/chrome/browser/prefs/pref_names.h"
+#import "ios/chrome/browser/shared/model/prefs/pref_names.h"
+#import "ios/chrome/browser/shared/ui/symbols/symbols.h"
+#import "ios/chrome/browser/ui/popup_menu/overflow_menu/destination_usage_history/constants.h"
+#import "ios/chrome/browser/ui/popup_menu/overflow_menu/feature_flags.h"
 #import "ios/chrome/browser/ui/popup_menu/overflow_menu/overflow_menu_constants.h"
+#import "ios/chrome/browser/ui/popup_menu/overflow_menu/overflow_menu_swift.h"
 #import "testing/platform_test.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace {
 
-// The number of days since the Unix epoch; one day, in this context, runs from
-// UTC midnight to UTC midnight.
-int TodaysDay() {
-  return (base::Time::Now() - base::Time::UnixEpoch()).InDays();
+// The number of destinations immediately visible in the carousel when the
+// overflow menu is opened.
+//
+// For the purposes of these unit tests, this value is
+// statically declared below. In practice, this value is dynamically calculated
+// based on device size.
+static constexpr int kVisibleDestinationsCount = 5;
+
+// A time delta from the Unix epoch to the beginning of the current day.
+base::TimeDelta TodaysDay() {
+  return base::Days(
+      (base::Time::Now() - base::Time::UnixEpoch()).InDaysFloored());
 }
 
 }  // namespace
@@ -32,32 +43,60 @@ class DestinationUsageHistoryTest : public PlatformTest {
 
  protected:
   void TearDown() override {
-    [destination_usage_history_ disconnect];
+    [destination_usage_history_ stop];
+
     PlatformTest::TearDown();
   }
 
-  // Creates CreateDestinationUsageHistory with empty pref data.
-  DestinationUsageHistory* CreateDestinationUsageHistory() {
+  // Initializes `destination_usage_history_` with empty pref data and returns
+  // the initial ranking.
+  DestinationRanking InitializeDestinationUsageHistory(
+      DestinationRanking default_destinations) {
     CreatePrefs();
 
     destination_usage_history_ =
         [[DestinationUsageHistory alloc] initWithPrefService:prefs_.get()];
 
-    return destination_usage_history_;
+    destination_usage_history_.visibleDestinationsCount =
+        kVisibleDestinationsCount;
+
+    [destination_usage_history_ start];
+
+    DestinationRanking initial_ranking = [destination_usage_history_
+        sortedDestinationsFromCurrentRanking:{}
+                       availableDestinations:default_destinations];
+
+    return initial_ranking;
   }
 
-  // Creates CreateDestinationUsageHistory with past data and `ranking`.
-  DestinationUsageHistory* CreateDestinationUsageHistoryWithData(
-      std::vector<overflow_menu::Destination>& ranking,
-      base::Value::Dict& history) {
-    base::Value::List prevRanking = RankingAsListValue(ranking);
+  // Initializes `destination_usage_history_` with past data and `ranking` and
+  // returns the new ranking.
+  DestinationRanking InitializeDestinationUsageHistoryWithData(
+      DestinationRanking& ranking,
+      base::Value::Dict& history,
+      DestinationRanking default_destinations) {
+    base::Value::List previous_ranking;
 
-    CreatePrefsWithData(prevRanking, history);
+    for (overflow_menu::Destination destination : ranking) {
+      previous_ranking.Append(
+          overflow_menu::StringNameForDestination(destination));
+    }
+
+    CreatePrefsWithData(previous_ranking, history);
 
     destination_usage_history_ =
         [[DestinationUsageHistory alloc] initWithPrefService:prefs_.get()];
 
-    return destination_usage_history_;
+    destination_usage_history_.visibleDestinationsCount =
+        kVisibleDestinationsCount;
+
+    [destination_usage_history_ start];
+
+    DestinationRanking initial_ranking = [destination_usage_history_
+        sortedDestinationsFromCurrentRanking:ranking
+                       availableDestinations:default_destinations];
+
+    return initial_ranking;
   }
 
   // Create pref registry for tests.
@@ -65,19 +104,18 @@ class DestinationUsageHistoryTest : public PlatformTest {
     prefs_ = std::make_unique<TestingPrefServiceSimple>();
     prefs_->registry()->RegisterDictionaryPref(
         prefs::kOverflowMenuDestinationUsageHistory, PrefRegistry::LOSSY_PREF);
+    prefs_->registry()->RegisterListPref(prefs::kOverflowMenuNewDestinations,
+                                         PrefRegistry::LOSSY_PREF);
   }
 
   // Helper for CreateDestinationUsageHistoryWithData(), inserts day history
   // data and `ranking` for testing pref service.
-  void CreatePrefsWithData(base::Value::List& storedRanking,
-                           base::Value::Dict& storedHistory) {
+  void CreatePrefsWithData(base::Value::List& stored_ranking,
+                           base::Value::Dict& stored_history) {
     CreatePrefs();
 
-    // Set the passed in `storedHistory`.
-    base::Value::Dict history = storedHistory.Clone();
-    // Set the passed in `storedRanking`.
-    base::Value::List ranking = storedRanking.Clone();
-    history.Set("ranking", std::move(ranking));
+    // Set the passed in `stored_history`.
+    base::Value::Dict history = stored_history.Clone();
 
     prefs_->SetDict(prefs::kOverflowMenuDestinationUsageHistory,
                     std::move(history));
@@ -99,37 +137,34 @@ class DestinationUsageHistoryTest : public PlatformTest {
     return DottedPath(base::NumberToString(day), destination);
   }
 
-  // Converts std::vector<overflow_menu::Destination> ranking to
-  // base::Value::List ranking.
-  base::Value::List RankingAsListValue(
-      std::vector<overflow_menu::Destination>& ranking) {
-    base::Value::List rankingList;
-
-    for (overflow_menu::Destination destination : ranking) {
-      rankingList.Append(overflow_menu::StringNameForDestination(destination));
-    }
-
-    return rankingList;  // base::Value automatically does a std::move() upon
-                         // return here.
+  DestinationRanking SampleDestinations() {
+    return {
+        overflow_menu::Destination::Bookmarks,
+        overflow_menu::Destination::History,
+        overflow_menu::Destination::ReadingList,
+        overflow_menu::Destination::Passwords,
+        overflow_menu::Destination::Downloads,
+        overflow_menu::Destination::RecentTabs,
+        overflow_menu::Destination::SiteInfo,
+        overflow_menu::Destination::Settings,
+    };
   }
 
   std::unique_ptr<TestingPrefServiceSimple> prefs_;
   DestinationUsageHistory* destination_usage_history_;
-  static constexpr int numAboveFoldDestinations = 5;
 };
 
 // Tests the initializer correctly creates a DestinationUsageHistory* with the
 // specified Pref service.
 TEST_F(DestinationUsageHistoryTest, InitWithPrefService) {
-  DestinationUsageHistory* destination_usage_history =
-      CreateDestinationUsageHistory();
+  InitializeDestinationUsageHistory(SampleDestinations());
 
-  PrefService* pref_service = destination_usage_history.prefService;
+  PrefService* pref_service = prefs_.get();
 
   EXPECT_NE(
       pref_service->FindPreference(prefs::kOverflowMenuDestinationUsageHistory),
       nullptr);
-  EXPECT_FALSE(
+  EXPECT_TRUE(
       pref_service->HasPrefPath(prefs::kOverflowMenuDestinationUsageHistory));
 }
 
@@ -149,17 +184,16 @@ TEST_F(DestinationUsageHistoryTest, InitWithPrefServiceForDirtyPrefs) {
   };
 
   base::Value::Dict history;
-  base::Value::Dict dayHistory;
+  base::Value::Dict day_history;
   history.SetByDottedPath(
-      DottedPath(TodaysDay(), overflow_menu::Destination::Bookmarks),
-      std::move(dayHistory));
+      DottedPath(TodaysDay().InDays(), overflow_menu::Destination::Bookmarks),
+      std::move(day_history));
 
   // Create DestinationUsageHistory.
-  DestinationUsageHistory* destination_usage_history =
-      CreateDestinationUsageHistoryWithData(ranking, history);
+  InitializeDestinationUsageHistoryWithData(ranking, history,
+                                            SampleDestinations());
 
-  // Grab its pref service.
-  PrefService* pref_service = destination_usage_history.prefService;
+  PrefService* pref_service = prefs_.get();
 
   EXPECT_NE(
       pref_service->FindPreference(prefs::kOverflowMenuDestinationUsageHistory),
@@ -168,91 +202,60 @@ TEST_F(DestinationUsageHistoryTest, InitWithPrefServiceForDirtyPrefs) {
       pref_service->HasPrefPath(prefs::kOverflowMenuDestinationUsageHistory));
 }
 
-// Tests DestinationUsageHistory::disconnect correctly nullifies the
-// prefService.
-TEST_F(DestinationUsageHistoryTest, DestroysPrefServiceOnDisconnect) {
-  DestinationUsageHistory* destination_usage_history =
-      CreateDestinationUsageHistory();
-
-  [destination_usage_history disconnect];
-
-  EXPECT_EQ(destination_usage_history.prefService, nullptr);
-}
-
 // Tests that a new destination click is incremented and written to Chrome
 // Prefs.
-TEST_F(DestinationUsageHistoryTest, HandlesNewDestinationClickAndAddToPrefs) {
-  DestinationUsageHistory* destination_usage_history =
-      CreateDestinationUsageHistory();
+TEST_F(DestinationUsageHistoryTest, HandlesNewDestinationClick) {
+  InitializeDestinationUsageHistory(SampleDestinations());
 
   // Click bookmarks destination.
-  [destination_usage_history
-         trackDestinationClick:overflow_menu::Destination::Bookmarks
-      numAboveFoldDestinations:numAboveFoldDestinations];
+  [destination_usage_history_
+      recordClickForDestination:overflow_menu::Destination::Bookmarks];
 
-  // Fetch saved destination usage history.
-  const base::Value::Dict& history =
-      destination_usage_history.prefService->GetDict(
-          prefs::kOverflowMenuDestinationUsageHistory);
+  ScopedDictPrefUpdate update(prefs_.get(),
+                              prefs::kOverflowMenuDestinationUsageHistory);
 
-  // Query saved usage history for Bookmarks entry for today.
-  const base::Value* target = history.FindByDottedPath(
-      DottedPath(TodaysDay(), overflow_menu::Destination::Bookmarks));
+  std::optional<int> expected = update->FindIntByDottedPath(
+      DottedPath(TodaysDay().InDays(), overflow_menu::Destination::Bookmarks));
 
-  // Verify bookmarks entry exists and has been clicked once.
-  ASSERT_NE(target, nullptr);
-  EXPECT_TRUE(destination_usage_history.prefService->HasPrefPath(
-      prefs::kOverflowMenuDestinationUsageHistory));
-  EXPECT_EQ(21, target->GetInt());
+  // Verify bookmarks entry exists.
+  EXPECT_TRUE(expected.has_value());
+
+  // Verify bookmarks entry has single click (plus the default seeded 20 clicks)
+  // for today.
+  EXPECT_EQ(expected.value(), 21);
 }
 
-// Tests that each destination in the history is populated with a default number
-// of clicks.
-TEST_F(DestinationUsageHistoryTest, InjectsDefaultNumClicksForAllDestinations) {
-  DestinationUsageHistory* destination_usage_history =
-      CreateDestinationUsageHistory();
+// Tests that each destination in the history is populated with a default
+// number of clicks.
+TEST_F(DestinationUsageHistoryTest,
+       InjectsDefaultClickCountForAllDestinations) {
+  DestinationRanking sample_destinations = SampleDestinations();
 
-  // Click bookmarks destination.
-  [destination_usage_history
-         trackDestinationClick:overflow_menu::Destination::Bookmarks
-      numAboveFoldDestinations:numAboveFoldDestinations];
+  InitializeDestinationUsageHistory(sample_destinations);
 
-  // Fetch saved destination usage history.
-  const base::Value::Dict& history =
-      destination_usage_history.prefService->GetDict(
-          prefs::kOverflowMenuDestinationUsageHistory);
+  ScopedDictPrefUpdate update(prefs_.get(),
+                              prefs::kOverflowMenuDestinationUsageHistory);
 
-  EXPECT_TRUE(destination_usage_history.prefService->HasPrefPath(
-      prefs::kOverflowMenuDestinationUsageHistory));
+  for (overflow_menu::Destination destination : sample_destinations) {
+    const std::string dotted_path =
+        DottedPath(TodaysDay().InDays(), destination);
 
-  std::vector<overflow_menu::Destination> destinations = {
-      overflow_menu::Destination::Bookmarks,
-      overflow_menu::Destination::History,
-      overflow_menu::Destination::ReadingList,
-      overflow_menu::Destination::Passwords,
-      overflow_menu::Destination::Downloads,
-      overflow_menu::Destination::RecentTabs,
-      overflow_menu::Destination::SiteInfo,
-      overflow_menu::Destination::Settings,
-  };
+    std::optional<int> expected = update->FindIntByDottedPath(dotted_path);
 
-  int today = TodaysDay();
-  for (overflow_menu::Destination destination : destinations) {
-    const base::Value* target =
-        history.FindByDottedPath(DottedPath(today, destination));
-    int expected_count =
-        destination == overflow_menu::Destination::Bookmarks ? 21 : 20;
+    // Verify destination entry exists.
+    EXPECT_TRUE(expected.has_value());
 
-    EXPECT_NE(target, nullptr);
-    EXPECT_EQ(expected_count, target->GetInt());
+    // Verify destination  entry has single click (plus the default seeded 20
+    // clicks) for today.
+    EXPECT_EQ(expected.value(), 20);
   }
 }
 
-// Tests that an existing destination click is incremented and written to Chrome
-// Prefs.
+// Tests that an existing destination click is incremented.
 TEST_F(DestinationUsageHistoryTest,
        HandlesExistingDestinationClickAndAddToPrefs) {
-  // Construct existing usage data stored in prefs.
+  // Construct existing usage data, where Bookmarks has been clicked 5 times,
+  // stored in prefs.
   std::vector<overflow_menu::Destination> ranking = {
       overflow_menu::Destination::Bookmarks,
       overflow_menu::Destination::History,
@@ -263,40 +266,40 @@ TEST_F(DestinationUsageHistoryTest,
       overflow_menu::Destination::SiteInfo,
       overflow_menu::Destination::Settings,
   };
-  base::Value::Dict prefHistory;
-  base::Value::Dict prefDayHistory;
-  prefDayHistory.Set(overflow_menu::StringNameForDestination(
-                         overflow_menu::Destination::Bookmarks),
-                     5);
-  prefHistory.Set(base::NumberToString(TodaysDay()), std::move(prefDayHistory));
+  base::Value::Dict history;
+  base::Value::Dict day_history;
+  day_history.Set(overflow_menu::StringNameForDestination(
+                      overflow_menu::Destination::Bookmarks),
+                  5);
+  history.Set(base::NumberToString(TodaysDay().InDays()),
+              std::move(day_history));
 
   // Create DestinationUsageHistory.
-  DestinationUsageHistory* destination_usage_history =
-      CreateDestinationUsageHistoryWithData(ranking, prefHistory);
+  InitializeDestinationUsageHistoryWithData(ranking, history,
+                                            SampleDestinations());
 
   // Click bookmarks destination.
-  [destination_usage_history
-         trackDestinationClick:overflow_menu::Destination::Bookmarks
-      numAboveFoldDestinations:numAboveFoldDestinations];
+  [destination_usage_history_
+      recordClickForDestination:overflow_menu::Destination::Bookmarks];
 
-  // Fetch saved destination usage history.
-  const base::Value::Dict& history =
-      destination_usage_history.prefService->GetDict(
-          prefs::kOverflowMenuDestinationUsageHistory);
+  ScopedDictPrefUpdate update(prefs_.get(),
+                              prefs::kOverflowMenuDestinationUsageHistory);
 
-  // Query saved usage history for Bookmarks entry for `TodaysDay`.
-  const base::Value* target = history.FindByDottedPath(
-      DottedPath(TodaysDay(), overflow_menu::Destination::Bookmarks));
+  std::optional<int> expected = update->FindIntByDottedPath(
+      DottedPath(TodaysDay().InDays(), overflow_menu::Destination::Bookmarks));
 
-  // Verify bookmarks entry exists and has been clicked once.
-  ASSERT_NE(target, nullptr);
-  EXPECT_TRUE(destination_usage_history.prefService->HasPrefPath(
-      prefs::kOverflowMenuDestinationUsageHistory));
-  EXPECT_EQ(6, target->GetInt());
+  // Verify bookmarks entry exists.
+  EXPECT_TRUE(expected.has_value());
+
+  // Verify bookmarks entry has single click (plus the existing 5 clicks)
+  // for today.
+  EXPECT_EQ(expected.value(), 6);
 }
 
 TEST_F(DestinationUsageHistoryTest, DoesNotSwapTwoShownDestinations) {
-  std::vector<overflow_menu::Destination> ranking = {
+  DestinationRanking sample_destinations = SampleDestinations();
+
+  DestinationRanking ranking = {
       overflow_menu::Destination::Bookmarks,
       overflow_menu::Destination::History,
       overflow_menu::Destination::ReadingList,
@@ -308,37 +311,33 @@ TEST_F(DestinationUsageHistoryTest, DoesNotSwapTwoShownDestinations) {
   };
   base::Value::Dict history;
 
-  DestinationUsageHistory* destination_usage_history =
-      CreateDestinationUsageHistoryWithData(ranking, history);
+  DestinationRanking initial_ranking =
+      InitializeDestinationUsageHistoryWithData(ranking, history,
+                                                sample_destinations);
+  // Click bookmarks Reading List five
+  // times.
+  [destination_usage_history_
+      recordClickForDestination:overflow_menu::Destination::ReadingList];
+  [destination_usage_history_
+      recordClickForDestination:overflow_menu::Destination::ReadingList];
+  [destination_usage_history_
+      recordClickForDestination:overflow_menu::Destination::ReadingList];
+  [destination_usage_history_
+      recordClickForDestination:overflow_menu::Destination::ReadingList];
+  [destination_usage_history_
+      recordClickForDestination:overflow_menu::Destination::ReadingList];
 
-  // Click bookmarks Reading List (currently in ranking position 3) five times.
-  [destination_usage_history
-         trackDestinationClick:overflow_menu::Destination::ReadingList
-      numAboveFoldDestinations:numAboveFoldDestinations];
-  [destination_usage_history
-         trackDestinationClick:overflow_menu::Destination::ReadingList
-      numAboveFoldDestinations:numAboveFoldDestinations];
-  [destination_usage_history
-         trackDestinationClick:overflow_menu::Destination::ReadingList
-      numAboveFoldDestinations:numAboveFoldDestinations];
-  [destination_usage_history
-         trackDestinationClick:overflow_menu::Destination::ReadingList
-      numAboveFoldDestinations:numAboveFoldDestinations];
-  [destination_usage_history
-         trackDestinationClick:overflow_menu::Destination::ReadingList
-      numAboveFoldDestinations:numAboveFoldDestinations];
+  DestinationRanking sorted_ranking = [destination_usage_history_
+      sortedDestinationsFromCurrentRanking:initial_ranking
+                     availableDestinations:sample_destinations];
 
-  // Verify that no ranking swaps occurred.
-  std::vector<overflow_menu::Destination> newRanking =
-      [destination_usage_history
-          updatedRankWithCurrentRanking:ranking
-               numAboveFoldDestinations:numAboveFoldDestinations];
-
-  EXPECT_EQ(ranking, newRanking);
+  EXPECT_EQ(initial_ranking, sorted_ranking);
 }
 
 TEST_F(DestinationUsageHistoryTest, DoesNotSwapTwoUnshownDestinations) {
-  std::vector<overflow_menu::Destination> ranking = {
+  DestinationRanking sample_destinations = SampleDestinations();
+
+  DestinationRanking ranking = {
       overflow_menu::Destination::Bookmarks,
       overflow_menu::Destination::History,
       overflow_menu::Destination::ReadingList,
@@ -349,58 +348,62 @@ TEST_F(DestinationUsageHistoryTest, DoesNotSwapTwoUnshownDestinations) {
       overflow_menu::Destination::Settings,
   };
   base::Value::Dict history;
-  base::Value::Dict dayHistory;
-  dayHistory.Set(overflow_menu::StringNameForDestination(
-                     overflow_menu::Destination::Bookmarks),
-                 1);
-  dayHistory.Set(overflow_menu::StringNameForDestination(
-                     overflow_menu::Destination::History),
-                 1);
-  dayHistory.Set(overflow_menu::StringNameForDestination(
-                     overflow_menu::Destination::ReadingList),
-                 1);
-  dayHistory.Set(overflow_menu::StringNameForDestination(
-                     overflow_menu::Destination::Passwords),
-                 1);
-  dayHistory.Set(overflow_menu::StringNameForDestination(
-                     overflow_menu::Destination::Downloads),
-                 1);
+  base::Value::Dict day_history;
+  day_history.Set(overflow_menu::StringNameForDestination(
+                      overflow_menu::Destination::Bookmarks),
+                  3);
+  day_history.Set(overflow_menu::StringNameForDestination(
+                      overflow_menu::Destination::History),
+                  3);
+  day_history.Set(overflow_menu::StringNameForDestination(
+                      overflow_menu::Destination::ReadingList),
+                  3);
+  day_history.Set(overflow_menu::StringNameForDestination(
+                      overflow_menu::Destination::Passwords),
+                  3);
+  day_history.Set(overflow_menu::StringNameForDestination(
+                      overflow_menu::Destination::Downloads),
+                  3);
+  day_history.Set(overflow_menu::StringNameForDestination(
+                      overflow_menu::Destination::RecentTabs),
+                  1);
+  day_history.Set(overflow_menu::StringNameForDestination(
+                      overflow_menu::Destination::SiteInfo),
+                  1);
+  day_history.Set(overflow_menu::StringNameForDestination(
+                      overflow_menu::Destination::Settings),
+                  1);
 
-  history.Set(base::NumberToString(TodaysDay()), std::move(dayHistory));
+  history.Set(base::NumberToString(TodaysDay().InDays()),
+              std::move(day_history));
 
-  DestinationUsageHistory* destination_usage_history =
-      CreateDestinationUsageHistoryWithData(ranking, history);
+  DestinationRanking initial_ranking =
+      InitializeDestinationUsageHistoryWithData(ranking, history,
+                                                sample_destinations);
 
   // Click Recent Tabs (currently in ranking position 6) once.
-  [destination_usage_history
-         trackDestinationClick:overflow_menu::Destination::RecentTabs
-      numAboveFoldDestinations:numAboveFoldDestinations];
-  EXPECT_EQ(ranking,
-            [destination_usage_history
-                updatedRankWithCurrentRanking:ranking
-                     numAboveFoldDestinations:numAboveFoldDestinations]);
+  [destination_usage_history_
+      recordClickForDestination:overflow_menu::Destination::RecentTabs];
 
   // Click Site Inforamtion (currently in ranking position 7) once.
-  [destination_usage_history
-         trackDestinationClick:overflow_menu::Destination::SiteInfo
-      numAboveFoldDestinations:numAboveFoldDestinations];
-  EXPECT_EQ(ranking,
-            [destination_usage_history
-                updatedRankWithCurrentRanking:ranking
-                     numAboveFoldDestinations:numAboveFoldDestinations]);
+  [destination_usage_history_
+      recordClickForDestination:overflow_menu::Destination::SiteInfo];
 
   // Click Settings (currently in last position) once.
-  [destination_usage_history
-         trackDestinationClick:overflow_menu::Destination::Settings
-      numAboveFoldDestinations:numAboveFoldDestinations];
-  EXPECT_EQ(ranking,
-            [destination_usage_history
-                updatedRankWithCurrentRanking:ranking
-                     numAboveFoldDestinations:numAboveFoldDestinations]);
+  [destination_usage_history_
+      recordClickForDestination:overflow_menu::Destination::Settings];
+
+  DestinationRanking sorted_ranking = [destination_usage_history_
+      sortedDestinationsFromCurrentRanking:initial_ranking
+                     availableDestinations:sample_destinations];
+
+  EXPECT_EQ(initial_ranking, sorted_ranking);
 }
 
 TEST_F(DestinationUsageHistoryTest, DeletesExpiredUsageData) {
-  std::vector<overflow_menu::Destination> ranking = {
+  DestinationRanking sample_destinations = SampleDestinations();
+
+  DestinationRanking ranking = {
       overflow_menu::Destination::Bookmarks,
       overflow_menu::Destination::History,
       overflow_menu::Destination::ReadingList,
@@ -414,41 +417,58 @@ TEST_F(DestinationUsageHistoryTest, DeletesExpiredUsageData) {
   base::Value::Dict history;
 
   // Usage data just a bit older than 1 year.
-  int recently_expired_day = TodaysDay() - 366;
+  base::TimeDelta recently_expired_day = TodaysDay() - base::Days(366);
   base::Value::Dict recently_expired_day_history;
   recently_expired_day_history.Set(overflow_menu::StringNameForDestination(
                                        overflow_menu::Destination::Bookmarks),
                                    1);
-  history.Set(base::NumberToString(recently_expired_day),
+  history.Set(base::NumberToString(recently_expired_day.InDays()),
               std::move(recently_expired_day_history));
 
   // Usage data almost 3 years old.
-  int expired_day = TodaysDay() - 1000;
+  base::TimeDelta expired_day = TodaysDay() - base::Days(1000);
   base::Value::Dict expired_day_history;
   expired_day_history.Set(overflow_menu::StringNameForDestination(
                               overflow_menu::Destination::Bookmarks),
                           1);
-  history.Set(base::NumberToString(expired_day),
+  history.Set(base::NumberToString(expired_day.InDays()),
               std::move(expired_day_history));
 
-  DestinationUsageHistory* destination_usage_history =
-      CreateDestinationUsageHistoryWithData(ranking, history);
+  InitializeDestinationUsageHistoryWithData(ranking, history,
+                                            sample_destinations);
 
-  // Click destination to trigger ranking algorithm which removes expired data.
-  [destination_usage_history
-         trackDestinationClick:overflow_menu::Destination::Settings
-      numAboveFoldDestinations:numAboveFoldDestinations];
+  [destination_usage_history_
+      sortedDestinationsFromCurrentRanking:ranking
+                     availableDestinations:sample_destinations];
 
-  // Fetch saved destination usage history.
-  const base::Value::Dict& saved_history =
-      destination_usage_history.prefService->GetDict(
-          prefs::kOverflowMenuDestinationUsageHistory);
+  ScopedDictPrefUpdate update(prefs_.get(),
+                              prefs::kOverflowMenuDestinationUsageHistory);
 
-  std::set<std::string> seen_keys;
-  for (auto&& [day, day_history] : saved_history)
-    seen_keys.insert(day);
+  // Has one entry for today's seeded history.
+  EXPECT_EQ(update->size(), (size_t)1);
+  EXPECT_NE(update->Find(base::NumberToString(TodaysDay().InDays())), nullptr);
+  EXPECT_EQ(update->Find(base::NumberToString(recently_expired_day.InDays())),
+            nullptr);
+  EXPECT_EQ(update->Find(base::NumberToString(expired_day.InDays())), nullptr);
+}
 
-  std::set<std::string> expected_keys = {"ranking",
-                                         base::NumberToString(TodaysDay())};
-  ASSERT_EQ(expected_keys, seen_keys);
+TEST_F(DestinationUsageHistoryTest, ClearsUsageData) {
+  base::Value::Dict history;
+
+  // Usage data for yesterday.
+  base::TimeDelta day = TodaysDay() - base::Days(1);
+  base::Value::Dict day_history;
+  day_history.Set(overflow_menu::StringNameForDestination(
+                      overflow_menu::Destination::Bookmarks),
+                  1);
+  history.Set(base::NumberToString(day.InDays()), std::move(day_history));
+
+  DestinationRanking ranking;
+  InitializeDestinationUsageHistoryWithData(ranking, history, {});
+
+  [destination_usage_history_ clearStoredClickData];
+
+  const base::Value::Dict& new_history =
+      prefs_->GetDict(prefs::kOverflowMenuDestinationUsageHistory);
+  EXPECT_EQ(new_history.size(), 0u);
 }

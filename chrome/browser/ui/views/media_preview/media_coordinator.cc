@@ -1,0 +1,65 @@
+// Copyright 2023 The Chromium Authors
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+
+#include "chrome/browser/ui/views/media_preview/media_coordinator.h"
+
+#include <memory>
+
+#include "chrome/browser/ui/views/chrome_layout_provider.h"
+#include "chrome/browser/ui/views/media_preview/media_view.h"
+#include "ui/views/background.h"
+#include "ui/views/border.h"
+#include "ui/views/view.h"
+
+MediaCoordinator::EligibleDevices::EligibleDevices() = default;
+MediaCoordinator::EligibleDevices::EligibleDevices(
+    std::vector<std::string> cameras,
+    std::vector<std::string> mics)
+    : cameras(cameras), mics(mics) {}
+MediaCoordinator::EligibleDevices::~EligibleDevices() = default;
+MediaCoordinator::EligibleDevices::EligibleDevices(const EligibleDevices&) =
+    default;
+
+MediaCoordinator::MediaCoordinator(ViewType view_type,
+                                   views::View& parent_view,
+                                   std::optional<size_t> index,
+                                   bool is_subsection,
+                                   EligibleDevices eligible_devices) {
+  media_view_ =
+      parent_view.AddChildViewAt(std::make_unique<MediaView>(is_subsection),
+                                 index.value_or(parent_view.children().size()));
+
+  if (!is_subsection) {
+    auto* provider = ChromeLayoutProvider::Get();
+    const int kRoundedRadius = provider->GetCornerRadiusMetric(
+        views::ShapeContextTokens::kOmniboxExpandedRadius);
+    const int kBorderThickness =
+        provider->GetDistanceMetric(views::DISTANCE_RELATED_CONTROL_VERTICAL);
+
+    media_view_->SetBorder(views::CreateThemedRoundedRectBorder(
+        kBorderThickness, kRoundedRadius, ui::kColorButtonBorder));
+    media_view_->SetBackground(views::CreateThemedRoundedRectBackground(
+        ui::kColorButtonBorder, kRoundedRadius));
+  }
+
+  if (view_type != ViewType::kMicOnly) {
+    camera_coordinator_.emplace(*media_view_, /*needs_borders=*/!is_subsection,
+                                eligible_devices.cameras);
+  }
+
+  if (view_type != ViewType::kCameraOnly) {
+    mic_coordinator_.emplace(*media_view_, /*needs_borders=*/!is_subsection,
+                             eligible_devices.mics);
+  }
+}
+
+MediaCoordinator::~MediaCoordinator() {
+  // Reset child coordinators before removing view.
+  camera_coordinator_.reset();
+  mic_coordinator_.reset();
+  if (media_view_ && media_view_->parent()) {
+    media_view_->parent()->RemoveChildViewT(
+        std::exchange(media_view_, nullptr));
+  }
+}

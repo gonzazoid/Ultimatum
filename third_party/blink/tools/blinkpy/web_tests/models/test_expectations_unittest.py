@@ -28,14 +28,12 @@
 
 from collections import OrderedDict
 import optparse
+import textwrap
 import unittest
 
 from blinkpy.common.host_mock import MockHost
-from blinkpy.common.system.output_capture import OutputCapture
-from blinkpy.web_tests.models.test_configuration import (
-    TestConfiguration, TestConfigurationConverter)
 from blinkpy.web_tests.models.test_expectations import (
-    TestExpectations, SystemConfigurationRemover, ParseError)
+    TestExpectations, SystemConfigurationEditor, ParseError)
 from blinkpy.web_tests.models.typ_types import ResultType, Expectation
 from six.moves import range
 from functools import reduce
@@ -329,14 +327,15 @@ class FlagExpectationsTests(Base):
             ResultType.Pass, ResultType.Timeout)
 
 
-class SystemConfigurationRemoverTests(Base):
+class SystemConfigurationEditorTests(Base):
     def __init__(self, testFunc):
-        super(SystemConfigurationRemoverTests, self).__init__(testFunc)
+        super(SystemConfigurationEditorTests, self).__init__(testFunc)
         self._port.configuration_specifier_macros_dict = {
             'mac': ['mac10.10', 'mac10.11', 'mac10.12', 'mac10.13'],
             'win': ['win7', 'win10'],
             'linux': ['precise', 'trusty']
         }
+        self.maxDiff = None
 
     def set_up_using_raw_expectations(self, content):
         self._general_exp_filename = self._port.host.filesystem.join(
@@ -345,9 +344,288 @@ class SystemConfigurationRemoverTests(Base):
                                                    content)
         expectations_dict = {self._general_exp_filename: content}
         test_expectations = TestExpectations(self._port, expectations_dict)
-        self._system_config_remover = SystemConfigurationRemover(
-            self._port.host.filesystem,
+        self._system_config_remover = SystemConfigurationEditor(
             test_expectations)
+
+    def test_update_versions_with_autotriage(self):
+        raw_expectations = textwrap.dedent("""\
+            # tags: [ Mac10.10 Mac10.11 Mac10.12 Mac ]
+            # results: [ Failure Crash ]
+            # Below Expectation should be split
+            crbug.com/123 [ Mac ] failures/expected/text.html?\* [ Failure ]
+            """)
+        self.set_up_using_raw_expectations(raw_expectations)
+        change = self._system_config_remover.update_versions(
+            'failures/expected/text.html?*', {'Mac10.11'}, {ResultType.Crash})
+        self.assertEqual(len(change.lines_removed), 1)
+        self.assertEqual(len(change.lines_added), 3)
+        self._system_config_remover.update_expectations()
+        updated_exps = self._port.host.filesystem.read_text_file(
+            self._general_exp_filename)
+        self.assertEqual(
+            updated_exps,
+            textwrap.dedent("""\
+                # tags: [ Mac10.10 Mac10.11 Mac10.12 Mac ]
+                # results: [ Failure Crash ]
+                # Below Expectation should be split
+                crbug.com/123 [ Mac10.10 ] failures/expected/text.html?\* [ Failure ]
+                crbug.com/123 [ Mac10.11 ] failures/expected/text.html?\* [ Crash ]
+                crbug.com/123 [ Mac10.12 ] failures/expected/text.html?\* [ Failure ]
+                """))
+
+    def test_update_versions_marker(self):
+        raw_expectations = textwrap.dedent("""\
+            # tags: [ Mac10.10 Mac10.11 Mac10.12 Mac ]
+            # results: [ Failure Crash ]
+
+            # === wpt-importer ===
+            [ Mac10.12 ] failures/expected/image.html [ Failure ]
+
+            # Should not change:
+            [ Mac ] failures/expected/text.html?\* [ Failure ]
+            """)
+        self.set_up_using_raw_expectations(raw_expectations)
+        change = self._system_config_remover.update_versions(
+            'failures/expected/image.html', {'Mac10.11'}, {ResultType.Crash},
+            marker='=== wpt-importer ===')
+        self.assertEqual(len(change.lines_removed), 0)
+        self.assertEqual(len(change.lines_added), 1)
+        self._system_config_remover.update_expectations()
+        updated_exps = self._port.host.filesystem.read_text_file(
+            self._general_exp_filename)
+        self.assertEqual(
+            updated_exps,
+            textwrap.dedent("""\
+                # tags: [ Mac10.10 Mac10.11 Mac10.12 Mac ]
+                # results: [ Failure Crash ]
+
+                # === wpt-importer ===
+                [ Mac10.11 ] failures/expected/image.html [ Crash ]
+                [ Mac10.12 ] failures/expected/image.html [ Failure ]
+
+                # Should not change:
+                [ Mac ] failures/expected/text.html?\* [ Failure ]
+                """))
+
+    def test_update_versions_marker_not_found(self):
+        raw_expectations = textwrap.dedent("""\
+            # tags: [ Mac10.10 Mac10.11 Mac10.12 Mac ]
+            # tags: [ Debug Release ]
+            # results: [ Failure Crash ]
+            [ Mac Debug ] failures/expected/text.html?\* [ Failure ]
+            """)
+        self.set_up_using_raw_expectations(raw_expectations)
+        change = self._system_config_remover.update_versions(
+            'failures/expected/text.html?*', {'Mac10.11'},
+            {ResultType.Failure},
+            marker='create-me')
+        self.assertEqual(len(change.lines_removed), 1)
+        self.assertEqual(len(change.lines_added), 3)
+        self._system_config_remover.update_expectations()
+        updated_exps = self._port.host.filesystem.read_text_file(
+            self._general_exp_filename)
+        self.assertEqual(
+            updated_exps,
+            textwrap.dedent("""\
+                # tags: [ Mac10.10 Mac10.11 Mac10.12 Mac ]
+                # tags: [ Debug Release ]
+                # results: [ Failure Crash ]
+                [ Debug Mac10.10 ] failures/expected/text.html?\* [ Failure ]
+                [ Debug Mac10.12 ] failures/expected/text.html?\* [ Failure ]
+
+                # create-me
+                [ Mac10.11 ] failures/expected/text.html?\* [ Failure ]
+                """))
+
+    def test_update_versions_end_of_file(self):
+        raw_expectations = textwrap.dedent("""\
+            # tags: [ Mac10.10 Mac10.11 Mac10.12 Mac ]
+            # results: [ Failure Crash ]
+            # Below Expectation should be split
+            crbug.com/123 [ Mac ] failures/expected/text.html?\* [ Failure ]  # comment
+
+            """)
+        self.set_up_using_raw_expectations(raw_expectations)
+        change = self._system_config_remover.update_versions(
+            'failures/expected/text.html?*', {'Mac10.11'},
+            {ResultType.Failure, ResultType.Crash},
+            autotriage=False)
+        self.assertEqual(len(change.lines_removed), 1)
+        self.assertEqual(len(change.lines_added), 3)
+        self._system_config_remover.update_expectations()
+        updated_exps = self._port.host.filesystem.read_text_file(
+            self._general_exp_filename)
+        self.assertEqual(
+            updated_exps,
+            textwrap.dedent("""\
+                # tags: [ Mac10.10 Mac10.11 Mac10.12 Mac ]
+                # results: [ Failure Crash ]
+                # Below Expectation should be split
+                crbug.com/123 [ Mac10.10 ] failures/expected/text.html?\* [ Failure ]  # comment
+                crbug.com/123 [ Mac10.12 ] failures/expected/text.html?\* [ Failure ]  # comment
+
+                [ Mac10.11 ] failures/expected/text.html?\* [ Crash Failure ]
+                """))
+
+    def test_update_then_merge_without_net_change(self):
+        raw_expectations = textwrap.dedent("""\
+            # tags: [ Win7 Win10 Win ]
+            # results: [ Failure Crash ]
+            crbug.com/123 [ Win ] failures/expected/text.html?\* [ Failure ]
+            """)
+        self.set_up_using_raw_expectations(raw_expectations)
+        change = self._system_config_remover.update_versions(
+            'failures/expected/text.html?*', {'Win7'}, {ResultType.Failure})
+        change += self._system_config_remover.merge_versions(
+            'failures/expected/text.html?*')
+        self.assertEqual(len(change.lines_removed), 0)
+        self.assertEqual(len(change.lines_added), 0)
+        self._system_config_remover.update_expectations()
+        updated_exps = self._port.host.filesystem.read_text_file(
+            self._general_exp_filename)
+        self.assertEqual(updated_exps, raw_expectations)
+
+    def test_merge_versions_os(self):
+        raw_expectations = textwrap.dedent("""\
+            # tags: [ Mac10.10 Mac10.11 Mac10.12 Mac10.13 Mac Win7 Win10 Win ]
+            # results: [ Failure Crash ]
+            # Below Expectation should be merged
+            crbug.com/123 [ Win7 ] failures/expected/text.html?\* [ Failure ]  # comment
+            crbug.com/123 [ Mac10.10 ] failures/expected/text.html?\* [ Failure ]  # comment
+            crbug.com/123 [ Mac10.11 ] failures/expected/text.html?\* [ Failure ]  # comment
+            crbug.com/456 [ Mac10.12 ] failures/expected/text.html?\* [ Failure ]  # comment 2
+            crbug.com/456 [ Mac10.13 ] failures/expected/text.html?\* [ Failure ]  # comment 2
+            """)
+        self.set_up_using_raw_expectations(raw_expectations)
+        change = self._system_config_remover.merge_versions(
+            'failures/expected/text.html?*')
+        self.assertEqual(len(change.lines_removed), 4)
+        self.assertEqual(len(change.lines_added), 1)
+        self._system_config_remover.update_expectations()
+        updated_exps = self._port.host.filesystem.read_text_file(
+            self._general_exp_filename)
+        self.assertEqual(
+            updated_exps,
+            textwrap.dedent("""\
+                # tags: [ Mac10.10 Mac10.11 Mac10.12 Mac10.13 Mac Win7 Win10 Win ]
+                # results: [ Failure Crash ]
+                # Below Expectation should be merged
+                crbug.com/123 [ Win7 ] failures/expected/text.html?\* [ Failure ]  # comment
+                crbug.com/123 crbug.com/456 [ Mac ] failures/expected/text.html?\* [ Failure ]  # comment, comment 2
+                """))
+
+    def test_merge_versions_generic(self):
+        raw_expectations = textwrap.dedent("""\
+            # tags: [ Mac10.10 Mac10.11 Mac10.12 Mac10.13 Mac Win7 Win10 Win Precise Trusty Linux ]
+            # results: [ Failure Crash ]
+            # Below Expectation should be merged
+            crbug.com/123 [ Win7 ] failures/expected/text.html?\* [ Failure ]  # comment
+            crbug.com/123 [ Win10 ] failures/expected/text.html?\* [ Failure ]  # comment
+            crbug.com/123 [ Mac ] failures/expected/text.html?\* [ Failure ]  # comment
+            crbug.com/123 [ Precise ] failures/expected/text.html?\* [ Failure ]  # comment
+            crbug.com/123 [ Trusty ] failures/expected/text.html?\* [ Failure ]  # comment
+            """)
+        self.set_up_using_raw_expectations(raw_expectations)
+        change = self._system_config_remover.merge_versions(
+            'failures/expected/text.html?*')
+        self.assertEqual(len(change.lines_removed), 5)
+        self.assertEqual(len(change.lines_added), 1)
+        self._system_config_remover.update_expectations()
+        updated_exps = self._port.host.filesystem.read_text_file(
+            self._general_exp_filename)
+        self.assertEqual(
+            updated_exps,
+            textwrap.dedent("""\
+                # tags: [ Mac10.10 Mac10.11 Mac10.12 Mac10.13 Mac Win7 Win10 Win Precise Trusty Linux ]
+                # results: [ Failure Crash ]
+                # Below Expectation should be merged
+                crbug.com/123 failures/expected/text.html?\* [ Failure ]  # comment
+                """))
+
+    def test_merge_versions_with_other_specifiers(self):
+        raw_expectations = textwrap.dedent("""\
+            # tags: [ Win7 Win10 Win ]
+            # tags: [ Debug Release ]
+            # results: [ Failure Crash ]
+            crbug.com/123 [ Debug Win7 ] failures/expected/text.html?\* [ Crash ]  # DCHECK triggered
+            crbug.com/123 [ Debug Win10 ] failures/expected/text.html?\* [ Crash ]
+            """)
+        self.set_up_using_raw_expectations(raw_expectations)
+        change = self._system_config_remover.merge_versions(
+            'failures/expected/text.html?*')
+        self.assertEqual(len(change.lines_removed), 2)
+        self.assertEqual(len(change.lines_added), 1)
+        self._system_config_remover.update_expectations()
+        updated_exps = self._port.host.filesystem.read_text_file(
+            self._general_exp_filename)
+        self.assertEqual(
+            updated_exps,
+            textwrap.dedent("""\
+                # tags: [ Win7 Win10 Win ]
+                # tags: [ Debug Release ]
+                # results: [ Failure Crash ]
+                crbug.com/123 [ Debug Win ] failures/expected/text.html?\* [ Crash ]  # DCHECK triggered
+                """))
+
+    def test_merge_versions_skip_with_different_results(self):
+        raw_expectations = textwrap.dedent("""\
+            # tags: [ Mac10.10 Mac10.11 Mac10.12 Mac10.13 Mac Win7 Win10 Win Precise Trusty Linux ]
+            # results: [ Failure Crash ]
+            # The Win and Linux expectations should be merged.
+            # The Mac results prevent merging to a generic expectation.
+            crbug.com/123 [ Win7 ] failures/expected/text.html?\* [ Failure ]  # comment
+            crbug.com/123 [ Win10 ] failures/expected/text.html?\* [ Failure ]  # comment
+            crbug.com/123 [ Mac ] failures/expected/text.html?\* [ Crash Failure ]  # comment
+            crbug.com/123 [ Precise ] failures/expected/text.html?\* [ Failure ]  # comment
+            crbug.com/123 [ Trusty ] failures/expected/text.html?\* [ Failure ]  # comment
+            """)
+        self.set_up_using_raw_expectations(raw_expectations)
+        change = self._system_config_remover.merge_versions(
+            'failures/expected/text.html?*')
+        self.assertEqual(len(change.lines_removed), 4)
+        self.assertEqual(len(change.lines_added), 2)
+        self._system_config_remover.update_expectations()
+        updated_exps = self._port.host.filesystem.read_text_file(
+            self._general_exp_filename)
+        self.assertEqual(
+            updated_exps,
+            textwrap.dedent("""\
+                # tags: [ Mac10.10 Mac10.11 Mac10.12 Mac10.13 Mac Win7 Win10 Win Precise Trusty Linux ]
+                # results: [ Failure Crash ]
+                # The Win and Linux expectations should be merged.
+                # The Mac results prevent merging to a generic expectation.
+                crbug.com/123 [ Win ] failures/expected/text.html?\* [ Failure ]  # comment
+                crbug.com/123 [ Mac ] failures/expected/text.html?\* [ Crash Failure ]  # comment
+                crbug.com/123 [ Linux ] failures/expected/text.html?\* [ Failure ]  # comment
+                """))
+
+    def test_merge_versions_skip_with_disjoint_specifiers(self):
+        raw_expectations = textwrap.dedent("""\
+            # tags: [ Win7 Win10 Win ]
+            # tags: [ Debug Release ]
+            # results: [ Failure Crash ]
+            # Debug and Release describe disjoint test configurations.
+            crbug.com/123 [ Debug Win7 ] failures/expected/text.html?\* [ Failure ]
+            crbug.com/123 [ Release Win10 ] failures/expected/text.html?\* [ Failure ]
+            """)
+        self.set_up_using_raw_expectations(raw_expectations)
+        change = self._system_config_remover.merge_versions(
+            'failures/expected/text.html?*')
+        self.assertEqual(len(change.lines_removed), 0)
+        self.assertEqual(len(change.lines_added), 0)
+        self._system_config_remover.update_expectations()
+        updated_exps = self._port.host.filesystem.read_text_file(
+            self._general_exp_filename)
+        self.assertEqual(
+            updated_exps,
+            textwrap.dedent("""\
+                # tags: [ Win7 Win10 Win ]
+                # tags: [ Debug Release ]
+                # results: [ Failure Crash ]
+                # Debug and Release describe disjoint test configurations.
+                crbug.com/123 [ Debug Win7 ] failures/expected/text.html?\* [ Failure ]
+                crbug.com/123 [ Release Win10 ] failures/expected/text.html?\* [ Failure ]
+                """))
 
     def test_remove_mac_version_from_mac_expectation(self):
         raw_expectations = (
@@ -356,8 +634,10 @@ class SystemConfigurationRemoverTests(Base):
             '# Below Expectation should be split\n'
             '[ Mac ] failures/expected/text.html?\* [ Failure ]\n')
         self.set_up_using_raw_expectations(raw_expectations)
-        self._system_config_remover.remove_os_versions(
+        change = self._system_config_remover.remove_os_versions(
             'failures/expected/text.html?*', set(['Mac10.10']))
+        self.assertEqual(len(change.lines_removed), 1)
+        self.assertEqual(len(change.lines_added), 2)
         self._system_config_remover.update_expectations()
         updated_exps = self._port.host.filesystem.read_text_file(
             self._general_exp_filename)
@@ -376,8 +656,10 @@ class SystemConfigurationRemoverTests(Base):
             '# Below Expectation should be unaffected\n'
             '[ Linux ] failures/expected/text.html [ Failure ]\n')
         self.set_up_using_raw_expectations(raw_expectations)
-        self._system_config_remover.remove_os_versions(
+        change = self._system_config_remover.remove_os_versions(
             'failures/expected/text.html', set(['Mac10.10']))
+        self.assertEqual(len(change.lines_removed), 0)
+        self.assertEqual(len(change.lines_added), 0)
         self._system_config_remover.update_expectations()
         updated_exps = self._port.host.filesystem.read_text_file(
             self._general_exp_filename)
@@ -390,8 +672,10 @@ class SystemConfigurationRemoverTests(Base):
             '# Below Expectation should be split\n'
             'failures/expected/text.html [ Failure ]\n')
         self.set_up_using_raw_expectations(raw_expectations)
-        self._system_config_remover.remove_os_versions(
+        change = self._system_config_remover.remove_os_versions(
             'failures/expected/text.html', set(['Mac10.10']))
+        self.assertEqual(len(change.lines_removed), 1)
+        self.assertEqual(len(change.lines_added), 4)
         self._system_config_remover.update_expectations()
         updated_exps = self._port.host.filesystem.read_text_file(
             self._general_exp_filename)
@@ -412,9 +696,11 @@ class SystemConfigurationRemoverTests(Base):
             '# The expectation below and this comment block should be deleted\n'
             '[ Mac ] failures/expected/text.html [ Failure ]\n')
         self.set_up_using_raw_expectations(raw_expectations)
-        self._system_config_remover.remove_os_versions(
+        change = self._system_config_remover.remove_os_versions(
             'failures/expected/text.html',
             {'Mac10.10', 'Mac10.11', 'Mac10.12'})
+        self.assertEqual(len(change.lines_removed), 1)
+        self.assertEqual(len(change.lines_added), 0)
         self._system_config_remover.update_expectations()
         updated_exps = self._port.host.filesystem.read_text_file(
             self._general_exp_filename)
@@ -429,9 +715,11 @@ class SystemConfigurationRemoverTests(Base):
             '# Below Expectation should be split\n'
             'failures/expected/text.html [ Failure ]\n')
         self.set_up_using_raw_expectations(raw_expectations)
-        self._system_config_remover.remove_os_versions(
+        change = self._system_config_remover.remove_os_versions(
             'failures/expected/text.html',
             {'Mac10.10', 'Mac10.11', 'Mac10.12'})
+        self.assertEqual(len(change.lines_removed), 1)
+        self.assertEqual(len(change.lines_added), 2)
         self._system_config_remover.update_expectations()
         updated_exps = self._port.host.filesystem.read_text_file(
             self._general_exp_filename)
@@ -450,9 +738,11 @@ class SystemConfigurationRemoverTests(Base):
             '# Below Expectation should be unaffected\n'
             '[ Linux ] failures/expected/text.html [ Failure ]\n')
         self.set_up_using_raw_expectations(raw_expectations)
-        self._system_config_remover.remove_os_versions(
+        change = self._system_config_remover.remove_os_versions(
             'failures/expected/text.html',
             {'Mac10.10', 'Mac10.11', 'Mac10.12'})
+        self.assertEqual(len(change.lines_removed), 0)
+        self.assertEqual(len(change.lines_added), 0)
         self._system_config_remover.update_expectations()
         updated_exps = self._port.host.filesystem.read_text_file(
             self._general_exp_filename)
@@ -468,8 +758,10 @@ class SystemConfigurationRemoverTests(Base):
         all_versions = reduce(
             lambda x, y: x + y,
             list(self._port.configuration_specifier_macros_dict.values()))
-        self._system_config_remover.remove_os_versions(
+        change = self._system_config_remover.remove_os_versions(
             'failures/expected/text.html', all_versions)
+        self.assertEqual(len(change.lines_removed), 1)
+        self.assertEqual(len(change.lines_added), 0)
         self._system_config_remover.update_expectations()
         updated_exps = self._port.host.filesystem.read_text_file(
             self._general_exp_filename)
@@ -488,8 +780,10 @@ class SystemConfigurationRemoverTests(Base):
         all_versions = reduce(
             lambda x, y: x + y,
             list(self._port.configuration_specifier_macros_dict.values()))
-        self._system_config_remover.remove_os_versions(
+        change = self._system_config_remover.remove_os_versions(
             'failures/expected/text.html', all_versions)
+        self.assertEqual(len(change.lines_removed), 1)
+        self.assertEqual(len(change.lines_added), 0)
         self._system_config_remover.update_expectations()
         updated_exps = self._port.host.filesystem.read_text_file(
             self._general_exp_filename)
@@ -505,8 +799,10 @@ class SystemConfigurationRemoverTests(Base):
             '# Below Expectation should be unaffected\n'
             '[ Mac10.11 ] failures/expected/text.html [ Failure ]\n')
         self.set_up_using_raw_expectations(raw_expectations)
-        self._system_config_remover.remove_os_versions(
+        change = self._system_config_remover.remove_os_versions(
             'failures/expected/text.html', set(['Mac10.10']))
+        self.assertEqual(len(change.lines_removed), 0)
+        self.assertEqual(len(change.lines_added), 0)
         self._system_config_remover.update_expectations()
         updated_exps = self._port.host.filesystem.read_text_file(
             self._general_exp_filename)
@@ -519,8 +815,10 @@ class SystemConfigurationRemoverTests(Base):
             '# Below Expectation as well as this comment should be deleted\n'
             '[ Mac10.10 ] failures/expected/text.html [ Failure ]\n')
         self.set_up_using_raw_expectations(raw_expectations)
-        self._system_config_remover.remove_os_versions(
+        change = self._system_config_remover.remove_os_versions(
             'failures/expected/text.html', set(['Mac10.10']))
+        self.assertEqual(len(change.lines_removed), 1)
+        self.assertEqual(len(change.lines_added), 0)
         self._system_config_remover.update_expectations()
         updated_exps = self._port.host.filesystem.read_text_file(
             self._general_exp_filename)
@@ -713,8 +1011,8 @@ class RemoveExpectationsTest(Base):
                                    '# results: [ Failure ]\n'
                                    '\n'
                                    '# This comment will be deleted\n'
-                                   '[ mac ] test1 [ Failure ]\n'
-                                   '[ Win ] test3 [ Crash ]\n'))
+                                   '[ Win ] test3 [ Crash ]\n'
+                                   '[ mac ] test1 [ Failure ]\n'))
 
     def test_remove_after_add(self):
         port = MockHost().port_factory.get('test-win-win7')
@@ -743,35 +1041,11 @@ class RemoveExpectationsTest(Base):
                                    '# results: [ Failure Crash ]\n'
                                    '\n'
                                    '# This comment will not be deleted\n'
-                                   'test2 [ Failure ]\n'
-                                   '[ Mac ] test3 [ Crash ]\n'))
+                                   '[ Mac ] test3 [ Crash ]\n'
+                                   'test2 [ Failure ]\n'))
 
 
 class AddExpectationsTest(Base):
-
-    def test_add_expectation_end_of_file_nonzero_lineno(self):
-        port = MockHost().port_factory.get('test-win-win7')
-        raw_expectations = ('# tags: [ Mac Win ]\n'
-                            '# tags: [ release ]\n'
-                            '# results: [ Failure ]\n'
-                            '\n'
-                            '# this is a block of expectations\n'
-                            'test [ Failure ]\n')
-        expectations_dict = OrderedDict()
-        expectations_dict['/tmp/TestExpectations'] = ''
-        expectations_dict['/tmp/TestExpectations2'] = raw_expectations
-        test_expectations = TestExpectations(port, expectations_dict)
-
-        with self.assertRaises(ValueError) as ctx:
-            test_expectations.add_expectations(
-                '/tmp/TestExpectations2',
-                [Expectation(test='test3',
-                             results=set([ResultType.Failure]))],
-                lineno=0)
-            test_expectations.commit_changes()
-        self.assertIn('append_to_end_of_file must be set to True',
-                      str(ctx.exception))
-
     def test_add_expectation_with_negative_lineno(self):
         port = MockHost().port_factory.get('test-win-win7')
         raw_expectations = ('# tags: [ Mac Win ]\n'
@@ -816,31 +1090,6 @@ class AddExpectationsTest(Base):
             test_expectations.commit_changes()
         self.assertIn('greater than the total line count', str(ctx.exception))
 
-    def test_use_append_to_end_flag_non_zero_lineno(self):
-        # Use append_to_end_of_file=True with lineno != 0
-        # An exception should be raised.
-        port = MockHost().port_factory.get('test-win-win7')
-        raw_expectations = ('# tags: [ Mac Win ]\n'
-                            '# tags: [ release ]\n'
-                            '# results: [ Failure ]\n'
-                            '\n'
-                            '# this is a block of expectations\n'
-                            'test [ Failure ]\n')
-        expectations_dict = OrderedDict()
-        expectations_dict['/tmp/TestExpectations'] = ''
-        expectations_dict['/tmp/TestExpectations2'] = raw_expectations
-        test_expectations = TestExpectations(port, expectations_dict)
-
-        with self.assertRaises(ValueError) as ctx:
-            test_expectations.add_expectations(
-                '/tmp/TestExpectations2',
-                [Expectation(test='test3',
-                             results=set([ResultType.Failure]))],
-                lineno=100, append_to_end_of_file=True)
-            test_expectations.commit_changes()
-        self.assertIn('append_to_end_of_file is set then lineno must be 0',
-                      str(ctx.exception))
-
     def test_add_expectations_to_end_of_file(self):
         port = MockHost().port_factory.get('test-win-win7')
         raw_expectations = ('# tags: [ Mac Win ]\n'
@@ -855,17 +1104,15 @@ class AddExpectationsTest(Base):
         test_expectations = TestExpectations(port, expectations_dict)
         test_expectations.add_expectations(
             '/tmp/TestExpectations2',
-            [Expectation(test='test3', results=set([ResultType.Failure]))],
-            append_to_end_of_file=True)
+            [Expectation(test='test3', results=set([ResultType.Failure]))])
+        test_expectations.add_expectations('/tmp/TestExpectations2', [
+            Expectation(test='test2',
+                        tags={'mac', 'release'},
+                        results={ResultType.Crash, ResultType.Failure})
+        ])
         test_expectations.add_expectations(
             '/tmp/TestExpectations2',
-            [Expectation(test='test2', tags={'mac', 'release'},
-                         results={ResultType.Crash, ResultType.Failure})],
-            append_to_end_of_file=True)
-        test_expectations.add_expectations(
-            '/tmp/TestExpectations2',
-            [Expectation(test='test1', results=set([ResultType.Pass]))],
-            append_to_end_of_file=True)
+            [Expectation(test='test1', results=set([ResultType.Pass]))])
         test_expectations.commit_changes()
         content = port.host.filesystem.read_text_file('/tmp/TestExpectations2')
         self.assertEqual(content, ('# tags: [ Mac Win ]\n'

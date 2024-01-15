@@ -4,11 +4,12 @@
 
 #include "content/browser/blob_storage/blob_registry_wrapper.h"
 
-#include "base/bind.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "content/browser/blob_storage/chrome_blob_storage_context.h"
 #include "content/browser/child_process_security_policy_impl.h"
-#include "content/public/browser/browser_task_traits.h"
+#include "content/public/browser/browser_thread.h"
 #include "content/public/common/content_features.h"
 #include "net/base/features.h"
 #include "storage/browser/blob/blob_registry_impl.h"
@@ -65,8 +66,7 @@ scoped_refptr<BlobRegistryWrapper> BlobRegistryWrapper::Create(
   return result;
 }
 
-BlobRegistryWrapper::BlobRegistryWrapper() {
-}
+BlobRegistryWrapper::BlobRegistryWrapper() = default;
 
 void BlobRegistryWrapper::Bind(
     int process_id,
@@ -79,7 +79,7 @@ void BlobRegistryWrapper::Bind(
               process_id)));
 }
 
-BlobRegistryWrapper::~BlobRegistryWrapper() {}
+BlobRegistryWrapper::~BlobRegistryWrapper() = default;
 
 void BlobRegistryWrapper::InitializeOnIOThreadDeprecated(
     scoped_refptr<ChromeBlobStorageContext> blob_storage_context,

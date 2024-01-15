@@ -11,6 +11,8 @@
 #if BUILDFLAG(IS_WIN)
 #include <windows.h>
 #include <winevt.h>
+
+#include "base/native_library.h"
 #endif
 
 #include <string>
@@ -39,7 +41,7 @@ void EchoService::Quit() {
 }
 
 void EchoService::Crash() {
-  IMMEDIATE_CRASH();
+  base::ImmediateCrash();
 }
 
 #if BUILDFLAG(IS_WIN)
@@ -49,6 +51,50 @@ void EchoService::DelayLoad() {
   EVT_HANDLE handle = ::EvtCreateRenderContext(0, nullptr, 0);
   ::EvtClose(handle);
 }
+
+void EchoService::LoadNativeLibrary(const ::base::FilePath& library,
+                                    bool call_sec32_delayload,
+                                    LoadNativeLibraryCallback callback) {
+  // This attempts to load a library inside the sandbox - it should fail unless
+  // the library was in `ServiceProcessHostOptions::WithPreloadedLibraries()`.
+  base::NativeLibraryLoadError error;
+  // We leak the module as preloading already leaked it.
+  HMODULE hmod = base::LoadNativeLibrary(library, &error);
+  if (!hmod) {
+    std::move(callback).Run(LoadStatus::kFailedLoadLibrary, error.code);
+    return;
+  }
+
+  // Calls an exported function that calls a delayloaded function that should
+  // be loaded in the utility (as secur32.dll is imported by chrome.dll).
+  if (call_sec32_delayload) {
+    BOOL(WINAPI * fn)() = nullptr;
+    fn = reinterpret_cast<decltype(fn)>(
+        GetProcAddress(hmod, "FnCallsDelayloadFn"));
+    if (!fn) {
+      std::move(callback).Run(LoadStatus::kFailedGetProcAddress,
+                              GetLastError());
+      return;
+    }
+    BOOL ret = fn();
+    if (!ret) {
+      std::move(callback).Run(LoadStatus::kFailedCallingDelayLoad,
+                              GetLastError());
+      return;
+    }
+  }
+  std::move(callback).Run(LoadStatus::kSuccess, ERROR_SUCCESS);
+}
+
+void EchoService::CallUser32(const std::string& lower,
+                             CallUser32Callback callback) {
+  // Validate behavior of FileUtilService by calling user32's CharUpperA().
+  std::vector<std::string::value_type> buffer(lower.size() + 1);
+  std::copy(lower.begin(), lower.end(), buffer.begin());
+  ::CharUpperA(buffer.data());
+  std::move(callback).Run(std::string(buffer.data()));
+}
+
 #endif  // BUILDFLAG(IS_WIN)
 
 }  // namespace echo

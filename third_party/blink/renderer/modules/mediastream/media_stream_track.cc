@@ -7,7 +7,7 @@
 #include "third_party/blink/renderer/bindings/modules/v8/v8_media_stream_constraints.h"
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
 #include "third_party/blink/renderer/modules/mediastream/media_constraints_impl.h"
-#include "third_party/blink/renderer/modules/mediastream/media_error_state.h"
+#include "third_party/blink/renderer/modules/mediastream/media_stream_track_video_stats.h"
 #include "third_party/blink/renderer/modules/mediastream/transferred_media_stream_track.h"
 #include "third_party/blink/renderer/modules/mediastream/user_media_client.h"
 #include "third_party/blink/renderer/modules/mediastream/user_media_request.h"
@@ -23,10 +23,15 @@ class GetOpenDeviceRequestCallbacks final : public UserMediaRequest::Callbacks {
   void OnSuccess(const MediaStreamVector& streams,
                  CaptureController* capture_controller) override {}
   void OnError(ScriptWrappable* callback_this_value,
-               const V8MediaStreamError* error) override {}
+               const V8MediaStreamError* error,
+               CaptureController* capture_controller,
+               UserMediaRequestResult result) override {}
 };
 
 }  // namespace
+
+MediaStreamTrack::MediaStreamTrack()
+    : ActiveScriptWrappable<MediaStreamTrack>({}) {}
 
 String ContentHintToString(
     const WebMediaStreamTrack::ContentHintType& content_hint) {
@@ -75,15 +80,15 @@ MediaStreamTrack* MediaStreamTrack::FromTransferredState(
 
   auto* window =
       DynamicTo<LocalDOMWindow>(ExecutionContext::From(script_state));
-  if (!window)
+  if (!window) {
     return nullptr;
+  }
 
   UserMediaClient* user_media_client = UserMediaClient::From(window);
   if (!user_media_client) {
     return nullptr;
   }
 
-  MediaErrorState error_state;
   // TODO(1288839): Set media_type, options, callbacks, surface appropriately
   MediaConstraints audio = (data.kind == "audio")
                                ? media_constraints_impl::Create()
@@ -99,12 +104,12 @@ MediaStreamTrack* MediaStreamTrack::FromTransferredState(
       MakeGarbageCollected<GetOpenDeviceRequestCallbacks>(),
       IdentifiableSurface());
   if (!request) {
-      return nullptr;
+    return nullptr;
   }
 
   // TODO(1288839): Create a TransferredMediaStreamTrack implementing interfaces
-  // supporting BrowserCaptureMediaStreamTrack or FocusableMediaStreamTrack
-  // operations when needed (or support these behaviors in some other way).
+  // supporting BrowserCaptureMediaStreamTrack operations when needed (or
+  // support these behaviors in some other way).
   TransferredMediaStreamTrack* transferred_media_stream_track =
       MakeGarbageCollected<TransferredMediaStreamTrack>(
           ExecutionContext::From(script_state), data);

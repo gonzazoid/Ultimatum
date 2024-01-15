@@ -4,8 +4,8 @@
 
 #include "chrome/browser/ui/media_router/query_result_manager.h"
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "base/json/json_writer.h"
 #include "components/media_router/browser/media_sinks_observer.h"
 #include "components/media_router/browser/test/mock_media_router.h"
@@ -33,8 +33,9 @@ const char kOrigin[] = "https://origin.com";
 
 class MockObserver : public MediaSinkWithCastModesObserver {
  public:
-  MOCK_METHOD1(OnSinksUpdated,
-               void(const std::vector<MediaSinkWithCastModes>& sinks));
+  MOCK_METHOD(void,
+              OnSinksUpdated,
+              (const std::vector<MediaSinkWithCastModes>& sinks));
 };
 
 }  // namespace
@@ -180,7 +181,7 @@ TEST_F(QueryResultManagerTest, MultipleQueries) {
       {sink1, {}}, {sink2, {}}, {sink3, {}}, {sink4, {}}};
   const auto& sinks_observers = query_result_manager_.sinks_observers_;
   auto* any_sink_observer =
-      sinks_observers.find(absl::optional<MediaSource>())->second.get();
+      sinks_observers.find(std::optional<MediaSource>())->second.get();
   EXPECT_CALL(mock_observer_, OnSinksUpdated(VectorSetEquals(expected_sinks)));
   any_sink_observer->OnSinksUpdated(sinks_query_result, {});
 

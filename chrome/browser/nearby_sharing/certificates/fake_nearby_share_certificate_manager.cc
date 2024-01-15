@@ -15,6 +15,7 @@ std::unique_ptr<NearbyShareCertificateManager>
 FakeNearbyShareCertificateManager::Factory::CreateInstance(
     NearbyShareLocalDeviceDataManager* local_device_data_manager,
     NearbyShareContactManager* contact_manager,
+    NearbyShareProfileInfoProvider* profile_info_provider,
     PrefService* pref_service,
     leveldb_proto::ProtoDatabaseProvider* proto_database_provider,
     const base::FilePath& profile_path,
@@ -50,7 +51,7 @@ FakeNearbyShareCertificateManager::FakeNearbyShareCertificateManager()
 FakeNearbyShareCertificateManager::~FakeNearbyShareCertificateManager() =
     default;
 
-std::vector<nearbyshare::proto::PublicCertificate>
+std::vector<nearby::sharing::proto::PublicCertificate>
 FakeNearbyShareCertificateManager::GetPrivateCertificatesAsPublicCertificates(
     nearby_share::mojom::Visibility visibility) {
   ++num_get_private_certificates_as_public_certificates_calls_;

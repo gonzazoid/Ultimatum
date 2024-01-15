@@ -29,7 +29,8 @@ constexpr int64_t kServerVersion = 5;
 
 sync_pb::ModelTypeState GenerateModelTypeState() {
   sync_pb::ModelTypeState model_type_state;
-  model_type_state.set_initial_sync_done(true);
+  model_type_state.set_initial_sync_state(
+      sync_pb::ModelTypeState_InitialSyncState_INITIAL_SYNC_DONE);
   return model_type_state;
 }
 
@@ -70,7 +71,7 @@ EntityData GenerateEntityData(const std::string& storage_key,
 UpdateResponseData GenerateUpdate(const std::string& storage_key,
                                   const ClientTagHash& client_tag_hash,
                                   int64_t response_version) {
-  auto entity = absl::make_unique<EntityData>(
+  auto entity = std::make_unique<EntityData>(
       GenerateEntityData(storage_key, client_tag_hash));
   UpdateResponseData update;
   update.entity = std::move(*entity);
@@ -105,7 +106,9 @@ TEST_F(ProcessorEntityTrackerTest, ShouldLoadFromMetadata) {
   // Check some getters for the entity tracker.
   EXPECT_EQ(2u, entity_tracker.size());
   EXPECT_EQ(1u, entity_tracker.CountNonTombstoneEntries());
-  EXPECT_TRUE(entity_tracker.model_type_state().initial_sync_done());
+  EXPECT_EQ(entity_tracker.model_type_state().initial_sync_state(),
+            sync_pb::ModelTypeState_InitialSyncState_INITIAL_SYNC_DONE);
+
   EXPECT_TRUE(entity_tracker.AllStorageKeysPopulated());
   EXPECT_FALSE(entity_tracker.HasLocalChanges());
 
@@ -141,7 +144,7 @@ TEST_F(ProcessorEntityTrackerTest, ShouldLoadFromMetadata) {
 }
 
 TEST_F(ProcessorEntityTrackerTest, ShouldAddNewLocalEntity) {
-  std::unique_ptr<EntityData> entity_data = absl::make_unique<EntityData>(
+  std::unique_ptr<EntityData> entity_data = std::make_unique<EntityData>(
       GenerateEntityData(kStorageKey1, kClientTagHash1));
   EntityData* entity_data_ptr = entity_data.get();
   const ProcessorEntity* entity = entity_tracker_.AddUnsyncedLocal(
@@ -298,7 +301,7 @@ TEST_F(ProcessorEntityTrackerTest, ShouldRemoveEntityForClientTagHash) {
 }
 
 TEST_F(ProcessorEntityTrackerTest, ShouldReturnLocalChanges) {
-  std::unique_ptr<EntityData> entity_data = absl::make_unique<EntityData>(
+  std::unique_ptr<EntityData> entity_data = std::make_unique<EntityData>(
       GenerateEntityData(kStorageKey1, kClientTagHash1));
   ProcessorEntity* entity = entity_tracker_.AddUnsyncedLocal(
       kStorageKey1, std::move(entity_data), /*trimmed_specifics=*/{});
@@ -322,10 +325,7 @@ TEST_F(ProcessorEntityTrackerTest, ShouldReturnLocalChanges) {
 }
 
 TEST_F(ProcessorEntityTrackerTest, ShouldUpdateSpecificsCacheOnLocalCreation) {
-  base::test::ScopedFeatureList feature_list;
-  feature_list.InitAndEnableFeature(kCacheBaseEntitySpecificsInMetadata);
-
-  std::unique_ptr<EntityData> entity_data = absl::make_unique<EntityData>(
+  std::unique_ptr<EntityData> entity_data = std::make_unique<EntityData>(
       GenerateEntityData(kStorageKey1, kClientTagHash1));
   sync_pb::EntitySpecifics specifics_for_caching;
   specifics_for_caching.mutable_preference()->set_name("name");
@@ -340,9 +340,6 @@ TEST_F(ProcessorEntityTrackerTest, ShouldUpdateSpecificsCacheOnLocalCreation) {
 }
 
 TEST_F(ProcessorEntityTrackerTest, ShouldUpdateSpecificsCacheOnRemoteCreation) {
-  base::test::ScopedFeatureList feature_list;
-  feature_list.InitAndEnableFeature(kCacheBaseEntitySpecificsInMetadata);
-
   sync_pb::EntitySpecifics specifics_for_caching;
   specifics_for_caching.mutable_preference()->set_name("name");
   specifics_for_caching.mutable_preference()->set_value("value");

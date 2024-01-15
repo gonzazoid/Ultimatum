@@ -9,7 +9,7 @@
 
 namespace base {
 template <typename T>
-struct DefaultSingletonTraits;
+class NoDestructor;
 }  // namespace base
 
 class SharingMessageBridge;
@@ -26,7 +26,7 @@ class SharingMessageBridgeFactory : public ProfileKeyedServiceFactory {
       content::BrowserContext* context);
 
  private:
-  friend struct base::DefaultSingletonTraits<SharingMessageBridgeFactory>;
+  friend base::NoDestructor<SharingMessageBridgeFactory>;
 
   SharingMessageBridgeFactory();
   ~SharingMessageBridgeFactory() override;
@@ -35,7 +35,7 @@ class SharingMessageBridgeFactory : public ProfileKeyedServiceFactory {
       delete;
 
   // BrowserContextKeyedServiceFactory overrides:
-  KeyedService* BuildServiceInstanceFor(
+  std::unique_ptr<KeyedService> BuildServiceInstanceForBrowserContext(
       content::BrowserContext* context) const override;
 };
 

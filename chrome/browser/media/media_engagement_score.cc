@@ -136,7 +136,7 @@ media::mojom::MediaEngagementScoreDetailsPtr
 MediaEngagementScore::GetScoreDetails() const {
   return media::mojom::MediaEngagementScoreDetails::New(
       origin_, actual_score(), visits(), media_playbacks(),
-      last_media_playback_time().ToJsTime(), high_score());
+      last_media_playback_time().InMillisecondsFSinceUnixEpoch(), high_score());
 }
 
 MediaEngagementScore::~MediaEngagementScore() = default;
@@ -154,8 +154,8 @@ void MediaEngagementScore::Commit(bool force_update) {
   if (!UpdateScoreDict(force_update))
     return;
 
-  content_settings::ContentSettingConstraints constraints = {
-      base::Time::Now() + kScoreExpirationDuration};
+  content_settings::ContentSettingConstraints constraints;
+  constraints.set_lifetime(kScoreExpirationDuration);
   settings_map_->SetWebsiteSettingDefaultScope(
       origin_.GetURL(), GURL(), ContentSettingsType::MEDIA_ENGAGEMENT,
       base::Value(std::move(score_dict_)), constraints);

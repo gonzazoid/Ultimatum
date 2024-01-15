@@ -37,7 +37,7 @@ WebDocument WebDisallowTransitionScopeTest::TopWebDocument() const {
 TEST_F(WebDisallowTransitionScopeTest, TestDisallowTransition) {
   // Make the death test thread-safe. For more info, see:
   // https://github.com/google/googletest/blob/main/googletest/docs/advanced.md#death-tests-and-threads
-  ::testing::FLAGS_gtest_death_test_style = "threadsafe";
+  GTEST_FLAG_SET(death_test_style, "threadsafe");
 
   web_view_helper_.InitializeAndLoad("about:blank");
 
@@ -50,9 +50,9 @@ TEST_F(WebDisallowTransitionScopeTest, TestDisallowTransition) {
   {
     // Illegal transition.
     WebDisallowTransitionScope disallow(&web_doc);
-    EXPECT_DEATH(core_doc->Lifecycle().EnsureStateAtMost(
-                     DocumentLifecycle::kVisualUpdatePending),
-                 "Cannot rewind document lifecycle");
+    EXPECT_DEATH_IF_SUPPORTED(core_doc->Lifecycle().EnsureStateAtMost(
+                                  DocumentLifecycle::kVisualUpdatePending),
+                              "Cannot rewind document lifecycle");
   }
 
   // Legal transition.

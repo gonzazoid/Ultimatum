@@ -7,19 +7,21 @@
 #include <utility>
 
 #include "base/strings/utf_string_conversions.h"
+#include "base/values.h"
 #include "chrome/browser/apps/app_discovery_service/play_extras.h"
-#include "chrome/browser/ash/login/screens/recommend_apps/recommend_apps_fetcher.h"
+#include "chrome/browser/apps/app_discovery_service/recommended_arc_apps/recommend_apps_fetcher.h"
 
 namespace apps {
 
-RecommendedArcAppFetcher::RecommendedArcAppFetcher() = default;
+RecommendedArcAppFetcher::RecommendedArcAppFetcher(Profile* profile)
+    : profile_(profile) {}
 RecommendedArcAppFetcher::~RecommendedArcAppFetcher() = default;
 
 void RecommendedArcAppFetcher::GetApps(ResultCallback callback) {
   // Only one request can ever be made at a time.
   DCHECK(!callback_);
   callback_ = std::move(callback);
-  recommend_apps_fetcher_ = ash::RecommendAppsFetcher::Create(this);
+  recommend_apps_fetcher_ = RecommendAppsFetcher::Create(profile_, this);
   recommend_apps_fetcher_->Start();
 }
 
@@ -31,45 +33,41 @@ void RecommendedArcAppFetcher::OnLoadSuccess(base::Value app_list) {
     return;
   }
 
-  const base::Value* app_value = app_list.FindListKey("recommendedApp");
-  if (!app_value || !app_value->is_list()) {
-    std::move(callback_).Run({}, DiscoveryError::kErrorMalformedData);
-    return;
-  }
-
-  const base::Value::List& apps = app_value->GetList();
-  if (apps.empty()) {
+  const base::Value::List* apps = app_list.GetDict().FindList("recommendedApp");
+  if (!apps || apps->empty()) {
     std::move(callback_).Run({}, DiscoveryError::kErrorMalformedData);
     return;
   }
 
   std::vector<Result> results;
-  for (auto& big_app : apps) {
-    if (big_app.is_dict()) {
-      const base::Value* app = big_app.FindDictKey("androidApp");
+  for (auto& big_app : *apps) {
+    const base::Value::Dict* big_app_dict = big_app.GetIfDict();
+    if (big_app_dict) {
+      const base::Value::Dict* app = big_app_dict->FindDict("androidApp");
       if (!app) {
         continue;
       }
-      const std::string* package_name = app->FindStringKey("packageName");
-      const std::string* title = app->FindStringKey("title");
+      const std::string* package_name = app->FindString("packageName");
+      const std::string* title = app->FindString("title");
       if (!package_name || !title)
         continue;
-      const std::string* icon_url = app->FindStringPath("icon.imageUri");
-      const std::string* category = app->FindStringKey("category");
+      const std::string* icon_url =
+          app->FindStringByDottedPath("icon.imageUri");
+      const std::string* category = app->FindString("category");
       const std::string* app_description =
-          app->FindStringPath("appDescription.shortDescription");
+          app->FindStringByDottedPath("appDescription.shortDescription");
       const std::string* content_rating =
-          app->FindStringPath("contentRating.name");
+          app->FindStringByDottedPath("contentRating.name");
       const std::string* content_rating_url =
-          app->FindStringPath("contentRating.image.imageUri");
-      const std::string* in_app_purchases =
-          app->FindStringPath("inAppPurchaseInformation.disclaimerText");
+          app->FindStringByDottedPath("contentRating.image.imageUri");
+      const std::string* in_app_purchases = app->FindStringByDottedPath(
+          "inAppPurchaseInformation.disclaimerText");
       const std::string* previously_installed =
-          app->FindStringPath("fastAppReinstall.explanationText");
+          app->FindStringByDottedPath("fastAppReinstall.explanationText");
       const std::string* contain_ads =
-          app->FindStringPath("adsInformation.disclaimerText");
-      const base::Value* optimized_for_chrome =
-          big_app.FindDictKey("merchCurated");
+          app->FindStringByDottedPath("adsInformation.disclaimerText");
+      const base::Value::Dict* optimized_for_chrome =
+          big_app_dict->FindDict("merchCurated");
 
       auto extras = std::make_unique<PlayExtras>(
           *package_name, icon_url ? GURL(*icon_url) : GURL(),

@@ -3,7 +3,7 @@
 // found in the LICENSE file.
 
 import {pdfCreateOutOfProcessPlugin, PdfPlugin} from 'chrome://print/pdf/pdf_scripting_api.js';
-import {assert} from 'chrome://resources/js/assert_ts.js';
+import {assert} from 'chrome://resources/js/assert.js';
 
 export type ViewportChangedCallback =
     (pageX: number, pageY: number, pageWidth: number, viewportWidth: number,
@@ -83,7 +83,8 @@ export class PluginProxyImpl implements PluginProxy {
   createPlugin(previewUid: number, index: number) {
     assert(!this.plugin_);
     const srcUrl = this.getPreviewUrl_(previewUid, index);
-    this.plugin_ = pdfCreateOutOfProcessPlugin(srcUrl, 'chrome://print/pdf');
+    this.plugin_ = pdfCreateOutOfProcessPlugin(
+        srcUrl, 'chrome://print/pdf/index_print.html');
     this.plugin_!.classList.add('preview-area-plugin');
     // NOTE: The plugin's 'id' field must be set to 'pdf-viewer' since
     // chrome/renderer/printing/print_render_frame_helper.cc actually

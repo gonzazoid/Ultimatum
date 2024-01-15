@@ -9,9 +9,11 @@
 #include "ash/wm/window_mirror_view.h"
 #include "base/containers/flat_map.h"
 #include "base/containers/flat_set.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/aura/client/transient_window_client_observer.h"
 #include "ui/aura/window.h"
 #include "ui/aura/window_observer.h"
+#include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/views/view.h"
 
 namespace ash {
@@ -23,7 +25,9 @@ class ASH_EXPORT WindowPreviewView
       public aura::client::TransientWindowClientObserver,
       public aura::WindowObserver {
  public:
-  WindowPreviewView(aura::Window* window, bool trilinear_filtering_on_init);
+  METADATA_HEADER(WindowPreviewView);
+
+  explicit WindowPreviewView(aura::Window* window);
 
   WindowPreviewView(const WindowPreviewView&) = delete;
   WindowPreviewView& operator=(const WindowPreviewView&) = delete;
@@ -61,8 +65,7 @@ class ASH_EXPORT WindowPreviewView
   // |mirror_views_|.
   gfx::RectF GetUnionRect() const;
 
-  aura::Window* window_;
-  bool trilinear_filtering_on_init_;
+  raw_ptr<aura::Window> window_;
 
   base::flat_map<aura::Window*, WindowMirrorView*> mirror_views_;
 

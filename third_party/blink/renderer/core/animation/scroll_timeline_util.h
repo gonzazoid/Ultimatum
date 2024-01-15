@@ -7,7 +7,7 @@
 
 #include "cc/animation/scroll_timeline.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
-#include "third_party/blink/renderer/core/animation/scroll_timeline.h"
+#include "third_party/blink/renderer/bindings/core/v8/v8_scroll_axis.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/platform/animation/compositor_animation.h"
 
@@ -15,6 +15,7 @@ namespace blink {
 
 using CompositorScrollTimeline = cc::ScrollTimeline;
 using ScrollOffsets = cc::ScrollTimeline::ScrollOffsets;
+using ScrollAxis = V8ScrollAxis::Enum;
 
 class AnimationTimeline;
 class ComputedStyle;
@@ -32,14 +33,12 @@ ToCompositorScrollTimeline(AnimationTimeline*);
 absl::optional<CompositorElementId> CORE_EXPORT
 GetCompositorScrollElementId(const Node*);
 
-// Convert the blink concept of a ScrollTimeline orientation into the cc one.
+// Convert the blink concept of a ScrollTimeline axis into the cc one.
 //
 // This implements a subset of the conversions documented in
 // https://drafts.csswg.org/css-writing-modes-3/#logical-to-physical
 CompositorScrollTimeline::ScrollDirection CORE_EXPORT
-ConvertOrientation(ScrollTimeline::ScrollDirection, const ComputedStyle*);
-
-absl::optional<ScrollOffsets> CreateScrollOffsets(ScrollTimeline* timeline);
+ConvertOrientation(ScrollAxis, const ComputedStyle*);
 
 }  // namespace scroll_timeline_util
 

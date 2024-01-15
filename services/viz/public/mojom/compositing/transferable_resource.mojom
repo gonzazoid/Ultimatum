@@ -24,7 +24,6 @@ enum SynchronizationType {
 struct TransferableResource {
   ResourceId id;
   SharedImageFormat format;
-  uint32 filter;
   gfx.mojom.Size size;
   gpu.mojom.MailboxHolder mailbox_holder;
   SynchronizationType synchronization_type;
@@ -33,7 +32,6 @@ struct TransferableResource {
   bool is_backed_by_surface_texture;
   bool wants_promotion_hint;
   gfx.mojom.ColorSpace color_space;
-  gfx.mojom.ColorSpace? color_space_when_sampled;
-  gfx.mojom.HDRMetadata? hdr_metadata;
-  gpu.mojom.VulkanYCbCrInfo ? ycbcr_info;
+  gfx.mojom.HDRMetadata hdr_metadata;
+  gpu.mojom.VulkanYCbCrInfo? ycbcr_info;
 };

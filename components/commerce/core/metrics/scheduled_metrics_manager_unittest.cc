@@ -5,15 +5,14 @@
 #include <map>
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/task_environment.h"
-#include "components/bookmarks/browser/bookmark_model.h"
-#include "components/bookmarks/browser/bookmark_node.h"
-#include "components/bookmarks/test/test_bookmark_client.h"
 #include "components/commerce/core/metrics/scheduled_metrics_manager.h"
+#include "components/commerce/core/mock_shopping_service.h"
 #include "components/commerce/core/pref_names.h"
+#include "components/commerce/core/price_tracking_utils.h"
 #include "components/commerce/core/test_utils.h"
 #include "components/power_bookmarks/core/power_bookmark_utils.h"
 #include "components/power_bookmarks/core/proto/power_bookmark_meta.pb.h"
@@ -27,7 +26,7 @@ namespace commerce::metrics {
 class ScheduledMetricsManagerTest : public testing::Test {
  public:
   ScheduledMetricsManagerTest()
-      : bookmark_model_(bookmarks::TestBookmarkClient::CreateModel()),
+      : shopping_service_(std::make_unique<MockShoppingService>()),
         pref_service_(std::make_unique<TestingPrefServiceSimple>()) {}
   ScheduledMetricsManagerTest(const ScheduledMetricsManagerTest&) = delete;
   ScheduledMetricsManagerTest operator=(const ScheduledMetricsManagerTest&) =
@@ -40,13 +39,13 @@ class ScheduledMetricsManagerTest : public testing::Test {
 
   void CreateUpdateManagerAndWait() {
     auto metrics_manager = std::make_unique<ScheduledMetricsManager>(
-        pref_service_.get(), bookmark_model_.get());
+        pref_service_.get(), shopping_service_.get());
     base::RunLoop().RunUntilIdle();
   }
 
  protected:
   base::test::TaskEnvironment task_environment_;
-  std::unique_ptr<bookmarks::BookmarkModel> bookmark_model_;
+  std::unique_ptr<MockShoppingService> shopping_service_;
   std::unique_ptr<TestingPrefServiceSimple> pref_service_;
 };
 
@@ -56,13 +55,10 @@ TEST_F(ScheduledMetricsManagerTest, TrackedProductCountRecorded) {
   pref_service_->SetTime(kCommerceDailyMetricsLastUpdateTime, base::Time());
   base::HistogramTester histogram_tester;
 
-  // Add two tracked products and one untracked product.
-  AddProductBookmark(bookmark_model_.get(), u"product 1",
-                     GURL("http://example.com"), 123L, true);
-  AddProductBookmark(bookmark_model_.get(), u"product 2",
-                     GURL("http://example.com"), 456L, false);
-  AddProductBookmark(bookmark_model_.get(), u"product 3",
-                     GURL("http://example.com"), 789L, true);
+  // Add two tracked products.
+  shopping_service_->SetGetAllSubscriptionsCallbackValue(
+      {BuildUserSubscriptionForClusterId(123L),
+       BuildUserSubscriptionForClusterId(456L)});
 
   CreateUpdateManagerAndWait();
 
@@ -75,8 +71,8 @@ TEST_F(ScheduledMetricsManagerTest, TrackedProductCountNotRecordedEarly) {
                          base::Time::Now());
   base::HistogramTester histogram_tester;
 
-  AddProductBookmark(bookmark_model_.get(), u"product 1",
-                     GURL("http://example.com"), 123L, true);
+  shopping_service_->SetGetAllSubscriptionsCallbackValue(
+      {BuildUserSubscriptionForClusterId(123L)});
 
   CreateUpdateManagerAndWait();
 
@@ -92,6 +88,8 @@ TEST_F(ScheduledMetricsManagerTest, EmailNotification_NoTrackedProducts) {
   // Assume the user has enabled notifications but has no tracked products.
   pref_service_->SetBoolean(kPriceEmailNotificationsEnabled, true);
 
+  shopping_service_->SetGetAllSubscriptionsCallbackValue(
+      std::vector<CommerceSubscription>());
   CreateUpdateManagerAndWait();
 
   histogram_tester.ExpectUniqueSample(
@@ -110,8 +108,8 @@ TEST_F(ScheduledMetricsManagerTest, EmailNotification_TrackedProducts) {
   pref_service_->SetBoolean(kPriceEmailNotificationsEnabled, true);
 
   // Have at least one tracked product.
-  AddProductBookmark(bookmark_model_.get(), u"product 1",
-                     GURL("http://example.com"), 123L, true);
+  shopping_service_->SetGetAllSubscriptionsCallbackValue(
+      {BuildUserSubscriptionForClusterId(123L)});
 
   CreateUpdateManagerAndWait();
 
@@ -131,8 +129,8 @@ TEST_F(ScheduledMetricsManagerTest,
   pref_service_->SetBoolean(kPriceEmailNotificationsEnabled, false);
 
   // Have at least one tracked product.
-  AddProductBookmark(bookmark_model_.get(), u"product 1",
-                     GURL("http://example.com"), 123L, true);
+  shopping_service_->SetGetAllSubscriptionsCallbackValue(
+      {BuildUserSubscriptionForClusterId(123L)});
 
   CreateUpdateManagerAndWait();
 

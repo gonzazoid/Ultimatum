@@ -12,11 +12,14 @@
 #include <vector>
 
 #include "base/compiler_specific.h"
+#include "base/containers/lru_cache.h"
 #include "base/memory/unsafe_shared_memory_region.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
+#include "base/time/time.h"
 #include "gpu/config/gpu_driver_bug_workarounds.h"
 #include "gpu/config/gpu_info.h"
+#include "gpu/config/gpu_preferences.h"
 #include "media/mojo/mojom/video_encode_accelerator.mojom.h"
 #include "media/mojo/services/media_mojo_export.h"
 #include "media/video/video_encode_accelerator.h"
@@ -24,10 +27,6 @@
 #include "mojo/public/cpp/bindings/pending_associated_receiver.h"
 #include "mojo/public/cpp/bindings/pending_associated_remote.h"
 #include "mojo/public/cpp/bindings/remote.h"
-
-namespace gpu {
-struct GpuPreferences;
-}  // namespace gpu
 
 namespace media {
 
@@ -75,16 +74,18 @@ class MEDIA_MOJO_EXPORT MojoVideoEncodeAcceleratorService
       mojo::PendingRemote<mojom::MediaLog> media_log,
       InitializeCallback callback) override;
   void Encode(const scoped_refptr<VideoFrame>& frame,
-              bool force_keyframe,
+              const media::VideoEncoder::EncodeOptions& options,
               EncodeCallback callback) override;
   void UseOutputBitstreamBuffer(int32_t bitstream_buffer_id,
                                 base::UnsafeSharedMemoryRegion region) override;
   void RequestEncodingParametersChangeWithBitrate(
       const media::Bitrate& bitrate_allocation,
-      uint32_t framerate) override;
+      uint32_t framerate,
+      const absl::optional<gfx::Size>& size) override;
   void RequestEncodingParametersChangeWithLayers(
       const media::VideoBitrateAllocation& bitrate_allocation,
-      uint32_t framerate) override;
+      uint32_t framerate,
+      const absl::optional<gfx::Size>& size) override;
   void IsFlushSupported(IsFlushSupportedCallback callback) override;
   void Flush(FlushCallback callback) override;
 
@@ -99,13 +100,13 @@ class MEDIA_MOJO_EXPORT MojoVideoEncodeAcceleratorService
   void BitstreamBufferReady(
       int32_t bitstream_buffer_id,
       const media::BitstreamBufferMetadata& metadata) override;
-  void NotifyError(::media::VideoEncodeAccelerator::Error error) override;
+  void NotifyErrorStatus(const EncoderStatus& status) override;
   void NotifyEncoderInfoChange(const ::media::VideoEncoderInfo& info) override;
 
   CreateAndInitializeVideoEncodeAcceleratorCallback create_vea_callback_;
-  const gpu::GpuPreferences& gpu_preferences_;
+  const gpu::GpuPreferences gpu_preferences_;
   const gpu::GpuDriverBugWorkarounds gpu_workarounds_;
-  const gpu::GPUInfo::GPUDevice& gpu_device_;
+  const gpu::GPUInfo::GPUDevice gpu_device_;
 
   // Owned pointer to the underlying VideoEncodeAccelerator.
   std::unique_ptr<::media::VideoEncodeAccelerator> encoder_;
@@ -117,6 +118,9 @@ class MEDIA_MOJO_EXPORT MojoVideoEncodeAcceleratorService
   // Cache of parameters for sanity verification.
   size_t output_buffer_size_;
   gfx::Size input_coded_size_;
+  bool supports_frame_size_change;
+
+  base::LRUCache<int64_t, base::TimeTicks> timestamps_;
 
   // Note that this class is already thread hostile when bound.
   SEQUENCE_CHECKER(sequence_checker_);

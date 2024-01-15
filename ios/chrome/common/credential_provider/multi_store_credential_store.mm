@@ -8,10 +8,6 @@
 #import "base/notreached.h"
 #import "ios/chrome/common/credential_provider/credential.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 @interface MultiStoreCredentialStore ()
 
 @property(nonatomic, strong) NSArray<id<CredentialStore>>* stores;
@@ -32,8 +28,13 @@
 #pragma mark - CredentialStore
 
 - (NSArray<id<Credential>>*)credentials {
-  return
-      [self.stores valueForKeyPath:@"credentials.@distinctUnionOfArrays.self"];
+  NSMutableSet<id<Credential>>* uniqueCredentials = [[NSMutableSet alloc] init];
+  for (id<CredentialStore> store in self.stores) {
+    for (id<Credential> credential in store.credentials) {
+      [uniqueCredentials addObject:credential];
+    }
+  }
+  return uniqueCredentials.allObjects;
 }
 
 - (id<Credential>)credentialWithRecordIdentifier:(NSString*)recordIdentifier {

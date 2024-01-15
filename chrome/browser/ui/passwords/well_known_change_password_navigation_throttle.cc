@@ -6,16 +6,14 @@
 
 #include "base/logging.h"
 #include "base/metrics/histogram_functions.h"
+#include "base/task/sequenced_task_runner.h"
 #include "chrome/browser/password_manager/affiliation_service_factory.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/common/url_constants.h"
 #include "chrome/common/webui_url_constants.h"
-#include "components/password_manager/content/browser/password_change_success_tracker_factory.h"
-#include "components/password_manager/core/browser/password_change_success_tracker.h"
-#include "components/password_manager/core/browser/site_affiliation/affiliation_service.h"
-#include "components/password_manager/core/browser/well_known_change_password_state.h"
-#include "components/password_manager/core/browser/well_known_change_password_util.h"
-#include "components/password_manager/core/common/password_manager_features.h"
+#include "components/password_manager/core/browser/affiliation/affiliation_service.h"
+#include "components/password_manager/core/browser/well_known_change_password/well_known_change_password_state.h"
+#include "components/password_manager/core/browser/well_known_change_password/well_known_change_password_util.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/navigation_handle.h"
 #include "content/public/browser/page_navigator.h"
@@ -36,7 +34,6 @@ using content::NavigationHandle;
 using content::NavigationThrottle;
 using content::WebContents;
 using password_manager::IsWellKnownChangePasswordUrl;
-using password_manager::PasswordChangeSuccessTracker;
 using password_manager::WellKnownChangePasswordResult;
 using password_manager::WellKnownChangePasswordState;
 
@@ -54,6 +51,8 @@ bool IsTriggeredByGoogleOwnedUI(NavigationHandle* handle) {
     url::Origin origin = handle->GetInitiatorOrigin().value_or(url::Origin());
     return origin == url::Origin::Create(GURL(chrome::kChromeUISettingsURL)) ||
            origin ==
+               url::Origin::Create(GURL(chrome::kChromeUIPasswordManagerURL)) ||
+           origin ==
                url::Origin::Create(GURL(chrome::kGooglePasswordManagerURL));
   }
 
@@ -66,6 +65,14 @@ bool IsTriggeredByGoogleOwnedUI(NavigationHandle* handle) {
 std::unique_ptr<WellKnownChangePasswordNavigationThrottle>
 WellKnownChangePasswordNavigationThrottle::MaybeCreateThrottleFor(
     NavigationHandle* handle) {
+  auto* profile = Profile::FromBrowserContext(
+      handle->GetWebContents()->GetBrowserContext());
+  // Create WellKnownChangePasswordNavigationThrottle only for regular or
+  // incognito profiles.
+  if (!profile->IsRegularProfile() && !profile->IsIncognitoProfile()) {
+    return nullptr;
+  }
+
   // Don't handle navigations in subframes or main frames that are in a nested
   // frame tree (e.g. portals, fenced frames)
   if (handle->IsInOutermostMainFrame() &&
@@ -92,6 +99,7 @@ WellKnownChangePasswordNavigationThrottle::
   affiliation_service_ =
       AffiliationServiceFactory::GetForProfile(Profile::FromBrowserContext(
           handle->GetWebContents()->GetBrowserContext()));
+  CHECK(affiliation_service_);
   if (affiliation_service_->GetChangePasswordURL(request_url_).is_empty()) {
     well_known_change_password_state_.PrefetchChangePasswordURLs(
         affiliation_service_, {request_url_});
@@ -122,9 +130,16 @@ WellKnownChangePasswordNavigationThrottle::WillStartRequest() {
   // TODO(crbug.com/1127520): Confirm that this works correctly within
   // redirects.
   network::ResourceRequest::TrustedParams trusted_params;
-  trusted_params.isolation_info = net::IsolationInfo::CreatePartial(
+
+  // Create a new IsolationInfo with RequestType::kOther since this is sort of
+  // a subresource request (so it shouldn't change sites on redirects).
+  DCHECK(!navigation_handle()->GetIsolationInfo().IsEmpty());
+  trusted_params.isolation_info = net::IsolationInfo::Create(
       net::IsolationInfo::RequestType::kOther,
-      navigation_handle()->GetIsolationInfo().network_isolation_key());
+      *navigation_handle()->GetIsolationInfo().top_frame_origin(),
+      url::Origin::Create(navigation_handle()->GetURL()),
+      net::SiteForCookies());
+
   well_known_change_password_state_.FetchNonExistingResource(
       url_loader_factory.get(), request_url_,
       navigation_handle()->GetInitiatorOrigin(), std::move(trusted_params));
@@ -141,7 +156,7 @@ WellKnownChangePasswordNavigationThrottle::WillProcessResponse() {
   // PostTask because the Throttle needs to be deferred before the status code
   // is set. After setting the status code Resume() can be called synchronous
   // and thereby before the throttle is deferred. This would result in a crash.
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(
           &WellKnownChangePasswordState::SetChangePasswordResponseCode,
@@ -158,35 +173,19 @@ void WellKnownChangePasswordNavigationThrottle::OnProcessingFinished(
     bool is_supported) {
   GURL redirect_url = affiliation_service_->GetChangePasswordURL(request_url_);
 
-  // Extend the information of precisely what kind of flow the manual
-  // password change flow is.
-  raw_ptr<PasswordChangeSuccessTracker> password_change_success_tracker =
-      password_manager::PasswordChangeSuccessTrackerFactory::
-          GetForBrowserContext(
-              navigation_handle()->GetWebContents()->GetBrowserContext());
-
   // If affiliation service returns .well-known/change-password as change
   // password url - show it even if Chrome doesn't detect it as supported.
   if (is_supported || redirect_url == request_url_) {
     RecordMetric(WellKnownChangePasswordResult::kUsedWellKnownChangePassword);
-    password_change_success_tracker->OnChangePasswordFlowModified(
-        request_url_,
-        PasswordChangeSuccessTracker::StartEvent::kManualWellKnownUrlFlow);
     Resume();
     return;
   }
 
   if (redirect_url.is_valid()) {
     RecordMetric(WellKnownChangePasswordResult::kFallbackToOverrideUrl);
-    password_change_success_tracker->OnChangePasswordFlowModified(
-        request_url_,
-        PasswordChangeSuccessTracker::StartEvent::kManualChangePasswordUrlFlow);
     Redirect(redirect_url);
   } else {
     RecordMetric(WellKnownChangePasswordResult::kFallbackToOriginUrl);
-    password_change_success_tracker->OnChangePasswordFlowModified(
-        request_url_,
-        PasswordChangeSuccessTracker::StartEvent::kManualHomepageFlow);
     Redirect(request_url_.DeprecatedGetOriginAsURL());
   }
   CancelDeferredNavigation(NavigationThrottle::CANCEL);
@@ -202,7 +201,7 @@ void WellKnownChangePasswordNavigationThrottle::Redirect(const GURL& url) {
   if (!web_contents)
     return;
 
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(
                      [](base::WeakPtr<content::WebContents> web_contents,
                         const content::OpenURLParams& params) {

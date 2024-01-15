@@ -9,6 +9,8 @@
 
 #include "base/logging.h"
 #include "base/memory/raw_ptr.h"
+#include "base/memory/weak_ptr.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_checker.h"
 #include "build/build_config.h"
@@ -21,16 +23,17 @@
 #include "gpu/ipc/service/command_buffer_stub.h"
 #include "gpu/ipc/service/gpu_channel.h"
 #include "gpu/ipc/service/gpu_channel_manager.h"
-#include "media/gpu/gles2_decoder_helper.h"
 #include "ui/gl/gl_context.h"
 
 #if BUILDFLAG(IS_WIN)
 #include "gpu/command_buffer/service/dxgi_shared_handle_manager.h"
 #endif
 
-namespace media {
+#if !BUILDFLAG(IS_ANDROID)
+#include "media/gpu/gles2_decoder_helper.h"
+#endif
 
-namespace {
+namespace media {
 
 class CommandBufferHelperImpl
     : public CommandBufferHelper,
@@ -56,12 +59,40 @@ class CommandBufferHelperImpl
 #endif  // BUILDFLAG(IS_MAC)
         ,
         stub_->channel()->task_runner());
+#if !BUILDFLAG(IS_ANDROID)
     decoder_helper_ = GLES2DecoderHelper::Create(stub_->decoder_context());
+#endif
   }
 
   CommandBufferHelperImpl(const CommandBufferHelperImpl&) = delete;
   CommandBufferHelperImpl& operator=(const CommandBufferHelperImpl&) = delete;
 
+  void WaitForSyncToken(gpu::SyncToken sync_token,
+                        base::OnceClosure done_cb) override {
+    DVLOG(2) << __func__;
+    DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
+
+    if (!stub_) {
+      return;
+    }
+
+    // TODO(sandersd): Do we need to keep a ref to |this| while there are
+    // pending waits? If we destruct while they are pending, they will never
+    // run.
+    stub_->channel()->scheduler()->ScheduleTask(
+        gpu::Scheduler::Task(wait_sequence_id_, std::move(done_cb),
+                             std::vector<gpu::SyncToken>({sync_token})));
+  }
+
+  // Const variant of GetSharedImageStub() for internal callers.
+  gpu::SharedImageStub* shared_image_stub() const {
+    if (!stub_) {
+      return nullptr;
+    }
+    return stub_->channel()->shared_image_stub();
+  }
+
+#if !BUILDFLAG(IS_ANDROID)
   gl::GLContext* GetGLContext() override {
     DVLOG(2) << __func__;
     DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
@@ -76,11 +107,15 @@ class CommandBufferHelperImpl
     return shared_image_stub();
   }
 
-  // Const variant of above method for internal callers.
-  gpu::SharedImageStub* shared_image_stub() const {
-    if (!stub_)
+  gpu::MemoryTypeTracker* GetMemoryTypeTracker() override {
+    return &memory_type_tracker_;
+  }
+
+  gpu::SharedImageManager* GetSharedImageManager() override {
+    if (!stub_) {
       return nullptr;
-    return stub_->channel()->shared_image_stub();
+    }
+    return stub_->channel()->gpu_channel_manager()->shared_image_manager();
   }
 
 #if BUILDFLAG(IS_WIN)
@@ -162,18 +197,8 @@ class CommandBufferHelperImpl
     textures_[service_id]->SetCleared();
   }
 
-  bool BindImage(GLuint service_id,
-                 gl::GLImage* image,
-                 bool client_managed) override {
-    DVLOG(2) << __func__ << "(" << service_id << ")";
-    DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-
-    DCHECK(textures_.count(service_id));
-    textures_[service_id]->BindImage(image, client_managed);
-    return true;
-  }
-
-  gpu::Mailbox CreateMailbox(GLuint service_id) override {
+ private:
+  gpu::Mailbox CreateLegacyMailbox(GLuint service_id) override {
     DVLOG(2) << __func__ << "(" << service_id << ")";
     DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
 
@@ -181,28 +206,13 @@ class CommandBufferHelperImpl
       return gpu::Mailbox();
 
     DCHECK(textures_.count(service_id));
-    return decoder_helper_->CreateMailbox(textures_[service_id].get());
+    return decoder_helper_->CreateLegacyMailbox(textures_[service_id].get());
   }
 
-  void WaitForSyncToken(gpu::SyncToken sync_token,
-                        base::OnceClosure done_cb) override {
-    DVLOG(2) << __func__;
+ public:
+  void AddWillDestroyStubCB(WillDestroyStubCB callback) override {
     DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-
-    if (!stub_)
-      return;
-
-    // TODO(sandersd): Do we need to keep a ref to |this| while there are
-    // pending waits? If we destruct while they are pending, they will never
-    // run.
-    stub_->channel()->scheduler()->ScheduleTask(
-        gpu::Scheduler::Task(wait_sequence_id_, std::move(done_cb),
-                             std::vector<gpu::SyncToken>({sync_token})));
-  }
-
-  void SetWillDestroyStubCB(WillDestroyStubCB will_destroy_stub_cb) override {
-    DCHECK(!will_destroy_stub_cb_);
-    will_destroy_stub_cb_ = std::move(will_destroy_stub_cb);
+    will_destroy_stub_callbacks_.push_back(std::move(callback));
   }
 
   bool IsPassthrough() const override {
@@ -221,6 +231,7 @@ class CommandBufferHelperImpl
         ->feature_flags()
         .arb_texture_rectangle;
   }
+#endif
 
  private:
   // Helper class to forward memory tracking calls to shared image stub.
@@ -280,21 +291,28 @@ class CommandBufferHelperImpl
     DVLOG(1) << __func__;
     DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
 
-    // In case |will_destroy_stub_cb_| drops the last reference to |this|, make
-    // sure that we're around a bit longer.
-    scoped_refptr<CommandBufferHelper> thiz(this);
+    // In case any of the |will_destroy_stub_callbacks_| drops the last
+    // reference to |this|, use a weak ptr to check if |this| is still alive.
+    auto weak_ptr = weak_ptr_factory_.GetWeakPtr();
 
-    if (will_destroy_stub_cb_)
-      std::move(will_destroy_stub_cb_).Run(have_context);
+    // Save callbacks in case |this| gets destroyed while running callbacks.
+    auto callbacks = std::move(will_destroy_stub_callbacks_);
+    for (auto& callback : callbacks) {
+      std::move(callback).Run(have_context);
+    }
 
-    DestroyStub();
+    if (weak_ptr && weak_ptr->stub_) {
+      weak_ptr->DestroyStub();
+    }
   }
 
   void DestroyStub() {
     DVLOG(3) << __func__;
     DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
 
+#if !BUILDFLAG(IS_ANDROID)
     decoder_helper_ = nullptr;
+#endif
 
     // If the last reference to |this| is in a |done_cb|, destroying the wait
     // sequence can delete |this|. Clearing |stub_| first prevents DestroyStub()
@@ -310,19 +328,21 @@ class CommandBufferHelperImpl
   // Wait tasks are scheduled on our own sequence so that we can't inadvertently
   // block the command buffer.
   gpu::SequenceId wait_sequence_id_;
+#if !BUILDFLAG(IS_ANDROID)
   // TODO(sandersd): Merge GLES2DecoderHelper implementation into this class.
   std::unique_ptr<GLES2DecoderHelper> decoder_helper_;
+#endif
   std::map<GLuint, std::unique_ptr<gpu::gles2::AbstractTexture>> textures_;
 
-  WillDestroyStubCB will_destroy_stub_cb_;
+  std::vector<WillDestroyStubCB> will_destroy_stub_callbacks_;
 
   MemoryTrackerImpl memory_tracker_;
   gpu::MemoryTypeTracker memory_type_tracker_;
 
   THREAD_CHECKER(thread_checker_);
-};
 
-}  // namespace
+  base::WeakPtrFactory<CommandBufferHelperImpl> weak_ptr_factory_{this};
+};
 
 CommandBufferHelper::CommandBufferHelper(
     scoped_refptr<base::SequencedTaskRunner> task_runner)

@@ -6,8 +6,8 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/location.h"
 #include "base/task/single_thread_task_runner.h"
 #include "ui/events/event.h"
@@ -91,13 +91,15 @@ void LocalHotkeyInputMonitorChromeos::Core::Start() {
   // TODO(erg): Need to handle the mus case where PlatformEventSource is null
   // because we are in mus. This class looks like it can be rewritten with mus
   // EventMatchers. (And if that doesn't work, maybe a PointerObserver.)
-  if (ui::PlatformEventSource::GetInstance())
+  if (ui::PlatformEventSource::GetInstance()) {
     ui::PlatformEventSource::GetInstance()->AddPlatformEventObserver(this);
+  }
 }
 
 LocalHotkeyInputMonitorChromeos::Core::~Core() {
-  if (ui::PlatformEventSource::GetInstance())
+  if (ui::PlatformEventSource::GetInstance()) {
     ui::PlatformEventSource::GetInstance()->RemovePlatformEventObserver(this);
+  }
 }
 
 void LocalHotkeyInputMonitorChromeos::Core::WillProcessEvent(

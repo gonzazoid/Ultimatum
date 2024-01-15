@@ -1,5 +1,13 @@
 const STORE_URL = '/wpt_internal/fenced_frame/resources/key-value-store.py';
+const BEACON_URL = '/wpt_internal/fenced_frame/resources/automatic-beacon-store.py';
 const REMOTE_EXECUTOR_URL = '/wpt_internal/fenced_frame/resources/remote-context-executor.https.html';
+
+// If your test needs to modify FLEDGE bidding or decision logic, you should
+// update the generated JS in the corresponding handler below.
+const FLEDGE_BIDDING_URL =
+    '/wpt_internal/fenced_frame/resources/fledge-bidding-logic.py';
+const FLEDGE_DECISION_URL =
+    '/wpt_internal/fenced_frame/resources/fledge-decision-logic.py';
 
 // Creates a URL that includes a list of stash key UUIDs that are being used
 // in the test. This allows us to generate UUIDs on the fly and let anything
@@ -18,18 +26,10 @@ function getRemoteContextURL(origin) {
   return new URL(REMOTE_EXECUTOR_URL, origin);
 }
 
-// Similar to generateURL, but creates a urn:uuid that a fenced frame can
-// navigate to. This relies on a mock Shared Storage auction, since it is the
-// simplest WP-exposed way to turn a url into a urn:uuid.
-// Note: this function, unlike generateURL, is asynchronous and needs to be
-// called with an await operator.
-// @param {string} href - The base url of the page being navigated to
-// @param {string list} keylist - The list of key UUIDs to be used. Note that
-//                                order matters when extracting the keys
-async function generateURN(href, keylist = []) {
+async function runSelectRawURL(href, resolve_to_config = false) {
   try {
     await sharedStorage.worklet.addModule(
-      "/wpt_internal/shared_storage/resources/simple-module.js");
+        '/wpt_internal/fenced_frame/resources/simple-shared-storage-module.js');
   } catch (e) {
     // Shared Storage needs to have a module added before we can operate on it.
     // It is generated on the fly with this call, and since there's no way to
@@ -37,12 +37,136 @@ async function generateURN(href, keylist = []) {
     // in a try/catch so that if it runs a second time in a test, it will
     // gracefully fail rather than bring the whole test down.
   }
-
-  const full_url = generateURL(href, keylist);
   return await sharedStorage.selectURL(
-      "test-url-selection-operation", [{url: full_url}],
-      {data: {'mockResult': 0}}
-  );
+      'test-url-selection-operation', [{url: href}], {
+        data: {'mockResult': 0},
+        resolveToConfig: resolve_to_config,
+        keepAlive: true
+      });
+}
+
+// Similar to generateURL, but creates
+// 1. An urn:uuid if `resolve_to_config` is false.
+// 2. A fenced frame config object if `resolve_to_config` is true.
+// This relies on a mock Shared Storage auction, since it is the simplest
+// WP-exposed way to turn a url into an urn:uuid or a fenced frame config.
+// Note: this function, unlike generateURL, is asynchronous and needs to be
+// called with an await operator.
+// @param {string} href - The base url of the page being navigated to
+// @param {string list} keylist - The list of key UUIDs to be used. Note that
+//                                order matters when extracting the keys
+// @param {boolean} [resolve_to_config = false] - Determines whether the result
+//                                                of `sharedStorage.selectURL()`
+//                                                is an urn:uuid or a fenced
+//                                                frame config.
+// Note:
+// 1. There is a limit of 3 calls per origin per pageload for
+// `sharedStorage.selectURL()`, so `runSelectURL()` must also respect this
+// limit.
+// 2. If `resolve_to_config` is true, blink feature `FencedFramesAPIChanges`
+// needs to be enabled for `selectURL()` to return a fenced frame config.
+// Otherwise `selectURL()` will fall back to the old behavior that returns an
+// urn:uuid.
+async function runSelectURL(href, keylist = [], resolve_to_config = false) {
+  const full_url = generateURL(href, keylist);
+  return await runSelectRawURL(full_url, resolve_to_config);
+}
+
+async function generateURNFromFledgeRawURL(
+    href, nested_urls, resolve_to_config = false, ad_with_size = false,
+    requested_size = null, automatic_beacon = false) {
+  const bidding_token = token();
+  const seller_token = token();
+
+  const ad_components_list = nested_urls.map((url) => {
+    return ad_with_size ?
+      { renderURL: url, sizeGroup: "group1" } :
+      { renderURL: url }
+  });
+
+  let interestGroup = {
+    name: 'testAd1',
+    owner: location.origin,
+    biddingLogicURL: new URL(FLEDGE_BIDDING_URL, location.origin),
+    ads: [{renderURL: href, bid: 1}],
+    userBiddingSignals: {biddingToken: bidding_token},
+    trustedBiddingSignalsKeys: ['key1'],
+    adComponents: ad_components_list,
+  };
+
+  let biddingUrlParams =
+    new URLSearchParams(interestGroup.biddingLogicURL.search);
+  if (requested_size)
+    biddingUrlParams.set(
+        'requested-size', requested_size[0] + '-' + requested_size[1]);
+  if (ad_with_size)
+    biddingUrlParams.set('ad-with-size', 1);
+  if (automatic_beacon)
+    biddingUrlParams.set('automatic-beacon', 1);
+  interestGroup.biddingLogicURL.search = biddingUrlParams;
+
+  if (ad_with_size) {
+    interestGroup.ads[0].sizeGroup = 'group1';
+    interestGroup.adSizes = {'size1': {width: '100px', height: '50px'}};
+    interestGroup.sizeGroups = {'group1': ['size1']};
+  }
+
+  // Pick an arbitrarily high duration to guarantee that we never leave the
+  // ad interest group while the test runs.
+  navigator.joinAdInterestGroup(interestGroup, /*durationSeconds=*/3000000);
+
+  let auctionConfig = {
+    seller: location.origin,
+    interestGroupBuyers: [location.origin],
+    decisionLogicURL: new URL(FLEDGE_DECISION_URL, location.origin),
+    auctionSignals: {biddingToken: bidding_token, sellerToken: seller_token},
+    resolveToConfig: resolve_to_config
+  };
+
+  if (requested_size) {
+    let decisionUrlParams =
+      new URLSearchParams(auctionConfig.decisionLogicURL.search);
+    decisionUrlParams.set(
+        'requested-size', requested_size[0] + '-' + requested_size[1]);
+    auctionConfig.decisionLogicURL.search = decisionUrlParams;
+
+    auctionConfig['requestedSize'] = {width: requested_size[0], height: requested_size[1]};
+  }
+
+  return navigator.runAdAuction(auctionConfig);
+}
+
+// Similar to runSelectURL, but uses FLEDGE instead of Shared Storage as the
+// auctioning tool.
+// Note: this function, unlike generateURL, is asynchronous and needs to be
+// called with an await operator. @param {string} href - The base url of the
+// page being navigated to @param {string list} keylist - The list of key UUIDs
+// to be used. Note that order matters when extracting the keys.
+// Warning: tests that use this function should not be run in parallel
+// because calls to navigator.joinAdInterestGroup on interest groups with the
+// same name and owner can overwrite each other, and as a result, the tests'
+// auctions may use another test's joined interest group.
+// @param {string} href - The base url of the page being navigated to
+// @param {string list} keylist - The list of key UUIDs to be used. Note that
+//                                order matters when extracting the keys
+// @param {string list} nested_urls - A list of urls that will eventually become
+//                                    the nested configs/ad components
+// @param {boolean} [resolve_to_config = false] - Determines whether the result
+//                                                of `navigator.runAdAuction()`
+//                                                is an urn:uuid or a fenced
+//                                                frame config.
+// @param {boolean} [ad_with_size = false] - Determines whether the auction is
+//                                           run with ad sizes specified.
+// @param {boolean} [automatic_beacon = false] - If true, FLEDGE logic will
+//                                               register an automatic beacon
+//                                               after completion.
+async function generateURNFromFledge(
+    href, keylist, nested_urls = [], resolve_to_config = false,
+    ad_with_size = false, requested_size = null, automatic_beacon = false) {
+  const full_url = generateURL(href, keylist);
+  return generateURNFromFledgeRawURL(
+      full_url, nested_urls, resolve_to_config, ad_with_size, requested_size,
+      automatic_beacon);
 }
 
 // Extracts a list of UUIDs from the from the current page's URL.
@@ -67,14 +191,8 @@ function getRemoteOriginURL(url, https=true) {
   return new URL(url.toString().replace(same_origin, cross_origin));
 }
 
-// Attaches an object that waits for scripts to execute from RemoteContext.
-// (In practice, this is either a frame or a window.)
-// Returns a proxy for the object that first resolves to the object itself,
-// then resolves to the RemoteContext if the property isn't found.
-// The proxy also has an extra attribute `execute`, which is an alias for the
-// remote context's `execute_script(fn, args=[])`.
-function attachContext(object_constructor, html, headers, origin) {
-
+// Builds a URL to be used as a remote context executor.
+function generateRemoteContextURL(headers, origin) {
   // Generate the unique id for the parent/child channel.
   const uuid = token();
 
@@ -96,8 +214,10 @@ function attachContext(object_constructor, html, headers, origin) {
   });
   url.searchParams.append('pipe', formatted_headers.join('|'));
 
-  const object = object_constructor(url);
+  return [uuid, url];
+}
 
+function buildRemoteContextForObject(object, uuid, html) {
   // https://github.com/web-platform-tests/wpt/blob/master/common/dispatcher/README.md
   const context = new RemoteContext(uuid);
   if (html) {
@@ -133,42 +253,161 @@ function attachContext(object_constructor, html, headers, origin) {
   return proxy;
 }
 
-function attachFrameContext(element_name, html, headers, attributes, origin) {
-  frame_constructor = (url) => {
+// Attaches an object that waits for scripts to execute from RemoteContext.
+// (In practice, this is either a frame or a window.)
+// Returns a proxy for the object that first resolves to the object itself,
+// then resolves to the RemoteContext if the property isn't found.
+// The proxy also has an extra attribute `execute`, which is an alias for the
+// remote context's `execute_script(fn, args=[])`.
+function attachContext(object_constructor, html, headers, origin) {
+  const [uuid, url] = generateRemoteContextURL(headers, origin);
+  const object = object_constructor(url);
+  return buildRemoteContextForObject(object, uuid, html);
+}
+
+// TODO(crbug.com/1347953): Update this function to also test
+// `sharedStorage.selectURL()` that returns a fenced frame config object.
+// This should be done after fixing the following flaky tests that use this
+// function.
+// 1. crbug.com/1372536: resize-lock-input.https.html
+// 2. crbug.com/1394559: unfenced-top.https.html
+async function attachOpaqueContext(
+    generator_api, resolve_to_config, ad_with_size, requested_size,
+    automatic_beacon, object_constructor, html, headers, origin) {
+  const [uuid, url] = generateRemoteContextURL(headers, origin);
+  const id = await (
+      generator_api == 'fledge' ?
+          generateURNFromFledge(
+              url, [], [], resolve_to_config, ad_with_size, requested_size,
+              automatic_beacon) :
+          runSelectURL(url, [], resolve_to_config));
+  const object = object_constructor(id);
+  return buildRemoteContextForObject(object, uuid, html);
+}
+
+function attachPotentiallyOpaqueContext(
+    generator_api, resolve_to_config, ad_with_size, requested_size,
+    automatic_beacon, frame_constructor, html, headers, origin) {
+  generator_api = generator_api.toLowerCase();
+  if (generator_api == 'fledge' || generator_api == 'sharedstorage') {
+    return attachOpaqueContext(
+        generator_api, resolve_to_config, ad_with_size, requested_size,
+        automatic_beacon, frame_constructor, html, headers, origin);
+  } else {
+    return attachContext(frame_constructor, html, headers, origin);
+  }
+}
+
+function attachFrameContext(
+    element_name, generator_api, resolve_to_config, ad_with_size,
+    requested_size, automatic_beacon, html, headers, attributes, origin) {
+  frame_constructor = (id) => {
     frame = document.createElement(element_name);
     attributes.forEach(attribute => {
       frame.setAttribute(attribute[0], attribute[1]);
     });
-    frame.src = url;
+    if (element_name == "iframe") {
+      frame.src = id;
+    } else if (id instanceof FencedFrameConfig) {
+      frame.config = id;
+    } else {
+      const config = new FencedFrameConfig(id);
+      frame.config = config;
+    }
     document.body.append(frame);
     return frame;
   };
+  return attachPotentiallyOpaqueContext(
+      generator_api, resolve_to_config, ad_with_size, requested_size,
+      automatic_beacon, frame_constructor, html, headers, origin);
+}
 
-  return attachContext(frame_constructor, html, headers, origin);
+function replaceFrameContext(frame_proxy, {
+  generator_api = '',
+  resolve_to_config = false,
+  ad_with_size = false,
+  requested_size = null,
+  automatic_beacon = false,
+  html = '',
+  headers = [],
+  origin = ''
+} = {}) {
+  frame_constructor = (id) => {
+    if (frame_proxy.element.nodeName == "IFRAME") {
+      frame_proxy.element.src = id;
+    } else if (id instanceof FencedFrameConfig) {
+      frame_proxy.element.config = id;
+    } else {
+      const config = new FencedFrameConfig(id);
+      frame_proxy.element.config = config;
+    }
+    return frame_proxy.element;
+  };
+  return attachPotentiallyOpaqueContext(
+      generator_api, resolve_to_config, ad_with_size, requested_size,
+      automatic_beacon, frame_constructor, html, headers, origin);
 }
 
 // Attach a fenced frame that waits for scripts to execute.
 // Takes as input a(n optional) dictionary of configs:
+// - generator_api: the name of the API that should generate the urn/config.
+//    Supports (case-insensitive) "fledge" and "sharedstorage", or any other
+//    value as a default.
+//    If you generate a urn, then you need to await the result of this function.
+// - resolve_to_config: whether a config should be used. (currently only works
+//    for FLEDGE and sharedStorage generator_api)
+// - ad_with_size: whether an ad auction is run with size specified for the ads
+//    and ad components. (currently only works for FLEDGE)
+// - requested_size: A 2-element list with the width and height for
+//    requestedSize in the FLEDGE auction config. This is different from
+//    ad_with_size, which refers to size information provided alongside the ads
+//    themselves.
+// - automatic_beacon: If true and generator_api = "fledge", an automatic beacon
+//    will be registered for a top-level navigation after the FLEDGE auction
+//    completes.
 // - html: extra HTML source code to inject into the loaded frame
 // - headers: an array of header pairs [[key, value], ...]
-// - attributes: an array of attribute pairs to set on the frame [[key, value], ...]
+// - attributes: an array of attribute pairs to set on the frame [[key, value],
+// ...]
 // - origin: origin of the url, default to location.origin if not set
 // Returns a proxy that acts like the frame HTML element, but with an extra
 // function `execute`. See `attachFrameContext` or the README for more details.
-function attachFencedFrameContext({html = "", headers=[], attributes=[], origin=""} = {}) {
-  return attachFrameContext('fencedframe', html, headers, attributes, origin);
+function attachFencedFrameContext({
+  generator_api = '',
+  resolve_to_config = false,
+  ad_with_size = false,
+  requested_size = null,
+  automatic_beacon = false,
+  html = '',
+  headers = [],
+  attributes = [],
+  origin = ''
+} = {}) {
+  return attachFrameContext(
+      'fencedframe', generator_api, resolve_to_config, ad_with_size,
+      requested_size, automatic_beacon, html, headers, attributes, origin);
 }
 
 // Attach an iframe that waits for scripts to execute.
 // See `attachFencedFrameContext` for more details.
-function attachIFrameContext({html = "", headers=[], attributes=[], origin=""} = {}) {
-  return attachFrameContext('iframe', html, headers, attributes, origin);
+function attachIFrameContext({
+  generator_api = '',
+  automatic_beacon = false,
+  html = '',
+  headers = [],
+  attributes = [],
+  origin = ''
+} = {}) {
+  return attachFrameContext(
+      'iframe', generator_api, resolve_to_config = false, ad_with_size = false,
+      requested_size = null, automatic_beacon, html, headers, attributes,
+      origin);
 }
 
 // Open a window that waits for scripts to execute.
 // Returns a proxy that acts like the window object, but with an extra
 // function `execute`. See `attachContext` for more details.
-function attachWindowContext({target="_blank", html = "", headers=[], origin=""} = {}) {
+function attachWindowContext({target="_blank", html="", headers=[], origin=""}={}) {
   window_constructor = (url) => {
     return window.open(url, target);
   }
@@ -195,17 +434,22 @@ async function stringToStashKey(string) {
   return digest_slices.join('-');
 }
 
-function attachFencedFrame(url, mode='') {
+// Create a fenced frame. Then navigate it using the given `target`, which can
+// be either an urn:uuid or a fenced frame config object.
+function attachFencedFrame(target) {
   assert_implements(
       window.HTMLFencedFrameElement,
       'The HTMLFencedFrameElement should be exposed on the window object');
 
   const fenced_frame = document.createElement('fencedframe');
-  assert_true('mode' in fenced_frame);
-  if (mode) {
-    fenced_frame.mode = mode;
+
+  if (target instanceof FencedFrameConfig) {
+    fenced_frame.config = target;
+  } else {
+    const config = new FencedFrameConfig(target);
+    fenced_frame.config = config;
   }
-  fenced_frame.src = url;
+
   document.body.append(fenced_frame);
   return fenced_frame;
 }
@@ -254,6 +498,44 @@ async function nextValueFromServer(key) {
   }
 }
 
+// Checks the automatic beacon data server to see if it has received an
+// automatic beacon with a given event type and body.
+async function readAutomaticBeaconDataFromServer(event_type, expected_body) {
+  let serverURL = `${BEACON_URL}`;
+  const response = await fetch(serverURL + "?" + new URLSearchParams({
+    type: event_type,
+    expected_body: expected_body,
+  }));
+  if (!response.ok)
+    throw new Error('An error happened in the server ' + response.status);
+  const value = await response.text();
+
+  // The value is not stored in the server.
+  if (value === "<Not set>")
+    return { status: false };
+
+  return { status: true, value: value };
+}
+
+// Convenience wrapper around the above getter that will wait until a value is
+// available on the server. The server uses a hash of the concatenated event
+// type and beacon data as the key when storing the beacon in the database. To
+// retrieve it, we need to supply the endpoint with both pieces of information.
+async function nextAutomaticBeacon(event_type, expected_body) {
+  while (true) {
+    // Fetches the test result from the server.
+    const { status, value } =
+        await readAutomaticBeaconDataFromServer(event_type, expected_body);
+    if (!status) {
+      // The test result has not been stored yet. Retry after a while.
+      await new Promise(resolve => setTimeout(resolve, 20));
+      continue;
+    }
+
+    return value;
+  }
+}
+
 // Writes `value` for `key` in the key-value store on the server.
 async function writeValueToServer(key, value, origin = '') {
   // Resolve the key if it is a Promise.
@@ -270,4 +552,37 @@ async function simulateGesture() {
     await new Promise(resolve => requestAnimationFrame(resolve));
   }
   await test_driver.bless('simulate gesture');
+}
+
+// Fenced frames are always put in the public IP address space which is the
+// least privileged. In case a navigation to a local data: URL or blob: URL
+// resource is allowed, they would only be able to fetch things that are *also*
+// in the public IP address space. So for the document described by these local
+// URLs, we'll set them up to only communicate back to the outer page via
+// resources obtained in the public address space.
+function createLocalSource(key, url) {
+  return `
+    <head>
+      <script src="${url}"><\/script>
+    </head>
+    <body>
+      <script>
+        writeValueToServer("${key}", "LOADED", /*origin=*/"${url.origin}");
+      <\/script>
+    </body>
+  `;
+}
+
+function setupCSP(csp, second_csp=null) {
+  let meta = document.createElement('meta');
+  meta.httpEquiv = "Content-Security-Policy";
+  meta.content = "fenced-frame-src " + csp;
+  document.head.appendChild(meta);
+
+  if (second_csp != null) {
+    let second_meta = document.createElement('meta');
+    second_meta.httpEquiv = "Content-Security-Policy";
+    second_meta.content = "frame-src " + second_csp;
+    document.head.appendChild(second_meta);
+  }
 }

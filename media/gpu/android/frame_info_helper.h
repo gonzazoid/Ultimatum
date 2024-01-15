@@ -5,6 +5,7 @@
 #ifndef MEDIA_GPU_ANDROID_FRAME_INFO_HELPER_H_
 #define MEDIA_GPU_ANDROID_FRAME_INFO_HELPER_H_
 
+#include "base/task/sequenced_task_runner.h"
 #include "media/gpu/android/shared_image_video_provider.h"
 #include "media/gpu/media_gpu_export.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -57,6 +58,10 @@ class MEDIA_GPU_EXPORT FrameInfoHelper {
   virtual void GetFrameInfo(
       std::unique_ptr<CodecOutputBufferRenderer> buffer_renderer,
       FrameInfoReadyCB callback) = 0;
+
+  // Returns true if the FrameInfoHelper can't currently produce any more
+  // frames.
+  virtual bool IsStalled() const = 0;
 
  protected:
   FrameInfoHelper() = default;

@@ -5,16 +5,17 @@
 #ifndef COMPONENTS_MEDIA_ROUTER_COMMON_PROVIDERS_CAST_CERTIFICATE_NET_PARSED_CERTIFICATE_H_
 #define COMPONENTS_MEDIA_ROUTER_COMMON_PROVIDERS_CAST_CERTIFICATE_NET_PARSED_CERTIFICATE_H_
 
-#include "net/cert/pki/parsed_certificate.h"
+#include "third_party/boringssl/src/pki/parsed_certificate.h"
 #include "third_party/openscreen/src/cast/common/public/parsed_certificate.h"
 
 namespace cast_certificate {
 
-net::ParseCertificateOptions GetCertParsingOptions();
+bssl::ParseCertificateOptions GetCertParsingOptions();
 
 class NetParsedCertificate final : public openscreen::cast::ParsedCertificate {
  public:
-  explicit NetParsedCertificate(scoped_refptr<net::ParsedCertificate> cert);
+  explicit NetParsedCertificate(
+      std::shared_ptr<const bssl::ParsedCertificate> cert);
   ~NetParsedCertificate() override;
 
   // openscreen::cast::ParsedCertificate implementation:
@@ -32,18 +33,17 @@ class NetParsedCertificate final : public openscreen::cast::ParsedCertificate {
 
   openscreen::ErrorOr<uint64_t> GetSerialNumber() const override;
 
-  bool VerifySignedData(
-      openscreen::cast::DigestAlgorithm algorithm,
-      const openscreen::cast::ConstDataSpan& data,
-      const openscreen::cast::ConstDataSpan& signature) const override;
+  bool VerifySignedData(openscreen::cast::DigestAlgorithm algorithm,
+                        const openscreen::ByteView& data,
+                        const openscreen::ByteView& signature) const override;
 
-  bool HasPolicyOid(const openscreen::cast::ConstDataSpan& oid) const override;
+  bool HasPolicyOid(const openscreen::ByteView& oid) const override;
 
   void SetNotBeforeTimeForTesting(time_t not_before) override;
   void SetNotAfterTimeForTesting(time_t not_after) override;
 
  private:
-  scoped_refptr<net::ParsedCertificate> cert_;
+  std::shared_ptr<const bssl::ParsedCertificate> cert_;
 };
 
 }  // namespace cast_certificate

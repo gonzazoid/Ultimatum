@@ -44,6 +44,22 @@ class StructTraits<media::mojom::VideoEncoderInfoDataView,
       const media::VideoEncoderInfo& video_encoder_info) {
     return video_encoder_info.implementation_name;
   }
+  static bool has_frame_delay(
+      const media::VideoEncoderInfo& video_encoder_info) {
+    return video_encoder_info.frame_delay.has_value();
+  }
+  static int32_t frame_delay(
+      const media::VideoEncoderInfo& video_encoder_info) {
+    return video_encoder_info.frame_delay.value_or(0);
+  }
+  static bool has_input_capacity(
+      const media::VideoEncoderInfo& video_encoder_info) {
+    return video_encoder_info.input_capacity.has_value();
+  }
+  static int32_t input_capacity(
+      const media::VideoEncoderInfo& video_encoder_info) {
+    return video_encoder_info.input_capacity.value_or(0);
+  }
   static bool supports_native_handle(
       const media::VideoEncoderInfo& video_encoder_info) {
     return video_encoder_info.supports_native_handle;
@@ -63,6 +79,18 @@ class StructTraits<media::mojom::VideoEncoderInfoDataView,
   static bool reports_average_qp(
       const media::VideoEncoderInfo& video_encoder_info) {
     return video_encoder_info.reports_average_qp;
+  }
+  static bool apply_alignment_to_all_simulcast_layers(
+      const media::VideoEncoderInfo& video_encoder_info) {
+    return video_encoder_info.apply_alignment_to_all_simulcast_layers;
+  }
+  static uint32_t requested_resolution_alignment(
+      const media::VideoEncoderInfo& video_encoder_info) {
+    return video_encoder_info.requested_resolution_alignment;
+  }
+  static bool supports_frame_size_change(
+      const media::VideoEncoderInfo& video_encoder_info) {
+    return video_encoder_info.supports_frame_size_change;
   }
   static base::span<const std::vector<uint8_t>,
                     media::VideoEncoderInfo::kMaxSpatialLayers>

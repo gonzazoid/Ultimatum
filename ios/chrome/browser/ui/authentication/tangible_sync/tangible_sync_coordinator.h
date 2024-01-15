@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,9 +21,10 @@
 
 // Initiates a TangibleSyncCoordinator with `navigationController`,
 // `browser` and `delegate`.
-- (instancetype)initFirstRunWithBaseNavigationController:
+- (instancetype)initWithBaseNavigationController:
                     (UINavigationController*)navigationController
-                                                 browser:(Browser*)browser
+                                         browser:(Browser*)browser
+                                        firstRun:(BOOL)firstRun
     NS_DESIGNATED_INITIALIZER;
 
 @end

@@ -7,18 +7,18 @@
 #include <cfloat>
 #include <cmath>
 
+#include <optional>
 #include "base/json/json_string_value_serializer.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_base.h"
 #include "base/metrics/sparse_histogram.h"
 #include "base/metrics/user_metrics.h"
 #include "base/notreached.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
 #include "base/values.h"
 #include "chromecast/base/metrics/cast_histograms.h"
 #include "chromecast/base/metrics/cast_metrics_helper.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/metrics_proto/cast_logs.pb.h"
 
 namespace chromecast {
@@ -73,7 +73,7 @@ void CastRuntimeMetricsRecorder::RecordSimpleActionWithValue(
 
 CastRuntimeMetricsRecorder::CastRuntimeMetricsRecorder(
     EventBuilderFactory* event_builder_factory)
-    : task_runner_(base::SequencedTaskRunnerHandle::Get()),
+    : task_runner_(base::SequencedTaskRunner::GetCurrentDefault()),
       event_builder_factory_(event_builder_factory) {
   DCHECK(event_builder_factory_);
 
@@ -120,10 +120,10 @@ void CastRuntimeMetricsRecorder::RemoveActiveConnection(
 void CastRuntimeMetricsRecorder::RecordCastEvent(
     std::unique_ptr<CastEventBuilder> event_builder) {
   if (task_runner_->RunsTasksInCurrentSequence()) {
-    DLOG(INFO) << "RecordCastEvent direct";
+    DVLOG(1) << "RecordCastEvent direct";
     RecordCastEventOnSequence(std::move(event_builder));
   } else {
-    DLOG(INFO) << "RecordCastEvent bounce";
+    DVLOG(1) << "RecordCastEvent bounce";
     task_runner_->PostTask(
         FROM_HERE,
         base::BindOnce(&CastRuntimeMetricsRecorder::RecordCastEventOnSequence,
@@ -133,7 +133,7 @@ void CastRuntimeMetricsRecorder::RecordCastEvent(
 
 void CastRuntimeMetricsRecorder::RecordCastEventOnSequence(
     std::unique_ptr<CastEventBuilder> event_builder) {
-  DLOG(INFO) << "RecordCastEventOnSequence";
+  DVLOG(1) << "RecordCastEventOnSequence";
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   if (events_.size() >= kCastEventLimit) {
     static bool logged_once = false;
@@ -235,23 +235,24 @@ bool CastRuntimeMetricsRecorder::RecordJsonCastEvent(const std::string& event) {
   std::unique_ptr<const base::Value> value(
       JSONStringValueDeserializer(event).Deserialize(nullptr, nullptr));
   if (!value) {
-    DVLOG(3) << "This is not a JSON format event: " << event;
+    LOG(ERROR) << "This is not a JSON format event: " << event;
     return false;
   }
 
   if (!value->is_dict()) {
-    DVLOG(3) << "This is not a dictionary JSON format event: " << event;
+    LOG(ERROR) << "This is not a dictionary JSON format event: " << event;
     return false;
   }
 
-  const std::string* name = value->FindStringKey(kEventName);
+  const base::Value::Dict& value_dict = value->GetDict();
+  const std::string* name = value_dict.FindString(kEventName);
   if (!name) {
-    DVLOG(3) << "Missing field:" << kEventName;
+    LOG(ERROR) << "Missing field:" << kEventName;
     return false;
   }
 
   // Gets event creation time. If unavailable use now.
-  absl::optional<double> maybe_event_time = value->FindDoubleKey(kEventTime);
+  std::optional<double> maybe_event_time = value_dict.FindDouble(kEventTime);
   double event_time = 0;
   if (maybe_event_time && maybe_event_time.value() > 0) {
     event_time = maybe_event_time.value();
@@ -259,31 +260,33 @@ bool CastRuntimeMetricsRecorder::RecordJsonCastEvent(const std::string& event) {
     event_time = (base::TimeTicks::Now() - base::TimeTicks()).InMicroseconds();
   }
   // Gets App Id.
-  const std::string* maybe_app_id = value->FindStringKey(kEventAppId);
+  const std::string* maybe_app_id = value_dict.FindString(kEventAppId);
   std::string app_id;
   if (maybe_app_id) {
     app_id = *maybe_app_id;
   }
   // Gets session Id.
-  const std::string* maybe_session_id = value->FindStringKey(kEventSessionId);
+  const std::string* maybe_session_id = value_dict.FindString(kEventSessionId);
   std::string session_id;
   if (maybe_session_id) {
     session_id = *maybe_session_id;
   }
   // Gets SDK version.
-  const std::string* maybe_sdk_version = value->FindStringKey(kEventSdkVersion);
+  const std::string* maybe_sdk_version =
+      value_dict.FindString(kEventSdkVersion);
   std::string sdk_version;
   if (maybe_sdk_version) {
     sdk_version = *maybe_sdk_version;
   }
 
-  const base::Value* multiple_events = value->FindDictKey(kEventEventsPair);
+  const base::Value::Dict* multiple_events =
+      value_dict.FindDict(kEventEventsPair);
   if (!multiple_events) {
     std::unique_ptr<CastEventBuilder> event_builder(CreateEventBuilder(*name));
     PopulateEventBuilder(event_builder.get(), event_time, app_id, sdk_version,
                          session_id);
-    absl::optional<double> maybe_event_value =
-        value->FindDoubleKey(kEventValue);
+    std::optional<double> maybe_event_value =
+        value_dict.FindDouble(kEventValue);
     if (maybe_event_value) {
       double event_value = maybe_event_value.value();
       DCHECK_EQ(event_value, std::nearbyint(event_value));
@@ -291,7 +294,7 @@ bool CastRuntimeMetricsRecorder::RecordJsonCastEvent(const std::string& event) {
       event_builder->SetExtraValue(static_cast<int64_t>(event_value));
     }
 
-    const std::string* audit_report = value->FindStringKey(kEventAuditReport);
+    const std::string* audit_report = value_dict.FindString(kEventAuditReport);
     if (audit_report) {
       event_builder->SetAuditReport(*audit_report);
     }
@@ -300,8 +303,8 @@ bool CastRuntimeMetricsRecorder::RecordJsonCastEvent(const std::string& event) {
     return true;
   }
 
-  for (auto kv : multiple_events->DictItems()) {
-    absl::optional<double> maybe_event_value = kv.second.GetIfDouble();
+  for (auto kv : *multiple_events) {
+    std::optional<double> maybe_event_value = kv.second.GetIfDouble();
     if (!maybe_event_value) {
       continue;
     }

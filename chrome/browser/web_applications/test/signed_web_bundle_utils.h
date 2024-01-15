@@ -7,7 +7,7 @@
 
 #include <memory>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "components/web_package/mojom/web_bundle_parser.mojom-forward.h"
 #include "mojo/public/cpp/system/data_pipe.h"
 #include "net/base/net_errors.h"
@@ -19,7 +19,7 @@ class SignedWebBundleReader;
 // Start reading the response body from `read_response_body_callback`. The
 // returned Mojo handle can be used to provide the response contents.
 mojo::ScopedDataPipeConsumerHandle ReadResponseBody(
-    uint32_t response_length,
+    uint64_t response_length,
     base::OnceCallback<void(mojo::ScopedDataPipeProducerHandle producer_handle,
                             base::OnceCallback<void(net::Error net_error)>)>
         read_response_body_callback,
@@ -33,7 +33,7 @@ std::string ReadAndFulfillResponseBody(
 
 // Given a callback that produces a response, read its contents and return it.
 std::string ReadAndFulfillResponseBody(
-    uint32_t response_length,
+    uint64_t response_length,
     base::OnceCallback<void(mojo::ScopedDataPipeProducerHandle producer_handle,
                             base::OnceCallback<void(net::Error net_error)>)>
         read_response_body_callback);

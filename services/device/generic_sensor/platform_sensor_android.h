@@ -6,11 +6,13 @@
 #define SERVICES_DEVICE_GENERIC_SENSOR_PLATFORM_SENSOR_ANDROID_H_
 
 #include "base/android/scoped_java_ref.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "services/device/generic_sensor/platform_sensor.h"
 
 namespace device {
+
 class PlatformSensorAndroid : public PlatformSensor {
  public:
   // Creates a new PlatformSensorAndroid for the given sensor type, returning
@@ -44,6 +46,18 @@ class PlatformSensorAndroid : public PlatformSensor {
       jdouble value3,
       jdouble value4);
 
+  base::android::ScopedJavaGlobalRef<jobject> GetJavaObjectForTesting() {
+    return j_object_;
+  }
+
+  // Simulate a `SensorEvent` from
+  // android.hardware.Sensor. The simulated event is created
+  // with length of |reading_values_length| and filled with readings with
+  // (reading_index + 0.1).
+  static void SimulateSensorEventFromJavaForTesting(
+      base::android::ScopedJavaGlobalRef<jobject> j_object_,
+      jint reading_values_length);
+
  protected:
   ~PlatformSensorAndroid() override;
   bool StartSensor(const PlatformSensorConfiguration& configuration) override;
@@ -57,6 +71,7 @@ class PlatformSensorAndroid : public PlatformSensor {
   const scoped_refptr<base::SequencedTaskRunner> sequenced_task_runner_ =
       base::ThreadPool::CreateSequencedTaskRunner({base::MayBlock()});
 };
+
 }  // namespace device
 
 #endif  // SERVICES_DEVICE_GENERIC_SENSOR_PLATFORM_SENSOR_ANDROID_H_

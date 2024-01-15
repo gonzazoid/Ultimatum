@@ -13,10 +13,6 @@
 #import "third_party/ocmock/OCMock/OCMock.h"
 #import "third_party/ocmock/gtest_support.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 namespace {
 
 using base::test::ios::WaitUntilConditionOrTimeout;
@@ -93,7 +89,7 @@ TEST_F(PedalSectionExtractorTest, Debounce) {
   [[delegate_ expect] invalidatePedals];
 
   // Verify that the pedal cache expires.
-  ASSERT_TRUE(WaitUntilConditionOrTimeout(1, ^{
+  ASSERT_TRUE(WaitUntilConditionOrTimeout(base::Seconds(1), ^{
     return ![extractor_ hasCachedPedals];
   }));
 

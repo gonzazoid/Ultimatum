@@ -1,8 +1,10 @@
 include_rules = [
+  "+components/miracle_parameter",
   "+crypto",
   "+net/net_jni_headers",
   "+third_party/apple_apsl",
   "+third_party/boringssl/src/include",
+  "+third_party/boringssl/src/pki",
   "+third_party/nss",
   "+third_party/protobuf/src/google/protobuf",
   "+third_party/zlib",
@@ -52,6 +54,10 @@ specific_include_rules = {
 
   "fuzzer_test_support.cc": [
     "+base/i18n",
+  ],
+
+  "zstd_source_stream\.cc": [
+    "+third_party/zstd",
   ],
 
   # Dependencies specific for fuzz targets and other fuzzing-related code.

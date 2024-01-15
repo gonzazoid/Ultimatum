@@ -2,6 +2,12 @@
 # in Network Service, please consider sharing the design idea/doc with
 # network-service-dev@chromium.org beforehand.
 
+# Primary
+bashi@chromium.org
+horo@chromium.org
+ricea@chromium.org
+
+# Secondary
 cduvall@chromium.org
 ericorth@chromium.org
 jam@chromium.org
@@ -18,18 +24,14 @@ per-file sec_header_helpers*=creis@chromium.org
 per-file sec_header_helpers*=lukasza@chromium.org
 per-file sec_header_helpers*=mkwst@chromium.org
 
-per-file expect_ct_reporter*=estark@chromium.org
-
 per-file cert_verifier_with_trust_anchors*=file://chromeos/ash/components/policy/OWNERS
 
 per-file *_type_converter*.*=set noparent
 per-file *_type_converter*.*=file://ipc/SECURITY_OWNERS
 
-per-file network_sandbox_hook_linux.*.cc=file://sandbox/OWNERS
+per-file network_sandbox_hook_linux.*=set noparent
+per-file network_sandbox_hook_linux.*=file://sandbox/linux/OWNERS
 
-per-file network_quality*=file://net/nqe/OWNERS
-
-per-file BUILD.gn=file://net/nqe/OWNERS
 per-file BUILD.gn=file://services/network/resource_scheduler/OWNERS
 per-file BUILD.gn=file://services/network/sct_auditing/OWNERS
 
@@ -43,3 +45,6 @@ per-file *cookie*=file://net/cookies/OWNERS
 # Private Network Access
 per-file private_network_access*=titouan@chromium.org
 per-file private_network_access*=lyf@chromium.org
+
+# WebTransport
+per-file web_transport*=file://net/OWNERS

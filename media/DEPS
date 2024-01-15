@@ -4,6 +4,7 @@ include_rules = [
   "+cc/paint",
   "+components/crash/core/common/crash_key.h",
   "+components/system_media_controls/linux/buildflags",
+  "+components/viz/common/resources",
   "+crypto",
   "+device/udev_linux",
   "+gpu",
@@ -17,12 +18,14 @@ include_rules = [
   "+third_party/re2",
   "+third_party/dav1d",
   "+third_party/ffmpeg",
+  "+third_party/flac",
+  "+third_party/fuzztest",
   "+third_party/libaom",
   "+third_party/libdrm",
   "+third_party/libgav1",
   "+third_party/libvpx",
   "+third_party/libyuv",
-  "+third_party/openh264/src/codec/api/svc",
+  "+third_party/openh264/src/codec/api/wels",
   "+third_party/opus",
   "+third_party/skia",
   "+ui/base/x/x11_user_input_monitor.h",
@@ -54,5 +57,8 @@ specific_include_rules = {
   ],
   "null_video_sink_unittest.cc": [
     "+components/viz/common/frame_sinks/begin_frame_args.h",
+  ],
+  "fuchsia_.*_mojom_traits\.h": [
+    "+mojo/public/cpp/base/fuchsia/fidl_interface_request_mojom_traits.h",
   ],
 }

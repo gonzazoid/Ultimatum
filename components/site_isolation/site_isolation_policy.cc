@@ -29,12 +29,7 @@ namespace {
 using IsolatedOriginSource =
     content::ChildProcessSecurityPolicy::IsolatedOriginSource;
 
-bool g_disallow_memory_threshold_caching = false;
-
-bool ShouldCacheMemoryThresholdDecision() {
-  return base::FeatureList::IsEnabled(
-      features::kCacheSiteIsolationMemoryThreshold);
-}
+bool g_disallow_memory_threshold_caching_for_testing = false;
 
 struct IsolationDisableDecisions {
   bool should_disable_strict;
@@ -171,9 +166,9 @@ bool SiteIsolationPolicy::IsIsolationForOAuthSitesEnabled() {
 bool SiteIsolationPolicy::IsEnterprisePolicyApplicable() {
 #if BUILDFLAG(IS_ANDROID)
   // https://crbug.com/844118: Limiting policy to devices with > 1GB RAM.
-  // Using 1077 rather than 1024 because 1) it helps ensure that devices with
+  // Using 1077 rather than 1024 because it helps ensure that devices with
   // exactly 1GB of RAM won't get included because of inaccuracies or off-by-one
-  // errors and 2) this is the bucket boundary in Memory.Stats.Win.TotalPhys2.
+  // errors.
   bool have_enough_memory = base::SysInfo::AmountOfPhysicalMemoryMB() > 1077;
   return have_enough_memory;
 #else
@@ -184,9 +179,7 @@ bool SiteIsolationPolicy::IsEnterprisePolicyApplicable() {
 // static
 bool SiteIsolationPolicy::ShouldDisableSiteIsolationDueToMemoryThreshold(
     content::SiteIsolationMode site_isolation_mode) {
-  static const bool cache_memory_threshold_decision =
-      ShouldCacheMemoryThresholdDecision();
-  if (!g_disallow_memory_threshold_caching && cache_memory_threshold_decision) {
+  if (!g_disallow_memory_threshold_caching_for_testing) {
     return CachedDisableSiteIsolation(site_isolation_mode);
   }
   return ShouldDisableSiteIsolationDueToMemorySlow(site_isolation_mode);
@@ -398,7 +391,7 @@ bool SiteIsolationPolicy::ShouldPdfCompositorBeEnabledForOopifs() {
 // static
 void SiteIsolationPolicy::SetDisallowMemoryThresholdCachingForTesting(
     bool disallow_caching) {
-  g_disallow_memory_threshold_caching = disallow_caching;
+  g_disallow_memory_threshold_caching_for_testing = disallow_caching;
 }
 
 }  // namespace site_isolation

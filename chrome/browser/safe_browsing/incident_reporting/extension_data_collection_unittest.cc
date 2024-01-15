@@ -88,30 +88,27 @@ void ExtensionTestingProfile::AddExtension(std::string extension_id,
   scoped_refptr<const extensions::Extension> extension =
       extensions::ExtensionBuilder()
           .SetID(extension_id)
-          .SetManifest(extensions::DictionaryBuilder()
+          .SetManifest(base::Value::Dict()
                            .Set("name", extension_name)
                            .Set("version", version)
                            .Set("manifest_version", 2)
                            .Set("description", description)
-                           .Set("update_url", update_url)
-                           .Build())
+                           .Set("update_url", update_url))
           .Build();
 
   // Install the extension on the faked extension service.
   extension_service_->AddExtension(extension.get());
 
   extension_prefs_->UpdateExtensionPref(
-      extension_id, "install_time",
-      std::make_unique<base::Value>(
-          base::NumberToString(install_time.ToInternalValue())));
-  extension_prefs_->UpdateExtensionPref(
-      extension_id, "state", std::make_unique<base::Value>(state_value));
+      extension_id, "last_update_time",
+      base::Value(base::NumberToString(install_time.ToInternalValue())));
+  extension_prefs_->UpdateExtensionPref(extension_id, "state",
+                                        base::Value(state_value));
 }
 
 void ExtensionTestingProfile::SetInstallSignature(
     extensions::InstallSignature signature) {
-  base::DictionaryValue signature_dict;
-  signature.ToValue(&signature_dict);
+  base::Value::Dict signature_dict = signature.ToDict();
   extension_prefs_->SetInstallSignature(&signature_dict);
 }
 
@@ -130,7 +127,7 @@ class ExtensionDataCollectionTest : public testing::Test {
     SAFE_BROWSING_AND_EXTENDED_REPORTING,
   };
 
-  ExtensionDataCollectionTest() : profile_number_() {}
+  ExtensionDataCollectionTest() = default;
 
   void SetUp() override {
     testing::Test::SetUp();
@@ -188,7 +185,7 @@ class ExtensionDataCollectionTest : public testing::Test {
   std::unique_ptr<TestingProfileManager> profile_manager_;
 
  private:
-  int profile_number_;
+  int profile_number_ = 0;
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   ash::ScopedCrosSettingsTestHelper cros_settings_test_helper_;
@@ -259,7 +256,8 @@ TEST_F(ExtensionDataCollectionTest, CollectExtensionDataWithExtension) {
 
   ASSERT_EQ(extension_info.id(), extension_id);
   ASSERT_EQ(extension_info.name(), extension_name);
-  ASSERT_EQ(extension_info.install_time_msec(), install_time.ToJavaTime());
+  ASSERT_EQ(extension_info.install_time_msec(),
+            install_time.InMillisecondsSinceUnixEpoch());
   ASSERT_EQ(extension_info.version(), version);
   ASSERT_EQ(extension_info.description(), description);
   ASSERT_EQ(extension_info.update_url(), update_url);
@@ -295,7 +293,8 @@ TEST_F(ExtensionDataCollectionTest, CollectsLastInstalledExtension) {
 
   ASSERT_EQ(extension_info.id(), extension_id);
   ASSERT_EQ(extension_info.name(), extension_name);
-  ASSERT_EQ(extension_info.install_time_msec(), install_time.ToJavaTime());
+  ASSERT_EQ(extension_info.install_time_msec(),
+            install_time.InMillisecondsSinceUnixEpoch());
 }
 
 TEST_F(ExtensionDataCollectionTest, IgnoresExtensionsIfNoExtendedSafeBrowsing) {

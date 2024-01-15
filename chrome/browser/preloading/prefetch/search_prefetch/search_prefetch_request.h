@@ -7,21 +7,25 @@
 
 #include <memory>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/state_transitions.h"
-#include "net/traffic_annotation/network_traffic_annotation.h"
+#include "chrome/browser/preloading/prefetch/search_prefetch/search_prefetch_url_loader.h"
 #include "services/network/public/cpp/resource_request.h"
 #include "url/gurl.h"
 
 class PrerenderManager;
 class Profile;
-class SearchPrefetchURLLoader;
 class StreamingSearchPrefetchURLLoader;
+
 namespace content {
 class PreloadingAttempt;
 enum class PreloadingTriggeringOutcome;
 enum class PreloadingFailureReason;
 }  // namespace content
+
+namespace net {
+struct NetworkTrafficAnnotationTag;
+}  // namespace net
 
 // These values are persisted to logs. Entries should not be renumbered and
 // numeric values should never be reused.
@@ -69,7 +73,7 @@ enum class SearchPrefetchStatus {
 
 // A class representing a prefetch used by the Search Prefetch Service.
 // It plays the following roles to support search preloading.
-// - Preparing a resource request to prefetch a search terms.
+// - Preparing a resource request to prefetch a search page.
 // - Starting prerendering upon the request succeeding to upgrade prefetch to
 //   prerender after the Search Prefetch Service tells it that the prefetched
 //   term is prerenderable.
@@ -78,7 +82,7 @@ enum class SearchPrefetchStatus {
 //   more easily.
 class SearchPrefetchRequest {
  public:
-  SearchPrefetchRequest(const std::u16string& prefetch_search_terms,
+  SearchPrefetchRequest(const GURL& canonical_search_url,
                         const GURL& prefetch_url,
                         bool navigation_prefetch,
                         content::PreloadingAttempt* prefetch_preloading_attempt,
@@ -147,7 +151,14 @@ class SearchPrefetchRequest {
   void RecordClickTime();
 
   // Takes ownership of underlying data/objects needed to serve the response.
-  std::unique_ptr<SearchPrefetchURLLoader> TakeSearchPrefetchURLLoader();
+  scoped_refptr<StreamingSearchPrefetchURLLoader> TakeSearchPrefetchURLLoader();
+
+  // Instead of completely letting a navigation stack own the prefetch loader,
+  // creates a copy of the prefetched response so that it can be shared among
+  // different clients.
+  // Note: This method should be called after the response reader received
+  // response headers.
+  SearchPrefetchURLLoader::RequestHandler CreateResponseReader();
 
   // Whether the request was started as a navigation prefetch (as opposed to a
   // suggestion prefetch).
@@ -161,12 +172,16 @@ class SearchPrefetchRequest {
   // exists.
   void SetPrefetchAttemptFailureReason(content::PreloadingFailureReason reason);
 
+  // Tells StreamingSearchPrefetchURLLoader to run the callback upon
+  // destruction.
+  void SetLoaderDestructionCallbackForTesting(
+      base::OnceClosure streaming_url_loader_destruction_callback);
+
  private:
   // Starts and begins processing |resource_request|.
   void StartPrefetchRequestInternal(
       Profile* profile,
       std::unique_ptr<network::ResourceRequest> resource_request,
-      const net::NetworkTrafficAnnotationTag& traffic_annotation,
       base::OnceCallback<void(bool)> report_error_callback);
 
   // Stops the on-going prefetch and should mark |current_status_|
@@ -191,8 +206,9 @@ class SearchPrefetchRequest {
 
   SearchPrefetchStatus current_status_ = SearchPrefetchStatus::kNotStarted;
 
-  // The search terms that this request is prefetching.
-  const std::u16string prefetch_search_terms_;
+  // The canonical representation of the search suggestion including query,
+  // intent, and extra parameters that can alter the Search page.
+  const GURL canonical_search_url_;
 
   // The URL to prefetch the search terms from.
   GURL prefetch_url_;
@@ -207,10 +223,8 @@ class SearchPrefetchRequest {
   // Whether this is for a navigation-time prefetch.
   bool navigation_prefetch_;
 
-  std::unique_ptr<net::NetworkTrafficAnnotationTag> network_traffic_annotation_;
-
   // The ongoing prefetch request. Null before and after the fetch.
-  std::unique_ptr<StreamingSearchPrefetchURLLoader> streaming_url_loader_;
+  scoped_refptr<StreamingSearchPrefetchURLLoader> streaming_url_loader_;
 
   // Once set, this is used to log the metrics corresponding to the prefetch
   // attempt. Please note this is different from `prerender_preloading_attempt_`
@@ -235,7 +249,7 @@ class SearchPrefetchRequest {
   // before we receive a prefetch response or the prerender is not created.
   base::WeakPtr<content::PreloadingAttempt> prerender_preloading_attempt_;
 
-  base::raw_ptr<Profile> profile_;
+  raw_ptr<Profile> profile_;
 };
 
 // Used when DCHECK_STATE_TRANSITION triggers.

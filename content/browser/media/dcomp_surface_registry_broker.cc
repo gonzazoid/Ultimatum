@@ -6,7 +6,6 @@
 
 #include "base/logging.h"
 #include "content/browser/gpu/gpu_process_host.h"
-#include "media/base/bind_to_current_loop.h"
 #include "mojo/public/cpp/bindings/callback_helpers.h"
 
 namespace content {
@@ -31,7 +30,7 @@ void DCOMPSurfaceRegistryBroker::RegisterDCOMPSurfaceHandle(
   auto* gpu_service = gpu_process_host->gpu_host()->gpu_service();
   gpu_service->RegisterDCOMPSurfaceHandle(
       std::move(surface_handle), mojo::WrapCallbackWithDefaultInvokeIfNotRun(
-                                     std::move(callback), absl::nullopt));
+                                     std::move(callback), std::nullopt));
 }
 
 void DCOMPSurfaceRegistryBroker::UnregisterDCOMPSurfaceHandle(

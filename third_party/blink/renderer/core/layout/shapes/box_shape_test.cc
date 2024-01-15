@@ -30,8 +30,11 @@
 #include "third_party/blink/renderer/core/layout/shapes/box_shape.h"
 
 #include <memory>
+
 #include "testing/gtest/include/gtest/gtest.h"
+#include "third_party/blink/renderer/core/testing/core_unit_test_helper.h"
 #include "third_party/blink/renderer/platform/geometry/float_rounded_rect.h"
+#include "third_party/blink/renderer/platform/testing/task_environment.h"
 
 namespace blink {
 
@@ -44,6 +47,7 @@ class BoxShapeTest : public testing::Test {
     return Shape::CreateLayoutBoxShape(bounds, WritingMode::kHorizontalTb,
                                        shape_margin);
   }
+  test::TaskEnvironment task_environment_;
 };
 
 namespace {
@@ -80,7 +84,7 @@ TEST_F(BoxShapeTest, zeroRadii) {
       CreateBoxShape(FloatRoundedRect(0, 0, 100, 50), 10);
   EXPECT_FALSE(shape->IsEmpty());
 
-  EXPECT_EQ(LayoutRect(-10, -10, 120, 70),
+  EXPECT_EQ(LogicalRect(-10, -10, 120, 70),
             shape->ShapeMarginLogicalBoundingBox());
 
   // A BoxShape's bounds include the top edge but not the bottom edge.
@@ -144,7 +148,8 @@ TEST_F(BoxShapeTest, getIntervals) {
       FloatRoundedRect(gfx::Rect(0, 0, 100, 100), corner_radii), 0);
   EXPECT_FALSE(shape->IsEmpty());
 
-  EXPECT_EQ(LayoutRect(0, 0, 100, 100), shape->ShapeMarginLogicalBoundingBox());
+  EXPECT_EQ(LogicalRect(0, 0, 100, 100),
+            shape->ShapeMarginLogicalBoundingBox());
 
   TEST_EXCLUDED_INTERVAL(shape, LayoutUnit(10), LayoutUnit(95), LayoutUnit(0),
                          LayoutUnit(100));

@@ -2,10 +2,9 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-// clang-format off
-// #import {dom, Polymer} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
-// #import {invokePolymerMethod} from '../../display_manager.m.js';
-// clang-format on
+import {dom} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+
+import {invokePolymerMethod} from '../../display_manager.js';
 
 /**
  * @fileoverview
@@ -38,7 +37,7 @@
  */
 
 /** @polymerBehavior */
-/* #export */ var MultiStepBehavior = {
+export const MultiStepBehavior = {
   properties: {
     uiStep: {
       type: String,
@@ -140,6 +139,7 @@
       this.hideUIStep_(this.uiStep);
     }
     this.uiStep = step;
+    this.shadowRoot.host.setAttribute('multistep', step);
     this.showUIStep_(this.uiStep);
   },
 
@@ -149,7 +149,7 @@
       return;
     }
     for (const element of this.stepElements_[step] || []) {
-      cr.ui.login.invokePolymerMethod(element, 'onBeforeShow');
+      invokePolymerMethod(element, 'onBeforeShow');
       element.hidden = false;
       // Trigger show() if element is an oobe-dialog
       if (element.show && typeof element.show === 'function') {
@@ -160,7 +160,7 @@
 
   hideUIStep_(step) {
     for (const element of this.stepElements_[step] || []) {
-      cr.ui.login.invokePolymerMethod(element, 'onBeforeHide');
+      invokePolymerMethod(element, 'onBeforeHide');
       element.hidden = true;
     }
   },
@@ -172,7 +172,7 @@
    */
   refreshStepBindings_() {
     this.stepElements_ = {};
-    var matches = Polymer.dom(this.root).querySelectorAll('[for-step]');
+    const matches = dom(this.root).querySelectorAll('[for-step]');
     for (const child of matches) {
       const stepsList = child.getAttribute('for-step');
       for (const stepChunk of stepsList.split(',')) {
@@ -187,22 +187,13 @@
 
 };
 
-/**
- * TODO(b/24294625): Replace with an interface.
- * @typedef {{
- *   setUIStep: function(string),
- *   onBeforeShow: function(),
- *   onBeforeHide: function(),
- * }}
- */
-MultiStepBehavior.Proto;
-
 /** @interface */
-/* #export */ class MultiStepBehaviorInterface {
+export class MultiStepBehaviorInterface {
+  /** @return {Object} */
+  get UI_STEPS() {}
   setUIStep(step) {}
   /** @return {string} */
   defaultUIStep() {}
-
   /** @return {string} */
   get uiStep() {}
 }

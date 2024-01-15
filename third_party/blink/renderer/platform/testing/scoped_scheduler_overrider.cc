@@ -4,6 +4,8 @@
 
 #include "third_party/blink/renderer/platform/testing/scoped_scheduler_overrider.h"
 
+#include "base/memory/raw_ptr.h"
+#include "base/task/single_thread_task_runner.h"
 #include "third_party/blink/renderer/platform/wtf/wtf.h"
 
 namespace blink {
@@ -20,18 +22,13 @@ class ThreadWithCustomScheduler : public MainThread {
 
   ThreadScheduler* Scheduler() override { return scheduler_; }
 
-  scoped_refptr<base::SingleThreadTaskRunner> GetDeprecatedTaskRunner()
-      const override {
-    return task_runner_;
-  }
-
   scoped_refptr<base::SingleThreadTaskRunner> GetTaskRunner(
       MainThreadTaskRunnerRestricted) const override {
     return task_runner_;
   }
 
  private:
-  ThreadScheduler* scheduler_;
+  raw_ptr<ThreadScheduler, ExperimentalRenderer> scheduler_;
   scoped_refptr<base::SingleThreadTaskRunner> task_runner_;
 };
 

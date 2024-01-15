@@ -9,21 +9,31 @@
 #include <sys/time.h>
 #include <unistd.h>
 
+#include <bit>
 #include <queue>
+#include <vector>
 
-#include "base/bind.h"
 #include "base/bits.h"
+#include "base/containers/flat_set.h"
+#include "base/functional/bind.h"
+#include "base/logging.h"
 #include "base/ranges/algorithm.h"
 #include "base/synchronization/waitable_event.h"
 #include "base/threading/thread.h"
 #include "base/time/time.h"
+#include "media/base/test_data_util.h"
 #include "media/base/video_frame.h"
+#include "testing/gtest/include/gtest/gtest.h"
 
 #ifndef KERNEL_VERSION
 #define KERNEL_VERSION(a, b, c) (((a) << 16) + ((b) << 8) + (c))
 #endif
 
 namespace media {
+
+constexpr char kMjpegFrameFile[] = "one_frame_1280x720.mjpeg";
+constexpr unsigned int kMjpegFrameWidth = 1280;
+constexpr unsigned int kMjpegFrameHeight = 720;
 
 static const int kInvalidId = -1;
 static const int kSuccessReturnValue = 0;
@@ -38,8 +48,15 @@ static const unsigned int kMaxHeight = 2160;
 static const int kDefaultFrameInternvalNumerator = 50;
 static const int kDefaultFrameInternvalDenominator = 1000;
 
+namespace {
+
+int Error(int error_code) {
+  errno = error_code;
+  return kErrorReturnValue;
+}
+
 __u32 RoundUpToMultipleOfPageSize(__u32 size) {
-  CHECK(base::bits::IsPowerOfTwo(getpagesize()));
+  CHECK(std::has_single_bit(base::checked_cast<__u32>(getpagesize())));
   return base::bits::AlignUp(size, base::checked_cast<__u32>(getpagesize()));
 }
 
@@ -60,6 +77,50 @@ struct FakeV4L2Buffer {
   std::unique_ptr<uint8_t[]> data;
 };
 
+VideoPixelFormat V4L2FourccToPixelFormat(uint32_t fourcc) {
+  switch (fourcc) {
+    case V4L2_PIX_FMT_YUV420:
+      return PIXEL_FORMAT_I420;
+    case V4L2_PIX_FMT_NV12:
+      return PIXEL_FORMAT_NV12;
+    case V4L2_PIX_FMT_Y16:
+      return PIXEL_FORMAT_Y16;
+    case V4L2_PIX_FMT_Z16:
+      return PIXEL_FORMAT_Y16;
+    case V4L2_PIX_FMT_YUYV:
+      return PIXEL_FORMAT_YUY2;
+    case V4L2_PIX_FMT_RGB24:
+      return PIXEL_FORMAT_RGB24;
+    case V4L2_PIX_FMT_MJPEG:
+      return PIXEL_FORMAT_MJPEG;
+    default:
+      return PIXEL_FORMAT_I420;
+  }
+}
+
+size_t GetV4L2FrameSize(uint32_t pixelformat,
+                        unsigned int width,
+                        unsigned int height) {
+  auto size = VideoFrame::AllocationSize(V4L2FourccToPixelFormat(pixelformat),
+                                         gfx::Size(width, width));
+  if (pixelformat == V4L2_PIX_FMT_MJPEG) {
+    DCHECK_EQ(width, kMjpegFrameWidth);
+    DCHECK_EQ(height, kMjpegFrameHeight);
+    auto file_path = media::GetTestDataFilePath(kMjpegFrameFile);
+    if (!file_path.empty()) {
+      FILE* fp = fopen(file_path.value().c_str(), "rb");
+      if (fp) {
+        fseek(fp, 0, SEEK_END);
+        size = ftell(fp);
+        fclose(fp);
+      }
+    }
+  }
+  return size;
+}
+
+}  // namespace
+
 class FakeV4L2Impl::OpenedDevice {
  public:
   explicit OpenedDevice(const FakeV4L2DeviceConfig& config, int open_flags)
@@ -70,11 +131,16 @@ class FakeV4L2Impl::OpenedDevice {
         frame_production_thread_("FakeV4L2Impl FakeProductionThread") {
     selected_format_.width = kDefaultWidth;
     selected_format_.height = kDefaultHeight;
-    selected_format_.pixelformat = V4L2_PIX_FMT_YUV420;
+    selected_format_.pixelformat = config_.v4l2_pixel_format;
+    if (config_.v4l2_pixel_format == V4L2_PIX_FMT_MJPEG) {
+      selected_format_.width = kMjpegFrameWidth;
+      selected_format_.height = kMjpegFrameHeight;
+    }
     selected_format_.field = V4L2_FIELD_NONE;
     selected_format_.bytesperline = kDefaultWidth;
-    selected_format_.sizeimage = VideoFrame::AllocationSize(
-        PIXEL_FORMAT_I420, gfx::Size(kDefaultWidth, kDefaultHeight));
+    selected_format_.sizeimage =
+        GetV4L2FrameSize(selected_format_.pixelformat, selected_format_.width,
+                         selected_format_.height);
     selected_format_.colorspace = V4L2_COLORSPACE_REC709;
     selected_format_.priv = 0;
 
@@ -107,18 +173,30 @@ class FakeV4L2Impl::OpenedDevice {
         base::Milliseconds(timeout_in_milliseconds));
   }
 
+  void EnqueueEvents() {
+    for (uint32_t control_id : control_event_subscriptions_) {
+      pending_events_.emplace();
+      v4l2_event& event = pending_events_.back();
+      event.type = V4L2_EVENT_CTRL;
+      event.id = control_id;
+    }
+  }
+
+  bool HasPendingEvents() const { return !pending_events_.empty(); }
+
   int enum_fmt(v4l2_fmtdesc* fmtdesc) {
     if (fmtdesc->index > 0u) {
       // We only support a single format for now.
-      return EINVAL;
+      return Error(EINVAL);
     }
     if (fmtdesc->type != V4L2_BUF_TYPE_VIDEO_CAPTURE) {
       // We only support video capture.
-      return EINVAL;
+      return Error(EINVAL);
     }
     fmtdesc->flags = 0u;
-    strcpy(reinterpret_cast<char*>(fmtdesc->description), "YUV420");
-    fmtdesc->pixelformat = V4L2_PIX_FMT_YUV420;
+    strcpy(reinterpret_cast<char*>(fmtdesc->description),
+           FourccToString(config_.v4l2_pixel_format).c_str());
+    fmtdesc->pixelformat = config_.v4l2_pixel_format;
     memset(fmtdesc->reserved, 0, sizeof(fmtdesc->reserved));
     return kSuccessReturnValue;
   }
@@ -136,6 +214,8 @@ class FakeV4L2Impl::OpenedDevice {
     return kSuccessReturnValue;
   }
 
+  int g_ctrl(v4l2_control* control) { return Error(EINVAL); }
+
   int s_ctrl(v4l2_control* control) { return kSuccessReturnValue; }
 
   int s_ext_ctrls(v4l2_ext_controls* control) { return kSuccessReturnValue; }
@@ -144,42 +224,42 @@ class FakeV4L2Impl::OpenedDevice {
     switch (control->id) {
       case V4L2_CID_PAN_ABSOLUTE:
         if (!config_.descriptor.control_support().pan)
-          return EINVAL;
+          return Error(EINVAL);
         break;
       case V4L2_CID_TILT_ABSOLUTE:
         if (!config_.descriptor.control_support().tilt)
-          return EINVAL;
+          return Error(EINVAL);
         break;
       case V4L2_CID_ZOOM_ABSOLUTE:
         if (!config_.descriptor.control_support().zoom)
-          return EINVAL;
+          return Error(EINVAL);
         break;
       default:
-        return EINVAL;
+        return Error(EINVAL);
     }
     control->flags = 0;
     control->minimum = 100;
     control->maximum = 400;
     control->step = 1;
-    return 0;
+    return kSuccessReturnValue;
   }
 
   int s_fmt(v4l2_format* format) {
     if (format->type != V4L2_BUF_TYPE_VIDEO_CAPTURE ||
         format->fmt.pix.width > kMaxWidth ||
         format->fmt.pix.height > kMaxHeight) {
-      return EINVAL;
+      return Error(EINVAL);
     }
     v4l2_pix_format& pix_format = format->fmt.pix;
     // We only support YUV420 output for now. Tell this to the client by
     // overwriting whatever format it requested.
-    pix_format.pixelformat = V4L2_PIX_FMT_YUV420;
+    pix_format.pixelformat = config_.v4l2_pixel_format;
     // We only support non-interlaced output
     pix_format.field = V4L2_FIELD_NONE;
     // We do not support padding bytes
     pix_format.bytesperline = pix_format.width;
-    pix_format.sizeimage = VideoFrame::AllocationSize(
-        PIXEL_FORMAT_I420, gfx::Size(pix_format.width, pix_format.height));
+    pix_format.sizeimage = GetV4L2FrameSize(
+        config_.v4l2_pixel_format, pix_format.width, pix_format.height);
     // Arbitrary colorspace
     pix_format.colorspace = V4L2_COLORSPACE_REC709;
     pix_format.priv = 0;
@@ -189,7 +269,7 @@ class FakeV4L2Impl::OpenedDevice {
 
   int g_parm(v4l2_streamparm* parm) {
     if (parm->type != V4L2_BUF_TYPE_VIDEO_CAPTURE)
-      return EINVAL;
+      return Error(EINVAL);
     v4l2_captureparm& captureparm = parm->parm.capture;
     captureparm.capability = V4L2_CAP_TIMEPERFRAME;
     captureparm.timeperframe = timeperframe_;
@@ -201,7 +281,7 @@ class FakeV4L2Impl::OpenedDevice {
 
   int s_parm(v4l2_streamparm* parm) {
     if (parm->type != V4L2_BUF_TYPE_VIDEO_CAPTURE)
-      return EINVAL;
+      return Error(EINVAL);
     v4l2_captureparm& captureparm = parm->parm.capture;
     captureparm.capability = V4L2_CAP_TIMEPERFRAME;
     timeperframe_ = captureparm.timeperframe;
@@ -213,10 +293,10 @@ class FakeV4L2Impl::OpenedDevice {
 
   int reqbufs(v4l2_requestbuffers* bufs) {
     if (bufs->type != V4L2_BUF_TYPE_VIDEO_CAPTURE)
-      return EINVAL;
+      return Error(EINVAL);
     if (bufs->memory != V4L2_MEMORY_MMAP) {
       // We only support device-owned buffers
-      return EINVAL;
+      return Error(EINVAL);
     }
     incoming_queue_ = std::queue<FakeV4L2Buffer*>();
     outgoing_queue_ = std::queue<FakeV4L2Buffer*>();
@@ -235,9 +315,9 @@ class FakeV4L2Impl::OpenedDevice {
 
   int querybuf(v4l2_buffer* buf) {
     if (buf->type != V4L2_BUF_TYPE_VIDEO_CAPTURE)
-      return EINVAL;
+      return Error(EINVAL);
     if (buf->index >= device_buffers_.size())
-      return EINVAL;
+      return Error(EINVAL);
     auto& buffer = device_buffers_[buf->index];
     buf->memory = V4L2_MEMORY_MMAP;
     buf->flags = buffer.flags;
@@ -248,11 +328,11 @@ class FakeV4L2Impl::OpenedDevice {
 
   int qbuf(v4l2_buffer* buf) {
     if (buf->type != V4L2_BUF_TYPE_VIDEO_CAPTURE)
-      return EINVAL;
+      return Error(EINVAL);
     if (buf->memory != V4L2_MEMORY_MMAP)
-      return EINVAL;
+      return Error(EINVAL);
     if (buf->index >= device_buffers_.size())
-      return EINVAL;
+      return Error(EINVAL);
     auto& buffer = device_buffers_[buf->index];
     buffer.flags = V4L2_BUF_FLAG_MAPPED & V4L2_BUF_FLAG_QUEUED;
     buf->flags = buffer.flags;
@@ -264,9 +344,9 @@ class FakeV4L2Impl::OpenedDevice {
 
   int dqbuf(v4l2_buffer* buf) {
     if (buf->type != V4L2_BUF_TYPE_VIDEO_CAPTURE)
-      return EINVAL;
+      return Error(EINVAL);
     if (buf->memory != V4L2_MEMORY_MMAP)
-      return EINVAL;
+      return Error(EINVAL);
     bool outgoing_queue_is_empty = true;
     {
       base::AutoLock lock(outgoing_queue_lock_);
@@ -274,7 +354,7 @@ class FakeV4L2Impl::OpenedDevice {
     }
     if (outgoing_queue_is_empty) {
       if (open_flags_ & O_NONBLOCK)
-        return EAGAIN;
+        return Error(EAGAIN);
       wait_for_outgoing_queue_event_.Wait();
     }
     base::AutoLock lock(outgoing_queue_lock_);
@@ -282,9 +362,29 @@ class FakeV4L2Impl::OpenedDevice {
     outgoing_queue_.pop();
     buffer->flags = V4L2_BUF_FLAG_MAPPED & V4L2_BUF_FLAG_DONE;
     buf->index = buffer->index;
-    buf->bytesused = VideoFrame::AllocationSize(
-        PIXEL_FORMAT_I420,
-        gfx::Size(selected_format_.width, selected_format_.height));
+    buf->bytesused =
+        GetV4L2FrameSize(selected_format_.pixelformat, selected_format_.width,
+                         selected_format_.height);
+    if (selected_format_.pixelformat == V4L2_PIX_FMT_MJPEG) {
+      DCHECK_EQ(selected_format_.width, kMjpegFrameWidth);
+      DCHECK_EQ(selected_format_.height, kMjpegFrameHeight);
+      auto file_path = media::GetTestDataFilePath(kMjpegFrameFile);
+      if (!file_path.empty()) {
+        FILE* fp = fopen(file_path.value().c_str(), "rb");
+        if (fp) {
+          fseek(fp, 0, SEEK_END);
+          long len = ftell(fp);
+          if (len <= static_cast<long>(buffer->length)) {
+            fseek(fp, 0, SEEK_SET);
+            auto read_size = fread(buffer->data.get(), 1, len, fp);
+            buf->bytesused = read_size;
+          }
+
+          fclose(fp);
+        }
+      }
+    }
+
     buf->flags = buffer->flags;
     buf->field = V4L2_FIELD_NONE;
     buf->timestamp = buffer->timestamp;
@@ -297,7 +397,7 @@ class FakeV4L2Impl::OpenedDevice {
 
   int streamon(const int* type) {
     if (*type != V4L2_BUF_TYPE_VIDEO_CAPTURE)
-      return EINVAL;
+      return Error(EINVAL);
     frame_production_thread_.Start();
     should_quit_frame_production_loop_.UnsafeResetForTesting();
     frame_production_thread_.task_runner()->PostTask(
@@ -309,7 +409,7 @@ class FakeV4L2Impl::OpenedDevice {
 
   int streamoff(const int* type) {
     if (*type != V4L2_BUF_TYPE_VIDEO_CAPTURE)
-      return EINVAL;
+      return Error(EINVAL);
     should_quit_frame_production_loop_.Set();
     frame_production_thread_.Stop();
     incoming_queue_ = std::queue<FakeV4L2Buffer*>();
@@ -319,24 +419,57 @@ class FakeV4L2Impl::OpenedDevice {
 
   int enum_framesizes(v4l2_frmsizeenum* frame_size) {
     if (frame_size->index > 0)
-      return -1;
+      return kErrorReturnValue;
 
     frame_size->type = V4L2_FRMSIZE_TYPE_DISCRETE;
     frame_size->discrete.width = kDefaultWidth;
     frame_size->discrete.height = kDefaultHeight;
-    return 0;
+    return kSuccessReturnValue;
   }
 
   int enum_frameintervals(v4l2_frmivalenum* frame_interval) {
     if (frame_interval->index > 0 || frame_interval->width != kDefaultWidth ||
         frame_interval->height != kDefaultWidth) {
-      return -1;
+      return kErrorReturnValue;
     }
 
     frame_interval->type = V4L2_FRMIVAL_TYPE_DISCRETE;
     frame_interval->discrete.numerator = kDefaultFrameInternvalNumerator;
     frame_interval->discrete.denominator = kDefaultFrameInternvalDenominator;
-    return 0;
+    return kSuccessReturnValue;
+  }
+
+  int dqevent(v4l2_event* event) {
+    if (pending_events_.empty()) {
+      return Error(EINVAL);
+    }
+    *event = pending_events_.front();
+    pending_events_.pop();
+    event->pending = pending_events_.size();
+    return kSuccessReturnValue;
+  }
+
+  int subscribe_event(v4l2_event_subscription* event_subscription) {
+    if (event_subscription->type != V4L2_EVENT_CTRL) {
+      NOTIMPLEMENTED();
+      return Error(EINVAL);
+    }
+    EXPECT_NE(event_subscription->id, 0u);
+    control_event_subscriptions_.insert(event_subscription->id);
+    return kSuccessReturnValue;
+  }
+
+  int unsubscribe_event(v4l2_event_subscription* event_subscription) {
+    if (event_subscription->type != V4L2_EVENT_CTRL) {
+      NOTIMPLEMENTED();
+      return Error(EINVAL);
+    }
+    if (event_subscription->id == 0) {
+      control_event_subscriptions_.clear();
+    } else {
+      control_event_subscriptions_.erase(event_subscription->id);
+    }
+    return kSuccessReturnValue;
   }
 
  private:
@@ -372,9 +505,11 @@ class FakeV4L2Impl::OpenedDevice {
   const int open_flags_;
   v4l2_pix_format selected_format_;
   v4l2_fract timeperframe_;
+  base::flat_set<uint32_t> control_event_subscriptions_;
   std::vector<FakeV4L2Buffer> device_buffers_;
   std::queue<FakeV4L2Buffer*> incoming_queue_;
   std::queue<FakeV4L2Buffer*> outgoing_queue_;
+  std::queue<v4l2_event> pending_events_;
   base::WaitableEvent wait_for_outgoing_queue_event_;
   base::Thread frame_production_thread_;
   base::AtomicFlag should_quit_frame_production_loop_;
@@ -430,7 +565,7 @@ int FakeV4L2Impl::ioctl(int fd, int request, void* argp) {
   base::AutoLock lock(lock_);
   auto device_iter = opened_devices_.find(fd);
   if (device_iter == opened_devices_.end())
-    return EBADF;
+    return Error(EBADF);
   auto* opened_device = device_iter->second.get();
 
   switch (static_cast<uint32_t>(request)) {
@@ -438,6 +573,8 @@ int FakeV4L2Impl::ioctl(int fd, int request, void* argp) {
       return opened_device->enum_fmt(reinterpret_cast<v4l2_fmtdesc*>(argp));
     case VIDIOC_QUERYCAP:
       return opened_device->querycap(reinterpret_cast<v4l2_capability*>(argp));
+    case VIDIOC_G_CTRL:
+      return opened_device->g_ctrl(reinterpret_cast<v4l2_control*>(argp));
     case VIDIOC_S_CTRL:
       return opened_device->s_ctrl(reinterpret_cast<v4l2_control*>(argp));
     case VIDIOC_S_EXT_CTRLS:
@@ -470,6 +607,14 @@ int FakeV4L2Impl::ioctl(int fd, int request, void* argp) {
     case VIDIOC_ENUM_FRAMEINTERVALS:
       return opened_device->enum_frameintervals(
           reinterpret_cast<v4l2_frmivalenum*>(argp));
+    case VIDIOC_DQEVENT:
+      return opened_device->dqevent(reinterpret_cast<v4l2_event*>(argp));
+    case VIDIOC_SUBSCRIBE_EVENT:
+      return opened_device->subscribe_event(
+          reinterpret_cast<v4l2_event_subscription*>(argp));
+    case VIDIOC_UNSUBSCRIBE_EVENT:
+      return opened_device->unsubscribe_event(
+          reinterpret_cast<v4l2_event_subscription*>(argp));
 
     case VIDIOC_CROPCAP:
     case VIDIOC_DBG_G_REGISTER:
@@ -487,7 +632,6 @@ int FakeV4L2Impl::ioctl(int fd, int request, void* argp) {
     case VIDIOC_S_AUDOUT:
     case VIDIOC_G_CROP:
     case VIDIOC_S_CROP:
-    case VIDIOC_G_CTRL:
     case VIDIOC_G_ENC_INDEX:
     case VIDIOC_G_EXT_CTRLS:
     case VIDIOC_TRY_EXT_CTRLS:
@@ -517,14 +661,25 @@ int FakeV4L2Impl::ioctl(int fd, int request, void* argp) {
     case VIDIOC_QUERYMENU:
     case VIDIOC_QUERYSTD:
     case VIDIOC_S_HW_FREQ_SEEK:
+    case VIDIOC_S_DV_TIMINGS:
+    case VIDIOC_G_DV_TIMINGS:
+    case VIDIOC_CREATE_BUFS:
+    case VIDIOC_PREPARE_BUF:
+    case VIDIOC_G_SELECTION:
+    case VIDIOC_S_SELECTION:
+    case VIDIOC_DECODER_CMD:
+    case VIDIOC_TRY_DECODER_CMD:
+    case VIDIOC_ENUM_DV_TIMINGS:
+    case VIDIOC_QUERY_DV_TIMINGS:
+    case VIDIOC_DV_TIMINGS_CAP:
+    case VIDIOC_ENUM_FREQ_BANDS:
       // Unsupported |request| code.
-      NOTREACHED() << "Unsupported request code " << request;
+      LOG(ERROR) << "Unsupported request code " << request;
       return kErrorReturnValue;
   }
 
   // Invalid |request|.
-  NOTREACHED();
-  return kErrorReturnValue;
+  NOTREACHED_NORETURN();
 }
 
 // We ignore |start| in this implementation
@@ -568,25 +723,30 @@ int FakeV4L2Impl::poll(struct pollfd* ufds, unsigned int nfds, int timeout) {
   base::AutoLock lock(lock_);
   if (nfds != 1) {
     // We only support polling of a single device.
-    errno = EINVAL;
-    return kErrorReturnValue;
+    return Error(EINVAL);
   }
   pollfd& ufd = ufds[0];
   auto device_iter = opened_devices_.find(ufd.fd);
   if (device_iter == opened_devices_.end()) {
-    errno = EBADF;
-    return kErrorReturnValue;
+    return Error(EBADF);
   }
   auto* opened_device = device_iter->second.get();
-  if (ufd.events != POLLIN) {
+  if (!(ufd.events & POLLIN)) {
     // We only support waiting for data to become readable.
-    errno = EINVAL;
-    return kErrorReturnValue;
+    return Error(EINVAL);
   }
   if (!opened_device->BlockUntilOutputQueueHasBuffer(timeout)) {
     return 0;
   }
   ufd.revents |= POLLIN;
+  if (ufd.events & POLLPRI) {
+    if (opened_device->HasPendingEvents()) {
+      ufd.revents |= POLLPRI;
+    } else {
+      // For the next poll.
+      opened_device->EnqueueEvents();
+    }
+  }
   return 1;
 }
 

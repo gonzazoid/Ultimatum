@@ -1,8 +1,10 @@
 Name: bspatch
-URL: http://lxr.mozilla.org/mozilla/source/toolkit/mozapps/update/src/updater/
+URL: https://github.com/mozilla-services/services-central-legacy/tree/master/toolkit/mozapps/update/updater
 Version: unknown
 License: BSD 2-Clause License
+License File: LICENSE
 Security Critical: yes
+Shipped: yes
 
 Description:
 This is Chrome's locally patched copy of Colin Percival's bspatch tool

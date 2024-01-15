@@ -125,7 +125,7 @@ class PrefetchManager {
   void TryToLaunchPrefetchJobs();
 
   base::WeakPtr<Delegate> delegate_;
-  const raw_ptr<Profile> profile_;
+  const raw_ptr<Profile, DanglingUntriaged> profile_;
 
   // All the jobs that haven't yet started. A job is removed once it starts.
   // Inflight jobs destruct once finished.
@@ -137,7 +137,7 @@ class PrefetchManager {
   // across all main frame URLs.
   size_t inflight_jobs_count_ = 0;
 
-  raw_ptr<Observer> observer_for_testing_ = nullptr;
+  raw_ptr<Observer, DanglingUntriaged> observer_for_testing_ = nullptr;
 
   base::WeakPtrFactory<PrefetchManager> weak_factory_{this};
 };

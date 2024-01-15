@@ -14,53 +14,49 @@
 
 namespace content {
 
-class SiteInstance;
 class RenderFrameHostImpl;
 
-// Verifies that |params| are valid and can be accessed by the renderer process
-// associated with |site_instance|.
+// Verifies that |params| are valid and can be accessed by |process|.
 //
 // If the |params| are valid, returns true.
 //
-// Otherwise, terminates the renderer associated with |site_instance| and
-// returns false.
+// Otherwise, terminates |process| and returns false.
 //
 // This function has to be called on the UI thread.
-bool VerifyDownloadUrlParams(SiteInstance* site_instance,
+bool VerifyDownloadUrlParams(RenderProcessHost* process,
                              const blink::mojom::DownloadURLParams& params);
 
-// Verifies that |params| are valid and can be accessed by the renderer process
-// associated with |site_instance|. |current_rfh| represents the current frame
-// on which OpenURL is being called
+// Verifies that |params| are valid and can be accessed by |process|.
+// |current_rfh| represents the current frame on which OpenURL is being called
 //
 // Returns true if the |params| are valid.  As a side-effect of the verification
 // |out_validated_url| and |out_blob_url_loader_factory| will be populated.
 //
-// Terminates the renderer the process associated with |site_instance| and
-// returns false if the |params| are invalid.
+// Terminates |process| and returns false if the |params| are invalid.
 //
 // This function has to be called on the UI thread.
 bool VerifyOpenURLParams(RenderFrameHostImpl* current_rfh,
-                         SiteInstance* site_instance,
+                         RenderProcessHost* process,
                          const blink::mojom::OpenURLParamsPtr& params,
                          GURL* out_validated_url,
                          scoped_refptr<network::SharedURLLoaderFactory>*
                              out_blob_url_loader_factory);
 
-// Verifies that CommonNavigationParams are valid and can be accessed by the
-// renderer process associated with |site_instance|.
+// Verifies that CommonNavigationParams are valid and can be accessed by
+// |current_rfh|'s process.
 //
 // Returns true if the CommonNavigationParams are valid.  As a side-effect of
 // the verification parts of |common_params| will be rewritten (e.g. some
 // URLs will be filtered).
 //
-// Terminates the renderer the process associated with |site_instance| and
-// returns false if the CommonNavigationParams are invalid.
+// Terminates |current_rfh|'s process and returns false if the
+// CommonNavigationParams are invalid.
 //
 // This function has to be called on the UI thread.
 bool VerifyBeginNavigationCommonParams(
-    SiteInstance* site_instance,
-    blink::mojom::CommonNavigationParams* common_params);
+    const RenderFrameHostImpl& current_rfh,
+    blink::mojom::CommonNavigationParams* common_params,
+    std::optional<blink::LocalFrameToken>& initiator_frame_token);
 
 // Verify that the initiator frame identified by `initiator_frame_token` and
 // `initiator_process_id` can navigate `current_rfh`.
@@ -75,7 +71,7 @@ bool VerifyBeginNavigationCommonParams(
 // This function has to be called on the UI thread.
 bool VerifyNavigationInitiator(
     RenderFrameHostImpl* current_rfh,
-    const absl::optional<blink::LocalFrameToken>& initiator_frame_token,
+    const std::optional<blink::LocalFrameToken>& initiator_frame_token,
     int initiator_process_id);
 
 }  // namespace content

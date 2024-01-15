@@ -5,23 +5,19 @@
 #import <memory>
 #import <string>
 
-#import "base/mac/foundation_util.h"
+#import "base/apple/foundation_util.h"
 #import "base/strings/sys_string_conversions.h"
 #import "base/values.h"
 #import "components/strings/grit/components_strings.h"
+#import "ios/chrome/browser/shared/ui/list_model/list_model.h"
+#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_text_edit_item.h"
+#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_text_header_footer_item.h"
+#import "ios/chrome/browser/shared/ui/util/rtl_geometry.h"
+#import "ios/chrome/browser/shared/ui/util/uikit_ui_util.h"
 #import "ios/chrome/browser/ui/autofill/card_expiration_date_fix_flow_view_bridge.h"
 #import "ios/chrome/browser/ui/autofill/expiration_date_picker.h"
-#import "ios/chrome/browser/ui/list_model/list_model.h"
-#import "ios/chrome/browser/ui/table_view/cells/table_view_text_edit_item.h"
-#import "ios/chrome/browser/ui/table_view/cells/table_view_text_header_footer_item.h"
-#import "ios/chrome/browser/ui/util/rtl_geometry.h"
-#import "ios/chrome/browser/ui/util/uikit_ui_util.h"
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
 #import "ui/base/l10n/l10n_util.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 CGFloat const kMainSection = 0;
 CGFloat const kNumberOfRowsInMainSection = 1;
@@ -170,7 +166,6 @@ void CardExpirationDateFixFlowViewBridge::DeleteSelf() {
   textField.delegate = self;
 
   _footerView = [[TableViewTextHeaderFooterView alloc] init];
-  _footerView.subtitleLabel.textColor = [UIColor colorNamed:kRedColor];
 
   // Set initial value.
   [self didSelectMonth:_expirationDatePicker.month
@@ -259,11 +254,13 @@ void CardExpirationDateFixFlowViewBridge::DeleteSelf() {
   if ([_expirationDateYear intValue] < currentYear ||
       ([_expirationDateYear intValue] == currentYear &&
        [_expirationDateMonth intValue] < currentMonth)) {
-    _footerView.subtitleLabel.text = base::SysUTF16ToNSString(
-        _bridge->GetController()->GetInvalidDateError());
+    [_footerView
+        setSubtitle:base::SysUTF16ToNSString(
+                        _bridge->GetController()->GetInvalidDateError())
+          withColor:[UIColor colorNamed:kRedColor]];
     _confirmButton.enabled = NO;
   } else {
-    _footerView.subtitleLabel.text = nil;
+    [_footerView setSubtitle:nil];
     _confirmButton.enabled = YES;
   }
 }

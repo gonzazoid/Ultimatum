@@ -30,7 +30,7 @@ void PasswordManagerInteractiveTestBase::FillElementWithValue(
     const std::string& element_id,
     const std::string& value,
     const std::string& expected_value) {
-  ASSERT_TRUE(content::ExecuteScript(
+  ASSERT_TRUE(content::ExecJs(
       RenderFrameHost(),
       base::StringPrintf("document.getElementById('%s').focus();",
                          element_id.c_str())));
@@ -74,27 +74,26 @@ void PasswordManagerInteractiveTestBase::WaitForElementValue(
   const std::string script =
       value_check_function +
       base::StringPrintf(
-          "if (valueCheck()) {"
-          "  /* Spin the event loop with setTimeout. */"
-          "  setTimeout(window.domAutomationController.send(%d), 0);"
-          "} else {"
-          "  var element = document.getElementById('%s');"
-          "  if (!element)"
-          "    window.domAutomationController.send(%d);"
-          "  element.oninput = function() {"
-          "    if (valueCheck()) {"
-          "      /* Spin the event loop with setTimeout. */"
-          "      setTimeout(window.domAutomationController.send(%d), 0);"
-          "      element.oninput = undefined;"
-          "    }"
-          "  };"
-          "}",
+          "new Promise(resolve => {"
+          "  if (valueCheck()) {"
+          "    resolve(%d);"
+          "  } else {"
+          "    var element = document.getElementById('%s');"
+          "    if (!element)"
+          "      resolve(%d);"
+          "    element.oninput = function() {"
+          "      if (valueCheck()) {"
+          "        resolve(%d);"
+          "        element.oninput = undefined;"
+          "      }"
+          "    };"
+          "  }"
+          "});",
           RETURN_CODE_OK, element_id.c_str(), RETURN_CODE_NO_ELEMENT,
           RETURN_CODE_OK);
   EXPECT_EQ(RETURN_CODE_OK,
             content::EvalJs(RenderFrameHost(), script,
-                            content::EXECUTE_SCRIPT_NO_USER_GESTURE |
-                                content::EXECUTE_SCRIPT_USE_MANUAL_REPLY))
+                            content::EXECUTE_SCRIPT_NO_USER_GESTURE))
       << "element_id = " << element_id
       << ", expected_value = " << expected_value;
 }
@@ -114,8 +113,8 @@ void PasswordManagerInteractiveTestBase::VerifyPasswordIsSavedAndFilled(
   if (!username_id.empty())
     FillElementWithValue(username_id, kUsername);
   FillElementWithValue(password_id, kPassword);
-  ASSERT_TRUE(content::ExecuteScript(RenderFrameHost(), submission_script));
-  observer.Wait();
+  ASSERT_TRUE(content::ExecJs(RenderFrameHost(), submission_script));
+  ASSERT_TRUE(observer.Wait());
   WaitForPasswordStore();
 
   BubbleObserver(WebContents()).AcceptSavePrompt();
@@ -144,9 +143,9 @@ void PasswordManagerInteractiveTestBase::SimulateUserDeletingFieldContent(
   SCOPED_TRACE(::testing::Message()
                << "SimulateUserDeletingFieldContent " << field_id);
   std::string focus("document.getElementById('" + field_id + "').focus();");
-  ASSERT_TRUE(content::ExecuteScript(WebContents(), focus));
+  ASSERT_TRUE(content::ExecJs(WebContents(), focus));
   std::string select("document.getElementById('" + field_id + "').select();");
-  ASSERT_TRUE(content::ExecuteScript(WebContents(), select));
+  ASSERT_TRUE(content::ExecJs(WebContents(), select));
   content::SimulateKeyPress(WebContents(), ui::DomKey::BACKSPACE,
                             ui::DomCode::BACKSPACE, ui::VKEY_BACK, false, false,
                             false, false);

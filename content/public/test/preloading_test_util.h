@@ -7,12 +7,18 @@
 
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "components/ukm/test_ukm_recorder.h"
 #include "content/public/browser/preloading.h"
 #include "content/public/browser/preloading_data.h"
 #include "services/metrics/public/cpp/ukm_source_id.h"
+#include "third_party/blink/public/mojom/speculation_rules/speculation_rules.mojom-shared.h"
 
-namespace content::test {
+namespace content {
+
+class PreloadingConfig;
+
+namespace test {
 
 // The set of UKM metric names in the PreloadingAttempt and PreloadingPrediction
 // UKM logs. This is useful for calling TestUkmRecorder::GetEntries.
@@ -25,6 +31,13 @@ class PreloadingAttemptUkmEntryBuilder {
  public:
   explicit PreloadingAttemptUkmEntryBuilder(PreloadingPredictor predictor);
 
+  // This method assumes a navigation has occurred thus `TimeToNextNavigation`
+  // is set. Install `base::ScopedMockElapsedTimersForTest` into the test
+  // fixture to assert the entry's latency values' correctness.
+  //
+  // Optional `ready_time` should be set by the caller, if this attempt ever
+  // reaches `PreloadingTriggeringOutcome::kReady` state, at the time of
+  // reporting.
   ukm::TestUkmRecorder::HumanReadableUkmEntry BuildEntry(
       ukm::SourceId source_id,
       PreloadingType preloading_type,
@@ -32,7 +45,10 @@ class PreloadingAttemptUkmEntryBuilder {
       PreloadingHoldbackStatus holdback_status,
       PreloadingTriggeringOutcome triggering_outcome,
       PreloadingFailureReason failure_reason,
-      bool accurate) const;
+      bool accurate,
+      std::optional<base::TimeDelta> ready_time = std::nullopt,
+      std::optional<blink::mojom::SpeculationEagerness> eagerness =
+          std::nullopt) const;
 
  private:
   PreloadingPredictor predictor_;
@@ -45,6 +61,9 @@ class PreloadingPredictionUkmEntryBuilder {
  public:
   explicit PreloadingPredictionUkmEntryBuilder(PreloadingPredictor predictor);
 
+  // This method assumes a navigation has occurred thus `TimeToNextNavigation`
+  // is set. Install `base::ScopedMockElapsedTimersForTest` into the test
+  // fixture to assert the entry's latency values' correctness.
   ukm::TestUkmRecorder::HumanReadableUkmEntry BuildEntry(
       ukm::SourceId source_id,
       int64_t confidence,
@@ -53,6 +72,20 @@ class PreloadingPredictionUkmEntryBuilder {
  private:
   PreloadingPredictor predictor_;
 };
+
+// Checks if `ukm_recorder` recorded `expected_attempt_entries`. Doesn't care
+// about the recording order.
+void ExpectPreloadingAttemptUkm(
+    ukm::TestAutoSetUkmRecorder& ukm_recorder,
+    const std::vector<ukm::TestUkmRecorder::HumanReadableUkmEntry>&
+        expected_attempt_entries);
+
+// Checks if `ukm_recorder` recorded `expected_prediction_entries`. Doesn't care
+// about the recording order.
+void ExpectPreloadingPredictionUkm(
+    ukm::TestAutoSetUkmRecorder& ukm_recorder,
+    const std::vector<ukm::TestUkmRecorder::HumanReadableUkmEntry>&
+        expected_prediction_entries);
 
 // Turns a UKM entry into a human-readable string.
 std::string UkmEntryToString(
@@ -77,9 +110,35 @@ class PreloadingAttemptAccessor {
   PreloadingFailureReason GetFailureReason();
 
  private:
-  PreloadingAttempt* preloading_attempt_;
+  raw_ptr<PreloadingAttempt> preloading_attempt_;
 };
 
-}  // namespace content::test
+// Creating a PreloadingConfigOverride will override the current
+// PreloadingConfig (which is normally configured via field trial) until
+// PreloadingConfigOverride is destroyed. By default the configuration disables
+// sampling UKM preloading logs (some log types are sampled by default, which
+// can make preloading tests that verify UKM logs flaky) but enables (i.e. does
+// not hold back) all preloading features. For testing holdbacks, SetHoldback
+// can be called to disable a particular preloading feature.
+class PreloadingConfigOverride {
+ public:
+  PreloadingConfigOverride();
+  ~PreloadingConfigOverride();
+
+  void SetHoldback(PreloadingType preloading_type,
+                   PreloadingPredictor predictor,
+                   bool holdback);
+
+  void SetHoldback(std::string_view preloading_type,
+                   std::string_view predictor,
+                   bool holdback);
+
+ private:
+  std::unique_ptr<PreloadingConfig> preloading_config_;
+  raw_ptr<PreloadingConfig> overridden_config_;
+};
+
+}  // namespace test
+}  // namespace content
 
 #endif  // CONTENT_PUBLIC_TEST_PRELOADING_TEST_UTIL_H_

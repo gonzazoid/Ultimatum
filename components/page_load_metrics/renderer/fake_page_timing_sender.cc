@@ -25,19 +25,21 @@ void FakePageTimingSender::SendTiming(
     const mojom::FrameRenderDataUpdate& render_data,
     const mojom::CpuTimingPtr& cpu_timing,
     const mojom::InputTimingPtr new_input_timing,
-    const absl::optional<blink::MobileFriendliness>& mobile_friendliness,
-    uint32_t soft_navigation_count) {
+    const absl::optional<blink::SubresourceLoadMetrics>&
+        subresource_load_metrics,
+    const mojom::SoftNavigationMetricsPtr& soft_navigation_metrics) {
   validator_->UpdateTiming(timing, metadata, new_features, resources,
                            render_data, cpu_timing, new_input_timing,
-                           mobile_friendliness, soft_navigation_count);
+                           subresource_load_metrics, soft_navigation_metrics);
 }
 
 void FakePageTimingSender::SetUpSmoothnessReporting(
     base::ReadOnlySharedMemoryRegion shared_memory) {}
 
-FakePageTimingSender::PageTimingValidator::PageTimingValidator()
-    : expected_input_timing(mojom::InputTiming::New()),
-      actual_input_timing(mojom::InputTiming::New()) {}
+FakePageTimingSender::PageTimingValidator::PageTimingValidator() {
+  expected_input_timing.max_event_durations =
+      mojom::UserInteractionLatencies::NewUserInteractionLatencies({});
+}
 
 FakePageTimingSender::PageTimingValidator::~PageTimingValidator() {
   VerifyExpectedTimings();
@@ -67,33 +69,62 @@ void FakePageTimingSender::PageTimingValidator::VerifyExpectedTimings() const {
   }
 }
 
-void FakePageTimingSender::PageTimingValidator::UpdateExpectedInputTiming(
-    const base::TimeDelta input_delay) {
-  expected_input_timing->num_input_events++;
-  expected_input_timing->total_input_delay += input_delay;
-  expected_input_timing->total_adjusted_input_delay += base::Milliseconds(
-      std::max(int64_t(0), input_delay.InMilliseconds() - int64_t(50)));
-}
-void FakePageTimingSender::PageTimingValidator::VerifyExpectedInputTiming()
-    const {
-  ASSERT_EQ(expected_input_timing.is_null(), actual_input_timing.is_null());
-  ASSERT_EQ(expected_input_timing->num_input_events,
-            actual_input_timing->num_input_events);
-  ASSERT_EQ(expected_input_timing->total_input_delay,
-            actual_input_timing->total_input_delay);
-  ASSERT_EQ(expected_input_timing->total_adjusted_input_delay,
-            actual_input_timing->total_adjusted_input_delay);
+void FakePageTimingSender::PageTimingValidator::ExpectSoftNavigationMetrics(
+    const mojom::SoftNavigationMetrics& soft_navigation_metrics) {
+  VerifyExpectedSoftNavigationMetrics();
+  expected_soft_navigation_metrics_.push_back(soft_navigation_metrics.Clone());
 }
 
 void FakePageTimingSender::PageTimingValidator::
-    UpdateExpectedMobileFriendliness(
-        const blink::MobileFriendliness& mobile_friendliness) {
-  expected_mobile_friendliness = mobile_friendliness;
+    VerifyExpectedSoftNavigationMetrics() const {
+  ASSERT_EQ(actual_soft_navigation_metrics_.size(),
+            expected_soft_navigation_metrics_.size());
+  for (size_t i = 0; i < actual_soft_navigation_metrics_.size(); ++i) {
+    if (actual_soft_navigation_metrics_.at(i)->Equals(
+            *expected_soft_navigation_metrics_.at(i))) {
+      continue;
+    }
+    ADD_FAILURE() << "Observed soft navigation metric != expected one at index "
+                  << i;
+  }
+}
+
+void FakePageTimingSender::PageTimingValidator::UpdateExpectedInteractionTiming(
+    const base::TimeDelta interaction_duration,
+    mojom::UserInteractionType interaction_type,
+    uint64_t interaction_offset,
+    const base::TimeTicks interaction_time) {
+  expected_input_timing.num_interactions++;
+  expected_input_timing.max_event_durations->get_user_interaction_latencies()
+      .emplace_back(mojom::UserInteractionLatency::New(
+          interaction_duration, interaction_type, interaction_offset,
+          interaction_time));
+}
+void FakePageTimingSender::PageTimingValidator::
+    VerifyExpectedInteractionTiming() const {
+  ASSERT_EQ(expected_input_timing.num_interactions,
+            actual_input_timing.num_interactions);
+  auto& expected_latencies = expected_input_timing.max_event_durations
+                                 ->get_user_interaction_latencies();
+  auto& actual_latencies =
+      actual_input_timing.max_event_durations->get_user_interaction_latencies();
+
+  for (size_t i = 0; i < expected_latencies.size(); ++i) {
+    ASSERT_EQ(expected_latencies[i]->interaction_latency,
+              actual_latencies[i]->interaction_latency);
+  }
 }
 
 void FakePageTimingSender::PageTimingValidator::
-    VerifyExpectedMobileFriendliness() const {
-  ASSERT_EQ(expected_mobile_friendliness, actual_mobile_friendliness);
+    UpdateExpectedSubresourceLoadMetrics(
+        const blink::SubresourceLoadMetrics& subresource_load_metrics) {
+  expected_subresource_load_metrics_ = subresource_load_metrics;
+}
+
+void FakePageTimingSender::PageTimingValidator::
+    VerifyExpectedSubresourceLoadMetrics() const {
+  ASSERT_EQ(expected_subresource_load_metrics_,
+            actual_subresource_load_metrics_);
 }
 
 void FakePageTimingSender::PageTimingValidator::VerifyExpectedCpuTimings()
@@ -144,9 +175,11 @@ void FakePageTimingSender::PageTimingValidator::UpdateTiming(
     const mojom::FrameRenderDataUpdate& render_data,
     const mojom::CpuTimingPtr& cpu_timing,
     const mojom::InputTimingPtr& new_input_timing,
-    const absl::optional<blink::MobileFriendliness>& mobile_friendliness,
-    uint32_t soft_navigation_count) {
+    const absl::optional<blink::SubresourceLoadMetrics>&
+        subresource_load_metrics,
+    const mojom::SoftNavigationMetricsPtr& soft_navigation_metrics) {
   actual_timings_.push_back(timing.Clone());
+  actual_soft_navigation_metrics_.push_back(soft_navigation_metrics->Clone());
   if (!cpu_timing->task_time.is_zero()) {
     actual_cpu_timings_.push_back(cpu_timing.Clone());
   }
@@ -161,12 +194,24 @@ void FakePageTimingSender::PageTimingValidator::UpdateTiming(
   actual_main_frame_intersection_rect_ = metadata->main_frame_intersection_rect;
   actual_main_frame_viewport_rect_ = metadata->main_frame_viewport_rect;
 
-  actual_input_timing->num_input_events += new_input_timing->num_input_events;
-  actual_input_timing->total_input_delay += new_input_timing->total_input_delay;
-  actual_input_timing->total_adjusted_input_delay +=
-      new_input_timing->total_adjusted_input_delay;
-  if (mobile_friendliness.has_value())
-    actual_mobile_friendliness = *mobile_friendliness;
+  if (new_input_timing->num_interactions > 0 &&
+      actual_input_timing.num_interactions == 0) {
+    actual_input_timing.max_event_durations =
+        mojom::UserInteractionLatencies::NewUserInteractionLatencies({});
+  }
+  actual_input_timing.num_interactions = new_input_timing->num_interactions;
+  for (const mojom::UserInteractionLatencyPtr& user_interaction :
+       new_input_timing->max_event_durations
+           ->get_user_interaction_latencies()) {
+    actual_input_timing.max_event_durations->get_user_interaction_latencies()
+        .emplace_back(mojom::UserInteractionLatency::New(
+            user_interaction->interaction_latency,
+            user_interaction->interaction_type,
+            user_interaction->interaction_offset,
+            user_interaction->interaction_time));
+  }
+
+  actual_subresource_load_metrics_ = subresource_load_metrics;
 
   VerifyExpectedTimings();
   VerifyExpectedCpuTimings();
@@ -174,8 +219,8 @@ void FakePageTimingSender::PageTimingValidator::UpdateTiming(
   VerifyExpectedRenderData();
   VerifyExpectedMainFrameIntersectionRect();
   VerifyExpectedMainFrameViewportRect();
-  VerifyExpectedMobileFriendliness();
-  // TODO(yoav): Verify that soft nav count matches expectations.
+  VerifyExpectedSubresourceLoadMetrics();
+  VerifyExpectedSoftNavigationMetrics();
 }
 
 }  // namespace page_load_metrics

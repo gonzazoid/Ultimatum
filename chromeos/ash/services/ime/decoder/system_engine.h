@@ -5,8 +5,10 @@
 #ifndef CHROMEOS_ASH_SERVICES_IME_DECODER_SYSTEM_ENGINE_H_
 #define CHROMEOS_ASH_SERVICES_IME_DECODER_SYSTEM_ENGINE_H_
 
+#include <optional>
+
 #include "base/scoped_native_library.h"
-#include "chromeos/ash/services/ime/ime_decoder.h"
+#include "chromeos/ash/services/ime/ime_shared_library_wrapper.h"
 #include "chromeos/ash/services/ime/public/cpp/shared_lib/interfaces.h"
 #include "chromeos/ash/services/ime/public/mojom/connection_factory.mojom.h"
 #include "chromeos/ash/services/ime/public/mojom/input_engine.mojom.h"
@@ -16,7 +18,6 @@
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace ash {
 namespace ime {
@@ -29,18 +30,13 @@ namespace ime {
 // shared lib, to facilitate accessing an IME engine therein via MojoMode.
 class SystemEngine {
  public:
-  explicit SystemEngine(ImeCrosPlatform* platform,
-                        absl::optional<ImeDecoder::EntryPoints> entry_points);
+  explicit SystemEngine(
+      ImeCrosPlatform* platform,
+      std::optional<ImeSharedLibraryWrapper::EntryPoints> entry_points);
 
   SystemEngine(const SystemEngine&) = delete;
   SystemEngine& operator=(const SystemEngine&) = delete;
   ~SystemEngine();
-
-  // Binds the mojom::InputMethod interface to this object and returns true if
-  // the given ime_spec is supported by the engine.
-  bool BindRequest(const std::string& ime_spec,
-                   mojo::PendingReceiver<mojom::InputMethod> receiver,
-                   mojo::PendingRemote<mojom::InputMethodHost> host);
 
   // Binds the mojom::ConnectionFactory interface in the shared library.
   bool BindConnectionFactory(
@@ -49,7 +45,7 @@ class SystemEngine {
   bool IsConnected();
 
  private:
-  absl::optional<ImeDecoder::EntryPoints> decoder_entry_points_;
+  std::optional<ImeSharedLibraryWrapper::EntryPoints> decoder_entry_points_;
 };
 
 }  // namespace ime

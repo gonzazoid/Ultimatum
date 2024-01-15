@@ -11,6 +11,8 @@
 #include "ash/public/cpp/session/session_observer.h"
 #include "ash/shell_observer.h"
 #include "ash/system/tray/tray_background_view.h"
+#include "base/memory/raw_ptr.h"
+#include "ui/base/metadata/metadata_header_macros.h"
 
 namespace views {
 class ImageView;
@@ -22,15 +24,17 @@ namespace ash {
 class VirtualKeyboardTray : public TrayBackgroundView,
                             public AccessibilityObserver,
                             public KeyboardControllerObserver,
-                            public ShellObserver,
-                            public SessionObserver {
+                            public ShellObserver {
  public:
-  VirtualKeyboardTray(Shelf* shelf, TrayBackgroundViewCatalogName catalog_name);
+  METADATA_HEADER(VirtualKeyboardTray);
 
+  VirtualKeyboardTray(Shelf* shelf, TrayBackgroundViewCatalogName catalog_name);
   VirtualKeyboardTray(const VirtualKeyboardTray&) = delete;
   VirtualKeyboardTray& operator=(const VirtualKeyboardTray&) = delete;
-
   ~VirtualKeyboardTray() override;
+
+  // Callback called when this is pressed.
+  void OnButtonPressed(const ui::Event& event);
 
   // TrayBackgroundView:
   void Initialize() override;
@@ -38,8 +42,8 @@ class VirtualKeyboardTray : public TrayBackgroundView,
   void HandleLocaleChange() override;
   void HideBubbleWithView(const TrayBubbleView* bubble_view) override;
   void ClickedOutsideBubble() override;
-  bool PerformAction(const ui::Event& event) override;
-  void OnThemeChanged() override;
+  void UpdateTrayItemColor(bool is_active) override;
+  void HideBubble(const TrayBubbleView* bubble_view) override;
 
   // AccessibilityObserver:
   void OnAccessibilityStatusChanged() override;
@@ -47,19 +51,12 @@ class VirtualKeyboardTray : public TrayBackgroundView,
   // KeyboardControllerObserver:
   void OnKeyboardVisibilityChanged(bool is_visible) override;
 
-  // SessionObserver:
-  void OnSessionStateChanged(session_manager::SessionState state) override;
-
-  // views::View:
-  const char* GetClassName() const override;
-
  private:
-  // Weak pointer, will be parented by TrayContainer for its lifetime.
-  views::ImageView* icon_;
+  // Owned by the views hierarchy.
+  raw_ptr<views::ImageView> icon_ = nullptr;
 
-  Shelf* shelf_;
-
-  ScopedSessionObserver session_observer_{this};
+  // Unowned.
+  const raw_ptr<Shelf> shelf_;
 };
 
 }  // namespace ash

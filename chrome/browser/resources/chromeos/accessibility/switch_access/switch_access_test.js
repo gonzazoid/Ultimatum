@@ -9,32 +9,59 @@ SwitchAccessSwitchAccessTest = class extends SwitchAccessE2ETest {
   /** @override */
   async setUpDeferred() {
     await super.setUpDeferred();
-    await importModule('SwitchAccess', '/switch_access/switch_access.js');
+    await Promise.all([
+      importModule('Flags', '/common/flags.js'),
+      importModule('SwitchAccess', '/switch_access/switch_access.js'),
+    ]);
+  }
+
+  async waitForCallback() {
+    return new Promise(resolve => this.promiseCallback = resolve);
   }
 };
 
-AX_TEST_F('SwitchAccessSwitchAccessTest', 'NoFocusDefersInit', function() {
-  // Build a new SwitchAccess instance with hooks.
-  let initCount = 0;
-  SwitchAccess.finishInit_ = () => initCount++;
+function resetState() {
+  delete Flags.instance;
+  delete SwitchAccess.instance;
+}
 
-  // A fake desktop.
-  const fakeDesktop = {};
-  fakeDesktop.addEventListener = () => {};
-  fakeDesktop.removeEventListener = () => {};
+AX_TEST_F(
+    'SwitchAccessSwitchAccessTest', 'NoFocusDefersInit', async function() {
+      await this.runWithLoadedTree('');
+      // Build a new SwitchAccess instance with hooks.
+      let initCount = 0;
+      const oldInit = SwitchAccess.init;
+      SwitchAccess.init = async (...args) => {
+        await oldInit(...args);
+        initCount++;
+        assertNotNullNorUndefined(this.promiseCallback);
+        this.promiseCallback();
+        delete this.promiseCallback;
+      };
 
-  // Stub out this to be synchronous.
-  chrome.automation.getDesktop = callback => callback(fakeDesktop);
+      // Stub this out so that focus is undefined.
+      chrome.automation.getFocus = callback => {
+        callback();
+        assertNotNullNorUndefined(this.promiseCallback);
+        this.promiseCallback();
+        delete this.promiseCallback;
+      };
 
-  // Stub this out as well so that focus is undefined.
-  chrome.automation.getFocus = callback => callback();
+      // Reset state so there are no re-initialization errors.
+      resetState();
 
-  // Initialize; we should not have called finishInit_ since there's no focus.
-  SwitchAccess.initialize();
-  assertEquals(0, initCount);
+      // Initialize; we should not have incremented initCount since there's no
+      // focus.
+      SwitchAccess.init(this.desktop);
+      await this.waitForCallback();
+      assertEquals(0, initCount);
 
-  // Restub this to pass a "focused" node.
-  chrome.automation.getFocus = callback => callback({});
-  SwitchAccess.initialize();
-  assertEquals(1, initCount);
-});
+      // Reset state so there are no re-initialization errors.
+      resetState();
+
+      // Restub this to pass a "focused" node.
+      chrome.automation.getFocus = callback => callback({});
+      SwitchAccess.init(this.desktop);
+      await this.waitForCallback();
+      assertEquals(1, initCount);
+    });

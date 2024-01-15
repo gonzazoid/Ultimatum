@@ -5,7 +5,7 @@
 #ifndef CHROME_BROWSER_ASH_CRYPTAUTH_CLIENT_APP_METADATA_PROVIDER_SERVICE_FACTORY_H_
 #define CHROME_BROWSER_ASH_CRYPTAUTH_CLIENT_APP_METADATA_PROVIDER_SERVICE_FACTORY_H_
 
-#include "base/memory/singleton.h"
+#include "base/no_destructor.h"
 #include "chrome/browser/profiles/profile_keyed_service_factory.h"
 
 class Profile;
@@ -27,22 +27,16 @@ class ClientAppMetadataProviderServiceFactory
       const ClientAppMetadataProviderServiceFactory&) = delete;
 
  private:
-  friend struct base::DefaultSingletonTraits<
-      ClientAppMetadataProviderServiceFactory>;
+  friend base::NoDestructor<ClientAppMetadataProviderServiceFactory>;
 
   ClientAppMetadataProviderServiceFactory();
   ~ClientAppMetadataProviderServiceFactory() override;
 
   // BrowserContextKeyedServiceFactory:
-  KeyedService* BuildServiceInstanceFor(
+  std::unique_ptr<KeyedService> BuildServiceInstanceForBrowserContext(
       content::BrowserContext* browser_context) const override;
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove after the migration is finished.
-namespace chromeos {
-using ::ash::ClientAppMetadataProviderServiceFactory;
-}
 
 #endif  // CHROME_BROWSER_ASH_CRYPTAUTH_CLIENT_APP_METADATA_PROVIDER_SERVICE_FACTORY_H_

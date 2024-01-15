@@ -5,7 +5,8 @@
 package org.chromium.net.test;
 
 import android.content.Context;
-import android.support.test.InstrumentationRegistry;
+
+import androidx.test.InstrumentationRegistry;
 
 import org.junit.rules.TestRule;
 import org.junit.runner.Description;
@@ -24,8 +25,7 @@ public class EmbeddedTestServerRule implements TestRule {
 
     private boolean mUseHttps;
 
-    @ServerCertificate
-    private int mCertificateType = ServerCertificate.CERT_OK;
+    @ServerCertificate private int mCertificateType = ServerCertificate.CERT_OK;
 
     @Override
     public Statement apply(Statement base, Description description) {
@@ -49,10 +49,17 @@ public class EmbeddedTestServerRule implements TestRule {
     public EmbeddedTestServer getServer() {
         if (mServer == null) {
             Context context = InstrumentationRegistry.getContext();
-            mServer = mUseHttps
-                    ? EmbeddedTestServer.createAndStartHTTPSServerWithPort(
-                            context, mCertificateType, mServerPort)
-                    : EmbeddedTestServer.createAndStartServerWithPort(context, mServerPort);
+            // Need to disable ResettersForTesting because it will destroy the server too early in
+            // the case where this rule is initialized via @ClassRule and getServer() is not called
+            // until one of the tests is executing.
+            mServer = new EmbeddedTestServer();
+            mServer.mDisableResetterForTesting = true;
+            if (mUseHttps) {
+                EmbeddedTestServer.initializeAndStartHTTPSServer(
+                        mServer, context, mCertificateType, mServerPort);
+            } else {
+                EmbeddedTestServer.initializeAndStartServer(mServer, context, mServerPort);
+            }
         }
         return mServer;
     }

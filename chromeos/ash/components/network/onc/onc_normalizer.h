@@ -34,26 +34,26 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) Normalizer
   // is set, but the field "HexSSID" is not, the contents of the "SSID" field is
   // converted to UTF-8 encoding, a hex representation of the byte sequence is
   // created and stored in the field "HexSSID".
-  base::Value NormalizeObject(
+  base::Value::Dict NormalizeObject(
       const chromeos::onc::OncValueSignature* object_signature,
-      const base::Value& onc_object);
+      const base::Value::Dict& onc_object);
 
  private:
   // Dispatch to the right normalization function according to |signature|.
-  base::Value MapObject(const chromeos::onc::OncValueSignature& signature,
-                        const base::Value& onc_object,
-                        bool* error) override;
+  base::Value::Dict MapObject(const chromeos::onc::OncValueSignature& signature,
+                              const base::Value::Dict& onc_object,
+                              bool* error) override;
 
-  void NormalizeCertificate(base::Value* cert);
-  void NormalizeEAP(base::Value* eap);
-  void NormalizeEthernet(base::Value* ethernet);
-  void NormalizeIPsec(base::Value* ipsec);
-  void NormalizeNetworkConfiguration(base::Value* network);
-  void NormalizeOpenVPN(base::Value* openvpn);
-  void NormalizeProxySettings(base::Value* proxy);
-  void NormalizeVPN(base::Value* vpn);
-  void NormalizeWiFi(base::Value* wifi);
-  void NormalizeStaticIPConfigForNetwork(base::Value* network);
+  void NormalizeCertificate(base::Value::Dict* cert);
+  void NormalizeEAP(base::Value::Dict* eap);
+  void NormalizeEthernet(base::Value::Dict* ethernet);
+  void NormalizeIPsec(base::Value::Dict* ipsec);
+  void NormalizeNetworkConfiguration(base::Value::Dict* network);
+  void NormalizeOpenVPN(base::Value::Dict* openvpn);
+  void NormalizeProxySettings(base::Value::Dict* proxy);
+  void NormalizeVPN(base::Value::Dict* vpn);
+  void NormalizeWiFi(base::Value::Dict* wifi);
+  void NormalizeStaticIPConfigForNetwork(base::Value::Dict* network);
 
   const bool remove_recommended_fields_;
 };

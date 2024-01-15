@@ -4,13 +4,16 @@
 
 #include "chrome/browser/ui/views/bubble/bubble_contents_wrapper.h"
 
+#include "chrome/browser/ui/browser_window.h"
 #include "chrome/browser/ui/prefs/prefs_tab_helper.h"
 #include "content/public/browser/keyboard_event_processing_result.h"
-#include "content/public/browser/native_web_keyboard_event.h"
 #include "content/public/browser/render_widget_host_view.h"
+#include "content/public/common/input/native_web_keyboard_event.h"
 #include "ui/base/models/menu_model.h"
 #include "ui/gfx/geometry/rounded_corners_f.h"
 #include "ui/views/widget/widget.h"
+
+#include "chrome/browser/page_load_metrics/page_load_metrics_initialize.h"
 
 namespace {
 
@@ -39,12 +42,26 @@ bool BubbleContentsWrapper::Host::HandleKeyboardEvent(
   return false;
 }
 
+bool BubbleContentsWrapper::Host::HandleContextMenu(
+    content::RenderFrameHost& render_frame_host,
+    const content::ContextMenuParams& params) {
+  // Ignores context menu.
+  return true;
+}
+
+content::WebContents* BubbleContentsWrapper::Host::OpenURLFromTab(
+    content::WebContents* source,
+    const content::OpenURLParams& params) {
+  return nullptr;
+}
+
 BubbleContentsWrapper::BubbleContentsWrapper(
     const GURL& webui_url,
     content::BrowserContext* browser_context,
     int task_manager_string_id,
     bool webui_resizes_host,
-    bool esc_closes_ui)
+    bool esc_closes_ui,
+    const std::string& webui_name)
     : webui_resizes_host_(webui_resizes_host),
       esc_closes_ui_(esc_closes_ui),
       web_contents_(content::WebContents::Create(
@@ -53,6 +70,8 @@ BubbleContentsWrapper::BubbleContentsWrapper(
   WebContentsObserver::Observe(web_contents_.get());
 
   PrefsTabHelper::CreateForWebContents(web_contents_.get());
+  chrome::InitializePageLoadMetricsForNonTabWebUI(web_contents_.get(),
+                                                  webui_name);
   task_manager::WebContentsTags::CreateForToolContents(web_contents_.get(),
                                                        task_manager_string_id);
 }
@@ -92,13 +111,43 @@ bool BubbleContentsWrapper::HandleKeyboardEvent(
 bool BubbleContentsWrapper::HandleContextMenu(
     content::RenderFrameHost& render_frame_host,
     const content::ContextMenuParams& params) {
-  // Ignores context menu.
-  return true;
+  return host_ ? host_->HandleContextMenu(render_frame_host, params) : true;
 }
 
-void BubbleContentsWrapper::RenderViewHostChanged(
-    content::RenderViewHost* old_host,
-    content::RenderViewHost* new_host) {
+std::unique_ptr<content::EyeDropper> BubbleContentsWrapper::OpenEyeDropper(
+    content::RenderFrameHost* frame,
+    content::EyeDropperListener* listener) {
+  BrowserWindow* window =
+      BrowserWindow::FindBrowserWindowWithWebContents(web_contents_.get());
+  return window->OpenEyeDropper(frame, listener);
+}
+
+content::WebContents* BubbleContentsWrapper::OpenURLFromTab(
+    content::WebContents* source,
+    const content::OpenURLParams& params) {
+  return host_ ? host_->OpenURLFromTab(source, params) : nullptr;
+}
+
+void BubbleContentsWrapper::RequestMediaAccessPermission(
+    content::WebContents* web_contents,
+    const content::MediaStreamRequest& request,
+    content::MediaResponseCallback callback) {
+  if (host_) {
+    host_->RequestMediaAccessPermission(web_contents, request,
+                                        std::move(callback));
+  }
+}
+
+void BubbleContentsWrapper::RunFileChooser(
+    content::RenderFrameHost* render_frame_host,
+    scoped_refptr<content::FileSelectListener> listener,
+    const blink::mojom::FileChooserParams& params) {
+  if (host_) {
+    host_->RunFileChooser(render_frame_host, listener, params);
+  }
+}
+
+void BubbleContentsWrapper::PrimaryPageChanged(content::Page& page) {
   content::RenderWidgetHostView* render_widget_host_view =
       web_contents_->GetRenderWidgetHostView();
   if (!webui_resizes_host_ || !render_widget_host_view)

@@ -13,7 +13,9 @@
 #include "base/rand_util.h"
 #include "base/scoped_observation.h"
 #include "base/strings/strcat.h"
+#include "base/task/sequenced_task_runner.h"
 #include "build/build_config.h"
+#include "components/country_codes/country_codes.h"
 #include "components/feed/core/common/pref_names.h"
 #include "components/feed/core/shared_prefs/pref_names.h"
 #include "components/feed/core/v2/feed_network_impl.h"
@@ -30,6 +32,7 @@
 #include "components/history/core/browser/history_types.h"
 #include "components/prefs/pref_service.h"
 #include "components/signin/public/base/consent_level.h"
+#include "components/signin/public/base/signin_pref_names.h"
 #include "components/signin/public/identity_manager/identity_manager.h"
 #include "net/base/network_change_notifier.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
@@ -123,10 +126,12 @@ class FeedService::StreamDelegateImpl : public FeedStream::Delegate {
  public:
   StreamDelegateImpl(PrefService* local_state,
                      FeedService::Delegate* service_delegate,
-                     signin::IdentityManager* identity_manager)
+                     signin::IdentityManager* identity_manager,
+                     PrefService* profile_prefs)
       : service_delegate_(service_delegate),
         eula_notifier_(local_state),
-        identity_manager_(identity_manager) {}
+        identity_manager_(identity_manager),
+        profile_prefs_(profile_prefs) {}
   StreamDelegateImpl(const StreamDelegateImpl&) = delete;
   StreamDelegateImpl& operator=(const StreamDelegateImpl&) = delete;
 
@@ -142,14 +147,16 @@ class FeedService::StreamDelegateImpl : public FeedStream::Delegate {
                "feed-screenshot-mode");
   }
   bool IsOffline() override { return net::NetworkChangeNotifier::IsOffline(); }
+
+  std::string GetCountry() override {
+    return country_codes::GetCurrentCountryCode();
+  }
+
   DisplayMetrics GetDisplayMetrics() override {
     return service_delegate_->GetDisplayMetrics();
   }
   std::string GetLanguageTag() override {
     return service_delegate_->GetLanguageTag();
-  }
-  bool IsAutoplayEnabled() override {
-    return service_delegate_->IsAutoplayEnabled();
   }
   TabGroupEnabledState GetTabGroupEnabledState() override {
     return service_delegate_->GetTabGroupEnabledState();
@@ -161,6 +168,11 @@ class FeedService::StreamDelegateImpl : public FeedStream::Delegate {
   AccountInfo GetAccountInfo() override {
     return AccountInfo(identity_manager_->GetPrimaryAccountInfo(
         GetConsentLevelNeededForPersonalizedFeed()));
+  }
+  // Returns if signin is allowed on Android. Return true on other platform so
+  // behavior is unchanged there.
+  bool IsSigninAllowed() override {
+    return profile_prefs_->GetBoolean(::prefs::kSigninAllowed);
   }
   void RegisterExperiments(const Experiments& experiments) override {
     service_delegate_->RegisterExperiments(experiments);
@@ -179,6 +191,7 @@ class FeedService::StreamDelegateImpl : public FeedStream::Delegate {
   std::unique_ptr<EulaObserver> eula_observer_;
   std::unique_ptr<HistoryObserverImpl> history_observer_;
   raw_ptr<signin::IdentityManager> identity_manager_;
+  raw_ptr<PrefService> profile_prefs_;
 };
 
 class FeedService::IdentityManagerObserverImpl
@@ -234,11 +247,12 @@ FeedService::FeedService(
     scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
     scoped_refptr<base::SequencedTaskRunner> background_task_runner,
     const std::string& api_key,
-    const ChromeInfo& chrome_info)
+    const ChromeInfo& chrome_info,
+    TemplateURLService* template_url_service)
     : delegate_(std::move(delegate)),
       refresh_task_scheduler_(std::move(refresh_task_scheduler)) {
   stream_delegate_ = std::make_unique<StreamDelegateImpl>(
-      local_state, delegate_.get(), identity_manager);
+      local_state, delegate_.get(), identity_manager, profile_prefs);
   network_delegate_ =
       std::make_unique<NetworkDelegateImpl>(delegate_.get(), identity_manager);
   metrics_reporter_ = std::make_unique<MetricsReporter>(profile_prefs);
@@ -254,7 +268,7 @@ FeedService::FeedService(
       refresh_task_scheduler_.get(), metrics_reporter_.get(),
       stream_delegate_.get(), profile_prefs, feed_network_.get(),
       image_fetcher_.get(), store_.get(), persistent_key_value_store_.get(),
-      chrome_info);
+      template_url_service, chrome_info);
   api_ = stream_.get();
 
   history_observer_ = std::make_unique<HistoryObserverImpl>(
@@ -296,8 +310,7 @@ void FeedService::ClearCachedData() {
 
 // static
 bool FeedService::IsEnabled(const PrefService& pref_service) {
-  return !base::FeatureList::IsEnabled(kIsAblated) &&
-         pref_service.GetBoolean(feed::prefs::kEnableSnippets);
+  return pref_service.GetBoolean(feed::prefs::kEnableSnippets);
 }
 
 // static

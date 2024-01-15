@@ -2,8 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/bind.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "chrome/browser/ui/browser_element_identifiers.h"
 #include "chrome/browser/ui/tabs/tab_menu_model.h"
@@ -66,10 +66,11 @@ IN_PROC_BROWSER_TEST_F(HelpBubbleFactoryRegistryInteractiveUitest,
   // the BrowserView hierarcny.
   auto* const app_menu_button =
       ui::ElementTracker::GetElementTracker()->GetFirstMatchingElement(
-          kAppMenuButtonElementId, context);
+          kToolbarAppMenuButtonElementId, context);
   ASSERT_NE(nullptr, app_menu_button);
   InteractionTestUtilBrowser test_util;
-  test_util.PressButton(app_menu_button);
+  ASSERT_EQ(ui::test::ActionResult::kSucceeded,
+            test_util.PressButton(app_menu_button));
 
   // Verify that the history menu item is visible.
   ui::TrackedElement* const element =
@@ -109,7 +110,7 @@ IN_PROC_BROWSER_TEST_F(HelpBubbleFactoryRegistryInteractiveUitest,
         // Have to defer opening because this call is blocking on Mac;
         // subsequent steps will be called from within the run loop of the
         // context menu.
-        base::ThreadTaskRunnerHandle::Get()->PostTask(
+        base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
             FROM_HERE, std::move(open_context_menu));
 #else
         // Conversely, on other platforms, this is already an async call and

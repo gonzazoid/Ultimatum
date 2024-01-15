@@ -5,13 +5,13 @@
 package org.chromium.chrome.browser.paint_preview;
 
 import org.chromium.base.task.PostTask;
+import org.chromium.base.task.TaskTraits;
 import org.chromium.chrome.browser.tab.EmptyTabObserver;
 import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.chrome.browser.util.ChromeAccessibilityUtil;
 import org.chromium.components.paintpreview.player.PlayerManager;
 import org.chromium.content_public.browser.LoadUrlParams;
 import org.chromium.content_public.browser.NavigationHandle;
-import org.chromium.content_public.browser.UiThreadTaskTraits;
 import org.chromium.ui.widget.Toast;
 import org.chromium.url.GURL;
 
@@ -39,16 +39,19 @@ public class DemoPaintPreview implements PlayerManager.Listener {
 
     private void show() {
         PaintPreviewCompositorUtils.warmupCompositor();
-        mTabbedPaintPreview.capture(success
-                -> PostTask.runOrPostTask(
-                        UiThreadTaskTraits.USER_VISIBLE, () -> onCapturedPaintPreview(success)));
+        mTabbedPaintPreview.capture(
+                success ->
+                        PostTask.runOrPostTask(
+                                TaskTraits.UI_USER_VISIBLE, () -> onCapturedPaintPreview(success)));
     }
 
     private void onCapturedPaintPreview(boolean captureSuccess) {
         boolean shown = false;
         if (captureSuccess) shown = mTabbedPaintPreview.maybeShow(this);
-        int toastStringRes = shown ? R.string.paint_preview_demo_capture_success
-                                   : R.string.paint_preview_demo_capture_failure;
+        int toastStringRes =
+                shown
+                        ? R.string.paint_preview_demo_capture_success
+                        : R.string.paint_preview_demo_capture_failure;
         Toast.makeText(mTab.getContext(), toastStringRes, Toast.LENGTH_LONG).show();
         if (!captureSuccess || !shown) {
             PaintPreviewCompositorUtils.stopWarmCompositor();
@@ -71,16 +74,20 @@ public class DemoPaintPreview implements PlayerManager.Listener {
 
     @Override
     public void onCompositorError(int status) {
-        Toast.makeText(mTab.getContext(), R.string.paint_preview_demo_playback_failure,
-                     Toast.LENGTH_LONG)
+        Toast.makeText(
+                        mTab.getContext(),
+                        R.string.paint_preview_demo_playback_failure,
+                        Toast.LENGTH_LONG)
                 .show();
         removePaintPreviewDemo();
     }
 
     @Override
     public void onViewReady() {
-        Toast.makeText(mTab.getContext(), R.string.paint_preview_demo_playback_start,
-                     Toast.LENGTH_LONG)
+        Toast.makeText(
+                        mTab.getContext(),
+                        R.string.paint_preview_demo_playback_start,
+                        Toast.LENGTH_LONG)
                 .show();
     }
 
@@ -114,8 +121,10 @@ public class DemoPaintPreview implements PlayerManager.Listener {
     @Override
     public void onAccessibilityNotSupported() {
         if (isAccessibilityEnabled()) {
-            Toast.makeText(mTab.getContext(), R.string.paint_preview_demo_no_accessibility,
-                         Toast.LENGTH_LONG)
+            Toast.makeText(
+                            mTab.getContext(),
+                            R.string.paint_preview_demo_no_accessibility,
+                            Toast.LENGTH_LONG)
                     .show();
         }
     }
@@ -126,12 +135,6 @@ public class DemoPaintPreview implements PlayerManager.Listener {
                 Tab tab, NavigationHandle navigationHandle) {
             if (!mTabbedPaintPreview.isAttached()) return;
             removePaintPreviewDemo();
-        }
-
-        @Override
-        public void onDidStartNavigationNoop(Tab tab, NavigationHandle navigationHandle) {
-            if (!mTabbedPaintPreview.isAttached()) return;
-            if (!navigationHandle.isInPrimaryMainFrame()) return;
         }
     }
 }

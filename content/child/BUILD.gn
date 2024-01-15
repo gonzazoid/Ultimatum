@@ -4,6 +4,7 @@
 
 import("//build/config/features.gni")
 import("//build/config/ui.gni")
+import("//device/vr/buildflags/buildflags.gni")
 import("//ppapi/buildflags/buildflags.gni")
 import("//third_party/blink/public/public_features.gni")
 if (is_android) {
@@ -44,6 +45,8 @@ target(link_target_type, "child") {
     "child_histogram_fetcher_impl.h",
     "child_process.cc",
     "child_process.h",
+    "child_process_synthetic_trial_syncer.cc",
+    "child_process_synthetic_trial_syncer.h",
     "child_thread_impl.cc",
     "child_thread_impl.h",
     "field_trial.cc",
@@ -67,10 +70,10 @@ target(link_target_type, "child") {
     "//base",
     "//build/config/compiler:compiler_buildflags",
     "//cc/paint",
-    "//components/autofill/core/common:features",
     "//components/discardable_memory/client",
     "//components/discardable_memory/public/mojom",
-    "//components/power_scheduler",
+    "//components/ml/webnn:features",
+    "//components/permissions:permissions_common",
     "//components/tracing:startup_tracing",
     "//components/variations",
     "//components/webcrypto",
@@ -79,6 +82,7 @@ target(link_target_type, "child") {
     "//content/public/common:common_sources",
     "//device/base",
     "//device/gamepad/public/cpp:switches",
+    "//device/vr/buildflags",
     "//gpu/command_buffer/client",
     "//media",
     "//mojo/core/embedder",
@@ -99,6 +103,7 @@ target(link_target_type, "child") {
     "//third_party/blink/public:resources",
     "//third_party/blink/public:scaled_resources",
     "//third_party/blink/public/common",
+    "//third_party/blink/public/common:buildflags",
     "//third_party/blink/public/strings",
     "//third_party/ced",
     "//third_party/zlib/google:compression_utils",
@@ -117,6 +122,8 @@ target(link_target_type, "child") {
     sources += [
       "child_process_sandbox_support_impl_linux.cc",
       "child_process_sandbox_support_impl_linux.h",
+      "sandboxed_process_thread_type_handler.cc",
+      "sandboxed_process_thread_type_handler.h",
     ]
     deps += [
       "//components/services/font/public/cpp",
@@ -156,6 +163,10 @@ target(link_target_type, "child") {
       "browser_font_resource_trusted.cc",
       "browser_font_resource_trusted.h",
     ]
+  }
+
+  if (enable_vr) {
+    deps += [ "//device/vr/public/cpp:features" ]
   }
 
   configs += [ "//content:content_implementation" ]

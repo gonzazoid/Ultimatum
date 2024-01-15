@@ -14,20 +14,16 @@ import static org.junit.Assert.assertTrue;
 import android.app.Notification;
 import android.content.Intent;
 import android.graphics.Bitmap;
-import android.os.Build;
 import android.support.v4.media.MediaMetadataCompat;
 import android.support.v4.media.session.PlaybackStateCompat;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.robolectric.RuntimeEnvironment;
 import org.robolectric.Shadows;
 import org.robolectric.annotation.Config;
 import org.robolectric.shadows.ShadowNotification;
 
 import org.chromium.base.test.BaseRobolectricTestRunner;
-import org.chromium.chrome.R;
-import org.chromium.components.browser_ui.media.MediaNotificationController;
 import org.chromium.components.browser_ui.media.MediaNotificationInfo;
 import org.chromium.services.media_session.MediaMetadata;
 import org.chromium.services.media_session.MediaPosition;
@@ -37,68 +33,10 @@ import org.chromium.services.media_session.MediaPosition;
  * NotificationManager.
  */
 @RunWith(BaseRobolectricTestRunner.class)
-@Config(manifest = Config.NONE,
-        // Remove this after updating to a version of Robolectric that supports
-        // notification channel creation. crbug.com/774315
-        sdk = Build.VERSION_CODES.N_MR1, shadows = MediaNotificationTestShadowResources.class)
+@Config(manifest = Config.NONE, shadows = MediaNotificationTestShadowResources.class)
 public class MediaNotificationManagerNotificationTest extends MediaNotificationTestBase {
     @Test
-    public void updateNotificationBuilderDisplaysCorrectMetadata_PreN_NonEmptyArtistAndAlbum() {
-        MediaNotificationController.sOverrideIsRunningNForTesting = false;
-
-        mMediaNotificationInfoBuilder.setMetadata(new MediaMetadata("title", "artist", "album"));
-        mMediaNotificationInfoBuilder.setOrigin("https://example.com/");
-
-        MediaNotificationInfo info = mMediaNotificationInfoBuilder.build();
-        Notification notification = updateNotificationBuilderAndBuild(info);
-
-        ShadowNotification shadowNotification = Shadows.shadowOf(notification);
-
-        if (info.isPrivate) {
-            assertNotEquals("title", shadowNotification.getContentTitle());
-            assertNotEquals("artist - album", shadowNotification.getContentText());
-            if (hasNApis()) {
-                assertNull(notification.extras.getString(Notification.EXTRA_SUB_TEXT));
-            }
-        } else {
-            assertEquals("title", shadowNotification.getContentTitle());
-            assertEquals("artist - album", shadowNotification.getContentText());
-
-            if (hasNApis()) {
-                assertEquals("https://example.com/",
-                        notification.extras.getString(Notification.EXTRA_SUB_TEXT));
-            }
-        }
-    }
-
-    @Test
-    public void updateNotificationBuilderDisplaysCorrectMetadata_PreN_EmptyArtistAndAlbum() {
-        MediaNotificationController.sOverrideIsRunningNForTesting = false;
-
-        mMediaNotificationInfoBuilder.setMetadata(new MediaMetadata("title", "", ""));
-        mMediaNotificationInfoBuilder.setOrigin("https://example.com/");
-
-        MediaNotificationInfo info = mMediaNotificationInfoBuilder.build();
-        Notification notification = updateNotificationBuilderAndBuild(info);
-
-        ShadowNotification shadowNotification = Shadows.shadowOf(notification);
-
-        if (info.isPrivate) {
-            assertNotEquals(info.metadata.getTitle(), shadowNotification.getContentTitle());
-            assertNotNull(shadowNotification.getContentText());
-        } else {
-            assertEquals(info.metadata.getTitle(), shadowNotification.getContentTitle());
-            assertEquals(info.origin, shadowNotification.getContentText());
-        }
-        if (hasNApis()) {
-            assertEquals(null, notification.extras.getString(Notification.EXTRA_SUB_TEXT));
-        }
-    }
-
-    @Test
-    public void updateNotificationBuilderDisplaysCorrectMetadata_AtLeastN_EmptyArtistAndAlbum() {
-        MediaNotificationController.sOverrideIsRunningNForTesting = true;
-
+    public void updateNotificationBuilderDisplaysCorrectMetadata_EmptyArtistAndAlbum() {
         mMediaNotificationInfoBuilder.setMetadata(new MediaMetadata("title", "", ""));
         mMediaNotificationInfoBuilder.setOrigin("https://example.com/");
 
@@ -110,17 +48,12 @@ public class MediaNotificationManagerNotificationTest extends MediaNotificationT
         if (info.isPrivate) {
             assertNotEquals(info.metadata.getTitle(), shadowNotification.getContentTitle());
             assertNull(shadowNotification.getContentText());
-            if (hasNApis()) {
-                assertNotEquals(
-                        info.origin, notification.extras.getString(Notification.EXTRA_SUB_TEXT));
-            }
+            assertNotEquals(
+                    info.origin, notification.extras.getString(Notification.EXTRA_SUB_TEXT));
         } else {
             assertEquals(info.metadata.getTitle(), shadowNotification.getContentTitle());
             assertEquals("", shadowNotification.getContentText());
-            if (hasNApis()) {
-                assertEquals(
-                        info.origin, notification.extras.getString(Notification.EXTRA_SUB_TEXT));
-            }
+            assertEquals(info.origin, notification.extras.getString(Notification.EXTRA_SUB_TEXT));
         }
     }
 
@@ -132,12 +65,10 @@ public class MediaNotificationManagerNotificationTest extends MediaNotificationT
         MediaNotificationInfo info = mMediaNotificationInfoBuilder.build();
         Notification notification = updateNotificationBuilderAndBuild(info);
 
-        if (hasNApis()) {
-            if (info.isPrivate) {
-                assertNull(notification.getLargeIcon());
-            } else {
-                assertTrue(largeIcon.sameAs(iconToBitmap(notification.getLargeIcon())));
-            }
+        if (info.isPrivate) {
+            assertNull(notification.getLargeIcon());
+        } else {
+            assertTrue(largeIcon.sameAs(iconToBitmap(notification.getLargeIcon())));
         }
     }
 
@@ -148,30 +79,8 @@ public class MediaNotificationManagerNotificationTest extends MediaNotificationT
         MediaNotificationInfo info = mMediaNotificationInfoBuilder.build();
         Notification notification = updateNotificationBuilderAndBuild(info);
 
-        if (hasNApis()) {
-            assertNull(notification.getLargeIcon());
-        }
+        assertNull(notification.getLargeIcon());
         assertNull(getController().mDefaultNotificationLargeIcon);
-    }
-
-    @Test
-    public void updateNotificationBuilderDisplaysCorrectLargeIcon_WithoutLargeIcon_PreN() {
-        MediaNotificationController.sOverrideIsRunningNForTesting = false;
-        assertNull(getController().mDefaultNotificationLargeIcon);
-
-        mMediaNotificationInfoBuilder.setNotificationLargeIcon(null);
-
-        MediaNotificationInfo info =
-                mMediaNotificationInfoBuilder
-                        .setDefaultNotificationLargeIcon(R.drawable.audio_playing_square)
-                        .build();
-        Notification notification = updateNotificationBuilderAndBuild(info);
-
-        assertNotNull(getController().mDefaultNotificationLargeIcon);
-        if (hasNApis()) {
-            assertTrue(getController().mDefaultNotificationLargeIcon.sameAs(
-                    iconToBitmap(notification.getLargeIcon())));
-        }
     }
 
     @Test
@@ -182,14 +91,13 @@ public class MediaNotificationManagerNotificationTest extends MediaNotificationT
         MediaNotificationInfo info = mMediaNotificationInfoBuilder.build();
         Notification notification = updateNotificationBuilderAndBuild(info);
 
-        if (hasNApis()) {
-            assertNull(notification.getLargeIcon());
-        }
+        assertNull(notification.getLargeIcon());
     }
 
     @Test
     public void updateNotificationBuilderDisplaysCorrectMiscInfo() {
-        mMediaNotificationInfoBuilder.setNotificationSmallIcon(1 /* resId */)
+        mMediaNotificationInfoBuilder
+                .setNotificationSmallIcon(/* resId= */ 1)
                 .setActions(0)
                 .setContentIntent(new Intent());
         MediaNotificationInfo info = mMediaNotificationInfoBuilder.build();
@@ -199,15 +107,13 @@ public class MediaNotificationManagerNotificationTest extends MediaNotificationT
 
         assertFalse(shadowNotification.isWhenShown());
         assertFalse(shadowNotification.isOngoing());
-        if (hasNApis()) {
-            assertNotNull(notification.getSmallIcon());
-            assertFalse((notification.flags & Notification.FLAG_AUTO_CANCEL) != 0);
-            assertTrue((notification.flags & Notification.FLAG_LOCAL_ONLY) != 0);
-            assertEquals(NOTIFICATION_GROUP_NAME, notification.getGroup());
-            assertTrue(notification.isGroupSummary());
-            assertNotNull(notification.contentIntent);
-            assertEquals(Notification.VISIBILITY_PRIVATE, notification.visibility);
-        }
+        assertNotNull(notification.getSmallIcon());
+        assertFalse((notification.flags & Notification.FLAG_AUTO_CANCEL) != 0);
+        assertTrue((notification.flags & Notification.FLAG_LOCAL_ONLY) != 0);
+        assertEquals(NOTIFICATION_GROUP_NAME, notification.getGroup());
+        assertTrue(notification.isGroupSummary());
+        assertNotNull(notification.contentIntent);
+        assertEquals(Notification.VISIBILITY_PRIVATE, notification.visibility);
     }
 
     @Test
@@ -218,9 +124,7 @@ public class MediaNotificationManagerNotificationTest extends MediaNotificationT
         ShadowNotification shadowNotification = Shadows.shadowOf(notification);
 
         assertTrue(shadowNotification.isOngoing());
-        if (hasNApis()) {
-            assertNotNull(notification.deleteIntent);
-        }
+        assertNotNull(notification.deleteIntent);
     }
 
     @Test
@@ -229,9 +133,7 @@ public class MediaNotificationManagerNotificationTest extends MediaNotificationT
         MediaNotificationInfo info = mMediaNotificationInfoBuilder.build();
         Notification notification = updateNotificationBuilderAndBuild(info);
 
-        if (hasNApis()) {
-            assertEquals(Notification.VISIBILITY_PUBLIC, notification.visibility);
-        }
+        assertEquals(Notification.VISIBILITY_PUBLIC, notification.visibility);
     }
 
     @Test
@@ -310,9 +212,5 @@ public class MediaNotificationManagerNotificationTest extends MediaNotificationT
         getController().updateNotificationBuilder();
 
         return getController().mNotificationBuilder.build();
-    }
-
-    private boolean hasNApis() {
-        return RuntimeEnvironment.getApiLevel() >= Build.VERSION_CODES.N;
     }
 }

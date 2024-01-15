@@ -197,11 +197,7 @@ class UserDataDowngradeBrowserCopyAndCleanTest
   }
 
   void TearDownInProcessBrowserTestFixture() override {
-    if (ParentClass::IsPreTest()) {
-      // Verify that the downgrade was detected and that the move took place.
-      histogram_tester_->ExpectUniqueSample(
-          "Downgrade.Type", 1 /* Type::kAdministrativeWipe */, 1);
-    } else {
+    if (!ParentClass::IsPreTest()) {
       // Verify the renamed user data directory has been deleted.
       EXPECT_FALSE(base::DirectoryExists(moved_user_data_dir()));
     }
@@ -266,7 +262,8 @@ class UserDataDowngradeBrowserNoResetTest
 // Verify the user data directory will not be reset without downgrade.
 IN_PROC_BROWSER_TEST_F(UserDataDowngradeBrowserNoResetTest, PRE_Test) {}
 
-IN_PROC_BROWSER_TEST_F(UserDataDowngradeBrowserNoResetTest, Test) {
+// TODO(crbug.com/1469927): Re-enable this test
+IN_PROC_BROWSER_TEST_F(UserDataDowngradeBrowserNoResetTest, DISABLED_Test) {
   base::ScopedAllowBlockingForTesting allow_blocking;
   EXPECT_EQ(chrome::kChromeVersion,
             GetLastVersion(user_data_dir())->GetString());

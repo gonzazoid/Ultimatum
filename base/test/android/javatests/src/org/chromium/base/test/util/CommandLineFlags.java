@@ -82,8 +82,6 @@ public final class CommandLineFlags {
     private static final String DISABLE_FEATURES = "disable-features";
     private static final String ENABLE_FEATURES = "enable-features";
 
-    private static boolean sInitializedForTest;
-
     // These members are used to track CommandLine state modifications made by the class/test method
     // currently being run, to be undone when the class/test method finishes.
     private static Set<String> sClassFlagsToRemove;
@@ -91,9 +89,7 @@ public final class CommandLineFlags {
     private static Set<String> sMethodFlagsToRemove;
     private static Map<String, String> sMethodFlagsToAdd;
 
-    /**
-     * Adds command-line flags to the {@link org.chromium.base.CommandLine} for this test.
-     */
+    /** Adds command-line flags to the {@link org.chromium.base.CommandLine} for this test. */
     @Inherited
     @Retention(RetentionPolicy.RUNTIME)
     @Target({ElementType.METHOD, ElementType.TYPE})
@@ -124,12 +120,8 @@ public final class CommandLineFlags {
      * trying to remove a flag set externally, i.e. by the command-line flags file, will not work.
      */
     public static void setUpClass(Class<?> clazz) {
-        // The command line may already have been initialized by Application-level init. We need to
-        // re-initialize it with test flags.
-        if (!sInitializedForTest) {
-            CommandLine.reset();
+        if (!CommandLine.isInitialized()) {
             CommandLineInitUtil.initCommandLine(getTestCmdLineFile());
-            sInitializedForTest = true;
         }
 
         Set<String> flags = new HashSet<>();
@@ -143,8 +135,11 @@ public final class CommandLineFlags {
         if (ApplicationStatus.isInitialized()) {
             for (Activity a : ApplicationStatus.getRunningActivities()) {
                 if (ApplicationStatus.getStateForActivity(a) < ActivityState.RESUMED) {
-                    Log.w(TAG,
-                            "Activity " + a + ", is still starting up while the Command Line flags "
+                    Log.w(
+                            TAG,
+                            "Activity "
+                                    + a
+                                    + ", is still starting up while the Command Line flags "
                                     + "are being reset. This is a known source of flakiness.");
                 }
             }
@@ -170,16 +165,33 @@ public final class CommandLineFlags {
     }
 
     private static void restoreFlags(Set<String> flagsToRemove, Map<String, String> flagsToAdd) {
-        for (Entry<String, String> flag : flagsToAdd.entrySet()) {
-            CommandLine.getInstance().appendSwitchWithValue(flag.getKey(), flag.getValue());
-        }
         for (String flag : flagsToRemove) {
             CommandLine.getInstance().removeSwitch(flag);
         }
+        for (Entry<String, String> flag : flagsToAdd.entrySet()) {
+            if (flag.getValue() == null) {
+                CommandLine.getInstance().appendSwitch(flag.getKey());
+            } else {
+                CommandLine.getInstance().appendSwitchWithValue(flag.getKey(), flag.getValue());
+            }
+        }
     }
 
-    private static void applyFlags(Set<String> flagsToAdd, Set<String> flagsToRemove,
-            Set<String> flagsToRemoveForRestore, Map<String, String> flagsToAddForRestore) {
+    private static void applyFlags(
+            Set<String> flagsToAdd,
+            Set<String> flagsToRemove,
+            Set<String> flagsToRemoveForRestore,
+            Map<String, String> flagsToAddForRestore) {
+        if (flagsToRemove != null) {
+            for (String flag : flagsToRemove) {
+                if (CommandLine.getInstance().hasSwitch(flag)) {
+                    String existingValue = CommandLine.getInstance().getSwitchValue(flag);
+                    CommandLine.getInstance().removeSwitch(flag);
+                    flagsToAddForRestore.put(flag, existingValue);
+                }
+            }
+        }
+
         Set<String> enableFeatures = new HashSet<String>(getFeatureValues(ENABLE_FEATURES));
         Set<String> disableFeatures = new HashSet<String>(getFeatureValues(DISABLE_FEATURES));
         for (String flag : flagsToAdd) {
@@ -210,24 +222,23 @@ public final class CommandLineFlags {
 
         if (enableFeatures.size() > 0) {
             String existingValue = CommandLine.getInstance().getSwitchValue(ENABLE_FEATURES);
-            flagsToAddForRestore.put(ENABLE_FEATURES, existingValue);
-            CommandLine.getInstance().appendSwitchWithValue(
-                    ENABLE_FEATURES, TextUtils.join(",", enableFeatures));
+            if (existingValue != null) {
+                flagsToAddForRestore.put(ENABLE_FEATURES, existingValue);
+                CommandLine.getInstance().removeSwitch(ENABLE_FEATURES);
+            }
+            CommandLine.getInstance()
+                    .appendSwitchWithValue(ENABLE_FEATURES, TextUtils.join(",", enableFeatures));
             flagsToRemoveForRestore.add(ENABLE_FEATURES);
         }
         if (disableFeatures.size() > 0) {
             String existingValue = CommandLine.getInstance().getSwitchValue(DISABLE_FEATURES);
-            flagsToAddForRestore.put(DISABLE_FEATURES, existingValue);
-            CommandLine.getInstance().appendSwitchWithValue(
-                    DISABLE_FEATURES, TextUtils.join(",", disableFeatures));
-            flagsToRemoveForRestore.add(DISABLE_FEATURES);
-        }
-        if (flagsToRemove == null) return;
-        for (String flag : flagsToRemove) {
-            if (CommandLine.getInstance().hasSwitch(flag)) {
-                CommandLine.getInstance().removeSwitch(flag);
-                flagsToAddForRestore.put(flag, null);
+            if (existingValue != null) {
+                flagsToAddForRestore.put(DISABLE_FEATURES, existingValue);
+                CommandLine.getInstance().removeSwitch(DISABLE_FEATURES);
             }
+            CommandLine.getInstance()
+                    .appendSwitchWithValue(DISABLE_FEATURES, TextUtils.join(",", disableFeatures));
+            flagsToRemoveForRestore.add(DISABLE_FEATURES);
         }
     }
 
@@ -241,7 +252,8 @@ public final class CommandLineFlags {
             }
         }
         for (Method method : clazz.getMethods()) {
-            Assert.assertFalse("@Rule annotations on methods are unsupported. Cause: "
+            Assert.assertFalse(
+                    "@Rule annotations on methods are unsupported. Cause: "
                             + method.toGenericString(),
                     method.isAnnotationPresent(Rule.class));
         }

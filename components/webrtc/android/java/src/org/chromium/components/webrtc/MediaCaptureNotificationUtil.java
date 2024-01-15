@@ -6,7 +6,6 @@ package org.chromium.components.webrtc;
 
 import android.app.PendingIntent;
 import android.content.Context;
-import android.os.Build;
 
 import androidx.annotation.IntDef;
 import androidx.annotation.Nullable;
@@ -19,12 +18,15 @@ import org.chromium.components.browser_ui.notifications.PendingIntentProvider;
 import org.chromium.components.url_formatter.SchemeDisplay;
 import org.chromium.components.url_formatter.UrlFormatter;
 
-/**
- * Helper to build a notification for Media Capture and Streams.
- */
+/** Helper to build a notification for Media Capture and Streams. */
 public class MediaCaptureNotificationUtil {
-    @IntDef({MediaType.NO_MEDIA, MediaType.AUDIO_AND_VIDEO, MediaType.VIDEO_ONLY,
-            MediaType.AUDIO_ONLY, MediaType.SCREEN_CAPTURE})
+    @IntDef({
+        MediaType.NO_MEDIA,
+        MediaType.AUDIO_AND_VIDEO,
+        MediaType.VIDEO_ONLY,
+        MediaType.AUDIO_ONLY,
+        MediaType.SCREEN_CAPTURE
+    })
     public @interface MediaType {
         int NO_MEDIA = 0;
         int AUDIO_AND_VIDEO = 1;
@@ -41,9 +43,13 @@ public class MediaCaptureNotificationUtil {
      * @param contentIntent the intent to be sent when the notification is clicked.
      * @param stopIntent if non-null, a stop button that triggers this intent will be added.
      */
-    public static NotificationWrapper createNotification(NotificationWrapperBuilder builder,
-            @MediaType int mediaType, @Nullable String url, @Nullable String appName,
-            @Nullable PendingIntentProvider contentIntent, @Nullable PendingIntent stopIntent) {
+    public static NotificationWrapper createNotification(
+            NotificationWrapperBuilder builder,
+            @MediaType int mediaType,
+            @Nullable String url,
+            @Nullable String appName,
+            @Nullable PendingIntentProvider contentIntent,
+            @Nullable PendingIntent stopIntent) {
         Context appContext = ContextUtils.getApplicationContext();
         builder.setAutoCancel(false)
                 .setOngoing(true)
@@ -54,35 +60,33 @@ public class MediaCaptureNotificationUtil {
         if (stopIntent != null) {
             builder.setPriorityBeforeO(NotificationCompat.PRIORITY_HIGH);
             builder.setVibrate(new long[0]);
-            builder.addAction(R.drawable.ic_stop_white_24dp,
-                    appContext.getString(R.string.accessibility_stop), stopIntent);
+            builder.addAction(
+                    R.drawable.ic_stop_white_24dp,
+                    appContext.getString(R.string.accessibility_stop),
+                    stopIntent);
         } else {
             assert mediaType != MediaType.SCREEN_CAPTURE : "SCREEN_CAPTURE requires a stop action";
         }
 
-        String titleText = getNotificationTitleText(mediaType);
-        // App name is automatically added to the title from Android N, but needs to be added
-        // explicitly for prior versions.
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N || appName == null) {
-            builder.setContentTitle(titleText);
-        } else {
-            builder.setContentTitle(appContext.getString(
-                    R.string.media_capture_notification_app_name_separator, appName, titleText));
-        }
+        // App name is automatically added to the title from Android N.
+        builder.setContentTitle(getNotificationTitleText(mediaType));
 
         String contentText = null;
         if (url == null) {
-            contentText = appContext.getString(
-                    R.string.media_capture_notification_content_text_incognito);
+            contentText =
+                    appContext.getString(
+                            R.string.media_capture_notification_content_text_incognito);
             builder.setSubText(appContext.getString(R.string.notification_incognito_tab));
         } else {
-            String urlForDisplay = UrlFormatter.formatUrlForSecurityDisplay(
-                    url, SchemeDisplay.OMIT_HTTP_AND_HTTPS);
+            String urlForDisplay =
+                    UrlFormatter.formatUrlForSecurityDisplay(
+                            url, SchemeDisplay.OMIT_HTTP_AND_HTTPS);
             if (contentIntent == null) {
                 contentText = urlForDisplay;
             } else {
-                contentText = appContext.getString(
-                        R.string.media_capture_notification_content_text, urlForDisplay);
+                contentText =
+                        appContext.getString(
+                                R.string.media_capture_notification_content_text, urlForDisplay);
             }
         }
 

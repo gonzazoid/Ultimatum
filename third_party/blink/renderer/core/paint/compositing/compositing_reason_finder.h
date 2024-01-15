@@ -11,32 +11,18 @@
 
 namespace blink {
 
-class PaintLayer;
 class LayoutObject;
 class ComputedStyle;
 
 class CORE_EXPORT CompositingReasonFinder {
-  DISALLOW_NEW();
+  STATIC_ONLY(CompositingReasonFinder);
 
  public:
-  CompositingReasonFinder(const CompositingReasonFinder&) = delete;
-  CompositingReasonFinder& operator=(const CompositingReasonFinder&) = delete;
-
-  // Composited scrolling reason is not included because
-  // PaintLayerScrollableArea needs the result of this function to determine
-  // composited scrolling status.
-  static CompositingReasons DirectReasonsForPaintPropertiesExceptScrolling(
+  static CompositingReasons DirectReasonsForPaintProperties(
       const LayoutObject&,
       const LayoutObject* container_for_fixed_position = nullptr);
 
   static bool ShouldForcePreferCompositingToLCDText(
-      const LayoutObject&,
-      CompositingReasons reasons_except_scrolling);
-
-  // This must be called after
-  // |DirectReasonsForPaintPropertiesExceptForScrolling()| and
-  // |PaintLayerScrollableArea::UpdateNeedsCompositedScrolling()|.
-  static CompositingReasons DirectReasonsForPaintProperties(
       const LayoutObject&,
       CompositingReasons reasons_except_scrolling);
 
@@ -46,7 +32,7 @@ class CORE_EXPORT CompositingReasonFinder {
   // that the LayoutObject does not end up using.
   static CompositingReasons PotentialCompositingReasonsFor3DTransform(
       const ComputedStyle&);
-  static bool RequiresCompositingForRootScroller(const PaintLayer&);
+  static bool RequiresCompositingForRootScroller(const LayoutObject&);
 };
 
 }  // namespace blink

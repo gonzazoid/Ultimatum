@@ -27,6 +27,11 @@
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
 #include "third_party/blink/renderer/platform/wtf/vector.h"
 
+namespace media {
+enum class VideoCodec;
+enum class AudioCodec;
+}  // namespace media
+
 namespace blink {
 
 class AvailabilityCallbackWrapper;
@@ -41,7 +46,7 @@ class V8RemotePlaybackAvailabilityCallback;
 //   initiate remote playback for a media element.
 // - A remote playback session is implemented as a PresentationConnection.
 class MODULES_EXPORT RemotePlayback final
-    : public EventTargetWithInlineData,
+    : public EventTarget,
       public ExecutionContextLifecycleObserver,
       public ActiveScriptWrappable<RemotePlayback>,
       public WebRemotePlaybackClient,
@@ -120,6 +125,9 @@ class MODULES_EXPORT RemotePlayback final
   bool RemotePlaybackAvailable() const override;
   void SourceChanged(const WebURL&, bool is_source_supported) override;
   WebString GetPresentationId() override;
+  void MediaMetadataChanged(
+      absl::optional<media::VideoCodec> video_codec,
+      absl::optional<media::AudioCodec> audio_codec) override;
 
   // RemotePlaybackController implementation.
   void AddObserver(RemotePlaybackObserver*) override;
@@ -162,6 +170,8 @@ class MODULES_EXPORT RemotePlayback final
   // May be called more than once in a row.
   void StopListeningForAvailability();
 
+  void UpdateAvailabilityUrlsAndStartListening();
+
   // Clears bindings after remote playback stops.
   void CleanupConnections();
 
@@ -172,9 +182,14 @@ class MODULES_EXPORT RemotePlayback final
   Member<ScriptPromiseResolver> prompt_promise_resolver_;
   Vector<KURL> availability_urls_;
   bool is_listening_;
+  bool is_background_availability_monitoring_disabled_for_testing_ = false;
 
   String presentation_id_;
   KURL presentation_url_;
+  WebURL source_;
+  bool is_source_supported_ = false;
+  absl::optional<media::VideoCodec> video_codec_ = absl::nullopt;
+  absl::optional<media::AudioCodec> audio_codec_ = absl::nullopt;
 
   HeapMojoReceiver<mojom::blink::PresentationConnection, RemotePlayback>
       presentation_connection_receiver_;

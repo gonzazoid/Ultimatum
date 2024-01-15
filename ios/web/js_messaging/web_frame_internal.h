@@ -8,7 +8,7 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/time/time.h"
 #include "base/values.h"
 
@@ -24,7 +24,7 @@ class WebFrameInternal {
   // world.
   virtual bool CallJavaScriptFunctionInContentWorld(
       const std::string& name,
-      const std::vector<base::Value>& parameters,
+      const base::Value::List& parameters,
       JavaScriptContentWorld* content_world) = 0;
 
   // Calls the JavaScript function in the same condition as
@@ -37,7 +37,7 @@ class WebFrameInternal {
   // `CanCallJavaScriptFunction` is false.
   virtual bool CallJavaScriptFunctionInContentWorld(
       const std::string& name,
-      const std::vector<base::Value>& parameters,
+      const base::Value::List& parameters,
       JavaScriptContentWorld* content_world,
       base::OnceCallback<void(const base::Value*)> callback,
       base::TimeDelta timeout) = 0;

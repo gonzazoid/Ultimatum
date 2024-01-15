@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 
 #include "base/command_line.h"
+#include "base/strings/strcat.h"
 #include "base/strings/stringprintf.h"
 #include "base/synchronization/lock.h"
 #include "base/test/scoped_feature_list.h"
@@ -24,6 +25,7 @@
 #include "content/public/test/browser_test_utils.h"
 #include "content/public/test/content_browser_test.h"
 #include "content/public/test/content_browser_test_utils.h"
+#include "content/public/test/content_mock_cert_verifier.h"
 #include "content/public/test/test_frame_navigation_observer.h"
 #include "content/public/test/test_navigation_observer.h"
 #include "content/public/test/test_utils.h"
@@ -36,10 +38,12 @@
 #include "net/test/embedded_test_server/default_handlers.h"
 #include "net/test/embedded_test_server/embedded_test_server.h"
 #include "net/test/embedded_test_server/http_request.h"
+#include "services/network/public/cpp/network_switches.h"
 #include "services/network/public/cpp/web_sandbox_flags.h"
 #include "services/network/public/mojom/web_sandbox_flags.mojom-shared.h"
 #include "third_party/blink/public/common/chrome_debug_urls.h"
 #include "third_party/blink/public/common/features.h"
+#include "third_party/blink/public/common/storage_key/storage_key.h"
 #include "third_party/blink/public/mojom/frame/user_activation_update_types.mojom.h"
 #include "url/url_constants.h"
 
@@ -54,8 +58,8 @@ EvalJsResult GetOriginFromRenderer(FrameTreeNode* node) {
 // Expect that frame_name, id and src match the node's values.
 void ExpectAttributesEq(FrameTreeNode* node,
                         const std::string& frame_name,
-                        const std::string& id,
-                        const std::string& src) {
+                        const std::optional<std::string> id,
+                        const std::optional<std::string> src) {
   EXPECT_EQ(frame_name, node->frame_name());
   EXPECT_EQ(id, node->html_id());
   EXPECT_EQ(src, node->html_src());
@@ -113,7 +117,7 @@ IN_PROC_BROWSER_TEST_F(FrameTreeBrowserTest, FrameTreeShape2) {
 
   // Check that the root node is properly created.
   ASSERT_EQ(3UL, root->child_count());
-  ExpectAttributesEq(root, std::string(), std::string(), std::string());
+  ExpectAttributesEq(root, std::string(), std::nullopt, std::nullopt);
 
   ASSERT_EQ(2UL, root->child_at(0)->child_count());
   ExpectAttributesEq(root->child_at(0), "1-1-name", "1-1-id", "1-1.html");
@@ -132,7 +136,7 @@ IN_PROC_BROWSER_TEST_F(FrameTreeBrowserTest, FrameTreeShape2) {
 
   root = wc->GetPrimaryFrameTree().root();
   EXPECT_EQ(0UL, root->child_count());
-  ExpectAttributesEq(root, std::string(), std::string(), std::string());
+  ExpectAttributesEq(root, std::string(), std::nullopt, std::nullopt);
 }
 
 // Frame attributes of iframe elements are correctly tracked in FrameTree.
@@ -145,7 +149,7 @@ IN_PROC_BROWSER_TEST_F(FrameTreeBrowserTest, FrameTreeAttributesUpdate) {
 
   // Check that the root node is properly created.
   ASSERT_EQ(3UL, root->child_count());
-  ExpectAttributesEq(root, std::string(), std::string(), std::string());
+  ExpectAttributesEq(root, std::string(), std::nullopt, std::nullopt);
 
   ASSERT_EQ(2UL, root->child_at(0)->child_count());
   ExpectAttributesEq(root->child_at(0), "1-1-name", "1-1-id", "1-1.html");
@@ -174,7 +178,7 @@ IN_PROC_BROWSER_TEST_F(FrameTreeBrowserTest, FrameNameVSWindowName) {
 
   // Check that the root node is properly created.
   ASSERT_EQ(3UL, root->child_count());
-  EXPECT_EQ(std::string(), root->html_name());
+  EXPECT_EQ(std::nullopt, root->html_name());
   EXPECT_EQ(std::string(), root->frame_name());
 
   ASSERT_EQ(2UL, root->child_at(0)->child_count());
@@ -223,9 +227,9 @@ IN_PROC_BROWSER_TEST_F(FrameTreeBrowserTest, LongAttributesCutDown) {
     iframe.src += 'c'.repeat(1200) + '.html';
   )"));
   // Long attribute is cut down to the maximum length.
-  EXPECT_EQ(1024UL, root->child_at(0)->html_id().size());
-  EXPECT_EQ(1024UL, root->child_at(0)->html_name().size());
-  EXPECT_EQ(1024UL, root->child_at(0)->html_src().size());
+  EXPECT_EQ(1024UL, root->child_at(0)->html_id()->size());
+  EXPECT_EQ(1024UL, root->child_at(0)->html_name()->size());
+  EXPECT_EQ(1024UL, root->child_at(0)->html_src()->size());
 }
 
 // Insert a frame into the frame tree and ensure that the inserted frame's
@@ -239,7 +243,7 @@ IN_PROC_BROWSER_TEST_F(FrameTreeBrowserTest, InsertFrameInTree) {
 
   // Check that the root node is properly created.
   ASSERT_EQ(3UL, root->child_count());
-  ExpectAttributesEq(root, std::string(), std::string(), std::string());
+  ExpectAttributesEq(root, std::string(), std::nullopt, std::nullopt);
 
   ASSERT_EQ(2UL, root->child_at(0)->child_count());
   ExpectAttributesEq(root->child_at(0), "1-1-name", "1-1-id", "1-1.html");
@@ -616,7 +620,8 @@ IN_PROC_BROWSER_TEST_F(FrameTreeBrowserTest, NavigateGrandchildToDataUrl) {
             url::SchemeHostPort(main_url));
 
   // Navigate the grandchild frame again cross-process to foo.com, then
-  // go back in session history. The origin for the data: URL must be preserved.
+  // go back in session history. The frame should commit a new opaque origin,
+  // but it will still have the same precursor origin (the main frame origin).
   {
     TestFrameNavigationObserver observer(target);
     EXPECT_TRUE(ExecJs(target, JsReplace("window.location = $1",
@@ -634,10 +639,12 @@ IN_PROC_BROWSER_TEST_F(FrameTreeBrowserTest, NavigateGrandchildToDataUrl) {
 
   url::Origin target_origin =
       target->current_frame_host()->GetLastCommittedOrigin();
+  EXPECT_NE(target_origin, original_target_origin);
   EXPECT_TRUE(target_origin.opaque());
   EXPECT_EQ(target_origin.GetTupleOrPrecursorTupleIfOpaque(),
+            original_target_origin.GetTupleOrPrecursorTupleIfOpaque());
+  EXPECT_EQ(target_origin.GetTupleOrPrecursorTupleIfOpaque(),
             url::SchemeHostPort(main_url));
-  EXPECT_EQ(target_origin, original_target_origin);
 }
 
 // Ensures that iframe with srcdoc is always put in the same origin as its
@@ -1231,6 +1238,8 @@ IN_PROC_BROWSER_TEST_F(CrossProcessFrameTreeBrowserTest,
   EXPECT_TRUE(blob_origin.opaque());
   EXPECT_EQ(root->current_origin().GetTupleOrPrecursorTupleIfOpaque(),
             blob_origin.GetTupleOrPrecursorTupleIfOpaque());
+  EXPECT_FALSE(
+      child->current_origin().GetTupleOrPrecursorTupleIfOpaque().IsValid());
 
   // Navigate the frame away to any web URL.
   {
@@ -1251,7 +1260,9 @@ IN_PROC_BROWSER_TEST_F(CrossProcessFrameTreeBrowserTest,
   EXPECT_EQ(blob_url, GURL(EvalJs(root, "blob_url;").ExtractString()));
 
   // Now navigate back in session history. It should successfully go back to
-  // the blob: URL.
+  // the blob: URL. The child frame won't be reusing the exact same origin it
+  // used before, but it will commit a new opaque origin which will still have
+  // no precursor information.
   {
     TestFrameNavigationObserver observer(child);
     shell()->web_contents()->GetController().GoBack();
@@ -1259,9 +1270,11 @@ IN_PROC_BROWSER_TEST_F(CrossProcessFrameTreeBrowserTest,
   }
   EXPECT_EQ(blob_url, child->current_frame_host()->GetLastCommittedURL());
   EXPECT_TRUE(child->current_origin().opaque());
-  EXPECT_EQ(blob_origin, child->current_origin());
+  EXPECT_NE(blob_origin, child->current_origin());
   EXPECT_EQ(root->current_origin().GetTupleOrPrecursorTupleIfOpaque(),
             child->current_origin().GetTupleOrPrecursorTupleIfOpaque());
+  EXPECT_FALSE(
+      child->current_origin().GetTupleOrPrecursorTupleIfOpaque().IsValid());
 }
 
 // Test to verify that about:blank iframe, which is a child of a sandboxed
@@ -1517,17 +1530,17 @@ IN_PROC_BROWSER_TEST_F(IsolateIcelandFrameTreeBrowserTest,
             DepictFrameTree(*root));
 }
 
-class FrameTreeAnonymousIframeBrowserTest : public FrameTreeBrowserTest {
+class FrameTreeCredentiallessIframeBrowserTest : public FrameTreeBrowserTest {
  public:
-  FrameTreeAnonymousIframeBrowserTest() = default;
+  FrameTreeCredentiallessIframeBrowserTest() = default;
 
   void SetUpCommandLine(base::CommandLine* command_line) override {
     command_line->AppendSwitch(switches::kEnableBlinkTestFeatures);
   }
 };
 
-// Tests the mojo propagation of the 'anonymous' attribute to the browser.
-IN_PROC_BROWSER_TEST_F(FrameTreeAnonymousIframeBrowserTest,
+// Tests the mojo propagation of the 'credentialless' attribute to the browser.
+IN_PROC_BROWSER_TEST_F(FrameTreeCredentiallessIframeBrowserTest,
                        AttributeIsPropagatedToBrowser) {
   GURL main_url(embedded_test_server()->GetURL("/hello.html"));
   EXPECT_TRUE(NavigateToURL(shell(), main_url));
@@ -1536,44 +1549,269 @@ IN_PROC_BROWSER_TEST_F(FrameTreeAnonymousIframeBrowserTest,
                             ->GetPrimaryFrameTree()
                             .root();
 
-  // Not setting the attribute => the iframe is not anonymous.
+  // Not setting the attribute => the iframe is not credentialless.
   EXPECT_TRUE(ExecJs(root,
                      "var f = document.createElement('iframe');"
                      "document.body.appendChild(f);"));
   EXPECT_EQ(1U, root->child_count());
-  EXPECT_FALSE(root->child_at(0)->anonymous());
+  EXPECT_FALSE(root->child_at(0)->Credentialless());
   EXPECT_EQ(false, EvalJs(root->child_at(0)->current_frame_host(),
-                          "window.anonymouslyFramed"));
+                          "window.credentialless"));
 
-  // Setting the attribute on the iframe element makes the iframe anonymous.
+  // Setting the attribute on the iframe element makes the iframe
+  // credentialless.
   EXPECT_TRUE(ExecJs(root,
                      "var d = document.createElement('div');"
-                     "d.innerHTML = '<iframe anonymous></iframe>';"
+                     "d.innerHTML = '<iframe credentialless></iframe>';"
                      "document.body.appendChild(d);"));
   EXPECT_EQ(2U, root->child_count());
-  EXPECT_TRUE(root->child_at(1)->anonymous());
+  EXPECT_TRUE(root->child_at(1)->Credentialless());
   EXPECT_EQ(true, EvalJs(root->child_at(1)->current_frame_host(),
-                         "window.anonymouslyFramed"));
+                         "window.credentialless"));
 
   // Setting the attribute via javascript works.
   EXPECT_TRUE(ExecJs(root,
                      "var g = document.createElement('iframe');"
-                     "g.anonymous = true;"
+                     "g.credentialless = true;"
                      "document.body.appendChild(g);"));
   EXPECT_EQ(3U, root->child_count());
-  EXPECT_TRUE(root->child_at(2)->anonymous());
+  EXPECT_TRUE(root->child_at(2)->Credentialless());
   EXPECT_EQ(true, EvalJs(root->child_at(2)->current_frame_host(),
-                         "window.anonymouslyFramed"));
+                         "window.credentialless"));
 
-  EXPECT_TRUE(ExecJs(root, "g.anonymous = false;"));
-  EXPECT_FALSE(root->child_at(2)->anonymous());
+  EXPECT_TRUE(ExecJs(root, "g.credentialless = false;"));
+  EXPECT_FALSE(root->child_at(2)->Credentialless());
   EXPECT_EQ(true, EvalJs(root->child_at(2)->current_frame_host(),
-                         "window.anonymouslyFramed"));
+                         "window.credentialless"));
 
-  EXPECT_TRUE(ExecJs(root, "g.anonymous = true;"));
-  EXPECT_TRUE(root->child_at(2)->anonymous());
+  EXPECT_TRUE(ExecJs(root, "g.credentialless = true;"));
+  EXPECT_TRUE(root->child_at(2)->Credentialless());
   EXPECT_EQ(true, EvalJs(root->child_at(2)->current_frame_host(),
-                         "window.anonymouslyFramed"));
+                         "window.credentialless"));
 }
 
+// TODO(crbug.com/1407150): Remove this when deprecation trial is complete.
+class FrameTreeSessionStorageDeprecationTrialBrowserTest
+    : public ContentBrowserTest {
+ public:
+  FrameTreeSessionStorageDeprecationTrialBrowserTest() {
+    feature_list_.InitAndEnableFeature(
+        net::features::kThirdPartyStoragePartitioning);
+  }
+
+ protected:
+  virtual net::EmbeddedTestServer& GetServer() = 0;
+
+  void SetUpCommandLine(base::CommandLine* command_line) override {
+    GetServer().ServeFilesFromSourceDirectory("content/test/data");
+    // EmbeddedTestServer::InitializeAndListen() initializes its `base_url_`
+    // which is required below. This cannot invoke Start() however as that kicks
+    // off the "EmbeddedTestServer IO Thread" which then races with
+    // initialization in ContentBrowserTest::SetUp(), http://crbug.com/674545.
+    ASSERT_TRUE(GetServer().InitializeAndListen());
+
+    // Add a host resolver rule to map all outgoing requests to the test server.
+    // This allows us to use "real" hostnames in URLs, which we can use to
+    // create arbitrary SiteInstances.
+    command_line->AppendSwitchASCII(
+        network::switches::kHostResolverRules,
+        "MAP * " +
+            net::HostPortPair::FromURL(GetServer().base_url()).ToString() +
+            ",EXCLUDE localhost");
+    mock_cert_verifier_.SetUpCommandLine(command_line);
+  }
+
+  void SetUp() override { ContentBrowserTest::SetUp(); }
+
+  void SetUpOnMainThread() override {
+    // Complete the manual Start() after ContentBrowserTest's own
+    // initialization, ref. comment on InitializeAndListen() above.
+    GetServer().StartAcceptingConnections();
+    mock_cert_verifier_.mock_cert_verifier()->set_default_result(net::OK);
+  }
+
+  void SetUpInProcessBrowserTestFixture() override {
+    mock_cert_verifier_.SetUpInProcessBrowserTestFixture();
+  }
+
+  void TearDownInProcessBrowserTestFixture() override {
+    mock_cert_verifier_.TearDownInProcessBrowserTestFixture();
+  }
+
+ private:
+  base::test::ScopedFeatureList feature_list_;
+  content::ContentMockCertVerifier mock_cert_verifier_;
+};
+
+class FrameTreeSessionStorageDeprecationTrialBrowserSecureTest
+    : public FrameTreeSessionStorageDeprecationTrialBrowserTest {
+  net::EmbeddedTestServer& GetServer() override {
+    static net::EmbeddedTestServer https_server(
+        net::EmbeddedTestServer::TYPE_HTTPS);
+    return https_server;
+  }
+};
+
+IN_PROC_BROWSER_TEST_F(FrameTreeSessionStorageDeprecationTrialBrowserSecureTest,
+                       RegisterOriginForUnpartitionedSessionStorageAccess) {
+  const url::Origin origin = url::Origin::Create(GURL("https://example.com"));
+  const blink::StorageKey first_party =
+      blink::StorageKey::CreateFirstParty(origin);
+  const blink::StorageKey third_party = blink::StorageKey::Create(
+      origin, net::SchemefulSite(GURL("https://notexample.com")),
+      blink::mojom::AncestorChainBit::kCrossSite);
+  const url::Origin opaque_origin = url::Origin();
+  const blink::StorageKey opaque_first_party =
+      blink::StorageKey::CreateFirstParty(opaque_origin);
+  const blink::StorageKey opaque_third_party = blink::StorageKey::Create(
+      opaque_origin, net::SchemefulSite(GURL("https://notexample.com")),
+      blink::mojom::AncestorChainBit::kCrossSite);
+  EXPECT_NE(first_party, third_party);
+  EXPECT_NE(opaque_first_party, opaque_third_party);
+  FrameTree& frame_tree = static_cast<WebContentsImpl*>(shell()->web_contents())
+                              ->GetPrimaryFrameTree();
+
+  // Before registering any origins we expect partitioned access for both keys.
+  EXPECT_EQ(third_party, frame_tree.GetSessionStorageKey(third_party));
+  EXPECT_EQ(opaque_third_party,
+            frame_tree.GetSessionStorageKey(opaque_third_party));
+
+  // We then register both origins.
+  frame_tree.RegisterOriginForUnpartitionedSessionStorageAccess(origin);
+  frame_tree.RegisterOriginForUnpartitionedSessionStorageAccess(opaque_origin);
+
+  // After registration the non-opaque key is unpartitioned but the opaque one
+  // is still partitioned.
+  EXPECT_EQ(first_party, frame_tree.GetSessionStorageKey(third_party));
+  EXPECT_EQ(opaque_third_party,
+            frame_tree.GetSessionStorageKey(opaque_third_party));
+}
+
+IN_PROC_BROWSER_TEST_F(FrameTreeSessionStorageDeprecationTrialBrowserSecureTest,
+                       GetSessionStorageKey) {
+  const blink::StorageKey dt_third_party = blink::StorageKey::Create(
+      url::Origin::Create(GURL("https://example.com")),
+      net::SchemefulSite(GURL("https://notexample.com")),
+      blink::mojom::AncestorChainBit::kCrossSite);
+  const blink::StorageKey dt_first_party =
+      blink::StorageKey::CreateFromStringForTesting("https://example.com");
+  const blink::StorageKey random_third_party = blink::StorageKey::Create(
+      url::Origin::Create(GURL("https://otherexample.com")),
+      net::SchemefulSite(GURL("https://notexample.com")),
+      blink::mojom::AncestorChainBit::kCrossSite);
+  EXPECT_NE(dt_third_party, dt_first_party);
+
+  // Load a page without the origin trial token.
+  EXPECT_TRUE(NavigateToURL(shell(), GURL("https://example.com/empty.html")));
+  // We should be able to get a partitioned storage key for example.com.
+  EXPECT_EQ(dt_third_party,
+            static_cast<WebContentsImpl*>(shell()->web_contents())
+                ->GetPrimaryFrameTree()
+                .GetSessionStorageKey(dt_third_party));
+
+  // Load a page with the origin trial token.
+  EXPECT_TRUE(NavigateToURL(shell(), GURL("https://example.com/session_storage/"
+                                          "partition_deprecation_trial.html")));
+  // We shouldn't be able to get a partitioned storage key for example.com.
+  EXPECT_EQ(dt_first_party,
+            static_cast<WebContentsImpl*>(shell()->web_contents())
+                ->GetPrimaryFrameTree()
+                .GetSessionStorageKey(dt_third_party));
+  // Other origins can still get partitioned storage keys.
+  EXPECT_EQ(random_third_party,
+            static_cast<WebContentsImpl*>(shell()->web_contents())
+                ->GetPrimaryFrameTree()
+                .GetSessionStorageKey(random_third_party));
+
+  // Load a page without the token after having loaded a page with the token.
+  EXPECT_TRUE(
+      NavigateToURL(shell(), GURL("https://otherexample.com/empty.html")));
+  // We shouldn't be able to get a partitioned storage key for example.com.
+  EXPECT_EQ(dt_first_party,
+            static_cast<WebContentsImpl*>(shell()->web_contents())
+                ->GetPrimaryFrameTree()
+                .GetSessionStorageKey(dt_third_party));
+  // Other origins can still get partitioned storage keys.
+  EXPECT_EQ(random_third_party,
+            static_cast<WebContentsImpl*>(shell()->web_contents())
+                ->GetPrimaryFrameTree()
+                .GetSessionStorageKey(random_third_party));
+
+  // Load a page without the origin trial token.
+  EXPECT_TRUE(NavigateToURL(shell(), GURL("https://example.com/empty.html")));
+  // We should be able to get a partitioned storage key for example.com.
+  EXPECT_EQ(dt_third_party,
+            static_cast<WebContentsImpl*>(shell()->web_contents())
+                ->GetPrimaryFrameTree()
+                .GetSessionStorageKey(dt_third_party));
+}
+
+class FrameTreeSessionStorageDeprecationTrialBrowserInsecureTest
+    : public FrameTreeSessionStorageDeprecationTrialBrowserTest {
+  net::EmbeddedTestServer& GetServer() override {
+    static net::EmbeddedTestServer https_server_(
+        net::EmbeddedTestServer::TYPE_HTTP);
+    return https_server_;
+  }
+};
+
+IN_PROC_BROWSER_TEST_F(
+    FrameTreeSessionStorageDeprecationTrialBrowserInsecureTest,
+    GetSessionStorageKeyInsecure) {
+  const blink::StorageKey dt_third_party = blink::StorageKey::Create(
+      url::Origin::Create(GURL("http://example.com")),
+      net::SchemefulSite(GURL("http://notexample.com")),
+      blink::mojom::AncestorChainBit::kCrossSite);
+  const blink::StorageKey dt_first_party =
+      blink::StorageKey::CreateFromStringForTesting("http://example.com");
+  const blink::StorageKey random_third_party = blink::StorageKey::Create(
+      url::Origin::Create(GURL("http://otherexample.com")),
+      net::SchemefulSite(GURL("http://notexample.com")),
+      blink::mojom::AncestorChainBit::kCrossSite);
+  EXPECT_NE(dt_third_party, dt_first_party);
+
+  // Load a page without the origin trial token.
+  EXPECT_TRUE(NavigateToURL(shell(), GURL("http://example.com/empty.html")));
+  // We should be able to get a partitioned storage key for example.com.
+  EXPECT_EQ(dt_third_party,
+            static_cast<WebContentsImpl*>(shell()->web_contents())
+                ->GetPrimaryFrameTree()
+                .GetSessionStorageKey(dt_third_party));
+
+  // Load a page with the origin trial token.
+  EXPECT_TRUE(NavigateToURL(shell(), GURL("http://example.com/session_storage/"
+                                          "partition_deprecation_trial.html")));
+  // We shouldn't be able to get a partitioned storage key for example.com.
+  EXPECT_EQ(dt_first_party,
+            static_cast<WebContentsImpl*>(shell()->web_contents())
+                ->GetPrimaryFrameTree()
+                .GetSessionStorageKey(dt_third_party));
+  // Other origins can still get partitioned storage keys.
+  EXPECT_EQ(random_third_party,
+            static_cast<WebContentsImpl*>(shell()->web_contents())
+                ->GetPrimaryFrameTree()
+                .GetSessionStorageKey(random_third_party));
+
+  // Load a page without the token after having loaded a page with the token.
+  EXPECT_TRUE(
+      NavigateToURL(shell(), GURL("http://otherexample.com/empty.html")));
+  // We shouldn't be able to get a partitioned storage key for example.com.
+  EXPECT_EQ(dt_first_party,
+            static_cast<WebContentsImpl*>(shell()->web_contents())
+                ->GetPrimaryFrameTree()
+                .GetSessionStorageKey(dt_third_party));
+  // Other origins can still get partitioned storage keys.
+  EXPECT_EQ(random_third_party,
+            static_cast<WebContentsImpl*>(shell()->web_contents())
+                ->GetPrimaryFrameTree()
+                .GetSessionStorageKey(random_third_party));
+
+  // Load a page without the origin trial token.
+  EXPECT_TRUE(NavigateToURL(shell(), GURL("http://example.com/empty.html")));
+  // We should be able to get a partitioned storage key for example.com.
+  EXPECT_EQ(dt_third_party,
+            static_cast<WebContentsImpl*>(shell()->web_contents())
+                ->GetPrimaryFrameTree()
+                .GetSessionStorageKey(dt_third_party));
+}
 }  // namespace content

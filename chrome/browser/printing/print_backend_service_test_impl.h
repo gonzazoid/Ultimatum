@@ -9,8 +9,10 @@
 #include <string>
 
 #include "base/memory/scoped_refptr.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/values.h"
 #include "build/build_config.h"
+#include "build/chromeos_buildflags.h"
 #include "chrome/services/printing/print_backend_service_impl.h"
 #include "chrome/services/printing/public/mojom/print_backend_service.mojom.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
@@ -20,7 +22,9 @@
 #if BUILDFLAG(IS_WIN)
 #include "base/containers/queue.h"
 #include "base/memory/read_only_shared_memory_region.h"
+#include "base/memory/scoped_refptr.h"
 #include "chrome/services/printing/public/mojom/printer_xml_parser.mojom-forward.h"
+#include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "printing/mojom/print.mojom.h"
 #endif
@@ -35,7 +39,6 @@ class Size;
 namespace printing {
 
 #if BUILDFLAG(IS_WIN)
-class PrinterXmlParserImpl;
 struct RenderPrintedPageData;
 #endif
 
@@ -52,13 +55,34 @@ class PrintBackendServiceTestImpl : public PrintBackendServiceImpl {
       scoped_refptr<TestPrintBackend> backend,
       bool sandboxed);
 
+#if BUILDFLAG(IS_WIN)
+  // Launch the service in-process for testing using the provided backend.
+  // `sandboxed` identifies if this service is potentially subject to
+  // experiencing access-denied errors on some commands. Launches the service on
+  // the thread associated with `service_task_runner`.
+  static std::unique_ptr<PrintBackendServiceTestImpl>
+  LaunchForTestingWithServiceThread(
+      mojo::Remote<mojom::PrintBackendService>& remote,
+      scoped_refptr<TestPrintBackend> backend,
+      bool sandboxed,
+      mojo::PendingRemote<mojom::PrinterXmlParser> xml_parser_remote,
+      scoped_refptr<base::SingleThreadTaskRunner> service_task_runner);
+#endif  // BUILDFLAG(IS_WIN)
+
   PrintBackendServiceTestImpl(const PrintBackendServiceTestImpl&) = delete;
   PrintBackendServiceTestImpl& operator=(const PrintBackendServiceTestImpl&) =
       delete;
   ~PrintBackendServiceTestImpl() override;
 
   // Override which needs special handling for using `test_print_backend_`.
-  void Init(const std::string& locale) override;
+  void Init(
+#if BUILDFLAG(IS_WIN)
+      const std::string& locale,
+      mojo::PendingRemote<mojom::PrinterXmlParser> remote
+#else
+      const std::string& locale
+#endif  // BUILDFLAG(IS_WIN)
+      ) override;
 
   // Overrides to support testing service termination scenarios.
   void EnumeratePrinters(
@@ -66,14 +90,17 @@ class PrintBackendServiceTestImpl : public PrintBackendServiceImpl {
   void GetDefaultPrinterName(
       mojom::PrintBackendService::GetDefaultPrinterNameCallback callback)
       override;
+#if BUILDFLAG(IS_CHROMEOS_ASH)
   void GetPrinterSemanticCapsAndDefaults(
       const std::string& printer_name,
       mojom::PrintBackendService::GetPrinterSemanticCapsAndDefaultsCallback
           callback) override;
+#endif
   void FetchCapabilities(
       const std::string& printer_name,
       mojom::PrintBackendService::FetchCapabilitiesCallback callback) override;
   void UpdatePrintSettings(
+      uint32_t context_id,
       base::Value::Dict job_settings,
       mojom::PrintBackendService::UpdatePrintSettingsCallback callback)
       override;
@@ -89,6 +116,13 @@ class PrintBackendServiceTestImpl : public PrintBackendServiceImpl {
       mojom::PrintBackendService::RenderPrintedPageCallback callback) override;
 #endif  // BUILDFLAG(IS_WIN)
 
+  // Tests which will have a leftover printing context established in the
+  // service can use this to skip the destructor check that all contexts were
+  // cleaned up.
+  void SkipPersistentContextsCheckOnShutdown() {
+    skip_dtor_persistent_contexts_check_ = true;
+  }
+
   // Cause the service to terminate on the next interaction it receives.  Once
   // terminated no further Mojo calls will be possible since there will not be
   // a receiver to handle them.
@@ -101,12 +135,10 @@ class PrintBackendServiceTestImpl : public PrintBackendServiceImpl {
   void set_rendering_delayed_until_page(uint32_t page_number) {
     rendering_delayed_until_page_number_ = page_number;
   }
-
-  mojo::PendingRemote<mojom::PrinterXmlParser> GetPrinterXmlParserRemote();
 #endif
 
  private:
-  // Use LaunchForTesting().
+  // Use LaunchForTesting() or LaunchForTestingWithServiceThread().
   PrintBackendServiceTestImpl(
       mojo::PendingReceiver<mojom::PrintBackendService> receiver,
       scoped_refptr<TestPrintBackend> backend);
@@ -117,9 +149,22 @@ class PrintBackendServiceTestImpl : public PrintBackendServiceImpl {
 
   void TerminateConnection();
 
+#if BUILDFLAG(IS_WIN)
+  // Launches and returns a test Print Backend service run on a service thread.
+  // This runs on the service thread.
+  static std::unique_ptr<PrintBackendServiceTestImpl>
+  CreateServiceOnServiceThread(
+      mojo::PendingReceiver<mojom::PrintBackendService> receiver,
+      scoped_refptr<TestPrintBackend> backend,
+      mojo::PendingRemote<mojom::PrinterXmlParser> xml_parser_remote);
+#endif  // BUILDFLAG(IS_WIN)
+
   // When pretending to be sandboxed, have the possibility of getting access
   // denied errors.
   bool is_sandboxed_ = false;
+
+  // Marker for skipping check for empty persistent contexts at destruction.
+  bool skip_dtor_persistent_contexts_check_ = false;
 
   // Marker to signal service should terminate on next interaction.
   bool terminate_receiver_ = false;
@@ -132,9 +177,6 @@ class PrintBackendServiceTestImpl : public PrintBackendServiceImpl {
 
   // The queue of pages whose rendering processing is being delayed.
   base::queue<std::unique_ptr<RenderPrintedPageData>> delayed_rendering_pages_;
-
-  // Used to parse XPS XML capabilities.
-  std::unique_ptr<PrinterXmlParserImpl> xml_parser_;
 #endif
 
   scoped_refptr<TestPrintBackend> test_print_backend_;

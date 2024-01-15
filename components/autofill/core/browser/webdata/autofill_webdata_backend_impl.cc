@@ -6,25 +6,33 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/check_is_test.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
-#include "base/notreached.h"
+#include "base/metrics/histogram_functions.h"
 #include "base/observer_list.h"
-#include "base/task/single_thread_task_runner.h"
+#include "base/strings/string_number_conversions.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/types/cxx23_to_underlying.h"
+#include "components/autofill/core/browser/data_model/autofill_metadata.h"
 #include "components/autofill/core/browser/data_model/autofill_offer_data.h"
+#include "components/autofill/core/browser/data_model/autofill_wallet_usage_data.h"
 #include "components/autofill/core/browser/data_model/credit_card.h"
 #include "components/autofill/core/browser/data_model/credit_card_cloud_token_data.h"
 #include "components/autofill/core/browser/data_model/iban.h"
 #include "components/autofill/core/browser/geo/autofill_country.h"
 #include "components/autofill/core/browser/payments/payments_customer_data.h"
+#include "components/autofill/core/browser/webdata/addresses/address_autofill_table.h"
+#include "components/autofill/core/browser/webdata/autocomplete/autocomplete_entry.h"
+#include "components/autofill/core/browser/webdata/autocomplete/autocomplete_table.h"
 #include "components/autofill/core/browser/webdata/autofill_change.h"
-#include "components/autofill/core/browser/webdata/autofill_entry.h"
-#include "components/autofill/core/browser/webdata/autofill_table.h"
-#include "components/autofill/core/browser/webdata/autofill_webdata_backend_util.h"
 #include "components/autofill/core/browser/webdata/autofill_webdata_service.h"
 #include "components/autofill/core/browser/webdata/autofill_webdata_service_observer.h"
+#include "components/autofill/core/browser/webdata/payments/payments_autofill_table.h"
+#include "components/autofill/core/common/autofill_clock.h"
 #include "components/autofill/core/common/form_field_data.h"
+#include "components/sync/base/model_type.h"
 #include "components/webdata/common/web_database_backend.h"
 
 using base::Time;
@@ -32,6 +40,89 @@ using base::Time;
 namespace autofill {
 
 namespace {
+
+// Do not modify the order or values of these elements as they are reported
+// as metrics. This is represented as AutofillWebDataBackendImplOperationResult
+// in enums.xml.
+// The ID space is a bit stretched out to enable adding new failure testing
+// inside functions where needed without destroying the order of elements.
+enum class Result {
+  kAddFormElements_Success = 0,
+  kAddFormElements_Failure = 1,
+  kRemoveFormElementsAddedBetween_Success = 10,
+  kRemoveFormElementsAddedBetween_Failure = 11,
+  kRemoveFormValueForElementName_Success = 20,
+  kRemoveFormValueForElementName_Failure = 22,
+  kAddAutofillProfile_Success = 30,
+  kAddAutofillProfile_Failure = 31,
+  kUpdateAutofillProfile_Success = 40,
+  kUpdateAutofillProfile_ReadFailure = 41,
+  kUpdateAutofillProfile_WriteFailure = 42,
+  kRemoveAutofillProfile_Success = 50,
+  kRemoveAutofillProfile_ReadFailure = 51,
+  kRemoveAutofillProfile_WriteFailure = 52,
+  kUpdateAutocompleteEntries_Success = 60,
+  kUpdateAutocompleteEntries_Failure = 61,
+  kAddCreditCard_Success = 70,
+  kAddCreditCard_Failure = 71,
+  kUpdateCreditCard_Success = 80,
+  kUpdateCreditCard_ReadFailure = 81,
+  kUpdateCreditCard_WriteFailure = 82,
+  kRemoveCreditCard_Success = 90,
+  kRemoveCreditCard_ReadFailure = 91,
+  kRemoveCreditCard_WriteFailure = 92,
+  kAddFullServerCreditCard_Success = 100,
+  kAddFullServerCreditCard_Failure = 101,
+  kUnmaskServerCreditCard_Success = 110,
+  kUnmaskServerCreditCard_Failure = 111,
+  kMaskServerCreditCard_Success = 120,
+  kMaskServerCreditCard_Failure = 121,
+  kUpdateServerCardMetadata_Success = 130,
+  kUpdateServerCardMetadata_Failure = 131,
+  kAddIban_Success = 140,
+  kAddIban_Failure = 141,
+  kUpdateIban_Success = 150,
+  kUpdateIban_ReadFailure = 151,
+  kUpdateIban_WriteFailure = 152,
+  kRemoveIban_Success = 160,
+  kRemoveIban_ReadFailure = 161,
+  kRemoveIban_WriteFailure = 162,
+  // Server addresses metadata updates (170, 171) are deprecated.
+  kAddUpiId_Success = 180,
+  kAddUpiId_Failure = 181,
+  kClearAllServerData_Success = 190,
+  kClearAllServerData_Failure = 191,
+  kClearAllLocalData_Success = 200,
+  kClearAllLocalData_Failure = 201,
+  kRemoveAutofillDataModifiedBetween_Success = 210,
+  kRemoveAutofillDataModifiedBetween_Failure = 211,
+  kRemoveOriginURLsModifiedBetween_Success = 220,
+  kRemoveOriginURLsModifiedBetween_Failure = 221,
+  kAddServerCvc_Success = 230,
+  kAddServerCvc_Failure = 231,
+  kUpdateServerCvc_Success = 240,
+  kUpdateServerCvc_Failure = 241,
+  kRemoveServerCvc_Success = 250,
+  kRemoveServerCvc_Failure = 251,
+  kClearServerCvcs_Success = 260,
+  kClearServerCvcs_Failure = 261,
+  kUpdateCreditCardCvc_Success = 270,
+  kUpdateCreditCardCvc_Failure = 271,
+  kClearLocalCvcs_Success = 272,
+  kClearLocalCvcs_Failure = 273,
+  kUpdateServerIbanMetadata_Success = 274,
+  kUpdateServerIbanMetadata_Failure = 275,
+  kMaxValue = kUpdateServerIbanMetadata_Failure,
+};
+
+// Reports the success or failure of various operations on the database via UMA.
+//
+// Unit tests live in web_data_service_unittest.cc.
+void ReportResult(Result result) {
+  base::UmaHistogramEnumeration(
+      "WebDatabase.AutofillWebDataBackendImpl.OperationResult", result);
+}
+
 WebDatabase::State DoNothingAndCommit(WebDatabase* db) {
   return WebDatabase::COMMIT_NEEDED;
 }
@@ -39,20 +130,16 @@ WebDatabase::State DoNothingAndCommit(WebDatabase* db) {
 
 AutofillWebDataBackendImpl::AutofillWebDataBackendImpl(
     scoped_refptr<WebDatabaseBackend> web_database_backend,
-    scoped_refptr<base::SingleThreadTaskRunner> ui_task_runner,
-    scoped_refptr<base::SingleThreadTaskRunner> db_task_runner,
-    const base::RepeatingClosure& on_changed_callback,
-    const base::RepeatingClosure& on_address_conversion_completed_callback,
+    scoped_refptr<base::SequencedTaskRunner> ui_task_runner,
+    scoped_refptr<base::SequencedTaskRunner> db_task_runner,
     const base::RepeatingCallback<void(syncer::ModelType)>&
-        on_sync_started_callback)
+        on_autofill_changed_by_sync_callback)
     : base::RefCountedDeleteOnSequence<AutofillWebDataBackendImpl>(
           std::move(db_task_runner)),
       ui_task_runner_(ui_task_runner),
       web_database_backend_(web_database_backend),
-      on_changed_callback_(on_changed_callback),
-      on_address_conversion_completed_callback_(
-          on_address_conversion_completed_callback),
-      on_sync_started_callback_(on_sync_started_callback) {}
+      on_autofill_changed_by_sync_callback_(
+          on_autofill_changed_by_sync_callback) {}
 
 void AutofillWebDataBackendImpl::AddObserver(
     AutofillWebDataServiceObserverOnDBSequence* observer) {
@@ -71,7 +158,11 @@ AutofillWebDataBackendImpl::~AutofillWebDataBackendImpl() {
 }
 
 void AutofillWebDataBackendImpl::SetAutofillProfileChangedCallback(
-    base::RepeatingCallback<void(const AutofillProfileDeepChange&)> change_cb) {
+    base::RepeatingCallback<void(const AutofillProfileChange&)> change_cb) {
+  // The callback must be set only once, but it can be reset in tests.
+  if (!on_autofill_profile_changed_cb_.is_null()) {
+    CHECK_IS_TEST();
+  }
   on_autofill_profile_changed_cb_ = std::move(change_cb);
 }
 
@@ -87,15 +178,15 @@ void AutofillWebDataBackendImpl::CommitChanges() {
 std::unique_ptr<WDTypedResult>
 AutofillWebDataBackendImpl::RemoveExpiredAutocompleteEntries(WebDatabase* db) {
   DCHECK(owning_task_runner()->RunsTasksInCurrentSequence());
-  AutofillChangeList changes;
-
-  if (AutofillTable::FromWebDatabase(db)->RemoveExpiredFormElements(&changes)) {
+  AutocompleteChangeList changes;
+  if (AutocompleteTable::FromWebDatabase(db)->RemoveExpiredFormElements(
+          changes)) {
     if (!changes.empty()) {
       // Post the notifications including the list of affected keys.
       // This is sent here so that work resulting from this notification
       // will be done on the DB sequence, and not the UI sequence.
       for (auto& db_observer : db_observer_list_)
-        db_observer.AutofillEntriesChanged(changes);
+        db_observer.AutocompleteEntriesChanged(changes);
     }
   }
 
@@ -120,31 +211,24 @@ void AutofillWebDataBackendImpl::NotifyOfCreditCardChanged(
     db_observer.CreditCardChanged(change);
 }
 
-void AutofillWebDataBackendImpl::NotifyOfMultipleAutofillChanges() {
+void AutofillWebDataBackendImpl::NotifyOfIbanChanged(const IbanChange& change) {
   DCHECK(owning_task_runner()->RunsTasksInCurrentSequence());
 
-  // UI sequence notification.
-  ui_task_runner_->PostTask(FROM_HERE, on_changed_callback_);
+  // DB sequence notification.
+  for (AutofillWebDataServiceObserverOnDBSequence& db_observer :
+       db_observer_list_) {
+    db_observer.IbanChanged(change);
+  }
 }
 
-void AutofillWebDataBackendImpl::NotifyOfAddressConversionCompleted() {
-  DCHECK(owning_task_runner()->RunsTasksInCurrentSequence());
-
-  // UI sequence notification.
-  ui_task_runner_->PostTask(FROM_HERE,
-                            on_address_conversion_completed_callback_);
-}
-
-void AutofillWebDataBackendImpl::NotifyThatSyncHasStarted(
+void AutofillWebDataBackendImpl::NotifyOnAutofillChangedBySync(
     syncer::ModelType model_type) {
   DCHECK(owning_task_runner()->RunsTasksInCurrentSequence());
 
-  if (on_sync_started_callback_.is_null())
-    return;
-
   // UI sequence notification.
   ui_task_runner_->PostTask(
-      FROM_HERE, base::BindOnce(on_sync_started_callback_, model_type));
+      FROM_HERE,
+      base::BindOnce(on_autofill_changed_by_sync_callback_, model_type));
 }
 
 base::SupportsUserData* AutofillWebDataBackendImpl::GetDBUserData() {
@@ -162,10 +246,10 @@ WebDatabase::State AutofillWebDataBackendImpl::AddFormElements(
     const std::vector<FormFieldData>& fields,
     WebDatabase* db) {
   DCHECK(owning_task_runner()->RunsTasksInCurrentSequence());
-  AutofillChangeList changes;
-  if (!AutofillTable::FromWebDatabase(db)->AddFormFieldValues(fields,
-                                                              &changes)) {
-    NOTREACHED();
+  AutocompleteChangeList changes;
+  if (!AutocompleteTable::FromWebDatabase(db)->AddFormFieldValues(fields,
+                                                                  &changes)) {
+    ReportResult(Result::kAddFormElements_Failure);
     return WebDatabase::COMMIT_NOT_NEEDED;
   }
 
@@ -173,8 +257,9 @@ WebDatabase::State AutofillWebDataBackendImpl::AddFormElements(
   // This is sent here so that work resulting from this notification will be
   // done on the DB sequence, and not the UI sequence.
   for (auto& db_observer : db_observer_list_)
-    db_observer.AutofillEntriesChanged(changes);
+    db_observer.AutocompleteEntriesChanged(changes);
 
+  ReportResult(Result::kAddFormElements_Success);
   return WebDatabase::COMMIT_NEEDED;
 }
 
@@ -185,10 +270,10 @@ AutofillWebDataBackendImpl::GetFormValuesForElementName(
     int limit,
     WebDatabase* db) {
   DCHECK(owning_task_runner()->RunsTasksInCurrentSequence());
-  std::vector<AutofillEntry> entries;
-  AutofillTable::FromWebDatabase(db)->GetFormValuesForElementName(
-      name, prefix, &entries, limit);
-  return std::make_unique<WDResult<std::vector<AutofillEntry>>>(
+  std::vector<AutocompleteEntry> entries;
+  AutocompleteTable::FromWebDatabase(db)->GetFormValuesForElementName(
+      name, prefix, limit, entries);
+  return std::make_unique<WDResult<std::vector<AutocompleteEntry>>>(
       AUTOFILL_VALUE_RESULT, entries);
 }
 
@@ -197,19 +282,20 @@ WebDatabase::State AutofillWebDataBackendImpl::RemoveFormElementsAddedBetween(
     const base::Time& delete_end,
     WebDatabase* db) {
   DCHECK(owning_task_runner()->RunsTasksInCurrentSequence());
-  AutofillChangeList changes;
-
-  if (AutofillTable::FromWebDatabase(db)->RemoveFormElementsAddedBetween(
-          delete_begin, delete_end, &changes)) {
+  AutocompleteChangeList changes;
+  if (AutocompleteTable::FromWebDatabase(db)->RemoveFormElementsAddedBetween(
+          delete_begin, delete_end, changes)) {
     if (!changes.empty()) {
       // Post the notifications including the list of affected keys.
       // This is sent here so that work resulting from this notification
       // will be done on the DB sequence, and not the UI sequence.
       for (auto& db_observer : db_observer_list_)
-        db_observer.AutofillEntriesChanged(changes);
+        db_observer.AutocompleteEntriesChanged(changes);
     }
+    ReportResult(Result::kRemoveFormElementsAddedBetween_Success);
     return WebDatabase::COMMIT_NEEDED;
   }
+  ReportResult(Result::kRemoveFormElementsAddedBetween_Failure);
   return WebDatabase::COMMIT_NOT_NEEDED;
 }
 
@@ -219,17 +305,19 @@ WebDatabase::State AutofillWebDataBackendImpl::RemoveFormValueForElementName(
     WebDatabase* db) {
   DCHECK(owning_task_runner()->RunsTasksInCurrentSequence());
 
-  if (AutofillTable::FromWebDatabase(db)->RemoveFormElement(name, value)) {
-    AutofillChangeList changes;
-    changes.push_back(
-        AutofillChange(AutofillChange::REMOVE, AutofillKey(name, value)));
+  if (AutocompleteTable::FromWebDatabase(db)->RemoveFormElement(name, value)) {
+    AutocompleteChangeList changes;
+    changes.push_back(AutocompleteChange(AutocompleteChange::REMOVE,
+                                         AutocompleteKey(name, value)));
 
     // Post the notifications including the list of affected keys.
     for (auto& db_observer : db_observer_list_)
-      db_observer.AutofillEntriesChanged(changes);
+      db_observer.AutocompleteEntriesChanged(changes);
 
+    ReportResult(Result::kRemoveFormValueForElementName_Success);
     return WebDatabase::COMMIT_NEEDED;
   }
+  ReportResult(Result::kRemoveFormValueForElementName_Failure);
   return WebDatabase::COMMIT_NOT_NEEDED;
 }
 
@@ -237,24 +325,29 @@ WebDatabase::State AutofillWebDataBackendImpl::AddAutofillProfile(
     const AutofillProfile& profile,
     WebDatabase* db) {
   DCHECK(owning_task_runner()->RunsTasksInCurrentSequence());
-  if (!AutofillTable::FromWebDatabase(db)->AddAutofillProfile(profile)) {
-    NOTREACHED();
+  AddressAutofillTable* table = AddressAutofillTable::FromWebDatabase(db);
+  if (!table->AddAutofillProfile(profile)) {
+    ReportResult(Result::kAddAutofillProfile_Failure);
     return WebDatabase::COMMIT_NOT_NEEDED;
   }
 
   // Send GUID-based notification.
+  // The `db_profile` is not guaranteed to be equivalent to `profile`, since the
+  // database might perform operations like `FinalizeAfterImport()`. Notify
+  // observers with `db_profile`.
+  AutofillProfile db_profile =
+      *table->GetAutofillProfile(profile.guid(), profile.source());
   AutofillProfileChange change(AutofillProfileChange::ADD, profile.guid(),
-                               &profile);
+                               std::move(db_profile));
   for (auto& db_observer : db_observer_list_)
     db_observer.AutofillProfileChanged(change);
 
   if (!on_autofill_profile_changed_cb_.is_null()) {
     ui_task_runner_->PostTask(
-        FROM_HERE, base::BindOnce(on_autofill_profile_changed_cb_,
-                                  AutofillProfileDeepChange(
-                                      AutofillProfileChange::ADD, profile)));
+        FROM_HERE, base::BindOnce(on_autofill_profile_changed_cb_, change));
   }
 
+  ReportResult(Result::kAddAutofillProfile_Success);
   return WebDatabase::COMMIT_NEEDED;
 }
 
@@ -262,33 +355,38 @@ WebDatabase::State AutofillWebDataBackendImpl::UpdateAutofillProfile(
     const AutofillProfile& profile,
     WebDatabase* db) {
   DCHECK(owning_task_runner()->RunsTasksInCurrentSequence());
+  AddressAutofillTable* table = AddressAutofillTable::FromWebDatabase(db);
   // Only perform the update if the profile exists.  It is currently
   // valid to try to update a missing profile.  We simply drop the write and
   // the caller will detect this on the next refresh.
   std::unique_ptr<AutofillProfile> original_profile =
-      AutofillTable::FromWebDatabase(db)->GetAutofillProfile(profile.guid(),
-                                                             profile.source());
+      table->GetAutofillProfile(profile.guid(), profile.source());
   if (!original_profile) {
+    ReportResult(Result::kUpdateAutofillProfile_ReadFailure);
     return WebDatabase::COMMIT_NOT_NEEDED;
   }
-  if (!AutofillTable::FromWebDatabase(db)->UpdateAutofillProfile(profile)) {
-    NOTREACHED();
-    return WebDatabase::COMMIT_NEEDED;
+  if (!table->UpdateAutofillProfile(profile)) {
+    ReportResult(Result::kUpdateAutofillProfile_WriteFailure);
+    return WebDatabase::COMMIT_NOT_NEEDED;
   }
 
   // Send GUID-based notification.
+  // The `db_profile` is not guaranteed to be equivalent to `profile`, since the
+  // database might perform operations like `FinalizeAfterImport()`. Notify
+  // observers with `db_profile`.
+  AutofillProfile db_profile =
+      *table->GetAutofillProfile(profile.guid(), profile.source());
   AutofillProfileChange change(AutofillProfileChange::UPDATE, profile.guid(),
-                               &profile);
+                               std::move(db_profile));
   for (auto& db_observer : db_observer_list_)
     db_observer.AutofillProfileChanged(change);
 
   if (!on_autofill_profile_changed_cb_.is_null()) {
     ui_task_runner_->PostTask(
-        FROM_HERE, base::BindOnce(on_autofill_profile_changed_cb_,
-                                  AutofillProfileDeepChange(
-                                      AutofillProfileChange::UPDATE, profile)));
+        FROM_HERE, base::BindOnce(on_autofill_profile_changed_cb_, change));
   }
 
+  ReportResult(Result::kUpdateAutofillProfile_Success);
   return WebDatabase::COMMIT_NEEDED;
 }
 
@@ -298,33 +396,32 @@ WebDatabase::State AutofillWebDataBackendImpl::RemoveAutofillProfile(
     WebDatabase* db) {
   DCHECK(owning_task_runner()->RunsTasksInCurrentSequence());
   std::unique_ptr<AutofillProfile> profile =
-      AutofillTable::FromWebDatabase(db)->GetAutofillProfile(guid,
-                                                             profile_source);
+      AddressAutofillTable::FromWebDatabase(db)->GetAutofillProfile(
+          guid, profile_source);
   if (!profile) {
-    NOTREACHED();
+    ReportResult(Result::kRemoveAutofillProfile_ReadFailure);
     return WebDatabase::COMMIT_NOT_NEEDED;
   }
 
-  if (!AutofillTable::FromWebDatabase(db)->RemoveAutofillProfile(
+  if (!AddressAutofillTable::FromWebDatabase(db)->RemoveAutofillProfile(
           guid, profile_source)) {
-    NOTREACHED();
+    ReportResult(Result::kRemoveAutofillProfile_WriteFailure);
     return WebDatabase::COMMIT_NOT_NEEDED;
   }
 
   // Send GUID-based notification.
-  AutofillProfileChange change(AutofillProfileChange::REMOVE, guid,
-                               profile.get());
+  // TODO(crbug.com/1420547): The change event for removal operations shouldn't
+  // need to include the deleted profile. The GUID should suffice.
+  AutofillProfileChange change(AutofillProfileChange::REMOVE, guid, *profile);
   for (auto& db_observer : db_observer_list_)
     db_observer.AutofillProfileChanged(change);
 
   if (!on_autofill_profile_changed_cb_.is_null()) {
     ui_task_runner_->PostTask(
-        FROM_HERE,
-        base::BindOnce(on_autofill_profile_changed_cb_,
-                       AutofillProfileDeepChange(AutofillProfileChange::REMOVE,
-                                                 *profile.get())));
+        FROM_HERE, base::BindOnce(on_autofill_profile_changed_cb_, change));
   }
 
+  ReportResult(Result::kRemoveAutofillProfile_Success);
   return WebDatabase::COMMIT_NEEDED;
 }
 
@@ -333,31 +430,11 @@ std::unique_ptr<WDTypedResult> AutofillWebDataBackendImpl::GetAutofillProfiles(
     WebDatabase* db) {
   DCHECK(owning_task_runner()->RunsTasksInCurrentSequence());
   std::vector<std::unique_ptr<AutofillProfile>> profiles;
-  AutofillTable::FromWebDatabase(db)->GetAutofillProfiles(&profiles,
-                                                          profile_source);
-  return std::unique_ptr<WDTypedResult>(
-      new WDResult<std::vector<std::unique_ptr<AutofillProfile>>>(
-          AUTOFILL_PROFILES_RESULT, std::move(profiles)));
-}
-
-std::unique_ptr<WDTypedResult> AutofillWebDataBackendImpl::GetServerProfiles(
-    WebDatabase* db) {
-  DCHECK(owning_task_runner()->RunsTasksInCurrentSequence());
-  std::vector<std::unique_ptr<AutofillProfile>> profiles;
-  AutofillTable::FromWebDatabase(db)->GetServerProfiles(&profiles);
-  return std::unique_ptr<WDTypedResult>(
-      new WDResult<std::vector<std::unique_ptr<AutofillProfile>>>(
-          AUTOFILL_PROFILES_RESULT, std::move(profiles)));
-}
-
-WebDatabase::State
-AutofillWebDataBackendImpl::ConvertWalletAddressesAndUpdateWalletCards(
-    const std::string& app_locale,
-    const std::string& primary_account_email,
-    WebDatabase* db) {
-  DCHECK(owning_task_runner()->RunsTasksInCurrentSequence());
-  return util::ConvertWalletAddressesAndUpdateWalletCards(
-      app_locale, primary_account_email, this, db);
+  AddressAutofillTable::FromWebDatabase(db)->GetAutofillProfiles(profile_source,
+                                                                 &profiles);
+  return std::make_unique<
+      WDResult<std::vector<std::unique_ptr<AutofillProfile>>>>(
+      AUTOFILL_PROFILES_RESULT, std::move(profiles));
 }
 
 std::unique_ptr<WDTypedResult>
@@ -367,20 +444,22 @@ AutofillWebDataBackendImpl::GetCountOfValuesContainedBetween(
     WebDatabase* db) {
   DCHECK(owning_task_runner()->RunsTasksInCurrentSequence());
   int value =
-      AutofillTable::FromWebDatabase(db)->GetCountOfValuesContainedBetween(
+      AutocompleteTable::FromWebDatabase(db)->GetCountOfValuesContainedBetween(
           begin, end);
-  return std::unique_ptr<WDTypedResult>(
-      new WDResult<int>(AUTOFILL_VALUE_RESULT, value));
+  return std::make_unique<WDResult<int>>(AUTOFILL_VALUE_RESULT, value);
 }
 
-WebDatabase::State AutofillWebDataBackendImpl::UpdateAutofillEntries(
-    const std::vector<AutofillEntry>& autofill_entries,
+WebDatabase::State AutofillWebDataBackendImpl::UpdateAutocompleteEntries(
+    const std::vector<AutocompleteEntry>& autocomplete_entries,
     WebDatabase* db) {
   DCHECK(owning_task_runner()->RunsTasksInCurrentSequence());
-  if (!AutofillTable::FromWebDatabase(db)->UpdateAutofillEntries(
-          autofill_entries))
+  if (!AutocompleteTable::FromWebDatabase(db)->UpdateAutocompleteEntries(
+          autocomplete_entries)) {
+    ReportResult(Result::kUpdateAutocompleteEntries_Failure);
     return WebDatabase::COMMIT_NOT_NEEDED;
+  }
 
+  ReportResult(Result::kUpdateAutocompleteEntries_Success);
   return WebDatabase::COMMIT_NEEDED;
 }
 
@@ -388,15 +467,16 @@ WebDatabase::State AutofillWebDataBackendImpl::AddCreditCard(
     const CreditCard& credit_card,
     WebDatabase* db) {
   DCHECK(owning_task_runner()->RunsTasksInCurrentSequence());
-  if (!AutofillTable::FromWebDatabase(db)->AddCreditCard(credit_card)) {
-    NOTREACHED();
+  if (!PaymentsAutofillTable::FromWebDatabase(db)->AddCreditCard(credit_card)) {
+    ReportResult(Result::kAddCreditCard_Failure);
     return WebDatabase::COMMIT_NOT_NEEDED;
   }
 
   for (auto& db_observer : db_observer_list_) {
     db_observer.CreditCardChanged(CreditCardChange(
-        CreditCardChange::ADD, credit_card.guid(), &credit_card));
+        CreditCardChange::ADD, credit_card.guid(), credit_card));
   }
+  ReportResult(Result::kAddCreditCard_Success);
   return WebDatabase::COMMIT_NEEDED;
 }
 
@@ -407,20 +487,38 @@ WebDatabase::State AutofillWebDataBackendImpl::UpdateCreditCard(
   // It is currently valid to try to update a missing profile.  We simply drop
   // the write and the caller will detect this on the next refresh.
   std::unique_ptr<CreditCard> original_credit_card =
-      AutofillTable::FromWebDatabase(db)->GetCreditCard(credit_card.guid());
-  if (!original_credit_card)
+      PaymentsAutofillTable::FromWebDatabase(db)->GetCreditCard(
+          credit_card.guid());
+  if (!original_credit_card) {
+    ReportResult(Result::kUpdateCreditCard_ReadFailure);
     return WebDatabase::COMMIT_NOT_NEEDED;
+  }
 
-  if (!AutofillTable::FromWebDatabase(db)->UpdateCreditCard(credit_card)) {
-    NOTREACHED();
+  if (!PaymentsAutofillTable::FromWebDatabase(db)->UpdateCreditCard(
+          credit_card)) {
+    ReportResult(Result::kUpdateCreditCard_WriteFailure);
     return WebDatabase::COMMIT_NOT_NEEDED;
   }
 
   for (auto& db_observer : db_observer_list_) {
     db_observer.CreditCardChanged(CreditCardChange(
-        CreditCardChange::UPDATE, credit_card.guid(), &credit_card));
+        CreditCardChange::UPDATE, credit_card.guid(), credit_card));
   }
+  ReportResult(Result::kUpdateCreditCard_Success);
   return WebDatabase::COMMIT_NEEDED;
+}
+
+WebDatabase::State AutofillWebDataBackendImpl::UpdateLocalCvc(
+    const std::string& guid,
+    const std::u16string& cvc,
+    WebDatabase* db) {
+  CHECK(owning_task_runner()->RunsTasksInCurrentSequence());
+  if (PaymentsAutofillTable::FromWebDatabase(db)->UpdateLocalCvc(guid, cvc)) {
+    ReportResult(Result::kUpdateCreditCardCvc_Success);
+    return WebDatabase::COMMIT_NEEDED;
+  }
+  ReportResult(Result::kUpdateCreditCardCvc_Failure);
+  return WebDatabase::COMMIT_NOT_NEEDED;
 }
 
 WebDatabase::State AutofillWebDataBackendImpl::RemoveCreditCard(
@@ -428,21 +526,22 @@ WebDatabase::State AutofillWebDataBackendImpl::RemoveCreditCard(
     WebDatabase* db) {
   DCHECK(owning_task_runner()->RunsTasksInCurrentSequence());
   std::unique_ptr<CreditCard> card =
-      AutofillTable::FromWebDatabase(db)->GetCreditCard(guid);
+      PaymentsAutofillTable::FromWebDatabase(db)->GetCreditCard(guid);
   if (!card) {
-    NOTREACHED();
+    ReportResult(Result::kRemoveCreditCard_ReadFailure);
     return WebDatabase::COMMIT_NOT_NEEDED;
   }
 
-  if (!AutofillTable::FromWebDatabase(db)->RemoveCreditCard(guid)) {
-    NOTREACHED();
+  if (!PaymentsAutofillTable::FromWebDatabase(db)->RemoveCreditCard(guid)) {
+    ReportResult(Result::kRemoveCreditCard_WriteFailure);
     return WebDatabase::COMMIT_NOT_NEEDED;
   }
 
   for (auto& db_observer : db_observer_list_) {
     db_observer.CreditCardChanged(
-        CreditCardChange(CreditCardChange::REMOVE, guid, card.get()));
+        CreditCardChange(CreditCardChange::REMOVE, guid, *card));
   }
+  ReportResult(Result::kRemoveCreditCard_Success);
   return WebDatabase::COMMIT_NEEDED;
 }
 
@@ -450,16 +549,17 @@ WebDatabase::State AutofillWebDataBackendImpl::AddFullServerCreditCard(
     const CreditCard& credit_card,
     WebDatabase* db) {
   DCHECK(owning_task_runner()->RunsTasksInCurrentSequence());
-  if (!AutofillTable::FromWebDatabase(db)->AddFullServerCreditCard(
+  if (!PaymentsAutofillTable::FromWebDatabase(db)->AddFullServerCreditCard(
           credit_card)) {
-    NOTREACHED();
+    ReportResult(Result::kAddFullServerCreditCard_Failure);
     return WebDatabase::COMMIT_NOT_NEEDED;
   }
 
   for (auto& db_observer : db_observer_list_) {
     db_observer.CreditCardChanged(CreditCardChange(
-        CreditCardChange::ADD, credit_card.guid(), &credit_card));
+        CreditCardChange::ADD, credit_card.guid(), credit_card));
   }
+  ReportResult(Result::kAddFullServerCreditCard_Success);
   return WebDatabase::COMMIT_NEEDED;
 }
 
@@ -467,20 +567,19 @@ std::unique_ptr<WDTypedResult> AutofillWebDataBackendImpl::GetCreditCards(
     WebDatabase* db) {
   DCHECK(owning_task_runner()->RunsTasksInCurrentSequence());
   std::vector<std::unique_ptr<CreditCard>> credit_cards;
-  AutofillTable::FromWebDatabase(db)->GetCreditCards(&credit_cards);
-  return std::unique_ptr<WDTypedResult>(
-      new WDResult<std::vector<std::unique_ptr<CreditCard>>>(
-          AUTOFILL_CREDITCARDS_RESULT, std::move(credit_cards)));
+  PaymentsAutofillTable::FromWebDatabase(db)->GetCreditCards(&credit_cards);
+  return std::make_unique<WDResult<std::vector<std::unique_ptr<CreditCard>>>>(
+      AUTOFILL_CREDITCARDS_RESULT, std::move(credit_cards));
 }
 
 std::unique_ptr<WDTypedResult> AutofillWebDataBackendImpl::GetServerCreditCards(
     WebDatabase* db) {
   DCHECK(owning_task_runner()->RunsTasksInCurrentSequence());
   std::vector<std::unique_ptr<CreditCard>> credit_cards;
-  AutofillTable::FromWebDatabase(db)->GetServerCreditCards(&credit_cards);
-  return std::unique_ptr<WDTypedResult>(
-      new WDResult<std::vector<std::unique_ptr<CreditCard>>>(
-          AUTOFILL_CREDITCARDS_RESULT, std::move(credit_cards)));
+  PaymentsAutofillTable::FromWebDatabase(db)->GetServerCreditCards(
+      credit_cards);
+  return std::make_unique<WDResult<std::vector<std::unique_ptr<CreditCard>>>>(
+      AUTOFILL_CREDITCARDS_RESULT, std::move(credit_cards));
 }
 
 WebDatabase::State AutofillWebDataBackendImpl::UnmaskServerCreditCard(
@@ -488,9 +587,12 @@ WebDatabase::State AutofillWebDataBackendImpl::UnmaskServerCreditCard(
     const std::u16string& full_number,
     WebDatabase* db) {
   DCHECK(owning_task_runner()->RunsTasksInCurrentSequence());
-  if (AutofillTable::FromWebDatabase(db)->UnmaskServerCreditCard(card,
-                                                                 full_number))
+  if (PaymentsAutofillTable::FromWebDatabase(db)->UnmaskServerCreditCard(
+          card, full_number)) {
+    ReportResult(Result::kUnmaskServerCreditCard_Success);
     return WebDatabase::COMMIT_NEEDED;
+  }
+  ReportResult(Result::kUnmaskServerCreditCard_Failure);
   return WebDatabase::COMMIT_NOT_NEEDED;
 }
 
@@ -498,8 +600,11 @@ WebDatabase::State AutofillWebDataBackendImpl::MaskServerCreditCard(
     const std::string& id,
     WebDatabase* db) {
   DCHECK(owning_task_runner()->RunsTasksInCurrentSequence());
-  if (AutofillTable::FromWebDatabase(db)->MaskServerCreditCard(id))
+  if (PaymentsAutofillTable::FromWebDatabase(db)->MaskServerCreditCard(id)) {
+    ReportResult(Result::kMaskServerCreditCard_Success);
     return WebDatabase::COMMIT_NEEDED;
+  }
+  ReportResult(Result::kMaskServerCreditCard_Failure);
   return WebDatabase::COMMIT_NOT_NEEDED;
 }
 
@@ -507,128 +612,226 @@ WebDatabase::State AutofillWebDataBackendImpl::UpdateServerCardMetadata(
     const CreditCard& card,
     WebDatabase* db) {
   DCHECK(owning_task_runner()->RunsTasksInCurrentSequence());
-  DCHECK_NE(CreditCard::LOCAL_CARD, card.record_type());
-  if (!AutofillTable::FromWebDatabase(db)->UpdateServerCardMetadata(card))
+  DCHECK_NE(CreditCard::RecordType::kLocalCard, card.record_type());
+  if (!PaymentsAutofillTable::FromWebDatabase(db)->UpdateServerCardMetadata(
+          card)) {
+    ReportResult(Result::kUpdateServerCardMetadata_Failure);
     return WebDatabase::COMMIT_NOT_NEEDED;
+  }
 
   for (auto& db_observer : db_observer_list_) {
     db_observer.CreditCardChanged(
-        CreditCardChange(CreditCardChange::UPDATE, card.server_id(), &card));
+        CreditCardChange(CreditCardChange::UPDATE, card.server_id(), card));
   }
 
+  ReportResult(Result::kUpdateServerCardMetadata_Success);
   return WebDatabase::COMMIT_NEEDED;
 }
 
-std::unique_ptr<WDTypedResult> AutofillWebDataBackendImpl::GetIBANs(
+std::unique_ptr<WDTypedResult> AutofillWebDataBackendImpl::GetLocalIbans(
     WebDatabase* db) {
   DCHECK(owning_task_runner()->RunsTasksInCurrentSequence());
-  std::vector<std::unique_ptr<IBAN>> ibans;
-  AutofillTable::FromWebDatabase(db)->GetIBANs(&ibans);
+  std::vector<std::unique_ptr<Iban>> ibans;
+  PaymentsAutofillTable::FromWebDatabase(db)->GetLocalIbans(&ibans);
 
-  return std::make_unique<WDResult<std::vector<std::unique_ptr<IBAN>>>>(
+  return std::make_unique<WDResult<std::vector<std::unique_ptr<Iban>>>>(
       AUTOFILL_IBANS_RESULT, std::move(ibans));
 }
 
-WebDatabase::State AutofillWebDataBackendImpl::AddIBAN(const IBAN& iban,
-                                                       WebDatabase* db) {
+std::unique_ptr<WDTypedResult> AutofillWebDataBackendImpl::GetServerIbans(
+    WebDatabase* db) {
   DCHECK(owning_task_runner()->RunsTasksInCurrentSequence());
-  if (!AutofillTable::FromWebDatabase(db)->AddIBAN(iban)) {
-    NOTREACHED();
+  std::vector<std::unique_ptr<Iban>> ibans;
+  PaymentsAutofillTable::FromWebDatabase(db)->GetServerIbans(ibans);
+  return std::make_unique<WDResult<std::vector<std::unique_ptr<Iban>>>>(
+      AUTOFILL_IBANS_RESULT, std::move(ibans));
+}
+
+WebDatabase::State AutofillWebDataBackendImpl::AddLocalIban(const Iban& iban,
+                                                            WebDatabase* db) {
+  DCHECK(owning_task_runner()->RunsTasksInCurrentSequence());
+  if (!PaymentsAutofillTable::FromWebDatabase(db)->AddLocalIban(iban)) {
+    ReportResult(Result::kAddIban_Failure);
     return WebDatabase::COMMIT_NOT_NEEDED;
   }
 
   for (auto& db_observer : db_observer_list_) {
-    db_observer.IBANChanged(IBANChange(IBANChange::ADD, iban.guid(), &iban));
+    db_observer.IbanChanged(IbanChange(IbanChange::ADD, iban.guid(), iban));
   }
+  ReportResult(Result::kAddIban_Success);
   return WebDatabase::COMMIT_NEEDED;
 }
 
-WebDatabase::State AutofillWebDataBackendImpl::UpdateIBAN(const IBAN& iban,
-                                                          WebDatabase* db) {
+WebDatabase::State AutofillWebDataBackendImpl::UpdateLocalIban(
+    const Iban& iban,
+    WebDatabase* db) {
   DCHECK(owning_task_runner()->RunsTasksInCurrentSequence());
   // It is currently valid to try to update a missing IBAN. We simply drop
   // the write and the caller will detect this on the next refresh.
-  std::unique_ptr<IBAN> original_iban =
-      AutofillTable::FromWebDatabase(db)->GetIBAN(iban.guid());
-  if (!original_iban)
+  std::unique_ptr<Iban> original_iban =
+      PaymentsAutofillTable::FromWebDatabase(db)->GetLocalIban(iban.guid());
+  if (!original_iban) {
+    ReportResult(Result::kUpdateIban_ReadFailure);
     return WebDatabase::COMMIT_NOT_NEEDED;
+  }
 
-  if (!AutofillTable::FromWebDatabase(db)->UpdateIBAN(iban)) {
-    NOTREACHED();
+  if (!PaymentsAutofillTable::FromWebDatabase(db)->UpdateLocalIban(iban)) {
+    ReportResult(Result::kUpdateIban_WriteFailure);
     return WebDatabase::COMMIT_NOT_NEEDED;
   }
 
   for (auto& db_observer : db_observer_list_) {
-    db_observer.IBANChanged(IBANChange(IBANChange::UPDATE, iban.guid(), &iban));
+    db_observer.IbanChanged(IbanChange(IbanChange::UPDATE, iban.guid(), iban));
   }
+  ReportResult(Result::kUpdateIban_Success);
   return WebDatabase::COMMIT_NEEDED;
 }
 
-WebDatabase::State AutofillWebDataBackendImpl::RemoveIBAN(
+WebDatabase::State AutofillWebDataBackendImpl::RemoveLocalIban(
     const std::string& guid,
     WebDatabase* db) {
   DCHECK(owning_task_runner()->RunsTasksInCurrentSequence());
-  std::unique_ptr<IBAN> iban =
-      AutofillTable::FromWebDatabase(db)->GetIBAN(guid);
+  std::unique_ptr<Iban> iban =
+      PaymentsAutofillTable::FromWebDatabase(db)->GetLocalIban(guid);
   if (!iban) {
-    NOTREACHED();
+    ReportResult(Result::kRemoveIban_ReadFailure);
     return WebDatabase::COMMIT_NOT_NEEDED;
   }
 
-  if (!AutofillTable::FromWebDatabase(db)->RemoveIBAN(guid)) {
-    NOTREACHED();
-    return WebDatabase::COMMIT_NOT_NEEDED;
-  }
-
-  for (auto& db_observer : db_observer_list_) {
-    db_observer.IBANChanged(IBANChange(IBANChange::REMOVE, guid, iban.get()));
-  }
-  return WebDatabase::COMMIT_NEEDED;
-}
-
-WebDatabase::State AutofillWebDataBackendImpl::UpdateServerAddressMetadata(
-    const AutofillProfile& profile,
-    WebDatabase* db) {
-  DCHECK(owning_task_runner()->RunsTasksInCurrentSequence());
-  DCHECK_EQ(AutofillProfile::SERVER_PROFILE, profile.record_type());
-  if (!AutofillTable::FromWebDatabase(db)->UpdateServerAddressMetadata(
-          profile)) {
+  if (!PaymentsAutofillTable::FromWebDatabase(db)->RemoveLocalIban(guid)) {
+    ReportResult(Result::kRemoveIban_WriteFailure);
     return WebDatabase::COMMIT_NOT_NEEDED;
   }
 
   for (auto& db_observer : db_observer_list_) {
-    db_observer.AutofillProfileChanged(AutofillProfileChange(
-        AutofillProfileChange::UPDATE, profile.server_id(), &profile));
+    db_observer.IbanChanged(IbanChange(IbanChange::REMOVE, guid, *iban));
+  }
+  ReportResult(Result::kRemoveIban_Success);
+  return WebDatabase::COMMIT_NEEDED;
+}
+
+WebDatabase::State AutofillWebDataBackendImpl::UpdateServerIbanMetadata(
+    const Iban& iban,
+    WebDatabase* db) {
+  CHECK(owning_task_runner()->RunsTasksInCurrentSequence());
+  CHECK_EQ(Iban::RecordType::kServerIban, iban.record_type());
+  if (!PaymentsAutofillTable::FromWebDatabase(db)
+           ->AddOrUpdateServerIbanMetadata(iban.GetMetadata())) {
+    ReportResult(Result::kUpdateServerIbanMetadata_Failure);
+    return WebDatabase::COMMIT_NOT_NEEDED;
   }
 
+  for (auto& db_observer : db_observer_list_) {
+    db_observer.IbanChanged(
+        IbanChange(IbanChange::UPDATE, iban.instrument_id(), iban));
+  }
+
+  ReportResult(Result::kUpdateServerIbanMetadata_Success);
   return WebDatabase::COMMIT_NEEDED;
 }
 
-WebDatabase::State AutofillWebDataBackendImpl::AddUpiId(
-    const std::string& upi_id,
+WebDatabase::State AutofillWebDataBackendImpl::AddServerCvc(
+    int64_t instrument_id,
+    const std::u16string& cvc,
     WebDatabase* db) {
-  DCHECK(owning_task_runner()->RunsTasksInCurrentSequence());
-
-  if (!AutofillTable::FromWebDatabase(db)->InsertUpiId(upi_id))
-    return WebDatabase::COMMIT_NOT_NEEDED;
-  return WebDatabase::COMMIT_NEEDED;
+  CHECK(owning_task_runner()->RunsTasksInCurrentSequence());
+  const ServerCvc server_cvc{instrument_id, cvc,
+                             /*last_updated_timestamp=*/AutofillClock::Now()};
+  if (PaymentsAutofillTable::FromWebDatabase(db)->AddServerCvc(server_cvc)) {
+    const ServerCvcChange change{ServerCvcChange::ADD, instrument_id,
+                                 server_cvc};
+    for (auto& db_observer : db_observer_list_) {
+      // TODO(crbug/1477924): Add integration tests for Add, Remove and Update
+      // for Wallet Credential data.
+      db_observer.ServerCvcChanged(change);
+    }
+    ReportResult(Result::kAddServerCvc_Success);
+    return WebDatabase::COMMIT_NEEDED;
+  }
+  ReportResult(Result::kAddServerCvc_Failure);
+  return WebDatabase::COMMIT_NOT_NEEDED;
 }
 
-std::unique_ptr<WDTypedResult> AutofillWebDataBackendImpl::GetAllUpiIds(
+WebDatabase::State AutofillWebDataBackendImpl::UpdateServerCvc(
+    int64_t instrument_id,
+    const std::u16string& cvc,
     WebDatabase* db) {
-  DCHECK(owning_task_runner()->RunsTasksInCurrentSequence());
+  CHECK(owning_task_runner()->RunsTasksInCurrentSequence());
+  const ServerCvc server_cvc{instrument_id, cvc,
+                             /*last_updated_timestamp=*/AutofillClock::Now()};
+  if (PaymentsAutofillTable::FromWebDatabase(db)->UpdateServerCvc(server_cvc)) {
+    const ServerCvcChange change{ServerCvcChange::UPDATE, instrument_id,
+                                 server_cvc};
+    for (auto& db_observer : db_observer_list_) {
+      db_observer.ServerCvcChanged(change);
+    }
+    ReportResult(Result::kUpdateServerCvc_Success);
+    return WebDatabase::COMMIT_NEEDED;
+  }
+  ReportResult(Result::kUpdateServerCvc_Failure);
+  return WebDatabase::COMMIT_NOT_NEEDED;
+}
 
-  std::vector<std::string> upi_ids =
-      AutofillTable::FromWebDatabase(db)->GetAllUpiIds();
-  return std::make_unique<WDResult<std::vector<std::string>>>(
-      AUTOFILL_UPI_RESULT, std::move(upi_ids));
+WebDatabase::State AutofillWebDataBackendImpl::RemoveServerCvc(
+    int64_t instrument_id,
+    WebDatabase* db) {
+  CHECK(owning_task_runner()->RunsTasksInCurrentSequence());
+  if (PaymentsAutofillTable::FromWebDatabase(db)->RemoveServerCvc(
+          instrument_id)) {
+    // Remove doesn't require `ServerCvc` struct data, so an empty data is
+    // passed to the ServerCvcChange
+    const ServerCvcChange change{ServerCvcChange::REMOVE, instrument_id,
+                                 ServerCvc{}};
+    for (auto& db_observer : db_observer_list_) {
+      db_observer.ServerCvcChanged(change);
+    }
+    ReportResult(Result::kRemoveServerCvc_Success);
+    return WebDatabase::COMMIT_NEEDED;
+  }
+  ReportResult(Result::kRemoveServerCvc_Failure);
+  return WebDatabase::COMMIT_NOT_NEEDED;
+}
+
+WebDatabase::State AutofillWebDataBackendImpl::ClearServerCvcs(
+    WebDatabase* db) {
+  CHECK(owning_task_runner()->RunsTasksInCurrentSequence());
+  std::vector<std::unique_ptr<ServerCvc>> server_cvc_list =
+      PaymentsAutofillTable::FromWebDatabase(db)->GetAllServerCvcs();
+  if (PaymentsAutofillTable::FromWebDatabase(db)->ClearServerCvcs()) {
+    for (const std::unique_ptr<ServerCvc>& server_cvc_from_list :
+         server_cvc_list) {
+      // Remove doesn't require `ServerCvc` struct data, so an empty data is
+      // passed to the ServerCvcChange
+      const ServerCvcChange change{ServerCvcChange::REMOVE,
+                                   server_cvc_from_list->instrument_id,
+                                   ServerCvc{}};
+      for (auto& db_observer : db_observer_list_) {
+        db_observer.ServerCvcChanged(change);
+      }
+    }
+    ReportResult(Result::kClearServerCvcs_Success);
+    return WebDatabase::COMMIT_NEEDED;
+  }
+  ReportResult(Result::kClearServerCvcs_Failure);
+  return WebDatabase::COMMIT_NOT_NEEDED;
+}
+
+WebDatabase::State AutofillWebDataBackendImpl::ClearLocalCvcs(WebDatabase* db) {
+  CHECK(owning_task_runner()->RunsTasksInCurrentSequence());
+  if (PaymentsAutofillTable::FromWebDatabase(db)->ClearLocalCvcs()) {
+    ReportResult(Result::kClearLocalCvcs_Success);
+    return WebDatabase::COMMIT_NEEDED;
+  }
+  ReportResult(Result::kClearLocalCvcs_Failure);
+  return WebDatabase::COMMIT_NOT_NEEDED;
 }
 
 std::unique_ptr<WDTypedResult>
 AutofillWebDataBackendImpl::GetPaymentsCustomerData(WebDatabase* db) {
   DCHECK(owning_task_runner()->RunsTasksInCurrentSequence());
   std::unique_ptr<PaymentsCustomerData> customer_data;
-  AutofillTable::FromWebDatabase(db)->GetPaymentsCustomerData(&customer_data);
+  PaymentsAutofillTable::FromWebDatabase(db)->GetPaymentsCustomerData(
+      customer_data);
   return std::make_unique<WDResult<std::unique_ptr<PaymentsCustomerData>>>(
       AUTOFILL_CUSTOMERDATA_RESULT, std::move(customer_data));
 }
@@ -637,8 +840,8 @@ std::unique_ptr<WDTypedResult>
 AutofillWebDataBackendImpl::GetCreditCardCloudTokenData(WebDatabase* db) {
   DCHECK(owning_task_runner()->RunsTasksInCurrentSequence());
   std::vector<std::unique_ptr<CreditCardCloudTokenData>> cloud_token_data;
-  AutofillTable::FromWebDatabase(db)->GetCreditCardCloudTokenData(
-      &cloud_token_data);
+  PaymentsAutofillTable::FromWebDatabase(db)->GetCreditCardCloudTokenData(
+      cloud_token_data);
   return std::make_unique<
       WDResult<std::vector<std::unique_ptr<CreditCardCloudTokenData>>>>(
       AUTOFILL_CLOUDTOKEN_RESULT, std::move(cloud_token_data));
@@ -648,30 +851,45 @@ std::unique_ptr<WDTypedResult> AutofillWebDataBackendImpl::GetAutofillOffers(
     WebDatabase* db) {
   DCHECK(owning_task_runner()->RunsTasksInCurrentSequence());
   std::vector<std::unique_ptr<AutofillOfferData>> offers;
-  AutofillTable::FromWebDatabase(db)->GetAutofillOffers(&offers);
+  PaymentsAutofillTable::FromWebDatabase(db)->GetAutofillOffers(&offers);
   return std::make_unique<
       WDResult<std::vector<std::unique_ptr<AutofillOfferData>>>>(
       AUTOFILL_OFFER_DATA, std::move(offers));
 }
 
+std::unique_ptr<WDTypedResult>
+AutofillWebDataBackendImpl::GetAutofillVirtualCardUsageData(WebDatabase* db) {
+  DCHECK(owning_task_runner()->RunsTasksInCurrentSequence());
+  std::vector<std::unique_ptr<VirtualCardUsageData>> virtual_card_usage_data;
+  PaymentsAutofillTable::FromWebDatabase(db)->GetAllVirtualCardUsageData(
+      &virtual_card_usage_data);
+  return std::make_unique<
+      WDResult<std::vector<std::unique_ptr<VirtualCardUsageData>>>>(
+      AUTOFILL_VIRTUAL_CARD_USAGE_DATA, std::move(virtual_card_usage_data));
+}
+
 WebDatabase::State AutofillWebDataBackendImpl::ClearAllServerData(
     WebDatabase* db) {
   DCHECK(owning_task_runner()->RunsTasksInCurrentSequence());
-  if (AutofillTable::FromWebDatabase(db)->ClearAllServerData()) {
-    NotifyOfMultipleAutofillChanges();
+  if (PaymentsAutofillTable::FromWebDatabase(db)->ClearAllServerData()) {
+    ReportResult(Result::kClearAllServerData_Success);
     return WebDatabase::COMMIT_NEEDED;
   }
+  ReportResult(Result::kClearAllServerData_Failure);
   return WebDatabase::COMMIT_NOT_NEEDED;
 }
 
 WebDatabase::State AutofillWebDataBackendImpl::ClearAllLocalData(
     WebDatabase* db) {
   DCHECK(owning_task_runner()->RunsTasksInCurrentSequence());
-  if (AutofillTable::FromWebDatabase(db)->ClearAllLocalData()) {
-    NotifyOfMultipleAutofillChanges();
-    return WebDatabase::COMMIT_NEEDED;
-  }
-  return WebDatabase::COMMIT_NOT_NEEDED;
+  bool a_succeeded =
+      AddressAutofillTable::FromWebDatabase(db)->ClearAllLocalData();
+  bool b_succeeded =
+      PaymentsAutofillTable::FromWebDatabase(db)->ClearAllLocalData();
+  ReportResult(a_succeeded && b_succeeded ? Result::kClearAllLocalData_Success
+                                          : Result::kClearAllLocalData_Failure);
+  return a_succeeded || b_succeeded ? WebDatabase::COMMIT_NEEDED
+                                    : WebDatabase::COMMIT_NOT_NEEDED;
 }
 
 WebDatabase::State
@@ -681,26 +899,40 @@ AutofillWebDataBackendImpl::RemoveAutofillDataModifiedBetween(
     WebDatabase* db) {
   DCHECK(owning_task_runner()->RunsTasksInCurrentSequence());
   std::vector<std::unique_ptr<AutofillProfile>> profiles;
-  std::vector<std::unique_ptr<CreditCard>> credit_cards;
-  if (AutofillTable::FromWebDatabase(db)->RemoveAutofillDataModifiedBetween(
-          delete_begin, delete_end, &profiles, &credit_cards)) {
+  bool commit_needed = false;
+  bool failures_observed = false;
+  if (AddressAutofillTable::FromWebDatabase(db)
+          ->RemoveAutofillDataModifiedBetween(delete_begin, delete_end,
+                                              &profiles)) {
     for (const std::unique_ptr<AutofillProfile>& profile : profiles) {
       for (auto& db_observer : db_observer_list_) {
         db_observer.AutofillProfileChanged(AutofillProfileChange(
-            AutofillProfileChange::REMOVE, profile->guid(), profile.get()));
+            AutofillProfileChange::REMOVE, profile->guid(), *profile));
       }
     }
+    commit_needed = true;
+  } else {
+    failures_observed = true;
+  }
+  std::vector<std::unique_ptr<CreditCard>> credit_cards;
+  if (PaymentsAutofillTable::FromWebDatabase(db)
+          ->RemoveAutofillDataModifiedBetween(delete_begin, delete_end,
+                                              &credit_cards)) {
     for (const std::unique_ptr<CreditCard>& credit_card : credit_cards) {
       for (auto& db_observer : db_observer_list_) {
         db_observer.CreditCardChanged(CreditCardChange(
-            CreditCardChange::REMOVE, credit_card->guid(), credit_card.get()));
+            CreditCardChange::REMOVE, credit_card->guid(), *credit_card));
       }
     }
-    // Note: It is the caller's responsibility to post notifications for any
-    // changes, e.g. by calling the Refresh() method of PersonalDataManager.
-    return WebDatabase::COMMIT_NEEDED;
+    commit_needed = true;
+  } else {
+    failures_observed = true;
   }
-  return WebDatabase::COMMIT_NOT_NEEDED;
+  ReportResult(failures_observed
+                   ? Result::kRemoveAutofillDataModifiedBetween_Success
+                   : Result::kRemoveAutofillDataModifiedBetween_Failure);
+  return commit_needed ? WebDatabase::COMMIT_NEEDED
+                       : WebDatabase::COMMIT_NOT_NEEDED;
 }
 
 WebDatabase::State AutofillWebDataBackendImpl::RemoveOriginURLsModifiedBetween(
@@ -708,30 +940,15 @@ WebDatabase::State AutofillWebDataBackendImpl::RemoveOriginURLsModifiedBetween(
     const base::Time& delete_end,
     WebDatabase* db) {
   DCHECK(owning_task_runner()->RunsTasksInCurrentSequence());
-  std::vector<std::unique_ptr<AutofillProfile>> profiles;
-  if (!AutofillTable::FromWebDatabase(db)->RemoveOriginURLsModifiedBetween(
-          delete_begin, delete_end, &profiles)) {
+  if (!PaymentsAutofillTable::FromWebDatabase(db)
+           ->RemoveOriginURLsModifiedBetween(delete_begin, delete_end)) {
+    ReportResult(Result::kRemoveOriginURLsModifiedBetween_Failure);
     return WebDatabase::COMMIT_NOT_NEEDED;
-  }
-
-  for (const auto& profile : profiles) {
-    AutofillProfileChange change(AutofillProfileChange::UPDATE, profile->guid(),
-                                 profile.get());
-    for (auto& db_observer : db_observer_list_)
-      db_observer.AutofillProfileChanged(change);
   }
   // Note: It is the caller's responsibility to post notifications for any
   // changes, e.g. by calling the Refresh() method of PersonalDataManager.
+  ReportResult(Result::kRemoveOriginURLsModifiedBetween_Success);
   return WebDatabase::COMMIT_NEEDED;
-}
-
-WebDatabase::State AutofillWebDataBackendImpl::RemoveOrphanAutofillTableRows(
-    WebDatabase* db) {
-  DCHECK(owning_task_runner()->RunsTasksInCurrentSequence());
-  if (AutofillTable::FromWebDatabase(db)->RemoveOrphanAutofillTableRows()) {
-    return WebDatabase::COMMIT_NEEDED;
-  }
-  return WebDatabase::COMMIT_NOT_NEEDED;
 }
 
 }  // namespace autofill

@@ -97,6 +97,14 @@
     </template>
 
     <div>
+      <h2>$i18n{resetApnMigratorLabel}</h2>
+      <cr-button class="action-button"
+          on-click="onResetApnMigratorClick_">
+        $i18n{resetApnMigratorLabel}
+      </cr-button>
+    </div>
+
+    <div>
       <h2>$i18n{addNewWifiLabel}</h2>
       <cr-button class="action-button" id="add-new-wifi-button"
           on-click="showAddNewWifi_">
@@ -137,12 +145,18 @@
   </div>
 
   <div class="tabpanel" id="select">
-    <div id="select-div">
-      <network-select
-          on-network-item-selected="onNetworkItemSelected_"
-          on-custom-item-selected="onCustomItemSelected_">
-      </network-select>
-    </div>
+    <div>$i18n{renderNetworkSelectButtonDescription}</div>
+    <cr-button class="action-button" on-click="renderNetworkSelect_">
+      $i18n{renderNetworkSelectButtonText}
+    </cr-button>
+    <template is="dom-if" if="[[showNetworkSelect_]]">
+      <div id="select-div">
+        <network-select
+            on-network-item-selected="onNetworkItemSelected_"
+            on-custom-item-selected="onCustomItemSelected_">
+        </network-select>
+      </div>
+    </template>
   </div>
 
   <div class="tabpanel" id="counters">
@@ -172,7 +186,9 @@
       $i18n{refreshTetheringConfigButtonText}
     </cr-button>
     <cr-input id="tethering-config-input" value="{{tetheringConfigToSet_}}"
-        placeholder="{}" type="text" on-input="validateJSON_"
+        placeholder='Example: {"ssid": "test_ssid", "passphrase": "test_password",
+ "auto_disable": true, "security": "wpa2", "band": "5GHz"}'
+        type="text" on-input="validateJSON_"
         error-message="Please enter valid JSON object"
         invalid="[[invalidJSON_]]">
     </cr-input>

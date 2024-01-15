@@ -5,7 +5,8 @@
 #ifndef CHROME_BROWSER_UI_COCOA_SCREENTIME_WEBPAGE_CONTROLLER_IMPL_H_
 #define CHROME_BROWSER_UI_COCOA_SCREENTIME_WEBPAGE_CONTROLLER_IMPL_H_
 
-#include "base/mac/scoped_nsobject.h"
+#include <Foundation/Foundation.h>
+
 #include "chrome/browser/ui/cocoa/screentime/webpage_controller.h"
 
 @class BlockedObserver;
@@ -15,7 +16,7 @@ namespace screentime {
 
 // This class wraps the STWebpageController screentime class, to allow for tests
 // to use a fake controller.
-class WebpageControllerImpl : public WebpageController {
+class NS_AVAILABLE_MAC(11.0) WebpageControllerImpl : public WebpageController {
  public:
   WebpageControllerImpl(const BlockedChangedCallback& callback);
   ~WebpageControllerImpl() override;
@@ -26,8 +27,8 @@ class WebpageControllerImpl : public WebpageController {
   void OnBlockedChanged(bool blocked);
 
  private:
-  base::scoped_nsobject<STWebpageController> platform_controller_;
-  base::scoped_nsobject<BlockedObserver> blocked_observer_;
+  STWebpageController* __strong platform_controller_;
+  BlockedObserver* __strong blocked_observer_;
   BlockedChangedCallback blocked_changed_callback_;
 };
 

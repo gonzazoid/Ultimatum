@@ -10,6 +10,8 @@
 
 namespace content {
 
+using PermissionStatus = blink::mojom::PermissionStatus;
+
 // Identifies the source or reason for a permission status being returned.
 enum class PermissionStatusSource {
   // The reason for the status is not specified.
@@ -39,21 +41,20 @@ enum class PermissionStatusSource {
   // permissions request.
   VIRTUAL_URL_DIFFERENT_ORIGIN,
 
-  // The status is the result of a permission being requested inside a portal.
-  // Permissions are currently always denied inside a portal.
-  PORTAL,
-
   // The status is the result of a permission being requested inside a fenced
   // frame. Permissions are currently always denied inside a fenced frame.
   FENCED_FRAME,
+
+  // The status is the result of being blocked due to having recently displayed
+  // the prompt to the user.
+  RECENT_DISPLAY,
 };
 
 struct CONTENT_EXPORT PermissionResult {
-  PermissionResult(blink::mojom::PermissionStatus status,
-                   PermissionStatusSource source);
+  PermissionResult(PermissionStatus status, PermissionStatusSource source);
   ~PermissionResult();
 
-  blink::mojom::PermissionStatus status;
+  PermissionStatus status;
   PermissionStatusSource source;
 };
 

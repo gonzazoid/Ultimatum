@@ -4,23 +4,27 @@
 
 #include "components/variations/variations_crash_keys.h"
 
+#include <set>
 #include <string>
 
+#include "base/command_line.h"
 #include "base/debug/leak_annotations.h"
+#include "base/metrics/field_trial_list_including_low_anonymity.h"
+#include "base/metrics/histogram_macros.h"
 #include "base/sequence_checker.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_piece.h"
 #include "base/strings/stringprintf.h"
 #include "base/task/sequenced_task_runner.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "build/buildflag.h"
 #include "build/chromeos_buildflags.h"
 #include "components/crash/core/common/crash_key.h"
 #include "components/variations/active_field_trials.h"
 #include "components/variations/buildflags.h"
 #include "components/variations/synthetic_trials.h"
+#include "components/variations/variations_switches.h"
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS_ASH) || BUILDFLAG(IS_CHROMEOS_LACROS)
 #include "base/task/thread_pool.h"
 #include "components/variations/variations_crash_keys_chromeos.h"
 #endif
@@ -29,14 +33,19 @@ namespace variations {
 
 namespace {
 
-// Size of the "num-experiments" crash key in bytes. 4096 bytes should be able
-// to hold about 227 entries, given each entry is 18 bytes long (due to being
+// Size of the "num-experiments" crash key in bytes. 1024*6 bytes should be able
+// to hold about 341 entries, given each entry is 18 bytes long (due to being
 // of the form "8e7abfb0-c16397b7,").
 #if BUILDFLAG(LARGE_VARIATION_KEY_SIZE)
-constexpr size_t kVariationsKeySize = 8192;
+constexpr size_t kVariationsKeySize = 1024 * 8;
+constexpr char kVariationKeySizeHistogram[] =
+    "Variations.Limits.VariationKeySize.Large";
 #else
-constexpr size_t kVariationsKeySize = 6144;
+constexpr size_t kVariationsKeySize = 1024 * 6;
+constexpr char kVariationKeySizeHistogram[] =
+    "Variations.Limits.VariationKeySize.Default";
 #endif
+constexpr size_t kVariationsKeySizeNumBuckets = 16;
 
 // Crash key reporting the number of experiments. 8 is the size of the crash key
 // in bytes, which is used to hold an int as a string.
@@ -47,9 +56,24 @@ crash_reporter::CrashKeyString<8> g_num_variations_crash_key(
 crash_reporter::CrashKeyString<kVariationsKeySize> g_variations_crash_key(
     kExperimentListKey);
 
-std::string ActiveGroupToString(const ActiveGroupId& active_group) {
-  return base::StringPrintf("%x-%x,", active_group.name, active_group.group);
+crash_reporter::CrashKeyString<64> g_variations_seed_version_crash_key(
+    kVariationsSeedVersionKey);
+
+std::string GetVariationsSeedVersion() {
+  base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();
+  // kVariationsSeedVersion should be set by the browser process in
+  // variations::PopulateLaunchOptionsWithVariationsInfo() before launching the
+  // child process.
+  if (command_line->HasSwitch(variations::switches::kVariationsSeedVersion)) {
+    return command_line->GetSwitchValueASCII(
+        variations::switches::kVariationsSeedVersion);
+  }
+
+  // Only works for the browser process.
+  return GetSeedVersion();
 }
+
+}  // namespace
 
 class VariationsCrashKeys final : public base::FieldTrialList::Observer {
  public:
@@ -61,7 +85,7 @@ class VariationsCrashKeys final : public base::FieldTrialList::Observer {
   ~VariationsCrashKeys() override;
 
   // base::FieldTrialList::Observer:
-  void OnFieldTrialGroupFinalized(const std::string& trial_name,
+  void OnFieldTrialGroupFinalized(const base::FieldTrial& trial,
                                   const std::string& group_name) override;
 
   // Notifies the object that the list of synthetic field trial groups has
@@ -75,28 +99,35 @@ class VariationsCrashKeys final : public base::FieldTrialList::Observer {
 
  private:
   // Adds an entry for the specified field trial to internal state, without
-  // updating crash keys.
-  void AppendFieldTrial(const std::string& trial_name,
-                        const std::string& group_name);
+  // updating crash keys. Returns true if it was successfully added. Returns
+  // false otherwise (i.e., the trial was already added previously).
+  bool AppendFieldTrial(const std::string& trial_name,
+                        const std::string& group_name,
+                        bool is_overridden);
 
   // Updates crash keys based on internal state.
   void UpdateCrashKeys();
+
+  void AppendFieldTrialAndUpdateCrashKeys(const std::string& trial_name,
+                                          const std::string& group_name,
+                                          bool is_overridden);
+
+  // List of active trials, used to prevent duplicates from being appended to
+  // |variations_string_|.
+  std::set<std::string> active_trials_;
 
   // Task runner corresponding to the UI thread, used to reschedule synchronous
   // observer calls that happen on a different thread.
   scoped_refptr<base::SequencedTaskRunner> ui_thread_task_runner_;
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS_ASH) || BUILDFLAG(IS_CHROMEOS_LACROS)
   // Task runner corresponding to a background thread, used for tasks that may
   // block.
   scoped_refptr<base::SequencedTaskRunner> background_thread_task_runner_;
-#endif  // IS_CHROMEOS_ASH
+#endif  // IS_CHROMEOS_ASH || BUILDFLAG(IS_CHROMEOS_LACROS)
 
   // A serialized string containing the variations state.
   std::string variations_string_;
-
-  // Number of entries in |variations_string_|.
-  size_t num_variations_ = 0;
 
   // A serialized string containing the synthetic trials state.
   std::string synthetic_trials_string_;
@@ -108,30 +139,48 @@ class VariationsCrashKeys final : public base::FieldTrialList::Observer {
 };
 
 VariationsCrashKeys::VariationsCrashKeys() {
+  // Set |ui_thread_task_runner_| *before* observering field trials. Otherwise,
+  // it would be possible for a field trial to be activated on a different
+  // thread, calling OnFieldTrialGroupFinalized(), and accessing
+  // |ui_thread_task_runner_| before it is set.
+  ui_thread_task_runner_ = base::SequencedTaskRunner::GetCurrentDefault();
+  // Observe field trials before filling the crash key with the currently
+  // active field trials. Otherwise, there could be a race condition where a
+  // trial is activated on a different thread before we started observing.
+  // Similarly, it is possible a trial is added twice if it is activated on
+  // a different thread after starting to observe, but before the call to
+  // GetActiveFieldTrialGroups() below. However, this is addressed with the use
+  // of |active_trials_|.
+  // TODO(crbug/1440498): This would not be necessary to do assuming this is
+  // called while Chrome is still in single-threaded mode. While this is true
+  // for the browser process, child processes call this relatively late (and
+  // possibly other platforms as well). Remove |active_trials_| when this is
+  // fixed.
+  base::FieldTrialListIncludingLowAnonymity::AddObserver(this);
+
   base::FieldTrial::ActiveGroups active_groups;
-  base::FieldTrialList::GetActiveFieldTrialGroups(&active_groups);
+  base::FieldTrialListIncludingLowAnonymity::GetActiveFieldTrialGroups(
+      &active_groups);
   for (const auto& entry : active_groups) {
-    AppendFieldTrial(entry.trial_name, entry.group_name);
+    AppendFieldTrial(entry.trial_name, entry.group_name, entry.is_overridden);
   }
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS_ASH) || BUILDFLAG(IS_CHROMEOS_LACROS)
   background_thread_task_runner_ = base::ThreadPool::CreateSequencedTaskRunner(
       {base::TaskPriority::BEST_EFFORT, base::MayBlock()});
-#endif  // IS_CHROMEOS_ASH
+#endif  // IS_CHROMEOS_ASH || BUILDFLAG(IS_CHROMEOS_LACROS)
 
   UpdateCrashKeys();
-
-  ui_thread_task_runner_ = base::SequencedTaskRunnerHandle::Get();
-  base::FieldTrialList::AddObserver(this);
 }
 
 VariationsCrashKeys::~VariationsCrashKeys() {
-  base::FieldTrialList::RemoveObserver(this);
+  base::FieldTrialListIncludingLowAnonymity::RemoveObserver(this);
   g_num_variations_crash_key.Clear();
   g_variations_crash_key.Clear();
+  g_variations_seed_version_crash_key.Clear();
 }
 
 void VariationsCrashKeys::OnFieldTrialGroupFinalized(
-    const std::string& trial_name,
+    const base::FieldTrial& trial,
     const std::string& group_name) {
   // If this is called on a different thread, post it back to the UI thread.
   // Note: This is safe to do because in production, this object is never
@@ -140,34 +189,50 @@ void VariationsCrashKeys::OnFieldTrialGroupFinalized(
   if (!ui_thread_task_runner_->RunsTasksInCurrentSequence()) {
     ui_thread_task_runner_->PostTask(
         FROM_HERE,
-        BindOnce(&VariationsCrashKeys::OnFieldTrialGroupFinalized,
+        BindOnce(&VariationsCrashKeys::AppendFieldTrialAndUpdateCrashKeys,
                  // base::Unretained() is safe here because this object is
                  // never deleted in production.
-                 base::Unretained(this), trial_name, group_name));
+                 base::Unretained(this), trial.trial_name(), group_name,
+                 trial.IsOverridden()));
     return;
   }
 
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-  AppendFieldTrial(trial_name, group_name);
-  UpdateCrashKeys();
+  AppendFieldTrialAndUpdateCrashKeys(trial.trial_name(), group_name,
+                                     trial.IsOverridden());
 }
 
-void VariationsCrashKeys::AppendFieldTrial(const std::string& trial_name,
-                                           const std::string& group_name) {
+bool VariationsCrashKeys::AppendFieldTrial(const std::string& trial_name,
+                                           const std::string& group_name,
+                                           bool is_overridden) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  if (!active_trials_.insert(trial_name).second) {
+    return false;
+  }
 
-  auto active_group_id = MakeActiveGroupId(trial_name, group_name);
+  auto active_group_id =
+      MakeActiveGroupId(trial_name, group_name, is_overridden);
   auto variation = ActiveGroupToString(active_group_id);
 
   variations_string_ += variation;
-  ++num_variations_;
+
+  return true;
+}
+
+void VariationsCrashKeys::AppendFieldTrialAndUpdateCrashKeys(
+    const std::string& trial_name,
+    const std::string& group_name,
+    bool is_overridden) {
+  if (AppendFieldTrial(trial_name, group_name, is_overridden)) {
+    UpdateCrashKeys();
+  }
 }
 
 ExperimentListInfo VariationsCrashKeys::GetExperimentListInfo() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   ExperimentListInfo result;
-  result.num_experiments = num_variations_ + num_synthetic_trials_;
+  result.num_experiments = active_trials_.size() + num_synthetic_trials_;
   result.experiment_list.reserve(variations_string_.size() +
                                  synthetic_trials_string_.size());
   result.experiment_list.append(variations_string_);
@@ -181,20 +246,22 @@ void VariationsCrashKeys::UpdateCrashKeys() {
   ExperimentListInfo info = GetExperimentListInfo();
   g_num_variations_crash_key.Set(base::NumberToString(info.num_experiments));
 
+  const size_t count_of_kbs = info.experiment_list.size() / 1024;
+  UMA_HISTOGRAM_EXACT_LINEAR(kVariationKeySizeHistogram, count_of_kbs,
+                             kVariationsKeySizeNumBuckets);
   if (info.experiment_list.size() > kVariationsKeySize) {
     // If size exceeded, truncate to the last full entry.
     int comma_index =
         info.experiment_list.substr(0, kVariationsKeySize).rfind(',');
     info.experiment_list.resize(comma_index + 1);
-    // NOTREACHED() will let us know of the problem and adjust the limit.
-    NOTREACHED();
   }
 
   g_variations_crash_key.Set(info.experiment_list);
+  g_variations_seed_version_crash_key.Set(GetVariationsSeedVersion());
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS_ASH) || BUILDFLAG(IS_CHROMEOS_LACROS)
   ReportVariationsToChromeOs(background_thread_task_runner_, info);
-#endif  // IS_CHROMEOS_ASH
+#endif  // IS_CHROMEOS_ASH || BUILDFLAG(IS_CHROMEOS_LACROS)
 }
 
 void VariationsCrashKeys::OnSyntheticTrialsChanged(
@@ -218,10 +285,9 @@ void VariationsCrashKeys::OnSyntheticTrialsChanged(
 // there's no benefit in cleaning it up at exit.
 VariationsCrashKeys* g_variations_crash_keys = nullptr;
 
-}  // namespace
-
 const char kNumExperimentsKey[] = "num-experiments";
 const char kExperimentListKey[] = "variations";
+const char kVariationsSeedVersionKey[] = "variations-seed-version";
 
 void InitCrashKeys() {
   DCHECK(!g_variations_crash_keys);
@@ -244,6 +310,10 @@ void ClearCrashKeysInstanceForTesting() {
 ExperimentListInfo GetExperimentListInfo() {
   DCHECK(g_variations_crash_keys);
   return g_variations_crash_keys->GetExperimentListInfo();
+}
+
+std::string ActiveGroupToString(const ActiveGroupId& active_group) {
+  return base::StringPrintf("%x-%x,", active_group.name, active_group.group);
 }
 
 }  // namespace variations

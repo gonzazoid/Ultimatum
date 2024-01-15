@@ -9,7 +9,6 @@
 
 #include "base/debug/stack_trace.h"
 #include "base/strings/utf_string_conversions.h"
-#include "build/branding_buildflags.h"
 #include "chrome/app/vector_icons/vector_icons.h"
 #include "chrome/browser/media/router/media_router_feature.h"
 #include "chrome/browser/ui/browser.h"
@@ -44,10 +43,6 @@
 #include "ui/views/controls/throbber.h"
 #include "ui/views/layout/box_layout.h"
 #include "ui/views/vector_icons.h"
-
-#if BUILDFLAG(GOOGLE_CHROME_BRANDING)
-#include "chrome/browser/ui/media_router/internal/vector_icons/vector_icons.h"
-#endif
 
 namespace media_router {
 
@@ -95,25 +90,6 @@ bool IsIncompatibleDialSink(const UIMediaSink& sink) {
          sink.cast_modes.empty();
 }
 
-std::u16string GetStatusTextForSink(const UIMediaSink& sink) {
-  if (sink.issue)
-    return base::UTF8ToUTF16(sink.issue->info().title);
-  // If the sink is disconnecting, say so instead of using the source info
-  // stored in |sink.status_text|.
-  if (sink.state == UIMediaSinkState::DISCONNECTING)
-    return l10n_util::GetStringUTF16(IDS_MEDIA_ROUTER_SINK_DISCONNECTING);
-  if (!sink.status_text.empty())
-    return sink.status_text;
-  switch (sink.state) {
-    case UIMediaSinkState::AVAILABLE:
-      return l10n_util::GetStringUTF16(IDS_MEDIA_ROUTER_SINK_AVAILABLE);
-    case UIMediaSinkState::CONNECTING:
-      return l10n_util::GetStringUTF16(IDS_MEDIA_ROUTER_SINK_CONNECTING);
-    default:
-      return std::u16string();
-  }
-}
-
 }  // namespace
 
 CastDialogSinkButton::CastDialogSinkButton(PressedCallback callback,
@@ -121,7 +97,7 @@ CastDialogSinkButton::CastDialogSinkButton(PressedCallback callback,
     : HoverButton(std::move(callback),
                   CreatePrimaryIconForSink(sink),
                   sink.friendly_name,
-                  GetStatusTextForSink(sink),
+                  sink.GetStatusTextForDisplay(),
                   /** secondary_icon_view */ nullptr),
       sink_(sink) {
   SetEnabled(sink.state == UIMediaSinkState::AVAILABLE ||
@@ -172,22 +148,20 @@ void CastDialogSinkButton::OnEnabledChanged() {
   if (sink_.state != UIMediaSinkState::AVAILABLE)
     return;
 
+  ui::ImageModel icon;
   if (GetEnabled()) {
-    if (saved_status_text_)
+    if (saved_status_text_) {
       RestoreStatusText();
-    static_cast<views::ImageView*>(icon_view())
-        ->SetImage(CreateSinkIcon(sink_.icon_type));
-  } else {
-    if (IsIncompatibleDialSink(sink_)) {
-      OverrideStatusText(
-          l10n_util::GetStringUTF16(IDS_MEDIA_ROUTER_AVAILABLE_SPECIFIC_SITES));
-    } else {
-      OverrideStatusText(
-          l10n_util::GetStringUTF16(IDS_MEDIA_ROUTER_SOURCE_NOT_SUPPORTED));
     }
-    static_cast<views::ImageView*>(icon_view())
-        ->SetImage(CreateDisabledSinkIcon(sink_.icon_type));
+    icon = CreateSinkIcon(sink_.icon_type);
+  } else {
+    int status_text = IsIncompatibleDialSink(sink_)
+                          ? IDS_MEDIA_ROUTER_AVAILABLE_SPECIFIC_SITES
+                          : IDS_MEDIA_ROUTER_SOURCE_NOT_SUPPORTED;
+    OverrideStatusText(l10n_util::GetStringUTF16(status_text));
+    icon = CreateDisabledSinkIcon(sink_.icon_type);
   }
+  static_cast<views::ImageView*>(icon_view())->SetImage(icon);
 
   if (GetWidget())
     UpdateTitleTextStyle();
@@ -198,7 +172,7 @@ void CastDialogSinkButton::UpdateTitleTextStyle() {
       GetColorProvider()->GetColor(ui::kColorDialogBackground);
   SetTitleTextStyle(
       GetEnabled() ? views::style::STYLE_PRIMARY : views::style::STYLE_DISABLED,
-      background_color);
+      background_color, /*color_id=*/std::nullopt);
 }
 
 void CastDialogSinkButton::RequestFocus() {
@@ -270,7 +244,7 @@ const gfx::VectorIcon* CastDialogSinkButton::GetVectorIcon(UIMediaSink sink) {
                     : GetVectorIcon(sink.icon_type);
 }
 
-BEGIN_METADATA(CastDialogSinkButton, HoverButton)
+BEGIN_METADATA(CastDialogSinkButton)
 END_METADATA
 
 }  // namespace media_router

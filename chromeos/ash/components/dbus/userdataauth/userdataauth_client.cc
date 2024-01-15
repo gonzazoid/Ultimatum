@@ -8,10 +8,11 @@
 
 #include <google/protobuf/message_lite.h>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/memory/raw_ptr.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "chromeos/ash/components/dbus/userdataauth/fake_userdataauth_client.h"
 #include "dbus/bus.h"
@@ -117,74 +118,9 @@ class UserDataAuthClientImpl : public UserDataAuthClient {
                     std::move(callback));
   }
 
-  void Mount(const ::user_data_auth::MountRequest& request,
-             MountCallback callback) override {
-    CallProtoMethod(::user_data_auth::kMount,
-                    ::user_data_auth::kUserDataAuthInterface, request,
-                    std::move(callback));
-  }
-
   void Remove(const ::user_data_auth::RemoveRequest& request,
               RemoveCallback callback) override {
     CallProtoMethod(::user_data_auth::kRemove,
-                    ::user_data_auth::kUserDataAuthInterface, request,
-                    std::move(callback));
-  }
-
-  void GetKeyData(const ::user_data_auth::GetKeyDataRequest& request,
-                  GetKeyDataCallback callback) override {
-    CallProtoMethod(::user_data_auth::kGetKeyData,
-                    ::user_data_auth::kUserDataAuthInterface, request,
-                    std::move(callback));
-  }
-
-  void CheckKey(const ::user_data_auth::CheckKeyRequest& request,
-                CheckKeyCallback callback) override {
-    CallProtoMethod(::user_data_auth::kCheckKey,
-                    ::user_data_auth::kUserDataAuthInterface, request,
-                    std::move(callback));
-  }
-
-  void AddKey(const ::user_data_auth::AddKeyRequest& request,
-              AddKeyCallback callback) override {
-    CallProtoMethod(::user_data_auth::kAddKey,
-                    ::user_data_auth::kUserDataAuthInterface, request,
-                    std::move(callback));
-  }
-
-  void RemoveKey(const ::user_data_auth::RemoveKeyRequest& request,
-                 RemoveKeyCallback callback) override {
-    CallProtoMethod(::user_data_auth::kRemoveKey,
-                    ::user_data_auth::kUserDataAuthInterface, request,
-                    std::move(callback));
-  }
-
-  void MassRemoveKeys(const ::user_data_auth::MassRemoveKeysRequest& request,
-                      MassRemoveKeysCallback callback) override {
-    CallProtoMethod(::user_data_auth::kMassRemoveKeys,
-                    ::user_data_auth::kUserDataAuthInterface, request,
-                    std::move(callback));
-  }
-
-  void MigrateKey(const ::user_data_auth::MigrateKeyRequest& request,
-                  MigrateKeyCallback callback) override {
-    CallProtoMethod(::user_data_auth::kMigrateKey,
-                    ::user_data_auth::kUserDataAuthInterface, request,
-                    std::move(callback));
-  }
-
-  void StartFingerprintAuthSession(
-      const ::user_data_auth::StartFingerprintAuthSessionRequest& request,
-      StartFingerprintAuthSessionCallback callback) override {
-    CallProtoMethod(::user_data_auth::kStartFingerprintAuthSession,
-                    ::user_data_auth::kUserDataAuthInterface, request,
-                    std::move(callback));
-  }
-
-  void EndFingerprintAuthSession(
-      const ::user_data_auth::EndFingerprintAuthSessionRequest& request,
-      EndFingerprintAuthSessionCallback callback) override {
-    CallProtoMethod(::user_data_auth::kEndFingerprintAuthSession,
                     ::user_data_auth::kUserDataAuthInterface, request,
                     std::move(callback));
   }
@@ -229,29 +165,6 @@ class UserDataAuthClientImpl : public UserDataAuthClient {
                     std::move(callback));
   }
 
-  void AuthenticateAuthSession(
-      const ::user_data_auth::AuthenticateAuthSessionRequest& request,
-      AuthenticateAuthSessionCallback callback) override {
-    CallProtoMethod(::user_data_auth::kAuthenticateAuthSession,
-                    ::user_data_auth::kUserDataAuthInterface, request,
-                    std::move(callback));
-  }
-
-  void AddCredentials(const ::user_data_auth::AddCredentialsRequest& request,
-                      AddCredentialsCallback callback) override {
-    CallProtoMethod(::user_data_auth::kAddCredentials,
-                    ::user_data_auth::kUserDataAuthInterface, request,
-                    std::move(callback));
-  }
-
-  void UpdateCredential(
-      const ::user_data_auth::UpdateCredentialRequest& request,
-      UpdateCredentialCallback callback) override {
-    CallProtoMethod(::user_data_auth::kUpdateCredential,
-                    ::user_data_auth::kUserDataAuthInterface, request,
-                    std::move(callback));
-  }
-
   void PrepareGuestVault(
       const ::user_data_auth::PrepareGuestVaultRequest& request,
       PrepareGuestVaultCallback callback) override {
@@ -272,6 +185,14 @@ class UserDataAuthClientImpl : public UserDataAuthClient {
       const ::user_data_auth::CreatePersistentUserRequest& request,
       CreatePersistentUserCallback callback) override {
     CallProtoMethod(::user_data_auth::kCreatePersistentUser,
+                    ::user_data_auth::kUserDataAuthInterface, request,
+                    std::move(callback));
+  }
+
+  void RestoreDeviceKey(
+      const ::user_data_auth::RestoreDeviceKeyRequest& request,
+      RestoreDeviceKeyCallback callback) override {
+    CallProtoMethod(::user_data_auth::kRestoreDeviceKey,
                     ::user_data_auth::kUserDataAuthInterface, request,
                     std::move(callback));
   }
@@ -346,6 +267,14 @@ class UserDataAuthClientImpl : public UserDataAuthClient {
                     std::move(callback));
   }
 
+  void GetAuthFactorExtendedInfo(
+      const ::user_data_auth::GetAuthFactorExtendedInfoRequest& request,
+      GetAuthFactorExtendedInfoCallback callback) override {
+    CallProtoMethod(::user_data_auth::kGetAuthFactorExtendedInfo,
+                    ::user_data_auth::kUserDataAuthInterface, request,
+                    std::move(callback));
+  }
+
   void GetRecoveryRequest(
       const ::user_data_auth::GetRecoveryRequestRequest& request,
       GetRecoveryRequestCallback callback) override {
@@ -378,6 +307,22 @@ class UserDataAuthClientImpl : public UserDataAuthClient {
                     std::move(callback));
   }
 
+  void GetArcDiskFeatures(
+      const ::user_data_auth::GetArcDiskFeaturesRequest& request,
+      GetArcDiskFeaturesCallback callback) override {
+    CallProtoMethod(::user_data_auth::kGetArcDiskFeatures,
+                    ::user_data_auth::kUserDataAuthInterface, request,
+                    std::move(callback));
+  }
+
+  void GetRecoverableKeyStores(
+      const ::user_data_auth::GetRecoverableKeyStoresRequest& request,
+      GetRecoverableKeyStoresCallback callback) override {
+    CallProtoMethod(::user_data_auth::kGetRecoverableKeyStores,
+                    ::user_data_auth::kUserDataAuthInterface, request,
+                    std::move(callback));
+  }
+
  private:
   // Calls cryptohomed's |method_name| method in |interface_name| interface,
   // passing in |request| as input with |timeout_ms|. Once the (asynchronous)
@@ -395,8 +340,8 @@ class UserDataAuthClientImpl : public UserDataAuthClient {
       LOG(ERROR)
           << "Failed to append protobuf when calling UserDataAuth method "
           << method_name;
-      base::ThreadTaskRunnerHandle::Get()->PostTask(
-          FROM_HERE, base::BindOnce(std::move(callback), absl::nullopt));
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+          FROM_HERE, base::BindOnce(std::move(callback), std::nullopt));
       return;
     }
     // Bind with the weak pointer of |this| so the response is not
@@ -430,7 +375,7 @@ class UserDataAuthClientImpl : public UserDataAuthClient {
     ReplyType reply_proto;
     if (!ParseProto(response, &reply_proto)) {
       LOG(ERROR) << "Failed to parse reply protobuf from UserDataAuth method";
-      std::move(callback).Run(absl::nullopt);
+      std::move(callback).Run(std::nullopt);
       return;
     }
     std::move(callback).Run(reply_proto);
@@ -520,7 +465,7 @@ class UserDataAuthClientImpl : public UserDataAuthClient {
   }
 
   // D-Bus proxy for cryptohomed, not owned.
-  dbus::ObjectProxy* proxy_ = nullptr;
+  raw_ptr<dbus::ObjectProxy> proxy_ = nullptr;
 
   // List of observers for dbus signals.
   base::ObserverList<Observer> observer_list_;
@@ -533,37 +478,43 @@ class UserDataAuthClientImpl : public UserDataAuthClient {
 
 }  // namespace
 
-UserDataAuthClient::UserDataAuthClient() {
-  CHECK(!g_instance);
-  g_instance = this;
-}
+UserDataAuthClient::UserDataAuthClient() = default;
 
-UserDataAuthClient::~UserDataAuthClient() {
-  CHECK_EQ(this, g_instance);
-  g_instance = nullptr;
-}
+UserDataAuthClient::~UserDataAuthClient() = default;
 
 // static
 void UserDataAuthClient::Initialize(dbus::Bus* bus) {
   CHECK(bus);
-  (new UserDataAuthClientImpl())->Init(bus);
+  CHECK(!g_instance);
+  auto* impl = new UserDataAuthClientImpl();
+  g_instance = impl;
+  impl->Init(bus);
 }
 
 // static
 void UserDataAuthClient::InitializeFake() {
-  // Certain tests may create FakeUserDataAuthClient() before the browser starts
-  // to set parameters.
-  if (!FakeUserDataAuthClient::Get()) {
-    new FakeUserDataAuthClient();
+  if (g_instance) {
+    // TODO(b/239430274): Certain tests call InitializeFake() before the
+    // browser starts to set parameters. They should just access the fake
+    // instance directly via FakeUserDataAuthClient::Get(), via
+    // FakeUserDataAuthClient::TestApi or via CryptohomeMixin.
+    CHECK(g_instance == FakeUserDataAuthClient::Get());
+  } else {
+    g_instance = FakeUserDataAuthClient::Get();
+    CHECK(g_instance);
   }
+}
+
+void UserDataAuthClient::OverrideGlobalInstanceForTesting(
+    UserDataAuthClient* client) {
+  g_instance = client;
 }
 
 // static
 void UserDataAuthClient::Shutdown() {
   CHECK(g_instance);
   delete g_instance;
-  // The destructor resets |g_instance|.
-  DCHECK(!g_instance);
+  g_instance = nullptr;
 }
 
 // static

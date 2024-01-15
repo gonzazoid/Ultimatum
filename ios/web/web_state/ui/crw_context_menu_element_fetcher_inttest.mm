@@ -7,6 +7,7 @@
 #import <WebKit/WebKit.h>
 
 #import "base/test/ios/wait_util.h"
+#import "base/time/time.h"
 #import "ios/testing/scoped_block_swizzler.h"
 #import "ios/web/js_features/context_menu/context_menu_constants.h"
 #import "ios/web/public/test/web_view_content_test_util.h"
@@ -15,10 +16,6 @@
 #import "ios/web/web_state/web_state_impl.h"
 #import "testing/gtest/include/gtest/gtest.h"
 #import "testing/gtest_mac.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace {
 // This is the timeout used while waiting for the JavaScript to complete. The
@@ -30,7 +27,7 @@ namespace {
 // given timespan (and so it ensures that if the "failing" JavaScript tests
 // pass, it is because the JavaScript isn't called and not because it didn't
 // have time to complete).
-const CGFloat kFetcherJSTimeout = 1.0;
+constexpr base::TimeDelta kFetcherJSTimeout = base::Seconds(1);
 }  // namespace
 
 namespace web {

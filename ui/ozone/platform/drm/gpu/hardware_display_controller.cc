@@ -13,16 +13,16 @@
 #include <type_traits>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/ranges/algorithm.h"
-#include "base/strings/stringprintf.h"
 #include "base/trace_event/typed_macros.h"
 #include "third_party/libdrm/src/include/drm/drm_fourcc.h"
 #include "third_party/perfetto/include/perfetto/tracing/traced_value.h"
 #include "third_party/skia/include/core/SkCanvas.h"
 #include "third_party/skia/include/core/SkImage.h"
+#include "ui/gfx/buffer_format_util.h"
 #include "ui/gfx/geometry/point.h"
 #include "ui/gfx/geometry/size.h"
 #include "ui/gfx/gpu_fence_handle.h"
@@ -85,8 +85,9 @@ bool IsRockchipAfbc(uint64_t modifier) {
 
 HardwareDisplayController::HardwareDisplayController(
     std::unique_ptr<CrtcController> controller,
-    const gfx::Point& origin)
-    : origin_(origin) {
+    const gfx::Point& origin,
+    raw_ptr<DrmModifiersFilter> drm_modifiers_filter)
+    : origin_(origin), drm_modifiers_filter_(drm_modifiers_filter) {
   AddCrtc(std::move(controller));
   AllocateCursorBuffers();
 }
@@ -96,9 +97,10 @@ HardwareDisplayController::~HardwareDisplayController() = default;
 void HardwareDisplayController::GetModesetProps(
     CommitRequest* commit_request,
     const DrmOverlayPlaneList& modeset_planes,
-    const drmModeModeInfo& mode) {
+    const drmModeModeInfo& mode,
+    bool enable_vrr) {
   GetModesetPropsForCrtcs(commit_request, modeset_planes,
-                          /*use_current_crtc_mode=*/false, mode);
+                          /*use_current_crtc_mode=*/false, mode, enable_vrr);
 }
 
 void HardwareDisplayController::GetEnableProps(
@@ -107,14 +109,16 @@ void HardwareDisplayController::GetEnableProps(
   // TODO(markyacoub): Simplify and remove the use of empty_mode.
   drmModeModeInfo empty_mode = {};
   GetModesetPropsForCrtcs(commit_request, modeset_planes,
-                          /*use_current_crtc_mode=*/true, empty_mode);
+                          /*use_current_crtc_mode=*/true, empty_mode,
+                          /*enable_vrr=*/absl::nullopt);
 }
 
 void HardwareDisplayController::GetModesetPropsForCrtcs(
     CommitRequest* commit_request,
     const DrmOverlayPlaneList& modeset_planes,
     bool use_current_crtc_mode,
-    const drmModeModeInfo& mode) {
+    const drmModeModeInfo& mode,
+    absl::optional<bool> enable_vrr) {
   DCHECK(commit_request);
 
   GetDrmDevice()->plane_manager()->BeginFrame(&owned_hardware_planes_);
@@ -127,7 +131,8 @@ void HardwareDisplayController::GetModesetPropsForCrtcs(
 
     CrtcCommitRequest request = CrtcCommitRequest::EnableCrtcRequest(
         controller->crtc(), controller->connector(), modeset_mode, origin_,
-        &owned_hardware_planes_, std::move(overlays));
+        &owned_hardware_planes_, std::move(overlays),
+        enable_vrr.value_or(controller->vrr_enabled()));
     commit_request->push_back(std::move(request));
   }
 }
@@ -145,7 +150,7 @@ void HardwareDisplayController::UpdateState(
   watchdog_.Disarm();
 
   // Verify that the current state matches the requested state.
-  if (crtc_request.should_enable() && IsEnabled()) {
+  if (crtc_request.should_enable_crtc() && IsEnabled()) {
     DCHECK(!crtc_request.overlays().empty());
     // TODO(markyacoub): This should be absorbed in the commit request.
     ResetCursor();
@@ -277,6 +282,12 @@ std::vector<uint64_t> HardwareDisplayController::GetFormatModifiers(
   std::vector<uint64_t> modifiers =
       crtc_controllers_[0]->GetFormatModifiers(fourcc_format);
 
+  if (drm_modifiers_filter_) {
+    gfx::BufferFormat buffer_format =
+        GetBufferFormatFromFourCCFormat(fourcc_format);
+    modifiers = drm_modifiers_filter_->Filter(buffer_format, modifiers);
+  }
+
   for (size_t i = 1; i < crtc_controllers_.size(); ++i) {
     std::vector<uint64_t> other =
         crtc_controllers_[i]->GetFormatModifiers(fourcc_format);
@@ -319,7 +330,7 @@ HardwareDisplayController::GetFormatModifiersForTestModeset(
   return GetFormatModifiers(fourcc_format);
 }
 
-void HardwareDisplayController::UpdatePreferredModiferForFormat(
+void HardwareDisplayController::UpdatePreferredModifierForFormat(
     gfx::BufferFormat buffer_format,
     uint64_t modifier) {
   uint32_t fourcc_format = GetFourCCFormatFromBufferFormat(buffer_format);
@@ -452,7 +463,7 @@ void HardwareDisplayController::OnPageFlipComplete(
     DrmOverlayPlaneList pending_planes,
     const gfx::PresentationFeedback& presentation_feedback) {
   if (!page_flip_request_)
-    return;  // Modeset occured during this page flip.
+    return;  // Modeset occurred during this page flip.
 
   time_of_last_flip_ = presentation_feedback.timestamp;
   current_planes_ = std::move(pending_planes);
@@ -504,7 +515,7 @@ void HardwareDisplayController::OnModesetComplete(
 
 void HardwareDisplayController::AllocateCursorBuffers() {
   TRACE_EVENT0("drm", "HDC::AllocateCursorBuffers");
-  gfx::Size max_cursor_size = GetMaximumCursorSize(GetDrmDevice()->get_fd());
+  gfx::Size max_cursor_size = GetMaximumCursorSize(*GetDrmDevice());
   SkImageInfo info = SkImageInfo::MakeN32Premul(max_cursor_size.width(),
                                                 max_cursor_size.height());
   for (size_t i = 0; i < std::size(cursor_buffers_); ++i) {

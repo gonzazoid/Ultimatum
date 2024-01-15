@@ -9,9 +9,10 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
 #include "base/values.h"
 #include "chrome/browser/ash/policy/core/device_local_account.h"
 #include "chrome/browser/ash/policy/handlers/configuration_policy_handler_ash.h"
@@ -50,9 +51,9 @@ class CloudExternalDataPolicyObserver::PolicyServiceObserver
                        const PolicyMap& current) override;
 
  private:
-  CloudExternalDataPolicyObserver* parent_;
+  raw_ptr<CloudExternalDataPolicyObserver> parent_;
   const std::string user_id_;
-  PolicyService* policy_service_;
+  raw_ptr<PolicyService> policy_service_;
 };
 
 CloudExternalDataPolicyObserver::PolicyServiceObserver::PolicyServiceObserver(

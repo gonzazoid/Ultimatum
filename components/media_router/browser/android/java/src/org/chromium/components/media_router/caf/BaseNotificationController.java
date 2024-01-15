@@ -13,7 +13,6 @@ import com.google.android.gms.cast.framework.media.RemoteMediaClient;
 import org.chromium.components.browser_ui.media.MediaNotificationInfo;
 import org.chromium.components.browser_ui.media.MediaNotificationListener;
 import org.chromium.components.browser_ui.media.MediaNotificationManager;
-import org.chromium.components.media_router.MediaRouteUmaRecorder;
 import org.chromium.components.media_router.MediaRouterClient;
 import org.chromium.components.media_router.R;
 import org.chromium.services.media_session.MediaMetadata;
@@ -87,13 +86,20 @@ public abstract class BaseNotificationController
     }
 
     private void updateNotificationMetadata() {
-        MediaMetadata notificationMetadata = new MediaMetadata("", "", "");
+        // We use a placeholder title here to comply with the requirement for non-empty
+        // notification titles. See crbug.com/1445673 for more details.
+        MediaMetadata notificationMetadata = new MediaMetadata("Chromecast", "", "");
         mNotificationBuilder.setMetadata(notificationMetadata);
 
         if (!mSessionController.isConnected()) return;
 
         CastDevice castDevice = mSessionController.getSession().getCastDevice();
-        if (castDevice != null) notificationMetadata.setTitle(castDevice.getFriendlyName());
+        if (castDevice != null) {
+            String friendlyName = castDevice.getFriendlyName();
+            if (friendlyName != null && !friendlyName.isEmpty()) {
+                notificationMetadata.setTitle(friendlyName);
+            }
+        }
 
         RemoteMediaClient remoteMediaClient = mSessionController.getRemoteMediaClient();
 
@@ -104,7 +110,7 @@ public abstract class BaseNotificationController
         if (metadata == null) return;
 
         String title = metadata.getString(com.google.android.gms.cast.MediaMetadata.KEY_TITLE);
-        if (title != null) notificationMetadata.setTitle(title);
+        if (title != null && !title.isEmpty()) notificationMetadata.setTitle(title);
 
         String artist = metadata.getString(com.google.android.gms.cast.MediaMetadata.KEY_ARTIST);
         if (artist == null) {
@@ -125,8 +131,6 @@ public abstract class BaseNotificationController
         if (!mSessionController.isConnected()) return;
 
         mSessionController.getRemoteMediaClient().play();
-        MediaRouteUmaRecorder.recordCastNotificationControlsAction(
-                MediaRouteUmaRecorder.CastNotificationControls.RESUME);
     }
 
     @Override
@@ -134,8 +138,6 @@ public abstract class BaseNotificationController
         if (!mSessionController.isConnected()) return;
 
         mSessionController.getRemoteMediaClient().pause();
-        MediaRouteUmaRecorder.recordCastNotificationControlsAction(
-                MediaRouteUmaRecorder.CastNotificationControls.PAUSE);
     }
 
     @Override
@@ -143,8 +145,6 @@ public abstract class BaseNotificationController
         if (!mSessionController.isConnected()) return;
 
         mSessionController.endSession();
-        MediaRouteUmaRecorder.recordCastNotificationControlsAction(
-                MediaRouteUmaRecorder.CastNotificationControls.STOP);
     }
 
     @Override
@@ -154,8 +154,8 @@ public abstract class BaseNotificationController
     public void onMediaSessionSeekTo(long pos) {}
 
     protected Intent createBringTabToFrontIntent() {
-        return MediaRouterClient.getInstance().createBringTabToFrontIntent(
-                mSessionController.getRouteCreationInfo().tabId);
+        return MediaRouterClient.getInstance()
+                .createBringTabToFrontIntent(mSessionController.getRouteCreationInfo().tabId);
     }
 
     // Abstract methods to be implemented by children.

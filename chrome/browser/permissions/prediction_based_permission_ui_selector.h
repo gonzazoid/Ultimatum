@@ -7,7 +7,8 @@
 
 #include <memory>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
 #include "components/permissions/permission_actions_history.h"
 #include "components/permissions/permission_ui_selector.h"
@@ -28,9 +29,8 @@ class PredictionBasedPermissionUiSelector
     : public permissions::PermissionUiSelector {
  public:
   enum class PredictionSource {
-    USE_SERVER_SIDE,
-    USE_ONDEVICE,
-    USE_ANY,
+    USE_SERVER_SIDE,  // url based cpss v2
+    USE_ONDEVICE,     // on device cpss v1
     USE_NONE,
   };
   using PredictionGrantLikelihood =

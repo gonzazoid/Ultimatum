@@ -8,9 +8,13 @@ namespace device_signals {
 
 namespace names {
 
+// Sub-property name for representing an Agent ID value. This is used for
+// forwarding third-party agent signals.
+const char kAgentId[] = "agentId";
+
 // Name of the signal for getting information of the AllowScreenLock
 // policy https://chromeenterprise.google/policies/?policy=AllowScreenLock.
-const char kAllowScreenLock[] = "allowSreenLock";
+const char kAllowScreenLock[] = "allowScreenLock";
 
 // Name of the signal for getting information about the browser version.
 const char kBrowserVersion[] = "browserVersion";
@@ -19,13 +23,17 @@ const char kBrowserVersion[] = "browserVersion";
 // dns is enabled on the device.
 const char kBuiltInDnsClientEnabled[] = "builtInDnsClientEnabled";
 
-// Name of the signal for getting information about whether chrome cleanup
-// is enabled on the device.
-const char kChromeCleanupEnabled[] = "chromeCleanupEnabled";
-
 // Name of the signal for getting information about whether users can
 // access other computers from Chrome using Chrome Remote Desktop.
 const char kChromeRemoteDesktopAppBlocked[] = "chromeRemoteDesktopAppBlocked";
+
+// Name of a signal object containing information about a CrowdStrike agent
+// currently installed.
+const char kCrowdStrike[] = "crowdStrike";
+
+// Sub-property name for representing a Customer ID value. This is used for
+// forwarding third-party agent signals.
+const char kCustomerId[] = "customerId";
 
 // Customer IDs of organizations that are affiliated with the organization
 // that is currently managing the device (or browser for non-CrOS platforms).
@@ -78,7 +86,7 @@ const char kOsVersion[] = "osVersion";
 // Name of the signal for getting information about whether the device
 // has a password reuse protection warning trigger.
 const char kPasswordProtectionWarningTrigger[] =
-    "passwordPotectionWarningTrigger";
+    "passwordProtectionWarningTrigger";
 
 // Customer IDs of organizations that are affiliated with the organization
 // that is currently managing the user who is logged in to the current Chrome
@@ -120,6 +128,13 @@ const char kSystemDnsServers[] = "systemDnsServers";
 // blocking is enabled on the device.
 const char kThirdPartyBlockingEnabled[] = "thirdPartyBlockingEnabled";
 
+// Name of the signal for the trigger which generated the device signals.
+const char kTrigger[] = "trigger";
+
+// Name of the signal for getting information about the managed user's
+// enrollment domain.
+const char kUserEnrollmentDomain[] = "userEnrollmentDomain";
+
 // Name of the signal for getting information about the windows domain
 // the device has joined.
 const char kWindowsMachineDomain[] = "windowsMachineDomain";
@@ -158,6 +173,13 @@ const char kMissingBundle[] = "MISSING_BUNDLE";
 // Returned when requesting the collection of a parameterized signal without
 // parameters.
 const char kMissingParameters[] = "MISSING_PARAMETERS";
+
+// Returned when a signal could not be retrieved due to a parsing operation
+// failed.
+const char kParsingFailed[] = "PARSING_FAILED";
+
+// Returned when a value was in a different format than expected.
+const char kUnexpectedValue[] = "UNEXPECTED_VALUE";
 
 }  // namespace errors
 

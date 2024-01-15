@@ -25,7 +25,6 @@
 #include "third_party/blink/renderer/platform/transforms/transform_operations.h"
 
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/blink/renderer/platform/testing/transformation_matrix_test_helpers.h"
 #include "third_party/blink/renderer/platform/transforms/interpolated_transform_operation.h"
 #include "third_party/blink/renderer/platform/transforms/matrix_3d_transform_operation.h"
 #include "third_party/blink/renderer/platform/transforms/matrix_transform_operation.h"
@@ -58,10 +57,9 @@ static void EmpiricallyTestBounds(const TransformOperations& from,
     float t = step / (kNumSteps - 1);
     t = min_progress + (max_progress - min_progress) * t;
     TransformOperations operations = from.Blend(to, t);
-    TransformationMatrix matrix;
+    gfx::Transform matrix;
     operations.Apply(gfx::SizeF(0, 0), matrix);
-    gfx::BoxF transformed = box;
-    matrix.TransformBox(transformed);
+    gfx::BoxF transformed = matrix.MapBox(box);
 
     if (first_time)
       empirical_bounds = transformed;
@@ -445,7 +443,7 @@ TEST(TransformOperationsTest, NonCommutativeRotations) {
                                          max_progress, &bounds));
 
   TransformOperations operations = to_ops.Blend(from_ops, max_progress);
-  TransformationMatrix blended_transform;
+  gfx::Transform blended_transform;
   operations.Apply(gfx::SizeF(0, 0), blended_transform);
 
   gfx::Point3F blended_point(0.9f, 0.9f, 0);
@@ -454,6 +452,20 @@ TEST(TransformOperationsTest, NonCommutativeRotations) {
   expanded_bounds.ExpandTo(blended_point);
 
   EXPECT_BOXF_EQ(bounds, expanded_bounds);
+}
+
+TEST(TransformOperationsTest, NonInvertibleBlendTest) {
+  TransformOperations from_ops;
+  TransformOperations to_ops;
+
+  from_ops.Operations().push_back(TranslateTransformOperation::Create(
+      Length::Fixed(5), Length::Fixed(-5), TransformOperation::kTranslate));
+  to_ops.Operations().push_back(
+      MatrixTransformOperation::Create(0, 0, 0, 0, 0, 0));
+
+  EXPECT_EQ(from_ops, to_ops.Blend(from_ops, 0.25));
+  EXPECT_EQ(to_ops, to_ops.Blend(from_ops, 0.5));
+  EXPECT_EQ(to_ops, to_ops.Blend(from_ops, 0.75));
 }
 
 TEST(TransformOperationsTest, AbsoluteSequenceBoundsTest) {
@@ -506,13 +518,13 @@ TEST(TransformOperationsTest, ZoomTest) {
       Length::Fixed(1), Length::Fixed(2), 3, TransformOperation::kTranslate3D));
   ops.Operations().push_back(PerspectiveTransformOperation::Create(1234));
   ops.Operations().push_back(
-      Matrix3DTransformOperation::Create(TransformationMatrix::ColMajor(
+      Matrix3DTransformOperation::Create(gfx::Transform::ColMajor(
           1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16)));
 
   // Apply unzoomed ops to unzoomed units, then zoom in
   gfx::Point3F unzoomed_point = original_point;
   TransformOperations unzoomed_ops = ops;
-  TransformationMatrix unzoomed_matrix;
+  gfx::Transform unzoomed_matrix;
   ops.Apply(gfx::SizeF(0, 0), unzoomed_matrix);
   gfx::Point3F result1 = unzoomed_matrix.MapPoint(unzoomed_point);
   result1.Scale(zoom_factor, zoom_factor, zoom_factor);
@@ -521,11 +533,11 @@ TEST(TransformOperationsTest, ZoomTest) {
   gfx::Point3F zoomed_point = original_point;
   zoomed_point.Scale(zoom_factor, zoom_factor, zoom_factor);
   TransformOperations zoomed_ops = ops.Zoom(zoom_factor);
-  TransformationMatrix zoomed_matrix;
+  gfx::Transform zoomed_matrix;
   zoomed_ops.Apply(gfx::SizeF(0, 0), zoomed_matrix);
   gfx::Point3F result2 = zoomed_matrix.MapPoint(zoomed_point);
 
-  EXPECT_EQ(result1, result2);
+  EXPECT_POINT3F_EQ(result1, result2);
 }
 
 TEST(TransformOperationsTest, PerspectiveOpsTest) {
@@ -603,11 +615,11 @@ TEST(TransformOperationsTest, CanBlendWithMatrixTest) {
 TEST(TransformOperationsTest, CanBlendWithMatrix3DTest) {
   TransformOperations ops_a, ops_b;
   ops_a.Operations().push_back(Matrix3DTransformOperation::Create(
-      TransformationMatrix::Affine(1, 0, 0, 1, 0, 0)));
+      gfx::Transform::Affine(1, 0, 0, 1, 0, 0)));
   ops_a.Operations().push_back(
       RotateTransformOperation::Create(0, TransformOperation::kRotate));
   ops_b.Operations().push_back(Matrix3DTransformOperation::Create(
-      TransformationMatrix::Affine(2, 0, 0, 2, 0, 0)));
+      gfx::Transform::Affine(2, 0, 0, 2, 0, 0)));
   ops_b.Operations().push_back(
       RotateTransformOperation::Create(360, TransformOperation::kRotate));
 
@@ -653,14 +665,14 @@ TEST(TransformOperationsTest, InterpolatedTransformBlendIdentityTest) {
       RotateTransformOperation::Create(11.25, TransformOperation::kRotate));
 
   const gfx::SizeF box_size(100, 100);
-  TransformationMatrix mat_d1, mat_d2, mat_d3;
+  gfx::Transform mat_d1, mat_d2, mat_d3;
   ops_d1.Apply(box_size, mat_d1);
   ops_d2.Apply(box_size, mat_d2);
   ops_d3.Apply(box_size, mat_d3);
 
-  EXPECT_TRANSFORMATION_MATRIX(mat_d1, mat_d2);
-  EXPECT_TRANSFORMATION_MATRIX(mat_d1, mat_d3);
-  EXPECT_TRANSFORMATION_MATRIX(mat_d2, mat_d3);
+  EXPECT_TRANSFORM_EQ(mat_d1, mat_d2);
+  EXPECT_TRANSFORM_EQ(mat_d1, mat_d3);
+  EXPECT_TRANSFORM_EQ(mat_d2, mat_d3);
 }
 
 TEST(TransformOperationsTest, BlendPercentPrefixTest) {
@@ -689,15 +701,15 @@ TEST(TransformOperationsTest, BlendPercentPrefixTest) {
   // part does not, so it should interpolate to a matrix and not defer to an
   // InterpolatedTransformOperation.
   ASSERT_TRUE(IsA<Matrix3DTransformOperation>(*ops_c.Operations()[1]));
-  TransformationMatrix mat_c =
+  gfx::Transform mat_c =
       To<Matrix3DTransformOperation>(*ops_c.Operations()[1]).Matrix();
 
   auto translate_ref = TranslateTransformOperation::Create(
       Length::Percent(50), Length::Percent(25), TransformOperation::kTranslate);
   // scale(1.5) rotate(90deg)
-  auto matrix_ref = TransformationMatrix::Affine(0, 1.5, -1.5, 0, 0, 0);
+  auto matrix_ref = gfx::Transform::Affine(0, 1.5, -1.5, 0, 0, 0);
   EXPECT_EQ(*ops_c.Operations()[0], *translate_ref);
-  EXPECT_TRANSFORMATION_MATRIX(mat_c, matrix_ref);
+  EXPECT_TRANSFORM_NEAR(mat_c, matrix_ref, 1e-15);
 }
 
 TEST(TransformOperationsTest, SizeDependenciesCombineTest) {
@@ -724,12 +736,35 @@ TEST(TransformOperationsTest, OutOfRangePercentage) {
       Length::Percent(std::numeric_limits<float>::max()), Length::Percent(50),
       TransformOperation::kTranslate));
 
-  TransformationMatrix mat;
+  gfx::Transform mat;
   ops.Apply(gfx::SizeF(800, 600), mat);
 
   // There should not be inf or nan in the transformation result.
   for (int i = 0; i < 16; i++)
-    EXPECT_TRUE(std::isfinite(mat.ColMajorData()[i]));
+    EXPECT_TRUE(std::isfinite(mat.ColMajorData(i)));
+}
+
+TEST(TranformOperationsTest, DisallowBlockSizeDependent_Disallowed) {
+  TransformOperations from_ops;
+  TransformOperations to_ops;
+  from_ops.Operations().push_back(TranslateTransformOperation::Create(
+      Length::Percent(50), Length::Fixed(20), TransformOperation::kTranslate));
+  to_ops.Operations().push_back(
+      ScaleTransformOperation::Create(2, 2, TransformOperation::kScale));
+
+  const wtf_size_t matching_prefix_length = 0;
+  const double progress = 0.8;
+
+  TransformOperations blended_ops = to_ops.Blend(
+      from_ops, progress,
+      TransformOperations::BoxSizeDependentMatrixBlending::kDisallow);
+  EXPECT_EQ(blended_ops, to_ops);
+
+  scoped_refptr<TransformOperation> blended_op =
+      to_ops.BlendRemainingByUsingMatrixInterpolation(
+          from_ops, matching_prefix_length, progress,
+          TransformOperations::BoxSizeDependentMatrixBlending::kDisallow);
+  EXPECT_EQ(blended_op, nullptr);
 }
 
 }  // namespace blink

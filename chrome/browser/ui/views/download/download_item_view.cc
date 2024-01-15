@@ -13,10 +13,10 @@
 #include <numeric>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/containers/fixed_flat_map.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/memory/raw_ptr.h"
 #include "base/metrics/histogram_functions.h"
@@ -24,7 +24,7 @@
 #include "base/numerics/math_constants.h"
 #include "base/ranges/algorithm.h"
 #include "base/ranges/functional.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
 #include "build/buildflag.h"
 #include "cc/paint/paint_flags.h"
@@ -68,6 +68,7 @@
 #include "ui/base/themed_vector_icon.h"
 #include "ui/base/ui_base_types.h"
 #include "ui/color/color_id.h"
+#include "ui/color/color_provider.h"
 #include "ui/compositor/layer.h"
 #include "ui/display/screen.h"
 #include "ui/events/event.h"
@@ -86,7 +87,7 @@
 #include "ui/gfx/text_elider.h"
 #include "ui/views/accessibility/view_accessibility.h"
 #include "ui/views/animation/ink_drop.h"
-#include "ui/views/animation/ink_drop_host_view.h"
+#include "ui/views/animation/ink_drop_host.h"
 #include "ui/views/background.h"
 #include "ui/views/border.h"
 #include "ui/views/controls/button/image_button.h"
@@ -97,6 +98,7 @@
 #include "ui/views/controls/progress_ring_utils.h"
 #include "ui/views/controls/styled_label.h"
 #include "ui/views/style/typography.h"
+#include "ui/views/style/typography_provider.h"
 #include "ui/views/vector_icons.h"
 #include "ui/views/widget/root_view.h"
 #include "ui/views/widget/widget.h"
@@ -137,9 +139,9 @@ constexpr int kMinimumVerticalPadding = 2 + kTopBottomPadding;
 
 // A stub subclass of Button that has no visuals.
 class TransparentButton : public views::Button {
- public:
-  METADATA_HEADER(TransparentButton);
+  METADATA_HEADER(TransparentButton, views::Button)
 
+ public:
   explicit TransparentButton(DownloadItemView* parent)
       : Button(Button::PressedCallback()) {
     views::InstallRectHighlightPathGenerator(this);
@@ -154,9 +156,13 @@ class TransparentButton : public views::Button {
         [](views::View* host) {
           // This button will be used like a LabelButton, so use the same
           // foreground base color as a label button.
+          // TODO(crbug.com/1423975): Replace by a `ui::ColorId` and use it in
+          // `InkDropHost::SetBaseColorId`.
           return color_utils::DeriveDefaultIconColor(
-              views::style::GetColor(*host, views::style::CONTEXT_BUTTON,
-                                     views::style::STYLE_PRIMARY));
+              host->GetColorProvider()->GetColor(
+                  views::TypographyProvider::Get().GetColorId(
+                      views::style::CONTEXT_BUTTON,
+                      views::style::STYLE_PRIMARY)));
         },
         this));
   }
@@ -180,7 +186,7 @@ class TransparentButton : public views::Button {
   }
 };
 
-BEGIN_METADATA(TransparentButton, views::Button)
+BEGIN_METADATA(TransparentButton)
 END_METADATA
 
 int GetFilenameStyle(const views::Label& label) {
@@ -212,15 +218,15 @@ bool is_download_warning(download::DownloadItemMode mode) {
          (mode == download::DownloadItemMode::kMalicious);
 }
 
-// Whether we are in the mixed content mode.
-bool is_mixed_content(download::DownloadItemMode mode) {
-  return (mode == download::DownloadItemMode::kMixedContentWarn) ||
-         (mode == download::DownloadItemMode::kMixedContentBlock);
+// Whether we are in the insecure download mode.
+bool is_insecure(download::DownloadItemMode mode) {
+  return (mode == download::DownloadItemMode::kInsecureDownloadWarn) ||
+         (mode == download::DownloadItemMode::kInsecureDownloadBlock);
 }
 
 // Whether a warning label is visible.
 bool has_warning_label(download::DownloadItemMode mode) {
-  return is_download_warning(mode) || is_mixed_content(mode);
+  return is_download_warning(mode) || is_insecure(mode);
 }
 
 float GetDPIScaleForView(views::View* view) {
@@ -232,9 +238,9 @@ float GetDPIScaleForView(views::View* view) {
 }  // namespace
 
 class DownloadItemView::ContextMenuButton : public views::ImageButton {
- public:
-  METADATA_HEADER(ContextMenuButton);
+  METADATA_HEADER(ContextMenuButton, views::ImageButton)
 
+ public:
   explicit ContextMenuButton(DownloadItemView* owner)
       : views::ImageButton(
             base::BindRepeating(&DownloadItemView::DropdownButtonPressed,
@@ -328,11 +334,11 @@ DownloadItemView::DownloadItemView(DownloadUIModel::DownloadUIModelPtr model,
       l10n_util::GetStringUTF16(IDS_OPEN_DOWNLOAD_NOW)));
 
   save_button_ = AddChildView(std::make_unique<views::MdTextButton>(
-      base::BindRepeating(&DownloadItemView::SaveOrDiscardButtonPressed,
+      base::BindRepeating(&DownloadItemView::ExecuteCommand,
                           base::Unretained(this), DownloadCommands::KEEP)));
 
   discard_button_ = AddChildView(std::make_unique<views::MdTextButton>(
-      base::BindRepeating(&DownloadItemView::SaveOrDiscardButtonPressed,
+      base::BindRepeating(&DownloadItemView::ExecuteCommand,
                           base::Unretained(this), DownloadCommands::DISCARD),
       l10n_util::GetStringUTF16(IDS_DISCARD_DOWNLOAD)));
 
@@ -520,7 +526,7 @@ void DownloadItemView::OnDownloadOpened() {
     label->SetText(filename);
     StyleFilename(*label, 0, filename.length());
   };
-  base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE,
       base::BindOnce(std::move(reenable), weak_ptr_factory_.GetWeakPtr()),
       base::Seconds(3));
@@ -539,13 +545,6 @@ void DownloadItemView::AnimationProgressed(const gfx::Animation* animation) {
 
 void DownloadItemView::AnimationEnded(const gfx::Animation* animation) {
   AnimationProgressed(animation);
-}
-
-void DownloadItemView::MaybeSubmitDownloadToFeedbackService(
-    DownloadCommands::Command command) {
-  if (!model_->ShouldAllowDownloadFeedback() ||
-      !SubmitDownloadToFeedbackService(command))
-    ExecuteCommand(command);
 }
 
 gfx::Size DownloadItemView::CalculatePreferredSize() const {
@@ -662,7 +661,7 @@ void DownloadItemView::OnPaint(gfx::Canvas* canvas) {
     cc::PaintFlags flags;
     // Use an alpha to make the image look disabled.
     if (!GetEnabled())
-      flags.setAlpha(120);
+      flags.setAlphaf(120.0f / 255.0f);
     canvas->DrawImageInt(*file_icon, progress_x + offset, progress_y + offset,
                          flags);
   }
@@ -729,14 +728,10 @@ void DownloadItemView::SetMode(download::DownloadItemMode mode) {
   if (mode_ == download::DownloadItemMode::kNormal) {
     UpdateAccessibleAlertAndAnimationsForNormalMode();
   } else if (is_download_warning(mode_)) {
-    const auto danger_type = model_->GetDangerType();
-    const auto file_path = model_->GetTargetFilePath();
-    bool is_https = model_->GetURL().SchemeIs(url::kHttpsScheme);
-    bool has_user_gesture = model_->HasUserGesture();
-    RecordDangerousDownloadWarningShown(danger_type, file_path, is_https,
-                                        has_user_gesture);
+    MaybeRecordDangerousDownloadWarningShown(*model_);
     announce_accessible_alert_soon_ = true;
-    if (danger_type == download::DOWNLOAD_DANGER_TYPE_PROMPT_FOR_SCANNING) {
+    if (model_->GetDangerType() ==
+        download::DOWNLOAD_DANGER_TYPE_PROMPT_FOR_SCANNING) {
       UpdateAccessibleAlert(l10n_util::GetStringFUTF16(
           IDS_PROMPT_DEEP_SCANNING_ACCESSIBLE_ALERT, unelided_filename));
     } else {
@@ -744,10 +739,10 @@ void DownloadItemView::SetMode(download::DownloadItemMode mode) {
       UpdateAccessibleAlert(model_->GetWarningText(unelided_filename, &ignore));
       accessible_alert_timer_.Stop();
     }
-  } else if (is_mixed_content(mode_)) {
+  } else if (is_insecure(mode_)) {
     announce_accessible_alert_soon_ = true;
     UpdateAccessibleAlert(l10n_util::GetStringFUTF16(
-        IDS_PROMPT_DOWNLOAD_MIXED_CONTENT_BLOCKED_ACCESSIBLE_ALERT,
+        IDS_PROMPT_DOWNLOAD_INSECURE_BLOCKED_ACCESSIBLE_ALERT,
         unelided_filename));
   } else if (mode_ == download::DownloadItemMode::kDeepScanning) {
     UpdateAccessibleAlert(l10n_util::GetStringFUTF16(
@@ -862,11 +857,11 @@ void DownloadItemView::UpdateButtons() {
 
   save_button_->SetVisible(
       (mode_ == download::DownloadItemMode::kDangerous) ||
-      (mode_ == download::DownloadItemMode::kMixedContentWarn));
+      (mode_ == download::DownloadItemMode::kInsecureDownloadWarn));
   save_button_->SetText(model_->GetWarningConfirmButtonText());
 
   discard_button_->SetVisible(
-      (mode_ == download::DownloadItemMode::kMixedContentBlock) ||
+      (mode_ == download::DownloadItemMode::kInsecureDownloadBlock) ||
       prompt_to_discard);
   scan_button_->SetVisible(prompt_to_scan);
   review_button_->SetVisible(prompt_to_review);
@@ -883,15 +878,8 @@ void DownloadItemView::UpdateButtons() {
 void DownloadItemView::UpdateAccessibleAlertAndAnimationsForNormalMode() {
   using State = download::DownloadItem::DownloadState;
   const State state = model_->GetState();
-  const std::u16string web_drive = model_->GetWebDriveName();
   if ((state == State::IN_PROGRESS) && !model_->IsPaused()) {
-    if (web_drive.empty()) {
-      UpdateAccessibleAlert(GetInProgressAccessibleAlertText());
-    } else {
-      announce_accessible_alert_soon_ = true;
-      UpdateAccessibleAlert(
-          l10n_util::GetStringFUTF16(IDS_DOWNLOAD_STATUS_UPLOADING, web_drive));
-    }
+    UpdateAccessibleAlert(GetInProgressAccessibleAlertText());
 
     if (!indeterminate_progress_timer_.IsRunning()) {
       indeterminate_progress_start_time_ = base::TimeTicks::Now();
@@ -922,17 +910,8 @@ void DownloadItemView::UpdateAccessibleAlertAndAnimationsForNormalMode() {
         {State::COMPLETE, IDS_DOWNLOAD_COMPLETE_ACCESSIBLE_ALERT},
         {State::CANCELLED, IDS_DOWNLOAD_CANCELLED_ACCESSIBLE_ALERT},
     });
-    const std::u16string alert_text =
-        (web_drive.empty() || state == State::CANCELLED)
-            ? l10n_util::GetStringFUTF16(
-                  kMap.at(state),
-                  model_->GetFileNameToReportUser().LossyDisplayName())
-            // When the file is rereouted to web drive and not cancelled, use
-            // regular string formulated in DownloadUIModel.
-            // TODO(https://crbug.com/1240372) Update with accessibility
-            // specific localized strings.
-            : model_->GetStatusText();
-
+    const std::u16string alert_text = l10n_util::GetStringFUTF16(
+        kMap.at(state), model_->GetFileNameToReportUser().LossyDisplayName());
     announce_accessible_alert_soon_ = true;
     UpdateAccessibleAlert(alert_text);
   }
@@ -971,33 +950,7 @@ std::u16string DownloadItemView::GetInProgressAccessibleAlertText() const {
   if (model_->GetOpenWhenComplete() || has_warning_label(mode_))
     return accessible_name_;
 
-  // Prefer to announce the time remaining, if known.
-  base::TimeDelta remaining;
-  if (model_->TimeRemaining(&remaining)) {
-    // If complete, skip this round: a completion status update is coming soon.
-    if (remaining.is_zero())
-      return std::u16string();
-
-    const std::u16string remaining_string =
-        ui::TimeFormat::Simple(ui::TimeFormat::FORMAT_REMAINING,
-                               ui::TimeFormat::LENGTH_SHORT, remaining);
-    return l10n_util::GetStringFUTF16(
-        IDS_DOWNLOAD_STATUS_TIME_REMAINING_ACCESSIBLE_ALERT, remaining_string);
-  }
-
-  // Time remaining is unknown, try to announce percent remaining.
-  if (model_->PercentComplete() > 0) {
-    DCHECK_LE(model_->PercentComplete(), 100);
-    return l10n_util::GetStringFUTF16Int(
-        IDS_DOWNLOAD_STATUS_PERCENT_COMPLETE_ACCESSIBLE_ALERT,
-        100 - model_->PercentComplete());
-  }
-
-  // Percent remaining is also unknown, announce bytes to download.
-  return l10n_util::GetStringFUTF16(
-      IDS_DOWNLOAD_STATUS_IN_PROGRESS_ACCESSIBLE_ALERT,
-      ui::FormatBytes(model_->GetTotalBytes()),
-      model_->GetFileNameToReportUser().LossyDisplayName());
+  return model_->GetInProgressAccessibleAlertText();
 }
 
 void DownloadItemView::AnnounceAccessibleAlert() {
@@ -1050,7 +1003,7 @@ ui::ImageModel DownloadItemView::GetIcon() const {
 
   const int non_error_icon_size = 27;
   const auto kWarning = ui::ImageModel::FromVectorIcon(
-      vector_icons::kWarningIcon, ui::kColorAlertMediumSeverity,
+      vector_icons::kWarningIcon, ui::kColorAlertMediumSeverityIcon,
       non_error_icon_size);
   const auto kError = ui::ImageModel::FromVectorIcon(
       vector_icons::kErrorIcon, ui::kColorAlertHighSeverity, 24);
@@ -1083,10 +1036,13 @@ ui::ImageModel DownloadItemView::GetIcon() const {
     case download::DOWNLOAD_DANGER_TYPE_SENSITIVE_CONTENT_WARNING:
       return kWarning;
     case download::DOWNLOAD_DANGER_TYPE_ASYNC_SCANNING:
+    case download::DOWNLOAD_DANGER_TYPE_ASYNC_LOCAL_PASSWORD_SCANNING:
     case download::DOWNLOAD_DANGER_TYPE_PROMPT_FOR_SCANNING:
+    case download::DOWNLOAD_DANGER_TYPE_PROMPT_FOR_LOCAL_PASSWORD_SCANNING:
       return kInfo;
     case download::DOWNLOAD_DANGER_TYPE_BLOCKED_UNSUPPORTED_FILETYPE:
     case download::DOWNLOAD_DANGER_TYPE_DEEP_SCANNED_SAFE:
+    case download::DOWNLOAD_DANGER_TYPE_DEEP_SCANNED_FAILED:
     case download::DOWNLOAD_DANGER_TYPE_NOT_DANGEROUS:
     case download::DOWNLOAD_DANGER_TYPE_MAYBE_DANGEROUS_CONTENT:
     case download::DOWNLOAD_DANGER_TYPE_USER_VALIDATED:
@@ -1095,20 +1051,20 @@ ui::ImageModel DownloadItemView::GetIcon() const {
       break;
   }
 
-  switch (model_->GetMixedContentStatus()) {
-    case download::DownloadItem::MixedContentStatus::BLOCK:
+  switch (model_->GetInsecureDownloadStatus()) {
+    case download::DownloadItem::InsecureDownloadStatus::BLOCK:
       return kError;
-    case download::DownloadItem::MixedContentStatus::WARN:
+    case download::DownloadItem::InsecureDownloadStatus::WARN:
       return kWarning;
-    case download::DownloadItem::MixedContentStatus::UNKNOWN:
-    case download::DownloadItem::MixedContentStatus::SAFE:
-    case download::DownloadItem::MixedContentStatus::VALIDATED:
-    case download::DownloadItem::MixedContentStatus::SILENT_BLOCK:
+    case download::DownloadItem::InsecureDownloadStatus::UNKNOWN:
+    case download::DownloadItem::InsecureDownloadStatus::SAFE:
+    case download::DownloadItem::InsecureDownloadStatus::VALIDATED:
+    case download::DownloadItem::InsecureDownloadStatus::SILENT_BLOCK:
       break;
   }
 
   LOG(ERROR) << "Unexpected danger type " << danger_type
-             << " or mixed content status " << model_->GetMixedContentStatus();
+             << " or insecure status " << model_->GetInsecureDownloadStatus();
   return kInfo;
 }
 
@@ -1130,17 +1086,8 @@ std::pair<std::u16string, int> DownloadItemView::GetStatusTextAndStyle() const {
   if (type == DangerType::DOWNLOAD_DANGER_TYPE_DEEP_SCANNED_OPENED_DANGEROUS)
     return {l10n_util::GetStringUTF16(kDangerous), STYLE_RED};
 
-  const GURL url = model_->GetOriginalURL().DeprecatedGetOriginAsURL();
   const std::u16string text =
-      (!model_->ShouldPromoteOrigin() || url.is_empty())
-          ? model_->GetStatusText()
-#if BUILDFLAG(IS_ANDROID)
-          // url_formatter::ElideUrl() doesn't exist on Android.
-          : std::u16string();
-#else
-          : url_formatter::ElideUrl(url, status_label_->font_list(),
-                                    kTextWidth);
-#endif
+      model_->GetStatusTextForLabel(status_label_->font_list(), kTextWidth);
   return {text, views::style::STYLE_PRIMARY};
 }
 
@@ -1162,16 +1109,16 @@ gfx::Size DownloadItemView::GetButtonSize() const {
 
 std::u16string DownloadItemView::ElidedFilename(
     const views::Label& label) const {
-  const gfx::FontList& font_list =
-      views::style::GetFont(CONTEXT_DOWNLOAD_SHELF, GetFilenameStyle(label));
+  const gfx::FontList& font_list = views::TypographyProvider::Get().GetFont(
+      CONTEXT_DOWNLOAD_SHELF, GetFilenameStyle(label));
   return gfx::ElideFilename(model_->GetFileNameToReportUser(), font_list,
                             kTextWidth);
 }
 
 std::u16string DownloadItemView::ElidedFilename(
     const views::StyledLabel& label) const {
-  const gfx::FontList& font_list =
-      views::style::GetFont(CONTEXT_DOWNLOAD_SHELF, GetFilenameStyle(label));
+  const gfx::FontList& font_list = views::TypographyProvider::Get().GetFont(
+      CONTEXT_DOWNLOAD_SHELF, GetFilenameStyle(label));
   return gfx::ElideFilename(model_->GetFileNameToReportUser(), font_list,
                             kTextWidth);
 }
@@ -1231,22 +1178,12 @@ void DownloadItemView::OpenButtonPressed() {
   if (mode_ == download::DownloadItemMode::kNormal) {
     complete_animation_.End();
     announce_accessible_alert_soon_ = true;
-    RecordDownloadOpenButtonPressed(model_->IsDone());
     model_->OpenDownload();
     // WARNING: |this| may be deleted!
   } else {
     ShowOpenDialog(
         shelf_->browser()->tab_strip_model()->GetActiveWebContents());
   }
-}
-
-void DownloadItemView::SaveOrDiscardButtonPressed(
-    DownloadCommands::Command command) {
-  if (is_mixed_content(mode_))
-    ExecuteCommand(command);
-  else
-    MaybeSubmitDownloadToFeedbackService(command);
-  // WARNING: |this| may be deleted!
 }
 
 void DownloadItemView::DropdownButtonPressed(const ui::Event& event) {
@@ -1299,19 +1236,12 @@ void DownloadItemView::ShowOpenDialog(content::WebContents* web_contents) {
                        DownloadCommands::DEEP_SCAN),
         base::BindOnce(&DownloadItemView::ExecuteCommand,
                        weak_ptr_factory_.GetWeakPtr(),
-                       DownloadCommands::BYPASS_DEEP_SCANNING));
+                       DownloadCommands::BYPASS_DEEP_SCANNING_AND_OPEN));
   }
 }
 
 void DownloadItemView::ShowContextMenuImpl(const gfx::Rect& rect,
                                            ui::MenuSourceType source_type) {
-  context_menu_.SetOnMenuWillShowCallback(base::BindRepeating(
-      [](base::TimeTicks start_time_ticks) {
-        base::UmaHistogramTimes("Download.Shelf.Views.ShowContextMenuTime",
-                                base::TimeTicks::Now() - start_time_ticks);
-      },
-      base::TimeTicks::Now()));
-
   // Similar hack as in MenuButtonController.
   // We're about to show the menu from a mouse press. By showing from the
   // mouse press event we block RootView in mouse dispatching. This also
@@ -1333,7 +1263,7 @@ void DownloadItemView::ShowContextMenuImpl(const gfx::Rect& rect,
     // function (which wants to know if the button was already pressed) is
     // reached -- so delay marking the button as "released" until the callstack
     // unwinds.
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(&DownloadItemView::SetDropdownPressed,
                                   std::move(view), false));
   };
@@ -1348,27 +1278,9 @@ void DownloadItemView::OpenDownloadDuringAsyncScanning() {
   model_->SetOpenWhenComplete(true);
 }
 
-bool DownloadItemView::SubmitDownloadToFeedbackService(
-    DownloadCommands::Command command) const {
-#if BUILDFLAG(FULL_SAFE_BROWSING)
-  auto* const sb_service = g_browser_process->safe_browsing_service();
-  if (!sb_service)
-    return false;
-  auto* const dp_service = sb_service->download_protection_service();
-  if (!dp_service)
-    return false;
-  // TODO(shaktisahu): Enable feedback service for offline item.
-  return !model_->GetDownloadItem() ||
-         dp_service->MaybeBeginFeedbackForDownload(
-             shelf_->browser()->profile(), model_->GetDownloadItem(), command);
-#else
-  NOTREACHED();
-  return false;
-#endif
-}
-
 void DownloadItemView::ExecuteCommand(DownloadCommands::Command command) {
   commands_.ExecuteCommand(command);
+  // WARNING: |this| may be deleted!
 }
 
 std::u16string DownloadItemView::GetStatusTextForTesting() const {
@@ -1383,12 +1295,12 @@ DEFINE_ENUM_CONVERTERS(download::DownloadItemMode,
                        {download::DownloadItemMode::kNormal, u"kNormal"},
                        {download::DownloadItemMode::kDangerous, u"kDangerous"},
                        {download::DownloadItemMode::kMalicious, u"kMalicious"},
-                       {download::DownloadItemMode::kMixedContentWarn,
-                        u"kMixedContentWarn"},
-                       {download::DownloadItemMode::kMixedContentBlock,
-                        u"kMixedContentBlock"})
+                       {download::DownloadItemMode::kInsecureDownloadWarn,
+                        u"kInsecureDownloadWarn"},
+                       {download::DownloadItemMode::kInsecureDownloadBlock,
+                        u"kInsecureDownloadBlock"})
 
-BEGIN_METADATA(DownloadItemView, views::View)
+BEGIN_METADATA(DownloadItemView)
 ADD_READONLY_PROPERTY_METADATA(download::DownloadItemMode, Mode)
 ADD_READONLY_PROPERTY_METADATA(std::u16string, InProgressAccessibleAlertText)
 ADD_READONLY_PROPERTY_METADATA(gfx::RectF, IconBounds)

@@ -7,15 +7,16 @@ package org.chromium.chrome.browser.background_task_scheduler;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
-import static org.mockito.Mockito.any;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 
+import android.app.Notification;
 import android.content.Context;
 
 import org.junit.After;
@@ -76,13 +77,17 @@ public class NativeBackgroundTaskTest {
         private int mCallCount;
 
         @Override
-        public void startBrowserProcessesAsync(@LibraryProcessType int libraryProcessType,
-                boolean startGpuProcess, boolean startMinimalBrowser,
+        public void startBrowserProcessesAsync(
+                @LibraryProcessType int libraryProcessType,
+                boolean startGpuProcess,
+                boolean startMinimalBrowser,
                 final StartupCallback callback) {}
 
         @Override
         public void startBrowserProcessesSync(
-                @LibraryProcessType int libraryProcessType, boolean singleProcess) {}
+                @LibraryProcessType int libraryProcessType,
+                boolean singleProcess,
+                boolean startGpuProcess) {}
 
         @Override
         public boolean isFullBrowserStarted() {
@@ -115,6 +120,7 @@ public class NativeBackgroundTaskTest {
         public void setIsStartupSuccessfullyCompleted(boolean flag) {
             mStartupSucceeded = flag;
         }
+
         public int completedCallCount() {
             return mCallCount;
         }
@@ -124,15 +130,11 @@ public class NativeBackgroundTaskTest {
     private TaskFinishedCallback mCallback;
     private TestNativeBackgroundTask mTask;
 
-    @Rule
-    public final JniMocker mocker = new JniMocker();
-    @Mock
-    private ChromeBrowserInitializer mChromeBrowserInitializer;
-    @Captor
-    ArgumentCaptor<BrowserParts> mBrowserParts;
+    @Rule public final JniMocker mocker = new JniMocker();
+    @Mock private ChromeBrowserInitializer mChromeBrowserInitializer;
+    @Captor ArgumentCaptor<BrowserParts> mBrowserParts;
 
-    @Mock
-    private BackgroundTaskSchedulerExternalUma mExternalUmaMock;
+    @Mock private BackgroundTaskSchedulerExternalUma mExternalUmaMock;
 
     private static class TaskFinishedCallback implements BackgroundTask.TaskFinishedCallback {
         private boolean mWasCalled;
@@ -150,6 +152,9 @@ public class NativeBackgroundTaskTest {
             mCallbackLatch.countDown();
         }
 
+        @Override
+        public void setNotification(int notificationId, Notification notification) {}
+
         boolean wasCalled() {
             return mWasCalled;
         }
@@ -164,8 +169,7 @@ public class NativeBackgroundTaskTest {
     }
 
     private static class TestNativeBackgroundTask extends NativeBackgroundTask {
-        @StartBeforeNativeResult
-        private int mStartBeforeNativeResult;
+        @StartBeforeNativeResult private int mStartBeforeNativeResult;
         private boolean mWasOnStartTaskWithNativeCalled;
         private boolean mNeedsReschedulingAfterStop;
         private CountDownLatch mStartWithNativeLatch;
@@ -210,9 +214,6 @@ public class NativeBackgroundTaskTest {
             mWasOnStopTaskWithNativeCalled = true;
             return mNeedsReschedulingAfterStop;
         }
-
-        @Override
-        public void reschedule(Context context) {}
 
         boolean waitOnStartWithNativeCallback() {
             return waitOnLatch(mStartWithNativeLatch);
@@ -266,24 +267,26 @@ public class NativeBackgroundTaskTest {
                 .handlePreNativeStartupAndLoadLibraries(any(BrowserParts.class));
         switch (setup) {
             case SUCCESS:
-                doAnswer(new Answer<Void>() {
-                    @Override
-                    public Void answer(InvocationOnMock invocation) {
-                        mBrowserParts.getValue().finishNativeInitialization();
-                        return null;
-                    }
-                })
+                doAnswer(
+                                new Answer<Void>() {
+                                    @Override
+                                    public Void answer(InvocationOnMock invocation) {
+                                        mBrowserParts.getValue().finishNativeInitialization();
+                                        return null;
+                                    }
+                                })
                         .when(mChromeBrowserInitializer)
                         .handlePostNativeStartup(eq(true), mBrowserParts.capture());
                 break;
             case FAILURE:
-                doAnswer(new Answer<Void>() {
-                    @Override
-                    public Void answer(InvocationOnMock invocation) {
-                        mBrowserParts.getValue().onStartupFailure(null);
-                        return null;
-                    }
-                })
+                doAnswer(
+                                new Answer<Void>() {
+                                    @Override
+                                    public Void answer(InvocationOnMock invocation) {
+                                        mBrowserParts.getValue().onStartupFailure(null);
+                                        return null;
+                                    }
+                                })
                         .when(mChromeBrowserInitializer)
                         .handlePostNativeStartup(eq(true), mBrowserParts.capture());
                 break;
@@ -317,8 +320,9 @@ public class NativeBackgroundTaskTest {
     @Feature("BackgroundTaskScheduler")
     public void testOnStartTask_Done_BeforeNativeLoaded() {
         mTask.setStartTaskBeforeNativeResult(NativeBackgroundTask.StartBeforeNativeResult.DONE);
-        assertFalse(mTask.onStartTask(
-                ContextUtils.getApplicationContext(), getTaskParameters(), mCallback));
+        assertFalse(
+                mTask.onStartTask(
+                        ContextUtils.getApplicationContext(), getTaskParameters(), mCallback));
 
         assertEquals(0, mBrowserStartupController.completedCallCount());
         verifyStartupCalls(0, 0);
@@ -331,8 +335,9 @@ public class NativeBackgroundTaskTest {
     public void testOnStartTask_Reschedule_BeforeNativeLoaded() {
         mTask.setStartTaskBeforeNativeResult(
                 NativeBackgroundTask.StartBeforeNativeResult.RESCHEDULE);
-        assertTrue(mTask.onStartTask(
-                ContextUtils.getApplicationContext(), getTaskParameters(), mCallback));
+        assertTrue(
+                mTask.onStartTask(
+                        ContextUtils.getApplicationContext(), getTaskParameters(), mCallback));
 
         assertTrue(mCallback.waitOnCallback());
         assertEquals(0, mBrowserStartupController.completedCallCount());
@@ -353,7 +358,6 @@ public class NativeBackgroundTaskTest {
         verifyStartupCalls(0, 0);
         assertTrue(mTask.wasOnStartTaskWithNativeCalled());
         assertFalse(mCallback.wasCalled());
-        verify(mExternalUmaMock).reportNativeTaskStarted(TaskIds.TEST, false);
     }
 
     @Test
@@ -368,8 +372,7 @@ public class NativeBackgroundTaskTest {
         verifyStartupCalls(1, 1);
         assertTrue(mTask.wasOnStartTaskWithNativeCalled());
         assertFalse(mCallback.wasCalled());
-        verify(mExternalUmaMock).reportNativeTaskStarted(TaskIds.TEST, false);
-        verify(mExternalUmaMock).reportTaskStartedNative(TaskIds.TEST, false);
+        verify(mExternalUmaMock).reportTaskStartedNative(TaskIds.TEST);
     }
 
     @Test
@@ -385,9 +388,7 @@ public class NativeBackgroundTaskTest {
         assertFalse(mTask.wasOnStartTaskWithNativeCalled());
         assertTrue(mCallback.wasCalled());
         assertTrue(mCallback.needsRescheduling());
-        verify(mExternalUmaMock).reportNativeTaskStarted(TaskIds.TEST, false);
-        verify(mExternalUmaMock).reportTaskStartedNative(TaskIds.TEST, false);
-        verify(mExternalUmaMock).reportNativeTaskFinished(TaskIds.TEST, false);
+        verify(mExternalUmaMock).reportTaskStartedNative(TaskIds.TEST);
     }
 
     @Test
@@ -403,9 +404,7 @@ public class NativeBackgroundTaskTest {
         assertFalse(mTask.wasOnStartTaskWithNativeCalled());
         assertTrue(mCallback.wasCalled());
         assertTrue(mCallback.needsRescheduling());
-        verify(mExternalUmaMock).reportNativeTaskStarted(TaskIds.TEST, false);
-        verify(mExternalUmaMock).reportTaskStartedNative(TaskIds.TEST, false);
-        verify(mExternalUmaMock).reportNativeTaskFinished(TaskIds.TEST, false);
+        verify(mExternalUmaMock).reportTaskStartedNative(TaskIds.TEST);
     }
 
     @Test
@@ -418,9 +417,7 @@ public class NativeBackgroundTaskTest {
         assertTrue(mTask.onStopTask(ContextUtils.getApplicationContext(), getTaskParameters()));
         assertTrue(mTask.wasOnStopTaskBeforeNativeLoadedCalled());
         assertFalse(mTask.wasOnStopTaskWithNativeCalled());
-        verify(mExternalUmaMock).reportNativeTaskStarted(TaskIds.TEST, false);
-        verify(mExternalUmaMock).reportTaskStartedNative(TaskIds.TEST, false);
-        verify(mExternalUmaMock).reportNativeTaskFinished(TaskIds.TEST, false);
+        verify(mExternalUmaMock).reportTaskStartedNative(TaskIds.TEST);
     }
 
     @Test
@@ -433,9 +430,7 @@ public class NativeBackgroundTaskTest {
         assertFalse(mTask.onStopTask(ContextUtils.getApplicationContext(), getTaskParameters()));
         assertTrue(mTask.wasOnStopTaskBeforeNativeLoadedCalled());
         assertFalse(mTask.wasOnStopTaskWithNativeCalled());
-        verify(mExternalUmaMock).reportNativeTaskStarted(TaskIds.TEST, false);
-        verify(mExternalUmaMock).reportTaskStartedNative(TaskIds.TEST, false);
-        verify(mExternalUmaMock).reportNativeTaskFinished(TaskIds.TEST, false);
+        verify(mExternalUmaMock).reportTaskStartedNative(TaskIds.TEST);
     }
 
     @Test
@@ -448,8 +443,6 @@ public class NativeBackgroundTaskTest {
         assertTrue(mTask.onStopTask(ContextUtils.getApplicationContext(), getTaskParameters()));
         assertFalse(mTask.wasOnStopTaskBeforeNativeLoadedCalled());
         assertTrue(mTask.wasOnStopTaskWithNativeCalled());
-        verify(mExternalUmaMock).reportNativeTaskStarted(TaskIds.TEST, false);
-        verify(mExternalUmaMock).reportNativeTaskFinished(TaskIds.TEST, false);
     }
 
     @Test
@@ -462,7 +455,5 @@ public class NativeBackgroundTaskTest {
         assertFalse(mTask.onStopTask(ContextUtils.getApplicationContext(), getTaskParameters()));
         assertFalse(mTask.wasOnStopTaskBeforeNativeLoadedCalled());
         assertTrue(mTask.wasOnStopTaskWithNativeCalled());
-        verify(mExternalUmaMock).reportNativeTaskStarted(TaskIds.TEST, false);
-        verify(mExternalUmaMock).reportNativeTaskFinished(TaskIds.TEST, false);
     }
 }

@@ -85,12 +85,20 @@ export class ListenerMock {
 export class MockItemDelegate extends ClickMock implements ItemDelegate {
   itemStateChangedTarget: FakeChromeEvent = new FakeChromeEvent();
   deleteItem(_id: string) {}
+  deleteItems(_ids: string[]) {
+    return Promise.resolve();
+  }
+  uninstallItem(_id: string) {
+    return Promise.resolve();
+  }
+  setItemSafetyCheckWarningAcknowledged(_id: string) {}
   setItemEnabled(_id: string, _isEnabled: boolean) {}
   setItemAllowedIncognito(_id: string, _isAllowedIncognito: boolean) {}
   setItemAllowedOnFileUrls(_id: string, _isAllowedOnFileUrls: boolean) {}
   setItemHostAccess(
       _id: string, _hostAccess: chrome.developerPrivate.HostAccess) {}
   setItemCollectsErrors(_id: string, _collectsErrors: boolean) {}
+  setItemPinnedToToolbar(_id: string, _pinnedToToolbar: boolean) {}
   inspectItemView(_id: string, _view: chrome.developerPrivate.ExtensionView) {}
   openUrl(_url: string) {}
 
@@ -188,6 +196,7 @@ export function createExtensionInfo(
           suspiciousInstall: false,
           corruptInstall: false,
           updateRequired: false,
+          publishedInStoreRequired: false,
           blockedByPolicy: false,
           custodianApprovalRequired: false,
           parentDisabledPermissions: false,
@@ -210,7 +219,7 @@ export function createExtensionInfo(
         offlineEnabled: false,
         runtimeErrors: [],
         runtimeWarnings: [],
-        permissions: {simplePermissions: []},
+        permissions: {simplePermissions: [], canAccessSiteData: false},
         state: 'ENABLED',
         type: 'EXTENSION',
         updateUrl: '',
@@ -220,6 +229,7 @@ export function createExtensionInfo(
         webStoreUrl: '',
         showSafeBrowsingAllowlistWarning: false,
         showAccessRequestsInToolbar: false,
+        acknowledgeSafetyCheckWarning: false,
       },
       properties || {});
 }

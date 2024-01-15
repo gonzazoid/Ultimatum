@@ -6,8 +6,10 @@
 
 #include <memory>
 
+#include <optional>
 #include "base/files/file_path.h"
 #include "base/strings/string_piece.h"
+#include "base/strings/stringprintf.h"
 #include "pdf/pdfium/pdfium_engine.h"
 #include "pdf/pdfium/pdfium_engine_exports.h"
 #include "pdf/pdfium/pdfium_test_base.h"
@@ -16,7 +18,6 @@
 #include "printing/pdf_render_settings.h"
 #include "printing/units.h"
 #include "testing/gmock/include/gmock/gmock.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/web/web_print_params.h"
 #include "third_party/skia/include/core/SkBitmap.h"
 #include "third_party/skia/include/core/SkImage.h"
@@ -33,11 +34,18 @@ using ::testing::ElementsAre;
 
 namespace {
 
-constexpr gfx::Size kUSLetterSize = {612, 792};
-constexpr gfx::Rect kUSLetterRect = {{0, 0}, kUSLetterSize};
-constexpr gfx::Rect kPrintableAreaRect = {{18, 18}, {576, 733}};
+// blink::WebPrintParams takes values in CSS pixels, not points.
+constexpr gfx::SizeF kUSLetterSize = {816, 1056};
+constexpr gfx::RectF kUSLetterRect = {{0, 0}, kUSLetterSize};
+constexpr gfx::RectF kPrintableAreaRect = {{24, 24}, {768, 977.33333}};
 
 using ExpectedDimensions = std::vector<gfx::SizeF>;
+
+std::string GenerateRendererSpecificFileName(const std::string& file_name,
+                                             bool use_skia_renderer) {
+  return base::StringPrintf("%s%s.png", file_name.c_str(),
+                            use_skia_renderer ? "_skia" : "");
+}
 
 base::FilePath GetReferenceFilePath(base::StringPiece test_filename) {
   return base::FilePath(FILE_PATH_LITERAL("pdfium_print"))
@@ -46,9 +54,8 @@ base::FilePath GetReferenceFilePath(base::StringPiece test_filename) {
 
 blink::WebPrintParams GetDefaultPrintParams() {
   blink::WebPrintParams params;
-  params.print_content_area = kUSLetterRect;
-  params.printable_area = kUSLetterRect;
-  params.paper_size = kUSLetterSize;
+  params.default_page_description.size = kUSLetterSize;
+  params.printable_area_in_css_pixels = kUSLetterRect;
   params.print_scaling_option = printing::mojom::PrintScalingOption::kNone;
   return params;
 }
@@ -62,7 +69,7 @@ void CheckPdfDimensions(const std::vector<uint8_t>& pdf_data,
   ASSERT_EQ(expected_dimensions.size(), static_cast<size_t>(page_count));
 
   for (int i = 0; i < page_count; ++i) {
-    absl::optional<gfx::SizeF> page_size =
+    std::optional<gfx::SizeF> page_size =
         exports.GetPDFPageSizeByIndex(pdf_data, i);
     ASSERT_TRUE(page_size.has_value());
     EXPECT_EQ(expected_dimensions[i], page_size.value());
@@ -104,7 +111,7 @@ void CheckPdfRendering(const std::vector<uint8_t>& pdf_data,
 
 }  // namespace
 
-TEST_F(PDFiumPrintTest, Basic) {
+TEST_P(PDFiumPrintTest, Basic) {
   TestClient client;
   std::unique_ptr<PDFiumEngine> engine =
       InitializeEngine(&client, FILE_PATH_LITERAL("hello_world2.pdf"));
@@ -149,7 +156,7 @@ TEST_F(PDFiumPrintTest, Basic) {
   }
 }
 
-TEST_F(PDFiumPrintTest, AlterScalingDefault) {
+TEST_P(PDFiumPrintTest, AlterScalingDefault) {
   TestClient client;
   std::unique_ptr<PDFiumEngine> engine =
       InitializeEngine(&client, FILE_PATH_LITERAL("rectangles.pdf"));
@@ -161,20 +168,23 @@ TEST_F(PDFiumPrintTest, AlterScalingDefault) {
   const std::vector<int> pages = {0};
 
   blink::WebPrintParams print_params = GetDefaultPrintParams();
-  print_params.printable_area = kPrintableAreaRect;
+  print_params.printable_area_in_css_pixels = kPrintableAreaRect;
   std::vector<uint8_t> pdf_data = print.PrintPagesAsPdf(pages, print_params);
   CheckPdfDimensions(pdf_data, kExpectedDimensions);
-  CheckPdfRendering(pdf_data, 0, kExpectedDimensions[0],
-                    "alter_scaling_default.png");
-
+  CheckPdfRendering(
+      pdf_data, 0, kExpectedDimensions[0],
+      GenerateRendererSpecificFileName("alter_scaling_default",
+                                       /*use_skia_renderer=*/GetParam()));
   print_params.rasterize_pdf = true;
   pdf_data = print.PrintPagesAsPdf(pages, print_params);
   CheckPdfDimensions(pdf_data, kExpectedDimensions);
-  CheckPdfRendering(pdf_data, 0, kExpectedDimensions[0],
-                    "alter_scaling_default_raster.png");
+  CheckPdfRendering(
+      pdf_data, 0, kExpectedDimensions[0],
+      GenerateRendererSpecificFileName("alter_scaling_default_raster",
+                                       /*use_skia_renderer=*/GetParam()));
 }
 
-TEST_F(PDFiumPrintTest, AlterScalingFitPaper) {
+TEST_P(PDFiumPrintTest, AlterScalingFitPaper) {
   TestClient client;
   std::unique_ptr<PDFiumEngine> engine =
       InitializeEngine(&client, FILE_PATH_LITERAL("rectangles.pdf"));
@@ -186,22 +196,25 @@ TEST_F(PDFiumPrintTest, AlterScalingFitPaper) {
   const std::vector<int> pages = {0};
 
   blink::WebPrintParams print_params = GetDefaultPrintParams();
-  print_params.printable_area = kPrintableAreaRect;
+  print_params.printable_area_in_css_pixels = kPrintableAreaRect;
   print_params.print_scaling_option =
       printing::mojom::PrintScalingOption::kFitToPaper;
   std::vector<uint8_t> pdf_data = print.PrintPagesAsPdf(pages, print_params);
   CheckPdfDimensions(pdf_data, kExpectedDimensions);
-  CheckPdfRendering(pdf_data, 0, kExpectedDimensions[0],
-                    "alter_scaling_fit-paper.png");
-
+  CheckPdfRendering(
+      pdf_data, 0, kExpectedDimensions[0],
+      GenerateRendererSpecificFileName("alter_scaling_fit-paper",
+                                       /*use_skia_renderer=*/GetParam()));
   print_params.rasterize_pdf = true;
   pdf_data = print.PrintPagesAsPdf(pages, print_params);
   CheckPdfDimensions(pdf_data, kExpectedDimensions);
-  CheckPdfRendering(pdf_data, 0, kExpectedDimensions[0],
-                    "alter_scaling_fit-paper_raster.png");
+  CheckPdfRendering(
+      pdf_data, 0, kExpectedDimensions[0],
+      GenerateRendererSpecificFileName("alter_scaling_fit-paper_raster",
+                                       /*use_skia_renderer=*/GetParam()));
 }
 
-TEST_F(PDFiumPrintTest, AlterScalingFitPrintable) {
+TEST_P(PDFiumPrintTest, AlterScalingFitPrintable) {
   TestClient client;
   std::unique_ptr<PDFiumEngine> engine =
       InitializeEngine(&client, FILE_PATH_LITERAL("rectangles.pdf"));
@@ -213,19 +226,24 @@ TEST_F(PDFiumPrintTest, AlterScalingFitPrintable) {
   const std::vector<int> pages = {0};
 
   blink::WebPrintParams print_params = GetDefaultPrintParams();
-  print_params.printable_area = kPrintableAreaRect;
+  print_params.printable_area_in_css_pixels = kPrintableAreaRect;
   print_params.print_scaling_option =
       printing::mojom::PrintScalingOption::kFitToPrintableArea;
   std::vector<uint8_t> pdf_data = print.PrintPagesAsPdf(pages, print_params);
   CheckPdfDimensions(pdf_data, kExpectedDimensions);
-  CheckPdfRendering(pdf_data, 0, kExpectedDimensions[0],
-                    "alter_scaling_fit-printable.png");
-
+  CheckPdfRendering(
+      pdf_data, 0, kExpectedDimensions[0],
+      GenerateRendererSpecificFileName("alter_scaling_fit-printable",
+                                       /*use_skia_renderer=*/GetParam()));
   print_params.rasterize_pdf = true;
   pdf_data = print.PrintPagesAsPdf(pages, print_params);
   CheckPdfDimensions(pdf_data, kExpectedDimensions);
-  CheckPdfRendering(pdf_data, 0, kExpectedDimensions[0],
-                    "alter_scaling_fit-printable_raster.png");
+  CheckPdfRendering(
+      pdf_data, 0, kExpectedDimensions[0],
+      GenerateRendererSpecificFileName("alter_scaling_fit-printable_raster",
+                                       /*use_skia_renderer=*/GetParam()));
 }
+
+INSTANTIATE_TEST_SUITE_P(All, PDFiumPrintTest, testing::Bool());
 
 }  // namespace chrome_pdf

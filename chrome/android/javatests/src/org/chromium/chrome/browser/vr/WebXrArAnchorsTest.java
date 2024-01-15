@@ -7,8 +7,6 @@ package org.chromium.chrome.browser.vr;
 import static org.chromium.chrome.browser.vr.WebXrArTestFramework.PAGE_LOAD_TIMEOUT_S;
 import static org.chromium.chrome.browser.vr.XrTestFramework.POLL_TIMEOUT_SHORT_MS;
 
-import android.os.Build;
-
 import androidx.test.filters.LargeTest;
 import androidx.test.filters.MediumTest;
 
@@ -23,7 +21,6 @@ import org.chromium.base.test.params.ParameterAnnotations.UseRunnerDelegate;
 import org.chromium.base.test.params.ParameterSet;
 import org.chromium.base.test.params.ParameterizedRunner;
 import org.chromium.base.test.util.CommandLineFlags;
-import org.chromium.base.test.util.MinAndroidSdkLevel;
 import org.chromium.chrome.browser.flags.ChromeSwitches;
 import org.chromium.chrome.browser.vr.rules.ArPlaybackFile;
 import org.chromium.chrome.browser.vr.rules.XrActivityRestriction;
@@ -34,20 +31,19 @@ import org.chromium.chrome.test.ChromeJUnit4RunnerDelegate;
 import java.util.List;
 import java.util.concurrent.Callable;
 
-/**
- * End-to-end tests for testing WebXR for AR's anchors behavior.
- */
+/** End-to-end tests for testing WebXR for AR's anchors behavior. */
 @RunWith(ParameterizedRunner.class)
 @UseRunnerDelegate(ChromeJUnit4RunnerDelegate.class)
-@CommandLineFlags.Add({ChromeSwitches.DISABLE_FIRST_RUN_EXPERIENCE,
-        "enable-features=WebXR,WebXRARModule,WebXRHitTest,LogJsConsoleMessages"})
-@MinAndroidSdkLevel(Build.VERSION_CODES.N) // WebXR for AR is only supported on N+
+@CommandLineFlags.Add({
+    ChromeSwitches.DISABLE_FIRST_RUN_EXPERIENCE,
+    "enable-features=WebXR,WebXRARModule,WebXRHitTest,LogJsConsoleMessages"
+})
 public class WebXrArAnchorsTest {
     @ClassParameter
     private static List<ParameterSet> sClassParams =
             ArTestRuleUtils.generateDefaultTestRuleParameters();
-    @Rule
-    public RuleChain mRuleChain;
+
+    @Rule public RuleChain mRuleChain;
 
     private ChromeActivityTestRule mTestRule;
     private WebXrArTestFramework mWebXrArTestFramework;
@@ -62,9 +58,7 @@ public class WebXrArAnchorsTest {
         mWebXrArTestFramework = new WebXrArTestFramework(mTestRule);
     }
 
-    /**
-     * Tests that anchor can be created off of a valid hit test result.
-     */
+    /** Tests that anchor can be created off of a valid hit test result. */
     @Test
     @MediumTest
     @XrActivityRestriction({XrActivityRestriction.SupportedActivity.ALL})
@@ -77,9 +71,7 @@ public class WebXrArAnchorsTest {
         mWebXrArTestFramework.endTest();
     }
 
-    /**
-     * Tests that a free-floating anchor can be created when the session is stable.
-     */
+    /** Tests that a free-floating anchor can be created when the session is stable. */
     @Test
     @MediumTest
     @XrActivityRestriction({XrActivityRestriction.SupportedActivity.ALL})
@@ -101,8 +93,7 @@ public class WebXrArAnchorsTest {
     @XrActivityRestriction({XrActivityRestriction.SupportedActivity.ALL})
     @ArPlaybackFile(
             "chrome/test/data/xr/ar_playback_datasets/floor_session_with_tracking_loss_37s_30fps.mp4")
-    public void
-    testAnchorStates() {
+    public void testAnchorStates() {
         mWebXrArTestFramework.loadFileAndAwaitInitialization(
                 "webxr_test_basic_anchors_updates", PAGE_LOAD_TIMEOUT_S);
         mWebXrArTestFramework.enterSessionWithUserGestureOrFail();

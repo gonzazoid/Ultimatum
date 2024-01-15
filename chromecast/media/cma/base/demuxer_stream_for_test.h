@@ -7,8 +7,7 @@
 
 #include <list>
 
-#include "base/bind.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/functional/bind.h"
 #include "chromecast/media/cma/base/demuxer_stream_adapter.h"
 #include "media/base/decoder_buffer.h"
 #include "media/base/demuxer_stream.h"
@@ -44,7 +43,7 @@ class DemuxerStreamForTest : public ::media::DemuxerStream {
   ~DemuxerStreamForTest() override;
 
   // ::media::DemuxerStream implementation.
-  void Read(ReadCB read_cb) override;
+  void Read(uint32_t count, ReadCB read_cb) override;
   ::media::AudioDecoderConfig audio_decoder_config() override;
   ::media::VideoDecoderConfig video_decoder_config() override;
   Type type() const override;

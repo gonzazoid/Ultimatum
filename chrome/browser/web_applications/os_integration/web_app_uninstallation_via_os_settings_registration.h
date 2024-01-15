@@ -7,14 +7,21 @@
 
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "build/build_config.h"
-#include "chrome/browser/web_applications/web_app_id.h"
 #include "components/services/app_service/public/cpp/file_handler.h"
+#include "components/webapps/common/web_app_id.h"
 
-class Profile;
+namespace base {
+class FilePath;
+}
 
 namespace web_app {
+
+#if BUILDFLAG(IS_WIN)
+std::wstring GetUninstallStringKeyForTesting(const base::FilePath& profile_path,
+                                             const webapps::AppId& app_id);
+#endif
 
 // True if uninstallation via os settings are managed externally by the
 // operating system. Windows is the only Os that support this feature now.
@@ -25,13 +32,18 @@ bool ShouldRegisterUninstallationViaOsSettingsWithOs();
 // Once an entry exists in the given Windows registry, it will be
 // displayed in the Windows OS settings so that user can uninstall from
 // there like any other native apps.
-void RegisterUninstallationViaOsSettingsWithOs(const AppId& app_id,
-                                               const std::string& app_name,
-                                               Profile* profile);
+// Returns if the operation was successful.
+bool RegisterUninstallationViaOsSettingsWithOs(
+    const webapps::AppId& app_id,
+    const std::string& app_name,
+    const base::FilePath& profile_path);
 
 // Remove an entry from the Windows uninstall registry.
-void UnegisterUninstallationViaOsSettingsWithOs(const AppId& app_id,
-                                                Profile* profile);
+// Returns true if the operation had no errors. The registry key not existing is
+// not considered an error, and return true.
+bool UnregisterUninstallationViaOsSettingsWithOs(
+    const webapps::AppId& app_id,
+    const base::FilePath& profile_path);
 
 }  // namespace web_app
 

@@ -6,9 +6,9 @@
 
 #include <utility>
 
-#include "base/guid.h"
 #include "base/strings/string_util.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/uuid.h"
 #include "components/download/public/common/download_item.h"
 #include "content/browser/blob_storage/chrome_blob_storage_context.h"
 #include "content/public/browser/background_fetch_response.h"
@@ -48,8 +48,8 @@ class BackgroundFetchRequestInfo::BlobDataOnIO {
 
     // In a normal profile, |file_path| and |file_size| will
     // be populated.
-    auto blob_builder =
-        std::make_unique<storage::BlobDataBuilder>(base::GenerateGUID());
+    auto blob_builder = std::make_unique<storage::BlobDataBuilder>(
+        base::Uuid::GenerateRandomV4().AsLowercaseString());
     blob_builder->AppendFile(file_path, /* offset= */ 0, file_size,
                              /* expected_modification_time= */ base::Time());
 
@@ -73,7 +73,7 @@ BackgroundFetchRequestInfo::BackgroundFetchRequestInfo(
     blink::mojom::FetchAPIRequestPtr fetch_request,
     uint64_t request_body_size)
     : RefCountedDeleteOnSequence<BackgroundFetchRequestInfo>(
-          base::SequencedTaskRunnerHandle::Get()),
+          base::SequencedTaskRunner::GetCurrentDefault()),
       request_index_(request_index),
       fetch_request_(std::move(fetch_request)),
       request_body_size_(request_body_size) {}
@@ -85,7 +85,7 @@ BackgroundFetchRequestInfo::~BackgroundFetchRequestInfo() {
 void BackgroundFetchRequestInfo::InitializeDownloadGuid() {
   DCHECK(download_guid_.empty());
 
-  download_guid_ = base::GenerateGUID();
+  download_guid_ = base::Uuid::GenerateRandomV4().AsLowercaseString();
 }
 
 void BackgroundFetchRequestInfo::SetDownloadGuid(

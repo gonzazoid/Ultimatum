@@ -3,7 +3,6 @@
 # found in the LICENSE file.
 
 source_set("scanner") {
-  configs += [ "//build/config/compiler:enable_arc" ]
   sources = [
     "camera_controller.h",
     "camera_controller.mm",
@@ -28,9 +27,9 @@ source_set("scanner") {
     "//base",
     "//components/version_info",
     "//ios/chrome/app/strings",
-    "//ios/chrome/browser/ui/commands",
-    "//ios/chrome/browser/ui/icons",
-    "//ios/chrome/browser/ui/util",
+    "//ios/chrome/browser/shared/public/commands",
+    "//ios/chrome/browser/shared/ui/symbols:icons",
+    "//ios/chrome/browser/shared/ui/util",
     "//ios/chrome/common:ios_app_bundle_id_prefix_buildflags",
     "//ios/chrome/common/ui/util",
     "//ios/third_party/material_components_ios",

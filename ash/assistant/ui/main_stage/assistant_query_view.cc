@@ -11,13 +11,13 @@
 #include "ash/assistant/ui/assistant_ui_constants.h"
 #include "ash/assistant/ui/assistant_view_ids.h"
 #include "ash/assistant/ui/colors/assistant_colors.h"
-#include "ash/assistant/ui/colors/assistant_colors_util.h"
 #include "ash/constants/ash_features.h"
 #include "ash/style/ash_color_id.h"
 #include "base/strings/escape.h"
 #include "base/strings/utf_string_conversions.h"
 #include "third_party/skia/include/core/SkColor.h"
 #include "ui/accessibility/ax_enums.mojom.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/chromeos/styles/cros_styles.h"
 #include "ui/color/color_provider.h"
 #include "ui/views/accessibility/view_accessibility.h"
@@ -55,10 +55,6 @@ AssistantQueryView::AssistantQueryView() {
 }
 
 AssistantQueryView::~AssistantQueryView() = default;
-
-const char* AssistantQueryView::GetClassName() const {
-  return "AssistantQueryView";
-}
 
 gfx::Size AssistantQueryView::CalculatePreferredSize() const {
   return gfx::Size(kMaxWidthDip, GetHeightForWidth(kMaxWidthDip));
@@ -139,5 +135,8 @@ void AssistantQueryView::SetText(const std::string& high_confidence_text,
 
   low_confidence_label_->SetText(low_confidence_text_16);
 }
+
+BEGIN_METADATA(AssistantQueryView)
+END_METADATA
 
 }  // namespace ash

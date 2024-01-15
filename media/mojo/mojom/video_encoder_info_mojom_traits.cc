@@ -4,6 +4,8 @@
 
 #include "media/mojo/mojom/video_encoder_info_mojom_traits.h"
 
+#include "media/mojo/mojom/video_encoder_info.mojom.h"
+
 namespace mojo {
 
 // static
@@ -29,9 +31,23 @@ bool StructTraits<
   out->is_hardware_accelerated = data.is_hardware_accelerated();
   out->supports_simulcast = data.supports_simulcast();
   out->reports_average_qp = data.reports_average_qp();
+  out->apply_alignment_to_all_simulcast_layers =
+      data.apply_alignment_to_all_simulcast_layers();
+  out->requested_resolution_alignment = data.requested_resolution_alignment();
+  out->supports_frame_size_change = data.supports_frame_size_change();
 
   if (!data.ReadImplementationName(&out->implementation_name))
     return false;
+
+  if (data.has_frame_delay())
+    out->frame_delay = data.frame_delay();
+  else
+    out->frame_delay.reset();
+
+  if (data.has_input_capacity())
+    out->input_capacity = data.input_capacity();
+  else
+    out->input_capacity.reset();
 
   base::span<std::vector<uint8_t>> fps_allocation(out->fps_allocation);
   if (!data.ReadFpsAllocation(&fps_allocation))

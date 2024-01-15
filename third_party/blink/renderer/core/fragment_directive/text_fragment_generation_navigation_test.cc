@@ -8,8 +8,6 @@
 #include "components/shared_highlighting/core/common/shared_highlighting_data_driven_test.h"
 #include "components/shared_highlighting/core/common/shared_highlighting_data_driven_test_results.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/blink/public/platform/scheduler/test/renderer_scheduler_test_support.h"
-#include "third_party/blink/public/platform/scheduler/web_thread_scheduler.h"
 #include "third_party/blink/renderer/core/annotation/annotation_agent_container_impl.h"
 #include "third_party/blink/renderer/core/annotation/annotation_agent_impl.h"
 #include "third_party/blink/renderer/core/editing/iterators/text_iterator.h"
@@ -21,6 +19,8 @@
 #include "third_party/blink/renderer/core/html/html_element.h"
 #include "third_party/blink/renderer/core/testing/sim/sim_request.h"
 #include "third_party/blink/renderer/core/testing/sim/sim_test.h"
+#include "third_party/blink/renderer/platform/scheduler/public/main_thread_scheduler.h"
+#include "third_party/blink/renderer/platform/scheduler/public/thread_scheduler.h"
 #include "third_party/blink/renderer/platform/testing/unit_test_helpers.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
 
@@ -75,8 +75,9 @@ void TextFragmentGenerationNavigationTest::SetUp() {
 }
 
 void TextFragmentGenerationNavigationTest::RunAsyncMatchingTasks() {
-  auto* scheduler = blink::scheduler::WebThreadScheduler::MainThreadScheduler();
-  blink::scheduler::RunIdleTasksForTesting(scheduler, base::BindOnce([]() {}));
+  ThreadScheduler::Current()
+      ->ToMainThreadScheduler()
+      ->StartIdlePeriodForTesting();
   RunPendingTasks();
 }
 
@@ -106,17 +107,17 @@ RangeInFlatTree* TextFragmentGenerationNavigationTest::GetSelectionRange(
     absl::optional<int> end_text_offset) {
   // Parent of start node will be the node with `start_parent_id` id
   // or the DOM body if no `start_parent_id`.
-  Node* start_parent_node =
-      start_parent_id == nullptr
-          ? GetDocument().body()
-          : GetDocument().getElementById(start_parent_id->c_str());
+  Node* start_parent_node = start_parent_id == nullptr
+                                ? GetDocument().body()
+                                : GetDocument().getElementById(
+                                      AtomicString(start_parent_id->c_str()));
 
   // Parent of end node will be the node with `end_parent_id` id
   // or the DOM body if no `end_parent_id`.
   Node* end_parent_node =
       end_parent_id == nullptr
           ? GetDocument().body()
-          : GetDocument().getElementById(end_parent_id->c_str());
+          : GetDocument().getElementById(AtomicString(end_parent_id->c_str()));
 
   const Node* start_node =
       start_parent_node->childNodes()->item(start_offset_in_parent);
@@ -150,7 +151,7 @@ String TextFragmentGenerationNavigationTest::GenerateSelector(
 }
 
 String TextFragmentGenerationNavigationTest::GetHighlightedText() {
-  auto* container = AnnotationAgentContainerImpl::From(GetDocument());
+  auto* container = AnnotationAgentContainerImpl::CreateIfNeeded(GetDocument());
   // Returns a null string, distinguishable from an empty string.
   if (!container)
     return String();

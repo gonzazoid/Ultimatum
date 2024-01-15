@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <cstdio>
 #include <limits>
+#include <optional>
 #include <set>
 #include <sstream>
 #include <utility>
@@ -18,17 +19,17 @@
 #include "ash/components/arc/session/arc_bridge_service.h"
 #include "ash/components/arc/session/arc_service_manager.h"
 #include "base/base64.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/check.h"
 #include "base/feature_list.h"
 #include "base/format_macros.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "base/values.h"
 #include "chrome/browser/ash/policy/status_collector/child_activity_storage.h"
 #include "chrome/browser/ash/policy/status_collector/interval_map.h"
@@ -37,10 +38,10 @@
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/common/pref_names.h"
+#include "chromeos/ash/components/login/login_state/login_state.h"
 #include "chromeos/ash/components/settings/cros_settings_names.h"
 #include "chromeos/ash/components/settings/timezone_settings.h"
-#include "chromeos/login/login_state/login_state.h"
-#include "chromeos/system/statistics_provider.h"
+#include "chromeos/ash/components/system/statistics_provider.h"
 #include "chromeos/version/version_loader.h"
 #include "components/policy/core/common/cloud/cloud_policy_constants.h"
 #include "components/policy/core/common/cloud/cloud_policy_util.h"
@@ -48,7 +49,6 @@
 #include "components/prefs/pref_service.h"
 #include "components/prefs/scoped_user_pref_update.h"
 #include "content/public/browser/browser_thread.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/cros_system_api/dbus/service_constants.h"
 
 namespace policy {
@@ -117,7 +117,7 @@ class ChildStatusCollectorState : public StatusCollectorState {
 ChildStatusCollector::ChildStatusCollector(
     PrefService* pref_service,
     Profile* profile,
-    chromeos::system::StatisticsProvider* provider,
+    ash::system::StatisticsProvider* provider,
     const AndroidStatusFetcher& android_status_fetcher,
     base::TimeDelta activity_day_start)
     : StatusCollector(provider, ash::CrosSettings::Get()),
@@ -131,8 +131,8 @@ ChildStatusCollector::ChildStatusCollector(
 
   // Get the task runner of the current thread, so we can queue status responses
   // on this thread.
-  CHECK(base::SequencedTaskRunnerHandle::IsSet());
-  task_runner_ = base::SequencedTaskRunnerHandle::Get();
+  CHECK(base::SequencedTaskRunner::HasCurrentDefault());
+  task_runner_ = base::SequencedTaskRunner::GetCurrentDefault();
 
   if (android_status_fetcher_.is_null())
     android_status_fetcher_ = base::BindRepeating(&ReadAndroidStatus);
@@ -384,7 +384,7 @@ void ChildStatusCollector::FillChildStatusReportRequest(
   anything_reported |= GetAppActivity(status);
 
   if (report_boot_mode_) {
-    absl::optional<std::string> boot_mode =
+    std::optional<std::string> boot_mode =
         StatusCollector::GetBootMode(statistics_provider_);
     if (boot_mode) {
       status->set_boot_mode(*boot_mode);
@@ -430,7 +430,7 @@ bool ChildStatusCollector::IsReportingAppInfoAndActivity() const {
 // Make this function fallible when the optional passed in evaluated to
 // nullptr, instead of returning a dummy string.
 void ChildStatusCollector::OnOSVersion(
-    const absl::optional<std::string>& version) {
+    const std::optional<std::string>& version) {
   os_version_ = version.value_or("0.0.0.0");
 }
 

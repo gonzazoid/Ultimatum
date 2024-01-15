@@ -12,8 +12,8 @@ import("//printing/buildflags/buildflags.gni")
 import("//testing/test.gni")
 import("//tools/generate_stubs/rules.gni")
 
-assert(is_linux || is_chromeos_lacros || is_chromeos,
-       "This file should only be referenced on Linux")
+assert(is_linux || is_chromeos,
+       "This file should only be referenced on Linux or Chrome OS")
 assert(use_gio, "GIO is required for building with GTK")
 
 source_set("gtk_types") {
@@ -100,8 +100,6 @@ component("gtk") {
     "select_file_dialog_linux_gtk.cc",
     "select_file_dialog_linux_gtk.h",
     "settings_provider.h",
-    "settings_provider_gsettings.cc",
-    "settings_provider_gsettings.h",
     "settings_provider_gtk.cc",
     "settings_provider_gtk.h",
     "window_frame_provider_gtk.cc",
@@ -126,6 +124,7 @@ component("gtk") {
     "//ui/aura",
     "//ui/base",
     "//ui/base:buildflags",
+    "//ui/base:ozone_buildflags",
     "//ui/base/ime",
     "//ui/base/ime/linux",
     "//ui/color",

@@ -108,13 +108,13 @@ in the `NetworkTrafficAnnotation` message of
      well.
    * `trigger`: What user action triggered the network request. Use a textual
      description. This should be a human readable string.
-   * `user_data`: What nature of data is being sent, as enums. 
-      Any personally identifiable (PII) data, provided by user or generated 
-      by Google, should be pointed out. You can include multiple 
-      values, and you may want to supplement this with the data field. 
+   * `user_data`: What nature of data is being sent, as enums.
+      Any personally identifiable (PII) data, provided by user or generated
+      by Google, should be pointed out. You can include multiple
+      values, and you may want to supplement this with the data field.
       All available User data enums can be found [here](https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/privacy/traffic_annotation.proto?q=UserDataType).
-   * `data`: Textual description of data being sent, for things that aren't 
-      covered by user_data enum values. You can also use this field if 
+   * `data`: Textual description of data being sent, for things that aren't
+      covered by user_data enum values. You can also use this field if
       more context needs to be provided to describe user_data.
    * `destination`: Target of the network request. It can be either the website
      that user visits and interacts with, a Google service, a request that does
@@ -126,15 +126,17 @@ in the `NetworkTrafficAnnotation` message of
      ZeroSuggest), use  `GOOGLE_OWNED_SERVICE`. If the request can go to other
      domains and is perceived as a part of a website rather than a native
      browser feature, use `WEBSITE`. Use `LOCAL` if the request is processed
-     locally and doesn't go to network, otherwise use `OTHER`. If `OTHER` is
-     used, please add plain text description in `destination_other`
-     field.
+     locally and doesn't go to network. If the request goes to a third-party proxy
+     first and then is forwarded to a Google service, use `PROXIED_GOOGLE_OWNED_SERVICE`.
+     Otherwise use `OTHER`. If `OTHER` is used, please add plain text description in `destination_other` field.
    * `destination_other`: Human readable description in case the destination
      points to `OTHER`.
-   * `contacts`: A person's or team's email address who are point-of-contact 
-      for questions, issues, or bugs related to this network request. 
-      This field is meant for internal use and should not be used in any 
+   * `internal`: Data that is meant to be visible internally, example point of contacts,
+      should be placed inside internal field. This field should not be used in any
       external reports.
+     * `contacts`: A person's or team's email address who are point-of-contact
+        for questions, issues, or bugs related to this network request. An
+        OWNERS file may also be specified using the `owners` field.
    * `last_reviewed`: Date when this annotation was last reviewed in YYYY-MM-DD format.
 * `policy`: These set of fields specify the controls that a user may have
   on disabling or limiting the network request and its trace.
@@ -158,15 +160,23 @@ in the `NetworkTrafficAnnotation` message of
      Note that settings look different on different platforms, make sure your
      description works everywhere!
    * `chrome_policy`: Policy configuration that disables or limits this network
-     request. This would be a text serialized protobuf of any enterprise policy.
-     See policy list or
+     request. This would be a text serialized protobuf of any **non-device**
+     enterprise policy. See policy list or
      `out/Debug/gen/components/policy/proto/chrome_settings.proto` for the full
      list of policies.
+     * Note: Use `chrome_device_policy` instead for device policies.
+   * `chrome_device_policy`: Policy configuration that disables or limits this
+     network request. This would be a text serialized protobuf of any
+     **device** enterprise policy. See
+     `components/policy/proto/chrome_device_policy.proto` for the full list of
+     policies.
+     * Note: Use `chrome_policy` instead for non-device policies (e.g. user
+     policies).
    * `policy_exception_justification`: If there is no policy to disable or limit
      this request, a justification can be presented here.
    * `deprecated_policies`: Policy names disabling or limiting this network request
       which are currently deprecated. These should be a subset of the policies in the
-      `chrome_policy` field. If a policy is removed from the `chrome_policy` field, 
+      `chrome_policy` field. If a policy is removed from the `chrome_policy` field,
       then it should be removed from this field also.
 * `comments`: If required, any human readable extra comments.
 
@@ -192,6 +202,11 @@ all other fields bundled together as a serialized protobuf string.
             "suggested spellings, which will be displayed in the context menu."
           trigger: "User types text into a text field or asks to correct a "
                    "misspelled word."
+          internal {
+            contacts {
+                email: "chrome-spellcheck@google.com"
+            }
+          }
           user_data {
             type: USER_CONTENT
           }
@@ -231,6 +246,15 @@ all other fields bundled together as a serialized protobuf string.
             "The state of the local DB is sent so the server can send just the "
             "changes. This doesn't include any user data."
           destination: GOOGLE_OWNED_SERVICE
+          internal {
+            contacts {
+                email: "chrome-safebrowsing@google.com"
+            }
+          }
+          user_data {
+            type: NONE
+          }
+          last_reviewed: "2023-01-01"
         }
         policy {
           cookies_allowed: YES

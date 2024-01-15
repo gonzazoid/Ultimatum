@@ -10,6 +10,7 @@
 #include <memory>
 
 #include "ash/components/arc/mojom/nearby_share.mojom.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/ash/arc/nearby_share/nearby_share_session_impl.h"
 #include "components/keyed_service/core/keyed_service.h"
@@ -51,15 +52,18 @@ class ArcNearbyShareBridge : public KeyedService,
       mojo::PendingRemote<mojom::NearbyShareSessionInstance> instance,
       StartNearbyShareCallback callback) override;
 
+  static void EnsureFactoryBuilt();
+
  private:
   // Called by NearbyShareSessionImpl when the session is finished and can be
   // cleaned up.
   void OnNearbyShareSessionFinished(uint32_t task_id);
 
-  ArcBridgeService* const arc_bridge_service_;  // Owned by ArcServiceManager.
+  const raw_ptr<ArcBridgeService>
+      arc_bridge_service_;  // Owned by ArcServiceManager.
 
   // Unowned pointer.
-  Profile* const profile_;
+  const raw_ptr<Profile> profile_;
 
   // Map that keeps track of a task_id with its NearbyShareSessionImpl instance.
   std::map<uint32_t, std::unique_ptr<NearbyShareSessionImpl>> session_map_;

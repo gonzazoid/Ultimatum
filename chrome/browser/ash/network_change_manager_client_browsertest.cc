@@ -4,6 +4,7 @@
 
 #include <memory>
 
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "chromeos/ash/components/dbus/shill/shill_service_client.h"
@@ -12,6 +13,7 @@
 #include "mojo/public/cpp/bindings/remote.h"
 #include "net/base/network_change_notifier.h"
 #include "services/network/public/cpp/network_connection_tracker.h"
+#include "services/network/public/mojom/network_service.mojom.h"
 #include "services/network/public/mojom/network_service_test.mojom.h"
 #include "third_party/cros_system_api/dbus/shill/dbus-constants.h"
 
@@ -120,17 +122,13 @@ class NetworkChangeManagerClientBrowserTest : public InProcessBrowserTest {
         network::mojom::ConnectionType::CONNECTION_ETHERNET);
 
     // Wait for all services to be removed.
-    service_client_ = ShillServiceClient::Get()->GetTestInterface();
-    service_client_->ClearServices();
+    ShillServiceClient::Get()->GetTestInterface()->ClearServices();
     base::RunLoop().RunUntilIdle();
   }
 
   ShillServiceClient::TestInterface* service_client() {
-    return service_client_;
+    return ShillServiceClient::Get()->GetTestInterface();
   }
-
- private:
-  ShillServiceClient::TestInterface* service_client_;
 };
 
 // Tests that network changes from shill are received by both the
@@ -168,7 +166,7 @@ IN_PROC_BROWSER_TEST_F(NetworkChangeManagerClientBrowserTest,
   // BrowserTestBase::SimulateNetworkServiceCrash to avoid the cleanup and
   // reconnection work it does for you.
   mojo::Remote<network::mojom::NetworkServiceTest> network_service_test;
-  content::GetNetworkService()->BindTestInterface(
+  content::GetNetworkService()->BindTestInterfaceForTesting(
       network_service_test.BindNewPipeAndPassReceiver());
   IgnoreNetworkServiceCrashes();
   network_service_test->SimulateCrash();

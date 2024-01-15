@@ -5,7 +5,7 @@
 #include "chrome/browser/ui/webui/ash/launcher_internals/launcher_internals_ui.h"
 
 #include "base/containers/span.h"
-#include "chrome/browser/ui/app_list/app_list_client_impl.h"
+#include "chrome/browser/ash/app_list/app_list_client_impl.h"
 #include "chrome/browser/ui/webui/webui_util.h"
 #include "chrome/common/webui_url_constants.h"
 #include "chrome/grit/launcher_internals_resources.h"
@@ -17,16 +17,13 @@ namespace ash {
 
 LauncherInternalsUI::LauncherInternalsUI(content::WebUI* web_ui)
     : MojoWebUIController(web_ui) {
-  auto source = base::WrapUnique(
-      content::WebUIDataSource::Create(chrome::kChromeUILauncherInternalsHost));
-  webui::SetupWebUIDataSource(source.get(),
+  content::WebUIDataSource* source = content::WebUIDataSource::CreateAndAdd(
+      web_ui->GetWebContents()->GetBrowserContext(),
+      chrome::kChromeUILauncherInternalsHost);
+  webui::SetupWebUIDataSource(source,
                               base::make_span(kLauncherInternalsResources,
                                               kLauncherInternalsResourcesSize),
                               IDR_LAUNCHER_INTERNALS_INDEX_HTML);
-
-  content::BrowserContext* browser_context =
-      web_ui->GetWebContents()->GetBrowserContext();
-  content::WebUIDataSource::Add(browser_context, source.release());
 }
 
 LauncherInternalsUI::~LauncherInternalsUI() = default;

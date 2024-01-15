@@ -10,44 +10,59 @@
 
 #include <memory>
 
-#include "base/mac/foundation_util.h"
-#include "base/mac/scoped_cftyperef.h"
-#include "base/mac/scoped_nsobject.h"
+#include "base/apple/bridging.h"
+#include "base/apple/scoped_cftyperef.h"
 
 namespace enterprise_connectors {
 
 SecureEnclaveHelperImpl::~SecureEnclaveHelperImpl() = default;
 
-base::ScopedCFTypeRef<SecKeyRef> SecureEnclaveHelperImpl::CreateSecureKey(
-    CFDictionaryRef attributes) {
-  base::ScopedCFTypeRef<SecKeyRef> key(
-      SecKeyCreateRandomKey(attributes, nullptr));
+base::apple::ScopedCFTypeRef<SecKeyRef>
+SecureEnclaveHelperImpl::CreateSecureKey(CFDictionaryRef attributes,
+                                         OSStatus* error) {
+  base::apple::ScopedCFTypeRef<CFErrorRef> error_ref;
+  base::apple::ScopedCFTypeRef<SecKeyRef> key(
+      SecKeyCreateRandomKey(attributes, error_ref.InitializeInto()));
+
+  // In the odd chance that the API did not populate `error_ref`, fallback to
+  // errSecCoreFoundationUnknown.
+  OSStatus status =
+      error_ref ? CFErrorGetCode(error_ref.get()) : errSecCoreFoundationUnknown;
+  if (error) {
+    *error = status;
+  }
+
   return key;
 }
 
-bool SecureEnclaveHelperImpl::Update(CFDictionaryRef query,
-                                     CFDictionaryRef attributes_to_update) {
-  return SecItemUpdate(query, attributes_to_update) == errSecSuccess;
-}
-
-bool SecureEnclaveHelperImpl::Delete(CFDictionaryRef query) {
-  return SecItemDelete(query) == errSecSuccess;
-}
-
-base::ScopedCFTypeRef<SecKeyRef> SecureEnclaveHelperImpl::CopyKey(
-    CFDictionaryRef query) {
-  base::ScopedCFTypeRef<SecKeyRef> key;
-  SecItemCopyMatching(
+base::apple::ScopedCFTypeRef<SecKeyRef> SecureEnclaveHelperImpl::CopyKey(
+    CFDictionaryRef query,
+    OSStatus* error) {
+  base::apple::ScopedCFTypeRef<SecKeyRef> key;
+  OSStatus status = SecItemCopyMatching(
       query, const_cast<CFTypeRef*>(
                  reinterpret_cast<const CFTypeRef*>(key.InitializeInto())));
+
+  if (error) {
+    *error = status;
+  }
+
   return key;
+}
+
+OSStatus SecureEnclaveHelperImpl::Update(CFDictionaryRef query,
+                                         CFDictionaryRef attributes_to_update) {
+  return SecItemUpdate(query, attributes_to_update);
+}
+
+OSStatus SecureEnclaveHelperImpl::Delete(CFDictionaryRef query) {
+  return SecItemDelete(query);
 }
 
 bool SecureEnclaveHelperImpl::IsSecureEnclaveSupported() {
-  base::scoped_nsobject<TKTokenWatcher> token_watcher(
-      [[TKTokenWatcher alloc] init]);
-  return ([token_watcher.get().tokenIDs
-      containsObject:base::mac::CFToNSCast(kSecAttrTokenIDSecureEnclave)]);
+  TKTokenWatcher* token_watcher = [[TKTokenWatcher alloc] init];
+  return ([token_watcher.tokenIDs
+      containsObject:base::apple::CFToNSPtrCast(kSecAttrTokenIDSecureEnclave)]);
 }
 
 }  // namespace enterprise_connectors

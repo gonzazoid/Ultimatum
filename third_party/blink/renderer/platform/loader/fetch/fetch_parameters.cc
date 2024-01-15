@@ -37,26 +37,15 @@ namespace blink {
 // static
 FetchParameters FetchParameters::CreateForTest(
     ResourceRequest resource_request) {
-  return FetchParameters(std::move(resource_request), nullptr);
+  return FetchParameters(std::move(resource_request),
+                         ResourceLoaderOptions(/*world=*/nullptr));
 }
 
 FetchParameters::FetchParameters(ResourceRequest resource_request,
-                                 scoped_refptr<const DOMWrapperWorld> world)
+                                 ResourceLoaderOptions options)
     : resource_request_(std::move(resource_request)),
       decoder_options_(TextResourceDecoderOptions::kPlainTextContent),
-      options_(std::move(world)),
-      speculative_preload_type_(SpeculativePreloadType::kNotSpeculative),
-      defer_(kNoDefer),
-      image_request_behavior_(ImageRequestBehavior::kNone) {}
-
-FetchParameters::FetchParameters(ResourceRequest resource_request,
-                                 const ResourceLoaderOptions& options)
-    : resource_request_(std::move(resource_request)),
-      decoder_options_(TextResourceDecoderOptions::kPlainTextContent),
-      options_(options),
-      speculative_preload_type_(SpeculativePreloadType::kNotSpeculative),
-      defer_(kNoDefer),
-      image_request_behavior_(ImageRequestBehavior::kNone) {}
+      options_(std::move(options)) {}
 
 FetchParameters::FetchParameters(FetchParameters&&) = default;
 
@@ -97,11 +86,14 @@ void FetchParameters::SetCrossOriginAccessControl(
     resource_request_.SetHTTPOrigin(origin);
 }
 
-void FetchParameters::SetResourceWidth(ResourceWidth resource_width) {
-  if (resource_width.is_set) {
-    resource_width_.width = resource_width.width;
-    resource_width_.is_set = true;
-  }
+void FetchParameters::SetResourceWidth(
+    const absl::optional<float> resource_width) {
+  resource_width_ = resource_width;
+}
+
+void FetchParameters::SetResourceHeight(
+    const absl::optional<float> resource_height) {
+  resource_height_ = resource_height;
 }
 
 void FetchParameters::SetSpeculativePreloadType(
@@ -126,7 +118,6 @@ void FetchParameters::SetLazyImageDeferred() {
 }
 
 void FetchParameters::SetLazyImageNonBlocking() {
-  // TODO(domfarolino): [Before merging]: can we DCHECK here.
   image_request_behavior_ = ImageRequestBehavior::kNonBlockingImage;
 }
 

@@ -18,6 +18,7 @@ import logging
 import requests
 
 from blinkpy.common.path_finder import RELATIVE_WEB_TESTS
+from blinkpy.web_tests.models import test_failures
 from blinkpy.web_tests.models.typ_types import ResultType
 
 logging.getLogger("urllib3").setLevel(logging.WARNING)
@@ -120,6 +121,13 @@ class TestResultSink(object):
         # https://chromium.googlesource.com/infra/luci/luci-go/+/master/resultdb/proto/type/common.proto#56
         pair = lambda k, v: {'key': k, 'value': v}
 
+        # According to //third_party/blink/web_tests/SlowTests, a test is
+        # considered slow if it is slower than ~30% of its timeout since test
+        # times can vary by up to 3x.
+        portion_of_timeout = result.total_run_time / (self._port.timeout_ms() /
+                                                      1000)
+        test_was_slow = portion_of_timeout > 0.3
+
         tags = [
             pair('test_name', result.test_name),
             pair('web_tests_device_failed', str(result.device_failed)),
@@ -128,7 +136,27 @@ class TestResultSink(object):
                  self._port.flag_specific_config_name() or ''),
             pair('web_tests_base_timeout',
                  str(int(self._port.timeout_ms() / 1000))),
+            pair('web_tests_test_was_slow', json.dumps(test_was_slow)),
         ]
+
+        # The hash allows `rebaseline-cl` to determine whether baselines are
+        # equal without needing to download the files.
+        if result.actual_image_hash:
+            tags.append(
+                pair(test_failures.FailureImage.ACTUAL_HASH_RDB_TAG,
+                     result.actual_image_hash))
+
+        if (result.image_diff_stats and result.image_diff_stats.keys() >=
+            {'maxDifference', 'totalPixels'}):
+            tags.append(
+                pair('web_tests_image_diff_max_difference',
+                     str(result.image_diff_stats['maxDifference'])))
+            tags.append(
+                pair('web_tests_image_diff_total_pixels',
+                     str(result.image_diff_stats['totalPixels'])))
+
+        for test_type_str in sorted(result.test_type):
+            tags.append(pair('web_tests_test_type', test_type_str))
 
         for used_file in self._port.used_expectations_files():
             tags.append(

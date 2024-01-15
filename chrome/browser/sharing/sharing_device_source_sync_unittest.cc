@@ -6,13 +6,13 @@
 
 #include <memory>
 
-#include "base/callback.h"
-#include "base/guid.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/test/bind.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/time/time.h"
+#include "base/uuid.h"
 #include "chrome/browser/sharing/fake_device_info.h"
 #include "chrome/browser/sharing/features.h"
 #include "chrome/browser/sharing/sharing_constants.h"
@@ -52,8 +52,8 @@ std::unique_ptr<syncer::DeviceInfo> CreateDeviceInfo(
                                                {enabled_feature});
 
   return CreateFakeDeviceInfo(
-      base::GenerateGUID(), client_name, std::move(sharing_info),
-      sync_pb::SyncEnums_DeviceType_TYPE_LINUX,
+      base::Uuid::GenerateRandomV4().AsLowercaseString(), client_name,
+      std::move(sharing_info), sync_pb::SyncEnums_DeviceType_TYPE_LINUX,
       syncer::DeviceInfo::OsType::kLinux,
       syncer::DeviceInfo::FormFactor::kDesktop, manufacturer_name, model_name);
 }
@@ -277,7 +277,7 @@ TEST_F(SharingDeviceSourceSyncTest, GetDeviceCandidates_Expired) {
   task_environment_.FastForwardBy(kSharingDeviceExpiration +
                                   base::Milliseconds(1));
 
-  std::vector<std::unique_ptr<syncer::DeviceInfo>> candidates =
+  std::vector<std::unique_ptr<SharingTargetDeviceInfo>> candidates =
       device_source->GetDeviceCandidates(
           sync_pb::SharingSpecificFields::CLICK_TO_CALL_V2);
 
@@ -293,7 +293,7 @@ TEST_F(SharingDeviceSourceSyncTest, GetDeviceCandidates_MissingRequirements) {
   fake_device_info_tracker_.Add(device_info.get());
 
   // Requires shared clipboard feature.
-  std::vector<std::unique_ptr<syncer::DeviceInfo>> candidates =
+  std::vector<std::unique_ptr<SharingTargetDeviceInfo>> candidates =
       device_source->GetDeviceCandidates(
           sync_pb::SharingSpecificFields::SHARED_CLIPBOARD_V2);
 
@@ -371,7 +371,6 @@ TEST_F(SharingDeviceSourceSyncTest, GetDeviceCandidates_NoChannel) {
 }
 
 TEST_F(SharingDeviceSourceSyncTest, GetDeviceCandidates_FCMChannel) {
-  scoped_feature_list_.InitAndDisableFeature(kSharingSendViaSync);
   auto device_source = CreateDeviceSource(/*wait_until_ready=*/true);
   auto device_info = CreateDeviceInfo(
       "client_name", sync_pb::SharingSpecificFields::CLICK_TO_CALL_V2,

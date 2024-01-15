@@ -75,7 +75,7 @@ class NetErrorTabHelperTest : public InProcessBrowserTest {
   }
 
  private:
-  raw_ptr<chrome_browser_net::NetErrorTabHelper, DanglingUntriaged>
+  raw_ptr<chrome_browser_net::NetErrorTabHelper, AcrossTasksDanglingUntriaged>
       tab_helper_ = nullptr;
 };
 
@@ -93,7 +93,7 @@ class NetErrorTabHelperWithPrerenderingTest : public NetErrorTabHelperTest {
       const NetErrorTabHelperWithPrerenderingTest&) = delete;
 
   void SetUp() override {
-    prerender_helper_.SetUp(embedded_test_server());
+    prerender_helper_.RegisterServerRequestMonitor(embedded_test_server());
     NetErrorTabHelperTest::SetUp();
   }
 
@@ -208,10 +208,6 @@ class NetErrorTabHelperWithFencedFrameTest : public NetErrorTabHelperTest {
       const NetErrorTabHelperWithFencedFrameTest&) = delete;
   NetErrorTabHelperWithFencedFrameTest& operator=(
       const NetErrorTabHelperWithFencedFrameTest&) = delete;
-
-  RenderFrameHost* primary_main_frame_host() {
-    return GetWebContents()->GetPrimaryMainFrame();
-  }
 
   test::FencedFrameTestHelper& fenced_frame_test_helper() {
     return fenced_frame_test_helper_;

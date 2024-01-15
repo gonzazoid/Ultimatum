@@ -43,14 +43,20 @@ def kill(proc, name, timeout_in_seconds=10):
   if not proc:
     return
 
-  proc.terminate()
   thread = threading.Thread(target=proc.wait)
-  thread.start()
+  try:
+    proc.terminate()
+    thread.start()
 
-  thread.join(timeout_in_seconds)
-  if thread.is_alive():
-    print('%s running after SIGTERM, trying SIGKILL.\n' % name, file=sys.stderr)
-    proc.kill()
+    thread.join(timeout_in_seconds)
+    if thread.is_alive():
+      print('%s running after SIGTERM, trying SIGKILL.\n' % name,
+        file=sys.stderr)
+      proc.kill()
+  except OSError as e:
+    # proc.terminate()/kill() can raise, not sure if only ProcessLookupError
+    # which is explained in https://bugs.python.org/issue40550#msg382427
+    print('Exception while killing process %s: %s' % (name, e), file=sys.stderr)
 
   thread.join(timeout_in_seconds)
   if thread.is_alive():
@@ -199,13 +205,16 @@ def _run_with_xvfb(cmd, env, stdoutfile, use_openbox,
       signal.signal(signal.SIGUSR1, signal.SIG_IGN)
       xvfb_proc = subprocess.Popen(xvfb_cmd, stderr=subprocess.STDOUT, env=env)
       signal.signal(signal.SIGUSR1, set_xvfb_ready)
-      for _ in range(10):
+      for _ in range(30):
         time.sleep(.1)  # gives Xvfb time to start or fail.
         if xvfb_ready.getvalue() or xvfb_proc.poll() is not None:
           break  # xvfb sent ready signal, or already failed and stopped.
 
       if xvfb_proc.poll() is None:
-        break  # xvfb is running, can proceed.
+        if xvfb_ready.getvalue():
+          break  # xvfb is ready
+        kill(xvfb_proc, 'Xvfb')  # still not ready, give up and retry
+
     if xvfb_proc.poll() is not None:
       raise _XvfbProcessError('Failed to start after 10 tries')
 
@@ -229,12 +238,12 @@ def _run_with_xvfb(cmd, env, stdoutfile, use_openbox,
           ['openbox', '--sm-disable', '--startup',
            openbox_startup_cmd], stderr=subprocess.STDOUT, env=env)
 
-      for _ in range(10):
+      for _ in range(30):
         time.sleep(.1)  # gives Openbox time to start or fail.
         if openbox_ready.getvalue() or openbox_proc.poll() is not None:
           break  # openbox sent ready signal, or failed and stopped.
 
-      if openbox_proc.poll() is not None:
+      if openbox_proc.poll() is not None or not openbox_ready.getvalue():
         raise _XvfbProcessError('Failed to start OpenBox.')
 
     if use_xcompmgr:
@@ -288,6 +297,12 @@ def _run_with_weston(cmd, env, stdoutfile, cwd):
     # Set $XDG_RUNTIME_DIR if it is not set.
     _set_xdg_runtime_dir(env)
 
+    # Write options that can't be passed via CLI flags to the config file.
+    # 1) panel-position=none - disables the panel, which might interfere with
+    # the tests by blocking mouse input.
+    with open(_weston_config_file_path(), 'w') as weston_config_file:
+      weston_config_file.write('[shell]\npanel-position=none')
+
     # Weston is compiled along with the Ozone/Wayland platform, and is
     # fetched as data deps. Thus, run it from the current directory.
     #
@@ -298,14 +313,15 @@ def _run_with_weston(cmd, env, stdoutfile, cwd):
     # to enter idle state. Otherwise, Weston stops to send frame callbacks,
     # and tests start to time out (this typically happens after 300 seconds -
     # the default time after which Weston enters the idle state).
-    # 3) --modules=test-plugin.so,systemd-notify.so - enables support for the
-    # weston-test Wayland protocol extension and the systemd-notify protocol.
+    # 3) --modules=ui-controls.so,systemd-notify.so - enables support for the
+    # ui-controls Wayland protocol extension and the systemd-notify protocol.
     # 4) --width && --height set size of a virtual display: we need to set
     # an adequate size so that tests can have more room for managing size
     # of windows.
+    # 5) --config=... - tells Weston to use our custom config.
     weston_cmd = ['./weston', '--backend=headless-backend.so', '--idle-time=0',
-          '--modules=test-plugin.so,systemd-notify.so', '--width=1024',
-          '--height=768']
+          '--modules=ui-controls.so,systemd-notify.so', '--width=1280',
+          '--height=800', '--config=' + _weston_config_file_path()]
 
     if '--weston-use-gl' in cmd:
       # Runs Weston using hardware acceleration instead of SwiftShader.
@@ -388,6 +404,9 @@ def _run_with_weston(cmd, env, stdoutfile, cwd):
     if os.path.exists(_weston_notify_socket_address()):
       os.remove(_weston_notify_socket_address())
 
+    if os.path.exists(_weston_config_file_path()):
+      os.remove(_weston_config_file_path())
+
     # dbus-daemon is not a subprocess, so we can't SIGTERM+waitpid() on it.
     # To ensure it exits, use SIGKILL which should be safe since all other
     # processes that it would have been servicing have exited.
@@ -396,6 +415,9 @@ def _run_with_weston(cmd, env, stdoutfile, cwd):
 
 def _weston_notify_socket_address():
   return os.path.join(tempfile.gettempdir(), '.xvfb.py-weston-notify.sock')
+
+def _weston_config_file_path():
+  return os.path.join(tempfile.gettempdir(), '.xvfb.py-weston.ini')
 
 def _get_display_from_weston(weston_proc_pid):
   """Retrieves $WAYLAND_DISPLAY set by Weston.

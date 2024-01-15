@@ -7,6 +7,7 @@
 #include <iterator>
 
 #include "base/run_loop.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/test/bind.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_binding_for_core.h"
@@ -22,6 +23,7 @@
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/mojo/heap_mojo_associated_receiver.h"
 #include "third_party/blink/renderer/platform/mojo/heap_mojo_associated_remote.h"
+#include "third_party/blink/renderer/platform/testing/task_environment.h"
 #include "v8/include/v8.h"
 
 namespace blink {
@@ -56,7 +58,7 @@ class BroadcastChannelTester : public GarbageCollected<BroadcastChannelTester>,
     channel_->addEventListener(event_type_names::kMessageerror, listener);
   }
 
-  BroadcastChannel* channel() const { return channel_; }
+  BroadcastChannel* channel() const { return channel_.Get(); }
   const HeapVector<Member<MessageEvent>>& received_events() const {
     return received_events_;
   }
@@ -129,6 +131,7 @@ BlinkCloneableMessage MakeNullMessage() {
 }
 
 TEST(BroadcastChannelTest, DispatchMessageEvent) {
+  test::TaskEnvironment task_environment;
   DummyPageHolder holder;
   ExecutionContext* execution_context = holder.GetFrame().DomWindow();
   auto* tester =
@@ -144,6 +147,7 @@ TEST(BroadcastChannelTest, DispatchMessageEvent) {
 }
 
 TEST(BroadcastChannelTest, AgentClusterLockedMatch) {
+  test::TaskEnvironment task_environment;
   DummyPageHolder holder;
   ExecutionContext* execution_context = holder.GetFrame().DomWindow();
   auto* tester =
@@ -162,6 +166,7 @@ TEST(BroadcastChannelTest, AgentClusterLockedMatch) {
 }
 
 TEST(BroadcastChannelTest, AgentClusterLockedMismatch) {
+  test::TaskEnvironment task_environment;
   DummyPageHolder holder;
   ExecutionContext* execution_context = holder.GetFrame().DomWindow();
   auto* tester =
@@ -180,6 +185,7 @@ TEST(BroadcastChannelTest, AgentClusterLockedMismatch) {
 }
 
 TEST(BroadcastChannelTest, MessageCannotDeserialize) {
+  test::TaskEnvironment task_environment;
   DummyPageHolder holder;
   LocalDOMWindow* window = holder.GetFrame().DomWindow();
   auto* tester = MakeGarbageCollected<BroadcastChannelTester>(window);
@@ -204,6 +210,7 @@ TEST(BroadcastChannelTest, MessageCannotDeserialize) {
 }
 
 TEST(BroadcastChannelTest, OutgoingMessagesMarkedWithAgentClusterId) {
+  test::TaskEnvironment task_environment;
   DummyPageHolder holder;
   ExecutionContext* execution_context = holder.GetFrame().DomWindow();
   ScriptState* script_state = ToScriptStateForMainWorld(&holder.GetFrame());
@@ -226,7 +233,17 @@ TEST(BroadcastChannelTest, OutgoingMessagesMarkedWithAgentClusterId) {
   EXPECT_FALSE(tester->sent_messages()[0].locked_to_sender_agent_cluster);
 }
 
-TEST(BroadcastChannelTest, OutgoingAgentClusterLockedMessage) {
+// TODO(crbug.com/1413818): iOS doesn't support WebAssembly yet.
+#if BUILDFLAG(IS_IOS)
+#define MAYBE_OutgoingAgentClusterLockedMessage \
+  DISABLED_OutgoingAgentClusterLockedMessage
+#else
+#define MAYBE_OutgoingAgentClusterLockedMessage \
+  OutgoingAgentClusterLockedMessage
+#endif
+
+TEST(BroadcastChannelTest, MAYBE_OutgoingAgentClusterLockedMessage) {
+  test::TaskEnvironment task_environment;
   DummyPageHolder holder;
   ExecutionContext* execution_context = holder.GetFrame().DomWindow();
   ScriptState* script_state = ToScriptStateForMainWorld(&holder.GetFrame());

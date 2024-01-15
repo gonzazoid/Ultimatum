@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors
+// Copyright 2023 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,88 +7,110 @@ package org.chromium.base.jank_tracker;
 import android.os.Handler;
 import android.os.HandlerThread;
 
-import androidx.annotation.Nullable;
-
-import org.chromium.base.TraceEvent;
-
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * This class receives requests to start and stop jank scenario tracking and runs them in a
  * HandlerThread it creates. In addition it handles the recording of periodic jank metrics.
  */
-class JankReportingScheduler {
-    private static final long PERIODIC_METRIC_DELAY_MS = 30_000;
-    private static final long TRACE_EVENT_TRACK_ID = 84186319646187624L;
+public class JankReportingScheduler {
+    private static final long PERIODIC_METRIC_DELAY_MS = 5_000;
     private final FrameMetricsStore mFrameMetricsStore;
 
-    JankReportingScheduler(FrameMetricsStore frameMetricsStore) {
+    public JankReportingScheduler(FrameMetricsStore frameMetricsStore) {
         mFrameMetricsStore = frameMetricsStore;
+        LazyHolder.HANDLER.post(
+                new Runnable() {
+                    @Override
+                    public void run() {
+                        mFrameMetricsStore.initialize();
+                    }
+                });
     }
 
-    private final Runnable mPeriodicMetricReporter = new Runnable() {
-        @Override
-        public void run() {
-            finishTrackingScenario(JankScenario.PERIODIC_REPORTING);
+    private final Runnable mPeriodicMetricReporter =
+            new Runnable() {
+                @Override
+                public void run() {
+                    // delay should never be null.
+                    finishTrackingScenario(JankScenario.PERIODIC_REPORTING);
 
-            if (mIsPeriodicReporterLooping.get()) {
-                startTrackingScenario(JankScenario.PERIODIC_REPORTING);
-                getOrCreateHandler().postDelayed(mPeriodicMetricReporter, PERIODIC_METRIC_DELAY_MS);
-            }
+                    if (mIsPeriodicReporterLooping.get()) {
+                        // We delay starting the next periodic reporting until the timeout has
+                        // finished by taking the delay and +1 so that it will run in order (it
+                        // was posted above).
+                        startTrackingScenario(JankScenario.PERIODIC_REPORTING);
+                        LazyHolder.HANDLER.postDelayed(
+                                mPeriodicMetricReporter, PERIODIC_METRIC_DELAY_MS);
+                    }
+                }
+            };
+
+    private static class LazyHolder {
+        private static final HandlerThread HANDLER_THREAD;
+        private static final Handler HANDLER;
+
+        static {
+            HANDLER_THREAD = new HandlerThread("Jank-Tracker");
+            HANDLER_THREAD.start();
+            HANDLER = new Handler(HANDLER_THREAD.getLooper());
         }
-    };
+    }
 
-    @Nullable
-    protected HandlerThread mHandlerThread;
-    @Nullable
-    private Handler mHandler;
     private final AtomicBoolean mIsPeriodicReporterLooping = new AtomicBoolean(false);
 
-    // The string added is a static string.
-    @SuppressWarnings("NoDynamicStringsInTraceEventCheck")
-    void startTrackingScenario(@JankScenario int scenario) {
-        // Make a unique ID for each scenario for tracing.
-        TraceEvent.startAsync("JankCUJ:" + JankMetricUMARecorder.scenarioToString(scenario),
-                TRACE_EVENT_TRACK_ID + scenario);
-        getOrCreateHandler().post(new JankReportingRunnable(
-                mFrameMetricsStore, scenario, /* isStartingTracking= */ true));
+    public void startTrackingScenario(JankScenario scenario) {
+        LazyHolder.HANDLER.post(
+                new JankReportingRunnable(
+                        mFrameMetricsStore,
+                        scenario,
+                        /* isStartingTracking= */ true,
+                        LazyHolder.HANDLER,
+                        null));
     }
 
-    // The string added is a static string.
-    @SuppressWarnings("NoDynamicStringsInTraceEventCheck")
-    void finishTrackingScenario(@JankScenario int scenario) {
-        TraceEvent.finishAsync("JankCUJ:" + JankMetricUMARecorder.scenarioToString(scenario),
-                TRACE_EVENT_TRACK_ID + scenario);
-        getOrCreateHandler().post(new JankReportingRunnable(
-                mFrameMetricsStore, scenario, /* isStartingTracking= */ false));
+    public void finishTrackingScenario(JankScenario scenario) {
+        finishTrackingScenario(scenario, -1);
     }
 
-    protected Handler getOrCreateHandler() {
-        if (mHandler == null) {
-            mHandlerThread = new HandlerThread("Jank-Tracker");
-            mHandlerThread.start();
-            mHandler = new Handler(mHandlerThread.getLooper());
-        }
-        return mHandler;
+    public void finishTrackingScenario(JankScenario scenario, long endScenarioTimeNs) {
+        finishTrackingScenario(scenario, JankEndScenarioTime.endAt(endScenarioTimeNs));
     }
 
-    void startReportingPeriodicMetrics() {
+    public void finishTrackingScenario(JankScenario scenario, JankEndScenarioTime endScenarioTime) {
+        // We store the stop task in case the delay is greater than zero and we start this scenario
+        // again.
+        JankReportingRunnable runnable =
+                new JankReportingRunnable(
+                        mFrameMetricsStore,
+                        scenario,
+                        /* isStartingTracking= */ false,
+                        LazyHolder.HANDLER,
+                        endScenarioTime);
+        LazyHolder.HANDLER.post(runnable);
+    }
+
+    public Handler getOrCreateHandler() {
+        return LazyHolder.HANDLER;
+    }
+
+    public void startReportingPeriodicMetrics() {
         // If mIsPeriodicReporterLooping was already true then there's no need to post another task.
         if (mIsPeriodicReporterLooping.getAndSet(true)) {
             return;
         }
         startTrackingScenario(JankScenario.PERIODIC_REPORTING);
-        getOrCreateHandler().postDelayed(mPeriodicMetricReporter, PERIODIC_METRIC_DELAY_MS);
+        LazyHolder.HANDLER.postDelayed(mPeriodicMetricReporter, PERIODIC_METRIC_DELAY_MS);
     }
 
-    void stopReportingPeriodicMetrics() {
+    public void stopReportingPeriodicMetrics() {
         // Disable mPeriodicMetricReporter looping, and return early if it was already disabled.
         if (!mIsPeriodicReporterLooping.getAndSet(false)) {
             return;
         }
         // Remove any existing mPeriodicMetricReporter delayed tasks.
-        getOrCreateHandler().removeCallbacks(mPeriodicMetricReporter);
+        LazyHolder.HANDLER.removeCallbacks(mPeriodicMetricReporter);
         // Run mPeriodicMetricReporter one last time immediately.
-        getOrCreateHandler().post(mPeriodicMetricReporter);
+        LazyHolder.HANDLER.post(mPeriodicMetricReporter);
     }
 }

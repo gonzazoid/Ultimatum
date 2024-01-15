@@ -4,7 +4,7 @@
 
 // For ease of development, we load the graph from this hardcoded location by
 // default. This should be changed when a snapshot picker is implemented.
-const LATEST_GRAPH = 'https://storage.googleapis.com/clank-dependency-graphs/latest/monochrome_public_bundle.json';
+const LATEST_GRAPH = 'https://storage.googleapis.com/clank-dependency-graphs/latest/all.json';
 
 // We serve our testing data on localhost:8888 as a
 // fallback that will be triggered if CORS blocks the request. In production,
@@ -16,6 +16,7 @@ import * as d3 from 'd3';
 
 /**
  * Retrieve the graph to show.
+ *
  * @return {Promise} Promise resolved with the graph data.
  */
 async function loadGraph() {

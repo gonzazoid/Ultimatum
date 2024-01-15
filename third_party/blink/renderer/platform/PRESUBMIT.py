@@ -12,7 +12,6 @@ import os
 import re
 import sys
 
-USE_PYTHON3 = True
 RUNTIMEENABLED_NAME = re.compile(r'\s*name\s*:\s*"([^"]*)"')
 ASH_STATUS = "ChromeOS_Ash"
 LACROS_STATUS = "ChromeOS_Lacros"
@@ -49,7 +48,7 @@ def RuntimeEnabledFeatures(input_api, filename):
 def RuntimeEnabledFeatureNames(filename):
     """Reads the 'name' of each feature in runtime_enabled_features.json5."""
     # Note: We don't have a JSON5 parser available, so just use a regex.
-    with open(filename) as f:
+    with open(filename, encoding='utf-8') as f:
         for line in f:
             match = RUNTIMEENABLED_NAME.match(line)
             if match:

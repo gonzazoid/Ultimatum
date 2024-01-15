@@ -35,8 +35,6 @@
 #include "components/find_in_page/find_types.h"
 #include "components/prefs/pref_service.h"
 #include "content/public/browser/download_manager.h"
-#include "content/public/browser/notification_service.h"
-#include "content/public/browser/notification_types.h"
 #include "content/public/browser/render_view_host.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/test/browser_test.h"
@@ -160,7 +158,7 @@ class FindInPageControllerTest : public InProcessBrowserTest {
                    bool forward,
                    bool case_sensitive,
                    int* ordinal) {
-    Browser* browser = chrome::FindBrowserWithWebContents(web_contents);
+    Browser* browser = chrome::FindBrowserWithTab(web_contents);
     browser->GetFindBarController()->find_bar()->SetFindTextAndSelectedRange(
         search_str, gfx::Range());
     return ui_test_utils::FindInPage(web_contents, search_str, forward,
@@ -345,7 +343,7 @@ IN_PROC_BROWSER_TEST_F(FindInPageControllerTest, NoAudibleAlertOnFrameChange) {
   constexpr char kRemoveFrameScript[] =
       "frame = document.getElementsByTagName(\"FRAME\")[0];\n"
       "frame.parentElement.removeChild(frame);\n";
-  ASSERT_TRUE(content::ExecuteScript(web_contents, kRemoveFrameScript));
+  ASSERT_TRUE(content::ExecJs(web_contents, kRemoveFrameScript));
 
   ASSERT_TRUE(
       ui_test_utils::NavigateToURL(browser(), GetURL("specialchar.html")));
@@ -664,11 +662,7 @@ IN_PROC_BROWSER_TEST_F(FindInPageControllerTest,
   EXPECT_EQ(1, ordinal);
 
   // Move the selection to link 1, after searching.
-  std::string result;
-  ASSERT_TRUE(content::ExecuteScriptAndExtractString(
-      web_contents,
-      "window.domAutomationController.send(selectLink1());",
-      &result));
+  ASSERT_TRUE(content::ExecJs(web_contents, "selectLink1();"));
 
   // Do a find-next after the selection.  This should move forward
   // from there to the 3rd instance of 'google'.
@@ -693,11 +687,7 @@ IN_PROC_BROWSER_TEST_F(FindInPageControllerTest,
   int ordinal = 0;
 
   // Move the selection to the text span.
-  std::string result;
-  ASSERT_TRUE(content::ExecuteScriptAndExtractString(
-      web_contents,
-      "window.domAutomationController.send(selectSpan());",
-      &result));
+  ASSERT_TRUE(content::ExecJs(web_contents, "selectSpan();"));
 
   // Do a find-next after the selection. This should select the 2nd occurrence
   // of the word 'find'.
@@ -807,8 +797,8 @@ IN_PROC_BROWSER_TEST_F(FindInPageControllerTest, NavigateClearsOrdinal) {
 
   // Open the Find box. In most tests we can just search without opening the
   // box first, but in this case we are testing functionality triggered by
-  // NOTIFICATION_NAV_ENTRY_COMMITTED in the FindBarController and the observer
-  // for that event isn't setup unless the box is open.
+  // `NavigationEntryCommitted()` in the FindBarController and it isn't setup
+  // unless the box is open.
   EnsureFindBoxOpen();
 
   // Search for a text that exists within a link on the page.
@@ -1401,12 +1391,10 @@ IN_PROC_BROWSER_TEST_F(FindInPageControllerTest, NoIncognitoPrepopulate) {
       browser()->profile()->GetPrimaryOTRProfile(/*create_if_needed=*/true);
   Browser* incognito_browser =
       Browser::Create(Browser::CreateParams(incognito_profile, true));
-  content::WindowedNotificationObserver observer(
-      content::NOTIFICATION_LOAD_STOP,
-      content::NotificationService::AllSources());
   chrome::AddSelectedTabWithURL(incognito_browser, url,
                                 ui::PAGE_TRANSITION_AUTO_TOPLEVEL);
-  observer.Wait();
+  EXPECT_TRUE(content::WaitForLoadStop(
+      incognito_browser->tab_strip_model()->GetActiveWebContents()));
   incognito_browser->window()->Show();
 
   // Open the find box and make sure that it is prepopulated with "page".
@@ -1461,13 +1449,11 @@ IN_PROC_BROWSER_TEST_F(FindInPageControllerTest, FitWindow) {
   Browser::CreateParams params(Browser::TYPE_POPUP, browser()->profile(), true);
   params.initial_bounds = gfx::Rect(0, 0, 100, 500);
   Browser* popup = Browser::Create(params);
-  content::WindowedNotificationObserver observer(
-      content::NOTIFICATION_LOAD_STOP,
-      content::NotificationService::AllSources());
   chrome::AddSelectedTabWithURL(popup, GURL(url::kAboutBlankURL),
                                 ui::PAGE_TRANSITION_LINK);
   // Wait for the page to finish loading.
-  observer.Wait();
+  EXPECT_TRUE(content::WaitForLoadStop(
+      popup->tab_strip_model()->GetActiveWebContents()));
   popup->window()->Show();
 
   EnsureFindBoxOpenForBrowser(popup);

@@ -4,46 +4,107 @@
 
 #include "ash/system/cast/cast_feature_pod_controller.h"
 
+#include <string>
+
 #include "ash/constants/quick_settings_catalogs.h"
 #include "ash/public/cpp/ash_view_ids.h"
+#include "ash/public/cpp/cast_config_controller.h"
 #include "ash/public/cpp/system_tray_client.h"
 #include "ash/resources/vector_icons/vector_icons.h"
 #include "ash/shell.h"
 #include "ash/strings/grit/ash_strings.h"
 #include "ash/system/model/system_tray_model.h"
-#include "ash/system/unified/feature_pod_button.h"
+#include "ash/system/unified/feature_tile.h"
+#include "ash/system/unified/quick_settings_metrics_util.h"
 #include "ash/system/unified/unified_system_tray_controller.h"
+#include "base/functional/bind.h"
+#include "base/strings/utf_string_conversions.h"
 #include "components/access_code_cast/common/access_code_cast_metrics.h"
 #include "ui/base/l10n/l10n_util.h"
 
 namespace ash {
+namespace {
+
+// Returns the active SinkAndRoute if this machine ("local source") is
+// casting to it. Otherwise returns an empty SinkAndRoute.
+SinkAndRoute GetActiveSinkAndRoute() {
+  auto* cast_config = CastConfigController::Get();
+  CHECK(cast_config);
+  for (const auto& sink_and_route : cast_config->GetSinksAndRoutes()) {
+    if (!sink_and_route.route.id.empty() &&
+        sink_and_route.route.is_local_source) {
+      return sink_and_route;
+    }
+  }
+  return SinkAndRoute();
+}
+
+// Returns the string to display for the "Casting" feature tile label.
+std::u16string GetCastingString(const CastRoute& route) {
+  switch (route.content_source) {
+    case ContentSource::kUnknown:
+      return l10n_util::GetStringUTF16(IDS_ASH_STATUS_TRAY_CASTING);
+    case ContentSource::kTab:
+      return l10n_util::GetStringUTF16(IDS_ASH_STATUS_TRAY_CASTING_TAB);
+    case ContentSource::kDesktop:
+      return l10n_util::GetStringUTF16(IDS_ASH_STATUS_TRAY_CASTING_SCREEN);
+  }
+}
+
+}  // namespace
 
 CastFeaturePodController::CastFeaturePodController(
     UnifiedSystemTrayController* tray_controller)
     : tray_controller_(tray_controller) {}
 
 CastFeaturePodController::~CastFeaturePodController() {
-  if (CastConfigController::Get() && button_)
+  if (CastConfigController::Get() && tile_) {
     CastConfigController::Get()->RemoveObserver(this);
+  }
 }
 
-FeaturePodButton* CastFeaturePodController::CreateButton() {
-  button_ = new FeaturePodButton(this);
-  button_->SetVectorIcon(kUnifiedMenuCastIcon);
-  button_->SetLabel(l10n_util::GetStringUTF16(IDS_ASH_STATUS_TRAY_CAST_SHORT));
-  button_->SetIconAndLabelTooltips(
-      l10n_util::GetStringUTF16(IDS_ASH_STATUS_TRAY_CAST_TOOLTIP));
-  button_->ShowDetailedViewArrow();
-  button_->DisableLabelButtonFocus();
-  button_->SetID(VIEW_ID_CAST_MAIN_VIEW);
+// static
+bool CastFeaturePodController::CalculateButtonVisibility() {
+  // Shows the button even if there are no media sinks.
+  auto* cast_config = CastConfigController::Get();
+  return cast_config && cast_config->HasMediaRouterForPrimaryProfile();
+}
 
-  if (CastConfigController::Get()) {
-    CastConfigController::Get()->AddObserver(this);
-    CastConfigController::Get()->RequestDeviceRefresh();
+std::unique_ptr<FeatureTile> CastFeaturePodController::CreateTile(
+    bool compact) {
+  auto tile = std::make_unique<FeatureTile>(
+      base::BindRepeating(&CastFeaturePodController::OnIconPressed,
+                          weak_factory_.GetWeakPtr()),
+      /*is_togglable=*/true,
+      compact ? FeatureTile::TileType::kCompact
+              : FeatureTile::TileType::kPrimary);
+  tile_ = tile.get();
+  tile->SetID(VIEW_ID_CAST_MAIN_VIEW);
+
+  bool target_visibility = CalculateButtonVisibility();
+  if (target_visibility) {
+    TrackVisibilityUMA();
+  }
+  tile->SetVisible(target_visibility);
+
+  tile->SetTooltipText(
+      l10n_util::GetStringUTF16(IDS_ASH_STATUS_TRAY_CAST_TOOLTIP));
+
+  auto* cast_config = CastConfigController::Get();
+  if (cast_config) {
+    cast_config->AddObserver(this);
+    cast_config->RequestDeviceRefresh();
   }
 
-  Update();
-  return button_;
+  UpdateFeatureTile();
+
+  // Compact tile doesn't have a sub-label or drill-in button.
+  if (compact) {
+    return tile;
+  }
+
+  tile->CreateDecorativeDrillInArrow();
+  return tile;
 }
 
 QsFeatureCatalogName CastFeaturePodController::GetCatalogName() {
@@ -77,18 +138,47 @@ void CastFeaturePodController::OnLabelPressed() {
 
 void CastFeaturePodController::OnDevicesUpdated(
     const std::vector<SinkAndRoute>& devices) {
-  Update();
+  UpdateFeatureTile();
 }
 
-void CastFeaturePodController::Update() {
+void CastFeaturePodController::UpdateFeatureTile() {
+  DCHECK(tile_);
   auto* cast_config = CastConfigController::Get();
-  // The cast feature tile will always be shown on the QS bubble if the revamped
-  // view is enabled.
-  button_->SetVisible(features::IsQsRevampEnabled() ||
-                      (cast_config &&
-                       (cast_config->HasSinksAndRoutes() ||
-                        cast_config->AccessCodeCastingEnabled()) &&
-                       !cast_config->HasActiveRoute()));
+  if (!cast_config) {
+    return;  // May be null in tests.
+  }
+  bool is_casting = cast_config->HasActiveRoute();
+  tile_->SetToggled(is_casting);
+  if (is_casting) {
+    tile_->SetVectorIcon(kQuickSettingsCastConnectedIcon);
+
+    // Set the label to "Casting screen" or "Casting tab".
+    SinkAndRoute sink_and_route = GetActiveSinkAndRoute();
+    tile_->SetLabel(GetCastingString(sink_and_route.route));
+
+    if (tile_->tile_type() == FeatureTile::TileType::kPrimary) {
+      // If the sink has a name ("Sony TV") then show it as a sub-label.
+      const std::string& active_sink_name = sink_and_route.sink.name;
+      bool has_name = !active_sink_name.empty();
+      if (has_name) {
+        tile_->SetSubLabel(base::UTF8ToUTF16(active_sink_name));
+      }
+      tile_->SetSubLabelVisibility(has_name);
+    }
+    return;
+  }
+  tile_->SetVectorIcon(kQuickSettingsCastIcon);
+
+  // Set the label to "Cast screen".
+  tile_->SetLabel(l10n_util::GetStringUTF16(IDS_ASH_STATUS_TRAY_CAST));
+
+  if (tile_->tile_type() == FeatureTile::TileType::kPrimary) {
+    tile_->SetSubLabel(
+        l10n_util::GetStringUTF16(IDS_ASH_STATUS_TRAY_CAST_DEVICES_AVAILABLE));
+    bool devices_available = cast_config->HasSinksAndRoutes() ||
+                             cast_config->AccessCodeCastingEnabled();
+    tile_->SetSubLabelVisibility(devices_available);
+  }
 }
 
 }  // namespace ash

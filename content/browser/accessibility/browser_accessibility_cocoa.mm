@@ -8,14 +8,17 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
+
 #include <algorithm>
 #include <iterator>
 #include <map>
 #include <memory>
+#include <optional>
 #include <utility>
 
-#include "base/mac/foundation_util.h"
-#include "base/mac/scoped_cftyperef.h"
+#include "base/apple/foundation_util.h"
+#include "base/apple/scoped_cftyperef.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
 #include "base/strings/sys_string_conversions.h"
@@ -28,7 +31,6 @@
 #include "content/browser/accessibility/one_shot_accessibility_tree_search.h"
 #include "content/browser/accessibility/web_ax_platform_tree_manager_delegate.h"
 #include "content/public/common/content_client.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/strings/grit/blink_strings.h"
 #include "third_party/skia/include/core/SkColor.h"
 #include "ui/accessibility/ax_common.h"
@@ -37,11 +39,10 @@
 #include "ui/accessibility/ax_role_properties.h"
 #include "ui/accessibility/ax_selection.h"
 #include "ui/accessibility/platform/ax_platform_node.h"
+#import "ui/accessibility/platform/ax_platform_node_mac.h"
 #include "ui/accessibility/platform/ax_utils_mac.h"
 #include "ui/gfx/mac/coordinate_conversion.h"
 #include "ui/strings/grit/ax_strings.h"
-
-#import "ui/accessibility/platform/ax_platform_node_mac.h"
 
 using AXPosition = ui::AXPlatformNodeDelegate::AXPosition;
 using AXRange = ui::AXPlatformNodeDelegate::AXRange;
@@ -193,32 +194,19 @@ NSString* const NSAccessibilityValueAutofillAvailableAttribute =
     @"AXValueAutofillAvailable";
 // Not currently supported by Chrome -- information not stored:
 // NSString* const NSAccessibilityValueAutofilledAttribute =
-// @"AXValueAutofilled"; Not currently supported by Chrome -- mismatch of types
-// supported: NSString* const NSAccessibilityValueAutofillTypeAttribute =
-// @"AXValueAutofillType";
+// @"AXValueAutofilled";
+
+// Not currently supported by Chrome -- mismatch of types supported: NSString*
+// const NSAccessibilityValueAutofillTypeAttribute = @"AXValueAutofillType";
 
 // Actions.
 NSString* const NSAccessibilityScrollToVisibleAction = @"AXScrollToVisible";
 
 // A mapping from an accessibility attribute to its method name.
-NSDictionary* attributeToMethodNameMap = nil;
+NSDictionary* gAttributeToMethodNameMap = nil;
 
 // VoiceOver uses -1 to mean "no limit" for AXResultsLimit.
 const int kAXResultsLimitNoLimit = -1;
-
-// The following are private accessibility APIs required for cursor navigation
-// and text selection. VoiceOver started relying on them in Mac OS X 10.11.
-// They are public as of the 12.0 SDK.
-#if !defined(MAC_OS_VERSION_12_0) || \
-    MAC_OS_X_VERSION_MAX_ALLOWED < MAC_OS_VERSION_12_0
-using AXTextMarkerRangeRef = CFTypeRef;
-using AXTextMarkerRef = CFTypeRef;
-extern "C" {
-AXTextMarkerRangeRef AXTextMarkerRangeCreate(CFAllocatorRef,
-                                             AXTextMarkerRef start,
-                                             AXTextMarkerRef end);
-}  // extern "C"
-#endif
 
 AXRange CreateAXRange(const BrowserAccessibility& start_object,
                       int start_offset,
@@ -482,7 +470,7 @@ bool IsSelectedStateRelevant(BrowserAccessibility* item) {
   // to know that it's not selected in this case.
   // Only do this for the focused item -- that is the only item where explicitly
   // setting the item to unselected is relevant, as the focused item is the only
-  // item that could have been selected annyway.
+  // item that could have been selected anyway.
   // Therefore, if the user navigates to other items by detaching accessibility
   // focus from the input focus via VO+Shift+F3, those items will not be
   // redundantly reported as not selected.
@@ -500,7 +488,7 @@ AXTextEdit::AXTextEdit(std::u16string inserted_text,
                        id edit_text_marker)
     : inserted_text(inserted_text),
       deleted_text(deleted_text),
-      edit_text_marker(edit_text_marker, base::scoped_policy::RETAIN) {}
+      edit_text_marker(edit_text_marker) {}
 AXTextEdit::AXTextEdit(const AXTextEdit& other) = default;
 AXTextEdit::~AXTextEdit() = default;
 
@@ -516,7 +504,18 @@ bool content::IsNSRange(id value) {
          0 == strcmp([value objCType], @encode(NSRange));
 }
 
-@implementation BrowserAccessibilityCocoa
+@implementation BrowserAccessibilityCocoa {
+  // Dangling pointer https://crbug.com/1475830.
+  raw_ptr<content::BrowserAccessibility, DanglingUntriaged> _owner;
+  // An array of children of this object. Cached to avoid re-computing.
+  NSMutableArray* __strong _children;
+  // Whether the children have changed and need to be updated.
+  bool _needsToUpdateChildren;
+  // Whether _children is currently being computed.
+  bool _gettingChildren;
+  // Stores the previous value of an edit field.
+  std::u16string _oldValue;
+}
 
 + (void)initialize {
   const struct {
@@ -580,14 +579,10 @@ bool content::IsNSRange(id value) {
   };
 
   NSMutableDictionary* dict = [[NSMutableDictionary alloc] init];
-  const size_t numAttributes = sizeof(attributeToMethodNameContainer) /
-                               sizeof(attributeToMethodNameContainer[0]);
-  for (size_t i = 0; i < numAttributes; ++i) {
-    [dict setObject:attributeToMethodNameContainer[i].methodName
-             forKey:attributeToMethodNameContainer[i].attribute];
+  for (const auto& item : attributeToMethodNameContainer) {
+    dict[item.attribute] = item.methodName;
   }
-  attributeToMethodNameMap = dict;
-  dict = nil;
+  gAttributeToMethodNameMap = dict;
 }
 
 - (instancetype)initWithObject:(BrowserAccessibility*)accessibility
@@ -621,7 +616,7 @@ bool content::IsNSRange(id value) {
     base::AutoReset<bool> set_getting_children(&_gettingChildren, true);
     // PlatformChildCount may add extra mac nodes if the node requires them.
     uint32_t childCount = _owner->PlatformChildCount();
-    _children.reset([[NSMutableArray alloc] initWithCapacity:childCount]);
+    _children = [[NSMutableArray alloc] initWithCapacity:childCount];
     for (auto it = _owner->PlatformChildrenBegin();
          it != _owner->PlatformChildrenEnd(); ++it) {
       AXPlatformNodeCocoa* child = it->GetNativeViewAccessible();
@@ -666,8 +661,8 @@ bool content::IsNSRange(id value) {
   if (![self instanceActive])
     return nil;
 
-  absl::optional<int> column = _owner->node()->GetTableCellColIndex();
-  absl::optional<int> colspan = _owner->node()->GetTableCellColSpan();
+  std::optional<int> column = _owner->node()->GetTableCellColIndex();
+  std::optional<int> colspan = _owner->node()->GetTableCellColSpan();
   if (column && colspan)
     return [NSValue valueWithRange:NSMakeRange(*column, *colspan)];
   return nil;
@@ -676,7 +671,7 @@ bool content::IsNSRange(id value) {
 - (NSArray*)columns {
   if (![self instanceActive])
     return nil;
-  NSMutableArray* ret = [[[NSMutableArray alloc] init] autorelease];
+  NSMutableArray* ret = [[NSMutableArray alloc] init];
   for (AXPlatformNodeCocoa* child in [self accessibilityChildren]) {
     if ([[child accessibilityRole] isEqualToString:NSAccessibilityColumnRole])
       [ret addObject:child];
@@ -807,12 +802,12 @@ bool content::IsNSRange(id value) {
     return [self treeItemRowIndex];
   } else if ([self internalRole] == ax::mojom::Role::kColumn) {
     DCHECK(_owner->node());
-    absl::optional<int> col_index = *_owner->node()->GetTableColColIndex();
+    std::optional<int> col_index = *_owner->node()->GetTableColColIndex();
     if (col_index)
       return @(*col_index);
   } else if ([self internalRole] == ax::mojom::Role::kRow) {
     DCHECK(_owner->node());
-    absl::optional<int> row_index = _owner->node()->GetTableRowRowIndex();
+    std::optional<int> row_index = _owner->node()->GetTableRowRowIndex();
     if (row_index)
       return @(*row_index);
   }
@@ -936,7 +931,7 @@ bool content::IsNSRange(id value) {
 
 // private
 - (NSArray*)linkedUIElements {
-  NSMutableArray* ret = [[[NSMutableArray alloc] init] autorelease];
+  NSMutableArray* ret = [[NSMutableArray alloc] init];
   [self
       addLinkedUIElementsFromAttribute:ax::mojom::IntListAttribute::kControlsIds
                                  addTo:ret];
@@ -1021,7 +1016,7 @@ bool content::IsNSRange(id value) {
           ->ToBrowserAccessibilityManagerMac();
   if (!manager) {
     // TODO(accessibility) Determine why this is happening.
-    SANITIZER_NOTREACHED();
+    DCHECK(false);
     return nil;
   }
   SANITIZER_CHECK(manager->GetParentView());
@@ -1033,14 +1028,6 @@ bool content::IsNSRange(id value) {
     return nil;
   NSPoint pointInScreen = [self accessibilityFrame].origin;
   return [NSValue valueWithPoint:pointInScreen];
-}
-
-// Returns an enum indicating the role from owner_.
-// internal
-- (ax::mojom::Role)internalRole {
-  if ([self instanceActive])
-    return static_cast<ax::mojom::Role>(_owner->GetRole());
-  return ax::mojom::Role::kNone;
 }
 
 - (content::BrowserAccessibility*)owner {
@@ -1058,7 +1045,8 @@ bool content::IsNSRange(id value) {
   // dispatch the actual text that changed on the value changed notification.
   // We run this code on all macOS versions to get the highest test coverage.
   std::u16string oldValue = _oldValue;
-  std::u16string newValue = _owner->GetValueForControl();
+  std::u16string newValue = _owner->CreateTextPositionAt(0)->GetText(
+      ui::AXEmbeddedObjectBehavior::kSuppressCharacter);
   _oldValue = newValue;
   if (oldValue.empty() && newValue.empty())
     return content::AXTextEdit();
@@ -1176,7 +1164,7 @@ bool content::IsNSRange(id value) {
   if (!table)
     return nil;
 
-  NSMutableArray* ret = [[[NSMutableArray alloc] init] autorelease];
+  NSMutableArray* ret = [[NSMutableArray alloc] init];
 
   if (is_table_like) {
     // If this is a table, return all row headers.
@@ -1207,8 +1195,8 @@ bool content::IsNSRange(id value) {
   if (![self instanceActive])
     return nil;
 
-  absl::optional<int> row = _owner->node()->GetTableCellRowIndex();
-  absl::optional<int> rowspan = _owner->node()->GetTableCellRowSpan();
+  std::optional<int> row = _owner->node()->GetTableCellRowIndex();
+  std::optional<int> rowspan = _owner->node()->GetTableCellRowSpan();
   if (row && rowspan)
     return [NSValue valueWithRange:NSMakeRange(*row, *rowspan)];
   return nil;
@@ -1217,7 +1205,7 @@ bool content::IsNSRange(id value) {
 - (NSArray*)accessibilityRows {
   if (![self instanceActive])
     return nil;
-  NSMutableArray* ret = [[[NSMutableArray alloc] init] autorelease];
+  NSMutableArray* ret = [[NSMutableArray alloc] init];
 
   std::vector<int32_t> node_id_list;
   if (_owner->GetRole() == ax::mojom::Role::kTree)
@@ -1243,7 +1231,7 @@ bool content::IsNSRange(id value) {
   if (![self instanceActive])
     return nil;
 
-  NSMutableArray* ret = [[[NSMutableArray alloc] init] autorelease];
+  NSMutableArray* ret = [[NSMutableArray alloc] init];
   BrowserAccessibility* focusedChild = _owner->manager()->GetFocus();
 
   // "IsDescendantOf" also returns true when the two objects are equivalent.
@@ -1354,9 +1342,7 @@ bool content::IsNSRange(id value) {
   if (ax_range.IsNull())
     return nil;
 
-  // Voiceover expects this range to be backwards in order to read the selected
-  // words correctly.
-  return AXRangeToAXTextMarkerRange(ax_range.AsBackwardRange());
+  return AXRangeToAXTextMarkerRange(std::move(ax_range));
 }
 
 - (NSString*)sortDirection {
@@ -1421,7 +1407,7 @@ bool content::IsNSRange(id value) {
 - (NSArray*)tabs {
   if (![self instanceActive])
     return nil;
-  NSMutableArray* tabSubtree = [[[NSMutableArray alloc] init] autorelease];
+  NSMutableArray* tabSubtree = [[NSMutableArray alloc] init];
 
   if ([self internalRole] == ax::mojom::Role::kTab)
     [tabSubtree addObject:self];
@@ -1567,7 +1553,7 @@ bool content::IsNSRange(id value) {
   if (![self instanceActive])
     return nil;
 
-  NSMutableArray* ret = [[[NSMutableArray alloc] init] autorelease];
+  NSMutableArray* ret = [[NSMutableArray alloc] init];
   for (int32_t id : _owner->node()->GetTableUniqueCellIds()) {
     BrowserAccessibility* cell = _owner->manager()->GetFromID(id);
     if (cell)
@@ -1602,9 +1588,18 @@ bool content::IsNSRange(id value) {
       _owner->manager()
           ->GetManagerForRootFrame()
           ->ToBrowserAccessibilityManagerMac();
-  CHECK(root_manager) << "There should always be a root manager whenever an "
-                         "object is instanceActive.";
-  CHECK(root_manager->GetParentView());
+  if (!root_manager) {
+    // TODO(crbug.com/1350583) Find out why this happens -- there should always
+    // be a root manager whenever an object is instanceActive. This used to be a
+    // CHECK() but caused too many crashes, with unknown cause.
+    return nil;
+  }
+  if (!root_manager->GetParentView()) {
+    // TODO(crbug.com/1425682) Find out why this happens, there should always be
+    // a parent view. This used to be a CHECK() but caused too many crashes.
+    // Repro steps are available in the bug.
+    return nil;
+  }
   return root_manager->GetWindow();  // Can be null for inactive tabs.
 }
 
@@ -1621,7 +1616,7 @@ bool content::IsNSRange(id value) {
 }
 
 - (NSString*)methodNameForAttribute:(NSString*)attribute {
-  return [attributeToMethodNameMap objectForKey:attribute];
+  return [gAttributeToMethodNameMap objectForKey:attribute];
 }
 
 - (NSString*)valueForRange:(NSRange)range {
@@ -1656,7 +1651,10 @@ bool content::IsNSRange(id value) {
 
   SEL selector = NSSelectorFromString([self methodNameForAttribute:attribute]);
   if (selector)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Warc-performSelector-leaks"
     return [self performSelector:selector];
+#pragma clang diagnostic pop
 
   return [super accessibilityAttributeValue:attribute];
 }
@@ -2159,10 +2157,16 @@ bool content::IsNSRange(id value) {
     if (range.IsNull())
       return nil;
 
-    startObject = _owner->manager()->GetFromAXNode(range.anchor()->GetAnchor());
-    endObject = _owner->manager()->GetFromAXNode(range.focus()->GetAnchor());
-    startOffset = range.anchor()->text_offset();
-    endOffset = range.focus()->text_offset();
+    const AXPosition anchor = range.anchor()->AsTextPosition();
+    const AXPosition focus = range.focus()->AsTextPosition();
+    if (!anchor || !focus) {
+      return nil;
+    }
+
+    startObject = _owner->manager()->GetFromAXNode(anchor->GetAnchor());
+    endObject = _owner->manager()->GetFromAXNode(focus->GetAnchor());
+    startOffset = anchor->text_offset();
+    endOffset = focus->text_offset();
     DCHECK(startObject && endObject);
     DCHECK_GE(startOffset, 0);
     DCHECK_GE(endOffset, 0);
@@ -2255,44 +2259,44 @@ bool content::IsNSRange(id value) {
     return nil;
 
   // General attributes.
-  NSMutableArray* ret = [NSMutableArray
-      arrayWithObjects:
-          NSAccessibilityUIElementForTextMarkerParameterizedAttribute,
-          NSAccessibilityTextMarkerRangeForUIElementParameterizedAttribute,
-          NSAccessibilityLineForTextMarkerParameterizedAttribute,
-          NSAccessibilityTextMarkerRangeForLineParameterizedAttribute,
-          NSAccessibilityStringForTextMarkerRangeParameterizedAttribute,
-          NSAccessibilityTextMarkerForPositionParameterizedAttribute,
-          NSAccessibilityBoundsForTextMarkerRangeParameterizedAttribute,
-          NSAccessibilityAttributedStringForTextMarkerRangeWithOptionsParameterizedAttribute,
-          NSAccessibilityTextMarkerRangeForUnorderedTextMarkersParameterizedAttribute,
-          NSAccessibilityNextTextMarkerForTextMarkerParameterizedAttribute,
-          NSAccessibilityPreviousTextMarkerForTextMarkerParameterizedAttribute,
-          NSAccessibilityLeftWordTextMarkerRangeForTextMarkerParameterizedAttribute,
-          NSAccessibilityRightWordTextMarkerRangeForTextMarkerParameterizedAttribute,
-          NSAccessibilityLeftLineTextMarkerRangeForTextMarkerParameterizedAttribute,
-          NSAccessibilityRightLineTextMarkerRangeForTextMarkerParameterizedAttribute,
-          NSAccessibilitySentenceTextMarkerRangeForTextMarkerParameterizedAttribute,
-          NSAccessibilityParagraphTextMarkerRangeForTextMarkerParameterizedAttribute,
-          NSAccessibilityNextWordEndTextMarkerForTextMarkerParameterizedAttribute,
-          NSAccessibilityPreviousWordStartTextMarkerForTextMarkerParameterizedAttribute,
-          NSAccessibilityNextLineEndTextMarkerForTextMarkerParameterizedAttribute,
-          NSAccessibilityPreviousLineStartTextMarkerForTextMarkerParameterizedAttribute,
-          NSAccessibilityNextSentenceEndTextMarkerForTextMarkerParameterizedAttribute,
-          NSAccessibilityPreviousSentenceStartTextMarkerForTextMarkerParameterizedAttribute,
-          NSAccessibilityNextParagraphEndTextMarkerForTextMarkerParameterizedAttribute,
-          NSAccessibilityPreviousParagraphStartTextMarkerForTextMarkerParameterizedAttribute,
-          NSAccessibilityStyleTextMarkerRangeForTextMarkerParameterizedAttribute,
-          NSAccessibilityLengthForTextMarkerRangeParameterizedAttribute,
-          NSAccessibilityEndTextMarkerForBoundsParameterizedAttribute,
-          NSAccessibilityStartTextMarkerForBoundsParameterizedAttribute,
-          NSAccessibilityLineTextMarkerRangeForTextMarkerParameterizedAttribute,
-          NSAccessibilityIndexForChildUIElementParameterizedAttribute,
-          NSAccessibilityBoundsForRangeParameterizedAttribute,
-          NSAccessibilityStringForRangeParameterizedAttribute,
-          NSAccessibilityUIElementCountForSearchPredicateParameterizedAttribute,
-          NSAccessibilityUIElementsForSearchPredicateParameterizedAttribute,
-          NSAccessibilitySelectTextWithCriteriaParameterizedAttribute, nil];
+  NSMutableArray* ret = [@[
+    NSAccessibilityUIElementForTextMarkerParameterizedAttribute,
+    NSAccessibilityTextMarkerRangeForUIElementParameterizedAttribute,
+    NSAccessibilityLineForTextMarkerParameterizedAttribute,
+    NSAccessibilityTextMarkerRangeForLineParameterizedAttribute,
+    NSAccessibilityStringForTextMarkerRangeParameterizedAttribute,
+    NSAccessibilityTextMarkerForPositionParameterizedAttribute,
+    NSAccessibilityBoundsForTextMarkerRangeParameterizedAttribute,
+    NSAccessibilityAttributedStringForTextMarkerRangeWithOptionsParameterizedAttribute,
+    NSAccessibilityTextMarkerRangeForUnorderedTextMarkersParameterizedAttribute,
+    NSAccessibilityNextTextMarkerForTextMarkerParameterizedAttribute,
+    NSAccessibilityPreviousTextMarkerForTextMarkerParameterizedAttribute,
+    NSAccessibilityLeftWordTextMarkerRangeForTextMarkerParameterizedAttribute,
+    NSAccessibilityRightWordTextMarkerRangeForTextMarkerParameterizedAttribute,
+    NSAccessibilityLeftLineTextMarkerRangeForTextMarkerParameterizedAttribute,
+    NSAccessibilityRightLineTextMarkerRangeForTextMarkerParameterizedAttribute,
+    NSAccessibilitySentenceTextMarkerRangeForTextMarkerParameterizedAttribute,
+    NSAccessibilityParagraphTextMarkerRangeForTextMarkerParameterizedAttribute,
+    NSAccessibilityNextWordEndTextMarkerForTextMarkerParameterizedAttribute,
+    NSAccessibilityPreviousWordStartTextMarkerForTextMarkerParameterizedAttribute,
+    NSAccessibilityNextLineEndTextMarkerForTextMarkerParameterizedAttribute,
+    NSAccessibilityPreviousLineStartTextMarkerForTextMarkerParameterizedAttribute,
+    NSAccessibilityNextSentenceEndTextMarkerForTextMarkerParameterizedAttribute,
+    NSAccessibilityPreviousSentenceStartTextMarkerForTextMarkerParameterizedAttribute,
+    NSAccessibilityNextParagraphEndTextMarkerForTextMarkerParameterizedAttribute,
+    NSAccessibilityPreviousParagraphStartTextMarkerForTextMarkerParameterizedAttribute,
+    NSAccessibilityStyleTextMarkerRangeForTextMarkerParameterizedAttribute,
+    NSAccessibilityLengthForTextMarkerRangeParameterizedAttribute,
+    NSAccessibilityEndTextMarkerForBoundsParameterizedAttribute,
+    NSAccessibilityStartTextMarkerForBoundsParameterizedAttribute,
+    NSAccessibilityLineTextMarkerRangeForTextMarkerParameterizedAttribute,
+    NSAccessibilityIndexForChildUIElementParameterizedAttribute,
+    NSAccessibilityBoundsForRangeParameterizedAttribute,
+    NSAccessibilityStringForRangeParameterizedAttribute,
+    NSAccessibilityUIElementCountForSearchPredicateParameterizedAttribute,
+    NSAccessibilityUIElementsForSearchPredicateParameterizedAttribute,
+    NSAccessibilitySelectTextWithCriteriaParameterizedAttribute
+  ] mutableCopy];
 
   if ([[self role] isEqualToString:NSAccessibilityTableRole] ||
       [[self role] isEqualToString:NSAccessibilityGridRole]) {
@@ -2366,22 +2370,17 @@ bool content::IsNSRange(id value) {
     return nil;
 
   // General attributes.
-  NSMutableArray* ret = [NSMutableArray
-      arrayWithObjects:NSAccessibilityChildrenAttribute,
-                       NSAccessibilityEnabledAttribute,
-                       NSAccessibilityEndTextMarkerAttribute,
-                       NSAccessibilityFocusedAttribute,
-                       NSAccessibilityLinkedUIElementsAttribute,
-                       NSAccessibilityParentAttribute,
-                       NSAccessibilityPositionAttribute,
-                       NSAccessibilityRoleAttribute,
-                       NSAccessibilityRoleDescriptionAttribute,
-                       NSAccessibilitySelectedTextMarkerRangeAttribute,
-                       NSAccessibilityStartTextMarkerAttribute,
-                       NSAccessibilitySubroleAttribute,
-                       NSAccessibilityTopLevelUIElementAttribute,
-                       NSAccessibilityValueAttribute,
-                       NSAccessibilityWindowAttribute, nil];
+  NSMutableArray* ret = [@[
+    NSAccessibilityChildrenAttribute, NSAccessibilityEnabledAttribute,
+    NSAccessibilityEndTextMarkerAttribute, NSAccessibilityFocusedAttribute,
+    NSAccessibilityLinkedUIElementsAttribute, NSAccessibilityParentAttribute,
+    NSAccessibilityPositionAttribute, NSAccessibilityRoleAttribute,
+    NSAccessibilityRoleDescriptionAttribute,
+    NSAccessibilitySelectedTextMarkerRangeAttribute,
+    NSAccessibilityStartTextMarkerAttribute, NSAccessibilitySubroleAttribute,
+    NSAccessibilityTopLevelUIElementAttribute, NSAccessibilityValueAttribute,
+    NSAccessibilityWindowAttribute
+  ] mutableCopy];
 
   // Specific role attributes.
   NSString* role = [self role];
@@ -2526,7 +2525,7 @@ bool content::IsNSRange(id value) {
     if ([self internalRole] == ax::mojom::Role::kDateTime)
       return NO;
 
-    return GetState(_owner, ax::mojom::State::kFocusable);
+    return _owner->IsFocusable();
   }
 
   if ([attribute isEqualToString:NSAccessibilityValueAttribute])
@@ -2673,7 +2672,12 @@ bool content::IsNSRange(id value) {
     }
   }
   if ([attribute
-          isEqualToString:NSAccessibilitySelectedTextMarkerRangeAttribute]) {
+          isEqualToString:NSAccessibilitySelectedTextMarkerRangeAttribute] &&
+      // Condition also on when this node is editable. VoiceOver as of Mac 13
+      // sets selections as users navigate on read only content. This has
+      // adverse side effects on VoiceOver's a11y focus causing loops in
+      // navigation.
+      _owner->HasState(ax::mojom::State::kEditable)) {
     AXRange range = AXTextMarkerRangeToAXRange(value);
     if (range.IsNull())
       return;

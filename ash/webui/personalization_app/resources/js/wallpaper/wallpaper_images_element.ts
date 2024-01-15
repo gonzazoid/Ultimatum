@@ -9,20 +9,25 @@
  * wallpaper collection id to avoid refetching data unnecessarily.
  */
 
+import 'chrome://resources/ash/common/personalization/wallpaper.css.js';
 import 'chrome://resources/polymer/v3_0/iron-media-query/iron-media-query.js';
-import '../../css/wallpaper.css.js';
 
-import {assert} from 'chrome://resources/js/assert_ts.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
+import {WallpaperGridItemSelectedEvent} from 'chrome://resources/ash/common/personalization/wallpaper_grid_item_element.js';
+import {isNonEmptyArray} from 'chrome://resources/ash/common/sea_pen/sea_pen_utils.js';
+import {assert} from 'chrome://resources/js/assert.js';
 
-import {CurrentWallpaper, OnlineImageType, WallpaperCollection, WallpaperImage, WallpaperType} from '../personalization_app.mojom-webui.js';
-import {PersonalizationRouter} from '../personalization_router_element.js';
+import {CurrentWallpaper, OnlineImageType, WallpaperCollection, WallpaperImage, WallpaperType} from '../../personalization_app.mojom-webui.js';
+import {dismissTimeOfDayBanner} from '../ambient/ambient_controller.js';
+import {isTimeOfDayWallpaperForcedAutoScheduleEnabled} from '../load_time_booleans.js';
+import {PersonalizationRouterElement} from '../personalization_router_element.js';
 import {WithPersonalizationStore} from '../personalization_store.js';
-import {isNonEmptyArray, isSelectionEvent} from '../utils.js';
+import {setColorModeAutoSchedule} from '../theme/theme_controller.js';
+import {getThemeProvider} from '../theme/theme_interface_provider.js';
+import {ThemeObserver} from '../theme/theme_observer.js';
 
 import {ImageTile} from './constants.js';
 import {getLoadingPlaceholderAnimationDelay, getLoadingPlaceholders, isWallpaperImage} from './utils.js';
-import {selectWallpaper} from './wallpaper_controller.js';
+import {getShouldShowTimeOfDayWallpaperDialog, selectWallpaper} from './wallpaper_controller.js';
 import {getTemplate} from './wallpaper_images_element.html.js';
 import {getWallpaperProvider} from './wallpaper_interface_provider.js';
 
@@ -32,9 +37,9 @@ import {getWallpaperProvider} from './wallpaper_interface_provider.js';
 
 /**
  * If |current| is set and is an online wallpaper (include daily refresh
- * wallpaper), return the assetId of that image. Otherwise returns null.
+ * wallpaper), return the unitId of that image. Otherwise returns null.
  */
-function getAssetId(current: CurrentWallpaper|null): bigint|null {
+function getUnitId(current: CurrentWallpaper|null): bigint|null {
   if (current == null) {
     return null;
   }
@@ -51,51 +56,61 @@ function getAssetId(current: CurrentWallpaper|null): bigint|null {
 }
 
 /**
- * Return a list of tile where each tile contains a single image.
+ * Return a list of tiles capturing units of image variants.
  */
-export function getRegularImageTiles(images: WallpaperImage[]): ImageTile[] {
-  return images.reduce((result, next) => {
-    result.push({
-      assetId: next.assetId,
-      attribution: next.attribution,
-      preview: [next.url],
-    });
-    return result;
-  }, [] as ImageTile[]);
-}
-
-/**
- * Return a list of tiles capturing units of Dark/Light images.
- */
-export function getDarkLightImageTiles(
+export function getImageTiles(
     isDarkModeActive: boolean, images: WallpaperImage[]): ImageTile[] {
   const tileMap = images.reduce((result, next) => {
     if (result.has(next.unitId)) {
-      // Add light url to the front and dark url to the back of the preview.
-      if (next.type === OnlineImageType.kLight) {
-        result.get(next.unitId)!['preview'].unshift(next.url);
-      } else {
-        result.get(next.unitId)!['preview'].push(next.url);
+      const tile = result.get(next.unitId)! as ImageTile;
+      if (!tile.hasPreviewImage) {
+        tile.preview.push(next.url);
       }
     } else {
       result.set(next.unitId, {
         preview: [next.url],
         unitId: next.unitId,
-      });
+      } as ImageTile);
     }
     // Populate the assetId and attribution based on image type and system's
     // color mode.
-    if ((isDarkModeActive && next.type !== OnlineImageType.kLight) ||
-        (!isDarkModeActive && next.type !== OnlineImageType.kDark)) {
-      result.get(next.unitId)!['assetId'] = next.assetId;
-      result.get(next.unitId)!['attribution'] = next.attribution;
+    const tile = result.get(next.unitId)! as ImageTile;
+    switch (next.type) {
+      case OnlineImageType.kLight:
+        if (!isDarkModeActive) {
+          tile.assetId = next.assetId;
+          tile.attribution = next.attribution;
+        }
+        break;
+      case OnlineImageType.kDark:
+        if (isDarkModeActive) {
+          tile.assetId = next.assetId;
+          tile.attribution = next.attribution;
+        }
+        break;
+      case OnlineImageType.kMorning:
+      case OnlineImageType.kLateAfternoon:
+        tile.isTimeOfDayWallpaper = true;
+        tile.assetId = next.assetId;
+        tile.attribution = next.attribution;
+        break;
+      case OnlineImageType.kPreview:
+        tile.hasPreviewImage = true;
+        tile.preview = [next.url];
+        tile.assetId = next.assetId;
+        tile.attribution = next.attribution;
+        break;
+      case OnlineImageType.kUnknown:
+        tile.assetId = next.assetId;
+        tile.attribution = next.attribution;
+        break;
     }
     return result;
   }, new Map() as Map<bigint, ImageTile>);
   return [...tileMap.values()];
 }
 
-export class WallpaperImages extends WithPersonalizationStore {
+export class WallpaperImagesElement extends WithPersonalizationStore {
   static get is() {
     return 'wallpaper-images';
   }
@@ -130,7 +145,7 @@ export class WallpaperImages extends WithPersonalizationStore {
        */
       imagesLoading_: Object,
 
-      selectedAssetId_: {
+      selectedUnitId_: {
         type: BigInt,
         value: null,
       },
@@ -138,7 +153,7 @@ export class WallpaperImages extends WithPersonalizationStore {
       /**
        * The pending selected image.
        */
-      pendingSelectedAssetId_: {
+      pendingSelectedUnitId_: {
         type: BigInt,
         value: null,
       },
@@ -150,13 +165,21 @@ export class WallpaperImages extends WithPersonalizationStore {
         observer: 'onHasErrorChanged_',
       },
 
-
       tiles_: {
         type: Array,
         computed:
             'computeTiles_(images_, imagesLoading_, collectionId, isDarkModeActive)',
+        observer: 'onTilesChanged_',
       },
 
+      /**
+       * The pending ToD wallpaper to be set when the dialog is displayed.
+       */
+      pendingTimeOfDayWallpaper_: Object,
+
+      colorModeAutoScheduleEnabled_: Boolean,
+
+      showTimeOfDayWallpaperDialog_: Boolean,
     };
   }
 
@@ -166,29 +189,38 @@ export class WallpaperImages extends WithPersonalizationStore {
   private collectionsLoading_: boolean;
   private images_: Record<string, WallpaperImage[]|null>;
   private imagesLoading_: Record<string, boolean>;
-  private selectedAssetId_: bigint|null;
-  private pendingSelectedAssetId_: bigint|null;
+  private selectedUnitId_: bigint|null;
+  private pendingSelectedUnitId_: bigint|null;
   private hasError_: boolean;
   private tiles_: ImageTile[];
+  private pendingTimeOfDayWallpaper_: WallpaperImage|null;
+  private colorModeAutoScheduleEnabled_: boolean|null;
+  private showTimeOfDayWallpaperDialog_: boolean;
 
   override connectedCallback() {
     super.connectedCallback();
-    this.watch<WallpaperImages['images_']>(
+    ThemeObserver.initThemeObserverIfNeeded();
+    this.watch<WallpaperImagesElement['images_']>(
         'images_', state => state.wallpaper.backdrop.images);
-    this.watch<WallpaperImages['imagesLoading_']>(
+    this.watch<WallpaperImagesElement['imagesLoading_']>(
         'imagesLoading_', state => state.wallpaper.loading.images);
-    this.watch<WallpaperImages['collections_']>(
+    this.watch<WallpaperImagesElement['collections_']>(
         'collections_', state => state.wallpaper.backdrop.collections);
-    this.watch<WallpaperImages['collectionsLoading_']>(
+    this.watch<WallpaperImagesElement['collectionsLoading_']>(
         'collectionsLoading_', state => state.wallpaper.loading.collections);
-    this.watch<WallpaperImages['selectedAssetId_']>(
-        'selectedAssetId_',
-        state => getAssetId(state.wallpaper.currentSelected));
-    this.watch<WallpaperImages['pendingSelectedAssetId_']>(
-        'pendingSelectedAssetId_',
+    this.watch<WallpaperImagesElement['selectedUnitId_']>(
+        'selectedUnitId_', state => getUnitId(state.wallpaper.currentSelected));
+    this.watch<WallpaperImagesElement['pendingSelectedUnitId_']>(
+        'pendingSelectedUnitId_',
         state => isWallpaperImage(state.wallpaper.pendingSelected) ?
-            state.wallpaper.pendingSelected.assetId :
+            state.wallpaper.pendingSelected.unitId :
             null);
+    this.watch<WallpaperImagesElement['colorModeAutoScheduleEnabled_']>(
+        'colorModeAutoScheduleEnabled_',
+        state => state.theme.colorModeAutoScheduleEnabled);
+    this.watch<WallpaperImagesElement['showTimeOfDayWallpaperDialog_']>(
+        'showTimeOfDayWallpaperDialog_',
+        state => state.wallpaper.shouldShowTimeOfDayWallpaperDialog);
     this.updateFromStore();
   }
 
@@ -224,7 +256,7 @@ export class WallpaperImages extends WithPersonalizationStore {
     if (hasError) {
       console.warn('An error occurred while loading collections or images');
       // Navigate back to main page and refresh.
-      PersonalizationRouter.reloadAtWallpaper();
+      PersonalizationRouterElement.reloadAtWallpaper();
     }
   }
 
@@ -245,11 +277,14 @@ export class WallpaperImages extends WithPersonalizationStore {
     }
 
     const imageArr = images[collectionId]!;
+    return getImageTiles(isDarkModeActive, imageArr);
+  }
 
-    if (loadTimeData.getBoolean('isDarkLightModeEnabled')) {
-      return getDarkLightImageTiles(isDarkModeActive, imageArr);
-    } else {
-      return getRegularImageTiles(imageArr);
+  private onTilesChanged_(tiles: ImageTile[]) {
+    if (tiles.some((tile => this.isTimeOfDayWallpaper_(tile)))) {
+      // Dismisses the banner after the Time of Day collection images are
+      // displayed.
+      dismissTimeOfDayBanner(this.getStore());
     }
   }
 
@@ -283,43 +318,60 @@ export class WallpaperImages extends WithPersonalizationStore {
   }
 
   private isTileSelected_(
-      tile: ImageTile, selectedAssetId: bigint|null,
-      pendingSelectedAssetId: bigint|null): boolean {
+      tile: ImageTile, selectedUnitId: bigint|null,
+      pendingSelectedUnitId: bigint|null): boolean {
     // Make sure that both are bigint (not undefined) and equal.
     return (
-        typeof selectedAssetId === 'bigint' && !!tile &&
-            tile.assetId === selectedAssetId && !pendingSelectedAssetId ||
-        typeof pendingSelectedAssetId === 'bigint' && !!tile &&
-            tile.assetId === pendingSelectedAssetId);
+        typeof selectedUnitId === 'bigint' && !!tile &&
+            tile.unitId === selectedUnitId && !pendingSelectedUnitId ||
+        typeof pendingSelectedUnitId === 'bigint' && !!tile &&
+            tile.unitId === pendingSelectedUnitId);
   }
 
-  private getClassForImg_(index: number, tile: ImageTile): string {
-    if (tile.preview.length < 2) {
-      return '';
-    }
-    switch (index) {
-      case 0:
-        return 'left';
-      case 1:
-        return 'right';
-      default:
-        return '';
-    }
+  private isTimeOfDayWallpaper_(tile: number|ImageTile): boolean {
+    return this.isImageTile_(tile) && !!tile.isTimeOfDayWallpaper;
   }
 
-  private onImageSelected_(e: Event) {
-    if (!isSelectionEvent(e)) {
-      return;
-    }
-    const imgElement = e.currentTarget as HTMLImageElement;
-    const assetId = imgElement.dataset['assetId'];
-    assert(assetId, 'assetId not found');
+  private async onImageSelected_(e: WallpaperGridItemSelectedEvent&
+                                 {model: {item: ImageTile}}) {
+    const unitId = e.model.item.unitId;
+    assert(unitId && typeof unitId === 'bigint', 'unitId not found');
     const images = this.images_[this.collectionId]!;
     assert(isNonEmptyArray(images));
-    const selectedImage =
-        images.find(choice => choice.assetId.toString() === assetId);
-    assert(selectedImage);
+    const selectedImage = images.find(choice => choice.unitId === unitId);
+    assert(selectedImage, 'could not find selected image');
+    if (await this.shouldShowTimeOfDayWallpaperDialog_(e.model.item)) {
+      this.pendingTimeOfDayWallpaper_ = selectedImage;
+      return;
+    }
     selectWallpaper(selectedImage, getWallpaperProvider(), this.getStore());
+  }
+
+  private async shouldShowTimeOfDayWallpaperDialog_(tile: ImageTile):
+      Promise<boolean> {
+    if (isTimeOfDayWallpaperForcedAutoScheduleEnabled()) {
+      await getShouldShowTimeOfDayWallpaperDialog(
+          getWallpaperProvider(), this.getStore());
+    }
+    return this.isTimeOfDayWallpaper_(tile) &&
+        this.showTimeOfDayWallpaperDialog_ &&
+        !this.colorModeAutoScheduleEnabled_;
+  }
+
+  private onCloseTimeOfDayDialog_() {
+    assert(
+        this.pendingTimeOfDayWallpaper_,
+        'could not find the time of day wallpaper');
+    selectWallpaper(
+        this.pendingTimeOfDayWallpaper_, getWallpaperProvider(),
+        this.getStore());
+    this.pendingTimeOfDayWallpaper_ = null;
+  }
+
+  private onConfirmTimeOfDayDialog_() {
+    setColorModeAutoSchedule(
+        /*enabled=*/ true, getThemeProvider(), this.getStore());
+    this.onCloseTimeOfDayDialog_();
   }
 
   private getAriaLabel_(tile: number|ImageTile): string {
@@ -334,4 +386,4 @@ export class WallpaperImages extends WithPersonalizationStore {
   }
 }
 
-customElements.define(WallpaperImages.is, WallpaperImages);
+customElements.define(WallpaperImagesElement.is, WallpaperImagesElement);

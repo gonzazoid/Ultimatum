@@ -6,33 +6,33 @@
 
 #include <memory>
 
+#include "base/feature_list.h"
 #include "base/memory/ptr_util.h"
 #include "base/metrics/field_trial_params.h"
 #include "base/metrics/histogram_functions.h"
-#include "base/metrics/histogram_macros.h"
 #include "base/task/common/lazy_now.h"
 #include "base/task/common/scoped_defer_task_posting.h"
 #include "base/task/common/task_annotator.h"
+#include "base/task/single_thread_task_runner.h"
+#include "base/threading/platform_thread.h"
 #include "base/time/time.h"
-#include "components/power_scheduler/power_mode.h"
-#include "components/power_scheduler/power_mode_arbiter.h"
-#include "components/power_scheduler/power_mode_voter.h"
 #include "third_party/blink/public/common/features.h"
 #include "third_party/blink/public/common/scheduler/web_scheduler_tracked_feature.h"
 #include "third_party/blink/public/platform/web_string.h"
 #include "third_party/blink/renderer/platform/back_forward_cache_utils.h"
 #include "third_party/blink/renderer/platform/runtime_enabled_features.h"
 #include "third_party/blink/renderer/platform/scheduler/common/features.h"
+#include "third_party/blink/renderer/platform/scheduler/common/task_priority.h"
 #include "third_party/blink/renderer/platform/scheduler/common/throttling/budget_pool.h"
 #include "third_party/blink/renderer/platform/scheduler/common/tracing_helper.h"
-#include "third_party/blink/renderer/platform/scheduler/main_thread/auto_advancing_virtual_time_domain.h"
 #include "third_party/blink/renderer/platform/scheduler/main_thread/find_in_page_budget_pool_controller.h"
 #include "third_party/blink/renderer/platform/scheduler/main_thread/main_thread_scheduler_impl.h"
+#include "third_party/blink/renderer/platform/scheduler/main_thread/main_thread_task_queue.h"
 #include "third_party/blink/renderer/platform/scheduler/main_thread/main_thread_web_scheduling_task_queue_impl.h"
 #include "third_party/blink/renderer/platform/scheduler/main_thread/page_scheduler_impl.h"
 #include "third_party/blink/renderer/platform/scheduler/main_thread/page_visibility_state.h"
-#include "third_party/blink/renderer/platform/scheduler/main_thread/resource_loading_task_runner_handle_impl.h"
 #include "third_party/blink/renderer/platform/scheduler/main_thread/task_type_names.h"
+#include "third_party/blink/renderer/platform/scheduler/public/web_scheduling_queue_type.h"
 #include "third_party/blink/renderer/platform/scheduler/worker/worker_scheduler_proxy.h"
 #include "third_party/perfetto/include/perfetto/tracing/traced_value.h"
 
@@ -46,11 +46,35 @@ using perfetto::protos::pbzero::RendererMainThreadTaskExecution;
 
 namespace {
 
+// When enabled, the main thread's type is reduced from `kCompositing` to
+// `kDefault` when WebRTC is in use within the renderer. This is a simple
+// workaround meant to be merged to higher channels while we're working on a
+// more refined solution. See crbug.com/1513904.
+BASE_FEATURE(kRendererMainIsDefaultThreadTypeForWebRTC,
+             "RendererMainIsNormalThreadTypeForWebRTC",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
 const char* VisibilityStateToString(bool is_visible) {
   if (is_visible) {
     return "visible";
   } else {
     return "hidden";
+  }
+}
+
+const char* IsVisibleAreaLargeStateToString(bool is_large) {
+  if (is_large) {
+    return "large";
+  } else {
+    return "small";
+  }
+}
+
+const char* UserActivationStateToString(bool had_user_activation) {
+  if (had_user_activation) {
+    return "had user activation";
+  } else {
+    return "no user activation";
   }
 }
 
@@ -118,11 +142,18 @@ FrameSchedulerImpl::FrameSchedulerImpl(
       main_thread_scheduler_(main_thread_scheduler),
       parent_page_scheduler_(parent_page_scheduler),
       delegate_(delegate),
-      throttling_state_(SchedulingLifecycleState::kNotThrottled),
       frame_visible_(true,
                      "FrameScheduler.FrameVisible",
                      &tracing_controller_,
                      VisibilityStateToString),
+      is_visible_area_large_(true,
+                             "FrameScheduler.IsVisibleAreaLarge",
+                             &tracing_controller_,
+                             IsVisibleAreaLargeStateToString),
+      had_user_activation_(false,
+                           "FrameScheduler.HadUserActivation",
+                           &tracing_controller_,
+                           UserActivationStateToString),
       frame_paused_(false,
                     "FrameScheduler.FramePaused",
                     &tracing_controller_,
@@ -176,9 +207,10 @@ FrameSchedulerImpl::FrameSchedulerImpl(
                                     "FrameScheduler.WaitingForMeaningfulPaint",
                                     &tracing_controller_,
                                     YesNoStateToString),
-      loading_power_mode_voter_(
-          power_scheduler::PowerModeArbiter::GetInstance()->NewVoter(
-              "PowerModeVoter.Loading")) {
+      is_load_event_dispatched_(false,
+                                "FrameScheduler.IsLoadEventDispatched",
+                                &tracing_controller_,
+                                YesNoStateToString) {
   frame_task_queue_controller_ = base::WrapUnique(
       new FrameTaskQueueController(main_thread_scheduler_, this, this));
   back_forward_cache_disabling_feature_tracker_.SetDelegate(delegate_);
@@ -191,17 +223,6 @@ FrameSchedulerImpl::FrameSchedulerImpl()
                          /*is_in_embedded_frame_tree=*/false,
                          FrameType::kSubframe) {}
 
-namespace {
-
-void CleanUpQueue(MainThreadTaskQueue* queue) {
-  DCHECK(queue);
-
-  queue->DetachFromMainThreadScheduler();
-  DCHECK(!queue->GetFrameScheduler());
-}
-
-}  // namespace
-
 FrameSchedulerImpl::~FrameSchedulerImpl() {
   weak_factory_.InvalidateWeakPtrs();
 
@@ -210,7 +231,10 @@ FrameSchedulerImpl::~FrameSchedulerImpl() {
     if (task_queue_and_voter.first->CanBeThrottled()) {
       RemoveThrottleableQueueFromBudgetPools(task_queue_and_voter.first);
     }
-    CleanUpQueue(task_queue_and_voter.first);
+    auto* queue = task_queue_and_voter.first;
+    CHECK(queue);
+    queue->DetachTaskQueue();
+    CHECK(!queue->GetFrameScheduler());
   }
 
   if (parent_page_scheduler_) {
@@ -273,7 +297,8 @@ void FrameSchedulerImpl::MoveTaskQueuesToCorrectWakeUpBudgetPool() {
       continue;
 
     auto* new_wake_up_budget_pool = parent_page_scheduler_->GetWakeUpBudgetPool(
-        task_queue, frame_origin_type_, frame_visible_);
+        task_queue, frame_origin_type_, frame_visible_, is_visible_area_large_,
+        had_user_activation_);
     if (task_queue->GetWakeUpBudgetPool() == new_wake_up_budget_pool) {
       continue;
     }
@@ -281,7 +306,8 @@ void FrameSchedulerImpl::MoveTaskQueuesToCorrectWakeUpBudgetPool() {
     parent_page_scheduler_->RemoveQueueFromWakeUpBudgetPool(task_queue,
                                                             &lazy_now);
     parent_page_scheduler_->AddQueueToWakeUpBudgetPool(
-        task_queue, frame_origin_type_, frame_visible_, &lazy_now);
+        task_queue, frame_origin_type_, frame_visible_, is_visible_area_large_,
+        had_user_activation_, &lazy_now);
   }
 }
 
@@ -289,7 +315,6 @@ void FrameSchedulerImpl::SetFrameVisible(bool frame_visible) {
   DCHECK(parent_page_scheduler_);
   if (frame_visible_ == frame_visible)
     return;
-  UMA_HISTOGRAM_BOOLEAN("RendererScheduler.IPC.FrameVisibility", frame_visible);
   frame_visible_ = frame_visible;
 
   MoveTaskQueuesToCorrectWakeUpBudgetPool();
@@ -298,6 +323,44 @@ void FrameSchedulerImpl::SetFrameVisible(bool frame_visible) {
 
 bool FrameSchedulerImpl::IsFrameVisible() const {
   return frame_visible_;
+}
+
+void FrameSchedulerImpl::SetVisibleAreaLarge(bool is_large) {
+  DCHECK(parent_page_scheduler_);
+  if (is_visible_area_large_ == is_large) {
+    return;
+  }
+  is_visible_area_large_ = is_large;
+
+  if (!IsCrossOriginToNearestMainFrame()) {
+    return;
+  }
+
+  MoveTaskQueuesToCorrectWakeUpBudgetPool();
+  UpdatePolicy();
+}
+
+bool FrameSchedulerImpl::IsVisibleAreaLarge() const {
+  return is_visible_area_large_;
+}
+
+void FrameSchedulerImpl::SetHadUserActivation(bool had_user_activation) {
+  DCHECK(parent_page_scheduler_);
+  if (had_user_activation_ == had_user_activation) {
+    return;
+  }
+  had_user_activation_ = had_user_activation;
+
+  if (!IsCrossOriginToNearestMainFrame()) {
+    return;
+  }
+
+  MoveTaskQueuesToCorrectWakeUpBudgetPool();
+  UpdatePolicy();
+}
+
+bool FrameSchedulerImpl::HadUserActivation() const {
+  return had_user_activation_;
 }
 
 void FrameSchedulerImpl::SetCrossOriginToNearestMainFrame(bool cross_origin) {
@@ -345,10 +408,10 @@ void FrameSchedulerImpl::AddTaskTime(base::TimeDelta time) {
       base::Milliseconds(100);
   if (!delegate_)
     return;
-  task_time_ += time;
-  if (task_time_ >= kTaskDurationSendThreshold) {
-    delegate_->UpdateTaskTime(task_time_);
-    task_time_ = base::TimeDelta();
+  unreported_task_time_ += time;
+  if (unreported_task_time_ >= kTaskDurationSendThreshold) {
+    delegate_->UpdateTaskTime(unreported_task_time_);
+    unreported_task_time_ = base::TimeDelta();
   }
 }
 
@@ -385,6 +448,15 @@ QueueTraits FrameSchedulerImpl::CreateQueueTraitsForTaskType(TaskType type) {
       return IsInflightNetworkRequestBackForwardCacheSupportEnabled()
                  ? UnfreezableLoadingTaskQueueTraits()
                  : LoadingTaskQueueTraits();
+    case TaskType::kNetworkingUnfreezableRenderBlockingLoading: {
+      QueueTraits queue_traits =
+          IsInflightNetworkRequestBackForwardCacheSupportEnabled()
+              ? UnfreezableLoadingTaskQueueTraits()
+              : LoadingTaskQueueTraits();
+      queue_traits.SetPrioritisationType(
+          QueueTraits::PrioritisationType::kRenderBlocking);
+      return queue_traits;
+    }
     case TaskType::kNetworkingControl:
       return LoadingControlTaskQueueTraits();
     case TaskType::kLowPriorityScriptExecution:
@@ -403,7 +475,6 @@ QueueTraits FrameSchedulerImpl::CreateQueueTraitsForTaskType(TaskType type) {
     case TaskType::kWebSocket:
     case TaskType::kMicrotask:
     case TaskType::kUnshippedPortMessage:
-    case TaskType::kFileReading:
     case TaskType::kPresentation:
     case TaskType::kSensor:
     case TaskType::kPerformanceTimeline:
@@ -417,8 +488,16 @@ QueueTraits FrameSchedulerImpl::CreateQueueTraitsForTaskType(TaskType type) {
     case TaskType::kBackgroundFetch:
     case TaskType::kPermission:
     case TaskType::kWakeLock:
+    case TaskType::kStorage:
+    case TaskType::kClipboard:
       // TODO(altimin): Move appropriate tasks to throttleable task queue.
       return DeferrableTaskQueueTraits();
+    case TaskType::kFileReading:
+      // This is used by Blob operations (BlobURLStore in particular, which is
+      // associated to BlobRegistry) and should run with VT paused to prevent
+      // deadlocks when reading network requests as Blobs. See crbug.com/1455267
+      // for more details.
+      return DeferrableTaskQueueTraits().SetCanRunWhenVirtualTimePaused(true);
     // PostedMessage can be used for navigation, so we shouldn't defer it
     // when expecting a user gesture.
     case TaskType::kPostedMessage:
@@ -492,6 +571,7 @@ QueueTraits FrameSchedulerImpl::CreateQueueTraitsForTaskType(TaskType type) {
               QueueTraits::PrioritisationType::kPostMessageForwarding);
     case TaskType::kDeprecatedNone:
     case TaskType::kMainThreadTaskQueueV8:
+    case TaskType::kMainThreadTaskQueueV8LowPriority:
     case TaskType::kMainThreadTaskQueueCompositor:
     case TaskType::kMainThreadTaskQueueDefault:
     case TaskType::kMainThreadTaskQueueInput:
@@ -534,23 +614,6 @@ scoped_refptr<MainThreadTaskQueue> FrameSchedulerImpl::GetTaskQueue(
   return frame_task_queue_controller_->GetTaskQueue(queue_traits);
 }
 
-std::unique_ptr<WebResourceLoadingTaskRunnerHandle>
-FrameSchedulerImpl::CreateResourceLoadingTaskRunnerHandle() {
-  return CreateResourceLoadingTaskRunnerHandleImpl();
-}
-
-std::unique_ptr<WebResourceLoadingTaskRunnerHandle>
-FrameSchedulerImpl::CreateResourceLoadingMaybeUnfreezableTaskRunnerHandle() {
-  return ResourceLoadingTaskRunnerHandleImpl::WrapTaskRunner(
-      GetTaskQueue(TaskType::kNetworkingUnfreezable));
-}
-
-std::unique_ptr<ResourceLoadingTaskRunnerHandleImpl>
-FrameSchedulerImpl::CreateResourceLoadingTaskRunnerHandleImpl() {
-  return ResourceLoadingTaskRunnerHandleImpl::WrapTaskRunner(
-      GetTaskQueue(TaskType::kNetworking));
-}
-
 scoped_refptr<base::SingleThreadTaskRunner>
 FrameSchedulerImpl::ControlTaskRunner() {
   DCHECK(parent_page_scheduler_);
@@ -575,22 +638,22 @@ void FrameSchedulerImpl::DidStartProvisionalLoad() {
 
 void FrameSchedulerImpl::DidCommitProvisionalLoad(
     bool is_web_history_inert_commit,
-    NavigationType navigation_type) {
+    NavigationType navigation_type,
+    DidCommitProvisionalLoadParams params) {
   bool is_outermost_main_frame =
       GetFrameType() == FrameType::kMainFrame && !is_in_embedded_frame_tree_;
   bool is_same_document = navigation_type == NavigationType::kSameDocument;
 
   if (!is_same_document) {
-    loading_power_mode_voter_->VoteFor(power_scheduler::PowerMode::kLoading);
-    loading_power_mode_voter_->ResetVoteAfterTimeout(
-        power_scheduler::PowerModeVoter::kStuckLoadingTimeout);
-
     waiting_for_contentful_paint_ = true;
     waiting_for_meaningful_paint_ = true;
+    is_load_event_dispatched_ = false;
   }
 
   if (is_outermost_main_frame && !is_same_document) {
-    task_time_ = base::TimeDelta();
+    unreported_task_time_ = base::TimeDelta();
+  } else {
+    unreported_task_time_ = params.previous_document_unreported_task_time;
   }
 
   main_thread_scheduler_->DidCommitProvisionalLoad(
@@ -628,8 +691,16 @@ void FrameSchedulerImpl::OnStartedUsingNonStickyFeature(
     back_forward_cache_disabling_feature_tracker_.AddNonStickyFeature(
         feature, std::move(source_location), handle);
   }
-  if (policy.disable_align_wake_ups)
+  if (policy.disable_align_wake_ups) {
     DisableAlignWakeUpsForProcess();
+  }
+
+  if (feature == SchedulingPolicy::Feature::kWebRTC &&
+      base::FeatureList::IsEnabled(kRendererMainIsDefaultThreadTypeForWebRTC) &&
+      base::PlatformThread::GetCurrentThreadType() ==
+          base::ThreadType::kCompositing) {
+    base::PlatformThread::SetCurrentThreadType(base::ThreadType::kDefault);
+  }
 }
 
 void FrameSchedulerImpl::OnStartedUsingStickyFeature(
@@ -642,8 +713,9 @@ void FrameSchedulerImpl::OnStartedUsingStickyFeature(
     back_forward_cache_disabling_feature_tracker_.AddStickyFeature(
         feature, std::move(source_location));
   }
-  if (policy.disable_align_wake_ups)
+  if (policy.disable_align_wake_ups) {
     DisableAlignWakeUpsForProcess();
+  }
 }
 
 void FrameSchedulerImpl::OnStoppedUsingNonStickyFeature(
@@ -690,6 +762,12 @@ void FrameSchedulerImpl::OnRemovedAggressiveThrottlingOptOut() {
     parent_page_scheduler_->OnThrottlingStatusUpdated();
 }
 
+void FrameSchedulerImpl::OnTaskCompleted(TaskQueue::TaskTiming* timing) {
+  if (delegate_) {
+    delegate_->OnTaskCompleted(timing->start_time(), timing->end_time());
+  }
+}
+
 void FrameSchedulerImpl::WriteIntoTrace(perfetto::TracedValue context) const {
   auto dict = std::move(context).WriteDictionary();
   dict.Add("frame_visible", frame_visible_);
@@ -698,6 +776,8 @@ void FrameSchedulerImpl::WriteIntoTrace(perfetto::TracedValue context) const {
   dict.Add("frame_type", frame_type_ == FrameScheduler::FrameType::kMainFrame
                              ? "MainFrame"
                              : "Subframe");
+  dict.Add("is_visible_area_large", IsVisibleAreaLarge());
+  dict.Add("had_user_activation", HadUserActivation());
   dict.Add("disable_background_timer_throttling",
            !RuntimeEnabledFeatures::TimerThrottlingForBackgroundTabsEnabled());
 
@@ -836,8 +916,15 @@ void FrameSchedulerImpl::OnFirstContentfulPaintInMainFrame() {
   main_thread_scheduler_->OnMainFramePaint();
 }
 
-void FrameSchedulerImpl::OnFirstMeaningfulPaint() {
+void FrameSchedulerImpl::OnMainFrameInteractive() {
+  if (delegate_) {
+    return delegate_->MainFrameInteractive();
+  }
+}
+
+void FrameSchedulerImpl::OnFirstMeaningfulPaint(base::TimeTicks timestamp) {
   waiting_for_meaningful_paint_ = false;
+  first_meaningful_paint_timestamp_ = timestamp;
 
   if (GetFrameType() != FrameScheduler::FrameType::kMainFrame ||
       is_in_embedded_frame_tree_) {
@@ -847,9 +934,8 @@ void FrameSchedulerImpl::OnFirstMeaningfulPaint() {
   main_thread_scheduler_->OnMainFramePaint();
 }
 
-void FrameSchedulerImpl::OnLoad() {
-  loading_power_mode_voter_->ResetVoteAfterTimeout(
-      power_scheduler::PowerModeVoter::kLoadingTimeout);
+void FrameSchedulerImpl::OnDispatchLoadEvent() {
+  is_load_event_dispatched_ = true;
 }
 
 bool FrameSchedulerImpl::IsWaitingForContentfulPaint() const {
@@ -858,6 +944,19 @@ bool FrameSchedulerImpl::IsWaitingForContentfulPaint() const {
 
 bool FrameSchedulerImpl::IsWaitingForMeaningfulPaint() const {
   return waiting_for_meaningful_paint_;
+}
+
+bool FrameSchedulerImpl::IsLoading() const {
+  if (waiting_for_meaningful_paint_) {
+    return true;
+  }
+
+  if (is_load_event_dispatched_) {
+    return false;
+  }
+
+  return base::TimeTicks::Now() - first_meaningful_paint_timestamp_ <=
+         GetLoadingPhaseBufferTimeAfterFirstMeaningfulPaint();
 }
 
 bool FrameSchedulerImpl::IsOrdinary() const {
@@ -871,6 +970,11 @@ bool FrameSchedulerImpl::ShouldThrottleTaskQueues() const {
 
   if (parent_page_scheduler_->ThrottleForegroundTimers())
     return true;
+  if (parent_page_scheduler_->ThrottleUnimportantFrameTimers() &&
+      IsCrossOriginToNearestMainFrame() && frame_visible_ &&
+      !IsVisibleAreaLarge() && !HadUserActivation()) {
+    return true;
+  }
   if (!RuntimeEnabledFeatures::TimerThrottlingForBackgroundTabsEnabled())
     return false;
   if (parent_page_scheduler_->IsAudioPlaying())
@@ -884,7 +988,7 @@ bool FrameSchedulerImpl::IsExemptFromBudgetBasedThrottling() const {
   return opted_out_from_aggressive_throttling();
 }
 
-TaskQueue::QueuePriority FrameSchedulerImpl::ComputePriority(
+TaskPriority FrameSchedulerImpl::ComputePriority(
     MainThreadTaskQueue* task_queue) const {
   DCHECK(task_queue);
 
@@ -899,15 +1003,15 @@ TaskQueue::QueuePriority FrameSchedulerImpl::ComputePriority(
   switch (task_queue->GetPrioritisationType()) {
     case MainThreadTaskQueue::QueueTraits::PrioritisationType::
         kInternalScriptContinuation:
-      return TaskQueue::QueuePriority::kVeryHighPriority;
+      return TaskPriority::kVeryHighPriority;
     case MainThreadTaskQueue::QueueTraits::PrioritisationType::kBestEffort:
-      return TaskQueue::QueuePriority::kBestEffortPriority;
+      return TaskPriority::kBestEffortPriority;
     case MainThreadTaskQueue::QueueTraits::PrioritisationType::
         kPostMessageForwarding:
-      return TaskQueue::QueuePriority::kVeryHighPriority;
+      return TaskPriority::kVeryHighPriority;
     case MainThreadTaskQueue::QueueTraits::PrioritisationType::
         kInternalNavigationCancellation:
-      return TaskQueue::QueuePriority::kVeryHighPriority;
+      return TaskPriority::kVeryHighPriority;
     default:
       break;
   }
@@ -915,94 +1019,32 @@ TaskQueue::QueuePriority FrameSchedulerImpl::ComputePriority(
   // TODO(shaseley): This should use lower priorities if the frame is
   // deprioritized. Change this once we refactor and add frame policy/priorities
   // and add a range of new priorities less than low.
-  if (task_queue->web_scheduling_priority()) {
-    switch (task_queue->web_scheduling_priority().value()) {
+  if (absl::optional<WebSchedulingQueueType> queue_type =
+          task_queue->GetWebSchedulingQueueType()) {
+    bool is_continuation =
+        *queue_type == WebSchedulingQueueType::kContinuationQueue;
+    switch (*task_queue->GetWebSchedulingPriority()) {
       case WebSchedulingPriority::kUserBlockingPriority:
-        return TaskQueue::QueuePriority::kHighPriority;
+        return is_continuation ? TaskPriority::kHighPriorityContinuation
+                               : TaskPriority::kHighPriority;
       case WebSchedulingPriority::kUserVisiblePriority:
-        return TaskQueue::QueuePriority::kNormalPriority;
+        return is_continuation ? TaskPriority::kNormalPriorityContinuation
+                               : TaskPriority::kNormalPriority;
       case WebSchedulingPriority::kBackgroundPriority:
-        return TaskQueue::QueuePriority::kLowPriority;
+        return is_continuation ? TaskPriority::kLowPriorityContinuation
+                               : TaskPriority::kLowPriority;
     }
   }
 
   if (!parent_page_scheduler_) {
     // Frame might be detached during its shutdown. Return a default priority
     // in that case.
-    return TaskQueue::QueuePriority::kNormalPriority;
-  }
-
-  // A hidden page with no audio.
-  if (parent_page_scheduler_->IsBackgrounded()) {
-    if (main_thread_scheduler_->scheduling_settings()
-            .low_priority_background_page) {
-      return TaskQueue::QueuePriority::kLowPriority;
-    }
-
-    if (main_thread_scheduler_->scheduling_settings()
-            .best_effort_background_page) {
-      return TaskQueue::QueuePriority::kBestEffortPriority;
-    }
-  }
-
-  // Low priority feature enabled for hidden frame.
-  if (main_thread_scheduler_->scheduling_settings().low_priority_hidden_frame &&
-      !IsFrameVisible()) {
-    return TaskQueue::QueuePriority::kLowPriority;
-  }
-
-  bool is_subframe = GetFrameType() == FrameScheduler::FrameType::kSubframe;
-  bool is_throttleable_task_queue =
-      task_queue->queue_type() ==
-      MainThreadTaskQueue::QueueType::kFrameThrottleable;
-
-  // Low priority feature enabled for sub-frame.
-  if (main_thread_scheduler_->scheduling_settings().low_priority_subframe &&
-      is_subframe) {
-    return TaskQueue::QueuePriority::kLowPriority;
-  }
-
-  // Low priority feature enabled for sub-frame throttleable task queues.
-  if (main_thread_scheduler_->scheduling_settings()
-          .low_priority_subframe_throttleable &&
-      is_subframe && is_throttleable_task_queue) {
-    return TaskQueue::QueuePriority::kLowPriority;
-  }
-
-  // Low priority feature enabled for throttleable task queues.
-  if (main_thread_scheduler_->scheduling_settings().low_priority_throttleable &&
-      is_throttleable_task_queue) {
-    return TaskQueue::QueuePriority::kLowPriority;
-  }
-
-  // Ad frame experiment.
-  if (IsAdFrame()) {
-    if (main_thread_scheduler_->scheduling_settings().low_priority_ad_frame) {
-      return TaskQueue::QueuePriority::kLowPriority;
-    }
-
-    if (main_thread_scheduler_->scheduling_settings().best_effort_ad_frame) {
-      return TaskQueue::QueuePriority::kBestEffortPriority;
-    }
-  }
-
-  // Frame origin type experiment.
-  if (IsCrossOriginToNearestMainFrame() &&
-      main_thread_scheduler_->scheduling_settings().low_priority_cross_origin) {
-    return TaskQueue::QueuePriority::kLowPriority;
+    return TaskPriority::kNormalPriority;
   }
 
   if (task_queue->GetPrioritisationType() ==
       MainThreadTaskQueue::QueueTraits::PrioritisationType::kLoadingControl) {
-    return main_thread_scheduler_->should_prioritize_loading_with_compositing()
-               ? TaskQueue::QueuePriority::kVeryHighPriority
-               : TaskQueue::QueuePriority::kHighPriority;
-  }
-
-  if (task_queue->GetPrioritisationType() ==
-          MainThreadTaskQueue::QueueTraits::PrioritisationType::kLoading &&
-      main_thread_scheduler_->should_prioritize_loading_with_compositing()) {
-    return main_thread_scheduler_->compositor_priority();
+    return TaskPriority::kHighPriority;
   }
 
   if (task_queue->GetPrioritisationType() ==
@@ -1013,14 +1055,12 @@ TaskQueue::QueuePriority FrameSchedulerImpl::ComputePriority(
   if (task_queue->GetPrioritisationType() ==
       MainThreadTaskQueue::QueueTraits::PrioritisationType::
           kHighPriorityLocalFrame) {
-    return TaskQueue::QueuePriority::kHighestPriority;
+    return TaskPriority::kHighestPriority;
   }
 
   if (task_queue->GetPrioritisationType() ==
-          MainThreadTaskQueue::QueueTraits::PrioritisationType::kInput &&
-      base::FeatureList::IsEnabled(
-          ::blink::features::kInputTargetClientHighPriority)) {
-    return TaskQueue::QueuePriority::kHighestPriority;
+      MainThreadTaskQueue::QueueTraits::PrioritisationType::kInput) {
+    return TaskPriority::kHighestPriority;
   }
 
   if (task_queue->GetPrioritisationType() ==
@@ -1029,11 +1069,18 @@ TaskQueue::QueuePriority FrameSchedulerImpl::ComputePriority(
     // TODO(shaseley): This decision should probably be based on Agent
     // visibility. Consider changing this before shipping anything.
     return parent_page_scheduler_->IsPageVisible()
-               ? TaskQueue::QueuePriority::kHighPriority
-               : TaskQueue::QueuePriority::kNormalPriority;
+               ? TaskPriority::kHighPriority
+               : TaskPriority::kNormalPriority;
   }
 
-  return TaskQueue::QueuePriority::kNormalPriority;
+  if (task_queue->GetPrioritisationType() ==
+      MainThreadTaskQueue::QueueTraits::PrioritisationType::kRenderBlocking) {
+    return parent_page_scheduler_->IsPageVisible()
+               ? TaskPriority::kExtremelyHighPriority
+               : TaskPriority::kNormalPriority;
+  }
+
+  return TaskPriority::kNormalPriority;
 }
 
 std::unique_ptr<blink::mojom::blink::PauseSubresourceLoadingHandle>
@@ -1093,7 +1140,8 @@ void FrameSchedulerImpl::OnTaskQueueCreated(
     }
 
     parent_page_scheduler_->AddQueueToWakeUpBudgetPool(
-        task_queue, frame_origin_type_, frame_visible_, &lazy_now);
+        task_queue, frame_origin_type_, frame_visible_, is_visible_area_large_,
+        had_user_activation_, &lazy_now);
 
     if (task_queues_throttled_) {
       MainThreadTaskQueue::ThrottleHandle handle = task_queue->Throttle();
@@ -1174,13 +1222,6 @@ FrameSchedulerImpl::GetActiveFeaturesTrackedForBackForwardCacheMetrics() {
       .GetActiveFeaturesTrackedForBackForwardCacheMetrics();
 }
 
-uint64_t
-FrameSchedulerImpl::GetActiveFeaturesTrackedForBackForwardCacheMetricsMask()
-    const {
-  return back_forward_cache_disabling_feature_tracker_
-      .GetActiveFeaturesTrackedForBackForwardCacheMetricsMask();
-}
-
 base::WeakPtr<FrameOrWorkerScheduler>
 FrameSchedulerImpl::GetFrameOrWorkerSchedulerWeakPtr() {
   // We reset feature sets upon frame navigation, so having a document-bound
@@ -1191,6 +1232,7 @@ FrameSchedulerImpl::GetFrameOrWorkerSchedulerWeakPtr() {
 
 std::unique_ptr<WebSchedulingTaskQueue>
 FrameSchedulerImpl::CreateWebSchedulingTaskQueue(
+    WebSchedulingQueueType queue_type,
     WebSchedulingPriority priority) {
   // The QueueTraits for scheduler.postTask() are similar to those of
   // setTimeout() (deferrable queue traits + throttling for delayed tasks), with
@@ -1201,13 +1243,19 @@ FrameSchedulerImpl::CreateWebSchedulingTaskQueue(
   //     WebSchedulingPriority, which is only set for these task queues)
   scoped_refptr<MainThreadTaskQueue> immediate_task_queue =
       frame_task_queue_controller_->NewWebSchedulingTaskQueue(
-          DeferrableTaskQueueTraits(), priority);
+          DeferrableTaskQueueTraits(), queue_type, priority);
+  // Continuation task queues can only be used for immediate tasks since there
+  // the yield API doesn't support delayed continuations.
+  if (queue_type == WebSchedulingQueueType::kContinuationQueue) {
+    return std::make_unique<MainThreadWebSchedulingTaskQueueImpl>(
+        immediate_task_queue->AsWeakPtr(), nullptr);
+  }
   scoped_refptr<MainThreadTaskQueue> delayed_task_queue =
       frame_task_queue_controller_->NewWebSchedulingTaskQueue(
           DeferrableTaskQueueTraits()
               .SetCanBeThrottled(true)
               .SetCanBeIntensivelyThrottled(true),
-          priority);
+          queue_type, priority);
   return std::make_unique<MainThreadWebSchedulingTaskQueueImpl>(
       immediate_task_queue->AsWeakPtr(), delayed_task_queue->AsWeakPtr());
 }
@@ -1220,10 +1268,12 @@ void FrameSchedulerImpl::OnWebSchedulingTaskQueuePriorityChanged(
 
 void FrameSchedulerImpl::OnWebSchedulingTaskQueueDestroyed(
     MainThreadTaskQueue* queue) {
-  if (queue->CanBeThrottled())
+  if (queue->CanBeThrottled()) {
     RemoveThrottleableQueueFromBudgetPools(queue);
+  }
 
-  CleanUpQueue(queue);
+  // Don't run web scheduling tasks after detach.
+  queue->ShutdownTaskQueue();
 
   // After this is called, the queue will be destroyed. Do not attempt
   // to use it further.

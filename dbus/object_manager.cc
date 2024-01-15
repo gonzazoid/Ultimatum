@@ -6,19 +6,18 @@
 
 #include <stddef.h>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/metrics/histogram.h"
 #include "base/strings/stringprintf.h"
-#include "base/task/task_runner_util.h"
 #include "dbus/bus.h"
 #include "dbus/dbus_statistics.h"
+#include "dbus/error.h"
 #include "dbus/message.h"
 #include "dbus/object_proxy.h"
 #include "dbus/property.h"
-#include "dbus/scoped_dbus_error.h"
 #include "dbus/util.h"
 
 namespace dbus {
@@ -40,8 +39,8 @@ scoped_refptr<ObjectManager> ObjectManager::Create(
   // signals from the service. This is important to avoid any race conditions
   // that might cause us to miss PropertiesChanged signals once all objects are
   // initialized via GetManagedObjects.
-  base::PostTaskAndReplyWithResult(
-      bus->GetDBusTaskRunner(), FROM_HERE,
+  bus->GetDBusTaskRunner()->PostTaskAndReplyWithResult(
+      FROM_HERE,
       base::BindOnce(&ObjectManager::SetupMatchRuleAndFilter, object_manager),
       base::BindOnce(&ObjectManager::OnSetupMatchRuleAndFilterComplete,
                      object_manager));
@@ -51,11 +50,7 @@ scoped_refptr<ObjectManager> ObjectManager::Create(
 ObjectManager::ObjectManager(Bus* bus,
                              const std::string& service_name,
                              const ObjectPath& object_path)
-    : bus_(bus),
-      service_name_(service_name),
-      object_path_(object_path),
-      setup_success_(false),
-      cleanup_called_(false) {
+    : bus_(bus), service_name_(service_name), object_path_(object_path) {
   LOG_IF(FATAL, !object_path_.IsValid()) << object_path_.value();
   DVLOG(1) << "Creating ObjectManager for " << service_name_
            << " " << object_path_.value();
@@ -169,22 +164,27 @@ void ObjectManager::CleanUp() {
     return;
 
   bus_->RemoveFilterFunction(&ObjectManager::HandleMessageThunk, this);
-
-  ScopedDBusError error;
-  bus_->RemoveMatch(match_rule_, error.get());
-  if (error.is_set())
+  Error error;
+  bus_->RemoveMatch(match_rule_, &error);
+  if (error.IsValid()) {
     LOG(ERROR) << "Failed to remove match rule: " << match_rule_;
+  }
 
   match_rule_.clear();
+  // After Cleanup(), the Bus doesn't own `this` anymore and might be deleted
+  // before `this`.
+  bus_ = nullptr;
 }
 
 bool ObjectManager::SetupMatchRuleAndFilter() {
-  DCHECK(bus_);
   DCHECK(!setup_success_);
-  bus_->AssertOnDBusThread();
 
-  if (cleanup_called_)
+  if (cleanup_called_) {
     return false;
+  }
+
+  DCHECK(bus_);
+  bus_->AssertOnDBusThread();
 
   if (!bus_->Connect() || !bus_->SetUpAsyncOperations())
     return false;
@@ -205,9 +205,9 @@ bool ObjectManager::SetupMatchRuleAndFilter() {
 
   bus_->AddFilterFunction(&ObjectManager::HandleMessageThunk, this);
 
-  ScopedDBusError error;
-  bus_->AddMatch(match_rule, error.get());
-  if (error.is_set()) {
+  Error error;
+  bus_->AddMatch(match_rule, &error);
+  if (error.IsValid()) {
     LOG(ERROR) << "ObjectManager failed to add match rule \"" << match_rule
                << "\". Got " << error.name() << ": " << error.message();
     bus_->RemoveFilterFunction(&ObjectManager::HandleMessageThunk, this);
@@ -226,16 +226,17 @@ void ObjectManager::OnSetupMatchRuleAndFilterComplete(bool success) {
                  << ": Failed to set up match rule.";
     return;
   }
-
-  DCHECK(bus_);
   DCHECK(object_proxy_);
   DCHECK(setup_success_);
-  bus_->AssertOnOriginThread();
 
   // |object_proxy_| is no longer valid if the Bus was shut down before this
   // call. Don't initiate any other action from the origin thread.
-  if (cleanup_called_)
+  if (cleanup_called_) {
     return;
+  }
+
+  DCHECK(bus_);
+  bus_->AssertOnOriginThread();
 
   object_proxy_->ConnectToSignal(
       kObjectManagerInterface, kObjectManagerInterfacesAdded,

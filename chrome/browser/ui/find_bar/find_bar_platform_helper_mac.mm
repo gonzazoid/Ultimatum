@@ -24,14 +24,13 @@ class FindBarPlatformHelperMac : public FindBarPlatformHelper {
  public:
   FindBarPlatformHelperMac(FindBarController* find_bar_controller)
       : FindBarPlatformHelper(find_bar_controller) {
-    find_pasteboard_notification_observer_ =
-        [[NSNotificationCenter defaultCenter]
-            addObserverForName:kFindPasteboardChangedNotification
-                        object:[FindPasteboard sharedInstance]
-                         queue:nil
-                    usingBlock:^(NSNotification*) {
-                      UpdateFindBarControllerFromPasteboard();
-                    }];
+    find_pasteboard_notification_observer_ = [NSNotificationCenter.defaultCenter
+        addObserverForName:kFindPasteboardChangedNotification
+                    object:[FindPasteboard sharedInstance]
+                     queue:nil
+                usingBlock:^(NSNotification*) {
+                  UpdateFindBarControllerFromPasteboard();
+                }];
     UpdateFindBarControllerFromPasteboard();
   }
 
@@ -39,7 +38,7 @@ class FindBarPlatformHelperMac : public FindBarPlatformHelper {
   FindBarPlatformHelperMac& operator=(const FindBarPlatformHelperMac&) = delete;
 
   ~FindBarPlatformHelperMac() override {
-    [[NSNotificationCenter defaultCenter]
+    [NSNotificationCenter.defaultCenter
         removeObserver:find_pasteboard_notification_observer_];
   }
 
@@ -63,10 +62,9 @@ class FindBarPlatformHelperMac : public FindBarPlatformHelper {
   void UpdateFindBarControllerFromPasteboard() {
     content::WebContents* active_web_contents =
         find_bar_controller_->web_contents();
-    Browser* browser =
-        active_web_contents
-            ? chrome::FindBrowserWithWebContents(active_web_contents)
-            : nullptr;
+    Browser* browser = active_web_contents
+                           ? chrome::FindBrowserWithTab(active_web_contents)
+                           : nullptr;
     if (browser) {
       TabStripModel* tab_strip_model = browser->tab_strip_model();
 
@@ -87,7 +85,7 @@ class FindBarPlatformHelperMac : public FindBarPlatformHelper {
     }
   }
 
-  id find_pasteboard_notification_observer_;
+  id __strong find_pasteboard_notification_observer_;
 };
 
 }  // namespace

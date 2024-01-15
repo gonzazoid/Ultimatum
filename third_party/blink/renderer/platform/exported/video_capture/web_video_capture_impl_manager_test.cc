@@ -5,26 +5,27 @@
 #include <array>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/run_loop.h"
+#include "base/task/bind_post_task.h"
 #include "base/test/gmock_callback_support.h"
 #include "base/test/task_environment.h"
 #include "base/token.h"
-#include "media/base/bind_to_current_loop.h"
 #include "media/capture/mojom/video_capture.mojom-blink.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/common/browser_interface_broker_proxy.h"
 #include "third_party/blink/public/platform/modules/video_capture/web_video_capture_impl_manager.h"
+#include "third_party/blink/public/platform/scheduler/test/renderer_scheduler_test_support.h"
 #include "third_party/blink/renderer/platform/video_capture/gpu_memory_buffer_test_support.h"
 #include "third_party/blink/renderer/platform/video_capture/video_capture_impl.h"
 #include "third_party/blink/renderer/platform/wtf/cross_thread_copier_base.h"
 #include "third_party/blink/renderer/platform/wtf/cross_thread_functional.h"
 
 using base::test::RunOnceClosure;
-using media::BindToCurrentLoop;
 using ::testing::_;
 using ::testing::DoAll;
 using ::testing::InSequence;
@@ -53,7 +54,7 @@ class MockVideoCaptureImpl : public VideoCaptureImpl,
                        PauseResumeCallback* pause_callback,
                        base::OnceClosure destruct_callback)
       : VideoCaptureImpl(session_id,
-                         base::ThreadTaskRunnerHandle::Get(),
+                         scheduler::GetSingleThreadTaskRunnerForTesting(),
                          &GetEmptyBrowserInterfaceBroker()),
         pause_callback_(pause_callback),
         destruct_callback_(std::move(destruct_callback)) {}
@@ -105,12 +106,10 @@ class MockVideoCaptureImpl : public VideoCaptureImpl,
     NOTREACHED();
   }
 
-  MOCK_METHOD2(OnFrameDropped,
-               void(const base::UnguessableToken&,
-                    media::VideoCaptureFrameDropReason));
+  MOCK_METHOD1(OnFrameDropped, void(media::VideoCaptureFrameDropReason));
   MOCK_METHOD2(OnLog, void(const base::UnguessableToken&, const String&));
 
-  PauseResumeCallback* const pause_callback_;
+  const raw_ptr<PauseResumeCallback, ExperimentalRenderer> pause_callback_;
   base::OnceClosure destruct_callback_;
 };
 
@@ -136,7 +135,7 @@ class MockVideoCaptureImplManager : public WebVideoCaptureImplManager {
     return std::move(video_capture_impl);
   }
 
-  PauseResumeCallback* const pause_callback_;
+  const raw_ptr<PauseResumeCallback, ExperimentalRenderer> pause_callback_;
   const base::RepeatingClosure stop_capture_callback_;
 };
 
@@ -148,7 +147,8 @@ class VideoCaptureImplManagerTest : public ::testing::Test,
   VideoCaptureImplManagerTest()
       : manager_(new MockVideoCaptureImplManager(
             this,
-            BindToCurrentLoop(cleanup_run_loop_.QuitClosure()))),
+            base::BindPostTaskToCurrentDefault(
+                cleanup_run_loop_.QuitClosure()))),
         browser_interface_broker_(&GetEmptyBrowserInterfaceBroker()) {
     for (size_t i = 0; i < kNumClients; ++i) {
       session_ids_[i] = base::UnguessableToken::Create();
@@ -167,7 +167,7 @@ class VideoCaptureImplManagerTest : public ::testing::Test,
       bool same_session_id) {
     base::RunLoop run_loop;
     base::RepeatingClosure quit_closure =
-        BindToCurrentLoop(run_loop.QuitClosure());
+        base::BindPostTaskToCurrentDefault(run_loop.QuitClosure());
 
     InSequence s;
     if (!same_session_id) {
@@ -196,7 +196,7 @@ class VideoCaptureImplManagerTest : public ::testing::Test,
       std::array<base::OnceClosure, kNumClients>* stop_callbacks) {
     base::RunLoop run_loop;
     base::RepeatingClosure quit_closure =
-        BindToCurrentLoop(run_loop.QuitClosure());
+        base::BindPostTaskToCurrentDefault(run_loop.QuitClosure());
     EXPECT_CALL(*this, OnStopped(_))
         .Times(kNumClients - 1)
         .RetiresOnSaturation();
@@ -208,9 +208,8 @@ class VideoCaptureImplManagerTest : public ::testing::Test,
     run_loop.Run();
   }
 
-  MOCK_METHOD3(OnFrameReady,
+  MOCK_METHOD2(OnFrameReady,
                void(scoped_refptr<media::VideoFrame>,
-                    std::vector<scoped_refptr<media::VideoFrame>>,
                     base::TimeTicks estimated_capture_time));
   MOCK_METHOD1(OnStarted, void(const media::VideoCaptureSessionId& id));
   MOCK_METHOD1(OnStopped, void(const media::VideoCaptureSessionId& id));
@@ -237,7 +236,7 @@ class VideoCaptureImplManagerTest : public ::testing::Test,
         ConvertToBaseRepeatingCallback(
             CrossThreadBindRepeating(&VideoCaptureImplManagerTest::OnFrameReady,
                                      CrossThreadUnretained(this))),
-        base::DoNothing());
+        base::DoNothing(), base::DoNothing());
   }
 
   base::test::TaskEnvironment task_environment_;
@@ -245,7 +244,8 @@ class VideoCaptureImplManagerTest : public ::testing::Test,
       platform_;
   base::RunLoop cleanup_run_loop_;
   std::unique_ptr<MockVideoCaptureImplManager> manager_;
-  BrowserInterfaceBrokerProxy* browser_interface_broker_;
+  raw_ptr<BrowserInterfaceBrokerProxy, ExperimentalRenderer>
+      browser_interface_broker_;
 };
 
 // Multiple clients with the same session id. There is only one
@@ -288,7 +288,7 @@ TEST_F(VideoCaptureImplManagerTest, SuspendAndResumeSessions) {
   {
     base::RunLoop run_loop;
     base::RepeatingClosure quit_closure =
-        BindToCurrentLoop(run_loop.QuitClosure());
+        base::BindPostTaskToCurrentDefault(run_loop.QuitClosure());
     EXPECT_CALL(*this, OnPaused(session_ids_[0]))
         .Times(1)
         .RetiresOnSaturation();
@@ -306,7 +306,7 @@ TEST_F(VideoCaptureImplManagerTest, SuspendAndResumeSessions) {
   {
     base::RunLoop run_loop;
     base::RepeatingClosure quit_closure =
-        BindToCurrentLoop(run_loop.QuitClosure());
+        base::BindPostTaskToCurrentDefault(run_loop.QuitClosure());
     EXPECT_CALL(*this, OnResumed(session_ids_[0]))
         .Times(1)
         .RetiresOnSaturation();
@@ -325,7 +325,7 @@ TEST_F(VideoCaptureImplManagerTest, SuspendAndResumeSessions) {
   {
     base::RunLoop run_loop;
     base::RepeatingClosure quit_closure =
-        BindToCurrentLoop(run_loop.QuitClosure());
+        base::BindPostTaskToCurrentDefault(run_loop.QuitClosure());
     EXPECT_CALL(*this, OnPaused(session_ids_[0]))
         .WillOnce(RunOnceClosure(std::move(quit_closure)))
         .RetiresOnSaturation();
@@ -338,7 +338,7 @@ TEST_F(VideoCaptureImplManagerTest, SuspendAndResumeSessions) {
   {
     base::RunLoop run_loop;
     base::RepeatingClosure quit_closure =
-        BindToCurrentLoop(run_loop.QuitClosure());
+        base::BindPostTaskToCurrentDefault(run_loop.QuitClosure());
     EXPECT_CALL(*this, OnPaused(session_ids_[1]))
         .Times(1)
         .RetiresOnSaturation();
@@ -360,7 +360,7 @@ TEST_F(VideoCaptureImplManagerTest, SuspendAndResumeSessions) {
   {
     base::RunLoop run_loop;
     base::RepeatingClosure quit_closure =
-        BindToCurrentLoop(run_loop.QuitClosure());
+        base::BindPostTaskToCurrentDefault(run_loop.QuitClosure());
     EXPECT_CALL(*this, OnResumed(session_ids_[0]))
         .Times(1)
         .RetiresOnSaturation();

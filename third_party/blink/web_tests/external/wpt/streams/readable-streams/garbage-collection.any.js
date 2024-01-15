@@ -1,5 +1,6 @@
-// META: global=window,worker
+// META: global=window,worker,shadowrealm
 // META: script=../resources/test-utils.js
+// META: script=/common/gc.js
 'use strict';
 
 promise_test(async () => {

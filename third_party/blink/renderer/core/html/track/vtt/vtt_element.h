@@ -68,25 +68,22 @@ class VTTElement final : public Element {
   void SetLanguage(AtomicString value) { language_ = value; }
 
   static const QualifiedName& VoiceAttributeName() {
-    DEFINE_STATIC_LOCAL(QualifiedName, voice_attr,
-                        (g_null_atom, "voice", g_null_atom));
+    DEFINE_STATIC_LOCAL(QualifiedName, voice_attr, (AtomicString("voice")));
     return voice_attr;
   }
 
   static const QualifiedName& LangAttributeName() {
-    DEFINE_STATIC_LOCAL(QualifiedName, voice_attr,
-                        (g_null_atom, "lang", g_null_atom));
-    return voice_attr;
+    DEFINE_STATIC_LOCAL(QualifiedName, attr, (AtomicString("lang")));
+    return attr;
   }
 
-  const TextTrack* GetTrack() const { return track_; }
+  const TextTrack* GetTrack() const { return track_.Get(); }
 
   void SetTrack(TextTrack*);
   void Trace(Visitor*) const override;
 
  private:
-  LayoutObject* CreateLayoutObject(const ComputedStyle& style,
-                                   LegacyLayout legacy) override;
+  LayoutObject* CreateLayoutObject(const ComputedStyle& style) override;
 
   Member<TextTrack> track_;
   unsigned is_past_node_ : 1;

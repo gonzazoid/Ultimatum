@@ -2,10 +2,14 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {TestRunner} from 'test_runner';
+import {ConsoleTestRunner} from 'console_test_runner';
+import {SourcesTestRunner} from 'sources_test_runner';
+
+import * as SourcesModule from 'devtools/panels/sources/sources.js';
+
 (async function() {
   TestRunner.addResult(`Test that evaluation on call frame works across all inspected windows in the call stack.\n`);
-  await TestRunner.loadLegacyModule('console'); await TestRunner.loadTestModule('console_test_runner');
-  await TestRunner.loadLegacyModule('sources'); await TestRunner.loadTestModule('sources_test_runner');
   await TestRunner.showPanel('sources');
   await TestRunner.loadHTML(`
       <iframe id="iframe"></iframe>
@@ -61,14 +65,14 @@
   }
 
   async function step2(callFrames) {
-    await TestRunner.addSnifferPromise(Sources.CallStackSidebarPane.prototype, 'updatedForTest');
+    await TestRunner.addSnifferPromise(SourcesModule.CallStackSidebarPane.CallStackSidebarPane.prototype, 'updatedForTest');
     await SourcesTestRunner.captureStackTrace(callFrames);
     TestRunner.addResult('\n=== Evaluating on iframe ===');
     evaluateInConsoleAndDump(step3);
   }
 
   function step3() {
-    var pane = Sources.CallStackSidebarPane.instance();
+    var pane = SourcesModule.CallStackSidebarPane.CallStackSidebarPane.instance();
     pane.selectNextCallFrameOnStack();
     TestRunner.deprecatedRunAfterPendingDispatches(step4);
   }

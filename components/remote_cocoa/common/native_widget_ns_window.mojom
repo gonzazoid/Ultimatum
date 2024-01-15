@@ -53,7 +53,9 @@ enum WindowVisibilityState {
   kShowAndActivateWindow,
   // Shows with -[NSWindow orderWindow:..]. Orders the window above its parent
   // if it has one.
-  kShowInactive
+  kShowInactive,
+  // Miniaturizes with -[NSWindow miniaturize:].
+  kMiniaturizeWindow
 };
 
 // Window transitions to animate, mirrors views::Widget::VisibilityTransition.
@@ -86,9 +88,17 @@ struct NativeWidgetNSWindowInitParams {
   bool is_tooltip;
 };
 
-enum WindowControlsOverlayNSViewType {
-  kCaptionButtonContainer,
-  kWebAppFrameToolbar,
+// The visibility style of the toolbar in immersive fullscreen.
+enum ToolbarVisibilityStyle {
+  // No toolbar. Used for content fullscreen.
+  kNone,
+
+  // The toolbar is always shown.
+  kAlways,
+
+  // The toolbar will autohide. It can be revealed by placing the mouse at the
+  // top of the screen.
+  kAutohide,
 };
 
 // The interface through which a NativeWidgetMac may interact with an NSWindow
@@ -150,9 +160,17 @@ interface NativeWidgetNSWindow {
 
   // Specify new bounds for the window via |new_bounds| in screen coordinates.
   // The size of the window will be expanded so that the content size will be
-  // at least |minimum_content_size|.
+  // at least |minimum_content_size| and at most |maximum_content_size| (if
+  // provided).
   SetBounds(gfx.mojom.Rect new_bounds,
-            gfx.mojom.Size minimum_content_size);
+            gfx.mojom.Size minimum_content_size,
+            gfx.mojom.Size? maximum_content_size);
+
+  // Specify new size for the window via |new_size|. The top-left corner of the
+  // window will be kept in place. The size of the window will be expanded so
+  // that the content size will be at least |minimum_content_size|.
+  SetSize(gfx.mojom.Size new_size,
+          gfx.mojom.Size minimum_content_size);
 
   // Centers the window and sets its content size to |content_size|. The size of
   // the window will be expanded so that the content size will be at least
@@ -206,8 +224,23 @@ interface NativeWidgetNSWindow {
   // Set the window level of the NSWindow.
   SetWindowLevel(int32 level);
 
-  // Set the aspect ratio of the NSWindow. |aspect_ratio| must not be empty.
-  SetAspectRatio(gfx.mojom.SizeF aspect_ratio);
+  // Set the aspect ratio of the NSWindow. `aspect_ratio` must not be empty.
+  // The aspect ratio refers to the client area only; system-drawn window
+  // decorations like a title bar are not considered in the aspect ratio.
+  //
+  // `excluded_margin` is the amount of client area to ignore when computing
+  // the aspect ratio.  This allows for client-drawn window decorations to be
+  // excluded from the aspect-ratio-constrained size, similar to how system-
+  // drawn decorations are excluded.  If no adjustment is needed, such as if
+  // there are no client-drawn window decorations, then set `excluded_margin`
+  // to (0, 0).
+  //
+  // For example, `aspect_ratio` == 1.f, and `excluded_margin` == (10, 15)
+  // would allow a client area size of (40, 45), since (40-10)/(45-15) == 1.
+  // Presumably, (10, 15) of this area would be used to draw client-drawn
+  // decorations, while the remaining (30, 30) would be used for whatever
+  // content is supposed to have a 1.f aspect-ratio.
+  SetAspectRatio(gfx.mojom.SizeF aspect_ratio, gfx.mojom.Size excluded_margin);
 
   // Specify the content to draw in the NSView.
   SetCALayerParams(gfx.mojom.CALayerParams ca_layer_params);
@@ -243,29 +276,15 @@ interface NativeWidgetNSWindow {
   // Enable or disable this widget's local event monitor.
   SetLocalEventMonitorEnabled(bool enabled);
 
-  // Add the overlay NSView for a PWA with window controls overlay
-  // display override given a |overlay_type|.
-  CreateWindowControlsOverlayNSView(
-      WindowControlsOverlayNSViewType overlay_type);
-
-  // Update the overlay NSView with |bounds| for a PWA with window controls
-  // overlay display override for a |overlay_type|.
-  UpdateWindowControlsOverlayNSView(
-    gfx.mojom.Rect bounds, WindowControlsOverlayNSViewType overlay_type);
-
-  // Remove the overlay NSView with |bounds| for a PWA with window controls
-  // overlay display override for a |overlay_type|.
-  RemoveWindowControlsOverlayNSView(
-      WindowControlsOverlayNSViewType overlay_type);
-
   // Set the cursor type to display.
   SetCursor(ui.mojom.Cursor cursor);
 
-  // Enables immersive fullscreen. Pass the id of the overlay widget which is
-  // hosting top chrome. The callback is run once the top chrome NSView has
-  // been reparented into the AppKit controlled fullscreen NSWindow, indicating
-  // the immersive transition has started.
-  EnableImmersiveFullscreen(uint64 fullscreen_overlay_widget_id) => ();
+  // Enables immersive fullscreen. |fullscreen_overlay_widget_id| is the id of
+  // the overlay widget which is hosting top chrome.
+  // |tab_widget_id| is provided when the ImmersiveFullscreenTabs feature is
+  // enabled. It holds the id of the tab hosting widget.
+  EnableImmersiveFullscreen(uint64 fullscreen_overlay_widget_id,
+                            uint64 tab_widget_id);
 
   // Rollback the immersive transition. The top chrome NSView is reparented into
   // the overlay widget.
@@ -273,12 +292,21 @@ interface NativeWidgetNSWindow {
 
   // Update the visibility of the toolbar (top chrome) while in immersive
   // fullscreen. Typically this is used in response to the
-  // View -> "Always Show Toolbar in Full Screen" menu changing.
-  UpdateToolbarVisibility(bool always_show);
+  // View -> "Always Show Toolbar in Full Screen" menu changing or content
+  // going fullscreen.
+  UpdateToolbarVisibility(ToolbarVisibilityStyle style);
 
   // Also used during immersive fullscreen. Update the bounds of the AppKit
   // NSWindow hosting top chrome.
   OnTopContainerViewBoundsChanged(gfx.mojom.Rect bounds);
+
+  // Reveal top chrome leaving it visible until all outstanding calls to
+  // ImmersiveFullscreenRevealLock() are balanced with
+  // ImmersiveFullscreenRevealUnlock(). Top chrome will hover over content.
+  ImmersiveFullscreenRevealLock();
+
+  // Balances calls to ImmersiveFullscreenRevealLock().
+  ImmersiveFullscreenRevealUnlock();
 
   // Set whether can go back to the previous page.
   SetCanGoBack(bool can_go_back);

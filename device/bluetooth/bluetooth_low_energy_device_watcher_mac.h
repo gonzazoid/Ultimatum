@@ -9,9 +9,9 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
 #include "base/files/file_path.h"
 #include "base/files/file_path_watcher.h"
+#include "base/functional/callback.h"
 #include "base/memory/ref_counted.h"
 #include "base/sequence_checker.h"
 #include "base/task/cancelable_task_tracker.h"
@@ -71,7 +71,7 @@ class DEVICE_BLUETOOTH_EXPORT BluetoothLowEnergyDeviceWatcherMac
   }
 
  private:
-  friend class BluetoothAdapterMac;
+  friend class BluetoothLowEnergyAdapterApple;
   friend class base::RefCountedThreadSafe<BluetoothLowEnergyDeviceWatcherMac>;
 
   void AddBluetoothPropertyListFileWatcher();

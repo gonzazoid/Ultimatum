@@ -9,8 +9,8 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/time/time.h"
 #include "net/url_request/referrer_policy.h"
 #include "services/network/public/mojom/url_response_head.mojom-forward.h"
@@ -74,7 +74,8 @@ class DetachedResourceRequest {
 
   static void Start(std::unique_ptr<DetachedResourceRequest> request,
                     content::BrowserContext* browser_context);
-  void OnRedirectCallback(const net::RedirectInfo& redirect_info,
+  void OnRedirectCallback(const GURL& url_before_redirect,
+                          const net::RedirectInfo& redirect_info,
                           const network::mojom::URLResponseHead& response_head,
                           std::vector<std::string>* to_be_removed_headers);
   void OnResponseCallback(std::unique_ptr<std::string> response_body);

@@ -7,14 +7,14 @@
 #include <cinttypes>
 #include <memory>
 
-#include "base/bind.h"
 #include "base/feature_list.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/no_destructor.h"
 #include "base/strings/stringprintf.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/task/thread_pool.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/trace_event/memory_dump_manager.h"
 #include "base/trace_event/memory_usage_estimator.h"
 #include "base/trace_event/trace_event.h"
@@ -22,6 +22,7 @@
 #include "components/history/core/browser/history_service.h"
 #include "components/history/core/browser/url_database.h"
 #include "components/keep_alive_registry/keep_alive_registry.h"
+#include "components/omnibox/browser/omnibox_triggered_feature_service.h"
 #include "components/omnibox/browser/url_index_private_data.h"
 #include "components/omnibox/common/omnibox_features.h"
 
@@ -50,7 +51,6 @@ InMemoryURLIndex::RebuildPrivateDataFromHistoryDBTask::
                                         const SchemeSet& scheme_allowlist)
     : index_(index),
       scheme_allowlist_(scheme_allowlist),
-      succeeded_(false),
       task_creation_time_(base::TimeTicks::Now()) {}
 
 bool InMemoryURLIndex::RebuildPrivateDataFromHistoryDBTask::RunOnDBThread(
@@ -71,8 +71,7 @@ void InMemoryURLIndex::RebuildPrivateDataFromHistoryDBTask::
 }
 
 InMemoryURLIndex::RebuildPrivateDataFromHistoryDBTask::
-    ~RebuildPrivateDataFromHistoryDBTask() {
-}
+    ~RebuildPrivateDataFromHistoryDBTask() = default;
 
 // InMemoryURLIndex ------------------------------------------------------------
 
@@ -93,7 +92,8 @@ InMemoryURLIndex::InMemoryURLIndex(bookmarks::BookmarkModel* bookmark_model,
     history_service_observation_.Observe(history_service_.get());
 
   base::trace_event::MemoryDumpManager::GetInstance()->RegisterDumpProvider(
-      this, "InMemoryURLIndex", base::ThreadTaskRunnerHandle::Get());
+      this, "InMemoryURLIndex",
+      base::SingleThreadTaskRunner::GetCurrentDefault());
 }
 
 InMemoryURLIndex::~InMemoryURLIndex() {
@@ -130,13 +130,14 @@ ScoredHistoryMatches InMemoryURLIndex::HistoryItemsForTerms(
     const std::u16string& term_string,
     size_t cursor_position,
     const std::string& host_filter,
-    size_t max_matches) {
+    size_t max_matches,
+    OmniboxTriggeredFeatureService* triggered_feature_service) {
   return private_data_->HistoryItemsForTerms(
       term_string, cursor_position, host_filter, max_matches, bookmark_model_,
-      template_url_service_);
+      template_url_service_, triggered_feature_service);
 }
 
-std::vector<std::string> InMemoryURLIndex::HighlyVisitedHosts() const {
+const std::vector<std::string>& InMemoryURLIndex::HighlyVisitedHosts() const {
   return private_data_->HighlyVisitedHosts();
 }
 

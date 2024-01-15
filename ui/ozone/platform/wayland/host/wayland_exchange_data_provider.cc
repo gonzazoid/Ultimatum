@@ -48,8 +48,9 @@ int MimeTypeToFormat(const std::string& mime_type) {
     return OSExchangeData::FILE_NAME;
   if (mime_type == ui::kMimeTypeMozillaURL)
     return OSExchangeData::URL;
-  if (mime_type == ui::kMimeTypeHTML)
+  if (mime_type == ui::kMimeTypeHTML || mime_type == ui::kMimeTypeHTMLUtf8) {
     return OSExchangeData::HTML;
+  }
   if (base::StartsWith(mime_type, ui::kMimeTypeOctetStream))
     return OSExchangeData::FILE_CONTENTS;
   if (mime_type == ui::kMimeTypeWebCustomData)
@@ -116,15 +117,11 @@ void AddFiles(PlatformClipboard::Data data, OSExchangeDataProvider* provider) {
       continue;
     }
 
-    std::string url_path = url.path();
     url::RawCanonOutputT<char16_t> unescaped;
-    url::DecodeURLEscapeSequences(url_path.data(), url_path.size(),
-                                  url::DecodeURLMode::kUTF8OrIsomorphic,
-                                  &unescaped);
+    url::DecodeURLEscapeSequences(
+        url.path_piece(), url::DecodeURLMode::kUTF8OrIsomorphic, &unescaped);
 
-    std::string path8;
-    base::UTF16ToUTF8(unescaped.data(), unescaped.length(), &path8);
-    const base::FilePath path(path8);
+    const base::FilePath path(base::UTF16ToUTF8(unescaped.view()));
     filenames.emplace_back(path, path.BaseName());
   }
   if (filenames.empty())
@@ -203,8 +200,9 @@ std::vector<std::string> WaylandExchangeDataProvider::BuildMimeTypesList()
   if (HasURL(kFilenameToURLPolicy))
     mime_types.push_back(ui::kMimeTypeMozillaURL);
 
-  if (HasHtml())
+  if (HasHtml()) {
     mime_types.push_back(ui::kMimeTypeHTML);
+  }
 
   if (HasString()) {
     mime_types.push_back(ui::kMimeTypeTextUtf8);
@@ -275,7 +273,8 @@ bool WaylandExchangeDataProvider::ExtractData(const std::string& mime_type,
     out_content->append(url.spec());
     return true;
   }
-  if (mime_type == ui::kMimeTypeHTML && HasHtml()) {
+  if ((mime_type == ui::kMimeTypeHTML || mime_type == ui::kMimeTypeHTMLUtf8) &&
+      HasHtml()) {
     std::u16string data;
     GURL base_url;
     GetHtml(&data, &base_url);

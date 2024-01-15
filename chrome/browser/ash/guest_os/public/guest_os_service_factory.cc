@@ -12,14 +12,8 @@ namespace guest_os {
 // static
 GuestOsService* guest_os::GuestOsServiceFactory::GetForProfile(
     Profile* profile) {
-  // There's only the one service instance per login, instead of a new one for
-  // off-the-record. This is because users expect their Guest OSs to still work
-  // even when off-the-record, and to work with their existing VM instances. For
-  // example, when downloading files in Chrome they can still save their files
-  // to a Guest OS mount.
   return static_cast<GuestOsService*>(
-      GetInstance()->GetServiceForBrowserContext(profile->GetOriginalProfile(),
-                                                 true));
+      GetInstance()->GetServiceForBrowserContext(profile, true));
 }
 
 // static
@@ -29,16 +23,30 @@ GuestOsServiceFactory* GuestOsServiceFactory::GetInstance() {
 }
 
 GuestOsServiceFactory::GuestOsServiceFactory()
-    : ProfileKeyedServiceFactory("GuestOsService") {}
+    : ProfileKeyedServiceFactory(
+          "GuestOsService",
+          ProfileSelections::Builder()
+              // There's only the one service instance per login, instead of a
+              // new one for off-the-record. This is because users expect their
+              // Guest OSs to still work even when off-the-record, and to work
+              // with their existing VM instances. For example, when downloading
+              // files in Chrome they can still save their files to a Guest OS
+              // mount.
+              .WithRegular(ProfileSelection::kRedirectedToOriginal)
+              .WithGuest(ProfileSelection::kNone)
+              .WithAshInternals(ProfileSelection::kNone)
+              .WithSystem(ProfileSelection::kNone)
+              .Build()) {}
 
 GuestOsServiceFactory::~GuestOsServiceFactory() = default;
 
-KeyedService* GuestOsServiceFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+GuestOsServiceFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
   Profile* profile = Profile::FromBrowserContext(context);
   if (!profile)
     return nullptr;
-  return new GuestOsService(profile);
+  return std::make_unique<GuestOsService>(profile);
 }
 
 }  // namespace guest_os

@@ -6,8 +6,8 @@
  * WebUI to monitor File Metadata per Extension ID.
  */
 
-import {assert} from 'chrome://resources/js/assert_ts.js';
-import {sendWithPromise} from 'chrome://resources/js/cr.m.js';
+import {assert} from 'chrome://resources/js/assert.js';
+import {sendWithPromise} from 'chrome://resources/js/cr.js';
 import {getImage} from 'chrome://resources/js/icon.js';
 
 import {createElementFromDictionary, createElementFromText} from './utils.js';

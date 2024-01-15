@@ -16,7 +16,7 @@ class URLLoaderThrottle;
 }  // namespace blink
 
 namespace prerender {
-class PrerenderURLLoaderThrottle;
+class NoStatePrefetchURLLoaderThrottle;
 
 // Helper class to track whether its RenderFrame is currently being no-state
 // prefetched. Created when prefetching starts and deleted as soon as it stops.
@@ -32,10 +32,10 @@ class NoStatePrefetchHelper
 
   ~NoStatePrefetchHelper() override;
 
-  // Configures and returns a new PrerenderURLLoaderThrottle instance if the
-  // indicated frame has an associated NoStatePrefetchHelper.
+  // Configures and returns a new NoStatePrefetchURLLoaderThrottle instance if
+  // the indicated frame has an associated NoStatePrefetchHelper.
   static std::unique_ptr<blink::URLLoaderThrottle> MaybeCreateThrottle(
-      int render_frame_id);
+      const blink::LocalFrameToken& frame_token);
 
   // Returns true if |render_frame| is currently prefetching.
   static bool IsPrefetching(const content::RenderFrame* render_frame);
@@ -47,7 +47,7 @@ class NoStatePrefetchHelper
   void DidDispatchDOMContentLoadedEvent() override;
   void OnDestruct() override;
 
-  void AddThrottle(PrerenderURLLoaderThrottle& throttle);
+  void AddThrottle(NoStatePrefetchURLLoaderThrottle& throttle);
   void OnThrottleDestroyed();
   void SendPrefetchFinished();
 
@@ -56,7 +56,6 @@ class NoStatePrefetchHelper
   int prefetch_count_ = 0;
   bool prefetch_finished_ = false;
   base::TimeTicks start_time_;
-  base::TimeTicks parsed_time_;
 
   base::WeakPtrFactory<NoStatePrefetchHelper> weak_factory_{this};
 };

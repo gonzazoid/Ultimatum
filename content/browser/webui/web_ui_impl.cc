@@ -9,8 +9,8 @@
 #include <string>
 #include <utility>
 
-#include "base/callback_helpers.h"
 #include "base/debug/dump_without_crashing.h"
+#include "base/functional/callback_helpers.h"
 #include "base/json/json_writer.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_piece.h"
@@ -21,6 +21,7 @@
 #include "content/browser/child_process_security_policy_impl.h"
 #include "content/browser/renderer_host/dip_util.h"
 #include "content/browser/renderer_host/frame_tree.h"
+#include "content/browser/renderer_host/navigation_request.h"
 #include "content/browser/renderer_host/render_frame_host_impl.h"
 #include "content/browser/renderer_host/render_process_host_impl.h"
 #include "content/browser/web_contents/web_contents_impl.h"
@@ -40,43 +41,53 @@
 
 namespace content {
 
+namespace {
+
+template <typename Range>
+std::u16string GetJavascriptCallImpl(base::StringPiece function_name,
+                                     const Range& args) {
+  std::vector<std::u16string> json_args;
+  for (const auto& arg : args) {
+    json_args.push_back(base::UTF8ToUTF16(*base::WriteJson(arg)));
+  }
+
+  std::u16string result(base::ASCIIToUTF16(function_name));
+  result.push_back('(');
+  result.append(base::JoinString(json_args, u","));
+  result.push_back(')');
+  result.push_back(';');
+  return result;
+}
+
+}  // namespace
+
 const WebUI::TypeID WebUI::kNoWebUI = nullptr;
 
 // static
 std::u16string WebUI::GetJavascriptCall(
     base::StringPiece function_name,
     base::span<const base::ValueView> arg_list) {
-  std::u16string result(base::ASCIIToUTF16(function_name));
-  result.push_back('(');
-
-  std::string json;
-  for (size_t i = 0; i < arg_list.size(); ++i) {
-    if (i > 0)
-      result.push_back(',');
-
-    base::JSONWriter::Write(arg_list[i], &json);
-    result.append(base::UTF8ToUTF16(json));
-  }
-
-  result.push_back(')');
-  result.push_back(';');
-  return result;
+  return GetJavascriptCallImpl(function_name, arg_list);
 }
 
-WebUIImpl::WebUIImpl(WebContentsImpl* contents, RenderFrameHostImpl* frame_host)
+// static
+std::u16string WebUI::GetJavascriptCall(base::StringPiece function_name,
+                                        const base::Value::List& arg_list) {
+  return GetJavascriptCallImpl(function_name, arg_list);
+}
+
+WebUIImpl::WebUIImpl(WebContents* web_contents)
     : bindings_(BINDINGS_POLICY_WEB_UI),
       requestable_schemes_({kChromeUIScheme, url::kFileScheme}),
-      web_contents_(contents),
-      frame_host_(frame_host),
-      web_contents_observer_(new WebUIMainFrameObserver(this, contents)) {
-  DCHECK(contents);
-
-  // Assert that we can only open webui for the active or speculative pages.
-  DCHECK(frame_host->lifecycle_state() ==
-             RenderFrameHostImpl::LifecycleStateImpl::kActive ||
-         frame_host->lifecycle_state() ==
-             RenderFrameHostImpl::LifecycleStateImpl::kSpeculative);
+      web_contents_(web_contents),
+      web_contents_observer_(
+          std::make_unique<WebUIMainFrameObserver>(this, web_contents_)) {
+  DCHECK(web_contents_);
 }
+
+WebUIImpl::WebUIImpl(NavigationRequest* request)
+    : WebUIImpl(
+          WebContents::FromFrameTreeNodeId(request->GetFrameTreeNodeId())) {}
 
 WebUIImpl::~WebUIImpl() {
   // Delete the controller first, since it may also be keeping a pointer to some
@@ -115,6 +126,16 @@ void WebUIImpl::Send(const std::string& message, base::Value::List args) {
   }
 
   ProcessWebUIMessage(source_url, message, std::move(args));
+}
+
+void WebUIImpl::SetRenderFrameHost(RenderFrameHost* render_frame_host) {
+  frame_host_ =
+      static_cast<RenderFrameHostImpl*>(render_frame_host)->GetWeakPtr();
+  // Assert that we can only open WebUI for the active or speculative pages.
+  DCHECK(frame_host_->lifecycle_state() ==
+             RenderFrameHostImpl::LifecycleStateImpl::kActive ||
+         frame_host_->lifecycle_state() ==
+             RenderFrameHostImpl::LifecycleStateImpl::kSpeculative);
 }
 
 void WebUIImpl::WebUIRenderFrameCreated(RenderFrameHost* render_frame_host) {
@@ -194,6 +215,14 @@ WebUIController* WebUIImpl::GetController() {
   return controller_.get();
 }
 
+RenderFrameHost* WebUIImpl::GetRenderFrameHost() {
+  return frame_host_.get();
+}
+
+bool WebUIImpl::HasRenderFrameHost() const {
+  return !!frame_host_;
+}
+
 void WebUIImpl::SetController(std::unique_ptr<WebUIController> controller) {
   DCHECK(controller);
   controller_ = std::move(controller);
@@ -239,8 +268,9 @@ void WebUIImpl::ProcessWebUIMessage(const GURL& source_url,
     return;
   }
 
-  NOTREACHED() << "Unhandled chrome.send(\"" << message << "\", " << args
-               << "); from " << source_url;
+  DUMP_WILL_BE_NOTREACHED_NORETURN()
+      << "Unhandled chrome.send(\"" << message << "\", " << args << "); from "
+      << source_url;
 }
 
 std::vector<std::unique_ptr<WebUIMessageHandler>>*

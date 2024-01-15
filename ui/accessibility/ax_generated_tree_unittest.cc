@@ -58,7 +58,7 @@ std::string TreeToStringHelper(const AXNode* node) {
     result += "x";
   if (node->children().empty())
     return result;
-  const auto add_children = [](const std::string& str, const auto* node) {
+  const auto add_children = [](const std::string& str, const AXNode* node) {
     return str + " " + TreeToStringHelper(node);
   };
   return result + " (" +
@@ -75,7 +75,8 @@ std::string TreeToString(const AXTree& tree) {
 AXTreeUpdate SerializeEntireTree(AXSerializableTree& tree) {
   std::unique_ptr<AXTreeSource<const AXNode*>> tree_source(
       tree.CreateTreeSource());
-  AXTreeSerializer<const AXNode*> serializer(tree_source.get());
+  AXTreeSerializer<const AXNode*, std::vector<const AXNode*>> serializer(
+      tree_source.get());
   AXTreeUpdate update;
   CHECK(serializer.SerializeChanges(tree.root(), &update));
   return update;
@@ -270,7 +271,8 @@ TEST_P(SerializeGeneratedTreesTest, SerializeGeneratedTrees) {
           // empty tree |dst_tree|.
           std::unique_ptr<AXTreeSource<const AXNode*>> tree0_source(
               tree0.CreateTreeSource());
-          AXTreeSerializer<const AXNode*> serializer(tree0_source.get());
+          AXTreeSerializer<const AXNode*, std::vector<const AXNode*>>
+              serializer(tree0_source.get());
           AXTreeUpdate update0;
           ASSERT_TRUE(serializer.SerializeChanges(tree0.root(), &update0));
 
@@ -288,9 +290,9 @@ TEST_P(SerializeGeneratedTreesTest, SerializeGeneratedTrees) {
               tree1.CreateTreeSource());
           serializer.ChangeTreeSourceForTesting(tree1_source.get());
 
-          // Invalidate a subtree rooted at one of the nodes.
+          // Mark as dirty the subtree rooted at one of the nodes.
           if (l > 0)
-            serializer.InvalidateSubtree(tree1.GetFromId(l));
+            serializer.MarkSubtreeDirty(tree1.GetFromId(l));
 
           // Serialize a sequence of updates to |dst_tree| to match.
           for (int k_index = 0; k_index < tree_size; ++k_index) {

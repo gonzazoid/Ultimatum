@@ -98,6 +98,16 @@ constexpr MouseEventFlags EF_UNADJUSTED_MOUSE = 1 << 24;
 // mouse to another display when the mouse hits the window boundaries).
 constexpr MouseEventFlags EF_NOT_SUITABLE_FOR_MOUSE_WARPING = 1 << 25;
 
+// Flags specific to touch events.
+using TouchEventFlags = EventFlags;
+
+// Indicates this touch event is reserved for gesture recognition and
+// should not be handled in the event handler.
+constexpr TouchEventFlags EF_RESERVED_FOR_GESTURE = 1 << 26;
+
+// These value match the Windows default.
+constexpr int kDoubleClickTimeMs = 500;
+
 // Result of dispatching an event.
 enum EventResult {
   ER_UNHANDLED = 0,      // The event hasn't been handled. The event can be
@@ -111,6 +121,15 @@ enum EventResult {
                // happens if the event is being handled
                // asynchronously, or if the event is invalid and
                // shouldn't be handled at all.
+  ER_FORCE_PROCESS_GESTURE =
+      1 << 3,  // The event should be processed by gesture recognizer even if
+               // ER_HANDLED or ER_CONSUMED is set.
+  ER_SKIPPED =
+      1 << 4,  // The event has been been handled, and it should not be
+               // propagated to other handlers but the dispatchers may decide to
+               // handle the event themselves. A handler should set the result
+               // to this if it wishes to stop the event from propagating
+               // further but does not take any action other than stopping it.
 };
 
 // Phase of the event dispatch.

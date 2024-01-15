@@ -5,7 +5,7 @@
 #include "remoting/protocol/connection_tester.h"
 #include "base/memory/raw_ptr.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "net/base/io_buffer.h"
 #include "net/base/net_errors.h"
 #include "net/traffic_annotation/network_traffic_annotation_test_helper.h"
@@ -47,8 +47,8 @@ void StreamConnectionTester::CheckResults() {
   output_buffer_->SetOffset(0);
   ASSERT_EQ(test_data_size_, output_buffer_->size());
 
-  EXPECT_EQ(0, memcmp(output_buffer_->data(),
-                      input_buffer_->StartOfBuffer(), test_data_size_));
+  EXPECT_EQ(0, memcmp(output_buffer_->data(), input_buffer_->StartOfBuffer(),
+                      test_data_size_));
 }
 
 void StreamConnectionTester::Done() {
@@ -57,7 +57,8 @@ void StreamConnectionTester::Done() {
 
 void StreamConnectionTester::InitBuffers() {
   output_buffer_ = base::MakeRefCounted<net::DrainableIOBuffer>(
-      base::MakeRefCounted<net::IOBuffer>(test_data_size_), test_data_size_);
+      base::MakeRefCounted<net::IOBufferWithSize>(test_data_size_),
+      test_data_size_);
   for (int i = 0; i < test_data_size_; ++i) {
     output_buffer_->data()[i] = static_cast<char>(i);
   }
@@ -68,11 +69,12 @@ void StreamConnectionTester::InitBuffers() {
 void StreamConnectionTester::DoWrite() {
   int result = 1;
   while (result > 0) {
-    if (output_buffer_->BytesRemaining() == 0)
+    if (output_buffer_->BytesRemaining() == 0) {
       break;
+    }
 
-    int bytes_to_write = std::min(output_buffer_->BytesRemaining(),
-                                  message_size_);
+    int bytes_to_write =
+        std::min(output_buffer_->BytesRemaining(), message_size_);
     result =
         client_socket_->Write(output_buffer_.get(), bytes_to_write,
                               base::BindOnce(&StreamConnectionTester::OnWritten,
@@ -110,8 +112,9 @@ void StreamConnectionTester::DoRead() {
 
 void StreamConnectionTester::OnRead(int result) {
   HandleReadResult(result);
-  if (!on_done_.is_null())
+  if (!on_done_.is_null()) {
     DoRead();  // Don't try to read again when we are done reading.
+  }
 }
 
 void StreamConnectionTester::HandleReadResult(int result) {
@@ -122,8 +125,9 @@ void StreamConnectionTester::HandleReadResult(int result) {
   } else if (result > 0) {
     // Allocate memory for the next read.
     input_buffer_->set_offset(input_buffer_->offset() + result);
-    if (input_buffer_->offset() == test_data_size_)
+    if (input_buffer_->offset() == test_data_size_) {
       Done();
+    }
   }
 }
 

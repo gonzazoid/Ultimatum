@@ -34,6 +34,7 @@
 #include "third_party/blink/renderer/core/editing/visible_selection.h"
 #include "third_party/blink/renderer/core/editing/visible_units.h"
 #include "third_party/blink/renderer/core/layout/layout_object.h"
+#include "third_party/blink/renderer/platform/runtime_enabled_features.h"
 
 namespace blink {
 
@@ -103,7 +104,8 @@ class GranularityAdjuster final {
   template <typename Strategy>
   static PositionTemplate<Strategy> ComputeStartRespectingGranularityAlgorithm(
       const PositionWithAffinityTemplate<Strategy>& passed_start,
-      TextGranularity granularity) {
+      TextGranularity granularity,
+      WordInclusion inclusion = WordInclusion::kDefault) {
     DCHECK(passed_start.IsNotNull());
 
     switch (granularity) {
@@ -124,6 +126,16 @@ class GranularityAdjuster final {
             CreateVisiblePosition(passed_start);
         const PositionTemplate<Strategy> word_start = StartOfWordPosition(
             passed_start.GetPosition(), ChooseWordSide(visible_start));
+        if (inclusion == WordInclusion::kMiddle) {
+          // Check if the middle of the word is within the passed selection.
+          const PositionTemplate<Strategy> word_end = EndOfWordPosition(
+              passed_start.GetPosition(), ChooseWordSide(visible_start));
+          const PositionTemplate<Strategy> word_middle =
+              MiddleOfWordPosition(word_start, word_end);
+          if (passed_start.GetPosition() > word_middle) {
+            return word_end;
+          }
+        }
         return CreateVisiblePosition(word_start).DeepEquivalent();
       }
       case TextGranularity::kSentence:
@@ -160,7 +172,8 @@ class GranularityAdjuster final {
   static PositionTemplate<Strategy> ComputeEndRespectingGranularityAlgorithm(
       const PositionTemplate<Strategy>& start,
       const PositionWithAffinityTemplate<Strategy>& passed_end,
-      TextGranularity granularity) {
+      TextGranularity granularity,
+      WordInclusion inclusion = WordInclusion::kDefault) {
     DCHECK(passed_end.IsNotNull());
 
     switch (granularity) {
@@ -188,6 +201,15 @@ class GranularityAdjuster final {
                 ? original_end
                 : CreateVisiblePosition(EndOfWordPosition(
                       passed_end.GetPosition(), ChooseWordSide(original_end)));
+        if (inclusion == WordInclusion::kMiddle) {
+          const PositionTemplate<Strategy> word_start = StartOfWordPosition(
+              passed_end.GetPosition(), ChooseWordSide(original_end));
+          const PositionTemplate<Strategy> word_middle =
+              MiddleOfWordPosition(word_start, word_end.DeepEquivalent());
+          if (word_middle.IsNull() or word_middle > passed_end.GetPosition()) {
+            return word_start;
+          }
+        }
         if (!is_end_of_paragraph)
           return word_end.DeepEquivalent();
         if (IsEmptyTableCell(start.AnchorNode()))
@@ -285,7 +307,8 @@ class GranularityAdjuster final {
   template <typename Strategy>
   static SelectionTemplate<Strategy> AdjustSelection(
       const SelectionTemplate<Strategy>& canonicalized_selection,
-      TextGranularity granularity) {
+      TextGranularity granularity,
+      const WordInclusion inclusion) {
     const TextAffinity affinity = canonicalized_selection.Affinity();
 
     const PositionTemplate<Strategy> start =
@@ -293,7 +316,7 @@ class GranularityAdjuster final {
     const PositionTemplate<Strategy> new_start =
         ComputeStartRespectingGranularityAlgorithm(
             PositionWithAffinityTemplate<Strategy>(start, affinity),
-            granularity);
+            granularity, inclusion);
     const PositionTemplate<Strategy> expanded_start =
         new_start.IsNotNull() ? new_start : start;
 
@@ -302,7 +325,8 @@ class GranularityAdjuster final {
     const PositionTemplate<Strategy> new_end =
         ComputeEndRespectingGranularityAlgorithm(
             expanded_start,
-            PositionWithAffinityTemplate<Strategy>(end, affinity), granularity);
+            PositionWithAffinityTemplate<Strategy>(end, affinity), granularity,
+            inclusion);
     const PositionTemplate<Strategy> expanded_end =
         new_end.IsNotNull() ? new_end : end;
 
@@ -356,14 +380,18 @@ PositionInFlatTree ComputeEndRespectingGranularity(
 
 SelectionInDOMTree SelectionAdjuster::AdjustSelectionRespectingGranularity(
     const SelectionInDOMTree& selection,
-    TextGranularity granularity) {
-  return GranularityAdjuster::AdjustSelection(selection, granularity);
+    TextGranularity granularity,
+    const WordInclusion inclusion = WordInclusion::kDefault) {
+  return GranularityAdjuster::AdjustSelection(selection, granularity,
+                                              inclusion);
 }
 
 SelectionInFlatTree SelectionAdjuster::AdjustSelectionRespectingGranularity(
     const SelectionInFlatTree& selection,
-    TextGranularity granularity) {
-  return GranularityAdjuster::AdjustSelection(selection, granularity);
+    TextGranularity granularity,
+    const WordInclusion inclusion = WordInclusion::kDefault) {
+  return GranularityAdjuster::AdjustSelection(selection, granularity,
+                                              inclusion);
 }
 
 class ShadowBoundaryAdjuster final {
@@ -742,9 +770,29 @@ class SelectionTypeAdjuster final {
     // to do this operation, since all selection changes that result in a
     // RANGE come through here before anyone uses it.
     // TODO(editing-dev): Consider this canonicalization is really needed.
-    const EphemeralRangeTemplate<Strategy> minimal_range(
-        MostForwardCaretPosition(range.StartPosition()),
-        MostBackwardCaretPosition(range.EndPosition()));
+    PositionTemplate<Strategy> forward_start_position =
+        MostForwardCaretPosition(range.StartPosition());
+    PositionTemplate<Strategy> backward_end_position =
+        MostBackwardCaretPosition(range.EndPosition());
+    // When the start and end of `range` have different editability, and the
+    // return value of `CanonicalPositionOf` is null, `VisiblePosition` of
+    // `selection` will be a caret. For example, `EndPosition().AnchorNode()` is
+    // non-editable and its previous sibling node which is the
+    // `StartPosition().AnchorNode()` is editable. In this case, we shouldn't
+    // forward/backward the start/end position of `range`.
+    // See http://crbug.com/1371268 for more details.
+    if (RuntimeEnabledFeatures::AvoidCaretVisibleSelectionAdjusterEnabled()) {
+      if (IsEditablePosition(backward_end_position) &&
+          CanonicalPositionOf(forward_start_position).IsNull()) {
+        forward_start_position = range.StartPosition();
+      }
+      if (IsEditablePosition(forward_start_position) &&
+          CanonicalPositionOf(backward_end_position).IsNull()) {
+        backward_end_position = range.EndPosition();
+      }
+    }
+    const EphemeralRangeTemplate<Strategy> minimal_range(forward_start_position,
+                                                         backward_end_position);
     if (minimal_range.IsCollapsed() || selection.IsBaseFirst()) {
       return typename SelectionTemplate<Strategy>::Builder()
           .SetAsForwardSelection(minimal_range)

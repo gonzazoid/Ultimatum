@@ -47,10 +47,9 @@ def main():
             finder.path_from_blink_tools('blinkpy'),
         ],
         coverage_omit=[
-            '*/blinkpy/third_party/*',
+            '*/blinkpy/presubmit/*',
             # Exclude non-production code.
             '*/PRESUBMIT.py',
-            '*/blinkpy/web_tests/lint_test_expectations_presubmit.py',
             '*_unittest.py',
             '*mock*.py',
             # Temporarily exclude python2 code that Coverage.py cannot import in
@@ -61,7 +60,10 @@ def main():
             path_finder.get_blink_tools_dir(),
             path_finder.get_build_scripts_dir(),
         ],
-        path=[path_finder.get_blinkpy_thirdparty_dir()])
+        path=[
+            path_finder.get_blinkpy_thirdparty_dir(),
+            finder.path_from_chromium_base('third_party', 'pyjson5', 'src')
+        ])
 
 
 if __name__ == "__main__":

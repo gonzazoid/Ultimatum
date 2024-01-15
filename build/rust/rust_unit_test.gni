@@ -15,6 +15,7 @@ import("//build/rust/rust_unit_tests_group.gni")
 #
 #   sources
 #   edition (optional)
+#   allow_unsafe (optional)
 #   configs (optional)
 #   deps (optional)
 #   crate_root (optional)
@@ -62,11 +63,7 @@ template("rust_unit_test") {
   if (defined(invoker.edition)) {
     _edition = invoker.edition
   }
-  _configs += [ string_join("",
-                            [
-                              "//build/rust:edition_",
-                              _edition,
-                            ]) ]
+  _configs += [ "//build/rust:edition_${_edition}" ]
 
   # We require that all source files are listed, even though this is
   # not a requirement for rustc. The reason is to ensure that tools
@@ -80,6 +77,15 @@ template("rust_unit_test") {
     deps = [ ":$_exe_target_name" ]
   }
 
+  # The OUT_DIR for a crate's tests should point to the same OUT_DIR that the
+  # library it's testing used. The `env_out_dir` variable can be used to specify
+  # that directory.
+  if (defined(invoker.env_out_dir)) {
+    _env_out_dir = invoker.env_out_dir
+  } else {
+    _env_out_dir = target_gen_dir
+  }
+
   # TODO(crbug.com/1229320): Arrange to run test executables on try bots.
   # TODO(crbug.com/gn/146): Allow Rust executables to depend on C/C++ source
   # sets.
@@ -90,21 +96,15 @@ template("rust_unit_test") {
     forward_variables_from(invoker,
                            "*",
                            [
+                             "allow_unsafe",
                              "edition",
                              "features",
                              "rustflags",
                              "configs",
-                             "output_name",
                              "crate_name",
                              "crate_root",
+                             "env_out_dir",
                            ])
-
-    if (defined(output_dir) && output_dir != "") {
-      _out_dir = output_dir
-    } else {
-      _out_dir = target_out_dir
-    }
-
     if (!defined(output_name) || output_name == "") {
       output_name = _crate_name
     }
@@ -122,10 +122,23 @@ template("rust_unit_test") {
     if (!defined(rustenv)) {
       rustenv = []
     }
-    rustenv += [ "OUT_DIR=" + rebase_path(_out_dir) ]
+
+    rustenv += [ "OUT_DIR=" +
+                 rebase_path(_env_out_dir, get_path_info(_crate_root, "dir")) ]
     metadata = {
       # Consumed by "rust_unit_tests_group" gni template.
       rust_unit_test_executables = [ _crate_name ]
+    }
+
+    # Duplicated from rust_target since we didn't use the rust_executable
+    # template as it causes a GN cycle.
+    if (!defined(deps)) {
+      deps = []
+    }
+    if (!defined(invoker.no_chromium_prelude) || !invoker.no_chromium_prelude) {
+      if (enable_chromium_prelude) {
+        deps += [ "//build/rust/chromium_prelude" ]
+      }
     }
   }
 }

@@ -10,6 +10,7 @@
 #include "content/common/content_export.h"
 #include "content/public/browser/tts_controller.h"
 #include "content/public/browser/tts_utterance.h"
+#include "url/gurl.h"
 
 namespace content {
 
@@ -34,6 +35,16 @@ class CONTENT_EXPORT ExternalPlatformDelegate {
   // utterance will be added to the utterance queue of the external
   // TtsController and processed in sequence.
   virtual void Enqueue(std::unique_ptr<TtsUtterance> utterance) = 0;
+
+  // Requests external TtsController to stop the current utterance if it matches
+  // the given |source_url|.
+  virtual void Stop(const GURL& source_url) = 0;
+
+  // Requests external TtsController to pause speech synthesis.
+  virtual void Pause() = 0;
+
+  // Requests external TtsController to resume speech synthesis.
+  virtual void Resume() = 0;
 };
 
 // Abstract class that defines the native platform TTS interface,

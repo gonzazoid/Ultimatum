@@ -10,10 +10,11 @@ import android.view.animation.Animation;
 import android.view.animation.AnimationUtils;
 
 import androidx.annotation.Nullable;
-import androidx.annotation.VisibleForTesting;
 
-import org.chromium.content_public.browser.GestureListenerManager;
-import org.chromium.content_public.browser.GestureStateListener;
+import org.chromium.base.ResettersForTesting;
+import org.chromium.content_public.browser.BrowserContextHandle;
+import org.chromium.content_public.browser.ContentFeatureList;
+import org.chromium.content_public.browser.ContentFeatureMap;
 import org.chromium.content_public.browser.LoadCommittedDetails;
 import org.chromium.content_public.browser.WebContents;
 import org.chromium.content_public.browser.WebContentsObserver;
@@ -26,39 +27,34 @@ import org.chromium.ui.modelutil.PropertyModelChangeProcessor;
  * zoom should be calling methods in this class only.
  */
 public class PageZoomCoordinator {
-    private final Delegate mDelegate;
+    private final PageZoomCoordinatorDelegate mDelegate;
     private final PropertyModel mModel;
     private final PageZoomMediator mMediator;
 
     private WebContentsObserver mWebContentsObserver;
-    private GestureListenerManager mGestureListenerManager;
-    private GestureStateListener mGestureListener;
     private int mBottomControlsOffset;
+    private Runnable mDismissalCallback;
 
     private View mView;
+    private BrowserContextHandle mBrowserContextHandle;
 
     private static Boolean sShouldShowMenuItemForTesting;
 
-    /**
-     * Delegate interface for any class that wants a |PageZoomCoordinator| and to display the view.
-     */
-    public interface Delegate {
-        View getZoomControlView();
-    }
-
-    public PageZoomCoordinator(Delegate delegate) {
+    public PageZoomCoordinator(PageZoomCoordinatorDelegate delegate) {
         mDelegate = delegate;
         mModel = new PropertyModel.Builder(PageZoomProperties.ALL_KEYS).build();
+        mModel.set(PageZoomProperties.USER_INTERACTION_CALLBACK, this::onViewInteraction);
         mMediator = new PageZoomMediator(mModel);
+        mDismissalCallback = () -> hide();
     }
 
     /**
-     * Whether or not the AppMenu should show the 'Zoom' menu item.
+     * Returns true if the AppMenu item for Zoom should be displayed, false otherwise.
      * @return boolean
      */
     public static boolean shouldShowMenuItem() {
         if (sShouldShowMenuItemForTesting != null) return sShouldShowMenuItemForTesting;
-        return PageZoomMediator.shouldShowMenuItem();
+        return PageZoomUtils.shouldShowZoomMenuItem();
     }
 
     /**
@@ -66,6 +62,8 @@ public class PageZoomCoordinator {
      * @param webContents   WebContents that this zoom UI will control.
      */
     public void show(WebContents webContents) {
+        PageZoomUma.logAppMenuSliderOpenedHistogram();
+
         // If inflating for the first time or showing from hidden, start animation
         if (mView == null) {
             // If the view has not been created, lazily inflate from the view stub.
@@ -77,54 +75,71 @@ public class PageZoomCoordinator {
             mView.startAnimation(getInAnimation());
         }
 
+        if (mBrowserContextHandle == null) {
+            mBrowserContextHandle = mDelegate.getBrowserContextHandle();
+        }
+
+        mModel.set(
+                PageZoomProperties.DEFAULT_ZOOM_FACTOR,
+                PageZoomUtils.getDefaultZoomLevelAsZoomFactor(mBrowserContextHandle));
+
+        adjustPadding();
+
+        // Consume hover events so screen readers do not select web contents behind slider.
+        mView.setOnHoverListener((v, event) -> true);
+
+        mModel.set(
+                PageZoomProperties.RESET_ZOOM_VISIBLE,
+                ContentFeatureMap.isEnabled(
+                        ContentFeatureList.ACCESSIBILITY_PAGE_ZOOM_ENHANCEMENTS));
+
         // Adjust bottom margin for any bottom controls
         setBottomMargin(mBottomControlsOffset);
 
         mMediator.setWebContents(webContents);
-        mWebContentsObserver = new WebContentsObserver(webContents) {
-            @Override
-            public void navigationEntryCommitted(LoadCommittedDetails details) {
-                // When navigation occurs (i.e. navigate to another link, forward/backward
-                // navigation), hide the dialog
-                // Only on navigationEntryCommitted to avoid premature dismissal during transient
-                // didStartNavigation events
-                hide();
-            }
+        mWebContentsObserver =
+                new WebContentsObserver(webContents) {
+                    @Override
+                    public void navigationEntryCommitted(LoadCommittedDetails details) {
+                        // When navigation occurs (i.e. navigate to another link, forward/backward
+                        // navigation), hide the dialog Only on navigationEntryCommitted to avoid
+                        // premature dismissal during transient didStartNavigation events
+                        hide();
+                    }
 
-            @Override
-            public void wasHidden() {
-                // When the web contents are hidden (i.e. navigate to another tab), hide the dialog
-                hide();
-            }
+                    @Override
+                    public void wasHidden() {
+                        // When the web contents are hidden (i.e. navigate to another tab), hide the
+                        // dialog
+                        hide();
+                    }
 
-            @Override
-            public void onWebContentsLostFocus() {
-                // When the web contents loses focus (i.e. omnibox selected), hide the dialog
-                hide();
-            }
-        };
+                    @Override
+                    public void onWebContentsLostFocus() {
+                        // When the web contents loses focus (i.e. omnibox selected), hide the
+                        // dialog
+                        hide();
+                    }
+                };
 
-        mGestureListenerManager = GestureListenerManager.fromWebContents(webContents);
-        mGestureListener = new GestureStateListener() {
-            @Override
-            public void onScrollStarted(
-                    int scrollOffsetY, int scrollExtentY, boolean isDirectionUp) {
-                // On scroll, hide the dialog
-                hide();
-            }
-        };
-        mGestureListenerManager.addListener(mGestureListener);
+        onViewInteraction(null);
     }
 
-    /**
-     * Hide the zoom feature UI from the user.
-     */
+    /** Hide the zoom feature UI from the user. */
     public void hide() {
         // TODO(mschillaci): Add a FrameLayout wrapper so the view can be removed.
         if (mView != null && mView.getVisibility() == View.VISIBLE) {
             Animation animation = getOutAnimation();
             mView.startAnimation(animation);
             mView.setVisibility(View.GONE);
+
+            // Ensure that the user has set a zoom value during this session.
+            double zoomValue = mMediator.latestZoomValue();
+            if (zoomValue != 0.0) {
+                mMediator.logZoomLevelUKM(zoomValue);
+                PageZoomUma.logAppMenuSliderZoomLevelChangedHistogram();
+                PageZoomUma.logAppMenuSliderZoomLevelValueHistogram(zoomValue);
+            }
         }
     }
 
@@ -141,16 +156,14 @@ public class PageZoomCoordinator {
         setBottomMargin(mBottomControlsOffset);
     }
 
-    /**
-     * Clean-up views and children during destruction.
-     */
+    /** Clean-up views and children during destruction. */
     public void destroy() {
         if (mWebContentsObserver != null) {
             mWebContentsObserver.destroy();
         }
 
-        if (mGestureListenerManager != null && mGestureListener != null) {
-            mGestureListenerManager.removeListener(mGestureListener);
+        if (mView != null) {
+            mView.removeCallbacks(mDismissalCallback);
         }
     }
 
@@ -158,9 +171,15 @@ public class PageZoomCoordinator {
      * Used for testing only, allows a mocked value for the {@link shouldShowMenuItem} method.
      * @param isEnabled     Should show the menu item or not.
      */
-    @VisibleForTesting
     public static void setShouldShowMenuItemForTesting(@Nullable Boolean isEnabled) {
         sShouldShowMenuItemForTesting = isEnabled;
+        ResettersForTesting.register(() -> sShouldShowMenuItemForTesting = null);
+    }
+
+    /** Handle when the user interacts with the view */
+    private void onViewInteraction(Void unused) {
+        mView.removeCallbacks(mDismissalCallback);
+        mView.postDelayed(mDismissalCallback, PageZoomUtils.LAST_INTERACTION_DISMISSAL);
     }
 
     private Animation getInAnimation() {
@@ -178,10 +197,39 @@ public class PageZoomCoordinator {
     private void setBottomMargin(int bottomOffset) {
         if (mView != null) {
             MarginLayoutParams layout = (MarginLayoutParams) mView.getLayoutParams();
-            layout.setMargins(layout.leftMargin, layout.topMargin, layout.rightMargin,
-                    mView.getContext().getResources().getDimensionPixelSize(
-                            R.dimen.page_zoom_view_margins)
+            layout.setMargins(
+                    layout.leftMargin,
+                    layout.topMargin,
+                    layout.rightMargin,
+                    mView.getContext()
+                                    .getResources()
+                                    .getDimensionPixelSize(R.dimen.page_zoom_view_margins)
                             + bottomOffset);
+        }
+    }
+
+    private void adjustPadding() {
+        if (mView != null) {
+            int displayWidth = mView.getContext().getResources().getDisplayMetrics().widthPixels;
+            int maxMobileWidth =
+                    mView.getContext()
+                            .getResources()
+                            .getDimensionPixelSize(R.dimen.page_zoom_view_tablet_mode_min_width);
+            int defaultPadding =
+                    mView.getContext()
+                            .getResources()
+                            .getDimensionPixelSize(R.dimen.page_zoom_view_padding);
+
+            if (displayWidth > maxMobileWidth) {
+                int maxWidth =
+                        mView.getContext()
+                                .getResources()
+                                .getDimensionPixelSize(R.dimen.page_zoom_view_max_width);
+                int padding = (displayWidth - maxWidth) / 2;
+                mView.setPadding(padding, defaultPadding, padding, defaultPadding);
+            } else {
+                mView.setPadding(defaultPadding, defaultPadding, defaultPadding, defaultPadding);
+            }
         }
     }
 }

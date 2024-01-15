@@ -17,7 +17,7 @@ enum AcceleratorSource {
   // accelerator_controller_impl.cc.
   kAsh,
   // Event rewriters that are owned by ash and handled in
-  // event_rewriter_chromeos.cc.
+  // event_rewriter_ash.cc.
   kEventRewriter,
   // Accelerators that are owned by the browser and sources from
   // accelerator_table.cc.
@@ -52,52 +52,103 @@ enum AcceleratorState {
   kDisabledByConflict,
   // Accelerator disabled due to user manually disabling it.
   kDisabledByUser,
+  // Accelerator disabled due to certain keys are not available.
+  kDisabledByUnavailableKeys,
 };
 
 // Represents the style of layout for an accelerator.
-// TODO(jimmyxgong): Add alternate layout styles.
 enum AcceleratorLayoutStyle {
+  // Used for shortcuts containing zero or more modifiers and one key,
+  // e.g. "Ctrl+T", "Ctrl+Shift+T", "<Refresh Icon>", etc.
   kDefault = 0,
+  // Used to display arbitrary text with optional modifiers/keys interspersed,
+  // e.g. "Hold <Ctrl> and click on a link" or "Drag link to bookmarks bar".
+  kText = 1,
 };
 
 // Enum of top-level accelerator categories. Used in the UI for categorization.
-// TODO(jimmyxgong): These are not the final enums, update once final categories
-// are available.
+// Must be kept in sync with enums.xml: `ShortcutCustomizationMainCategory`.
 enum AcceleratorCategory {
-  kSystem,
-  kWindowsAndDesk,
-  kTabsAndPages,
-  kTextAndInput,
+  kGeneral,
+  kDevice,
+  kBrowser,
+  kText,
+  kWindowsAndDesks,
+  kAccessibility,
   kDebug,
   kDeveloper,
 };
 
 // Enum of secondary-level accelerator categories. Used in the UI for
 // categorization.
-// TODO(jimmyxgong): These are not the final enums, update once final
-// subcategories are available.
 enum AcceleratorSubcategory {
+  kGeneralControls,
+  kApps,
+  kMedia,
+  kInputs,
+  kDisplay,
   kGeneral,
-  kSystemControls,
-  kSystemApps,
+  kBrowserNavigation,
+  kPages,
+  kTabs,
+  kBookmarks,
+  kDeveloperTools,
+  kTextNavigation,
+  kTextEditing,
+  kWindows,
+  kDesks,
+  kChromeVox,
+  kVisibility,
+  kAccessibilityNavigation,
+};
+
+// Enum of possible options for text accelerators.
+enum TextAcceleratorPartType {
+  kPlainText,
+  kModifier,
+  kKey,
+  kDelimiter,
+};
+
+// The text to display as well as its corresponding type which determines how
+// it should be displayed.
+struct TextAcceleratorPart {
+  mojo_base.mojom.String16 text;
+  TextAcceleratorPartType type;
+};
+
+// An accelerator that can display arbitrary text with optional modifiers/keys
+// interspersed.
+struct TextAcceleratorProperties {
+  array<TextAcceleratorPart> parts;
+};
+
+// An accelerator that has at least one modifier and a set of keys.
+struct StandardAcceleratorProperties {
+  // Underlying accelerator struct, contains keycode and modifier.
+  ui.mojom.Accelerator accelerator;
+  // The user viewable string of the primary activation key for the accelerator.
+  mojo_base.mojom.String16 key_display;
+  // Optional field - if the accelerator is an alias of another accelerator this
+  // field represents the original accelerator.
+  ui.mojom.Accelerator? original_accelerator;
+};
+
+// Contains properties specific to an accelerator type.
+union LayoutStyleProperties {
+  StandardAcceleratorProperties standard_accelerator;
+  TextAcceleratorProperties text_accelerator;
 };
 
 // Represents an accelerator in its entirety. Includes the keys, state, type,
 // and whether the accelerator is locked.
 struct AcceleratorInfo {
-  // Underlying accelerator struct, contains keycode and modifier.
-  ui.mojom.Accelerator accelerator;
-  // The user viewable string of the primary activation key for the accelerator.
-  mojo_base.mojom.String16 key_display;
   AcceleratorType type;
   AcceleratorState state;
-  // True if the accelerator's activation key is available and can be pressed.
-  // False if the accelerator's activation key is not available or can not be
-  // pressed.
-  bool has_key_event;
   // True if the accelerator can not be customized by the user.
   // False if the accelerator can be customized by the user.
   bool locked;
+  LayoutStyleProperties layout_properties;
 };
 
 // Represents layout styling descriptors of an accelerator. Includes the

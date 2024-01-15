@@ -4,6 +4,7 @@
 
 import 'chrome://diagnostics/routine_section.js';
 import 'chrome://resources/cr_elements/cr_button/cr_button.js';
+import 'chrome://webui-test/chromeos/mojo_webui_test_support.js';
 
 import {createRoutine} from 'chrome://diagnostics/diagnostics_utils.js';
 import {FakeSystemRoutineController} from 'chrome://diagnostics/fake_system_routine_controller.js';
@@ -15,15 +16,15 @@ import {RoutineResultListElement} from 'chrome://diagnostics/routine_result_list
 import {RoutineSectionElement} from 'chrome://diagnostics/routine_section.js';
 import {RoutineType, StandardRoutineResult} from 'chrome://diagnostics/system_routine_controller.mojom-webui.js';
 import {BadgeType, TextBadgeElement} from 'chrome://diagnostics/text_badge.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
+import {loadTimeData} from 'chrome://resources/ash/common/load_time_data.m.js';
+import {assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chromeos/chai_assert.js';
 import {flushTasks} from 'chrome://webui-test/polymer_test_util.js';
 
-import {assertEquals, assertFalse, assertTrue} from '../../chai_assert.js';
-import {isVisible} from '../../test_util.js';
+import {isVisible} from '../test_util.js';
 
 import * as dx_utils from './diagnostics_test_utils.js';
 
-export function routineSectionTestSuite() {
+suite('routineSectionTestSuite', function() {
   /** @type {?RoutineSectionElement} */
   let routineSectionElement = null;
 
@@ -34,7 +35,7 @@ export function routineSectionTestSuite() {
   const originalTime = performance.now;
 
   setup(function() {
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes.emptyHTML;
 
     // Setup a fake routine controller so that nothing resolves unless
     // done explicitly.
@@ -189,7 +190,7 @@ export function routineSectionTestSuite() {
   function getAnnouncedText() {
     assertTrue(!!routineSectionElement);
 
-    return routineSectionElement.announcedText_;
+    return routineSectionElement.announcedText;
   }
 
   /**
@@ -209,13 +210,13 @@ export function routineSectionTestSuite() {
   }
 
   /**
-   * Get currentTestName_ private member for testing.
+   * Get currentTestName private member for testing.
    * @suppress {visibility} // access private member
    * @return {string}
    */
   function getCurrentTestName() {
     assertTrue(!!routineSectionElement);
-    return routineSectionElement.currentTestName_;
+    return routineSectionElement.currentTestName;
   }
 
   /**
@@ -238,7 +239,7 @@ export function routineSectionTestSuite() {
    * @return {!Promise}
    */
   function triggerStatusUpdate() {
-    routineSectionElement.setRunningStatusBadgeText_();
+    routineSectionElement.setRunningStatusBadgeText();
     return flushTasks();
   }
 
@@ -522,6 +523,45 @@ export function routineSectionTestSuite() {
           assertFalse(getStatusTextElement().hidden);
           dx_utils.assertElementContainsText(
               getStatusTextElement(), 'Test succeeded');
+          dx_utils.assertElementContainsText(
+              getStatusTextElement(), 'Learn more');
+        });
+  });
+
+  test('PowerTestResultListStatusSuccess', () => {
+    /** @type {!Array<!RoutineType>} */
+    const routines = [
+      RoutineType.kBatteryCharge,
+    ];
+
+    routineController.setFakeStandardRoutineResult(
+        RoutineType.kBatteryCharge, StandardRoutineResult.kTestPassed);
+
+    return initializeRoutineSection(routines)
+        .then(() => {
+          // Hidden by default.
+          assertFalse(isVisible(getStatusBadge()));
+          assertFalse(isVisible(getStatusTextElement()));
+          return clickRunTestsButton();
+        })
+        .then(() => {
+          // Text is visible describing which test is being run.
+          assertFalse(getStatusTextElement().hidden);
+          dx_utils.assertElementContainsText(
+              getStatusTextElement(),
+              loadTimeData.getString('batteryChargeRoutineText').toLowerCase());
+
+          // Resolve the running test.
+          return routineController.resolveRoutineForTesting();
+        })
+        .then(() => {
+          return flushTasks();
+        })
+        .then(() => {
+          // Text is visible saying test progress.
+          assertFalse(getStatusTextElement().hidden);
+          dx_utils.assertElementContainsText(
+              getStatusTextElement(), 'Charged 0.00% in 0 seconds.');
           dx_utils.assertElementContainsText(
               getStatusTextElement(), 'Learn more');
         });
@@ -1367,4 +1407,4 @@ export function routineSectionTestSuite() {
           assertEquals('', getAnnouncedText());
         });
   });
-}
+});

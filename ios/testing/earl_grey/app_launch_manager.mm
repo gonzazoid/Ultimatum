@@ -16,10 +16,6 @@
 #import "ios/testing/earl_grey/earl_grey_test.h"
 #import "ios/third_party/edo/src/Service/Sources/EDOServiceException.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 namespace {
 // Returns the list of extra app launch args from test command line args.
 NSArray<NSString*>* ExtraAppArgsFromTestSwitch() {
@@ -53,6 +49,9 @@ bool LaunchArgumentsAreEqual(NSArray<NSString*>* args1,
 }  // namespace
 
 @interface AppLaunchManager ()
+// Similar to EG's -backgroundApplication, but with a longer 20 second wait and
+// faster 0.5 second poll interval.
+- (BOOL)backgroundApplication;
 // List of observers to be notified of actions performed by the app launch
 // manager.
 @property(nonatomic, strong)
@@ -146,13 +145,24 @@ bool LaunchArgumentsAreEqual(NSArray<NSString*>* args1,
   }
 
   if (appIsRunning) {
-    [CoverageUtils writeClangCoverageProfile];
-
     if (gracefullyKill) {
-      GREYAssertTrue([EarlGrey backgroundApplication],
+      GREYAssertTrue([self backgroundApplication],
                      @"Failed to background application.");
+
+      if (self.runningApplication.state ==
+          XCUIApplicationStateRunningBackgroundSuspended) {
+        [self.runningApplication terminate];
+      } else {
+        [BaseEarlGreyTestCaseAppInterface gracefulTerminate];
+        if (![self.runningApplication
+                waitForState:XCUIApplicationStateNotRunning
+                     timeout:5]) {
+          [self.runningApplication terminate];
+        }
+      }
     }
 
+    // No-op if already terminated above.
     [self.runningApplication terminate];
 
     // Can't use EG conditionals here since the app is terminated.
@@ -165,6 +175,13 @@ bool LaunchArgumentsAreEqual(NSArray<NSString*>* args1,
 
   XCUIApplication* application = [[XCUIApplication alloc] init];
   application.launchArguments = arguments;
+
+  // Instruct EG to not DYLD_INSERT_LIBRARIES, which can interfere with
+  // Chromium's framework setup.
+  NSMutableDictionary<NSString*, NSString*>* mutableEnv =
+      [application.launchEnvironment mutableCopy];
+  mutableEnv[@"EG_SKIP_INSERT_LIBRARIES"] = @"YES";
+  application.launchEnvironment = [mutableEnv copy];
 
   @try {
     [application launch];
@@ -245,6 +262,18 @@ bool LaunchArgumentsAreEqual(NSArray<NSString*>* args1,
     [arguments addObject:base::SysUTF8ToNSString(arg)];
   }
 
+  // For the app to use the same language as the test module. This workaround
+  // the fact that EarlGrey tests depends on localizable strings (unfortunate)
+  // even though the test module does not have access to the system locale. To
+  // make this work, we force the app to use the same locale as used by the
+  // test module (which is the first item in -preferredLocalizations).
+  NSArray<NSString*>* languages = [NSBundle mainBundle].preferredLocalizations;
+  if (languages.count != 0) {
+    NSString* language = [languages firstObject];
+    [arguments addObject:@"-AppleLanguages"];
+    [arguments addObject:[NSString stringWithFormat:@"(%@)", language]];
+  }
+
   [self ensureAppLaunchedWithArgs:arguments
                    relaunchPolicy:configuration.relaunch_policy];
 
@@ -252,6 +281,12 @@ bool LaunchArgumentsAreEqual(NSArray<NSString*>* args1,
     if (@available(iOS 14, *)) {
       [BaseEarlGreyTestCaseAppInterface enableFastAnimation];
     }
+
+#if !TARGET_IPHONE_SIMULATOR
+    if (@available(iOS 17, *)) {
+      [BaseEarlGreyTestCaseAppInterface swizzleKeyboardOOP];
+    }
+#endif
 
     // Wait for application to settle before continuing on with test.
     GREYWaitForAppToIdle(@"App failed to idle BEFORE test body started.\n\n"
@@ -274,9 +309,24 @@ bool LaunchArgumentsAreEqual(NSArray<NSString*>* args1,
 }
 
 - (void)backgroundAndForegroundApp {
-  GREYAssertTrue([EarlGrey backgroundApplication],
+  GREYAssertTrue([self backgroundApplication],
                  @"Failed to background application.");
   [self.runningApplication activate];
+}
+
+- (BOOL)backgroundApplication {
+  XCUIApplication* currentApplication = [[XCUIApplication alloc] init];
+  // Tell the system to background the app.
+  [[XCUIDevice sharedDevice] pressButton:XCUIDeviceButtonHome];
+  BOOL (^conditionBlock)(void) = ^BOOL {
+    return currentApplication.state == XCUIApplicationStateRunningBackground ||
+           currentApplication.state ==
+               XCUIApplicationStateRunningBackgroundSuspended;
+  };
+  GREYCondition* condition =
+      [GREYCondition conditionWithName:@"check if backgrounded"
+                                 block:conditionBlock];
+  return [condition waitWithTimeout:20.0 pollInterval:0.5];
 }
 
 - (void)addObserver:(id<AppLaunchManagerObserver>)observer {

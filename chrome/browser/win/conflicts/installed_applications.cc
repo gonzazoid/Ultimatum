@@ -6,9 +6,8 @@
 
 #include <algorithm>
 
-#include "base/metrics/histogram_macros.h"
+#include "base/strings/strcat.h"
 #include "base/strings/string_util.h"
-#include "base/strings/stringprintf.h"
 #include "base/threading/scoped_blocking_call.h"
 #include "base/win/registry.h"
 #include "base/win/win_util.h"
@@ -120,9 +119,6 @@ InstalledApplications::InstalledApplications(
   base::ScopedBlockingCall scoped_blocking_call(FROM_HERE,
                                                 base::BlockingType::MAY_BLOCK);
 
-  SCOPED_UMA_HISTOGRAM_TIMER(
-      "ThirdPartyModules.InstalledApplications.GetDataTime");
-
   // Iterate over all the variants of the uninstall registry key.
   static constexpr wchar_t kUninstallKeyPath[] =
       L"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall";
@@ -146,10 +142,7 @@ InstalledApplications::InstalledApplications(
   // Retrieve the current user's Security Identifier. If it fails, |user_sid|
   // will stay empty.
   std::wstring user_sid;
-  bool got_user_sid_string = base::win::GetUserSidString(&user_sid);
-  UMA_HISTOGRAM_BOOLEAN(
-      "ThirdPartyModules.InstalledApplications.GotUserSidString",
-      got_user_sid_string);
+  base::win::GetUserSidString(&user_sid);
 
   for (const auto& combination : registry_key_combinations) {
     for (base::win::RegistryKeyIterator i(combination.first, kUninstallKeyPath,
@@ -174,8 +167,7 @@ void InstalledApplications::CheckRegistryKeyForInstalledApplication(
     const std::wstring& key_name,
     const MsiUtil& msi_util,
     const std::wstring& user_sid) {
-  std::wstring candidate_key_path =
-      base::StringPrintf(L"%ls\\%ls", key_path.c_str(), key_name.c_str());
+  std::wstring candidate_key_path = base::StrCat({key_path, L"\\", key_name});
   base::win::RegKey candidate(hkey, candidate_key_path.c_str(),
                               KEY_QUERY_VALUE | wow64access);
 

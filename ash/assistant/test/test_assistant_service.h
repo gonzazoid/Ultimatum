@@ -6,6 +6,7 @@
 #define ASH_ASSISTANT_TEST_TEST_ASSISTANT_SERVICE_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -16,7 +17,6 @@
 #include "chromeos/ash/services/libassistant/public/mojom/notification_delegate.mojom-forward.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace ash {
 
@@ -84,12 +84,10 @@ class TestAssistantService : public assistant::Assistant {
   void SetInteractionResponse(std::unique_ptr<InteractionResponse> response);
 
   // Returns the current interaction.
-  absl::optional<assistant::AssistantInteractionMetadata> current_interaction();
+  std::optional<assistant::AssistantInteractionMetadata> current_interaction();
 
   // Assistant overrides:
   void StartEditReminderInteraction(const std::string& client_id) override;
-  void StartScreenContextInteraction(
-      const std::vector<uint8_t>& assistant_screenshot) override;
   void StartTextInteraction(const std::string& query,
                             assistant::AssistantQuerySource source,
                             bool allow_tts) override;
@@ -117,7 +115,7 @@ class TestAssistantService : public assistant::Assistant {
   void RemoveAlarmOrTimer(const std::string& id) override;
   void ResumeTimer(const std::string& id) override;
 
-  absl::optional<bool> dark_mode_enabled() { return dark_mode_enabled_; }
+  std::optional<bool> dark_mode_enabled() { return dark_mode_enabled_; }
 
  private:
   void StartInteraction(assistant::AssistantInteractionType type,
@@ -133,7 +131,7 @@ class TestAssistantService : public assistant::Assistant {
   std::unique_ptr<CurrentInteractionSubscriber> current_interaction_subscriber_;
   std::unique_ptr<InteractionResponse> interaction_response_;
 
-  absl::optional<bool> dark_mode_enabled_;
+  std::optional<bool> dark_mode_enabled_;
 
   base::ObserverList<assistant::AssistantInteractionSubscriber>
       interaction_subscribers_;

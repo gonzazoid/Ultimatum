@@ -6,7 +6,7 @@
 
 #include <algorithm>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/pickle.h"
 #include "base/run_loop.h"
@@ -25,10 +25,11 @@
 #include "components/safe_browsing/content/browser/threat_details.h"
 #include "components/safe_browsing/content/browser/threat_details_history.h"
 #include "components/safe_browsing/content/browser/ui_manager.h"
+#include "components/safe_browsing/content/browser/unsafe_resource_util.h"
+#include "components/safe_browsing/content/browser/web_contents_key.h"
 #include "components/safe_browsing/content/common/safe_browsing.mojom.h"
 #include "components/safe_browsing/core/browser/referrer_chain_provider.h"
 #include "components/safe_browsing/core/common/proto/csd.pb.h"
-#include "components/security_interstitials/content/unsafe_resource_util.h"
 #include "components/security_interstitials/core/unsafe_resource.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/global_routing_id.h"
@@ -43,6 +44,7 @@
 #include "net/base/net_errors.h"
 #include "net/http/http_util.h"
 #include "services/network/public/cpp/weak_wrapper_shared_url_loader_factory.h"
+#include "services/network/public/mojom/fetch_api.mojom.h"
 #include "services/network/public/mojom/url_response_head.mojom.h"
 #include "services/network/test/test_url_loader_factory.h"
 #include "testing/gmock/include/gmock/gmock-matchers.h"
@@ -115,7 +117,9 @@ class ThreatDetailsWrap : public ThreatDetails {
                       base::BindOnce(&ThreatDetailsWrap::ThreatDetailsDone,
                                      base::Unretained(this))),
         run_loop_(nullptr),
-        done_callback_count_(0) {}
+        done_callback_count_(0) {
+    SetShouldSendReport(true);
+  }
 
   ThreatDetailsWrap(
       SafeBrowsingUIManager* ui_manager,
@@ -135,11 +139,13 @@ class ThreatDetailsWrap : public ThreatDetails {
                       base::BindOnce(&ThreatDetailsWrap::ThreatDetailsDone,
                                      base::Unretained(this))),
         run_loop_(nullptr),
-        done_callback_count_(0) {}
+        done_callback_count_(0) {
+    SetShouldSendReport(true);
+  }
 
   ~ThreatDetailsWrap() override {}
 
-  void ThreatDetailsDone(content::WebContents* web_contents) {
+  void ThreatDetailsDone(WebContentsKey web_contents_key) {
     ++done_callback_count_;
     run_loop_->Quit();
     run_loop_ = nullptr;
@@ -183,6 +189,9 @@ class MockSafeBrowsingUIManager : public SafeBrowsingUIManager {
             std::make_unique<ChromeSafeBrowsingBlockingPageFactory>(),
             GURL(chrome::kChromeUINewTabURL)),
         report_sent_(false) {}
+  MOCK_METHOD2(AttachThreatDetailsAndLaunchSurvey,
+               void(content::BrowserContext* browser_context,
+                    std::unique_ptr<ClientSafeBrowsingReportRequest> report));
 
   MockSafeBrowsingUIManager(const MockSafeBrowsingUIManager&) = delete;
   MockSafeBrowsingUIManager& operator=(const MockSafeBrowsingUIManager&) =
@@ -246,7 +255,7 @@ class ThreatDetailsTest : public ChromeRenderViewHostTestHarness {
   std::string WaitForThreatDetailsDone(ThreatDetailsWrap* report,
                                        bool did_proceed,
                                        int num_visit) {
-    report->FinishCollection(did_proceed, num_visit);
+    report->FinishCollection(did_proceed, num_visit, nullptr);
     // Wait for the callback (ThreatDetailsDone).
     base::RunLoop run_loop;
     report->SetRunLoopToQuit(&run_loop);
@@ -274,14 +283,18 @@ class ThreatDetailsTest : public ChromeRenderViewHostTestHarness {
                     bool is_subresource,
                     const GURL& url,
                     UnsafeResource* resource) {
+    auto* primary_main_frame = web_contents()->GetPrimaryMainFrame();
     const content::GlobalRenderFrameHostId primary_main_frame_id =
-        web_contents()->GetPrimaryMainFrame()->GetGlobalId();
+        primary_main_frame->GetGlobalId();
     resource->url = url;
     resource->is_subresource = is_subresource;
+    resource->request_destination =
+        is_subresource ? network::mojom::RequestDestination::kScript
+                       : network::mojom::RequestDestination::kDocument;
     resource->threat_type = threat_type;
     resource->threat_source = threat_source;
     resource->render_process_id = primary_main_frame_id.child_id;
-    resource->render_frame_id = primary_main_frame_id.frame_routing_id;
+    resource->render_frame_token = primary_main_frame->GetFrameToken().value();
   }
 
   void VerifyResults(const ClientSafeBrowsingReportRequest& report_pb,
@@ -289,6 +302,8 @@ class ThreatDetailsTest : public ChromeRenderViewHostTestHarness {
     EXPECT_EQ(expected_pb.type(), report_pb.type());
     EXPECT_EQ(expected_pb.url(), report_pb.url());
     EXPECT_EQ(expected_pb.page_url(), report_pb.page_url());
+    EXPECT_EQ(expected_pb.url_request_destination(),
+              report_pb.url_request_destination());
     EXPECT_EQ(expected_pb.referrer_url(), report_pb.referrer_url());
     EXPECT_EQ(expected_pb.did_proceed(), report_pb.did_proceed());
     EXPECT_EQ(expected_pb.has_repeat_visit(), report_pb.has_repeat_visit());
@@ -429,6 +444,49 @@ class ThreatDetailsTest : public ChromeRenderViewHostTestHarness {
     WriteCacheEntry(kLandingURL, kLandingHeaders, kLandingData);
   }
 
+  void VerifyReferrerChainPresence(const SBThreatType& sb_threat_type,
+                                   int expected_referrer_chain_size,
+                                   bool pull_referrer_chain) {
+    auto navigation = content::NavigationSimulator::CreateBrowserInitiated(
+        GURL(kLandingURL), web_contents());
+    navigation->SetReferrer(blink::mojom::Referrer::New(
+        GURL(kReferrerURL), network::mojom::ReferrerPolicy::kDefault));
+    navigation->Commit();
+
+    UnsafeResource resource;
+    InitResource(sb_threat_type, ThreatSource::LOCAL_PVER4,
+                 true /* is_subresource */, GURL(kThreatURL), &resource);
+
+    ReferrerChain returned_referrer_chain;
+    if (pull_referrer_chain) {
+      returned_referrer_chain.Add()->set_url(kReferrerURL);
+      returned_referrer_chain.Add()->set_url(kSecondRedirectURL);
+      EXPECT_CALL(*referrer_chain_provider_,
+                  IdentifyReferrerChainByRenderFrameHost(
+                      web_contents()->GetPrimaryMainFrame(), _, _))
+          .WillOnce(DoAll(SetArgPointee<2>(returned_referrer_chain),
+                          Return(ReferrerChainProvider::SUCCESS)));
+    } else {
+      EXPECT_CALL(*referrer_chain_provider_,
+                  IdentifyReferrerChainByRenderFrameHost(
+                      web_contents()->GetPrimaryMainFrame(), _, _))
+          .Times(0);
+    }
+
+    auto report = std::make_unique<ThreatDetailsWrap>(
+        ui_manager_.get(), web_contents(), resource, nullptr, history_service(),
+        referrer_chain_provider_.get());
+    report->SetShouldSendReport(true);
+    report->StartCollection();
+
+    std::string serialized = WaitForThreatDetailsDone(
+        report.get(), true /* did_proceed*/, 1 /* num_visit */);
+
+    ClientSafeBrowsingReportRequest actual;
+    actual.ParseFromString(serialized);
+    EXPECT_EQ(actual.referrer_chain_size(), expected_referrer_chain_size);
+  }
+
   std::unique_ptr<MockReferrerChainProvider> referrer_chain_provider_;
   scoped_refptr<MockSafeBrowsingUIManager> ui_manager_;
   network::TestURLLoaderFactory test_url_loader_factory_;
@@ -461,6 +519,7 @@ TEST_F(ThreatDetailsTest, ThreatSubResource) {
   ClientSafeBrowsingReportRequest expected;
   expected.set_type(ClientSafeBrowsingReportRequest::URL_MALWARE);
   expected.set_url(kThreatURL);
+  expected.set_url_request_destination(ClientSafeBrowsingReportRequest::SCRIPT);
   expected.set_page_url(kLandingURL);
   // The referrer is stripped to its origin because it's a cross-origin URL.
   expected.set_referrer_url(
@@ -520,6 +579,7 @@ TEST_F(ThreatDetailsTest, SuspiciousSiteWithReferrerChain) {
   expected.mutable_client_properties()->set_url_api_type(
       ClientSafeBrowsingReportRequest::PVER4_NATIVE);
   expected.set_url(kThreatURL);
+  expected.set_url_request_destination(ClientSafeBrowsingReportRequest::SCRIPT);
   expected.set_page_url(kLandingURL);
   // The referrer is stripped to its origin because it's a cross-origin URL.
   expected.set_referrer_url(
@@ -544,6 +604,20 @@ TEST_F(ThreatDetailsTest, SuspiciousSiteWithReferrerChain) {
 
   VerifyResults(actual, expected);
 }
+
+// Tests referrer chain is present for supported threat types.
+TEST_F(ThreatDetailsTest, SupportedThreatTypesHaveReferrerChain) {
+  VerifyReferrerChainPresence(SB_THREAT_TYPE_URL_PHISHING,
+                              /*expected_referrer_chain_size=*/0,
+                              /*pull_referrer_chain=*/false);
+  VerifyReferrerChainPresence(SB_THREAT_TYPE_SUSPICIOUS_SITE,
+                              /*expected_referrer_chain_size=*/2,
+                              /*pull_referrer_chain=*/true);
+  VerifyReferrerChainPresence(SB_THREAT_TYPE_APK_DOWNLOAD,
+                              /*expected_referrer_chain_size=*/2,
+                              /*pull_referrer_chain=*/true);
+}
+
 // Tests creating a simple threat report of a phishing page where the
 // subresource has a different original_url.
 TEST_F(ThreatDetailsTest, ThreatSubResourceWithOriginalUrl) {
@@ -571,6 +645,7 @@ TEST_F(ThreatDetailsTest, ThreatSubResourceWithOriginalUrl) {
   expected.mutable_client_properties()->set_url_api_type(
       ClientSafeBrowsingReportRequest::PVER4_NATIVE);
   expected.set_url(kThreatURL);
+  expected.set_url_request_destination(ClientSafeBrowsingReportRequest::SCRIPT);
   expected.set_page_url(kLandingURL);
   expected.set_referrer_url("");
   expected.set_did_proceed(false);
@@ -638,6 +713,7 @@ TEST_F(ThreatDetailsTest, ThreatDOMDetails) {
   expected.mutable_client_properties()->set_url_api_type(
       ClientSafeBrowsingReportRequest::PVER4_NATIVE);
   expected.set_url(kThreatURL);
+  expected.set_url_request_destination(ClientSafeBrowsingReportRequest::SCRIPT);
   expected.set_page_url(kLandingURL);
   expected.set_referrer_url("");
   expected.set_did_proceed(false);
@@ -755,6 +831,7 @@ TEST_F(ThreatDetailsTest, ThreatDOMDetails_MultipleFrames) {
   expected.mutable_client_properties()->set_url_api_type(
       ClientSafeBrowsingReportRequest::PVER4_NATIVE);
   expected.set_url(kThreatURL);
+  expected.set_url_request_destination(ClientSafeBrowsingReportRequest::SCRIPT);
   expected.set_page_url(kLandingURL);
   expected.set_referrer_url("");
   expected.set_did_proceed(false);
@@ -963,6 +1040,7 @@ TEST_F(ThreatDetailsTest, ThreatDOMDetails_AmbiguousDOM) {
   ClientSafeBrowsingReportRequest expected;
   expected.set_type(ClientSafeBrowsingReportRequest::URL_UNWANTED);
   expected.set_url(kThreatURL);
+  expected.set_url_request_destination(ClientSafeBrowsingReportRequest::SCRIPT);
   expected.set_page_url(kLandingURL);
   expected.set_referrer_url("");
   expected.set_did_proceed(false);
@@ -1174,6 +1252,7 @@ TEST_F(ThreatDetailsTest, ThreatDOMDetails_TrimToAdTags) {
   expected.mutable_client_properties()->set_url_api_type(
       ClientSafeBrowsingReportRequest::PVER4_NATIVE);
   expected.set_url(kThreatURL);
+  expected.set_url_request_destination(ClientSafeBrowsingReportRequest::SCRIPT);
   expected.set_page_url(kLandingURL);
   expected.set_referrer_url("");
   expected.set_did_proceed(false);
@@ -1410,6 +1489,7 @@ TEST_F(ThreatDetailsTest, ThreatWithRedirectUrl) {
   expected.mutable_client_properties()->set_url_api_type(
       ClientSafeBrowsingReportRequest::ANDROID_SAFETYNET);
   expected.set_url(kThreatURL);
+  expected.set_url_request_destination(ClientSafeBrowsingReportRequest::SCRIPT);
   expected.set_page_url(kLandingURL);
   expected.set_referrer_url("");
   expected.set_did_proceed(true);
@@ -1487,6 +1567,8 @@ TEST_F(ThreatDetailsTest, ThreatOnMainPageLoadBlocked) {
   ClientSafeBrowsingReportRequest expected;
   expected.set_type(ClientSafeBrowsingReportRequest::URL_MALWARE);
   expected.set_url(kLandingURL);
+  expected.set_url_request_destination(
+      ClientSafeBrowsingReportRequest::DOCUMENT);
   expected.set_page_url(kLandingURL);
   // Note that the referrer policy is not actually enacted here, since that's
   // done in Blink.
@@ -1547,6 +1629,7 @@ TEST_F(ThreatDetailsTest, ThreatWithPendingLoad) {
   expected.mutable_client_properties()->set_url_api_type(
       ClientSafeBrowsingReportRequest::PVER4_NATIVE);
   expected.set_url(kThreatURL);
+  expected.set_url_request_destination(ClientSafeBrowsingReportRequest::SCRIPT);
   expected.set_page_url(kLandingURL);
   // The referrer is stripped to its origin because it's a cross-origin URL.
   expected.set_referrer_url(
@@ -1569,10 +1652,8 @@ TEST_F(ThreatDetailsTest, ThreatWithPendingLoad) {
 }
 
 TEST_F(ThreatDetailsTest, ThreatOnFreshTab) {
-  // A fresh WebContents should be on the initial NavigationEntry, or have
-  // no NavigationEntry (if InitialNavigationEntry is disabled).
-  EXPECT_TRUE(!controller().GetLastCommittedEntry() ||
-              controller().GetLastCommittedEntry()->IsInitialEntry());
+  // A fresh WebContents should be on the initial NavigationEntry.
+  EXPECT_TRUE(controller().GetLastCommittedEntry()->IsInitialEntry());
   EXPECT_EQ(nullptr, controller().GetPendingEntry());
 
   // Initiate the connection to a (pretend) renderer process.
@@ -1599,6 +1680,7 @@ TEST_F(ThreatDetailsTest, ThreatOnFreshTab) {
   ClientSafeBrowsingReportRequest expected;
   expected.set_type(ClientSafeBrowsingReportRequest::URL_MALWARE);
   expected.set_url(kThreatURL);
+  expected.set_url_request_destination(ClientSafeBrowsingReportRequest::SCRIPT);
   expected.set_did_proceed(true);
   expected.set_repeat_visit(true);
 
@@ -1645,6 +1727,7 @@ TEST_F(ThreatDetailsTest, HTTPCache) {
   ClientSafeBrowsingReportRequest expected;
   expected.set_type(ClientSafeBrowsingReportRequest::URL_CLIENT_SIDE_PHISHING);
   expected.set_url(kThreatURL);
+  expected.set_url_request_destination(ClientSafeBrowsingReportRequest::SCRIPT);
   expected.set_page_url(kLandingURL);
   expected.set_referrer_url("");
   expected.set_did_proceed(true);
@@ -1726,6 +1809,7 @@ TEST_F(ThreatDetailsTest, HttpsResourceSanitization) {
   ClientSafeBrowsingReportRequest expected;
   expected.set_type(ClientSafeBrowsingReportRequest::URL_CLIENT_SIDE_PHISHING);
   expected.set_url(kThreatURLHttps);
+  expected.set_url_request_destination(ClientSafeBrowsingReportRequest::SCRIPT);
   expected.set_page_url(kLandingURL);
   expected.set_referrer_url("");
   expected.set_did_proceed(true);
@@ -1775,7 +1859,7 @@ TEST_F(ThreatDetailsTest, HTTPCacheNoEntries) {
       ->NavigateAndCommit(GURL(kLandingURL));
 
   UnsafeResource resource;
-  InitResource(SB_THREAT_TYPE_URL_CLIENT_SIDE_MALWARE,
+  InitResource(SB_THREAT_TYPE_URL_CLIENT_SIDE_PHISHING,
                ThreatSource::LOCAL_PVER4, true /* is_subresource */,
                GURL(kThreatURL), &resource);
 
@@ -1808,10 +1892,11 @@ TEST_F(ThreatDetailsTest, HTTPCacheNoEntries) {
   actual.ParseFromString(serialized);
 
   ClientSafeBrowsingReportRequest expected;
-  expected.set_type(ClientSafeBrowsingReportRequest::URL_CLIENT_SIDE_MALWARE);
+  expected.set_type(ClientSafeBrowsingReportRequest::URL_CLIENT_SIDE_PHISHING);
   expected.mutable_client_properties()->set_url_api_type(
       ClientSafeBrowsingReportRequest::PVER4_NATIVE);
   expected.set_url(kThreatURL);
+  expected.set_url_request_destination(ClientSafeBrowsingReportRequest::SCRIPT);
   expected.set_page_url(kLandingURL);
   expected.set_referrer_url("");
   expected.set_did_proceed(false);
@@ -1871,6 +1956,7 @@ TEST_F(ThreatDetailsTest, HistoryServiceUrls) {
   expected.mutable_client_properties()->set_url_api_type(
       ClientSafeBrowsingReportRequest::PVER4_NATIVE);
   expected.set_url(kThreatURL);
+  expected.set_url_request_destination(ClientSafeBrowsingReportRequest::SCRIPT);
   expected.set_page_url(kLandingURL);
   expected.set_referrer_url("");
   expected.set_did_proceed(true);
@@ -1925,7 +2011,9 @@ TEST_F(ThreatDetailsTest, CanCancelDuringCollection) {
     base::RunLoop run_loop;
     report->SetShouldStopAfterRedirectCollection(true);
     report->SetRunLoopToQuit(&run_loop);
-    report->FinishCollection(/*did_proceed=*/true, /*num_visits=*/-1);
+    report->FinishCollection(
+        /*did_proceed=*/true, /*num_visits=*/-1,
+        /*interstitial_interactions=*/nullptr);
     run_loop.Run();
   }
 
@@ -1933,6 +2021,48 @@ TEST_F(ThreatDetailsTest, CanCancelDuringCollection) {
   report.reset();
 
   base::RunLoop().RunUntilIdle();
+}
+
+// Tests a simple threat report has the correct mapping between ThreatSource and
+// UrlApiType.
+TEST_F(ThreatDetailsTest, ThreatSourceToUrlApiType) {
+  struct TestCase {
+    ThreatSource threat_source;
+    ClientSafeBrowsingReportRequest::SafeBrowsingUrlApiType
+        expected_url_api_type;
+  } test_cases[] = {
+      {ThreatSource::NATIVE_PVER5_REAL_TIME,
+       ClientSafeBrowsingReportRequest::PVER5_NATIVE_REAL_TIME},
+      {ThreatSource::ANDROID_SAFEBROWSING_REAL_TIME,
+       ClientSafeBrowsingReportRequest::ANDROID_SAFEBROWSING_REAL_TIME},
+      {ThreatSource::ANDROID_SAFEBROWSING,
+       ClientSafeBrowsingReportRequest::ANDROID_SAFEBROWSING}};
+
+  for (const auto& test_case : test_cases) {
+    auto navigation = content::NavigationSimulator::CreateBrowserInitiated(
+        GURL(kLandingURL), web_contents());
+    navigation->SetReferrer(blink::mojom::Referrer::New(
+        GURL(kReferrerURL), network::mojom::ReferrerPolicy::kDefault));
+    navigation->Commit();
+
+    UnsafeResource resource;
+    InitResource(SB_THREAT_TYPE_URL_MALWARE, test_case.threat_source,
+                 /*is_subresource=*/false, GURL(kThreatURL), &resource);
+
+    auto report = std::make_unique<ThreatDetailsWrap>(
+        ui_manager_.get(), web_contents(), resource, nullptr, history_service(),
+        referrer_chain_provider_.get());
+    report->StartCollection();
+
+    std::string serialized = WaitForThreatDetailsDone(
+        report.get(), /*did_proceed=*/true, /*num_visit=*/1);
+
+    ClientSafeBrowsingReportRequest report_pb;
+    report_pb.ParseFromString(serialized);
+    EXPECT_TRUE(report_pb.client_properties().has_url_api_type());
+    EXPECT_EQ(report_pb.client_properties().url_api_type(),
+              test_case.expected_url_api_type);
+  }
 }
 
 }  // namespace safe_browsing

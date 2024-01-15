@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ref_counted_memory.h"
 #include "base/strings/utf_string_conversions.h"
 #include "content/browser/webui/web_ui_data_source_impl.h"
@@ -83,11 +83,9 @@ class WebUIDataSourceTest : public testing::Test {
  private:
   void SetUp() override {
     SetContentClient(&client_);
-    WebUIDataSource* source = WebUIDataSourceImpl::Create("host");
-    WebUIDataSourceImpl* source_impl =
-        static_cast<WebUIDataSourceImpl*>(source);
-    source_impl->disable_load_time_data_defaults_for_testing();
-    source_ = base::WrapRefCounted(source_impl);
+    WebUIDataSourceImpl* source = new WebUIDataSourceImpl("host");
+    source->disable_load_time_data_defaults_for_testing();
+    source_ = base::WrapRefCounted(source);
   }
 
   BrowserTaskEnvironment task_environment_;

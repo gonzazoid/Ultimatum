@@ -5,9 +5,9 @@
 #ifndef COMPONENTS_FEED_CORE_V2_FEEDSTORE_UTIL_H_
 #define COMPONENTS_FEED_CORE_V2_FEEDSTORE_UTIL_H_
 
-#include <deque>
 #include <string>
-#include "base/strings/string_piece_forward.h"
+#include "base/containers/flat_set.h"
+#include "base/strings/string_piece.h"
 #include "base/time/time.h"
 #include "components/feed/core/proto/v2/store.pb.h"
 #include "components/feed/core/v2/public/stream_type.h"
@@ -23,11 +23,13 @@ class Metadata;
 
 const char kForYouStreamKey[] = "i";
 const char kFollowStreamKey[] = "w";
-constexpr base::StringPiece kChannelStreamKeyPrefix = "c";
-const int kMaxMostRecentContentHashes = 50;
+const char kSupervisedUserStreamKey[] = "s";
+constexpr base::StringPiece kSingleWebFeedStreamKeyPrefix = "c";
+constexpr base::StringPiece kSingleWebFeedMenuStreamKeyPrefix = "m/";
+constexpr base::StringPiece kSingleWebFeedOtherStreamKeyPrefix = "o/";
 
 std::string StreamKey(const feed::StreamType& stream_type);
-feed::StreamType StreamTypeFromId(base::StringPiece key);
+feed::StreamType StreamTypeFromKey(base::StringPiece key);
 
 base::StringPiece StreamPrefix(feed::StreamKind stream_type);
 
@@ -56,6 +58,8 @@ void SetLastFetchTime(Metadata& metadata,
                       const feed::StreamType& stream_type,
                       const base::Time& fetch_time);
 feedstore::Metadata MakeMetadata(const std::string& gaia);
+feedstore::DocView CreateDocView(uint64_t docid,
+                                 base::Time timestamp = base::Time::Now());
 
 // Mutations of Metadata. Metadata will need stored again after being changed,
 // call `FeedStream::SetMetadata()`.
@@ -88,11 +92,9 @@ feed::ContentHashSet GetViewContentIds(const Metadata& metadata,
 int32_t ContentHashFromPrefetchMetadata(
     const feedwire::PrefetchMetadata& prefetch_metadata);
 
-// Appends `new_content_hashes` to `Metadata.most_recent_content_hashes` whose
-// size is capped to kMaxMostRecentContentHashes. The oldest content appears
-// at the beginning of the list.
-void AddMostRecentContentHashes(Metadata& metadata,
-                                std::deque<uint32_t> new_content_hashes);
+base::flat_set<uint32_t> GetViewedContentHashes(
+    const Metadata& metadata,
+    const feed::StreamType& stream_type);
 
 }  // namespace feedstore
 

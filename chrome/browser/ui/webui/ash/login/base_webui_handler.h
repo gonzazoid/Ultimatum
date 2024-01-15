@@ -9,9 +9,9 @@
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/values.h"
 #include "chrome/browser/ash/login/oobe_screen.h"
 #include "components/login/base_screen_handler_utils.h"
@@ -23,7 +23,7 @@ namespace login {
 class LocalizedValuesBuilder;
 }
 
-namespace chromeos {
+namespace ash {
 
 class OobeUI;
 
@@ -106,10 +106,6 @@ class BaseWebUIHandler : public content::WebUIMessageHandler {
     web_ui()->RegisterHandlerCallback(function_name, callback);
   }
 
-  // Called when the page is ready and handler can do initialization.
-  // DEPRECATED: Use InitAfterJavascriptAllowed if required.
-  virtual void InitializeDeprecated() {}
-
   // Show selected WebUI `screen`.
   void ShowScreenDeprecated(OobeScreenId screen);
 
@@ -125,6 +121,6 @@ class BaseWebUIHandler : public content::WebUIMessageHandler {
   std::vector<base::OnceClosure> deferred_calls_;
 };
 
-}  // namespace chromeos
+}  // namespace ash
 
 #endif  // CHROME_BROWSER_UI_WEBUI_ASH_LOGIN_BASE_WEBUI_HANDLER_H_

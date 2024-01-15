@@ -4,14 +4,13 @@
 
 #include "base/task/current_thread.h"
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/message_loop/message_pump_for_io.h"
 #include "base/message_loop/message_pump_for_ui.h"
 #include "base/message_loop/message_pump_type.h"
 #include "base/task/sequence_manager/sequence_manager_impl.h"
 #include "base/threading/thread_local.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/trace_event/base_tracing.h"
 #include "build/build_config.h"
 
@@ -107,12 +106,8 @@ CurrentThread::ScopedAllowApplicationTasksInNativeNestedLoop::
   TRACE_EVENT_END0("base", "ScopedNestableTaskAllower");
 }
 
-bool CurrentThread::NestableTasksAllowed() const {
+bool CurrentThread::ApplicationTasksAllowedInNativeNestedLoop() const {
   return current_->IsTaskExecutionAllowed();
-}
-
-bool CurrentThread::operator==(const CurrentThread& other) const {
-  return current_ == other.current_;
 }
 
 #if !BUILDFLAG(IS_NACL)
@@ -239,7 +234,7 @@ bool CurrentIOThread::WatchFileDescriptor(
 }
 #endif  // BUILDFLAG(IS_WIN)
 
-#if BUILDFLAG(IS_MAC)
+#if BUILDFLAG(IS_MAC) || (BUILDFLAG(IS_IOS) && !BUILDFLAG(CRONET_BUILD))
 bool CurrentIOThread::WatchMachReceivePort(
     mach_port_t port,
     MessagePumpForIO::MachPortWatchController* controller,

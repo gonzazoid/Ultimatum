@@ -7,13 +7,14 @@
 #include <algorithm>
 #include <set>
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
 #include "base/files/file_enumerator.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/memory/ref_counted_memory.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/path_service.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "base/time/default_tick_clock.h"
 #include "chrome/common/chrome_paths.h"
@@ -141,9 +142,7 @@ base::FilePath NotificationImageRetainer::RegisterTemporaryImage(
 
   // At this point, a temp file is already created. We need to clean it up even
   // if it fails to write the image data to this file.
-  int data_len = base::checked_cast<int>(data->size());
-  bool data_write_success = (base::WriteFile(temp_file, data->front_as<char>(),
-                                             data_len) == data_len);
+  bool data_write_success = base::WriteFile(temp_file, *data);
 
   // Start the timer if it hasn't to delete the expired files in batch. This
   // avoids creating a deletion task for each file, otherwise the overhead can

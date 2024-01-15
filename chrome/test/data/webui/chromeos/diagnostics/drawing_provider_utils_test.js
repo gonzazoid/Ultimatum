@@ -2,10 +2,13 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {constructRgba, getTrailOpacityFromPressure, lookupCssVariableValue, MARK_COLOR, MARK_OPACITY, TRAIL_COLOR, TRAIL_MAX_OPACITY} from 'chrome://diagnostics/drawing_provider_utils.js';
+import 'chrome://diagnostics/strings.m.js';
+import 'chrome://webui-test/chromeos/mojo_webui_test_support.js';
 
-import {assertEquals} from '../../chai_assert.js';
-import {MockController} from '../../mock_controller.js';
+import {constructRgba, getTrailOpacityFromPressure, lookupCssVariableValue, MARK_COLOR, MARK_OPACITY, TRAIL_COLOR, TRAIL_MAX_OPACITY} from 'chrome://diagnostics/drawing_provider_utils.js';
+import {assertEquals} from 'chrome://webui-test/chromeos/chai_assert.js';
+
+import {MockController} from '../mock_controller.m.js';
 
 // A helper function to mock getPropertyValue function.
 const mockGetPropertyValue = (valName) => {
@@ -19,7 +22,7 @@ const mockGetPropertyValue = (valName) => {
   }
 };
 
-export function drawingProviderUtilsTestSuite() {
+suite('drawingProviderUtilsTestSuite', function() {
   /** @type {{createFunctionMock: Function, reset: Function}} */
   let mockController;
 
@@ -65,4 +68,4 @@ export function drawingProviderUtilsTestSuite() {
       assertEquals(expectedRgba[i], constructRgba(rgbList[i], opacityList[i]));
     }
   });
-}
+});

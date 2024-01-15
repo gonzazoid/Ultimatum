@@ -9,12 +9,11 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/lazy_instance.h"
 #include "base/location.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/tick_clock.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
@@ -23,14 +22,12 @@
 #include "chrome/browser/extensions/extension_tab_util.h"
 #include "chrome/browser/extensions/updater/extension_updater.h"
 #include "chrome/browser/profiles/profile.h"
+#include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_finder.h"
 #include "chrome/browser/ui/browser_navigator.h"
 #include "chrome/browser/ui/browser_navigator_params.h"
-#include "chrome/browser/ui/browser_window.h"
 #include "components/update_client/update_query_params.h"
-#include "content/public/browser/notification_service.h"
 #include "extensions/browser/extension_system.h"
-#include "extensions/browser/notification_types.h"
 #include "extensions/browser/warning_service.h"
 #include "extensions/browser/warning_set.h"
 #include "extensions/common/api/runtime.h"
@@ -38,14 +35,10 @@
 #include "extensions/common/manifest.h"
 #include "net/base/backoff_entry.h"
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
+#include "chromeos/components/kiosk/kiosk_utils.h"
 #include "chromeos/dbus/power/power_manager_client.h"
-#include "components/user_manager/user_manager.h"
 #include "third_party/cros_system_api/dbus/service_constants.h"
-#endif
-
-#if BUILDFLAG(IS_CHROMEOS_LACROS)
-#include "chrome/browser/lacros/app_mode/kiosk_session_service_lacros.h"
 #endif
 
 using extensions::Extension;
@@ -110,7 +103,7 @@ BackoffPolicy::BackoffPolicy() {
   };
 }
 
-BackoffPolicy::~BackoffPolicy() {}
+BackoffPolicy::~BackoffPolicy() = default;
 
 // static
 const net::BackoffEntry::Policy* BackoffPolicy::Get() {
@@ -130,15 +123,11 @@ struct ChromeRuntimeAPIDelegate::UpdateCheckInfo {
 ChromeRuntimeAPIDelegate::ChromeRuntimeAPIDelegate(
     content::BrowserContext* context)
     : browser_context_(context), registered_for_updates_(false) {
-  registrar_.Add(this,
-                 extensions::NOTIFICATION_EXTENSION_UPDATE_FOUND,
-                 content::NotificationService::AllSources());
   extension_registry_observation_.Observe(
       extensions::ExtensionRegistry::Get(browser_context_));
 }
 
-ChromeRuntimeAPIDelegate::~ChromeRuntimeAPIDelegate() {
-}
+ChromeRuntimeAPIDelegate::~ChromeRuntimeAPIDelegate() = default;
 
 // static
 void ChromeRuntimeAPIDelegate::set_tick_clock_for_tests(
@@ -206,15 +195,14 @@ void ChromeRuntimeAPIDelegate::ReloadExtension(
     // extension function unloading the extension has to be done
     // asynchronously. Fortunately PostTask guarentees FIFO order so just
     // post both tasks.
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(&extensions::ExtensionService::TerminateExtension,
-                       service->AsWeakPtr(), extension_id));
+                       service->AsExtensionServiceWeakPtr(), extension_id));
     extensions::WarningSet warnings;
     warnings.insert(
-        extensions::Warning::CreateReloadTooFrequentWarning(
-            extension_id));
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+        extensions::Warning::CreateReloadTooFrequentWarning(extension_id));
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(&extensions::WarningService::NotifyWarningsOnUI,
                        browser_context_, warnings));
@@ -222,10 +210,10 @@ void ChromeRuntimeAPIDelegate::ReloadExtension(
     // We can't call ReloadExtension directly, since when this method finishes
     // it tries to decrease the reference count for the extension, which fails
     // if the extension has already been reloaded; so instead we post a task.
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(&extensions::ExtensionService::ReloadExtension,
-                       service->AsWeakPtr(), extension_id));
+                       service->AsExtensionServiceWeakPtr(), extension_id));
   }
 }
 
@@ -244,14 +232,17 @@ bool ChromeRuntimeAPIDelegate::CheckForUpdates(const std::string& extension_id,
   // return a status of throttled.
   if (info.backoff->ShouldRejectRequest() || info.callbacks.size() >= 10) {
     UpdateCheckResult result = UpdateCheckResult(
-        extensions::api::runtime::REQUEST_UPDATE_CHECK_STATUS_THROTTLED, "");
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+        extensions::api::runtime::RequestUpdateCheckStatus::kThrottled, "");
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(callback), std::move(result)));
   } else {
     info.callbacks.push_back(std::move(callback));
 
     extensions::ExtensionUpdater::CheckParams params;
     params.ids = {extension_id};
+    params.update_found_callback =
+        base::BindRepeating(&ChromeRuntimeAPIDelegate::OnExtensionUpdateFound,
+                            base::Unretained(this));
     params.callback =
         base::BindOnce(&ChromeRuntimeAPIDelegate::UpdateCheckComplete,
                        base::Unretained(this), extension_id);
@@ -263,10 +254,12 @@ bool ChromeRuntimeAPIDelegate::CheckForUpdates(const std::string& extension_id,
 void ChromeRuntimeAPIDelegate::OpenURL(const GURL& uninstall_url) {
   Profile* profile = Profile::FromBrowserContext(browser_context_);
   Browser* browser = chrome::FindLastActiveWithProfile(profile);
-  if (!browser)
+  if (!browser) {
     browser = Browser::Create(Browser::CreateParams(profile, false));
-  if (!browser)
+  }
+  if (!browser) {
     return;
+  }
 
   NavigateParams params(browser, uninstall_url,
                         ui::PAGE_TRANSITION_CLIENT_REDIRECT);
@@ -278,17 +271,17 @@ void ChromeRuntimeAPIDelegate::OpenURL(const GURL& uninstall_url) {
 bool ChromeRuntimeAPIDelegate::GetPlatformInfo(PlatformInfo* info) {
   const char* os = update_client::UpdateQueryParams::GetOS();
   if (strcmp(os, "mac") == 0) {
-    info->os = extensions::api::runtime::PLATFORM_OS_MAC;
+    info->os = extensions::api::runtime::PlatformOs::kMac;
   } else if (strcmp(os, "win") == 0) {
-    info->os = extensions::api::runtime::PLATFORM_OS_WIN;
+    info->os = extensions::api::runtime::PlatformOs::kWin;
   } else if (strcmp(os, "cros") == 0) {
-    info->os = extensions::api::runtime::PLATFORM_OS_CROS;
+    info->os = extensions::api::runtime::PlatformOs::kCros;
   } else if (strcmp(os, "linux") == 0) {
-    info->os = extensions::api::runtime::PLATFORM_OS_LINUX;
+    info->os = extensions::api::runtime::PlatformOs::kLinux;
   } else if (strcmp(os, "openbsd") == 0) {
-    info->os = extensions::api::runtime::PLATFORM_OS_OPENBSD;
+    info->os = extensions::api::runtime::PlatformOs::kOpenbsd;
   } else if (strcmp(os, "fuchsia") == 0) {
-    info->os = extensions::api::runtime::PLATFORM_OS_FUCHSIA;
+    info->os = extensions::api::runtime::PlatformOs::kFuchsia;
   } else {
     NOTREACHED() << "Platform not supported: " << os;
     return false;
@@ -296,17 +289,17 @@ bool ChromeRuntimeAPIDelegate::GetPlatformInfo(PlatformInfo* info) {
 
   const char* arch = update_client::UpdateQueryParams::GetArch();
   if (strcmp(arch, "arm") == 0) {
-    info->arch = extensions::api::runtime::PLATFORM_ARCH_ARM;
+    info->arch = extensions::api::runtime::PlatformArch::kArm;
   } else if (strcmp(arch, "arm64") == 0) {
-    info->arch = extensions::api::runtime::PLATFORM_ARCH_ARM64;
+    info->arch = extensions::api::runtime::PlatformArch::kArm64;
   } else if (strcmp(arch, "x86") == 0) {
-    info->arch = extensions::api::runtime::PLATFORM_ARCH_X86_32;
+    info->arch = extensions::api::runtime::PlatformArch::kX86_32;
   } else if (strcmp(arch, "x64") == 0) {
-    info->arch = extensions::api::runtime::PLATFORM_ARCH_X86_64;
+    info->arch = extensions::api::runtime::PlatformArch::kX86_64;
   } else if (strcmp(arch, "mipsel") == 0) {
-    info->arch = extensions::api::runtime::PLATFORM_ARCH_MIPS;
+    info->arch = extensions::api::runtime::PlatformArch::kMips;
   } else if (strcmp(arch, "mips64el") == 0) {
-    info->arch = extensions::api::runtime::PLATFORM_ARCH_MIPS64;
+    info->arch = extensions::api::runtime::PlatformArch::kMips64;
   } else {
     NOTREACHED();
     return false;
@@ -314,15 +307,15 @@ bool ChromeRuntimeAPIDelegate::GetPlatformInfo(PlatformInfo* info) {
 
   const char* nacl_arch = update_client::UpdateQueryParams::GetNaclArch();
   if (strcmp(nacl_arch, "arm") == 0) {
-    info->nacl_arch = extensions::api::runtime::PLATFORM_NACL_ARCH_ARM;
+    info->nacl_arch = extensions::api::runtime::PlatformNaclArch::kArm;
   } else if (strcmp(nacl_arch, "x86-32") == 0) {
-    info->nacl_arch = extensions::api::runtime::PLATFORM_NACL_ARCH_X86_32;
+    info->nacl_arch = extensions::api::runtime::PlatformNaclArch::kX86_32;
   } else if (strcmp(nacl_arch, "x86-64") == 0) {
-    info->nacl_arch = extensions::api::runtime::PLATFORM_NACL_ARCH_X86_64;
+    info->nacl_arch = extensions::api::runtime::PlatformNaclArch::kX86_64;
   } else if (strcmp(nacl_arch, "mips32") == 0) {
-    info->nacl_arch = extensions::api::runtime::PLATFORM_NACL_ARCH_MIPS;
+    info->nacl_arch = extensions::api::runtime::PlatformNaclArch::kMips;
   } else if (strcmp(nacl_arch, "mips64") == 0) {
-    info->nacl_arch = extensions::api::runtime::PLATFORM_NACL_ARCH_MIPS64;
+    info->nacl_arch = extensions::api::runtime::PlatformNaclArch::kMips64;
   } else {
     NOTREACHED();
     return false;
@@ -332,19 +325,14 @@ bool ChromeRuntimeAPIDelegate::GetPlatformInfo(PlatformInfo* info) {
 }
 
 bool ChromeRuntimeAPIDelegate::RestartDevice(std::string* error_message) {
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-  if (user_manager::UserManager::Get()->IsLoggedInAsKioskApp() ||
-      user_manager::UserManager::Get()->IsLoggedInAsWebKioskApp()) {
+#if BUILDFLAG(IS_CHROMEOS)
+  if (chromeos::IsKioskSession()) {
     chromeos::PowerManagerClient::Get()->RequestRestart(
-        power_manager::REQUEST_RESTART_OTHER, "chrome.runtime API");
+        power_manager::REQUEST_RESTART_API, "chrome.runtime API");
     return true;
   }
 #endif
-#if BUILDFLAG(IS_CHROMEOS_LACROS)
-  if (KioskSessionServiceLacros::Get()->RestartDevice("chrome.runtime API")) {
-    return true;
-  }
-#endif
+
   *error_message = "Function available only for ChromeOS kiosk mode.";
   return false;
 }
@@ -356,18 +344,12 @@ bool ChromeRuntimeAPIDelegate::OpenOptionsPage(
                                                               browser_context);
 }
 
-void ChromeRuntimeAPIDelegate::Observe(
-    int type,
-    const content::NotificationSource& source,
-    const content::NotificationDetails& details) {
-  DCHECK_EQ(extensions::NOTIFICATION_EXTENSION_UPDATE_FOUND, type);
-  using UpdateDetails = const std::pair<std::string, base::Version>;
-  const std::string& id = content::Details<UpdateDetails>(details)->first;
-  const base::Version& version =
-      content::Details<UpdateDetails>(details)->second;
+void ChromeRuntimeAPIDelegate::OnExtensionUpdateFound(
+    const std::string& id,
+    const base::Version& version) {
   if (version.IsValid()) {
     UpdateCheckResult result = UpdateCheckResult(
-        extensions::api::runtime::REQUEST_UPDATE_CHECK_STATUS_UPDATE_AVAILABLE,
+        extensions::api::runtime::RequestUpdateCheckStatus::kUpdateAvailable,
         version.GetString());
     CallUpdateCallbacks(id, std::move(result));
   }
@@ -377,8 +359,9 @@ void ChromeRuntimeAPIDelegate::OnExtensionInstalled(
     content::BrowserContext* browser_context,
     const Extension* extension,
     bool is_update) {
-  if (!is_update)
+  if (!is_update) {
     return;
+  }
   auto info = update_check_info_.find(extension->id());
   if (info != update_check_info_.end()) {
     info->second.backoff->Reset();
@@ -400,12 +383,12 @@ void ChromeRuntimeAPIDelegate::UpdateCheckComplete(
 
   if (update) {
     UpdateCheckResult result = UpdateCheckResult(
-        extensions::api::runtime::REQUEST_UPDATE_CHECK_STATUS_UPDATE_AVAILABLE,
+        extensions::api::runtime::RequestUpdateCheckStatus::kUpdateAvailable,
         update->VersionString());
     CallUpdateCallbacks(extension_id, std::move(result));
   } else {
     UpdateCheckResult result = UpdateCheckResult(
-        extensions::api::runtime::REQUEST_UPDATE_CHECK_STATUS_NO_UPDATE, "");
+        extensions::api::runtime::RequestUpdateCheckStatus::kNoUpdate, "");
     CallUpdateCallbacks(extension_id, std::move(result));
   }
 }
@@ -414,8 +397,9 @@ void ChromeRuntimeAPIDelegate::CallUpdateCallbacks(
     const std::string& extension_id,
     const UpdateCheckResult& result) {
   auto it = update_check_info_.find(extension_id);
-  if (it == update_check_info_.end())
+  if (it == update_check_info_.end()) {
     return;
+  }
   std::vector<UpdateCheckCallback> callbacks;
   it->second.callbacks.swap(callbacks);
   for (auto& callback : callbacks) {

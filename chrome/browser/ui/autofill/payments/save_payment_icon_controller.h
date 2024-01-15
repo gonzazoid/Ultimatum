@@ -16,42 +16,51 @@ class AutofillBubbleBase;
 // The controller for SavePaymentIconView.
 class SavePaymentIconController {
  public:
+  // The type of the autofill bubble attached to the icon.
+  enum class PaymentBubbleType {
+    kUnknown = 0,
+    // Bubble for credit card.
+    kCreditCard = 1,
+    // Bubble for save IBAN.
+    kSaveIban = 2,
+    // Bubble for manage saved IBAN
+    kManageSavedIban = 3,
+    kMaxValue = kManageSavedIban
+  };
+
   virtual ~SavePaymentIconController() = default;
 
   // Returns a reference to the SavePaymentIconController associated with the
-  // given |web_contents|. If controller does not exist, this will create the
-  // controller from the |web_contents| then return the reference.
-  static SavePaymentIconController* GetOrCreate(
-      content::WebContents* web_contents);
-
-  // Returns a reference to the SavePaymentIconController associated with the
-  // given |web_contents|. If controller does not exist, this will return
-  // nullptr.
-  static SavePaymentIconController* Get(content::WebContents* web_contents);
+  // given `web_contents` and `command_id`. If controller does not exist, this
+  // returns nullptr.
+  static SavePaymentIconController* Get(content::WebContents* web_contents,
+                                        int command_id);
 
   // Once the animation ends, it shows a new bubble if needed.
   virtual void OnAnimationEnded() = 0;
 
-  // Returns true iff upload save failed and the failure badge on the icon
-  // should be shown.
-  virtual bool ShouldShowSaveFailureBadge() const = 0;
-
   // Returns true iff the payment saved animation should be shown.
-  virtual bool ShouldShowCardSavedLabelAnimation() const = 0;
+  virtual bool ShouldShowPaymentSavedLabelAnimation() const = 0;
 
   // Returns true iff upload save is in progress and the saving animation should
   // be shown.
-  virtual bool ShouldShowSavingCardAnimation() const = 0;
+  virtual bool ShouldShowSavingPaymentAnimation() const = 0;
 
   // Returns true iff the payment icon is visible.
   virtual bool IsIconVisible() const = 0;
 
-  // Returns the currently active save card bubble view. Can be nullptr if no
-  // bubble is visible.
-  virtual AutofillBubbleBase* GetSaveBubbleView() const = 0;
+  // Returns the currently active save payment or manage saved payment bubble
+  // view. Can be nullptr if no bubble is visible.
+  virtual AutofillBubbleBase* GetPaymentBubbleView() const = 0;
+
+  virtual PaymentBubbleType GetPaymentBubbleType() const = 0;
 
   // Returns the tooltip message for the save payment icon.
   virtual std::u16string GetSavePaymentIconTooltipText() const = 0;
+
+  // Returns the id of the string to show in the save animation upon a
+  // successful save.
+  virtual int GetSaveSuccessAnimationStringId() const = 0;
 };
 
 }  // namespace autofill

@@ -9,8 +9,8 @@
 
 #include <vector>
 
-#include "base/callback_forward.h"
-#include "chrome/browser/platform_keys/platform_keys.h"
+#include "base/functional/callback_forward.h"
+#include "chrome/browser/chromeos/platform_keys/platform_keys.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace ash::platform_keys {

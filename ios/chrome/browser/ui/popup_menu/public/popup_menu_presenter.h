@@ -9,7 +9,6 @@
 
 #import "ios/chrome/browser/ui/popup_menu/public/popup_menu_presenter_delegate.h"
 #import "ios/chrome/browser/ui/presenters/contained_presenter.h"
-#import "ios/chrome/browser/ui/util/named_guide.h"
 
 // Presenter for the popup menu. It handles showing/dismissing a popup menu.
 @interface PopupMenuPresenter : NSObject <ContainedPresenter>
@@ -18,8 +17,8 @@
 // parent class property.
 @property(nonatomic, weak) id<PopupMenuPresenterDelegate> delegate;
 
-// Guide name used for the presentation.
-@property(nonatomic, strong) GuideName* guideName;
+// Layout guide used for the presentation.
+@property(nonatomic, strong) UILayoutGuide* layoutGuide;
 
 @end
 

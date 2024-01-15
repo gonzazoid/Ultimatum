@@ -10,6 +10,8 @@
 #include <string>
 
 #include "base/component_export.h"
+#include "base/observer_list.h"
+#include "base/observer_list_types.h"
 #include "ui/base/ime/ash/text_input_target.h"
 #include "ui/base/ime/composition_text.h"
 #include "ui/events/event.h"
@@ -17,28 +19,46 @@
 
 namespace ui {
 class InputMethod;
+}
+
+namespace ash {
 
 class COMPONENT_EXPORT(UI_BASE_IME_ASH) MockIMEInputContextHandler
     : public TextInputTarget {
  public:
   struct UpdateCompositionTextArg {
-    CompositionText composition_text;
+    ui::CompositionText composition_text;
     gfx::Range selection;
     bool is_visible;
   };
 
   struct DeleteSurroundingTextArg {
-    int32_t offset;
-    uint32_t length;
+    uint32_t num_char16s_before_cursor;
+    uint32_t num_char16s_after_cursor;
   };
+
+  struct ReplaceSurroundingTextArg {
+    uint32_t length_before_selection;
+    uint32_t length_after_selection;
+    std::u16string replacement_text;
+  };
+
+  class Observer : public base::CheckedObserver {
+   public:
+    // Called whenever the commit text is updated.
+    virtual void OnCommitText(const std::u16string& text) = 0;
+  };
+
+  void AddObserver(Observer* observer);
+  void RemoveObserver(Observer* observer);
 
   MockIMEInputContextHandler();
   virtual ~MockIMEInputContextHandler();
 
   void CommitText(
       const std::u16string& text,
-      TextInputClient::InsertTextCursorBehavior cursor_behavior) override;
-  void UpdateCompositionText(const CompositionText& text,
+      ui::TextInputClient::InsertTextCursorBehavior cursor_behavior) override;
+  void UpdateCompositionText(const ui::CompositionText& text,
                              uint32_t cursor_pos,
                              bool visible) override;
 
@@ -51,33 +71,30 @@ class COMPONENT_EXPORT(UI_BASE_IME_ASH) MockIMEInputContextHandler
       uint32_t end,
       const std::vector<ui::ImeTextSpan>& text_spans) override;
   gfx::Range GetAutocorrectRange() override;
-  gfx::Rect GetAutocorrectCharacterBounds() override;
-  gfx::Rect GetTextFieldBounds() override;
   void SetAutocorrectRange(const gfx::Range& range,
                            SetAutocorrectRangeDoneCallback callback) override;
   bool ClearGrammarFragments(const gfx::Range& range) override;
-  absl::optional<GrammarFragment> GetGrammarFragmentAtCursor() override;
+  absl::optional<ui::GrammarFragment> GetGrammarFragmentAtCursor() override;
   bool AddGrammarFragments(
-      const std::vector<GrammarFragment>& fragments) override;
-  bool SetSelectionRange(uint32_t start, uint32_t end) override;
-  void DeleteSurroundingText(int32_t offset, uint32_t length) override;
+      const std::vector<ui::GrammarFragment>& fragments) override;
+  void DeleteSurroundingText(uint32_t num_char16s_before_cursor,
+                             uint32_t num_char16s_after_cursor) override;
+  void ReplaceSurroundingText(uint32_t length_before_selection,
+                              uint32_t length_after_selection,
+                              base::StringPiece16 replacement_text) override;
   SurroundingTextInfo GetSurroundingTextInfo() override;
-  void SendKeyEvent(KeyEvent* event) override;
-  InputMethod* GetInputMethod() override;
-  void ConfirmCompositionText(bool reset_engine, bool keep_selection) override;
+  void SendKeyEvent(ui::KeyEvent* event) override;
+  ui::InputMethod* GetInputMethod() override;
+  void ConfirmComposition(bool reset_engine) override;
   bool HasCompositionText() override;
-  std::u16string GetCompositionText() override;
   ukm::SourceId GetClientSourceForMetrics() override;
 
-  std::vector<GrammarFragment> get_grammar_fragments() const {
+  std::vector<ui::GrammarFragment> get_grammar_fragments() const {
     return grammar_fragments_;
   }
 
   void set_cursor_range(gfx::Range range) { cursor_range_ = range; }
   int commit_text_call_count() const { return commit_text_call_count_; }
-  int set_selection_range_call_count() const {
-    return set_selection_range_call_count_;
-  }
   int update_preedit_text_call_count() const {
     return update_preedit_text_call_count_;
   }
@@ -98,6 +115,10 @@ class COMPONENT_EXPORT(UI_BASE_IME_ASH) MockIMEInputContextHandler
     return last_delete_surrounding_text_arg_;
   }
 
+  const ReplaceSurroundingTextArg& last_replace_surrounding_text_arg() const {
+    return last_replace_surrounding_text_arg_;
+  }
+
   void set_autocorrect_enabled(bool enabled) {
     autocorrect_enabled_ = enabled;
     if (!enabled) {
@@ -114,7 +135,6 @@ class COMPONENT_EXPORT(UI_BASE_IME_ASH) MockIMEInputContextHandler
 
  private:
   int commit_text_call_count_;
-  int set_selection_range_call_count_;
   int update_preedit_text_call_count_;
   int delete_surrounding_text_call_count_;
   std::u16string last_commit_text_;
@@ -123,9 +143,12 @@ class COMPONENT_EXPORT(UI_BASE_IME_ASH) MockIMEInputContextHandler
   DeleteSurroundingTextArg last_delete_surrounding_text_arg_;
   gfx::Range autocorrect_range_;
   bool autocorrect_enabled_ = true;
-  std::vector<GrammarFragment> grammar_fragments_;
+  std::vector<ui::GrammarFragment> grammar_fragments_;
   gfx::Range cursor_range_;
+  ReplaceSurroundingTextArg last_replace_surrounding_text_arg_;
+  base::ObserverList<Observer> observers_;
 };
-}  // namespace ui
+
+}  // namespace ash
 
 #endif  // UI_BASE_IME_ASH_MOCK_IME_INPUT_CONTEXT_HANDLER_H_

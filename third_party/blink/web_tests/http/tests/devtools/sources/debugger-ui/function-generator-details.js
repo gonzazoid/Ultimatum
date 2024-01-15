@@ -2,10 +2,15 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {TestRunner} from 'test_runner';
+import {SourcesTestRunner} from 'sources_test_runner';
+
+import * as UIModule from 'devtools/ui/legacy/legacy.js';
+import * as SDK from 'devtools/core/sdk/sdk.js';
+
 (async function() {
   TestRunner.addResult(
       `Tests that Debugger.getGeneratorObjectDetails command returns correct result.\n`);
-  await TestRunner.loadLegacyModule('sources'); await TestRunner.loadTestModule('sources_test_runner');
   await TestRunner.showPanel('sources');
   await TestRunner.evaluateInPagePromise(`
       function forward(iter, step)
@@ -46,7 +51,7 @@
   `);
 
   function performStandardTestCase(pageExpression, next) {
-    UI.context.flavor(SDK.ExecutionContext)
+    UIModule.Context.Context.instance().flavor(SDK.RuntimeModel.ExecutionContext)
         .evaluate({expression: pageExpression})
         .then(didEvaluate);
 

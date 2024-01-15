@@ -10,9 +10,12 @@
 #include <vector>
 
 #include "base/containers/span.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
-#include "device/fido/fido_constants.h"
+#include "base/observer_list.h"
+#include "base/observer_list_types.h"
+#include "base/scoped_observation.h"
+#include "content/common/content_export.h"
 #include "device/fido/virtual_fido_device.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/receiver_set.h"
@@ -26,8 +29,22 @@ namespace content {
 // This class has very little logic itself, it merely stores a unique ID and the
 // state of the authenticator, whereas performing all cryptographic operations
 // is delegated to the VirtualFidoDevice class.
-class VirtualAuthenticator : public blink::test::mojom::VirtualAuthenticator {
+class CONTENT_EXPORT VirtualAuthenticator
+    : public blink::test::mojom::VirtualAuthenticator,
+      public device::VirtualFidoDevice::Observer {
  public:
+  class Observer : public base::CheckedObserver {
+   public:
+    virtual void OnCredentialCreated(
+        VirtualAuthenticator* authenticator,
+        const device::VirtualFidoDevice::Credential& credential) = 0;
+    virtual void OnAssertion(
+        VirtualAuthenticator* authenticator,
+        const device::VirtualFidoDevice::Credential& credential) = 0;
+    virtual void OnAuthenticatorWillBeDestroyed(
+        VirtualAuthenticator* authenticator) = 0;
+  };
+
   explicit VirtualAuthenticator(
       const blink::test::mojom::VirtualAuthenticatorOptions& options);
 
@@ -76,6 +93,20 @@ class VirtualAuthenticator : public blink::test::mojom::VirtualAuthenticator {
     is_user_verified_ = is_user_verified;
   }
 
+  // If set, overrides the signature in the authenticator response to be zero.
+  // Defaults to false.
+  void set_bogus_signature(bool is_bogus) {
+    state_->ctap2_invalid_signature = is_bogus;
+  }
+
+  // If set, overrides the UV bit in the flags in the authenticator response to
+  // be zero. Defaults to false.
+  void set_bad_uv_bit(bool is_bad_bit) { state_->unset_uv_bit = is_bad_bit; }
+
+  // If set, overrides the UP bit in the flags in the authenticator response to
+  // be zero. Defaults to false.
+  void set_bad_up_bit(bool is_bad_bit) { state_->unset_up_bit = is_bad_bit; }
+
   bool has_resident_key() const { return has_resident_key_; }
 
   device::FidoTransportProtocol transport() const { return state_->transport; }
@@ -93,6 +124,10 @@ class VirtualAuthenticator : public blink::test::mojom::VirtualAuthenticator {
   // There is an N:1 relationship between VirtualFidoDevices and this class, so
   // this method can be called any number of times.
   std::unique_ptr<device::VirtualFidoDevice> ConstructDevice();
+
+  void AddObserver(Observer* observer);
+  void RemoveObserver(Observer* observer);
+  bool HasObserversForTest();
 
   // blink::test::mojom::VirtualAuthenticator:
   void GetLargeBlob(const std::vector<uint8_t>& key_handle,
@@ -125,6 +160,12 @@ class VirtualAuthenticator : public blink::test::mojom::VirtualAuthenticator {
       SetLargeBlobCallback callback,
       base::expected<mojo_base::BigBuffer, std::string> result);
 
+  // device::VirtualFidoDevice::Observer:
+  void OnCredentialCreated(
+      const device::VirtualFidoDevice::Credential& credential) override;
+  void OnAssertion(
+      const device::VirtualFidoDevice::Credential& credential) override;
+
   const device::ProtocolVersion protocol_;
   const device::Ctap2Version ctap2_version_;
   const device::AuthenticatorAttachment attachment_;
@@ -133,12 +174,17 @@ class VirtualAuthenticator : public blink::test::mojom::VirtualAuthenticator {
   const bool has_large_blob_;
   const bool has_cred_blob_;
   const bool has_min_pin_length_;
+  const bool has_prf_;
   bool is_user_verified_ = true;
   const std::string unique_id_;
   bool is_user_present_;
+  base::ObserverList<Observer> observers_;
   data_decoder::DataDecoder data_decoder_;
   scoped_refptr<device::VirtualFidoDevice::State> state_;
   mojo::ReceiverSet<blink::test::mojom::VirtualAuthenticator> receiver_set_;
+  base::ScopedObservation<device::VirtualFidoDevice::State,
+                          device::VirtualFidoDevice::Observer>
+      observation_{this};
 
   base::WeakPtrFactory<VirtualAuthenticator> weak_factory_{this};
 };

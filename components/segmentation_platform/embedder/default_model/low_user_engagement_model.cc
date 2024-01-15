@@ -6,9 +6,12 @@
 
 #include <array>
 
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/metrics/field_trial_params.h"
+#include "base/task/sequenced_task_runner.h"
 #include "components/segmentation_platform/internal/metadata/metadata_writer.h"
+#include "components/segmentation_platform/public/config.h"
 #include "components/segmentation_platform/public/constants.h"
+#include "components/segmentation_platform/public/features.h"
 
 namespace segmentation_platform {
 
@@ -21,6 +24,7 @@ constexpr SegmentId kChromeStartSegmentId =
     SegmentId::OPTIMIZATION_TARGET_SEGMENTATION_CHROME_LOW_USER_ENGAGEMENT;
 constexpr int64_t kChromeStartSignalStorageLength = 28;
 constexpr int64_t kChromeStartMinSignalCollectionLength = 28;
+constexpr int64_t kModelVersion = 2;
 
 // InputFeatures.
 constexpr std::array<MetadataWriter::UMAFeature, 1> kChromeStartUMAFeatures = {
@@ -35,36 +39,55 @@ constexpr std::array<MetadataWriter::UMAFeature, 1> kChromeStartUMAFeatures = {
 }  // namespace
 
 LowUserEngagementModel::LowUserEngagementModel()
-    : ModelProvider(kChromeStartSegmentId) {}
+    : DefaultModelProvider(kChromeStartSegmentId) {}
 
-void LowUserEngagementModel::InitAndFetchModel(
-    const ModelUpdatedCallback& model_updated_callback) {
+std::unique_ptr<Config> LowUserEngagementModel::GetConfig() {
+  if (!base::FeatureList::IsEnabled(
+          features::kSegmentationPlatformLowEngagementFeature)) {
+    return nullptr;
+  }
+  auto config = std::make_unique<Config>();
+  config->segmentation_key = kChromeLowUserEngagementSegmentationKey;
+  config->segmentation_uma_name = kChromeLowUserEngagementUmaName;
+  config->AddSegmentId(kChromeStartSegmentId,
+                       std::make_unique<LowUserEngagementModel>());
+  config->auto_execute_and_cache = true;
+  config->is_boolean_segment = true;
+
+  return config;
+}
+
+std::unique_ptr<DefaultModelProvider::ModelConfig>
+LowUserEngagementModel::GetModelConfig() {
   proto::SegmentationModelMetadata chrome_start_metadata;
   MetadataWriter writer(&chrome_start_metadata);
   writer.SetDefaultSegmentationMetadataConfig(
       kChromeStartMinSignalCollectionLength, kChromeStartSignalStorageLength);
 
-  // Set discrete mapping.
-  writer.AddBooleanSegmentDiscreteMapping(
-      kChromeLowUserEngagementSegmentationKey);
-
   // Set features.
   writer.AddUmaFeatures(kChromeStartUMAFeatures.data(),
                         kChromeStartUMAFeatures.size());
 
-  constexpr int kModelVersion = 1;
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
-      FROM_HERE,
-      base::BindRepeating(model_updated_callback, kChromeStartSegmentId,
-                          std::move(chrome_start_metadata), kModelVersion));
+  // Set OutputConfig.
+  writer.AddOutputConfigForBinaryClassifier(
+      /*threshold=*/0.5f,
+      /*positive_label=*/kChromeLowUserEngagementUmaName,
+      /*negative_label=*/kLegacyNegativeLabel);
+
+  writer.AddPredictedResultTTLInOutputConfig(
+      /*top_label_to_ttl_list=*/{}, /*default_ttl=*/7,
+      /*time_unit=*/proto::TimeUnit::DAY);
+
+  return std::make_unique<ModelConfig>(std::move(chrome_start_metadata),
+                                       kModelVersion);
 }
 
 void LowUserEngagementModel::ExecuteModelWithInput(
-    const std::vector<float>& inputs,
+    const ModelProvider::Request& inputs,
     ExecutionCallback callback) {
   // Invalid inputs.
   if (inputs.size() != 28) {
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(callback), absl::nullopt));
     return;
   }
@@ -78,12 +101,9 @@ void LowUserEngagementModel::ExecuteModelWithInput(
   if (!weeks[0] || !weeks[1] || !weeks[2] || !weeks[3])
     result = 1;
 
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
-      FROM_HERE, base::BindOnce(std::move(callback), result));
-}
-
-bool LowUserEngagementModel::ModelAvailable() {
-  return true;
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE,
+      base::BindOnce(std::move(callback), ModelProvider::Response(1, result)));
 }
 
 }  // namespace segmentation_platform

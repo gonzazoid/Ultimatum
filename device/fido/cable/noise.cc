@@ -48,6 +48,7 @@ void Noise::Init(Noise::HandshakeType type) {
   // See https://www.noiseprotocol.org/noise.html#the-handshakestate-object
   static const char kKNProtocolName[] = "Noise_KNpsk0_P256_AESGCM_SHA256";
   static const char kNKProtocolName[] = "Noise_NKpsk0_P256_AESGCM_SHA256";
+  static const char kNKNoPskProtocolName[] = "Noise_NK_P256_AESGCM_SHA256";
   static_assert(sizeof(kNKProtocolName) == sizeof(kKNProtocolName),
                 "protocol names are different lengths");
   static_assert(sizeof(kKNProtocolName) == crypto::kSHA256Length,
@@ -65,6 +66,12 @@ void Noise::Init(Noise::HandshakeType type) {
 
     case HandshakeType::kKNpsk0:
       memcpy(chaining_key_.data(), kKNProtocolName, sizeof(kKNProtocolName));
+      break;
+
+    case HandshakeType::kNK:
+      memset(chaining_key_.data(), 0, chaining_key_.size());
+      memcpy(chaining_key_.data(), kNKNoPskProtocolName,
+             sizeof(kNKNoPskProtocolName));
       break;
   }
 
@@ -94,8 +101,8 @@ void Noise::MixKeyAndHash(base::span<const uint8_t> ikm) {
        chaining_key_.data(), chaining_key_.size(), /*info=*/nullptr, 0);
   DCHECK_EQ(chaining_key_.size(), 32u);
   memcpy(chaining_key_.data(), output, 32);
-  MixHash(base::span<const uint8_t>(&output[32], 32));
-  InitializeKey(base::span<const uint8_t, 32>(&output[64], 32));
+  MixHash(base::span<const uint8_t>(&output[32], 32u));
+  InitializeKey(base::span<const uint8_t, 32>(&output[64], 32u));
 }
 
 std::vector<uint8_t> Noise::EncryptAndHash(

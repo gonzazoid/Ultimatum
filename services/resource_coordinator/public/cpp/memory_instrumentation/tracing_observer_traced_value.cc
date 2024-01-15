@@ -36,8 +36,7 @@ void OsDumpAsValueInto(TracedValue* value, const mojom::OSMemDump& os_dump) {
 
 TracingObserverTracedValue::TracingObserverTracedValue(
     base::trace_event::TraceLog* trace_log,
-    base::trace_event::MemoryDumpManager* memory_dump_manager)
-    : TracingObserver(trace_log, memory_dump_manager) {}
+    base::trace_event::MemoryDumpManager* memory_dump_manager) {}
 
 TracingObserverTracedValue::~TracingObserverTracedValue() = default;
 
@@ -46,7 +45,7 @@ void TracingObserverTracedValue::AddToTrace(
     const base::trace_event::MemoryDumpRequestArgs& args,
     const base::ProcessId pid,
     std::unique_ptr<TracedValue> traced_value) {
-  CHECK_NE(base::trace_event::MemoryDumpType::SUMMARY_ONLY, args.dump_type);
+  CHECK_NE(base::trace_event::MemoryDumpType::kSummaryOnly, args.dump_type);
 
   traced_value->SetString(
       "level_of_detail",

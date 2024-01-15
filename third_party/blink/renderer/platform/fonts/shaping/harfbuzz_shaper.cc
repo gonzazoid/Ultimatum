@@ -35,6 +35,7 @@
 #include <unicode/uchar.h>
 #include <unicode/uscript.h>
 #include <algorithm>
+#include <hb-cplusplus.hh>
 #include <memory>
 #include <utility>
 
@@ -47,6 +48,7 @@
 #include "third_party/blink/renderer/platform/fonts/opentype/open_type_caps_support.h"
 #include "third_party/blink/renderer/platform/fonts/shaping/case_mapping_harfbuzz_buffer_filler.h"
 #include "third_party/blink/renderer/platform/fonts/shaping/font_features.h"
+#include "third_party/blink/renderer/platform/fonts/shaping/han_kerning.h"
 #include "third_party/blink/renderer/platform/fonts/shaping/harfbuzz_face.h"
 #include "third_party/blink/renderer/platform/fonts/shaping/shape_result_inline_headers.h"
 #include "third_party/blink/renderer/platform/fonts/small_caps_iterator.h"
@@ -70,7 +72,7 @@ constexpr hb_feature_t CreateFeature(char c1,
           static_cast<unsigned>(-1) /* end */};
 }
 
-#if DCHECK_IS_ON()
+#if EXPENSIVE_DCHECKS_ARE_ON()
 // Check if the ShapeResult has the specified range.
 // |text| and |font| are only for logging.
 void CheckShapeResultRange(const ShapeResult* result,
@@ -78,6 +80,9 @@ void CheckShapeResultRange(const ShapeResult* result,
                            unsigned end,
                            const String& text,
                            const Font* font) {
+  if (!result) {
+    return;
+  }
   DCHECK_LE(start, end);
   unsigned length = end - start;
   if (length == result->NumCharacters() &&
@@ -190,43 +195,39 @@ struct ReshapeQueueItem {
       : action_(action), start_index_(start), num_characters_(num) {}
 };
 
-template <typename T>
-class HarfBuzzScopedPtr {
+//
+// Represents a context while shaping a range.
+//
+// Input-only data and objects whose pointers don't change are marked as
+// `const`.
+//
+struct RangeContext {
   STACK_ALLOCATED();
 
  public:
-  typedef void (*DestroyFunction)(T*);
-
-  HarfBuzzScopedPtr(T* ptr, DestroyFunction destroy)
-      : ptr_(ptr), destroy_(destroy) {
-    DCHECK(destroy_);
+  RangeContext(const Font* font,
+               TextDirection direction,
+               unsigned start,
+               unsigned end,
+               ShapeOptions options = ShapeOptions())
+      : font(font),
+        text_direction(direction),
+        start(start),
+        end(end),
+        buffer(hb_buffer_create()),
+        options(options) {
+    DCHECK_GE(end, start);
+    font_features.Initialize(font->GetFontDescription());
   }
-  HarfBuzzScopedPtr(const HarfBuzzScopedPtr&) = delete;
-  HarfBuzzScopedPtr& operator=(const HarfBuzzScopedPtr&) = delete;
-  ~HarfBuzzScopedPtr() {
-    if (ptr_)
-      (*destroy_)(ptr_);
-  }
 
-  T* Get() { return ptr_; }
-  void Set(T* ptr) { ptr_ = ptr; }
-
- private:
-  T* ptr_;
-  DestroyFunction destroy_;
-};
-
-struct RangeData {
-  STACK_ALLOCATED();
-
- public:
-  hb_buffer_t* buffer;
-  const Font* font;
-  TextDirection text_direction;
-  unsigned start;
-  unsigned end;
+  const Font* const font;
+  const TextDirection text_direction;
+  const unsigned start;
+  const unsigned end;
+  const hb::unique_ptr<hb_buffer_t> buffer;
   FontFeatures font_features;
   Deque<ReshapeQueueItem> reshape_queue;
+  const ShapeOptions options;
 
   hb_direction_t HarfBuzzDirection(CanvasRotationInVertical canvas_rotation) {
     FontOrientation orientation = font->GetFontDescription().Orientation();
@@ -259,6 +260,10 @@ static inline hb_script_t ICUScriptToHBScript(UScriptCode script) {
   return hb_script_from_string(uscript_getShortName(script), -1);
 }
 
+inline float HarfBuzzPositionToFloat(hb_position_t value) {
+  return static_cast<float>(value) / (1 << 16);
+}
+
 void RoundHarfBuzzPosition(hb_position_t* value) {
   if ((*value) & 0xFFFF) {
     // There is a non-zero fractional part in the 16.16 value.
@@ -282,8 +287,7 @@ void RoundHarfBuzzBufferPositions(hb_buffer_t* buffer) {
 }
 
 inline bool ShapeRange(hb_buffer_t* buffer,
-                       const hb_feature_t* font_features,
-                       unsigned font_features_size,
+                       const FontFeatures& font_features,
                        const SimpleFontData* current_font,
                        scoped_refptr<UnicodeRangeSet> current_font_range_set,
                        UScriptCode current_run_script,
@@ -297,6 +301,25 @@ inline bool ShapeRange(hb_buffer_t* buffer,
     return false;
   }
 
+  FontFeatures variant_features;
+  if (!platform_data->ResolvedFeatures().empty()) {
+    const ResolvedFontFeatures& resolved_features =
+        platform_data->ResolvedFeatures();
+    for (const std::pair<uint32_t, uint32_t>& feature : resolved_features) {
+      variant_features.Append({feature.first, feature.second, 0 /* start */,
+                               static_cast<unsigned>(-1) /* end */});
+    }
+  }
+
+  bool needs_feature_merge = variant_features.size();
+  if (needs_feature_merge) {
+    for (wtf_size_t i = 0; i < font_features.size(); ++i) {
+      variant_features.Append(font_features.data()[i]);
+    }
+  }
+  const FontFeatures& argument_features =
+      needs_feature_merge ? variant_features : font_features;
+
   hb_buffer_set_language(buffer, language);
   hb_buffer_set_script(buffer, ICUScriptToHBScript(current_run_script));
   hb_buffer_set_direction(buffer, direction);
@@ -307,14 +330,14 @@ inline bool ShapeRange(hb_buffer_t* buffer,
                               ? HarfBuzzFace::kPrepareForVerticalLayout
                               : HarfBuzzFace::kNoVerticalLayout,
                           specified_size);
-  hb_shape(hb_font, buffer, font_features, font_features_size);
+  hb_shape(hb_font, buffer, argument_features.data(), argument_features.size());
   if (!face->ShouldSubpixelPosition())
     RoundHarfBuzzBufferPositions(buffer);
 
   return true;
 }
 
-BufferSlice ComputeSlice(RangeData* range_data,
+BufferSlice ComputeSlice(RangeContext* range_data,
                          const ReshapeQueueItem& current_queue_item,
                          const hb_glyph_info_t* glyph_info,
                          unsigned num_glyphs,
@@ -359,7 +382,7 @@ BufferSlice ComputeSlice(RangeData* range_data,
   return result;
 }
 
-void QueueCharacters(RangeData* range_data,
+void QueueCharacters(RangeContext* range_data,
                      const SimpleFontData* current_font,
                      bool& font_cycle_queued,
                      const BufferSlice& slice) {
@@ -400,7 +423,7 @@ CanvasRotationInVertical CanvasRotationForRun(
 
 }  // namespace
 
-void HarfBuzzShaper::CommitGlyphs(RangeData* range_data,
+void HarfBuzzShaper::CommitGlyphs(RangeContext* range_data,
                                   const SimpleFontData* current_font,
                                   UScriptCode current_run_script,
                                   CanvasRotationInVertical canvas_rotation,
@@ -447,7 +470,7 @@ void HarfBuzzShaper::CommitGlyphs(RangeData* range_data,
 }
 
 void HarfBuzzShaper::ExtractShapeResults(
-    RangeData* range_data,
+    RangeContext* range_data,
     bool& font_cycle_queued,
     const ReshapeQueueItem& current_queue_item,
     const SimpleFontData* current_font,
@@ -666,17 +689,6 @@ void SplitUntilNextCaseChange(
   }
 }
 
-inline RangeData CreateRangeData(const Font* font,
-                                 TextDirection direction,
-                                 hb_buffer_t* buffer) {
-  RangeData range_data;
-  range_data.buffer = buffer;
-  range_data.font = font;
-  range_data.text_direction = direction;
-  range_data.font_features.Initialize(font->GetFontDescription());
-  return range_data;
-}
-
 class CapsFeatureSettingsScopedOverlay final {
   STACK_ALLOCATED();
 
@@ -743,15 +755,15 @@ CapsFeatureSettingsScopedOverlay::~CapsFeatureSettingsScopedOverlay() {
 }  // namespace
 
 void HarfBuzzShaper::ShapeSegment(
-    RangeData* range_data,
+    RangeContext* range_data,
     const RunSegmenter::RunSegmenterRange& segment,
     ShapeResult* result) const {
   DCHECK(result);
   DCHECK(range_data->buffer);
   const Font* font = range_data->font;
   const FontDescription& font_description = font->GetFontDescription();
-  const hb_language_t language =
-      font_description.LocaleOrDefault().HarfbuzzLanguage();
+  const LayoutLocale& locale = font_description.LocaleOrDefault();
+  const hb_language_t language = locale.HarfbuzzLanguage();
   bool needs_caps_handling =
       font_description.VariantCaps() != FontDescription::kCapsNormal;
   OpenTypeCapsSupport caps_support;
@@ -850,14 +862,17 @@ void HarfBuzzShaper::ShapeSegment(
         &range_data->font_features,
         caps_support.FontFeatureToUse(small_caps_behavior));
     hb_direction_t direction = range_data->HarfBuzzDirection(canvas_rotation);
+    HanKerning han_kerning(
+        text_, shape_start, shape_end, *adjusted_font, font_description,
+        {.is_horizontal = HB_DIRECTION_IS_HORIZONTAL(direction),
+         .apply_start = range_data->options.han_kerning_start &&
+                        range_data->start == shape_start},
+        &range_data->font_features);
 
-    if (!ShapeRange(range_data->buffer,
-                    range_data->font_features.IsEmpty()
-                        ? nullptr
-                        : range_data->font_features.data(),
-                    range_data->font_features.size(), adjusted_font,
-                    current_font_data_for_range_set->Ranges(), segment.script,
-                    direction, language, font_description.SpecifiedSize()))
+    if (!ShapeRange(range_data->buffer, range_data->font_features,
+                    adjusted_font, current_font_data_for_range_set->Ranges(),
+                    segment.script, direction, language,
+                    font_description.SpecifiedSize()))
       DLOG(ERROR) << "Shaping range failed.";
 
     ExtractShapeResults(range_data, font_cycle_queued, current_queue_item,
@@ -889,15 +904,10 @@ scoped_refptr<ShapeResult> HarfBuzzShaper::Shape(const Font* font,
   DCHECK_GE(end, start);
   DCHECK_LE(end, text_.length());
 
-  unsigned length = end - start;
+  const unsigned length = end - start;
   scoped_refptr<ShapeResult> result =
       ShapeResult::Create(font, start, length, direction);
-
-  HarfBuzzScopedPtr<hb_buffer_t> buffer(hb_buffer_create(), hb_buffer_destroy);
-  RangeData range_data = CreateRangeData(font, direction, buffer.Get());
-  range_data.start = start;
-  range_data.end = end;
-
+  RangeContext range_data(font, direction, start, end);
   if (text_.Is8Bit()) {
     // 8-bit text is guaranteed to horizontal latin-1.
     RunSegmenter::RunSegmenterRange segment_range = {
@@ -926,11 +936,9 @@ scoped_refptr<ShapeResult> HarfBuzzShaper::Shape(const Font* font,
     }
   }
 
-#if DCHECK_IS_ON()
-  if (result)
-    CheckShapeResultRange(result.get(), start, end, text_, font);
+#if EXPENSIVE_DCHECKS_ARE_ON()
+  CheckShapeResultRange(result.get(), start, end, text_, font);
 #endif
-
   return result;
 }
 
@@ -939,35 +947,28 @@ scoped_refptr<ShapeResult> HarfBuzzShaper::Shape(
     TextDirection direction,
     unsigned start,
     unsigned end,
-    const Vector<RunSegmenter::RunSegmenterRange>& ranges) const {
+    const Vector<RunSegmenter::RunSegmenterRange>& ranges,
+    ShapeOptions options) const {
   DCHECK_GE(end, start);
   DCHECK_LE(end, text_.length());
   DCHECK_GT(ranges.size(), 0u);
   DCHECK_EQ(start, ranges[0].start);
   DCHECK_EQ(end, ranges[ranges.size() - 1].end);
 
-  unsigned length = end - start;
+  const unsigned length = end - start;
   scoped_refptr<ShapeResult> result =
       ShapeResult::Create(font, start, length, direction);
-
-  HarfBuzzScopedPtr<hb_buffer_t> buffer(hb_buffer_create(), hb_buffer_destroy);
-  RangeData range_data = CreateRangeData(font, direction, buffer.Get());
-
+  RangeContext range_data(font, direction, start, end, options);
   for (const RunSegmenter::RunSegmenterRange& segmented_range : ranges) {
     DCHECK_GE(segmented_range.end, segmented_range.start);
     DCHECK_GE(segmented_range.start, start);
     DCHECK_LE(segmented_range.end, end);
-
-    range_data.start = segmented_range.start;
-    range_data.end = segmented_range.end;
     ShapeSegment(&range_data, segmented_range, result.get());
   }
 
-#if DCHECK_IS_ON()
-  if (result)
-    CheckShapeResultRange(result.get(), start, end, text_, font);
+#if EXPENSIVE_DCHECKS_ARE_ON()
+  CheckShapeResultRange(result.get(), start, end, text_, font);
 #endif
-
   return result;
 }
 
@@ -976,28 +977,22 @@ scoped_refptr<ShapeResult> HarfBuzzShaper::Shape(
     TextDirection direction,
     unsigned start,
     unsigned end,
-    const RunSegmenter::RunSegmenterRange pre_segmented) const {
+    const RunSegmenter::RunSegmenterRange pre_segmented,
+    ShapeOptions options) const {
   DCHECK_GE(end, start);
   DCHECK_LE(end, text_.length());
   DCHECK_GE(start, pre_segmented.start);
   DCHECK_LE(end, pre_segmented.end);
 
-  unsigned length = end - start;
+  const unsigned length = end - start;
   scoped_refptr<ShapeResult> result =
       ShapeResult::Create(font, start, length, direction);
-
-  HarfBuzzScopedPtr<hb_buffer_t> buffer(hb_buffer_create(), hb_buffer_destroy);
-  RangeData range_data = CreateRangeData(font, direction, buffer.Get());
-  range_data.start = start;
-  range_data.end = end;
-
+  RangeContext range_data(font, direction, start, end, options);
   ShapeSegment(&range_data, pre_segmented, result.get());
 
-#if DCHECK_IS_ON()
-  if (result)
-    CheckShapeResultRange(result.get(), start, end, text_, font);
+#if EXPENSIVE_DCHECKS_ARE_ON()
+  CheckShapeResultRange(result.get(), start, end, text_, font);
 #endif
-
   return result;
 }
 
@@ -1005,6 +1000,51 @@ scoped_refptr<ShapeResult> HarfBuzzShaper::Shape(
     const Font* font,
     TextDirection direction) const {
   return Shape(font, direction, 0, text_.length());
+}
+
+void HarfBuzzShaper::GetGlyphData(const SimpleFontData& font_data,
+                                  const LayoutLocale& locale,
+                                  UScriptCode script,
+                                  bool is_horizontal,
+                                  GlyphDataList& glyphs) {
+  hb::unique_ptr<hb_buffer_t> hb_buffer(hb_buffer_create());
+  hb_buffer_set_language(hb_buffer, locale.HarfbuzzLanguage());
+  hb_buffer_set_script(hb_buffer, ICUScriptToHBScript(script));
+  hb_buffer_set_direction(hb_buffer,
+                          is_horizontal ? HB_DIRECTION_LTR : HB_DIRECTION_TTB);
+  CHECK(!text_.Is8Bit());
+  static_assert(sizeof(uint16_t) == sizeof(UChar));
+  hb_buffer_add_utf16(hb_buffer,
+                      reinterpret_cast<const uint16_t*>(text_.Characters16()),
+                      text_.length(), 0, text_.length());
+
+  const FontPlatformData& platform_data = font_data.PlatformData();
+  HarfBuzzFace* const hb_face = platform_data.GetHarfBuzzFace();
+  DCHECK(hb_face);
+  hb_font_t* const hb_font = hb_face->GetScaledFont(
+      nullptr,
+      is_horizontal ? HarfBuzzFace::kNoVerticalLayout
+                    : HarfBuzzFace::kPrepareForVerticalLayout,
+      platform_data.size());
+  DCHECK(hb_font);
+  hb_shape(hb_font, hb_buffer, nullptr, 0);
+
+  // Create `GlyphDataList` from `hb_buffer`.
+  unsigned num_glyphs;
+  hb_glyph_info_t* glyph_info =
+      hb_buffer_get_glyph_infos(hb_buffer, &num_glyphs);
+  hb_glyph_position_t* glyph_position =
+      hb_buffer_get_glyph_positions(hb_buffer, nullptr);
+  glyphs.reserve(num_glyphs);
+  for (; num_glyphs; --num_glyphs, ++glyph_info, ++glyph_position) {
+    glyphs.push_back(GlyphData{
+        .cluster = glyph_info->cluster,
+        .glyph = static_cast<Glyph>(glyph_info->codepoint),
+        .advance = {HarfBuzzPositionToFloat(glyph_position->x_advance),
+                    -HarfBuzzPositionToFloat(glyph_position->y_advance)},
+        .offset = {HarfBuzzPositionToFloat(glyph_position->x_offset),
+                   -HarfBuzzPositionToFloat(glyph_position->y_offset)}});
+  }
 }
 
 }  // namespace blink

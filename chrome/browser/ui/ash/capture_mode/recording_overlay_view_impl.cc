@@ -6,8 +6,9 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
+#include "base/task/single_thread_task_runner.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/ash/projector/projector_client_impl.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
@@ -28,7 +29,7 @@ RecordingOverlayViewImpl::RecordingOverlayViewImpl(Profile* profile)
   // Loading the annotator app in `web_view_` can take a long time, so in order
   // to avoid stalling the initialization of recording, we will do this
   // asynchronously.
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&RecordingOverlayViewImpl::InitializeAnnotator,
                                 weak_ptr_factory_.GetWeakPtr()));
 }

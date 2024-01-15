@@ -6,9 +6,10 @@
 #include <tuple>
 
 #include "base/base64.h"
-#include "base/callback.h"
 #include "base/files/file_path_watcher.h"
 #include "base/files/file_util.h"
+#include "base/functional/callback.h"
+#include "base/i18n/time_formatting.h"
 #include "base/json/json_writer.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/synchronization/lock.h"
@@ -16,7 +17,6 @@
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/time/time.h"
-#include "base/time/time_to_iso8601.h"
 #include "base/values.h"
 #include "build/build_config.h"
 #include "chrome/browser/browser_process.h"
@@ -35,8 +35,8 @@
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/browsing_data_remover.h"
 #include "content/public/browser/network_service_instance.h"
+#include "content/public/browser/network_service_util.h"
 #include "content/public/browser/storage_partition.h"
-#include "content/public/common/network_service_util.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/browser_test_utils.h"
 #include "content/public/test/browsing_data_remover_test_util.h"
@@ -59,6 +59,7 @@
 #include "net/traffic_annotation/network_traffic_annotation.h"
 #include "net/traffic_annotation/network_traffic_annotation_test_helper.h"
 #include "services/network/public/cpp/features.h"
+#include "services/network/public/mojom/network_service.mojom.h"
 #include "services/network/public/proto/sct_audit_report.pb.h"
 #include "services/network/test/test_url_loader_factory.h"
 
@@ -129,8 +130,7 @@ class SCTReportingServiceBrowserTest : public CertVerifierBrowserTest {
     // Set sampling rate to 1.0 to ensure deterministic behavior.
     scoped_feature_list_.InitWithFeaturesAndParameters(
         {{features::kSCTAuditing,
-          {{features::kSCTAuditingSamplingRate.name, "1.0"}}},
-         {network::features::kSCTAuditingRetryReports, {}}},
+          {{features::kSCTAuditingSamplingRate.name, "1.0"}}}},
         {});
     SystemNetworkContextManager::SetEnableCertificateTransparencyForTesting(
         true);
@@ -223,7 +223,7 @@ class SCTReportingServiceBrowserTest : public CertVerifierBrowserTest {
     CertVerifierBrowserTest::SetUpOnMainThread();
 
     // Set up NetworkServiceTest once.
-    content::GetNetworkService()->BindTestInterface(
+    content::GetNetworkService()->BindTestInterfaceForTesting(
         network_service_test_.BindNewPipeAndPassReceiver());
 
     // Override the retry delay to 0 so that retries happen immediately.
@@ -356,42 +356,37 @@ class SCTReportingServiceBrowserTest : public CertVerifierBrowserTest {
     // 2022-01-01 00:00:00 GMT.
     base::Time server_time =
         base::Time::UnixEpoch() + base::Seconds(1640995200);
-    base::Value response(base::Value::Type::DICTIONARY);
-    response.SetStringKey("responseStatus", "OK");
-    response.SetStringKey("now", base::TimeToISO8601(server_time));
+    base::Value::Dict response;
+    response.Set("responseStatus", "OK");
+    response.Set("now", base::TimeFormatAsIso8601(server_time));
 
-    base::Value suffixes(base::Value::Type::LIST);
+    base::Value::List suffixes;
     for (const auto& suffix : suffix_list_) {
       suffixes.Append(
           base::Base64Encode(base::as_bytes(base::make_span(suffix))));
     }
-    response.SetKey("hashSuffix", std::move(suffixes));
+    response.Set("hashSuffix", std::move(suffixes));
 
-    base::Value log_list(base::Value::Type::LIST);
+    base::Value::List log_list;
     {
-      base::Value log_status(base::Value::Type::DICTIONARY);
-      log_status.SetStringKey("logId", base::Base64Encode(kTestGoogleLogId));
-      log_status.SetStringKey("ingestedUntil",
-                              base::TimeToISO8601(server_time));
+      base::Value::Dict log_status;
+      log_status.Set("logId", base::Base64Encode(kTestGoogleLogId));
+      log_status.Set("ingestedUntil", base::TimeFormatAsIso8601(server_time));
       log_list.Append(std::move(log_status));
     }
     {
-      base::Value log_status(base::Value::Type::DICTIONARY);
-      log_status.SetStringKey("logId",
-                              base::Base64Encode(kTestNonGoogleLogId1));
-      log_status.SetStringKey("ingestedUntil",
-                              base::TimeToISO8601(server_time));
+      base::Value::Dict log_status;
+      log_status.Set("logId", base::Base64Encode(kTestNonGoogleLogId1));
+      log_status.Set("ingestedUntil", base::TimeFormatAsIso8601(server_time));
       log_list.Append(std::move(log_status));
     }
     {
-      base::Value log_status(base::Value::Type::DICTIONARY);
-      log_status.SetStringKey("logId",
-                              base::Base64Encode(kTestNonGoogleLogId2));
-      log_status.SetStringKey("ingestedUntil",
-                              base::TimeToISO8601(server_time));
+      base::Value::Dict log_status;
+      log_status.Set("logId", base::Base64Encode(kTestNonGoogleLogId2));
+      log_status.Set("ingestedUntil", base::TimeFormatAsIso8601(server_time));
       log_list.Append(std::move(log_status));
     }
-    response.SetKey("logStatus", std::move(log_list));
+    response.Set("logStatus", std::move(log_list));
 
     std::string json;
     bool ok = base::JSONWriter::Write(response, &json);
@@ -549,7 +544,7 @@ IN_PROC_BROWSER_TEST_F(SCTReportingServiceBrowserTest,
   // so set back up a retry delay of zero to avoid test timeouts.
   {
     network_service_test().reset();
-    content::GetNetworkService()->BindTestInterface(
+    content::GetNetworkService()->BindTestInterfaceForTesting(
         network_service_test().BindNewPipeAndPassReceiver());
 
     mojo::ScopedAllowSyncCallForTesting allow_sync_call;
@@ -1082,21 +1077,7 @@ class ReportPersistenceWaiter {
   std::unique_ptr<base::FilePathWatcher> watcher2_;
 };
 
-// Subclass to force-enable kSCTAuditingPersistReports. Parent class will handle
-// enabling the other required features and setup.
-class SCTReportingServiceWithPersistenceBrowserTest
-    : public SCTReportingServiceBrowserTest {
- public:
-  SCTReportingServiceWithPersistenceBrowserTest() {
-    scoped_feature_list_.InitAndEnableFeature(
-        network::features::kSCTAuditingPersistReports);
-  }
-
- private:
-  base::test::ScopedFeatureList scoped_feature_list_;
-};
-
-IN_PROC_BROWSER_TEST_F(SCTReportingServiceWithPersistenceBrowserTest,
+IN_PROC_BROWSER_TEST_F(SCTReportingServiceBrowserTest,
                        PersistedReportClearedOnClearBrowsingHistory) {
   // Set a long retry delay so that retries don't occur immediately.
   {

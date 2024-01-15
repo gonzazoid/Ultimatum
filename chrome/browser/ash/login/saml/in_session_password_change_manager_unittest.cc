@@ -4,25 +4,22 @@
 
 #include "chrome/browser/ash/login/saml/in_session_password_change_manager.h"
 
-#include "ash/public/cpp/session/session_activation_observer.h"
-#include "ash/public/cpp/session/session_controller.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/task_environment.h"
-#include "build/build_config.h"
 #include "chrome/browser/ash/login/login_pref_names.h"
 #include "chrome/browser/ash/login/users/fake_chrome_user_manager.h"
 #include "chrome/browser/browser_process.h"
-#include "chrome/browser/notifications/notification_display_service_impl.h"
 #include "chrome/browser/notifications/notification_display_service_tester.h"
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/test/base/testing_browser_process.h"
 #include "chrome/test/base/testing_profile.h"
 #include "chrome/test/base/testing_profile_manager.h"
+#include "chromeos/ash/components/dbus/userdataauth/userdataauth_client.h"
 #include "chromeos/ash/components/login/auth/public/saml_password_attributes.h"
 #include "components/user_manager/scoped_user_manager.h"
 #include "components/user_manager/user_names.h"
 #include "content/public/test/browser_task_environment.h"
-#include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace ash {
@@ -34,7 +31,7 @@ constexpr base::TimeDelta kOneHour = base::Hours(1);
 constexpr base::TimeDelta kOneDay = base::Days(1);
 constexpr base::TimeDelta kAdvanceWarningTime = base::Days(14);
 constexpr base::TimeDelta kOneYear = base::Days(365);
-constexpr base::TimeDelta kTenYears = base::Days(10 * 365);
+constexpr base::TimeDelta kThreeYears = base::Days(3 * 365);
 
 inline std::u16string utf16(const char* ascii) {
   return base::ASCIIToUTF16(ascii);
@@ -44,6 +41,12 @@ inline std::u16string utf16(const char* ascii) {
 
 class InSessionPasswordChangeManagerTest : public testing::Test {
  public:
+  InSessionPasswordChangeManagerTest() { UserDataAuthClient::InitializeFake(); }
+
+  ~InSessionPasswordChangeManagerTest() override {
+    UserDataAuthClient::Shutdown();
+  }
+
   void SetUp() override {
     ASSERT_TRUE(profile_manager_.SetUp());
     profile_ = profile_manager_.CreateTestingProfile("test");
@@ -53,13 +56,9 @@ class InSessionPasswordChangeManagerTest : public testing::Test {
         prefs::kSamlPasswordExpirationAdvanceWarningDays,
         kAdvanceWarningTime.InDays());
 
-    std::unique_ptr<FakeChromeUserManager> fake_user_manager =
-        std::make_unique<FakeChromeUserManager>();
-    fake_user_manager->AddUser(user_manager::StubAccountId());
-    fake_user_manager->LoginUser(user_manager::StubAccountId());
-    ASSERT_TRUE(fake_user_manager->GetPrimaryUser());
-    scoped_user_manager_ = std::make_unique<user_manager::ScopedUserManager>(
-        std::move(fake_user_manager));
+    fake_user_manager_->AddUser(user_manager::StubAccountId());
+    fake_user_manager_->LoginUser(user_manager::StubAccountId());
+    ASSERT_TRUE(fake_user_manager_->GetPrimaryUser());
 
     display_service_tester_ =
         std::make_unique<NotificationDisplayServiceTester>(profile_);
@@ -77,7 +76,7 @@ class InSessionPasswordChangeManagerTest : public testing::Test {
   }
 
  protected:
-  absl::optional<Notification> Notification() {
+  std::optional<Notification> Notification() {
     return NotificationDisplayServiceTester::Get()->GetNotification(
         "saml.password-expiry-notification");
   }
@@ -96,10 +95,11 @@ class InSessionPasswordChangeManagerTest : public testing::Test {
   content::BrowserTaskEnvironment test_environment_{
       base::test::TaskEnvironment::MainThreadType::UI,
       base::test::TaskEnvironment::TimeSource::MOCK_TIME};
+  user_manager::TypedScopedUserManager<ash::FakeChromeUserManager>
+      fake_user_manager_{std::make_unique<ash::FakeChromeUserManager>()};
   TestingProfileManager profile_manager_{TestingBrowserProcess::GetGlobal()};
-  TestingProfile* profile_;
+  raw_ptr<TestingProfile> profile_;
 
-  std::unique_ptr<user_manager::ScopedUserManager> scoped_user_manager_;
   std::unique_ptr<NotificationDisplayServiceTester> display_service_tester_;
   std::unique_ptr<InSessionPasswordChangeManager> manager_;
 };
@@ -118,8 +118,8 @@ TEST_F(InSessionPasswordChangeManagerTest, MaybeShow_WillNotExpire) {
   manager_->MaybeShowExpiryNotification();
 
   EXPECT_FALSE(Notification().has_value());
-  // No notification shown now and nothing shown in the next 10 years.
-  test_environment_.FastForwardBy(kTenYears);
+  // No notification shown now and nothing shown in the next 3 years.
+  test_environment_.FastForwardBy(kThreeYears);
   EXPECT_FALSE(Notification().has_value());
 }
 
@@ -163,17 +163,11 @@ TEST_F(InSessionPasswordChangeManagerTest, MaybeShow_DeleteExpirationTime) {
 
   // Since expiration time is now removed, it is not shown later either.
   SamlPasswordAttributes::DeleteFromPrefs(profile_->GetPrefs());
-  test_environment_.FastForwardBy(kTenYears);
+  test_environment_.FastForwardBy(kThreeYears);
   EXPECT_FALSE(Notification().has_value());
 }
 
-// TODO(crbug.com/1358349): re-enable thie test. Flakily times out on Linux.
-#if BUILDFLAG(IS_LINUX)
-#define MAYBE_MaybeShow_PasswordChanged DISABLED_MaybeShow_PasswordChanged
-#else
-#define MAYBE_MaybeShow_PasswordChanged MaybeShow_PasswordChanged
-#endif
-TEST_F(InSessionPasswordChangeManagerTest, MAYBE_MaybeShow_PasswordChanged) {
+TEST_F(InSessionPasswordChangeManagerTest, MaybeShow_PasswordChanged) {
   SetExpirationTime(base::Time::Now() + (kAdvanceWarningTime / 2) - kOneHour);
   manager_->MaybeShowExpiryNotification();
 
@@ -186,7 +180,7 @@ TEST_F(InSessionPasswordChangeManagerTest, MAYBE_MaybeShow_PasswordChanged) {
   manager_->DismissExpiryNotification();
 
   // From now on, notification will not be reshown.
-  test_environment_.FastForwardBy(kTenYears);
+  test_environment_.FastForwardBy(kThreeYears);
   EXPECT_FALSE(Notification().has_value());
 }
 
@@ -243,8 +237,7 @@ TEST_F(InSessionPasswordChangeManagerTest, TimePasses_NoUserActionTaken) {
   EXPECT_EQ(utf16("Choose a new one now"), Notification()->message());
 }
 
-TEST_F(InSessionPasswordChangeManagerTest,
-       DISABLED_TimePasses_NotificationDismissed) {
+TEST_F(InSessionPasswordChangeManagerTest, TimePasses_NotificationDismissed) {
   SetExpirationTime(base::Time::Now() + kOneYear + kAdvanceWarningTime / 2);
   manager_->MaybeShowExpiryNotification();
 
@@ -261,7 +254,7 @@ TEST_F(InSessionPasswordChangeManagerTest,
   ExpectNotificationAndDismiss();
 
   // This continues each day even once the password has long expired.
-  test_environment_.FastForwardBy(kTenYears);
+  test_environment_.FastForwardBy(kThreeYears);
   ExpectNotificationAndDismiss();
   test_environment_.FastForwardBy(kOneDay);
   ExpectNotificationAndDismiss();

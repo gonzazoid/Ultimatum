@@ -55,18 +55,18 @@ class ShippingAddressEditorViewController : public EditorViewController {
   // EditorViewController:
   bool IsEditingExistingItem() override;
   std::vector<EditorField> GetFieldDefinitions() override;
-  std::u16string GetInitialValueForType(
-      autofill::ServerFieldType type) override;
+  std::u16string GetInitialValueForType(autofill::FieldType type) override;
   bool ValidateModelAndSave() override;
   std::unique_ptr<ValidationDelegate> CreateValidationDelegate(
       const EditorField& field) override;
   std::unique_ptr<ui::ComboboxModel> GetComboboxModelForType(
-      const autofill::ServerFieldType& type) override;
+      const autofill::FieldType& type) override;
   void OnPerformAction(ValidatingCombobox* combobox) override;
   void UpdateEditorView() override;
 
   // PaymentRequestSheetController:
   std::u16string GetSheetTitle() override;
+  base::WeakPtr<PaymentRequestSheetController> GetWeakPtr() override;
 
  protected:
   int GetPrimaryButtonId() override;
@@ -76,7 +76,7 @@ class ShippingAddressEditorViewController : public EditorViewController {
   class ShippingAddressValidationDelegate : public ValidationDelegate {
    public:
     ShippingAddressValidationDelegate(
-        ShippingAddressEditorViewController* parent,
+        base::WeakPtr<ShippingAddressEditorViewController> controller,
         const EditorField& field);
 
     ShippingAddressValidationDelegate(
@@ -104,12 +104,12 @@ class ShippingAddressEditorViewController : public EditorViewController {
 
     EditorField field_;
 
-    // Raw pointer back to the owner of this class, therefore will not be null.
-    raw_ptr<ShippingAddressEditorViewController> controller_;
+    // Pointer back to the owner of this class, therefore will not be null.
+    base::WeakPtr<ShippingAddressEditorViewController> controller_;
   };
 
   std::u16string GetValueForType(const autofill::AutofillProfile& profile,
-                                 autofill::ServerFieldType type);
+                                 autofill::FieldType type);
 
   bool GetSheetId(DialogViewID* sheet_id) override;
 
@@ -145,7 +145,8 @@ class ShippingAddressEditorViewController : public EditorViewController {
 
   // A temporary profile to keep unsaved data in between relayout (e.g., when
   // the country is changed and fields set may be different).
-  autofill::AutofillProfile temporary_profile_;
+  autofill::AutofillProfile temporary_profile_{
+      autofill::i18n_model_definition::kLegacyHierarchyCountryCode};
 
   // List of fields, reset everytime the current country changes.
   std::vector<EditorField> editor_fields_;
@@ -171,8 +172,9 @@ class ShippingAddressEditorViewController : public EditorViewController {
   bool failed_to_load_region_data_;
 
   // Owned by the state combobox, which is owned by this object's base class.
-  raw_ptr<autofill::RegionComboboxModel> region_model_;
+  raw_ptr<autofill::RegionComboboxModel, DanglingUntriaged> region_model_;
 
+  // Must be the last member of a leaf class.
   base::WeakPtrFactory<ShippingAddressEditorViewController> weak_ptr_factory_{
       this};
 };

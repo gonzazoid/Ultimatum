@@ -7,6 +7,7 @@
 #include <wayland-server-core.h>
 
 #include <cstdint>
+#include <memory>
 
 #include "base/memory/raw_ptr.h"
 #include "base/notreached.h"
@@ -66,8 +67,6 @@ struct WlDataDeviceImpl : public TestSelectionDevice::Delegate {
                                   selection_offer->resource());
   }
 
-  void OnDestroying() override { delete this; }
-
  private:
   const raw_ptr<TestDataDevice> device_;
 };
@@ -80,7 +79,7 @@ const struct wl_data_device_interface kTestDataDeviceImpl = {
 
 TestDataDevice::TestDataDevice(wl_resource* resource,
                                TestDataDeviceManager* manager)
-    : TestSelectionDevice(resource, new WlDataDeviceImpl(this)),
+    : TestSelectionDevice(resource, std::make_unique<WlDataDeviceImpl>(this)),
       manager_(manager) {}
 
 TestDataDevice::~TestDataDevice() = default;
@@ -102,11 +101,27 @@ void TestDataDevice::StartDrag(TestDataSource* source,
   DCHECK(origin);
 
   CHECK(manager_);
+  drag_serial_ = serial;
   manager_->set_data_source(source);
+  SendOfferAndEnter(origin, {});
+  wl_client_flush(wl_resource_get_client(resource()));
+}
 
-  if (drag_delegate_)
-    drag_delegate_->StartDrag(source, origin, serial);
-  TestWaylandServerThread::FlushClientForResource(resource());
+void TestDataDevice::SendOfferAndEnter(MockSurface* origin,
+                                       const gfx::Point& location) {
+  DCHECK(manager_->data_source());
+  auto* data_offer = OnDataOffer();
+  DCHECK(data_offer);
+  for (const auto& mime_type : manager_->data_source()->mime_types())
+    data_offer->OnOffer(mime_type, {});
+
+  auto* client = wl_resource_get_client(resource());
+  auto* display = wl_client_get_display(client);
+  DCHECK(display);
+  wl_data_device_send_enter(resource(), wl_display_get_serial(display),
+                            origin->resource(), wl_fixed_from_int(location.x()),
+                            wl_fixed_from_int(location.y()),
+                            data_offer->resource());
 }
 
 void TestDataDevice::OnEnter(uint32_t serial,

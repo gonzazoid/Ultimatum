@@ -5,8 +5,8 @@
 #ifndef COMPONENTS_PERFORMANCE_MANAGER_PUBLIC_GRAPH_GRAPH_OPERATIONS_H_
 #define COMPONENTS_PERFORMANCE_MANAGER_PUBLIC_GRAPH_GRAPH_OPERATIONS_H_
 
-#include "base/callback_forward.h"
 #include "base/containers/flat_set.h"
+#include "base/functional/function_ref.h"
 
 namespace performance_manager {
 
@@ -17,7 +17,7 @@ class ProcessNode;
 // A collection of utilities for performing common queries and traversals on a
 // graph.
 struct GraphOperations {
-  using FrameNodeVisitor = base::RepeatingCallback<bool(const FrameNode*)>;
+  using FrameNodeVisitor = base::FunctionRef<bool(const FrameNode*)>;
 
   // Returns the collection of page nodes that are associated with the given
   // |process|. A page is associated with a process if the page's frame tree
@@ -36,14 +36,14 @@ struct GraphOperations {
   // children next (level 1), all the way down to the deepest leaf frames.
   static std::vector<const FrameNode*> GetFrameNodes(const PageNode* page);
 
-  // Traverse the frame tree of a |page| in the given order, invoking the
-  // provided |callable| for each frame node in the tree. If the visitor returns
+  // Traverse the frame tree of a `page` in the given order, invoking the
+  // provided `visitor` for each frame node in the tree. If the visitor returns
   // false then then the iteration is halted. Returns true if all calls to the
   // visitor returned true, false otherwise.
   static bool VisitFrameTreePreOrder(const PageNode* page,
-                                     const FrameNodeVisitor& visitor);
+                                     FrameNodeVisitor visitor);
   static bool VisitFrameTreePostOrder(const PageNode* page,
-                                      const FrameNodeVisitor& visitor);
+                                      FrameNodeVisitor visitor);
 
   // Returns true if the given |frame| is in the frame tree associated with the
   // given |page|.

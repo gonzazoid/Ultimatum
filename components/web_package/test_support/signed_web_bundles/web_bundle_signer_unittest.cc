@@ -32,7 +32,7 @@ constexpr uint8_t kTestPrivateKey[] = {
 
 std::string GetTestFileContents(const base::FilePath& path) {
   base::FilePath test_data_dir;
-  base::PathService::Get(base::DIR_SOURCE_ROOT, &test_data_dir);
+  base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &test_data_dir);
   test_data_dir = test_data_dir.Append(
       base::FilePath(FILE_PATH_LITERAL("components/test/data/web_package")));
 
@@ -45,8 +45,6 @@ std::vector<uint8_t> GetStringAsBytes(base::StringPiece contents) {
   auto bytes = base::as_bytes(base::make_span(contents));
   return std::vector<uint8_t>(bytes.begin(), bytes.end());
 }
-
-}  // namespace
 
 TEST(WebBundleSignerTest, SignedWebBundleByteByByteComparison) {
   WebBundleBuilder builder;
@@ -64,7 +62,9 @@ TEST(WebBundleSignerTest, SignedWebBundleByteByByteComparison) {
       {WebBundleSigner::KeyPair(kTestPublicKey, kTestPrivateKey)});
 
   std::vector<uint8_t> expected_bundle = GetStringAsBytes(GetTestFileContents(
-      base::FilePath(FILE_PATH_LITERAL("simple_b2_signed.wbn"))));
+      base::FilePath(FILE_PATH_LITERAL("simple_b2_signed.swbn"))));
   EXPECT_EQ(signed_bundle, expected_bundle);
 }
+
+}  // namespace
 }  // namespace web_package

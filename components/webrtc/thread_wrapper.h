@@ -11,9 +11,10 @@
 #include <map>
 #include <memory>
 
-#include "base/callback_forward.h"
+#include "base/auto_reset.h"
 #include "base/compiler_specific.h"
 #include "base/feature_list.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/weak_ptr.h"
 #include "base/synchronization/lock.h"
 #include "base/synchronization/waitable_event.h"
@@ -22,6 +23,7 @@
 #include "base/time/time.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/webrtc/rtc_base/thread.h"
+#include "third_party/webrtc_overrides/api/location.h"
 #include "third_party/webrtc_overrides/coalesced_tasks.h"
 
 namespace webrtc {
@@ -53,7 +55,7 @@ class ThreadWrapper : public base::CurrentThread::DestructionObserver,
   // Creates ThreadWrapper for |task_runner| that runs tasks on the
   // current thread.
   static std::unique_ptr<ThreadWrapper> WrapTaskRunner(
-      scoped_refptr<base::SingleThreadTaskRunner> task_runner);
+      ::scoped_refptr<base::SingleThreadTaskRunner> task_runner);
 
   // Returns thread wrapper for the current thread or nullptr if it doesn't
   // exist.
@@ -91,15 +93,6 @@ class ThreadWrapper : public base::CurrentThread::DestructionObserver,
   // CurrentThread::DestructionObserver implementation.
   void WillDestroyCurrentMessageLoop() override;
 
-  // TaskQueueBase overrides.
-  void PostTask(absl::AnyInvocable<void() &&> task) override;
-  void PostDelayedTask(absl::AnyInvocable<void() &&> task,
-                       webrtc::TimeDelta delay) override;
-  void PostDelayedHighPrecisionTask(absl::AnyInvocable<void() &&> task,
-                                    webrtc::TimeDelta delay) override;
-
-  void BlockingCall(rtc::FunctionView<void()> functor) override;
-
   // Following methods are not supported. They are overriden just to
   // ensure that they are not called (each of them contain NOTREACHED
   // in the body). Some of this methods can be implemented if it
@@ -118,7 +111,19 @@ class ThreadWrapper : public base::CurrentThread::DestructionObserver,
   class PostTaskLatencySampler;
 
   explicit ThreadWrapper(
-      scoped_refptr<base::SingleThreadTaskRunner> task_runner);
+      ::scoped_refptr<base::SingleThreadTaskRunner> task_runner);
+
+  // rtc::Thread overrides.
+  void BlockingCallImpl(rtc::FunctionView<void()> functor,
+                        const webrtc::Location& location) override;
+  // TaskQueueBase overrides.
+  void PostTaskImpl(absl::AnyInvocable<void() &&> task,
+                    const PostTaskTraits& traits,
+                    const Location& location) override;
+  void PostDelayedTaskImpl(absl::AnyInvocable<void() &&> task,
+                           TimeDelta delay,
+                           const PostDelayedTaskTraits& traits,
+                           const Location& location) override;
 
   void ProcessPendingSends();
 
@@ -134,8 +139,10 @@ class ThreadWrapper : public base::CurrentThread::DestructionObserver,
   // |task_start_timestamp|.
   void FinalizeRunTask(absl::optional<base::TimeTicks> task_start_timestamp);
 
+  const base::AutoReset<ThreadWrapper*> resetter_;
+
   // Task runner used to execute messages posted on this thread.
-  scoped_refptr<base::SingleThreadTaskRunner> task_runner_;
+  ::scoped_refptr<base::SingleThreadTaskRunner> task_runner_;
 
   bool send_allowed_;
 

@@ -7,12 +7,17 @@
 
 #include <memory>
 
-#include "components/signin/ios/browser/wait_for_network_callback_helper.h"
 #include "components/signin/public/base/signin_client.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
 
+class WaitForNetworkCallbackHelperIOS;
+
 namespace ios_web_view {
 class WebViewBrowserState;
+}
+
+namespace version_info {
+enum class Channel;
 }
 
 // iOS WebView specific signin client.
@@ -42,15 +47,22 @@ class IOSWebViewSigninClient : public SigninClient {
       content_settings::Observer* observer) override;
   void PreSignOut(
       base::OnceCallback<void(SignoutDecision)> on_signout_decision_reached,
-      signin_metrics::ProfileSignout signout_source_metric) override;
+      signin_metrics::ProfileSignout signout_source_metric,
+      bool has_sync_account) override;
+  bool AreNetworkCallsDelayed() override;
   void DelayNetworkCall(base::OnceClosure callback) override;
   std::unique_ptr<GaiaAuthFetcher> CreateGaiaAuthFetcher(
       GaiaAuthConsumer* consumer,
       gaia::GaiaSource source) override;
+  version_info::Channel GetClientChannel() override;
+  void OnPrimaryAccountChangedWithEventSource(
+      signin::PrimaryAccountChangeEvent event_details,
+      absl::variant<signin_metrics::AccessPoint, signin_metrics::ProfileSignout>
+          event_source) override;
 
  private:
   // Helper to delay callbacks until connection becomes online again.
-  std::unique_ptr<WaitForNetworkCallbackHelper> network_callback_helper_;
+  std::unique_ptr<WaitForNetworkCallbackHelperIOS> network_callback_helper_;
   // The PrefService associated with this service.
   PrefService* pref_service_;
   // The browser_state_ associated with this service.

@@ -7,9 +7,8 @@
 
 #include <memory>
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
-#include "build/build_config.h"
 #include "components/viz/service/display_embedder/skia_output_surface_dependency.h"
 
 namespace base {
@@ -41,32 +40,27 @@ class VIZ_SERVICE_EXPORT SkiaOutputSurfaceDependencyImpl
   scoped_refptr<gpu::SharedContextState> GetSharedContextState() override;
   gpu::raster::GrShaderCache* GetGrShaderCache() override;
   VulkanContextProvider* GetVulkanContextProvider() override;
-  DawnContextProvider* GetDawnContextProvider() override;
+  gpu::DawnContextProvider* GetDawnContextProvider() override;
   const gpu::GpuPreferences& GetGpuPreferences() const override;
   const gpu::GpuFeatureInfo& GetGpuFeatureInfo() override;
   gpu::MailboxManager* GetMailboxManager() override;
-  gpu::ImageFactory* GetGpuImageFactory() override;
   bool IsOffscreen() override;
   gpu::SurfaceHandle GetSurfaceHandle() override;
   scoped_refptr<gl::GLSurface> CreateGLSurface(
       base::WeakPtr<gpu::ImageTransportSurfaceDelegate> stub,
       gl::GLSurfaceFormat format) override;
+  scoped_refptr<gl::Presenter> CreatePresenter(
+      base::WeakPtr<gpu::ImageTransportSurfaceDelegate> stub) override;
+  base::ScopedClosureRunner CachePresenter(gl::Presenter* presenter) override;
   base::ScopedClosureRunner CacheGLSurface(gl::GLSurface* surface) override;
   scoped_refptr<base::TaskRunner> GetClientTaskRunner() override;
   void ScheduleGrContextCleanup() override;
   void ScheduleDelayedGPUTaskFromGPUThread(base::OnceClosure task) override;
-
-#if BUILDFLAG(IS_WIN)
-  void DidCreateAcceleratedSurfaceChildWindow(
-      gpu::SurfaceHandle parent_window,
-      gpu::SurfaceHandle child_window) override;
-#endif
-
   void DidLoseContext(gpu::error::ContextLostReason reason,
                       const GURL& active_url) override;
 
-  base::TimeDelta GetGpuBlockedTimeSinceLastSwap() override;
   bool NeedsSupportForExternalStencil() override;
+  bool IsUsingCompositorGpuThread() override;
 
  private:
   const raw_ptr<GpuServiceImpl> gpu_service_impl_;

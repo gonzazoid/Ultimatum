@@ -5,6 +5,7 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_MODULES_PRESENTATION_PRESENTATION_CONNECTION_H_
 #define THIRD_PARTY_BLINK_RENDERER_MODULES_PRESENTATION_PRESENTATION_CONNECTION_H_
 
+#include "base/task/single_thread_task_runner.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "third_party/blink/public/mojom/presentation/presentation.mojom-blink.h"
@@ -34,7 +35,7 @@ class ScriptPromiseResolver;
 class WebString;
 
 class MODULES_EXPORT PresentationConnection
-    : public EventTargetWithInlineData,
+    : public EventTarget,
       public ExecutionContextLifecycleStateObserver,
       public mojom::blink::PresentationConnection {
   DEFINE_WRAPPERTYPEINFO();

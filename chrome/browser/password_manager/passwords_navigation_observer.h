@@ -8,9 +8,8 @@
 #include <string>
 
 #include "base/run_loop.h"
-#include "content/public/browser/navigation_handle.h"
-#include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/web_contents_observer.h"
+#include "content/public/test/browser_test_utils.h"
 
 class PasswordsNavigationObserver : public content::WebContentsObserver {
  public:
@@ -33,11 +32,9 @@ class PasswordsNavigationObserver : public content::WebContentsObserver {
     quit_on_entry_committed_ = quit_on_entry_committed;
   }
 
-  // Wait for navigation to succeed.
-  void Wait();
-
-  // Returns the RenderFrameHost that navigated.
-  content::RenderFrameHost* render_frame_host() { return render_frame_host_; }
+  // Wait for navigation. Returns true on success, false otherwise (e.g. on
+  // timeout).
+  [[nodiscard]] bool Wait();
 
   // content::WebContentsObserver:
   void DidFinishNavigation(
@@ -47,9 +44,8 @@ class PasswordsNavigationObserver : public content::WebContentsObserver {
 
  private:
   std::string wait_for_path_;
-  raw_ptr<content::RenderFrameHost, DanglingUntriaged> render_frame_host_;
   bool quit_on_entry_committed_ = false;
-  base::RunLoop run_loop_;
+  content::WaiterHelper waiter_helper_;
 };
 
 #endif  // CHROME_BROWSER_PASSWORD_MANAGER_PASSWORDS_NAVIGATION_OBSERVER_H_

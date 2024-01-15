@@ -72,6 +72,10 @@ class NATIVE_THEME_EXPORT NativeThemeBase : public NativeTheme {
     kScrollbarArrow,
     kScrollbarArrowHovered,
     kScrollbarArrowPressed,
+    // TODO(1374503): kScrollbarCorner overlaps with
+    // NativeTheme::Part::kScrollbarCorner. Make ControlColorId a enum class
+    // or remove the class completely in favor of ColorProvider colors.
+    kScrollbarCornerControlColorId,
     kScrollbarTrack,
     kScrollbarThumb,
     kScrollbarThumbHovered,
@@ -91,7 +95,8 @@ class NATIVE_THEME_EXPORT NativeThemeBase : public NativeTheme {
   NativeThemeBase();
   explicit NativeThemeBase(
       bool should_only_use_dark_colors,
-      ui::SystemTheme system_theme = ui::SystemTheme::kDefault);
+      ui::SystemTheme system_theme = ui::SystemTheme::kDefault,
+      NativeTheme* theme_to_update = nullptr);
   ~NativeThemeBase() override;
 
   // Draw the arrow. Used by scrollbar and inner spin button.
@@ -119,14 +124,16 @@ class NATIVE_THEME_EXPORT NativeThemeBase : public NativeTheme {
       Part part,
       State state,
       const gfx::Rect& rect,
-      NativeTheme::ScrollbarOverlayColorTheme theme,
+      const ScrollbarThumbExtraParams& extra_params,
       ColorScheme color_scheme) const;
 
-  virtual void PaintScrollbarCorner(cc::PaintCanvas* canvas,
-                                    const ColorProvider* color_provider,
-                                    State state,
-                                    const gfx::Rect& rect,
-                                    ColorScheme color_scheme) const;
+  virtual void PaintScrollbarCorner(
+      cc::PaintCanvas* canvas,
+      const ColorProvider* color_provider,
+      State state,
+      const gfx::Rect& rect,
+      const ScrollbarTrackExtraParams& extra_params,
+      ColorScheme color_scheme) const;
 
   void PaintCheckbox(cc::PaintCanvas* canvas,
                      const ColorProvider* color_provider,
@@ -325,8 +332,6 @@ class NATIVE_THEME_EXPORT NativeThemeBase : public NativeTheme {
       State state,
       ColorScheme color_scheme,
       const ColorProvider* color_provider) const;
-  SkColor GetHighContrastControlColor(ControlColorId color_id,
-                                      ColorScheme color_scheme) const;
   SkColor GetDarkModeControlColor(ControlColorId color_id) const;
 
   SkColor GetControlColorFromColorProvider(

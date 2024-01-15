@@ -4,7 +4,7 @@
 
 #include "chrome/browser/ui/toolbar/media_router_action_controller.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/observer_list.h"
 #include "base/ranges/algorithm.h"
 #include "chrome/browser/media/router/media_router_feature.h"
@@ -167,10 +167,6 @@ MediaRouterActionController::MediaRouterActionController(
       prefs::kShowCastIconInToolbar,
       base::BindRepeating(&MediaRouterActionController::MaybeAddOrRemoveAction,
                           base::Unretained(this)));
-  if (!profile_->IsOffTheRecord()) {
-    media_router::MediaRouterMetrics::RecordIconStateAtInit(
-        MediaRouterActionController::GetAlwaysShowActionPref(profile_));
-  }
 }
 
 void MediaRouterActionController::MaybeAddOrRemoveAction() {

@@ -63,8 +63,8 @@
 #include <unordered_set>
 
 #include "base/android/build_info.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/task/task_traits.h"
@@ -218,8 +218,8 @@ NetworkChangeNotifierAndroid::NetworkChangeNotifierAndroid(
     : NetworkChangeNotifier(NetworkChangeCalculatorParamsAndroid()),
       delegate_(delegate),
       blocking_thread_objects_(nullptr, base::OnTaskRunnerDeleter(nullptr)) {
-  CHECK_EQ(NetId::INVALID, handles::kInvalidNetworkHandle)
-      << "handles::kInvalidNetworkHandle doesn't match NetId::INVALID";
+  static_assert(NetId::INVALID == handles::kInvalidNetworkHandle,
+                "handles::kInvalidNetworkHandle doesn't match NetId::INVALID");
   delegate_->RegisterObserver(this);
   // Since Android P, ConnectivityManager's signals include VPNs so we don't
   // need to use AddressTrackerLinux.

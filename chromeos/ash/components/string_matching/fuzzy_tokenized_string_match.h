@@ -5,6 +5,8 @@
 #ifndef CHROMEOS_ASH_COMPONENTS_STRING_MATCHING_FUZZY_TOKENIZED_STRING_MATCH_H_
 #define CHROMEOS_ASH_COMPONENTS_STRING_MATCHING_FUZZY_TOKENIZED_STRING_MATCH_H_
 
+#include <vector>
+
 #include "chromeos/ash/components/string_matching/tokenized_string.h"
 #include "ui/gfx/range/range.h"
 
@@ -66,19 +68,20 @@ class FuzzyTokenizedStringMatch {
   // The return score is in range of [0, 1].
   static double WeightedRatio(const TokenizedString& query,
                               const TokenizedString& text);
-  // TODO(crbug.com/1336160): Should prefix match always be favored over other
-  // matches? Reconsider this principle.
-  //
-  // Since prefix match should always be favored over other matches, this
-  // function is dedicated to calculate a prefix match score in range of [0, 1]
-  // using PrefixMatcher class.
-  // This score has two components: first character match (aka acronym match)
-  // and whole prefix match.
+
+  // This function is dedicated to calculate a prefix match score in range of
+  // [0, 1] using PrefixMatcher class.
   static double PrefixMatcher(const TokenizedString& query,
-                              const TokenizedString& text,
-                              bool use_acronym_matcher = false);
+                              const TokenizedString& text);
+
+  // This function is dedicated to calculate a first character match (aka
+  // acronym match) score in range of [0, 1] using AcronymMatcher class.
+  static double AcronymMatcher(const TokenizedString& query,
+                               const TokenizedString& text);
 
   // Calculates and returns the relevance score of |query| relative to |text|.
+  // The relevance score is in range of [0,1], representing how well the query
+  // matches the text.
   double Relevance(const TokenizedString& query,
                    const TokenizedString& text,
                    bool use_weighted_ratio,
@@ -87,8 +90,18 @@ class FuzzyTokenizedStringMatch {
   const Hits& hits() const { return hits_; }
 
  private:
-  // Score in range of [0,1] representing how well the query matches the text.
-  double relevance_ = 0;
+  // This function is dedicated to calculate a prefix match score in range of
+  // [0, 1] and its hits information using PrefixMatcher class.
+  static double PrefixMatcher(const TokenizedString& query,
+                              const TokenizedString& text,
+                              std::vector<Hits>& hits_vector);
+  // This function is dedicated to calculate a first character match (aka
+  // acronym match) score in range of [0, 1] and its hits information using
+  // AcronymMatcher class.
+  static double AcronymMatcher(const TokenizedString& query,
+                               const TokenizedString& text,
+                               std::vector<Hits>& hits_vector);
+
   Hits hits_;
 };
 

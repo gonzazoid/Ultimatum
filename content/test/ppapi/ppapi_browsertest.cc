@@ -67,7 +67,13 @@ TEST_PPAPI_OUT_OF_PROCESS(Graphics2D)
 TEST_PPAPI_IN_PROCESS(ImageData)
 TEST_PPAPI_OUT_OF_PROCESS(ImageData)
 
-TEST_PPAPI_OUT_OF_PROCESS(InputEvent)
+// Fails on macOS; https://crbug.com/14531024
+#if BUILDFLAG(IS_MAC)
+#define MAYBE_InputEvent DISABLED_InputEvent
+#else
+#define MAYBE_InputEvent InputEvent
+#endif
+TEST_PPAPI_OUT_OF_PROCESS(MAYBE_InputEvent)
 
 // "Instance" tests are really InstancePrivate tests. InstancePrivate is not
 // supported in NaCl, so these tests are only run trusted.
@@ -82,7 +88,7 @@ IN_PROC_BROWSER_TEST_F(PPAPITest,
   // In other tests, we use one call to RunTest so that the tests can all run
   // in one plugin instance. This saves time on loading the plugin (especially
   // for NaCl). Here, we actually want to destroy the Instance, to test whether
-  // the destructor can run ExecuteScript successfully. That's why we have two
+  // the destructor can run ExecJs successfully. That's why we have two
   // separate calls to RunTest; the second one forces a navigation which
   // destroys the instance from the prior RunTest.
   // See test_instance_deprecated.cc for more information.

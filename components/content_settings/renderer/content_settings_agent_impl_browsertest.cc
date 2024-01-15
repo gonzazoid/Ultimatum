@@ -4,9 +4,11 @@
 
 #include <stddef.h>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
+#include "base/test/scoped_feature_list.h"
 #include "base/values.h"
 #include "components/content_settings/core/common/content_settings.h"
 #include "components/content_settings/core/common/content_settings_utils.h"
@@ -18,6 +20,10 @@
 #include "net/cookies/site_for_cookies.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/common/associated_interfaces/associated_interface_registry.h"
+#include "third_party/blink/public/common/browser_interface_broker_proxy.h"
+#include "third_party/blink/public/common/features.h"
+#include "third_party/blink/public/common/navigation/navigation_params.h"
+#include "third_party/blink/public/mojom/loader/code_cache.mojom.h"
 #include "third_party/blink/public/platform/web_url.h"
 #include "third_party/blink/public/test/test_web_frame_content_dumper.h"
 #include "third_party/blink/public/web/web_view.h"
@@ -64,7 +70,7 @@ class MockContentSettingsManagerImpl : public mojom::ContentSettingsManager {
       mojo::PendingReceiver<mojom::ContentSettingsManager> receiver) override {
     ADD_FAILURE() << "Not reached";
   }
-  void AllowStorageAccess(int32_t render_frame_id,
+  void AllowStorageAccess(const blink::LocalFrameToken& frame_token,
                           StorageType storage_type,
                           const url::Origin& origin,
                           const net::SiteForCookies& site_for_cookies,
@@ -73,14 +79,14 @@ class MockContentSettingsManagerImpl : public mojom::ContentSettingsManager {
     ++log_->allow_storage_access_count;
     std::move(callback).Run(true);
   }
-  void OnContentBlocked(int32_t render_frame_id,
+  void OnContentBlocked(const blink::LocalFrameToken& frame_token,
                         ContentSettingsType type) override {
     ++log_->on_content_blocked_count;
     log_->on_content_blocked_type = type;
   }
 
  private:
-  Log* log_;
+  raw_ptr<Log, ExperimentalRenderer> log_;
 };
 
 class MockContentSettingsAgentDelegate
@@ -170,23 +176,106 @@ class CommitTimeConditionChecker : public content::RenderFrameObserver {
 
 }  // namespace
 
-class ContentSettingsAgentImplBrowserTest : public content::RenderViewTest {
+enum class BackgroundResourceFetchTestCase {
+  kBackgroundResourceFetchEnabled,
+  kBackgroundResourceFetchDisabled,
+};
+
+class ContentSettingsAgentImplBrowserTest
+    : public content::RenderViewTest,
+      public testing::WithParamInterface<BackgroundResourceFetchTestCase> {
  protected:
   void SetUp() override {
+    std::vector<base::test::FeatureRef> enabled_features;
+    std::vector<base::test::FeatureRef> disabled_features;
+    if (IsBackgroundResourceFetchEnabled()) {
+      enabled_features.push_back(blink::features::kBackgroundResourceFetch);
+    } else {
+      disabled_features.push_back(blink::features::kBackgroundResourceFetch);
+    }
+    feature_background_resource_fetch_.InitWithFeatures(enabled_features,
+                                                        disabled_features);
     RenderViewTest::SetUp();
 
     // Set up a fake url loader factory to ensure that script loader can create
-    // a WebURLLoader.
-    CreateFakeWebURLLoaderFactory();
+    // a URLLoader.
+    CreateFakeURLLoaderFactory();
 
     // Unbind the ContentSettingsAgent interface that would be registered by
     // the ContentSettingsAgentImpl created when the render frame is created.
     GetMainRenderFrame()->GetAssociatedInterfaceRegistry()->RemoveInterface(
         mojom::ContentSettingsAgent::Name_);
+
+    // Bind a FakeCodeCacheHost which handles FetchCachedCode() method, because
+    // script loading is blocked until the callback of FetchCachedCode() is
+    // called.
+    GetMainRenderFrame()->GetBrowserInterfaceBroker()->SetBinderForTesting(
+        blink::mojom::CodeCacheHost::Name_,
+        base::BindRepeating(
+            &ContentSettingsAgentImplBrowserTest::OnCodeCacheHostRequest,
+            base::Unretained(this)));
   }
+
+ private:
+  class FakeCodeCacheHost : public blink::mojom::CodeCacheHost {
+   public:
+    explicit FakeCodeCacheHost(
+        mojo::PendingReceiver<blink::mojom::CodeCacheHost> receiver) {
+      receiver_.Bind(std::move(receiver));
+    }
+
+    void DidGenerateCacheableMetadata(blink::mojom::CodeCacheType cache_type,
+                                      const GURL& url,
+                                      base::Time expected_response_time,
+                                      mojo_base::BigBuffer data) override {}
+    void FetchCachedCode(blink::mojom::CodeCacheType cache_type,
+                         const GURL& url,
+                         FetchCachedCodeCallback callback) override {
+      std::move(callback).Run(base::Time(), std::vector<uint8_t>());
+    }
+    void ClearCodeCacheEntry(blink::mojom::CodeCacheType cache_type,
+                             const GURL& url) override {}
+    void DidGenerateCacheableMetadataInCacheStorage(
+        const GURL& url,
+        base::Time expected_response_time,
+        mojo_base::BigBuffer data,
+        const std::string& cache_storage_cache_name) override {}
+
+   private:
+    mojo::Receiver<blink::mojom::CodeCacheHost> receiver_{this};
+  };
+
+  bool IsBackgroundResourceFetchEnabled() const {
+    return GetParam() ==
+           BackgroundResourceFetchTestCase::kBackgroundResourceFetchEnabled;
+  }
+
+  void OnCodeCacheHostRequest(mojo::ScopedMessagePipeHandle handle) {
+    fake_code_cache_hosts_.emplace_back(std::make_unique<FakeCodeCacheHost>(
+        mojo::PendingReceiver<blink::mojom::CodeCacheHost>(std::move(handle))));
+  }
+
+  std::vector<std::unique_ptr<FakeCodeCacheHost>> fake_code_cache_hosts_;
+  base::test::ScopedFeatureList feature_background_resource_fetch_;
 };
 
-TEST_F(ContentSettingsAgentImplBrowserTest, AllowlistedSchemes) {
+INSTANTIATE_TEST_SUITE_P(
+    All,
+    ContentSettingsAgentImplBrowserTest,
+    testing::ValuesIn(
+        {BackgroundResourceFetchTestCase::kBackgroundResourceFetchEnabled,
+         BackgroundResourceFetchTestCase::kBackgroundResourceFetchDisabled}),
+    [](const testing::TestParamInfo<BackgroundResourceFetchTestCase>& info) {
+      switch (info.param) {
+        case (BackgroundResourceFetchTestCase::kBackgroundResourceFetchEnabled):
+          return "BackgroundResourceFetchEnabled";
+        case (
+            BackgroundResourceFetchTestCase::kBackgroundResourceFetchDisabled):
+          return "BackgroundResourceFetchDisabled";
+      }
+    });
+
+TEST_P(ContentSettingsAgentImplBrowserTest, AllowlistedSchemes) {
   url::ScopedSchemeRegistryForTests scoped_registry;
   url::AddStandardScheme(kAllowlistScheme, url::SCHEME_WITH_HOST);
 
@@ -214,7 +303,7 @@ TEST_F(ContentSettingsAgentImplBrowserTest, AllowlistedSchemes) {
   EXPECT_FALSE(mock_agent.IsAllowlistedForContentSettings());
 }
 
-TEST_F(ContentSettingsAgentImplBrowserTest, DidBlockContentType) {
+TEST_P(ContentSettingsAgentImplBrowserTest, DidBlockContentType) {
   MockContentSettingsAgentImpl mock_agent(GetMainRenderFrame());
   mock_agent.DidBlockContentType(ContentSettingsType::COOKIES);
   base::RunLoop().RunUntilIdle();
@@ -229,7 +318,7 @@ TEST_F(ContentSettingsAgentImplBrowserTest, DidBlockContentType) {
 
 // Tests that multiple invocations of AllowStorageAccessSync result in a single
 // IPC.
-TEST_F(ContentSettingsAgentImplBrowserTest, AllowStorageAccessSync) {
+TEST_P(ContentSettingsAgentImplBrowserTest, AllowStorageAccessSync) {
   // Load some HTML, so we have a valid security origin.
   LoadHTMLWithUrlOverride("<html></html>", "https://example.com/");
   MockContentSettingsAgentImpl mock_agent(GetMainRenderFrame());
@@ -247,7 +336,7 @@ TEST_F(ContentSettingsAgentImplBrowserTest, AllowStorageAccessSync) {
 }
 
 // Tests that multiple invocations of AllowStorageAccess result in a single IPC.
-TEST_F(ContentSettingsAgentImplBrowserTest, AllowStorageAccess) {
+TEST_P(ContentSettingsAgentImplBrowserTest, AllowStorageAccess) {
   // Load some HTML, so we have a valid security origin.
   LoadHTMLWithUrlOverride("<html></html>", "https://example.com/");
   MockContentSettingsAgentImpl mock_agent(GetMainRenderFrame());
@@ -266,61 +355,7 @@ TEST_F(ContentSettingsAgentImplBrowserTest, AllowStorageAccess) {
   EXPECT_EQ(1, mock_agent.allow_storage_access_count());
 }
 
-// Regression test for http://crbug.com/35011
-TEST_F(ContentSettingsAgentImplBrowserTest, JSBlockSentAfterPageLoad) {
-  MockContentSettingsAgentImpl mock_agent(GetMainRenderFrame());
-
-  // 1. Load page with JS.
-  const char kHtml[] =
-      "<html>"
-      "<head>"
-      "<script>document.createElement('div');</script>"
-      "</head>"
-      "<body>"
-      "</body>"
-      "</html>";
-  render_thread_->sink().ClearMessages();
-  LoadHTML(kHtml);
-
-  // 2. Block JavaScript.
-  RendererContentSettingRules content_setting_rules;
-  ContentSettingsForOneType& script_setting_rules =
-      content_setting_rules.script_rules;
-  script_setting_rules.push_back(ContentSettingPatternSource(
-      ContentSettingsPattern::Wildcard(), ContentSettingsPattern::Wildcard(),
-      content_settings::ContentSettingToValue(CONTENT_SETTING_BLOCK),
-      std::string(), false));
-  ContentSettingsAgentImpl* agent =
-      ContentSettingsAgentImpl::Get(GetMainRenderFrame());
-  agent->SetRendererContentSettingRulesForTest(content_setting_rules);
-
-  // Make sure no pending messages are in the queue.
-  base::RunLoop().RunUntilIdle();
-  render_thread_->sink().ClearMessages();
-
-  const auto HasSentOnContentBlocked =
-      [](MockContentSettingsAgentImpl* mock_agent) {
-        return mock_agent->on_content_blocked_count() > 0;
-      };
-
-  // 3. Reload page. Verify that the notification that javascript was blocked
-  // has not yet been sent at the time when the navigation commits.
-  CommitTimeConditionChecker checker(
-      GetMainRenderFrame(),
-      base::BindRepeating(HasSentOnContentBlocked,
-                          base::Unretained(&mock_agent)),
-      false);
-
-  std::string url_str = "data:text/html;charset=utf-8,";
-  url_str.append(kHtml);
-  GURL url(url_str);
-  Reload(url);
-  base::RunLoop().RunUntilIdle();
-
-  EXPECT_TRUE(HasSentOnContentBlocked(&mock_agent));
-}
-
-TEST_F(ContentSettingsAgentImplBrowserTest, ImagesBlockedByDefault) {
+TEST_P(ContentSettingsAgentImplBrowserTest, ImagesBlockedByDefault) {
   MockContentSettingsAgentImpl mock_agent(GetMainRenderFrame());
 
   // Load some HTML.
@@ -358,7 +393,7 @@ TEST_F(ContentSettingsAgentImplBrowserTest, ImagesBlockedByDefault) {
   EXPECT_EQ(1, mock_agent.on_content_blocked_count());
 }
 
-TEST_F(ContentSettingsAgentImplBrowserTest, ImagesAllowedByDefault) {
+TEST_P(ContentSettingsAgentImplBrowserTest, ImagesAllowedByDefault) {
   MockContentSettingsAgentImpl mock_agent(GetMainRenderFrame());
 
   // Load some HTML.
@@ -395,7 +430,7 @@ TEST_F(ContentSettingsAgentImplBrowserTest, ImagesAllowedByDefault) {
   EXPECT_EQ(ContentSettingsType::IMAGES, mock_agent.on_content_blocked_type());
 }
 
-TEST_F(ContentSettingsAgentImplBrowserTest, ContentSettingsBlockScripts) {
+TEST_P(ContentSettingsAgentImplBrowserTest, ContentSettingsBlockScripts) {
   MockContentSettingsAgentImpl mock_agent(GetMainRenderFrame());
   // Set the content settings for scripts.
   RendererContentSettingRules content_setting_rules;
@@ -417,29 +452,7 @@ TEST_F(ContentSettingsAgentImplBrowserTest, ContentSettingsBlockScripts) {
   EXPECT_EQ(1, mock_agent.on_content_blocked_count());
 }
 
-TEST_F(ContentSettingsAgentImplBrowserTest, ContentSettingsAllowScripts) {
-  MockContentSettingsAgentImpl mock_agent(GetMainRenderFrame());
-  // Set the content settings for scripts.
-  RendererContentSettingRules content_setting_rules;
-  ContentSettingsForOneType& script_setting_rules =
-      content_setting_rules.script_rules;
-  script_setting_rules.push_back(ContentSettingPatternSource(
-      ContentSettingsPattern::Wildcard(), ContentSettingsPattern::Wildcard(),
-      content_settings::ContentSettingToValue(CONTENT_SETTING_ALLOW),
-      std::string(), false));
-
-  ContentSettingsAgentImpl* agent =
-      ContentSettingsAgentImpl::Get(GetMainRenderFrame());
-  agent->SetRendererContentSettingRulesForTest(content_setting_rules);
-
-  // Load a page which contains a script.
-  LoadHTML(kScriptHtml);
-
-  // Verify that the script was not blocked.
-  EXPECT_EQ(0, mock_agent.on_content_blocked_count());
-}
-
-TEST_F(ContentSettingsAgentImplBrowserTest,
+TEST_P(ContentSettingsAgentImplBrowserTest,
        ContentSettingsAllowScriptsWithSrc) {
   MockContentSettingsAgentImpl mock_agent(GetMainRenderFrame());
   // Set the content settings for scripts.
@@ -462,104 +475,7 @@ TEST_F(ContentSettingsAgentImplBrowserTest,
   EXPECT_EQ(0, mock_agent.on_content_blocked_count());
 }
 
-// Regression test for crbug.com/232410: Load a page with JS blocked. Then,
-// allow JS and reload the page. In each case, only one of noscript or script
-// tags should be enabled, but never both.
-TEST_F(ContentSettingsAgentImplBrowserTest, ContentSettingsNoscriptTag) {
-  MockContentSettingsAgentImpl mock_agent(GetMainRenderFrame());
-
-  // 1. Block JavaScript.
-  RendererContentSettingRules content_setting_rules;
-  ContentSettingsForOneType& script_setting_rules =
-      content_setting_rules.script_rules;
-  script_setting_rules.push_back(ContentSettingPatternSource(
-      ContentSettingsPattern::Wildcard(), ContentSettingsPattern::Wildcard(),
-      content_settings::ContentSettingToValue(CONTENT_SETTING_BLOCK),
-      std::string(), false));
-
-  ContentSettingsAgentImpl* agent =
-      ContentSettingsAgentImpl::Get(GetMainRenderFrame());
-  agent->SetRendererContentSettingRulesForTest(content_setting_rules);
-
-  // 2. Load a page which contains a noscript tag and a script tag. Note that
-  // the page doesn't have a body tag.
-  const char kHtml[] =
-      "<html>"
-      "<noscript>JS_DISABLED</noscript>"
-      "<script>document.write('JS_ENABLED');</script>"
-      "</html>";
-  LoadHTML(kHtml);
-  EXPECT_NE(
-      std::string::npos,
-      blink::TestWebFrameContentDumper::DumpLayoutTreeAsText(
-          GetMainFrame(), blink::TestWebFrameContentDumper::kLayoutAsTextNormal)
-          .Utf8()
-          .find("JS_DISABLED"));
-  EXPECT_EQ(
-      std::string::npos,
-      blink::TestWebFrameContentDumper::DumpLayoutTreeAsText(
-          GetMainFrame(), blink::TestWebFrameContentDumper::kLayoutAsTextNormal)
-          .Utf8()
-          .find("JS_ENABLED"));
-
-  // 3. Allow JavaScript.
-  script_setting_rules.clear();
-  script_setting_rules.push_back(ContentSettingPatternSource(
-      ContentSettingsPattern::Wildcard(), ContentSettingsPattern::Wildcard(),
-      content_settings::ContentSettingToValue(CONTENT_SETTING_ALLOW),
-      std::string(), false));
-  agent->SetRendererContentSettingRulesForTest(content_setting_rules);
-
-  // 4. Reload the page.
-  std::string url_str = "data:text/html;charset=utf-8,";
-  url_str.append(kHtml);
-  GURL url(url_str);
-  Reload(url);
-  EXPECT_NE(
-      std::string::npos,
-      blink::TestWebFrameContentDumper::DumpLayoutTreeAsText(
-          GetMainFrame(), blink::TestWebFrameContentDumper::kLayoutAsTextNormal)
-          .Utf8()
-          .find("JS_ENABLED"));
-  EXPECT_EQ(
-      std::string::npos,
-      blink::TestWebFrameContentDumper::DumpLayoutTreeAsText(
-          GetMainFrame(), blink::TestWebFrameContentDumper::kLayoutAsTextNormal)
-          .Utf8()
-          .find("JS_DISABLED"));
-}
-
-// Checks that same document navigations don't update content settings for the
-// page.
-TEST_F(ContentSettingsAgentImplBrowserTest,
-       ContentSettingsSameDocumentNavigation) {
-  MockContentSettingsAgentImpl mock_agent(GetMainRenderFrame());
-  // Load a page which contains a script.
-  LoadHTML(kScriptHtml);
-
-  // Verify that the script was not blocked.
-  EXPECT_EQ(0, mock_agent.on_content_blocked_count());
-
-  // Block JavaScript.
-  RendererContentSettingRules content_setting_rules;
-  ContentSettingsForOneType& script_setting_rules =
-      content_setting_rules.script_rules;
-  script_setting_rules.push_back(ContentSettingPatternSource(
-      ContentSettingsPattern::Wildcard(), ContentSettingsPattern::Wildcard(),
-      content_settings::ContentSettingToValue(CONTENT_SETTING_BLOCK),
-      std::string(), false));
-
-  ContentSettingsAgentImpl* agent =
-      ContentSettingsAgentImpl::Get(GetMainRenderFrame());
-  agent->SetRendererContentSettingRulesForTest(content_setting_rules);
-
-  // The page shouldn't see the change to script blocking setting after a
-  // same document navigation.
-  OnSameDocumentNavigation(GetMainFrame(), true);
-  EXPECT_TRUE(agent->AllowScript(true));
-}
-
-TEST_F(ContentSettingsAgentImplBrowserTest, MixedAutoupgradesDisabledByRules) {
+TEST_P(ContentSettingsAgentImplBrowserTest, MixedAutoupgradesDisabledByRules) {
   MockContentSettingsAgentImpl mock_agent(GetMainRenderFrame());
 
   LoadHTMLWithUrlOverride("<html></html>", "https://example.com/");
@@ -591,65 +507,12 @@ TEST_F(ContentSettingsAgentImplBrowserTest, MixedAutoupgradesDisabledByRules) {
   EXPECT_FALSE(agent->ShouldAutoupgradeMixedContent());
 }
 
-TEST_F(ContentSettingsAgentImplBrowserTest, MixedAutoupgradesNoSettingsSet) {
+TEST_P(ContentSettingsAgentImplBrowserTest, MixedAutoupgradesNoSettingsSet) {
   MockContentSettingsAgentImpl mock_agent(GetMainRenderFrame());
 
   ContentSettingsAgentImpl* agent =
       ContentSettingsAgentImpl::Get(GetMainRenderFrame());
   EXPECT_TRUE(agent->ShouldAutoupgradeMixedContent());
-}
-
-TEST_F(ContentSettingsAgentImplBrowserTest, ContentSettingsAllowedAutoDark) {
-  MockContentSettingsAgentImpl mock_agent(GetMainRenderFrame());
-
-  // Load some HTML.
-  LoadHTMLWithUrlOverride("<html></html>", "https://example.com/");
-
-  // Set the default auto dark mode setting.
-  RendererContentSettingRules content_setting_rules;
-  ContentSettingsForOneType& auto_dark_content_rules =
-      content_setting_rules.auto_dark_content_rules;
-  auto_dark_content_rules.push_back(ContentSettingPatternSource(
-      ContentSettingsPattern::Wildcard(), ContentSettingsPattern::Wildcard(),
-      content_settings::ContentSettingToValue(CONTENT_SETTING_ALLOW),
-      std::string(), false));
-
-  ContentSettingsAgentImpl* agent =
-      ContentSettingsAgentImpl::Get(GetMainRenderFrame());
-  agent->SetRendererContentSettingRulesForTest(content_setting_rules);
-  EXPECT_TRUE(agent->AllowAutoDarkWebContent(true));
-
-  // Create an exception which blocked the auto dark.
-  auto_dark_content_rules.insert(
-      auto_dark_content_rules.begin(),
-      ContentSettingPatternSource(
-          ContentSettingsPattern::FromString("https://example.com/"),
-          ContentSettingsPattern::Wildcard(),
-          content_settings::ContentSettingToValue(CONTENT_SETTING_BLOCK),
-          std::string(), false));
-  agent->SetRendererContentSettingRulesForTest(content_setting_rules);
-  EXPECT_FALSE(agent->AllowAutoDarkWebContent(true));
-}
-
-TEST_F(ContentSettingsAgentImplBrowserTest, ContentSettingsDisabledAutoDark) {
-  MockContentSettingsAgentImpl mock_agent(GetMainRenderFrame());
-
-  // Load some HTML.
-  LoadHTMLWithUrlOverride("<html></html>", "https://example.com/");
-
-  // Set the default auto dark mode setting.
-  RendererContentSettingRules content_setting_rules;
-  ContentSettingsForOneType& auto_dark_content_rules =
-      content_setting_rules.auto_dark_content_rules;
-  auto_dark_content_rules.push_back(ContentSettingPatternSource(
-      ContentSettingsPattern::Wildcard(), ContentSettingsPattern::Wildcard(),
-      content_settings::ContentSettingToValue(CONTENT_SETTING_BLOCK),
-      std::string(), false));
-
-  ContentSettingsAgentImpl* agent =
-      ContentSettingsAgentImpl::Get(GetMainRenderFrame());
-  agent->SetRendererContentSettingRulesForTest(content_setting_rules);
-  EXPECT_FALSE(agent->AllowAutoDarkWebContent(true));
 }
 
 }  // namespace content_settings

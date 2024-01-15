@@ -24,8 +24,9 @@ class BreadcrumbManagerObserver : public base::CheckedObserver {
   // logged prepended to the string passed to `BreadcrumbManager::AddEvent()`.
   virtual void EventAdded(const std::string& event) {}
 
-  // Called when old events have been removed.
-  virtual void OldEventsRemoved() {}
+  // Called when the previous session's events have been retrieved from file and
+  // added to the BreadcrumbManager.
+  virtual void PreviousSessionEventsAdded() {}
 
  protected:
   BreadcrumbManagerObserver();

@@ -55,7 +55,7 @@ TEST(ValuesUtilTest, InvalidInt64Values) {
       std::make_unique<Value>(true),
       std::make_unique<Value>(Value::Type::BINARY),
       std::make_unique<Value>(Value::Type::LIST),
-      std::make_unique<Value>(Value::Type::DICTIONARY),
+      std::make_unique<Value>(Value::Type::DICT),
       std::make_unique<Value>(""),
       std::make_unique<Value>("abcd"),
       std::make_unique<Value>("1234.0"),
@@ -95,7 +95,7 @@ TEST(ValuesUtilTest, UnguessableToken) {
   };
   for (const auto& test_case : kTestCases) {
     UnguessableToken input =
-        UnguessableToken::Deserialize(test_case.high, test_case.low);
+        UnguessableToken::CreateForTesting(test_case.high, test_case.low);
     Value expected(test_case.expected);
     SCOPED_TRACE(testing::Message() << "expected: " << test_case.expected);
 

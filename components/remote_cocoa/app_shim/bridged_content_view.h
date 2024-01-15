@@ -9,6 +9,7 @@
 
 #include <string>
 
+#include "base/memory/raw_ptr_exclusion.h"
 #include "components/remote_cocoa/app_shim/remote_cocoa_app_shim_export.h"
 #import "ui/base/cocoa/tool_tip_base_view.h"
 #import "ui/base/cocoa/tracking_area.h"
@@ -31,13 +32,14 @@ REMOTE_COCOA_APP_SHIM_EXPORT
                                                  NSServicesMenuRequestor> {
  @private
   // Weak, reset by clearView.
-  remote_cocoa::NativeWidgetNSWindowBridge* _bridge;
+  // This field is not a raw_ptr<> because it requires @property rewrite.
+  RAW_PTR_EXCLUSION remote_cocoa::NativeWidgetNSWindowBridge* _bridge;
 
   // A tracking area installed to enable mouseMoved events.
   ui::ScopedCrTrackingArea _cursorTrackingArea;
 
   // The keyDown event currently being handled, nil otherwise.
-  NSEvent* _keyDownEvent;
+  NSEvent* __strong _keyDownEvent;
 
   // Whether there's an active key down event which is not handled yet.
   BOOL _hasUnhandledKeyDownEvent;
@@ -53,7 +55,7 @@ REMOTE_COCOA_APP_SHIM_EXPORT
 
 @property(readonly, nonatomic) remote_cocoa::NativeWidgetNSWindowBridge* bridge;
 @property(assign, nonatomic) BOOL drawMenuBackgroundForBlur;
-@property(assign, nonatomic) NSEvent* keyDownEventForTesting;
+@property(strong, nonatomic) NSEvent* keyDownEventForTesting;
 
 // Initialize the NSView -> views::View bridge. |viewToHost| must be non-NULL.
 - (instancetype)initWithBridge:(remote_cocoa::NativeWidgetNSWindowBridge*)bridge

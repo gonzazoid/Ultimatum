@@ -69,6 +69,20 @@ class PasswordProtectionService : public PasswordProtectionServiceBase {
       LoginReputationClientRequest::TriggerType trigger_type,
       bool password_field_exists);
 
+  // Same as above but uses a PasswordProtectionRequest that avoids sending
+  // real requests that can be used for testing.
+  void StartRequestForTesting(
+      content::WebContents* web_contents,
+      const GURL& main_frame_url,
+      const GURL& password_form_action,
+      const GURL& password_form_frame_url,
+      const std::string& username,
+      PasswordType password_type,
+      const std::vector<password_manager::MatchingReusedCredential>&
+          matching_reused_credentials,
+      LoginReputationClientRequest::TriggerType trigger_type,
+      bool password_field_exists);
+
 #if defined(ON_FOCUS_PING_ENABLED)
   virtual void MaybeStartPasswordFieldOnFocusRequest(
       content::WebContents* web_contents,
@@ -113,14 +127,6 @@ class PasswordProtectionService : public PasswordProtectionServiceBase {
       content::WebContents* web_contents) = 0;
 #endif
 
-#if BUILDFLAG(SAFE_BROWSING_AVAILABLE)
-  // Binds the |phishing_detector| to the appropriate interface, as provided by
-  // |provider|.
-  virtual void GetPhishingDetector(
-      service_manager::InterfaceProvider* provider,
-      mojo::Remote<mojom::PhishingDetector>* phishing_detector);
-#endif
-
   // Called when a new navigation is starting to create a deferring condition
   // if there is a pending sync password reuse ping or if there is a modal
   // warning dialog showing in the corresponding web contents.
@@ -129,6 +135,8 @@ class PasswordProtectionService : public PasswordProtectionServiceBase {
       content::NavigationHandle& navigation_handle);
 
  protected:
+  void StartRequestInternal(scoped_refptr<PasswordProtectionRequest> request);
+
   void RemoveWarningRequestsByWebContents(content::WebContents* web_contents);
 
   bool IsModalWarningShowingInWebContents(content::WebContents* web_contents);

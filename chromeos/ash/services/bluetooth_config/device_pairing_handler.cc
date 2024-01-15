@@ -6,7 +6,6 @@
 
 #include "base/strings/strcat.h"
 #include "base/strings/string_number_conversions.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/default_clock.h"
 #include "components/device_event_log/device_event_log.h"
 #include "device/bluetooth/bluetooth_common.h"
@@ -33,7 +32,7 @@ std::string PasskeyToString(uint32_t passkey) {
 }
 
 mojom::PairingResult GetPairingResult(
-    absl::optional<device::ConnectionFailureReason> failure_reason) {
+    std::optional<device::ConnectionFailureReason> failure_reason) {
   if (!failure_reason) {
     return mojom::PairingResult::kSuccess;
   }
@@ -71,7 +70,8 @@ DevicePairingHandler::DevicePairingHandler(
     mojo::PendingReceiver<mojom::DevicePairingHandler> pending_receiver,
     AdapterStateController* adapter_state_controller)
     : adapter_state_controller_(adapter_state_controller) {
-  adapter_state_controller_observation_.Observe(adapter_state_controller_);
+  adapter_state_controller_observation_.Observe(
+      adapter_state_controller_.get());
   receiver_.Bind(std::move(pending_receiver));
 }
 
@@ -132,7 +132,7 @@ void DevicePairingHandler::SendAuthorizePairing() {
 }
 
 void DevicePairingHandler::FinishCurrentPairingRequest(
-    absl::optional<device::ConnectionFailureReason> failure_reason) {
+    std::optional<device::ConnectionFailureReason> failure_reason) {
   PerformFinishCurrentPairingRequest(
       failure_reason, base::Time::Now() - pairing_start_timestamp_);
   current_pairing_device_id_.clear();
@@ -169,8 +169,14 @@ void DevicePairingHandler::PairDevice(
     PairDeviceCallback callback) {
   BLUETOOTH_LOG(USER) << "Attempting to pair with device " << device_id;
 
-  // There should only be one PairDevice request at a time.
-  CHECK(current_pairing_device_id_.empty());
+  // In certain situations, such as when the pairing dialog is initiated from
+  // both the system tray and ChromeOS settings, an active pairing request
+  // might be underway when the pairDevice function is called. In such
+  // instances, cancel the second pairing request. (See b/311813249)
+  if (!current_pairing_device_id_.empty()) {
+    std::move(callback).Run(mojom::PairingResult::kNonAuthFailure);
+    return;
+  }
 
   pairing_start_timestamp_ = base::Time::Now();
   pair_device_callback_ = std::move(callback);

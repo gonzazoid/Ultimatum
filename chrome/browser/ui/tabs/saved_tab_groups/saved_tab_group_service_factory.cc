@@ -9,9 +9,9 @@
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/tabs/saved_tab_groups/saved_tab_group_keyed_service.h"
 
-SavedTabGroupServiceFactory& SavedTabGroupServiceFactory::GetInstance() {
+SavedTabGroupServiceFactory* SavedTabGroupServiceFactory::GetInstance() {
   static base::NoDestructor<SavedTabGroupServiceFactory> instance;
-  return *instance;
+  return instance.get();
 }
 
 // static
@@ -19,17 +19,22 @@ SavedTabGroupKeyedService* SavedTabGroupServiceFactory::GetForProfile(
     Profile* profile) {
   DCHECK(profile);
   return static_cast<SavedTabGroupKeyedService*>(
-      GetInstance().GetServiceForBrowserContext(profile, /*create=*/true));
+      GetInstance()->GetServiceForBrowserContext(profile, /*create=*/true));
 }
 
 SavedTabGroupServiceFactory::SavedTabGroupServiceFactory()
-    : ProfileKeyedServiceFactory("SavedTabGroupKeyedService") {}
+    : ProfileKeyedServiceFactory(
+          "SavedTabGroupKeyedService",
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              .Build()) {}
 
 SavedTabGroupServiceFactory::~SavedTabGroupServiceFactory() = default;
 
-KeyedService* SavedTabGroupServiceFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+SavedTabGroupServiceFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
   DCHECK(context);
   Profile* profile = Profile::FromBrowserContext(context);
-  return new SavedTabGroupKeyedService(profile);
+  return std::make_unique<SavedTabGroupKeyedService>(profile);
 }

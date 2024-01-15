@@ -8,14 +8,15 @@
 
 #include "ash/constants/notifier_catalogs.h"
 #include "ash/public/cpp/notification_utils.h"
-#include "base/bind.h"
+#include "ash/webui/settings/public/constants/routes.mojom.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "chrome/browser/ash/tpm_firmware_update.h"
 #include "chrome/browser/notifications/notification_display_service.h"
 #include "chrome/browser/notifications/notification_display_service_factory.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/settings_window_manager_chromeos.h"
-#include "chrome/browser/ui/webui/settings/chromeos/constants/routes.mojom.h"
 #include "chrome/common/pref_names.h"
 #include "chrome/common/webui_url_constants.h"
 #include "chrome/grit/generated_resources.h"
@@ -65,7 +66,7 @@ class TPMFirmwareUpdateNotificationDelegate
         NotificationHandler::Type::TRANSIENT, kTPMFirmwareUpdateNotificationId);
   }
 
-  Profile* const profile_;
+  const raw_ptr<Profile> profile_;
 };
 
 void OnAvailableUpdateModes(Profile* profile,
@@ -74,26 +75,22 @@ void OnAvailableUpdateModes(Profile* profile,
     return;
   }
 
-  std::unique_ptr<message_center::Notification> notification =
-      CreateSystemNotification(
-          message_center::NOTIFICATION_TYPE_SIMPLE,
-          kTPMFirmwareUpdateNotificationId,
-          l10n_util::GetStringUTF16(IDS_TPM_FIRMWARE_UPDATE_NOTIFICATION_TITLE),
-          l10n_util::GetStringFUTF16(
-              IDS_TPM_FIRMWARE_UPDATE_NOTIFICATION_MESSAGE,
-              ui::GetChromeOSDeviceName()),
-          std::u16string(), GURL(kTPMFirmwareUpdateNotificationId),
-          message_center::NotifierId(
-              message_center::NotifierType::SYSTEM_COMPONENT,
-              kTPMFirmwareUpdateNotificationId,
-              NotificationCatalogName::kTPMFirmwareUpdate),
-          message_center::RichNotificationData(),
-          base::MakeRefCounted<TPMFirmwareUpdateNotificationDelegate>(profile),
-          gfx::kNoneIcon,
-          message_center::SystemNotificationWarningLevel::WARNING);
+  message_center::Notification notification = CreateSystemNotification(
+      message_center::NOTIFICATION_TYPE_SIMPLE,
+      kTPMFirmwareUpdateNotificationId,
+      l10n_util::GetStringUTF16(IDS_TPM_FIRMWARE_UPDATE_NOTIFICATION_TITLE),
+      l10n_util::GetStringFUTF16(IDS_TPM_FIRMWARE_UPDATE_NOTIFICATION_MESSAGE,
+                                 ui::GetChromeOSDeviceName()),
+      std::u16string(), GURL(kTPMFirmwareUpdateNotificationId),
+      message_center::NotifierId(message_center::NotifierType::SYSTEM_COMPONENT,
+                                 kTPMFirmwareUpdateNotificationId,
+                                 NotificationCatalogName::kTPMFirmwareUpdate),
+      message_center::RichNotificationData(),
+      base::MakeRefCounted<TPMFirmwareUpdateNotificationDelegate>(profile),
+      gfx::kNoneIcon, message_center::SystemNotificationWarningLevel::WARNING);
 
   NotificationDisplayServiceFactory::GetForProfile(profile)->Display(
-      NotificationHandler::Type::TRANSIENT, *notification,
+      NotificationHandler::Type::TRANSIENT, notification,
       /*metadata=*/nullptr);
 }
 

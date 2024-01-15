@@ -6,6 +6,7 @@
 #define ASH_ASSISTANT_UI_MAIN_STAGE_ASSISTANT_ONBOARDING_SUGGESTION_VIEW_H_
 
 #include "base/component_export.h"
+#include "base/memory/raw_ptr.h"
 #include "base/unguessable_token.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/views/controls/button/button.h"
@@ -42,9 +43,9 @@ class COMPONENT_EXPORT(ASSISTANT_UI) AssistantOnboardingSuggestionView
 
   // views::View:
   int GetHeightForWidth(int width) const override;
+  void AddLayerToRegion(ui::Layer* layer, views::LayerRegion region) override;
+  void RemoveLayerFromRegions(ui::Layer* layer) override;
   void ChildPreferredSizeChanged(views::View* child) override;
-  void AddLayerBeneathView(ui::Layer* layer) override;
-  void RemoveLayerBeneathView(ui::Layer* layer) override;
   void OnThemeChanged() override;
 
   // Returns the icon for the suggestion.
@@ -59,15 +60,16 @@ class COMPONENT_EXPORT(ASSISTANT_UI) AssistantOnboardingSuggestionView
 
   void OnButtonPressed();
 
-  AssistantViewDelegate* const delegate_;  // Owned by AssistantController.
+  const raw_ptr<AssistantViewDelegate>
+      delegate_;  // Owned by AssistantController.
   const base::UnguessableToken suggestion_id_;
   const int index_;
   GURL url_;
 
   // Owned by view hierarchy.
-  views::ImageView* icon_ = nullptr;
-  views::Label* label_ = nullptr;
-  views::InkDropContainerView* ink_drop_container_ = nullptr;
+  raw_ptr<views::ImageView> icon_ = nullptr;
+  raw_ptr<views::Label> label_ = nullptr;
+  raw_ptr<views::InkDropContainerView> ink_drop_container_ = nullptr;
 
   base::WeakPtrFactory<AssistantOnboardingSuggestionView> weak_factory_{this};
 };

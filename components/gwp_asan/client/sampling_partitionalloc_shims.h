@@ -9,6 +9,7 @@
 
 #include "components/gwp_asan/client/export.h"
 #include "components/gwp_asan/client/guarded_page_allocator.h"
+#include "components/gwp_asan/common/lightweight_detector_state.h"
 
 namespace gwp_asan {
 namespace internal {

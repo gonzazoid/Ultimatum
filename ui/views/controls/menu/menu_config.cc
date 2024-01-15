@@ -5,13 +5,18 @@
 #include "ui/views/controls/menu/menu_config.h"
 
 #include "base/no_destructor.h"
+#include "ui/base/ui_base_features.h"
 #include "ui/views/controls/menu/menu_controller.h"
 #include "ui/views/controls/menu/menu_item_view.h"
+#include "ui/views/layout/layout_provider.h"
+#include "ui/views/style/typography.h"
+#include "ui/views/style/typography_provider.h"
 
 namespace views {
 
 MenuConfig::MenuConfig() {
   Init();
+  InitCR2023();
 }
 
 MenuConfig::~MenuConfig() = default;
@@ -23,8 +28,9 @@ int MenuConfig::CornerRadiusForMenu(const MenuController* controller) const {
   }
 
   if (controller && (controller->IsCombobox() ||
-                     (!win11_style_menus && controller->IsContextMenu())))
+                     (!use_bubble_border && controller->IsContextMenu()))) {
     return auxiliary_corner_radius;
+  }
   return corner_radius;
 }
 
@@ -41,6 +47,26 @@ bool MenuConfig::ShouldShowAcceleratorText(const MenuItemView* item,
   }
   *text = accelerator.GetShortcutText();
   return true;
+}
+
+void MenuConfig::InitCR2023() {
+  if (!features::IsChromeRefresh2023()) {
+    return;
+  }
+
+  font_list = TypographyProvider::Get().GetFont(style::CONTEXT_MENU,
+                                                style::STYLE_BODY_3_EMPHASIS);
+  reserve_dedicated_arrow_column = false;
+  menu_horizontal_border_size = 0;
+  submenu_horizontal_overlap = 0;
+  item_vertical_margin = 6;
+  item_horizontal_border_padding = 12;
+  arrow_size = 16;
+  separator_height = 17;
+  separator_spacing_height = 4;
+  use_outer_border = false;
+
+  InitPlatformCR2023();
 }
 
 // static

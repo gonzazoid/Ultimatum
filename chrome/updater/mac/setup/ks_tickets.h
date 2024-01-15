@@ -7,19 +7,42 @@
 
 #import <Foundation/Foundation.h>
 
-#include "chrome/updater/update_service.h"
-
 extern NSString* _Nonnull const kCRUTicketBrandKey;
 extern NSString* _Nonnull const kCRUTicketTagKey;
 
+namespace base {
+class FilePath;
+}
+
 @interface KSPathExistenceChecker : NSObject <NSSecureCoding>
 @property(nonnull, readonly) NSString* path;
+
+- (nullable instancetype)initWithFilePath:(const base::FilePath&)filePath;
 @end
 
-@interface KSTicket : NSObject <NSSecureCoding>
+@interface KSTicket : NSObject <NSSecureCoding> {
+  NSString* __strong productID_;
+  NSString* __strong version_;
+  NSString* __strong brandCode_;
+  KSPathExistenceChecker* __strong existenceChecker_;
+  NSURL* __strong serverURL_;
+  NSString* __strong serverType_;
+  NSDate* __strong creationDate_;
+  NSString* __strong tag_;
+  NSString* __strong tagPath_;
+  NSString* __strong tagKey_;
+  NSString* __strong brandPath_;
+  NSString* __strong brandKey_;
+  NSString* __strong versionPath_;
+  NSString* __strong versionKey_;
+  NSString* __strong cohort_;
+  NSString* __strong cohortHint_;
+  NSString* __strong cohortName_;
+  int32_t ticketVersion_;
+}
 
 @property(nonnull, nonatomic, readonly) NSString* productID;
-@property(nonnull, nonatomic, readonly)
+@property(nullable, nonatomic, readonly)
     KSPathExistenceChecker* existenceChecker;
 @property(nullable, nonatomic, readonly) NSURL* serverURL;
 @property(nonnull, nonatomic, readonly) NSDate* creationDate;
@@ -42,8 +65,12 @@ extern NSString* _Nonnull const kCRUTicketTagKey;
 - (nullable NSString*)determineBrand;    // brand
 - (nullable NSString*)determineVersion;  // version
 
-- (nullable instancetype)initWithAppState:
-    (const updater::UpdateService::AppState&)state;
+- (nonnull instancetype)initWithAppId:(nonnull NSString*)appId
+                              version:(nullable const NSString*)version
+                                  ecp:(const base::FilePath&)ecp
+                                  tag:(nullable NSString*)tag
+                            brandCode:(nullable NSString*)brandCode
+                            brandPath:(const base::FilePath&)brandPath;
 
 @end
 

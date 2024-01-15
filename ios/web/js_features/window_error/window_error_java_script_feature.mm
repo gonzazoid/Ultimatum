@@ -9,10 +9,6 @@
 #import "ios/web/public/js_messaging/script_message.h"
 #import "net/base/mac/url_conversions.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 namespace {
 const char kScriptName[] = "error";
 
@@ -32,7 +28,7 @@ WindowErrorJavaScriptFeature::ErrorDetails::~ErrorDetails() = default;
 WindowErrorJavaScriptFeature::WindowErrorJavaScriptFeature(
     base::RepeatingCallback<void(ErrorDetails)> callback)
     : JavaScriptFeature(
-          ContentWorld::kAnyContentWorld,
+          ContentWorld::kIsolatedWorld,
           {FeatureScript::CreateWithFilename(
               kScriptName,
               FeatureScript::InjectionTime::kDocumentStart,
@@ -45,7 +41,7 @@ WindowErrorJavaScriptFeature::WindowErrorJavaScriptFeature(
 }
 WindowErrorJavaScriptFeature::~WindowErrorJavaScriptFeature() = default;
 
-absl::optional<std::string>
+std::optional<std::string>
 WindowErrorJavaScriptFeature::GetScriptMessageHandlerName() const {
   return kWindowErrorResultHandlerName;
 }
@@ -55,24 +51,26 @@ void WindowErrorJavaScriptFeature::ScriptMessageReceived(
     const ScriptMessage& script_message) {
   ErrorDetails details;
 
-  if (!script_message.body() || !script_message.body()->is_dict()) {
+  const base::Value::Dict* script_dict =
+      script_message.body() ? script_message.body()->GetIfDict() : nullptr;
+  if (!script_dict) {
     return;
   }
 
-  std::string* filename =
-      script_message.body()->FindStringKey(kScriptMessageResponseFilenameKey);
+  const std::string* filename =
+      script_dict->FindString(kScriptMessageResponseFilenameKey);
   if (filename) {
     details.filename = base::SysUTF8ToNSString(*filename);
   }
 
   auto line_number =
-      script_message.body()->FindDoubleKey(kScriptMessageResponseLineNumberKey);
+      script_dict->FindDouble(kScriptMessageResponseLineNumberKey);
   if (line_number) {
     details.line_number = static_cast<int>(line_number.value());
   }
 
-  std::string* log_message =
-      script_message.body()->FindStringKey(kScriptMessageResponseMessageKey);
+  const std::string* log_message =
+      script_dict->FindString(kScriptMessageResponseMessageKey);
   if (log_message) {
     details.message = base::SysUTF8ToNSString(*log_message);
   }

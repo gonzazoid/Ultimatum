@@ -4,11 +4,16 @@
 
 #include "services/device/device_posture/device_posture_provider_impl.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "mojo/public/cpp/bindings/remote_set.h"
 #include "services/device/device_posture/device_posture_platform_provider.h"
 
 namespace device {
+
+DevicePostureProviderImpl::DevicePostureClientInformation::
+    DevicePostureClientInformation() = default;
+DevicePostureProviderImpl::DevicePostureClientInformation::
+    ~DevicePostureClientInformation() = default;
 
 DevicePostureProviderImpl::DevicePostureProviderImpl(
     std::unique_ptr<DevicePosturePlatformProvider> platform_provider)
@@ -25,11 +30,40 @@ DevicePostureProviderImpl::DevicePostureProviderImpl(
 DevicePostureProviderImpl::~DevicePostureProviderImpl() = default;
 
 void DevicePostureProviderImpl::AddListenerAndGetCurrentPosture(
-    mojo::PendingRemote<mojom::DevicePostureProviderClient> client,
+    mojo::PendingRemote<mojom::DevicePostureClient> client,
     AddListenerAndGetCurrentPostureCallback callback) {
-  clients_.Add(std::move(client));
+  posture_clients_[receivers_.current_receiver()].clients.Add(
+      std::move(client));
   mojom::DevicePostureType posture = platform_provider_->GetDevicePosture();
   std::move(callback).Run(posture);
+}
+
+void DevicePostureProviderImpl::AddListenerAndGetCurrentViewportSegments(
+    mojo::PendingRemote<mojom::DeviceViewportSegmentsClient> client,
+    AddListenerAndGetCurrentViewportSegmentsCallback callback) {
+  viewport_segments_clients_.Add(std::move(client));
+  std::move(callback).Run(platform_provider_->GetViewportSegments());
+}
+
+void DevicePostureProviderImpl::OverrideDevicePostureForEmulation(
+    mojom::DevicePostureType emulated_posture) {
+  // Notify the related clients about the new posture.
+  const auto receiver_id = receivers_.current_receiver();
+  DevicePostureClientInformation& client_info = posture_clients_[receiver_id];
+  client_info.is_emulated = true;
+  for (auto& client : client_info.clients) {
+    client->OnPostureChanged(emulated_posture);
+  }
+}
+
+void DevicePostureProviderImpl::DisableDevicePostureOverrideForEmulation() {
+  // Restore the original posture from the platform.
+  const auto receiver_id = receivers_.current_receiver();
+  DevicePostureClientInformation& client_info = posture_clients_[receiver_id];
+  client_info.is_emulated = false;
+  for (auto& client : client_info.clients) {
+    client->OnPostureChanged(platform_provider_->GetDevicePosture());
+  }
 }
 
 void DevicePostureProviderImpl::Bind(
@@ -41,8 +75,25 @@ void DevicePostureProviderImpl::Bind(
 
 void DevicePostureProviderImpl::OnDevicePostureChanged(
     const mojom::DevicePostureType& posture) {
-  for (auto& client : clients_)
-    client->OnPostureChanged(posture);
+  for (const auto& [receiver_id, posture_client_information] :
+       posture_clients_) {
+    // If we receive a posture change from the platform but we're emulating it
+    // we shouldn't notify the clients.
+    if (posture_client_information.is_emulated) {
+      continue;
+    }
+
+    for (auto& client : posture_client_information.clients) {
+      client->OnPostureChanged(posture);
+    }
+  }
+}
+
+void DevicePostureProviderImpl::OnViewportSegmentsChanged(
+    const std::vector<gfx::Rect>& segments) {
+  for (auto& client : viewport_segments_clients_) {
+    client->OnViewportSegmentsChanged(segments);
+  }
 }
 
 void DevicePostureProviderImpl::OnReceiverConnectionError() {

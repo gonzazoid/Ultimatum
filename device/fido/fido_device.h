@@ -10,8 +10,8 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/component_export.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "device/fido/authenticator_get_info_response.h"
 #include "device/fido/fido_constants.h"
@@ -90,14 +90,6 @@ class COMPONENT_EXPORT(DEVICE_FIDO) FidoDevice {
   // same VID:PID. It defaults to returning the value of |GetId|.
   virtual std::string GetDisplayName() const;
   virtual FidoTransportProtocol DeviceTransport() const = 0;
-
-  // These must only be called on Bluetooth devices.
-  virtual bool IsInPairingMode() const;
-  virtual bool IsPaired() const;
-
-  // Returns whether the service bit is set to require a PIN or passkey to pair
-  // for a FIDO Bluetooth device.
-  virtual bool RequiresBlePairingPin() const;
 
   // NoSilentRequests returns true if this device does not support up=false
   // requests.

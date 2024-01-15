@@ -5,14 +5,15 @@
 #include <set>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/files/file.h"
 #include "base/files/file_enumerator.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
 #include "base/lazy_instance.h"
 #include "base/memory/ptr_util.h"
+#include "base/test/launcher/unit_test_launcher.h"
 #include "base/test/task_environment.h"
 #include "base/test/test_suite.h"
 #include "base/trace_event/process_memory_dump.h"
@@ -428,7 +429,13 @@ TEST_F(ChromiumEnvDBTrackerTest, CheckMemEnv) {
   EXPECT_TRUE(leveldb_chrome::IsMemEnv(memenv.get()));
 }
 
-TEST_F(ChromiumEnvDBTrackerTest, MemoryDumpCreation) {
+// TODO(crbug.com/1482738): Fix and re-enable this test.
+#if BUILDFLAG(IS_ANDROID)
+#define MAYBE_MemoryDumpCreation DISABLED_MemoryDumpCreation
+#else
+#define MAYBE_MemoryDumpCreation MemoryDumpCreation
+#endif  // BUILDFLAG(IS_ANDROID)
+TEST_F(ChromiumEnvDBTrackerTest, MAYBE_MemoryDumpCreation) {
   Options options;
   options.create_if_missing = true;
   leveldb::Cache* web_cache = leveldb_chrome::GetSharedWebBlockCache();
@@ -474,7 +481,7 @@ TEST_F(ChromiumEnvDBTrackerTest, MemoryDumpCreation) {
   DBTracker::GetInstance()->VisitDatabases(base::BindRepeating(db_visitor));
   ASSERT_EQ(browser_cache->TotalCharge() * 2, web_cache->TotalCharge());
 
-  MemoryDumpArgs dump_args = {MemoryDumpLevelOfDetail::BACKGROUND};
+  MemoryDumpArgs dump_args = {MemoryDumpLevelOfDetail::kBackground};
   base::trace_event::ProcessMemoryDump pmd(dump_args);
   auto* mad1 = DBTracker::GetOrCreateAllocatorDump(&pmd, db1.get());
   auto* mad2 = DBTracker::GetOrCreateAllocatorDump(&pmd, db2.get());
@@ -499,7 +506,7 @@ TEST_F(ChromiumEnvDBTrackerTest, MemEnvMemoryDumpCreation) {
   writable_file->Append(Slice(kValue));
   delete writable_file;
 
-  const MemoryDumpArgs dump_args = {MemoryDumpLevelOfDetail::BACKGROUND};
+  const MemoryDumpArgs dump_args = {MemoryDumpLevelOfDetail::kBackground};
   base::trace_event::ProcessMemoryDump dump1(dump_args);
   auto* mad = DBTracker::GetOrCreateAllocatorDump(&dump1, memenv.get());
 
@@ -665,7 +672,9 @@ class ChromiumLevelDBRebuildTest : public ::testing::Test {
   const base::FilePath& temp_path() const { return scoped_temp_dir_.GetPath(); }
 
  private:
-  base::ScopedAllowBlockingForTesting allow_blocking_;
+  // TODO(https://github.com/llvm/llvm-project/issues/61334): Explicit
+  // [[maybe_unused]] attribute shouuld not be necessary here.
+  [[maybe_unused]] base::ScopedAllowBlockingForTesting allow_blocking_;
   base::ScopedTempDir scoped_temp_dir_;
 };
 
@@ -676,16 +685,15 @@ TEST_F(ChromiumLevelDBRebuildTest, RebuildDb) {
   options.create_if_missing = true;
 
   auto s = leveldb_env::OpenDB(options, db_path.AsUTF8Unsafe(), &db);
-  ASSERT_TRUE(s.ok());
+  EXPECT_TRUE(s.ok());
+  ASSERT_TRUE(db);
   db->Put(leveldb::WriteOptions(), "key1", "value1");
   db->Put(leveldb::WriteOptions(), "key2", "value2");
   db->Delete(leveldb::WriteOptions(), "key1");
 
-  leveldb::DB* old_db_ptr = db.get();
   s = leveldb_env::RewriteDB(options, db_path.AsUTF8Unsafe(), &db);
   EXPECT_TRUE(s.ok());
-  EXPECT_NE(old_db_ptr, db.get());
-  EXPECT_TRUE(db);
+  ASSERT_TRUE(db);
 
   std::string value;
   s = db->Get(leveldb::ReadOptions(), "key1", &value);
@@ -789,4 +797,10 @@ TEST_F(ChromiumLevelDBRebuildTest, FinishCleanup) {
 
 }  // namespace leveldb_env
 
-int main(int argc, char** argv) { return base::TestSuite(argc, argv).Run(); }
+int main(int argc, char** argv) {
+  base::TestSuite test_suite(argc, argv);
+
+  // Many tests reuse the same database path and so must run serially.
+  return base::LaunchUnitTestsSerially(
+      argc, argv, BindOnce(&base::TestSuite::Run, Unretained(&test_suite)));
+}

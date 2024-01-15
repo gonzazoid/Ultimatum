@@ -4,7 +4,7 @@
 
 #include "services/shape_detection/text_detection_impl_mac.h"
 
-#include "base/mac/scoped_cftyperef.h"
+#include "base/apple/scoped_cftyperef.h"
 #include "base/strings/sys_string_conversions.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/self_owned_receiver.h"
@@ -22,16 +22,16 @@ void TextDetectionImpl::Create(
 
 TextDetectionImplMac::TextDetectionImplMac() {
   NSDictionary* const opts = @{CIDetectorAccuracy : CIDetectorAccuracyHigh};
-  detector_.reset(
-      [[CIDetector detectorOfType:CIDetectorTypeText context:nil options:opts]
-          retain]);
+  detector_ = [CIDetector detectorOfType:CIDetectorTypeText
+                                 context:nil
+                                 options:opts];
 }
 
-TextDetectionImplMac::~TextDetectionImplMac() {}
+TextDetectionImplMac::~TextDetectionImplMac() = default;
 
 void TextDetectionImplMac::Detect(const SkBitmap& bitmap,
                                   DetectCallback callback) {
-  base::scoped_nsobject<CIImage> ci_image = CreateCIImageFromSkBitmap(bitmap);
+  CIImage* ci_image = CIImageFromSkBitmap(bitmap);
   if (!ci_image) {
     std::move(callback).Run({});
     return;

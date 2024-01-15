@@ -49,18 +49,17 @@ struct ResourceTimingInfo {
   // in PerformanceResourceTiming (http://www.w3.org/TR/resource-timing-1/).
   string name;
 
-  // The start time of the request. Corresponds to
-  // |requestStart| in PerformanceResourceTiming
-  // (http://www.w3.org/TR/resource-timing-1/).
+  // This timestamp is set at the time when ResourceFetcher::RequestResource is
+  // called and will end up as the startTime of the corresponding performance
+  // timeline resource timing entry.
   mojo_base.mojom.TimeTicks start_time;
 
   // Corresponds to |nextHopProtocol| in PerformanceResourceTiming
   // (http://www.w3.org/TR/resource-timing-2/).
   string alpn_negotiated_protocol;
 
-  // Corresponds to the result of calling
-  // HttpResponseInfo::ConnectionInfoToString on the associated response
-  // object.
+  // Corresponds to the result of calling HttpConnectionInfoToString on
+  // the associated response object.
   string connection_info;
 
   // The load timing data.
@@ -73,11 +72,6 @@ struct ResourceTimingInfo {
   // Corresponds to |responseEnd| in PerformanceResourceTiming
   // (http://www.w3.org/TR/resource-timing-1/).
   mojo_base.mojom.TimeTicks response_end;
-
-  // Deprecated, use |request_destination| instead in new code.
-  // TODO(crbug.com/889751): Remove this once all the code migrates.
-  RequestContextType context_type;
-  network.mojom.RequestDestination request_destination;
 
   // https://w3c.github.io/resource-timing/#dfn-cache-mode
   CacheState cache_state;
@@ -103,7 +97,6 @@ struct ResourceTimingInfo {
   // exposed by PerformanceResourceTiming, but the underlying behavior is a
   // little different.
   bool allow_timing_details;
-  bool allow_redirect_details;
 
   // Normally, the timestamps are relative to the time origin. In most cases,
   // these timestamps should be positive value, so 0 is used to mark invalid

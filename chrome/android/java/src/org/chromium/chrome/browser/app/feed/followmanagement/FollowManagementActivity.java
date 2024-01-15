@@ -10,12 +10,11 @@ import android.view.MenuItem;
 import androidx.appcompat.widget.Toolbar;
 
 import org.chromium.base.Log;
+import org.chromium.chrome.R;
 import org.chromium.chrome.browser.SnackbarActivity;
 import org.chromium.chrome.browser.feed.followmanagement.FollowManagementCoordinator;
 
-/**
- * Activity for managing feed and webfeed settings on the new tab page.
- */
+/** Activity for managing feed and webfeed settings on the new tab page. */
 public class FollowManagementActivity extends SnackbarActivity {
     private static final String TAG = "FollowMActivity";
 
@@ -28,7 +27,7 @@ public class FollowManagementActivity extends SnackbarActivity {
         setContentView(coordinator.getView());
 
         // Set up the toolbar and back button.
-        Toolbar toolbar = (Toolbar) findViewById(org.chromium.chrome.browser.feed.R.id.action_bar);
+        Toolbar toolbar = (Toolbar) findViewById(R.id.action_bar);
         setSupportActionBar(toolbar);
         getSupportActionBar().setDisplayHomeAsUpEnabled(true);
     }

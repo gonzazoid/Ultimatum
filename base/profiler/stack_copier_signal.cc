@@ -4,8 +4,10 @@
 
 #include "base/profiler/stack_copier_signal.h"
 
+#include <errno.h>
 #include <linux/futex.h>
 #include <signal.h>
+#include <stdint.h>
 #include <sys/ucontext.h>
 #include <syscall.h>
 
@@ -30,40 +32,63 @@ namespace {
 // handlers cannot allocate memory or use pthread api.
 class AsyncSafeWaitableEvent {
  public:
-  AsyncSafeWaitableEvent() { futex_.store(0, std::memory_order_release); }
-  ~AsyncSafeWaitableEvent() {}
+  AsyncSafeWaitableEvent() {
+    futex_.store(kNotSignaled, std::memory_order_release);
+  }
+  ~AsyncSafeWaitableEvent() = default;
+  AsyncSafeWaitableEvent(const AsyncSafeWaitableEvent&) = delete;
+  AsyncSafeWaitableEvent& operator=(const AsyncSafeWaitableEvent&) = delete;
 
   bool Wait() {
     // futex() can wake up spuriously if this memory address was previously used
-    // for a pthread mutex. So, also check the condition.
+    // for a pthread mutex or we get a signal. So, also check the condition.
     while (true) {
       long res =
-          syscall(SYS_futex, futex_int_ptr(), FUTEX_WAIT | FUTEX_PRIVATE_FLAG,
-                  0, nullptr, nullptr, 0);
-      if (futex_.load(std::memory_order_acquire) != 0)
+          syscall(SYS_futex, futex_ptr(), FUTEX_WAIT | FUTEX_PRIVATE_FLAG,
+                  kNotSignaled, nullptr, nullptr, 0);
+      int futex_errno = errno;
+      if (futex_.load(std::memory_order_acquire) != kNotSignaled) {
         return true;
-      if (res != 0)
-        return false;
+      }
+      if (res != 0) {
+        // EINTR indicates the wait was interrupted by a signal; retry the wait.
+        // EAGAIN happens if this thread sees the FUTEX_WAKE before it sees the
+        // atomic_int store in Signal. This can't happen in an unoptimized
+        // single total modification order threading model; however, since we
+        // using release-acquire semantics on the atomic_uint32_t, it might be.
+        // (The futex docs aren't clear what memory/threading model they are
+        // using.)
+        if (futex_errno != EINTR && futex_errno != EAGAIN) {
+          return false;
+        }
+      }
     }
   }
 
   void Signal() {
-    futex_.store(1, std::memory_order_release);
-    syscall(SYS_futex, futex_int_ptr(), FUTEX_WAKE | FUTEX_PRIVATE_FLAG, 1,
-            nullptr, nullptr, 0);
+    futex_.store(kSignaled, std::memory_order_release);
+    syscall(SYS_futex, futex_ptr(), FUTEX_WAKE | FUTEX_PRIVATE_FLAG, 1, nullptr,
+            nullptr, 0);
   }
 
  private:
-  // Provides a pointer to the atomic's storage. std::atomic_int has standard
-  // layout so its address can be used for the pointer as long as it only
-  // contains the int.
-  int* futex_int_ptr() {
-    static_assert(sizeof(futex_) == sizeof(int),
-                  "Expected std::atomic_int to be the same size as int");
-    return reinterpret_cast<int*>(&futex_);
+  // The possible values in the futex / atomic_int.
+  static constexpr uint32_t kNotSignaled = 0;
+  static constexpr uint32_t kSignaled = 1;
+
+  // Provides a pointer to the atomic's storage. std::atomic_uint32_t has
+  // standard layout so its address can be used for the pointer as long as it
+  // only contains the uint32_t.
+  uint32_t* futex_ptr() {
+    // futex documents state the futex is 32 bits regardless of the platform
+    // size.
+    static_assert(sizeof(futex_) == sizeof(uint32_t),
+                  "Expected std::atomic_uint32_t to be the same size as "
+                  "uint32_t");
+    return reinterpret_cast<uint32_t*>(&futex_);
   }
 
-  std::atomic_int futex_{0};
+  std::atomic_uint32_t futex_{kNotSignaled};
 };
 
 // Scoped signal event that calls Signal on the AsyncSafeWaitableEvent at

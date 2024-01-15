@@ -22,6 +22,11 @@ class COMPONENT_EXPORT(TYPECD) FakeTypecdClient : public TypecdClient {
   // signal.
   void EmitThunderboltDeviceConnectedSignal(bool is_thunderbolt_only);
   void EmitCableWarningSignal(typecd::CableWarningType type);
+
+  // TypecdClient:
+  void SetPeripheralDataAccessPermissionState(bool permitted) override;
+  void SetTypeCPortsUsingDisplays(
+      const std::vector<uint32_t>& port_nums) override;
 };
 
 }  // namespace ash

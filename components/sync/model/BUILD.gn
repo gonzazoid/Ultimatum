@@ -58,25 +58,30 @@ static_library("model") {
     "sync_data.h",
     "sync_error.cc",
     "sync_error.h",
-    "sync_error_factory.h",
     "sync_metadata_store.h",
     "sync_metadata_store_change_list.cc",
     "sync_metadata_store_change_list.h",
+    "syncable_service.cc",
     "syncable_service.h",
     "syncable_service_based_bridge.cc",
     "syncable_service_based_bridge.h",
     "type_entities_count.h",
+    "wipe_model_upon_sync_disabled_behavior.h",
   ]
 
   configs += [ "//build/config/compiler:wexit_time_destructors" ]
 
   public_deps = [
     "//base",
+    "//components/prefs",
     "//components/sync/base",
     "//components/sync/engine",
     "//components/sync/protocol",
     "//third_party/leveldatabase",
   ]
 
-  deps = [ "//components/keyed_service/core" ]
+  deps = [
+    "//components/keyed_service/core",
+    "//components/version_info",
+  ]
 }

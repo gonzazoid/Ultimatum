@@ -10,7 +10,7 @@
 // Each one of the following types with the exception of
 // AutofillUITypeCreditCardExpDate, AutofillUITypeCreditCardBillingAddress,
 // and AutofillUITypeCreditCardSaveToChrome corresponds to an
-// autofill::ServerFieldType.
+// autofill::FieldType.
 typedef NS_ENUM(NSInteger, AutofillUIType) {
   AutofillUITypeUnknown,
   AutofillUITypeCreditCardNumber,
@@ -28,6 +28,7 @@ typedef NS_ENUM(NSInteger, AutofillUIType) {
   AutofillUITypeProfileHomeAddressLine2,
   AutofillUITypeProfileHomeAddressDependentLocality,
   AutofillUITypeProfileHomeAddressCity,
+  AutofillUITypeProfileHomeAddressAdminLevel2,
   AutofillUITypeProfileHomeAddressState,
   AutofillUITypeProfileHomeAddressZip,
   AutofillUITypeProfileHomeAddressSortingCode,

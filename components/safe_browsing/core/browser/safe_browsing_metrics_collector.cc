@@ -87,12 +87,62 @@ void SafeBrowsingMetricsCollector::StartLogging() {
 void SafeBrowsingMetricsCollector::LogMetricsAndScheduleNextLogging() {
   LogDailyOptInMetrics();
   LogDailyEventMetrics();
+  MaybeLogDailyEsbProtegoPingSentLast24Hours();
   RemoveOldEventsFromPref();
 
   pref_service_->SetInt64(
       prefs::kSafeBrowsingMetricsLastLogTime,
       base::Time::Now().ToDeltaSinceWindowsEpoch().InSeconds());
   ScheduleNextLoggingAfterInterval(base::Days(kMetricsLoggingIntervalDay));
+}
+
+void SafeBrowsingMetricsCollector::
+    MaybeLogDailyEsbProtegoPingSentLast24Hours() {
+  if (GetSafeBrowsingState(*pref_service_) !=
+      SafeBrowsingState::ENHANCED_PROTECTION) {
+    return;
+  }
+
+  auto last_ping_with_token = pref_service_->GetTime(
+      prefs::kSafeBrowsingEsbProtegoPingWithTokenLastLogTime);
+  auto last_ping_without_token = pref_service_->GetTime(
+      prefs::kSafeBrowsingEsbProtegoPingWithoutTokenLastLogTime);
+  auto most_recent_ping_type = last_ping_with_token > last_ping_without_token
+                                   ? ProtegoPingType::kWithToken
+                                   : ProtegoPingType::kWithoutToken;
+  auto most_recent_ping_time =
+      std::max(last_ping_with_token, last_ping_without_token);
+
+  auto most_recent_collector_run_time = PrefValueToTime(
+      pref_service_->GetValue(prefs::kSafeBrowsingMetricsLastLogTime));
+
+  bool sent_ping_since_last_collector_run =
+      most_recent_ping_time > most_recent_collector_run_time;
+  base::UmaHistogramEnumeration(
+      "SafeBrowsing.Enhanced.ProtegoRequestSentInLast24Hours",
+      sent_ping_since_last_collector_run ? most_recent_ping_type
+                                         : ProtegoPingType::kNone);
+
+  auto logged_ping_type = ProtegoPingType::kNone;
+
+  if (base::Time::Now() - last_ping_with_token < base::Hours(24)) {
+    // If a ping with token was sent within the last 24 hours,
+    // the most recent ping type is kWithToken.
+    // If both last_ping_with_token and last_ping_without_token are present,
+    // we log kWithToken instead of kWithoutToken because if a token has been
+    // sent before, we are certain that this account is a signed in account
+    // and the server has received the token.
+    // The kWithoutToken ping could be sent after the account logged out.
+    logged_ping_type = ProtegoPingType::kWithToken;
+  } else if (base::Time::Now() - last_ping_without_token < base::Hours(24)) {
+    // If no ping with token was sent but a ping without token was sent within
+    // the last 24 hours, the most recent ping type is kWithoutToken.
+    // Otherwise, it is the default value, kNone.
+    logged_ping_type = ProtegoPingType::kWithoutToken;
+  }
+  base::UmaHistogramEnumeration(
+      "SafeBrowsing.Enhanced.ProtegoRequestSentInLast24Hours2",
+      logged_ping_type);
 }
 
 void SafeBrowsingMetricsCollector::ScheduleNextLoggingAfterInterval(
@@ -127,21 +177,11 @@ void SafeBrowsingMetricsCollector::LogDailyEventMetrics() {
     if (IsBypassEventType(event_type)) {
       int bypass_count = GetEventCountSince(user_state, event_type,
                                             base::Time::Now() - base::Days(28));
-      base::UmaHistogramCounts100("SafeBrowsing.Daily.BypassCountLast28Days." +
-                                      GetUserStateMetricSuffix(user_state) +
-                                      "." +
-                                      GetEventTypeMetricSuffix(event_type),
-                                  bypass_count);
       total_bypass_count += bypass_count;
     }
     if (IsSecuritySensitiveEventType(event_type)) {
       int security_sensitive_event_count = GetEventCountSince(
           user_state, event_type, base::Time::Now() - base::Days(28));
-      base::UmaHistogramCounts100(
-          "SafeBrowsing.Daily.SecuritySensitiveCountLast28Days." +
-              GetUserStateMetricSuffix(user_state) + "." +
-              GetEventTypeMetricSuffix(event_type),
-          security_sensitive_event_count);
       total_security_sensitive_event_count += security_sensitive_event_count;
     }
   }
@@ -159,22 +199,20 @@ void SafeBrowsingMetricsCollector::RemoveOldEventsFromPref() {
   ScopedDictPrefUpdate update(pref_service_,
                               prefs::kSafeBrowsingEventTimestamps);
   base::Value::Dict& mutable_state_dict = update.Get();
-
-  // Histogram to check whether prefs::kSafeBrowsingEventTimestamp is a dict.
-  // Prefs DCHECKs if it's the wrong type, or not registered, so this is not
-  // actually needed.
-  //
-  // TODO(mmenke): Remove this histogram.
-  base::UmaHistogramBoolean("SafeBrowsing.MetricsCollector.IsPrefValid", true);
+  size_t total_size = 0;
 
   for (auto state_map : mutable_state_dict) {
     for (auto event_map : state_map.second.GetDict()) {
+      total_size += event_map.second.GetList().size();
       event_map.second.GetList().EraseIf([&](const auto& timestamp) {
         return base::Time::Now() - PrefValueToTime(timestamp) >
                base::Days(kEventMaxDurationDay);
       });
     }
   }
+
+  base::UmaHistogramCounts1000(
+      "SafeBrowsing.MetricsCollectorEventCountAtCleanup", total_size);
 }
 
 void SafeBrowsingMetricsCollector::AddSafeBrowsingEventToPref(
@@ -199,8 +237,17 @@ void SafeBrowsingMetricsCollector::AddBypassEventToPref(
     case ThreatSource::CLIENT_SIDE_DETECTION:
       event = EventType::CSD_INTERSTITIAL_BYPASS;
       break;
-    case ThreatSource::REAL_TIME_CHECK:
-      event = EventType::REAL_TIME_INTERSTITIAL_BYPASS;
+    case ThreatSource::URL_REAL_TIME_CHECK:
+      event = EventType::URL_REAL_TIME_INTERSTITIAL_BYPASS;
+      break;
+    case ThreatSource::NATIVE_PVER5_REAL_TIME:
+      event = EventType::HASH_PREFIX_REAL_TIME_INTERSTITIAL_BYPASS;
+      break;
+    case ThreatSource::ANDROID_SAFEBROWSING_REAL_TIME:
+      event = EventType::ANDROID_SAFEBROWSING_REAL_TIME_INTERSTITIAL_BYPASS;
+      break;
+    case ThreatSource::ANDROID_SAFEBROWSING:
+      event = EventType::ANDROID_SAFEBROWSING_INTERSTITIAL_BYPASS;
       break;
     default:
       NOTREACHED() << "Unexpected threat source.";
@@ -356,25 +403,6 @@ void SafeBrowsingMetricsCollector::
     return;
   }
 
-  for (int event_type_int = 0; event_type_int <= EventType::kMaxValue;
-       event_type_int += 1) {
-    EventType event_type = static_cast<EventType>(event_type_int);
-    if (IsBypassEventType(event_type)) {
-      base::UmaHistogramCounts100(
-          "SafeBrowsing.EsbDisabled.BypassCountLast28Days." +
-              GetEventTypeMetricSuffix(event_type),
-          GetEventCountSince(UserState::kEnhancedProtection, event_type,
-                             base::Time::Now() - base::Days(28)));
-    }
-    if (IsSecuritySensitiveEventType(event_type)) {
-      base::UmaHistogramCounts100(
-          "SafeBrowsing.EsbDisabled.SecuritySensitiveCountLast28Days." +
-              GetEventTypeMetricSuffix(event_type),
-          GetEventCountSince(UserState::kEnhancedProtection, event_type,
-                             base::Time::Now() - base::Days(28)));
-    }
-  }
-
   absl::optional<SafeBrowsingMetricsCollector::Event> latest_bypass_event =
       GetLatestEventFromEventTypeFilter(
           UserState::kEnhancedProtection,
@@ -384,12 +412,6 @@ void SafeBrowsingMetricsCollector::
     base::UmaHistogramEnumeration(
         "SafeBrowsing.EsbDisabled.LastBypassEventType",
         latest_bypass_event->type);
-    base::UmaHistogramCustomTimes(
-        "SafeBrowsing.EsbDisabled.LastBypassEventInterval." +
-            GetEventTypeMetricSuffix(latest_bypass_event->type),
-        /* sample */ base::Time::Now() - latest_bypass_event->timestamp,
-        /* min */ base::Seconds(1),
-        /* max */ base::Days(1), /* buckets */ 50);
   }
 
   absl::optional<SafeBrowsingMetricsCollector::Event>
@@ -401,13 +423,6 @@ void SafeBrowsingMetricsCollector::
     base::UmaHistogramEnumeration(
         "SafeBrowsing.EsbDisabled.LastSecuritySensitiveEventType",
         latest_security_sensitive_event->type);
-    base::UmaHistogramCustomTimes(
-        "SafeBrowsing.EsbDisabled.LastSecuritySensitiveEventInterval." +
-            GetEventTypeMetricSuffix(latest_security_sensitive_event->type),
-        /* sample */ base::Time::Now() -
-            latest_security_sensitive_event->timestamp,
-        /* min */ base::Seconds(1),
-        /* max */ base::Days(1), /* buckets */ 50);
   }
 
   const absl::optional<Event> latest_enabled_event =
@@ -468,11 +483,14 @@ bool SafeBrowsingMetricsCollector::IsBypassEventType(const EventType& type) {
       return false;
     case EventType::DATABASE_INTERSTITIAL_BYPASS:
     case EventType::CSD_INTERSTITIAL_BYPASS:
-    case EventType::REAL_TIME_INTERSTITIAL_BYPASS:
+    case EventType::URL_REAL_TIME_INTERSTITIAL_BYPASS:
     case EventType::DANGEROUS_DOWNLOAD_BYPASS:
     case EventType::PASSWORD_REUSE_MODAL_BYPASS:
     case EventType::EXTENSION_ALLOWLIST_INSTALL_BYPASS:
     case EventType::NON_ALLOWLISTED_EXTENSION_RE_ENABLED:
+    case EventType::HASH_PREFIX_REAL_TIME_INTERSTITIAL_BYPASS:
+    case EventType::ANDROID_SAFEBROWSING_REAL_TIME_INTERSTITIAL_BYPASS:
+    case EventType::ANDROID_SAFEBROWSING_INTERSTITIAL_BYPASS:
       return true;
   }
 }
@@ -484,11 +502,14 @@ bool SafeBrowsingMetricsCollector::IsSecuritySensitiveEventType(
     case EventType::USER_STATE_ENABLED:
     case EventType::DATABASE_INTERSTITIAL_BYPASS:
     case EventType::CSD_INTERSTITIAL_BYPASS:
-    case EventType::REAL_TIME_INTERSTITIAL_BYPASS:
+    case EventType::URL_REAL_TIME_INTERSTITIAL_BYPASS:
     case EventType::DANGEROUS_DOWNLOAD_BYPASS:
     case EventType::PASSWORD_REUSE_MODAL_BYPASS:
     case EventType::EXTENSION_ALLOWLIST_INSTALL_BYPASS:
     case EventType::NON_ALLOWLISTED_EXTENSION_RE_ENABLED:
+    case EventType::HASH_PREFIX_REAL_TIME_INTERSTITIAL_BYPASS:
+    case EventType::ANDROID_SAFEBROWSING_REAL_TIME_INTERSTITIAL_BYPASS:
+    case EventType::ANDROID_SAFEBROWSING_INTERSTITIAL_BYPASS:
       return false;
     case EventType::SECURITY_SENSITIVE_SAFE_BROWSING_INTERSTITIAL:
     case EventType::SECURITY_SENSITIVE_SSL_INTERSTITIAL:
@@ -507,38 +528,6 @@ std::string SafeBrowsingMetricsCollector::GetUserStateMetricSuffix(
       return "EnhancedProtection";
     case UserState::kManaged:
       return "Managed";
-  }
-}
-
-std::string SafeBrowsingMetricsCollector::GetEventTypeMetricSuffix(
-    const EventType& event_type) {
-  switch (event_type) {
-    case EventType::USER_STATE_DISABLED:
-      return "UserStateDisabled";
-    case EventType::USER_STATE_ENABLED:
-      return "UserStateEnabled";
-    case EventType::DATABASE_INTERSTITIAL_BYPASS:
-      return "DatabaseInterstitialBypass";
-    case EventType::CSD_INTERSTITIAL_BYPASS:
-      return "CsdInterstitialBypass";
-    case EventType::REAL_TIME_INTERSTITIAL_BYPASS:
-      return "RealTimeInterstitialBypass";
-    case EventType::DANGEROUS_DOWNLOAD_BYPASS:
-      return "DangerousDownloadBypass";
-    case EventType::PASSWORD_REUSE_MODAL_BYPASS:
-      return "PasswordReuseModalBypass";
-    case EventType::EXTENSION_ALLOWLIST_INSTALL_BYPASS:
-      return "ExtensionAllowlistInstallBypass";
-    case EventType::NON_ALLOWLISTED_EXTENSION_RE_ENABLED:
-      return "NonAllowlistedExtensionReEnabled";
-    case EventType::SECURITY_SENSITIVE_SAFE_BROWSING_INTERSTITIAL:
-      return "SafeBrowsingInterstitial";
-    case EventType::SECURITY_SENSITIVE_SSL_INTERSTITIAL:
-      return "SSLInterstitial";
-    case EventType::SECURITY_SENSITIVE_PASSWORD_PROTECTION:
-      return "PasswordProtection";
-    case EventType::SECURITY_SENSITIVE_DOWNLOAD:
-      return "Download";
   }
 }
 

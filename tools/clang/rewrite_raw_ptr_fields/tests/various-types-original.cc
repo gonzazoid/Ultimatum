@@ -107,13 +107,18 @@ struct MyStruct {
   using SomeClassPtrAlias = SomeClass*;
 
   // Char pointer fields should be rewritten, unless they are on the
-  // --field-filter-file blocklist.  See also gen-char-test.cc for tests
-  // covering generating the blocklist.
+  // --field-filter-file blocklist.
   //
   // Expected rewrite: raw_ptr<char>, etc.
   char* char_ptr;
-  const char* const_char_ptr;
+  char16_t* char16_ptr;
   wchar_t* wide_char_ptr;
+
+  // TODO(crbug.com/1381955) |const char| pointer fields are not supported yet.
+  //
+  // No rewrite expected (for now).
+  const char* const_char_ptr;
+  const char16_t* const_char16_ptr;
   const wchar_t* const_wide_char_ptr;
 
   // |array_of_ptrs| is an array 123 of pointer to SomeClass.
@@ -132,16 +137,16 @@ struct MyStruct {
 };
 
 struct MyStruct2 {
-  // Expected rewrite: raw_ref<bool> bool_ref;
+  // Expected rewrite: const raw_ref<bool> bool_ref;
   bool& bool_ref;
-  // Expected rewrite: raw_ref<const bool> bool_ref;
+  // Expected rewrite: const raw_ref<const bool> bool_ref;
   const bool& const_bool_ref;
 
-  // Expected rewrite: raw_ref<std::string> string_ref;
+  // Expected rewrite: const raw_ref<std::string> string_ref;
   std::string& string_ref;
-  // Expected rewrite: raw_ref<std::vector<char>> vector_ref;
+  // Expected rewrite: const raw_ref<std::vector<char>> vector_ref;
   std::vector<char>& vector_ref;
-  // Expected rewrite: raw_ref<SomeTemplate<char>> template_ref;
+  // Expected rewrite: const raw_ref<SomeTemplate<char>> template_ref;
   SomeTemplate<char>& template_ref;
 
   // Some types may be spelled in various, alternative ways.  If possible, the
@@ -149,31 +154,31 @@ struct MyStruct2 {
   //
   // Spelling of integer types.
   //
-  // Expected rewrite: raw_ref<int> ...
+  // Expected rewrite: const raw_ref<int> ...
   int& int_spelling1;
-  // Expected rewrite: raw_ref<signed int> ...
-  // Today this is rewritten into: raw_ref<int> ...
+  // Expected rewrite: const raw_ref<signed int> ...
+  // Today this is rewritten into: const raw_ref<int> ...
   signed int& int_spelling2;
-  // Expected rewrite: raw_ref<long int> ...
-  // Today this is rewritten into: raw_ref<long> ...
+  // Expected rewrite: const raw_ref<long int> ...
+  // Today this is rewritten into: const raw_ref<long> ...
   long int& int_spelling3;
-  // Expected rewrite: raw_ref<unsigned> ...
-  // Today this is rewritten into: raw_ref<unsigned int>
+  // Expected rewrite: const raw_ref<unsigned> ...
+  // Today this is rewritten into: const raw_ref<unsigned int>
   unsigned& int_spelling4;
-  // Expected rewrite: raw_ref<int32_t> ...
+  // Expected rewrite: const raw_ref<int32_t> ...
   int32_t& int_spelling5;
-  // Expected rewrite: raw_ref<int64_t> ...
+  // Expected rewrite: const raw_ref<int64_t> ...
   int64_t& int_spelling6;
-  // Expected rewrite: raw_ref<int_fast32_t> ...
+  // Expected rewrite: const raw_ref<int_fast32_t> ...
   int_fast32_t& int_spelling7;
   //
   // Spelling of structs and classes.
   //
-  // Expected rewrite: raw_ref<SomeClass> ...
+  // Expected rewrite: const raw_ref<SomeClass> ...
   SomeClass& class_spelling1;
-  // Expected rewrite: raw_ref<class SomeClass> ...
+  // Expected rewrite: const raw_ref<class SomeClass> ...
   class SomeClass& class_spelling2;
-  // Expected rewrite: raw_ref<my_namespace::SomeClass> ...
+  // Expected rewrite: const raw_ref<my_namespace::SomeClass> ...
   my_namespace::SomeClass& class_spelling3;
 
   // Typedef-ed or type-aliased pointees should participate in the rewriting. No
@@ -181,11 +186,11 @@ struct MyStruct2 {
   typedef SomeClass SomeClassTypedef;
   using SomeClassAlias = SomeClass;
   typedef void (*func_ptr_typedef2)(char);
-  // Expected rewrite: raw_ref<SomeClassTypedef> ...
+  // Expected rewrite: const raw_ref<SomeClassTypedef> ...
   SomeClassTypedef& typedef_ref;
-  // Expected rewrite: raw_ref<SomeClassAlias> ...
+  // Expected rewrite: const raw_ref<SomeClassAlias> ...
   SomeClassAlias& alias_ref;
-  // Expected rewrite: raw_ref<func_ptr_typedef2> ...
+  // Expected rewrite: const raw_ref<func_ptr_typedef2> ...
   func_ptr_typedef2& ref_to_function_ptr;
 
   // Typedefs and type alias definitions should not be rewritten.
@@ -196,10 +201,9 @@ struct MyStruct2 {
   using SomeClassRefAlias = SomeClass&;
 
   // Char pointer fields should be rewritten, unless they are on the
-  // --field-filter-file blocklist.  See also gen-char-test.cc for tests
-  // covering generating the blocklist.
+  // --field-filter-file blocklist.
   //
-  // Expected rewrite: raw_ref<char>, etc.
+  // Expected rewrite: const raw_ref<char>, etc.
   char& char_ref;
   const char& const_char_ref;
   wchar_t& wide_char_ref;

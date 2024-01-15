@@ -9,10 +9,6 @@
 #import "testing/platform_test.h"
 #import "third_party/ocmock/OCMock/OCMock.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 using ContentSuggestionsTileLayoutUtilTest = PlatformTest;
 
 // Tests that MostVisitedCellSize returns correct size for all content size
@@ -31,10 +27,10 @@ TEST_F(ContentSuggestionsTileLayoutUtilTest, MostVisitedCellSize) {
   EXPECT_TRUE(CGSizeEqualToSize(
       kContentSuggestionsTileViewSizeSmall, MostVisitedCellSize(UIContentSizeCategoryLarge)));
   EXPECT_TRUE(
-      CGSizeEqualToSize(kContentSuggestionsTileViewSizeSmall,
+      CGSizeEqualToSize(kContentSuggestionsTileViewSizeMedium,
                         MostVisitedCellSize(UIContentSizeCategoryExtraLarge)));
   EXPECT_TRUE(CGSizeEqualToSize(
-      kContentSuggestionsTileViewSizeSmall,
+      kContentSuggestionsTileViewSizeMedium,
       MostVisitedCellSize(UIContentSizeCategoryExtraExtraLarge)));
   EXPECT_TRUE(CGSizeEqualToSize(
       kContentSuggestionsTileViewSizeMedium,

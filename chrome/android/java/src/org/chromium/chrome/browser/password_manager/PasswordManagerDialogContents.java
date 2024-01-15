@@ -9,15 +9,12 @@ import androidx.annotation.Nullable;
 import org.chromium.base.Callback;
 import org.chromium.ui.modaldialog.ModalDialogManager;
 
-/**
- * Class containing all data that customizes the contents displayed in the dialog.
- */
+/** Class containing all data that customizes the contents displayed in the dialog. */
 public class PasswordManagerDialogContents {
 
     private final String mTitle;
     private final String mDetails;
     private final String mPrimaryButtonText;
-    private final @IdRes int mPrimaryButtonIconId;
     private final @Nullable String mSecondaryButtonText;
     private final @IdRes int mIllustrationId;
     private final Callback<Integer> mButtonClickCallback;
@@ -29,23 +26,27 @@ public class PasswordManagerDialogContents {
     /**
      * Constructor for the dialog contents.
      *
-     * @param title The title of the dialog, to be displayed below the image.
-     * @param details The details text to be displayed under the title.
-     * @param illustrationId The resource id of the image displayed above the title.
-     * @param primaryButtonText The text of the primary button.
-     * @param primaryButtonIconId The resource ID of icon on the primary button, or 0 if none.
-     * @param secondaryButtonText The text of the secondary button or null if there shouldn't be a
-     *      secondary button.
-     * @param buttonClickCallback The callback handling the click on the buttons. It takes the type
-     *      of the button as a parameter.
+     * @param title               The title of the dialog, to be displayed below the
+     *                            image.
+     * @param details             The details text to be displayed under the title.
+     * @param illustrationId      The resource id of the image displayed above the
+     *                            title.
+     * @param primaryButtonText   The text of the primary button.
+     * @param secondaryButtonText The text of the secondary button or null if there
+     *                            shouldn't be a secondary button.
+     * @param buttonClickCallback The callback handling the click on the buttons. It
+     *                            takes the type of the button as a parameter.
      */
-    public PasswordManagerDialogContents(String title, String details, int illustrationId,
-            String primaryButtonText, int primaryButtonIconId, @Nullable String secondaryButtonText,
+    public PasswordManagerDialogContents(
+            String title,
+            String details,
+            int illustrationId,
+            String primaryButtonText,
+            @Nullable String secondaryButtonText,
             Callback<Integer> buttonClickCallback) {
         mTitle = title;
         mDetails = details;
         mPrimaryButtonText = primaryButtonText;
-        mPrimaryButtonIconId = primaryButtonIconId;
         mSecondaryButtonText = secondaryButtonText;
         mIllustrationId = illustrationId;
         mButtonClickCallback = buttonClickCallback;
@@ -54,9 +55,7 @@ public class PasswordManagerDialogContents {
         mDialogType = ModalDialogManager.ModalDialogType.APP;
     }
 
-    /**
-     * Sets whether or not the primary button should be displayed as filled.
-     */
+    /** Sets whether or not the primary button should be displayed as filled. */
     public void setPrimaryButtonFilled(boolean primaryButtonFilled) {
         mPrimaryButtonFilled = primaryButtonFilled;
     }
@@ -69,53 +68,34 @@ public class PasswordManagerDialogContents {
         mHelpButtonCallback = helpButtonCallback;
     }
 
-    /**
-     * Sets type of the modal dialog to be displayed: app or tab modal.
-     */
+    /** Sets type of the modal dialog to be displayed: app or tab modal. */
     public void setDialogType(@ModalDialogManager.ModalDialogType int type) {
         mDialogType = type;
     }
 
-    /**
-     * Returns the title of the dialog. It is also used as content description.
-     */
+    /** Returns the title of the dialog. It is also used as content description. */
     public String getTitle() {
         return mTitle;
     }
 
-    /**
-     * Returns the details to be displayed in the dialog under the title.
-     */
+    /** Returns the details to be displayed in the dialog under the title. */
     public String getDetails() {
         return mDetails;
     }
 
-    /**
-     * Returns the text displayed in the primary button.
-     */
+    /** Returns the text displayed in the primary button. */
     public String getPrimaryButtonText() {
         return mPrimaryButtonText;
     }
 
     /**
-     * Returns the resource ID for the icon displayed in the primary button, or
-     * 0 if no icon is displayed.
-     */
-    public int getPrimaryButtonIconId() {
-        return mPrimaryButtonIconId;
-    }
-
-    /**
      * Returns the text displayed in the secondary button or null if the dialog has only one button.
      */
-    @Nullable
-    public String getSecondaryButtonText() {
+    public @Nullable String getSecondaryButtonText() {
         return mSecondaryButtonText;
     }
 
-    /**
-     * The resource id of the image displayed above the title.
-     */
+    /** The resource id of the image displayed above the title. */
     public @IdRes int getIllustrationId() {
         return mIllustrationId;
     }
@@ -129,9 +109,7 @@ public class PasswordManagerDialogContents {
         return mButtonClickCallback;
     }
 
-    /**
-     * Whether the primary button should be displayed as filled or not.
-     */
+    /** Whether the primary button should be displayed as filled or not. */
     public boolean isPrimaryButtonFilled() {
         return mPrimaryButtonFilled;
     }
@@ -140,14 +118,11 @@ public class PasswordManagerDialogContents {
      * Returns the callback handling the click on the help icon or null if no help icon should be
      * displayed.
      */
-    @Nullable
-    public Runnable getHelpButtonCallback() {
+    public @Nullable Runnable getHelpButtonCallback() {
         return mHelpButtonCallback;
     }
 
-    /**
-     * The type of the dialog: app modal or tab modal.
-     */
+    /** The type of the dialog: app modal or tab modal. */
     public @ModalDialogManager.ModalDialogType int getDialogType() {
         return mDialogType;
     }

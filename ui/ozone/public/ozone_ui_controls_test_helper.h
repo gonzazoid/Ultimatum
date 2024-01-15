@@ -7,8 +7,8 @@
 
 #include <memory>
 
-#include "base/callback_forward.h"
 #include "base/component_export.h"
+#include "base/functional/callback_forward.h"
 #include "ui/base/test/ui_controls.h"
 #include "ui/events/keycodes/keyboard_codes.h"
 #include "ui/gfx/native_widget_types.h"
@@ -23,22 +23,26 @@ class OzoneUIControlsTestHelper {
  public:
   virtual ~OzoneUIControlsTestHelper() = default;
 
+  // Reset the internal state if any.
+  virtual void Reset() = 0;
+
+  // Returns true if the underlying platform supports screen coordinates;
+  virtual bool SupportsScreenCoordinates() const = 0;
+
   // Returns current button down mask.
   virtual unsigned ButtonDownMask() const = 0;
 
-  // Sends key press event and executes |closure| when done.
-  virtual void SendKeyPressEvent(gfx::AcceleratedWidget widget,
-                                 ui::KeyboardCode key,
-                                 bool control,
-                                 bool shift,
-                                 bool alt,
-                                 bool command,
-                                 base::OnceClosure closure) = 0;
+  // Sends key events and executes `closure` when done.
+  virtual void SendKeyEvents(gfx::AcceleratedWidget widget,
+                             ui::KeyboardCode key,
+                             int key_event_types,
+                             int accelerator_state,
+                             base::OnceClosure closure) = 0;
 
   // Sends mouse motion notify event and executes |closure| when done.
   virtual void SendMouseMotionNotifyEvent(gfx::AcceleratedWidget widget,
                                           const gfx::Point& mouse_loc,
-                                          const gfx::Point& mouse_root_loc,
+                                          const gfx::Point& mouse_loc_in_screen,
                                           base::OnceClosure closure) = 0;
 
   // Sends mouse event and executes |closure| when done.
@@ -47,7 +51,7 @@ class OzoneUIControlsTestHelper {
                               int button_state,
                               int accelerator_state,
                               const gfx::Point& mouse_loc,
-                              const gfx::Point& mouse_root_loc,
+                              const gfx::Point& mouse_loc_in_screen,
                               base::OnceClosure closure) = 0;
 
 #if BUILDFLAG(IS_CHROMEOS_LACROS)
@@ -66,6 +70,10 @@ class OzoneUIControlsTestHelper {
   // SendMouseMotionNotifyEvent instead of calling MoveCursorTo via
   // aura::Window.
   virtual bool MustUseUiControlsForMoveCursorTo() = 0;
+
+#if BUILDFLAG(IS_LINUX)
+  virtual void ForceUseScreenCoordinatesOnce();
+#endif
 };
 
 COMPONENT_EXPORT(OZONE)

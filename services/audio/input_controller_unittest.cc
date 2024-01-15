@@ -5,18 +5,24 @@
 #include "services/audio/input_controller.h"
 
 #include <memory>
+#include <string_view>
 #include <utility>
 
 #include "base/run_loop.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/test/bind.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
+#include "base/time/time.h"
 #include "media/audio/aecdump_recording_manager.h"
+#include "media/audio/audio_io.h"
 #include "media/audio/audio_manager.h"
 #include "media/audio/fake_audio_input_stream.h"
 #include "media/audio/fake_audio_log_factory.h"
 #include "media/audio/fake_audio_manager.h"
+#include "media/audio/mock_audio_manager.h"
 #include "media/audio/test_audio_thread.h"
+#include "media/base/audio_glitch_info.h"
 #include "media/base/audio_processing.h"
 #include "media/base/media_switches.h"
 #include "media/base/user_input_monitor.h"
@@ -48,17 +54,17 @@ const int kSamplesPerPacket = kSampleRate / 100;
 // more than that for the callbacks.
 constexpr base::TimeDelta kOnMutePollInterval = base::Milliseconds(1000);
 
-enum class ProcessingFifoSetting {
-  kEnabled,
-  kEnabledWithSizeZero,
+enum class ChromeWideEchoCancellationSetting { kEnabled, kDisabled };
+
+enum class DecreaseFifoSizeSetting {
   kDisabled,
+  kDecreasedTo10,
+  kDecreasedTo0,
 };
 
-const std::string kFifoSizeParameter = "processing_fifo_size";
-const std::map<std::string, std::string> kDisabledFifoParam{
-    {kFifoSizeParameter, "0"}};
-const std::map<std::string, std::string> kEnabledFifoParam{
-    {kFifoSizeParameter, "110"}};
+#if BUILDFLAG(CHROME_WIDE_ECHO_CANCELLATION)
+const std::string kFifoSizeParameter = "fifo_size";
+#endif
 
 }  // namespace
 
@@ -71,7 +77,7 @@ class MockInputControllerEventHandler : public InputController::EventHandler {
   MockInputControllerEventHandler& operator=(
       const MockInputControllerEventHandler&) = delete;
 
-  void OnLog(base::StringPiece) override {}
+  void OnLog(std::string_view) override {}
 
   MOCK_METHOD1(OnCreated, void(bool initially_muted));
   MOCK_METHOD1(OnError, void(InputController::ErrorCode error_code));
@@ -82,11 +88,12 @@ class MockSyncWriter : public InputController::SyncWriter {
  public:
   MockSyncWriter() = default;
 
-  MOCK_METHOD4(Write,
+  MOCK_METHOD5(Write,
                void(const media::AudioBus* data,
                     double volume,
                     bool key_pressed,
-                    base::TimeTicks capture_time));
+                    base::TimeTicks capture_time,
+                    const media::AudioGlitchInfo& audio_glitch_info));
   MOCK_METHOD0(Close, void());
 };
 
@@ -100,36 +107,83 @@ class MockUserInputMonitor : public media::UserInputMonitor {
   MOCK_METHOD0(DisableKeyPressMonitoring, void());
 };
 
+class MockAudioInputStream : public media::AudioInputStream {
+ public:
+  MOCK_METHOD0(Open, OpenOutcome());
+  MOCK_METHOD0(Stop, void());
+  MOCK_METHOD0(Close, void());
+  MOCK_METHOD0(GetMaxVolume, double());
+  MOCK_METHOD1(SetVolume, void(double volume));
+  MOCK_METHOD0(GetVolume, double());
+  MOCK_METHOD1(SetAutomaticGainControl, bool(bool enabled));
+  MOCK_METHOD0(GetAutomaticGainControl, bool());
+  MOCK_METHOD0(IsMuted, bool());
+  MOCK_METHOD1(SetOutputDeviceForAec,
+               void(const std::string& output_device_id));
+
+  void Start(AudioInputCallback* callback) override {
+    captured_callback_ = callback;
+  }
+
+  absl::optional<AudioInputCallback*> captured_callback_;
+};
+
+enum class AudioManagerType { MOCK, FAKE };
+
 template <base::test::TaskEnvironment::TimeSource TimeSource =
-              base::test::TaskEnvironment::TimeSource::MOCK_TIME>
+              base::test::TaskEnvironment::TimeSource::MOCK_TIME,
+          AudioManagerType audio_manager_type = AudioManagerType::FAKE>
 class TimeSourceInputControllerTest
-    : public ::testing::TestWithParam<ProcessingFifoSetting> {
+    : public ::testing::TestWithParam<
+          std::tuple<ChromeWideEchoCancellationSetting,
+                     DecreaseFifoSizeSetting>> {
  public:
   TimeSourceInputControllerTest()
       : task_environment_(TimeSource),
-        audio_manager_(std::make_unique<media::FakeAudioManager>(
-            std::make_unique<media::TestAudioThread>(false),
-            &log_factory_)),
+        audio_manager_(
+            audio_manager_type == AudioManagerType::FAKE
+                ? static_cast<std::unique_ptr<media::AudioManager>>(
+                      std::make_unique<media::FakeAudioManager>(
+                          std::make_unique<media::TestAudioThread>(false),
+                          &log_factory_))
+                : static_cast<std::unique_ptr<media::AudioManager>>(
+                      std::make_unique<media::MockAudioManager>(
+                          std::make_unique<media::TestAudioThread>(false)))),
         aecdump_recording_manager_(audio_manager_->GetTaskRunner()),
         params_(media::AudioParameters::AUDIO_FAKE,
                 kChannelLayoutConfig,
                 kSampleRate,
                 kSamplesPerPacket) {
 #if BUILDFLAG(CHROME_WIDE_ECHO_CANCELLATION)
-    switch (GetParam()) {
-      case ProcessingFifoSetting::kEnabled:
-        processing_fifo_feature_.InitAndEnableFeatureWithParameters(
-            media::kChromeWideEchoCancellation, kEnabledFifoParam);
+    std::vector<base::test::FeatureRefAndParams> enabled_features;
+    std::vector<base::test::FeatureRef> disabled_features;
+
+    if (GetChromeWideEchoCancellationSetting() ==
+        ChromeWideEchoCancellationSetting::kEnabled) {
+      enabled_features.emplace_back(media::kChromeWideEchoCancellation,
+                                    base::FieldTrialParams());
+    } else {
+      disabled_features.emplace_back(media::kChromeWideEchoCancellation);
+    }
+
+    switch (GetDecreaseFifoSizeSetting()) {
+      case DecreaseFifoSizeSetting::kDisabled:
+        disabled_features.emplace_back(media::kDecreaseProcessingAudioFifoSize);
         break;
-      case ProcessingFifoSetting::kEnabledWithSizeZero:
-        processing_fifo_feature_.InitAndEnableFeatureWithParameters(
-            media::kChromeWideEchoCancellation, kDisabledFifoParam);
+      case DecreaseFifoSizeSetting::kDecreasedTo10:
+        enabled_features.emplace_back(
+            media::kDecreaseProcessingAudioFifoSize,
+            base::FieldTrialParams{{kFifoSizeParameter, "10"}});
         break;
-      case ProcessingFifoSetting::kDisabled:
-        processing_fifo_feature_.InitAndDisableFeature(
-            media::kChromeWideEchoCancellation);
+      case DecreaseFifoSizeSetting::kDecreasedTo0:
+        enabled_features.emplace_back(
+            media::kDecreaseProcessingAudioFifoSize,
+            base::FieldTrialParams{{kFifoSizeParameter, "0"}});
         break;
-    };
+    }
+
+    processing_fifo_feature_.InitWithFeaturesAndParameters(enabled_features,
+                                                           disabled_features);
 #endif
   }
 
@@ -153,7 +207,18 @@ class TimeSourceInputControllerTest
   }
 
   bool IsProcessingFifoEnabled() {
-    return GetParam() == ProcessingFifoSetting::kEnabled;
+    return GetChromeWideEchoCancellationSetting() ==
+               ChromeWideEchoCancellationSetting::kEnabled &&
+           GetDecreaseFifoSizeSetting() !=
+               DecreaseFifoSizeSetting::kDecreasedTo0;
+  }
+
+  ChromeWideEchoCancellationSetting GetChromeWideEchoCancellationSetting() {
+    return std::get<0>(GetParam());
+  }
+
+  DecreaseFifoSizeSetting GetDecreaseFifoSizeSetting() {
+    return std::get<1>(GetParam());
   }
 
   base::test::TaskEnvironment task_environment_;
@@ -175,19 +240,26 @@ class TimeSourceInputControllerTest
 auto test_name_generator =
     [](const ::testing::TestParamInfo<
         TimeSourceInputControllerTest<>::ParamType>& info) {
-      switch (info.param) {
-        case ProcessingFifoSetting::kEnabled:
-          return "FifoEnabled";
-        case ProcessingFifoSetting::kEnabledWithSizeZero:
-          return "FifoEnabledWithSizeZero";
-        case ProcessingFifoSetting::kDisabled:
-          return "FifoDisabled";
+      std::string name_suffix =
+          std::get<0>(info.param) == ChromeWideEchoCancellationSetting::kEnabled
+              ? "CWAECEnabled_"
+              : "CWAECDisabled_";
+      switch (std::get<1>(info.param)) {
+        case DecreaseFifoSizeSetting::kDisabled:
+          return name_suffix + "DecreaseFifoDisabled";
+        case DecreaseFifoSizeSetting::kDecreasedTo10:
+          return name_suffix + "DecreaseFifoTo10";
+        case DecreaseFifoSizeSetting::kDecreasedTo0:
+          return name_suffix + "DecreaseFifoTo0";
       }
     };
 
 using SystemTimeInputControllerTest = TimeSourceInputControllerTest<
     base::test::TaskEnvironment::TimeSource::SYSTEM_TIME>;
 using InputControllerTest = TimeSourceInputControllerTest<>;
+using InputControllerTestWithMockAudioManager = TimeSourceInputControllerTest<
+    base::test::TaskEnvironment::TimeSource::MOCK_TIME,
+    AudioManagerType::MOCK>;
 
 TEST_P(InputControllerTest, CreateAndCloseWithoutRecording) {
   EXPECT_CALL(event_handler_, OnCreated(_));
@@ -214,8 +286,8 @@ TEST_P(SystemTimeInputControllerTest, CreateRecordAndClose) {
     // Wait for Write() to be called ten times.
     testing::InSequence s;
     EXPECT_CALL(user_input_monitor_, EnableKeyPressMonitoring());
-    EXPECT_CALL(sync_writer_, Write(NotNull(), _, _, _)).Times(Exactly(9));
-    EXPECT_CALL(sync_writer_, Write(NotNull(), _, _, _))
+    EXPECT_CALL(sync_writer_, Write(NotNull(), _, _, _, _)).Times(Exactly(9));
+    EXPECT_CALL(sync_writer_, Write(NotNull(), _, _, _, _))
         .Times(AtLeast(1))
         .WillOnce(InvokeWithoutArgs([&]() { loop.Quit(); }));
   }
@@ -230,6 +302,36 @@ TEST_P(SystemTimeInputControllerTest, CreateRecordAndClose) {
   controller_->Close();
 
   task_environment_.RunUntilIdle();
+}
+
+TEST_P(InputControllerTestWithMockAudioManager, PropagatesGlitchInfo) {
+  MockAudioInputStream mock_stream;
+  static_cast<media::MockAudioManager*>(audio_manager_.get())
+      ->SetMakeInputStreamCB(base::BindRepeating(
+          [](media::AudioInputStream* stream,
+             const media::AudioParameters& params,
+             const std::string& device_id) { return stream; },
+          &mock_stream));
+  auto audio_bus = media::AudioBus::Create(params_);
+
+  CreateAudioController();
+  ASSERT_TRUE(controller_.get());
+  controller_->Record();
+
+  ASSERT_TRUE(mock_stream.captured_callback_);
+  media::AudioInputStream::AudioInputCallback* callback =
+      *mock_stream.captured_callback_;
+
+  for (int i = 0; i < 5; i++) {
+    media::AudioGlitchInfo audio_glitch_info{
+        .duration = base::Milliseconds(123 + i), .count = 5};
+    EXPECT_CALL(sync_writer_, Write(NotNull(), _, _, _, audio_glitch_info));
+    callback->OnData(audio_bus.get(), base::TimeTicks(), 1, audio_glitch_info);
+    testing::Mock::VerifyAndClearExpectations(&sync_writer_);
+  }
+
+  EXPECT_CALL(sync_writer_, Close());
+  controller_->Close();
 }
 
 TEST_P(InputControllerTest, RecordTwice) {
@@ -302,21 +404,35 @@ TEST_P(InputControllerTest, TestOnmutedCallbackInitiallyMuted) {
   controller_->Close();
 }
 
-INSTANTIATE_TEST_SUITE_P(
-    InputControllerTest,
-    InputControllerTest,
-    testing::Values(ProcessingFifoSetting::kEnabled,
-                    ProcessingFifoSetting::kEnabledWithSizeZero,
-                    ProcessingFifoSetting::kDisabled),
-    test_name_generator);
+auto test_values =
+    testing::ValuesIn(std::vector<TimeSourceInputControllerTest<>::ParamType>{
+        {ChromeWideEchoCancellationSetting::kEnabled,
+         DecreaseFifoSizeSetting::kDisabled},
+        {ChromeWideEchoCancellationSetting::kEnabled,
+         DecreaseFifoSizeSetting::kDecreasedTo10},
+        {ChromeWideEchoCancellationSetting::kEnabled,
+         DecreaseFifoSizeSetting::kDecreasedTo0},
+        {ChromeWideEchoCancellationSetting::kDisabled,
+         DecreaseFifoSizeSetting::kDisabled},
+        {ChromeWideEchoCancellationSetting::kDisabled,
+         DecreaseFifoSizeSetting::kDecreasedTo10},
+        {ChromeWideEchoCancellationSetting::kDisabled,
+         DecreaseFifoSizeSetting::kDecreasedTo0}});
 
-INSTANTIATE_TEST_SUITE_P(
-    SystemTimeInputControllerTest,
-    SystemTimeInputControllerTest,
-    testing::Values(ProcessingFifoSetting::kEnabled,
-                    ProcessingFifoSetting::kEnabledWithSizeZero,
-                    ProcessingFifoSetting::kDisabled),
-    test_name_generator);
+INSTANTIATE_TEST_SUITE_P(InputControllerTest,
+                         InputControllerTest,
+                         test_values,
+                         test_name_generator);
+
+INSTANTIATE_TEST_SUITE_P(SystemTimeInputControllerTest,
+                         SystemTimeInputControllerTest,
+                         test_values,
+                         test_name_generator);
+
+INSTANTIATE_TEST_SUITE_P(InputControllerTestWithMockAudioManager,
+                         InputControllerTestWithMockAudioManager,
+                         test_values,
+                         test_name_generator);
 
 #if BUILDFLAG(CHROME_WIDE_ECHO_CANCELLATION)
 class InputControllerTestHelper {
@@ -334,6 +450,11 @@ class InputControllerTestHelper {
   void AttachOnProcessedCallback(base::RepeatingClosure on_processed_callback) {
     controller_->processing_fifo_->AttachOnProcessedCallbackForTesting(
         std::move(on_processed_callback));
+  }
+
+  int FifoSize() {
+    CHECK(IsUsingProcessingThread());
+    return controller_->processing_fifo_->fifo_size();
   }
 
  private:
@@ -383,7 +504,6 @@ class TimeSourceInputControllerTestWithDeviceListener
     settings.noise_suppression = false;
     settings.transient_noise_suppression = false;
     settings.automatic_gain_control = false;
-    settings.experimental_automatic_gain_control = false;
     settings.high_pass_filter = false;
     settings.multi_channel_capture_processing = false;
     settings.stereo_mirroring = false;
@@ -423,8 +543,8 @@ TEST_P(InputControllerTestWithDeviceListener,
   ASSERT_TRUE(controller_.get());
 
   base::RunLoop loop;
-  base::SequencedTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                   loop.QuitClosure());
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(FROM_HERE,
+                                                           loop.QuitClosure());
   loop.Run();
 
   // |controller_| should have bound the pending AudioProcessorControls
@@ -448,8 +568,8 @@ TEST_P(InputControllerTestWithDeviceListener,
   ASSERT_TRUE(controller_.get());
 
   base::RunLoop loop;
-  base::SequencedTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                   loop.QuitClosure());
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(FROM_HERE,
+                                                           loop.QuitClosure());
   loop.Run();
 
   // When all forms of audio processing are disabled, |controller_| should
@@ -553,6 +673,46 @@ TEST_P(InputControllerTestWithDeviceListener, RecordAfterSetOutputForAec) {
   EXPECT_FALSE(helper_->IsUsingProcessingThread());
 }
 
+TEST_P(InputControllerTestWithDeviceListener, FifoSize) {
+  const std::string kOutputDeviceId = "0x123";
+  EXPECT_CALL(device_output_listener_, StartListening(_, kOutputDeviceId))
+      .Times(1);
+  EXPECT_CALL(device_output_listener_, StopListening(_)).Times(1);
+
+  SetupProcessingConfig(AudioProcessingType::kWithPlayoutReference);
+  CreateAudioController();
+
+  ASSERT_TRUE(controller_.get());
+
+  controller_->SetOutputDeviceForAec(kOutputDeviceId);
+  controller_->Record();
+
+  if (GetChromeWideEchoCancellationSetting() ==
+      ChromeWideEchoCancellationSetting::kDisabled) {
+    EXPECT_FALSE(helper_->IsUsingProcessingThread());
+  } else {
+    switch (GetDecreaseFifoSizeSetting()) {
+      case DecreaseFifoSizeSetting::kDisabled:
+        EXPECT_TRUE(helper_->IsUsingProcessingThread());
+        EXPECT_EQ(helper_->FifoSize(), 110);
+        break;
+      case DecreaseFifoSizeSetting::kDecreasedTo10:
+        EXPECT_TRUE(helper_->IsUsingProcessingThread());
+        EXPECT_EQ(helper_->FifoSize(), 10);
+        break;
+      case DecreaseFifoSizeSetting::kDecreasedTo0:
+        EXPECT_FALSE(helper_->IsUsingProcessingThread());
+        break;
+    }
+  }
+
+  // InputController should offload processing to its own thread, if enabled.
+  EXPECT_EQ(IsProcessingFifoEnabled(), helper_->IsUsingProcessingThread());
+
+  controller_->Close();
+  EXPECT_FALSE(helper_->IsUsingProcessingThread());
+}
+
 TEST_P(InputControllerTestWithDeviceListener, ChangeOutputForAec) {
   const std::string kOutputDeviceId = "0x123";
   const std::string kOtherOutputDeviceId = "0x987";
@@ -590,7 +750,7 @@ TEST_P(SystemTimeInputControllerTestWithDeviceListener, CreateRecordAndClose) {
   bool data_processed_by_fifo = false;
 
   if (IsProcessingFifoEnabled()) {
-    auto main_sequence = base::SequencedTaskRunnerHandle::Get();
+    auto main_sequence = base::SequencedTaskRunner::GetCurrentDefault();
     auto verify_data_processed = [&data_processed_by_fifo, main_sequence]() {
       // Data should be processed on its own thread.
       EXPECT_FALSE(main_sequence->RunsTasksInCurrentSequence());
@@ -610,8 +770,8 @@ TEST_P(SystemTimeInputControllerTestWithDeviceListener, CreateRecordAndClose) {
     // Wait for Write() to be called ten times.
     testing::InSequence s;
     EXPECT_CALL(user_input_monitor_, EnableKeyPressMonitoring());
-    EXPECT_CALL(sync_writer_, Write(NotNull(), _, _, _)).Times(Exactly(9));
-    EXPECT_CALL(sync_writer_, Write(NotNull(), _, _, _))
+    EXPECT_CALL(sync_writer_, Write(NotNull(), _, _, _, _)).Times(Exactly(9));
+    EXPECT_CALL(sync_writer_, Write(NotNull(), _, _, _, _))
         .Times(AtLeast(1))
         .WillOnce(InvokeWithoutArgs([&]() { loop.Quit(); }));
   }
@@ -638,21 +798,15 @@ TEST_P(SystemTimeInputControllerTestWithDeviceListener, CreateRecordAndClose) {
   EXPECT_EQ(data_processed_by_fifo, IsProcessingFifoEnabled());
 }
 
-INSTANTIATE_TEST_SUITE_P(
-    InputControllerTestWithDeviceListener,
-    InputControllerTestWithDeviceListener,
-    testing::Values(ProcessingFifoSetting::kEnabled,
-                    ProcessingFifoSetting::kEnabledWithSizeZero,
-                    ProcessingFifoSetting::kDisabled),
-    test_name_generator);
+INSTANTIATE_TEST_SUITE_P(InputControllerTestWithDeviceListener,
+                         InputControllerTestWithDeviceListener,
+                         test_values,
+                         test_name_generator);
 
-INSTANTIATE_TEST_SUITE_P(
-    SystemTimeInputControllerTestWithDeviceListener,
-    SystemTimeInputControllerTestWithDeviceListener,
-    testing::Values(ProcessingFifoSetting::kEnabled,
-                    ProcessingFifoSetting::kEnabledWithSizeZero,
-                    ProcessingFifoSetting::kDisabled),
-    test_name_generator);
+INSTANTIATE_TEST_SUITE_P(SystemTimeInputControllerTestWithDeviceListener,
+                         SystemTimeInputControllerTestWithDeviceListener,
+                         test_values,
+                         test_name_generator);
 
 #endif  // BUILDFLAG(CHROME_WIDE_ECHO_CANCELLATION)
 

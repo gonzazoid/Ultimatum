@@ -39,6 +39,16 @@ chromium-metrics-reviews@google.com.
 <variants name="HoldingSpaceItemType">
   <variant name="All" summary="Includes all item types."/>
   <variant name="ArcDownload" summary="Items backed by an ARC download file."/>
+  <variant name="CameraAppPhoto"
+      summary="Items backed by a camera app photo file."/>
+  <variant name="CameraAppScanJpg"
+      summary="Items backed by a JPG camera app scan file."/>
+  <variant name="CameraAppScanPdf"
+      summary="Items backed by a PDF camera app scan file."/>
+  <variant name="CameraAppVideoGif"
+      summary="Items backed by a GIF camera app video file."/>
+  <variant name="CameraAppVideoMp4"
+      summary="Items backed by a MP4 camera app video file."/>
   <variant name="DiagnosticsLog"
       summary="Items backed by a diagnostics log file."/>
   <variant name="Download"
@@ -53,16 +63,19 @@ chromium-metrics-reviews@google.com.
   <variant name="NearbyShare" summary="Items backed by a nearby shared file."/>
   <variant name="PhoneHubCameraRoll"
       summary="Recent photos and videos taken on connected Android phone."/>
+  <variant name="PhotoshopWeb" summary="Items backed by a Photoshop Web file."/>
   <variant name="PinnedFile" summary="Items pinned explicitly by the user."/>
   <variant name="PrintedPdf" summary="Items backed by a printed PDF file."/>
   <variant name="Scan" summary="Items backed by a scanned file."/>
   <variant name="ScreenRecording"
-      summary="Items backed by a screen recording file."/>
+      summary="Items backed by a WebM screen recording file."/>
+  <variant name="ScreenRecordingGif"
+      summary="Items backed by a GIF screen recording file."/>
   <variant name="Screenshot" summary="Items backed by a screenshot file."/>
 </variants>
 
 <histogram name="HoldingSpace.Animation.BubbleResize.Smoothness" units="%"
-    expires_after="2023-04-01">
+    expires_after="2024-06-01">
   <owner>dmblack@google.com</owner>
   <owner>gzadina@google.com</owner>
   <summary>
@@ -74,7 +87,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="HoldingSpace.Animation.PodResize.Smoothness" units="%"
-    expires_after="2023-04-01">
+    expires_after="2024-06-01">
   <owner>dmblack@google.com</owner>
   <owner>gzadina@google.com</owner>
   <summary>
@@ -86,7 +99,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="HoldingSpace.Downloads.Action.All"
-    enum="HoldingSpaceDownloadsAction" expires_after="2023-04-01">
+    enum="HoldingSpaceDownloadsAction" expires_after="2024-06-01">
   <owner>dmblack@google.com</owner>
   <owner>gzadina@google.com</owner>
   <summary>
@@ -95,8 +108,30 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
+<histogram name="HoldingSpace.FileCreatedFromShowSaveFilePicker.Extension"
+    enum="HoldingSpaceExtension" expires_after="2024-06-01">
+  <owner>dmblack@google.com</owner>
+  <owner>alexandrahill@google.com</owner>
+  <summary>
+    Records the extension for a file that was created in fulfillment of a
+    `window.showSaveFilePicker()` request at the moment of file creation.
+  </summary>
+</histogram>
+
+<histogram
+    name="HoldingSpace.FileCreatedFromShowSaveFilePicker.FilePickerBindingContext"
+    enum="HoldingSpaceFilePickerBindingContext" expires_after="2024-06-01">
+  <owner>dmblack@google.com</owner>
+  <owner>alexandrahill@google.com</owner>
+  <summary>
+    Records the binding context for the file picker used to create a file in
+    fulfillment of a `window.showSaveFilePicker()` request at the moment of file
+    creation.
+  </summary>
+</histogram>
+
 <histogram name="HoldingSpace.FilesAppChip.Action.All"
-    enum="HoldingSpaceFilesAppChipAction" expires_after="2023-04-01">
+    enum="HoldingSpaceFilesAppChipAction" expires_after="2024-06-01">
   <owner>dmblack@google.com</owner>
   <owner>gzadina@google.com</owner>
   <summary>
@@ -106,7 +141,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="HoldingSpace.Item.Action.All" enum="HoldingSpaceItemAction"
-    expires_after="2023-04-01">
+    expires_after="2024-06-01">
   <owner>dmblack@google.com</owner>
   <owner>gzadina@google.com</owner>
   <summary>
@@ -115,8 +150,58 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
+<histogram name="HoldingSpace.Item.Action.Launch.Empty"
+    enum="HoldingSpaceItemType" expires_after="2024-06-01">
+  <owner>dmblack@google.com</owner>
+  <owner>alexandrahill@google.com</owner>
+  <summary>
+    Records an attempt to launch a holding space item of a specific type, backed
+    by an empty file, at the moment of attempt.
+  </summary>
+</histogram>
+
+<histogram name="HoldingSpace.Item.Action.Launch.Empty.Extension"
+    enum="HoldingSpaceExtension" expires_after="2024-06-01">
+  <owner>dmblack@google.com</owner>
+  <owner>alexandrahill@google.com</owner>
+  <summary>
+    Records an attempt to launch a holding space item backed by an empty file of
+    a specific extension at the moment of attempt.
+  </summary>
+</histogram>
+
+<histogram name="HoldingSpace.Item.Action.Launch.Failure"
+    enum="HoldingSpaceItemType" expires_after="2024-06-01">
+  <owner>dmblack@google.com</owner>
+  <owner>alexandrahill@google.com</owner>
+  <summary>
+    Records a failure to launch a holding space item of a specific type at the
+    moment of failure.
+  </summary>
+</histogram>
+
+<histogram name="HoldingSpace.Item.Action.Launch.Failure.Extension"
+    enum="HoldingSpaceExtension" expires_after="2024-06-01">
+  <owner>dmblack@google.com</owner>
+  <owner>alexandrahill@google.com</owner>
+  <summary>
+    Records a failure to launch a holding space item backed by file of a
+    specific extension at the moment of failure.
+  </summary>
+</histogram>
+
+<histogram name="HoldingSpace.Item.Action.Launch.Failure.Reason"
+    enum="HoldingSpaceItemLaunchFailureReason" expires_after="2024-06-01">
+  <owner>dmblack@google.com</owner>
+  <owner>alexandrahill@google.com</owner>
+  <summary>
+    Records the reason for failing to launch a holding space item at the moment
+    of failure.
+  </summary>
+</histogram>
+
 <histogram name="HoldingSpace.Item.Action.{action}" enum="HoldingSpaceItemType"
-    expires_after="2023-04-01">
+    expires_after="2024-06-01">
   <owner>dmblack@google.com</owner>
   <owner>gzadina@google.com</owner>
   <summary>
@@ -127,7 +212,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="HoldingSpace.Item.Action.{action}.Extension"
-    enum="HoldingSpaceExtension" expires_after="2023-04-01">
+    enum="HoldingSpaceExtension" expires_after="2024-06-01">
   <owner>dmblack@google.com</owner>
   <owner>gzadina@google.com</owner>
   <summary>
@@ -137,8 +222,19 @@ chromium-metrics-reviews@google.com.
   <token key="action" variants="HoldingSpaceItemAction"/>
 </histogram>
 
+<histogram name="HoldingSpace.Item.Action.{action}.FileSystemType"
+    enum="HoldingSpaceFileSystemType" expires_after="2024-06-01">
+  <owner>dmblack@google.com</owner>
+  <owner>gzadina@google.com</owner>
+  <summary>
+    Records the file system type of an item in holding space UI for which an
+    action was taken at the moment the action is performed. {action}
+  </summary>
+  <token key="action" variants="HoldingSpaceItemAction"/>
+</histogram>
+
 <histogram name="HoldingSpace.Item.Count.{type}" units="items"
-    expires_after="2023-04-01">
+    expires_after="2024-06-01">
   <owner>dmblack@google.com</owner>
   <owner>gzadina@google.com</owner>
   <summary>
@@ -148,38 +244,8 @@ chromium-metrics-reviews@google.com.
   <token key="type" variants="HoldingSpaceItemType"/>
 </histogram>
 
-<histogram name="HoldingSpace.Item.FailureToLaunch" enum="HoldingSpaceItemType"
-    expires_after="2023-04-01">
-  <owner>dmblack@google.com</owner>
-  <owner>gzadina@google.com</owner>
-  <summary>
-    Records a failure to launch a holding space item of a specific type at the
-    moment of failure.
-  </summary>
-</histogram>
-
-<histogram name="HoldingSpace.Item.FailureToLaunch.Extension"
-    enum="HoldingSpaceExtension" expires_after="2023-04-01">
-  <owner>dmblack@google.com</owner>
-  <owner>gzadina@google.com</owner>
-  <summary>
-    Records a failure to launch a holding space item backed by file of a
-    specific extension at the moment of failure.
-  </summary>
-</histogram>
-
-<histogram name="HoldingSpace.Item.FailureToLaunch.Reason"
-    enum="HoldingSpaceItemFailureToLaunchReason" expires_after="2023-04-01">
-  <owner>dmblack@google.com</owner>
-  <owner>gzadina@google.com</owner>
-  <summary>
-    Records the reason for failing to launch a holding space item at the moment
-    of failure.
-  </summary>
-</histogram>
-
 <histogram name="HoldingSpace.Item.TotalCount.{type}" units="items"
-    expires_after="2023-04-01">
+    expires_after="2024-06-01">
   <owner>dmblack@google.com</owner>
   <owner>gzadina@google.com</owner>
   <summary>
@@ -191,7 +257,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="HoldingSpace.Pod.Action.All" enum="HoldingSpacePodAction"
-    expires_after="2023-04-01">
+    expires_after="2024-06-01">
   <owner>dmblack@google.com</owner>
   <owner>gzadina@google.com</owner>
   <summary>
@@ -201,7 +267,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="HoldingSpace.Suggestions.Action.All"
-    enum="HoldingSpaceSuggestionsAction" expires_after="2023-04-01">
+    enum="HoldingSpaceSuggestionsAction" expires_after="2024-06-01">
   <owner>dmblack@google.com</owner>
   <owner>gzadina@google.com</owner>
   <summary>
@@ -211,7 +277,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="HoldingSpace.TimeFromFirstAvailabilityToFirstAdd" units="ms"
-    expires_after="2023-04-01">
+    expires_after="2024-06-01">
   <owner>dmblack@google.com</owner>
   <owner>gzadina@google.com</owner>
   <summary>
@@ -221,7 +287,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="HoldingSpace.TimeFromFirstAvailabilityToFirstEntry" units="ms"
-    expires_after="2023-04-01">
+    expires_after="2024-06-01">
   <owner>dmblack@google.com</owner>
   <owner>gzadina@google.com</owner>
   <summary>
@@ -231,7 +297,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="HoldingSpace.TimeFromFirstEntryToFirstPin" units="ms"
-    expires_after="2023-04-01">
+    expires_after="2024-06-01">
   <owner>dmblack@google.com</owner>
   <owner>gzadina@google.com</owner>
   <summary>
@@ -242,7 +308,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="HoldingSpace.UserPreferences.PreviewsEnabled"
-    enum="BooleanEnabled" expires_after="2023-04-01">
+    enum="BooleanEnabled" expires_after="2024-06-01">
   <owner>dmblack@google.com</owner>
   <owner>gzadina@google.com</owner>
   <summary>
@@ -252,7 +318,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="HoldingSpace.UserPreferences.SuggestionsExpanded"
-    enum="BooleanExpanded" expires_after="2023-04-01">
+    enum="BooleanExpanded" expires_after="2024-06-01">
   <owner>dmblack@google.com</owner>
   <owner>gzadina@google.com</owner>
   <summary>

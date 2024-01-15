@@ -2,7 +2,10 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-import("//base/allocator/allocator.gni")
+if (is_android) {
+  import("//build/config/android/rules.gni")
+}
+import("//base/allocator/partition_allocator/partition_alloc.gni")
 import("//testing/test.gni")
 import("//tools/v8_context_snapshot/v8_context_snapshot.gni")
 import("//v8/gni/v8.gni")
@@ -52,6 +55,10 @@ component("gin") {
     "runner.h",
     "shell_runner.cc",
     "shell_runner.h",
+    "thread_isolation.cc",
+    "thread_isolation.h",
+    "time_clamper.cc",
+    "time_clamper.h",
     "try_catch.cc",
     "try_catch.h",
     "v8_foreground_task_runner.cc",
@@ -77,6 +84,12 @@ component("gin") {
       "v8_platform_page_allocator.cc",
       "v8_platform_page_allocator.h",
     ]
+    if (enable_pkeys) {
+      sources += [
+        "v8_platform_thread_isolated_allocator.cc",
+        "v8_platform_thread_isolated_allocator.h",
+      ]
+    }
   }
 
   if (v8_use_external_startup_data) {
@@ -94,16 +107,14 @@ component("gin") {
   deps = [
     "//base/third_party/dynamic_annotations",
     "//third_party/abseil-cpp:absl",
+    "//tools/v8_context_snapshot:buildflags",
   ]
 
   if (is_mac) {
     frameworks = [ "CoreFoundation.framework" ]
   }
 
-  configs += [
-    "//tools/v8_context_snapshot:use_v8_context_snapshot",
-    "//v8:external_startup_data",
-  ]
+  configs += [ "//v8:external_startup_data" ]
 }
 
 executable("gin_shell") {
@@ -118,6 +129,49 @@ executable("gin_shell") {
   ]
 
   configs += [ "//v8:external_startup_data" ]
+}
+
+if (is_android && enable_java_templates &&
+    current_toolchain == default_toolchain) {
+  android_assets("v8_snapshot_assets") {
+    if (v8_use_external_startup_data) {
+      disable_compression = true
+      if (use_v8_context_snapshot) {
+        deps = [ "//tools/v8_context_snapshot:v8_context_snapshot" ]
+        sources = [ "$root_build_dir/$v8_context_snapshot_filename" ]
+      } else {
+        if (current_cpu == "arm" || current_cpu == "x86") {
+          _arch_suffix = "32"
+        } else {
+          _arch_suffix = "64"
+        }
+        renaming_sources = [ "$root_build_dir/snapshot_blob.bin" ]
+        renaming_destinations = [ "snapshot_blob_$_arch_suffix.bin" ]
+        deps = [ "//v8:run_mksnapshot_default" ]
+      }
+    }
+  }
+
+  if (android_64bit_target_cpu && !skip_secondary_abi_for_cq) {
+    android_assets("v8_snapshot_secondary_abi_assets") {
+      assert(android_64bit_target_cpu,
+             "32-bit targets shouldn't have secondary abi")
+      disable_compression = true
+      if (use_v8_context_snapshot) {
+        sources = [ "$root_out_dir/v8_context_snapshot_32.bin" ]
+        deps =
+            [ "//tools/v8_context_snapshot($android_secondary_abi_toolchain)" ]
+      } else {
+        _secondary_abi_out_dir =
+            get_label_info("//v8($android_secondary_abi_toolchain)",
+                           "root_out_dir")
+        renaming_sources = [ "$_secondary_abi_out_dir/snapshot_blob.bin" ]
+        renaming_destinations = [ "snapshot_blob_32.bin" ]
+        deps =
+            [ "//v8:run_mksnapshot_default($android_secondary_abi_toolchain)" ]
+      }
+    }
+  }
 }
 
 source_set("gin_test") {
@@ -146,9 +200,11 @@ test("gin_unittests") {
     "converter_unittest.cc",
     "data_object_builder_unittest.cc",
     "interceptor_unittest.cc",
+    "isolate_holder_unittest.cc",
     "per_context_data_unittest.cc",
     "shell_runner_unittest.cc",
     "test/run_all_unittests.cc",
+    "time_clamper_unittest.cc",
     "v8_isolate_memory_dump_provider_unittest.cc",
     "v8_platform_unittest.cc",
     "v8_shared_memory_dump_provider_unittest.cc",
@@ -170,10 +226,7 @@ test("gin_unittests") {
     }
   }
 
-  configs += [
-    "//tools/v8_context_snapshot:use_v8_context_snapshot",
-    "//v8:external_startup_data",
-  ]
+  configs += [ "//v8:external_startup_data" ]
 
   data_deps = [
     "//testing/buildbot/filters:gin_unittests_filters",
@@ -181,8 +234,8 @@ test("gin_unittests") {
   ]
   data = []
 
-  # gin_shell is not an Android app.
-  if (!is_android) {
+  # gin_shell is not an Android/iOS app.
+  if (!is_android && !is_ios) {
     sources += [ "shell/gin_shell_unittest.cc" ]
     deps += [ ":gin_shell" ]
     data_deps += [ ":gin_shell" ]
@@ -191,13 +244,10 @@ test("gin_unittests") {
 
   # On Android, the APK must bundle the startup data.
   if (is_android) {
-    deps += [ "//v8:v8_external_startup_data_assets" ]
+    deps += [ ":v8_snapshot_assets" ]
   }
 
   if (is_fuchsia) {
-    # TODO(https://crbug.com/1185811): Investigate removing the requirement for
-    # job_policy_ambient_mark_vmo_exec for the sake of V8's allocator in tests.
-    test_runner_shard = "//build/config/fuchsia/test/elf_test_ambient_exec_runner.shard.test-cml"
     additional_manifest_fragments =
         [ "//build/config/fuchsia/test/mark_vmo_executable.shard.test-cml" ]
   }

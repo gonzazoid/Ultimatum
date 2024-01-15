@@ -114,8 +114,9 @@ void OmahaPolicyValidator::ValidateAutoUpdateCheckPeriodPolicy(
 
 void OmahaPolicyValidator::ValidateDownloadPreferencePolicy(
     PolicyValidationResult& validation_result) const {
-  if (!omaha_settings_.has_download_preference())
+  if (!omaha_settings_.has_download_preference()) {
     return;
+  }
 
   if (!base::EqualsCaseInsensitiveASCII(omaha_settings_.download_preference(),
                                         kDownloadPreferenceCacheable)) {
@@ -127,8 +128,9 @@ void OmahaPolicyValidator::ValidateDownloadPreferencePolicy(
 }
 void OmahaPolicyValidator::ValidateUpdatesSuppressedPolicies(
     PolicyValidationResult& validation_result) const {
-  if (!omaha_settings_.has_updates_suppressed())
+  if (!omaha_settings_.has_updates_suppressed()) {
     return;
+  }
 
   if (omaha_settings_.updates_suppressed().start_hour() < 0 ||
       omaha_settings_.updates_suppressed().start_hour() >= 24) {
@@ -167,7 +169,7 @@ void OmahaPolicyValidator::ValidateProxyPolicies(
         base::ToLowerASCII(omaha_settings_.proxy_mode());
     if (!base::Contains(kProxyModeValidValues, proxy_mode)) {
       validation_result.issues.emplace_back(
-          "proxy_mode", PolicyValueValidationIssue::Severity::kError,
+          "proxy_mode", PolicyValueValidationIssue::Severity::kWarning,
           "Unrecognized proxy mode: " + omaha_settings_.proxy_mode());
     }
   }
@@ -411,7 +413,9 @@ bool DMResponseValidator::ValidateTimestamp(
   }
 
   if (policy_data.timestamp() < policy_info_.timestamp()) {
-    VLOG(1) << "Unexpected DM response timestamp older than cached timestamp.";
+    VLOG(1) << "Unexpected DM response timestamp [" << policy_data.timestamp()
+            << "] is older than cached timestamp [" << policy_info_.timestamp()
+            << "].";
     validation_result.status =
         PolicyValidationResult::Status::kValidationBadTimestamp;
     return false;
@@ -424,7 +428,7 @@ bool DMResponseValidator::ValidatePayloadPolicy(
     const enterprise_management::PolicyData& policy_data,
     PolicyValidationResult& validation_result) const {
   // Policy type was validated previously.
-  DCHECK(policy_data.has_policy_type());
+  CHECK(policy_data.has_policy_type());
 
   if (base::EqualsCaseInsensitiveASCII(policy_data.policy_type(),
                                        kGoogleUpdatePolicyType)) {
@@ -453,8 +457,9 @@ bool DMResponseValidator::ValidatePolicyResponse(
     return false;
   }
 
-  if (fetch_policy_data.has_policy_token())
+  if (fetch_policy_data.has_policy_token()) {
     validation_result.policy_token = fetch_policy_data.policy_token();
+  }
 
   if (!ValidateDMToken(fetch_policy_data, validation_result) ||
       !ValidateDeviceId(fetch_policy_data, validation_result) ||
@@ -463,11 +468,13 @@ bool DMResponseValidator::ValidatePolicyResponse(
   }
 
   std::string signature_key;
-  if (!ValidateNewPublicKey(fetch_response, signature_key, validation_result))
+  if (!ValidateNewPublicKey(fetch_response, signature_key, validation_result)) {
     return false;
+  }
 
-  if (fetch_policy_data.has_policy_type())
+  if (fetch_policy_data.has_policy_type()) {
     validation_result.policy_type = fetch_policy_data.policy_type();
+  }
   if (validation_result.policy_type.empty()) {
     VLOG(1) << "Missing policy type in the policy response.";
     validation_result.status =

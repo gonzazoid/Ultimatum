@@ -4,7 +4,7 @@
 
 #include "content/browser/renderer_host/pepper/pepper_network_proxy_host.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "content/browser/renderer_host/pepper/browser_ppapi_host_impl.h"
 #include "content/browser/renderer_host/pepper/pepper_proxy_lookup_helper.h"
 #include "content/browser/renderer_host/pepper/pepper_socket_utils.h"
@@ -163,7 +163,7 @@ void PepperNetworkProxyHost::TryToSendUnsentRequests() {
 void PepperNetworkProxyHost::OnResolveProxyCompleted(
     ppapi::host::ReplyMessageContext context,
     PepperProxyLookupHelper* pending_request,
-    absl::optional<net::ProxyInfo> proxy_info) {
+    std::optional<net::ProxyInfo> proxy_info) {
   auto it = pending_requests_.find(pending_request);
   DCHECK(it != pending_requests_.end());
   pending_requests_.erase(it);
@@ -174,6 +174,9 @@ void PepperNetworkProxyHost::OnResolveProxyCompleted(
     // the request fails with ERR_MANDATORY_PROXY_CONFIGURATION_FAILED. There's
     // really no action a plugin can take, so there's no need to distinguish
     // which error occurred.
+    context.params.set_result(PP_ERROR_FAILED);
+  } else if (proxy_info->ContainsMultiProxyChain()) {
+    // Multi-proxy chains cannot be represented as a PAC string.
     context.params.set_result(PP_ERROR_FAILED);
   } else {
     pac_string = proxy_info->ToPacString();

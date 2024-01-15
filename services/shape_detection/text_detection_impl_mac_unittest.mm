@@ -8,11 +8,11 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/apple/bridging.h"
+#include "base/apple/scoped_cftyperef.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/mac/mac_util.h"
-#include "base/mac/scoped_cftyperef.h"
-#include "base/mac/scoped_nsobject.h"
 #include "base/run_loop.h"
 #include "base/test/gmock_callback_support.h"
 #include "base/test/task_environment.h"
@@ -50,43 +50,42 @@ TEST_F(TextDetectionImplMacTest, ScanOnce) {
   }
 
   impl_ = std::make_unique<TextDetectionImplMac>();
-  base::ScopedCFTypeRef<CGColorSpaceRef> rgb_colorspace(
+  base::apple::ScopedCFTypeRef<CGColorSpaceRef> rgb_colorspace(
       CGColorSpaceCreateWithName(kCGColorSpaceGenericRGB));
 
   const int width = 200;
   const int height = 50;
-  base::ScopedCFTypeRef<CGContextRef> context(CGBitmapContextCreate(
+  base::apple::ScopedCFTypeRef<CGContextRef> context(CGBitmapContextCreate(
       nullptr, width, height, 8 /* bitsPerComponent */,
-      width * 4 /* rowBytes */, rgb_colorspace,
+      width * 4 /* rowBytes */, rgb_colorspace.get(),
       uint32_t{kCGImageAlphaPremultipliedFirst} | kCGBitmapByteOrder32Host));
 
   // Draw a white background.
-  CGContextSetRGBFillColor(context, 1.0, 1.0, 1.0, 1.0);
-  CGContextFillRect(context, CGRectMake(0.0, 0.0, width, height));
+  CGContextSetRGBFillColor(context.get(), 1.0, 1.0, 1.0, 1.0);
+  CGContextFillRect(context.get(), CGRectMake(0.0, 0.0, width, height));
 
   // Create a line of Helvetica 16 text, and draw it in the |context|.
-  base::scoped_nsobject<NSFont> helvetica([NSFont fontWithName:@"Helvetica"
-                                                          size:16]);
-  NSDictionary* attributes = @{(id)kCTFontAttributeName : helvetica};
+  NSDictionary* attributes =
+      @{NSFontAttributeName : [NSFont fontWithName:@"Helvetica" size:16]};
 
-  base::scoped_nsobject<NSAttributedString> info([[NSAttributedString alloc]
-      initWithString:@"https://www.chromium.org"
-          attributes:attributes]);
+  NSAttributedString* info =
+      [[NSAttributedString alloc] initWithString:@"https://www.chromium.org"
+                                      attributes:attributes];
 
-  base::ScopedCFTypeRef<CTLineRef> line(
-      CTLineCreateWithAttributedString((CFAttributedStringRef)info.get()));
+  base::apple::ScopedCFTypeRef<CTLineRef> line(
+      CTLineCreateWithAttributedString(base::apple::NSToCFPtrCast(info)));
 
-  CGContextSetTextPosition(context, 10.0, height / 2.0);
-  CTLineDraw(line, context);
+  CGContextSetTextPosition(context.get(), 10.0, height / 2.0);
+  CTLineDraw(line.get(), context.get());
 
   // Extract a CGImage and its raw pixels from |context|.
-  base::ScopedCFTypeRef<CGImageRef> cg_image(
-      CGBitmapContextCreateImage(context));
-  EXPECT_EQ(static_cast<size_t>(width), CGImageGetWidth(cg_image));
-  EXPECT_EQ(static_cast<size_t>(height), CGImageGetHeight(cg_image));
+  base::apple::ScopedCFTypeRef<CGImageRef> cg_image(
+      CGBitmapContextCreateImage(context.get()));
+  EXPECT_EQ(static_cast<size_t>(width), CGImageGetWidth(cg_image.get()));
+  EXPECT_EQ(static_cast<size_t>(height), CGImageGetHeight(cg_image.get()));
 
   SkBitmap bitmap;
-  ASSERT_TRUE(SkCreateBitmapFromCGImage(&bitmap, cg_image));
+  ASSERT_TRUE(SkCreateBitmapFromCGImage(&bitmap, cg_image.get()));
 
   base::RunLoop run_loop;
   // Send the image to Detect() and expect the response in callback.

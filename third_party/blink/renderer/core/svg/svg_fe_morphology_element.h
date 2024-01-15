@@ -54,6 +54,10 @@ class SVGFEMorphologyElement final
   FilterEffect* Build(SVGFilterBuilder*, Filter*) override;
   bool TaintsOrigin() const override { return false; }
 
+  SVGAnimatedPropertyBase* PropertyFromAttribute(
+      const QualifiedName& attribute_name) const override;
+  void SynchronizeAllSVGAttributes() const override;
+
   Member<SVGAnimatedNumberOptionalNumber> radius_;
   Member<SVGAnimatedString> in1_;
   Member<SVGAnimatedEnumeration<MorphologyOperatorType>> svg_operator_;

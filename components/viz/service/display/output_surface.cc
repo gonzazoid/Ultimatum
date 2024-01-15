@@ -8,9 +8,8 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/trace_event/trace_event.h"
 #include "components/viz/service/display/output_surface_client.h"
 #include "components/viz/service/display/output_surface_frame.h"
@@ -26,7 +25,7 @@ OutputSurface::Capabilities::Capabilities(const Capabilities& capabilities) =
 OutputSurface::Capabilities& OutputSurface::Capabilities::operator=(
     const Capabilities& capabilities) = default;
 
-OutputSurface::OutputSurface(Type type) : type_(type) {}
+OutputSurface::OutputSurface() : type_(Type::kSkia) {}
 
 OutputSurface::OutputSurface(
     std::unique_ptr<SoftwareOutputDevice> software_device)

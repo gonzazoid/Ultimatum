@@ -1,11 +1,11 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_DEVICE_SIGNALS_CORE_BROWSER_MOCK_SETTINGS_CLIENT_H_
 #define COMPONENTS_DEVICE_SIGNALS_CORE_BROWSER_MOCK_SETTINGS_CLIENT_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "components/device_signals/core/browser/settings_client.h"
 #include "testing/gmock/include/gmock/gmock.h"
 

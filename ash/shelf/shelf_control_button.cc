@@ -8,13 +8,16 @@
 #include "ash/resources/vector_icons/vector_icons.h"
 #include "ash/shelf/shelf_button_delegate.h"
 #include "ash/shell.h"
-#include "ash/style/ash_color_provider.h"
-#include "ash/wm/tablet_mode/tablet_mode_controller.h"
+#include "ash/style/style_util.h"
+#include "chromeos/constants/chromeos_features.h"
 #include "ui/accessibility/ax_node_data.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
+#include "ui/chromeos/styles/cros_tokens_color_mappings.h"
 #include "ui/color/color_id.h"
 #include "ui/gfx/canvas.h"
 #include "ui/gfx/paint_vector_icon.h"
 #include "ui/views/animation/flood_fill_ink_drop_ripple.h"
+#include "ui/views/animation/ink_drop.h"
 #include "ui/views/controls/focus_ring.h"
 #include "ui/views/controls/highlight_path_generator.h"
 #include "ui/views/widget/widget.h"
@@ -34,13 +37,13 @@ class ShelfControlButtonHighlightPathGenerator
       const ShelfControlButtonHighlightPathGenerator&) = delete;
 
   // views::HighlightPathGenerator:
-  absl::optional<gfx::RRectF> GetRoundRect(const gfx::RectF& rect) override {
+  std::optional<gfx::RRectF> GetRoundRect(const gfx::RectF& rect) override {
     auto* shelf_config = ShelfConfig::Get();
     // Some control buttons have a slightly larger size to fill the shelf and
     // maximize the click target, but we still want their "visual" size to be
     // the same.
     gfx::RectF visual_bounds = rect;
-    visual_bounds.ClampToCenteredSize(
+    visual_bounds.set_size(
         gfx::SizeF(shelf_config->control_size(), shelf_config->control_size()));
     if (Shell::Get()->IsInTabletMode() && shelf_config->is_in_app()) {
       visual_bounds.Inset(gfx::InsetsF::VH(
@@ -56,9 +59,21 @@ ShelfControlButton::ShelfControlButton(
     Shelf* shelf,
     ShelfButtonDelegate* shelf_button_delegate)
     : ShelfButton(shelf, shelf_button_delegate) {
-  SetHasInkDropActionOnClick(true);
+  const bool jelly_enabled = chromeos::features::IsJellyEnabled();
+  if (jelly_enabled) {
+    StyleUtil::SetUpInkDropForButton(this, gfx::Insets(),
+                                     /*highlight_on_hover=*/false,
+                                     /*highlight_on_focus=*/false);
+  } else {
+    views::InkDrop::UseInkDropForSquareRipple(views::InkDrop::Get(this),
+                                              /*highlight_on_hover=*/false);
+  }
+
   SetInstallFocusRingOnFocus(true);
-  views::FocusRing::Get(this)->SetColorId(ui::kColorAshFocusRing);
+  views::FocusRing::Get(this)->SetOutsetFocusRingDisabled(true);
+  views::FocusRing::Get(this)->SetColorId(
+      jelly_enabled ? static_cast<ui::ColorId>(cros_tokens::kCrosSysFocusRing)
+                    : ui::kColorAshFocusRing);
   views::HighlightPathGenerator::Install(
       this, std::make_unique<ShelfControlButtonHighlightPathGenerator>());
   SetPaintToLayer();
@@ -71,10 +86,6 @@ gfx::PointF ShelfControlButton::GetCenterPoint() const {
   return gfx::RectF(GetLocalBounds()).CenterPoint();
 }
 
-const char* ShelfControlButton::GetClassName() const {
-  return "ash/ShelfControlButton";
-}
-
 gfx::Size ShelfControlButton::CalculatePreferredSize() const {
   return gfx::Size(ShelfConfig::Get()->control_size(),
                    ShelfConfig::Get()->control_size());
@@ -85,17 +96,7 @@ void ShelfControlButton::GetAccessibleNodeData(ui::AXNodeData* node_data) {
   node_data->SetNameChecked(GetAccessibleName());
 }
 
-void ShelfControlButton::PaintButtonContents(gfx::Canvas* canvas) {
-  PaintBackground(canvas, GetContentsBounds());
-}
-
-void ShelfControlButton::PaintBackground(gfx::Canvas* canvas,
-                                         const gfx::Rect& bounds) {
-  cc::PaintFlags flags;
-  flags.setAntiAlias(true);
-  flags.setColor(ShelfConfig::Get()->GetShelfControlButtonColor(GetWidget()));
-  canvas->DrawRoundRect(bounds, ShelfConfig::Get()->control_border_radius(),
-                        flags);
-}
+BEGIN_METADATA(ShelfControlButton)
+END_METADATA
 
 }  // namespace ash

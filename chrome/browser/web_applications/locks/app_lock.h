@@ -5,46 +5,57 @@
 #ifndef CHROME_BROWSER_WEB_APPLICATIONS_LOCKS_APP_LOCK_H_
 #define CHROME_BROWSER_WEB_APPLICATIONS_LOCKS_APP_LOCK_H_
 
+#include <memory>
+
 #include "base/containers/flat_set.h"
-#include "base/memory/raw_ref.h"
+#include "base/memory/weak_ptr.h"
 #include "chrome/browser/web_applications/locks/lock.h"
-#include "chrome/browser/web_applications/web_app_id.h"
+#include "chrome/browser/web_applications/locks/with_app_resources.h"
+#include "components/webapps/common/web_app_id.h"
+
+namespace content {
+struct PartitionedLockHolder;
+}
 
 namespace web_app {
 
-class OsIntegrationManager;
-class WebAppRegistrar;
-class WebAppSyncBridge;
+class WebAppLockManager;
 
-// This locks the given app ids in the WebAppProvider system.
+// This locks the given app ID(s) in the WebAppProvider system.
 //
-// Locks can be acquired by using the `WebAppLockManager`. The lock is acquired
-// when the callback given to the WebAppLockManager is called. Destruction of
-// this class will release the lock or cancel the lock request if it is not
-// acquired yet.
+// Locks can be acquired by using the `WebAppLockManager`.
 class AppLockDescription : public LockDescription {
  public:
-  explicit AppLockDescription(base::flat_set<AppId> app_ids);
+  explicit AppLockDescription(const webapps::AppId& app_id);
+  explicit AppLockDescription(base::flat_set<webapps::AppId> app_ids);
+  AppLockDescription(AppLockDescription&&);
   ~AppLockDescription();
 };
 
-class AppLock {
+// Holding this lock means that no other lock-compatible operations are touching
+// the same app id/s. This does not ensure that the app/s are installed when the
+// lock is granted. Checks for that will need to be handled by the user of
+// the lock.
+//
+// See `WebAppLockManager` for how to use locks. Destruction of this class will
+// release the lock or cancel the lock request if it is not acquired yet.
+//
+// Note: Accessing a lock will CHECK-fail if the WebAppProvider system has
+// shutdown (or the profile has shut down).
+class AppLock : public Lock, public WithAppResources {
  public:
-  AppLock(WebAppRegistrar& registrar,
-          WebAppSyncBridge& sync_bridge,
-          OsIntegrationManager& os_integration_manager);
+  using LockDescription = AppLockDescription;
+
   ~AppLock();
 
-  WebAppRegistrar& registrar() { return *registrar_; }
-  WebAppSyncBridge& sync_bridge() { return *sync_bridge_; }
-  OsIntegrationManager& os_integration_manager() {
-    return *os_integration_manager_;
-  }
+  base::WeakPtr<AppLock> AsWeakPtr() { return weak_factory_.GetWeakPtr(); }
 
  private:
-  raw_ref<WebAppRegistrar> registrar_;
-  raw_ref<WebAppSyncBridge> sync_bridge_;
-  raw_ref<OsIntegrationManager> os_integration_manager_;
+  friend class WebAppLockManager;
+  AppLock(base::WeakPtr<WebAppLockManager> lock_manager,
+          std::unique_ptr<content::PartitionedLockHolder> holder);
+
+  base::WeakPtrFactory<AppLock> weak_factory_{this};
 };
 
 }  // namespace web_app

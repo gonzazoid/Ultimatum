@@ -6,13 +6,12 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/memory/shared_memory_mapping.h"
 #include "base/memory/unsafe_shared_memory_region.h"
+#include "base/task/bind_post_task.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
-#include "media/base/bind_to_current_loop.h"
 #include "media/base/video_frame.h"
 #include "media/base/video_types.h"
 
@@ -20,7 +19,7 @@ namespace chromeos_camera {
 
 FakeMjpegDecodeAccelerator::FakeMjpegDecodeAccelerator(
     const scoped_refptr<base::SingleThreadTaskRunner>& io_task_runner)
-    : client_task_runner_(base::ThreadTaskRunnerHandle::Get()),
+    : client_task_runner_(base::SingleThreadTaskRunner::GetCurrentDefault()),
       io_task_runner_(std::move(io_task_runner)),
       decoder_thread_("FakeMjpegDecoderThread") {}
 
@@ -53,7 +52,7 @@ void FakeMjpegDecodeAccelerator::InitializeAsync(
       FROM_HERE,
       base::BindOnce(&FakeMjpegDecodeAccelerator::InitializeOnTaskRunner,
                      weak_factory_.GetWeakPtr(), client,
-                     media::BindToCurrentLoop(std::move(init_cb))));
+                     base::BindPostTaskToCurrentDefault(std::move(init_cb))));
 }
 
 void FakeMjpegDecodeAccelerator::Decode(

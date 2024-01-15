@@ -4,16 +4,22 @@
 
 #include "ash/system/bluetooth/bluetooth_detailed_view_controller.h"
 
+#include <optional>
+
+#include "ash/constants/ash_switches.h"
 #include "ash/public/cpp/bluetooth_config_service.h"
+#include "ash/public/cpp/hats_bluetooth_revamp_trigger.h"
 #include "ash/public/cpp/system_tray_client.h"
 #include "ash/shell.h"
 #include "ash/strings/grit/ash_strings.h"
 #include "ash/system/model/system_tray_model.h"
 #include "ash/system/unified/unified_system_tray_controller.h"
 #include "base/check.h"
+#include "base/command_line.h"
+#include "base/memory/ptr_util.h"
+#include "build/chromeos_buildflags.h"
 #include "chromeos/ash/services/bluetooth_config/public/cpp/cros_bluetooth_config_util.h"
 #include "mojo/public/cpp/bindings/clone_traits.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/views/view.h"
 
@@ -21,7 +27,16 @@ namespace ash {
 
 using bluetooth_config::IsBluetoothEnabledOrEnabling;
 using bluetooth_config::mojom::AudioOutputCapability;
+using bluetooth_config::mojom::BatteryProperties;
+using bluetooth_config::mojom::BluetoothDeviceProperties;
+using bluetooth_config::mojom::BluetoothDevicePropertiesPtr;
+using bluetooth_config::mojom::BluetoothSystemState;
+using bluetooth_config::mojom::DeviceBatteryInfo;
+using bluetooth_config::mojom::DeviceBatteryInfoPtr;
 using bluetooth_config::mojom::DeviceConnectionState;
+using bluetooth_config::mojom::DeviceType;
+using bluetooth_config::mojom::PairedBluetoothDeviceProperties;
+using bluetooth_config::mojom::PairedBluetoothDevicePropertiesPtr;
 
 BluetoothDetailedViewController::BluetoothDetailedViewController(
     UnifiedSystemTrayController* tray_controller)
@@ -36,7 +51,7 @@ BluetoothDetailedViewController::BluetoothDetailedViewController(
 
 BluetoothDetailedViewController::~BluetoothDetailedViewController() = default;
 
-views::View* BluetoothDetailedViewController::CreateView() {
+std::unique_ptr<views::View> BluetoothDetailedViewController::CreateView() {
   DCHECK(!view_);
   std::unique_ptr<BluetoothDetailedView> bluetooth_detailed_view =
       BluetoothDetailedView::Factory::Create(detailed_view_delegate_.get(),
@@ -51,9 +66,8 @@ views::View* BluetoothDetailedViewController::CreateView() {
                                               previously_connected_devices_);
   }
 
-  // We are expected to return an unowned pointer that the caller is responsible
-  // for deleting.
-  return bluetooth_detailed_view.release()->GetAsView();
+  // `bluetooth_detailed_view` is not a views::View, so we must GetAsView().
+  return base::WrapUnique(bluetooth_detailed_view.release()->GetAsView());
 }
 
 std::u16string BluetoothDetailedViewController::GetAccessibleName() const {
@@ -63,6 +77,12 @@ std::u16string BluetoothDetailedViewController::GetAccessibleName() const {
 
 void BluetoothDetailedViewController::OnPropertiesUpdated(
     bluetooth_config::mojom::BluetoothSystemPropertiesPtr properties) {
+  if (properties->system_state == BluetoothSystemState::kUnavailable) {
+    tray_controller_->TransitionToMainView(
+        /*restore_focus=*/true);  // Deletes |this|.
+    return;
+  }
+
   const bool has_bluetooth_enabled_state_changed =
       system_state_ != properties->system_state;
   system_state_ = properties->system_state;
@@ -72,6 +92,11 @@ void BluetoothDetailedViewController::OnPropertiesUpdated(
 
   connected_devices_.clear();
   previously_connected_devices_.clear();
+
+  if (base::CommandLine::ForCurrentProcess()->HasSwitch(
+          switches::kQsAddFakeBluetoothDevices)) {
+    AddFakeBluetoothDevices();
+  }
 
   for (auto& paired_device : properties->paired_devices) {
     if (paired_device->device_properties->connection_state ==
@@ -89,12 +114,20 @@ void BluetoothDetailedViewController::OnPropertiesUpdated(
 
 void BluetoothDetailedViewController::OnToggleClicked(bool new_state) {
   remote_cros_bluetooth_config_->SetBluetoothEnabledState(new_state);
+
+  if (auto* hats_bluetooth_revamp_trigger = HatsBluetoothRevampTrigger::Get()) {
+    hats_bluetooth_revamp_trigger->TryToShowSurvey();
+  }
 }
 
 void BluetoothDetailedViewController::OnPairNewDeviceRequested() {
   tray_controller_->CloseBubble();  // Deletes |this|.
   Shell::Get()->system_tray_model()->client()->ShowBluetoothPairingDialog(
-      /*device_address=*/absl::nullopt);
+      /*device_address=*/std::nullopt);
+
+  if (auto* hats_bluetooth_revamp_trigger = HatsBluetoothRevampTrigger::Get()) {
+    hats_bluetooth_revamp_trigger->TryToShowSurvey();
+  }
 }
 
 void BluetoothDetailedViewController::OnDeviceListItemSelected(
@@ -119,14 +152,161 @@ void BluetoothDetailedViewController::OnDeviceListItemSelected(
 }
 
 void BluetoothDetailedViewController::BluetoothEnabledStateChanged() {
-  const bool bluetooth_enabled_state =
-      IsBluetoothEnabledOrEnabling(system_state_);
   if (view_)
-    view_->UpdateBluetoothEnabledState(bluetooth_enabled_state);
+    view_->UpdateBluetoothEnabledState(system_state_);
   if (device_list_controller_) {
     device_list_controller_->UpdateBluetoothEnabledState(
-        bluetooth_enabled_state);
+        IsBluetoothEnabledOrEnabling(system_state_));
   }
+}
+
+void BluetoothDetailedViewController::AddFakeBluetoothDevices() {
+#if !BUILDFLAG(IS_CHROMEOS_DEVICE)
+  // Only add fake devices in the linux-chromeos emulator. We don't want to
+  // increase the binary size for real devices.
+  {
+    PairedBluetoothDevicePropertiesPtr paired_device_properties =
+        PairedBluetoothDeviceProperties::New();
+    paired_device_properties->device_properties =
+        BluetoothDeviceProperties::New();
+    paired_device_properties->device_properties->id = "Unknown";
+    paired_device_properties->device_properties->public_name = u"Unknown";
+    paired_device_properties->device_properties->connection_state =
+        DeviceConnectionState::kConnected;
+    paired_device_properties->device_properties->device_type =
+        DeviceType::kUnknown;
+
+    connected_devices_.push_back(mojo::Clone(paired_device_properties));
+  }
+  {
+    PairedBluetoothDevicePropertiesPtr paired_device_properties =
+        PairedBluetoothDeviceProperties::New();
+    paired_device_properties->device_properties =
+        BluetoothDeviceProperties::New();
+    paired_device_properties->device_properties->id = "Computer";
+    paired_device_properties->device_properties->public_name = u"Computer";
+    paired_device_properties->device_properties->device_type =
+        DeviceType::kComputer;
+    paired_device_properties->device_properties->connection_state =
+        DeviceConnectionState::kConnected;
+    paired_device_properties->device_properties->battery_info =
+        DeviceBatteryInfo::New();
+    paired_device_properties->device_properties->battery_info
+        ->default_properties = BatteryProperties::New();
+    paired_device_properties->device_properties->battery_info
+        ->default_properties->battery_percentage = 75;
+
+    connected_devices_.push_back(mojo::Clone(paired_device_properties));
+  }
+  {
+    PairedBluetoothDevicePropertiesPtr paired_device_properties =
+        PairedBluetoothDeviceProperties::New();
+    paired_device_properties->device_properties =
+        BluetoothDeviceProperties::New();
+    paired_device_properties->device_properties->id = "Phone";
+    paired_device_properties->device_properties->public_name = u"Phone";
+    paired_device_properties->device_properties->device_type =
+        DeviceType::kPhone;
+    paired_device_properties->device_properties->connection_state =
+        DeviceConnectionState::kConnected;
+    paired_device_properties->device_properties->battery_info =
+        DeviceBatteryInfo::New();
+    paired_device_properties->device_properties->battery_info->left_bud_info =
+        BatteryProperties::New();
+    paired_device_properties->device_properties->battery_info->left_bud_info
+        ->battery_percentage = 5;
+    paired_device_properties->device_properties->battery_info->case_info =
+        BatteryProperties::New();
+    paired_device_properties->device_properties->battery_info->case_info
+        ->battery_percentage = 64;
+    paired_device_properties->device_properties->battery_info->right_bud_info =
+        BatteryProperties::New();
+    paired_device_properties->device_properties->battery_info->right_bud_info
+        ->battery_percentage = 9;
+
+    connected_devices_.push_back(mojo::Clone(paired_device_properties));
+  }
+  {
+    PairedBluetoothDevicePropertiesPtr paired_device_properties =
+        PairedBluetoothDeviceProperties::New();
+    paired_device_properties->device_properties =
+        BluetoothDeviceProperties::New();
+    paired_device_properties->device_properties->id = "Game Controller";
+    paired_device_properties->device_properties->public_name =
+        u"Game Controller";
+    paired_device_properties->device_properties->device_type =
+        DeviceType::kGameController;
+
+    connected_devices_.push_back(mojo::Clone(paired_device_properties));
+  }
+  {
+    PairedBluetoothDevicePropertiesPtr paired_device_properties =
+        PairedBluetoothDeviceProperties::New();
+    paired_device_properties->device_properties =
+        BluetoothDeviceProperties::New();
+    paired_device_properties->device_properties->id = "Keyboard";
+    paired_device_properties->device_properties->public_name = u"Keyboard";
+    paired_device_properties->device_properties->device_type =
+        DeviceType::kKeyboard;
+
+    connected_devices_.push_back(mojo::Clone(paired_device_properties));
+  }
+  {
+    PairedBluetoothDevicePropertiesPtr paired_device_properties =
+        PairedBluetoothDeviceProperties::New();
+    paired_device_properties->device_properties =
+        BluetoothDeviceProperties::New();
+    paired_device_properties->device_properties->id = "Mouse";
+    paired_device_properties->device_properties->public_name = u"Mouse";
+    paired_device_properties->device_properties->device_type =
+        DeviceType::kMouse;
+
+    connected_devices_.push_back(mojo::Clone(paired_device_properties));
+  }
+  {
+    PairedBluetoothDevicePropertiesPtr paired_device_properties =
+        PairedBluetoothDeviceProperties::New();
+    paired_device_properties->device_properties =
+        BluetoothDeviceProperties::New();
+    paired_device_properties->device_properties->id = "Tablet";
+    paired_device_properties->device_properties->public_name = u"Tablet";
+    paired_device_properties->device_properties->device_type =
+        DeviceType::kTablet;
+
+    connected_devices_.push_back(mojo::Clone(paired_device_properties));
+  }
+  {
+    PairedBluetoothDevicePropertiesPtr paired_device_properties =
+        PairedBluetoothDeviceProperties::New();
+    paired_device_properties->device_properties =
+        BluetoothDeviceProperties::New();
+    paired_device_properties->device_properties->id = "Headset";
+    paired_device_properties->device_properties->public_name = u"Headset";
+    paired_device_properties->device_properties->device_type =
+        DeviceType::kHeadset;
+    paired_device_properties->device_properties->connection_state =
+        DeviceConnectionState::kConnecting;
+
+    previously_connected_devices_.push_back(
+        mojo::Clone(paired_device_properties));
+  }
+  {
+    PairedBluetoothDevicePropertiesPtr paired_device_properties =
+        PairedBluetoothDeviceProperties::New();
+    paired_device_properties->device_properties =
+        BluetoothDeviceProperties::New();
+    paired_device_properties->device_properties->id = "Video Camera";
+    paired_device_properties->device_properties->public_name =
+        u"Video Camera with a very very very very very very very long name";
+    paired_device_properties->device_properties->device_type =
+        DeviceType::kVideoCamera;
+    paired_device_properties->device_properties->connection_state =
+        DeviceConnectionState::kNotConnected;
+
+    previously_connected_devices_.push_back(
+        mojo::Clone(paired_device_properties));
+  }
+#endif  // !BUILDFLAG(IS_CHROMEOS_DEVICE)
 }
 
 }  // namespace ash

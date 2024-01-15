@@ -42,6 +42,8 @@ namespace translate {
 
 namespace {
 
+const int kForceTriggerBackoffThreshold = 4;
+
 // Returns whether or not the given list includes at least one language with
 // the same base as the input language.
 // For example: "en-US" and "en-UK" share the same base "en".
@@ -135,33 +137,6 @@ void MigrateObsoleteAlwaysTranslateLanguagesPref(PrefService* prefs) {
 
 }  // namespace
 
-const char TranslatePrefs::kPrefForceTriggerTranslateCount[] =
-    "translate_force_trigger_on_english_count_for_backoff_1";
-const char TranslatePrefs::kPrefNeverPromptSitesDeprecated[] =
-    "translate_site_blacklist";
-const char TranslatePrefs::kPrefTranslateDeniedCount[] =
-    "translate_denied_count_for_language";
-const char TranslatePrefs::kPrefTranslateIgnoredCount[] =
-    "translate_ignored_count_for_language";
-const char TranslatePrefs::kPrefTranslateAcceptedCount[] =
-    "translate_accepted_count";
-
-// Deprecated 10/2021.
-const char TranslatePrefs::kPrefAlwaysTranslateListDeprecated[] =
-    "translate_whitelists";
-
-#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_IOS)
-const char TranslatePrefs::kPrefTranslateAutoAlwaysCount[] =
-    "translate_auto_always_count";
-const char TranslatePrefs::kPrefTranslateAutoNeverCount[] =
-    "translate_auto_never_count";
-#endif
-
-#if BUILDFLAG(IS_ANDROID)
-const char TranslatePrefs::kPrefExplicitLanguageAskShown[] =
-    "translate_explicit_language_ask_shown";
-#endif
-
 // The below properties used to be used but now are deprecated. Don't use them
 // since an old profile might have some values there.
 //
@@ -239,6 +214,7 @@ void TranslatePrefs::ResetToDefaults() {
   prefs_->ClearPref(kPrefTranslateIgnoredCount);
   prefs_->ClearPref(kPrefTranslateAcceptedCount);
   prefs_->ClearPref(prefs::kPrefTranslateRecentTarget);
+  force_translate_on_english_for_testing_ = false;
 
 #if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_IOS)
   prefs_->ClearPref(kPrefTranslateAutoAlwaysCount);
@@ -842,14 +818,6 @@ void TranslatePrefs::ResetTranslationAutoNeverCount(
 #endif  // BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_IOS)
 
 #if BUILDFLAG(IS_ANDROID)
-bool TranslatePrefs::GetExplicitLanguageAskPromptShown() const {
-  return prefs_->GetBoolean(kPrefExplicitLanguageAskShown);
-}
-
-void TranslatePrefs::SetExplicitLanguageAskPromptShown(bool shown) {
-  prefs_->SetBoolean(kPrefExplicitLanguageAskShown, shown);
-}
-
 bool TranslatePrefs::GetAppLanguagePromptShown() const {
   return prefs_->GetBoolean(language::prefs::kAppLanguagePromptShown);
 }
@@ -869,12 +837,28 @@ void TranslatePrefs::GetUserSelectedLanguageList(
   language_prefs_->GetUserSelectedLanguagesList(languages);
 }
 
+bool TranslatePrefs::ShouldForceTriggerTranslateOnEnglishPages() {
+  if (!language::OverrideTranslateTriggerInIndia() &&
+      !force_translate_on_english_for_testing_) {
+    return false;
+  }
+
+  return GetForceTriggerOnEnglishPagesCount() < kForceTriggerBackoffThreshold;
+}
+
+bool TranslatePrefs::force_translate_on_english_for_testing_ = false;
+
+// static
+void TranslatePrefs::SetShouldForceTriggerTranslateOnEnglishPagesForTesting() {
+  force_translate_on_english_for_testing_ = true;
+}
+
 bool TranslatePrefs::CanTranslateLanguage(base::StringPiece language) {
   // Under this experiment, translate English page even though English may be
   // blocked.
-  if (language == "en" && language::ShouldForceTriggerTranslateOnEnglishPages(
-                              GetForceTriggerOnEnglishPagesCount()))
+  if (language == "en" && ShouldForceTriggerTranslateOnEnglishPages()) {
     return true;
+  }
 
   return !IsBlockedLanguage(language);
 }
@@ -929,8 +913,7 @@ void TranslatePrefs::ReportAcceptedAfterForceTriggerOnEnglishPages() {
 // static
 void TranslatePrefs::RegisterProfilePrefs(
     user_prefs::PrefRegistrySyncable* registry) {
-  registry->RegisterListPref(kPrefNeverPromptSitesDeprecated,
-                             user_prefs::PrefRegistrySyncable::SYNCABLE_PREF);
+  registry->RegisterListPref(kPrefNeverPromptSitesDeprecated);
   registry->RegisterDictionaryPref(
       prefs::kPrefNeverPromptSitesWithTime,
       user_prefs::PrefRegistrySyncable::SYNCABLE_PREF);
@@ -940,9 +923,7 @@ void TranslatePrefs::RegisterProfilePrefs(
   registry->RegisterDictionaryPref(
       kPrefTranslateDeniedCount,
       user_prefs::PrefRegistrySyncable::SYNCABLE_PREF);
-  registry->RegisterDictionaryPref(
-      kPrefTranslateIgnoredCount,
-      user_prefs::PrefRegistrySyncable::SYNCABLE_PREF);
+  registry->RegisterDictionaryPref(kPrefTranslateIgnoredCount);
   registry->RegisterDictionaryPref(
       kPrefTranslateAcceptedCount,
       user_prefs::PrefRegistrySyncable::SYNCABLE_PREF);
@@ -963,19 +944,14 @@ void TranslatePrefs::RegisterProfilePrefs(
       user_prefs::PrefRegistrySyncable::SYNCABLE_PREF);
 #endif
 
-#if BUILDFLAG(IS_ANDROID)
-  registry->RegisterBooleanPref(
-      kPrefExplicitLanguageAskShown, false,
-      user_prefs::PrefRegistrySyncable::SYNCABLE_PREF);
-#endif
-
   RegisterProfilePrefsForMigration(registry);
 }
 
 // static
 void TranslatePrefs::RegisterProfilePrefsForMigration(
     user_prefs::PrefRegistrySyncable* registry) {
-  // Deprecated 10/2021.
+  // TODO(crbug/1303963): Deprecated 10/2021. Check status of bug before
+  // removing.
   registry->RegisterDictionaryPref(kPrefAlwaysTranslateListDeprecated);
 }
 
@@ -998,24 +974,6 @@ void TranslatePrefs::MigrateNeverPromptSites() {
     }
   }
   deprecated_list.clear();
-}
-
-// static
-void TranslatePrefs::MigrateObsoleteProfilePrefs(PrefService* profile_prefs) {
-  // TODO(crbug/1291356): Remove this method.
-  const base::Value* deprecated_always_translate_list =
-      profile_prefs->GetUserPrefValue(kPrefAlwaysTranslateListDeprecated);
-  if (deprecated_always_translate_list &&
-      !profile_prefs->GetUserPrefValue(prefs::kPrefAlwaysTranslateList)) {
-    profile_prefs->Set(prefs::kPrefAlwaysTranslateList,
-                       *deprecated_always_translate_list);
-  }
-}
-
-// static
-void TranslatePrefs::ClearObsoleteProfilePrefs(PrefService* profile_prefs) {
-  // TODO(crbug/1291356): Remove this method.
-  profile_prefs->ClearPref(kPrefAlwaysTranslateListDeprecated);
 }
 
 bool TranslatePrefs::IsValueOnNeverPromptList(const char* pref_id,

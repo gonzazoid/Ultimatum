@@ -4,38 +4,40 @@
 
 #include "chrome/browser/ash/login/demo_mode/demo_extensions_external_loader.h"
 
+#include <optional>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/json/json_reader.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
 #include "base/values.h"
+#include "chrome/browser/ash/extensions/external_cache.h"
+#include "chrome/browser/ash/extensions/external_cache_impl.h"
 #include "chrome/browser/ash/login/demo_mode/demo_components.h"
 #include "chrome/browser/ash/login/demo_mode/demo_session.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/browser_process.h"
-#include "chrome/browser/chromeos/extensions/external_cache_impl.h"
 #include "chrome/browser/extensions/external_provider_impl.h"
 #include "extensions/browser/extension_file_task_runner.h"
 #include "extensions/common/extension_urls.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace ash {
+
 namespace {
 
 // Arbitrary, but reasonable size limit in bytes for prefs file.
 constexpr size_t kPrefsSizeLimit = 1024 * 1024;
 
-absl::optional<base::Value::Dict> LoadPrefsFromDisk(
+std::optional<base::Value::Dict> LoadPrefsFromDisk(
     const base::FilePath& prefs_path) {
   if (!base::PathExists(prefs_path)) {
     LOG(WARNING) << "Demo extensions prefs not found " << prefs_path.value();
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   std::string prefs_str;
@@ -43,18 +45,18 @@ absl::optional<base::Value::Dict> LoadPrefsFromDisk(
                                          kPrefsSizeLimit)) {
     LOG(ERROR) << "Failed to read prefs " << prefs_path.value() << "; "
                << "failed after reading " << prefs_str.size() << " bytes";
-    return absl::nullopt;
+    return std::nullopt;
   }
 
-  absl::optional<base::Value> prefs_value = base::JSONReader::Read(prefs_str);
+  std::optional<base::Value> prefs_value = base::JSONReader::Read(prefs_str);
   if (!prefs_value) {
     LOG(ERROR) << "Unable to parse demo extensions prefs.";
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   if (!prefs_value->is_dict()) {
     LOG(ERROR) << "Demo extensions prefs not a dictionary.";
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   return std::move(prefs_value).value().TakeDict();
@@ -89,7 +91,7 @@ void DemoExtensionsExternalLoader::LoadApp(const std::string& app_id) {
     prefs.Set(app, std::move(app_dict));
   }
   if (!external_cache_) {
-    external_cache_ = std::make_unique<ExternalCacheImpl>(
+    external_cache_ = std::make_unique<chromeos::ExternalCacheImpl>(
         cache_dir_, g_browser_process->shared_url_loader_factory(),
         extensions::GetExtensionFileTaskRunner(), this,
         true /* always_check_updates */,
@@ -140,7 +142,7 @@ void DemoExtensionsExternalLoader::StartLoadingFromOfflineDemoResources() {
 }
 
 void DemoExtensionsExternalLoader::DemoExternalExtensionsPrefsLoaded(
-    absl::optional<base::Value::Dict> prefs) {
+    std::optional<base::Value::Dict> prefs) {
   if (!prefs.has_value()) {
     LoadFinished(base::Value::Dict());
     return;

@@ -48,6 +48,7 @@ class MediaController : public mojom::MediaController,
   void PreviousTrack() override;
   void NextTrack() override;
   void Seek(base::TimeDelta seek_time) override;
+  void SkipAd() override;
   void ObserveImages(mojom::MediaSessionImageType type,
                      int minimum_size_px,
                      int desired_size_px,
@@ -63,6 +64,8 @@ class MediaController : public mojom::MediaController,
   void HangUp() override;
   void Raise() override;
   void SetMute(bool mute) override;
+  void RequestMediaRemoting() override;
+  void EnterAutoPictureInPicture() override;
 
   // mojom::MediaSessionObserver overrides.
   void MediaSessionInfoChanged(

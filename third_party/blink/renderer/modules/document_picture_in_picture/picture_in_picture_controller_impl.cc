@@ -7,24 +7,17 @@
 #include <limits>
 #include <utility>
 
-#include "base/callback_helpers.h"
-#include "base/ranges/algorithm.h"
+#include "base/functional/callback_helpers.h"
+#include "base/task/single_thread_task_runner.h"
 #include "media/mojo/mojom/media_player.mojom-blink.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "third_party/blink/public/common/browser_interface_broker_proxy.h"
 #include "third_party/blink/public/common/media/display_type.h"
-#include "third_party/blink/public/common/scheme_registry.h"
-#include "third_party/blink/public/mojom/manifest/display_mode.mojom-shared.h"
 #include "third_party/blink/public/mojom/permissions_policy/permissions_policy.mojom-blink.h"
-#include "third_party/blink/public/web/web_picture_in_picture_window_options.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_controller.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_binding_for_core.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_throw_dom_exception.h"
-#include "third_party/blink/renderer/bindings/modules/v8/v8_document_picture_in_picture_options.h"
-#include "third_party/blink/renderer/core/css/style_engine.h"
-#include "third_party/blink/renderer/core/css/style_sheet_contents.h"
-#include "third_party/blink/renderer/core/css/style_sheet_list.h"
 #include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/dom/dom_exception.h"
 #include "third_party/blink/renderer/core/dom/events/event.h"
@@ -34,13 +27,19 @@
 #include "third_party/blink/renderer/core/html/media/html_media_element.h"
 #include "third_party/blink/renderer/core/html/media/html_video_element.h"
 #include "third_party/blink/renderer/core/layout/layout_video.h"
-#include "third_party/blink/renderer/modules/document_picture_in_picture/document_picture_in_picture_session.h"
 #include "third_party/blink/renderer/modules/picture_in_picture/picture_in_picture_event.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/runtime_enabled_features.h"
 #include "third_party/blink/renderer/platform/weborigin/scheme_registry.h"
 #include "third_party/blink/renderer/platform/widget/frame_widget.h"
 #include "third_party/blink/renderer/platform/wtf/functional.h"
+
+#if !BUILDFLAG(IS_ANDROID)
+#include "third_party/blink/public/web/web_picture_in_picture_window_options.h"
+#include "third_party/blink/renderer/bindings/modules/v8/v8_document_picture_in_picture_options.h"
+#include "third_party/blink/renderer/modules/document_picture_in_picture/document_picture_in_picture.h"
+#include "third_party/blink/renderer/modules/document_picture_in_picture/document_picture_in_picture_event.h"
+#endif  // !BUILDFLAG(IS_ANDROID)
 
 namespace blink {
 
@@ -73,6 +72,14 @@ PictureInPictureControllerImpl::IsDocumentAllowed(bool report_failure) const {
   if (!frame)
     return Status::kFrameDetached;
 
+  // Picture-in-Picture is not allowed if the window is a document
+  // Picture-in-Picture window.
+  if (RuntimeEnabledFeatures::DocumentPictureInPictureAPIEnabled(
+          GetSupplementable()->GetExecutionContext()) &&
+      DomWindow() && DomWindow()->IsPictureInPictureWindow()) {
+    return Status::kDocumentPip;
+  }
+
   // `GetPictureInPictureEnabled()` returns false when the embedder or the
   // system forbids the page from using Picture-in-Picture.
   DCHECK(GetSupplementable()->GetSettings());
@@ -81,8 +88,7 @@ PictureInPictureControllerImpl::IsDocumentAllowed(bool report_failure) const {
 
   // If document is not allowed to use the policy-controlled feature named
   // "picture-in-picture", return kDisabledByPermissionsPolicy status.
-  if (RuntimeEnabledFeatures::PictureInPictureAPIEnabled() &&
-      !GetSupplementable()->GetExecutionContext()->IsFeatureEnabled(
+  if (!GetSupplementable()->GetExecutionContext()->IsFeatureEnabled(
           blink::mojom::blink::PermissionsPolicyFeature::kPictureInPicture,
           report_failure ? ReportOptions::kReportOnFailure
                          : ReportOptions::kDoNotReport)) {
@@ -203,8 +209,8 @@ void PictureInPictureControllerImpl::OnEnteredPictureInPicture(
     return;
   }
 
-  video_picture_in_picture_session_.reset();
-  video_picture_in_picture_session_.Bind(
+  picture_in_picture_session_.reset();
+  picture_in_picture_session_.Bind(
       std::move(session_remote),
       element->GetDocument().GetTaskRunner(TaskType::kMediaElementEvent));
   if (IsElementAllowed(*element, /*report_failure=*/true) != Status::kEnabled) {
@@ -225,10 +231,12 @@ void PictureInPictureControllerImpl::OnEnteredPictureInPicture(
   if (picture_in_picture_element_)
     OnExitedPictureInPicture(nullptr);
 
-  if (document_picture_in_picture_session_) {
+#if !BUILDFLAG(IS_ANDROID)
+  if (document_picture_in_picture_window_) {
     // TODO(crbug.com/1360452): close the window too.
-    document_picture_in_picture_session_ = nullptr;
+    document_picture_in_picture_window_ = nullptr;
   }
+#endif  // !BUILDFLAG(IS_ANDROID)
 
   picture_in_picture_element_ = element;
   picture_in_picture_element_->OnEnteredPictureInPicture();
@@ -263,10 +271,10 @@ void PictureInPictureControllerImpl::ExitPictureInPicture(
   if (!EnsureService())
     return;
 
-  if (!video_picture_in_picture_session_.is_bound())
+  if (!picture_in_picture_session_.is_bound())
     return;
 
-  video_picture_in_picture_session_->Stop(
+  picture_in_picture_session_->Stop(
       WTF::BindOnce(&PictureInPictureControllerImpl::OnExitedPictureInPicture,
                     WrapPersistent(this), WrapPersistent(resolver)));
   session_observer_receiver_.reset();
@@ -300,6 +308,8 @@ void PictureInPictureControllerImpl::OnExitedPictureInPicture(
         event_type_names::kLeavepictureinpicture,
         WrapPersistent(picture_in_picture_window_.Get())));
 
+    picture_in_picture_window_ = nullptr;
+
     // Register the video frame sink back to the element when the PiP window
     // is closed and if the video is not unset.
     if (element->GetWebMediaPlayer()) {
@@ -313,16 +323,11 @@ void PictureInPictureControllerImpl::OnExitedPictureInPicture(
 
 PictureInPictureWindow* PictureInPictureControllerImpl::pictureInPictureWindow()
     const {
-  return picture_in_picture_window_;
-}
-
-DocumentPictureInPictureSession*
-PictureInPictureControllerImpl::documentPictureInPictureSession() const {
-  return document_picture_in_picture_session_;
+  return picture_in_picture_window_.Get();
 }
 
 Element* PictureInPictureControllerImpl::PictureInPictureElement() const {
-  return picture_in_picture_element_;
+  return picture_in_picture_element_.Get();
 }
 
 Element* PictureInPictureControllerImpl::PictureInPictureElement(
@@ -339,78 +344,14 @@ bool PictureInPictureControllerImpl::IsPictureInPictureElement(
   return element == picture_in_picture_element_;
 }
 
-void PictureInPictureControllerImpl::AddToAutoPictureInPictureElementsList(
-    HTMLVideoElement* element) {
-  RemoveFromAutoPictureInPictureElementsList(element);
-  auto_picture_in_picture_elements_.push_back(element);
-}
-
-void PictureInPictureControllerImpl::RemoveFromAutoPictureInPictureElementsList(
-    HTMLVideoElement* element) {
-  DCHECK(element);
-  auto it = base::ranges::find(auto_picture_in_picture_elements_, element);
-  if (it != auto_picture_in_picture_elements_.end())
-    auto_picture_in_picture_elements_.erase(it);
-}
-
-HTMLVideoElement* PictureInPictureControllerImpl::AutoPictureInPictureElement()
+#if !BUILDFLAG(IS_ANDROID)
+LocalDOMWindow* PictureInPictureControllerImpl::documentPictureInPictureWindow()
     const {
-  return auto_picture_in_picture_elements_.empty()
-             ? nullptr
-             : auto_picture_in_picture_elements_.back();
+  return document_picture_in_picture_window_.Get();
 }
 
-bool PictureInPictureControllerImpl::IsEnterAutoPictureInPictureAllowed()
-    const {
-  // Entering Auto Picture-in-Picture is allowed if one of these conditions is
-  // true:
-  // - Document runs in a Chrome Extension.
-  // - Document is in fullscreen.
-  // - Document is in a PWA window that runs in the scope of the PWA.
-  bool is_in_pwa_window = false;
-  if (GetSupplementable()->GetFrame()) {
-    mojom::blink::DisplayMode display_mode =
-        GetSupplementable()->GetFrame()->GetWidgetForLocalRoot()->DisplayMode();
-    is_in_pwa_window = display_mode != mojom::blink::DisplayMode::kBrowser;
-  }
-  if (!(CommonSchemeRegistry::IsExtensionScheme(
-            GetSupplementable()->Url().Protocol().Ascii()) ||
-        Fullscreen::FullscreenElementFrom(*GetSupplementable()) ||
-        (is_in_pwa_window && GetSupplementable()->IsInWebAppScope()))) {
-    return false;
-  }
-
-  // Don't allow if there's already an element in Auto Picture-in-Picture.
-  if (picture_in_picture_element_)
-    return false;
-
-  // Don't allow if there's already a Document Picture-in-Picture session.
-  if (document_picture_in_picture_session_)
-    return false;
-
-  // Don't allow if there's no element eligible to enter Auto Picture-in-Picture
-  if (!AutoPictureInPictureElement())
-    return false;
-
-  // Don't allow if video won't resume playing automatically when it becomes
-  // visible again.
-  if (AutoPictureInPictureElement()->PausedWhenVisible())
-    return false;
-
-  // Allow if video is allowed to enter Picture-in-Picture.
-  return (IsElementAllowed(*AutoPictureInPictureElement(),
-                           /*report_failure=*/true) == Status::kEnabled);
-}
-
-bool PictureInPictureControllerImpl::IsExitAutoPictureInPictureAllowed() const {
-  // Don't allow exiting Auto Picture-in-Picture if there's no eligible element
-  // to exit Auto Picture-in-Picture.
-  if (!AutoPictureInPictureElement())
-    return false;
-
-  // Allow if the element already in Picture-in-Picture is the same as the one
-  // eligible to exit Auto Picture-in-Picture.
-  return (picture_in_picture_element_ == AutoPictureInPictureElement());
+bool PictureInPictureControllerImpl::HasDocumentPictureInPictureWindow() const {
+  return document_picture_in_picture_window_;
 }
 
 void PictureInPictureControllerImpl::CreateDocumentPictureInPictureWindow(
@@ -420,23 +361,42 @@ void PictureInPictureControllerImpl::CreateDocumentPictureInPictureWindow(
     ScriptPromiseResolver* resolver,
     ExceptionState& exception_state) {
   if (!LocalFrame::ConsumeTransientUserActivation(opener.GetFrame())) {
-    resolver->Reject(MakeGarbageCollected<DOMException>(
-        DOMExceptionCode::kNotAllowedError,
-        "Document PiP requires user activation"));
+    exception_state.ThrowDOMException(DOMExceptionCode::kNotAllowedError,
+                                      "Document PiP requires user activation");
+    resolver->Reject(exception_state);
     return;
   }
 
   WebPictureInPictureWindowOptions web_options;
-  web_options.initial_aspect_ratio = options->initialAspectRatio();
-  web_options.lock_aspect_ratio = options->lockAspectRatio();
+  web_options.width = options->width();
+  web_options.height = options->height();
+
+  // If either width or height is specified, then both must be specified.
+  if (web_options.width > 0 && web_options.height == 0) {
+    exception_state.ThrowRangeError(
+        "Height must be specified if width is specified");
+    resolver->Reject(exception_state);
+    return;
+  } else if (web_options.width == 0 && web_options.height > 0) {
+    exception_state.ThrowRangeError(
+        "Width must be specified if height is specified");
+    resolver->Reject(exception_state);
+    return;
+  }
 
   auto* dom_window = opener.openPictureInPictureWindow(
       script_state->GetIsolate(), web_options, exception_state);
 
-  // If we can't create a window then reject the promise with the exception
-  // state.
-  if (!dom_window || exception_state.HadException()) {
-    resolver->Reject();
+  if (!dom_window) {
+    exception_state.ThrowDOMException(DOMExceptionCode::kInvalidStateError,
+                                      "Internal error: no window");
+    resolver->Reject(exception_state);
+    return;
+  }
+
+  // If we can't create a window, reject the promise with the exception state.
+  if (exception_state.HadException()) {
+    resolver->Reject(exception_state);
     return;
   }
 
@@ -453,27 +413,6 @@ void PictureInPictureControllerImpl::CreateDocumentPictureInPictureWindow(
   Document* pip_document = local_dom_window->document();
   DCHECK(pip_document);
   pip_document->SetBaseURLOverride(opener.document()->BaseURL());
-
-  // Copy style sheets, if requested.
-  if (options->copyStyleSheets()) {
-    StyleSheetList& list = opener.document()->StyleSheets();
-    for (unsigned i = 0; i < list.length(); i++) {
-      StyleSheet* sheet = list.item(i);
-      if (!sheet->IsCSSStyleSheet() || sheet->disabled()) {
-        continue;
-      }
-      CSSStyleSheet* css = To<CSSStyleSheet>(sheet);
-      StyleSheetContents* contents = css->Contents();
-
-      // Inject the style sheet. It will not stay in sync with the opener.
-      //
-      // `key` is arbitrary; it just has to avoid conflicting with any other
-      // injected style sheets. Typically, only extensions do that, so it's
-      // fairly rare.
-      pip_document->GetStyleEngine().InjectSheet(
-          /*key=*/AtomicString::Number(i), contents);
-    }
-  }
 
   SetMayThrottleIfUndrawnFrames(false);
 
@@ -497,8 +436,7 @@ void PictureInPictureControllerImpl::CreateDocumentPictureInPictureWindow(
     ResolveOpenDocumentPictureInPicture();
   }
 
-  document_picture_in_picture_session_ =
-      MakeGarbageCollected<DocumentPictureInPictureSession>(local_dom_window);
+  document_picture_in_picture_window_ = local_dom_window;
 
   // There should not be an unresolved ScriptPromiseResolver at this point.
   // Leaving one unresolved and letting it get garbage collected will crash the
@@ -513,12 +451,44 @@ void PictureInPictureControllerImpl::CreateDocumentPictureInPictureWindow(
           WrapPersistent(this)));
 }
 
+void PictureInPictureControllerImpl::ResolveOpenDocumentPictureInPicture() {
+  CHECK(document_picture_in_picture_window_);
+  CHECK(open_document_pip_resolver_);
+
+  if (DomWindow()) {
+    DocumentPictureInPicture::From(*DomWindow())
+        ->DispatchEvent(*DocumentPictureInPictureEvent::Create(
+            event_type_names::kEnter,
+            WrapPersistent(document_picture_in_picture_window_.Get())));
+  }
+
+  open_document_pip_resolver_->Resolve(document_picture_in_picture_window_);
+  open_document_pip_resolver_ = nullptr;
+}
+
+PictureInPictureControllerImpl::DocumentPictureInPictureObserver::
+    DocumentPictureInPictureObserver(PictureInPictureControllerImpl* controller)
+    : controller_(controller) {}
+PictureInPictureControllerImpl::DocumentPictureInPictureObserver::
+    ~DocumentPictureInPictureObserver() = default;
+
+void PictureInPictureControllerImpl::DocumentPictureInPictureObserver::
+    ContextDestroyed() {
+  controller_->OnDocumentPictureInPictureContextDestroyed();
+}
+
+void PictureInPictureControllerImpl::DocumentPictureInPictureObserver::Trace(
+    Visitor* visitor) const {
+  visitor->Trace(controller_);
+  ContextLifecycleObserver::Trace(visitor);
+}
+
 void PictureInPictureControllerImpl::
     OnDocumentPictureInPictureContextDestroyed() {
   // The document PIP window has been destroyed, so the opener is no longer
   // associated with it.  Allow throttling again.
   SetMayThrottleIfUndrawnFrames(true);
-  document_picture_in_picture_session_ = nullptr;
+  document_picture_in_picture_window_ = nullptr;
 
   // If there is an unresolved promise for a document PiP window, reject it now.
   // Note that we know that it goes with the current session, since we replace
@@ -529,24 +499,7 @@ void PictureInPictureControllerImpl::
     open_document_pip_resolver_ = nullptr;
   }
 }
-
-void PictureInPictureControllerImpl::PageVisibilityChanged() {
-  DCHECK(GetSupplementable());
-
-  // If page becomes visible and exiting Auto Picture-in-Picture is allowed,
-  // exit Picture-in-Picture.
-  if (GetSupplementable()->IsPageVisible() &&
-      IsExitAutoPictureInPictureAllowed()) {
-    ExitPictureInPicture(picture_in_picture_element_, nullptr);
-    return;
-  }
-
-  // If page becomes hidden and entering Auto Picture-in-Picture is allowed,
-  // enter Picture-in-Picture.
-  if (GetSupplementable()->hidden() && IsEnterAutoPictureInPictureAllowed()) {
-    EnterPictureInPicture(AutoPictureInPictureElement(), /*promise=*/nullptr);
-  }
-}
+#endif  // !BUILDFLAG(IS_ANDROID)
 
 void PictureInPictureControllerImpl::OnPictureInPictureStateChange() {
   DCHECK(picture_in_picture_element_);
@@ -564,7 +517,7 @@ void PictureInPictureControllerImpl::OnPictureInPictureStateChange() {
   picture_in_picture_element_->BindMediaPlayerReceiver(
       media_player_remote.InitWithNewEndpointAndPassReceiver());
 
-  video_picture_in_picture_session_->Update(
+  picture_in_picture_session_->Update(
       picture_in_picture_element_->GetWebMediaPlayer()->GetDelegateId(),
       std::move(media_player_remote),
       picture_in_picture_element_->GetWebMediaPlayer()->GetSurfaceId().value(),
@@ -584,8 +537,9 @@ void PictureInPictureControllerImpl::OnStopped() {
 
 void PictureInPictureControllerImpl::SetMayThrottleIfUndrawnFrames(
     bool may_throttle) {
-  if (!GetSupplementable()->GetFrame()->GetWidgetForLocalRoot()) {
-    // Tests do not always have a widget.
+  if (!GetSupplementable()->GetFrame() ||
+      !GetSupplementable()->GetFrame()->GetWidgetForLocalRoot()) {
+    // Tests do not always have a frame or widget.
     return;
   }
   GetSupplementable()
@@ -595,28 +549,27 @@ void PictureInPictureControllerImpl::SetMayThrottleIfUndrawnFrames(
 }
 
 void PictureInPictureControllerImpl::Trace(Visitor* visitor) const {
-  visitor->Trace(picture_in_picture_element_);
-  visitor->Trace(auto_picture_in_picture_elements_);
-  visitor->Trace(picture_in_picture_window_);
-  visitor->Trace(document_picture_in_picture_session_);
-  visitor->Trace(session_observer_receiver_);
-  visitor->Trace(picture_in_picture_service_);
-  visitor->Trace(video_picture_in_picture_session_);
+#if !BUILDFLAG(IS_ANDROID)
+  visitor->Trace(document_picture_in_picture_window_);
   visitor->Trace(document_pip_context_observer_);
   visitor->Trace(open_document_pip_resolver_);
+#endif  // !BUILDFLAG(IS_ANDROID)
+  visitor->Trace(picture_in_picture_element_);
+  visitor->Trace(picture_in_picture_window_);
+  visitor->Trace(session_observer_receiver_);
+  visitor->Trace(picture_in_picture_service_);
+  visitor->Trace(picture_in_picture_session_);
   PictureInPictureController::Trace(visitor);
-  PageVisibilityObserver::Trace(visitor);
   ExecutionContextClient::Trace(visitor);
 }
 
 PictureInPictureControllerImpl::PictureInPictureControllerImpl(
     Document& document)
     : PictureInPictureController(document),
-      PageVisibilityObserver(document.GetPage()),
       ExecutionContextClient(document.GetExecutionContext()),
       session_observer_receiver_(this, document.GetExecutionContext()),
       picture_in_picture_service_(document.GetExecutionContext()),
-      video_picture_in_picture_session_(document.GetExecutionContext()) {}
+      picture_in_picture_session_(document.GetExecutionContext()) {}
 
 bool PictureInPictureControllerImpl::EnsureService() {
   if (picture_in_picture_service_.is_bound())
@@ -631,30 +584,6 @@ bool PictureInPictureControllerImpl::EnsureService() {
   GetSupplementable()->GetFrame()->GetBrowserInterfaceBroker().GetInterface(
       picture_in_picture_service_.BindNewPipeAndPassReceiver(task_runner));
   return true;
-}
-
-void PictureInPictureControllerImpl::ResolveOpenDocumentPictureInPicture() {
-  CHECK(document_picture_in_picture_session_);
-  CHECK(open_document_pip_resolver_);
-  open_document_pip_resolver_->Resolve(document_picture_in_picture_session_);
-  open_document_pip_resolver_ = nullptr;
-}
-
-PictureInPictureControllerImpl::DocumentPictureInPictureObserver::
-    DocumentPictureInPictureObserver(PictureInPictureControllerImpl* controller)
-    : controller_(controller) {}
-PictureInPictureControllerImpl::DocumentPictureInPictureObserver::
-    ~DocumentPictureInPictureObserver() = default;
-
-void PictureInPictureControllerImpl::DocumentPictureInPictureObserver::
-    ContextDestroyed() {
-  controller_->OnDocumentPictureInPictureContextDestroyed();
-}
-
-void PictureInPictureControllerImpl::DocumentPictureInPictureObserver::Trace(
-    Visitor* visitor) const {
-  visitor->Trace(controller_);
-  ContextLifecycleObserver::Trace(visitor);
 }
 
 }  // namespace blink

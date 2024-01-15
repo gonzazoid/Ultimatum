@@ -5,10 +5,7 @@
 #import "ios/chrome/browser/ui/menu/menu_histograms.h"
 
 #import "base/metrics/histogram_functions.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "base/notreached.h"
 
 namespace {
 // Histogram for tracking menu scenario started.
@@ -44,44 +41,63 @@ const char KContextMenuLinkActionsHistogram[] =
     "Mobile.ContextMenu.WebLink.Actions";
 const char kToolbarMenuActionsHistogram[] =
     "Mobile.ContextMenu.Toolbar.Actions";
+const char kOmniboxMostVisitedEntryActionsHistogram[] =
+    "Mobile.ContextMenu.OmniboxMostVisitedEntry.Actions";
+const char kPinnedTabsEntryActionsHistogram[] =
+    "Mobile.ContextMenu.PinnedTabsEntry.Actions";
+const char kTabStripEntryActionsHistogram[] =
+    "Mobile.ContextMenu.TabStrip.Actions";
+const char kInactiveTabsEntryActionsHistogram[] =
+    "Mobile.ContextMenu.InactiveTabsEntry.Actions";
 }  // namespace
 
-void RecordMenuShown(MenuScenario scenario) {
-  base::UmaHistogramEnumeration(kMenuEntryPointsHistogram, scenario);
+void RecordMenuShown(MenuScenarioHistogram scenario) {
+  base::UmaHistogramEnumeration(kMenuEntryPointsHistogram, scenario,
+                                kMenuScenarioHistogramCount);
 }
 
-const char* GetActionsHistogramName(MenuScenario scenario) {
+const char* GetActionsHistogramName(MenuScenarioHistogram scenario) {
   switch (scenario) {
-    case MenuScenario::kHistoryEntry:
+    case kMenuScenarioHistogramHistoryEntry:
       return kHistoryEntryActionsHistogram;
-    case MenuScenario::kBookmarkEntry:
+    case kMenuScenarioHistogramBookmarkEntry:
       return kBookmarkEntryActionsHistogram;
-    case MenuScenario::kReadingListEntry:
+    case kMenuScenarioHistogramReadingListEntry:
       return kReadingListEntryActionsHistogram;
-    case MenuScenario::kRecentTabsEntry:
+    case kMenuScenarioHistogramRecentTabsEntry:
       return kRecentTabsEntryActionsHistogram;
-    case MenuScenario::kRecentTabsHeader:
+    case kMenuScenarioHistogramRecentTabsHeader:
       return kRecentTabsHeaderActionsHistogram;
-    case MenuScenario::kMostVisitedEntry:
+    case kMenuScenarioHistogramMostVisitedEntry:
       return kMostVisitedEntryActionsHistogram;
-    case MenuScenario::kBookmarkFolder:
+    case kMenuScenarioHistogramBookmarkFolder:
       return kBookmarkFolderActionsHistogram;
-    case MenuScenario::kContextMenuImage:
+    case kMenuScenarioHistogramContextMenuImage:
       return KContextMenuImageActionsHistogram;
-    case MenuScenario::kContextMenuImageLink:
+    case kMenuScenarioHistogramContextMenuImageLink:
       return KContextMenuImageLinkActionsHistogram;
-    case MenuScenario::kContextMenuLink:
+    case kMenuScenarioHistogramContextMenuLink:
       return KContextMenuLinkActionsHistogram;
-    case MenuScenario::kTabGridEntry:
-    case MenuScenario::kThumbStrip:
+    case kMenuScenarioHistogramTabGridEntry:
+    case kMenuScenarioHistogramThumbStrip:
       return kTabGridActionsHistogram;
-    case MenuScenario::kTabGridAddTo:
+    case kMenuScenarioHistogramTabGridAddTo:
       return kTabGridAddToActionsHistogram;
-    case MenuScenario::kTabGridEdit:
+    case kMenuScenarioHistogramTabGridEdit:
       return kTabGridEditActionsHistogram;
-    case MenuScenario::kTabGridSearchResult:
+    case kMenuScenarioHistogramTabGridSearchResult:
       return kTabGridSearchResultHistogram;
-    case MenuScenario::kToolbarMenu:
+    case kMenuScenarioHistogramToolbarMenu:
       return kToolbarMenuActionsHistogram;
+    case kMenuScenarioHistogramOmniboxMostVisitedEntry:
+      return kOmniboxMostVisitedEntryActionsHistogram;
+    case kMenuScenarioHistogramPinnedTabsEntry:
+      return kPinnedTabsEntryActionsHistogram;
+    case kMenuScenarioHistogramTabStripEntry:
+      return kTabStripEntryActionsHistogram;
+    case kMenuScenarioHistogramInactiveTabsEntry:
+      return kInactiveTabsEntryActionsHistogram;
+    case kMenuScenarioHistogramCount:
+      NOTREACHED_NORETURN();
   }
 }

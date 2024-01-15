@@ -5,11 +5,11 @@
 #ifndef CHROME_BROWSER_UI_VIEWS_TABS_TAB_SLOT_CONTROLLER_H_
 #define CHROME_BROWSER_UI_VIEWS_TABS_TAB_SLOT_CONTROLLER_H_
 
+#include <optional>
 #include <string>
 
 #include "chrome/browser/ui/tabs/tab_types.h"
 #include "chrome/browser/ui/views/tabs/tab_strip_types.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/skia/include/core/SkColor.h"
 #include "ui/base/ui_base_types.h"
 
@@ -48,6 +48,8 @@ class TabSlotController {
     kSelectionChanged,
     kEvent
   };
+
+  enum class Liveness { kAlive, kDeleted };
 
   virtual const ui::ListSelectionModel& GetSelectionModel() const = 0;
 
@@ -90,7 +92,7 @@ class TabSlotController {
 
   // Switches the collapsed state of a tab group. Returns false if the state was
   // not successfully switched.
-  virtual bool ToggleTabGroupCollapsedState(
+  virtual void ToggleTabGroupCollapsedState(
       const tab_groups::TabGroupId group,
       ToggleTabGroupCollapsedStateOrigin origin =
           ToggleTabGroupCollapsedStateOrigin::kImplicitAction) = 0;
@@ -126,9 +128,12 @@ class TabSlotController {
       const ui::LocatedEvent& event,
       const ui::ListSelectionModel& original_selection) = 0;
 
-  // Continues dragging a Tab.
-  virtual void ContinueDrag(views::View* view,
-                            const ui::LocatedEvent& event) = 0;
+  // Continues dragging a Tab. May enter a nested event loop - returns
+  // Liveness::kDeleted if `this` was destroyed during this nested event loop,
+  // and Liveness::kAlive if `this` is still alive.
+  [[nodiscard]] virtual Liveness ContinueDrag(
+      views::View* view,
+      const ui::LocatedEvent& event) = 0;
 
   // Ends dragging a Tab. Returns whether the tab has been destroyed.
   virtual bool EndDrag(EndDragReason reason) = 0;
@@ -174,18 +179,8 @@ class TabSlotController {
   // frame.
   virtual bool HasVisibleBackgroundTabShapes() const = 0;
 
-  // Returns whether the tab strip should be painted as if the window frame is
-  // active.
-  virtual bool ShouldPaintAsActiveFrame() const = 0;
-
   // Returns the color of the separator between the tabs.
   virtual SkColor GetTabSeparatorColor() const = 0;
-
-  // Returns the tab background color based on both the |tab_state| and the
-  // |active_state| of the window.
-  virtual SkColor GetTabBackgroundColor(
-      TabActive active,
-      BrowserFrameActiveState active_state) const = 0;
 
   // Returns the tab foreground color of the the text based on `active` and the
   // activation state of the window.
@@ -193,7 +188,7 @@ class TabSlotController {
 
   // Returns the background tab image resource ID if the image has been
   // customized, directly or indirectly, by the theme.
-  virtual absl::optional<int> GetCustomBackgroundId(
+  virtual std::optional<int> GetCustomBackgroundId(
       BrowserFrameActiveState active_state) const = 0;
 
   // Returns the accessible tab name for this tab.

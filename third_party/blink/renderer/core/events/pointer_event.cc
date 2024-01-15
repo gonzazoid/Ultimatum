@@ -89,6 +89,9 @@ PointerEvent::PointerEvent(const AtomicString& type,
         PointerEventUtil::TransformToAzimuthInValidRange(azimuth_angle_),
         PointerEventUtil::TransformToAltitudeInValidRange(altitude_angle_));
   }
+  if (initializer->hasDeviceId()) {
+    device_id_ = initializer->deviceId();
+  }
 }
 
 bool PointerEvent::IsMouseEvent() const {
@@ -149,6 +152,14 @@ Node* PointerEvent::fromElement() const {
 }
 
 HeapVector<Member<PointerEvent>> PointerEvent::getCoalescedEvents() {
+  if (auto* local_dom_window = DynamicTo<LocalDOMWindow>(view())) {
+    auto* document = local_dom_window->document();
+    if (document && !local_dom_window->isSecureContext()) {
+      UseCounter::Count(document,
+                        WebFeature::kGetCoalescedEventsInInsecureContext);
+    }
+  }
+
   if (coalesced_events_targets_dirty_) {
     for (auto coalesced_event : coalesced_events_)
       coalesced_event->SetTarget(target());

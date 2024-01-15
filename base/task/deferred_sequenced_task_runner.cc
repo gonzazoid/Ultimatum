@@ -7,8 +7,8 @@
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
 
 namespace base {
 
@@ -33,6 +33,8 @@ DeferredSequencedTaskRunner::DeferredSequencedTaskRunner(
   AutoLock lock(lock_);
   DCHECK(target_task_runner_);
 #endif
+  task_runner_atomic_ptr_.store(target_task_runner_.get(),
+                                std::memory_order_release);
 }
 
 DeferredSequencedTaskRunner::DeferredSequencedTaskRunner()
@@ -58,9 +60,13 @@ bool DeferredSequencedTaskRunner::PostDelayedTask(const Location& from_here,
 }
 
 bool DeferredSequencedTaskRunner::RunsTasksInCurrentSequence() const {
-  AutoLock lock(lock_);
-  if (target_task_runner_)
-    return target_task_runner_->RunsTasksInCurrentSequence();
+  // task_runner_atomic_ptr_ cannot change once it has been initialized, so it's
+  // safe to access it without lock.
+  SequencedTaskRunner* task_runner_ptr =
+      task_runner_atomic_ptr_.load(std::memory_order_acquire);
+  if (task_runner_ptr) {
+    return task_runner_ptr->RunsTasksInCurrentSequence();
+  }
 
   return created_thread_id_ == PlatformThread::CurrentId();
 }
@@ -91,7 +97,14 @@ void DeferredSequencedTaskRunner::StartWithTaskRunner(
   DCHECK(!target_task_runner_);
   DCHECK(target_task_runner);
   target_task_runner_ = std::move(target_task_runner);
+  task_runner_atomic_ptr_.store(target_task_runner_.get(),
+                                std::memory_order_release);
   StartImpl();
+}
+
+bool DeferredSequencedTaskRunner::Started() const {
+  AutoLock lock(lock_);
+  return started_;
 }
 
 DeferredSequencedTaskRunner::~DeferredSequencedTaskRunner() = default;

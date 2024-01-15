@@ -9,9 +9,13 @@
 #include "ash/public/cpp/shell_window_ids.h"
 #include "ash/resources/vector_icons/vector_icons.h"
 #include "ash/shell.h"
+#include "ash/style/ash_color_id.h"
+#include "chromeos/constants/chromeos_features.h"
 #include "ui/accessibility/ax_enums.mojom.h"
 #include "ui/accessibility/ax_node_data.h"
-#include "ui/gfx/paint_vector_icon.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
+#include "ui/base/models/image_model.h"
+#include "ui/chromeos/styles/cros_tokens_color_mappings.h"
 #include "ui/views/controls/image_view.h"
 #include "ui/views/controls/label.h"
 #include "ui/views/layout/box_layout.h"
@@ -27,17 +31,23 @@ constexpr int kAlertIconSizeDp = 20;
 LoginErrorBubble::LoginErrorBubble()
     : LoginErrorBubble(nullptr /*anchor_view*/) {}
 
-LoginErrorBubble::LoginErrorBubble(views::View* anchor_view)
-    : LoginBaseBubbleView(anchor_view) {
+LoginErrorBubble::LoginErrorBubble(base::WeakPtr<views::View> anchor_view)
+    : LoginBaseBubbleView(std::move(anchor_view)) {
   alert_icon_ = AddChildView(std::make_unique<views::ImageView>());
-  alert_icon_->SetPreferredSize(gfx::Size(kAlertIconSizeDp, kAlertIconSizeDp));
+  alert_icon_->SetImage(ui::ImageModel::FromVectorIcon(
+      kLockScreenAlertIcon,
+      chromeos::features::IsJellyrollEnabled()
+          ? static_cast<ui::ColorId>(cros_tokens::kCrosSysOnSurface)
+          : kColorAshIconColorPrimary,
+      kAlertIconSizeDp));
 }
 
 LoginErrorBubble::~LoginErrorBubble() = default;
 
 void LoginErrorBubble::SetContent(std::unique_ptr<views::View> content) {
-  if (content_)
-    RemoveChildViewT(content_);
+  if (content_) {
+    RemoveChildViewT(content_.get());
+  }
   content_ = AddChildView(std::move(content));
 }
 
@@ -50,26 +60,12 @@ void LoginErrorBubble::SetTextContent(const std::u16string& message) {
   SetContent(login_views_utils::CreateBubbleLabel(message, this));
 }
 
-const char* LoginErrorBubble::GetClassName() const {
-  return "LoginErrorBubble";
-}
-
 void LoginErrorBubble::GetAccessibleNodeData(ui::AXNodeData* node_data) {
   node_data->role = ax::mojom::Role::kAlertDialog;
-  node_data->SetName(accessible_name_);
+  node_data->SetName(GetAccessibleName());
 }
 
-void LoginErrorBubble::OnThemeChanged() {
-  LoginBaseBubbleView::OnThemeChanged();
-  alert_icon_->SetImage(gfx::CreateVectorIcon(
-      kLockScreenAlertIcon,
-      AshColorProvider::Get()->GetContentLayerColor(
-          AshColorProvider::ContentLayerType::kIconColorPrimary)));
-  // It is assumed that we will not have an external call to SetTextContent
-  // followed by a call to SetContent (in such a case, the content would be
-  // erased on theme changed and replaced with the prior message).
-  if (!message_.empty())
-    SetTextContent(message_);
-}
+BEGIN_METADATA(LoginErrorBubble, LoginBaseBubbleView)
+END_METADATA
 
 }  // namespace ash

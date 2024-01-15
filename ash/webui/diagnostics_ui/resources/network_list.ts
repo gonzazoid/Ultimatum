@@ -7,9 +7,10 @@ import './diagnostics_shared.css.js';
 import './icons.html.js';
 import './network_card.js';
 
+import {loadTimeData} from 'chrome://resources/ash/common/load_time_data.m.js';
 import {I18nMixin} from 'chrome://resources/cr_elements/i18n_mixin.js';
-import {assert} from 'chrome://resources/js/assert_ts.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
+import {assert} from 'chrome://resources/js/assert.js';
+import {PolymerElementProperties} from 'chrome://resources/polymer/v3_0/polymer/interfaces.js';
 import {afterNextRender, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {ConnectivityCardElement} from './connectivity_card.js';
@@ -35,27 +36,27 @@ export interface NetworkListElement {
 const NetworkListElementBase = I18nMixin(PolymerElement);
 
 export class NetworkListElement extends NetworkListElementBase {
-  static get is() {
+  static get is(): string {
     return 'network-list';
   }
 
-  static get template() {
+  static get template(): HTMLTemplateElement {
     return getTemplate();
   }
 
-  static get properties() {
+  static get properties(): PolymerElementProperties {
     return {
       testSuiteStatus: {
         type: Number,
         value: TestSuiteStatus.NOT_RUNNING,
       },
 
-      otherNetworkGuids_: {
+      otherNetworkGuids: {
         type: Array,
         value: () => [],
       },
 
-      activeGuid_: {
+      activeGuid: {
         type: String,
         value: '',
       },
@@ -65,7 +66,7 @@ export class NetworkListElement extends NetworkListElementBase {
         value: true,
       },
 
-      isLoggedIn_: {
+      isLoggedIn: {
         type: Boolean,
         value: loadTimeData.getBoolean('isLoggedIn'),
       },
@@ -75,35 +76,35 @@ export class NetworkListElement extends NetworkListElementBase {
 
   testSuiteStatus: TestSuiteStatus;
   isActive: boolean;
-  protected isLoggedIn_: boolean;
-  private otherNetworkGuids_: string[];
-  private activeGuid_: string;
-  private browserProxy_: DiagnosticsBrowserProxy =
+  protected isLoggedIn: boolean;
+  private otherNetworkGuids: string[];
+  private activeGuid: string;
+  private browserProxy: DiagnosticsBrowserProxy =
       DiagnosticsBrowserProxyImpl.getInstance();
-  private networkHealthProvider_: NetworkHealthProviderInterface =
+  private networkHealthProvider: NetworkHealthProviderInterface =
       getNetworkHealthProvider();
-  private networkListObserverReceiver_: NetworkListObserverReceiver|null = null;
+  private networkListObserverReceiver: NetworkListObserverReceiver|null = null;
 
   constructor() {
     super();
-    this.browserProxy_.initialize();
-    this.observeNetworkList_();
+    this.browserProxy.initialize();
+    this.observeNetworkList();
   }
 
-  override disconnectedCallback() {
+  override disconnectedCallback(): void {
     super.disconnectedCallback();
 
-    if (this.networkListObserverReceiver_) {
-      this.networkListObserverReceiver_.$.close();
+    if (this.networkListObserverReceiver) {
+      this.networkListObserverReceiver.$.close();
     }
   }
 
-  private observeNetworkList_(): void {
+  private observeNetworkList(): void {
     // Calling observeNetworkList will trigger onNetworkListChanged.
-    this.networkListObserverReceiver_ = new NetworkListObserverReceiver(this);
+    this.networkListObserverReceiver = new NetworkListObserverReceiver(this);
 
-    this.networkHealthProvider_.observeNetworkList(
-        this.networkListObserverReceiver_.$.bindNewPipeAndPassRemote());
+    this.networkHealthProvider.observeNetworkList(
+        this.networkListObserverReceiver.$.bindNewPipeAndPassRemote());
   }
 
   /**
@@ -113,8 +114,8 @@ export class NetworkListElement extends NetworkListElementBase {
     // The connectivity-card is responsible for displaying the active network
     // so we need to filter out the activeGuid to avoid displaying a
     // a network-card for it.
-    this.otherNetworkGuids_ = networkGuids.filter(guid => guid !== activeGuid);
-    this.activeGuid_ = activeGuid;
+    this.otherNetworkGuids = networkGuids.filter(guid => guid !== activeGuid);
+    this.activeGuid = activeGuid;
   }
 
   /**
@@ -128,7 +129,7 @@ export class NetworkListElement extends NetworkListElementBase {
       // Focus the first visible card title. If no cards are present,
       // fallback to focusing the element's main container.
       afterNextRender(this, () => {
-        if (this.activeGuid_) {
+        if (this.activeGuid) {
           const connectivityCard: ConnectivityCardElement|null =
               this.shadowRoot!.querySelector('connectivity-card');
           assert(connectivityCard);
@@ -137,7 +138,7 @@ export class NetworkListElement extends NetworkListElementBase {
           assert(cardTitle);
           cardTitle.focus();
           return;
-        } else if (this.otherNetworkGuids_.length > 0) {
+        } else if (this.otherNetworkGuids.length > 0) {
           const networkCard: NetworkCardElement|null =
               this.shadowRoot!.querySelector('network-card');
           assert(networkCard);
@@ -150,11 +151,11 @@ export class NetworkListElement extends NetworkListElementBase {
       });
       // TODO(ashleydp): Remove when a call can be made at a higher component
       // to avoid duplicate code in all navigatable pages.
-      this.browserProxy_.recordNavigation('connectivity');
+      this.browserProxy.recordNavigation('connectivity');
     }
   }
 
-  protected getSettingsString_(): TrustedHTML {
+  protected getSettingsString(): TrustedHTML {
     return this.i18nAdvanced('settingsLinkText');
   }
 }

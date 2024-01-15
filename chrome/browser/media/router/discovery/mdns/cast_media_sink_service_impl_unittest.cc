@@ -8,7 +8,7 @@
 #include <utility>
 #include <vector>
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
 #include "base/ranges/algorithm.h"
 #include "base/run_loop.h"
@@ -42,6 +42,8 @@ using MockBoolCallback = base::MockCallback<base::OnceCallback<void(bool)>>;
 namespace media_router {
 
 namespace {
+
+const char kPubliclyRoutableIPv4Address[] = "172.32.0.0";
 
 MATCHER_P(RetryParamEq, expected, "") {
   return expected.initial_delay_in_milliseconds ==
@@ -138,7 +140,7 @@ class CastMediaSinkServiceImplTest : public ::testing::TestWithParam<bool> {
   TestMediaSinkService dial_media_sink_service_;
   std::unique_ptr<cast_channel::MockCastSocketService>
       mock_cast_socket_service_;
-  raw_ptr<base::MockOneShotTimer> mock_timer_;
+  raw_ptr<base::MockOneShotTimer, DanglingUntriaged> mock_timer_;
   CastMediaSinkServiceImpl media_sink_service_impl_;
   testing::NiceMock<MockObserver> observer_;
 };
@@ -345,7 +347,7 @@ TEST_P(CastMediaSinkServiceImplTest, TestOpenChannelFails) {
   socket.SetErrorState(cast_channel::ChannelError::CAST_SOCKET_ERROR);
 
   EXPECT_CALL(*mock_cast_socket_service_, OpenSocket_(ip_endpoint, _))
-      .WillRepeatedly(base::test::RunOnceCallback<1>(&socket));
+      .WillRepeatedly(base::test::RunOnceCallbackRepeatedly<1>(&socket));
   media_sink_service_impl_.OpenChannel(
       cast_sink, nullptr, CastMediaSinkServiceImpl::SinkSource::kMdns,
       base::DoNothing(),
@@ -448,7 +450,7 @@ TEST_P(CastMediaSinkServiceImplTest, OpenChannelNewIPSameSink) {
   media_sink_service_impl_.SetClockForTest(&clock);
 
   EXPECT_CALL(*mock_cast_socket_service_, OpenSocket_(ip_endpoint1, _))
-      .WillRepeatedly(base::test::RunOnceCallback<1>(&socket));
+      .WillRepeatedly(base::test::RunOnceCallbackRepeatedly<1>(&socket));
   std::vector<MediaSinkInternal> sinks1 = {cast_sink1};
   media_sink_service_impl_.OpenChannels(
       sinks1, CastMediaSinkServiceImpl::SinkSource::kMdns);
@@ -464,7 +466,7 @@ TEST_P(CastMediaSinkServiceImplTest, OpenChannelNewIPSameSink) {
   cast_sink1.set_cast_data(extra_data);
 
   EXPECT_CALL(*mock_cast_socket_service_, OpenSocket_(ip_endpoint2, _))
-      .WillRepeatedly(base::test::RunOnceCallback<1>(&socket));
+      .WillRepeatedly(base::test::RunOnceCallbackRepeatedly<1>(&socket));
 
   std::vector<MediaSinkInternal> updated_sinks1 = {cast_sink1};
   media_sink_service_impl_.OpenChannels(
@@ -492,7 +494,7 @@ TEST_P(CastMediaSinkServiceImplTest, OpenChannelUpdatedSinkSameIP) {
   media_sink_service_impl_.SetClockForTest(&clock);
 
   EXPECT_CALL(*mock_cast_socket_service_, OpenSocket_(ip_endpoint, _))
-      .WillRepeatedly(base::test::RunOnceCallback<1>(&socket));
+      .WillRepeatedly(base::test::RunOnceCallbackRepeatedly<1>(&socket));
   std::vector<MediaSinkInternal> sinks = {cast_sink};
   OpenChannels(sinks, CastMediaSinkServiceImpl::SinkSource::kMdns);
 
@@ -563,7 +565,7 @@ TEST_P(CastMediaSinkServiceImplTest, TestSuccessOnChannelErrorRetry) {
       base::DoNothing());
 
   EXPECT_CALL(*mock_cast_socket_service_, OpenSocket_(ip_endpoint1, _))
-      .WillRepeatedly(base::test::RunOnceCallback<1>(&socket));
+      .WillRepeatedly(base::test::RunOnceCallbackRepeatedly<1>(&socket));
   media_sink_service_impl_.OnError(socket,
                                    cast_channel::ChannelError::PING_TIMEOUT);
 
@@ -590,7 +592,7 @@ TEST_P(CastMediaSinkServiceImplTest, TestFailureOnChannelErrorRetry) {
   // Set the error state to indicate that opening a channel failed.
   socket.SetErrorState(ChannelError::CONNECT_ERROR);
   EXPECT_CALL(*mock_cast_socket_service_, OpenSocket_(ip_endpoint1, _))
-      .WillRepeatedly(base::test::RunOnceCallback<1>(&socket));
+      .WillRepeatedly(base::test::RunOnceCallbackRepeatedly<1>(&socket));
   media_sink_service_impl_.OnError(socket,
                                    cast_channel::ChannelError::PING_TIMEOUT);
 
@@ -642,8 +644,9 @@ TEST_P(CastMediaSinkServiceImplTest, TestOnChannelErrorNoRetryForMissingSink) {
 
 TEST_P(CastMediaSinkServiceImplTest, TestOnSinkAddedOrUpdated) {
   // If the DialMediaSinkService is not enabled, bypass this test.
-  if (!GetParam())
+  if (!GetParam()) {
     return;
+  }
 
   // Make sure |media_sink_service_impl_| adds itself as an observer to
   // |dial_media_sink_service_|.
@@ -1531,6 +1534,32 @@ TEST_P(CastMediaSinkServiceImplTest, TestAccessCodeSinkNotAddedToNetworkCache) {
 
   content::RunAllTasksUntilIdle();
   mock_time_task_runner_->FastForwardUntilNoTasksRemain();
+}
+
+TEST_P(CastMediaSinkServiceImplTest,
+       TestOpenChannelFailsForPubliclyRoutableIP) {
+  MediaSinkInternal cast_sink = CreateCastSink(1);
+
+  net::IPAddress address;
+  EXPECT_TRUE(address.AssignFromIPLiteral(kPubliclyRoutableIPv4Address));
+  ASSERT_TRUE(address.IsValid());
+
+  auto ip_endpoint = net::IPEndPoint(address, 8009);
+  ASSERT_TRUE(ip_endpoint.address().IsPubliclyRoutable());
+
+  CastSinkExtraData extra_data = cast_sink.cast_data();
+  extra_data.ip_endpoint = ip_endpoint;
+  cast_sink.set_cast_data(extra_data);
+
+  MockBoolCallback mock_callback;
+  EXPECT_CALL(mock_callback, Run(false)).Times(1);
+
+  // No pending sink
+  EXPECT_CALL(*mock_cast_socket_service_, OpenSocket_(ip_endpoint, _)).Times(0);
+  media_sink_service_impl_.OpenChannel(
+      cast_sink, nullptr, CastMediaSinkServiceImpl::SinkSource::kMdns,
+      mock_callback.Get(),
+      media_sink_service_impl_.CreateCastSocketOpenParams(cast_sink));
 }
 
 INSTANTIATE_TEST_SUITE_P(DialMediaSinkServiceEnabled,

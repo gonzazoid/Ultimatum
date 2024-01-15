@@ -6,9 +6,10 @@
 
 function createFencedFrame(url, name) {
   const frame = document.createElement('fencedframe');
+  const config = new FencedFrameConfig(url);
   frame.name = name;
   frame.id = name;
-  frame.src = url;
+  frame.config = config;
   document.body.appendChild(frame);
 }
 
@@ -48,11 +49,13 @@ async function createDocWrittenFrame(name, base_url) {
   document.body.appendChild(frame);
 
   frame.contentDocument.open();
-  frame.onload = function() {
-    window.domAutomationController.send(true);
-  };
-  frame.contentDocument.write(docText);
-  frame.contentDocument.close();
+  return new Promise(resolve => {
+    frame.onload = function() {
+      resolve(true);
+    };
+    frame.contentDocument.write(docText);
+    frame.contentDocument.close();
+  });
 }
 
 function createFrameWithDocWriteAbortedLoad(name) {

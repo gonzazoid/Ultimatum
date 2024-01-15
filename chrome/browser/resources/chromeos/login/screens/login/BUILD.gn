@@ -2,203 +2,61 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-import("//chrome/test/base/js2gtest.gni")
 import("//third_party/closure_compiler/compile_js.gni")
-import("//tools/polymer/html_to_js.gni")
-import("//tools/polymer/polymer.gni")
-import("../../oobe_auto_imports.gni")
-
-group("polymer3_elements") {
-  public_deps = [
-    ":checking_downloading_update_module",
-    ":update_required_card_module",
-  ]
-}
+import("//tools/polymer/html_to_wrapper.gni")
+import("../../login.gni")
 
 js_type_check("closure_compile") {
   is_polymer3 = true
   closure_flags = default_closure_args
   deps = [
-    ":active_directory_password_change",
-    ":checking_downloading_update.m",
-    ":cryptohome_recovery",
-    ":encryption_migration",
-    ":gaia_password_changed",
-    ":lacros_data_backward_migration",
-    ":lacros_data_migration",
-    ":management_transition",
-    ":offline_login",
-    ":update_required_card.m",
+    ":checking_downloading_update",
+    ":update_required_card",
   ]
 }
 
 ###############################
 # Closure compiler libraries below
 
-js_library("active_directory_password_change") {
-  sources = [ "$root_gen_dir/chrome/browser/resources/chromeos/login/screens/login/active_directory_password_change.js" ]
+js_library("update_required_card") {
+  sources = [ "$root_gen_dir/chrome/browser/resources/chromeos/login/screens/login/update_required_card.js" ]
   deps = [
-    "../../components/behaviors:login_screen_behavior.m",
-    "../../components/behaviors:multi_step_behavior.m",
-    "../../components/behaviors:oobe_i18n_behavior.m",
-    "../../components/buttons:oobe_next_button",
-    "../../components/buttons:oobe_text_button.m",
-    "../../components/dialogs:oobe_modal_dialog.m",
-  ]
-  externs_list =
-      [ "//ui/webui/resources/cr_elements/cr_input/cr_input_externs.js" ]
-  extra_deps = [ ":web_components" ]
-}
-
-js_library("cryptohome_recovery") {
-  sources = [ "$root_gen_dir/chrome/browser/resources/chromeos/login/screens/login/cryptohome_recovery.js" ]
-  deps = [
-    "../../components/behaviors:login_screen_behavior.m",
-    "../../components/behaviors:multi_step_behavior.m",
-    "../../components/behaviors:oobe_i18n_behavior.m",
-    "../../components/dialogs:oobe_adaptive_dialog.m",
-    "../../components/dialogs:oobe_loading_dialog.m",
-  ]
-  extra_deps = [ ":web_components" ]
-}
-
-js_library("encryption_migration") {
-  sources = [ "$root_gen_dir/chrome/browser/resources/chromeos/login/screens/login/encryption_migration.js" ]
-  deps = [
-    "../../components/behaviors:login_screen_behavior.m",
-    "../../components/behaviors:multi_step_behavior.m",
-    "../../components/behaviors:oobe_i18n_behavior.m",
-    "../../components/buttons:oobe_next_button",
-    "../../components/buttons:oobe_text_button.m",
-    "../../components/dialogs:oobe_adaptive_dialog.m",
-    "../../components/dialogs:oobe_loading_dialog.m",
-  ]
-  extra_deps = [ ":web_components" ]
-}
-
-js_library("gaia_password_changed") {
-  sources = [ "$root_gen_dir/chrome/browser/resources/chromeos/login/screens/login/gaia_password_changed.js" ]
-  deps = [
-    "../../components/behaviors:login_screen_behavior.m",
-    "../../components/behaviors:multi_step_behavior.m",
-    "../../components/behaviors:oobe_i18n_behavior.m",
-    "../../components/buttons:oobe_next_button",
-    "../../components/buttons:oobe_text_button.m",
-    "../../components/dialogs:oobe_adaptive_dialog.m",
-    "../../components/dialogs:oobe_loading_dialog.m",
-  ]
-  externs_list =
-      [ "//ui/webui/resources/cr_elements/cr_input/cr_input_externs.js" ]
-  extra_deps = [ ":web_components" ]
-}
-
-js_library("lacros_data_migration") {
-  sources = [ "$root_gen_dir/chrome/browser/resources/chromeos/login/screens/login/lacros_data_migration.js" ]
-  deps = [
-    "../../components:oobe_slide",
-    "../../components/behaviors:login_screen_behavior.m",
-    "../../components/behaviors:oobe_dialog_host_behavior.m",
-    "../../components/dialogs:oobe_loading_dialog.m",
-  ]
-  extra_deps = [ ":web_components" ]
-}
-
-js_library("lacros_data_backward_migration") {
-  sources = [ "$root_gen_dir/chrome/browser/resources/chromeos/login/screens/login/lacros_data_backward_migration.js" ]
-  deps = [
-    "../../components:oobe_slide",
-    "../../components/behaviors:login_screen_behavior.m",
-    "../../components/behaviors:oobe_dialog_host_behavior.m",
-    "../../components/dialogs:oobe_loading_dialog.m",
-  ]
-  extra_deps = [ ":web_components" ]
-}
-
-js_library("management_transition") {
-  sources = [ "$root_gen_dir/chrome/browser/resources/chromeos/login/screens/login/management_transition.js" ]
-  deps = [
-    "../../components/behaviors:login_screen_behavior.m",
-    "../../components/behaviors:multi_step_behavior.m",
-    "../../components/behaviors:oobe_i18n_behavior.m",
-    "../../components/buttons:oobe_next_button",
-    "../../components/buttons:oobe_text_button.m",
-    "../../components/dialogs:oobe_modal_dialog.m",
-  ]
-  extra_deps = [ ":web_components" ]
-}
-
-js_library("offline_login") {
-  sources = [ "$root_gen_dir/chrome/browser/resources/chromeos/login/screens/login/offline_login.js" ]
-  deps = [
-    "../../components/behaviors:login_screen_behavior.m",
-    "../../components/behaviors:multi_step_behavior.m",
-    "../../components/behaviors:oobe_i18n_behavior.m",
-    "../../components/buttons:oobe_next_button",
-    "../../components/buttons:oobe_text_button.m",
-    "../../components/dialogs:oobe_modal_dialog.m",
-  ]
-  extra_deps = [ ":web_components" ]
-  externs_list =
-      [ "//ui/webui/resources/cr_elements/cr_dialog/cr_dialog_externs.js" ]
-}
-
-js_library("update_required_card.m") {
-  sources = [ "$root_gen_dir/chrome/browser/resources/chromeos/login/screens/login/update_required_card.m.js" ]
-  deps = [
-    ":checking_downloading_update.m",
-    "../../components/behaviors:login_screen_behavior.m",
-    "../../components/behaviors:multi_step_behavior.m",
-    "../../components/behaviors:oobe_i18n_behavior.m",
-    "../../components/buttons:oobe_next_button",
-    "../../components/buttons:oobe_text_button.m",
-    "../../components/dialogs:oobe_modal_dialog.m",
+    ":checking_downloading_update",
+    "../../components/behaviors:login_screen_behavior",
+    "../../components/behaviors:multi_step_behavior",
+    "../../components/behaviors:oobe_i18n_behavior",
+    "../../components/dialogs:oobe_modal_dialog",
     "//third_party/polymer/v3_0/components-chromium/polymer:polymer_bundled",
   ]
-  extra_deps = [ ":update_required_card_module" ]
+  extra_deps = [ ":web_components" ]
   externs_list = [ "$externs_path/tts.js" ]
 }
 
-js_library("checking_downloading_update.m") {
-  sources = [ "$root_gen_dir/chrome/browser/resources/chromeos/login/screens/login/checking_downloading_update.m.js" ]
+js_library("checking_downloading_update") {
+  sources = [ "$root_gen_dir/chrome/browser/resources/chromeos/login/screens/login/checking_downloading_update.js" ]
   deps = [
-    "../../components/behaviors:oobe_dialog_host_behavior.m",
-    "../../components/behaviors:oobe_i18n_behavior.m",
-    "../../components/buttons:oobe_next_button",
-    "../../components/buttons:oobe_text_button.m",
-    "../../components/dialogs:oobe_adaptive_dialog.m",
+    "../../components/behaviors:oobe_dialog_host_behavior",
+    "../../components/behaviors:oobe_i18n_behavior",
+    "../../components/dialogs:oobe_adaptive_dialog",
     "//third_party/polymer/v3_0/components-chromium/polymer:polymer_bundled",
   ]
-  extra_deps = [ ":checking_downloading_update_module" ]
+  extra_deps = [ ":web_components" ]
   externs_list = [ "$externs_path/tts.js" ]
 }
 
-polymer_modulizer("update_required_card") {
-  js_file = "update_required_card.js"
-  html_file = "update_required_card.html"
-  html_type = "dom-module"
-  auto_imports = oobe_auto_imports
-  migrated_imports = oobe_migrated_imports
-  namespace_rewrites = oobe_namespace_rewrites
-}
-
-polymer_modulizer("checking_downloading_update") {
-  js_file = "checking_downloading_update.js"
-  html_file = "checking_downloading_update.html"
-  html_type = "dom-module"
-  auto_imports = oobe_auto_imports
-  migrated_imports = oobe_migrated_imports
-  namespace_rewrites = oobe_namespace_rewrites
-}
-
-html_to_js("web_components") {
-  js_files = [
-    "active_directory_password_change.js",
-    "cryptohome_recovery.js",
-    "encryption_migration.js",
-    "gaia_password_changed.js",
-    "lacros_data_backward_migration.js",
-    "lacros_data_migration.js",
-    "management_transition.js",
-    "offline_login.js",
+group("web_components") {
+  public_deps = [
+    ":copy_js",
+    ":generate_web_component_html_wrapper_files",
   ]
+}
+
+html_to_wrapper("generate_web_component_html_wrapper_files") {
+  in_files = rebase_path(login_screens_html_files, "./screens/login", ".")
+  use_js = true
+}
+
+copy("copy_js") {
+  sources = rebase_path(login_screens_js_files, "./screens/login", ".")
+  outputs = [ "$target_gen_dir/{{source_file_part}}" ]
 }

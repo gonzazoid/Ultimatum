@@ -13,7 +13,7 @@
 #include "base/logging.h"
 #include "base/ranges/algorithm.h"
 #include "base/task/bind_post_task.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "chrome/browser/ash/policy/reporting/metrics_reporting/network/wifi_signal_strength_rssi_fetcher.h"
 #include "chromeos/ash/components/network/device_state.h"
 #include "chromeos/ash/components/network/network_state.h"
@@ -76,28 +76,6 @@ NetworkInterfaceInfoPtr GetWifiNetworkInterfaceInfo(
   return interface_info_it->Clone();
 }
 
-NetworkConnectionState GetNetworkConnectionState(
-    const ash::NetworkState* network) {
-  if (network->IsConnectedState()) {
-    auto portal_state = network->GetPortalState();
-    switch (portal_state) {
-      case ash::NetworkState::PortalState::kUnknown:
-        return NetworkConnectionState::CONNECTED;
-      case ash::NetworkState::PortalState::kOnline:
-        return NetworkConnectionState::ONLINE;
-      case ash::NetworkState::PortalState::kPortalSuspected:
-      case ash::NetworkState::PortalState::kPortal:
-      case ash::NetworkState::PortalState::kProxyAuthRequired:
-      case ash::NetworkState::PortalState::kNoInternet:
-        return NetworkConnectionState::PORTAL;
-    }
-  }
-  if (network->IsConnectingState()) {
-    return NetworkConnectionState::CONNECTING;
-  }
-  return NetworkConnectionState::NOT_CONNECTED;
-}
-
 NetworkType GetNetworkType(const ash::NetworkTypePattern& type) {
   if (type.Equals(ash::NetworkTypePattern::Cellular())) {
     return NetworkType::CELLULAR;
@@ -120,6 +98,29 @@ NetworkType GetNetworkType(const ash::NetworkTypePattern& type) {
 
 }  // namespace
 
+// static
+NetworkConnectionState NetworkTelemetrySampler::GetNetworkConnectionState(
+    const ash::NetworkState* network) {
+  if (network->IsConnectedState()) {
+    auto portal_state = network->GetPortalState();
+    switch (portal_state) {
+      case ash::NetworkState::PortalState::kUnknown:
+        return NetworkConnectionState::CONNECTED;
+      case ash::NetworkState::PortalState::kOnline:
+        return NetworkConnectionState::ONLINE;
+      case ash::NetworkState::PortalState::kPortalSuspected:
+      case ash::NetworkState::PortalState::kPortal:
+      case ash::NetworkState::PortalState::kProxyAuthRequired:
+      case ash::NetworkState::PortalState::kNoInternet:
+        return NetworkConnectionState::PORTAL;
+    }
+  }
+  if (network->IsConnectingState()) {
+    return NetworkConnectionState::CONNECTING;
+  }
+  return NetworkConnectionState::NOT_CONNECTED;
+}
+
 NetworkTelemetrySampler::NetworkTelemetrySampler() = default;
 
 NetworkTelemetrySampler::~NetworkTelemetrySampler() = default;
@@ -128,11 +129,13 @@ void NetworkTelemetrySampler::MaybeCollect(OptionalMetricCallback callback) {
   auto handle_probe_result_cb =
       base::BindOnce(&NetworkTelemetrySampler::CollectWifiSignalStrengthRssi,
                      weak_ptr_factory_.GetWeakPtr(), std::move(callback));
-  ash::cros_healthd::ServiceConnection::GetInstance()->ProbeTelemetryInfo(
-      std::vector<ash::cros_healthd::mojom::ProbeCategoryEnum>{
-          ash::cros_healthd::mojom::ProbeCategoryEnum::kNetworkInterface},
-      base::BindPostTask(base::SequencedTaskRunnerHandle::Get(),
-                         std::move(handle_probe_result_cb)));
+  ash::cros_healthd::ServiceConnection::GetInstance()
+      ->GetProbeService()
+      ->ProbeTelemetryInfo(
+          std::vector<ash::cros_healthd::mojom::ProbeCategoryEnum>{
+              ash::cros_healthd::mojom::ProbeCategoryEnum::kNetworkInterface},
+          base::BindPostTaskToCurrentDefault(
+              std::move(handle_probe_result_cb)));
 }
 
 void NetworkTelemetrySampler::CollectWifiSignalStrengthRssi(
@@ -164,8 +167,7 @@ void NetworkTelemetrySampler::CollectWifiSignalStrengthRssi(
                      std::move(cros_healthd_telemetry));
   FetchWifiSignalStrengthRssi(
       std::move(service_paths),
-      base::BindPostTask(base::SequencedTaskRunnerHandle::Get(),
-                         std::move(wifi_signal_rssi_cb)));
+      base::BindPostTaskToCurrentDefault(std::move(wifi_signal_rssi_cb)));
 }
 
 void NetworkTelemetrySampler::CollectNetworksStates(
@@ -185,7 +187,7 @@ void NetworkTelemetrySampler::CollectNetworksStates(
   ::ash::NetworkStateHandler::NetworkStateList network_state_list =
       GetNetworkStateList();
   if (network_state_list.empty()) {
-    std::move(callback).Run(absl::nullopt);
+    std::move(callback).Run(std::nullopt);
     return;
   }
 
@@ -272,7 +274,7 @@ void NetworkTelemetrySampler::CollectNetworksStates(
     return;
   }
 
-  std::move(callback).Run(absl::nullopt);
+  std::move(callback).Run(std::nullopt);
 }
 
 }  // namespace reporting

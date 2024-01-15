@@ -6,9 +6,8 @@
 
 #import <Cocoa/Cocoa.h>
 
-#import "base/mac/foundation_util.h"
+#import "base/apple/foundation_util.h"
 #import "base/mac/mac_util.h"
-#import "base/mac/scoped_nsobject.h"
 #include "base/strings/utf_string_conversions.h"
 #import "testing/gtest_mac.h"
 #include "ui/gfx/geometry/point.h"
@@ -17,8 +16,7 @@
 #include "ui/views/test/widget_test.h"
 #include "ui/views/widget/widget.h"
 
-namespace views {
-namespace test {
+namespace views::test {
 
 namespace {
 
@@ -28,7 +26,7 @@ id<NSAccessibility> ToNSAccessibility(id obj) {
 
 // Unboxes an accessibilityValue into an int via NSNumber.
 int IdToInt(id value) {
-  return base::mac::ObjCCastStrict<NSNumber>(value).intValue;
+  return base::apple::ObjCCastStrict<NSNumber>(value).intValue;
 }
 
 // TODO(https://crbug.com/936990): NSTabItemView is not an NSView (despite the
@@ -45,12 +43,7 @@ id GetLegacyA11yAttributeValue(id obj, NSString* attribute) {
 
 class TabbedPaneAccessibilityMacTest : public WidgetTest {
  public:
-  TabbedPaneAccessibilityMacTest() = default;
-
-  TabbedPaneAccessibilityMacTest(const TabbedPaneAccessibilityMacTest&) =
-      delete;
-  TabbedPaneAccessibilityMacTest& operator=(
-      const TabbedPaneAccessibilityMacTest&) = delete;
+  static constexpr int kTabbedPaneID = 123;
 
   // WidgetTest:
   void SetUp() override {
@@ -64,20 +57,25 @@ class TabbedPaneAccessibilityMacTest : public WidgetTest {
     tabbed_pane->AddTab(u"Tab 1", std::make_unique<View>());
     tabbed_pane->AddTab(u"Tab 2", std::make_unique<View>());
     tabbed_pane->Layout();
+    tabbed_pane->SetID(kTabbedPaneID);
 
-    tabbed_pane_ =
-        widget_->GetContentsView()->AddChildView(std::move(tabbed_pane));
+    widget_->GetContentsView()->AddChildView(std::move(tabbed_pane));
     widget_->Show();
   }
 
   void TearDown() override {
-    widget_->CloseNow();
+    widget_.ExtractAsDangling()->CloseNow();
     WidgetTest::TearDown();
+  }
+
+  TabbedPane* tabbed_pane() {
+    return static_cast<TabbedPane*>(
+        widget_->GetContentsView()->GetViewByID(kTabbedPaneID));
   }
 
   TabbedPaneTab* GetTabAt(size_t index) {
     return static_cast<TabbedPaneTab*>(
-        tabbed_pane_->tab_strip_->children()[index]);
+        tabbed_pane()->tab_strip_->children()[index]);
   }
 
   id<NSAccessibility> A11yElementAtPoint(const gfx::Point& point) {
@@ -93,17 +91,16 @@ class TabbedPaneAccessibilityMacTest : public WidgetTest {
 
  protected:
   raw_ptr<Widget> widget_ = nullptr;
-  raw_ptr<TabbedPane> tabbed_pane_ = nullptr;
 };
 
 // Test the Tab's a11y information compared to a Cocoa NSTabViewItem.
 TEST_F(TabbedPaneAccessibilityMacTest, AttributesMatchAppKit) {
   // Create a Cocoa NSTabView to test against and select the first tab.
-  base::scoped_nsobject<NSTabView> cocoa_tab_group(
-      [[NSTabView alloc] initWithFrame:NSMakeRect(50, 50, 100, 100)]);
+  NSTabView* cocoa_tab_group =
+      [[NSTabView alloc] initWithFrame:NSMakeRect(50, 50, 100, 100)];
   NSArray* cocoa_tabs = @[
-    [[[NSTabViewItem alloc] init] autorelease],
-    [[[NSTabViewItem alloc] init] autorelease],
+    [[NSTabViewItem alloc] init],
+    [[NSTabViewItem alloc] init],
   ];
   for (size_t i = 0; i < [cocoa_tabs count]; ++i) {
     [cocoa_tabs[i] setLabel:[NSString stringWithFormat:@"Tab %zu", i + 1]];
@@ -120,7 +117,7 @@ TEST_F(TabbedPaneAccessibilityMacTest, AttributesMatchAppKit) {
   // versions of Cocoa by exposing the role description of "tab" even in older
   // versions of macOS. Doing so causes a mismatch between native Cocoa and our
   // tabs.
-  if (base::mac::IsAtLeastOS12()) {
+  if (base::mac::MacOSMajorVersion() >= 12) {
     EXPECT_NSEQ(
         GetLegacyA11yAttributeValue(cocoa_tabs[0],
                                     NSAccessibilityRoleDescriptionAttribute),
@@ -181,5 +178,4 @@ TEST_F(TabbedPaneAccessibilityMacTest, WritableValue) {
   EXPECT_TRUE(GetTabAt(0)->selected());
 }
 
-}  // namespace test
-}  // namespace views
+}  // namespace views::test

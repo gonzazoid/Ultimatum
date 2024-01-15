@@ -9,30 +9,42 @@ for more details on the presubmit API built into depot_tools.
 """
 
 PRESUBMIT_VERSION = '2.0.0'
-USE_PYTHON3 = True
 
 _IGNORE_FREEZE_FOOTER = 'Ignore-Freeze'
 
 # The time module's handling of timezones is abysmal, so the boundaries are
 # precomputed in UNIX time
-_FREEZE_START = 1639641600  # 2021/12/16 00:00 -0800
-_FREEZE_END = 1641196800  # 2022/01/03 00:00 -0800
+_FREEZE_START = 1702627200  # 2023/12/15 00:00 -0800
+_FREEZE_END = 1704182400  # 2024/01/02 00:00 -0800
 
 
 def CheckFreeze(input_api, output_api):
   if _FREEZE_START <= input_api.time.time() < _FREEZE_END:
     footers = input_api.change.GitFootersFromDescription()
-    if _IGNORE_FREEZE_FOOTER not in footers:
 
+    # We don't want the files in the ../filters/ subdirectory to be
+    # subject to the freeze. Check to see if any files outside
+    # that directory are being changed.
+    has_non_filter_files = not all('filters' in f
+                                   for f in input_api.LocalPaths())
+
+    if has_non_filter_files and _IGNORE_FREEZE_FOOTER not in footers:
       def convert(t):
         ts = input_api.time.localtime(t)
         return input_api.time.strftime('%Y/%m/%d %H:%M %z', ts)
 
+      # Don't report errors when on the presubmit --all bot or when testing
+      # with presubmit --files.
+      if input_api.no_diffs:
+        report_type = output_api.PresubmitPromptWarning
+      else:
+        report_type = output_api.PresubmitError
       return [
-          output_api.PresubmitError(
-              'There is a prod freeze in effect from {} until {},'
-              ' files in //testing/buildbot cannot be modified'.format(
-                  convert(_FREEZE_START), convert(_FREEZE_END)))
+          report_type('There is a prod freeze in effect from {} until {},'
+                      ' files in //testing/buildbot cannot be modified'
+                      ' (though files in //testing/buildbot/filters'
+                      ' can be).'.format(convert(_FREEZE_START),
+                                         convert(_FREEZE_END)))
       ]
 
   return []
@@ -51,21 +63,39 @@ def CheckSourceSideSpecs(input_api, output_api):
 
 
 def CheckTests(input_api, output_api):
+  for f in input_api.AffectedFiles():
+    # If the only files changed here match //testing/buildbot/*.(pyl|json),
+    # then we can assume the unit tests are unaffected.
+    if (len(f.LocalPath().split(input_api.os_path.sep)) != 3
+        or not f.LocalPath().endswith(('.json', '.pyl'))):
+      break
+  else:
+    return []
   glob = input_api.os_path.join(input_api.PresubmitLocalPath(), '*test.py')
-  tests = input_api.canned_checks.GetUnitTests(input_api,
-                                               output_api,
-                                               input_api.glob(glob),
-                                               run_on_python2=False,
-                                               run_on_python3=True,
-                                               skip_shebang_check=True)
+  tests = input_api.canned_checks.GetUnitTests(input_api, output_api,
+                                               input_api.glob(glob))
   return input_api.RunTests(tests)
 
 
-def CheckManageJsonFiles(input_api, output_api):
+def CheckJsonFiles(input_api, output_api):
+  return input_api.RunTests([
+      input_api.Command(name='check JSON files',
+                        cmd=[input_api.python3_executable, 'check.py'],
+                        kwargs={},
+                        message=output_api.PresubmitError),
+  ])
+
+
+def CheckPylFilesSynced(input_api, output_api):
   return input_api.RunTests([
       input_api.Command(
-          name='manage JSON files',
-          cmd=[input_api.python3_executable, 'manage.py', '--check'],
+          name='check-pyl-files-synced',
+          cmd=[
+              input_api.python3_executable,
+              '../../infra/config/scripts/sync-pyl-files.py',
+              '--check',
+          ],
           kwargs={},
-          message=output_api.PresubmitError),
+          message=output_api.PresubmitError,
+      ),
   ])

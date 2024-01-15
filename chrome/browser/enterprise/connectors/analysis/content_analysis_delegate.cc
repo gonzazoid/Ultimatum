@@ -10,9 +10,9 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/feature_list.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
@@ -39,6 +39,7 @@
 #include "chrome/browser/safe_browsing/cloud_content_scanning/file_analysis_request.h"
 #include "chrome/browser/safe_browsing/download_protection/check_client_download_request.h"
 #include "chrome/grit/generated_resources.h"
+#include "components/enterprise/buildflags/buildflags.h"
 #include "components/enterprise/common/proto/connectors.pb.h"
 #include "components/policy/core/common/chrome_schema.h"
 #include "components/prefs/pref_service.h"
@@ -51,6 +52,10 @@
 #include "net/base/mime_util.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/ui_base_types.h"
+
+#if BUILDFLAG(ENTERPRISE_LOCAL_CONTENT_ANALYSIS)
+#include "chrome/browser/enterprise/connectors/analysis/content_analysis_sdk_manager.h"  // nogncheck
+#endif
 
 using safe_browsing::BinaryUploadService;
 
@@ -65,32 +70,25 @@ ContentAnalysisDelegate::Factory* GetFactoryStorage() {
   return factory.get();
 }
 
-// A BinaryUploadService::Request implementation that gets the data to scan
-// from a string.
-class StringAnalysisRequest : public BinaryUploadService::Request {
- public:
-  StringAnalysisRequest(CloudOrLocalAnalysisSettings settings,
-                        std::string text,
-                        BinaryUploadService::ContentAnalysisCallback callback);
-  ~StringAnalysisRequest() override;
+bool* UIEnabledStorage() {
+  static bool enabled = true;
+  return &enabled;
+}
 
-  StringAnalysisRequest(const StringAnalysisRequest&) = delete;
-  StringAnalysisRequest& operator=(const StringAnalysisRequest&) = delete;
+ContentAnalysisDelegate::OnAckAllRequestsCallback* OnAckAllRequestsStorage() {
+  static base::NoDestructor<ContentAnalysisDelegate::OnAckAllRequestsCallback>
+      callback;
+  return callback.get();
+}
 
-  // BinaryUploadService::Request implementation.
-  void GetRequestData(DataCallback callback) override;
-
- private:
-  Data data_;
-  BinaryUploadService::Result result_ =
-      BinaryUploadService::Result::FILE_TOO_LARGE;
-};
+}  // namespace
 
 StringAnalysisRequest::StringAnalysisRequest(
     CloudOrLocalAnalysisSettings settings,
     std::string text,
     BinaryUploadService::ContentAnalysisCallback callback)
     : Request(std::move(callback), std::move(settings)) {
+  DCHECK_GT(text.size(), 0u);
   data_.size = text.size();
 
   // Only remember strings less than the maximum allowed.
@@ -110,15 +108,8 @@ StringAnalysisRequest::~StringAnalysisRequest() {
 }
 
 void StringAnalysisRequest::GetRequestData(DataCallback callback) {
-  std::move(callback).Run(result_, std::move(data_));
+  std::move(callback).Run(result_, data_);
 }
-
-bool* UIEnabledStorage() {
-  static bool enabled = true;
-  return &enabled;
-}
-
-}  // namespace
 
 ContentAnalysisDelegate::Data::Data() = default;
 ContentAnalysisDelegate::Data::Data(Data&& other) = default;
@@ -146,9 +137,20 @@ void ContentAnalysisDelegate::BypassWarnings(
       content_size += entry.size();
 
     ReportAnalysisConnectorWarningBypass(
-        profile_, url_, "", "", "Text data", std::string(), "text/plain",
+        profile_, url_, url_, "", "", "Text data", std::string(), "text/plain",
         extensions::SafeBrowsingPrivateEventRouter::kTriggerWebContentUpload,
         access_point_, content_size, text_response_, user_justification);
+  }
+
+  // Mark the full image as complying and report a warning bypass.
+  if (image_warning_) {
+    result_.image_result = true;
+
+    ReportAnalysisConnectorWarningBypass(
+        profile_, url_, url_, "", "", "Image data", std::string(),
+        /*mime_type*/ std::string(),
+        extensions::SafeBrowsingPrivateEventRouter::kTriggerWebContentUpload,
+        access_point_, data_.image.size(), image_response_, user_justification);
   }
 
   if (!warned_file_indices_.empty()) {
@@ -164,7 +166,8 @@ void ContentAnalysisDelegate::BypassWarnings(
     result_.page_result = true;
 
     ReportAnalysisConnectorWarningBypass(
-        profile_, url_, "", "", title_, /*sha256*/ std::string(),
+        profile_, url_, url_, "", /*destination*/ data_.printer_name, title_,
+        /*sha256*/ std::string(),
         /*mime_type*/ std::string(),
         extensions::SafeBrowsingPrivateEventRouter::kTriggerPagePrint,
         access_point_, /*content_size*/ -1, page_response_, user_justification);
@@ -224,16 +227,29 @@ absl::optional<GURL> ContentAnalysisDelegate::GetCustomLearnMoreUrl() const {
 }
 
 bool ContentAnalysisDelegate::BypassRequiresJustification() const {
-  if (!base::FeatureList::IsEnabled(kBypassJustificationEnabled))
-    return false;
-
   return data_.settings.tags.count(final_result_tag_) &&
          data_.settings.tags.at(final_result_tag_).requires_justification;
 }
 
 std::u16string ContentAnalysisDelegate::GetBypassJustificationLabel() const {
-  return l10n_util::GetStringUTF16(
-      IDS_DEEP_SCANNING_DIALOG_UPLOAD_BYPASS_JUSTIFICATION_LABEL);
+  int id;
+  switch (access_point_) {
+    case safe_browsing::DeepScanAccessPoint::UPLOAD:
+    case safe_browsing::DeepScanAccessPoint::DRAG_AND_DROP:
+    case safe_browsing::DeepScanAccessPoint::FILE_TRANSFER:
+      id = IDS_DEEP_SCANNING_DIALOG_UPLOAD_BYPASS_JUSTIFICATION_LABEL;
+      break;
+    case safe_browsing::DeepScanAccessPoint::DOWNLOAD:
+      id = IDS_DEEP_SCANNING_DIALOG_DOWNLOAD_BYPASS_JUSTIFICATION_LABEL;
+      break;
+    case safe_browsing::DeepScanAccessPoint::PASTE:
+      id = IDS_DEEP_SCANNING_DIALOG_PASTE_BYPASS_JUSTIFICATION_LABEL;
+      break;
+    case safe_browsing::DeepScanAccessPoint::PRINT:
+      id = IDS_DEEP_SCANNING_DIALOG_PRINT_BYPASS_JUSTIFICATION_LABEL;
+      break;
+  }
+  return l10n_util::GetStringUTF16(id);
 }
 
 absl::optional<std::u16string>
@@ -242,14 +258,11 @@ ContentAnalysisDelegate::OverrideCancelButtonText() const {
 }
 
 // static
-bool ContentAnalysisDelegate::IsEnabled(
-    Profile* profile,
-    GURL url,
-    Data* data,
-    enterprise_connectors::AnalysisConnector connector) {
-  auto* service =
-      enterprise_connectors::ConnectorsServiceFactory::GetForBrowserContext(
-          profile);
+bool ContentAnalysisDelegate::IsEnabled(Profile* profile,
+                                        GURL url,
+                                        Data* data,
+                                        AnalysisConnector connector) {
+  auto* service = ConnectorsServiceFactory::GetForBrowserContext(profile);
   // If the corresponding Connector policy isn't set, don't perform scans.
   if (!service || !service->IsConnectorEnabled(connector))
     return false;
@@ -275,8 +288,13 @@ void ContentAnalysisDelegate::CreateForWebContents(
     CompletionCallback callback,
     safe_browsing::DeepScanAccessPoint access_point) {
   Factory* testing_factory = GetFactoryStorage();
-  bool wait_for_verdict = data.settings.block_until_verdict ==
-                          enterprise_connectors::BlockUntilVerdict::kBlock;
+  bool wait_for_verdict =
+      data.settings.block_until_verdict == BlockUntilVerdict::kBlock;
+  bool should_allow_by_default =
+      data.settings.default_action == DefaultAction::kAllow;
+  DVLOG(1) << __func__
+           << ": should_allow_by_default=" << should_allow_by_default;
+
   // Using new instead of std::make_unique<> to access non public constructor.
   auto delegate = testing_factory->is_null()
                       ? base::WrapUnique(new ContentAnalysisDelegate(
@@ -285,40 +303,74 @@ void ContentAnalysisDelegate::CreateForWebContents(
                       : testing_factory->Run(web_contents, std::move(data),
                                              std::move(callback));
 
-  bool work_being_done = delegate->UploadData();
+  UploadDataStatus upload_data_status = delegate->UploadData();
 
-  // Only show UI if work is being done in the background, the user must
-  // wait for a verdict.
-  bool show_ui = work_being_done && wait_for_verdict && (*UIEnabledStorage());
+  // Only show UI if one of the two conditions is met:
+  // 1. work is ongoing in the background and that the user must wait for a
+  // verdict.
+  // 2. work is done and fail-closed conditions are met.
+  bool show_in_progress_ui =
+      upload_data_status == UploadDataStatus::kInProgress && wait_for_verdict &&
+      (*UIEnabledStorage());
+  bool show_fail_closed_ui =
+      delegate->IsFailClosed(upload_data_status, should_allow_by_default) &&
+      (*UIEnabledStorage());
+
+  DVLOG(1) << __func__ << ": show_fail_closed_ui=" << show_fail_closed_ui;
 
   // If the UI is enabled, create the modal dialog.
-  if (show_ui) {
+  if (show_in_progress_ui || show_fail_closed_ui) {
     ContentAnalysisDelegate* delegate_ptr = delegate.get();
     int files_count = delegate_ptr->data_.paths.size();
+
+    // Update the result early if fail-closed is determined, otherwise set it to
+    // the default state.
+    FinalContentAnalysisResult result =
+        show_fail_closed_ui ? FinalContentAnalysisResult::FAIL_CLOSED
+                            : FinalContentAnalysisResult::SUCCESS;
 
     // This dialog is owned by the constrained_window code.
     delegate_ptr->dialog_ = new ContentAnalysisDialog(
         std::move(delegate),
         delegate_ptr->data_.settings.cloud_or_local_settings
             .is_cloud_analysis(),
-        web_contents, access_point, files_count);
+        web_contents, access_point, files_count, result);
     return;
   }
 
-  if (!wait_for_verdict || !work_being_done) {
+  // If local client cannot be found, fail open on all the OS except on Windows
+  // (available integration should be installed).
+  if (upload_data_status == UploadDataStatus::kNoLocalClientFound) {
+    bool should_fail_open =
+        delegate->ShouldFailOpenWithoutLocalClient(should_allow_by_default);
+    DVLOG(1) << __func__ << ": no local client found, should_fail_open="
+             << should_fail_open;
+    delegate->FillAllResultsWith(should_fail_open);
+    delegate->RunCallback();
+  }
+
+  if (!wait_for_verdict || upload_data_status == UploadDataStatus::kComplete) {
     // The UI will not be shown but the policy is set to not wait for the
-    // verdict, or no scans need to be performed.  Inform the caller that they
-    // may proceed.
+    // verdict, or no scans need to be performed.  Inform the caller that
+    // they may proceed.
     //
-    // Supporting "wait for verdict" while not showing a UI makes writing tests
-    // for callers of this code easier.
+    // Supporting "wait for verdict" while not showing a UI makes writing
+    // tests for callers of this code easier.
+    DCHECK(delegate->final_result_ != FinalContentAnalysisResult::FAIL_CLOSED);
     delegate->FillAllResultsWith(true);
     delegate->RunCallback();
   }
 
-  // Upload service callback will delete the delegate.
-  if (work_being_done)
+  // If all requests are already done, just let `delegate` go out of scope.
+  if (delegate->all_work_done_) {
+    return;
+  }
+
+  // ... otherwise, let the last response from the upload service callback
+  // delete the delegate when there is no more work.
+  if (upload_data_status == UploadDataStatus::kInProgress) {
     delegate.release();
+  }
 }
 
 // static
@@ -337,6 +389,24 @@ void ContentAnalysisDelegate::DisableUIForTesting() {
   *UIEnabledStorage() = false;
 }
 
+// TODO(b/283067315): Add this to all the test TearDown()s.
+// static
+void ContentAnalysisDelegate::EnableUIAfterTesting() {
+  *UIEnabledStorage() = true;
+}
+
+// static
+void ContentAnalysisDelegate::SetOnAckAllRequestsCallbackForTesting(
+    OnAckAllRequestsCallback callback) {
+  *OnAckAllRequestsStorage() = std::move(callback);
+}
+
+void ContentAnalysisDelegate::SetPageWarningForTesting(
+    ContentAnalysisResponse page_response) {
+  page_warning_ = true;
+  page_response_ = std::move(page_response);
+}
+
 ContentAnalysisDelegate::ContentAnalysisDelegate(
     content::WebContents* web_contents,
     Data data,
@@ -349,17 +419,22 @@ ContentAnalysisDelegate::ContentAnalysisDelegate(
   profile_ = Profile::FromBrowserContext(web_contents->GetBrowserContext());
   url_ = web_contents->GetLastCommittedURL();
   title_ = base::UTF16ToUTF8(web_contents->GetTitle());
-  std::string user_action_token = base::RandBytesAsString(128);
-  user_action_id_ =
-      base::HexEncode(user_action_token.data(), user_action_token.size());
+  user_action_id_ = base::HexEncode(base::RandBytesAsVector(128));
+  page_content_type_ = web_contents->GetContentsMimeType();
   result_.text_results.resize(data_.text.size(), false);
+  result_.image_result = false;
   result_.paths_results.resize(data_.paths.size(), false);
   result_.page_result = false;
+
+  // This setter is technically redundant with other code in the class, but
+  // is useful to make unit tests behave predictably so the ordering in which
+  // each type of request is made doesn't matter.
+  files_request_complete_ = data_.paths.empty();
 }
 
 void ContentAnalysisDelegate::StringRequestCallback(
     BinaryUploadService::Result result,
-    enterprise_connectors::ContentAnalysisResponse response) {
+    ContentAnalysisResponse response) {
   // Remember to send an ack for this response.
   if (result == safe_browsing::BinaryUploadService::Result::SUCCESS)
     final_actions_[response.request_token()] = GetAckFinalAction(response);
@@ -374,28 +449,74 @@ void ContentAnalysisDelegate::StringRequestCallback(
 
   text_request_complete_ = true;
 
-  RequestHandlerResult request_handler_result =
+  string_request_result_ =
       CalculateRequestHandlerResult(data_.settings, result, response);
 
-  bool text_complies = request_handler_result.complies;
-  bool should_warn = request_handler_result.final_result ==
+  DVLOG(1) << __func__ << ": string result=" << string_request_result_.complies;
+
+  bool text_complies = string_request_result_.complies;
+  bool should_warn = string_request_result_.final_result ==
                      FinalContentAnalysisResult::WARNING;
 
   std::fill(result_.text_results.begin(), result_.text_results.end(),
             text_complies);
 
   MaybeReportDeepScanningVerdict(
-      profile_, url_, "", "", "Text data", std::string(), "text/plain",
+      profile_, url_, url_, "", "", "Text data", std::string(), "text/plain",
       extensions::SafeBrowsingPrivateEventRouter::kTriggerWebContentUpload,
       access_point_, content_size, result, response,
       CalculateEventResult(data_.settings, text_complies, should_warn));
 
-  UpdateFinalResult(request_handler_result.final_result,
-                    request_handler_result.tag);
+  UpdateFinalResult(string_request_result_.final_result,
+                    string_request_result_.tag);
 
   if (should_warn) {
     text_warning_ = true;
     text_response_ = std::move(response);
+  }
+
+  MaybeCompleteScanRequest();
+}
+
+void ContentAnalysisDelegate::ImageRequestCallback(
+    BinaryUploadService::Result result,
+    ContentAnalysisResponse response) {
+  // Remember to send an ack for this response.
+  if (result == safe_browsing::BinaryUploadService::Result::SUCCESS) {
+    final_actions_[response.request_token()] = GetAckFinalAction(response);
+  }
+
+  RecordDeepScanMetrics(
+      data_.settings.cloud_or_local_settings.is_cloud_analysis(), access_point_,
+      base::TimeTicks::Now() - upload_start_time_, data_.image.size(), result,
+      response);
+
+  image_request_complete_ = true;
+
+  image_request_result_ =
+      CalculateRequestHandlerResult(data_.settings, result, response);
+
+  DVLOG(1) << __func__ << ": image result=" << image_request_result_.complies;
+
+  bool image_complies = image_request_result_.complies;
+  bool should_warn =
+      image_request_result_.final_result == FinalContentAnalysisResult::WARNING;
+
+  result_.image_result = image_complies;
+
+  MaybeReportDeepScanningVerdict(
+      profile_, url_, url_, "", "", "Image data", std::string(),
+      /*mime_type*/ std::string(),
+      extensions::SafeBrowsingPrivateEventRouter::kTriggerWebContentUpload,
+      access_point_, data_.image.size(), result, response,
+      CalculateEventResult(data_.settings, image_complies, should_warn));
+
+  UpdateFinalResult(image_request_result_.final_result,
+                    image_request_result_.tag);
+
+  if (should_warn) {
+    image_warning_ = true;
+    image_response_ = std::move(response);
   }
 
   MaybeCompleteScanRequest();
@@ -411,11 +532,14 @@ void ContentAnalysisDelegate::FilesRequestCallback(
   for (size_t index = 0; index < results.size(); ++index) {
     FinalContentAnalysisResult result = results[index].final_result;
     result_.paths_results[index] = results[index].complies;
+    DVLOG(1) << __func__ << ": file index=" << index
+             << " result=" << results[index].complies;
     if (result == FinalContentAnalysisResult::WARNING) {
       warned_file_indices_.push_back(index);
     }
     UpdateFinalResult(result, results[index].tag);
   }
+  files_request_results_ = std::move(results);
   files_request_complete_ = true;
 
   MaybeCompleteScanRequest();
@@ -438,13 +562,13 @@ bool ContentAnalysisDelegate::CancelDialog() {
   if (!dialog_)
     return false;
 
-  dialog_->CancelDialog();
+  dialog_->CancelDialogAndDelete();
   return true;
 }
 
 void ContentAnalysisDelegate::PageRequestCallback(
     BinaryUploadService::Result result,
-    enterprise_connectors::ContentAnalysisResponse response) {
+    ContentAnalysisResponse response) {
   // Remember to send an ack for this response.
   if (result == safe_browsing::BinaryUploadService::Result::SUCCESS)
     final_actions_[response.request_token()] = GetAckFinalAction(response);
@@ -459,12 +583,15 @@ void ContentAnalysisDelegate::PageRequestCallback(
   RequestHandlerResult request_handler_result =
       CalculateRequestHandlerResult(data_.settings, result, response);
 
+  DVLOG(1) << __func__ << ": print result=" << request_handler_result.complies;
+
   result_.page_result = request_handler_result.complies;
   bool should_warn = request_handler_result.final_result ==
                      FinalContentAnalysisResult::WARNING;
 
   MaybeReportDeepScanningVerdict(
-      profile_, url_, "", "", title_, /*sha256*/ std::string(),
+      profile_, url_, url_, "", /*destination*/ data_.printer_name, title_,
+      /*sha256*/ std::string(),
       /*mime_type*/ std::string(),
       extensions::SafeBrowsingPrivateEventRouter::kTriggerPagePrint,
       access_point_, /*content_size*/ -1, result, response,
@@ -481,11 +608,32 @@ void ContentAnalysisDelegate::PageRequestCallback(
   MaybeCompleteScanRequest();
 }
 
-bool ContentAnalysisDelegate::UploadData() {
+ContentAnalysisDelegate::UploadDataStatus
+ContentAnalysisDelegate::UploadData() {
   upload_start_time_ = base::TimeTicks::Now();
 
-  // Create a text request, a page request and a file request for each file.
+#if BUILDFLAG(ENTERPRISE_LOCAL_CONTENT_ANALYSIS)
+  // If this is a local content analysis, check if the local agent is ready.
+  // If not, abort early.  This is to prevent doing a lot of work, like reading
+  // files into memory or calcuating SHA256 hashes and prevent a flash of the
+  // in-progress dialog.
+  const CloudOrLocalAnalysisSettings& cloud_or_local =
+      data_.settings.cloud_or_local_settings;
+  if (cloud_or_local.is_local_analysis()) {
+    auto client = ContentAnalysisSdkManager::Get()->GetClient(
+        {cloud_or_local.local_path(), cloud_or_local.user_specific()});
+    if (!client) {
+      return UploadDataStatus::kNoLocalClientFound;
+    }
+  }
+#endif
+
+  DVLOG(1) << __func__ << ": prepare requests for analysis";
+
+  // Create a text request, an image request, a page request and a file request
+  // for each file.
   PrepareTextRequest();
+  PrepareImageRequest();
   PreparePageRequest();
 
   if (!data_.paths.empty()) {
@@ -493,7 +641,7 @@ bool ContentAnalysisDelegate::UploadData() {
     // MultiFileRequestHandler is owned by this class.
     files_request_handler_ = FilesRequestHandler::Create(
         GetBinaryUploadService(), profile_, data_.settings, url_, "", "",
-        user_action_id_, access_point_, data_.paths,
+        user_action_id_, title_, access_point_, data_.reason, data_.paths,
         base::BindOnce(&ContentAnalysisDelegate::FilesRequestCallback,
                        GetWeakPtr()));
     files_request_complete_ = !files_request_handler_->UploadData();
@@ -505,8 +653,32 @@ bool ContentAnalysisDelegate::UploadData() {
   // Do not add code under this comment. The above line should be the last thing
   // this function does before the return statement.
 
-  return !text_request_complete_ || !files_request_complete_ ||
-         !page_request_complete_;
+  return text_request_complete_ && image_request_complete_ &&
+                 files_request_complete_ && page_request_complete_
+             ? UploadDataStatus::kComplete
+             : UploadDataStatus::kInProgress;
+}
+
+bool ContentAnalysisDelegate::IsFailClosed(UploadDataStatus upload_data_status,
+                                           bool should_allow_by_default) {
+  // Fail-closed can be triggered in two cases:
+  //   1. The final scan result is already updated to fail-closed (when LBUS or
+  //   CBUS cannot upload data and exceed max retry).
+  //   2. LCAC cannot connect to the local agent on Windows.
+  return final_result_ == FinalContentAnalysisResult::FAIL_CLOSED ||
+         (upload_data_status == UploadDataStatus::kNoLocalClientFound &&
+          !ShouldFailOpenWithoutLocalClient(should_allow_by_default));
+}
+
+bool ContentAnalysisDelegate::ShouldFailOpenWithoutLocalClient(
+    bool should_allow_by_default) {
+// Fail-closed settings should only be applied to Windows, otherwise it should
+// fail open.
+#if BUILDFLAG(IS_WIN)
+  return should_allow_by_default;
+#else
+  return true;
+#endif
 }
 
 void ContentAnalysisDelegate::PrepareTextRequest() {
@@ -535,8 +707,35 @@ void ContentAnalysisDelegate::PrepareTextRequest() {
         base::BindOnce(&ContentAnalysisDelegate::StringRequestCallback,
                        weak_ptr_factory_.GetWeakPtr()));
 
-    PrepareRequest(enterprise_connectors::BULK_DATA_ENTRY, request.get());
+    PrepareRequest(BULK_DATA_ENTRY, request.get());
     UploadTextForDeepScanning(std::move(request));
+  }
+}
+
+void ContentAnalysisDelegate::PrepareImageRequest() {
+  // The request is considered complete if there is no image or if the image is
+  // too large compared to the maximum size.
+  image_request_complete_ =
+      data_.image.empty() ||
+      data_.image.size() >
+          data_.settings.cloud_or_local_settings.max_file_size();
+
+  if (!data_.image.empty()) {
+    base::UmaHistogramCustomCounts("Enterprise.OnBulkDataEntry.DataSize",
+                                   data_.image.size(),
+                                   /*min=*/1,
+                                   /*max=*/51 * 1024 * 1024,
+                                   /*buckets=*/50);
+  }
+
+  if (!image_request_complete_) {
+    auto request = std::make_unique<StringAnalysisRequest>(
+        data_.settings.cloud_or_local_settings, data_.image,
+        base::BindOnce(&ContentAnalysisDelegate::ImageRequestCallback,
+                       weak_ptr_factory_.GetWeakPtr()));
+
+    PrepareRequest(BULK_DATA_ENTRY, request.get());
+    UploadImageForDeepScanning(std::move(request));
   }
 }
 
@@ -552,8 +751,14 @@ void ContentAnalysisDelegate::PreparePageRequest() {
         base::BindOnce(&ContentAnalysisDelegate::PageRequestCallback,
                        weak_ptr_factory_.GetWeakPtr()));
 
-    PrepareRequest(enterprise_connectors::PRINT, request.get());
+    PrepareRequest(PRINT, request.get());
     request->set_filename(title_);
+    if (!data_.printer_name.empty()) {
+      request->set_printer_name(data_.printer_name);
+    }
+    if (!page_content_type_.empty()) {
+      request->set_content_type(page_content_type_);
+    }
     UploadPageForDeepScanning(std::move(request));
   }
 }
@@ -562,7 +767,7 @@ void ContentAnalysisDelegate::PreparePageRequest() {
 // are handled by
 // chrome/browser/enterprise/connectors/analysis/files_request_handler.h
 void ContentAnalysisDelegate::PrepareRequest(
-    enterprise_connectors::AnalysisConnector connector,
+    AnalysisConnector connector,
     BinaryUploadService::Request* request) {
   if (data_.settings.cloud_or_local_settings.is_cloud_analysis()) {
     request->set_device_token(
@@ -572,12 +777,10 @@ void ContentAnalysisDelegate::PrepareRequest(
   // Include tab page title, user action id, and count of requests per user
   // action in local content analysis requests.
   if (data_.settings.cloud_or_local_settings.is_local_analysis()) {
+    // Increment the total number of user action requests by 1.
+    total_requests_count_++;
     request->set_tab_title(title_);
     request->set_user_action_id(user_action_id_);
-    // Set request count to 1 for print/paste event. Request count for file
-    // events are set in
-    // chrome/browser/enterprise/connectors/analysis/request_handler_base.cc
-    request->set_user_action_requests_count(1);
   }
 
   request->set_analysis_connector(connector);
@@ -585,14 +788,23 @@ void ContentAnalysisDelegate::PrepareRequest(
   request->set_url(data_.url.spec());
   request->set_tab_url(data_.url);
   request->set_per_profile_request(data_.settings.per_profile);
-  for (const auto& tag : data_.settings.tags)
+
+  for (const auto& tag : data_.settings.tags) {
     request->add_tag(tag.first);
-  if (data_.settings.client_metadata)
+  }
+
+  if (data_.settings.client_metadata) {
     request->set_client_metadata(*data_.settings.client_metadata);
+  }
+
+  if (data_.reason != ContentAnalysisRequest::UNKNOWN) {
+    request->set_reason(data_.reason);
+  }
 }
 
 void ContentAnalysisDelegate::FillAllResultsWith(bool status) {
   std::fill(result_.text_results.begin(), result_.text_results.end(), status);
+  result_.image_result = status;
   std::fill(result_.paths_results.begin(), result_.paths_results.end(), status);
   result_.page_result = status;
 }
@@ -604,7 +816,17 @@ BinaryUploadService* ContentAnalysisDelegate::GetBinaryUploadService() {
 
 void ContentAnalysisDelegate::UploadTextForDeepScanning(
     std::unique_ptr<BinaryUploadService::Request> request) {
+  request->set_user_action_requests_count(total_requests_count_);
   BinaryUploadService* upload_service = GetBinaryUploadService();
+  if (upload_service) {
+    upload_service->MaybeUploadForDeepScanning(std::move(request));
+  }
+}
+
+void ContentAnalysisDelegate::UploadImageForDeepScanning(
+    std::unique_ptr<BinaryUploadService::Request> request) {
+  BinaryUploadService* upload_service = GetBinaryUploadService();
+  request->set_user_action_requests_count(total_requests_count_);
   if (upload_service)
     upload_service->MaybeUploadForDeepScanning(std::move(request));
 }
@@ -612,41 +834,91 @@ void ContentAnalysisDelegate::UploadTextForDeepScanning(
 void ContentAnalysisDelegate::UploadPageForDeepScanning(
     std::unique_ptr<BinaryUploadService::Request> request) {
   BinaryUploadService* upload_service = GetBinaryUploadService();
+  request->set_user_action_requests_count(total_requests_count_);
   if (upload_service)
     upload_service->MaybeUploadForDeepScanning(std::move(request));
 }
 
 bool ContentAnalysisDelegate::UpdateDialog() {
-  // Only show final result UI in the case of a cloud analysis.
-  // In the local case, the local agent does that.
-  return data_.settings.cloud_or_local_settings.is_cloud_analysis()
-             ? ShowFinalResultInDialog()
-             : CancelDialog();
+  // In the case of fail-closed, show the final result UI regardless of cloud or
+  // local analysis. Otherwise, only show the result for cloud analysis.
+  bool show_ui = final_result_ == FinalContentAnalysisResult::FAIL_CLOSED ||
+                 data_.settings.cloud_or_local_settings.is_cloud_analysis();
+
+  DVLOG(1) << __func__ << ": show_ui=" << show_ui;
+  return show_ui ? ShowFinalResultInDialog() : CancelDialog();
 }
 
 void ContentAnalysisDelegate::MaybeCompleteScanRequest() {
-  if (!text_request_complete_ || !files_request_complete_ ||
-      !page_request_complete_) {
+  if (!text_request_complete_ || !image_request_complete_ ||
+      !files_request_complete_ || !page_request_complete_) {
+    DVLOG(1) << __func__ << ": scan request is incomplete.";
     return;
+  }
+
+  // If showing the warning message, wait before running the callback. The
+  // callback will be called either in BypassWarnings or Cancel.
+  if (final_result_ != FinalContentAnalysisResult::WARNING) {
+    DVLOG(1) << __func__ << ": calling RunCallback()";
+    RunCallback();
   }
 
   AckAllRequests();
 
-  // If showing the warning message, wait before running the callback. The
-  // callback will be called either in BypassWarnings or Cancel.
-  if (final_result_ != FinalContentAnalysisResult::WARNING)
-    RunCallback();
+  if (callback_running_ && !dialog_ && *UIEnabledStorage()) {
+    // This code path implies that RunCallback has already been called,
+    // and that we are racing against a non-blocking scan. In such a
+    // case, we let the other caller handle deletion of `this`, and let
+    // them know no more work is needed.
+    all_work_done_ = true;
+    return;
+  }
 
   if (!UpdateDialog() && data_uploaded_) {
     // No UI was shown.  Delete |this| to cleanup, unless UploadData isn't done
     // yet.
+    DVLOG(1) << __func__ << ": about to delete `this` to clean up.";
     delete this;
   }
 }
 
 void ContentAnalysisDelegate::RunCallback() {
-  if (!callback_.is_null())
-    std::move(callback_).Run(data_, result_);
+  DCHECK(!callback_running_);
+  if (callback_.is_null()) {
+    return;
+  }
+
+  callback_running_ = true;
+  std::move(callback_).Run(data_, result_);
+  callback_running_ = false;
+
+  // Since `result_` might have been tweaked by `callback_`, `final_actions_`
+  // need to be updated before Acks are sent.
+  for (size_t i = 0; i < result_.paths_results.size(); ++i) {
+    if (!result_.paths_results[i] && files_request_results_.size() > i &&
+        final_actions_.count(files_request_results_[i].request_token) &&
+        final_actions_[files_request_results_[i].request_token] ==
+            ContentAnalysisAcknowledgement::ALLOW) {
+      final_actions_[files_request_results_[i].request_token] =
+          ContentAnalysisAcknowledgement::BLOCK;
+    }
+  }
+
+  // If both image and text are present, synchronize their ack statuses if
+  // needed.
+  if (!string_request_result_.request_token.empty() &&
+      !image_request_result_.request_token.empty()) {
+    if (!result_.image_result) {
+      final_actions_[string_request_result_.request_token] =
+          ContentAnalysisAcknowledgement::BLOCK;
+    }
+    // text_results is uniformly updated in StringRequestCallback(), so the
+    // values should be consistent.
+    if (!result_.text_results[0]) {
+      final_actions_[image_request_result_.request_token] =
+          ContentAnalysisAcknowledgement::BLOCK;
+    }
+  }
 }
 
 void ContentAnalysisDelegate::UpdateFinalResult(
@@ -659,17 +931,25 @@ void ContentAnalysisDelegate::UpdateFinalResult(
 }
 
 void ContentAnalysisDelegate::AckAllRequests() {
+  if (!OnAckAllRequestsStorage()->is_null())
+    std::move(*OnAckAllRequestsStorage()).Run(final_actions_);
+
   BinaryUploadService* upload_service = GetBinaryUploadService();
   if (!upload_service)
     return;
 
   for (const auto& token_and_action : final_actions_) {
-    auto ack = std::make_unique<safe_browsing::BinaryUploadService::Ack>(
-        data_.settings.cloud_or_local_settings);
-    ack->set_request_token(token_and_action.first);
-    ack->set_status(ContentAnalysisAcknowledgement::SUCCESS);
-    ack->set_final_action(token_and_action.second);
-    upload_service->MaybeAcknowledge(std::move(ack));
+    // Only have files that have a request token. Not having one implies that
+    // the agent never received the request for some reason (size, encryption,
+    // etc.) so it doesn't make sense to send an ack.
+    if (!token_and_action.first.empty()) {
+      auto ack = std::make_unique<safe_browsing::BinaryUploadService::Ack>(
+          data_.settings.cloud_or_local_settings);
+      ack->set_request_token(token_and_action.first);
+      ack->set_status(ContentAnalysisAcknowledgement::SUCCESS);
+      ack->set_final_action(token_and_action.second);
+      upload_service->MaybeAcknowledge(std::move(ack));
+    }
   }
 }
 

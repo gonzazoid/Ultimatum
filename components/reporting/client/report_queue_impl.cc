@@ -9,64 +9,173 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/check.h"
+#include "base/check_op.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/location.h"
+#include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/scoped_refptr.h"
+#include "base/memory/weak_ptr.h"
+#include "base/metrics/histogram_functions.h"
 #include "base/notreached.h"
 #include "base/sequence_checker.h"
+#include "base/strings/strcat.h"
+#include "base/strings/string_number_conversions.h"
 #include "base/task/bind_post_task.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
 #include "base/time/time.h"
+#include "base/types/expected.h"
 #include "components/reporting/client/report_queue_configuration.h"
+#include "components/reporting/proto/synced/metric_data.pb.h"
 #include "components/reporting/proto/synced/record.pb.h"
 #include "components/reporting/proto/synced/record_constants.pb.h"
 #include "components/reporting/storage/storage_module_interface.h"
 #include "components/reporting/util/status.h"
 #include "components/reporting/util/statusor.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace reporting {
 namespace {
 
+// UTC time of 2122-01-01T00:00:00Z since Unix epoch 1970-01-01T00:00:00Z in
+// microseconds.
+constexpr int64_t kTime2122 = 4'796'668'800'000'000;
+
+// Returns true if record is allowed to go to `destination`. Returns false
+// otherwise.
+static bool RecordMayGoToDestination(const std::string& record_data,
+                                     Destination destination) {
+  // All records sent to destination *_METRIC must be MetricData
+  // protos due to the way the server is implemented.
+  if (destination == Destination::EVENT_METRIC ||
+      destination == Destination::TELEMETRY_METRIC ||
+      destination == Destination::INFO_METRIC) {
+    MetricData metric_data;
+    const bool is_metric_data =
+        metric_data.ParseFromString(record_data) &&
+        (metric_data.has_event_data() || metric_data.has_telemetry_data() ||
+         metric_data.has_info_data());
+    LOG_IF(ERROR, !is_metric_data)
+        << "Only MetricData records may be enqueued with destinations: "
+           "EVENT_METRIC, TELEMETRY_METRIC, or INFO_METRIC";
+    return is_metric_data;
+  }
+  return true;
+}
+
 // Calls |record_producer|, checks the result and in case of success, forwards
-// it to the storage. In production code should be invoked asynchronously, on a
-// thread pool (no synchronization expected).
+// it to the storage. In production code should be invoked asynchronously, on
+// a thread pool (no synchronization expected).
 void AddRecordToStorage(scoped_refptr<StorageModuleInterface> storage,
                         Priority priority,
+                        WrappedRateLimiter::AsyncAcquireCb acquire_cb,
                         std::string dm_token,
                         Destination destination,
+                        int64_t reserved_space,
+                        absl::optional<SourceInfo> source_info,
                         ReportQueue::RecordProducer record_producer,
                         StorageModuleInterface::EnqueueCallback callback) {
   // Generate record data.
-  auto record_result = std::move(record_producer).Run();
-  if (!record_result.ok()) {
-    std::move(callback).Run(record_result.status());
+  const auto record_result = std::move(record_producer).Run();
+  if (!record_result.has_value()) {
+    std::move(callback).Run(record_result.error());
     return;
   }
 
+  CHECK(RecordMayGoToDestination(record_result.value(), destination));
+
   // Augment data.
   Record record;
-  *record.mutable_data() = std::move(record_result.ValueOrDie());
+  *record.mutable_data() = std::move(record_result.value());
   record.set_destination(destination);
+  if (reserved_space > 0L) {
+    record.set_reserved_space(reserved_space);
+  }
 
-  // |record| with no DM token is assumed to be associated with device DM token
+  // Additional record augmentation for keeping local record copy.
+  // Note: that must be done before calling `storage->AddRecord` below,
+  // because later the handler might call it with no need to set this flag.
+  switch (destination) {
+    case LOG_UPLOAD:
+      // It would be better to base the decision on `upload_settings` presence
+      // in the event, but that would require protobuf reflecion, that is not
+      // included in Chromium build. So instead we just use `destination`.
+      record.set_needs_local_unencrypted_copy(true);
+      break;
+    default:  // Do nothing.
+      break;
+  }
+
+  // |record| with no DM token is assumed to be associated with device DM
+  // token.
   if (!dm_token.empty()) {
     *record.mutable_dm_token() = std::move(dm_token);
   }
 
+  // Augment source info if available.
+  if (source_info.has_value()) {
+    *record.mutable_source_info() = std::move(source_info.value());
+  }
+
   // Calculate timestamp in microseconds - to match Spanner expectations.
   const int64_t time_since_epoch_us =
-      base::Time::Now().ToJavaTime() * base::Time::kMicrosecondsPerMillisecond;
+      base::Time::Now().InMillisecondsSinceUnixEpoch() *
+      base::Time::kMicrosecondsPerMillisecond;
+  if (time_since_epoch_us > kTime2122) {
+    // Unusual timestamp. Reject the record even though the record is good
+    // otherwise, because we can't obtain a reasonable timestamp. We have this
+    // code block here because server very occasionally detects very large
+    // timestamps. The reason could come from occasional irregular system
+    // time. Filtering out irregular timestamps here should address the
+    // problem without leaving timestamp-related bugs in the ERP undiscovered
+    // (should there be any).
+    base::UmaHistogramBoolean("Browser.ERP.UnusualEnqueueTimestamp", true);
+    std::move(callback).Run(Status(
+        error::FAILED_PRECONDITION,
+        base::StrCat(
+            {"Abnormal system timestamp obtained. Microseconds since epoch: ",
+             base::NumberToString(time_since_epoch_us)})));
+    return;
+  }
   record.set_timestamp_us(time_since_epoch_us);
-  if (!record_result.ok()) {
-    std::move(callback).Run(record_result.status());
+
+  const auto record_size = record.ByteSizeLong();
+
+  // Prepare `Storage::AddRecord` as a callback.
+  auto add_record_cb = base::BindOnce(&StorageModuleInterface::AddRecord,
+                                      storage, priority, std::move(record));
+
+  // Rate-limit event, if required.
+  if (!acquire_cb) {
+    // No rate limiter, just add resulting Record to the storage.
+    std::move(add_record_cb).Run(std::move(callback));
     return;
   }
 
-  // Add resulting Record to the storage.
-  storage->AddRecord(priority, std::move(record), std::move(callback));
+  // Add Record only if rate limiter approves.
+  acquire_cb.Run(
+      record_size,
+      base::BindOnce(
+          [](size_t record_size,
+             base::OnceCallback<void(StorageModuleInterface::EnqueueCallback
+                                         callback)> add_record_cb,
+             StorageModuleInterface::EnqueueCallback callback, bool acquired) {
+            if (!acquired) {
+              std::move(callback).Run(
+                  Status(error::OUT_OF_RANGE,
+                         base::StrCat({"Event size ",
+                                       base::NumberToString(record_size),
+                                       " rejected by rate limiter"})));
+              return;
+            }
+            // Add resulting Record to the storage.
+            std::move(add_record_cb).Run(std::move(callback));
+          },
+          record_size, std::move(add_record_cb), std::move(callback)));
 }
 }  // namespace
 
@@ -81,7 +190,9 @@ void ReportQueueImpl::Create(
 ReportQueueImpl::ReportQueueImpl(
     std::unique_ptr<ReportQueueConfiguration> config,
     scoped_refptr<StorageModuleInterface> storage)
-    : config_(std::move(config)), storage_(storage) {}
+    : config_(std::move(config)), storage_(storage) {
+  CHECK(config_);
+}
 
 ReportQueueImpl::~ReportQueueImpl() = default;
 
@@ -105,8 +216,10 @@ void ReportQueueImpl::AddProducedRecord(RecordProducer record_producer,
   base::ThreadPool::PostTask(
       FROM_HERE, {base::TaskPriority::BEST_EFFORT},
       base::BindOnce(&AddRecordToStorage, storage_, priority,
-                     config_->dm_token(), config_->destination(),
-                     std::move(record_producer), std::move(callback)));
+                     config_->is_event_allowed_cb(), config_->dm_token(),
+                     config_->destination(), config_->reserved_space(),
+                     config_->source_info(), std::move(record_producer),
+                     std::move(callback)));
 }
 
 void ReportQueueImpl::Flush(Priority priority, FlushCallback callback) {
@@ -116,8 +229,11 @@ void ReportQueueImpl::Flush(Priority priority, FlushCallback callback) {
 base::OnceCallback<void(StatusOr<std::unique_ptr<ReportQueue>>)>
 ReportQueueImpl::PrepareToAttachActualQueue() const {
   NOTREACHED();
-  return base::BindOnce(
-      [](StatusOr<std::unique_ptr<ReportQueue>>) { NOTREACHED(); });
+  return base::DoNothing();
+}
+
+Destination ReportQueueImpl::GetDestination() const {
+  return config_->destination();
 }
 
 // Implementation of SpeculativeReportQueueImpl::PendingRecordProducer
@@ -150,18 +266,21 @@ SpeculativeReportQueueImpl::PendingRecordProducer::operator=(
 
 // static
 std::unique_ptr<SpeculativeReportQueueImpl, base::OnTaskRunnerDeleter>
-SpeculativeReportQueueImpl::Create() {
+SpeculativeReportQueueImpl::Create(
+    const SpeculativeConfigSettings& config_settings) {
   scoped_refptr<base::SequencedTaskRunner> sequenced_task_runner =
       base::ThreadPool::CreateSequencedTaskRunner(
           {base::TaskPriority::BEST_EFFORT, base::MayBlock()});
   return std::unique_ptr<SpeculativeReportQueueImpl, base::OnTaskRunnerDeleter>(
-      new SpeculativeReportQueueImpl(sequenced_task_runner),
+      new SpeculativeReportQueueImpl(config_settings, sequenced_task_runner),
       base::OnTaskRunnerDeleter(sequenced_task_runner));
 }
 
 SpeculativeReportQueueImpl::SpeculativeReportQueueImpl(
+    const SpeculativeConfigSettings& config_settings,
     scoped_refptr<base::SequencedTaskRunner> sequenced_task_runner)
-    : sequenced_task_runner_(sequenced_task_runner) {
+    : sequenced_task_runner_(sequenced_task_runner),
+      config_settings_(config_settings) {
   DETACH_FROM_SEQUENCE(sequence_checker_);
 }
 
@@ -206,7 +325,8 @@ void SpeculativeReportQueueImpl::AddProducedRecord(
       FROM_HERE,
       base::BindOnce(&SpeculativeReportQueueImpl::MaybeEnqueueRecordProducer,
                      weak_ptr_factory_.GetWeakPtr(), priority,
-                     std::move(callback), std::move(record_producer)));
+                     base::BindPostTaskToCurrentDefault(std::move(callback)),
+                     std::move(record_producer)));
 }
 
 void SpeculativeReportQueueImpl::MaybeEnqueueRecordProducer(
@@ -237,7 +357,7 @@ void SpeculativeReportQueueImpl::MaybeEnqueueRecordProducer(
 
 void SpeculativeReportQueueImpl::EnqueuePendingRecordProducers() const {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  DCHECK(actual_report_queue_.has_value());
+  CHECK(actual_report_queue_.has_value());
   if (pending_record_producers_.empty()) {
     return;
   }
@@ -279,47 +399,32 @@ base::OnceCallback<void(StatusOr<std::unique_ptr<ReportQueue>>)>
 SpeculativeReportQueueImpl::PrepareToAttachActualQueue() const {
   return base::BindPostTask(
       sequenced_task_runner_,
-      base::BindOnce(
-          [](base::WeakPtr<SpeculativeReportQueueImpl> speculative_queue,
-             StatusOr<std::unique_ptr<ReportQueue>> actual_queue_result) {
-            if (!speculative_queue) {
-              return;  // Speculative queue was destructed in a meantime.
-            }
-            // Set actual queue for the speculative queue to use
-            // (asynchronously).
-            speculative_queue->AttachActualQueue(
-                std::move(std::move(actual_queue_result)));
-          },
-          weak_ptr_factory_.GetMutableWeakPtr()));
+      base::BindOnce(&SpeculativeReportQueueImpl::AttachActualQueue,
+                     weak_ptr_factory_.GetMutableWeakPtr()));
+}
+
+Destination SpeculativeReportQueueImpl::GetDestination() const {
+  return config_settings_.destination;
 }
 
 void SpeculativeReportQueueImpl::AttachActualQueue(
     StatusOr<std::unique_ptr<ReportQueue>> status_or_actual_queue) {
-  sequenced_task_runner_->PostTask(
-      FROM_HERE,
-      base::BindOnce(
-          [](base::WeakPtr<SpeculativeReportQueueImpl> self,
-             StatusOr<std::unique_ptr<ReportQueue>> status_or_actual_queue) {
-            if (!self) {
-              return;
-            }
-            DCHECK_CALLED_ON_VALID_SEQUENCE(self->sequence_checker_);
-            if (self->actual_report_queue_.has_value()) {
-              // Already attached, do nothing.
-              return;
-            }
-            if (!status_or_actual_queue.ok()) {
-              // Failed to create actual queue.
-              // Flush all pending records with this status.
-              self->PurgePendingProducers(status_or_actual_queue.status());
-              return;
-            }
-            // Actual report queue succeeded, store it (never to change later).
-            self->actual_report_queue_ =
-                std::move(status_or_actual_queue.ValueOrDie());
-            self->EnqueuePendingRecordProducers();
-          },
-          weak_ptr_factory_.GetWeakPtr(), std::move(status_or_actual_queue)));
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  if (actual_report_queue_.has_value()) {
+    // Already attached, do nothing.
+    return;
+  }
+  if (!status_or_actual_queue.has_value()) {
+    // Failed to create actual queue.
+    // Flush all pending records with this status.
+    PurgePendingProducers(status_or_actual_queue.error());
+    return;
+  }
+  // Actual report queue succeeded, store it (never to change later).
+  CHECK_EQ(config_settings_.destination,
+           status_or_actual_queue.value()->GetDestination());
+  actual_report_queue_ = std::move(status_or_actual_queue.value());
+  EnqueuePendingRecordProducers();
 }
 
 void SpeculativeReportQueueImpl::PurgePendingProducers(Status status) const {

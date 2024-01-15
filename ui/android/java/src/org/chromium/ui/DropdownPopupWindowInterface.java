@@ -4,15 +4,12 @@
 
 package org.chromium.ui;
 
-import android.view.View;
 import android.widget.AdapterView;
 import android.widget.ListAdapter;
 import android.widget.ListView;
 import android.widget.PopupWindow;
 
-/**
- * The interface for dropdown popup window.
- */
+/** The interface for dropdown popup window. */
 public interface DropdownPopupWindowInterface {
     /**
      * Sets the adapter that provides the data and the views to represent the data
@@ -29,9 +26,7 @@ public interface DropdownPopupWindowInterface {
      */
     void setInitialSelection(int initialSelection);
 
-    /**
-     * Shows the popup. The adapter should be set before calling this method.
-     */
+    /** Shows the popup. The adapter should be set before calling this method. */
     void show();
 
     /**
@@ -68,21 +63,12 @@ public interface DropdownPopupWindowInterface {
     void setOnItemClickListener(AdapterView.OnItemClickListener clickListener);
 
     /**
-     * Adds a non-scrolling View beneath the list. This View will be separated from the main list
-     * by a single divider.
-     * TODO(crbug.com/896349): This currently only works when called before show().
-     */
-    void setFooterView(View footerView);
-
-    /**
      * Show the popup. Will have no effect if the popup is already showing.
      * Post a {@link #show()} call to the UI thread.
      */
     void postShow();
 
-    /**
-     * Disposes of the popup window.
-     */
+    /** Disposes of the popup window. */
     void dismiss();
 
     /**

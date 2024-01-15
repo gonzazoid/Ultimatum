@@ -10,22 +10,22 @@
 namespace autofill {
 
 // Interface that exposes controller functionality to EditAddressProfileView
-// bubble.
+// dialog.
 class EditAddressProfileDialogController {
  public:
   virtual ~EditAddressProfileDialogController() = default;
 
   virtual std::u16string GetWindowTitle() const = 0;
+  virtual const std::u16string& GetFooterMessage() const = 0;
   virtual std::u16string GetOkButtonLabel() const = 0;
   virtual const AutofillProfile& GetProfileToEdit() const = 0;
-  // Gets invoked when the user click either OK or Cancel buttons in the address
-  // profile dialog. `decision` reflects which button has been clicked.
-  // `profile_with_edits` contains the address profile including the edits
-  // performed by the user.
-  virtual void OnUserDecision(
+  virtual bool GetIsValidatable() const = 0;
+  // Gets invoked when the dialog is being closed. `decision` reflects which
+  // button has been clicked. `profile_with_edits` contains the address profile
+  // including the edits performed by the user.
+  virtual void OnDialogClosed(
       AutofillClient::SaveAddressProfileOfferUserDecision decision,
-      const AutofillProfile& profile_with_edits) = 0;
-  virtual void OnDialogClosed() = 0;
+      base::optional_ref<const AutofillProfile> profile_with_edits) = 0;
 };
 
 }  // namespace autofill

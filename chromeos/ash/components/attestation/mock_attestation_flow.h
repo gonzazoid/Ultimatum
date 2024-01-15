@@ -5,9 +5,10 @@
 #ifndef CHROMEOS_ASH_COMPONENTS_ATTESTATION_MOCK_ATTESTATION_FLOW_H_
 #define CHROMEOS_ASH_COMPONENTS_ATTESTATION_MOCK_ATTESTATION_FLOW_H_
 
+#include <optional>
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "chromeos/ash/components/attestation/attestation_flow.h"
 #include "testing/gmock/include/gmock/gmock.h"
 
@@ -84,14 +85,18 @@ class MockAttestationFlow : public AttestationFlow {
   MockAttestationFlow();
   ~MockAttestationFlow() override;
 
-  MOCK_METHOD7(GetCertificate,
-               void(AttestationCertificateProfile,
-                    const AccountId& account_id,
-                    const std::string&,
-                    bool,
-                    ::attestation::KeyType,
-                    const std::string&, /* key_name */
-                    CertificateCallback));
+  MOCK_METHOD(
+      void,
+      GetCertificate,
+      (AttestationCertificateProfile /*certificate_profile*/,
+       const AccountId& /*account_id*/,
+       const std::string& /*request_origin*/,
+       bool /*force_new_key*/,
+       ::attestation::KeyType /*key_crypto_type*/,
+       const std::string& /*key_name*/,
+       const std::optional<
+           AttestationFlow::CertProfileSpecificData>& /*profile_specific_data*/,
+       CertificateCallback /*callback*/));
 };
 
 }  // namespace attestation

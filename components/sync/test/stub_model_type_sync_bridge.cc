@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "components/sync/model/metadata_change_list.h"
 
 namespace syncer {
@@ -22,13 +22,13 @@ StubModelTypeSyncBridge::CreateMetadataChangeList() {
   return nullptr;
 }
 
-absl::optional<ModelError> StubModelTypeSyncBridge::MergeSyncData(
+absl::optional<ModelError> StubModelTypeSyncBridge::MergeFullSyncData(
     std::unique_ptr<MetadataChangeList> metadata_change_list,
     EntityChangeList entity_data) {
   return {};
 }
 
-absl::optional<ModelError> StubModelTypeSyncBridge::ApplySyncChanges(
+absl::optional<ModelError> StubModelTypeSyncBridge::ApplyIncrementalSyncChanges(
     std::unique_ptr<MetadataChangeList> metadata_change_list,
     EntityChangeList entity_changes) {
   return {};

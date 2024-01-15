@@ -13,7 +13,7 @@ StubDevToolsClient::StubDevToolsClient() : id_("stub-id") {}
 
 StubDevToolsClient::StubDevToolsClient(const std::string& id) : id_(id) {}
 
-StubDevToolsClient::~StubDevToolsClient() {}
+StubDevToolsClient::~StubDevToolsClient() = default;
 
 const std::string& StubDevToolsClient::GetId() {
   return id_;
@@ -32,7 +32,9 @@ Status StubDevToolsClient::SetTunnelSessionId(std::string session_id) {
   return Status{kOk};
 }
 
-Status StubDevToolsClient::StartBidiServer(std::string bidi_mapper_script) {
+Status StubDevToolsClient::StartBidiServer(
+    std::string bidi_mapper_script,
+    const base::Value::Dict& mapper_options) {
   return Status{kOk};
 }
 
@@ -40,12 +42,12 @@ bool StubDevToolsClient::IsNull() const {
   return false;
 }
 
-bool StubDevToolsClient::WasCrashed() {
-  return false;
+bool StubDevToolsClient::IsConnected() const {
+  return is_connected_;
 }
 
-Status StubDevToolsClient::ConnectIfNecessary() {
-  return Status(kOk);
+bool StubDevToolsClient::WasCrashed() {
+  return false;
 }
 
 Status StubDevToolsClient::PostBidiCommand(base::Value::Dict command) {
@@ -54,7 +56,7 @@ Status StubDevToolsClient::PostBidiCommand(base::Value::Dict command) {
 
 Status StubDevToolsClient::SendCommand(const std::string& method,
                                        const base::Value::Dict& params) {
-  base::Value result;
+  base::Value::Dict result;
   return SendCommandAndGetResult(method, params, &result);
 }
 
@@ -80,8 +82,7 @@ Status StubDevToolsClient::SendAsyncCommand(const std::string& method,
 Status StubDevToolsClient::SendCommandAndGetResult(
     const std::string& method,
     const base::Value::Dict& params,
-    base::Value* result) {
-  *result = base::Value(base::Value::Type::DICTIONARY);
+    base::Value::Dict* result) {
   return Status(kOk);
 }
 
@@ -89,7 +90,7 @@ Status StubDevToolsClient::SendCommandAndGetResultWithTimeout(
     const std::string& method,
     const base::Value::Dict& params,
     const Timeout* timeout,
-    base::Value* result) {
+    base::Value::Dict* result) {
   return SendCommandAndGetResult(method, params, result);
 }
 
@@ -101,6 +102,13 @@ Status StubDevToolsClient::SendCommandAndIgnoreResponse(
 
 void StubDevToolsClient::AddListener(DevToolsEventListener* listener) {
   listeners_.push_back(listener);
+}
+
+void StubDevToolsClient::RemoveListener(DevToolsEventListener* listener) {
+  auto it = std::find(listeners_.begin(), listeners_.end(), listener);
+  if (it != listeners_.end()) {
+    listeners_.erase(it);
+  }
 }
 
 Status StubDevToolsClient::HandleEventsUntil(
@@ -115,10 +123,12 @@ Status StubDevToolsClient::HandleReceivedEvents() {
 
 void StubDevToolsClient::SetDetached() {}
 
-void StubDevToolsClient::SetOwner(WebViewImpl* owner) {}
+void StubDevToolsClient::SetOwner(WebViewImpl* owner) {
+  owner_ = owner;
+}
 
 WebViewImpl* StubDevToolsClient::GetOwner() const {
-  return nullptr;
+  return owner_;
 }
 
 DevToolsClient* StubDevToolsClient::GetRootClient() {

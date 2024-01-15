@@ -8,7 +8,6 @@
 #include "base/metrics/histogram_functions.h"
 #include "chrome/services/sharing/nearby/platform/bluetooth_device.h"
 
-namespace location {
 namespace nearby {
 namespace chrome {
 
@@ -169,7 +168,7 @@ bool BleMedium::StartScanning(
   // A different DiscoveredPeripheralCallback is being passed on each call, so
   // each must be captured and associated with its service UUID.
   discovered_peripheral_callbacks_map_.insert(
-      {service_uuid, discovered_peripheral_callback});
+      {service_uuid, std::move(discovered_peripheral_callback)});
 
   discovery_service_id_to_fast_advertisement_service_uuid_map_.insert(
       {service_id, service_uuid});
@@ -400,4 +399,3 @@ chrome::BlePeripheral* BleMedium::GetDiscoveredBlePeripheral(
 
 }  // namespace chrome
 }  // namespace nearby
-}  // namespace location

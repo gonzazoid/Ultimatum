@@ -10,7 +10,8 @@
 #import "base/test/ios/wait_util.h"
 #import "components/shared_highlighting/core/common/fragment_directives_utils.h"
 #import "components/shared_highlighting/core/common/text_fragment.h"
-#import "ios/chrome/browser/ui/ui_feature_flags.h"
+#import "ios/chrome/browser/shared/public/features/features.h"
+#import "ios/chrome/browser/ui/browser_container/edit_menu_app_interface.h"
 #import "ios/chrome/test/earl_grey/chrome_actions.h"
 #import "ios/chrome/test/earl_grey/chrome_actions_app_interface.h"
 #import "ios/chrome/test/earl_grey/chrome_earl_grey.h"
@@ -27,10 +28,6 @@
 #import "net/test/embedded_test_server/http_request.h"
 #import "net/test/embedded_test_server/http_response.h"
 #import "net/test/embedded_test_server/request_handler_util.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 using shared_highlighting::TextFragment;
 
@@ -101,7 +98,7 @@ NSArray<NSString*>* GetMarkedText() {
   GREYAssertTrue(result.is_list(), @"Result is not iterable.");
 
   NSMutableArray<NSString*>* marked_texts = [NSMutableArray array];
-  for (const auto& element : result.GetListDeprecated()) {
+  for (const auto& element : result.GetList()) {
     if (element.is_string()) {
       NSString* ns_element = base::SysUTF8ToNSString(element.GetString());
       [marked_texts addObject:ns_element];
@@ -218,14 +215,9 @@ std::unique_ptr<net::test_server::HttpResponse> LoadHtml(
 }
 
 // Tests that a link can be generated for a simple text selection.
-// TODO(crbug.com/1232101) Re-enable flakey tests.
-- (void)DISABLE_testGenerateLinkForSimpleText {
-  // TODO(crbug.com/1149603): Re-enable this test on iPad once presenting
-  // popovers work.
-  if ([ChromeEarlGrey isIPadIdiom]) {
-    EARL_GREY_TEST_DISABLED(@"Test is disabled on iPad.");
-  }
-
+// crbug.com/1403831 Disable flaky test
+- (void)DISABLED_testGenerateLinkForSimpleText {
+  [ChromeEarlGrey clearPasteboard];
   GURL pageURL = self.testServer->GetURL(kTestURL);
   [ChromeEarlGrey loadURL:pageURL];
   [ChromeEarlGrey waitForWebStateContainingText:kTestPageTextSample];
@@ -270,22 +262,16 @@ std::unique_ptr<net::test_server::HttpResponse> LoadHtml(
 
   // Assert the values stored in the pasteboard. Lower-casing the expected
   // GURL as that is what the JS library is doing.
-  std::vector<TextFragment> fragments{
-      TextFragment(base::ToLowerASCII(kToBeSelectedText))};
-  GURL expectedGURL =
-      shared_highlighting::AppendFragmentDirectives(pageURL, fragments);
+  NSString* stringURL = base::SysUTF8ToNSString(pageURL.spec());
+  NSString* fragment = @"#:~:text=bar-,";
+  NSString* selectedText =
+      base::SysUTF8ToNSString(base::ToLowerASCII(kToBeSelectedText));
 
-  // Wait for the value to be in the pasteboard.
-  GREYCondition* getPasteboardValue = [GREYCondition
-      conditionWithName:@"Could not get an expected URL from the pasteboard."
-                  block:^{
-                    return expectedGURL == [ChromeEarlGrey pasteboardURL];
-                  }];
+  NSString* expectedURL =
+      [NSString stringWithFormat:@"%@%@%@", stringURL, fragment, selectedText];
+  [ChromeEarlGrey verifyStringCopied:expectedURL];
 
-  GREYAssert(
-      [getPasteboardValue
-          waitWithTimeout:base::test::ios::kWaitForActionTimeout.InSecondsF()],
-      @"Could not get expected URL from pasteboard.");
+  [ChromeEarlGrey clearPasteboard];
 }
 
 - (void)testBadSelectionDisablesGenerateLink {
@@ -300,13 +286,9 @@ std::unique_ptr<net::test_server::HttpResponse> LoadHtml(
                             selectorWithElementID:kSimpleTextElementId],
                         true)];
 
-  // TODO(crbug.com/1233056): Xcode 13 gesture recognizers seem to get stuck
-  // when the user longs presses on plain text.  For this test, disable EG
-  // synchronization.
-  ScopedSynchronizationDisabler disabler;
-  id<GREYMatcher> copyButton =
-      chrome_test_util::SystemSelectionCalloutCopyButton();
-  [ChromeEarlGrey waitForSufficientlyVisibleElementWithMatcher:copyButton];
+  [ChromeEarlGrey
+      waitForSufficientlyVisibleElementWithMatcher:[EditMenuAppInterface
+                                                       editMenuMatcher]];
 
   // Make sure the Link to Text button is not visible.
   [[EarlGrey selectElementWithMatcher:

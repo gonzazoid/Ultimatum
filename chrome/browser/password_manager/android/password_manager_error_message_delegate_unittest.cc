@@ -79,8 +79,6 @@ PasswordManagerErrorMessageDelegateTest::
   helper_bridge_ = mock_helper_bridge.get();
   delegate_ = std::make_unique<PasswordManagerErrorMessageDelegate>(
       std::move(mock_helper_bridge));
-  test_pref_service_.registry()->RegisterIntegerPref(
-      password_manager::prefs::kTimesUPMAuthErrorShown, 0);
 }
 
 void PasswordManagerErrorMessageDelegateTest::SetUp() {
@@ -97,7 +95,8 @@ void PasswordManagerErrorMessageDelegateTest::TearDown() {
 void PasswordManagerErrorMessageDelegateTest::DisplayMessageAndExpectEnqueued(
     password_manager::ErrorMessageFlowType flow_type,
     password_manager::PasswordStoreBackendErrorType error_type) {
-  EXPECT_CALL(*helper_bridge_, ShouldShowErrorUI()).WillOnce(Return(true));
+  EXPECT_CALL(*helper_bridge_, ShouldShowErrorUI(web_contents()))
+      .WillOnce(Return(true));
   EXPECT_CALL(message_dispatcher_bridge_, EnqueueMessage);
   delegate_->MaybeDisplayErrorMessage(web_contents(), pref_service(), flow_type,
                                       error_type,
@@ -207,7 +206,8 @@ TEST_F(PasswordManagerErrorMessageDelegateTest, MetricOnAutodismissTimer) {
 
 TEST_F(PasswordManagerErrorMessageDelegateTest,
        NotDisplayedWhenCondiditonNotMet) {
-  EXPECT_CALL(*helper_bridge(), ShouldShowErrorUI()).WillOnce(Return(false));
+  EXPECT_CALL(*helper_bridge(), ShouldShowErrorUI(web_contents()))
+      .WillOnce(Return(false));
   EXPECT_CALL(*message_dispatcher_bridge(), EnqueueMessage).Times(0);
   EXPECT_CALL(*mock_dismissal_callback(), Run);
   delegate()->MaybeDisplayErrorMessage(
@@ -218,35 +218,10 @@ TEST_F(PasswordManagerErrorMessageDelegateTest,
 }
 
 TEST_F(PasswordManagerErrorMessageDelegateTest, DisplaySavesTimestamp) {
-  EXPECT_CALL(*helper_bridge(), SaveErrorUIShownTimestamp());
+  EXPECT_CALL(*helper_bridge(), SaveErrorUIShownTimestamp(web_contents()));
   DisplayMessageAndExpectEnqueued(
       password_manager::ErrorMessageFlowType::kSaveFlow,
       password_manager::PasswordStoreBackendErrorType::kAuthErrorResolvable);
-}
-
-TEST_F(PasswordManagerErrorMessageDelegateTest, DisplayIncreasesCounter) {
-  ASSERT_EQ(0, pref_service()->GetInteger(
-                   password_manager::prefs::kTimesUPMAuthErrorShown));
-  DisplayMessageAndExpectEnqueued(
-      password_manager::ErrorMessageFlowType::kSaveFlow,
-      password_manager::PasswordStoreBackendErrorType::kAuthErrorResolvable);
-  EXPECT_EQ(1, pref_service()->GetInteger(
-                   password_manager::prefs::kTimesUPMAuthErrorShown));
-}
-
-TEST_F(PasswordManagerErrorMessageDelegateTest,
-       CounterDoesntIncreaseWhenShouldntShow) {
-  ASSERT_EQ(0, pref_service()->GetInteger(
-                   password_manager::prefs::kTimesUPMAuthErrorShown));
-  EXPECT_CALL(*helper_bridge(), ShouldShowErrorUI()).WillOnce(Return(false));
-  EXPECT_CALL(*message_dispatcher_bridge(), EnqueueMessage).Times(0);
-  delegate()->MaybeDisplayErrorMessage(
-      web_contents(), pref_service(),
-      password_manager::ErrorMessageFlowType::kSaveFlow,
-      password_manager::PasswordStoreBackendErrorType::kAuthErrorResolvable,
-      base::DoNothing());
-  EXPECT_EQ(0, pref_service()->GetInteger(
-                   password_manager::prefs::kTimesUPMAuthErrorShown));
 }
 
 TEST_F(PasswordManagerErrorMessageDelegateTest,

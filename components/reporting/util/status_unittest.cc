@@ -4,11 +4,10 @@
 
 #include "components/reporting/util/status.h"
 
-#include <stdio.h>
 #include <utility>
 
 #include "base/logging.h"
-#include "components/reporting/util/status.pb.h"
+#include "components/reporting/proto/synced/status.pb.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -34,13 +33,6 @@ TEST(Status, OkConstructorIgnoresMessage) {
   Status status(error::OK, "msg");
   EXPECT_TRUE(status.ok());
   EXPECT_EQ("OK", status.ToString());
-}
-
-TEST(Status, CheckOK) {
-  Status status;
-  CHECK_OK(status);
-  CHECK_OK(status) << "Failed";
-  DCHECK_OK(status) << "Failed";
 }
 
 TEST(Status, ErrorMessage) {

@@ -7,13 +7,13 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <utility>
 #include <vector>
 
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/raw_ref.h"
-#include "base/memory/ref_counted.h"
 #include "base/observer_list.h"
 #include "base/scoped_observation.h"
 #include "base/time/time.h"
@@ -28,10 +28,8 @@
 #include "chrome/browser/ui/views/tabs/tab_drag_context.h"
 #include "chrome/browser/ui/views/tabs/tab_group_header.h"
 #include "chrome/browser/ui/views/tabs/tab_group_views.h"
-#include "chrome/browser/ui/views/tabs/tab_layout_state.h"
 #include "chrome/browser/ui/views/tabs/tab_slot_controller.h"
 #include "components/tab_groups/tab_group_visual_data.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/base/pointer/touch_ui_controller.h"
 #include "ui/gfx/color_palette.h"
@@ -46,6 +44,7 @@ class Tab;
 class TabHoverCardController;
 class TabStripController;
 class TabStripObserver;
+class TabStyle;
 
 namespace gfx {
 class Rect;
@@ -74,8 +73,9 @@ class TabStrip : public views::View,
                  public TabContainerController,
                  public TabSlotController,
                  public BrowserRootView::DropTarget {
+  METADATA_HEADER(TabStrip, views::View)
+
  public:
-  METADATA_HEADER(TabStrip);
   explicit TabStrip(std::unique_ptr<TabStripController> controller);
   TabStrip(const TabStrip&) = delete;
   TabStrip& operator=(const TabStrip&) = delete;
@@ -88,14 +88,12 @@ class TabStrip : public views::View,
 
   // Returns the size needed for the specified views. This is invoked during
   // drag and drop to calculate offsets and positioning.
-  static int GetSizeNeededForViews(const std::vector<TabSlotView*>& views);
+  static int GetSizeNeededForViews(
+      const std::vector<raw_ptr<TabSlotView, VectorExperimental>>& views);
 
   // Add and remove observers to changes within this TabStrip.
   void AddObserver(TabStripObserver* observer);
   void RemoveObserver(TabStripObserver* observer);
-
-  // Called when the colors of the frame change.
-  void FrameColorsChanged();
 
   // Sets |background_offset_| and schedules a paint.
   void SetBackgroundOffset(int background_offset);
@@ -122,7 +120,7 @@ class TabStrip : public views::View,
   // Returns information about tabs at given indices.
   bool IsTabCrashed(int tab_index) const;
   bool TabHasNetworkError(int tab_index) const;
-  absl::optional<TabAlertState> GetTabAlertState(int tab_index) const;
+  std::optional<TabAlertState> GetTabAlertState(int tab_index) const;
 
   // Updates the loading animations displayed by tabs in the tabstrip to the
   // next frame. The |elapsed_time| parameter is shared between tabs and used to
@@ -147,7 +145,7 @@ class TabStrip : public views::View,
   void SetTabData(int model_index, TabRendererData data);
 
   // Sets the tab group at the specified model index.
-  void AddTabToGroup(absl::optional<tab_groups::TabGroupId> group,
+  void AddTabToGroup(std::optional<tab_groups::TabGroupId> group,
                      int model_index);
 
   // Creates the views associated with a newly-created tab group.
@@ -170,7 +168,6 @@ class TabStrip : public views::View,
                              const tab_groups::TabGroupVisualData* new_visuals);
 
   // Handles animations relating to toggling the collapsed state of a group.
-  // TODO(1295774): Maybe move this functionality into TabContainer.
   void ToggleTabGroup(const tab_groups::TabGroupId& group,
                       bool is_collapsing,
                       ToggleTabGroupCollapsedStateOrigin origin);
@@ -197,8 +194,9 @@ class TabStrip : public views::View,
   }
 
   // Returns the index of the specified view in the model coordinate system, or
-  // -1 if view is closing or not a tab.
-  int GetModelIndexOf(const TabSlotView* view) const;
+  // std::nullopt if view is closing not a tab, or is not in this tabstrip.
+  // TODO(tbergquist): This should return an optional<size_t>.
+  std::optional<int> GetModelIndexOf(const TabSlotView* view) const;
 
   // Gets the number of Tabs in the tab strip.
   int GetTabCount() const;
@@ -222,7 +220,7 @@ class TabStrip : public views::View,
   void StopAnimating(bool layout);
 
   // Returns the index of the focused tab, if any.
-  absl::optional<int> GetFocusedTabIndex() const;
+  std::optional<int> GetFocusedTabIndex() const;
 
   // Returns a view for anchoring an in-product help promo. |index_hint|
   // indicates at which tab the promo should be displayed, but is not
@@ -234,15 +232,19 @@ class TabStrip : public views::View,
 
   // TabContainerController:
   bool IsValidModelIndex(int index) const override;
-  int GetActiveIndex() const override;
+  std::optional<int> GetActiveIndex() const override;
   int NumPinnedTabsInModel() const override;
-  void OnDropIndexUpdate(int index, bool drop_before) override;
-  absl::optional<int> GetFirstTabInGroup(
+  void OnDropIndexUpdate(std::optional<int> index, bool drop_before) override;
+  std::optional<int> GetFirstTabInGroup(
       const tab_groups::TabGroupId& group) const override;
   gfx::Range ListTabsInGroup(
       const tab_groups::TabGroupId& group) const override;
   bool CanExtendDragHandle() const override;
   const views::View* GetTabClosingModeMouseWatcherHostView() const override;
+  bool IsAnimatingInTabStrip() const override;
+  void UpdateAnimationTarget(
+      TabSlotView* tab_slot_view,
+      gfx::Rect target_bounds_in_tab_container_coords) override;
 
   // TabContainerController AND TabSlotController:
   bool IsGroupCollapsed(const tab_groups::TabGroupId& group) const override;
@@ -260,7 +262,7 @@ class TabStrip : public views::View,
   void ShiftTabPrevious(Tab* tab) override;
   void MoveTabFirst(Tab* tab) override;
   void MoveTabLast(Tab* tab) override;
-  bool ToggleTabGroupCollapsedState(
+  void ToggleTabGroupCollapsedState(
       const tab_groups::TabGroupId group,
       ToggleTabGroupCollapsedStateOrigin origin =
           ToggleTabGroupCollapsedStateOrigin::kImplicitAction) override;
@@ -278,7 +280,8 @@ class TabStrip : public views::View,
       TabSlotView* source,
       const ui::LocatedEvent& event,
       const ui::ListSelectionModel& original_selection) override;
-  void ContinueDrag(views::View* view, const ui::LocatedEvent& event) override;
+  [[nodiscard]] Liveness ContinueDrag(views::View* view,
+                                      const ui::LocatedEvent& event) override;
   bool EndDrag(EndDragReason reason) override;
   Tab* GetTabAt(const gfx::Point& point) override;
   const Tab* GetAdjacentTab(const Tab* tab, int offset) override;
@@ -291,14 +294,10 @@ class TabStrip : public views::View,
   int GetStrokeThickness() const override;
   bool CanPaintThrobberToLayer() const override;
   bool HasVisibleBackgroundTabShapes() const override;
-  bool ShouldPaintAsActiveFrame() const override;
   SkColor GetTabSeparatorColor() const override;
-  SkColor GetTabBackgroundColor(
-      TabActive active,
-      BrowserFrameActiveState active_state) const override;
   SkColor GetTabForegroundColor(TabActive active) const override;
   std::u16string GetAccessibleTabName(const Tab* tab) const override;
-  absl::optional<int> GetCustomBackgroundId(
+  std::optional<int> GetCustomBackgroundId(
       BrowserFrameActiveState active_state) const override;
   float GetHoverOpacityForTab(float range_parameter) const override;
   float GetHoverOpacityForRadialHighlight() const override;
@@ -395,6 +394,7 @@ class TabStrip : public views::View,
   void OnMouseExited(const ui::MouseEvent& event) override;
   void AddedToWidget() override;
   void RemovedFromWidget() override;
+  void OnThemeChanged() override;
 
   // ui::EventHandler:
   void OnGestureEvent(ui::GestureEvent* event) override;
@@ -424,10 +424,10 @@ class TabStrip : public views::View,
 
   std::unique_ptr<TabHoverCardController> hover_card_controller_;
 
-  raw_ref<TabDragContextImpl, DanglingUntriaged> drag_context_;
+  raw_ref<TabDragContextImpl, AcrossTasksDanglingUntriaged> drag_context_;
 
   // The View parent for the tabs and the various group views.
-  raw_ref<TabContainer, DanglingUntriaged> tab_container_;
+  raw_ref<TabContainer, AcrossTasksDanglingUntriaged> tab_container_;
 
   // The background offset used by inactive tabs to match the frame image.
   int background_offset_ = 0;
@@ -436,10 +436,29 @@ class TabStrip : public views::View,
   gfx::Point last_mouse_move_location_;
 
   // Used to track the time needed to create a new tab from the new tab button.
-  absl::optional<base::TimeTicks> new_tab_button_pressed_start_time_;
+  std::optional<base::TimeTicks> new_tab_button_pressed_start_time_;
 
   // Used for seek time metrics from the time the mouse enters the tabstrip.
-  absl::optional<base::TimeTicks> mouse_entered_tabstrip_time_;
+  std::optional<base::TimeTicks> mouse_entered_tabstrip_time_;
+
+  // Used to track if the time from mouse entered to tab switch has been
+  // reported.
+  bool has_reported_time_mouse_entered_to_switch_ = false;
+
+  // Used to track if the tab dragging metrics have been reported.
+  bool has_reported_tab_drag_metrics_ = false;
+
+  // Used to track the time of last tab dragging.
+  std::optional<base::TimeTicks> last_tab_drag_time_;
+
+  // Used to count the number of tab dragging in the last 30 minutes and 5
+  // minutes.
+  int tab_drag_count_30min_ = 0;
+  int tab_drag_count_5min_ = 0;
+  std::unique_ptr<base::RepeatingTimer> tab_drag_count_timer_30min_;
+  std::unique_ptr<base::RepeatingTimer> tab_drag_count_timer_5min_;
+
+  const raw_ptr<const TabStyle> style_;
 
   // Number of mouse moves.
   int mouse_move_count_ = 0;
@@ -465,6 +484,8 @@ class TabStrip : public views::View,
   float radial_highlight_opacity_ = 1.0f;
 
   SkColor separator_color_ = gfx::kPlaceholderColor;
+
+  base::CallbackListSubscription paint_as_active_subscription_;
 
   const base::CallbackListSubscription subscription_ =
       ui::TouchUiController::Get()->RegisterCallback(

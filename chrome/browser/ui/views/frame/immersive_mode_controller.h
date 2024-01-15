@@ -121,6 +121,15 @@ class ImmersiveModeController {
   virtual void OnWidgetActivationChanged(views::Widget* widget,
                                          bool active) = 0;
 
+  // Returns the minimum y-offset for the web contents. Used on Mac to prevent
+  // find results from hiding under the top chrome when the find bar is in use.
+  virtual int GetMinimumContentOffset() const = 0;
+
+  // Returns an offset to add to the vertical origin of the infobar while
+  // laying out the browser view. Used on Mac to ensure the infobar stays
+  // visible when revealing topchrome.
+  virtual int GetExtraInfobarOffset() const = 0;
+
   virtual void AddObserver(Observer* observer);
   virtual void RemoveObserver(Observer* observer);
 

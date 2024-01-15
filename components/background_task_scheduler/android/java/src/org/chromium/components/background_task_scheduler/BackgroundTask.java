@@ -4,6 +4,7 @@
 
 package org.chromium.components.background_task_scheduler;
 
+import android.app.Notification;
 import android.content.Context;
 
 import androidx.annotation.AnyThread;
@@ -18,8 +19,10 @@ import androidx.annotation.MainThread;
  */
 public interface BackgroundTask {
     /**
-     * Callback to invoke whenever background processing has finished after first returning true
-     * from {@link #onStartTask(Context, TaskParameters, TaskFinishedCallback)}.
+     * Callback to the {@link BackgroundTaskScheduler} mainly used to
+     * 1. Invoke whenever background processing has finished after first returning true
+     *    from {@link #onStartTask(Context, TaskParameters, TaskFinishedCallback)}.
+     * 2. Associate a notification to the task's lifecycle in case of user-initiated tasks.
      */
     interface TaskFinishedCallback {
         /**
@@ -30,6 +33,18 @@ public interface BackgroundTask {
          */
         @AnyThread
         void taskFinished(boolean needsReschedule);
+
+        /**
+         * Callback to provide the {@link BackgroundTaskScheduler} with a notification to post and
+         * tie to this task's lifecycle. This is only required for those user-initiated tasks. If
+         * chrome does not call this method for a required notification within 10 seconds after
+         * {@link #onStartTask(Context, TaskParameters, TaskFinishedCallback)} is called, the system
+         * will trigger an ANR and stop this job.
+         * @param notificationId The ID for this notification.
+         * @param notification The notification to be displayed.
+         */
+        @AnyThread
+        void setNotification(int notificationId, Notification notification);
     }
 
     /**
@@ -72,14 +87,4 @@ public interface BackgroundTask {
      */
     @MainThread
     boolean onStopTask(Context context, TaskParameters taskParameters);
-
-    /**
-     * Callback from {@link BackgroundTaskScheduler} when it detects system conditions requiring
-     * rescheduling, e.g. Google Play Services update or OS upgrade. The task should schedule itself
-     * again with appropriate parameters.
-     *
-     * @param context the current context.
-     */
-    @MainThread
-    void reschedule(Context context);
 }

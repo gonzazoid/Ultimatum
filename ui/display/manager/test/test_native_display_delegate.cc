@@ -4,32 +4,31 @@
 
 #include "ui/display/manager/test/test_native_display_delegate.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/strcat.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "ui/display/manager/test/action_logger.h"
 #include "ui/display/types/display_mode.h"
 #include "ui/display/types/display_snapshot.h"
 #include "ui/display/types/native_display_observer.h"
 #include "ui/gfx/geometry/size.h"
 
-namespace display {
-namespace test {
+namespace display::test {
 
 std::string GetModesetFlag(uint32_t flag) {
   std::string flags_str;
   if (flag & kTestModeset)
-    flags_str = base::StrCat({flags_str, kTestModesetStr, ", "});
+    flags_str = base::StrCat({flags_str, kTestModesetStr, ","});
   if (flag & kCommitModeset)
-    flags_str = base::StrCat({flags_str, kCommitModesetStr, ", "});
+    flags_str = base::StrCat({flags_str, kCommitModesetStr, ","});
   if (flag & kSeamlessModeset)
-    flags_str = base::StrCat({flags_str, kSeamlessModesetStr, ", "});
+    flags_str = base::StrCat({flags_str, kSeamlessModesetStr, ","});
 
-  // Remove trailing comma and space.
+  // Remove trailing comma.
   if (!flags_str.empty())
-    flags_str.resize(flags_str.size() - 2);
+    flags_str.resize(flags_str.size() - 1);
   return flags_str;
 }
 
@@ -43,6 +42,22 @@ TestNativeDisplayDelegate::TestNativeDisplayDelegate(ActionLogger* log)
       log_(log) {}
 
 TestNativeDisplayDelegate::~TestNativeDisplayDelegate() = default;
+
+const std::vector<raw_ptr<DisplaySnapshot, VectorExperimental>>
+TestNativeDisplayDelegate::GetOutputs() const {
+  std::vector<raw_ptr<DisplaySnapshot, VectorExperimental>> outputs;
+  for (const auto& output : outputs_) {
+    outputs.push_back(output.get());
+  }
+  return outputs;
+}
+
+void TestNativeDisplayDelegate::SetOutputs(
+    std::vector<std::unique_ptr<DisplaySnapshot>> outputs) {
+  std::move(begin(outputs_), end(outputs_),
+            std::back_inserter(cached_outputs_));
+  outputs_ = std::move(outputs);
+}
 
 void TestNativeDisplayDelegate::Initialize() {
   log_->AppendAction(kInit);
@@ -64,12 +79,13 @@ void TestNativeDisplayDelegate::GetDisplays(GetDisplaysCallback callback) {
   // This mimics the behavior of Ozone DRM when new display state arrives.
   for (NativeDisplayObserver& observer : observers_)
     observer.OnDisplaySnapshotsInvalidated();
+  cached_outputs_.clear();
 
   if (run_async_) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
-        FROM_HERE, base::BindOnce(std::move(callback), outputs_));
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE, base::BindOnce(std::move(callback), GetOutputs()));
   } else {
-    std::move(callback).Run(outputs_);
+    std::move(callback).Run(GetOutputs());
   }
 }
 
@@ -141,17 +157,31 @@ void TestNativeDisplayDelegate::Configure(
   log_->AppendAction(config_outcome);
 
   if (run_async_) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(callback), config_success));
   } else {
     std::move(callback).Run(config_success);
   }
 }
 
+void TestNativeDisplayDelegate::SetHdcpKeyProp(
+    int64_t display_id,
+    const std::string& key,
+    SetHdcpKeyPropCallback callback) {
+  log_->AppendAction(GetSetHdcpKeyPropAction(display_id, true));
+
+  if (run_async_) {
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE, base::BindOnce(std::move(callback), true));
+  } else {
+    std::move(callback).Run(true);
+  }
+}
+
 void TestNativeDisplayDelegate::GetHDCPState(const DisplaySnapshot& output,
                                              GetHDCPStateCallback callback) {
   if (run_async_) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(callback), get_hdcp_expectation_,
                                   hdcp_state_, content_protection_method_));
   } else {
@@ -166,7 +196,7 @@ void TestNativeDisplayDelegate::SetHDCPState(
     ContentProtectionMethod protection_method,
     SetHDCPStateCallback callback) {
   if (run_async_) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(&TestNativeDisplayDelegate::DoSetHDCPState,
                        base::Unretained(this), output.display_id(), state,
@@ -208,6 +238,24 @@ void TestNativeDisplayDelegate::DoSetHDCPState(
   std::move(callback).Run(set_hdcp_expectation_);
 }
 
+void TestNativeDisplayDelegate::SetColorCalibration(
+    int64_t display_id,
+    const ColorCalibration& calibration) {
+  log_->AppendAction(SetColorCalibrationAction(display_id, calibration));
+}
+
+void TestNativeDisplayDelegate::SetColorTemperatureAdjustment(
+    int64_t display_id,
+    const ColorTemperatureAdjustment& cta) {
+  log_->AppendAction(SetColorTemperatureAdjustmentAction(display_id, cta));
+}
+
+void TestNativeDisplayDelegate::SetGammaAdjustment(
+    int64_t display_id,
+    const GammaAdjustment& gamma) {
+  log_->AppendAction(SetGammaAdjustmentAction(display_id, gamma));
+}
+
 bool TestNativeDisplayDelegate::SetColorMatrix(
     int64_t display_id,
     const std::vector<float>& color_matrix) {
@@ -217,10 +265,9 @@ bool TestNativeDisplayDelegate::SetColorMatrix(
 
 bool TestNativeDisplayDelegate::SetGammaCorrection(
     int64_t display_id,
-    const std::vector<display::GammaRampRGBEntry>& degamma_lut,
-    const std::vector<display::GammaRampRGBEntry>& gamma_lut) {
-  log_->AppendAction(
-      SetGammaCorrectionAction(display_id, degamma_lut, gamma_lut));
+    const display::GammaCurve& degamma,
+    const display::GammaCurve& gamma) {
+  log_->AppendAction(SetGammaCorrectionAction(display_id, degamma, gamma));
   return true;
 }
 
@@ -245,5 +292,4 @@ FakeDisplayController* TestNativeDisplayDelegate::GetFakeDisplayController() {
   return nullptr;
 }
 
-}  // namespace test
-}  // namespace display
+}  // namespace display::test

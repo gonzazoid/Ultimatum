@@ -8,28 +8,18 @@
 #include <memory>
 
 #include "base/compiler_specific.h"
-#include "base/memory/raw_ptr.h"
 #include "components/omnibox/browser/autocomplete_controller.h"
-#include "components/omnibox/browser/autocomplete_match.h"
+#include "components/omnibox/browser/omnibox_edit_model.h"
+#include "components/prefs/pref_change_registrar.h"
 
-struct AutocompleteMatch;
-class AutocompleteResult;
-class InstantController;
 class OmniboxClient;
-class OmniboxEditModel;
+class OmniboxView;
 
-// This class controls the various services that can modify the content
-// for the omnibox, including AutocompleteController and InstantController. It
-// is responsible of updating the omnibox content.
-// TODO(beaudoin): Keep on expanding this class so that OmniboxEditModel no
-//     longer needs to hold any reference to AutocompleteController. Also make
-//     this the point of contact between InstantController and OmniboxEditModel.
-//     As the refactor progresses, keep the class comment up to date to
-//     precisely explain what this class is doing.
+// This class controls the various services that can modify the content of the
+// omnibox, including `AutocompleteController` and `OmniboxEditModel`.
 class OmniboxController : public AutocompleteController::Observer {
  public:
-  OmniboxController(OmniboxEditModel* omnibox_edit_model,
-                    OmniboxClient* client);
+  OmniboxController(OmniboxView* view, std::unique_ptr<OmniboxClient> client);
   ~OmniboxController() override;
   OmniboxController(const OmniboxController&) = delete;
   OmniboxController& operator=(const OmniboxController&) = delete;
@@ -37,49 +27,81 @@ class OmniboxController : public AutocompleteController::Observer {
   // The |current_url| field of input is only set for mobile ports.
   void StartAutocomplete(const AutocompleteInput& input) const;
 
+  // Cancels any pending asynchronous query. If `clear_result` is true, will
+  // also erase the result set.
+  void StopAutocomplete(bool clear_result) const;
+
+  // Starts an autocomplete prefetch request so that zero-prefix providers can
+  // optionally start a prefetch request to warm up the their underlying
+  // service(s) and/or optionally cache their otherwise async response.
+  // Virtual for testing.
+  virtual void StartZeroSuggestPrefetch();
+
   // AutocompleteController::Observer:
   void OnResultChanged(AutocompleteController* controller,
                        bool default_match_changed) override;
+
+  OmniboxClient* client() { return client_.get(); }
+
+  OmniboxEditModel* edit_model() { return edit_model_.get(); }
+
+  void SetEditModelForTesting(std::unique_ptr<OmniboxEditModel> edit_model) {
+    edit_model_ = std::move(edit_model);
+  }
 
   AutocompleteController* autocomplete_controller() {
     return autocomplete_controller_.get();
   }
 
-  void set_autocomplete_controller(
+  const AutocompleteController* autocomplete_controller() const {
+    return autocomplete_controller_.get();
+  }
+
+  void SetAutocompleteControllerForTesting(
       std::unique_ptr<AutocompleteController> autocomplete_controller) {
     autocomplete_controller_ = std::move(autocomplete_controller);
   }
 
-  // Set |current_match_| to an invalid value, indicating that we do not yet
-  // have a valid match for the current text in the omnibox.
-  void InvalidateCurrentMatch();
-
-  const AutocompleteMatch& current_match() const { return current_match_; }
-
   // Turns off keyword mode for the current match.
   void ClearPopupKeywordMode() const;
 
-  const AutocompleteResult& result() const {
-    return autocomplete_controller_->result();
-  }
+  // Returns the header string associated with `suggestion_group_id`, or an
+  // empty string if `suggestion_group_id` is not found in the results.
+  std::u16string GetHeaderForSuggestionGroup(
+      omnibox::GroupId suggestion_group_id) const;
+
+  // Returns whether or not `suggestion_group_id` should be collapsed in the UI.
+  // This method takes into account both the user's stored prefs as well as
+  // the server-provided visibility hint. Returns false if `suggestion_group_id`
+  // is not found in the results.
+  bool IsSuggestionGroupHidden(omnibox::GroupId suggestion_group_id) const;
+
+  // Sets the UI collapsed/expanded state of the `suggestion_group_id` in the
+  // user's stored prefs based on the value of `hidden`. Does nothing if
+  // `suggestion_group_id` is not found in the results.
+  void SetSuggestionGroupHidden(omnibox::GroupId suggestion_group_id,
+                                bool hidden) const;
 
  private:
   // Stores the bitmap in the OmniboxPopupModel.
   void SetRichSuggestionBitmap(int result_index, const SkBitmap& bitmap);
 
-  // Weak, it owns us.
-  // TODO(beaudoin): Consider defining a delegate to ease unit testing.
-  raw_ptr<OmniboxEditModel> omnibox_edit_model_;
+  // Called when the prefs for the visibility of groups changes.
+  void OnSuggestionGroupVisibilityPrefChanged();
 
-  raw_ptr<OmniboxClient> client_;
+  std::unique_ptr<OmniboxClient> client_;
 
   std::unique_ptr<AutocompleteController> autocomplete_controller_;
 
-  // TODO(beaudoin): This AutocompleteMatch is used to let the OmniboxEditModel
-  // know what it should display. Not every field is required for that purpose,
-  // but the ones specifically needed are unclear. We should therefore spend
-  // some time to extract these fields and use a tighter structure here.
-  AutocompleteMatch current_match_;
+  // `edit_model_` may indirectly contains raw pointers (e.g.
+  // `edit_model_->current_match_->provider`) into `AutocompleteProvider`
+  // objects owned by `autocomplete_controller_`.  Because of this (per
+  // docs/dangling_ptr_guide.md) the `edit_model_` field needs to be declared
+  // *after* the `autocomplete_controller_` field.
+  std::unique_ptr<OmniboxEditModel> edit_model_;
+
+  // Observes changes to the prefs for the visibility of groups.
+  PrefChangeRegistrar pref_change_registrar_;
 
   base::WeakPtrFactory<OmniboxController> weak_ptr_factory_{this};
 };

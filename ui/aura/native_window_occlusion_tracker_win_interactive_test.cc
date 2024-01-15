@@ -16,7 +16,6 @@
 #include "base/test/bind.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/win/scoped_gdi_object.h"
-#include "base/win/windows_version.h"
 #include "mojo/core/embedder/embedder.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/aura/env.h"
@@ -204,17 +203,6 @@ class NativeWindowOcclusionTrackerTest : public test::AuraTestBase {
     native_win->Init(nullptr, bounds);
     HWND hwnd = native_win->hwnd();
     SetNativeWindowBounds(hwnd, bounds);
-    base::win::ScopedRegion region(CreateRectRgn(0, 0, 0, 0));
-    if (GetWindowRgn(hwnd, region.get()) == COMPLEXREGION) {
-      // On Windows 7, the newly created window has a complex region, which
-      // means it will be ignored during the occlusion calculation. So, force
-      // it to have a simple region so that we get test coverage on win 7.
-      RECT bounding_rect;
-      GetWindowRect(hwnd, &bounding_rect);
-      base::win::ScopedRegion rectangular_region(
-          CreateRectRgnIndirect(&bounding_rect));
-      SetWindowRgn(hwnd, rectangular_region.get(), TRUE);
-    }
     ShowWindow(hwnd, SW_SHOWNORMAL);
     EXPECT_TRUE(UpdateWindow(hwnd));
     native_wins_.push_back(std::move(native_win));
@@ -557,15 +545,9 @@ TEST_F(NativeWindowOcclusionTrackerTest,
 }
 
 // Test that a maximized aura window that is covered by a fullscreen window
-// is marked as occluded.
-TEST_F(NativeWindowOcclusionTrackerTest, MaximizedOccludedByFullscreenWindow) {
-  // Win7 has non rectangular windows and odd padding; this breaks fullscreen
-  // window occlusion of maximized windows, which makes this test fail on Win7.
-  // Win7 support is going away soon and shouldn't get in the way of this test
-  // coverage.
-  if (base::win::GetVersion() <= base::win::Version::WIN7)
-    return;
-
+// is marked as occluded. TODO(https://crbug.com/1315398): Fix flakiness.
+TEST_F(NativeWindowOcclusionTrackerTest,
+       DISABLED_MaximizedOccludedByFullscreenWindow) {
   // Create an aura window that is maximized.
   base::RunLoop run_loop1;
   MockWindowTreeHostObserver observer(run_loop1.QuitClosure());

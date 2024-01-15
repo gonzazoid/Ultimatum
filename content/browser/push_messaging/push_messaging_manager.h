@@ -10,6 +10,7 @@
 #include <memory>
 #include <string>
 
+#include "base/memory/raw_ref.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "content/public/browser/browser_thread.h"
@@ -80,7 +81,7 @@ class PushMessagingManager : public blink::mojom::PushMessaging {
   void DidRegister(RegisterData data,
                    const std::string& push_subscription_id,
                    const GURL& endpoint,
-                   const absl::optional<base::Time>& expiration_time,
+                   const std::optional<base::Time>& expiration_time,
                    const std::vector<uint8_t>& p256dh,
                    const std::vector<uint8_t>& auth,
                    blink::mojom::PushRegistrationStatus status);
@@ -100,7 +101,7 @@ class PushMessagingManager : public blink::mojom::PushMessaging {
   void PersistRegistration(RegisterData data,
                            const std::string& push_subscription_id,
                            const GURL& endpoint,
-                           const absl::optional<base::Time>& expiration_time,
+                           const std::optional<base::Time>& expiration_time,
                            const std::vector<uint8_t>& p256dh,
                            const std::vector<uint8_t>& auth,
                            blink::mojom::PushRegistrationStatus status);
@@ -108,7 +109,7 @@ class PushMessagingManager : public blink::mojom::PushMessaging {
   void DidPersistRegistration(
       RegisterData data,
       const GURL& endpoint,
-      const absl::optional<base::Time>& expiration_time,
+      const std::optional<base::Time>& expiration_time,
       const std::vector<uint8_t>& p256dh,
       const std::vector<uint8_t>& auth,
       blink::mojom::PushRegistrationStatus push_registration_status,
@@ -116,13 +117,12 @@ class PushMessagingManager : public blink::mojom::PushMessaging {
 
   void SendSubscriptionError(RegisterData data,
                              blink::mojom::PushRegistrationStatus status);
-  void SendSubscriptionSuccess(
-      RegisterData data,
-      blink::mojom::PushRegistrationStatus status,
-      const GURL& endpoint,
-      const absl::optional<base::Time>& expiration_time,
-      const std::vector<uint8_t>& p256dh,
-      const std::vector<uint8_t>& auth);
+  void SendSubscriptionSuccess(RegisterData data,
+                               blink::mojom::PushRegistrationStatus status,
+                               const GURL& endpoint,
+                               const std::optional<base::Time>& expiration_time,
+                               const std::vector<uint8_t>& p256dh,
+                               const std::vector<uint8_t>& auth);
 
   void GetSubscriptionDidUnsubscribe(
       GetSubscriptionCallback callback,
@@ -136,7 +136,7 @@ class PushMessagingManager : public blink::mojom::PushMessaging {
       const std::string& application_server_key,
       bool is_valid,
       const GURL& endpoint,
-      const absl::optional<base::Time>& expiration_time,
+      const std::optional<base::Time>& expiration_time,
       const std::vector<uint8_t>& p256dh,
       const std::vector<uint8_t>& auth);
 
@@ -166,7 +166,7 @@ class PushMessagingManager : public blink::mojom::PushMessaging {
 
   PushMessagingService* GetService();
 
-  RenderProcessHost& render_process_host_;
+  const raw_ref<RenderProcessHost> render_process_host_;
 
   // Will be ChildProcessHost::kInvalidUniqueID in requests from Service Worker.
   const int render_frame_id_;

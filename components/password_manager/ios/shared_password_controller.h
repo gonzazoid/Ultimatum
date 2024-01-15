@@ -7,15 +7,21 @@
 
 #import <Foundation/Foundation.h>
 
+#import "components/autofill/ios/browser/autofill_manager_observer_bridge.h"
 #import "components/autofill/ios/browser/form_suggestion_provider.h"
 #import "components/autofill/ios/form_util/form_activity_observer.h"
 #include "components/password_manager/core/browser/password_manager.h"
+#import "components/password_manager/ios/password_account_storage_notice_handler.h"
 #import "components/password_manager/ios/password_controller_driver_helper.h"
 #import "components/password_manager/ios/password_form_helper.h"
 #import "components/password_manager/ios/password_generation_provider.h"
 #import "components/password_manager/ios/password_manager_driver_bridge.h"
 #import "components/password_manager/ios/password_suggestion_helper.h"
+#import "ios/web/public/js_messaging/web_frames_manager_observer_bridge.h"
 #import "ios/web/public/web_state_observer_bridge.h"
+
+// The string ' ••••••••' appended to the username in the suggestion.
+extern NSString* const kPasswordFormSuggestionSuffix;
 
 namespace password_manager {
 class PasswordManagerClient;
@@ -25,7 +31,9 @@ class PasswordManagerClient;
 @class SharedPasswordController;
 
 // Protocol to define methods that must be implemented by the embedder.
-@protocol SharedPasswordControllerDelegate <NSObject>
+@protocol
+    SharedPasswordControllerDelegate <NSObject,
+                                      PasswordsAccountStorageNoticeHandler>
 
 // The PasswordManagerClient owned by the delegate.
 @property(nonatomic, readonly)
@@ -44,12 +52,27 @@ class PasswordManagerClient;
 - (void)sharedPasswordController:(SharedPasswordController*)controller
              didAcceptSuggestion:(FormSuggestion*)suggestion;
 
+// Adds event listeners to fields which are associated with a bottom sheet.
+// When the focus event occurs on these fields, a bottom sheet will be shown
+// instead of the keyboard, allowing the user to fill the fields by tapping
+// one of the suggestions.
+- (void)attachListenersForBottomSheet:
+            (const std::vector<autofill::FieldRendererId>&)rendererIds
+                           forFrameId:(const std::string&)frameId;
+
+// Detach listeners to fields which are associated with a bottom sheet.
+// When there are no more credentials, we want to show the user the keyboard
+// instead of the bottom sheet.
+- (void)detachListenersForBottomSheet:(const std::string&)frameId;
+
 @end
 
 // Per-tab shared password controller. Handles parsing forms, loading
 // suggestions, filling forms, and generating passwords.
 @interface SharedPasswordController
-    : NSObject <CRWWebStateObserver,
+    : NSObject <CRWWebFramesManagerObserver,
+                CRWWebStateObserver,
+                AutofillManagerObserver,
                 FormActivityObserver,
                 FormSuggestionProvider,
                 PasswordFormHelperDelegate,

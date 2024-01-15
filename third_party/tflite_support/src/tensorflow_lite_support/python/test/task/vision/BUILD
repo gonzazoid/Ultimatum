@@ -12,6 +12,7 @@ py_test(
         "//tensorflow_lite_support/cc/test/testdata/task/vision:test_images",
         "//tensorflow_lite_support/cc/test/testdata/task/vision:test_models",
     ],
+    tags = ["not_run:arm"],
     deps = [
         # build rule placeholder: numpy dep,
         # build rule placeholder: tensorflow dep,
@@ -75,6 +76,7 @@ py_test(
         "//tensorflow_lite_support/cc/test/testdata/task/vision:test_indices",
         "//tensorflow_lite_support/cc/test/testdata/task/vision:test_models",
     ],
+    tags = ["not_run:arm"],
     deps = [
         # build rule placeholder: tensorflow dep,
         "//tensorflow_lite_support/python/task/core:base_options",
@@ -96,6 +98,7 @@ py_test(
         "//tensorflow_lite_support/cc/test/testdata/task/vision:test_images",
         "//tensorflow_lite_support/cc/test/testdata/task/vision:test_models",
     ],
+    tags = ["not_run:arm"],
     deps = [
         # build rule placeholder: tensorflow dep,
         "//tensorflow_lite_support/python/task/core:base_options",

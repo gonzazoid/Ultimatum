@@ -6,6 +6,7 @@
 #define CHROMEOS_ASH_COMPONENTS_MEMORY_MEMORY_H_
 
 #include <cstddef>
+#include <optional>
 
 #include "base/component_export.h"
 #include "base/feature_list.h"
@@ -14,36 +15,14 @@
 #include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace ash {
-
-// MlockMaping will attempt to mlock a mapping using the newer mlock2 syscall
-// if available using the MLOCK_ONFAULT option. This will allow pages to be
-// locked as they are faulted in. If the running kernel does not support
-// mlock2, it was added in kernel 4.4, it will fall back to mlock where it
-// will lock all pages immediately by faulting them in.
-COMPONENT_EXPORT(ASH_MEMORY) bool MlockMapping(void* addr, size_t length);
-
-// A feature which controls the locking the main program text.
-BASE_DECLARE_FEATURE(kCrOSLockMainProgramText);
-
-// The maximum number of bytes that the browser will attempt to lock, -1 will
-// disable the max size and is the default option.
-extern const base::FeatureParam<int> kCrOSLockMainProgramTextMaxSize;
-
-// Lock main program text segments fully.
-COMPONENT_EXPORT(ASH_MEMORY) void LockMainProgramText();
-
-// It should be called when some memory configuration is changed.
-COMPONENT_EXPORT(ASH_MEMORY) void UpdateMemoryParameters();
 
 namespace memory {
 
 class COMPONENT_EXPORT(ASH_MEMORY) ZramMetrics
     : public base::RefCountedThreadSafe<ZramMetrics> {
  public:
-  static constexpr base::TimeDelta kZramMetricsPeriod = base::Seconds(10);
   // Max number of pages should be the max system memory divided by the smallest
   // possible page size, or: 16GB / 4096
   static constexpr uint64_t kMaxNumPages =
@@ -54,11 +33,11 @@ class COMPONENT_EXPORT(ASH_MEMORY) ZramMetrics
   ZramMetrics(const ZramMetrics&) = delete;
   ZramMetrics& operator=(const ZramMetrics&) = delete;
 
-  // Begins data collection.
-  void Start();
+  // Must be called on a background sequence. Updates the cached instance of
+  // orig_data_size_mb_. Returns false if there's an error.
+  bool CollectEvents();
 
-  // Ends data collection.
-  void Stop();
+  uint32_t orig_data_size_mb() const { return orig_data_size_mb_; }
 
  private:
   // Friend it so it can call our private destructor.
@@ -66,19 +45,16 @@ class COMPONENT_EXPORT(ASH_MEMORY) ZramMetrics
 
   ~ZramMetrics();
 
-  void StartOnSequence();
-  void StopOnSequence();
-  void CollectEvents();
-
-  base::TimeDelta period_;
-  base::RepeatingTimer timer_;
-
   // Last-time old-pages stats for delta computation
   // (only for kernel v5.15+), using |has_old_huge_pages_| to determine
   // whether |old_huge_pages_| and |old_huge_pages_since_| are valid.
   bool has_old_huge_pages_ = false;
   uint64_t old_huge_pages_ = 0;
   uint64_t old_huge_pages_since_ = 0;
+
+  // A cached instance of OrigDataSizeMB. Only valid if CollectEvents returns
+  // true.
+  uint32_t orig_data_size_mb_ = 0;
 
   // The background task runner where the collection takes place.
   scoped_refptr<base::SequencedTaskRunner> runner_;
@@ -107,10 +83,10 @@ struct ZramMmStat {
   uint32_t pages_compacted;
   // The number of incompressible pages.
   // Start supporting from v4.19.
-  absl::optional<uint64_t> huge_pages;
+  std::optional<uint64_t> huge_pages;
   // The number of huge pages since zram set up.
   // Start supporting from v5.15.
-  absl::optional<uint64_t> huge_pages_since;
+  std::optional<uint64_t> huge_pages_since;
 };
 
 struct ZramBdStat {

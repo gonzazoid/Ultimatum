@@ -14,7 +14,6 @@
 #include "base/strings/stringprintf.h"
 #include "chrome/browser/media/router/discovery/access_code/access_code_cast_sink_service_factory.h"
 #include "chrome/browser/media/router/discovery/access_code/access_code_media_sink_util.h"
-#include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/signin/identity_manager_factory.h"
 #include "chrome/browser/sync/sync_service_factory.h"
 #include "components/access_code_cast/common/access_code_cast_metrics.h"
@@ -184,6 +183,7 @@ void AccessCodeCastHandler::AddSink(
           std::move(callback), AddSinkResultCode::UNKNOWN_ERROR);
   add_sink_callback_ = std::move(base::BindOnce(&AddSinkMetricsCallback))
                            .Then(std::move(callback_with_default_invoker));
+  add_sink_request_time_ = base::Time::Now();
 
   if (!media_route_starter_) {
     std::move(add_sink_callback_).Run(AddSinkResultCode::UNKNOWN_ERROR);
@@ -232,7 +232,7 @@ void AccessCodeCastHandler::CheckForDiscoveryCompletion() {
 
 void AccessCodeCastHandler::OnSinkAddedResult(
     access_code_cast::mojom::AddSinkResultCode add_sink_result,
-    absl::optional<MediaSink::Id> sink_id) {
+    std::optional<MediaSink::Id> sink_id) {
   DCHECK(sink_id || add_sink_result != AddSinkResultCode::OK);
 
   if (add_sink_result == AddSinkResultCode::ACCESS_CODE_NOT_FOUND)
@@ -314,7 +314,7 @@ void AccessCodeCastHandler::CastToSink(CastToSinkCallback callback) {
     return;
   }
 
-  current_route_request_ = absl::make_optional(*params->request);
+  current_route_request_ = std::make_optional(*params->request);
 
   if (HasActiveRoute(sink_id_.value())) {
     GetMediaRouter()->GetLogger()->LogInfo(
@@ -367,6 +367,8 @@ void AccessCodeCastHandler::OnRouteResponse(MediaCastMode cast_mode,
     return;
   }
 
+  AccessCodeCastMetrics::RecordNewDeviceConnectDuration(base::Time::Now() -
+                                                        add_sink_request_time_);
   base::UmaHistogramSparse("MediaRouter.Source.CastingSource", cast_mode);
   std::move(dialog_callback).Run(RouteRequestResultCode::OK);
 }

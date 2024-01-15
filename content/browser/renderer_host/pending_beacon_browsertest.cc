@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 
 #include <type_traits>
+#include <unordered_map>
 
 #include "base/feature_list.h"
 #include "base/location.h"
@@ -18,6 +19,7 @@
 #include "content/browser/web_contents/web_contents_impl.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/permission_controller_delegate.h"
+#include "content/public/browser/permission_request_description.h"
 #include "content/public/browser/permission_result.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/test/browser_test.h"
@@ -34,6 +36,17 @@
 
 namespace content {
 
+namespace {
+
+void PermissionRequestResponseCallbackWrapper(
+    base::OnceCallback<void(blink::mojom::PermissionStatus)> callback,
+    const std::vector<blink::mojom::PermissionStatus>& vector) {
+  DCHECK_EQ(vector.size(), 1ul);
+  std::move(callback).Run(vector.at(0));
+}
+
+}  // namespace
+
 MATCHER(IsFrameVisible,
         base::StrCat({"Frame is", negation ? " not" : "", " visible"})) {
   return arg->GetVisibilityState() == PageVisibilityState::kVisible;
@@ -47,14 +60,21 @@ MATCHER(IsFrameHidden,
 class PendingBeaconTimeoutBrowserTestBase : public ContentBrowserTest {
  protected:
   using FeaturesType = std::vector<base::test::FeatureRefAndParams>;
+  using DisabledFeaturesType = std::vector<base::test::FeatureRef>;
 
   void SetUp() override {
-    feature_list_.InitWithFeaturesAndParameters(GetEnabledFeatures(), {});
+    feature_list_.InitWithFeaturesAndParameters(GetEnabledFeatures(),
+                                                GetDisabledFeatures());
     ContentBrowserTest::SetUp();
   }
   virtual const FeaturesType& GetEnabledFeatures() = 0;
+  virtual const DisabledFeaturesType& GetDisabledFeatures() {
+    static const DisabledFeaturesType disabled_features = {};
+    return disabled_features;
+  }
 
   void SetUpOnMainThread() override {
+    histogram_tester_ = std::make_unique<base::HistogramTester>();
     CheckPermissionStatus(blink::PermissionType::BACKGROUND_SYNC,
                           blink::mojom::PermissionStatus::GRANTED);
     // TODO(crbug.com/1293679): Update ContentBrowserTest to support overriding
@@ -74,7 +94,9 @@ class PendingBeaconTimeoutBrowserTestBase : public ContentBrowserTest {
     https_test_server_->RegisterDefaultHandler(base::BindRepeating(
         &PendingBeaconTimeoutBrowserTestBase::HandleBeaconRequest,
         base::Unretained(this)));
-
+  }
+  void TearDownOnMainThread() override {
+    histogram_tester_.reset();
     ContentBrowserTest::SetUpOnMainThread();
   }
 
@@ -130,6 +152,10 @@ class PendingBeaconTimeoutBrowserTestBase : public ContentBrowserTest {
       base::AutoLock auto_lock(count_lock_);
       waiting_run_loop_.reset();
     }
+
+    // Tries to wait such that browser can process the responses from http
+    // server. (No guarantee)
+    base::RunLoop().RunUntilIdle();
   }
 
   WebContents* web_contents() const { return shell()->web_contents(); }
@@ -168,9 +194,72 @@ class PendingBeaconTimeoutBrowserTestBase : public ContentBrowserTest {
 
     base::MockOnceCallback<void(blink::mojom::PermissionStatus)> callback;
     EXPECT_CALL(callback, Run(permission_status));
-    permission_controller_delegate->RequestPermission(
-        permission_type, current_frame_host(), GURL("127.0.0.1"),
-        /*user_gesture=*/true, callback.Get());
+    permission_controller_delegate->RequestPermissions(
+        current_frame_host(),
+        PermissionRequestDescription(permission_type,
+                                     /*user_gesture=*/true, GURL("127.0.0.1")),
+        base::BindOnce(&PermissionRequestResponseCallbackWrapper,
+                       callback.Get()));
+  }
+
+  const base::HistogramTester& histogram_tester() { return *histogram_tester_; }
+
+  void ExpectActions(
+      const std::unordered_map<PendingBeaconHost::Action, size_t>& actions) {
+    for (const auto& [action, count] : actions) {
+      histogram_tester().ExpectBucketCount("PendingBeaconHost.Action", action,
+                                           count);
+    }
+  }
+  void ExpectBatchActions(
+      const std::unordered_map<PendingBeaconHost::BatchAction, size_t>&
+          batch_actions) {
+    for (const auto& [batch_action, count] : batch_actions) {
+      histogram_tester().ExpectBucketCount("PendingBeaconHost.BatchAction",
+                                           batch_action, count);
+    }
+  }
+  void ExpectBatchAction(const PendingBeaconHost::BatchAction& batch_action,
+                         size_t count) {
+    for (auto e = PendingBeaconHost::BatchAction::kNone;
+         e != PendingBeaconHost::BatchAction::kMaxValue;
+         e = PendingBeaconHost::BatchAction(static_cast<int>(e) + 1)) {
+      const size_t expected_count = e == batch_action ? count : 0;
+      histogram_tester().ExpectBucketCount("PendingBeaconHost.BatchAction", e,
+                                           expected_count);
+    }
+  }
+  void ExpectNoBatchAction() {
+    ExpectBatchActions(
+        {{PendingBeaconHost::BatchAction::kSendAllOnNavigation, 0},
+         {PendingBeaconHost::BatchAction::kSendAllOnProcessExit, 0},
+         {PendingBeaconHost::BatchAction::kSendAllOnHostDestroy, 0}});
+  }
+  // Expect the given `count` number of beacons are sent by `batch_action`.
+  void ExpectSendByBrowserBatchAction(
+      const PendingBeaconHost::BatchAction& batch_action,
+      size_t count) {
+    ExpectActions({{PendingBeaconHost::Action::kCreate, count},
+                   // Expect to not be sent by single beacon's sendNow().
+                   {PendingBeaconHost::Action::kSend, 0},
+                   {PendingBeaconHost::Action::kNetworkSend, count},
+                   // No guarantee RFH can be alive when receiving response.
+                   // {PendingBeaconHost::Action::kNetworkComplete, count},
+                   {PendingBeaconHost::Action::kDelete, 0}});
+    ExpectBatchAction(batch_action, count);
+  }
+  // Expect the given `count` number of beacons are sent by a `sendNow() request
+  // from renderer. Note that `sendNow()` can be triggered either by JS call or
+  // by timers for `backgroundTimeout`/`timeout`.
+  void ExpectSendByRendererAction(size_t count) {
+    ExpectActions({{PendingBeaconHost::Action::kCreate, count},
+                   // Expect to be sent by beacon's sendNow() from renderer.
+                   {PendingBeaconHost::Action::kSend, count},
+                   {PendingBeaconHost::Action::kNetworkSend, count},
+                   // No guarantee RFH can be alive when receiving response.
+                   // {PendingBeaconHost::Action::kNetworkComplete, count},
+                   {PendingBeaconHost::Action::kDelete, 0}});
+    ExpectNoBatchAction();
   }
 
   static constexpr char kBeaconEndpoint[] = "/pending_beacon/timeout";
@@ -224,6 +313,8 @@ class PendingBeaconTimeoutBrowserTestBase : public ContentBrowserTest {
 
   std::unique_ptr<RenderFrameHostWrapper> current_document_ = nullptr;
   std::unique_ptr<RenderFrameHostWrapper> previous_document_ = nullptr;
+
+  std::unique_ptr<base::HistogramTester> histogram_tester_;
 };
 
 class PendingBeaconWithBackForwardCacheMetricsBrowserTestBase
@@ -233,13 +324,11 @@ class PendingBeaconWithBackForwardCacheMetricsBrowserTestBase
   void SetUpOnMainThread() override {
     // TestAutoSetUkmRecorder's constructor requires a sequenced context.
     ukm_recorder_ = std::make_unique<ukm::TestAutoSetUkmRecorder>();
-    histogram_tester_ = std::make_unique<base::HistogramTester>();
     PendingBeaconTimeoutBrowserTestBase::SetUpOnMainThread();
   }
 
   void TearDownOnMainThread() override {
     ukm_recorder_.reset();
-    histogram_tester_.reset();
     PendingBeaconTimeoutBrowserTestBase::TearDownOnMainThread();
   }
 
@@ -249,34 +338,43 @@ class PendingBeaconWithBackForwardCacheMetricsBrowserTestBase
   }
   // `BackForwardCacheMetricsTestMatcher` implementation.
   const base::HistogramTester& histogram_tester() override {
-    return *histogram_tester_;
+    return PendingBeaconTimeoutBrowserTestBase::histogram_tester();
   }
 
  private:
   std::unique_ptr<ukm::TestAutoSetUkmRecorder> ukm_recorder_;
-  std::unique_ptr<base::HistogramTester> histogram_tester_;
 };
 
 struct TestTimeoutType {
   std::string test_case_name;
   int32_t timeout;
+
+  // Returns true if `timeout` is too short for the test browser to complete a
+  // navigation.
+  // Empirically picking 1 second here.
+  bool IsShortTimeout() const { return timeout < 1000 && timeout >= 0; }
 };
 
 // Tests to cover PendingBeacon's backgroundTimeout & timeout behaviors when
 // BackForwardCache is off.
-// Disables BackForwardCache by setting its cache size to 0 such that a page is
-// discarded right away on user navigating to another page. And on page
-// discard, pending beacons should be sent out no matter what value its
-// backgroundTimeout/timeout is.
+//
+// Disables BackForwardCache such that a page is discarded right away on user
+// navigating to another page.
+// And on page discard, pending beacons should be sent out no matter what value
+// its backgroundTimeout/timeout is.
 class PendingBeaconTimeoutNoBackForwardCacheBrowserTest
     : public PendingBeaconTimeoutBrowserTestBase,
       public testing::WithParamInterface<TestTimeoutType> {
  protected:
   const FeaturesType& GetEnabledFeatures() override {
     static const FeaturesType enabled_features = {
-        {blink::features::kPendingBeaconAPI, {{"send_on_navigation", "true"}}},
-        {features::kBackForwardCache, {{"cache_size", "0"}}}};
+        {blink::features::kPendingBeaconAPI, {{"send_on_navigation", "true"}}}};
     return enabled_features;
+  }
+  const DisabledFeaturesType& GetDisabledFeatures() override {
+    static const DisabledFeaturesType disabled_features = {
+        features::kBackForwardCache};
+    return disabled_features;
   }
 };
 
@@ -287,7 +385,7 @@ INSTANTIATE_TEST_SUITE_P(
         {"LongTimeout", 600000},
         {"OneSecondTimeout", 1000},
         {"ShortTimeout", 1},
-        {"NoTimeout", 0},
+        {"ZeroTimeout", 0},
         {"DefaultTimeout", -1},        // default.
         {"NegativeTimeout", -600000},  // behaves the same as default.
     }),
@@ -311,10 +409,14 @@ IN_PROC_BROWSER_TEST_P(PendingBeaconTimeoutNoBackForwardCacheBrowserTest,
   // The beacon should have been sent out after the page is gone.
   WaitForAllBeaconsSent(total_beacon);
   EXPECT_EQ(sent_beacon_count(), total_beacon);
+  // As "send_on_navigation" is on, beacons are not send on page discard.
+  // TODO(crbug.com/1378833): Update to `kSendAllOnHostDestroy` once completed.
+  ExpectSendByBrowserBatchAction(
+      PendingBeaconHost::BatchAction::kSendAllOnNavigation, total_beacon);
 }
 
 IN_PROC_BROWSER_TEST_P(PendingBeaconTimeoutNoBackForwardCacheBrowserTest,
-                       SendOnPageDiscardNotUsingTimeout) {
+                       SendOnPageDiscardNotUsingLongerTimeout) {
   const size_t total_beacon = 1;
   RegisterBeaconRequestMonitor(total_beacon);
 
@@ -329,6 +431,28 @@ IN_PROC_BROWSER_TEST_P(PendingBeaconTimeoutNoBackForwardCacheBrowserTest,
   // The beacon should have been sent out after the page is gone.
   WaitForAllBeaconsSent(total_beacon);
   EXPECT_EQ(sent_beacon_count(), total_beacon);
+  if (GetParam().IsShortTimeout()) {
+    // If timeout is too short, beacon sending **may** complete before
+    // navigating away from page A, which means it won't be triggered by the
+    // "send on page discard" batch action but by the sendNow() from renderer.
+    ExpectActions({{PendingBeaconHost::Action::kCreate, total_beacon},
+                   // No guarantee to be sent by single beacon's sendNow().
+                   // {PendingBeaconHost::Action::kSend, 0},
+                   {PendingBeaconHost::Action::kNetworkSend, total_beacon},
+                   // No guarantee RFH can be alive when receiving response.
+                   // {PendingBeaconHost::Action::kNetworkComplete, count},
+                   {PendingBeaconHost::Action::kDelete, 0}});
+    // No guarantee it won't be send on navigation.
+    ExpectBatchActions(
+        {{PendingBeaconHost::BatchAction::kSendAllOnProcessExit, 0},
+         {PendingBeaconHost::BatchAction::kSendAllOnHostDestroy, 0}});
+  } else {
+    // As "send_on_navigation" is on, beacons are not send on page discard.
+    // TODO(crbug.com/1378833): Update to `kSendAllOnHostDestroy` once
+    // completed.
+    ExpectSendByBrowserBatchAction(
+        PendingBeaconHost::BatchAction::kSendAllOnNavigation, total_beacon);
+  }
 }
 
 // Tests to cover PendingBeacon's backgroundTimeout behaviors.
@@ -345,8 +469,9 @@ class PendingBeaconBackgroundTimeoutBrowserTest
          {{"PendingBeaconMaxBackgroundTimeoutInMs", "60000"},
           // Don't force sending out beacons on pagehide.
           {"send_on_navigation", "false"}}},
-        {features::kBackForwardCache,
-         {{"TimeToLiveInBackForwardCacheInSeconds", "5"}}},
+        {features::kBackForwardCache, {{}}},
+        {features::kBackForwardCacheTimeToLiveControl,
+         {{"time_to_live_seconds", "5"}}},
         // Forces BFCache to work in low memory device.
         {features::kBackForwardCacheMemoryControls,
          {{"memory_threshold_for_back_forward_cache_in_mb", "0"}}}};
@@ -370,6 +495,8 @@ IN_PROC_BROWSER_TEST_F(PendingBeaconBackgroundTimeoutBrowserTest,
 
   WaitForAllBeaconsSent(total_beacon);
   EXPECT_EQ(sent_beacon_count(), total_beacon);
+  // Triggered by backgroundTimeout's 0s timer from renderer.
+  ExpectSendByRendererAction(total_beacon);
 }
 
 IN_PROC_BROWSER_TEST_F(PendingBeaconBackgroundTimeoutBrowserTest,
@@ -388,6 +515,8 @@ IN_PROC_BROWSER_TEST_F(PendingBeaconBackgroundTimeoutBrowserTest,
 
   WaitForAllBeaconsSent(total_beacon);
   EXPECT_EQ(sent_beacon_count(), total_beacon);
+  // Triggered by backgroundTimeout's timer from renderer.
+  ExpectSendByRendererAction(total_beacon);
 }
 
 // When backgroundTimeout is set, its timer resets every time when the page
@@ -431,7 +560,17 @@ IN_PROC_BROWSER_TEST_F(PendingBeaconBackgroundTimeoutBrowserTest,
   EXPECT_EQ(sent_beacon_count(), total_beacon);
 }
 
-IN_PROC_BROWSER_TEST_F(PendingBeaconBackgroundTimeoutBrowserTest,
+// TODO(crbug.com/1491942): This fails with the field trial testing config.
+class PendingBeaconBackgroundTimeoutBrowserTestNoTestingConfig
+    : public PendingBeaconBackgroundTimeoutBrowserTest {
+ public:
+  void SetUpCommandLine(base::CommandLine* command_line) override {
+    PendingBeaconBackgroundTimeoutBrowserTest::SetUpCommandLine(command_line);
+    command_line->AppendSwitch("disable-field-trial-config");
+  }
+};
+
+IN_PROC_BROWSER_TEST_F(PendingBeaconBackgroundTimeoutBrowserTestNoTestingConfig,
                        SendMultipleOnBackgroundTimeout) {
   const size_t total_beacon = 5;
   RegisterBeaconRequestMonitor(total_beacon);
@@ -448,6 +587,8 @@ IN_PROC_BROWSER_TEST_F(PendingBeaconBackgroundTimeoutBrowserTest,
 
   WaitForAllBeaconsSent(total_beacon);
   EXPECT_EQ(sent_beacon_count(), total_beacon);
+  // Triggered by backgroundTimeout's timer from renderer.
+  ExpectSendByRendererAction(total_beacon);
 }
 
 // Tests to cover PendingBeacon's timeout behaviors.
@@ -580,8 +721,9 @@ class PendingBeaconMutualTimeoutWithLongBackForwardCacheTTLBrowserTest
         {blink::features::kPendingBeaconAPI,
          {// Don't force sending out beacons on pagehide.
           {"send_on_navigation", "false"}}},
-        {features::kBackForwardCache,
-         {{"TimeToLiveInBackForwardCacheInSeconds", "60"}}},
+        {features::kBackForwardCache, {{}}},
+        {features::kBackForwardCacheTimeToLiveControl,
+         {{"time_to_live_seconds", "60"}}},
         // Forces BFCache to work in low memory device.
         {features::kBackForwardCacheMemoryControls,
          {{"memory_threshold_for_back_forward_cache_in_mb", "0"}}}};
@@ -672,8 +814,9 @@ class PendingBeaconSendOnPagehideBrowserTest
         {blink::features::kPendingBeaconAPI,
          {{"PendingBeaconMaxBackgroundTimeoutInMs", "60000"},
           {"send_on_navigation", "true"}}},
-        {features::kBackForwardCache,
-         {{"TimeToLiveInBackForwardCacheInSeconds", "60"}}},
+        {features::kBackForwardCache, {{}}},
+        {features::kBackForwardCacheTimeToLiveControl,
+         {{"time_to_live_seconds", "60"}}},
         // Forces BFCache to work in low memory device.
         {features::kBackForwardCacheMemoryControls,
          {{"memory_threshold_for_back_forward_cache_in_mb", "0"}}}};
@@ -793,8 +936,15 @@ class PendingBeaconRendererProcessExitBrowserTest
   }
 };
 
+#if BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_ANDROID)
+// Disabled due to failures on various Mac/Linux builders.
+// TODO(crbug.com/1382713) Reenable the test.
+#define MAYBE_SendAllOnProcessCrash DISABLED_SendAllOnProcessCrash
+#else
+#define MAYBE_SendAllOnProcessCrash SendAllOnProcessCrash
+#endif
 IN_PROC_BROWSER_TEST_F(PendingBeaconRendererProcessExitBrowserTest,
-                       SendAllOnProcessCrash) {
+                       MAYBE_SendAllOnProcessCrash) {
   const size_t total_beacon = 2;
   RegisterBeaconRequestMonitor(total_beacon);
 
@@ -822,6 +972,8 @@ IN_PROC_BROWSER_TEST_F(PendingBeaconRendererProcessExitBrowserTest,
 
   WaitForAllBeaconsSent(total_beacon);
   EXPECT_EQ(sent_beacon_count(), total_beacon);
+  ExpectSendByBrowserBatchAction(
+      PendingBeaconHost::BatchAction::kSendAllOnProcessExit, total_beacon);
 }
 
 }  // namespace content

@@ -17,6 +17,7 @@
 #include "components/viz/service/display_embedder/skia_output_device.h"
 #include "components/viz/service/viz_service_export.h"
 #include "gpu/command_buffer/common/mailbox.h"
+#include "gpu/config/gpu_driver_bug_workarounds.h"
 
 namespace viz {
 
@@ -41,15 +42,12 @@ class VIZ_SERVICE_EXPORT SkiaOutputDeviceBufferQueue : public SkiaOutputDevice {
 
   // SkiaOutputDevice overrides.
   void Submit(bool sync_cpu, base::OnceClosure callback) override;
-  void SwapBuffers(BufferPresentedCallback feedback,
-                   OutputSurfaceFrame frame) override;
-  void PostSubBuffer(const gfx::Rect& rect,
-                     BufferPresentedCallback feedback,
-                     OutputSurfaceFrame frame) override;
-  void CommitOverlayPlanes(BufferPresentedCallback feedback,
-                           OutputSurfaceFrame frame) override;
-  bool Reshape(const SkSurfaceCharacterization& characterization,
+  void Present(const absl::optional<gfx::Rect>& update_rect,
+               BufferPresentedCallback feedback,
+               OutputSurfaceFrame frame) override;
+  bool Reshape(const SkImageInfo& image_info,
                const gfx::ColorSpace& color_space,
+               int sample_count,
                float device_scale_factor,
                gfx::OverlayTransform transform) override;
   void SetViewportSize(const gfx::Size& viewport_size) override;
@@ -64,6 +62,9 @@ class VIZ_SERVICE_EXPORT SkiaOutputDeviceBufferQueue : public SkiaOutputDevice {
           OverlayProcessorInterface::OutputSurfaceOverlayPlane>& plane)
       override;
   void ScheduleOverlays(SkiaOutputSurface::OverlayList overlays) override;
+
+  // SkiaOutputDevice override
+  void SetVSyncDisplayID(int64_t display_id) override;
 
  private:
   friend class SkiaOutputDeviceBufferQueueTest;
@@ -89,9 +90,11 @@ class VIZ_SERVICE_EXPORT SkiaOutputDeviceBufferQueue : public SkiaOutputDevice {
   // Given an overlay mailbox, returns the corresponding OverlayData* from
   // |overlays_|. Inserts an OverlayData if mailbox is not in |overlays_|.
   OverlayData* GetOrCreateOverlayData(const gpu::Mailbox& mailbox,
+                                      bool is_root_render_pass,
                                       bool* is_existing = nullptr);
 
   std::unique_ptr<OutputPresenter> presenter_;
+  const gpu::GpuDriverBugWorkarounds workarounds_;
 
   scoped_refptr<gpu::SharedContextState> context_state_;
   const raw_ptr<gpu::SharedImageRepresentationFactory> representation_factory_;

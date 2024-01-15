@@ -3,7 +3,9 @@
 // found in the LICENSE file.
 
 #include "chrome/updater/win/installer/configuration.h"
+
 #include <shellapi.h>
+
 #include "chrome/updater/win/installer/string.h"
 
 namespace updater {
@@ -36,9 +38,9 @@ bool Configuration::Initialize(HMODULE module) {
 
 void Configuration::Clear() {
   if (args_) {
-    ::LocalFree(args_);
-    args_ = nullptr;
+    args_.reset();
   }
+
   command_line_ = nullptr;
   operation_ = INSTALL_PRODUCT;
   argument_count_ = 0;
@@ -51,19 +53,22 @@ void Configuration::Clear() {
 // not release it.
 bool Configuration::ParseCommandLine(const wchar_t* command_line) {
   command_line_ = command_line;
-  args_ = ::CommandLineToArgvW(command_line_, &argument_count_);
-  if (!args_)
+  args_.reset(::CommandLineToArgvW(command_line_, &argument_count_));
+  if (!args_) {
     return false;
-
-  for (int i = 1; i < argument_count_; ++i) {
-    if (0 == ::lstrcmpi(args_[i], L"--system-level"))
-      is_system_level_ = true;
-    else if (0 == ::lstrcmpi(args_[i], L"--cleanup"))
-      operation_ = CLEANUP;
   }
 
-  if (!is_system_level_)
+  for (int i = 1; i < argument_count_; ++i) {
+    if (0 == ::lstrcmpi(args_.get()[i], L"--system-level")) {
+      is_system_level_ = true;
+    } else if (0 == ::lstrcmpi(args_.get()[i], L"--cleanup")) {
+      operation_ = CLEANUP;
+    }
+  }
+
+  if (!is_system_level_) {
     is_system_level_ = GetGoogleUpdateIsMachineEnvVar();
+  }
 
   return true;
 }

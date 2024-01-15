@@ -4,23 +4,27 @@
 
 #include <stddef.h>
 #include <sys/types.h>
+#include <memory>
 
 #include "ash/constants/ash_features.h"
 #include "ash/constants/ash_pref_names.h"
+#include "base/check_deref.h"
 #include "base/command_line.h"
+#include "base/memory/raw_ptr.h"
 #include "base/test/scoped_feature_list.h"
+#include "base/time/time.h"
 #include "chrome/browser/ash/input_method/input_method_manager_impl.h"
 #include "chrome/browser/ash/login/login_manager_test.h"
 #include "chrome/browser/ash/login/test/login_manager_mixin.h"
 #include "chrome/browser/ash/login/ui/user_adding_screen.h"
+#include "chrome/browser/ash/login/users/fake_chrome_user_manager.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/ash/settings/cros_settings.h"
-#include "chrome/browser/ash/settings/scoped_testing_cros_settings.h"
-#include "chrome/browser/ash/settings/stub_cros_settings_provider.h"
 #include "chrome/browser/ash/system/fake_input_device_settings.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/common/pref_names.h"
 #include "components/prefs/pref_service.h"
+#include "components/user_manager/scoped_user_manager.h"
 #include "components/user_manager/user_manager.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/test_utils.h"
@@ -35,9 +39,6 @@ class PreferencesTest : public LoginManagerTest {
   PreferencesTest()
       : LoginManagerTest(), input_settings_(nullptr), keyboard_(nullptr) {
     login_mixin_.AppendRegularUsers(2);
-    scoped_testing_cros_settings_.device_settings()->Set(
-        kDeviceOwner,
-        base::Value(login_mixin_.users()[0].account_id.GetUserEmail()));
 
     feature_list_.InitAndEnableFeature(features::kAllowScrollSettings);
   }
@@ -45,14 +46,25 @@ class PreferencesTest : public LoginManagerTest {
   PreferencesTest(const PreferencesTest&) = delete;
   PreferencesTest& operator=(const PreferencesTest&) = delete;
 
+  void SetUp() override {
+    LoginManagerTest::SetUp();
+
+    auto user_manager = std::make_unique<ash::FakeChromeUserManager>();
+    scoped_user_manager_ = std::make_unique<user_manager::ScopedUserManager>(
+        std::move(user_manager));
+  }
+
   void SetUpOnMainThread() override {
     LoginManagerTest::SetUpOnMainThread();
     input_settings_ = system::InputDeviceSettings::Get()->GetFakeInterface();
     EXPECT_NE(nullptr, input_settings_);
-    keyboard_ = new input_method::FakeImeKeyboard();
-    static_cast<input_method::InputMethodManagerImpl*>(
-        input_method::InputMethodManager::Get())
-        ->SetImeKeyboardForTesting(keyboard_);
+
+    GetFakeUserManager().SetOwnerId(login_mixin_.users()[0].account_id);
+
+    // In browser_test environment, FakeImeKeyboard is used by
+    // InputMethodManager.
+    keyboard_ = static_cast<input_method::FakeImeKeyboard*>(
+        input_method::InputMethodManager::Get()->GetImeKeyboard());
   }
 
   // Sets set of preferences in given |prefs|. Value of preference depends on
@@ -61,23 +73,22 @@ class PreferencesTest : public LoginManagerTest {
   void SetPrefs(PrefService* prefs, bool variant) {
     prefs->SetBoolean(prefs::kMouseReverseScroll, variant);
     prefs->SetBoolean(prefs::kNaturalScroll, variant);
-    prefs->SetBoolean(::prefs::kTapToClickEnabled, variant);
-    prefs->SetBoolean(::prefs::kPrimaryMouseButtonRight, !variant);
-    prefs->SetBoolean(::prefs::kPrimaryPointingStickButtonRight, !variant);
-    prefs->SetBoolean(::prefs::kMouseAcceleration, variant);
-    prefs->SetBoolean(::prefs::kMouseScrollAcceleration, variant);
-    prefs->SetBoolean(::prefs::kPointingStickAcceleration, variant);
-    prefs->SetBoolean(::prefs::kTouchpadAcceleration, variant);
-    prefs->SetBoolean(::prefs::kTouchpadScrollAcceleration, variant);
-    prefs->SetBoolean(::prefs::kTouchpadHapticFeedback, variant);
-    prefs->SetBoolean(::prefs::kEnableTouchpadThreeFingerClick, !variant);
-    prefs->SetInteger(::prefs::kMouseSensitivity, !variant);
-    prefs->SetInteger(::prefs::kMouseScrollSensitivity, variant ? 1 : 4);
-    prefs->SetInteger(::prefs::kPointingStickSensitivity, !variant);
-    prefs->SetInteger(::prefs::kTouchpadSensitivity, variant);
-    prefs->SetInteger(::prefs::kTouchpadHapticClickSensitivity,
-                      variant ? 1 : 3);
-    prefs->SetInteger(::prefs::kTouchpadScrollSensitivity, variant ? 1 : 4);
+    prefs->SetBoolean(prefs::kTapToClickEnabled, variant);
+    prefs->SetBoolean(prefs::kPrimaryMouseButtonRight, !variant);
+    prefs->SetBoolean(prefs::kPrimaryPointingStickButtonRight, !variant);
+    prefs->SetBoolean(prefs::kMouseAcceleration, variant);
+    prefs->SetBoolean(prefs::kMouseScrollAcceleration, variant);
+    prefs->SetBoolean(prefs::kPointingStickAcceleration, variant);
+    prefs->SetBoolean(prefs::kTouchpadAcceleration, variant);
+    prefs->SetBoolean(prefs::kTouchpadScrollAcceleration, variant);
+    prefs->SetBoolean(prefs::kTouchpadHapticFeedback, variant);
+    prefs->SetBoolean(prefs::kEnableTouchpadThreeFingerClick, !variant);
+    prefs->SetInteger(prefs::kMouseSensitivity, !variant);
+    prefs->SetInteger(prefs::kMouseScrollSensitivity, variant ? 1 : 4);
+    prefs->SetInteger(prefs::kPointingStickSensitivity, !variant);
+    prefs->SetInteger(prefs::kTouchpadSensitivity, variant);
+    prefs->SetInteger(prefs::kTouchpadHapticClickSensitivity, variant ? 1 : 3);
+    prefs->SetInteger(prefs::kTouchpadScrollSensitivity, variant ? 1 : 4);
     prefs->SetBoolean(prefs::kXkbAutoRepeatEnabled, variant);
     prefs->SetInteger(prefs::kXkbAutoRepeatDelay, variant ? 100 : 500);
     prefs->SetInteger(prefs::kXkbAutoRepeatInterval, variant ? 1 : 4);
@@ -86,57 +97,62 @@ class PreferencesTest : public LoginManagerTest {
         variant ? "xkb:us::eng,xkb:us:dvorak:eng" : "xkb:us::eng,xkb:ru::rus");
   }
 
+  ash::FakeChromeUserManager& GetFakeUserManager() {
+    return CHECK_DEREF(static_cast<ash::FakeChromeUserManager*>(
+        user_manager::UserManager::Get()));
+  }
+
   void CheckSettingsCorrespondToPrefs(PrefService* prefs) {
-    EXPECT_EQ(prefs->GetBoolean(::prefs::kTapToClickEnabled),
+    EXPECT_EQ(prefs->GetBoolean(prefs::kTapToClickEnabled),
               input_settings_->current_touchpad_settings().GetTapToClick());
     EXPECT_EQ(
-        prefs->GetBoolean(::prefs::kPrimaryMouseButtonRight),
+        prefs->GetBoolean(prefs::kPrimaryMouseButtonRight),
         input_settings_->current_mouse_settings().GetPrimaryButtonRight());
-    EXPECT_EQ(prefs->GetBoolean(::prefs::kPrimaryPointingStickButtonRight),
+    EXPECT_EQ(prefs->GetBoolean(prefs::kPrimaryPointingStickButtonRight),
               input_settings_->current_pointing_stick_settings()
                   .GetPrimaryButtonRight());
     EXPECT_EQ(prefs->GetBoolean(prefs::kMouseReverseScroll),
               input_settings_->current_mouse_settings().GetReverseScroll());
-    EXPECT_EQ(prefs->GetBoolean(::prefs::kMouseAcceleration),
+    EXPECT_EQ(prefs->GetBoolean(prefs::kMouseAcceleration),
               input_settings_->current_mouse_settings().GetAcceleration());
     EXPECT_EQ(
-        prefs->GetBoolean(::prefs::kMouseScrollAcceleration),
+        prefs->GetBoolean(prefs::kMouseScrollAcceleration),
         input_settings_->current_mouse_settings().GetScrollAcceleration());
     EXPECT_EQ(
-        prefs->GetBoolean(::prefs::kPointingStickAcceleration),
+        prefs->GetBoolean(prefs::kPointingStickAcceleration),
         input_settings_->current_pointing_stick_settings().GetAcceleration());
-    EXPECT_EQ(prefs->GetBoolean(::prefs::kTouchpadAcceleration),
+    EXPECT_EQ(prefs->GetBoolean(prefs::kTouchpadAcceleration),
               input_settings_->current_touchpad_settings().GetAcceleration());
     EXPECT_EQ(
-        prefs->GetBoolean(::prefs::kTouchpadScrollAcceleration),
+        prefs->GetBoolean(prefs::kTouchpadScrollAcceleration),
         input_settings_->current_touchpad_settings().GetScrollAcceleration());
-    EXPECT_EQ(prefs->GetBoolean(::prefs::kTouchpadHapticFeedback),
+    EXPECT_EQ(prefs->GetBoolean(prefs::kTouchpadHapticFeedback),
               input_settings_->current_touchpad_settings().GetHapticFeedback());
     EXPECT_EQ(
-        prefs->GetBoolean(::prefs::kEnableTouchpadThreeFingerClick),
+        prefs->GetBoolean(prefs::kEnableTouchpadThreeFingerClick),
         input_settings_->current_touchpad_settings().GetThreeFingerClick());
-    EXPECT_EQ(prefs->GetInteger(::prefs::kMouseSensitivity),
+    EXPECT_EQ(prefs->GetInteger(prefs::kMouseSensitivity),
               input_settings_->current_mouse_settings().GetSensitivity());
-    EXPECT_EQ(prefs->GetInteger(::prefs::kMouseScrollSensitivity),
+    EXPECT_EQ(prefs->GetInteger(prefs::kMouseScrollSensitivity),
               input_settings_->current_mouse_settings().GetScrollSensitivity());
     EXPECT_EQ(
-        prefs->GetInteger(::prefs::kPointingStickSensitivity),
+        prefs->GetInteger(prefs::kPointingStickSensitivity),
         input_settings_->current_pointing_stick_settings().GetSensitivity());
-    EXPECT_EQ(prefs->GetInteger(::prefs::kTouchpadSensitivity),
+    EXPECT_EQ(prefs->GetInteger(prefs::kTouchpadSensitivity),
               input_settings_->current_touchpad_settings().GetSensitivity());
-    EXPECT_EQ(prefs->GetInteger(::prefs::kTouchpadHapticClickSensitivity),
+    EXPECT_EQ(prefs->GetInteger(prefs::kTouchpadHapticClickSensitivity),
               input_settings_->current_touchpad_settings()
                   .GetHapticClickSensitivity());
     EXPECT_EQ(
-        prefs->GetInteger(::prefs::kTouchpadScrollSensitivity),
+        prefs->GetInteger(prefs::kTouchpadScrollSensitivity),
         input_settings_->current_touchpad_settings().GetScrollSensitivity());
     EXPECT_EQ(prefs->GetBoolean(prefs::kXkbAutoRepeatEnabled),
-              keyboard_->auto_repeat_is_enabled_);
+              keyboard_->GetAutoRepeatEnabled());
     input_method::AutoRepeatRate rate = keyboard_->last_auto_repeat_rate_;
     EXPECT_EQ(prefs->GetInteger(prefs::kXkbAutoRepeatDelay),
-              (int)rate.initial_delay_in_ms);
+              rate.initial_delay.InMilliseconds());
     EXPECT_EQ(prefs->GetInteger(prefs::kXkbAutoRepeatInterval),
-              (int)rate.repeat_interval_in_ms);
+              rate.repeat_interval.InMilliseconds());
     EXPECT_EQ(prefs->GetString(::prefs::kLanguageCurrentInputMethod),
               input_method::InputMethodManager::Get()
                   ->GetActiveIMEState()
@@ -146,22 +162,22 @@ class PreferencesTest : public LoginManagerTest {
 
   void CheckLocalStateCorrespondsToPrefs(PrefService* prefs) {
     PrefService* local_state = g_browser_process->local_state();
-    EXPECT_EQ(local_state->GetBoolean(::prefs::kOwnerTapToClickEnabled),
-              prefs->GetBoolean(::prefs::kTapToClickEnabled));
-    EXPECT_EQ(local_state->GetBoolean(::prefs::kOwnerPrimaryMouseButtonRight),
-              prefs->GetBoolean(::prefs::kPrimaryMouseButtonRight));
+    EXPECT_EQ(local_state->GetBoolean(prefs::kOwnerTapToClickEnabled),
+              prefs->GetBoolean(prefs::kTapToClickEnabled));
+    EXPECT_EQ(local_state->GetBoolean(prefs::kOwnerPrimaryMouseButtonRight),
+              prefs->GetBoolean(prefs::kPrimaryMouseButtonRight));
     EXPECT_EQ(
-        local_state->GetBoolean(::prefs::kOwnerPrimaryPointingStickButtonRight),
-        prefs->GetBoolean(::prefs::kPrimaryPointingStickButtonRight));
+        local_state->GetBoolean(prefs::kOwnerPrimaryPointingStickButtonRight),
+        prefs->GetBoolean(prefs::kPrimaryPointingStickButtonRight));
   }
 
   LoginManagerMixin login_mixin_{&mixin_host_};
-  ScopedTestingCrosSettings scoped_testing_cros_settings_;
 
  private:
   base::test::ScopedFeatureList feature_list_;
-  system::InputDeviceSettings::FakeInterface* input_settings_;
-  input_method::FakeImeKeyboard* keyboard_;
+  raw_ptr<system::InputDeviceSettings::FakeInterface> input_settings_;
+  raw_ptr<input_method::FakeImeKeyboard, DanglingUntriaged> keyboard_;
+  std::unique_ptr<user_manager::ScopedUserManager> scoped_user_manager_;
 };
 
 IN_PROC_BROWSER_TEST_F(PreferencesTest, MultiProfiles) {
@@ -195,7 +211,7 @@ IN_PROC_BROWSER_TEST_F(PreferencesTest, MultiProfiles) {
 
   // Check that changing prefs of the active user doesn't affect prefs of the
   // inactive user.
-  base::Value prefs_backup =
+  base::Value::Dict prefs_backup =
       prefs1->GetPreferenceValues(PrefService::INCLUDE_DEFAULTS);
   SetPrefs(prefs2, false);
   CheckSettingsCorrespondToPrefs(prefs2);
@@ -222,11 +238,11 @@ IN_PROC_BROWSER_TEST_F(PreferencesTest, MultiProfiles) {
   // state prefs and vice versa.
   EXPECT_EQ(user_manager->GetOwnerAccountId(), users[0].account_id);
   CheckLocalStateCorrespondsToPrefs(prefs1);
-  prefs2->SetBoolean(::prefs::kTapToClickEnabled,
-                     !prefs1->GetBoolean(::prefs::kTapToClickEnabled));
+  prefs2->SetBoolean(prefs::kTapToClickEnabled,
+                     !prefs1->GetBoolean(prefs::kTapToClickEnabled));
   CheckLocalStateCorrespondsToPrefs(prefs1);
-  prefs1->SetBoolean(::prefs::kTapToClickEnabled,
-                     !prefs1->GetBoolean(::prefs::kTapToClickEnabled));
+  prefs1->SetBoolean(prefs::kTapToClickEnabled,
+                     !prefs1->GetBoolean(prefs::kTapToClickEnabled));
   CheckLocalStateCorrespondsToPrefs(prefs1);
 
   // Switch user back.

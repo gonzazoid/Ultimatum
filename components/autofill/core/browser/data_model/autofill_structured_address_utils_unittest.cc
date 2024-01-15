@@ -16,7 +16,6 @@
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace autofill {
-namespace structured_address {
 
 // Element-wise comparison operator.
 bool operator==(const AddressToken& lhs, const AddressToken& rhs) {
@@ -36,7 +35,7 @@ TEST(AutofillStructuredAddressUtils, TestParseValueByRegularExpression) {
   std::string regex = kFirstMiddleLastRe;
   std::string value = "first middle1 middle2 middle3 last";
 
-  absl::optional<base::flat_map<std::string, std::string>> result_map;
+  std::optional<base::flat_map<std::string, std::string>> result_map;
 
   result_map = ParseValueByRegularExpression(value, regex);
 
@@ -185,12 +184,13 @@ TEST(AutofillStructuredAddressUtils, TestGetPlaceholderToken) {
 TEST(AutofillStructuredAddressUtils, CaptureTypeWithPattern) {
   EXPECT_EQ("(?i:(?P<NAME_FULL>abs\\w)(?:,|\\s+|$)+)?",
             CaptureTypeWithPattern(NAME_FULL, {"abs", "\\w"},
-                                   {.quantifier = MATCH_OPTIONAL}));
+                                   {.quantifier = MatchQuantifier::kOptional}));
   EXPECT_EQ("(?i:(?P<NAME_FULL>abs\\w)(?:,|\\s+|$)+)",
             CaptureTypeWithPattern(NAME_FULL, {"abs", "\\w"}));
-  EXPECT_EQ("(?i:(?P<NAME_FULL>abs\\w)(?:,|\\s+|$)+)??",
-            CaptureTypeWithPattern(NAME_FULL, "abs\\w",
-                                   {.quantifier = MATCH_LAZY_OPTIONAL}));
+  EXPECT_EQ(
+      "(?i:(?P<NAME_FULL>abs\\w)(?:,|\\s+|$)+)??",
+      CaptureTypeWithPattern(NAME_FULL, "abs\\w",
+                             {.quantifier = MatchQuantifier::kLazyOptional}));
   EXPECT_EQ("(?i:(?P<NAME_FULL>abs\\w)(?:,|\\s+|$)+)",
             CaptureTypeWithPattern(NAME_FULL, "abs\\w"));
   EXPECT_EQ("(?i:(?P<NAME_FULL>abs\\w)(?:_)+)",
@@ -198,11 +198,13 @@ TEST(AutofillStructuredAddressUtils, CaptureTypeWithPattern) {
 }
 
 TEST(AutofillStructuredAddressUtils, NoCaptureTypeWithPattern) {
-  EXPECT_EQ("(?i:abs\\w(?:,|\\s+|$)+)?",
-            NoCapturePattern("abs\\w", {.quantifier = MATCH_OPTIONAL}));
+  EXPECT_EQ(
+      "(?i:abs\\w(?:,|\\s+|$)+)?",
+      NoCapturePattern("abs\\w", {.quantifier = MatchQuantifier::kOptional}));
   EXPECT_EQ("(?i:abs\\w(?:,|\\s+|$)+)", NoCapturePattern("abs\\w"));
   EXPECT_EQ("(?i:abs\\w(?:,|\\s+|$)+)??",
-            NoCapturePattern("abs\\w", {.quantifier = MATCH_LAZY_OPTIONAL}));
+            NoCapturePattern("abs\\w",
+                             {.quantifier = MatchQuantifier::kLazyOptional}));
   EXPECT_EQ("(?i:abs\\w(?:,|\\s+|$)+)", NoCapturePattern("abs\\w"));
   EXPECT_EQ("(?i:abs\\w(?:_)+)",
             NoCapturePattern("abs\\w", {.separator = "_"}));
@@ -229,9 +231,21 @@ TEST(AutofillStructuredAddressUtils, NormalizeValue) {
 }
 
 TEST(AutofillStructuredAddressUtils, TestGetRewriter) {
-  EXPECT_EQ(RewriterCache::Rewrite(u"us", u"unit #3"), u"unit 3");
-  EXPECT_EQ(RewriterCache::Rewrite(u"us", u"california"), u"ca");
+  EXPECT_EQ(NormalizeAndRewrite(u"us", u"unit #3",
+                                /*keep_white_space=*/true),
+            u"u 3");
+  EXPECT_EQ(NormalizeAndRewrite(u"us", u"california",
+                                /*keep_white_space=*/true),
+            u"ca");
 }
 
-}  // namespace structured_address
+TEST(AutofillStructuredAddressUtils, AreStringTokenCompatible) {
+  EXPECT_TRUE(AreStringTokenCompatible(u"moto hello", u"hello, moto"));
+  EXPECT_TRUE(AreStringTokenCompatible(u"moto hello", u"hello, moto cross"));
+  EXPECT_FALSE(
+      AreStringTokenCompatible(u"moto hello, extra", u"hello, moto cross"));
+  EXPECT_TRUE(AreStringTokenCompatible(u"us foo", u"used, foo,us"));
+  EXPECT_FALSE(AreStringTokenCompatible(u"us foo", u"used, foo"));
+}
+
 }  // namespace autofill

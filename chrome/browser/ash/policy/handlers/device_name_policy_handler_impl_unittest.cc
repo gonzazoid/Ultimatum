@@ -10,8 +10,10 @@
 #include "chrome/browser/ash/settings/scoped_testing_cros_settings.h"
 #include "chrome/browser/ash/settings/stub_cros_settings_provider.h"
 #include "chromeos/ash/components/install_attributes/stub_install_attributes.h"
+#include "chromeos/ash/components/network/network_handler.h"
 #include "chromeos/ash/components/network/network_handler_test_helper.h"
-#include "chromeos/system/fake_statistics_provider.h"
+#include "chromeos/ash/components/network/network_state.h"
+#include "chromeos/ash/components/system/fake_statistics_provider.h"
 #include "components/policy/core/common/cloud/test/policy_builder.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -114,7 +116,7 @@ class DeviceNamePolicyHandlerImplTest : public testing::Test {
               handler_->GetDeviceNamePolicy());
 
     // GetHostnameChosenByAdministrator() should therefore return null.
-    const absl::optional<std::string> hostname =
+    const std::optional<std::string> hostname =
         handler_->GetHostnameChosenByAdministrator();
     EXPECT_FALSE(hostname);
   }
@@ -128,7 +130,7 @@ class DeviceNamePolicyHandlerImplTest : public testing::Test {
               handler_->GetDeviceNamePolicy());
 
     // GetHostnameChosenByAdministrator() should therefore return null.
-    const absl::optional<std::string> hostname =
+    const std::optional<std::string> hostname =
         handler_->GetHostnameChosenByAdministrator();
     EXPECT_FALSE(hostname);
   }
@@ -152,7 +154,7 @@ class DeviceNamePolicyHandlerImplTest : public testing::Test {
         after);
     // Check GetHostnameChosenByAdministrator() returns the expected hostname
     // value.
-    const absl::optional<std::string> hostname_chosen_by_administrator =
+    const std::optional<std::string> hostname_chosen_by_administrator =
         handler_->GetHostnameChosenByAdministrator();
     EXPECT_EQ(hostname_chosen_by_administrator, hostname_template);
 
@@ -215,7 +217,7 @@ class DeviceNamePolicyHandlerImplTest : public testing::Test {
   std::unique_ptr<ash::NetworkHandlerTestHelper> network_handler_test_helper_;
   ash::ScopedTestingCrosSettings scoped_testing_cros_settings_;
   std::unique_ptr<ash::ScopedStubInstallAttributes> attributes_;
-  chromeos::system::ScopedFakeStatisticsProvider fake_statistics_provider_;
+  ash::system::ScopedFakeStatisticsProvider fake_statistics_provider_;
   FakeObserver fake_observer_;
 };
 

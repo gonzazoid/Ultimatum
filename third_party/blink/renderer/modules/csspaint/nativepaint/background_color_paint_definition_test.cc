@@ -76,8 +76,7 @@ class BackgroundColorPaintDefinitionTest : public RenderingTest {
                        const CompositorPaintWorkletJob::AnimatedPropertyValues&
                            property_values) {
     BackgroundColorPaintDefinition definition;
-    definition.PaintForTest(animated_colors, offsets, property_values,
-                            scheduler::GetSingleThreadTaskRunnerForTesting());
+    definition.PaintForTest(animated_colors, offsets, property_values);
   }
 
  private:
@@ -461,9 +460,10 @@ TEST_F(BackgroundColorPaintDefinitionTest,
   auto* model1 = MakeGarbageCollected<StringKeyframeEffectModel>(keyframes);
 
   Element* element = GetElementById("target");
-  scoped_refptr<ComputedStyle> style =
-      GetDocument().GetStyleResolver().ResolveStyle(element,
-                                                    StyleRecalcContext());
+  StyleRecalcContext style_recalc_context;
+  style_recalc_context.old_style = element->GetComputedStyle();
+  const ComputedStyle* style = GetDocument().GetStyleResolver().ResolveStyle(
+      element, style_recalc_context);
   EXPECT_FALSE(style->HasCurrentBackgroundColorAnimation());
 
   NonThrowableExceptionState exception_state;
@@ -476,12 +476,10 @@ TEST_F(BackgroundColorPaintDefinitionTest,
   ASSERT_TRUE(element->GetElementAnimations());
   EXPECT_EQ(element->GetElementAnimations()->Animations().size(), 1u);
   style = GetDocument().GetStyleResolver().ResolveStyle(element,
-                                                        StyleRecalcContext());
+                                                        style_recalc_context);
   // Previously no background-color animation, now it has. This should trigger
   // a repaint, see ComputedStyle::UpdatePropertySpecificDifferences().
   EXPECT_TRUE(style->HasCurrentBackgroundColorAnimation());
-  style->ResetHasCurrentBackgroundColorAnimation();
-  style->ResetCompositablePaintAnimationChanged();
 
   start_keyframe->SetCSSPropertyValue(
       property_id, "blue", SecureContextMode::kInsecureContext, nullptr);
@@ -500,7 +498,7 @@ TEST_F(BackgroundColorPaintDefinitionTest,
   ASSERT_TRUE(element->GetElementAnimations());
   EXPECT_EQ(element->GetElementAnimations()->Animations().size(), 2u);
   style = GetDocument().GetStyleResolver().ResolveStyle(element,
-                                                        StyleRecalcContext());
+                                                        style_recalc_context);
   EXPECT_TRUE(style->HasCurrentBackgroundColorAnimation());
   // CompositablePaintAnimationChanged() being true will trigger a repaint. See
   // ComputedStyle::UpdatePropertySpecificDifferences().
@@ -536,9 +534,10 @@ TEST_F(BackgroundColorPaintDefinitionTest, TriggerRepaintChangedKeyframe) {
   auto* model = MakeGarbageCollected<StringKeyframeEffectModel>(keyframes);
 
   Element* element = GetElementById("target");
-  scoped_refptr<ComputedStyle> style =
-      GetDocument().GetStyleResolver().ResolveStyle(element,
-                                                    StyleRecalcContext());
+  StyleRecalcContext style_recalc_context;
+  style_recalc_context.old_style = element->GetComputedStyle();
+  const ComputedStyle* style = GetDocument().GetStyleResolver().ResolveStyle(
+      element, style_recalc_context);
   EXPECT_FALSE(style->HasCurrentBackgroundColorAnimation());
 
   NonThrowableExceptionState exception_state;
@@ -551,12 +550,10 @@ TEST_F(BackgroundColorPaintDefinitionTest, TriggerRepaintChangedKeyframe) {
   ASSERT_TRUE(element->GetElementAnimations());
   EXPECT_EQ(element->GetElementAnimations()->Animations().size(), 1u);
   style = GetDocument().GetStyleResolver().ResolveStyle(element,
-                                                        StyleRecalcContext());
+                                                        style_recalc_context);
   // Previously no background-color animation, now it has. This should trigger
   // a repaint, see ComputedStyle::UpdatePropertySpecificDifferences().
   EXPECT_TRUE(style->HasCurrentBackgroundColorAnimation());
-  style->ResetHasCurrentBackgroundColorAnimation();
-  style->ResetCompositablePaintAnimationChanged();
 
   start_keyframe->SetCSSPropertyValue(
       property_id, "red", SecureContextMode::kInsecureContext, nullptr);
@@ -570,7 +567,7 @@ TEST_F(BackgroundColorPaintDefinitionTest, TriggerRepaintChangedKeyframe) {
   ASSERT_TRUE(element->GetElementAnimations());
   EXPECT_EQ(element->GetElementAnimations()->Animations().size(), 1u);
   style = GetDocument().GetStyleResolver().ResolveStyle(element,
-                                                        StyleRecalcContext());
+                                                        style_recalc_context);
   EXPECT_TRUE(style->HasCurrentBackgroundColorAnimation());
   // CompositablePaintAnimationChanged() being true will trigger a repaint. See
   // ComputedStyle::UpdatePropertySpecificDifferences().

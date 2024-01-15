@@ -10,6 +10,7 @@
 #include "ash/app_list/model/search/search_result.h"
 #include "ash/app_list/model/search/search_result_observer.h"
 #include "ash/ash_export.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/base/models/simple_menu_model.h"
 #include "ui/views/context_menu_controller.h"
 #include "ui/views/controls/button/button.h"
@@ -82,6 +83,7 @@ class ASH_EXPORT ContinueTaskView : public views::Button,
 
  private:
   void UpdateIcon();
+  ui::ColorId GetIconBackgroundColorId() const;
   gfx::Size GetIconSize() const;
   void UpdateResult();
 
@@ -104,23 +106,18 @@ class ASH_EXPORT ContinueTaskView : public views::Button,
   // Closes the context menu for this view if it is running.
   void CloseContextMenu();
 
-  // Updates the background and the border if the ContinueTaskView is in tablet
-  // mode.
-  void UpdateStyleForTabletMode();
-
   // Record metrics at the moment when the ContinueTaskView result is removed.
   void LogMetricsOnResultRemoved();
 
   // The index of this view within a |SearchResultContainerView| that holds it.
-  absl::optional<int> index_in_container_;
+  std::optional<int> index_in_container_;
 
-  AppListViewDelegate* const view_delegate_;
-  views::Label* title_ = nullptr;
-  views::Label* subtitle_ = nullptr;
-  views::ImageView* icon_ = nullptr;
-  SearchResult* result_ = nullptr;  // Owned by SearchModel::SearchResults.
-
-  const bool is_tablet_mode_;
+  const raw_ptr<AppListViewDelegate> view_delegate_;
+  raw_ptr<views::Label> title_ = nullptr;
+  raw_ptr<views::Label> subtitle_ = nullptr;
+  raw_ptr<views::ImageView> icon_ = nullptr;
+  raw_ptr<SearchResult> result_ =
+      nullptr;  // Owned by SearchModel::SearchResults.
 
   std::unique_ptr<ui::SimpleMenuModel> context_menu_model_;
   std::unique_ptr<views::MenuRunner> context_menu_runner_;

@@ -6,37 +6,34 @@
 
 #import <MaterialComponents/MaterialSnackbar.h>
 
+#import "base/apple/foundation_util.h"
 #import "base/ios/block_types.h"
-#import "base/mac/foundation_util.h"
 #import "base/metrics/user_metrics.h"
 #import "base/metrics/user_metrics_action.h"
 #import "base/notreached.h"
 #import "base/strings/sys_string_conversions.h"
 #import "base/strings/utf_string_conversions.h"
 #import "components/version_info/version_info.h"
-#import "ios/chrome/browser/ui/commands/application_commands.h"
-#import "ios/chrome/browser/ui/commands/snackbar_commands.h"
+#import "ios/chrome/browser/shared/model/url/chrome_url_constants.h"
+#import "ios/chrome/browser/shared/public/commands/application_commands.h"
+#import "ios/chrome/browser/shared/public/commands/open_new_tab_command.h"
+#import "ios/chrome/browser/shared/public/commands/snackbar_commands.h"
+#import "ios/chrome/browser/shared/public/features/features.h"
+#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_detail_text_item.h"
+#import "ios/chrome/browser/shared/ui/table_view/legacy_chrome_table_view_styler.h"
+#import "ios/chrome/browser/shared/ui/table_view/table_view_utils.h"
+#import "ios/chrome/browser/shared/ui/util/pasteboard_util.h"
+#import "ios/chrome/browser/shared/ui/util/terms_util.h"
+#import "ios/chrome/browser/shared/ui/util/uikit_ui_util.h"
 #import "ios/chrome/browser/ui/settings/cells/version_item.h"
 #import "ios/chrome/browser/ui/settings/settings_table_view_controller_constants.h"
-#import "ios/chrome/browser/ui/settings/utils/settings_utils.h"
-#import "ios/chrome/browser/ui/table_view/cells/table_view_detail_text_item.h"
-#import "ios/chrome/browser/ui/table_view/chrome_table_view_styler.h"
-#import "ios/chrome/browser/ui/table_view/table_view_utils.h"
-#import "ios/chrome/browser/ui/ui_feature_flags.h"
-#import "ios/chrome/browser/ui/util/terms_util.h"
-#import "ios/chrome/browser/ui/util/uikit_ui_util.h"
-#import "ios/chrome/browser/url/chrome_url_constants.h"
 #import "ios/chrome/common/channel_info.h"
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
-#import "ios/chrome/grit/ios_chromium_strings.h"
+#import "ios/chrome/grit/ios_branded_strings.h"
 #import "ios/chrome/grit/ios_strings.h"
 #import "ui/base/l10n/l10n_util.h"
 #import "ui/base/l10n/l10n_util_mac.h"
 #import "url/gurl.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace {
 
@@ -136,7 +133,7 @@ const CGFloat kDefaultHeight = 70;
     viewForFooterInSection:(NSInteger)section {
   UIView* footer = [super tableView:tableView viewForFooterInSection:section];
   VersionFooter* versionFooter =
-      base::mac::ObjCCastStrict<VersionFooter>(footer);
+      base::apple::ObjCCastStrict<VersionFooter>(footer);
   versionFooter.delegate = self;
   return footer;
 }
@@ -164,23 +161,25 @@ const CGFloat kDefaultHeight = 70;
 #pragma mark - VersionFooterDelegate
 
 - (void)didTapVersionFooter:(VersionFooter*)footer {
-  [[UIPasteboard generalPasteboard] setString:[self versionOnlyString]];
+  StoreTextInPasteboard([self versionOnlyString]);
+
   TriggerHapticFeedbackForNotification(UINotificationFeedbackTypeSuccess);
   NSString* messageText = l10n_util::GetNSString(IDS_IOS_VERSION_COPIED);
   MDCSnackbarMessage* message =
       [MDCSnackbarMessage messageWithText:messageText];
   message.category = @"version copied";
-  [self.snackbarCommandsHandler showSnackbarMessage:message bottomOffset:0];
+  [self.snackbarHandler showSnackbarMessage:message bottomOffset:0];
 }
 
 #pragma mark - Private methods
 
 - (void)openURL:(GURL)URL {
-  BlockToOpenURL(self, self.applicationCommandsHandler)(URL);
+  OpenNewTabCommand* command = [OpenNewTabCommand commandWithURLFromChrome:URL];
+  [self.applicationHandler closeSettingsUIAndOpenURL:command];
 }
 
 - (std::string)versionString {
-  std::string versionString = version_info::GetVersionNumber();
+  std::string versionString(version_info::GetVersionNumber());
   std::string versionStringModifier = GetChannelString();
   if (!versionStringModifier.empty()) {
     versionString = versionString + " " + versionStringModifier;

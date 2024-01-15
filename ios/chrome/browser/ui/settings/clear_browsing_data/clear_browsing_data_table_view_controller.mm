@@ -4,29 +4,35 @@
 
 #import "ios/chrome/browser/ui/settings/clear_browsing_data/clear_browsing_data_table_view_controller.h"
 
-#import "base/mac/foundation_util.h"
+#import "base/apple/foundation_util.h"
 #import "base/metrics/histogram_functions.h"
 #import "base/metrics/user_metrics.h"
 #import "base/metrics/user_metrics_action.h"
 #import "components/browsing_data/core/pref_names.h"
 #import "components/prefs/pref_service.h"
 #import "components/signin/public/base/signin_metrics.h"
-#import "components/signin/public/base/signin_switches.h"
 #import "components/signin/public/identity_manager/objc/identity_manager_observer_bridge.h"
-#import "ios/chrome/browser/browser_state/chrome_browser_state.h"
-#import "ios/chrome/browser/browsing_data/browsing_data_features.h"
-#import "ios/chrome/browser/browsing_data/browsing_data_remove_mask.h"
-#import "ios/chrome/browser/discover_feed/discover_feed_service.h"
-#import "ios/chrome/browser/discover_feed/discover_feed_service_factory.h"
-#import "ios/chrome/browser/main/browser.h"
-#import "ios/chrome/browser/net/crurl.h"
-#import "ios/chrome/browser/signin/identity_manager_factory.h"
-#import "ios/chrome/browser/ui/alert_coordinator/action_sheet_coordinator.h"
-#import "ios/chrome/browser/ui/alert_coordinator/alert_coordinator.h"
-#import "ios/chrome/browser/ui/authentication/signout_action_sheet_coordinator.h"
-#import "ios/chrome/browser/ui/commands/application_commands.h"
-#import "ios/chrome/browser/ui/commands/browsing_data_commands.h"
-#import "ios/chrome/browser/ui/elements/chrome_activity_overlay_coordinator.h"
+#import "ios/chrome/browser/browsing_data/model/browsing_data_features.h"
+#import "ios/chrome/browser/browsing_data/model/browsing_data_remove_mask.h"
+#import "ios/chrome/browser/discover_feed/model/discover_feed_service.h"
+#import "ios/chrome/browser/discover_feed/model/discover_feed_service_factory.h"
+#import "ios/chrome/browser/intents/intents_donation_helper.h"
+#import "ios/chrome/browser/net/model/crurl.h"
+#import "ios/chrome/browser/shared/coordinator/alert/action_sheet_coordinator.h"
+#import "ios/chrome/browser/shared/coordinator/alert/alert_coordinator.h"
+#import "ios/chrome/browser/shared/model/browser/browser.h"
+#import "ios/chrome/browser/shared/model/browser_state/chrome_browser_state.h"
+#import "ios/chrome/browser/shared/model/url/chrome_url_constants.h"
+#import "ios/chrome/browser/shared/public/commands/application_commands.h"
+#import "ios/chrome/browser/shared/public/commands/browsing_data_commands.h"
+#import "ios/chrome/browser/shared/ui/elements/chrome_activity_overlay_coordinator.h"
+#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_text_button_item.h"
+#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_text_link_item.h"
+#import "ios/chrome/browser/shared/ui/table_view/legacy_chrome_table_view_styler.h"
+#import "ios/chrome/browser/shared/ui/table_view/table_view_utils.h"
+#import "ios/chrome/browser/signin/model/identity_manager_factory.h"
+#import "ios/chrome/browser/ui/authentication/signout_action_sheet/signout_action_sheet_coordinator.h"
+#import "ios/chrome/browser/ui/keyboard/UIKeyCommand+Chrome.h"
 #import "ios/chrome/browser/ui/settings/cells/clear_browsing_data_constants.h"
 #import "ios/chrome/browser/ui/settings/cells/table_view_clear_browsing_data_item.h"
 #import "ios/chrome/browser/ui/settings/clear_browsing_data/clear_browsing_data_consumer.h"
@@ -35,20 +41,12 @@
 #import "ios/chrome/browser/ui/settings/clear_browsing_data/clear_browsing_data_ui_delegate.h"
 #import "ios/chrome/browser/ui/settings/clear_browsing_data/time_range_selector_table_view_controller.h"
 #import "ios/chrome/browser/ui/settings/settings_navigation_controller.h"
-#import "ios/chrome/browser/ui/table_view/cells/table_view_text_button_item.h"
-#import "ios/chrome/browser/ui/table_view/cells/table_view_text_link_item.h"
-#import "ios/chrome/browser/ui/table_view/chrome_table_view_styler.h"
-#import "ios/chrome/browser/ui/table_view/table_view_utils.h"
-#import "ios/chrome/browser/url/chrome_url_constants.h"
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
 #import "ios/chrome/common/ui/table_view/table_view_cells_constants.h"
-#import "ios/chrome/grit/ios_chromium_strings.h"
+#import "ios/chrome/grit/ios_branded_strings.h"
 #import "ios/chrome/grit/ios_strings.h"
 #import "ui/base/l10n/l10n_util.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ui/strings/grit/ui_strings.h"
 
 @interface ClearBrowsingDataTableViewController () <
     ClearBrowsingDataConsumer,
@@ -113,6 +111,16 @@
             IdentityManagerFactory::GetForBrowserState(_browserState), self));
   }
   return self;
+}
+
+- (void)stop {
+  [self prepareForDismissal];
+  _identityManagerObserverBridge.reset();
+  [_dataManager disconnect];
+  _dataManager.consumer = nil;
+  _dataManager = nil;
+  _browser = nil;
+  _browserState = nil;
 }
 
 - (void)didMoveToParentViewController:(UIViewController*)parent {
@@ -186,6 +194,7 @@
 - (void)viewWillAppear:(BOOL)animated {
   [super viewWillAppear:animated];
   [self.dataManager restartCounters:BrowsingDataRemoveMask::REMOVE_ALL];
+  [IntentDonationHelper donateIntent:IntentType::kClearBrowsingData];
 
   [self updateToolbarButtons];
   // Showing toolbar here because parent class hides toolbar in
@@ -201,7 +210,7 @@
 - (void)dismiss {
   base::RecordAction(base::UserMetricsAction("MobileClearBrowsingDataClose"));
   [self prepareForDismissal];
-  [self.delegate dismissClearBrowsingData];
+  [self.delegate clearBrowsingDataTableViewControllerWantsDismissal:self];
 }
 
 #pragma mark - Public Methods
@@ -211,10 +220,7 @@
     [self.actionSheetCoordinator stop];
     self.actionSheetCoordinator = nil;
   }
-  if (self.alertCoordinator) {
-    [self.alertCoordinator stop];
-    self.alertCoordinator = nil;
-  }
+  [self dismissAlertCoordinator];
   if (self.overlayCoordinator.started) {
     [self.overlayCoordinator stop];
     self.navigationController.interactivePopGestureRecognizer.delegate = nil;
@@ -271,7 +277,7 @@
     case SectionIdentifierSavedSiteData:
     case SectionIdentifierGoogleAccount: {
       TableViewLinkHeaderFooterView* linkView =
-          base::mac::ObjCCastStrict<TableViewLinkHeaderFooterView>(view);
+          base::apple::ObjCCastStrict<TableViewLinkHeaderFooterView>(view);
       linkView.delegate = self;
     } break;
     default:
@@ -313,7 +319,7 @@
     case ItemTypeDataTypeAutofill: {
       DCHECK([item isKindOfClass:[TableViewClearBrowsingDataItem class]]);
       TableViewClearBrowsingDataItem* clearBrowsingDataItem =
-          base::mac::ObjCCastStrict<TableViewClearBrowsingDataItem>(item);
+          base::apple::ObjCCastStrict<TableViewClearBrowsingDataItem>(item);
 
       self.browserState->GetPrefs()->SetBoolean(clearBrowsingDataItem.prefName,
                                                 !clearBrowsingDataItem.checked);
@@ -326,14 +332,27 @@
   [self updateToolbarButtons];
 }
 
+#pragma mark - UIResponder
+
+// To always be able to register key commands via -keyCommands, the VC must be
+// able to become first responder.
+- (BOOL)canBecomeFirstResponder {
+  return YES;
+}
+
+- (NSArray*)keyCommands {
+  return @[ UIKeyCommand.cr_close ];
+}
+
+- (void)keyCommand_close {
+  base::RecordAction(base::UserMetricsAction("MobileKeyCommandClose"));
+  [self dismiss];
+}
+
 #pragma mark - TableViewLinkHeaderFooterItemDelegate
 
 - (void)view:(TableViewLinkHeaderFooterView*)view didTapLinkURL:(CrURL*)url {
   if (url.gurl == GURL(kCBDSignOutOfChromeURL)) {
-    DCHECK(base::FeatureList::IsEnabled(switches::kEnableCbdSignOut));
-    // TODO(crbug.com/1341654): Log a user action indicating that the user
-    // clicked on the sign out link from the footer. Remove the action
-    // indicating that this came from signin > signout.
     [self showSignOutWithItemView:[view contentView]];
     return;
   }
@@ -354,10 +373,16 @@
     base::UmaHistogramEnumeration("Settings.ClearBrowsingData.OpenMyActivity",
                                   MyActivityNavigation::kTopLevel);
   }
-  [self.delegate openURL:url.gurl];
+  [self.delegate clearBrowsingDataTableViewController:self
+                                       wantsToOpenURL:url.gurl];
 }
 
 #pragma mark - ClearBrowsingDataConsumer
+
+- (void)dismissAlertCoordinator {
+  [self.alertCoordinator stop];
+  self.alertCoordinator = nil;
+}
 
 - (void)updateCellsForItem:(TableViewItem*)item reload:(BOOL)reload {
   if (self.suppressTableViewUpdates)
@@ -413,6 +438,15 @@
     dispatch_after(timeOneSecondLater, dispatch_get_main_queue(), ^{
       [self.overlayCoordinator stop];
       self.navigationController.interactivePopGestureRecognizer.delegate = nil;
+
+      // Inform Voiceover users that their browsing data has
+      // been cleared. Otherwise, users only hear that the clear browsing data
+      // process was initiated, but not completed.
+      UIAccessibilityPostNotification(
+          UIAccessibilityAnnouncementNotification,
+          l10n_util::GetNSString(
+              IDS_IOS_CLEAR_BROWSING_DATA_HISTORY_NOTICE_TITLE));
+
       if (completionBlock)
         completionBlock();
     });
@@ -456,14 +490,20 @@
           l10n_util::GetNSString(
               IDS_IOS_CLEAR_BROWSING_DATA_HISTORY_NOTICE_OPEN_HISTORY_BUTTON)
                 action:^{
-                  [weakSelf.delegate openURL:GURL(kGoogleMyAccountURL)];
+                  [weakSelf.delegate
+                      clearBrowsingDataTableViewController:weakSelf
+                                            wantsToOpenURL:
+                                                GURL(kGoogleMyAccountURL)];
+                  [weakSelf dismissAlertCoordinator];
                 }
                  style:UIAlertActionStyleDefault];
 
   [self.alertCoordinator
       addItemWithTitle:l10n_util::GetNSString(
                            IDS_IOS_CLEAR_BROWSING_DATA_HISTORY_NOTICE_OK_BUTTON)
-                action:nil
+                action:^{
+                  [weakSelf dismissAlertCoordinator];
+                }
                  style:UIAlertActionStyleCancel];
 
   [self.alertCoordinator start];
@@ -475,8 +515,10 @@
     (UIPresentationController*)presentationController {
   base::RecordAction(
       base::UserMetricsAction("IOSClearBrowsingDataCloseWithSwipe"));
-  // Call prepareForDismissal to clean up state and stop the Coordinator.
+  // Call prepareForDismissal to clean up state and stop the Coordinators the
+  // current class own.
   [self prepareForDismissal];
+  [self.delegate clearBrowsingDataTableViewControllerWasRemoved:self];
 }
 
 - (BOOL)presentationControllerShouldDismiss:
@@ -514,6 +556,13 @@
                                baseViewController:self
                                           browser:_browser
                               sourceBarButtonItem:sender];
+  __weak ClearBrowsingDataTableViewController* weakSelf = self;
+  [self.actionSheetCoordinator
+      addItemWithTitle:l10n_util::GetNSString(IDS_APP_CANCEL)
+                action:^{
+                  [weakSelf dismissAlertCoordinator];
+                }
+                 style:UIAlertActionStyleCancel];
   [self.actionSheetCoordinator start];
 }
 
@@ -536,13 +585,14 @@
 
 // Offer the user to sign-out near itemView
 // If they sync, they can keep or delete their data.
+// TODO(crbug.com/1385791) Test that correct histogram is registered.
 - (void)showSignOutWithItemView:(UIView*)itemView {
   if (_signoutCoordinator) {
     // An action is already in progress, ignore user's request.
     return;
   }
-  signin_metrics::ProfileSignout signout_source_metric =
-      signin_metrics::USER_CLICKED_SIGNOUT_FROM_CLEAR_BROWSING_DATA_PAGE;
+  signin_metrics::ProfileSignout signout_source_metric = signin_metrics::
+      ProfileSignout::kUserClickedSignoutFromClearBrowsingDataPage;
   _signoutCoordinator = [[SignoutActionSheetCoordinator alloc]
       initWithBaseViewController:self
                          browser:_browser

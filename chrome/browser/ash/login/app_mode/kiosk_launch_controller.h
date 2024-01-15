@@ -8,23 +8,43 @@
 #include <memory>
 
 #include "ash/public/cpp/login_accelerators.h"
+#include "base/functional/callback_forward.h"
 #include "base/observer_list.h"
 #include "base/observer_list_types.h"
+#include "base/scoped_observation.h"
 #include "base/time/time.h"
 #include "chrome/browser/ash/app_mode/kiosk_app_launcher.h"
 #include "chrome/browser/ash/app_mode/kiosk_app_types.h"
 #include "chrome/browser/ash/app_mode/kiosk_profile_loader.h"
 #include "chrome/browser/ash/login/app_mode/force_install_observer.h"
+#include "chrome/browser/ash/login/app_mode/network_ui_controller.h"
 #include "chrome/browser/ui/webui/ash/login/app_launch_splash_screen_handler.h"
-// TODO(https://crbug.com/1164001): use forward declaration.
-#include "chrome/browser/ui/webui/ash/login/oobe_ui.h"
 
 namespace app_mode {
 class ForceInstallObserver;
+class LacrosLauncher;
 }  // namespace app_mode
 
 namespace ash {
 class LoginDisplayHost;
+class OobeUI;
+
+extern const char kKioskLaunchStateCrashKey[];
+extern const base::TimeDelta kDefaultKioskSplashScreenMinTime;
+
+// Kiosk launch state for crash key.
+enum class KioskLaunchState {
+  kAttemptToLaunch,
+  kStartLaunch,
+  kLauncherStarted,
+  kLaunchFailed,
+  kAppWindowCreated,
+};
+
+std::string KioskLaunchStateToString(KioskLaunchState state);
+
+// Sets crash key for kiosk launch state.
+void SetKioskLaunchStateCrashKey(KioskLaunchState state);
 
 // Controller for the kiosk launch process, responsible for loading the kiosk
 // profile, and updating the splash screen UI.
@@ -64,8 +84,8 @@ class LoginDisplayHost;
 // It is all encompassed within the combination of two states -- AppState and
 // NetworkUI state.
 class KioskLaunchController : public KioskProfileLoader::Delegate,
-                              public AppLaunchSplashScreenView::Delegate,
-                              public KioskAppLauncher::Delegate {
+                              public KioskAppLauncher::Observer,
+                              public NetworkUiController::Observer {
  public:
   class KioskProfileLoadFailedObserver : public base::CheckedObserver {
    public:
@@ -73,38 +93,32 @@ class KioskLaunchController : public KioskProfileLoader::Delegate,
     virtual void OnKioskProfileLoadFailed() = 0;
   };
 
-  using ReturnBoolCallback = base::RepeatingCallback<bool()>;
+  // Factory class that constructs a `KioskAppLauncher`.
+  // The default implementation constructs the correct implementation of
+  // `KioskAppLauncher` based on the kiosk type associated with `KioskAppId`.
+  using KioskAppLauncherFactory =
+      base::RepeatingCallback<std::unique_ptr<KioskAppLauncher>(
+          Profile*,
+          const KioskAppId&,
+          KioskAppLauncher::NetworkDelegate*)>;
 
   explicit KioskLaunchController(OobeUI* oobe_ui);
+  KioskLaunchController(
+      LoginDisplayHost* host,
+      AppLaunchSplashScreenView* splash_screen,
+      KioskAppLauncherFactory app_launcher_factory,
+      std::unique_ptr<NetworkUiController::NetworkMonitor> network_monitor);
   KioskLaunchController(const KioskLaunchController&) = delete;
   KioskLaunchController& operator=(const KioskLaunchController&) = delete;
   ~KioskLaunchController() override;
 
   [[nodiscard]] static std::unique_ptr<base::AutoReset<bool>>
-  DisableWaitTimerAndLoginOperationsForTesting();
+  DisableLoginOperationsForTesting();
   [[nodiscard]] static std::unique_ptr<base::AutoReset<bool>>
   SkipSplashScreenWaitForTesting();
-  [[nodiscard]] static std::unique_ptr<base::AutoReset<base::TimeDelta>>
-  SetNetworkWaitForTesting(base::TimeDelta wait_time);
   [[nodiscard]] static std::unique_ptr<base::AutoReset<bool>>
   BlockAppLaunchForTesting();
-  static void SetNetworkTimeoutCallbackForTesting(base::OnceClosure* callback);
-  static void SetCanConfigureNetworkCallbackForTesting(
-      ReturnBoolCallback* callback);
-  static void SetNeedOwnerAuthToConfigureNetworkCallbackForTesting(
-      ReturnBoolCallback* callback);
-
-  static std::unique_ptr<KioskLaunchController> CreateForTesting(
-      AppLaunchSplashScreenView* view,
-      std::unique_ptr<KioskAppLauncher> app_launcher);
-
-  bool waiting_for_network() const {
-    return app_state_ == AppState::kInitNetwork;
-  }
-  bool network_wait_timedout() const { return network_wait_timedout_; }
-  bool showing_network_dialog() const {
-    return network_ui_state_ == NetworkUIState::kShowing;
-  }
+  [[nodiscard]] static base::AutoReset<bool> BlockExitOnFailureForTesting();
 
   void Start(const KioskAppId& kiosk_app_id, bool auto_launch);
 
@@ -116,76 +130,65 @@ class KioskLaunchController : public KioskProfileLoader::Delegate,
 
   bool HandleAccelerator(LoginAcceleratorAction action);
 
+  // `NetworkUiController::Observer`:
+  void OnNetworkConfigureUiShowing() override;
+  void OnNetworkConfigureUiFinished() override;
+  void OnNetworkReady() override;
+  void OnNetworkLost() override;
+
+  // Currently required for testing
+  NetworkUiController::NetworkUIState GetNetworkUiStateForTesting() const {
+    return network_ui_controller_->GetNetworkUiStateForTesting();
+  }
+  NetworkUiController* GetNetworkUiControllerForTesting();
+
  private:
   friend class KioskLaunchControllerTest;
+  friend class KioskLaunchControllerUsingLacrosTest;
 
   enum AppState {
-    kCreatingProfile = 0,   // Profile is being created.
-    kInitNetwork,           // Waiting for the network to initialize.
+    kCreatingProfile = 0,  // Profile is being created.
+    kLaunchingLacros,
+    kInitLauncher,          // Launcher is initializing
     kInstallingApp,         // App is being installed.
     kInstallingExtensions,  // Force-installed extensions are being installed.
     kInstalled,  // Everything is installed, waiting for the splash screen timer
                  // to fire.
-    kLaunched    // App is being launched.
+    kLaunched,   // App is being launched.
+    kInitNetwork,  // Waiting for the network to initialize.
   };
-
-  enum NetworkUIState {
-    kNotShowing = 0,  // Network configure UI is not being shown.
-    kNeedToShow,      // We need to show the UI as soon as we can.
-    kShowing          // Network configure UI is being shown.
-  };
-
-  KioskLaunchController();
 
   void OnCancelAppLaunch();
   void OnNetworkConfigRequested();
+  void InitializeKeyboard();
+  void LaunchLacros();
+  void OnLacrosLaunchComplete();
+  void InitializeLauncher();
 
-  // AppLaunchSplashScreenView::Delegate:
-  void OnConfigureNetwork() override;
-  void OnDeletingSplashScreenView() override;
-  void OnNetworkConfigFinished() override;
-  void OnNetworkStateChanged(bool online) override;
-  KioskAppManagerBase::App GetAppData() override;
-  bool IsNetworkRequired() override;
-
-  // KioskAppLauncher::Delegate:
-  void InitializeNetwork() override;
-  bool IsNetworkReady() const override;
-  bool IsShowingNetworkConfigScreen() const override;
-  bool ShouldSkipAppInstallation() const override;
+  // `KioskAppLauncher::Observer`
   void OnLaunchFailed(KioskAppLaunchError::Error error) override;
   void OnAppInstalling() override;
   void OnAppPrepared() override;
   void OnAppLaunched() override;
   void OnAppDataUpdated() override;
-  void OnAppWindowCreated() override;
+  void OnAppWindowCreated(const std::optional<std::string>& app_name) override;
 
-  // KioskProfileLoader::Delegate:
+  // `KioskProfileLoader::Delegate`
   void OnProfileLoaded(Profile* profile) override;
   void OnProfileLoadFailed(KioskAppLaunchError::Error error) override;
-  void OnOldEncryptionDetected(const UserContext& user_context) override;
+  void OnOldEncryptionDetected(
+      std::unique_ptr<UserContext> user_context) override;
 
-  void OnOwnerSigninSuccess();
-
-  // Whether the network could be configured during launching.
-  bool CanConfigureNetwork();
-  // Whether the owner password is needed to configure network.
-  bool NeedOwnerAuthToConfigureNetwork();
-  // Shows network configuration dialog if kiosk profile was already created or
-  // postpones the display upon creation.
-  void MaybeShowNetworkConfigureUI();
-  // Shows the network configuration dialog.
-  void ShowNetworkConfigureUI();
-  void CloseNetworkConfigureScreenIfOnline();
-
-  void HandleWebAppInstallFailed();
+  // Returns the `Data` struct used to populate the splash screen.
+  AppLaunchSplashScreenView::Data GetSplashScreenAppData();
 
   // Continues launching after forced extensions are installed if required.
   // If it times out waiting for extensions to install, logs metrics via UMA.
   void FinishForcedExtensionsInstall(
       app_mode::ForceInstallObserver::Result result);
 
-  void OnNetworkWaitTimedOut();
+  void OnNetworkOnline();
+  void OnNetworkOffline();
   void OnTimerFire();
   void CloseSplashScreen();
   void CleanUp();
@@ -195,19 +198,20 @@ class KioskLaunchController : public KioskProfileLoader::Delegate,
 
   // Current state of the controller.
   AppState app_state_ = AppState::kCreatingProfile;
-  // Current state of network configure dialog.
-  NetworkUIState network_ui_state_ = NetworkUIState::kNotShowing;
 
-  LoginDisplayHost* const host_;  // Not owned, destructed upon shutdown.
-  AppLaunchSplashScreenView* splash_screen_view_ = nullptr;  // Owned by OobeUI.
-  KioskAppId kiosk_app_id_;                                  // Current app.
-  Profile* profile_ = nullptr;                               // Not owned.
+  // Not owned, destructed upon shutdown.
+  raw_ptr<LoginDisplayHost> const host_;
+  // Owned by OobeUI.
+  raw_ptr<AppLaunchSplashScreenView> splash_screen_view_ = nullptr;
+  // Current app.
+  KioskAppId kiosk_app_id_;
+  // Not owned.
+  raw_ptr<Profile> profile_ = nullptr;
+  const KioskAppLauncherFactory app_launcher_factory_;
+  std::unique_ptr<NetworkUiController> network_ui_controller_;
 
   // Whether app should be launched as soon as it is ready.
   bool launch_on_install_ = false;
-  bool network_wait_timedout_ = false;
-  // Whether the network is required for the installation.
-  bool network_required_ = false;
 
   // Whether the controller has already been cleaned-up.
   bool cleaned_up_ = false;
@@ -215,16 +219,14 @@ class KioskLaunchController : public KioskProfileLoader::Delegate,
   // Used to login into kiosk user profile.
   std::unique_ptr<KioskProfileLoader> kiosk_profile_loader_;
 
+  std::unique_ptr<app_mode::LacrosLauncher> lacros_launcher_;
+
   // A timer to ensure the app splash is shown for a minimum amount of time.
   base::OneShotTimer splash_wait_timer_;
 
   // Used to prepare and launch the actual kiosk app, is created after
   // profile initialization. Is nullptr for arc kiosks.
   std::unique_ptr<KioskAppLauncher> app_launcher_;
-
-  // A timer that fires when the network was not prepared and we require user
-  // network configuration to continue.
-  base::OneShotTimer network_wait_timer_;
 
   // Tracks the moment when Kiosk launcher is started.
   base::Time launcher_start_time_;
@@ -234,15 +236,11 @@ class KioskLaunchController : public KioskProfileLoader::Delegate,
   base::ObserverList<KioskProfileLoadFailedObserver>
       profile_load_failed_observers_;
 
+  base::ScopedObservation<KioskAppLauncher, KioskAppLauncher::Observer>
+      app_launcher_observation_{this};
   base::WeakPtrFactory<KioskLaunchController> weak_ptr_factory_{this};
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove after the //chrome/browser/chromeos
-// source migration is finished.
-namespace chromeos {
-using ::ash::KioskLaunchController;
-}
 
 #endif  // CHROME_BROWSER_ASH_LOGIN_APP_MODE_KIOSK_LAUNCH_CONTROLLER_H_

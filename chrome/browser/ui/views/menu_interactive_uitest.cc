@@ -3,6 +3,8 @@
 // found in the LICENSE file.
 #include "ui/views/controls/menu/menu_controller.h"
 
+#include <utility>
+
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/strings/utf_string_conversions.h"
@@ -13,9 +15,11 @@
 #include "chrome/test/base/in_process_browser_test.h"
 #include "chrome/test/base/interactive_test_utils.h"
 #include "chrome/test/base/test_browser_window.h"
-#include "content/public/browser/browser_accessibility_state.h"
 #include "content/public/test/browser_test.h"
+#include "content/public/test/scoped_accessibility_mode_override.h"
 #include "ui/accessibility/ax_node_data.h"
+#include "ui/base/metadata/metadata_header_macros.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/base/test/ui_controls.h"
 #include "ui/gfx/geometry/point.h"
 #include "ui/views/accessibility/view_accessibility.h"
@@ -41,12 +45,17 @@ namespace test {
 namespace {
 
 class TestButton : public Button {
+  METADATA_HEADER(TestButton, Button)
+
  public:
   TestButton() : Button(Button::PressedCallback()) {}
   TestButton(const TestButton&) = delete;
   TestButton& operator=(const TestButton&) = delete;
   ~TestButton() override = default;
 };
+
+BEGIN_METADATA(TestButton)
+END_METADATA
 
 }  // namespace
 
@@ -62,9 +71,11 @@ class MenuControllerUITest : public InProcessBrowserTest {
   // menu item and move the mouse there, and closes the menu.
   void SetupMenu(Widget* widget) {
     menu_delegate_ = std::make_unique<MenuDelegate>();
-    MenuItemView* menu_item = new MenuItemView(menu_delegate_.get());
+    auto menu_item_owning =
+        std::make_unique<MenuItemView>(menu_delegate_.get());
+    MenuItemView* menu_item = menu_item_owning.get();
     menu_runner_ = std::make_unique<MenuRunner>(
-        +menu_item, views::MenuRunner::CONTEXT_MENU);
+        std::move(menu_item_owning), views::MenuRunner::CONTEXT_MENU);
     first_item_ = menu_item->AppendMenuItem(1, u"One");
     menu_item->AppendMenuItem(2, u"Two");
     // Run the menu, so that the menu item size will be calculated.
@@ -75,8 +86,7 @@ class MenuControllerUITest : public InProcessBrowserTest {
     // Figure out the middle of the first menu item.
     mouse_pos_.set_x(first_item_->width() / 2);
     mouse_pos_.set_y(first_item_->height() / 2);
-    View::ConvertPointToScreen(
-        menu_item->GetSubmenu()->GetWidget()->GetRootView(), &mouse_pos_);
+    View::ConvertPointToScreen(first_item_.get(), &mouse_pos_);
     // Move the mouse so that it's where the menu will be shown.
     base::RunLoop run_loop;
     ui_controls::SendMouseMoveNotifyWhenDone(mouse_pos_.x(), mouse_pos_.y(),
@@ -103,8 +113,14 @@ class MenuControllerUITest : public InProcessBrowserTest {
     run_loop.RunUntilIdle();
   }
 
+  void TearDownOnMainThread() override {
+    first_item_ = nullptr;
+    menu_runner_.reset();
+    menu_delegate_.reset();
+  }
+
  protected:
-  raw_ptr<MenuItemView, DanglingUntriaged> first_item_ = nullptr;
+  raw_ptr<MenuItemView> first_item_ = nullptr;
   std::unique_ptr<MenuRunner> menu_runner_;
   std::unique_ptr<MenuDelegate> menu_delegate_;
   // Middle of first menu item.
@@ -113,17 +129,9 @@ class MenuControllerUITest : public InProcessBrowserTest {
 
 IN_PROC_BROWSER_TEST_F(MenuControllerUITest, TestMouseOverShownMenu) {
 #if !BUILDFLAG(IS_CHROMEOS_ASH)
-  content::testing::ScopedContentAXModeSetter ax_mode_setter(
+  content::ScopedAccessibilityModeOverride ax_mode_override(
       ui::kAXModeComplete);
 #endif
-#if BUILDFLAG(IS_WIN)
-  // TODO(crbug.com/1286137): This test is consistently failing on Win11.
-  if (base::win::OSInfo::GetInstance()->version() >=
-      base::win::Version::WIN11) {
-    GTEST_SKIP() << "Skipping test for WIN11_21H2 and greater";
-  }
-#endif
-
   // Create a parent widget.
   Widget* widget = new views::Widget;
   Widget::InitParams params(Widget::InitParams::TYPE_WINDOW);
@@ -223,17 +231,18 @@ IN_PROC_BROWSER_TEST_F(MenuControllerUITest, FocusOnOrphanMenu) {
   // Going into full screen mode prevents pre-test focus and mouse position
   // state from affecting test, and helps ui_controls function correctly.
   chrome::ToggleFullscreenMode(browser());
-  content::testing::ScopedContentAXModeSetter ax_mode_setter(
+  content::ScopedAccessibilityModeOverride ax_mode_override(
       ui::kAXModeComplete);
   MenuDelegate menu_delegate;
-  MenuItemView* menu_item = new MenuItemView(&menu_delegate);
+  auto menu_item_owning = std::make_unique<MenuItemView>(&menu_delegate);
+  MenuItemView* menu_item = menu_item_owning.get();
   AXEventCounter ax_counter(views::AXEventManager::Get());
   EXPECT_EQ(ax_counter.GetCount(ax::mojom::Event::kMenuStart), 0);
   EXPECT_EQ(ax_counter.GetCount(ax::mojom::Event::kMenuPopupStart), 0);
   EXPECT_EQ(ax_counter.GetCount(ax::mojom::Event::kMenuPopupEnd), 0);
   EXPECT_EQ(ax_counter.GetCount(ax::mojom::Event::kMenuEnd), 0);
-  std::unique_ptr<MenuRunner> menu_runner(
-      std::make_unique<MenuRunner>(menu_item, views::MenuRunner::CONTEXT_MENU));
+  std::unique_ptr<MenuRunner> menu_runner(std::make_unique<MenuRunner>(
+      std::move(menu_item_owning), views::MenuRunner::CONTEXT_MENU));
   MenuItemView* first_item = menu_item->AppendMenuItem(1, u"One");
   menu_item->AppendMenuItem(2, u"Two");
   menu_runner->RunMenuAt(nullptr, nullptr, gfx::Rect(),

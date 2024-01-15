@@ -7,7 +7,7 @@
 
 #include <memory>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/run_loop.h"
@@ -31,7 +31,6 @@
 
 namespace base {
 class CommandLine;
-class Value;
 }  // namespace base
 
 // A collection of functions designed for use with unit and browser tests.
@@ -51,9 +50,6 @@ blink::mojom::FetchAPIRequestPtr CreateFetchAPIRequest(
 // Deprecated: Use RunLoop::Run(). Use RunLoop::Type::kNestableTasksAllowed to
 // force nesting in browser tests.
 void RunMessageLoop();
-
-// Deprecated: Invoke |run_loop->Run()| directly.
-void RunThisRunLoop(base::RunLoop* run_loop);
 
 // Turns on nestable tasks, runs all pending tasks in the message loop, then
 // resets nestable tasks to what they were originally. Can only be called from
@@ -80,13 +76,6 @@ void RunAllTasksUntilIdle();
 // TODO(gab): Assess the need for this API (see comment on
 // RunAllPendingInMessageLoop() above).
 base::OnceClosure GetDeferredQuitTaskForRunLoop(base::RunLoop* run_loop);
-
-// Executes the specified JavaScript in the specified frame, and runs a nested
-// MessageLoop. When the result is available, it is returned.
-// This should not be used; the use of the ExecuteScript functions in
-// browser_test_utils is preferable.
-base::Value ExecuteScriptAndGetValue(RenderFrameHost* render_frame_host,
-                                     const std::string& script);
 
 // Returns true if all sites are isolated. Typically used to bail from a test
 // that is incompatible with --site-per-process.
@@ -123,15 +112,30 @@ void IsolateAllSitesForTesting(base::CommandLine* command_line);
 
 // Whether same-site navigations might result in a change of RenderFrameHosts -
 // this will happen when ProactivelySwapBrowsingInstance, RenderDocument or
-// back-forward cache is enabled on same-site main frame navigations.
+// back-forward cache is enabled on same-site main frame navigations. Note that
+// even if this returns true, not all same-site main frame navigations will
+// result in a change of RenderFrameHosts, e.g. if RenderDocument is disabled
+// but BFCache is enabled, this will return true but only same-site navigations
+// from pages that are BFCache-eligible will result in a RenderFrameHost change.
 bool CanSameSiteMainFrameNavigationsChangeRenderFrameHosts();
+
+// Whether same-site navigations will result in a change of RenderFrameHosts,
+// which will happen when RenderDocument is enabled. Due to the various levels
+// of the feature, the result may differ depending on whether the
+// RenderFrameHost is a main/local root/non-local-root frame.
+bool WillSameSiteNavigationChangeRenderFrameHosts(bool is_main_frame,
+                                                  bool is_local_root = true);
 
 // Whether same-site navigations might result in a change of SiteInstances -
 // this will happen when ProactivelySwapBrowsingInstance or back-forward cache
 // is enabled on same-site main frame navigations.
-// Note that unlike CanSameSiteMainFrameNavigationsChangeRenderFrameHosts()
+// Note that unlike WillSameSiteNavigationChangeRenderFrameHosts()
 // above, this will not be true when RenderDocument for main-frame is enabled.
 bool CanSameSiteMainFrameNavigationsChangeSiteInstances();
+
+// Returns true if navigation queueing is fully enabled, where we will queue new
+// navigations that happen when there is an existing pending commit navigation.
+bool IsNavigationQueueingEnabled();
 
 // Makes sure that navigations that start in |rfh| won't result in a proactive
 // BrowsingInstance swap (note they might still result in a normal
@@ -209,7 +213,7 @@ class MessageLoopRunner : public base::RefCountedThreadSafe<MessageLoopRunner> {
   // True after closure returned by |QuitClosure| has been called.
   bool quit_closure_called_ = false;
 
-  base::RunLoop run_loop_;
+  base::RunLoop run_loop_{base::RunLoop::Type::kNestableTasksAllowed};
 
   base::ThreadChecker thread_checker_;
 };
@@ -223,8 +227,7 @@ class MessageLoopRunner : public base::RefCountedThreadSafe<MessageLoopRunner> {
 // If the callback returns |true|, the condition is met. Otherwise, the
 // condition is not yet met and the callback will be invoked again every time a
 // notification of the expected type is received until the callback returns
-// |true|. For convenience, two callback types are defined, one that is provided
-// with the notification source and details, and one that is not.
+// |true|.
 //
 // This helper class exists to avoid the following common pattern in tests:
 //   PerformAction()
@@ -240,14 +243,10 @@ class MessageLoopRunner : public base::RefCountedThreadSafe<MessageLoopRunner> {
 class WindowedNotificationObserver : public NotificationObserver {
  public:
   // Callback invoked on notifications. Should return |true| when the condition
-  // being waited for is met. For convenience, there is a choice between two
-  // callback types, one that is provided with the notification source and
-  // details, and one that is not.
+  // being waited for is met.
   using ConditionTestCallback =
       base::RepeatingCallback<bool(const NotificationSource&,
                                    const NotificationDetails&)>;
-  using ConditionTestCallbackWithoutSourceAndDetails =
-      base::RepeatingCallback<bool(void)>;
 
   // Set up to wait for a simple condition. The condition is met when a
   // notification of the given |notification_type| from the given |source| is
@@ -261,9 +260,6 @@ class WindowedNotificationObserver : public NotificationObserver {
   // of |notification_type| from any source is received.
   WindowedNotificationObserver(int notification_type,
                                ConditionTestCallback callback);
-  WindowedNotificationObserver(
-      int notification_type,
-      ConditionTestCallbackWithoutSourceAndDetails callback);
 
   WindowedNotificationObserver(const WindowedNotificationObserver&) = delete;
   WindowedNotificationObserver& operator=(const WindowedNotificationObserver&) =
@@ -271,26 +267,13 @@ class WindowedNotificationObserver : public NotificationObserver {
 
   ~WindowedNotificationObserver() override;
 
-  // Adds an additional notification type to wait for. The condition will be met
-  // if any of the registered notification types from their respective sources
-  // is received.
-  void AddNotificationType(int notification_type,
-                           const NotificationSource& source);
-
   // Wait until the specified condition is met. If the condition is already met
   // (that is, the expected notification has already been received or the
   // given callback returns |true| already), Wait() returns immediately.
   void Wait();
 
-  // Returns NotificationService::AllSources() if we haven't observed a
-  // notification yet.
-  const NotificationSource& source() const {
-    return source_;
-  }
-
-  const NotificationDetails& details() const {
-    return details_;
-  }
+  // Whether the expected notification has already been received.
+  bool NotificationReceived() const;
 
   // NotificationObserver:
   void Observe(int type,
@@ -303,8 +286,6 @@ class WindowedNotificationObserver : public NotificationObserver {
 
   ConditionTestCallback callback_;
 
-  NotificationSource source_;
-  NotificationDetails details_;
   base::RunLoop run_loop_;
 };
 
@@ -365,7 +346,7 @@ class InProcessUtilityThreadHelper : public BrowserChildProcessObserver {
   void BrowserChildProcessHostDisconnected(
       const ChildProcessData& data) override;
 
-  absl::optional<base::RunLoop> run_loop_;
+  std::optional<base::RunLoop> run_loop_;
 };
 
 // This observer keeps tracks of whether a given RenderFrameHost has received
@@ -482,11 +463,32 @@ class TestPageScaleObserver : public WebContentsObserver {
   float last_scale_ = 0.f;
 };
 
+class EffectiveURLContentBrowserClientHelper {
+ public:
+  explicit EffectiveURLContentBrowserClientHelper(
+      bool requires_dedicated_process = false);
+  ~EffectiveURLContentBrowserClientHelper();
+
+  void AddTranslation(const GURL& url_to_modify, const GURL& url_to_return);
+  GURL GetEffectiveURL(const GURL& url);
+  bool DoesSiteRequireDedicatedProcess(BrowserContext* browser_context,
+                                       const GURL& effective_site_url);
+
+ private:
+  // A map of original URLs to effective URLs.
+  std::map<GURL, GURL> urls_to_modify_;
+
+  const bool requires_dedicated_process_;
+};
+
 // A custom ContentBrowserClient that simulates GetEffectiveURL() translation
 // for one or more URL pairs.  |requires_dedicated_process| indicates whether
 // the client should indicate that each registered URL requires a dedicated
 // process.  Passing |false| for it will rely on default behavior computed in
 // SiteInstanceImpl::DoesSiteRequireDedicatedProcess().
+//
+// Do not use this in browser tests. Instead use
+// EffectiveURLContentBrowserTestContentBrowserClient.
 class EffectiveURLContentBrowserClient : public ContentBrowserClient {
  public:
   explicit EffectiveURLContentBrowserClient(bool requires_dedicated_process);
@@ -510,14 +512,13 @@ class EffectiveURLContentBrowserClient : public ContentBrowserClient {
   bool DoesSiteRequireDedicatedProcess(BrowserContext* browser_context,
                                        const GURL& effective_site_url) override;
 
-  // A map of original URLs to effective URLs.
-  std::map<GURL, GURL> urls_to_modify_;
-
-  bool requires_dedicated_process_;
+  EffectiveURLContentBrowserClientHelper helper_;
 };
 
 // Wrapper around `SetBrowserClientForTesting()` that ensures the
-// previous content browser client is restored upon destruction.
+// previous content browser client is restored upon destruction. This is
+// unnecessary in browser tests. In browser tests subclass
+// ContentBrowserTestContentBrowserClient and it will take care of this for you.
 class ScopedContentBrowserClientSetting final {
  public:
   explicit ScopedContentBrowserClientSetting(ContentBrowserClient* new_client);

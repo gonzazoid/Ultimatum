@@ -12,12 +12,25 @@ cr.define('cr.ArcOverviewTracing', function() {
      * Initializes internal structures.
      */
     initialize() {
-      var maxTime = $('arc-overview-tracing-max-time');
+      const maxTime = $('arc-overview-tracing-max-time');
       maxTime.addEventListener('change', function(event) {
-        chrome.send('setMaxTime', [parseInt(maxTime.value)]);
+        let value = parseFloat(maxTime.value);
+        if (Number.isNaN(value) || value < 1) {
+          console.error('invalid maxTime:', maxTime.value);
+          value = 1;
+          maxTime.value = '1';
+        }
+        chrome.send('setMaxTime', [value]);
       }, false);
-      chrome.send('ready');
-      chrome.send('setMaxTime', [parseInt(maxTime.value)]);
+
+      // Note autocomplete for this input element must be *off* for this to
+      // do the right thing. Otherwise, the last-entered value may be restored
+      // automatically sometime after window.onload completes. I could not find
+      // the right event to intercept to capture the restored value. A vanilla
+      // HTML page I threw together did not have this problem, and the load
+      // event fired after the value was restored.
+      chrome.send('setMaxTime', [parseFloat(maxTime.value)]);
+
       initializeOverviewUi();
     },
 

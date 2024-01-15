@@ -14,10 +14,12 @@
 #include "content/public/common/cdm_info.h"
 #include "media/cdm/cdm_capability.h"
 #include "media/cdm/cdm_type.h"
+#include "media/cdm/clear_key_cdm_common.h"
 #include "third_party/widevine/cdm/buildflags.h"
 
 #if BUILDFLAG(ENABLE_LIBRARY_CDMS)
 #include "base/command_line.h"
+#include "components/cdm/common/cdm_manifest.h"
 #include "media/base/media_switches.h"
 #include "media/cdm/cdm_paths.h"  // nogncheck
 #endif
@@ -30,7 +32,7 @@
 #endif  // BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_WIN)
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
 #include "base/no_destructor.h"
-#include "components/cdm/common/cdm_manifest.h"
+#include "chrome/common/media/component_widevine_cdm_hint_file_linux.h"
 #include "media/cdm/supported_audio_codecs.h"
 // Needed for WIDEVINE_CDM_MIN_GLIBC_VERSION. This file is in
 // SHARED_INTERMEDIATE_DIR.
@@ -40,11 +42,12 @@
 #include <gnu/libc-version.h>
 #include "base/version.h"
 #endif  // defined(WIDEVINE_CDM_MIN_GLIBC_VERSION)
-#if !BUILDFLAG(IS_CHROMEOS_ASH)
-#include "chrome/common/media/component_widevine_cdm_hint_file_linux.h"
-#endif  // !BUILDFLAG(IS_CHROMEOS_ASH)
 #endif  // BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
 #endif  // BUILDFLAG(ENABLE_WIDEVINE)
+
+#if BUILDFLAG(IS_ANDROID)
+#include "components/cdm/common/android_cdm_registration.h"
+#endif  // BUILDFLAG(IS_ANDROID)
 
 namespace {
 
@@ -76,15 +79,19 @@ std::unique_ptr<content::CdmInfo> CreateCdmInfoFromWidevineDirectory(
   auto cdm_library_path =
       media::GetPlatformSpecificDirectory(cdm_base_path)
           .Append(base::GetNativeLibraryName(kWidevineCdmLibraryName));
-  if (!base::PathExists(cdm_library_path))
+  if (!base::PathExists(cdm_library_path)) {
+    DLOG(ERROR) << __func__ << " no directory: " << cdm_library_path;
     return nullptr;
+  }
 
   // Manifest should be at the top level.
   auto manifest_path = cdm_base_path.Append(FILE_PATH_LITERAL("manifest.json"));
   base::Version version;
   media::CdmCapability capability;
-  if (!ParseCdmManifestFromPath(manifest_path, &version, &capability))
+  if (!ParseCdmManifestFromPath(manifest_path, &version, &capability)) {
+    DLOG(ERROR) << __func__ << " no manifest: " << manifest_path;
     return nullptr;
+  }
 
   return CreateWidevineCdmInfo(version, cdm_library_path,
                                std::move(capability));
@@ -114,8 +121,8 @@ content::CdmInfo* GetBundledWidevine() {
       }());
   return s_cdm_info->get();
 }
-#endif  // BUILDFLAG(BUNDLE_WIDEVINE_CDM) && (BUILDFLAG(IS_LINUX) ||
-        // BUILDFLAG(IS_CHROMEOS))
+#endif  // BUILDFLAG(BUNDLE_WIDEVINE_CDM) &&
+        // (BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS))
 
 #if BUILDFLAG(ENABLE_WIDEVINE_CDM_COMPONENT) && \
     (BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS))
@@ -130,18 +137,30 @@ content::CdmInfo* GetComponentUpdatedWidevine() {
   static base::NoDestructor<std::unique_ptr<content::CdmInfo>> s_cdm_info(
       []() -> std::unique_ptr<content::CdmInfo> {
         auto install_dir = GetLatestComponentUpdatedWidevineCdmDirectory();
-        if (install_dir.empty())
+        if (install_dir.empty()) {
           return nullptr;
+        }
 
         return CreateCdmInfoFromWidevineDirectory(install_dir);
       }());
   return s_cdm_info->get();
 }
-#endif  // BUILDFLAG(ENABLE_WIDEVINE_CDM_COMPONENT) && (BUILDFLAG(IS_LINUX) ||
-        // BUILDFLAG(IS_CHROMEOS))
+#endif  // BUILDFLAG(ENABLE_WIDEVINE_CDM_COMPONENT) &&
+        // (BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS))
 
 void AddSoftwareSecureWidevine(std::vector<content::CdmInfo>* cdms) {
-#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
+  DVLOG(1) << __func__;
+
+#if BUILDFLAG(IS_ANDROID)
+  // On Android Widevine is done by MediaDrm, and should be supported on all
+  // devices. Register Widevine without any capabilities so that it will be
+  // checked the first time some page attempts to play protected content.
+  cdms->emplace_back(
+      kWidevineKeySystem, Robustness::kSoftwareSecure, absl::nullopt,
+      /*supports_sub_key_systems=*/false, kWidevineCdmDisplayName,
+      kWidevineCdmType, base::Version(), base::FilePath());
+
+#elif BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
 #if defined(WIDEVINE_CDM_MIN_GLIBC_VERSION)
   base::Version glibc_version(gnu_get_libc_version());
   DCHECK(glibc_version.IsValid());
@@ -188,11 +207,22 @@ void AddSoftwareSecureWidevine(std::vector<content::CdmInfo>* cdms) {
   } else {
     VLOG(1) << "Widevine enabled but no library found";
   }
-#endif  // BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
+#endif  // BUILDFLAG(IS_ANDROID)
 }
 
 void AddHardwareSecureWidevine(std::vector<content::CdmInfo>* cdms) {
-#if BUILDFLAG(USE_CHROMEOS_PROTECTED_MEDIA)
+  DVLOG(1) << __func__;
+
+#if BUILDFLAG(IS_ANDROID)
+  // On Android Widevine is done by MediaDrm, and should be supported on all
+  // devices. Register Widevine without any capabilities so that it will be
+  // checked the first time some page attempts to play protected content.
+  cdms->emplace_back(
+      kWidevineKeySystem, Robustness::kHardwareSecure, absl::nullopt,
+      /*supports_sub_key_systems=*/false, kWidevineCdmDisplayName,
+      kWidevineCdmType, base::Version(), base::FilePath());
+
+#elif BUILDFLAG(USE_CHROMEOS_PROTECTED_MEDIA)
 #if BUILDFLAG(IS_CHROMEOS_LACROS)
   if (!base::CommandLine::ForCurrentProcess()->HasSwitch(
           switches::kLacrosUseChromeosProtectedMedia)) {
@@ -216,6 +246,10 @@ void AddHardwareSecureWidevine(std::vector<content::CdmInfo>* cdms) {
 #if BUILDFLAG(IS_CHROMEOS_LACROS)
   if (base::CommandLine::ForCurrentProcess()->HasSwitch(
           switches::kLacrosEnablePlatformHevc)) {
+    capability.video_codecs.emplace(media::VideoCodec::kHEVC, kAllProfiles);
+  }
+#elif BUILDFLAG(IS_CHROMEOS_ASH)
+  if (base::FeatureList::IsEnabled(media::kPlatformHEVCDecoderSupport)) {
     capability.video_codecs.emplace(media::VideoCodec::kHEVC, kAllProfiles);
   }
 #else
@@ -242,7 +276,7 @@ void AddHardwareSecureWidevine(std::vector<content::CdmInfo>* cdms) {
   cdms->push_back(
       content::CdmInfo(kWidevineKeySystem, Robustness::kHardwareSecure,
                        std::move(capability), content::kChromeOsCdmType));
-#endif  // BUILDFLAG(USE_CHROMEOS_PROTECTED_MEDIA)
+#endif  // BUILDFLAG(IS_ANDROID)
 }
 
 void AddWidevine(std::vector<content::CdmInfo>* cdms) {
@@ -257,40 +291,62 @@ void AddExternalClearKey(std::vector<content::CdmInfo>* cdms) {
   base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();
   base::FilePath clear_key_cdm_path =
       command_line->GetSwitchValuePath(switches::kClearKeyCdmPathForTesting);
-  if (clear_key_cdm_path.empty() || !base::PathExists(clear_key_cdm_path))
+  if (clear_key_cdm_path.empty() || !base::PathExists(clear_key_cdm_path)) {
     return;
+  }
 
-  // TODO(crbug.com/764480): Remove these after we have a central place for
-  // External Clear Key (ECK) related information.
-  // Normal External Clear Key key system.
-  const char kExternalClearKeyKeySystem[] = "org.chromium.externalclearkey";
-  // A variant of ECK key system that has a different CDM type.
-  const char kkExternalClearKeyDifferentCdmTypeTestKeySystem[] =
-      "org.chromium.externalclearkey.differentcdmtype";
-
-  // Supported codecs are hard-coded in ExternalClearKeySystemInfo.
+  // Supported codecs are hard-coded in ExternalClearKeyKeySystemInfo.
   media::CdmCapability capability(
       {}, {}, {media::EncryptionScheme::kCenc, media::EncryptionScheme::kCbcs},
       {media::CdmSessionType::kTemporary,
        media::CdmSessionType::kPersistentLicense});
 
-  // Register kkExternalClearKeyDifferentCdmTypeTestKeySystem first separately.
-  // Otherwise, it'll be treated as a sub-key-system of normal
-  // kExternalClearKeyKeySystem. See MultipleCdmTypes test in
+  // Register media::kExternalClearKeyDifferentCdmTypeTestKeySystem first
+  // separately. Otherwise, it'll be treated as a sub-key-system of normal
+  // media::kExternalClearKeyKeySystem. See MultipleCdmTypes test in
   // ECKEncryptedMediaTest.
   cdms->push_back(content::CdmInfo(
-      kkExternalClearKeyDifferentCdmTypeTestKeySystem,
+      media::kExternalClearKeyDifferentCdmTypeTestKeySystem,
       Robustness::kSoftwareSecure, capability,
       /*supports_sub_key_systems=*/false, media::kClearKeyCdmDisplayName,
       media::kClearKeyCdmDifferentCdmType, base::Version("0.1.0.0"),
       clear_key_cdm_path));
 
   cdms->push_back(content::CdmInfo(
-      kExternalClearKeyKeySystem, Robustness::kSoftwareSecure, capability,
+      media::kExternalClearKeyKeySystem, Robustness::kSoftwareSecure,
+      capability,
       /*supports_sub_key_systems=*/true, media::kClearKeyCdmDisplayName,
       media::kClearKeyCdmType, base::Version("0.1.0.0"), clear_key_cdm_path));
 }
 #endif  // BUILDFLAG(ENABLE_LIBRARY_CDMS)
+
+#if BUILDFLAG(IS_WIN)
+void AddMediaFoundationClearKey(std::vector<content::CdmInfo>* cdms) {
+  if (!base::FeatureList::IsEnabled(media::kExternalClearKeyForTesting)) {
+    return;
+  }
+
+  // Register MediaFoundation Clear Key CDM if specified in feature list.
+  base::FilePath clear_key_cdm_path = base::FilePath::FromASCII(
+      media::kMediaFoundationClearKeyCdmPathForTesting.Get());
+  if (clear_key_cdm_path.empty() || !base::PathExists(clear_key_cdm_path)) {
+    return;
+  }
+
+  // Supported codecs are hard-coded in ExternalClearKeyKeySystemInfo.
+  media::CdmCapability capability(
+      {}, {}, {media::EncryptionScheme::kCenc, media::EncryptionScheme::kCbcs},
+      {media::CdmSessionType::kTemporary});
+
+  cdms->push_back(
+      content::CdmInfo(media::kMediaFoundationClearKeyKeySystem,
+                       Robustness::kHardwareSecure, capability,
+                       /*supports_sub_key_systems=*/false,
+                       media::kMediaFoundationClearKeyCdmDisplayName,
+                       media::kMediaFoundationClearKeyCdmType,
+                       base::Version("0.1.0.0"), clear_key_cdm_path));
+}
+#endif  // BUILDFLAG(IS_WIN)
 
 }  // namespace
 
@@ -306,4 +362,14 @@ void RegisterCdmInfo(std::vector<content::CdmInfo>* cdms) {
 #if BUILDFLAG(ENABLE_LIBRARY_CDMS)
   AddExternalClearKey(cdms);
 #endif
+
+#if BUILDFLAG(IS_WIN)
+  AddMediaFoundationClearKey(cdms);
+#endif
+
+#if BUILDFLAG(IS_ANDROID)
+  cdm::AddOtherAndroidCdms(cdms);
+#endif  // BUILDFLAG(IS_ANDROID)
+
+  DVLOG(3) << __func__ << " done with " << cdms->size() << " cdms";
 }

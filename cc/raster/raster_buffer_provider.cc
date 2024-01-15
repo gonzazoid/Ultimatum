@@ -10,12 +10,18 @@
 #include "base/trace_event/trace_event.h"
 #include "cc/raster/raster_source.h"
 #include "components/viz/common/resources/platform_color.h"
-#include "components/viz/common/resources/resource_format_utils.h"
+#include "components/viz/common/resources/shared_image_format_utils.h"
 #include "skia/ext/legacy_display_globals.h"
+#include "third_party/skia/include/core/SkAlphaType.h"
+#include "third_party/skia/include/core/SkBlendMode.h"
 #include "third_party/skia/include/core/SkCanvas.h"
 #include "third_party/skia/include/core/SkColorSpace.h"
-#include "third_party/skia/include/core/SkMath.h"
+#include "third_party/skia/include/core/SkColorType.h"
+#include "third_party/skia/include/core/SkImageInfo.h"
+#include "third_party/skia/include/core/SkPaint.h"
+#include "third_party/skia/include/core/SkRefCnt.h"
 #include "third_party/skia/include/core/SkSurface.h"
+#include "third_party/skia/include/core/SkSurfaceProps.h"
 #include "ui/gfx/geometry/axis_transform2d.h"
 
 namespace cc {
@@ -26,35 +32,11 @@ RasterBufferProvider::~RasterBufferProvider() = default;
 
 namespace {
 
-bool IsSupportedPlaybackToMemoryFormat(viz::ResourceFormat format) {
-  switch (format) {
-    case viz::RGBA_4444:
-    case viz::RGBA_8888:
-    case viz::BGRA_8888:
-    case viz::RGBA_F16:
-      return true;
-    case viz::ALPHA_8:
-    case viz::LUMINANCE_8:
-    case viz::RGB_565:
-    case viz::ETC1:
-    case viz::RED_8:
-    case viz::LUMINANCE_F16:
-    case viz::R16_EXT:
-    case viz::RG16_EXT:
-    case viz::BGR_565:
-    case viz::RG_88:
-    case viz::RGBX_8888:
-    case viz::BGRX_8888:
-    case viz::RGBA_1010102:
-    case viz::BGRA_1010102:
-    case viz::YVU_420:
-    case viz::YUV_420_BIPLANAR:
-    case viz::YUVA_420_TRIPLANAR:
-    case viz::P010:
-      return false;
-  }
-  NOTREACHED();
-  return false;
+bool IsSupportedPlaybackToMemoryFormat(viz::SharedImageFormat format) {
+  return (format == viz::SinglePlaneFormat::kRGBA_4444) ||
+         (format == viz::SinglePlaneFormat::kRGBA_8888) ||
+         (format == viz::SinglePlaneFormat::kBGRA_8888) ||
+         (format == viz::SinglePlaneFormat::kRGBA_F16);
 }
 
 }  // anonymous namespace
@@ -62,7 +44,7 @@ bool IsSupportedPlaybackToMemoryFormat(viz::ResourceFormat format) {
 // static
 void RasterBufferProvider::PlaybackToMemory(
     void* memory,
-    viz::ResourceFormat format,
+    viz::SharedImageFormat format,
     const gfx::Size& size,
     size_t stride,
     const RasterSource* raster_source,
@@ -75,10 +57,9 @@ void RasterBufferProvider::PlaybackToMemory(
   TRACE_EVENT0(TRACE_DISABLED_BY_DEFAULT("cc.debug"),
                "RasterBufferProvider::PlaybackToMemory");
 
-  DCHECK(IsSupportedPlaybackToMemoryFormat(format)) << format;
+  DCHECK(IsSupportedPlaybackToMemoryFormat(format)) << format.ToString();
 
-  SkColorType color_type =
-      ResourceFormatToClosestSkColorType(gpu_compositing, format);
+  SkColorType color_type = ToClosestSkColorType(gpu_compositing, format);
 
   // Uses kPremul_SkAlphaType since the result is not known to be opaque.
   SkImageInfo info = SkImageInfo::Make(size.width(), size.height(), color_type,
@@ -97,66 +78,54 @@ void RasterBufferProvider::PlaybackToMemory(
 
   gfx::Size content_size = raster_source->GetContentSize(transform.scale());
 
-  switch (format) {
-    case viz::RGBA_8888:
-    case viz::BGRA_8888:
-    case viz::RGBA_F16: {
-      sk_sp<SkSurface> surface =
-          SkSurface::MakeRasterDirect(info, memory, stride, &surface_props);
-      // There are some rare crashes where this doesn't succeed and may be
-      // indicative of memory stomps elsewhere.  Instead of displaying
-      // invalid content, just crash the renderer and try again.
-      // See: http://crbug.com/721744.
-      CHECK(surface);
-      raster_source->PlaybackToCanvas(surface->getCanvas(), content_size,
-                                      canvas_bitmap_rect, canvas_playback_rect,
-                                      transform, playback_settings);
-      return;
-    }
-    case viz::RGBA_4444: {
-      sk_sp<SkSurface> surface = SkSurface::MakeRaster(info, &surface_props);
-      // TODO(reveman): Improve partial raster support by reducing the size of
-      // playback rect passed to PlaybackToCanvas. crbug.com/519070
-      raster_source->PlaybackToCanvas(surface->getCanvas(), content_size,
-                                      canvas_bitmap_rect, canvas_bitmap_rect,
-                                      transform, playback_settings);
+  if ((format == viz::SinglePlaneFormat::kRGBA_8888) ||
+      (format == viz::SinglePlaneFormat::kBGRA_8888) ||
+      (format == viz::SinglePlaneFormat::kRGBA_F16)) {
+    sk_sp<SkSurface> surface =
+        SkSurfaces::WrapPixels(info, memory, stride, &surface_props);
+    // There are some rare crashes where this doesn't succeed and may be
+    // indicative of memory stomps elsewhere.  Instead of displaying
+    // invalid content, just crash the renderer and try again.
+    // See: http://crbug.com/721744.
+    CHECK(surface);
+    raster_source->PlaybackToCanvas(surface->getCanvas(), content_size,
+                                    canvas_bitmap_rect, canvas_playback_rect,
+                                    transform, playback_settings);
+    return;
+  }
 
-      TRACE_EVENT0("cc",
-                   "RasterBufferProvider::PlaybackToMemory::ConvertRGBA4444");
-      SkImageInfo dst_info = info.makeColorType(
-          ResourceFormatToClosestSkColorType(gpu_compositing, format));
-      auto dst_canvas =
-          SkCanvas::MakeRasterDirect(dst_info, memory, stride, &surface_props);
-      DCHECK(dst_canvas);
-      SkPaint paint;
-      paint.setDither(true);
-      paint.setBlendMode(SkBlendMode::kSrc);
-      surface->draw(dst_canvas.get(), 0, 0, SkSamplingOptions(), &paint);
-      return;
-    }
-    case viz::ETC1:
-    case viz::ALPHA_8:
-    case viz::LUMINANCE_8:
-    case viz::RGB_565:
-    case viz::RED_8:
-    case viz::LUMINANCE_F16:
-    case viz::R16_EXT:
-    case viz::RG16_EXT:
-    case viz::BGR_565:
-    case viz::RG_88:
-    case viz::RGBX_8888:
-    case viz::BGRX_8888:
-    case viz::RGBA_1010102:
-    case viz::BGRA_1010102:
-    case viz::YVU_420:
-    case viz::YUV_420_BIPLANAR:
-    case viz::YUVA_420_TRIPLANAR:
-    case viz::P010:
-      NOTREACHED();
-      return;
+  if (format == viz::SinglePlaneFormat::kRGBA_4444) {
+    sk_sp<SkSurface> surface = SkSurfaces::Raster(info, &surface_props);
+    // TODO(reveman): Improve partial raster support by reducing the size of
+    // playback rect passed to PlaybackToCanvas. crbug.com/519070
+    raster_source->PlaybackToCanvas(surface->getCanvas(), content_size,
+                                    canvas_bitmap_rect, canvas_bitmap_rect,
+                                    transform, playback_settings);
+
+    TRACE_EVENT0("cc",
+                 "RasterBufferProvider::PlaybackToMemory::ConvertRGBA4444");
+    SkImageInfo dst_info =
+        info.makeColorType(ToClosestSkColorType(gpu_compositing, format));
+    auto dst_canvas =
+        SkCanvas::MakeRasterDirect(dst_info, memory, stride, &surface_props);
+    DCHECK(dst_canvas);
+    SkPaint paint;
+    paint.setDither(true);
+    paint.setBlendMode(SkBlendMode::kSrc);
+    surface->draw(dst_canvas.get(), 0, 0, SkSamplingOptions(), &paint);
+    return;
   }
 
   NOTREACHED();
+}
+
+void RasterBufferProvider::FlushIfNeeded() {
+  if (!needs_flush_) {
+    return;
+  }
+
+  Flush();
+  needs_flush_ = false;
 }
 
 }  // namespace cc

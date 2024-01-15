@@ -52,7 +52,10 @@ bool TabletModeToggleFullscreenEventHandler::ProcessEvent(
     const ui::TouchEvent& event) {
   switch (event.type()) {
     case ui::ET_TOUCH_PRESSED: {
-      DCHECK(!drag_data_);
+      // Another drag is already underway from another finger.
+      if (drag_data_) {
+        return false;
+      }
 
       aura::Window* active_window = window_util::GetActiveWindow();
       if (!active_window || !CanToggleFullscreen(active_window))
@@ -67,7 +70,7 @@ bool TabletModeToggleFullscreenEventHandler::ProcessEvent(
         return false;
       }
 
-      drag_data_ = DragData{y, active_window};
+      drag_data_ = DragData{.start_y_location = y, .window = active_window};
       active_window->AddObserver(this);
       return true;
     }

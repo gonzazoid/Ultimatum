@@ -34,17 +34,9 @@ class MediaNotificationItem;
 
 class COMPONENT_EXPORT(MEDIA_MESSAGE_CENTER) MediaNotificationViewImpl
     : public MediaNotificationView {
+  METADATA_HEADER(MediaNotificationViewImpl, MediaNotificationView)
+
  public:
-  METADATA_HEADER(MediaNotificationViewImpl);
-
-  // The name of the histogram used when recorded whether the artwork was
-  // present.
-  static const char kArtworkHistogramName[];
-
-  // The name of the histogram used when recording the type of metadata that was
-  // displayed.
-  static const char kMetadataHistogramName[];
-
   // The type of metadata that was displayed. This is used in metrics so new
   // values must only be added to the end.
   enum class Metadata {
@@ -87,10 +79,11 @@ class COMPONENT_EXPORT(MEDIA_MESSAGE_CENTER) MediaNotificationViewImpl
       const media_session::MediaPosition& position) override {}
   void UpdateWithMediaArtwork(const gfx::ImageSkia& image) override;
   void UpdateWithFavicon(const gfx::ImageSkia& icon) override;
-  void UpdateWithVectorIcon(const gfx::VectorIcon& vector_icon) override;
-  void UpdateDeviceSelectorAvailability(bool availability) override;
+  void UpdateWithVectorIcon(const gfx::VectorIcon* vector_icon) override;
   void UpdateWithMuteStatus(bool mute) override {}
   void UpdateWithVolume(float volume) override {}
+  void UpdateDeviceSelectorVisibility(bool visible) override;
+  void UpdateDeviceSelectorAvailability(bool has_devices) override {}
 
   void OnThemeChanged() override;
 
@@ -106,7 +99,10 @@ class COMPONENT_EXPORT(MEDIA_MESSAGE_CENTER) MediaNotificationViewImpl
     return playback_button_container_;
   }
 
-  std::vector<views::View*> get_buttons_for_testing() { return GetButtons(); }
+  std::vector<raw_ptr<views::View, VectorExperimental>>
+  get_buttons_for_testing() {
+    return GetButtons();
+  }
 
   views::Button* GetHeaderRowForTesting() const;
   std::u16string GetSourceTitleForTesting() const;
@@ -142,7 +138,7 @@ class COMPONENT_EXPORT(MEDIA_MESSAGE_CENTER) MediaNotificationViewImpl
 
   // Returns the buttons contained in the button row and playback button
   // container.
-  std::vector<views::View*> GetButtons();
+  std::vector<raw_ptr<views::View, VectorExperimental>> GetButtons();
 
   // Container that receives OnExpanded events.
   const raw_ptr<MediaNotificationContainer> container_;
@@ -171,10 +167,6 @@ class COMPONENT_EXPORT(MEDIA_MESSAGE_CENTER) MediaNotificationViewImpl
 
   // Set of enabled actions.
   base::flat_set<media_session::mojom::MediaSessionAction> enabled_actions_;
-
-  // Stores the text to be read by screen readers describing the notification.
-  // Contains the title, artist and album separated by hyphens.
-  std::u16string accessible_name_;
 
   // Container views directly attached to this view.
   raw_ptr<message_center::NotificationHeaderView> header_row_ = nullptr;

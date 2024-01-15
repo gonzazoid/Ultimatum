@@ -7,14 +7,15 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include "base/android/scoped_java_ref.h"
 #include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ref.h"
 #include "chrome/browser/ui/android/tab_model/android_live_tab_context_wrapper.h"
 #include "components/sessions/core/tab_restore_service.h"
 #include "components/sessions/core/tab_restore_service_observer.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 class Profile;
 
@@ -55,13 +56,13 @@ class TabIterator {
  private:
   void SetupInnerTabList();
 
-  const sessions::TabRestoreService::Entries& entries_;
+  const raw_ref<const sessions::TabRestoreService::Entries> entries_;
   sessions::TabRestoreService::Entries::const_iterator current_entry_;
-  const std::vector<std::unique_ptr<sessions::TabRestoreService::Tab>>* tabs_ =
-      nullptr;
-  absl::optional<std::vector<std::unique_ptr<
-      sessions::TabRestoreService::Tab>>::const_reverse_iterator>
-      current_tab_ = absl::nullopt;
+  raw_ptr<const std::vector<std::unique_ptr<sessions::TabRestoreService::Tab>>>
+      tabs_ = nullptr;
+  std::optional<std::vector<std::unique_ptr<sessions::TabRestoreService::Tab>>::
+                    const_reverse_iterator>
+      current_tab_ = std::nullopt;
 };
 
 // Provides the list of recently closed tabs to Java.

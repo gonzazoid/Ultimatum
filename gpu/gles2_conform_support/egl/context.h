@@ -66,7 +66,9 @@ class Context : public base::RefCountedThreadSafe<Context>,
   // GpuControl implementation.
   void SetGpuControlClient(gpu::GpuControlClient*) override;
   const gpu::Capabilities& GetCapabilities() const override;
+  const gpu::GLCapabilities& GetGLCapabilities() const override;
   void SignalQuery(uint32_t query, base::OnceClosure callback) override;
+  void CancelAllQueries() override;
   void CreateGpuFence(uint32_t gpu_fence_id, ClientGpuFence source) override;
   void GetGpuFence(uint32_t gpu_fence_id,
                    base::OnceCallback<void(std::unique_ptr<gfx::GpuFence>)>
@@ -129,6 +131,7 @@ class Context : public base::RefCountedThreadSafe<Context>,
   std::unique_ptr<gpu::gles2::GLES2Interface> client_gl_context_;
 
   gpu::Capabilities capabilities_;
+  gpu::GLCapabilities gl_capabilities_;
 };
 
 }  // namespace egl

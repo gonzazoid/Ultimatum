@@ -36,11 +36,15 @@ struct IPCZ_ALIGN(8) BufferHeader {
   // Access mode for the region.
   BufferMode mode;
 
+  // Explicit padding for the next field to be 8-byte-aligned.
+  uint32_t padding;
+
   // The low and high components of the 128-bit GUID used to identify this
   // buffer.
   uint64_t guid_low;
   uint64_t guid_high;
 };
+static_assert(sizeof(BufferHeader) == 32, "Invalid BufferHeader size");
 
 // Produces a ScopedPlatformSharedMemoryHandle from a set of PlatformHandles and
 // an access mode.
@@ -132,9 +136,9 @@ scoped_refptr<SharedBuffer> SharedBuffer::CreateForMojoWrapper(
       return nullptr;
   }
 
-  auto guid =
+  std::optional<base::UnguessableToken> guid =
       base::UnguessableToken::Deserialize(mojo_guid.high, mojo_guid.low);
-  if (guid.is_empty()) {
+  if (!guid.has_value()) {
     return nullptr;
   }
 
@@ -147,7 +151,7 @@ scoped_refptr<SharedBuffer> SharedBuffer::CreateForMojoWrapper(
   auto handle = CreateRegionHandleFromPlatformHandles(
       {&handles[0], mojo_platform_handles.size()}, mode);
   auto region = base::subtle::PlatformSharedMemoryRegion::Take(
-      std::move(handle), mode, size, guid);
+      std::move(handle), mode, size, guid.value());
   if (!region.IsValid()) {
     return nullptr;
   }
@@ -190,7 +194,9 @@ bool SharedBuffer::Serialize(Transport& transmitter,
 
   DCHECK_GE(data.size(), sizeof(BufferHeader));
   BufferHeader& header = *reinterpret_cast<BufferHeader*>(data.data());
-  header.size = static_cast<uint32_t>(region_.GetSize());
+  header.size = sizeof(header);
+  header.buffer_size = static_cast<uint32_t>(region_.GetSize());
+  header.padding = 0;
   switch (region_.GetMode()) {
     case base::subtle::PlatformSharedMemoryRegion::Mode::kReadOnly:
       header.mode = BufferMode::kReadOnly;
@@ -235,6 +241,11 @@ scoped_refptr<SharedBuffer> SharedBuffer::Deserialize(
 
   const BufferHeader& header =
       *reinterpret_cast<const BufferHeader*>(data.data());
+  const size_t header_size = header.size;
+  if (header_size < sizeof(BufferHeader) || header_size % 8 != 0) {
+    return nullptr;
+  }
+
   base::subtle::PlatformSharedMemoryRegion::Mode mode;
   switch (header.mode) {
     case BufferMode::kReadOnly:
@@ -250,12 +261,15 @@ scoped_refptr<SharedBuffer> SharedBuffer::Deserialize(
       return nullptr;
   }
 
-  auto guid =
+  std::optional<base::UnguessableToken> guid =
       base::UnguessableToken::Deserialize(header.guid_high, header.guid_low);
+  if (!guid.has_value()) {
+    return nullptr;
+  }
 
   auto handle = CreateRegionHandleFromPlatformHandles(handles, mode);
   auto region = base::subtle::PlatformSharedMemoryRegion::Take(
-      std::move(handle), mode, header.size, guid);
+      std::move(handle), mode, header.buffer_size, guid.value());
   if (!region.IsValid()) {
     return nullptr;
   }

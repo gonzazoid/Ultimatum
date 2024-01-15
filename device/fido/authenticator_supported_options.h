@@ -8,6 +8,7 @@
 #include "base/component_export.h"
 #include "components/cbor/values.h"
 #include "device/fido/fido_constants.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace device {
 
@@ -37,6 +38,13 @@ struct COMPONENT_EXPORT(DEVICE_FIDO) AuthenticatorSupportedOptions {
     kNotSupported
   };
 
+  enum class PlatformDevice {
+    kNo,
+    kYes,
+    // kBoth authenticators may forward requests to both types of device.
+    kBoth,
+  };
+
   AuthenticatorSupportedOptions();
   AuthenticatorSupportedOptions(const AuthenticatorSupportedOptions& other);
   AuthenticatorSupportedOptions& operator=(
@@ -44,8 +52,9 @@ struct COMPONENT_EXPORT(DEVICE_FIDO) AuthenticatorSupportedOptions {
   ~AuthenticatorSupportedOptions();
 
   // Indicates that the authenticator is attached to the client and therefore
-  // can't be removed and used on another client.
-  bool is_platform_device = false;
+  // can't be removed and used on another client. If `kBoth` then the
+  // authenticator handles both types of requests (e.g. Windows Hello).
+  PlatformDevice is_platform_device = PlatformDevice::kNo;
   // Indicates that the authenticator is capable of storing keys on the
   // authenticator itself
   // and therefore can satisfy the authenticatorGetAssertion request with
@@ -92,9 +101,9 @@ struct COMPONENT_EXPORT(DEVICE_FIDO) AuthenticatorSupportedOptions {
   // uninteresting to Chromium because we do not support the administrative
   // operation to configure it. Thus this member reduces to a boolean.)
   bool enterprise_attestation = false;
-  // Indicates whether the authenticator supports the authenticatorLargeBlobs
-  // command.
-  bool supports_large_blobs = false;
+  // Whether the authenticator supports large blobs, and, if so, the method of
+  // that support.
+  absl::optional<LargeBlobSupportType> large_blob_type;
   // Indicates whether user verification must be used for make credential, final
   // (i.e. not pre-flight) get assertion requests, and writing large blobs. An
   // |always_uv| value of true will make uv=0 get assertion requests return
@@ -106,6 +115,15 @@ struct COMPONENT_EXPORT(DEVICE_FIDO) AuthenticatorSupportedOptions {
   // If true, indicates that the authenticator supports the minPinLength
   // extension.
   bool supports_min_pin_length_extension = false;
+  // If true, indicates that the authenticator supports the hmac_secret
+  // extension.
+  bool supports_hmac_secret = false;
+  // If true, indicates that the authenticator supports the PRF extension. This
+  // will be preferred to the hmac-secret extension if supported.
+  bool supports_prf = false;
+  // max_cred_blob_length is the longest credBlob value that this authenticator
+  // can store. A value of `nullopt` indicates no support for credBlob.
+  absl::optional<uint16_t> max_cred_blob_length;
 };
 
 COMPONENT_EXPORT(DEVICE_FIDO)

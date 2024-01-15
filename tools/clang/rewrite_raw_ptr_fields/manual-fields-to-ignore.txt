@@ -23,6 +23,12 @@ cast_channel::CastTransportTest::logger_
 content::IndexedDBDispatcherHost::indexed_db_context_
 ServiceProcessState::state_
 
+# Populated manually - used with gmock Field() that expects a raw pointer.
+base::Frame::module
+
+# Populated manually - requires a rewrite in a generated file
+gpu::MockTransferBuffer::ExpectedMemoryInfo::ptr
+
 # Populated manually - conflicting types in an initializer list
 WebUITabStripContainerView::tab_counter_
 DownloadItemView::review_button_
@@ -163,6 +169,11 @@ courgette::LabelManagerTest_SimpleIndexAssigner_Test::TestBody()::TestCase::expe
 # as a pointer to PA memory
 sandbox::TargetProcess::base_address_ # https://crbug.com/1173374
 
+# Populated manually - pointers that kernel sees as raw pointers
+# https://crbug.com/1395075
+base::(anonymous namespace)::kernel_sigaction::k_sa_handler
+base::(anonymous namespace)::kernel_sigaction::k_sa_restorer
+
 # Populated manually - uninitialized memory reinterpret_cast to raw_ptr<T>
 # causing AddRef/Deref mismatch.
 sandbox::(anonymous namespace)::_HEAP_32::Heap
@@ -235,12 +246,11 @@ device::(anonymous namespace)::CBORExtract_RequiredInOptionalMap_Test::TestBody(
 
 # Populated manually - pointer to Objective-C object
 gfx::ScopedNSGraphicsContextSaveGState::context_
-base::mac::ScopedNSAutoreleasePool::autorelease_pool_
+base::apple::ScopedNSAutoreleasePool::autorelease_pool_
 content::ThemeHelperMac::theme_observer_
 content::PopupMenuHelper::menu_runner_
 content::ShellJavaScriptDialog::helper_
 ui::ClipboardFormatType::data_
-ui::WeakPtrNSObjectFactory::handle_
 content::NativeEventProcessorObserver::event_
 image_editor::EventCaptureMac::web_contents_view_
 image_editor::EventCaptureMac::window_
@@ -302,6 +312,7 @@ gpu::gles2::PassthroughProgramCache::ProgramCacheValue::program_cache_
 # Populated manually - to avoid out-of-line destructor
 base::LockFreeAddressHashSet::Node::next
 gpu::gles2::TextureManager::DoTexSubImageArguments::pixels
+gpu::gles2::TextureManager::DoTexImageArguments::pixels
 
 # Populated manually - on-stack pointer + a large number of non-PA pointees
 base::AutoReset::scoped_variable_

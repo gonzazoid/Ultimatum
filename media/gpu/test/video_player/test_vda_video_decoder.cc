@@ -10,9 +10,10 @@
 #include <GLES2/gl2.h>
 #include <GLES2/gl2ext.h>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
 #include "media/base/media_log.h"
 #include "media/base/video_frame.h"
@@ -20,7 +21,6 @@
 #include "media/base/waiting.h"
 #include "media/gpu/gpu_video_decode_accelerator_factory.h"
 #include "media/gpu/macros.h"
-#include "media/gpu/test/video.h"
 #include "media/gpu/test/video_player/frame_renderer_dummy.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -54,7 +54,7 @@ TestVDAVideoDecoder::TestVDAVideoDecoder(
       decode_start_timestamps_(kTimestampCacheSize) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(vda_wrapper_sequence_checker_);
 
-  vda_wrapper_task_runner_ = base::ThreadTaskRunnerHandle::Get();
+  vda_wrapper_task_runner_ = base::SingleThreadTaskRunner::GetCurrentDefault();
 
   weak_this_ = weak_this_factory_.GetWeakPtr();
 }
@@ -102,7 +102,7 @@ void TestVDAVideoDecoder::Initialize(const VideoDecoderConfig& config,
 
   // Create Decoder.
   VideoDecodeAccelerator::Config vda_config(config.profile());
-  vda_config.output_mode = VideoDecodeAccelerator::Config::OutputMode::IMPORT;
+  vda_config.output_mode = VideoDecodeAccelerator::Config::OutputMode::kImport;
   vda_config.encryption_scheme = config.encryption_scheme();
   vda_config.is_deferred_initialization_allowed = false;
   vda_config.initial_expected_coded_size = config.coded_size();
@@ -118,7 +118,7 @@ void TestVDAVideoDecoder::Initialize(const VideoDecoderConfig& config,
     vda_config.is_deferred_initialization_allowed = true;
     decoder_ = media::VdVideoDecodeAccelerator::Create(
         base::BindRepeating(&media::VideoDecoderPipeline::Create), this,
-        vda_config, base::SequencedTaskRunnerHandle::Get());
+        vda_config, false, base::SequencedTaskRunner::GetCurrentDefault());
 #endif  // BUILDFLAG(USE_CHROMEOS_MEDIA_ACCELERATION)
   } else {
     DVLOGF(2) << "Use original VDA";

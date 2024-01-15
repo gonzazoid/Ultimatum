@@ -10,9 +10,9 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/posix/eintr_wrapper.h"
@@ -25,7 +25,9 @@
 #include "media/gpu/chromeos/dmabuf_video_frame_pool.h"
 #include "media/gpu/macros.h"
 #include "media/gpu/v4l2/v4l2_device.h"
+#include "media/gpu/v4l2/v4l2_video_decoder_delegate_av1.h"
 #include "media/gpu/v4l2/v4l2_video_decoder_delegate_h264.h"
+#include "media/gpu/v4l2/v4l2_video_decoder_delegate_h265.h"
 #include "media/gpu/v4l2/v4l2_video_decoder_delegate_vp8.h"
 #include "media/gpu/v4l2/v4l2_video_decoder_delegate_vp9.h"
 
@@ -105,12 +107,14 @@ V4L2StatelessVideoDecoderBackend::V4L2StatelessVideoDecoderBackend(
     scoped_refptr<V4L2Device> device,
     VideoCodecProfile profile,
     const VideoColorSpace& color_space,
-    scoped_refptr<base::SequencedTaskRunner> task_runner)
+    scoped_refptr<base::SequencedTaskRunner> task_runner,
+    CdmContext* cdm_context)
     : V4L2VideoDecoderBackend(client, std::move(device)),
       profile_(profile),
       color_space_(color_space),
       bitstream_id_to_timestamp_(kTimestampCacheSize),
-      task_runner_(task_runner) {
+      task_runner_(task_runner),
+      cdm_context_(cdm_context) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   weak_this_ = weak_this_factory_.GetWeakPtr();
@@ -118,7 +122,11 @@ V4L2StatelessVideoDecoderBackend::V4L2StatelessVideoDecoderBackend(
 
 V4L2StatelessVideoDecoderBackend::~V4L2StatelessVideoDecoderBackend() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  DCHECK(surfaces_at_device_.empty());
+  LOG_IF(WARNING, surfaces_at_device_.empty())
+      << "There is/are " << surfaces_at_device_.size()
+      << " pending CAPTURE queue buffers pending dequeuing. This might be "
+      << "fine or a problem depending on the destruction semantics (of the"
+      << "client code.";
 
   if (!output_request_queue_.empty() || flush_cb_ || current_decode_request_ ||
       !decode_request_queue_.empty()) {
@@ -199,34 +207,25 @@ void V4L2StatelessVideoDecoderBackend::OnOutputBufferDequeued(
     surface->video_frame()->AddDestructionObserver(std::move(reuse_buffer_cb));
   } else {
     // Keep a reference to the V4L2 buffer until the buffer is reused. The
-    // reason for this is that the config store uses V4L2 buffer IDs to
+    // reason for this is that the we currently use V4L2 buffer IDs to generate
+    // timestamps to
     // reference frames, therefore we cannot reuse the same V4L2 buffer ID for
     // another decode operation until all references to that frame are gone.
-    // Request API does not have this limitation, so we can probably remove this
-    // after config store is gone.
     surface->SetReleaseCallback(std::move(reuse_buffer_cb));
   }
 
   PumpOutputSurfaces();
-
-  // If we were waiting for an output buffer to be available, schedule a
-  // decode task.
-  if (pause_reason_ == PauseReason::kWaitSubFrameDecoded) {
-    pause_reason_ = PauseReason::kNone;
-    task_runner_->PostTask(
-        FROM_HERE,
-        base::BindOnce(&V4L2StatelessVideoDecoderBackend::DoDecodeWork,
-                       weak_this_));
-  }
 }
 
 scoped_refptr<V4L2DecodeSurface>
-V4L2StatelessVideoDecoderBackend::CreateSurface() {
+V4L2StatelessVideoDecoderBackend::CreateSecureSurface(uint64_t secure_handle) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DVLOGF(4);
 
   // Request V4L2 input and output buffers.
-  auto input_buf = input_queue_->GetFreeBuffer();
+  auto input_buf =
+      secure_handle ? input_queue_->GetFreeBufferForSecureHandle(secure_handle)
+                    : input_queue_->GetFreeBuffer();
   auto output_buf = output_queue_->GetFreeBuffer();
   if (!input_buf || !output_buf) {
     DVLOGF(3) << "There is no free V4L2 buffer.";
@@ -240,12 +239,21 @@ V4L2StatelessVideoDecoderBackend::CreateSurface() {
     // driver via MMAP. The VideoFrame received from V4L2 buffer will remain
     // until deallocating V4L2Queue. But we need to know when the buffer is not
     // used by the client. So we wrap the frame here.
+    DCHECK_EQ(output_queue_->GetMemoryType(), V4L2_MEMORY_MMAP);
     scoped_refptr<VideoFrame> origin_frame = output_buf->GetVideoFrame();
+    if (!origin_frame) {
+      LOG(ERROR) << "There is no available VideoFrame from the V4L2 buffer.";
+      return nullptr;
+    }
+
     frame = VideoFrame::WrapVideoFrame(origin_frame, origin_frame->format(),
                                        origin_frame->visible_rect(),
                                        origin_frame->natural_size());
   } else {
-    // Try to get VideoFrame from the pool.
+    // This is used in cases when the video decoder format does not need
+    // conversion before being sent to Chrome's Media pipeline. On ChromeOS,
+    // currently only RK3399 (scarlet) supports this.
+    DCHECK_EQ(output_queue_->GetMemoryType(), V4L2_MEMORY_DMABUF);
     frame = pool->GetFrame();
     if (!frame) {
       // We allocate the same number of output buffer slot in V4L2 device and
@@ -273,7 +281,14 @@ V4L2StatelessVideoDecoderBackend::CreateSurface() {
 
   return new V4L2RequestDecodeSurface(std::move(*input_buf),
                                       std::move(*output_buf), std::move(frame),
-                                      std::move(*request_ref));
+                                      secure_handle, std::move(*request_ref));
+}
+
+scoped_refptr<V4L2DecodeSurface>
+V4L2StatelessVideoDecoderBackend::CreateSurface() {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  DVLOGF(4);
+  return CreateSecureSurface(0);
 }
 
 bool V4L2StatelessVideoDecoderBackend::SubmitSlice(
@@ -286,15 +301,19 @@ bool V4L2StatelessVideoDecoderBackend::SubmitSlice(
   size_t plane_size = dec_surface->input_buffer().GetPlaneSize(0);
   size_t bytes_used = dec_surface->input_buffer().GetPlaneBytesUsed(0);
   if (size > plane_size - bytes_used) {
-    VLOGF(1) << "The size of submitted slice(" << size
-             << ") is larger than the remaining buffer size("
-             << plane_size - bytes_used << "). Plane size is " << plane_size;
+    LOG(ERROR) << "The size of submitted slice(" << size
+               << ") is larger than the remaining buffer size("
+               << plane_size - bytes_used << "). Plane size is " << plane_size;
     client_->OnBackendError();
     return false;
   }
 
-  void* mapping = dec_surface->input_buffer().GetPlaneMapping(0);
-  memcpy(reinterpret_cast<uint8_t*>(mapping) + bytes_used, data, size);
+  // Secure playback will submit a nullptr for |data|, the target data already
+  // will exist in the secure buffer.
+  if (data) {
+    void* mapping = dec_surface->input_buffer().GetPlaneMapping(0);
+    memcpy(reinterpret_cast<uint8_t*>(mapping) + bytes_used, data, size);
+  }
   dec_surface->input_buffer().SetPlaneBytesUsed(0, bytes_used + size);
   return true;
 }
@@ -311,7 +330,7 @@ void V4L2StatelessVideoDecoderBackend::DecodeSurface(
   enqueuing_timestamps_[timestamp.InMilliseconds()] = base::TimeTicks::Now();
 
   if (!dec_surface->Submit()) {
-    VLOGF(1) << "Error while submitting frame for decoding!";
+    LOG(ERROR) << "Error while submitting frame for decoding!";
     client_->OnBackendError();
     return;
   }
@@ -346,11 +365,18 @@ void V4L2StatelessVideoDecoderBackend::SurfaceReady(
   PumpOutputSurfaces();
 }
 
+void V4L2StatelessVideoDecoderBackend::ResumeDecoding() {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  DoDecodeWork();
+}
+
 void V4L2StatelessVideoDecoderBackend::EnqueueDecodeTask(
     scoped_refptr<DecoderBuffer> buffer,
-    VideoDecoder::DecodeCB decode_cb,
-    int32_t bitstream_id) {
+    VideoDecoder::DecodeCB decode_cb) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+
+  const int32_t bitstream_id =
+      bitstream_id_generator_.GenerateNextId().GetUnsafeValue();
 
   if (!buffer->end_of_stream())
     bitstream_id_to_timestamp_.Put(bitstream_id, buffer->timestamp());
@@ -369,8 +395,10 @@ void V4L2StatelessVideoDecoderBackend::DoDecodeWork() {
   if (!client_->IsDecoding())
     return;
 
-  if (!PumpDecodeTask())
+  if (!PumpDecodeTask()) {
+    LOG(ERROR) << "Failed to do decode work.";
     client_->OnBackendError();
+  }
 }
 
 bool V4L2StatelessVideoDecoderBackend::PumpDecodeTask() {
@@ -453,20 +481,16 @@ bool V4L2StatelessVideoDecoderBackend::PumpDecodeTask() {
         pause_reason_ = PauseReason::kRanOutOfSurfaces;
         return true;
 
-      case AcceleratedVideoDecoder::kNeedContextUpdate:
-        DVLOGF(3) << "Awaiting context update";
-        pause_reason_ = PauseReason::kWaitSubFrameDecoded;
-        return true;
-
       case AcceleratedVideoDecoder::kDecodeError:
         DVLOGF(3) << "Error decoding stream";
         return false;
 
       case AcceleratedVideoDecoder::kTryAgain:
-        NOTREACHED() << "Should not reach here unless this class accepts "
-                        "encrypted streams.";
-        DVLOGF(4) << "No key for decoding stream.";
-        return false;
+        // In this case we are waiting for an async operation relating to secure
+        // content. When that is complete, ResumeDecoding will be invoked and we
+        // will start decoding again; or a reset will occur and that will resume
+        // decoding.
+        return true;
     }
   }
 }
@@ -548,19 +572,26 @@ void V4L2StatelessVideoDecoderBackend::ChangeResolution() {
   DCHECK(surfaces_at_device_.empty());
   DCHECK(output_request_queue_.empty());
 
-  size_t num_output_frames = decoder_->GetRequiredNumOfPictures();
-  gfx::Rect visible_rect = decoder_->GetVisibleRect();
-  gfx::Size pic_size = decoder_->GetPicSize();
+  const size_t num_codec_reference_frames = decoder_->GetNumReferenceFrames();
+  // Verify |num_codec_reference_frames| has a reasonable value. Anecdotally 16
+  // is the largest amount of reference frames seen, on an ITU-T H.264 test
+  // vector (CAPCM*1_Sand_E.h264).
+  CHECK_LE(num_codec_reference_frames, 32u);
+
+  const gfx::Rect visible_rect = decoder_->GetVisibleRect();
+  const gfx::Size pic_size = decoder_->GetPicSize();
+  const uint8_t bit_depth = decoder_->GetBitDepth();
+
   // Set output format with the new resolution.
   DCHECK(!pic_size.IsEmpty());
   DVLOGF(3) << "Change resolution to " << pic_size.ToString();
-  client_->ChangeResolution(pic_size, visible_rect, num_output_frames);
+  client_->ChangeResolution(pic_size, visible_rect, num_codec_reference_frames,
+                            bit_depth);
 }
 
 bool V4L2StatelessVideoDecoderBackend::ApplyResolution(
     const gfx::Size& pic_size,
-    const gfx::Rect& visible_rect,
-    const size_t num_output_frames) {
+    const gfx::Rect& visible_rect) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK_EQ(input_queue_->QueuedBuffersCount(), 0u);
 
@@ -574,6 +605,7 @@ bool V4L2StatelessVideoDecoderBackend::ApplyResolution(
   format.fmt.pix_mp.width = pic_size.width();
   format.fmt.pix_mp.height = pic_size.height();
   if (device_->Ioctl(VIDIOC_S_FMT, &format) != 0) {
+    RecordVidiocIoctlErrorUMA(VidiocIoctlRequests::kVidiocSFmt);
     VPLOGF(1) << "Failed setting OUTPUT format";
     return false;
   }
@@ -587,6 +619,8 @@ void V4L2StatelessVideoDecoderBackend::OnChangeResolutionDone(
     return;
 
   if (status != CroStatus::Codes::kOk) {
+    LOG(ERROR) << "Backend failure when changing resolution ("
+               << static_cast<int>(status.code()) << ").";
     client_->OnBackendError();
     return;
   }
@@ -646,13 +680,18 @@ bool V4L2StatelessVideoDecoderBackend::StopInputQueueOnResChange() const {
   return true;
 }
 
-size_t V4L2StatelessVideoDecoderBackend::GetNumOUTPUTQueueBuffers() const {
-  // Some H.264 test vectors (CAPCM*1_Sand_E.h264) need 16 reference frames.
+size_t V4L2StatelessVideoDecoderBackend::GetNumOUTPUTQueueBuffers(
+    bool secure_mode) const {
+  // Some H.264 test vectors (CAPCM*1_Sand_E.h264) need 16 reference frames; add
+  // one to calculate the number of OUTPUT buffers, to account for the frame
+  // being decoded.
+  // For secure mode, we are very memory constrained so only allocate 8 buffers.
   // TODO(b/249325255): reduce this number to e.g. 8 or even less when it does
   // not artificially limit the size of the CAPTURE (decoded video frames)
   // queue.
-  constexpr size_t kNumInputBuffers = 16;
-  return kNumInputBuffers;
+  constexpr size_t kNumInputBuffers = 16 + 1;
+  constexpr size_t kNumInputBuffersSecureMode = 8;
+  return secure_mode ? kNumInputBuffersSecureMode : kNumInputBuffers;
 }
 
 bool V4L2StatelessVideoDecoderBackend::IsSupportedProfile(
@@ -660,15 +699,18 @@ bool V4L2StatelessVideoDecoderBackend::IsSupportedProfile(
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(device_);
   if (supported_profiles_.empty()) {
-    constexpr uint32_t kSupportedInputFourccs[] = {
-        V4L2_PIX_FMT_H264_SLICE,
-        V4L2_PIX_FMT_VP8_FRAME,
-        V4L2_PIX_FMT_VP9_FRAME,
+    const std::vector<uint32_t> kSupportedInputFourccs = {
+      V4L2_PIX_FMT_H264_SLICE,
+#if BUILDFLAG(ENABLE_HEVC_PARSER_AND_HW_DECODER)
+      V4L2_PIX_FMT_HEVC_SLICE,
+#endif
+      V4L2_PIX_FMT_VP8_FRAME,
+      V4L2_PIX_FMT_VP9_FRAME,
+      V4L2_PIX_FMT_AV1_FRAME,
     };
-    scoped_refptr<V4L2Device> device = V4L2Device::Create();
+    auto device = base::MakeRefCounted<V4L2Device>();
     VideoDecodeAccelerator::SupportedProfiles profiles =
-        device->GetSupportedDecodeProfiles(std::size(kSupportedInputFourccs),
-                                           kSupportedInputFourccs);
+        device->GetSupportedDecodeProfiles(kSupportedInputFourccs);
     for (const auto& entry : profiles)
       supported_profiles_.push_back(entry.profile);
   }
@@ -685,8 +727,15 @@ bool V4L2StatelessVideoDecoderBackend::CreateDecoder() {
 
   if (profile_ >= H264PROFILE_MIN && profile_ <= H264PROFILE_MAX) {
     decoder_ = std::make_unique<H264Decoder>(
-        std::make_unique<V4L2VideoDecoderDelegateH264>(this, device_.get()),
+        std::make_unique<V4L2VideoDecoderDelegateH264>(this, device_.get(),
+                                                       cdm_context_),
         profile_, color_space_);
+#if BUILDFLAG(ENABLE_HEVC_PARSER_AND_HW_DECODER)
+  } else if (profile_ >= HEVCPROFILE_MIN && profile_ <= HEVCPROFILE_MAX) {
+    decoder_ = std::make_unique<H265Decoder>(
+        std::make_unique<V4L2VideoDecoderDelegateH265>(this, device_.get()),
+        profile_, color_space_);
+#endif
   } else if (profile_ >= VP8PROFILE_MIN && profile_ <= VP8PROFILE_MAX) {
     decoder_ = std::make_unique<VP8Decoder>(
         std::make_unique<V4L2VideoDecoderDelegateVP8>(this, device_.get()),
@@ -695,6 +744,12 @@ bool V4L2StatelessVideoDecoderBackend::CreateDecoder() {
     decoder_ = std::make_unique<VP9Decoder>(
         std::make_unique<V4L2VideoDecoderDelegateVP9>(this, device_.get()),
         profile_, color_space_);
+#if BUILDFLAG(IS_CHROMEOS)
+  } else if (profile_ >= AV1PROFILE_MIN && profile_ <= AV1PROFILE_MAX) {
+    decoder_ = std::make_unique<AV1Decoder>(
+        std::make_unique<V4L2VideoDecoderDelegateAV1>(this, device_.get()),
+        profile_, color_space_);
+#endif
   } else {
     VLOGF(1) << "Unsupported profile " << GetProfileName(profile_);
     return false;

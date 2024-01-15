@@ -5,7 +5,7 @@ If you update this file, be sure also to update google_chrome_strings.grd. -->
 <grit base_dir="." latest_public_release="0" current_release="1"
       output_all_resource_defines="false" source_lang_id="en" enc_check="möl">
   <outputs>
-    <output filename="grit/chromium_strings.h" type="rc_header">
+    <output filename="grit/branded_strings.h" type="rc_header">
       <emit emit_type='prepend'></emit>
     </output>
     <output filename="chromium_strings_af.pak" type="data_package" lang="af" />
@@ -276,12 +276,31 @@ If you update this file, be sure also to update google_chrome_strings.grd. -->
         <part file="settings_chromium_strings.grdp" />
       </if>
 
-      <message name="IDS_PRODUCT_NAME" desc="The Chrome application name">
-        Chromium
-      </message>
-      <message name="IDS_SHORT_PRODUCT_NAME" desc="The Chrome application short name.">
-        Chromium
-      </message>
+      <!--
+        Even though Google Chrome for Testing is a separate brand, there is
+        no separate file for it. Instead, we use the same file as Chromium, with
+        a few select overrides for the most prominent end-user strings.
+
+        Rationale: https://goo.gle/chrome-for-testing#bookmark=id.n1rat320av91
+      -->
+      <if expr="_is_chrome_for_testing_branded">
+        <then>
+          <message name="IDS_PRODUCT_NAME" desc="The Chrome for Testing application name" translateable="false">
+            Google Chrome for Testing
+          </message>
+          <message name="IDS_SHORT_PRODUCT_NAME" desc="The Chrome for Testing application short name." translateable="false">
+            Chrome for Testing
+          </message>
+        </then>
+        <else>
+          <message name="IDS_PRODUCT_NAME" desc="The Chrome application name" translateable="false">
+            Chromium
+          </message>
+          <message name="IDS_SHORT_PRODUCT_NAME" desc="The Chrome application short name." translateable="false">
+            Chromium
+          </message>
+        </else>
+      </if>
       <if expr="is_win">
         <message name="IDS_SXS_SHORTCUT_NAME" desc="Unused in Chromium builds" translateable="false">
         </message>
@@ -335,9 +354,18 @@ If you update this file, be sure also to update google_chrome_strings.grd. -->
       </message>
       <if expr="not chromeos_ash">
         <!-- Browser Window Title Format -->
-        <message name="IDS_BROWSER_WINDOW_TITLE_FORMAT" desc="The format for titles displayed in tabs and popup windows">
-          <ph name="PAGE_TITLE">$1<ex>Google</ex></ph> - Chromium
-        </message>
+        <if expr="_is_chrome_for_testing_branded">
+          <then>
+            <message name="IDS_BROWSER_WINDOW_TITLE_FORMAT" desc="The format for titles displayed in tabs and popup windows">
+              <ph name="PAGE_TITLE">$1<ex>Google</ex></ph> - Google Chrome for Testing
+            </message>
+          </then>
+          <else>
+            <message name="IDS_BROWSER_WINDOW_TITLE_FORMAT" desc="The format for titles displayed in tabs and popup windows">
+              <ph name="PAGE_TITLE">$1<ex>Google</ex></ph> - Chromium
+            </message>
+          </else>
+        </if>
       </if>
       <if expr="chromeos_ash">
         <!-- Browser Window Title Format -->
@@ -365,9 +393,18 @@ If you update this file, be sure also to update google_chrome_strings.grd. -->
       </if>
       <!-- Accessible window title format - includes the channel, and the same
            on all browser platforms rather than different on ChromeOS. -->
-      <message name="IDS_ACCESSIBLE_BROWSER_WINDOW_TITLE_FORMAT" desc="The format for the accessible name of a tabbed browser window">
-        <ph name="PAGE_TITLE">$1<ex>Google</ex></ph> - Chromium
-      </message>
+      <if expr="_is_chrome_for_testing_branded">
+        <then>
+          <message name="IDS_ACCESSIBLE_BROWSER_WINDOW_TITLE_FORMAT" desc="The format for the accessible name of a tabbed browser window">
+            <ph name="PAGE_TITLE">$1<ex>Google</ex></ph> - Google Chrome for Testing
+          </message>
+        </then>
+        <else>
+          <message name="IDS_ACCESSIBLE_BROWSER_WINDOW_TITLE_FORMAT" desc="The format for the accessible name of a tabbed browser window">
+            <ph name="PAGE_TITLE">$1<ex>Google</ex></ph> - Chromium
+          </message>
+        </else>
+      </if>
       <message name="IDS_ACCESSIBLE_BETA_BROWSER_WINDOW_TITLE_FORMAT" desc="The format for the accessible name of a tabbed browser window for the beta channel version of the browser">
         <ph name="PAGE_TITLE">$1<ex>Google</ex></ph> - Chromium Beta
       </message>
@@ -377,12 +414,24 @@ If you update this file, be sure also to update google_chrome_strings.grd. -->
       <message name="IDS_ACCESSIBLE_CANARY_BROWSER_WINDOW_TITLE_FORMAT" desc="The format for the accessible name of a tabbed browser window for the canary (nightly build) channel version of the browser">
         <ph name="PAGE_TITLE">$1<ex>Google</ex></ph> - Chromium Canary
       </message>
-      <message name="IDS_ABOUT_VERSION_COMPANY_NAME" desc="Company name on the about pages">
-        The Chromium Authors
-      </message>
-      <message name="IDS_ABOUT_VERSION_COPYRIGHT" desc="Copyright information on the about pages">
-        Copyright <ph name="YEAR">{0,date,y}<ex>2016</ex></ph> The Chromium Authors. All rights reserved.
-      </message>
+      <if expr="_is_chrome_for_testing_branded">
+        <then>
+          <message name="IDS_ABOUT_VERSION_COMPANY_NAME" desc="Company name on the about pages">
+            Google LLC
+          </message>
+          <message name="IDS_ABOUT_VERSION_COPYRIGHT" desc="Copyright information on the about pages">
+            Copyright <ph name="YEAR">{0,date,y}<ex>2016</ex></ph> Google LLC. All rights reserved.
+          </message>
+        </then>
+        <else>
+          <message name="IDS_ABOUT_VERSION_COMPANY_NAME" desc="Company name on the about pages">
+            The Chromium Authors
+          </message>
+          <message name="IDS_ABOUT_VERSION_COPYRIGHT" desc="Copyright information on the about pages">
+            Copyright <ph name="YEAR">{0,date,y}<ex>2016</ex></ph> The Chromium Authors. All rights reserved.
+          </message>
+        </else>
+      </if>
       <if expr="chromeos_ash">
         <message name="IDS_ABOUT_CROS_VERSION_LICENSE" desc="Additional text displayed beneath the Chromium open source URLs for ChromeOS.">
           ChromiumOS is made possible by additional <ph name="BEGIN_LINK_CROS_OSS">&lt;a target="_blank" href="$1"&gt;</ph>open source software<ph name="END_LINK_CROS_OSS">&lt;/a&gt;</ph>.
@@ -394,15 +443,24 @@ If you update this file, be sure also to update google_chrome_strings.grd. -->
           Not used in Chromium. Placeholder to keep resource maps in sync.
         </message>
       </if>
-      <message name="IDS_ABOUT_TERMS_OF_SERVICE" desc="The terms of service label in the About box." translateable="false">
-        Not used in Chromium. Placeholder to keep resource maps in sync.
-      </message>
+      <if expr="_is_chrome_for_testing_branded">
+        <then>
+          <message name="IDS_ABOUT_TERMS_OF_SERVICE" desc="The terms of service label in the About box.">
+            Terms of Service
+          </message>
+        </then>
+        <else>
+          <message name="IDS_ABOUT_TERMS_OF_SERVICE" desc="The terms of service label in the About box." translateable="false">
+            Not used in Chromium. Placeholder to keep resource maps in sync.
+          </message>
+        </else>
+      </if>
       <if expr="is_macosx">
-        <message name="IDS_MAC_10_11_OBSOLETE" desc="A message displayed on an at-launch infobar and About (Help) page warning the user that the OS version they are using will soon be or is already unsupported.">
-          To get future Chromium updates, you'll need macOS 10.13 or later. This computer is using OS X 10.11.
+        <message name="IDS_MAC_10_13_OBSOLETE" desc="A message displayed on an at-launch infobar and About (Help) page warning the user that the OS version they are using will soon be or is already unsupported.">
+          To get future Chromium updates, you'll need macOS 10.15 or later. This computer is using macOS 10.13.
         </message>
-        <message name="IDS_MAC_10_12_OBSOLETE" desc="A message displayed on an at-launch infobar and About (Help) page warning the user that the OS version they are using will soon be or is already unsupported.">
-          To get future Chromium updates, you'll need macOS 10.13 or later. This computer is using macOS 10.12.
+        <message name="IDS_MAC_10_14_OBSOLETE" desc="A message displayed on an at-launch infobar and About (Help) page warning the user that the OS version they are using will soon be or is already unsupported.">
+          To get future Chromium updates, you'll need macOS 10.15 or later. This computer is using macOS 10.14.
         </message>
       </if>
       <if expr="is_win">
@@ -410,12 +468,27 @@ If you update this file, be sure also to update google_chrome_strings.grd. -->
           Chromium may not function correctly because it is no longer supported on Windows XP or Windows Vista
         </message>
       </if>
+      <if expr="is_win">
+        <message name="IDS_WIN_7_OBSOLETE" desc="A message displayed on an at-launch infobar and about:help warning the user that the computer they are using will soon be or is already unsupported.">
+                    To get future Chromium updates, you'll need Windows 10 or later. This computer is using Windows 7.
+        </message>
+      </if>
+      <if expr="is_win">
+        <message name="IDS_WIN_8_OBSOLETE" desc="A message displayed on an at-launch infobar and about:help warning the user that the computer they are using will soon be or is already unsupported.">
+                    To get future Chromium updates, you'll need Windows 10 or later. This computer is using Windows 8.
+        </message>
+      </if>
+      <if expr="is_win">
+        <message name="IDS_WIN_8_1_OBSOLETE" desc="A message displayed on an at-launch infobar and about:help warning the user that the computer they are using will soon be or is already unsupported.">
+                    To get future Chromium updates, you'll need Windows 10 or later. This computer is using Windows 8.1.
+        </message>
+      </if>
       <if expr="is_linux">
         <message name="IDS_LINUX_OBSOLETE" desc="A message displayed on an at-launch infobar and about:help warning the user that the OS version they are using is no longer supported.">
           Chromium may not function correctly because it is no longer supported on this Linux distribution
         </message>
       </if>
-      <message name="IDS_ACCNAME_APP" desc="The accessible name for the app menu.">
+      <message name="IDS_ACCNAME_APP" desc="The accessible name for the app menu." translateable="false">
         Chromium
       </message>
       <!-- Hung Browser Detector -->
@@ -486,11 +559,6 @@ Chromium is unable to recover your settings.
       </message>
       <!-- Add account dialog -->
       <if expr="chromeos_ash">
-        <message name="IDS_ACCOUNT_MANAGER_DIALOG_WELCOME_BODY_V2" desc="Text body for the Welcome screen in ChromiumOS 'Add account' dialog.">
-If you want to use this account one-time only, you can use Guest mode in Chromium browser. If you want to add an account for someone else, <ph name="LINK_BEGIN">&lt;a target="_blank" id="newPersonLink" href="$1<ex>https://google.com/</ex>"&gt;</ph>add a new person<ph name="LINK_END">&lt;/a&gt;</ph> to your <ph name="DEVICE_TYPE">$2<ex>Chromebook</ex></ph>.
-
-Permissions you've already given to websites and apps may apply to this account. You can manage your Google Accounts in <ph name="SETTINGS_LINK_BEGIN">&lt;a id="osSettingsLink" href="$3<ex>https://google.com/</ex>"&gt;</ph>Settings<ph name="SETTINGS_LINK_END">&lt;/a&gt;</ph>.
-        </message>
         <message name="IDS_ACCOUNT_MANAGER_DIALOG_WELCOME_BODY_V2_WITH_GUEST_MODE" desc="Text body for the Welcome screen in ChromiumOS 'Add account' dialog.">
 If you want to use this account one-time only, you can use <ph name="GUEST_LINK_BEGIN">&lt;a id="guestModeLink" href="#"&gt;</ph>Guest mode<ph name="GUEST_LINK_END">&lt;/a&gt;</ph> in Chromium browser. If you want to add an account for someone else, <ph name="LINK_BEGIN">&lt;a target="_blank" id="newPersonLink" href="$1<ex>https://google.com/</ex>"&gt;</ph>add a new person<ph name="LINK_END">&lt;/a&gt;</ph> to your <ph name="DEVICE_TYPE">$2<ex>Chromebook</ex></ph>.
 
@@ -498,7 +566,7 @@ Permissions you've already given to websites and apps may apply to this account.
         </message>
       </if>
       <!-- Crash Recovery Dialog -->
-      <message name="IDS_CRASH_RECOVERY_TITLE" desc="Title of dialog shown when the browser crashes.">
+      <message name="IDS_CRASH_RECOVERY_TITLE" desc="Title of dialog shown when the browser crashes." translateable="false">
         Chromium
       </message>
       <if expr="is_win">
@@ -514,7 +582,7 @@ Permissions you've already given to websites and apps may apply to this account.
       <message name="IDS_PASSWORD_MANAGER_ONBOARDING_DETAILS_C" desc="The explanation text that is shown below the title in the password manager onboarding dialog.">
         Chromium lets you know if your passwords are ever compromised
       </message>
-      <message name="IDS_PASSWORD_MANAGER_TITLE_BRAND" desc="The product name used in the title of the password bubble.">
+      <message name="IDS_PASSWORD_MANAGER_TITLE_BRAND" desc="The product name used in the title of the password bubble." translateable="false">
         Chromium
       </message>
       <message name="IDS_PASSWORD_BUBBLES_PASSWORD_MANAGER_LINK_TEXT_SAVING_ON_DEVICE" desc="The text of the Google Password Manager links displayed on Password Manager bubbles footer when the credentials are stored only locally.">
@@ -527,17 +595,8 @@ Permissions you've already given to websites and apps may apply to this account.
         In Password Manager on this device
       </message>
       <if expr="is_macosx">
-        <message name="IDS_PASSWORDS_PAGE_AUTHENTICATION_PROMPT" desc="Text for the dialog box that prompts the user for their OS account password before revealing plaintext passwords on the password page.">
-          Chromium is trying to show passwords.
-        </message>
-        <message name="IDS_PASSWORDS_PAGE_COPY_AUTHENTICATION_PROMPT" desc="Text for the dialog box that prompts the user for their OS account password before copying plaintext passwords into the clipboard.">
-          Chromium is trying to copy passwords.
-        </message>
-        <message name="IDS_PASSWORDS_PAGE_EDIT_AUTHENTICATION_PROMPT" desc="Text for the dialog box that prompts the user for their OS account password before editing plaintext passwords on the password page.">
-          Chromium is trying to edit passwords.
-        </message>
-        <message name="IDS_PASSWORDS_PAGE_EXPORT_AUTHENTICATION_PROMPT" desc="Text for the dialog box that prompts the user for their OS account password before exporting passwords to a file.">
-          Chromium wants to export your passwords.
+      <message name="IDS_PASSWORDS_AUTHENTICATION_PROMPT_PREFIX" desc="Text shown in the beginning of the OS-level user authentication prompt before performing a seneitive operation such as show passwords in plain text.">
+          Chromium is trying to <ph name="AUTHENTICATION_PURPOSE">$1<ex>show passwords</ex></ph>
         </message>
       </if>
       <if expr="is_win">
@@ -553,6 +612,9 @@ Permissions you've already given to websites and apps may apply to this account.
         <message name="IDS_PASSWORDS_PAGE_EXPORT_AUTHENTICATION_PROMPT" desc="Text for the dialog box that prompts the user for their OS account password before exporting passwords to a file.">
           Chromium wants to export your passwords. Type your Windows password to allow this.
         </message>
+        <message name="IDS_PASSWORDS_PAGE_IMPORT_AUTHENTICATION_PROMPT" desc="Text for the dialog box that prompts the user for their OS account password before overriding passwords during Import.">
+          Chromium is trying to replace existing passwords. Type your Windows password to allow this.
+        </message>
         <message name="IDS_INSTALL_HIGHER_VERSION" desc="Error displayed when higher version already exists.">
           This computer already has a more recent version of Chromium. If the software is not working, please uninstall Chromium and try again.
         </message>
@@ -566,7 +628,7 @@ Permissions you've already given to websites and apps may apply to this account.
           Installation failed due to unspecified error. Please download Chromium again.
         </message>
         <message name="IDS_INSTALL_OS_NOT_SUPPORTED" desc="Error displayed if OS is not supported">
-          Chromium requires Windows 7 or higher.
+          Chromium requires Windows 10 or higher.
         </message>
         <message name="IDS_INSTALL_OS_ERROR" desc="Error displayed when any Windows API call fails and we do not have more specific information.">
           An operating system error occurred during installation. Please download Chromium again.
@@ -608,9 +670,6 @@ Permissions you've already given to websites and apps may apply to this account.
       <message name="IDS_DEFAULT_BROWSER_INFOBAR_TEXT" desc="Text to show in an infobar when Chromium is not the current default browser.">
         Chromium isn't your default browser
       </message>
-      <message name="IDS_TAILORED_SECURITY_CONSENTED_ENABLE_NOTIFICATION_DESCRIPTION" desc="The text of the notification asking if the user wants to enable Enhanced Safe Browsing">
-        You turned on Enhanced Safe Browsing in your account. Now get it for Chromium.
-      </message>
       <if expr="is_win">
         <!-- Try Chrome Toast Dialog -->
         <message name="IDS_TRY_TOAST_HEADING" desc="Top line of the try-chrome-again dialog">
@@ -647,15 +706,13 @@ Permissions you've already given to websites and apps may apply to this account.
                desc="Subpage summary for malware warning for the user.">
         Chromium blocked this file because it has malware
       </message>
-      <message name="IDS_DOWNLOAD_BUBBLE_SUBPAGE_SUMMARY_DEEP_SCANNING_PROMPT"
-               desc="Subpage summary of warning for Deep Scanning.">
-        Chromium recommends scanning this file because it may be dangerous
+      <message name="IDS_DOWNLOAD_BUBBLE_SUBPAGE_SUMMARY_WARNING_BLOCKED_LEARN_MORE_LINK"
+               desc="Text for the link to the help page about why Chromium blocks some downloaded files.">
+        Learn why Chromium blocks some downloads
       </message>
-
-      <!-- Tailored Warning in Download Bubble Items -->
-      <message name="IDS_DOWNLOAD_BUBBLE_SUBPAGE_SUMMARY_SUSPICIOUS_ARCHIVE"
-               desc="Subpage summary for suspicious archive warning.">
-        Chromium blocked this archive file because it may hide malware
+      <message name="IDS_DOWNLOAD_BUBBLE_SUBPAGE_SUMMARY_DEEP_SCANNING_PROMPT_LOCAL_DECRYPTION"
+        desc="Subpage summary of warning for a file where we recommend providing the password for on-device decryption">
+        This file may be dangerous<ph name="LINE_BREAK">$1</ph>Chromium can check this download for you if you provide the password &#x2014; your password stays on your device
       </message>
 
       <!-- Download Shelf Items -->
@@ -684,6 +741,42 @@ Permissions you've already given to websites and apps may apply to this account.
       <message name="IDS_BLOCK_REASON_UNWANTED_DOWNLOAD"
          desc="Message shown to the user on chrome://downloads page to explain that this download is blocked because it is unwanted sofware.">
         This file may be dangerous, so Chromium has blocked it.
+      </message>
+      <message name="IDS_BLOCK_REASON_PROMPT_FOR_SCANNING"
+         desc="Message shown to the user on chrome://downloads page to explain that this download is recommended to be scanned.">
+        Chromium recommends scanning this file because it may be dangerous.
+      </message>
+
+      <!-- chrome://downloads page dangerous file description strings -->
+      <message name="IDS_BLOCK_DOWNLOAD_REASON_DANGEROUS_FILETYPE"
+               desc="On the chrome://downloads page, the description shown for a blocked file with a dangerous filetype.">
+        Chromium blocked this download because the file type isn't commonly downloaded and it may be dangerous
+      </message>
+      <message name="IDS_BLOCK_DOWNLOAD_REASON_DANGEROUS"
+               desc="On the chrome://downloads page, the description shown for a blocked file that is dangerous.">
+        Chromium blocked this download because the file is dangerous
+      </message>
+      <message name="IDS_BLOCK_DOWNLOAD_REASON_UNCOMMON"
+               desc="On the chrome://downloads page, the description shown for a blocked file that is uncommon.">
+        Chromium blocked this download because the file isn't commonly downloaded and it may be dangerous
+      </message>
+      <message name="IDS_BLOCK_DOWNLOAD_REASON_POTENTIALLY_UNWANTED"
+               desc="On the chrome://downloads page, the description shown for a blocked file that is potentially unwanted.">
+        Chromium blocked this download because the file is deceptive and may make unexpected changes to your device
+      </message>
+      <message name="IDS_BLOCK_DOWNLOAD_REASON_INSECURE"
+               desc="On the chrome://downloads page, the description shown for a blocked file that is insecure.">
+        Chromium blocked this download because the site isn't using a secure connection and the file may have been tampered with
+      </message>
+      <message name="IDS_BLOCK_DOWNLOAD_REASON_UNVERIFIED_NO_SAFE_BROWSING"
+               desc="On the chrome://downloads page, the description shown for a blocked file that could not be verified because Safe Browsing is off.">
+        Chromium blocked this download because you turned Safe Browsing off and the file can't be verified
+      </message>
+
+      <!-- chrome://downloads page bypass dangerous download warning dialog -->
+      <message name="IDS_DOWNLOAD_WARNING_BYPASS_DIALOG_LEARN_MORE_LINK"
+               desc="On the downloads page, the label for the link to the help center in the dialog to bypass a dangerous download warning.">
+        Learn why Chromium blocks some files
       </message>
 
       <!-- Abandon in-progress downloads confirmation dialog -->
@@ -718,7 +811,7 @@ Permissions you've already given to websites and apps may apply to this account.
 
         <!-- Extension uninstall prompt -->
         <message name="IDS_EXTENSION_UNINSTALL_PROMPT_REMOVE_DATA_CHECKBOX" desc="Checkbox text to ask the user whether they want to remove associated data at uninstall time. Only used when uninstalling an app associated with a particular website.">
-          Also clear data from Chromium (<ph name="URL">$1<ex>www.google.com</ex></ph>)
+          Also delete data from Chromium (<ph name="URL">$1<ex>www.google.com</ex></ph>)
         </message>
 
         <!-- Extension alerts. -->
@@ -729,6 +822,20 @@ Permissions you've already given to websites and apps may apply to this account.
           Chromium found that these items contain malware:
         </message>
       </if>
+
+      <!-- Extension Safety Check Detail Page strings -->
+      <message name="IDS_SAFETY_CHECK_EXTENSIONS_MALWARE" desc="The text explaining the reason for disabling extension. The extension in question contains malware.">
+        This extension contains malware and is unsafe. Remove it from Chromium so it can no longer see and change your data on sites you visit, including your personal info.
+      </message>
+      <message name="IDS_SAFETY_CHECK_EXTENSIONS_POLICY_VIOLATION" desc="The text explaining the reason for disabling extension. The extension in question violates Chrome Web Store policy.">
+        This extension violates the Chrome Web Store policy, and might be unsafe. Remove it from Chromium so it can no longer see and change your data on sites you visit, including your personal info.
+      </message>
+      <message name="IDS_SAFETY_CHECK_EXTENSIONS_UNPUBLISHED" desc="The text explaining the reason for disabling extension. The extension in question was unpublished by the developer.">
+        This extension was unpublished by its developer, and might be unsafe. Remove it from Chromium so it can no longer see and change your data on sites you visit, including your personal info.
+      </message>
+      <message name="IDS_EXTENSIONS_SAFETY_CHECK_PRIMARY_LABEL" desc="Alerts the user that the extension should be reviewed.">
+        Chromium recommends you review this extension
+      </message>
 
       <!-- chrome://settings/extensions page -->
       <message name="IDS_EXTENSIONS_ITEM_SHOW_ACCESS_REQUESTS_IN_TOOLBAR" desc="The label on the toggle to allow the extension to show site access requests in the toolbar.">
@@ -771,17 +878,35 @@ Permissions you've already given to websites and apps may apply to this account.
       </message>
 
       <if expr="use_titlecase and not chromeos_ash">
-        <message name="IDS_ABOUT" desc="In Title Case: The text label of the About Chrome menu item">
-          About &amp;Chromium
-        </message>
+        <if expr="_is_chrome_for_testing_branded">
+          <then>
+            <message name="IDS_ABOUT" desc="In Title Case: The text label of the About Chrome for Testing menu item">
+              About &amp;Google Chrome for Testing
+            </message>
+          </then>
+          <else>
+            <message name="IDS_ABOUT" desc="In Title Case: The text label of the About Chrome menu item">
+              About &amp;Chromium
+            </message>
+          </else>
+        </if>
         <message name="IDS_RELAUNCH_TO_UPDATE" desc="In Title Case: The text label of the relaunch to update Chrome menu item">
           Relaunch to Update &amp;Chromium
         </message>
       </if>
       <if expr="not use_titlecase and not chromeos_ash">
-        <message name="IDS_ABOUT" desc="The text label of the About Chrome menu item">
-          About &amp;Chromium
-        </message>
+        <if expr="_is_chrome_for_testing_branded">
+          <then>
+            <message name="IDS_ABOUT" desc="The text label of the About Chrome for Testing menu item">
+              About &amp;Google Chrome for Testing
+            </message>
+          </then>
+          <else>
+            <message name="IDS_ABOUT" desc="The text label of the About Chrome menu item">
+              About &amp;Chromium
+            </message>
+          </else>
+        </if>
         <message name="IDS_RELAUNCH_TO_UPDATE" desc="The text label of the relaunch to update Chrome menu item">
           Relaunch to update &amp;Chromium
         </message>
@@ -795,8 +920,14 @@ Permissions you've already given to websites and apps may apply to this account.
         </message>
       </if>
 
+      <if expr="is_win or is_macosx or is_linux">
+        <message name="IDS_RELAUNCH_TO_UPDATE_ALT" desc="Alternate text label of the relaunch to update Chrome menu item" translateable="false">
+        Not used in Chromium. Placeholder to keep resource maps in sync.
+        </message>
+      </if>
+
       <if expr="is_macosx">
-        <message name="IDS_APP_MENU_PRODUCT_NAME" desc="The application's short name, used for the Mac's application menu, activity monitor, etc. This should be less than 16 characters. Example: Chrome, not Google Chrome.">
+        <message name="IDS_APP_MENU_PRODUCT_NAME" desc="The application's short name, used for the Mac's application menu, activity monitor, etc. This should be less than 16 characters. Example: Chrome, not Google Chrome." translateable="false">
           Chromium
         </message>
         <message name="IDS_HELPER_NAME" desc="The helper application's name.  Should contain the Chrome application name (IDS_PRODUCT_NAME). Example: Google Chrome Helper.">
@@ -807,8 +938,12 @@ Permissions you've already given to websites and apps may apply to this account.
         </message>
       </if>
 
+      <message name="IDS_VIEW_PASSWORDS" desc="Item in the app menu which shows Password Manager page">
+        P&amp;assword Manager
+      </message>
+
       <!-- Chrome sign-in page -->
-      <message name="IDS_CHROME_SIGNIN_TITLE" desc="Title on the about:chrome-signin page">
+      <message name="IDS_CHROME_SIGNIN_TITLE" desc="Title on the about:chrome-signin page" translateable="false">
         Chromium
       </message>
 
@@ -870,9 +1005,18 @@ Permissions you've already given to websites and apps may apply to this account.
       </if>
 
       <!-- NTP strings -->
-      <message name="IDS_NTP_CUSTOMIZE_BUTTON_LABEL" desc="Label for button on the New Tab Page that opens dialog to customize Chromium browser.">
-        Customize Chromium
-      </message>
+      <if expr="_is_chrome_for_testing_branded">
+        <then>
+          <message name="IDS_NTP_CUSTOMIZE_BUTTON_LABEL" desc="Label for button on the New Tab Page that opens dialog to customize Chrome for Testing browser.">
+            Customize Chrome for Testing
+          </message>
+        </then>
+        <else>
+          <message name="IDS_NTP_CUSTOMIZE_BUTTON_LABEL" desc="Label for button on the New Tab Page that opens dialog to customize Chromium browser.">
+            Customize Chromium
+          </message>
+        </else>
+      </if>
 
       <!-- Signin Email Confirmation tab modal dialog -->
       <if expr="not chromeos_ash">
@@ -904,6 +1048,18 @@ Permissions you've already given to websites and apps may apply to this account.
         <message name="IDS_SIGNIN_DICE_WEB_INTERCEPT_CONSUMER_BUBBLE_DESC_V2" desc="Body of the web signin interception bubble. It is shown when the user signs in on the web while they already have another account present in the current profile.">
           Another account is already signed in. To keep your browsing separate, Chromium can create your own profile for you.
         </message>
+        <message name="IDS_SIGNIN_DICE_WEB_INTERCEPT_BUBBLE_CHROME_SIGNIN_TITLE" desc="Title of the Chrome Signin Bubble intercept that is shown when a signed out user signs in on the web with it's first account.">
+          Make Chromium your own
+        </message>
+        <message name="IDS_SIGNIN_DICE_WEB_INTERCEPT_BUBBLE_CHROME_SIGNIN_SUBTITLE" desc="Subtitle of the Chrome Signin Bubble intercept that is shown when a signed out user signs in on the web with it's first account.">
+          Sign in to get the most out of Chromium
+        </message>
+        <message name="IDS_SIGNIN_DICE_WEB_INTERCEPT_BUBBLE_CHROME_SIGNIN_DECLINE_TEXT" desc="Label of the Decline button of the Chrome Signin Bubble intercept that is shown when a signed out user signs in on the web with it's first account.">
+          Use Chromium without an account
+        </message>
+        <message name="IDS_AVATAR_BUTTON_INTERCEPT_BUBBLE_CHROME_SIGNIN_TEXT" desc="Text asking the user to sign into Chromium while the Chrome Signin Bubble intercept is shown.">
+          Sign in to Chromium?
+        </message>
       </if>
 
       <if expr="not chromeos_ash and not is_android">
@@ -913,15 +1069,6 @@ Permissions you've already given to websites and apps may apply to this account.
         </message>
         <message name="IDS_PROFILE_CUSTOMIZATION_TITLE_V2" desc="Title of the profile customization dialog">
           Customize your Chromium profile
-        </message>
-      </if>
-
-      <!-- Chrome Cleanup prompt.
-           Note: these strings should only be used by Google Chrome, but
-                 omitting them brings up a hash collision error. -->
-      <if expr="is_win">
-        <message name="IDS_CHROME_CLEANUP_PROMPT_EXPLANATION" desc="Description in the Chrome Cleanup dialog that Chromium browser shows when unwanted software, like ad injectors or software that changes the user's settings without their knowledge, is found on the user's computer. Appears under the title asking 'Remove harmful software?' Actor is Chromium; we are asking, Do you want Chromium to remove harmful software? 'it' is harmful software. User has the option of clicking 'Remove' to proceed with a cleanup, or 'Details' to see more details. The description is also shown on the Chrome Cleanup section of the Settings page, under 'Remove harmful software' title. Preferrably, the translation for this string should parallel IDS_SETTINGS_RESET_CLEANUP_EXPLANATION_CURRENTLY_REMOVING.">
-          There's harmful software on your computer. Chromium can remove it, restore your settings, and disable extensions to make your browser work normally again.
         </message>
       </if>
 
@@ -980,6 +1127,24 @@ Permissions you've already given to websites and apps may apply to this account.
         Chromium is using your camera.
       </message>
 
+      <if expr="not is_android">
+        <!-- WebHID system tray icon -->
+        <message name="IDS_WEBHID_SYSTEM_TRAY_ICON_TITLE" desc="Title for the WebHID system tray icon">
+            {NUM_DEVICES, plural,
+              =0 {1 HID device was being accessed by one or more Chromium extensions}
+              =1 {1 HID device is being accessed by one or more Chromium extensions}
+            other {# HID devices are being accessed by one or more Chromium extensions}}
+        </message>
+
+        <!-- WebUSB system tray icon -->
+         <message name="IDS_WEBUSB_SYSTEM_TRAY_ICON_TITLE" desc="Title for the WebUSB system tray icon">
+            {NUM_DEVICES, plural,
+              =0 {1 USB device was being accessed by one or more Chromium extensions}
+              =1 {1 USB device is being accessed by one or more Chromium extensions}
+            other {# USB devices are being accessed by one or more Chromium extensions}}
+        </message>
+      </if>
+
       <!-- ProcessSingleton -->
       <if expr="is_posix">
         <message name="IDS_PROFILE_IN_USE_POSIX" desc="Message shown when the browser cannot start because the profile is in use on a different host.">
@@ -1028,18 +1193,25 @@ Permissions you've already given to websites and apps may apply to this account.
         </message>
       </if>
 
+      <if expr="not is_android">
+        <!-- Password Manager Tutorial Strings -->
+        <message name="IDS_TUTORIAL_PASSWORD_MANAGER_OPEN_APP_MENU" desc="The description of the 'open add menu' step in password manager tutorial">
+          Click the Chromium menu
+        </message>
+        <message name="IDS_TUTORIAL_PASSWORD_MANAGER_CLICK_PASSWORD_MANAGER" desc="The description of the 'click password manager' step in password manager tutorial">
+          Click “Password Manager”
+        </message>
+        <message name="IDS_TUTORIAL_PASSWORD_MANAGER_SUCCESS_BODY" desc="The description of the body text in the 'success' step in password manager tutorial">
+          Use your shortcut to quickly get to the Password Manager. You can move your shortcut to your computer's home screen or app launcher.
+        </message>
+        <message name="IDS_PASSWORD_MANAGER_IPH_CREATE_SHORTCUT_BODY" desc="Body of the in Product Help shown after successfully logging into a website telling user about how to create a shortcut">
+          Add a shortcut to Password Manager
+        </message>
+      </if>
+
       <!-- Settings API bubble -->
-      <message name="IDS_EXTENSIONS_SETTINGS_API_FIRST_LINE_START_PAGES_SPECIFIC" desc="Text displayed in the Settings API bubble as first line when an extension has changed the start pages, and we are pointing to its icon.">
-        This extension has changed what page is shown when you start Chromium.
-      </message>
-      <message name="IDS_EXTENSIONS_SETTINGS_API_FIRST_LINE_START_PAGES" desc="Text displayed in the Settings API bubble as first line when an extension has changed the start pages, and we are not pointing to its icon.">
-        The extension "<ph name="EXTENSION_NAME">$1<ex>AdBlock</ex></ph>" has changed what page is shown when you start Chromium.
-      </message>
       <message name="IDS_EXTENSIONS_SETTINGS_API_SECOND_LINE_START_PAGES" desc="Second line in the Settings API bubble. Only shown if the secondary change by the extension was just the start pages. The triple single quotes are needed to preserve the space before and after the sentence which is needed when the language (Chrome is being translated to) uses space as word separator. Please preserve them, unless the language being translated to does not use space as word separator.">
         ''' It also controls what page is shown when you start Chromium. '''
-      </message>
-      <message name="IDS_EXTENSIONS_SETTINGS_API_SECOND_LINE_START_AND_HOME" desc="Second line in the Settings API bubble. Only shown if the secondary change by the extension was both the start page and the home page. See IDS_EXTENSIONS_SETTINGS_API_SECOND_LINE_START_PAGES for reason for triple quotes.">
-        ''' It also controls what page is shown when you start Chromium or click the Home button. '''
       </message>
       <message name="IDS_EXTENSIONS_SETTINGS_API_SECOND_LINE_START_AND_SEARCH" desc="Second line in the Settings API bubble. Only shown if the secondary change by the extension was both the start page and the search engine. See IDS_EXTENSIONS_SETTINGS_API_SECOND_LINE_START_PAGES for reason for triple quotes.">
         ''' It also controls what page is shown when you start Chromium or search from the Omnibox. '''
@@ -1127,6 +1299,15 @@ Permissions you've already given to websites and apps may apply to this account.
         </message>
       </if>
 
+      <if expr="is_win or is_macosx or is_linux">
+        <message name="IDS_UPDATE_RECOMMENDED_DIALOG_TITLE_ALT" desc="Alternate window title for the Update Recommended dialog." translateable="false">
+          Not used in Chromium. Placeholder to keep resource maps in sync.
+        </message>
+        <message name="IDS_UPDATE_RECOMMENDED_ALT" desc="Alternate main text of the Update Recommended dialog with a count of open Incognito windows." translateable="false">
+          Not used in Chromium. Placeholder to keep resource maps in sync.
+        </message>
+      </if>
+
       <!-- Update bubble -->
       <message name="IDS_REINSTALL_APP" desc="Text for the button the user clicks to reinstall the app.">
         Reinstall Chromium
@@ -1182,10 +1363,8 @@ Permissions you've already given to websites and apps may apply to this account.
       </message>
 
       <!-- Critical Notification bubble -->
-      <message name="IDS_CRITICAL_NOTIFICATION_TITLE" desc="The title for a bubble that appears when there is a critical update and Chromium must restart to install it. It counts down from # seconds and then Chromium automatically restarts.">
-        {SECONDS, plural,
-         =1 {Chromium will restart in 1 second}
-         other {Chromium will restart in # seconds}}
+      <message name="IDS_CRITICAL_NOTIFICATION_TITLE" desc="The title for a bubble that appears when there is a critical update and Chromium must restart to install it. It counts down a timer and then Chromium automatically restarts.">
+        Chromium will restart in <ph name="REMAINING_TIME">$1<ex>1 minute, 7 seconds</ex></ph>
       </message>
       <message name="IDS_CRITICAL_NOTIFICATION_TITLE_ALTERNATE" desc="The title for a bubble that appears when there is a critical update and Chromium must restart to install it. The title was previously countng down to an automatic restart and now it has finished. Will only be seen if a web page stops the shutdown process.">
         Please restart Chromium now
@@ -1328,21 +1507,46 @@ Permissions you've already given to websites and apps may apply to this account.
       <message name="IDS_DESKTOP_MEDIA_PICKER_TITLE_WEB_CONTENTS_ONLY" desc="Title for the window picker dialog shown when desktop capture of a tab is requested by an app.">
         Share a Chromium tab
       </message>
+      <!-- Idle timeout bubble. -->
+      <if expr="toolkit_views">
+        <message name="IDS_IDLE_BUBBLE_TITLE_CLOSE" desc="Title of a bubble that informs the user that Chrome closed automatically, because they were away from the computer for X minutes.">
+          Chromium was automatically closed
+        </message>
+        <message name="IDS_IDLE_BUBBLE_BODY_CLOSE_AND_CLEAR" desc="Body of a bubble that informs the user that Chromium closed + cleared data automatically, because they were away from the computer for X minutes.">
+          Your organization closes Chromium when it isn't used for <ph name="TIMEOUT_DURATION">$1<ex>30 minutes</ex></ph>. Browsing data was deleted. This could include history, autofill, and downloads.
+        </message>
+        <message name="IDS_IDLE_BUBBLE_BODY_CLEAR" desc="Body of a bubble that informs the user that Chromium cleared data automatically, because they were away from the computer for X minutes.">
+          Your organization deletes Chromium data when it isn't used for <ph name="TIMEOUT_DURATION">$1<ex>30 minutes</ex></ph>. This could include history, autofill, and downloads.
+        </message>
+        <message name="IDS_IDLE_BUBBLE_BODY_CLOSE" desc="Body of a bubble that informs the user that Chromium closed automatically, because they were away from the computer for X minutes.">
+          Your organization closes Chromium when it isn't used for <ph name="TIMEOUT_DURATION">$1<ex>30 minutes</ex></ph>.
+        </message>
+      </if>
       <!-- Idle timeout dialog. -->
       <if expr="not is_android and not is_chromeos">
-        <message name="IDS_IDLE_TIMEOUT_TITLE" desc="Title of the Idle Timeout dialog, warning the user that their windows are about to close.">
-          Chromium is inactive
+        <message name="IDS_IDLE_TIMEOUT_CLOSE_TITLE" desc="Title of the Idle Timeout dialog, warning the user that their windows are about to close.">
+          Chromium will soon close
         </message>
-        <message name="IDS_IDLE_TIMEOUT_BODY" desc="First sentence in the Idle Timeout dialog, warning the user that all browsers are about to close automatically.">
+        <message name="IDS_IDLE_TIMEOUT_CLEAR_TITLE" desc="Title of the Idle Timeout dialog, warning the user that their browsing data will be lost soon.">
+          Chromium will soon delete browsing data
+        </message>
+        <message name="IDS_IDLE_TIMEOUT_CLOSE_AND_CLEAR_TITLE" desc="Title of the Idle Timeout dialog, warning the user that their windows are about to close and their browsing data will be lost.">
+          Chromium will soon close and delete data
+        </message>
+        <message name="IDS_IDLE_TIMEOUT_CLOSE_BODY" desc="First sentence in the Idle Timeout dialog, warning the user that Chromium is going to close automatically.">
           {COUNT, plural,
-          =1 {Your administrator has configured Chromium to close if it is idle for more than 1 minute.}
-          other {Your administrator has configured Chromium to close if it is idle for more than # minutes.}}
+          =1 {Your organization automatically closes Chromium when it isn't used for 1 minute.}
+          other {Your organization automatically closes Chromium when it isn't used for # minutes.}}
         </message>
-        <message name="IDS_IDLE_TIMEOUT_COUNTDOWN" desc="In the Idle Timeout dialog, a countdown that ticks every second. When it reaches zero, Chrome closes all browsers.">
-          {0, plural,
-          =0 {Chromium will close now.}
-          =1 {Chromium will close in 1 second.}
-          other {Chromium will close in # seconds.}}
+        <message name="IDS_IDLE_TIMEOUT_CLEAR_BODY" desc="First sentence in the Idle Timeout dialog, warning the user that Chromium is going to clear data automatically.">
+          {COUNT, plural,
+          =1 {Your organization automatically deletes browsing data when Chromium isn't used for 1 minute. This could include history, autofill, and downloads. Your tabs will stay open.}
+          other {Your organization automatically deletes browsing data when Chromium isn't used for # minutes. This could include history, autofill, and downloads. Your tabs will stay open.}}
+        </message>
+        <message name="IDS_IDLE_TIMEOUT_CLOSE_AND_CLEAR_BODY" desc="First sentence in the Idle Timeout dialog, warning the user that Chromium is going to close and clear data automatically.">
+          {COUNT, plural,
+          =1 {Your organization automatically closes Chromium when it isn't used for 1 minute. Browsing data is deleted. This could include history, autofill, and downloads.}
+          other {Your organization automatically closes Chromium when it isn't used for # minutes. Browsing data is deleted. This could include history, autofill, and downloads.}}
         </message>
         <message name="IDS_IDLE_DISMISS_BUTTON" desc="Button label in the Idle Timeout dialog, this button dismisses the dialog and prevents browsers from closing automatically.">
           Continue using Chromium
@@ -1354,13 +1558,11 @@ Permissions you've already given to websites and apps may apply to this account.
           Help us improve Chromium
         </message>
       </if>
+
       <!-- Chrome parent extension/app install blocking dialog. -->
       <if expr="enable_extensions and enable_supervised_users">
-        <message name="IDS_EXTENSION_INSTALL_BLOCKED_BY_PARENT_PROMPT_MESSAGE" desc="Text for the dialog indicating that a parent has blocked extensions and apps.">
-         Your parent has turned off "Permissions for sites, apps and extensions" for Chromium. Adding this <ph name="EXTENSION_TYPE_PARAMETER">$1<ex>extension</ex></ph> is not allowed.
-        </message>
-        <message name="IDS_EXTENSION_ENABLE_BLOCKED_BY_PARENT_PROMPT_MESSAGE" desc="Text for the dialog indicating that a parent has blocked extensions and apps.">
-         Your parent has turned off "Permissions for sites, apps and extensions" for Chromium. Enabling this <ph name="EXTENSION_TYPE_PARAMETER">$1<ex>extension</ex></ph> is not allowed.
+        <message name="IDS_EXTENSION_PERMISSIONS_BLOCKED_BY_PARENT_PROMPT_MESSAGE" desc="Text for the dialog indicating that a parent has blocked extensions and apps.">
+         Your parent has turned off "Permissions for sites, apps and extensions" for Chromium
         </message>
       </if>
 
@@ -1375,6 +1577,9 @@ Permissions you've already given to websites and apps may apply to this account.
           </message>
           <message name="IDS_PROFILE_PICKER_PROFILE_CREATION_FLOW_ACCOUNT_SELECTION_LACROS_SUBTITLE" desc="Profile picker, account selection screen subtitle">
             Sign in to Chromium
+          </message>
+          <message name="IDS_PROFILE_PICKER_PROFILE_CREATION_FLOW_ACCOUNT_SELECTION_LACROS_SUBTITLE_WITH_GUEST" desc="Profile picker, account selection screen subtitle">
+            Sign in to Chromium. If you want to sign in an account one-time only, you can <ph name="GUEST_LINK_BEGIN">&lt;a id="guestModeLink" href="#"&gt;</ph>use the device as guest<ph name="GUEST_LINK_END">&lt;/a&gt;</ph>.
           </message>
         </if>
         <if expr="not chromeos_lacros">
@@ -1393,9 +1598,6 @@ Permissions you've already given to websites and apps may apply to this account.
         </if>
         <message name="IDS_PROFILE_PICKER_PROFILE_CREATION_FLOW_PROFILE_TYPE_CHOICE_TITLE" desc="Profile picker profile type choice title">
           Set up your new Chromium profile
-        </message>
-        <message name="IDS_PROFILE_PICKER_PROFILE_CREATION_FLOW_LOCAL_PROFILE_CREATION_TITLE" desc="Title for the local profile customiztion screen on the picker.">
-          Customize your Chromium profile
         </message>
         <message name="IDS_PROFILE_PICKER_IPH_FOR_PROFILES_TEXT" desc="Text of the IPH bubble for introducing profiles.">
           Each profile holds its own Chromium info like bookmarks, history, passwords, and more
@@ -1426,10 +1628,30 @@ Permissions you've already given to websites and apps may apply to this account.
           </message>
         </if>
         <if expr="not chromeos_lacros">
-          <message name="IDS_FRE_SIGN_IN_SUBTITLE" desc="The subtitle for the sign in page explaining to the users the benefits of signing in to Chrome">
-            You can enjoy the most out of Chromium
+          <message name="IDS_FRE_SIGN_IN_TITLE_0"
+            desc="This string appears as a heading on a full-page screen that asks the user to sign in to Chromium with their Google Account. It appears when the user launches Chromium for the first time. When they sign in, they can personalize and customize Chromium and remember their settings in their Google Account. The tone should be inviting and alluring.">
+            Sign in to Chromium
+          </message>
+          <message name="IDS_FRE_SIGN_IN_TITLE_1"
+            desc="This string appears as a heading on a full-page screen that asks the user to sign in to Chromium with their Google Account. It appears when the user launches Chromium for the first time. When they sign in, they can personalize and customize Chromium and remember their settings in their Google Account. The tone should be inviting and alluring.">
+            Make Chromium your own
+          </message>
+          <message name="IDS_FRE_SIGN_IN_TITLE_2"
+            desc="This string appears as a heading on a full-page screen that tells users the benefits of signing in to Chromium. It appears when the user launches Chromium for the first time. When they sign in, they can personalize and customize Chromium and remember their settings in their Google Account. The tone should be inviting and alluring.">
+            Do more with Chromium
           </message>
         </if>
+
+        <!-- Default Browser Promo -->
+        <message name="IDS_FRE_DEFAULT_BROWSER_TITLE" desc="Title for the page that prompts user to set Chromium as their default browser in the first run experience.">
+          Set Chromium as your default browser
+        </message>
+        <message name="IDS_FRE_DEFAULT_BROWSER_SUBTITLE_NEW" desc="Subtitle for the page that prompts user to set Chromium as their default browser in the first run experience.">
+          Use Chromium anytime you click links in messages, documents, and other apps
+        </message>
+        <message name="IDS_FRE_DEFAULT_BROWSER_ILLUSTRATION_ALT_TEXT" desc="Alt text for the illustration in the page that prompts user to set Chromium as their default browser.">
+          Chromium logo inside a computer screen.
+        </message>
 
         <!-- Profile switch IPH -->
         <message name="IDS_PROFILE_SWITCH_PROMO" desc="Text of the In-Product-Help bubble for profile switching.">
@@ -1437,6 +1659,9 @@ Permissions you've already given to websites and apps may apply to this account.
         </message>
         <message name="IDS_PROFILE_SWITCH_PROMO_SCREENREADER" desc="Text announced by screenreaders to explain how to switch between profiles.">
           <ph name="SHORTCUT">$1<ex>CTRL+SHIFT+M</ex></ph> can switch between Chromium profiles
+        </message>
+        <message name="IDS_PASSWORD_MANAGER_IPH_BODY_WEB_APP_PROFILE_SWITCH" desc="Body of the in Product Help for profile switching shown in the password manager web app.">
+          You can switch to see passwords from another Chromium profile
         </message>
       </if>
 
@@ -1466,6 +1691,9 @@ Permissions you've already given to websites and apps may apply to this account.
       </message>
       <message name="IDS_TAILORED_SECURITY_UNCONSENTED_PROMOTION_MESSAGE_DESCRIPTION" desc="Description shown in the message shown when a user changes their account-level tailored security setting encouraging them to enable Enhanced Safe Browsing">
         Enhanced protection does more to block phishing and malware
+      </message>
+      <message name="IDS_TAILORED_SECURITY_UNCONSENTED_PROMOTION_MESSAGE_DESCRIPTION_UPDATED" desc="Description shown in the message shown when a user changes their account-level tailored security setting encouraging them to enable Enhanced Safe Browsing">
+        Enhanced Safe Browsing does more to protect you against dangerous websites and downloads
       </message>
       <message name="IDS_TAILORED_SECURITY_UNCONSENTED_PROMOTION_MESSAGE_ACCEPT" desc="Accept button shown in the message shown when a user changes their account-level tailored security setting encouraging them to enable Enhanced Safe Browsing">
         Continue
@@ -1514,7 +1742,7 @@ Permissions you've already given to websites and apps may apply to this account.
 
       <!-- ChromiumUpdater Strings -->
       <if expr="is_win">
-        <message name="IDS_FRIENDLY_COMPANY_NAME" desc="Company name">
+        <message name="IDS_FRIENDLY_COMPANY_NAME" desc="Company name" translateable="false">
           Chromium
         </message>
         <message name="IDS_NO_UPDATE_RESPONSE" desc="Updater response for no updates when handling install result.">
@@ -1601,44 +1829,152 @@ Permissions you've already given to websites and apps may apply to this account.
         <message name="IDS_BUNDLE_INSTALLED_SUCCESSFULLY" desc="Installation complete message.">
           Installation complete.
         </message>
+
+        <!--extra code-->
+        <message name="IDS_EXTRA_CODE"
+                 desc="The optional extra code for any of the errors below">
+          Extra code: <ph name="EXTRA_CODE">$1<ex>0x80071234</ex></ph>.
+        </message>
+
+        <!--Network errors.-->
+        <message name="IDS_NO_NETWORK_PRESENT_ERROR"
+                 desc="Error message displayed in the main dialog when the Updater is unable to connect to the network.">
+          Unable to connect to the Internet. If you use a firewall, please allowlist <ph name="PRODUCT_EXE_NAME">$1<ex>ChromiumUpdater.exe</ex></ph>.
+        </message>
+        <message name="IDS_ERROR_HTTPSTATUS_UNAUTHORIZED"
+                 desc="Error message displayed in the main dialog when an update check or download fails due to unauthorized access, usually due to proxy problems.">
+          Unable to connect to the Internet. HTTP 401 Unauthorized. Please check your proxy configuration.
+        </message>
+        <message name="IDS_ERROR_HTTPSTATUS_FORBIDDEN"
+                 desc="Error message displayed in the main dialog when an update check or download fails due to forbidden access, usually due to proxy problems.">
+          Unable to connect to the Internet. HTTP 403 Forbidden. Please check your proxy configuration.
+        </message>
+        <message name="IDS_ERROR_HTTPSTATUS_PROXY_AUTH_REQUIRED"
+                 desc="Error message displayed in the main dialog when an update check or download fails due to a need for proxy authentication.">
+          Unable to connect to the Internet. Proxy server requires authentication.
+        </message>
+
+        <!--Update server response errors.-->
+        <message name="IDS_UNKNOWN_APPLICATION"
+                 desc="Error message displayed in the main dialog when the server responds with an error of unknown application.">
+          Unable to install, the application is unknown to the server.
+        </message>
+        <message name="IDS_RESTRICTED_RESPONSE_FROM_SERVER"
+                 desc="Error message displayed in the main dialog when the user is in a export-restricted country.">
+          Installation failed because access is restricted in this country.
+        </message>
+        <message name="IDS_OS_NOT_SUPPORTED"
+                 desc="Error message displayed in the main dialog when the OS does not meet the application's requirements.">
+          Installation failed because this version of the operating system is not supported.
+        </message>
+        <message name="IDS_HW_NOT_SUPPORTED"
+                 desc="Error message displayed in the main dialog when the computer does not meet the application's minimum hardware requirements.">
+          Installation failed because your computer does not meet the minimum hardware requirements.
+        </message>
+        <message name="IDS_NO_HASH"
+                 desc="Error message displayed in the main dialog when the server does not have the application installer's hash.">
+          Installation failed because the update server does not have any hash data for the application.
+        </message>
+        <message name="IDS_UNSUPPORTED_PROTOCOL"
+                 desc="Error message displayed in the main dialog for protocols that do not support multiple packages.">
+          Installation failed because of an unsupported protocol error.
+        </message>
+        <message name="IDS_INTERNAL"
+                 desc="Error message displayed in the main dialog when the update server encounters an internal error.">
+          Installation failed because of an update server internal error.
+        </message>
+        <message name="IDS_GENERIC_UPDATE_CHECK_ERROR"
+                 desc="Error message displayed in the main dialog when the update client returns an error in the update check.">
+          Update check error: <ph name="UPDATE_CHECK_ERROR">$1<ex>error-internal</ex></ph>.
+        </message>
+
+        <!--Download errors.-->
+        <message name="IDS_DOWNLOAD_HASH_MISMATCH"
+                 desc="Error message displayed in the main dialog when the downloaded file fails hash verification.">
+          The downloaded file failed verification.
+        </message>
+        <message name="IDS_GENERIC_DOWNLOAD_ERROR"
+                 desc="Error message displayed in the main dialog when the update client returns an error while downloading.">
+          Download error: <ph name="DOWNLOAD_ERROR">$1<ex>error-internal</ex></ph>.
+        </message>
+
+        <!--Unpack errors.-->
+        <message name="IDS_UNPACK_CACHING_ERROR"
+                 desc="Error message displayed in the main dialog when the update client fails to cache the installer.">
+          Failed to cache the downloaded installer. Error: <ph name="UNPACK_CACHING_ERROR_CODE">$1<ex>0x80070005</ex></ph>.
+        </message>
+        <message name="IDS_GENERIC_UNPACK_ERROR"
+                 desc="Error message displayed in the main dialog when the update client returns an error while unpacking.">
+          Unpack error: <ph name="UNPACK_ERROR">$1<ex>error-internal</ex></ph>.
+        </message>
+
+        <!--Service errors.-->
+        <message name="IDS_GENERIC_SERVICE_ERROR"
+                 desc="Error message displayed in the main dialog for runtime errors that occur in the update client service.">
+          Service error: <ph name="SERVICE_ERROR">$1<ex>error-internal</ex></ph>.
+        </message>
+
+        <!--Install errors.-->
+        <message name="IDS_GENERIC_INSTALL_ERROR"
+                 desc="Error message displayed in the main dialog for runtime errors that occur while installing.">
+          Install error: <ph name="INSTALL_ERROR">$1<ex>error-internal</ex></ph>
+        </message>
+        <message name="IDS_INSTALL_REBOOT"
+                 desc="Message displayed in the main dialog when a system reboot is required or has been initiated after installing.">
+          Reboot required: <ph name="INSTALL_SUCCESS">$1<ex>success-message-internal</ex></ph>
+        </message>
+        <message name="IDS_APP_INSTALL_DISABLED_BY_GROUP_POLICY"
+                 desc="Error message displayed in the main dialog when an IT admin has disabled installation or update of this application using Windows Group Policy.">
+          Install error: Your network administrator has applied a Group Policy that prevents installation: <ph name="INSTALL_ERROR">$1<ex>error-internal</ex></ph>
+        </message>
+        <message name="IDS_INVALID_INSTALLER_FILENAME"
+                 desc="Error message displayed in the main dialog when the application installer's filename or extension is invalid or unsupported.">
+          Install error: The installer filename is invalid or unsupported.
+        </message>
+        <message name="IDS_INSTALLER_FAILED_TO_START"
+                 desc="Error message displayed in the main dialog when the application installer process fails to start.">
+          Install error: The installer process failed to start.
+        </message>
+        <message name="IDS_INSTALLER_TIMED_OUT"
+                 desc="Error message displayed in the main dialog when the application installer does not complete in the allowed amount of time.">
+          Install error: The installer did not complete. The installation has been aborted.
+        </message>
       </if>
-      <!-- High Efficiency Chip strings -->
+      <!-- Memory Saver Chip strings -->
       <if expr="not is_android">
         <if expr="use_titlecase">
-          <message name="IDS_HIGH_EFFICIENCY_DIALOG_TITLE" desc="In Title Case: Title text for a dialog describing that the Memory Saver setting is enabled">
+          <message name="IDS_MEMORY_SAVER_DIALOG_TITLE" desc="In Title Case: Title text for a dialog describing that the Memory Saver setting is enabled">
             Memory Saver Made Chromium Faster
           </message>
         </if>
         <if expr="not use_titlecase">
-          <message name="IDS_HIGH_EFFICIENCY_DIALOG_TITLE" desc="Title text for a dialog describing that the Memory Saver setting is enabled">
+          <message name="IDS_MEMORY_SAVER_DIALOG_TITLE" desc="Title text for a dialog describing that the Memory Saver setting is enabled">
             Memory Saver made Chromium faster
           </message>
         </if>
+        <message name="IDS_MEMORY_SAVER_DIALOG_BODY_V2" desc="Body text for a dialog describing that Memory Saver mode will use less memory.">
+          While this tab was inactive, memory was freed up to keep Chromium fast. You can choose to always exclude this site from being inactive.
+        </message>
       </if>
 
-      <!-- High Efficiency IPH strings -->
+      <!-- Memory Saver IPH strings -->
       <if expr="not is_android">
         <if expr="use_titlecase">
-          <message name="IDS_HIGH_EFFICIENCY_INFO_MODE_PROMO_TITLE" desc="In Title Case: The title for the high efficiency info mode in-product promo bubble.">
-            Memory Saver Made Chromium Faster
-          </message>
-        </if>
-        <if expr="not use_titlecase">
-          <message name="IDS_HIGH_EFFICIENCY_INFO_MODE_PROMO_TITLE" desc="The title for the high efficiency info mode in-product promo bubble.">
-            Memory Saver made Chromium faster
-          </message>
-        </if>
-        <if expr="use_titlecase">
-          <message name="IDS_HIGH_EFFICIENCY_MODE_PROMO_TITLE" desc="In Title Case: The title for the high efficiency mode in-product promo bubble">
+          <message name="IDS_MEMORY_SAVER_MODE_PROMO_TITLE" desc="In Title Case: The title for the Memory Saver mode in-product promo bubble">
             Make Chromium Faster
           </message>
         </if>
         <if expr="not use_titlecase">
-          <message name="IDS_HIGH_EFFICIENCY_MODE_PROMO_TITLE" desc="The title for the high efficiency mode in-product promo bubble">
+          <message name="IDS_MEMORY_SAVER_MODE_PROMO_TITLE" desc="The title for the Memory Saver mode in-product promo bubble">
             Make Chromium faster
           </message>
         </if>
       </if>
+
+      <!-- Clear Browsing Data -->
+      <message name="IDS_SETTINGS_CLEAR_BROWSING_DATA_SIGNED_IN" desc="Description in the footer of the Clear Browsing Data dialog when the user is signed.">
+        To clear browsing data from this device only, while keeping it in your Google Account, <ph name="BEGIN_LINK">&lt;a href="#" target=&quot;_blank&quot;&gt;</ph>sign out of Chromium<ph name="END_LINK">&lt;/a&gt;</ph>.
+      </message>
     </messages>
   </release>
 </grit>

@@ -1,9 +1,9 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/modules/peerconnection/rtc_encoded_audio_receiver_source_optimizer.h"
-#include "third_party/blink/renderer/platform/heap/cross_thread_persistent.h"
+#include "base/task/single_thread_task_runner.h"
 #include "third_party/blink/renderer/platform/scheduler/public/post_cross_thread_task.h"
 #include "third_party/blink/renderer/platform/wtf/cross_thread_functional.h"
 
@@ -24,11 +24,9 @@ RtcEncodedAudioReceiverSourceOptimizer::PerformInProcessOptimization(
       context->GetTaskRunner(TaskType::kInternalMediaRealTime);
 
   auto* new_source = MakeGarbageCollected<RTCEncodedAudioUnderlyingSource>(
-      script_state, std::move(disconnect_callback_),
-      /*is_receiver=*/true);
+      script_state, std::move(disconnect_callback_));
 
-  set_underlying_source_.Run(WrapCrossThreadPersistent(new_source),
-                             std::move(current_runner));
+  set_underlying_source_.Run(new_source, std::move(current_runner));
 
   return new_source;
 }

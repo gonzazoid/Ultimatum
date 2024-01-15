@@ -132,14 +132,13 @@ class COMPONENT_EXPORT(OZONE_BASE) PlatformScreen {
   virtual base::Value::List GetGpuExtraInfo(
       const gfx::GpuExtraInfo& gpu_extra_info);
 
-  // Sets device scale factor received from external sources such as toolkits.
-  // Currently only used by Linux.
-  virtual void SetDeviceScaleFactor(float scale);
-
 #if BUILDFLAG(IS_CHROMEOS_LACROS)
+  // Called when tablet state is changed.
+  virtual void OnTabletStateChanged(display::TabletState tablet_state) {}
+
   // Returns tablet state. If a platform does not support this, returns
   // display::TabletState::kInClamshellMode.
-  virtual display::TabletState GetTabletState() const;
+  virtual display::TabletState GetTabletState() const = 0;
 #endif
 
  protected:

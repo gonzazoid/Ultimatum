@@ -8,7 +8,7 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/sequence_checker.h"
 #include "base/task/sequenced_task_runner.h"
@@ -43,7 +43,7 @@ class MEDIA_GPU_EXPORT ImageProcessorBackend {
 
   // Encapsulates ImageProcessor input / output configurations.
   struct MEDIA_GPU_EXPORT PortConfig {
-    PortConfig() = delete;
+    PortConfig();
     PortConfig(const PortConfig&);
     PortConfig(
         Fourcc fourcc,
@@ -116,6 +116,12 @@ class MEDIA_GPU_EXPORT ImageProcessorBackend {
 
   virtual bool supports_incoherent_buffers() const;
 
+  const scoped_refptr<base::SequencedTaskRunner>& task_runner() const {
+    return backend_task_runner_;
+  }
+
+  virtual std::string type() const = 0;
+
  protected:
   friend struct std::default_delete<ImageProcessorBackend>;
 
@@ -123,7 +129,6 @@ class MEDIA_GPU_EXPORT ImageProcessorBackend {
       const PortConfig& input_config,
       const PortConfig& output_config,
       OutputMode output_mode,
-      VideoRotation relative_rotation,
       ErrorCB error_cb,
       scoped_refptr<base::SequencedTaskRunner> backend_task_runner);
   virtual ~ImageProcessorBackend();
@@ -136,16 +141,13 @@ class MEDIA_GPU_EXPORT ImageProcessorBackend {
   // works as IMPORT mode for output.
   const OutputMode output_mode_;
 
-  // ImageProcessor performs a rotation if the |relative_rotation_| is not equal
-  // to VIDEO_ROTATION_0.
-  const VideoRotation relative_rotation_;
-
   // Call this callback when any error occurs.
   const ErrorCB error_cb_;
 
   // The main sequence and its checker. Except getter methods, all public
-  // methods and callbacks are called on this sequence.
-  scoped_refptr<base::SequencedTaskRunner> backend_task_runner_;
+  // methods and callbacks are called on this sequence. The proper
+  // SequencedTaskRunner is created by ImageProcessorBackend.
+  const scoped_refptr<base::SequencedTaskRunner> backend_task_runner_;
   SEQUENCE_CHECKER(backend_sequence_checker_);
 };
 

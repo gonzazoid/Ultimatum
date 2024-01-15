@@ -2,9 +2,19 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-if (is_mac) {
-  static_library("power_metrics") {
-    sources = [
+static_library("power_metrics") {
+  sources = [
+    "energy_metrics_provider.cc",
+    "energy_metrics_provider.h",
+  ]
+
+  deps = [
+    "//base",
+    "//third_party/abseil-cpp:absl",
+  ]
+
+  if (is_mac) {
+    sources += [
       "energy_impact_mac.h",
       "energy_impact_mac.mm",
       "m1_sensors_internal_types_mac.h",
@@ -19,24 +29,56 @@ if (is_mac) {
       "smc_mac.h",
       "smc_mac.mm",
     ]
-
-    deps = [ "//base" ]
   }
 
-  source_set("unit_tests") {
-    testonly = true
+  if (is_win) {
+    sources += [
+      "energy_metrics_provider_win.cc",
+      "energy_metrics_provider_win.h",
+    ]
 
-    sources = [
+    libs = [ "Setupapi.lib" ]
+    ldflags = [ "/DELAYLOAD:setupapi.dll" ]
+  }
+
+  if (is_linux || is_chromeos) {
+    sources += [
+      "energy_metrics_provider_linux.cc",
+      "energy_metrics_provider_linux.h",
+    ]
+  }
+
+  if (is_win || is_linux || is_chromeos) {
+    sources += [
+      "system_power_monitor.cc",
+      "system_power_monitor.h",
+    ]
+  }
+}
+
+source_set("unit_tests") {
+  testonly = true
+
+  sources = [ "energy_metrics_provider_unittest.cc" ]
+
+  deps = [
+    ":power_metrics",
+    "//base",
+    "//testing/gtest",
+  ]
+
+  if (is_mac) {
+    sources += [
       "energy_impact_mac_unittest.mm",
       "resource_coalition_mac_unittest.mm",
     ]
 
     data = [ "test/data/" ]
+  }
 
-    deps = [
-      ":power_metrics",
-      "//base",
-      "//testing/gtest",
-    ]
+  if (is_win || is_linux || is_chromeos) {
+    sources += [ "system_power_monitor_unittest.cc" ]
+
+    deps += [ "//base/test:test_support" ]
   }
 }

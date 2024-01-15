@@ -7,8 +7,8 @@
 #include <string>
 #include <utility>
 
-#include "base/callback.h"
 #include "base/command_line.h"
+#include "base/functional/callback.h"
 #include "base/i18n/rtl.h"
 #include "base/strings/string_split.h"
 #include "build/chromecast_buildflags.h"
@@ -40,16 +40,42 @@
 #include "net/cert/x509_certificate.h"
 #include "net/http/http_util.h"
 #include "net/ssl/ssl_private_key.h"
-#include "services/metrics/public/cpp/ukm_source_id.h"
 #include "services/network/public/cpp/network_switches.h"
 #include "services/network/public/cpp/resource_request.h"
 #include "services/network/public/mojom/network_context.mojom.h"
 #include "services/network/public/mojom/network_service.mojom.h"
 #include "third_party/blink/public/common/switches.h"
 #include "third_party/blink/public/mojom/webpreferences/web_preferences.mojom.h"
+#include "third_party/widevine/cdm/buildflags.h"
 #include "ui/base/l10n/l10n_util.h"
 
 namespace {
+
+constexpr net::NetworkTrafficAnnotationTag kProxyConfigTrafficAnnotation =
+    net::DefineNetworkTrafficAnnotation("webview_proxy_config", R"(
+      semantics {
+        sender: "Proxy configuration via a command line flag"
+        description:
+          "Used to fetch HTTP/HTTPS/SOCKS5/PAC proxy configuration when "
+          "proxy is configured by the --proxy-server command line flag. "
+          "When proxy implies automatic configuration, it can send network "
+          "requests in the scope of this annotation."
+        trigger:
+          "Whenever a network request is made when the system proxy settings "
+          "are used, and they indicate to use a proxy server."
+        data:
+          "Proxy configuration."
+        destination: OTHER
+        destination_other: "The proxy server specified in the configuration."
+      }
+      policy {
+        cookies_allowed: NO
+        setting:
+          "This request cannot be disabled in settings. However it will never "
+          "be made if user does not run with the '--proxy-server' switch."
+        policy_exception_justification:
+          "Not implemented, behaviour only available behind a switch."
+      })");
 
 class DevToolsManagerDelegate final : public content::DevToolsManagerDelegate {
  public:
@@ -70,7 +96,10 @@ class DevToolsManagerDelegate final : public content::DevToolsManagerDelegate {
     std::vector<content::BrowserContext*> contexts = GetBrowserContexts();
     return contexts.empty() ? nullptr : contexts.front();
   }
-  content::DevToolsAgentHost::List RemoteDebuggingTargets() override {
+  content::DevToolsAgentHost::List RemoteDebuggingTargets(
+      DevToolsManagerDelegate::TargetType target_type) override {
+    LOG_IF(WARNING, target_type != DevToolsManagerDelegate::kFrame)
+        << "Ignoring unsupported remote target type: " << target_type;
     return main_parts_->devtools_controller()->RemoteDebuggingTargets();
   }
 
@@ -90,12 +119,16 @@ static constexpr char const* kRendererSwitchesToCopy[] = {
     switches::kCorsExemptHeaders,
     switches::kEnableCastStreamingReceiver,
     switches::kEnableProtectedVideoBuffers,
-    switches::kUseOverlaysForVideo,
+    switches::kForceProtectedVideoOutputBuffers,
     switches::kMinVideoDecoderOutputBufferSize,
 
-    // TODO(crbug/1013412): Delete these two switches when fixed.
+// TODO(crbug/1013412): Delete these two switches when fixed.
+#if BUILDFLAG(ENABLE_WIDEVINE)
     switches::kEnableWidevine,
+#if BUILDFLAG(ENABLE_CAST_RECEIVER)
     switches::kPlayreadyKeySystem,
+#endif
+#endif
 
     // Pass to the renderer process for consistency with Chrome.
     network::switches::kUnsafelyTreatInsecureOriginAsSecure,
@@ -138,7 +171,7 @@ WebEngineContentBrowserClient::CreateDevToolsManagerDelegate() {
 }
 
 std::string WebEngineContentBrowserClient::GetProduct() {
-  return version_info::GetProductNameAndVersionForUserAgent();
+  return std::string(version_info::GetProductNameAndVersionForUserAgent());
 }
 
 std::string WebEngineContentBrowserClient::GetUserAgent() {
@@ -159,22 +192,28 @@ blink::UserAgentMetadata WebEngineContentBrowserClient::GetUserAgentMetadata() {
 void WebEngineContentBrowserClient::OverrideWebkitPrefs(
     content::WebContents* web_contents,
     blink::web_pref::WebPreferences* web_prefs) {
-  // Disable WebSQL support since it's being removed from the web platform.
+  // Disable WebSQL support since it is being removed from the web platform
+  // and does not work. See crbug.com/1317431.
   web_prefs->databases_enabled = false;
+
+  // TODO(crbug.com/1382970): Remove once supported in WebEngine.
+  web_prefs->disable_webauthn = true;
 
 #if BUILDFLAG(ENABLE_CAST_RECEIVER)
   static bool allow_insecure_content =
       base::CommandLine::ForCurrentProcess()->HasSwitch(
           switches::kAllowRunningInsecureContent);
-  if (allow_insecure_content)
+  if (allow_insecure_content) {
     web_prefs->allow_running_insecure_content = true;
+  }
 #endif
 
   FrameImpl* frame = FrameImpl::FromWebContents(web_contents);
   // This method may be called when a |web_contents| is instantiated but an
   // associated frame has not been created.
-  if (frame != nullptr)
+  if (frame != nullptr) {
     frame->OverrideWebPreferences(web_prefs);
+  }
 }
 
 void WebEngineContentBrowserClient::RegisterBrowserInterfaceBindersForFrame(
@@ -186,7 +225,6 @@ void WebEngineContentBrowserClient::RegisterBrowserInterfaceBindersForFrame(
 void WebEngineContentBrowserClient::
     RegisterNonNetworkNavigationURLLoaderFactories(
         int frame_tree_node_id,
-        ukm::SourceIdObj ukm_source_id,
         NonNetworkURLLoaderFactoryMap* factories) {
   if (base::CommandLine::ForCurrentProcess()->HasSwitch(
           switches::kEnableContentDirectories)) {
@@ -199,7 +237,7 @@ void WebEngineContentBrowserClient::
     RegisterNonNetworkSubresourceURLLoaderFactories(
         int render_process_id,
         int render_frame_id,
-        const absl::optional<url::Origin>& request_initiator_origin,
+        const std::optional<url::Origin>& request_initiator_origin,
         NonNetworkURLLoaderFactoryMap* factories) {
   if (base::CommandLine::ForCurrentProcess()->HasSwitch(
           switches::kEnableContentDirectories)) {
@@ -223,16 +261,14 @@ void WebEngineContentBrowserClient::AppendExtraCommandLineSwitches(
       *base::CommandLine::ForCurrentProcess();
 
   command_line->CopySwitchesFrom(browser_command_line,
-                                 kAllProcessSwitchesToCopy,
-                                 std::size(kAllProcessSwitchesToCopy));
+                                 kAllProcessSwitchesToCopy);
 
   std::string process_type =
       command_line->GetSwitchValueASCII(switches::kProcessType);
 
   if (process_type == switches::kRendererProcess) {
     command_line->CopySwitchesFrom(browser_command_line,
-                                   kRendererSwitchesToCopy,
-                                   std::size(kRendererSwitchesToCopy));
+                                   kRendererSwitchesToCopy);
   } else if (process_type == switches::kUtilityProcess) {
     // Although only the Network process needs
     // kUnsafelyTreatInsecureOriginAsSecureSwitchToCopy, differentiating utility
@@ -240,8 +276,7 @@ void WebEngineContentBrowserClient::AppendExtraCommandLineSwitches(
     // switch to all Utility processes so do the same here.
     // Do not add other switches here.
     command_line->CopySwitchesFrom(
-        browser_command_line, kUnsafelyTreatInsecureOriginAsSecureSwitchToCopy,
-        std::size(kUnsafelyTreatInsecureOriginAsSecureSwitchToCopy));
+        browser_command_line, kUnsafelyTreatInsecureOriginAsSecureSwitchToCopy);
   }
 }
 
@@ -259,6 +294,7 @@ std::string WebEngineContentBrowserClient::GetAcceptLangs(
 }
 
 base::OnceClosure WebEngineContentBrowserClient::SelectClientCertificate(
+    content::BrowserContext* browser_context,
     content::WebContents* web_contents,
     net::SSLCertRequestInfo* cert_request_info,
     net::ClientCertIdentityList client_certs,
@@ -283,7 +319,7 @@ WebEngineContentBrowserClient::CreateThrottlesForNavigation(
         navigation_handle, frame_impl->navigation_policy_handler()));
   }
 
-  const absl::optional<std::string>& explicit_sites_filter_error_page =
+  const std::optional<std::string>& explicit_sites_filter_error_page =
       frame_impl->explicit_sites_filter_error_page();
 
   if (explicit_sites_filter_error_page) {
@@ -302,7 +338,8 @@ WebEngineContentBrowserClient::CreateURLLoaderThrottles(
     content::BrowserContext* browser_context,
     const base::RepeatingCallback<content::WebContents*()>& wc_getter,
     content::NavigationUIData* navigation_ui_data,
-    int frame_tree_node_id) {
+    int frame_tree_node_id,
+    absl::optional<int64_t> navigation_id) {
   if (frame_tree_node_id == content::RenderFrameHost::kNoFrameTreeNodeId) {
     // TODO(crbug.com/1378791): Add support for workers.
     return {};
@@ -311,7 +348,7 @@ WebEngineContentBrowserClient::CreateURLLoaderThrottles(
   std::vector<std::unique_ptr<blink::URLLoaderThrottle>> throttles;
   auto* frame_impl = FrameImpl::FromWebContents(wc_getter.Run());
   DCHECK(frame_impl);
-  const auto& rules =
+  auto rules =
       frame_impl->url_request_rewrite_rules_manager()->GetCachedRules();
   if (rules) {
     throttles.emplace_back(std::make_unique<url_rewrite::URLLoaderThrottle>(
@@ -327,6 +364,23 @@ void WebEngineContentBrowserClient::ConfigureNetworkContextParams(
     network::mojom::NetworkContextParams* network_context_params,
     cert_verifier::mojom::CertVerifierCreationParams*
         cert_verifier_creation_params) {
+  const base::CommandLine& command_line =
+      *base::CommandLine::ForCurrentProcess();
+  std::string proxy = command_line.GetSwitchValueASCII(switches::kProxyServer);
+  if (!proxy.empty()) {
+    net::ProxyConfig proxy_config;
+    proxy_config.proxy_rules().ParseFromString(proxy);
+    std::string bypass_list =
+        command_line.GetSwitchValueASCII(switches::kProxyBypassList);
+    if (!bypass_list.empty()) {
+      proxy_config.proxy_rules().bypass_rules.ParseFromString(bypass_list);
+    }
+
+    network_context_params->initial_proxy_config =
+        net::ProxyConfigWithAnnotation(proxy_config,
+                                       kProxyConfigTrafficAnnotation);
+  }
+
   network_context_params->user_agent = GetUserAgent();
   network_context_params->accept_language =
       net::HttpUtil::GenerateAcceptLanguageHeader(GetAcceptLangs(context));

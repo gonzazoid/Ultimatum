@@ -9,23 +9,26 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/memory/ptr_util.h"
 #include "base/message_loop/message_pump_type.h"
+#include "base/no_destructor.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "base/threading/thread.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "chrome/browser/devtools/device/usb/usb_device_manager_helper.h"
 #include "chrome/browser/devtools/device/usb/usb_device_provider.h"
-#include "content/public/browser/browser_task_traits.h"
+#include "content/public/browser/browser_thread.h"
 #include "net/base/io_buffer.h"
 #include "net/base/ip_endpoint.h"
 #include "net/base/net_errors.h"
+#include "net/http/http_response_headers.h"
+#include "net/http/http_util.h"
 #include "net/socket/stream_socket.h"
 #include "net/traffic_annotation/network_traffic_annotation.h"
 
@@ -137,8 +140,7 @@ class HttpRequest {
               CommandCallback callback)
       : socket_(std::move(socket)),
         command_callback_(std::move(callback)),
-        expected_total_size_(0),
-        header_size_(std::string::npos) {
+        expected_total_size_(0) {
     SendRequest(path, headers);
   }
 
@@ -148,8 +150,7 @@ class HttpRequest {
               HttpUpgradeCallback callback)
       : socket_(std::move(socket)),
         http_upgrade_callback_(std::move(callback)),
-        expected_total_size_(0),
-        header_size_(std::string::npos) {
+        expected_total_size_(0) {
     SendRequest(path, headers);
   }
 
@@ -196,8 +197,8 @@ class HttpRequest {
     pieces.insert(pieces.end(), {crlf});
 
     std::string request = base::StrCat(pieces);
-    scoped_refptr<net::IOBuffer> base_buffer =
-        base::MakeRefCounted<net::IOBuffer>(request.size());
+    auto base_buffer =
+        base::MakeRefCounted<net::IOBufferWithSize>(request.size());
     memcpy(base_buffer->data(), request.data(), request.size());
     request_ = base::MakeRefCounted<net::DrainableIOBuffer>(
         std::move(base_buffer), request.size());
@@ -209,7 +210,7 @@ class HttpRequest {
     if (!CheckNetResultOrDie(result))
       return;
 
-    response_buffer_ = base::MakeRefCounted<net::IOBuffer>(kBufferSize);
+    response_buffer_ = base::MakeRefCounted<net::IOBufferWithSize>(kBufferSize);
 
     result = socket_->Read(
         response_buffer_.get(), kBufferSize,
@@ -219,6 +220,9 @@ class HttpRequest {
   }
 
   void OnResponseData(int result) {
+    scoped_refptr<net::HttpResponseHeaders> headers = nullptr;
+    size_t header_size;
+
     do {
       if (!CheckNetResultOrDie(result))
         return;
@@ -229,24 +233,26 @@ class HttpRequest {
 
       response_.append(response_buffer_->data(), result);
 
-      if (header_size_ == std::string::npos) {
-        header_size_ = response_.find("\r\n\r\n");
+      if (!headers) {
+        header_size = response_.find("\r\n\r\n");
 
-        if (header_size_ != std::string::npos) {
-          header_size_ += 4;
+        if (header_size != std::string::npos) {
+          header_size += 4;
+          headers = base::MakeRefCounted<net::HttpResponseHeaders>(
+              net::HttpUtil::AssembleRawHeaders(
+                  base::StringPiece(response_.data(), header_size)));
 
           int expected_body_size = 0;
 
-          // TODO(kaznacheev): Use net::HttpResponseHeader to parse the header.
-          std::string content_length = ExtractHeader("Content-Length:");
-          if (!content_length.empty()) {
+          std::string content_length;
+          if (headers->GetNormalizedHeader("Content-Length", &content_length)) {
             if (!base::StringToInt(content_length, &expected_body_size)) {
               CheckNetResultOrDie(net::ERR_FAILED);
               return;
             }
           }
 
-          expected_total_size_ = header_size_ + expected_body_size;
+          expected_total_size_ = header_size + expected_body_size;
         }
       }
 
@@ -256,15 +262,17 @@ class HttpRequest {
       //
       // Some (part of) WebSocket frames can be already received into
       // |response_|.
-      if (header_size_ != std::string::npos &&
-          response_.length() >= expected_total_size_) {
-        const std::string& body = response_.substr(header_size_);
+      if (headers && response_.length() >= expected_total_size_) {
+        const std::string& body = response_.substr(header_size);
 
         if (!command_callback_.is_null()) {
           std::move(command_callback_).Run(net::OK, body);
         } else {
+          std::string sec_websocket_extensions;
+          headers->GetNormalizedHeader("Sec-WebSocket-Extensions",
+                                       &sec_websocket_extensions);
           std::move(http_upgrade_callback_)
-              .Run(net::OK, ExtractHeader("Sec-WebSocket-Extensions:"), body,
+              .Run(net::OK, sec_websocket_extensions, body,
                    std::move(socket_));
         }
 
@@ -276,21 +284,6 @@ class HttpRequest {
           response_buffer_.get(), kBufferSize,
           base::BindOnce(&HttpRequest::OnResponseData, base::Unretained(this)));
     } while (result != net::ERR_IO_PENDING);
-  }
-
-  std::string ExtractHeader(const std::string& header) {
-    size_t start_pos = response_.find(header);
-    if (start_pos == std::string::npos)
-      return std::string();
-
-    size_t endline_pos = response_.find("\n", start_pos);
-    if (endline_pos == std::string::npos)
-      return std::string();
-
-    std::string value = response_.substr(
-        start_pos + header.length(), endline_pos - start_pos - header.length());
-    base::TrimWhitespaceASCII(value, base::TRIM_ALL, &value);
-    return value;
   }
 
   bool CheckNetResultOrDie(int result) {
@@ -322,10 +315,6 @@ class HttpRequest {
   // - Otherwise, this variable is set to the size of the header (including the
   //   last two CRLFs).
   size_t expected_total_size_;
-  // Initially set to std::string::npos. Once the end of the header is seen,
-  // set to the size of the header part in |response_| including the two CRLFs
-  // at the end.
-  size_t header_size_;
 };
 
 class DevicesRequest : public base::RefCountedThreadSafe<DevicesRequest> {
@@ -356,7 +345,8 @@ class DevicesRequest : public base::RefCountedThreadSafe<DevicesRequest> {
 
  private:
   explicit DevicesRequest(DescriptorsCallback callback)
-      : response_task_runner_(base::ThreadTaskRunnerHandle::Get()),
+      : response_task_runner_(
+            base::SingleThreadTaskRunner::GetCurrentDefault()),
         callback_(std::move(callback)),
         descriptors_(new DeviceDescriptors()) {}
 
@@ -452,10 +442,11 @@ void AndroidDeviceManager::Device::QueryDeviceInfo(
     DeviceInfoCallback callback) {
   task_runner_->PostTask(
       FROM_HERE,
-      base::BindOnce(&DeviceProvider::QueryDeviceInfo, provider_, serial_,
-                     base::BindOnce(&PostDeviceInfoCallback,
-                                    base::ThreadTaskRunnerHandle::Get(),
-                                    std::move(callback))));
+      base::BindOnce(
+          &DeviceProvider::QueryDeviceInfo, provider_, serial_,
+          base::BindOnce(&PostDeviceInfoCallback,
+                         base::SingleThreadTaskRunner::GetCurrentDefault(),
+                         std::move(callback))));
 }
 
 void AndroidDeviceManager::Device::OpenSocket(const std::string& socket_name,
@@ -471,11 +462,12 @@ void AndroidDeviceManager::Device::SendJsonRequest(
     CommandCallback callback) {
   task_runner_->PostTask(
       FROM_HERE,
-      base::BindOnce(&DeviceProvider::SendJsonRequest, provider_, serial_,
-                     socket_name, request,
-                     base::BindOnce(&PostCommandCallback,
-                                    base::ThreadTaskRunnerHandle::Get(),
-                                    std::move(callback))));
+      base::BindOnce(
+          &DeviceProvider::SendJsonRequest, provider_, serial_, socket_name,
+          request,
+          base::BindOnce(&PostCommandCallback,
+                         base::SingleThreadTaskRunner::GetCurrentDefault(),
+                         std::move(callback))));
 }
 
 void AndroidDeviceManager::Device::HttpUpgrade(const std::string& socket_name,
@@ -484,18 +476,20 @@ void AndroidDeviceManager::Device::HttpUpgrade(const std::string& socket_name,
                                                HttpUpgradeCallback callback) {
   task_runner_->PostTask(
       FROM_HERE,
-      base::BindOnce(&DeviceProvider::HttpUpgrade, provider_, serial_,
-                     socket_name, path, extensions,
-                     base::BindOnce(&PostHttpUpgradeCallback,
-                                    base::ThreadTaskRunnerHandle::Get(),
-                                    std::move(callback))));
+      base::BindOnce(
+          &DeviceProvider::HttpUpgrade, provider_, serial_, socket_name, path,
+          extensions,
+          base::BindOnce(&PostHttpUpgradeCallback,
+                         base::SingleThreadTaskRunner::GetCurrentDefault(),
+                         std::move(callback))));
 }
 
 AndroidDeviceManager::Device::Device(
     scoped_refptr<base::SingleThreadTaskRunner> device_task_runner,
     scoped_refptr<DeviceProvider> provider,
     const std::string& serial)
-    : RefCountedDeleteOnSequence<Device>(base::ThreadTaskRunnerHandle::Get()),
+    : RefCountedDeleteOnSequence<Device>(
+          base::SingleThreadTaskRunner::GetCurrentDefault()),
       task_runner_(device_task_runner),
       provider_(provider),
       serial_(serial) {}
@@ -506,21 +500,16 @@ AndroidDeviceManager::Device::~Device() {
                                 std::move(provider_), std::move(serial_)));
 }
 
-AndroidDeviceManager::HandlerThread*
-AndroidDeviceManager::HandlerThread::instance_ = nullptr;
-
 // static
-scoped_refptr<AndroidDeviceManager::HandlerThread>
+AndroidDeviceManager::HandlerThread*
 AndroidDeviceManager::HandlerThread::GetInstance() {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
-  if (!instance_)
-    new HandlerThread();
-  return instance_;
+  static base::NoDestructor<AndroidDeviceManager::HandlerThread> s_instance;
+  return s_instance.get();
 }
 
 AndroidDeviceManager::HandlerThread::HandlerThread() {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
-  instance_ = this;
   thread_ = new base::Thread(kDevToolsAdbBridgeThreadName);
   base::Thread::Options options;
   options.message_pump_type = base::MessagePumpType::IO;
@@ -543,7 +532,6 @@ void AndroidDeviceManager::HandlerThread::StopThread(
 
 AndroidDeviceManager::HandlerThread::~HandlerThread() {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
-  instance_ = nullptr;
   if (!thread_)
     return;
   // Shut down thread on a thread other than UI so it can join a thread.

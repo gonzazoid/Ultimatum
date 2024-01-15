@@ -9,11 +9,12 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/synchronization/condition_variable.h"
 #include "base/synchronization/lock.h"
 #include "base/time/time.h"
+#include "media/base/mock_filters.h"
 #include "media/cast/cast_config.h"
 #include "media/cast/common/sender_encoded_frame.h"
 #include "media/cast/encoding/vpx_encoder.h"
@@ -45,7 +46,9 @@ class VideoDecoderTest : public ::testing::TestWithParam<Codec> {
  public:
   VideoDecoderTest()
       : cast_environment_(new StandaloneCastEnvironment()),
-        vp8_encoder_(GetVideoSenderConfigForTest()),
+        vp8_encoder_(
+            GetVideoSenderConfigForTest(),
+            std::make_unique<media::MockVideoEncoderMetricsProvider>()),
         cond_(&lock_) {
     vp8_encoder_.Initialize();
   }
@@ -92,7 +95,7 @@ class VideoDecoderTest : public ::testing::TestWithParam<Codec> {
     // Encode |frame| into |encoded_frame->data|.
     std::unique_ptr<SenderEncodedFrame> encoded_frame(new SenderEncodedFrame());
     // Test only supports VP8, currently.
-    CHECK_EQ(CODEC_VIDEO_VP8, GetParam());
+    CHECK_EQ(Codec::kVideoVp8, GetParam());
     vp8_encoder_.Encode(video_frame, reference_time, encoded_frame.get());
     // Rewrite frame IDs for testing purposes.
     encoded_frame->frame_id = last_frame_id_ + 1 + num_dropped_frames;
@@ -237,7 +240,7 @@ TEST_P(VideoDecoderTest, DecodesFramesOfVaryingSizes) {
 
 INSTANTIATE_TEST_SUITE_P(All,
                          VideoDecoderTest,
-                         ::testing::Values(CODEC_VIDEO_VP8));
+                         ::testing::Values(Codec::kVideoVp8));
 
 }  // namespace cast
 }  // namespace media

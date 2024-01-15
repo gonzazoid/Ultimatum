@@ -7,10 +7,11 @@
 #include "base/test/mock_entropy_provider.h"
 #include "content/browser/startup_helper.h"
 #include "content/public/browser/network_service_instance.h"
-#include "content/public/common/network_service_util.h"
+#include "content/public/browser/network_service_util.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/content_browser_test.h"
 #include "mojo/public/cpp/bindings/remote.h"
+#include "services/network/public/mojom/network_service.mojom.h"
 #include "services/network/public/mojom/network_service_test.mojom.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -36,9 +37,9 @@ class TestFieldTrialListObserver : public base::FieldTrialList::Observer {
   void WaitForTrialGroupToBeFinalized() { run_loop_.Run(); }
 
   // base::FieldTrialList::Observer:
-  void OnFieldTrialGroupFinalized(const std::string& trial_name,
+  void OnFieldTrialGroupFinalized(const base::FieldTrial& trial,
                                   const std::string& group_name) override {
-    if (trial_name == kFieldTrialName) {
+    if (trial.trial_name() == kFieldTrialName) {
       EXPECT_EQ(kFieldTrialGroup, group_name);
       run_loop_.Quit();
     }
@@ -88,7 +89,7 @@ IN_PROC_BROWSER_TEST_F(NetworkFieldTrialBrowserTest, FieldTrialRegistered) {
   // inform the browser process about it.
   TestFieldTrialListObserver observer;
   mojo::Remote<network::mojom::NetworkServiceTest> network_service_test;
-  GetNetworkService()->BindTestInterface(
+  GetNetworkService()->BindTestInterfaceForTesting(
       network_service_test.BindNewPipeAndPassReceiver());
   network_service_test->ActivateFieldTrial(kFieldTrialName);
   observer.WaitForTrialGroupToBeFinalized();

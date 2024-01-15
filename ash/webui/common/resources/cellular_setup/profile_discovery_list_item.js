@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors
+// Copyright 2023 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,89 +15,68 @@ import '//resources/polymer/v3_0/iron-media-query/iron-media-query.js';
 import '//resources/polymer/v3_0/paper-spinner/paper-spinner-lite.js';
 import './cellular_setup_icons.html.js';
 
-import {I18nBehavior} from '//resources/ash/common/i18n_behavior.js';
-import {Polymer} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
-import {ESimProfileProperties, ESimProfileRemote} from 'chrome://resources/mojo/chromeos/ash/services/cellular_setup/public/mojom/esim_manager.mojom-webui.js';
+import {I18nBehavior, I18nBehaviorInterface} from '//resources/ash/common/i18n_behavior.js';
+import {mixinBehaviors, PolymerElement} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {mojoString16ToString} from 'chrome://resources/js/mojo_type_util.js';
+import {ESimProfileProperties} from 'chrome://resources/mojo/chromeos/ash/services/cellular_setup/public/mojom/esim_manager.mojom-webui.js';
 
 import {getTemplate} from './profile_discovery_list_item.html.js';
 
-Polymer({
-  _template: getTemplate(),
-  is: 'profile-discovery-list-item',
+/**
+ * @constructor
+ * @extends {PolymerElement}
+ * @implements {I18nBehaviorInterface}
+ */
+const ProfileDiscoveryListItemElementBase =
+    mixinBehaviors([I18nBehavior], PolymerElement);
 
-  behaviors: [I18nBehavior],
+/** @polymer */
+class ProfileDiscoveryListItemElement extends
+    ProfileDiscoveryListItemElementBase {
+  static get is() {
+    return 'profile-discovery-list-item';
+  }
 
-  properties: {
-    /** @type {?ESimProfileRemote} */
-    profile: {
-      type: Object,
-      value: null,
-      observer: 'onProfileChanged_',
-    },
+  static get template() {
+    return getTemplate();
+  }
 
-    selected: {
-      type: Boolean,
-      reflectToAttribute: true,
-    },
+  static get properties() {
+    return {
+      /**
+       * @type {?ESimProfileProperties}
+       */
+      profileProperties: {
+        type: Object,
+        value: null,
+        notify: true,
+      },
 
-    showLoadingIndicator: {
-      type: Boolean,
-    },
+      selected: {
+        type: Boolean,
+        reflectToAttribute: true,
+      },
 
-    /**
-     * @type {?ESimProfileProperties}
-     * @private
-     */
-    profileProperties_: {
-      type: Object,
-      value: null,
-      notify: true,
-    },
+      /**
+       * @type {boolean}
+       * @private
+       */
+      isDarkModeActive_: {
+        type: Boolean,
+        value: false,
+      },
 
-    /**
-     * @type {boolean}
-     * @private
-     */
-    isDarkModeActive_: {
-      type: Boolean,
-      value: false,
-    },
-  },
-
-  /** @private */
-  onProfileChanged_() {
-    if (!this.profile) {
-      this.profileProperties_ = null;
-      return;
-    }
-    this.profile.getProperties().then(response => {
-      this.profileProperties_ = response.properties;
-    });
-  },
+    };
+  }
 
   /** @private */
   getProfileName_() {
-    if (!this.profileProperties_) {
+    if (!this.profileProperties) {
       return '';
     }
-    return String.fromCharCode(...this.profileProperties_.name.data);
-  },
+    return mojoString16ToString(this.profileProperties.name);
+  }
+}
 
-  /** @private */
-  getProfileProvider_() {
-    if (!this.profileProperties_) {
-      return '';
-    }
-    return String.fromCharCode(...this.profileProperties_.serviceProvider.data);
-  },
-
-  /**
-   * @return {string}
-   * @private
-   */
-  getProfileImage_() {
-    return this.isDarkModeActive_ ?
-        'chrome://resources/ash/common/cellular_setup/default_esim_profile_dark.svg' :
-        'chrome://resources/ash/common/cellular_setup/default_esim_profile.svg';
-  },
-});
+customElements.define(
+    ProfileDiscoveryListItemElement.is, ProfileDiscoveryListItemElement);

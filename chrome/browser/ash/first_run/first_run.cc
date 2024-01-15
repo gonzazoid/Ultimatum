@@ -7,8 +7,8 @@
 #include "ash/components/arc/arc_prefs.h"
 #include "ash/components/arc/session/arc_service_manager.h"
 #include "ash/constants/ash_switches.h"
-#include "ash/public/cpp/tablet_mode.h"
 #include "base/command_line.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/metrics/histogram_macros.h"
 #include "chrome/browser/ash/arc/arc_util.h"
@@ -25,7 +25,7 @@
 #include "chrome/common/chrome_switches.h"
 #include "chrome/common/extensions/extension_constants.h"
 #include "chrome/common/pref_names.h"
-#include "chromeos/login/login_state/login_state.h"
+#include "chromeos/ash/components/login/login_state/login_state.h"
 #include "components/pref_registry/pref_registry_syncable.h"
 #include "components/prefs/pref_service.h"
 #include "components/session_manager/core/session_manager.h"
@@ -37,6 +37,7 @@
 #include "content/public/common/content_switches.h"
 #include "extensions/browser/extension_registry.h"
 #include "extensions/common/constants.h"
+#include "ui/display/screen.h"
 #include "ui/events/event_constants.h"
 #include "ui/gfx/geometry/rect.h"
 
@@ -76,12 +77,12 @@ bool ShouldShowGetStarted(Profile* profile,
 // Object of this class waits for system web apps to load. Then it launches the
 // help app. The object deletes itself if the app is launched or the profile is
 // destroyed.
-class AppLauncher : public ProfileObserver,
-                    public base::SupportsWeakPtr<AppLauncher> {
+class AppLauncher final : public ProfileObserver {
  public:
   // App launcher owns itself and will be deleted when the app is launched or
   // the profile is destroyed.
   static void LaunchHelpAfterSWALoad(Profile* profile) {
+    DCHECK(ShouldLaunchHelpApp(profile));
     new AppLauncher(profile);
   }
   // ProfileObserver:
@@ -90,8 +91,9 @@ class AppLauncher : public ProfileObserver,
  private:
   explicit AppLauncher(Profile* profile) : profile_(profile) {
     profile->AddObserver(this);
-    ash::SystemWebAppManager::Get(profile)->on_apps_synchronized().Post(
-        FROM_HERE, base::BindOnce(&AppLauncher::LaunchHelpApp, AsWeakPtr()));
+    SystemWebAppManager::Get(profile)->on_apps_synchronized().Post(
+        FROM_HERE, base::BindOnce(&AppLauncher::LaunchHelpApp,
+                                  weak_factory_.GetWeakPtr()));
   }
 
   ~AppLauncher() override { this->profile_->RemoveObserver(this); }
@@ -99,11 +101,11 @@ class AppLauncher : public ProfileObserver,
   AppLauncher& operator=(const AppLauncher&) = delete;
 
   void LaunchHelpApp() {
-    ash::LaunchSystemWebAppAsync(profile_, ash::SystemWebAppType::HELP);
+    LaunchSystemWebAppAsync(profile_, SystemWebAppType::HELP);
     profile_->GetPrefs()->SetBoolean(prefs::kFirstRunTutorialShown, true);
     delete this;
   }
-  Profile* profile_;
+  raw_ptr<Profile> profile_;
   base::WeakPtrFactory<AppLauncher> weak_factory_{this};
 };
 
@@ -128,10 +130,13 @@ bool ShouldLaunchHelpApp(Profile* profile) {
   profile->GetPrefs()->SetBoolean(prefs::kHelpAppShouldShowGetStarted,
                                   ShouldShowGetStarted(profile, user_manager));
   profile->GetPrefs()->SetBoolean(prefs::kHelpAppTabletModeDuringOobe,
-                                  ash::TabletMode::IsInTabletMode());
+                                  display::Screen::GetScreen()->InTabletMode());
 
   if (WizardController::default_controller())
     WizardController::default_controller()->PrepareFirstRunPrefs();
+
+  if (!SystemWebAppManager::Get(profile))
+    return false;
 
   if (!IsRegularUserOrSupervisedChild(user_manager))
     return false;
@@ -143,9 +148,9 @@ bool ShouldLaunchHelpApp(Profile* profile) {
     return true;
   }
 
-  // ash::TabletMode does not exist in some tests.
-  if (ash::TabletMode::Get() && ash::TabletMode::Get()->InTabletMode())
+  if (display::Screen::GetScreen()->InTabletMode()) {
     return false;
+  }
 
   if (command_line->HasSwitch(::switches::kTestType))
     return false;

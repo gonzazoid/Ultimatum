@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 
+#include "base/component_export.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
@@ -18,7 +19,6 @@
 #include "google_apis/gaia/google_service_auth_error.h"
 #include "net/base/net_errors.h"
 #include "net/traffic_annotation/network_traffic_annotation.h"
-#include "services/network/public/cpp/http_raw_request_response_info.h"
 #include "services/network/public/mojom/fetch_api.mojom.h"
 #include "url/gurl.h"
 
@@ -43,14 +43,13 @@ enum class MultiloginMode {
 };
 
 // Specifies the "source" parameter for Gaia calls.
-class GaiaSource {
+class COMPONENT_EXPORT(GOOGLE_APIS) GaiaSource {
  public:
   enum Type {
     kChrome,
     kChromeOS,
     kAccountReconcilorDice,
     kAccountReconcilorMirror,
-    kOAuth2LoginVerifier,
     kPrimaryAccountManager
   };
 
@@ -72,9 +71,9 @@ class SimpleURLLoader;
 class SharedURLLoaderFactory;
 }  // namespace network
 
-class GaiaAuthFetcher {
+class COMPONENT_EXPORT(GOOGLE_APIS) GaiaAuthFetcher {
  public:
-  struct MultiloginTokenIDPair {
+  struct COMPONENT_EXPORT(GOOGLE_APIS) MultiloginTokenIDPair {
     std::string token_;
     std::string gaia_id_;
 
@@ -104,48 +103,30 @@ class GaiaAuthFetcher {
 
   // Start a request to exchange the authorization code for an OAuthLogin-scoped
   // oauth2 token.
+  // If `binding_registration_token` is not empty, also registers binding key
+  // information to create a bound refresh token. This doesn't guarantee that
+  // the server actually binds the refresh token to a key.
   //
   // Either OnClientOAuthSuccess or OnClientOAuthFailure will be
   // called on the consumer on the original thread.
-  void StartAuthCodeForOAuth2TokenExchange(const std::string& auth_code);
+  void StartAuthCodeForOAuth2TokenExchange(
+      const std::string& auth_code,
+      const std::string& binding_registration_token = std::string());
 
   // Start a request to exchange the authorization code for an OAuthLogin-scoped
   // oauth2 token.
-  // Resulting refresh token is annotated on the server with |device_id|. Format
+  // Resulting refresh token is annotated on the server with `device_id`. Format
   // of device_id on the server is at most 64 unicode characters.
+  // If `binding_registration_token` is not empty, also registers binding key
+  // information to create a bound refresh token. This doesn't guarantee that
+  // the server actually binds the refresh token to a key.
   //
   // Either OnClientOAuthSuccess or OnClientOAuthFailure will be
   // called on the consumer on the original thread.
   void StartAuthCodeForOAuth2TokenExchangeWithDeviceId(
       const std::string& auth_code,
-      const std::string& device_id);
-
-  // Start a MergeSession request to pre-login the user with the given
-  // credentials.
-  //
-  // Start a MergeSession request to fill the browsing cookie jar with
-  // credentials represented by the account whose uber-auth token is
-  // |uber_token|.  This method will modify the cookies of the current profile.
-  //
-  // The |external_cc_result| string can specify the result of connetion checks
-  // for various google properties, and MergeSession will set cookies on those
-  // properties too if appropriate.  See StartGetCheckConnectionInfo() for
-  // details.  The string is a comma separated list of token/result pairs, where
-  // token and result are separated by a colon.  This string may be empty, in
-  // which case no specific handling is performed.
-  //
-  // Either OnMergeSessionSuccess or OnMergeSessionFailure will be
-  // called on the consumer on the original thread.
-  void StartMergeSession(const std::string& uber_token,
-                         const std::string& external_cc_result);
-
-  // Start a request to exchange an OAuthLogin-scoped oauth2 access token for an
-  // uber-auth token.  The returned token can be used with the method
-  // StartMergeSession().
-  //
-  // Either OnUberAuthTokenSuccess or OnUberAuthTokenFailure will be
-  // called on the consumer on the original thread.
-  void StartTokenFetchForUberAuthExchange(const std::string& access_token);
+      const std::string& device_id,
+      const std::string& binding_registration_token = std::string());
 
   // Starts a request to get the cookie for list of accounts.
   void StartOAuthMultilogin(gaia::MultiloginMode mode,
@@ -179,7 +160,7 @@ class GaiaAuthFetcher {
 
   // Starts a request to get the list of URLs to check for connection info.
   // Returns token/URL pairs to check, and the resulting status can be given to
-  // /MergeSession requests.
+  // OAuth multilogin requests.
   void StartGetCheckConnectionInfo();
 
   // `CreateAndStartGaiaFetcher()` been called && results not back yet?
@@ -226,17 +207,17 @@ class GaiaAuthFetcher {
 
   bool IsReAuthApiUrl(const GURL& url);
 
+  bool IsListAccountsUrl(const GURL& url);
+
  private:
   // The format of the POST body to get OAuth2 token pair from auth code.
   static const char kOAuth2CodeToTokenPairBodyFormat[];
-  // Additional param for the POST body to get OAuth2 token pair from auth code.
+  // Additional params for the POST body to get OAuth2 token pair from auth
+  // code.
   static const char kOAuth2CodeToTokenPairDeviceIdParam[];
+  static const char kOAuth2CodeToTokenPairBindingRegistrationTokenParam[];
   // The format of the POST body to revoke an OAuth2 token.
   static const char kOAuth2RevokeTokenBodyFormat[];
-  // The format of the POST body for MergeSession.
-  static const char kMergeSessionFormat[];
-  // The format of the URL for UberAuthToken.
-  static const char kUberAuthTokenURLFormat[];
 
   // Constants for parsing error responses.
   static const char kErrorParam[];
@@ -264,14 +245,6 @@ class GaiaAuthFetcher {
                        net::Error net_error,
                        int response_code);
 
-  void OnMergeSessionFetched(const std::string& data,
-                             net::Error net_error,
-                             int response_code);
-
-  void OnUberAuthTokenFetch(const std::string& data,
-                            net::Error net_error,
-                            int response_code);
-
   void OnOAuthMultiloginFetched(const std::string& data,
                                 net::Error net_error,
                                 int response_code);
@@ -288,19 +261,14 @@ class GaiaAuthFetcher {
                                    std::string* error,
                                    std::string* error_url);
 
-  // Given auth code and device ID (optional), create body to get OAuth2 token
-  // pair.
-  static std::string MakeGetTokenPairBody(const std::string& auth_code,
-                                          const std::string& device_id);
+  // Given auth code, device ID (optional), and registration token for token
+  // binding (optional) create body to get OAuth2 token pair.
+  static std::string MakeGetTokenPairBody(
+      const std::string& auth_code,
+      const std::string& device_id,
+      const std::string& binding_registration_token);
   // Given an OAuth2 token, create body to revoke the token.
   std::string MakeRevokeTokenBody(const std::string& auth_token);
-
-  // Supply the authentication token returned from StartIssueAuthToken.
-  static std::string MakeMergeSessionQuery(
-      const std::string& auth_token,
-      const std::string& external_cc_result,
-      const std::string& continue_url,
-      const std::string& source);
 
   // From a SimpleURLLoader result, generates an appropriate error.
   static GoogleServiceAuthError GenerateAuthError(const std::string& data,
@@ -312,8 +280,6 @@ class GaiaAuthFetcher {
   std::string source_;
   const GURL oauth2_token_gurl_;
   const GURL oauth2_revoke_gurl_;
-  const GURL merge_session_gurl_;
-  const GURL uberauth_token_gurl_;
   const GURL oauth_multilogin_gurl_;
   const GURL list_accounts_gurl_;
   const GURL logout_gurl_;

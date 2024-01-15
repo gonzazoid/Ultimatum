@@ -38,6 +38,13 @@ enum class BlockUntilVerdict {
   kBlock = 1,
 };
 
+// Enum representing if an analysis should block further interactions with the
+// browser if an error occurs.
+enum class DefaultAction {
+  kAllow = 0,
+  kBlock = 1,
+};
+
 // Struct holding settings data specific to a cloud analysis.
 struct CloudAnalysisSettings {
   CloudAnalysisSettings();
@@ -53,6 +60,9 @@ struct CloudAnalysisSettings {
   // The DM token to be used for scanning. May be empty, for example if this
   // scan is initiated by APP or for a local content analysis.
   std::string dm_token;
+
+  // The scanning limit for all data passed to cloud content analysis.
+  size_t max_file_size;
 };
 
 // Struct holding settings data specific to a local analysis.
@@ -65,8 +75,10 @@ struct LocalAnalysisSettings {
   ~LocalAnalysisSettings();
 
   std::string local_path;
-  bool user_specific;
-
+  bool user_specific = false;
+  base::span<const char* const> subject_names;
+  // The scanning limit for pasted text and image in local content analysis.
+  size_t max_file_size;
   // Arrays of base64 encoded signing key signatures.
   std::vector<std::string> verification_signatures;
 };
@@ -97,6 +109,10 @@ class CloudOrLocalAnalysisSettings
   const LocalAnalysisSettings& local_settings() const;
   const std::string local_path() const;
   bool user_specific() const;
+  base::span<const char* const> subject_names() const;
+
+  // Field accessible by both CloudAnalysisSettings and LocalAnalysisSettings.
+  size_t max_file_size() const;
 };
 
 // Main struct holding settings data for the content analysis Connector.
@@ -109,9 +125,9 @@ struct AnalysisSettings {
   CloudOrLocalAnalysisSettings cloud_or_local_settings;
   std::map<std::string, TagSettings> tags;
   BlockUntilVerdict block_until_verdict = BlockUntilVerdict::kNoBlock;
+  DefaultAction default_action = DefaultAction::kAllow;
   bool block_password_protected_files = false;
   bool block_large_files = false;
-  bool block_unsupported_file_types = false;
 
   // Minimum text size for BulkDataEntry scans. 0 means no minimum.
   size_t minimum_data_size = 100;

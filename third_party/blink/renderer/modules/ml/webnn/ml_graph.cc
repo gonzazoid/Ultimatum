@@ -4,15 +4,73 @@
 
 #include "third_party/blink/renderer/modules/ml/webnn/ml_graph.h"
 
+#include "base/numerics/checked_math.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
 #include "third_party/blink/renderer/core/dom/dom_exception.h"
+#include "third_party/blink/renderer/core/typed_arrays/dom_array_buffer.h"
+#include "third_party/blink/renderer/core/typed_arrays/dom_array_buffer_view.h"
+#include "third_party/blink/renderer/core/typed_arrays/dom_data_view.h"
+#include "third_party/blink/renderer/core/typed_arrays/dom_typed_array.h"
 #include "third_party/blink/renderer/modules/ml/ml_context.h"
 #include "third_party/blink/renderer/modules/ml/webnn/ml_operand.h"
 #include "third_party/blink/renderer/modules/ml/webnn/ml_operator.h"
+#include "third_party/blink/renderer/platform/bindings/exception_state.h"
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_deque.h"
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_set.h"
 
 namespace blink {
+
+namespace {
+
+bool ValidateNamedArrayBufferViews(
+    const MLNamedArrayBufferViews& named_array_buffer_views,
+    const HashMap<String, MLGraph::ResourceInfo>& resources_info,
+    String& error_message) {
+  if (named_array_buffer_views.size() !=
+      base::checked_cast<wtf_size_t>(resources_info.size())) {
+    error_message = String::Format(
+        "The number (%u) of the array buffer views doesn't match the "
+        "expectation (%u).",
+        named_array_buffer_views.size(),
+        base::checked_cast<wtf_size_t>(resources_info.size()));
+    return false;
+  }
+  for (const auto& named_array_buffer_view : named_array_buffer_views) {
+    const auto& [name, array_buffer_view] = named_array_buffer_view;
+    if (!resources_info.Contains(name)) {
+      error_message = String::Format("The name \"%s\" isn't part of the graph.",
+                                     name.Utf8().c_str());
+      return false;
+    }
+    if (array_buffer_view->IsDetached()) {
+      error_message =
+          String::Format("The array buffer view with name \"%s\" is detached.",
+                         name.Utf8().c_str());
+      return false;
+    }
+    const auto& info = resources_info.at(name);
+    if (array_buffer_view->GetType() !=
+        GetArrayBufferViewType(info.data_type)) {
+      error_message = String::Format(
+          "The type (%s) of the array buffer view with name \"%s\" doesn't "
+          "match the expected operand data type (%s).",
+          array_buffer_view->TypeName(), name.Utf8().c_str(),
+          V8MLOperandDataType(info.data_type).AsCStr());
+      return false;
+    }
+    if (array_buffer_view->byteLength() != info.byte_length) {
+      error_message = String::Format(
+          "The byte length (%zu) of the array buffer view with name \"%s\" "
+          "doesn't match the expected byte length (%zu).",
+          array_buffer_view->byteLength(), name.Utf8().c_str(),
+          info.byte_length);
+      return false;
+    }
+  }
+  return true;
+}
+
+}  // namespace
 
 MLGraph::MLGraph(MLContext* context) : ml_context_(context) {}
 
@@ -35,7 +93,61 @@ const HashMap<String, MLGraph::ResourceInfo>& MLGraph::GetOutputResourcesInfo()
   return output_resources_info_;
 }
 
-void MLGraph::BuildAsync(const MLNamedOperands& named_outputs,
+void MLGraph::ComputeAsync(ScopedMLTrace scoped_trace,
+                           const MLNamedArrayBufferViews& inputs,
+                           const MLNamedArrayBufferViews& outputs,
+                           ScriptPromiseResolver* resolver,
+                           ExceptionState& exception_state) {
+  // The MLGraph object should be initialized before computing.
+  DCHECK(resources_info_initialized_);
+
+  // Validate the MLNamedArrayBufferViews.
+  String error_message;
+  if (!ValidateNamedArrayBufferViews(inputs, input_resources_info_,
+                                     error_message)) {
+    resolver->Reject(MakeGarbageCollected<DOMException>(
+        DOMExceptionCode::kDataError, "Invalid inputs: " + error_message));
+    return;
+  }
+  if (!ValidateNamedArrayBufferViews(outputs, output_resources_info_,
+                                     error_message)) {
+    resolver->Reject(MakeGarbageCollected<DOMException>(
+        DOMExceptionCode::kDataError, "Invalid outputs: " + error_message));
+    return;
+  }
+
+  // Call ComputeAsyncImpl() implemented by an MLGraph backend.
+  ComputeAsyncImpl(std::move(scoped_trace), inputs, outputs, resolver,
+                   exception_state);
+}
+
+void MLGraph::ComputeSync(const MLNamedArrayBufferViews& inputs,
+                          const MLNamedArrayBufferViews& outputs,
+                          ExceptionState& exception_state) {
+  // The MLGraph object should be initialized before computing.
+  DCHECK(resources_info_initialized_);
+  ScopedMLTrace scoped_trace("MLGraph::ComputeSync");
+  // Validate the input and output MLNamedArrayBufferViews.
+  String error_message;
+  if (!ValidateNamedArrayBufferViews(inputs, input_resources_info_,
+                                     error_message)) {
+    exception_state.ThrowDOMException(DOMExceptionCode::kDataError,
+                                      "Invalid inputs: " + error_message);
+    return;
+  }
+  if (!ValidateNamedArrayBufferViews(outputs, output_resources_info_,
+                                     error_message)) {
+    exception_state.ThrowDOMException(DOMExceptionCode::kDataError,
+                                      "Invalid outputs: " + error_message);
+    return;
+  }
+
+  // Call ComputeSyncImpl() implemented by an MLGraph backend.
+  ComputeSyncImpl(inputs, outputs, exception_state);
+}
+
+void MLGraph::BuildAsync(ScopedMLTrace scoped_trace,
+                         const MLNamedOperands& named_outputs,
                          ScriptPromiseResolver* resolver) {
   String error_message;
   if (!ValidateAndInitializeResourcesInfo(named_outputs, error_message)) {
@@ -43,7 +155,20 @@ void MLGraph::BuildAsync(const MLNamedOperands& named_outputs,
         DOMExceptionCode::kDataError, error_message));
     return;
   }
-  BuildAsyncImpl(named_outputs, resolver);
+  BuildAsyncImpl(std::move(scoped_trace), named_outputs, resolver);
+}
+
+MLGraph* MLGraph::BuildSync(ScriptState* script_state,
+                            const MLNamedOperands& named_outputs,
+                            ExceptionState& exception_state) {
+  ScopedMLTrace scoped_trace("MLGraph::BuildSync");
+  String error_message;
+  if (!ValidateAndInitializeResourcesInfo(named_outputs, error_message)) {
+    exception_state.ThrowDOMException(DOMExceptionCode::kDataError,
+                                      error_message);
+    return nullptr;
+  }
+  return BuildSyncImpl(script_state, named_outputs, exception_state);
 }
 
 bool MLGraph::ValidateAndInitializeResourcesInfo(
@@ -77,7 +202,7 @@ bool MLGraph::ValidateAndInitializeResourcesInfo(
     }
     // Setup resource info for this output operand.
     output_resources_info_.insert(
-        name, ResourceInfo({.type = operand->Type(),
+        name, ResourceInfo({.data_type = operand->DataType(),
                             .byte_length = operand->ByteLength()}));
     // Mark its dependent operator is visited.
     visited_operators.insert(operand->Operator());
@@ -85,6 +210,9 @@ bool MLGraph::ValidateAndInitializeResourcesInfo(
     operators_queue.push_back(operand->Operator());
   }
 
+  // An input MLOperand may be used by more than one MLOperators. This set
+  // ensures an input MLOperand won't be validated multiple times.
+  HeapHashSet<Member<const MLOperand>> visited_input_operands;
   while (operators_queue.size() > 0) {
     // If the queue is not empty, dequeue an operator from the queue.
     const auto current_operator = operators_queue.TakeFirst();
@@ -94,13 +222,20 @@ bool MLGraph::ValidateAndInitializeResourcesInfo(
         case MLOperand::OperandKind::kOutput:
           DCHECK(operand->Operator());
           // If the operand is an output operand and its dependent operator is
-          // not visited, mark the dependent operator is visited and enqueue it.
+          // not visited, mark the dependent operator is visited and enqueue
+          // it.
           if (!visited_operators.Contains(operand->Operator())) {
             visited_operators.insert(operand->Operator());
             operators_queue.push_back(operand->Operator());
           }
           break;
         case MLOperand::OperandKind::kInput:
+          // If the operand has been validated, it doesn't need to be verified
+          // multiple times.
+          if (visited_input_operands.Contains(operand)) {
+            continue;
+          }
+          visited_input_operands.insert(operand);
           // If the operand is an input operand, validate whether its name is
           // unique.
           if (input_resources_info_.Contains(operand->Name())) {
@@ -112,17 +247,40 @@ bool MLGraph::ValidateAndInitializeResourcesInfo(
           // Setup resource info for this input operand.
           input_resources_info_.insert(
               operand->Name(),
-              ResourceInfo({.type = operand->Type(),
+              ResourceInfo({.data_type = operand->DataType(),
                             .byte_length = operand->ByteLength()}));
           break;
         case MLOperand::OperandKind::kConstant:
-          // If the operand is a constant operand, there is no check needed.
+          // If the operand has been validated, it doesn't need to be verified
+          // multiple times.
+          if (visited_input_operands.Contains(operand)) {
+            continue;
+          }
+          visited_input_operands.insert(operand);
+          // If the operand is a constant operand, validate its ArrayBufferView
+          // is not detached, because the backends may access its content in
+          // `BuildAsyncImpl()` or `BuildSyncImpl()`. A constant operand may
+          // carries a detached ArrayBufferView if the JS code first calls
+          // `MLGraphBuilder.constant()` to build a constant operand with a
+          // valid ArrayBufferView, then detaches the ArrayBufferView and calls
+          // `MLGraphBuilder.build()` to build the graph with this constant
+          // operand.
+          CHECK(operand->ArrayBufferView());
+          if (operand->ArrayBufferView()->IsDetached()) {
+            error_message =
+                "The array buffer view of the constant operand is detached.";
+            return false;
+          }
           break;
       }
     }
   }
   resources_info_initialized_ = true;
   return true;
+}
+
+const MLContext* MLGraph::Context() const {
+  return ml_context_.Get();
 }
 
 }  // namespace blink

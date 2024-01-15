@@ -5,19 +5,30 @@
 #include "third_party/blink/renderer/core/animation/css/css_animation_data.h"
 
 #include "third_party/blink/renderer/core/animation/timing.h"
+#include "third_party/blink/renderer/platform/runtime_enabled_features.h"
 
 namespace blink {
 
-CSSAnimationData::CSSAnimationData() {
+CSSAnimationData::CSSAnimationData() : CSSTimingData(InitialDuration()) {
   name_list_.push_back(InitialName());
   timeline_list_.push_back(InitialTimeline());
   iteration_count_list_.push_back(InitialIterationCount());
   direction_list_.push_back(InitialDirection());
   fill_mode_list_.push_back(InitialFillMode());
   play_state_list_.push_back(InitialPlayState());
+  range_start_list_.push_back(InitialRangeStart());
+  range_end_list_.push_back(InitialRangeEnd());
+  composition_list_.push_back(InitialComposition());
 }
 
 CSSAnimationData::CSSAnimationData(const CSSAnimationData& other) = default;
+
+absl::optional<double> CSSAnimationData::InitialDuration() {
+  if (RuntimeEnabledFeatures::ScrollTimelineEnabled()) {
+    return absl::nullopt;
+  }
+  return 0;
+}
 
 const AtomicString& CSSAnimationData::InitialName() {
   DEFINE_STATIC_LOCAL(const AtomicString, name, ("none"));
@@ -37,24 +48,14 @@ bool CSSAnimationData::AnimationsMatchForStyleRecalc(
          iteration_count_list_ == other.iteration_count_list_ &&
          direction_list_ == other.direction_list_ &&
          fill_mode_list_ == other.fill_mode_list_ &&
+         range_start_list_ == other.range_start_list_ &&
+         range_end_list_ == other.range_end_list_ &&
          TimingMatchForStyleRecalc(other);
 }
 
 Timing CSSAnimationData::ConvertToTiming(size_t index) const {
   DCHECK_LT(index, name_list_.size());
   Timing timing = CSSTimingData::ConvertToTiming(index);
-
-  // For animations attached to ScrollTimelines, use the new start/end delay
-  // values instead.
-  //
-  // TODO(crbug.com/1375994): Once animation-delay is a shorthand, this
-  // should move to CSSTimingData::ConvertToTiming.
-  if (!GetTimeline(index).IsKeyword()) {
-    DCHECK(RuntimeEnabledFeatures::CSSScrollTimelineEnabled());
-    timing.start_delay = GetRepeated(DelayStartList(), index);
-    timing.end_delay = GetRepeated(DelayEndList(), index);
-  }
-
   timing.iteration_count = GetRepeated(iteration_count_list_, index);
   timing.direction = GetRepeated(direction_list_, index);
   timing.fill_mode = GetRepeated(fill_mode_list_, index);

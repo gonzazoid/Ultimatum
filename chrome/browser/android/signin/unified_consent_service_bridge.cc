@@ -9,8 +9,9 @@
 #include "chrome/browser/sync/sync_service_factory.h"
 #include "chrome/browser/unified_consent/unified_consent_service_factory.h"
 #include "components/prefs/pref_service.h"
-#include "components/sync/driver/sync_service.h"
+#include "components/sync/service/sync_service.h"
 #include "components/unified_consent/pref_names.h"
+#include "components/unified_consent/unified_consent_metrics.h"
 #include "components/unified_consent/unified_consent_service.h"
 
 using base::android::JavaParamRef;
@@ -51,5 +52,5 @@ static void JNI_UnifiedConsentServiceBridge_RecordSyncSetupDataTypesHistogram(
   Profile* profile = ProfileAndroid::FromProfileAndroid(profileAndroid);
   auto* syncService = SyncServiceFactory::GetForProfile(profile);
   unified_consent::metrics::RecordSyncSetupDataTypesHistrogam(
-      syncService->GetUserSettings(), profile->GetPrefs());
+      syncService->GetUserSettings());
 }

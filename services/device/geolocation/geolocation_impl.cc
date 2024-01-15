@@ -6,18 +6,19 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "services/device/geolocation/geolocation_context.h"
 #include "services/device/public/cpp/geolocation/geoposition.h"
 
 namespace device {
 
 GeolocationImpl::GeolocationImpl(mojo::PendingReceiver<Geolocation> receiver,
+                                 const GURL& requesting_url,
                                  GeolocationContext* context)
     : receiver_(this, std::move(receiver)),
+      url_(requesting_url),
       context_(context),
-      high_accuracy_(false),
-      has_position_to_report_(false) {
+      high_accuracy_(false) {
   DCHECK(context_);
   receiver_.set_disconnect_handler(base::BindOnce(
       &GeolocationImpl::OnConnectionError, base::Unretained(this)));
@@ -26,10 +27,11 @@ GeolocationImpl::GeolocationImpl(mojo::PendingReceiver<Geolocation> receiver,
 GeolocationImpl::~GeolocationImpl() {
   // Make sure to respond to any pending callback even without a valid position.
   if (!position_callback_.is_null()) {
-    if (ValidateGeoposition(current_position_)) {
-      current_position_.error_code =
-          mojom::Geoposition::ErrorCode::POSITION_UNAVAILABLE;
-      current_position_.error_message.clear();
+    if (!current_result_ || !current_result_->is_error()) {
+      current_result_ =
+          mojom::GeopositionResult::NewError(mojom::GeopositionError::New(
+              mojom::GeopositionErrorCode::kPositionUnavailable,
+              /*error_message=*/"", /*error_technical=*/""));
     }
     ReportCurrentPosition();
   }
@@ -40,8 +42,8 @@ void GeolocationImpl::PauseUpdates() {
 }
 
 void GeolocationImpl::ResumeUpdates() {
-  if (ValidateGeoposition(position_override_)) {
-    OnLocationUpdate(position_override_);
+  if (position_override_) {
+    OnLocationUpdate(*position_override_);
     return;
   }
 
@@ -59,8 +61,8 @@ void GeolocationImpl::StartListeningForUpdates() {
 void GeolocationImpl::SetHighAccuracy(bool high_accuracy) {
   high_accuracy_ = high_accuracy;
 
-  if (ValidateGeoposition(position_override_)) {
-    OnLocationUpdate(position_override_);
+  if (position_override_) {
+    OnLocationUpdate(*position_override_);
     return;
   }
 
@@ -76,25 +78,47 @@ void GeolocationImpl::QueryNextPosition(QueryNextPositionCallback callback) {
 
   position_callback_ = std::move(callback);
 
-  if (has_position_to_report_)
+  if (current_result_) {
     ReportCurrentPosition();
+  }
 }
 
-void GeolocationImpl::SetOverride(const mojom::Geoposition& position) {
-  if (!position_callback_.is_null())
+void GeolocationImpl::SetOverride(const mojom::GeopositionResult& result) {
+  if (!position_callback_.is_null()) {
+    if (!current_result_) {
+      current_result_ =
+          mojom::GeopositionResult::NewError(mojom::GeopositionError::New(
+              mojom::GeopositionErrorCode::kPositionUnavailable,
+              /*error_message=*/"", /*error_technical=*/""));
+    }
     ReportCurrentPosition();
-  position_override_ = position;
-  if (!ValidateGeoposition(position_override_))
+  }
+
+  position_override_ = result.Clone();
+  if (result.is_error() ||
+      (result.is_position() && !ValidateGeoposition(*result.get_position()))) {
     ResumeUpdates();
+  }
 
   geolocation_subscription_ = {};
 
-  OnLocationUpdate(position_override_);
+  OnLocationUpdate(*position_override_);
 }
 
 void GeolocationImpl::ClearOverride() {
-  position_override_ = mojom::Geoposition();
+  position_override_.reset();
   StartListeningForUpdates();
+}
+
+void GeolocationImpl::OnPermissionRevoked() {
+  if (!position_callback_.is_null()) {
+    std::move(position_callback_)
+        .Run(mojom::GeopositionResult::NewError(mojom::GeopositionError::New(
+            mojom::GeopositionErrorCode::kPermissionDenied,
+            /*error_message=*/"User denied Geolocation",
+            /*error_technical=*/"")));
+  }
+  position_callback_.Reset();
 }
 
 void GeolocationImpl::OnConnectionError() {
@@ -104,20 +128,18 @@ void GeolocationImpl::OnConnectionError() {
   // return.
 }
 
-void GeolocationImpl::OnLocationUpdate(const mojom::Geoposition& position) {
+void GeolocationImpl::OnLocationUpdate(const mojom::GeopositionResult& result) {
   DCHECK(context_);
 
-  current_position_ = position;
-  current_position_.valid = ValidateGeoposition(position);
-  has_position_to_report_ = true;
+  current_result_ = result.Clone();
 
   if (!position_callback_.is_null())
     ReportCurrentPosition();
 }
 
 void GeolocationImpl::ReportCurrentPosition() {
-  std::move(position_callback_).Run(current_position_.Clone());
-  has_position_to_report_ = false;
+  CHECK(current_result_);
+  std::move(position_callback_).Run(std::move(current_result_));
 }
 
 }  // namespace device

@@ -5,8 +5,9 @@
 #include "chrome/browser/ash/plugin_vm/plugin_vm_files.h"
 
 #include "ash/public/cpp/shelf_model.h"
-#include "base/bind.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/test/bind.h"
 #include "base/test/mock_callback.h"
 #include "base/test/scoped_running_on_chromeos.h"
@@ -118,7 +119,7 @@ class PluginVmFilesTest : public testing::Test {
   FakePluginVmFeatures fake_plugin_vm_features_;
   base::test::ScopedRunningOnChromeOS running_on_chromeos_;
   std::string app_id_;
-  storage::ExternalMountPoints* mount_points_;
+  raw_ptr<storage::ExternalMountPoints> mount_points_;
   std::string mount_name_;
 };
 
@@ -163,8 +164,7 @@ TEST_F(PluginVmFilesTest, LaunchPluginVmApp) {
                 return std::make_unique<MockPluginVmManager>();
               })));
   ash::ShelfModel shelf_model;
-  ChromeShelfController chrome_shelf_controller(&profile_, &shelf_model,
-                                                /*shelf_item_factory=*/nullptr);
+  ChromeShelfController chrome_shelf_controller(&profile_, &shelf_model);
   chrome_shelf_controller.SetProfileForTest(&profile_);
   chrome_shelf_controller.SetShelfControllerHelperForTest(
       std::make_unique<ShelfControllerHelper>(&profile_));

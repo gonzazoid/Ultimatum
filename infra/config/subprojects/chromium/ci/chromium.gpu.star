@@ -6,27 +6,35 @@
 load("//lib/args.star", "args")
 load("//lib/branches.star", "branches")
 load("//lib/builder_config.star", "builder_config")
+load("//lib/builder_health_indicators.star", "health_spec")
 load("//lib/builders.star", "reclient", "sheriff_rotations")
 load("//lib/ci.star", "ci")
 load("//lib/consoles.star", "consoles")
+load("//lib/gn_args.star", "gn_args")
 
 ci.defaults.set(
-    builder_group = "chromium.gpu",
     executable = ci.DEFAULT_EXECUTABLE,
-    execution_timeout = ci.DEFAULT_EXECUTION_TIMEOUT,
+    builder_group = "chromium.gpu",
     pool = ci.gpu.POOL,
-    reclient_jobs = reclient.jobs.DEFAULT,
-    reclient_instance = reclient.instance.DEFAULT_TRUSTED,
-    service_account = ci.DEFAULT_SERVICE_ACCOUNT,
     sheriff_rotations = sheriff_rotations.CHROMIUM_GPU,
     tree_closing = True,
-    tree_closing_notifiers = ci.gpu.TREE_CLOSING_NOTIFIERS,
+    contact_team_email = "chrome-gpu-infra@google.com",
+    execution_timeout = ci.DEFAULT_EXECUTION_TIMEOUT,
+    health_spec = health_spec.DEFAULT,
+    reclient_instance = reclient.instance.DEFAULT_TRUSTED,
+    reclient_jobs = reclient.jobs.DEFAULT,
+    service_account = ci.DEFAULT_SERVICE_ACCOUNT,
+    shadow_service_account = ci.DEFAULT_SHADOW_SERVICE_ACCOUNT,
     thin_tester_cores = 2,
+    tree_closing_notifiers = ci.gpu.TREE_CLOSING_NOTIFIERS,
 )
 
 consoles.console_view(
     name = "chromium.gpu",
-    branch_selector = branches.DESKTOP_EXTENDED_STABLE_MILESTONE,
+    branch_selector = [
+        branches.selector.ANDROID_BRANCHES,
+        branches.selector.DESKTOP_BRANCHES,
+    ],
     ordering = {
         None: ["Windows", "Mac", "Linux"],
     },
@@ -34,6 +42,7 @@ consoles.console_view(
 
 ci.gpu.linux_builder(
     name = "Android Release (Nexus 5X)",
+    branch_selector = branches.selector.ANDROID_BRANCHES,
     builder_spec = builder_config.builder_spec(
         gclient_config = builder_config.gclient_config(
             config = "chromium",
@@ -44,7 +53,7 @@ ci.gpu.linux_builder(
         chromium_config = builder_config.chromium_config(
             config = "android",
             apply_configs = [
-                "download_vr_test_apks",
+                "download_xr_test_apks",
                 "mb",
             ],
             build_config = builder_config.build_config.RELEASE,
@@ -56,17 +65,27 @@ ci.gpu.linux_builder(
         ),
         build_gs_bucket = "chromium-gpu-archive",
     ),
-    branch_selector = branches.STANDARD_MILESTONE,
+    gn_args = gn_args.config(
+        configs = [
+            "gpu_tests",
+            "android_builder",
+            "release_builder",
+            "try_builder",
+            "reclient",
+            "arm64",
+            "static_angle",
+            "android_fastbuild",
+        ],
+    ),
     console_view_entry = consoles.console_view_entry(
         category = "Android",
     ),
     cq_mirrors_console_view = "mirrors",
-    sheriff_rotations = args.ignore_default(None),
 )
 
 ci.gpu.linux_builder(
     name = "GPU Linux Builder",
-    branch_selector = branches.STANDARD_MILESTONE,
+    branch_selector = branches.selector.LINUX_BRANCHES,
     builder_spec = builder_config.builder_spec(
         gclient_config = builder_config.gclient_config(
             config = "chromium",
@@ -83,6 +102,14 @@ ci.gpu.linux_builder(
             target_bits = 64,
         ),
         build_gs_bucket = "chromium-gpu-archive",
+    ),
+    gn_args = gn_args.config(
+        configs = [
+            "gpu_tests",
+            "release_builder",
+            "try_builder",
+            "reclient",
+        ],
     ),
     console_view_entry = consoles.console_view_entry(
         category = "Linux",
@@ -106,16 +133,23 @@ ci.gpu.linux_builder(
         ),
         build_gs_bucket = "chromium-gpu-archive",
     ),
+    gn_args = gn_args.config(
+        configs = [
+            "gpu_tests",
+            "debug_builder",
+            "reclient",
+        ],
+    ),
+    sheriff_rotations = args.ignore_default(None),
+    tree_closing = False,
     console_view_entry = consoles.console_view_entry(
         category = "Linux",
     ),
-    tree_closing = False,
-    sheriff_rotations = args.ignore_default(None),
 )
 
 ci.gpu.mac_builder(
     name = "GPU Mac Builder",
-    branch_selector = branches.DESKTOP_EXTENDED_STABLE_MILESTONE,
+    branch_selector = branches.selector.MAC_BRANCHES,
     builder_spec = builder_config.builder_spec(
         gclient_config = builder_config.gclient_config(
             config = "chromium",
@@ -127,13 +161,22 @@ ci.gpu.mac_builder(
             config = "chromium",
             apply_configs = [
                 "mb",
-                "goma_use_local",  # to mitigate compile step timeout (crbug.com/1056935)
             ],
             build_config = builder_config.build_config.RELEASE,
+            target_arch = builder_config.target_arch.INTEL,
             target_bits = 64,
             target_platform = builder_config.target_platform.MAC,
         ),
         build_gs_bucket = "chromium-gpu-archive",
+    ),
+    gn_args = gn_args.config(
+        configs = [
+            "gpu_tests",
+            "release_builder",
+            "try_builder",
+            "reclient",
+            "x64",
+        ],
     ),
     console_view_entry = consoles.console_view_entry(
         category = "Mac",
@@ -158,16 +201,24 @@ ci.gpu.mac_builder(
         ),
         build_gs_bucket = "chromium-gpu-archive",
     ),
-    console_view_entry = consoles.console_view_entry(
-        category = "Mac",
+    gn_args = gn_args.config(
+        configs = [
+            "gpu_tests",
+            "debug_builder",
+            "reclient",
+            "x64",
+        ],
     ),
     sheriff_rotations = args.ignore_default(None),
     tree_closing = False,
+    console_view_entry = consoles.console_view_entry(
+        category = "Mac",
+    ),
 )
 
 ci.gpu.windows_builder(
     name = "GPU Win x64 Builder",
-    branch_selector = branches.DESKTOP_EXTENDED_STABLE_MILESTONE,
+    branch_selector = branches.selector.WINDOWS_BRANCHES,
     builder_spec = builder_config.builder_spec(
         gclient_config = builder_config.gclient_config(
             config = "chromium",
@@ -185,6 +236,15 @@ ci.gpu.windows_builder(
             target_platform = builder_config.target_platform.WIN,
         ),
         build_gs_bucket = "chromium-gpu-archive",
+    ),
+    gn_args = gn_args.config(
+        configs = [
+            "gpu_tests",
+            "release_builder",
+            "try_builder",
+            "reclient",
+            "resource_allowlisting",
+        ],
     ),
     console_view_entry = consoles.console_view_entry(
         category = "Windows",
@@ -209,16 +269,24 @@ ci.gpu.windows_builder(
         ),
         build_gs_bucket = "chromium-gpu-archive",
     ),
-    console_view_entry = consoles.console_view_entry(
-        category = "Windows",
+    gn_args = gn_args.config(
+        configs = [
+            "gpu_tests",
+            "debug_builder",
+            "reclient",
+        ],
     ),
     sheriff_rotations = args.ignore_default(None),
     tree_closing = False,
+    console_view_entry = consoles.console_view_entry(
+        category = "Windows",
+    ),
     reclient_jobs = reclient.jobs.LOW_JOBS_FOR_CI,
 )
 
 ci.thin_tester(
     name = "Linux Debug (NVIDIA)",
+    triggered_by = ["GPU Linux Builder (dbg)"],
     builder_spec = builder_config.builder_spec(
         execution_mode = builder_config.execution_mode.TEST,
         gclient_config = builder_config.gclient_config(
@@ -234,17 +302,17 @@ ci.thin_tester(
         ),
         build_gs_bucket = "chromium-gpu-archive",
     ),
+    sheriff_rotations = args.ignore_default(None),
+    tree_closing = False,
     console_view_entry = consoles.console_view_entry(
         category = "Linux",
     ),
-    sheriff_rotations = args.ignore_default(None),
-    triggered_by = ["GPU Linux Builder (dbg)"],
-    tree_closing = False,
 )
 
 ci.thin_tester(
     name = "Linux Release (NVIDIA)",
-    branch_selector = branches.STANDARD_MILESTONE,
+    branch_selector = branches.selector.LINUX_BRANCHES,
+    triggered_by = ["ci/GPU Linux Builder"],
     builder_spec = builder_config.builder_spec(
         execution_mode = builder_config.execution_mode.TEST,
         gclient_config = builder_config.gclient_config(
@@ -263,15 +331,15 @@ ci.thin_tester(
         ),
         build_gs_bucket = "chromium-gpu-archive",
     ),
-    cq_mirrors_console_view = "mirrors",
     console_view_entry = consoles.console_view_entry(
         category = "Linux",
     ),
-    triggered_by = ["ci/GPU Linux Builder"],
+    cq_mirrors_console_view = "mirrors",
 )
 
 ci.thin_tester(
     name = "Mac Debug (Intel)",
+    triggered_by = ["GPU Mac Builder (dbg)"],
     builder_spec = builder_config.builder_spec(
         execution_mode = builder_config.execution_mode.TEST,
         gclient_config = builder_config.gclient_config(
@@ -288,17 +356,17 @@ ci.thin_tester(
         ),
         build_gs_bucket = "chromium-gpu-archive",
     ),
+    sheriff_rotations = args.ignore_default(None),
+    tree_closing = False,
     console_view_entry = consoles.console_view_entry(
         category = "Mac",
     ),
-    sheriff_rotations = args.ignore_default(None),
-    triggered_by = ["GPU Mac Builder (dbg)"],
-    tree_closing = False,
 )
 
 ci.thin_tester(
     name = "Mac Release (Intel)",
-    branch_selector = branches.DESKTOP_EXTENDED_STABLE_MILESTONE,
+    branch_selector = branches.selector.MAC_BRANCHES,
+    triggered_by = ["ci/GPU Mac Builder"],
     builder_spec = builder_config.builder_spec(
         execution_mode = builder_config.execution_mode.TEST,
         gclient_config = builder_config.gclient_config(
@@ -308,7 +376,6 @@ ci.thin_tester(
             config = "chromium",
             apply_configs = [
                 "mb",
-                "goma_use_local",  # to mitigate compile step timeout (crbug.com/1056935)
             ],
             build_config = builder_config.build_config.RELEASE,
             target_bits = 64,
@@ -320,11 +387,11 @@ ci.thin_tester(
         category = "Mac",
     ),
     cq_mirrors_console_view = "mirrors",
-    triggered_by = ["ci/GPU Mac Builder"],
 )
 
 ci.thin_tester(
     name = "Mac Retina Debug (AMD)",
+    triggered_by = ["GPU Mac Builder (dbg)"],
     builder_spec = builder_config.builder_spec(
         execution_mode = builder_config.execution_mode.TEST,
         gclient_config = builder_config.gclient_config(
@@ -341,16 +408,16 @@ ci.thin_tester(
         ),
         build_gs_bucket = "chromium-gpu-archive",
     ),
+    tree_closing = False,
     console_view_entry = consoles.console_view_entry(
         category = "Mac",
     ),
-    triggered_by = ["GPU Mac Builder (dbg)"],
-    tree_closing = False,
 )
 
 ci.thin_tester(
     name = "Mac Retina Release (AMD)",
-    branch_selector = branches.DESKTOP_EXTENDED_STABLE_MILESTONE,
+    branch_selector = branches.selector.MAC_BRANCHES,
+    triggered_by = ["ci/GPU Mac Builder"],
     builder_spec = builder_config.builder_spec(
         execution_mode = builder_config.execution_mode.TEST,
         gclient_config = builder_config.gclient_config(
@@ -360,7 +427,6 @@ ci.thin_tester(
             config = "chromium",
             apply_configs = [
                 "mb",
-                "goma_use_local",  # to mitigate compile step timeout (crbug.com/1056935)
             ],
             build_config = builder_config.build_config.RELEASE,
             target_bits = 64,
@@ -372,11 +438,11 @@ ci.thin_tester(
         category = "Mac",
     ),
     cq_mirrors_console_view = "mirrors",
-    triggered_by = ["ci/GPU Mac Builder"],
 )
 
 ci.thin_tester(
     name = "Win10 x64 Debug (NVIDIA)",
+    triggered_by = ["GPU Win x64 Builder (dbg)"],
     builder_spec = builder_config.builder_spec(
         execution_mode = builder_config.execution_mode.TEST,
         gclient_config = builder_config.gclient_config(
@@ -392,16 +458,16 @@ ci.thin_tester(
         ),
         build_gs_bucket = "chromium-gpu-archive",
     ),
+    tree_closing = False,
     console_view_entry = consoles.console_view_entry(
         category = "Windows",
     ),
-    triggered_by = ["GPU Win x64 Builder (dbg)"],
-    tree_closing = False,
 )
 
 ci.thin_tester(
     name = "Win10 x64 Release (NVIDIA)",
-    branch_selector = branches.DESKTOP_EXTENDED_STABLE_MILESTONE,
+    branch_selector = branches.selector.WINDOWS_BRANCHES,
+    triggered_by = ["ci/GPU Win x64 Builder"],
     builder_spec = builder_config.builder_spec(
         execution_mode = builder_config.execution_mode.TEST,
         gclient_config = builder_config.gclient_config(
@@ -425,5 +491,4 @@ ci.thin_tester(
         category = "Windows",
     ),
     cq_mirrors_console_view = "mirrors",
-    triggered_by = ["ci/GPU Win x64 Builder"],
 )

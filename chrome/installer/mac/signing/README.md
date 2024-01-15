@@ -25,7 +25,7 @@ Chrome uses.
 A sample invocation to use during development would be:
 
     $ ninja -C out/release chrome chrome/installer/mac
-    $ ./out/release/Chromium\ Packaging/sign_chrome.py --input out/release --output /tmp/signed --identity 'MacOS Developer' --development --disable-packaging
+    $ ./out/release/Chromium\ Packaging/sign_chrome.py --input out/release --output out/release/signed --identity 'MacOS Developer' --development --disable-packaging
 
 The `--disable-packaging` flag skips the creation of DMG and PKG files, which
 speeds up the signing process when one is only interested in a signed .app
@@ -53,9 +53,11 @@ Directions on how to create a self-signed certificate with the special Extended
 Key Usage extension for installer use can be found on
 [security.stackexchange](https://security.stackexchange.com/a/47908).
 
-You will need to explicitly mark the certificate in Keychain Access as trusted.
-Be sure that `security -v find-identity` lists this new certificate as a valid
-identity.
+You will need to explicitly mark the certificate as trusted. This can be done
+with
+`sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain my_installer_cert.crt`.
+Be sure that `sudo security -v find-identity` lists this new certificate as a
+valid identity.
 
 ## Chromium
 
@@ -80,6 +82,35 @@ signing identity/certificate. To test an `is_chrome_branded=true` build locally,
 build with `include_branded_entitlements=false` or replace the contents of
 [`app-entitlements-chrome.plist`](../../../app/app-entitlements-chrome.plist)
 with an empty plist.
+
+### TCC Permissions
+
+MacOS grants applications access to privileged resources using the TCC
+(Transparency, Consent, and Control) subsystem. TCC records user authorization
+decisions, in part, based on the code signing identity of the responsible
+application.
+
+One important point, as discussed in the [debugging
+tips](../../../../docs/mac/debugging.md#system-permission-prompts_transparency_consent_and-control-tcc)
+is if Chrome/Chromium is launched as a subprocess of another GUI application
+(such as Terminal), the parent GUI process – not the browser – is considered the
+responsible application for TCC's purposes.
+
+An authorization decision can be reset manually using the `tccutil(1)` command.
+For example, this would reset the microphone access permission:
+
+    tccutil reset Microphone org.chromium.Chromium
+
+Unfortunately there is not an authoritative list of service names for resetting,
+but the value `All` will remove all decisions. The decisions are recorded in a
+SQLite database, which can be inspected using the command below. This requires
+granting the **Full Disk Access** permission in System Settings to the Terminal
+or disabling System Integrity Protection.
+
+    sqlite3 ~"/Library/Application Support/com.apple.TCC/TCC.db"
+
+The `access.service` column's values corresponds to the `tccutil reset` service,
+sans the `kTCCService` prefix.
 
 ### System Detached Signatures
 

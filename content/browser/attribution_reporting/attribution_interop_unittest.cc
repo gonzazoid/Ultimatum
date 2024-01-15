@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include <sstream>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -10,35 +10,35 @@
 #include "base/base_paths.h"
 #include "base/files/file_enumerator.h"
 #include "base/files/file_path.h"
-#include "base/files/file_util.h"
 #include "base/path_service.h"
+#include "base/strings/string_piece.h"
+#include "base/test/gmock_expected_support.h"
+#include "base/test/scoped_feature_list.h"
 #include "base/test/values_test_util.h"
+#include "base/types/expected.h"
 #include "base/values.h"
+#include "components/attribution_reporting/event_level_epsilon.h"
+#include "components/attribution_reporting/features.h"
+#include "content/browser/attribution_reporting/attribution_config.h"
 #include "content/browser/attribution_reporting/attribution_interop_parser.h"
-#include "content/public/browser/attribution_config.h"
-#include "content/public/browser/attribution_reporting.h"
-#include "content/public/test/attribution_simulator.h"
+#include "content/browser/attribution_reporting/attribution_interop_runner.h"
+#include "services/network/public/cpp/features.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace content {
 
 namespace {
 
-using ::testing::Optional;
+using ::testing::AllOf;
+using ::testing::Field;
+using ::testing::UnorderedElementsAreArray;
 
 constexpr char kDefaultConfigFileName[] = "default_config.json";
 
-base::Value ReadJsonFromFile(const base::FilePath& path) {
-  std::string contents;
-  EXPECT_TRUE(base::ReadFileToString(path, &contents));
-  return base::test::ParseJson(contents);
-}
-
 base::FilePath GetInputDir() {
   base::FilePath input_dir;
-  base::PathService::Get(base::DIR_SOURCE_ROOT, &input_dir);
+  base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &input_dir);
   return input_dir.AppendASCII(
       "content/test/data/attribution_reporting/interop");
 }
@@ -53,8 +53,9 @@ std::vector<base::FilePath> GetInputs() {
                          FILE_PATH_LITERAL("*.json"));
 
   for (base::FilePath name = e.Next(); !name.empty(); name = e.Next()) {
-    if (name.BaseName().MaybeAsASCII() == kDefaultConfigFileName)
+    if (name.BaseName().MaybeAsASCII() == kDefaultConfigFileName) {
       continue;
+    }
 
     input_paths.push_back(std::move(name));
   }
@@ -62,67 +63,106 @@ std::vector<base::FilePath> GetInputs() {
   return input_paths;
 }
 
+void PreProcessOutput(AttributionInteropOutput& output) {
+  // Ensure that integral values for this field are replaced with the equivalent
+  // double, since they are equivalent at the JSON level.
+  for (auto& report : output.reports) {
+    base::Value::Dict* dict = report.payload.GetIfDict();
+    if (!dict) {
+      continue;
+    }
+
+    base::Value* rate = dict->Find("randomized_trigger_rate");
+    if (!rate || !rate->is_int()) {
+      continue;
+    }
+
+    // This coerces the integer to a double.
+    *rate = base::Value(rate->GetDouble());
+  }
+}
+
 class AttributionInteropTest : public ::testing::TestWithParam<base::FilePath> {
+ public:
+  static void SetUpTestSuite() {
+    ASSERT_OK_AND_ASSIGN(
+        g_config_,
+        ParseAttributionInteropConfig(base::test::ParseJsonDictFromFile(
+            GetInputDir().AppendASCII(kDefaultConfigFileName))));
+  }
+
+  AttributionInteropTest() {
+    // This UMA records a sample every 30s via a periodic task which
+    // interacts poorly with TaskEnvironment::FastForward using day long
+    // delays (we need to run the uma update every 30s for that
+    // interval)
+    scoped_feature_list_.InitAndDisableFeature(
+        network::features::kGetCookiesStringUma);
+  }
+
+ protected:
+  static AttributionInteropConfig GetConfig() { return g_config_; }
+
+ private:
+  static AttributionInteropConfig g_config_;
+  base::test::ScopedFeatureList scoped_feature_list_;
 };
+
+// static
+AttributionInteropConfig AttributionInteropTest::g_config_;
 
 // See //content/test/data/attribution_reporting/interop/README.md for the
 // JSON schema.
 TEST_P(AttributionInteropTest, HasExpectedOutput) {
-  std::ostringstream error_stream;
+  AttributionInteropConfig config = GetConfig();
+  base::Value::Dict dict = base::test::ParseJsonDictFromFile(GetParam());
 
-  AttributionInteropParser parser(error_stream);
-
-  AttributionConfig config;
-
-  base::Value config_value =
-      ReadJsonFromFile(GetInputDir().AppendASCII(kDefaultConfigFileName));
-
-  bool is_config_valid =
-      parser.ParseConfig(config_value, config, /*required=*/true);
-  EXPECT_TRUE(is_config_valid) << error_stream.str();
-  error_stream.str("");
-
-  base::Value value = ReadJsonFromFile(GetParam());
-  base::Value::Dict& dict = value.GetDict();
-
-  static constexpr char kKeyApiConfig[] = "api_config";
-  if (const base::Value* api_config = dict.Find(kKeyApiConfig)) {
-    bool success = parser.ParseConfig(*api_config, config, /*required=*/false,
-                                      kKeyApiConfig);
-    is_config_valid &= success;
-    EXPECT_TRUE(success) << error_stream.str();
-    error_stream.str("");
+  std::vector<base::test::FeatureRef> enabled_features;
+  if (dict.FindBool("needs_trigger_config").value_or(false)) {
+    enabled_features.emplace_back(
+        attribution_reporting::features::kAttributionReportingTriggerConfig);
+  }
+  if (dict.FindBool("needs_trigger_context_id").value_or(false)) {
+    enabled_features.emplace_back(
+        attribution_reporting::features::kAttributionReportingTriggerContextId);
   }
 
-  absl::optional<base::Value> input =
-      parser.SimulatorInputFromInteropInput(dict);
-  EXPECT_TRUE(input) << error_stream.str();
+  base::test::ScopedFeatureList scoped_feature_list;
+  scoped_feature_list.InitWithFeatures(enabled_features,
+                                       /*disabled_features=*/{});
 
-  base::Value* expected_output = dict.Find("output");
-  EXPECT_TRUE(expected_output);
+  if (const base::Value* api_config = dict.Find("api_config")) {
+    ASSERT_TRUE(api_config->is_dict());
+    ASSERT_EQ("", MergeAttributionInteropConfig(api_config->GetDict(), config));
+  }
 
-  ASSERT_TRUE(is_config_valid && input);
+  attribution_reporting::ScopedMaxEventLevelEpsilonForTesting
+      scoped_max_event_level_epsilon(config.max_event_level_epsilon);
 
-  AttributionSimulationOptions options{
-      .noise_mode = AttributionNoiseMode::kNone,
-      .config = config,
-      .delay_mode = AttributionDelayMode::kDefault,
-      .remove_report_ids = true,
-      .report_time_format =
-          AttributionReportTimeFormat::kMillisecondsSinceUnixEpoch,
-      .remove_assembled_report = true,
-  };
+  std::optional<base::Value> input = dict.Extract("input");
+  ASSERT_TRUE(input && input->is_dict());
 
-  base::Value simulator_output =
-      RunAttributionSimulation(std::move(*input), options, error_stream);
-  ASSERT_FALSE(simulator_output.is_none()) << error_stream.str();
+  std::optional<base::Value> output = dict.Extract("output");
+  ASSERT_TRUE(output && output->is_dict());
 
-  absl::optional<base::Value> actual_output =
-      parser.InteropOutputFromSimulatorOutput(std::move(simulator_output));
-  EXPECT_TRUE(actual_output) << error_stream.str();
+  ASSERT_OK_AND_ASSIGN(
+      auto expected_output,
+      AttributionInteropOutput::Parse(std::move(*output).TakeDict()));
 
-  if (expected_output)
-    EXPECT_THAT(actual_output, Optional(base::test::IsJson(*expected_output)));
+  ASSERT_OK_AND_ASSIGN(
+      AttributionInteropOutput actual_output,
+      RunAttributionInteropSimulation(std::move(*input).TakeDict(),
+                                      config.attribution_config));
+
+  PreProcessOutput(expected_output);
+  PreProcessOutput(actual_output);
+
+  EXPECT_THAT(actual_output,
+              AllOf(Field(&AttributionInteropOutput::reports,
+                          UnorderedElementsAreArray(expected_output.reports)),
+                    Field(&AttributionInteropOutput::unparsable_registrations,
+                          UnorderedElementsAreArray(
+                              expected_output.unparsable_registrations))));
 }
 
 INSTANTIATE_TEST_SUITE_P(

@@ -7,7 +7,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/values.h"
@@ -28,16 +28,15 @@ std::string HexToDecimal(std::string hex_str) {
   return base::NumberToString(result);
 }
 
-std::string FindStringOrEmpty(const base::Value& dict,
+std::string FindStringOrEmpty(const base::Value::Dict& dict,
                               const base::StringPiece key) {
-  const std::string* val = dict.FindStringKey(key);
+  const std::string* val = dict.FindString(key);
   return val ? *val : std::string();
 }
 
 }  // namespace
 
-GeolocationHandler::GeolocationHandler()
-    : cellular_enabled_(false), wifi_enabled_(false) {}
+GeolocationHandler::GeolocationHandler() = default;
 
 GeolocationHandler::~GeolocationHandler() {
   if (ShillManagerClient::Get())
@@ -100,12 +99,12 @@ void GeolocationHandler::OnPropertyChanged(const std::string& key,
 // Private methods
 
 void GeolocationHandler::ManagerPropertiesCallback(
-    absl::optional<base::Value> properties) {
+    std::optional<base::Value::Dict> properties) {
   if (!properties)
     return;
 
   const base::Value* value =
-      properties->FindKey(shill::kEnabledTechnologiesProperty);
+      properties->Find(shill::kEnabledTechnologiesProperty);
   if (value)
     HandlePropertyChanged(shill::kEnabledTechnologiesProperty, *value);
 }
@@ -145,15 +144,16 @@ void GeolocationHandler::RequestGeolocationObjects() {
 }
 
 void GeolocationHandler::GeolocationCallback(
-    absl::optional<base::Value> properties) {
-  if (!properties || !properties->is_dict()) {
+    std::optional<base::Value::Dict> properties) {
+  if (!properties) {
     LOG(ERROR) << "Failed to get Geolocation data";
     return;
   }
   wifi_access_points_.clear();
   cell_towers_.clear();
-  if (properties->DictEmpty())
+  if (properties->empty()) {
     return;  // No enabled devices, don't update received time.
+  }
 
   // Dictionary<device_type, entry_list>
   // Example dict returned from shill:
@@ -164,61 +164,59 @@ void GeolocationHandler::GeolocationCallback(
   //   kGeoCellTowersProperty: [ {kGeoCellIdProperty: cell_id_value, ...}, ... ]
   // }
   for (auto* device_type : kDevicePropertyNames) {
-    const base::Value* entry_list = properties->FindKey(device_type);
+    const base::Value::List* entry_list = properties->FindList(device_type);
     if (!entry_list) {
-      continue;
-    }
-
-    if (!entry_list->is_list()) {
-      LOG(WARNING) << "Geolocation dictionary value not a List: "
-                   << device_type;
+      if (properties->contains(device_type)) {
+        LOG(WARNING) << "Geolocation dictionary value not a List: "
+                     << device_type;
+      }
       continue;
     }
 
     // List[Dictionary<key, value_str>]
-    for (const auto& entry : entry_list->GetList()) {
+    for (const auto& entry : *entry_list) {
       if (!entry.is_dict()) {
         LOG(WARNING) << "Geolocation list value not a Dictionary";
         continue;
       }
       if (device_type == shill::kGeoWifiAccessPointsProperty) {
-        AddAccessPointFromDict(entry);
+        AddAccessPointFromDict(entry.GetDict());
       } else if (device_type == shill::kGeoCellTowersProperty) {
-        AddCellTowerFromDict(entry);
+        AddCellTowerFromDict(entry.GetDict());
       }
     }
   }
   geolocation_received_time_ = base::Time::Now();
 }
 
-void GeolocationHandler::AddAccessPointFromDict(const base::Value& entry) {
+void GeolocationHandler::AddAccessPointFromDict(
+    const base::Value::Dict& entry) {
   // Docs: developers.google.com/maps/documentation/business/geolocation
   WifiAccessPoint wap;
 
-  const std::string* age_str = entry.FindStringKey(shill::kGeoAgeProperty);
+  const std::string* age_str = entry.FindString(shill::kGeoAgeProperty);
   if (age_str) {
-    int64_t age_ms;
-    if (base::StringToInt64(*age_str, &age_ms)) {
-      wap.timestamp = base::Time::Now() - base::Milliseconds(age_ms);
+    int64_t age_seconds;
+    if (base::StringToInt64(*age_str, &age_seconds)) {
+      wap.timestamp = base::Time::Now() - base::Seconds(age_seconds);
     }
   }
 
   wap.mac_address = FindStringOrEmpty(entry, shill::kGeoMacAddressProperty);
 
   const std::string* strength_str =
-      entry.FindStringKey(shill::kGeoSignalStrengthProperty);
+      entry.FindString(shill::kGeoSignalStrengthProperty);
   if (strength_str) {
     base::StringToInt(*strength_str, &wap.signal_strength);
   }
 
   const std::string* signal_str =
-      entry.FindStringKey(shill::kGeoSignalToNoiseRatioProperty);
+      entry.FindString(shill::kGeoSignalToNoiseRatioProperty);
   if (signal_str) {
     base::StringToInt(*signal_str, &wap.signal_to_noise);
   }
 
-  const std::string* channel_str =
-      entry.FindStringKey(shill::kGeoChannelProperty);
+  const std::string* channel_str = entry.FindString(shill::kGeoChannelProperty);
   if (channel_str) {
     base::StringToInt(*channel_str, &wap.channel);
   }
@@ -226,30 +224,29 @@ void GeolocationHandler::AddAccessPointFromDict(const base::Value& entry) {
   wifi_access_points_.push_back(wap);
 }
 
-void GeolocationHandler::AddCellTowerFromDict(const base::Value& entry) {
+void GeolocationHandler::AddCellTowerFromDict(const base::Value::Dict& entry) {
   // Docs: developers.google.com/maps/documentation/business/geolocation
 
   // Create object.
   CellTower ct;
 
   // Read time fields into object.
-  const std::string* age_str = entry.FindStringKey(shill::kGeoAgeProperty);
+  const std::string* age_str = entry.FindString(shill::kGeoAgeProperty);
   if (age_str) {
-    int64_t age_ms;
-    if (base::StringToInt64(*age_str, &age_ms)) {
-      ct.timestamp = base::Time::Now() - base::Milliseconds(age_ms);
+    int64_t age_seconds;
+    if (base::StringToInt64(*age_str, &age_seconds)) {
+      ct.timestamp = base::Time::Now() - base::Seconds(age_seconds);
     }
   }
 
   // Read hex fields into object.
-  const std::string* hex_cell_id =
-      entry.FindStringKey(shill::kGeoCellIdProperty);
+  const std::string* hex_cell_id = entry.FindString(shill::kGeoCellIdProperty);
   if (hex_cell_id) {
     ct.ci = HexToDecimal(*hex_cell_id);
   }
 
   const std::string* hex_lac =
-      entry.FindStringKey(shill::kGeoLocationAreaCodeProperty);
+      entry.FindString(shill::kGeoLocationAreaCodeProperty);
   if (hex_lac) {
     ct.lac = HexToDecimal(*hex_lac);
   }

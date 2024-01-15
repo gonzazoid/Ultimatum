@@ -6,6 +6,7 @@ import {addEntries, ENTRIES, getCaller, pending, repeatUntil, RootPath, TestEntr
 import {testcase} from '../testcase.js';
 
 import {openNewWindow, remoteCall, setupAndWaitUntilReady} from './background.js';
+import {DirectoryTreePageObject} from './page_objects/directory_tree.js';
 import {BASIC_DRIVE_ENTRY_SET, BASIC_LOCAL_ENTRY_SET} from './test_data.js';
 
 /**
@@ -29,9 +30,7 @@ async function showGridView(rootPath, expectedSet) {
   await remoteCall.disableBannersForTesting(appId);
 
   // Click the grid view button.
-  await remoteCall.waitForElement(appId, '#view-button');
-  await remoteCall.callRemoteTestUtil(
-      'fakeEvent', appId, ['#view-button', 'click']);
+  await remoteCall.waitAndClickElement(appId, '#view-button');
 
   // Compare the grid labels of the entries.
   await repeatUntil(async () => {
@@ -136,15 +135,13 @@ testcase.showGridViewDocumentsProvider = async () => {
   const appId = await openNewWindow(RootPath.DOWNLOADS);
 
   // Wait for the DocumentsProvider volume to mount.
-  const documentsProviderVolumeQuery =
-      '[has-children="true"] [volume-type-icon="documents_provider"]';
-  await remoteCall.waitForElement(appId, documentsProviderVolumeQuery);
+  const documentsProviderVolumeType = 'documents_provider';
+  const directoryTree = await DirectoryTreePageObject.create(appId, remoteCall);
+  await directoryTree.waitForItemToHaveChildrenByType(
+      documentsProviderVolumeType, /* hasChildren= */ true);
 
   // Click to open the DocumentsProvider volume.
-  chrome.test.assertTrue(
-      !!await remoteCall.callRemoteTestUtil(
-          'fakeMouseClick', appId, [documentsProviderVolumeQuery]),
-      'fakeMouseClick failed');
+  await directoryTree.selectItemByType(documentsProviderVolumeType);
 
   // Click the grid view button.
   await remoteCall.waitForElement(appId, '#view-button');
@@ -176,4 +173,35 @@ testcase.showGridViewDocumentsProvider = async () => {
     }
     return true;
   });
+};
+
+/**
+ * Tests that an encrypted file will have a corresponding icon.
+ */
+testcase.showGridViewEncryptedFile = async () => {
+  const appId =
+      await setupAndWaitUntilReady(RootPath.DRIVE, [], [ENTRIES.testCSEFile]);
+
+  // Click the grid view button.
+  await remoteCall.waitAndClickElement(appId, '#view-button');
+
+  // Check the file's icon.
+  const icon = await remoteCall.waitForElementStyles(
+      appId, '.thumbnail-grid .no-thumbnail', ['-webkit-mask-image']);
+  chrome.test.assertTrue(
+      icon.styles['-webkit-mask-image'].includes('encrypted.svg'),
+      'Icon does not seem to be the encrypted one');
+
+  // Move mouse out of the view change button, so we won't have its hover text.
+  chrome.test.assertTrue(await remoteCall.callRemoteTestUtil(
+      'fakeMouseOut', appId, ['#view-button']));
+  await remoteCall.waitForElementLost(appId, 'files-tooltip[visible=true]');
+
+  // Hover over an icon: a tooltip should appear.
+  chrome.test.assertTrue(await remoteCall.callRemoteTestUtil(
+      'fakeMouseOver', appId,
+      ['[file-name="test-encrypted.txt"] .no-thumbnail']));
+  const label = await remoteCall.waitForElement(
+      appId, ['files-tooltip[visible=true]', '#label']);
+  chrome.test.assertEq('Encrypted file', label.text);
 };

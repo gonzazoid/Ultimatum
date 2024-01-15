@@ -5,16 +5,13 @@
 // Disable clang-format because it produces odd formatting.
 // clang-format off
 module.exports = {
-  'parserOptions': {
-    'project': ['./tsconfig_base.json'],
-  },
   'rules': {
     '@typescript-eslint/explicit-function-return-type': ['error'],
   },
   'overrides': [{
     'files': ['**/*.ts'],
     'parser':
-      '../../../../third_party/node/node_modules/@typescript-eslint/parser',
+      '../../../../third_party/node/node_modules/@typescript-eslint/parser/dist/index.js',
     'parserOptions': {
       tsconfigRootDir: __dirname,
     },

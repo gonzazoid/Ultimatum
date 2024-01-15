@@ -6,18 +6,10 @@
 #define COMPONENTS_BOOKMARKS_COMMON_BOOKMARK_FEATURES_H_
 
 #include "base/feature_list.h"
-#include "base/metrics/field_trial_params.h"
 
 namespace bookmarks {
 
-BASE_DECLARE_FEATURE(kApproximateNodeMatch);
-
-BASE_DECLARE_FEATURE(kTypedUrlsMap);
-
-BASE_DECLARE_FEATURE(kLimitNumNodesForBookmarkSearch);
-extern const base::FeatureParam<int> kLimitNumNodesForBookmarkSearchCount;
-
-BASE_DECLARE_FEATURE(kIndexPaths);
+BASE_DECLARE_FEATURE(kAllBookmarksBaselineFolderVisibility);
 
 }  // namespace bookmarks
 

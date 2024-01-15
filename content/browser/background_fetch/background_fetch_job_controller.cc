@@ -4,8 +4,8 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "content/browser/background_fetch/background_fetch_cross_origin_filter.h"
 #include "content/browser/background_fetch/background_fetch_data_manager.h"
 #include "content/browser/background_fetch/background_fetch_job_controller.h"
@@ -97,7 +97,7 @@ void BackgroundFetchJobController::InitializeRequestStatus(
     std::vector<scoped_refptr<BackgroundFetchRequestInfo>>
         active_fetch_requests,
     bool start_paused,
-    absl::optional<net::IsolationInfo> isolation_info) {
+    std::optional<net::IsolationInfo> isolation_info) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
 
   // Don't allow double initialization.
@@ -113,8 +113,6 @@ void BackgroundFetchJobController::InitializeRequestStatus(
   for (const auto& request_info : active_fetch_requests)
     active_guids.push_back(request_info->download_guid());
 
-  // TODO(https://crbug.com/1199077): Should we update
-  // BackgroundFetchDescription to StorageKey?
   auto fetch_description = std::make_unique<BackgroundFetchDescription>(
       registration_id().unique_id(), registration_id().storage_key().origin(),
       options_->title, icon_, completed_downloads_, total_downloads_,

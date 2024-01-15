@@ -11,6 +11,7 @@
 #include "testing/platform_test.h"
 
 namespace {
+
 // The behavior of most of these utility functions depends on what they are run
 // on, so there is not much to unittest them. The APIs are run to make sure they
 // don't choke. Additional checks are added for particular APIs when needed.

@@ -6,10 +6,10 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/test/task_environment.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "media/learning/impl/distribution_reporter.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -165,8 +165,8 @@ class LearningTaskControllerImplTest : public testing::Test {
   const TargetValue predicted_target_;
   const TargetValue not_predicted_target_;
 
-  raw_ptr<FakeDistributionReporter> reporter_raw_ = nullptr;
-  raw_ptr<FakeTrainer> trainer_raw_ = nullptr;
+  raw_ptr<FakeDistributionReporter, DanglingUntriaged> reporter_raw_ = nullptr;
+  raw_ptr<FakeTrainer, DanglingUntriaged> trainer_raw_ = nullptr;
 
   LearningTask task_;
   std::unique_ptr<LearningTaskControllerImpl> controller_;
@@ -221,7 +221,7 @@ TEST_F(LearningTaskControllerImplTest, FeatureProviderIsUsed) {
   task_.feature_descriptions.push_back({"AddedByFeatureProvider"});
   SequenceBoundFeatureProvider feature_provider =
       base::SequenceBound<FakeFeatureProvider>(
-          base::SequencedTaskRunnerHandle::Get());
+          base::SequencedTaskRunner::GetCurrentDefault());
   CreateController(std::move(feature_provider));
   LabelledExample example;
   example.features.push_back(FeatureValue(123));

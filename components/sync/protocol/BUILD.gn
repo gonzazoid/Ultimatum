@@ -19,6 +19,8 @@ static_library("util") {
   sources = [
     "entity_data.cc",
     "entity_data.h",
+    "model_type_state_helper.cc",
+    "model_type_state_helper.h",
     "proto_enum_conversions.cc",
     "proto_enum_conversions.h",
     "proto_memory_estimations.cc",
@@ -26,8 +28,6 @@ static_library("util") {
     "proto_value_conversions.cc",
     "proto_value_conversions.h",
     "proto_visitors.h",
-    "sync_protocol_error.cc",
-    "sync_protocol_error.h",
   ]
 
   public_deps = [

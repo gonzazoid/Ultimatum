@@ -6,6 +6,7 @@
 #define CONTENT_BROWSER_MEDIA_ANDROID_BROWSER_GPU_VIDEO_ACCELERATOR_FACTORIES_H_
 
 #include "base/callback_list.h"
+#include "base/task/sequenced_task_runner.h"
 #include "media/video/gpu_video_accelerator_factories.h"
 
 namespace viz {
@@ -44,7 +45,7 @@ class BrowserGpuVideoAcceleratorFactories
   std::unique_ptr<media::VideoDecoder> CreateVideoDecoder(
       media::MediaLog* media_log,
       media::RequestOverlayInfoCB request_overlay_info_cb) override;
-  absl::optional<media::VideoEncodeAccelerator::SupportedProfiles>
+  std::optional<media::VideoEncodeAccelerator::SupportedProfiles>
   GetVideoEncodeAcceleratorSupportedProfiles() override;
   bool IsEncoderSupportKnown() override;
   void NotifyEncoderSupportKnown(base::OnceClosure) override;

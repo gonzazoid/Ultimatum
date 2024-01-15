@@ -47,6 +47,26 @@ struct RootCompositorFrameSinkParams {
       external_begin_frame_controller;
 };
 
+// Response from StopFrameCounting that contains counted frames for all frame
+// sinks during the tracked time window.
+struct FrameCountingData {
+  array<FrameCountingPerSinkData> per_sink_data;
+};
+
+// Container for collected data for a given frame sink.
+struct FrameCountingPerSinkData {
+  CompositorFrameSinkType type;
+  bool is_root;
+  string debug_label;
+
+  // Bucket index of the first bucket in `presented_frames` based on the
+  // timestamp of the first presented frame in the bucket and start time.
+  uint16 start_bucket;
+
+  // Collected number of presented frames for the specified bucket size.
+  array<uint16> presented_frames;
+};
+
 // The FrameSinkManager interface is a privileged interface that allows the
 // frame sink manager host (browser or window server) to create
 // CompositorFrameSinks. Clients acquire a CompositorFrameSink connection
@@ -136,7 +156,8 @@ interface FrameSinkManager {
   // Creates a FrameSinkVideoCapturer instance.
   CreateVideoCapturer(pending_receiver<FrameSinkVideoCapturer> receiver);
 
-  // Marks the given SurfaceIds for destruction.
+  // Marks the given SurfaceIds for destruction. The client must supply a sorted
+  // `surface_ids`.
   EvictSurfaces(array<SurfaceId> surface_ids);
 
   // Throttles the frame sinks specified by |frame_sink_ids| and all their
@@ -159,7 +180,11 @@ interface FrameSinkManager {
   // Takes a snapshot of |surface_id| or a newer surface with the same
   // FrameSinkId. The request will be queued up until such surface exists and is
   // reachable from the root surface.
-  RequestCopyOfOutput(SurfaceId surface_id, CopyOutputRequest request);
+  //
+  // `capture_exact_surface_id`, when set to true, makes sure the snapshot will
+  // only be taken by the surface with the exact `surface_id`.
+  RequestCopyOfOutput(SurfaceId surface_id, CopyOutputRequest request,
+                      bool capture_exact_surface_id);
 
 
   // Caches the back buffer for the |root_frame_sink_id|. The back buffer is
@@ -173,6 +198,14 @@ interface FrameSinkManager {
   // This allows dynamic manipulation of the viz debug options stored in
   // |debug_settings| (show_overdraw_feedback, etc.).
   UpdateDebugRendererSettings(DebugRendererSettings debug_settings);
+
+  // Starts frame counting per frame sink on the Viz thread.
+  StartFrameCountingForTest(mojo_base.mojom.TimeTicks start_time,
+                            mojo_base.mojom.TimeDelta bucket_size);
+
+  // Stops frame counting on the Viz thread and returns all records to the
+  // caller.
+  StopFrameCountingForTest() => (FrameCountingData? data);
 };
 
 // The FrameSinkManagerClient interface is implemented by the Display
@@ -192,4 +225,13 @@ interface FrameSinkManagerClient {
   // when a surface of the provided |frame_sink_id| activates.
   OnFrameTokenChanged(FrameSinkId frame_sink_id, uint32 frame_token,
                       mojo_base.mojom.TimeTicks activation_time);
+
+  // Verifies that |thread_ids| do not belong to the host process. Renderer
+  // processes send their thread ids to the GPU process to be added to the ADPF
+  // session. GPU needs to make sure that they do not belong to the host
+  // process or the GPU process (i.e. itself) before adding the threads to the
+  // ADPF hint session.
+  [EnableIf=is_android]
+  VerifyThreadIdsDoNotBelongToHost(array<int32> thread_ids)
+      => (bool passed_verification);
 };

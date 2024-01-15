@@ -4,11 +4,7 @@
 
 #import "ios/public/provider/chrome/browser/voice_search/voice_search_api.h"
 
-#import "ios/chrome/browser/voice/voice_search_language.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ios/chrome/browser/voice/model/voice_search_language.h"
 
 namespace ios {
 namespace provider {

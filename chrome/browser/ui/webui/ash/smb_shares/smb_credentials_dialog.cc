@@ -6,20 +6,24 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "ash/webui/common/trusted_types_util.h"
+#include "base/functional/bind.h"
 #include "base/json/json_writer.h"
+#include "base/values.h"
 #include "chrome/browser/ui/webui/ash/smb_shares/smb_handler.h"
+#include "chrome/browser/ui/webui/webui_util.h"
 #include "chrome/common/webui_url_constants.h"
 #include "chrome/grit/browser_resources.h"
 #include "chrome/grit/generated_resources.h"
 #include "components/strings/grit/components_strings.h"
 #include "content/public/browser/web_ui.h"
 #include "content/public/browser/web_ui_data_source.h"
+#include "ui/webui/color_change_listener/color_change_handler.h"
 
 namespace ash::smb_dialog {
 namespace {
 
-constexpr int kSmbCredentialsDialogHeight = 230;
+constexpr int kSmbCredentialsDialogHeight = 295;
 
 void AddSmbCredentialsDialogStrings(content::WebUIDataSource* html_source) {
   static const struct {
@@ -95,9 +99,9 @@ void SmbCredentialsDialog::GetDialogSize(gfx::Size* size) const {
 }
 
 std::string SmbCredentialsDialog::GetDialogArgs() const {
-  base::DictionaryValue args;
-  args.SetKey("mid", base::Value(mount_id_));
-  args.SetKey("path", base::Value(share_path_));
+  base::Value::Dict args;
+  args.Set("mid", mount_id_);
+  args.Set("path", share_path_);
   std::string json;
   base::JSONWriter::Write(args, &json);
   return json;
@@ -105,10 +109,9 @@ std::string SmbCredentialsDialog::GetDialogArgs() const {
 
 SmbCredentialsDialogUI::SmbCredentialsDialogUI(content::WebUI* web_ui)
     : ui::WebDialogUI(web_ui) {
-  content::WebUIDataSource* source =
-      content::WebUIDataSource::Create(chrome::kChromeUISmbCredentialsHost);
-
-  source->DisableTrustedTypesCSP();
+  content::WebUIDataSource* source = content::WebUIDataSource::CreateAndAdd(
+      Profile::FromWebUI(web_ui), chrome::kChromeUISmbCredentialsHost);
+  ash::EnableTrustedTypesCSP(source);
 
   AddSmbCredentialsDialogStrings(source);
 
@@ -121,8 +124,6 @@ SmbCredentialsDialogUI::SmbCredentialsDialogUI(content::WebUI* web_ui)
       Profile::FromWebUI(web_ui),
       base::BindOnce(&SmbCredentialsDialogUI::OnUpdateCredentials,
                      base::Unretained(this))));
-
-  content::WebUIDataSource::Add(Profile::FromWebUI(web_ui), source);
 }
 
 SmbCredentialsDialogUI::~SmbCredentialsDialogUI() = default;
@@ -136,8 +137,16 @@ void SmbCredentialsDialogUI::OnUpdateCredentials(const std::string& username,
   }
 }
 
+void SmbCredentialsDialogUI::BindInterface(
+    mojo::PendingReceiver<color_change_listener::mojom::PageHandler> receiver) {
+  color_provider_handler_ = std::make_unique<ui::ColorChangeHandler>(
+      web_ui()->GetWebContents(), std::move(receiver));
+}
+
 bool SmbCredentialsDialog::ShouldShowCloseButton() const {
   return false;
 }
+
+WEB_UI_CONTROLLER_TYPE_IMPL(SmbCredentialsDialogUI)
 
 }  // namespace ash::smb_dialog

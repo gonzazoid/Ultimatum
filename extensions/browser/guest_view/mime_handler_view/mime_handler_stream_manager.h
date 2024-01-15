@@ -10,7 +10,6 @@
 #include <string>
 
 #include "base/gtest_prod_util.h"
-#include "base/memory/ref_counted.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "extensions/browser/extension_registry.h"
 #include "extensions/browser/extension_registry_observer.h"
@@ -53,6 +52,8 @@ class MimeHandlerStreamManager : public KeyedService,
   void OnExtensionUnloaded(content::BrowserContext* browser_context,
                            const Extension* extension,
                            UnloadedExtensionReason reason) override;
+
+  static void EnsureFactoryBuilt();
 
  private:
   FRIEND_TEST_ALL_PREFIXES(::ChromeMimeHandlerViewTest, Basic);

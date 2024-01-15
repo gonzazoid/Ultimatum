@@ -311,7 +311,6 @@ TaskManagerTableModel::TaskManagerTableModel(TableViewDelegate* delegate)
     : TaskManagerObserver(base::Milliseconds(kRefreshTimeMS),
                           REFRESH_TYPE_NONE),
       table_view_delegate_(delegate),
-      columns_settings_(new base::DictionaryValue),
       table_model_observer_(nullptr),
       stringifier_(new TaskManagerValuesStringifier),
 #if BUILDFLAG(ENABLE_NACL)
@@ -631,7 +630,11 @@ int TaskManagerTableModel::CompareValues(size_t row1,
       return ValueCompare(proc1_fd_count, proc2_fd_count);
     }
 #endif  // BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_MAC)
-
+    case IDS_TASK_MANAGER_KEEPALIVE_COUNT_COLUMN: {
+      return ValueCompare(
+          observed_task_manager()->GetKeepaliveCount(tasks_[row1]),
+          observed_task_manager()->GetKeepaliveCount(tasks_[row2]));
+    }
     default:
       NOTREACHED();
       return 0;
@@ -841,9 +844,9 @@ void TaskManagerTableModel::RetrieveSavedColumnsSettingsAndUpdateTable() {
     bool col_visibility = dictionary.FindBoolByDottedPath(col_id_key)
                               .value_or(kColumns[i].default_visibility);
 
-    // If the above FindBoolPath() fails, the |col_visibility| remains at the
-    // default visibility.
-    columns_settings_->SetBoolPath(col_id_key, col_visibility);
+    // If the above FindBoolByDottedPath() fails, the |col_visibility| remains
+    // at the default visibility.
+    columns_settings_.SetByDottedPath(col_id_key, col_visibility);
     table_view_delegate_->SetColumnVisibility(col_id, col_visibility);
     UpdateRefreshTypes(col_id, col_visibility);
 
@@ -864,7 +867,7 @@ void TaskManagerTableModel::StoreColumnsSettings() {
   ScopedDictPrefUpdate dict_update(local_state,
                                    prefs::kTaskManagerColumnVisibility);
 
-  for (const auto item : columns_settings_->GetDict()) {
+  for (const auto item : columns_settings_) {
     dict_update->SetByDottedPath(item.first, item.second.Clone());
   }
 
@@ -881,19 +884,20 @@ void TaskManagerTableModel::StoreColumnsSettings() {
 
 void TaskManagerTableModel::ToggleColumnVisibility(int column_id) {
   bool new_visibility = !table_view_delegate_->IsColumnVisible(column_id);
-  table_view_delegate_->SetColumnVisibility(column_id, new_visibility);
-  columns_settings_->SetBoolPath(GetColumnIdAsString(column_id),
-                                 new_visibility);
-  UpdateRefreshTypes(column_id, new_visibility);
+  if (table_view_delegate_->SetColumnVisibility(column_id, new_visibility)) {
+    columns_settings_.SetByDottedPath(GetColumnIdAsString(column_id),
+                                      new_visibility);
+    UpdateRefreshTypes(column_id, new_visibility);
+  }
 }
 
-absl::optional<size_t> TaskManagerTableModel::GetRowForWebContents(
+std::optional<size_t> TaskManagerTableModel::GetRowForWebContents(
     content::WebContents* web_contents) {
   TaskId task_id =
       observed_task_manager()->GetTaskIdForWebContents(web_contents);
   auto index = base::ranges::find(tasks_, task_id);
   if (index == tasks_.end())
-    return absl::nullopt;
+    return std::nullopt;
   return static_cast<size_t>(index - tasks_.begin());
 }
 

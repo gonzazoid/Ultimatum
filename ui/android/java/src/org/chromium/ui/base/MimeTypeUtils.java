@@ -3,26 +3,37 @@
 // found in the LICENSE file.
 package org.chromium.ui.base;
 
-import android.Manifest.permission;
+import android.Manifest;
+import android.os.Build;
 import android.webkit.MimeTypeMap;
 
 import androidx.annotation.IntDef;
 import androidx.annotation.Nullable;
 
 import org.chromium.base.BuildInfo;
-import org.chromium.ui.permissions.PermissionConstants;
 import org.chromium.url.GURL;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 
-/**
- * Utility methods for determining and working with mime types.
- */
+/** Utility methods for determining and working with mime types. */
 public class MimeTypeUtils {
-    /**
-     * A set of known mime types.
-     */
+    /** The MIME type for a plain text objects dragged from Chrome. */
+    public static final String CHROME_MIMETYPE_TEXT = "chrome/text";
+
+    /** The MIME type for a link objects dragged from Chrome. */
+    public static final String CHROME_MIMETYPE_LINK = "chrome/link";
+
+    /** The MIME type for a tab object dragged from Chrome. */
+    public static final String CHROME_MIMETYPE_TAB = "chrome/tab";
+
+    /** The MIME type for text. */
+    public static final String TEXT_MIME_TYPE = "text/plain";
+
+    /** The MIME type for an image. */
+    public static final String IMAGE_MIME_TYPE = "image/*";
+
+    /** A set of known mime types. */
     // Note: these values must match the AndroidUtilsMimeTypes enum in enums.xml.
     // Only add new values at the end, right before NUM_ENTRIES. We depend on these specific
     // values in UMA histograms.
@@ -46,8 +57,7 @@ public class MimeTypeUtils {
      */
     public static @Type int getMimeTypeForUrl(GURL url) {
         String extension = MimeTypeMap.getFileExtensionFromUrl(url.getSpec());
-        @Type
-        int mimeType = Type.UNKNOWN;
+        @Type int mimeType = Type.UNKNOWN;
         if (extension != null) {
             String type = MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension);
             if (type != null) {
@@ -76,16 +86,16 @@ public class MimeTypeUtils {
      */
     public @Nullable static String getPermissionNameForMimeType(@MimeTypeUtils.Type int mimeType) {
         if (useExternalStoragePermission()) {
-            return permission.READ_EXTERNAL_STORAGE;
+            return Manifest.permission.READ_EXTERNAL_STORAGE;
         }
 
         switch (mimeType) {
             case MimeTypeUtils.Type.AUDIO:
-                return PermissionConstants.READ_MEDIA_AUDIO;
+                return Manifest.permission.READ_MEDIA_AUDIO;
             case MimeTypeUtils.Type.IMAGE:
-                return PermissionConstants.READ_MEDIA_IMAGES;
+                return Manifest.permission.READ_MEDIA_IMAGES;
             case MimeTypeUtils.Type.VIDEO:
-                return PermissionConstants.READ_MEDIA_VIDEO;
+                return Manifest.permission.READ_MEDIA_VIDEO;
             default:
                 return null;
         }
@@ -94,6 +104,6 @@ public class MimeTypeUtils {
     static boolean useExternalStoragePermission() {
         // Extracted into a helper method for easy testing. Can be replaced with test annotations
         // once Robolectric recognizes SDK = T.
-        return !BuildInfo.isAtLeastT() || !BuildInfo.targetsAtLeastT();
+        return Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU || !BuildInfo.targetsAtLeastT();
     }
 }

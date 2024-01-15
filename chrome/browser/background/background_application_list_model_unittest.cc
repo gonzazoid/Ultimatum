@@ -21,8 +21,6 @@
 #include "chrome/browser/extensions/extension_service_test_base.h"
 #include "chrome/browser/extensions/permissions_updater.h"
 #include "chrome/test/base/testing_profile.h"
-#include "content/public/browser/notification_registrar.h"
-#include "content/public/browser/notification_types.h"
 #include "extensions/browser/extension_prefs.h"
 #include "extensions/browser/extension_registry.h"
 #include "extensions/browser/extension_system.h"
@@ -87,23 +85,20 @@ enum PushMessagingOption {
 static scoped_refptr<Extension> CreateExtension(
     const std::string& name,
     bool background_permission) {
-  base::DictionaryValue manifest;
-  manifest.SetStringPath(extensions::manifest_keys::kVersion, "1.0.0.0");
-  manifest.SetIntPath(extensions::manifest_keys::kManifestVersion, 2);
-  manifest.SetStringPath(extensions::manifest_keys::kName, name);
-  base::ListValue permissions;
+  base::Value::Dict manifest;
+  manifest.Set(extensions::manifest_keys::kVersion, "1.0.0.0");
+  manifest.Set(extensions::manifest_keys::kManifestVersion, 2);
+  manifest.Set(extensions::manifest_keys::kName, name);
+  base::Value::List permissions;
   if (background_permission) {
     permissions.Append("background");
   }
-  manifest.SetKey(extensions::manifest_keys::kPermissions,
-                  std::move(permissions));
+  manifest.Set(extensions::manifest_keys::kPermissions, std::move(permissions));
 
   std::string error;
-  scoped_refptr<Extension> extension;
-
-  extension = Extension::Create(bogus_file_pathname(name),
-                                extensions::mojom::ManifestLocation::kInternal,
-                                manifest, Extension::NO_FLAGS, &error);
+  scoped_refptr<Extension> extension = Extension::Create(
+      bogus_file_pathname(name), extensions::mojom::ManifestLocation::kInternal,
+      manifest, Extension::NO_FLAGS, &error);
 
   // Cannot ASSERT_* here because that attempts an illegitimate return.
   // Cannot EXPECT_NE here because that assumes non-pointers unlike EXPECT_EQ
@@ -161,7 +156,7 @@ TEST_F(BackgroundApplicationListModelTest, DISABLED_ExplicitTest) {
   ASSERT_TRUE(ExtensionSystem::Get(profile())->is_ready());
   ASSERT_TRUE(model()->startup_done());
 
-  ASSERT_TRUE(registry()->enabled_extensions().is_empty());
+  ASSERT_TRUE(registry()->enabled_extensions().empty());
   ASSERT_EQ(0U, model()->size());
 
   scoped_refptr<Extension> ext1 = CreateExtension("alpha", false);
@@ -227,7 +222,7 @@ TEST_F(BackgroundApplicationListModelTest, AddRemovePermissionsTest) {
   service()->Init();
   base::RunLoop().RunUntilIdle();
   ASSERT_TRUE(ExtensionSystem::Get(profile())->is_ready());
-  ASSERT_TRUE(registry()->enabled_extensions().is_empty());
+  ASSERT_TRUE(registry()->enabled_extensions().empty());
   ASSERT_EQ(0U, model()->size());
 
   scoped_refptr<Extension> ext = CreateExtension("extension", false);
@@ -280,7 +275,7 @@ TEST_F(BackgroundApplicationListModelTest, ExtensionLoadAndUnload) {
       CreateExtension("background_application", true);
   ASSERT_TRUE(bgapp->permissions_data()->HasAPIPermission(
       APIPermissionID::kBackground));
-  ASSERT_TRUE(registry()->enabled_extensions().is_empty());
+  ASSERT_TRUE(registry()->enabled_extensions().empty());
   ASSERT_EQ(0U, model()->size());
 
   extensions::TestExtensionRegistryObserver load_observer(registry());
@@ -293,7 +288,7 @@ TEST_F(BackgroundApplicationListModelTest, ExtensionLoadAndUnload) {
   service()->UnloadExtension(bgapp->id(),
                              extensions::UnloadedExtensionReason::UNINSTALL);
   unload_observer.WaitForExtensionUnloaded();
-  ASSERT_TRUE(registry()->enabled_extensions().is_empty());
+  ASSERT_TRUE(registry()->enabled_extensions().empty());
   EXPECT_EQ(0U, model()->size());
 }
 
@@ -309,7 +304,7 @@ TEST_F(BackgroundApplicationListModelTest, LateExtensionSystemReady) {
       CreateExtension("background_application", true);
   EXPECT_TRUE(bgapp->permissions_data()->HasAPIPermission(
       APIPermissionID::kBackground));
-  EXPECT_TRUE(registry()->enabled_extensions().is_empty());
+  EXPECT_TRUE(registry()->enabled_extensions().empty());
   EXPECT_EQ(0U, model()->size());
 
   extensions::TestExtensionRegistryObserver load_observer(registry());
@@ -436,7 +431,7 @@ TEST_F(BackgroundApplicationListModelTest, RandomTest) {
   service()->Init();
   base::RunLoop().RunUntilIdle();
   ASSERT_TRUE(ExtensionSystem::Get(profile())->is_ready());
-  ASSERT_TRUE(registry()->enabled_extensions().is_empty());
+  ASSERT_TRUE(registry()->enabled_extensions().empty());
   ASSERT_EQ(0U, model()->size());
 
   static const int kIterations = 20;

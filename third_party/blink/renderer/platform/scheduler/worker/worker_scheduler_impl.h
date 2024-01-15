@@ -7,10 +7,12 @@
 
 #include <map>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/task/sequence_manager/task_queue.h"
 #include "base/task/single_thread_task_runner.h"
 #include "third_party/blink/public/platform/task_type.h"
+#include "third_party/blink/renderer/platform/allow_discouraged_type.h"
 #include "third_party/blink/renderer/platform/scheduler/common/back_forward_cache_disabling_feature_tracker.h"
 #include "third_party/blink/renderer/platform/scheduler/common/tracing_helper.h"
 #include "third_party/blink/renderer/platform/scheduler/public/worker_scheduler.h"
@@ -53,6 +55,7 @@ class PLATFORM_EXPORT WorkerSchedulerImpl : public WorkerScheduler {
       SchedulingLifecycleState lifecycle_state) override;
   std::unique_ptr<PauseHandle> Pause() override;
   void InitializeOnWorkerThread(Delegate* delegate) override;
+  VirtualTimeController* GetVirtualTimeController() override;
 
   // FrameOrWorkerScheduler implementation:
   SchedulingLifecycleState CalculateLifecycleState(ObserverType) const override;
@@ -71,8 +74,15 @@ class PLATFORM_EXPORT WorkerSchedulerImpl : public WorkerScheduler {
       override;
   void SetPreemptedForCooperativeScheduling(Preempted) override {}
   std::unique_ptr<WebSchedulingTaskQueue> CreateWebSchedulingTaskQueue(
+      WebSchedulingQueueType,
       WebSchedulingPriority) override;
   scoped_refptr<base::SingleThreadTaskRunner> CompositorTaskRunner() override;
+  WebScopedVirtualTimePauser CreateWebScopedVirtualTimePauser(
+      const String& name,
+      WebScopedVirtualTimePauser::VirtualTaskDuration) override;
+
+  void PauseVirtualTime();
+  void UnpauseVirtualTime();
 
  protected:
   scoped_refptr<NonMainThreadTaskQueue> ThrottleableTaskQueue();
@@ -96,24 +106,34 @@ class PLATFORM_EXPORT WorkerSchedulerImpl : public WorkerScheduler {
   // - pausable task queue. Default queue for high-priority javascript tasks.
   //   They can be paused according to the spec during devtools debugging.
   //   Otherwise scheduler does not tamper with their execution.
+  // - pausable non-virtual time task queue: a pauseable task queue that is
+  //   an exempt from virtual time control. Used for the tasks that pause
+  //   virtual time for the duration of a pending request, so that responses
+  //   don't deadlock against paused VT.
+  //   They can be paused according to the spec during devtools debugging.
+  //   Otherwise scheduler does not tamper with their execution.
+
   // - unpausable task queue. Should be used for control tasks which should
   //   run when the context is paused. Usage should be extremely rare.
   //   Please consult scheduler-dev@ before using it. Running javascript
   //   on it is strictly verboten and can lead to hard-to-diagnose errors.
   scoped_refptr<NonMainThreadTaskQueue> throttleable_task_queue_;
   scoped_refptr<NonMainThreadTaskQueue> pausable_task_queue_;
+  scoped_refptr<NonMainThreadTaskQueue> pausable_non_vt_task_queue_;
   scoped_refptr<NonMainThreadTaskQueue> unpausable_task_queue_;
 
-  using TaskQueueVoterMap = std::map<
-      scoped_refptr<NonMainThreadTaskQueue>,
-      std::unique_ptr<base::sequence_manager::TaskQueue::QueueEnabledVoter>>;
+  using TaskQueueVoterMap ALLOW_DISCOURAGED_TYPE("TODO(crbug.com/1404327)") =
+      std::map<scoped_refptr<NonMainThreadTaskQueue>,
+               std::unique_ptr<
+                   base::sequence_manager::TaskQueue::QueueEnabledVoter>>;
 
   TaskQueueVoterMap task_runners_;
 
   SchedulingLifecycleState lifecycle_state_ =
       SchedulingLifecycleState::kNotThrottled;
 
-  WorkerThreadScheduler* thread_scheduler_;  // NOT OWNED
+  raw_ptr<WorkerThreadScheduler, DanglingUntriaged>
+      thread_scheduler_;  // NOT OWNED
 
   bool is_disposed_ = false;
   uint32_t paused_count_ = 0;

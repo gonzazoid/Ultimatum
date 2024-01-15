@@ -8,17 +8,19 @@
 
 #include <algorithm>
 #include <set>
+#include <string>
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/location.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
@@ -124,9 +126,9 @@ std::string BuildRequest() {
       "USER-AGENT: %s/%s %s\r\n"
       "\r\n",
       kDialRequestAddress, kDialRequestPort, kDialMaxResponseDelaySecs,
-      kDialSearchType, version_info::GetProductName().c_str(),
-      version_info::GetVersionNumber().c_str(),
-      version_info::GetOSType().c_str()));
+      kDialSearchType, version_info::GetProductName().data(),
+      version_info::GetVersionNumber().data(),
+      version_info::GetOSType().data()));
   // 1500 is a good MTU value for most Ethernet LANs.
   DCHECK_LE(request.size(), 1500U);
   return request;
@@ -536,7 +538,7 @@ void DialServiceImpl::NotifyOnDiscoveryRequest() {
     return;
   }
 
-  client_.OnDiscoveryRequest();
+  client_->OnDiscoveryRequest();
   // If we need to send additional requests, schedule a timer to do so.
   if (num_requests_sent_ < max_requests_ && num_requests_sent_ == 1) {
     // TODO(imcheng): Move this to SendOneRequest() once the implications are
@@ -552,13 +554,13 @@ void DialServiceImpl::NotifyOnDeviceDiscovered(
   if (!discovery_active_) {
     return;
   }
-  client_.OnDeviceDiscovered(device_data);
+  client_->OnDeviceDiscovered(device_data);
 }
 
 void DialServiceImpl::NotifyOnError() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  client_.OnError(HasOpenSockets() ? DIAL_SERVICE_SOCKET_ERROR
-                                   : DIAL_SERVICE_NO_INTERFACES);
+  client_->OnError(HasOpenSockets() ? DIAL_SERVICE_SOCKET_ERROR
+                                    : DIAL_SERVICE_NO_INTERFACES);
 }
 
 void DialServiceImpl::FinishDiscovery() {
@@ -570,7 +572,7 @@ void DialServiceImpl::FinishDiscovery() {
   request_timer_.Stop();
   discovery_active_ = false;
   num_requests_sent_ = 0;
-  client_.OnDiscoveryFinished();
+  client_->OnDiscoveryFinished();
 }
 
 bool DialServiceImpl::HasOpenSockets() {

@@ -10,7 +10,7 @@
 #include <list>
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/test/task_environment.h"
 #include "gpu/command_buffer/client/cmd_buffer_helper.h"
@@ -34,9 +34,8 @@ class MappedMemoryTestBase : public testing::Test {
 
   void SetUp() override {
     command_buffer_ = std::make_unique<CommandBufferDirectLocked>();
-    api_mock_ =
-        std::make_unique<AsyncAPIMock>(true, command_buffer_->service());
-    command_buffer_->set_handler(api_mock_.get());
+    api_mock_ = std::make_unique<AsyncAPIMock>(true, command_buffer_.get(),
+                                               command_buffer_->service());
 
     // ignore noops in the mock - we don't want to inspect the internals of the
     // helper.

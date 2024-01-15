@@ -4,15 +4,19 @@
 
 #include "chrome/browser/web_applications/os_integration/web_app_handler_registration_utils_win.h"
 
+#include <string_view>
+#include <utility>
+#include <vector>
+
 #include "base/command_line.h"
 #include "base/files/file_util.h"
+#include "base/hash/hash.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/thread_pool.h"
-#include "base/win/windows_version.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_attributes_entry.h"
@@ -21,10 +25,10 @@
 #include "chrome/browser/shell_integration.h"
 #include "chrome/browser/web_applications/chrome_pwa_launcher/chrome_pwa_launcher_util.h"
 #include "chrome/browser/web_applications/os_integration/web_app_shortcut_win.h"
-#include "chrome/browser/web_applications/web_app_id.h"
 #include "chrome/common/chrome_switches.h"
 #include "chrome/install_static/install_util.h"
 #include "chrome/installer/util/shell_util.h"
+#include "components/webapps/common/web_app_id.h"
 #include "content/public/browser/browser_thread.h"
 #include "net/base/filename_util.h"
 
@@ -44,7 +48,7 @@ constexpr const char* kRegistrationResultMetric =
 // only installed in exactly one other profile, it will need its app name
 // updated.
 bool IsWebAppLauncherRegisteredWithWindows(
-    const AppId& app_id,
+    const webapps::AppId& app_id,
     const base::FilePath& cur_profile_path,
     base::FilePath* only_profile_with_app_installed) {
   ProfileManager* profile_manager = g_browser_process->profile_manager();
@@ -88,7 +92,7 @@ std::wstring GetAppNameExtensionForProfile(const base::FilePath& profile_path) {
   return app_name_extension;
 }
 
-Result UpdateAppRegistration(const AppId& app_id,
+Result UpdateAppRegistration(const webapps::AppId& app_id,
                              const std::wstring& app_name,
                              const base::FilePath& profile_path,
                              const std::wstring& prog_id,
@@ -138,7 +142,7 @@ bool AppNameHasProfileExtension(const std::wstring& app_name,
 // registries. Changes to how they are generated will be disruptive to
 // previously written values, and should therefore be avoided if possible.
 std::wstring GetProgId(const base::FilePath& profile_path,
-                       const AppId& app_id,
+                       const webapps::AppId& app_id,
                        const absl::optional<std::set<std::string>>&
                            file_extensions = absl::nullopt) {
   // On system-level Win7 installs of the browser we need a user-specific part
@@ -154,10 +158,10 @@ std::wstring GetProgId(const base::FilePath& profile_path,
     // Provided file extensions must have a leading period. This is enforced
     // to ensure that calls to this function have consistent syntax (and
     // therefore get the same prog_id for a given set of inputs).
-    DCHECK(iter->at(0) == '.');
+    DCHECK_EQ(iter->at(0), '.');
     string_to_hash += *iter;
     while (++iter != file_extensions->end()) {
-      DCHECK(iter->at(0) == '.');
+      DCHECK_EQ(iter->at(0), '.');
       string_to_hash += ";";
       string_to_hash += *iter;
     }
@@ -171,7 +175,7 @@ std::wstring GetProgId(const base::FilePath& profile_path,
 
 }  // namespace
 
-base::CommandLine GetAppLauncherCommand(const AppId& app_id,
+base::CommandLine GetAppLauncherCommand(const webapps::AppId& app_id,
                                         const base::FilePath& app_launcher_path,
                                         const base::FilePath& profile_path) {
   base::CommandLine app_launcher_command(app_launcher_path);
@@ -181,7 +185,7 @@ base::CommandLine GetAppLauncherCommand(const AppId& app_id,
 }
 
 std::wstring GetAppNameExtensionForNextInstall(
-    const AppId& app_id,
+    const webapps::AppId& app_id,
     const base::FilePath& profile_path) {
   // Return a profile-specific app name extension only if duplicate |app_id|
   // installations exist in other profiles.
@@ -199,15 +203,6 @@ base::FilePath GetAppSpecificLauncherFilename(const std::wstring& app_name) {
   base::FilePath::StringType sanitized_app_name =
       internals::GetSanitizedFileName(base::AsString16(app_name)).value();
 
-  // On Windows 7, where the launcher has no file extension, replace any '.'
-  // characters with '_' to prevent a portion of the filename from being
-  // interpreted as its extension.
-  const bool is_win_7 = base::win::GetVersion() == base::win::Version::WIN7;
-  if (is_win_7) {
-    base::ReplaceChars(sanitized_app_name, FILE_PATH_LITERAL("."),
-                       FILE_PATH_LITERAL("_"), &sanitized_app_name);
-  }
-
   // If |sanitized_app_name| is a reserved filename, prepend '_' to allow its
   // use as the launcher filename (e.g. "nul" => "_nul"). Prepending is
   // preferred over appending in order to handle filenames containing '.', as
@@ -217,14 +212,9 @@ base::FilePath GetAppSpecificLauncherFilename(const std::wstring& app_name) {
   if (net::IsReservedNameOnWindows(sanitized_app_name))
     sanitized_app_name.insert(0, 1, FILE_PATH_LITERAL('_'));
 
-  // On Windows 8+, add .exe extension. On Windows 7, where an app's display
-  // name in the Open With menu can't be set programmatically, omit the
-  // extension to use the launcher filename as the app's display name.
-  if (!is_win_7) {
-    return base::FilePath(sanitized_app_name)
-        .AddExtension(FILE_PATH_LITERAL("exe"));
-  }
-  return base::FilePath(sanitized_app_name);
+  // Add .exe extension.
+  return base::FilePath(sanitized_app_name)
+      .AddExtension(FILE_PATH_LITERAL("exe"));
 }
 
 // See https://docs.microsoft.com/en-us/windows/win32/com/-progid--key for
@@ -232,13 +222,13 @@ base::FilePath GetAppSpecificLauncherFilename(const std::wstring& app_name) {
 // Windows registry, the mapping between a given profile+app_id and a prog_id
 // can not be changed.
 std::wstring GetProgIdForApp(const base::FilePath& profile_path,
-                             const AppId& app_id) {
+                             const webapps::AppId& app_id) {
   return GetProgId(profile_path, app_id);
 }
 
 std::wstring GetProgIdForAppFileHandler(
     const base::FilePath& profile_path,
-    const AppId& app_id,
+    const webapps::AppId& app_id,
     const std::set<std::string>& file_extensions) {
   return GetProgId(profile_path, app_id, file_extensions);
 }
@@ -280,7 +270,7 @@ absl::optional<base::FilePath> CreateAppLauncherFile(
 }
 
 void CheckAndUpdateExternalInstallations(const base::FilePath& cur_profile_path,
-                                         const AppId& app_id,
+                                         const webapps::AppId& app_id,
                                          ResultCallback callback) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
 
@@ -338,9 +328,9 @@ void CheckAndUpdateExternalInstallations(const base::FilePath& cur_profile_path,
     std::wstring external_installation_extension =
         GetAppNameExtensionForProfile(external_installation_profile_path);
     updated_name = std::wstring(
-        base::WStringPiece(external_installation_name.c_str(),
-                           external_installation_name.size() -
-                               external_installation_extension.size()));
+        std::wstring_view(external_installation_name.c_str(),
+                          external_installation_name.size() -
+                              external_installation_extension.size()));
     updated_extension = std::wstring();
   }
 

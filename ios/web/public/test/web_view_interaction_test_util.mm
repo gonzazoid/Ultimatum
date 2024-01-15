@@ -4,7 +4,7 @@
 
 #import "ios/web/public/test/web_view_interaction_test_util.h"
 
-#import "base/bind.h"
+#import "base/functional/bind.h"
 #import "base/json/string_escape.h"
 #import "base/logging.h"
 #import "base/strings/stringprintf.h"
@@ -13,21 +13,19 @@
 #import "base/test/ios/wait_util.h"
 #import "ios/web/js_messaging/java_script_feature_manager.h"
 #import "ios/web/js_messaging/web_frame_impl.h"
+#import "ios/web/js_messaging/web_view_js_utils.h"
 #import "ios/web/public/js_messaging/web_frame.h"
-#import "ios/web/public/js_messaging/web_frame_util.h"
+#import "ios/web/public/js_messaging/web_frames_manager.h"
 #import "ios/web/public/ui/crw_web_view_scroll_view_proxy.h"
 #import "ios/web/web_state/ui/crw_web_controller.h"
 #import "ios/web/web_state/ui/crw_web_view_proxy_impl.h"
 #import "ios/web/web_state/web_state_impl.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
-using web::NavigationManager;
-using base::test::ios::WaitUntilConditionOrTimeout;
-using base::test::ios::kWaitForUIElementTimeout;
 using base::test::ios::kWaitForJSCompletionTimeout;
+using base::test::ios::kWaitForUIElementTimeout;
+using base::test::ios::WaitUntilConditionOrTimeout;
+using web::NavigationManager;
+using web::ValueResultFromWKResult;
 
 namespace web {
 namespace test {
@@ -41,14 +39,15 @@ enum ElementAction {
 
 std::unique_ptr<base::Value> ExecuteJavaScript(web::WebState* web_state,
                                                const std::string& script) {
-  __block std::unique_ptr<base::Value> result;
+  __block id result = nil;
   __block bool did_finish = false;
-  static_cast<WebStateImpl*>(web_state)->ExecuteJavaScript(
-      base::UTF8ToUTF16(script), base::BindOnce(^(const base::Value* value) {
-        if (value)
-          result = std::make_unique<base::Value>(value->Clone());
-        did_finish = true;
-      }));
+  CRWWebController* web_controller =
+      WebStateImpl::FromWebState(web_state)->GetWebController();
+  [web_controller executeJavaScript:base::SysUTF8ToNSString(script)
+                  completionHandler:^(id handler_result, NSError*) {
+                    result = handler_result;
+                    did_finish = true;
+                  }];
 
   bool completed = WaitUntilConditionOrTimeout(kWaitForJSCompletionTimeout, ^{
     return did_finish;
@@ -57,26 +56,13 @@ std::unique_ptr<base::Value> ExecuteJavaScript(web::WebState* web_state,
     return nullptr;
   }
 
-  // As result is marked __block, this return call does a copy and not a move
-  // (marking the variable as __block mean it is allocated in the block object
-  // and not the stack). Use an explicit move to a local variable.
-  //
-  // Fixes the following compilation failures:
-  //   ../web_view_interaction_test_util.mm:58:10: error:
-  //       call to implicitly-deleted copy constructor of
-  //       'std::unique_ptr<base::Value>'
-  //
-  //   ../web_view_interaction_test_util.mm:58:10: error:
-  //       moving a local object in a return statement prevents copy elision
-  //       [-Werror,-Wpessimizing-move]
-  std::unique_ptr<base::Value> stack_result = std::move(result);
-  return stack_result;
+  return ValueResultFromWKResult(result);
 }
 
 std::unique_ptr<base::Value> CallJavaScriptFunction(
     web::WebState* web_state,
     const std::string& function,
-    const std::vector<base::Value>& parameters) {
+    const base::Value::List& parameters) {
   return CallJavaScriptFunctionForFeature(web_state, function, parameters,
                                           /*feature=*/nullptr);
 }
@@ -84,13 +70,14 @@ std::unique_ptr<base::Value> CallJavaScriptFunction(
 std::unique_ptr<base::Value> CallJavaScriptFunctionForFeature(
     web::WebState* web_state,
     const std::string& function,
-    const std::vector<base::Value>& parameters,
+    const base::Value::List& parameters,
     JavaScriptFeature* feature) {
   if (!web_state) {
     DLOG(ERROR) << "JavaScript can not be called on a null WebState.";
     return nullptr;
   }
 
+  WebFrameImpl* frame = nullptr;
   JavaScriptContentWorld* world = nullptr;
   if (feature) {
     JavaScriptFeatureManager* feature_manager =
@@ -102,12 +89,16 @@ std::unique_ptr<base::Value> CallJavaScriptFunctionForFeature(
                   << "JavaScriptFeature does not appear to be configured.";
       return nullptr;
     }
+    ContentWorld content_world = feature->GetSupportedContentWorld();
+    frame = static_cast<WebFrameImpl*>(
+        web_state->GetWebFramesManager(content_world)->GetMainWebFrame());
   } else {
     world = JavaScriptFeatureManager::GetPageContentWorldForBrowserState(
         web_state->GetBrowserState());
+    frame = static_cast<WebFrameImpl*>(
+        web_state->GetPageWorldWebFramesManager()->GetMainWebFrame());
   }
 
-  WebFrameImpl* frame = static_cast<WebFrameImpl*>(GetMainFrame(web_state));
   if (!frame) {
     DLOG(ERROR) << "JavaScript can not be called on a null WebFrame.";
     return nullptr;
@@ -197,19 +188,16 @@ CGRect GetBoundingRectOfElement(web::WebState* web_state,
       "    };"
       "})();";
 
-  __block std::unique_ptr<base::DictionaryValue> rect;
+  __block std::unique_ptr<base::Value::Dict> rect;
 
   bool found = WaitUntilConditionOrTimeout(kWaitForUIElementTimeout, ^{
     std::unique_ptr<base::Value> value =
         ExecuteJavaScript(web_state, kGetBoundsScript);
-    base::DictionaryValue* dictionary = nullptr;
-    if (value && value->GetAsDictionary(&dictionary)) {
-      std::string error;
-      if (dictionary->GetString("error", &error)) {
+    if (base::Value::Dict* dictionary = value->GetIfDict()) {
+      if (const std::string* error = dictionary->FindString("error")) {
         DLOG(ERROR) << "Error getting rect: " << error << ", retrying..";
       } else {
-        rect = base::DictionaryValue::From(
-            base::Value::ToUniquePtrValue(dictionary->Clone()));
+        rect = std::make_unique<base::Value::Dict>(dictionary->Clone());
         return true;
       }
     }
@@ -219,10 +207,10 @@ CGRect GetBoundingRectOfElement(web::WebState* web_state,
   if (!found)
     return CGRectNull;
 
-  absl::optional<double> left = rect->FindDoubleKey("left");
-  absl::optional<double> top = rect->FindDoubleKey("top");
-  absl::optional<double> width = rect->FindDoubleKey("width");
-  absl::optional<double> height = rect->FindDoubleKey("height");
+  std::optional<double> left = rect->FindDouble("left");
+  std::optional<double> top = rect->FindDouble("top");
+  std::optional<double> width = rect->FindDouble("width");
+  std::optional<double> height = rect->FindDouble("height");
   if (!(left && top && width && height))
     return CGRectNull;
 
@@ -248,7 +236,7 @@ bool RunActionOnWebViewElementWithScript(web::WebState* web_state,
                                          ElementAction action,
                                          NSError* __autoreleasing* error) {
   CRWWebController* web_controller =
-      static_cast<WebStateImpl*>(web_state)->GetWebController();
+      WebStateImpl::FromWebState(web_state)->GetWebController();
   const char* js_action = nullptr;
   switch (action) {
     case ELEMENT_ACTION_CLICK:

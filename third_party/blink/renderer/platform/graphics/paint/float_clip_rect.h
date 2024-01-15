@@ -6,10 +6,10 @@
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_GRAPHICS_PAINT_FLOAT_CLIP_RECT_H_
 
 #include "third_party/blink/renderer/platform/geometry/float_rounded_rect.h"
-#include "third_party/blink/renderer/platform/geometry/layout_rect.h"
-#include "third_party/blink/renderer/platform/transforms/transformation_matrix.h"
+#include "third_party/blink/renderer/platform/geometry/infinite_int_rect.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
 #include "ui/gfx/geometry/rect_f.h"
+#include "ui/gfx/geometry/transform.h"
 
 namespace blink {
 
@@ -18,7 +18,7 @@ class PLATFORM_EXPORT FloatClipRect {
 
  public:
   FloatClipRect()
-      : rect_(LayoutRect::InfiniteIntRect()),
+      : rect_(InfiniteIntRect()),
         has_radius_(false),
         is_tight_(true),
         is_infinite_(true) {}
@@ -98,10 +98,12 @@ class PLATFORM_EXPORT FloatClipRect {
     rect_.Offset(offset);
   }
 
-  // Assumes that the transform always makes the clip rect not tight. The caller
-  // should use MoveBy() to keep tightness if the transform is known to be
-  // identity or a 2d translation.
-  void Map(const TransformationMatrix& matrix) {
+  void Map(const gfx::Transform& matrix) {
+    if (matrix.IsIdentityOr2dTranslation()) {
+      Move(matrix.To2dTranslation());
+      return;
+    }
+    // Otherwise assumes that transform makes the clip rect not tight.
     is_tight_ = false;
     if (is_infinite_)
       return;

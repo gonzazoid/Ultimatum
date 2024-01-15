@@ -9,8 +9,8 @@
 // controller.
 @protocol SafetyCheckNavigationCommands
 
-// Shows password issues page.
-- (void)showPasswordIssuesPage;
+// Shows the Password Checkup page.
+- (void)showPasswordCheckupPage;
 
 // Opens update page at `location`.
 - (void)showUpdateAtLocation:(NSString*)location;

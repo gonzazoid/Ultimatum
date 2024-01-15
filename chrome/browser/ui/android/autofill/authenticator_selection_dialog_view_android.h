@@ -11,19 +11,19 @@
 
 #include "base/android/scoped_java_ref.h"
 #include "base/memory/raw_ptr.h"
-#include "chrome/browser/ui/autofill/payments/card_unmask_authentication_selection_dialog_view.h"
+#include "chrome/browser/ui/autofill/payments/card_unmask_authentication_selection_dialog.h"
 #include "ui/android/window_android.h"
 
 namespace autofill {
 class CardUnmaskAuthenticationSelectionDialogController;
 struct CardUnmaskChallengeOption;
 
-// Android implementation of the CardUnmaskAuthenticationSelectionDialogView.
+// Android implementation of the CardUnmaskAuthenticationSelectionDialog.
 // `CardUnmaskAuthenticationSelectionDialogControllerImpl` holds a pointer to
 // this View. The View is expected to call "delete this" on itself upon
 // dismissal.
 class AuthenticatorSelectionDialogViewAndroid
-    : public CardUnmaskAuthenticationSelectionDialogView {
+    : public CardUnmaskAuthenticationSelectionDialog {
  public:
   explicit AuthenticatorSelectionDialogViewAndroid(
       CardUnmaskAuthenticationSelectionDialogController* controller);
@@ -34,13 +34,14 @@ class AuthenticatorSelectionDialogViewAndroid
   AuthenticatorSelectionDialogViewAndroid& operator=(
       const AuthenticatorSelectionDialogViewAndroid&) = delete;
 
-  // CardUnmaskAuthenticationSelectionDialogView.
+  // CardUnmaskAuthenticationSelectionDialog.
   void Dismiss(bool user_closed_dialog, bool server_success) override;
+  void UpdateContent() override;
 
   // Called by the Java code when an Authenticator selection is made.
   void OnOptionSelected(JNIEnv* env,
                         const base::android::JavaParamRef<jstring>&
-                            authenticatorOptionIdentifier);
+                            authenticator_option_identifier);
 
   // Called by the Java code when the authenticatior selection dialog is
   // dismissed.

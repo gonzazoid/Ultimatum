@@ -19,7 +19,7 @@ from pytype_common import pytype_runner  # pylint: disable=wrong-import-position
 # This list should be kept in sync with EXTRA_PATH_COMPONENTS in PRESUBMIT.py
 EXTRA_PATHS_COMPONENTS = [
     ('build', ),
-    ('build', 'fuchsia'),
+    ('build', 'fuchsia', 'test'),
     ('build', 'util'),
     ('testing', ),
     ('third_party', 'catapult', 'common', 'py_utils'),
@@ -34,10 +34,15 @@ EXTRA_PATHS = [
 EXTRA_PATHS.append(GPU_DIR)
 
 FILES_AND_DIRECTORIES_TO_CHECK = [
+    # Directories.
     'flake_suppressor',
     'gold_inexact_matching',
     'gpu_tests',
+    'machine_times',
     'unexpected_passes',
+    # Files.
+    'get_machine_times.py',
+    'unexpected_pass_finder.py',
 ]
 FILES_AND_DIRECTORIES_TO_CHECK = [
     os.path.join(GPU_DIR, f) for f in FILES_AND_DIRECTORIES_TO_CHECK

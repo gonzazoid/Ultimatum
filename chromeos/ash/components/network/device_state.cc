@@ -5,7 +5,9 @@
 #include "chromeos/ash/components/network/device_state.h"
 
 #include <memory>
+#include <string>
 
+#include "ash/constants/ash_features.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/values.h"
@@ -14,6 +16,21 @@
 #include "third_party/cros_system_api/dbus/service_constants.h"
 
 namespace ash {
+namespace {
+
+bool IpTypeMatchesIpConfigMethod(const std::string& type,
+                                 const std::string& method) {
+  if (type == method) {
+    return true;
+  }
+  if (type == shill::kTypeIPv4) {
+    return method == shill::kTypeDHCP;
+  }
+  return type == shill::kTypeIPv6 &&
+         (method == shill::kTypeDHCP6 || method == shill::kTypeSLAAC);
+}
+
+}  // namespace
 
 DeviceState::DeviceState(const std::string& path)
     : ManagedState(MANAGED_TYPE_DEVICE, path) {}
@@ -43,29 +60,37 @@ bool DeviceState::PropertyChanged(const std::string& key,
       country_code_.clear();
       return true;
     }
-    const base::Value* operator_name = value.FindKey(shill::kOperatorNameKey);
-    if (operator_name)
-      operator_name_ = operator_name->GetString();
-    if (operator_name_.empty()) {
-      const base::Value* operator_code = value.FindKey(shill::kOperatorCodeKey);
-      operator_name_ = operator_code ? operator_code->GetString() : "";
+    const base::Value::Dict& dict = value.GetDict();
+
+    const std::string* operator_name = dict.FindString(shill::kOperatorNameKey);
+    if (operator_name) {
+      operator_name_ = *operator_name;
     }
-    const base::Value* country_code = value.FindKey(shill::kOperatorCountryKey);
-    country_code_ = country_code ? country_code->GetString() : "";
+    if (operator_name_.empty()) {
+      const std::string* operator_code =
+          dict.FindString(shill::kOperatorCodeKey);
+      operator_name_ = operator_code ? *operator_code : std::string();
+    }
+    const std::string* country_code =
+        dict.FindString(shill::kOperatorCountryKey);
+    country_code_ = country_code ? *country_code : std::string();
   } else if (key == shill::kTechnologyFamilyProperty) {
     return GetStringValue(key, value, &technology_family_);
   } else if (key == shill::kFoundNetworksProperty) {
-    if (!value.is_list())
+    if (!value.is_list()) {
       return false;
+    }
     CellularScanResults parsed_results;
     if (!network_util::ParseCellularScanResults(value.GetList(),
-                                                &parsed_results))
+                                                &parsed_results)) {
       return false;
+    }
     scan_results_.swap(parsed_results);
     return true;
   } else if (key == shill::kSIMSlotInfoProperty) {
-    if (!value.is_list())
+    if (!value.is_list()) {
       return false;
+    }
     CellularSIMSlotInfos parsed_results;
     if (!network_util::ParseCellularSIMSlotInfo(value.GetList(),
                                                 &parsed_results)) {
@@ -74,8 +99,10 @@ bool DeviceState::PropertyChanged(const std::string& key,
     sim_slot_infos_.swap(parsed_results);
     return true;
   } else if (key == shill::kSIMLockStatusProperty) {
-    if (!value.is_dict())
+    if (!value.is_dict()) {
       return false;
+    }
+    const base::Value::Dict& dict = value.GetDict();
 
     // Set default values for SIM properties.
     sim_lock_type_.erase();
@@ -83,16 +110,16 @@ bool DeviceState::PropertyChanged(const std::string& key,
     sim_lock_enabled_ = false;
 
     const base::Value* out_value = nullptr;
-    out_value = value.FindKey(shill::kSIMLockTypeProperty);
+    out_value = dict.Find(shill::kSIMLockTypeProperty);
     if (out_value) {
       GetStringValue(shill::kSIMLockTypeProperty, *out_value, &sim_lock_type_);
     }
-    out_value = value.FindKey(shill::kSIMLockRetriesLeftProperty);
+    out_value = dict.Find(shill::kSIMLockRetriesLeftProperty);
     if (out_value) {
       GetIntegerValue(shill::kSIMLockRetriesLeftProperty, *out_value,
                       &sim_retries_left_);
     }
-    out_value = value.FindKey(shill::kSIMLockEnabledProperty);
+    out_value = dict.Find(shill::kSIMLockEnabledProperty);
     if (out_value) {
       GetBooleanValue(shill::kSIMLockEnabledProperty, *out_value,
                       &sim_lock_enabled_);
@@ -138,7 +165,7 @@ bool DeviceState::IsActive() const {
 }
 
 void DeviceState::IPConfigPropertiesChanged(const std::string& ip_config_path,
-                                            base::Value properties) {
+                                            base::Value::Dict properties) {
   NET_LOG(EVENT) << "IPConfig for: " << path()
                  << " Changed: " << ip_config_path;
   ip_configs_.Set(ip_config_path, std::move(properties));
@@ -183,9 +210,7 @@ std::string DeviceState::GetIpAddressByType(const std::string& type) const {
         ip_config.FindString(shill::kMethodProperty);
     if (!ip_config_method)
       continue;
-    if (type == *ip_config_method ||
-        (type == shill::kTypeIPv4 && *ip_config_method == shill::kTypeDHCP) ||
-        (type == shill::kTypeIPv6 && *ip_config_method == shill::kTypeDHCP6)) {
+    if (IpTypeMatchesIpConfigMethod(type, *ip_config_method)) {
       const std::string* address =
           ip_config.FindString(shill::kAddressProperty);
       if (!address)
@@ -203,8 +228,19 @@ bool DeviceState::IsSimAbsent() const {
 bool DeviceState::IsSimLocked() const {
   if (technology_family_ == shill::kTechnologyFamilyCdma || !sim_present_)
     return false;
-  return sim_lock_type_ == shill::kSIMLockPin ||
-         sim_lock_type_ == shill::kSIMLockPuk;
+  if (sim_lock_type_ == shill::kSIMLockPin ||
+      sim_lock_type_ == shill::kSIMLockPuk) {
+    return true;
+  }
+  return features::IsCellularCarrierLockEnabled() &&
+         sim_lock_type_ == shill::kSIMLockNetworkPin;
+}
+
+bool DeviceState::IsSimCarrierLocked() const {
+  if (technology_family_ == shill::kTechnologyFamilyCdma || !sim_present_) {
+    return false;
+  }
+  return sim_lock_type_ == shill::kSIMLockNetworkPin;
 }
 
 bool DeviceState::HasAPN(const std::string& access_point_name) const {

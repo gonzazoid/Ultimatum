@@ -6,6 +6,7 @@
 #define ASH_CONTROLS_ROUNDED_SCROLL_BAR_H_
 
 #include "ash/ash_export.h"
+#include "base/memory/raw_ptr.h"
 #include "base/timer/timer.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/gfx/geometry/insets.h"
@@ -23,9 +24,9 @@ namespace ash {
 // - Draws the thumb with rounded ends
 // - Becomes brighter when the cursor is over the thumb
 class ASH_EXPORT RoundedScrollBar : public views::ScrollBar {
- public:
-  METADATA_HEADER(RoundedScrollBar);
+  METADATA_HEADER(RoundedScrollBar, views::ScrollBar)
 
+ public:
   explicit RoundedScrollBar(bool horizontal);
   RoundedScrollBar(const RoundedScrollBar&) = delete;
   RoundedScrollBar& operator=(const RoundedScrollBar&) = delete;
@@ -65,13 +66,13 @@ class ASH_EXPORT RoundedScrollBar : public views::ScrollBar {
   void HideScrollBar();
 
   // Called when the thumb hover/pressed state changed.
-  void OnThumbStateChanged();
+  void OnThumbStateChanged(views::Button::ButtonState old_state);
 
   // Called when the thumb bounds (position or size) changed.
   void OnThumbBoundsChanged();
 
   // Equivalent to GetThumb() but typed as the inner class `Thumb`.
-  Thumb* const thumb_;
+  const raw_ptr<Thumb> thumb_;
 
   // Insets for the scroll track.
   gfx::Insets insets_;

@@ -6,8 +6,8 @@
 
 #include <map>
 
+#include "base/memory/raw_ref.h"
 #include "base/ranges/algorithm.h"
-#include "base/strings/stringprintf.h"
 #include "base/test/test_reg_util_win.h"
 #include "base/win/registry.h"
 #include "chrome/browser/win/conflicts/msi_util.h"
@@ -15,8 +15,8 @@
 
 namespace {
 
-static const wchar_t kRegistryKeyPathFormat[] =
-    L"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\%ls";
+constexpr wchar_t kRegistryKeyPathPrefix[] =
+    L"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\";
 
 struct CommonInfo {
   std::wstring product_id;
@@ -46,8 +46,8 @@ class MockMsiUtil : public MsiUtil {
       const std::wstring& product_guid,
       const std::wstring& user_sid,
       std::vector<std::wstring>* component_paths) const override {
-    auto iter = component_paths_map_.find(product_guid);
-    if (iter == component_paths_map_.end())
+    auto iter = component_paths_map_->find(product_guid);
+    if (iter == component_paths_map_->end())
       return false;
 
     *component_paths = iter->second;
@@ -55,7 +55,8 @@ class MockMsiUtil : public MsiUtil {
   }
 
  private:
-  const std::map<std::wstring, std::vector<std::wstring>>& component_paths_map_;
+  const raw_ref<const std::map<std::wstring, std::vector<std::wstring>>>
+      component_paths_map_;
 };
 
 class TestInstalledApplications : public InstalledApplications {
@@ -95,8 +96,7 @@ class InstalledApplicationsTest : public testing::Test {
 
   void AddFakeApplication(const MsiApplicationInfo& application_info) {
     const std::wstring registry_key_path =
-        base::StringPrintf(kRegistryKeyPathFormat,
-                           application_info.common_info.product_id.c_str());
+        kRegistryKeyPathPrefix + application_info.common_info.product_id;
     base::win::RegKey registry_key(HKEY_CURRENT_USER, registry_key_path.c_str(),
                                    KEY_WRITE);
 
@@ -109,8 +109,7 @@ class InstalledApplicationsTest : public testing::Test {
   void AddFakeApplication(
       const InstallLocationApplicationInfo& application_info) {
     const std::wstring registry_key_path =
-        base::StringPrintf(kRegistryKeyPathFormat,
-                           application_info.common_info.product_id.c_str());
+        kRegistryKeyPathPrefix + application_info.common_info.product_id;
     base::win::RegKey registry_key(HKEY_CURRENT_USER, registry_key_path.c_str(),
                                    KEY_WRITE);
 

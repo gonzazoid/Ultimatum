@@ -5,7 +5,7 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_PLATFORM_MEDIASTREAM_MEDIA_STREAM_TRACK_PLATFORM_H_
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_MEDIASTREAM_MEDIA_STREAM_TRACK_PLATFORM_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/platform/modules/mediastream/web_media_stream_sink.h"
 #include "third_party/blink/public/platform/modules/mediastream/web_media_stream_track.h"
@@ -47,6 +47,7 @@ class PLATFORM_EXPORT MediaStreamTrackPlatform {
     absl::optional<bool> echo_cancellation;
     absl::optional<bool> auto_gain_control;
     absl::optional<bool> noise_supression;
+    absl::optional<bool> voice_isolation;
     String echo_cancellation_type;
     int32_t sample_rate = -1;
     int32_t sample_size = -1;
@@ -57,6 +58,13 @@ class PLATFORM_EXPORT MediaStreamTrackPlatform {
     absl::optional<media::mojom::DisplayCaptureSurfaceType> display_surface;
     absl::optional<bool> logical_surface;
     absl::optional<media::mojom::CursorCaptureType> cursor;
+    absl::optional<bool> suppress_local_audio_playback;
+  };
+
+  struct VideoFrameStats {
+    size_t deliverable_frames = 0u;
+    size_t discarded_frames = 0u;
+    size_t dropped_frames = 0u;
   };
 
   struct CaptureHandle {
@@ -70,6 +78,19 @@ class PLATFORM_EXPORT MediaStreamTrackPlatform {
   MediaStreamTrackPlatform(const MediaStreamTrackPlatform&) = delete;
   MediaStreamTrackPlatform& operator=(const MediaStreamTrackPlatform&) = delete;
   virtual ~MediaStreamTrackPlatform();
+
+  // Creates a new MediaStreamTrackPlatform of the same type as this based on
+  // data retrieved from the supplied MediaStreamComponent. This method must be
+  // called on a MediaStreamTrackPlatform object of the same type as the
+  // platform track member of the passed MediaStreamComponent.
+  //
+  // TODO(crbug.com/1302689): This is an instance method of this class solely
+  // for creating an object of the right type from either the platform or
+  // modules directories.  Remove this method when there is a better way to
+  // achieve this.
+  virtual std::unique_ptr<MediaStreamTrackPlatform> CreateFromComponent(
+      const MediaStreamComponent* component,
+      const String& id) = 0;
 
   static MediaStreamTrackPlatform* GetTrack(const WebMediaStreamTrack& track);
 
@@ -85,15 +106,25 @@ class PLATFORM_EXPORT MediaStreamTrackPlatform {
 
   // TODO(hta): Make method pure virtual when all tracks have the method.
   virtual void GetSettings(Settings& settings) const {}
+
+  virtual VideoFrameStats GetVideoFrameStats() const {
+    // This method is only callable on video tracks.
+    NOTREACHED();
+    return {};
+  }
+
   virtual CaptureHandle GetCaptureHandle();
 
   // Adds a one off callback that will be invoked when observing the first frame
-  // where |metadata.crop_version >= crop_version|.
-  virtual void AddCropVersionCallback(uint32_t crop_version,
-                                      base::OnceClosure callback) {}
+  // where |metadata.sub_capture_target_version >= sub_capture_target_version|.
+  virtual void AddSubCaptureTargetVersionCallback(
+      uint32_t sub_capture_target_version,
+      base::OnceClosure callback) {}
 
-  // Removes the callback that was associated with this |crop_version|, if any.
-  virtual void RemoveCropVersionCallback(uint32_t crop_version) {}
+  // Removes the callback that was associated with this
+  // |sub_capture_target_version|, if any.
+  virtual void RemoveSubCaptureTargetVersionCallback(
+      uint32_t sub_capture_target_version) {}
 
   bool is_local_track() const { return is_local_track_; }
 

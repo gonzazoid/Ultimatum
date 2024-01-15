@@ -7,36 +7,19 @@
 //    ../../third_party/xcbproto/src \
 //    gen/ui/gfx/x \
 //    bigreq \
-//    composite \
-//    damage \
-//    dpms \
-//    dri2 \
 //    dri3 \
-//    ge \
 //    glx \
-//    present \
 //    randr \
-//    record \
 //    render \
-//    res \
 //    screensaver \
 //    shape \
 //    shm \
 //    sync \
-//    xc_misc \
-//    xevie \
-//    xf86dri \
-//    xf86vidmode \
 //    xfixes \
-//    xinerama \
 //    xinput \
 //    xkb \
-//    xprint \
 //    xproto \
-//    xselinux \
-//    xtest \
-//    xv \
-//    xvmc
+//    xtest
 
 #include "dri3.h"
 
@@ -46,6 +29,7 @@
 
 #include "base/logging.h"
 #include "base/posix/eintr_wrapper.h"
+#include "ui/gfx/x/connection.h"
 #include "ui/gfx/x/xproto_internal.h"
 
 namespace x11 {
@@ -126,7 +110,7 @@ std::unique_ptr<Dri3::QueryVersionReply> detail::ReadReply<
   Read(&minor_version, &buf);
 
   Align(&buf, 4);
-  DCHECK_EQ(buf.offset < 32 ? 0 : buf.offset - 32, 4 * length);
+  CHECK_EQ(buf.offset < 32 ? 0 : buf.offset - 32, 4 * length);
 
   return reply;
 }
@@ -200,7 +184,7 @@ std::unique_ptr<Dri3::OpenReply> detail::ReadReply<Dri3::OpenReply>(
   Pad(&buf, 24);
 
   Align(&buf, 4);
-  DCHECK_EQ(buf.offset < 32 ? 0 : buf.offset - 32, 4 * length);
+  CHECK_EQ(buf.offset < 32 ? 0 : buf.offset - 32, 4 * length);
 
   return reply;
 }
@@ -370,7 +354,7 @@ std::unique_ptr<Dri3::BufferFromPixmapReply> detail::ReadReply<
   Pad(&buf, 12);
 
   Align(&buf, 4);
-  DCHECK_EQ(buf.offset < 32 ? 0 : buf.offset - 32, 4 * length);
+  CHECK_EQ(buf.offset < 32 ? 0 : buf.offset - 32, 4 * length);
 
   return reply;
 }
@@ -497,7 +481,7 @@ std::unique_ptr<Dri3::FDFromFenceReply> detail::ReadReply<
   Pad(&buf, 24);
 
   Align(&buf, 4);
-  DCHECK_EQ(buf.offset < 32 ? 0 : buf.offset - 32, 4 * length);
+  CHECK_EQ(buf.offset < 32 ? 0 : buf.offset - 32, 4 * length);
 
   return reply;
 }
@@ -604,7 +588,7 @@ std::unique_ptr<Dri3::GetSupportedModifiersReply> detail::ReadReply<
   }
 
   Align(&buf, 4);
-  DCHECK_EQ(buf.offset < 32 ? 0 : buf.offset - 32, 4 * length);
+  CHECK_EQ(buf.offset < 32 ? 0 : buf.offset - 32, 4 * length);
 
   return reply;
 }
@@ -703,7 +687,7 @@ Future<void> Dri3::PixmapFromBuffers(
   buf.Write(&modifier);
 
   // buffers
-  DCHECK_EQ(static_cast<size_t>(num_buffers), buffers.size());
+  CHECK_EQ(static_cast<size_t>(num_buffers), buffers.size());
   for (auto& buffers_elem : buffers) {
     // buffers_elem
     buf.fds().push_back(HANDLE_EINTR(dup(buffers_elem.get())));
@@ -848,9 +832,53 @@ std::unique_ptr<Dri3::BuffersFromPixmapReply> detail::ReadReply<
   }
 
   Align(&buf, 4);
-  DCHECK_EQ(buf.offset < 32 ? 0 : buf.offset - 32, 4 * length);
+  CHECK_EQ(buf.offset < 32 ? 0 : buf.offset - 32, 4 * length);
 
   return reply;
+}
+
+Future<void> Dri3::SetDRMDeviceInUse(
+    const Dri3::SetDRMDeviceInUseRequest& request) {
+  if (!connection_->Ready() || !present())
+    return {};
+
+  WriteBuffer buf;
+
+  auto& window = request.window;
+  auto& drmMajor = request.drmMajor;
+  auto& drmMinor = request.drmMinor;
+
+  // major_opcode
+  uint8_t major_opcode = info_.major_opcode;
+  buf.Write(&major_opcode);
+
+  // minor_opcode
+  uint8_t minor_opcode = 9;
+  buf.Write(&minor_opcode);
+
+  // length
+  // Caller fills in length for writes.
+  Pad(&buf, sizeof(uint16_t));
+
+  // window
+  buf.Write(&window);
+
+  // drmMajor
+  buf.Write(&drmMajor);
+
+  // drmMinor
+  buf.Write(&drmMinor);
+
+  Align(&buf, 4);
+
+  return connection_->SendRequest<void>(&buf, "Dri3::SetDRMDeviceInUse", false);
+}
+
+Future<void> Dri3::SetDRMDeviceInUse(const Window& window,
+                                     const uint32_t& drmMajor,
+                                     const uint32_t& drmMinor) {
+  return Dri3::SetDRMDeviceInUse(
+      Dri3::SetDRMDeviceInUseRequest{window, drmMajor, drmMinor});
 }
 
 }  // namespace x11

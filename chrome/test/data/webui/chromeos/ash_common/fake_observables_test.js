@@ -5,9 +5,9 @@
 import {FakeObservables} from 'chrome://resources/ash/common/fake_observables.js';
 import {PromiseResolver} from 'chrome://resources/js/promise_resolver.js';
 
-import {assertEquals} from '../../chai_assert.js';
+import {assertEquals} from 'chrome://webui-test/chromeos/chai_assert.js';
 
-export function fakeObservablesTestSuite() {
+suite('fakeObservablesTestSuite', () => {
   let observables = null;
 
   setup(() => {
@@ -215,4 +215,4 @@ export function fakeObservablesTestSuite() {
         'ObserveFoo_OnFooUpdated', 'foo', 0);
     return resolver.promise;
   });
-}
+});

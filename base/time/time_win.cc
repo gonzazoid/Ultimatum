@@ -35,10 +35,12 @@
 
 #include <windows.foundation.h>
 #include <windows.h>
+
 #include <mmsystem.h>
 #include <stdint.h>
 
 #include <atomic>
+#include <ostream>
 
 #include "base/bit_cast.h"
 #include "base/check_op.h"
@@ -455,10 +457,10 @@ TimeTicks RolloverProtectedNow() {
       break;
 
     // Save the changed state. If the existing value is unchanged from the
-    // original, exit the loop.
-    int32_t check = g_last_time_and_rollovers.compare_exchange_strong(
+    // original so that the operation is successful. Exit the loop.
+    bool success = g_last_time_and_rollovers.compare_exchange_strong(
         original, state.as_opaque_32, std::memory_order_release);
-    if (check == original)
+    if (success)
       break;
 
     // Another thread has done something in between so retry from the top.
@@ -640,6 +642,18 @@ TimeTicks::Clock TimeTicks::GetClock() {
                             : Clock::WIN_ROLLOVER_PROTECTED_TIME_GET_TIME;
 }
 
+// LiveTicks ------------------------------------------------------------------
+
+namespace subtle {
+LiveTicks LiveTicksNowIgnoringOverride() {
+  ULONGLONG unbiased_interrupt_time;
+  QueryUnbiasedInterruptTimePrecise(&unbiased_interrupt_time);
+  // QueryUnbiasedInterruptTimePrecise gets the interrupt time in system time
+  // units of 100 nanoseconds.
+  return LiveTicks() + Nanoseconds(unbiased_interrupt_time * 100);
+}
+}  // namespace subtle
+
 // ThreadTicks ----------------------------------------------------------------
 
 namespace subtle {
@@ -730,6 +744,18 @@ ABI::Windows::Foundation::DateTime TimeDelta::ToWinrtDateTime() const {
   ABI::Windows::Foundation::DateTime date_time;
   date_time.UniversalTime = InMicroseconds() * 10;
   return date_time;
+}
+
+// static
+TimeDelta TimeDelta::FromWinrtTimeSpan(ABI::Windows::Foundation::TimeSpan ts) {
+  // Duration is 100 ns intervals
+  return Microseconds(ts.Duration / 10);
+}
+
+ABI::Windows::Foundation::TimeSpan TimeDelta::ToWinrtTimeSpan() const {
+  ABI::Windows::Foundation::TimeSpan time_span;
+  time_span.Duration = InMicroseconds() * 10;
+  return time_span;
 }
 
 #if !defined(ARCH_CPU_ARM64)

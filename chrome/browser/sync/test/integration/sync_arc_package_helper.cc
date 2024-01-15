@@ -10,15 +10,16 @@
 #include "ash/components/arc/test/connection_holder_util.h"
 #include "ash/components/arc/test/fake_app_instance.h"
 #include "base/command_line.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
+#include "chrome/browser/ash/app_list/arc/arc_app_list_prefs.h"
+#include "chrome/browser/ash/app_list/arc/arc_package_syncable_service.h"
 #include "chrome/browser/ash/arc/arc_util.h"
 #include "chrome/browser/ash/arc/session/arc_session_manager.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/sync/test/integration/sync_datatype_helper.h"
 #include "chrome/browser/sync/test/integration/sync_test.h"
-#include "chrome/browser/ui/app_list/arc/arc_app_list_prefs.h"
-#include "chrome/browser/ui/app_list/arc/arc_package_syncable_service.h"
 #include "components/sync/protocol/arc_package_specifics.pb.h"
 #include "components/sync/protocol/entity_specifics.pb.h"
 
@@ -99,8 +100,35 @@ void SyncArcPackageHelper::ClearPackages(Profile* profile) {
   }
 }
 
+bool SyncArcPackageHelper::HasOnlyTestPackages(Profile* profile,
+                                               const std::vector<size_t>& ids) {
+  const ArcAppListPrefs* prefs = ArcAppListPrefs::Get(profile);
+  DCHECK(prefs);
+  if (prefs->GetPackagesFromPrefs().size() != ids.size()) {
+    return false;
+  }
+
+  for (const size_t id : ids) {
+    std::unique_ptr<ArcAppListPrefs::PackageInfo> package_info =
+        prefs->GetPackage(GetTestPackageName(id));
+    if (!package_info) {
+      return false;
+    }
+    // See InstallPackageWithIndex().
+    if (package_info->package_version != static_cast<int32_t>(id) ||
+        package_info->last_backup_android_id != static_cast<int64_t>(id) ||
+        package_info->last_backup_time != static_cast<int64_t>(id) ||
+        !package_info->should_sync) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 bool SyncArcPackageHelper::AllProfilesHaveSamePackages() {
-  const std::vector<Profile*>& profiles = test_->GetAllProfiles();
+  const std::vector<raw_ptr<Profile, VectorExperimental>>& profiles =
+      test_->GetAllProfiles();
   for (Profile* profile : profiles) {
     if (profile != profiles.front() &&
         !ArcPackagesMatch(profiles.front(), profile)) {
@@ -117,7 +145,8 @@ bool SyncArcPackageHelper::AllProfilesHaveSamePackageDetails() {
     return false;
   }
 
-  const std::vector<Profile*>& profiles = test_->GetAllProfiles();
+  const std::vector<raw_ptr<Profile, VectorExperimental>>& profiles =
+      test_->GetAllProfiles();
   for (Profile* profile : profiles) {
     if (profile != profiles.front() &&
         !ArcPackageDetailsMatch(profiles.front(), profile)) {
@@ -176,8 +205,6 @@ void SyncArcPackageHelper::DisableArcService(Profile* profile) {
   arc_app_list_prefs->app_connection_holder()->CloseInstance(
       instance_map_[profile].get());
   instance_map_.erase(profile);
-
-  arc::ArcSessionManager::Get()->Shutdown();
 }
 
 void SyncArcPackageHelper::InstallPackage(

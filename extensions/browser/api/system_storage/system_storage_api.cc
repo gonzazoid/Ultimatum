@@ -4,10 +4,10 @@
 
 #include "extensions/browser/api/system_storage/system_storage_api.h"
 
-#include "base/bind.h"
-#include "base/task/task_runner_util.h"
+#include "base/functional/bind.h"
 #include "base/task/thread_pool.h"
 #include "content/public/browser/browser_thread.h"
+#include "extensions/browser/api/system_storage/storage_info_provider.h"
 
 using storage_monitor::StorageMonitor;
 
@@ -16,12 +16,6 @@ namespace extensions {
 using api::system_storage::StorageUnitInfo;
 namespace EjectDevice = api::system_storage::EjectDevice;
 namespace GetAvailableCapacity = api::system_storage::GetAvailableCapacity;
-
-SystemStorageGetInfoFunction::SystemStorageGetInfoFunction() {
-}
-
-SystemStorageGetInfoFunction::~SystemStorageGetInfoFunction() {
-}
 
 ExtensionFunction::ResponseAction SystemStorageGetInfoFunction::Run() {
   StorageInfoProvider::Get()->StartQueryInfo(base::BindOnce(
@@ -38,15 +32,12 @@ void SystemStorageGetInfoFunction::OnGetStorageInfoCompleted(bool success) {
   }
 }
 
-SystemStorageEjectDeviceFunction::~SystemStorageEjectDeviceFunction() {
-}
-
 ExtensionFunction::ResponseAction SystemStorageEjectDeviceFunction::Run() {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
 
-  std::unique_ptr<EjectDevice::Params> params(
-      EjectDevice::Params::Create(args()));
-  EXTENSION_FUNCTION_VALIDATE(params.get());
+  std::optional<EjectDevice::Params> params =
+      EjectDevice::Params::Create(args());
+  EXTENSION_FUNCTION_VALIDATE(params);
 
   StorageMonitor::GetInstance()->EnsureInitialized(
       base::BindOnce(&SystemStorageEjectDeviceFunction::OnStorageMonitorInit,
@@ -76,22 +67,22 @@ void SystemStorageEjectDeviceFunction::OnStorageMonitorInit(
 void SystemStorageEjectDeviceFunction::HandleResponse(
     StorageMonitor::EjectStatus status) {
   api::system_storage::EjectDeviceResultCode result =
-      api::system_storage::EJECT_DEVICE_RESULT_CODE_FAILURE;
+      api::system_storage::EjectDeviceResultCode::kFailure;
   switch (status) {
     case StorageMonitor::EJECT_OK:
-      result = api::system_storage::EJECT_DEVICE_RESULT_CODE_SUCCESS;
+      result = api::system_storage::EjectDeviceResultCode::kSuccess;
       break;
     case StorageMonitor::EJECT_IN_USE:
-      result = api::system_storage::EJECT_DEVICE_RESULT_CODE_IN_USE;
+      result = api::system_storage::EjectDeviceResultCode::kInUse;
       break;
     case StorageMonitor::EJECT_NO_SUCH_DEVICE:
-      result = api::system_storage::EJECT_DEVICE_RESULT_CODE_NO_SUCH_DEVICE;
+      result = api::system_storage::EjectDeviceResultCode::kNoSuchDevice;
       break;
     case StorageMonitor::EJECT_FAILURE:
-      result = api::system_storage::EJECT_DEVICE_RESULT_CODE_FAILURE;
+      result = api::system_storage::EjectDeviceResultCode::kFailure;
   }
 
-  Respond(OneArgument(base::Value(api::system_storage::ToString(result))));
+  Respond(WithArguments(api::system_storage::ToString(result)));
 }
 
 SystemStorageGetAvailableCapacityFunction::
@@ -107,9 +98,9 @@ ExtensionFunction::ResponseAction
 SystemStorageGetAvailableCapacityFunction::Run() {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
 
-  std::unique_ptr<GetAvailableCapacity::Params> params(
-      GetAvailableCapacity::Params::Create(args()));
-  EXTENSION_FUNCTION_VALIDATE(params.get());
+  std::optional<GetAvailableCapacity::Params> params =
+      GetAvailableCapacity::Params::Create(args());
+  EXTENSION_FUNCTION_VALIDATE(params);
 
   StorageMonitor::GetInstance()->EnsureInitialized(base::BindOnce(
       &SystemStorageGetAvailableCapacityFunction::OnStorageMonitorInit, this,
@@ -119,8 +110,8 @@ SystemStorageGetAvailableCapacityFunction::Run() {
 
 void SystemStorageGetAvailableCapacityFunction::OnStorageMonitorInit(
     const std::string& transient_id) {
-  base::PostTaskAndReplyWithResult(
-      query_runner_.get(), FROM_HERE,
+  query_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE,
       base::BindOnce(
           &StorageInfoProvider::GetStorageFreeSpaceFromTransientIdAsync,
           StorageInfoProvider::Get(), transient_id),
@@ -137,7 +128,7 @@ void SystemStorageGetAvailableCapacityFunction::OnQueryCompleted(
     api::system_storage::StorageAvailableCapacityInfo result;
     result.id = transient_id;
     result.available_capacity = available_capacity;
-    Respond(OneArgument(base::Value(result.ToValue())));
+    Respond(WithArguments(result.ToValue()));
   } else {
     Respond(Error("Error occurred when querying available capacity."));
   }

@@ -22,10 +22,13 @@
 namespace base {
 namespace {
 
-const Time::Exploded kTestDateTimeExploded = {
-    2011, 4,  6, 30,  // Sat, Apr 30, 2011
-    22,   42, 7, 0    // 22:42:07.000 in UTC = 15:42:07 in US PDT.
-};
+constexpr Time::Exploded kTestDateTimeExploded = {.year = 2011,
+                                                  .month = 4,
+                                                  .day_of_week = 6,
+                                                  .day_of_month = 30,
+                                                  .hour = 22,
+                                                  .minute = 42,
+                                                  .second = 7};
 
 // Returns difference between the local time and GMT formatted as string.
 // This function gets |time| because the difference depends on time,
@@ -37,9 +40,10 @@ std::u16string GetShortTimeZone(const Time& time) {
       icu::TimeZoneFormat::createInstance(icu::Locale::getDefault(), status));
   EXPECT_TRUE(U_SUCCESS(status));
   icu::UnicodeString name;
-  zone_formatter->format(UTZFMT_STYLE_SPECIFIC_SHORT, *zone,
-                         static_cast<UDate>(time.ToDoubleT() * 1000),
-                         name, nullptr);
+  zone_formatter->format(
+      UTZFMT_STYLE_SPECIFIC_SHORT, *zone,
+      static_cast<UDate>(time.InSecondsFSinceUnixEpoch() * 1000), name,
+      nullptr);
   return i18n::UnicodeStringToString16(name);
 }
 
@@ -76,7 +80,7 @@ TEST(TimeFormattingTest, TimeFormatTimeOfDayDefault12h) {
   Time time;
   EXPECT_TRUE(Time::FromUTCExploded(kTestDateTimeExploded, &time));
   std::u16string clock24h(u"15:42");
-  std::u16string clock12h_pm(u"3:42 PM");
+  std::u16string clock12h_pm(u"3:42\u202fPM");
   std::u16string clock12h(u"3:42");
   std::u16string clock24h_millis(u"15:42:07.000");
 
@@ -114,7 +118,7 @@ TEST(TimeFormattingTest, TimeFormatTimeOfDayDefault24h) {
   Time time;
   EXPECT_TRUE(Time::FromUTCExploded(kTestDateTimeExploded, &time));
   std::u16string clock24h(u"15:42");
-  std::u16string clock12h_pm(u"3:42 pm");
+  std::u16string clock12h_pm(u"3:42\u202fpm");
   std::u16string clock12h(u"3:42");
   std::u16string clock24h_millis(u"15:42:07.000");
 
@@ -179,7 +183,7 @@ TEST(TimeFormattingTest, TimeFormatTimeOfDayDE) {
   Time time;
   EXPECT_TRUE(Time::FromUTCExploded(kTestDateTimeExploded, &time));
   std::u16string clock24h(u"15:42");
-  std::u16string clock12h_pm(u"3:42 PM");
+  std::u16string clock12h_pm(u"3:42\u202fPM");
   std::u16string clock12h(u"3:42");
 
   // The default is 24h clock.
@@ -244,13 +248,13 @@ TEST(TimeFormattingTest, TimeFormatDateUS) {
   EXPECT_EQ(u"Apr 30, 2011", TimeFormatShortDate(time));
   EXPECT_EQ(u"4/30/11", TimeFormatShortDateNumeric(time));
 
-  EXPECT_EQ(u"4/30/11, 3:42:07 PM", TimeFormatShortDateAndTime(time));
-  EXPECT_EQ(u"4/30/11, 3:42:07 PM " + GetShortTimeZone(time),
+  EXPECT_EQ(u"4/30/11, 3:42:07\u202fPM", TimeFormatShortDateAndTime(time));
+  EXPECT_EQ(u"4/30/11, 3:42:07\u202fPM " + GetShortTimeZone(time),
             TimeFormatShortDateAndTimeWithTimeZone(time));
 
   EXPECT_EQ(u"April 2011", TimeFormatMonthAndYear(time));
 
-  EXPECT_EQ(u"Saturday, April 30, 2011 at 3:42:07 PM",
+  EXPECT_EQ(u"Saturday, April 30, 2011 at 3:42:07\u202fPM",
             TimeFormatFriendlyDateAndTime(time));
 
   EXPECT_EQ(u"Saturday, April 30, 2011", TimeFormatFriendlyDate(time));
@@ -285,17 +289,79 @@ TEST(TimeFormattingTest, TimeFormatWithPattern) {
   EXPECT_TRUE(Time::FromUTCExploded(kTestDateTimeExploded, &time));
 
   i18n::SetICUDefaultLocale("en_US");
-  EXPECT_EQ(u"Apr 30, 2011", TimeFormatWithPattern(time, "yMMMd"));
-  EXPECT_EQ(u"April 30 at 3:42:07 PM",
-            TimeFormatWithPattern(time, "MMMMdjmmss"));
+  EXPECT_EQ(u"Apr 30, 2011", LocalizedTimeFormatWithPattern(time, "yMMMd"));
+  EXPECT_EQ(u"April 30 at 3:42:07\u202fPM",
+            LocalizedTimeFormatWithPattern(time, "MMMMdjmmss"));
+  EXPECT_EQ(
+      "Sat! 30 Apr 2011 at 15.42+07",
+      UnlocalizedTimeFormatWithPattern(time, "E! dd MMM y 'at' HH.mm+ss"));
+  EXPECT_EQ("Sat! 30 Apr 2011 at 22.42+07",
+            UnlocalizedTimeFormatWithPattern(time, "E! dd MMM y 'at' HH.mm+ss",
+                                             icu::TimeZone::getGMT()));
 
   i18n::SetICUDefaultLocale("en_GB");
-  EXPECT_EQ(u"30 Apr 2011", TimeFormatWithPattern(time, "yMMMd"));
-  EXPECT_EQ(u"30 April at 15:42:07", TimeFormatWithPattern(time, "MMMMdjmmss"));
+  EXPECT_EQ(u"30 Apr 2011", LocalizedTimeFormatWithPattern(time, "yMMMd"));
+  EXPECT_EQ(u"30 April at 15:42:07",
+            LocalizedTimeFormatWithPattern(time, "MMMMdjmmss"));
+  EXPECT_EQ(
+      "Sat! 30 Apr 2011 at 15.42+07",
+      UnlocalizedTimeFormatWithPattern(time, "E! dd MMM y 'at' HH.mm+ss"));
 
   i18n::SetICUDefaultLocale("ja_JP");
-  EXPECT_EQ(u"2011年4月30日", TimeFormatWithPattern(time, "yMMMd"));
-  EXPECT_EQ(u"4月30日 15:42:07", TimeFormatWithPattern(time, "MMMMdjmmss"));
+  EXPECT_EQ(u"2011年4月30日", LocalizedTimeFormatWithPattern(time, "yMMMd"));
+  EXPECT_EQ(u"4月30日 15:42:07",
+            LocalizedTimeFormatWithPattern(time, "MMMMdjmmss"));
+  EXPECT_EQ(
+      "Sat! 30 Apr 2011 at 15.42+07",
+      UnlocalizedTimeFormatWithPattern(time, "E! dd MMM y 'at' HH.mm+ss"));
+}
+
+TEST(TimeFormattingTest, UnlocalizedTimeFormatWithPatternMicroseconds) {
+  Time no_micros;
+  EXPECT_TRUE(Time::FromUTCExploded(kTestDateTimeExploded, &no_micros));
+  const Time micros = no_micros + Microseconds(987);
+
+  // Should support >3 'S' characters, truncating.
+  EXPECT_EQ("07.0009", UnlocalizedTimeFormatWithPattern(micros, "ss.SSSS"));
+  EXPECT_EQ("07.00098", UnlocalizedTimeFormatWithPattern(micros, "ss.SSSSS"));
+  EXPECT_EQ("07.000987", UnlocalizedTimeFormatWithPattern(micros, "ss.SSSSSS"));
+
+  // >6 'S' characters is also valid, and should be zero-filled.
+  EXPECT_EQ("07.0009870",
+            UnlocalizedTimeFormatWithPattern(micros, "ss.SSSSSSS"));
+
+  // Quoted 'S's should be ignored.
+  EXPECT_EQ("07.SSSSSS",
+            UnlocalizedTimeFormatWithPattern(micros, "ss.'SSSSSS'"));
+
+  // Multiple substitutions are possible.
+  EXPECT_EQ("07.000987'000987.07",
+            UnlocalizedTimeFormatWithPattern(micros, "ss.SSSSSS''SSSSSS.ss"));
+
+  // All the above should still work when the number of microseconds is zero.
+  EXPECT_EQ("07.0000", UnlocalizedTimeFormatWithPattern(no_micros, "ss.SSSS"));
+  EXPECT_EQ("07.00000",
+            UnlocalizedTimeFormatWithPattern(no_micros, "ss.SSSSS"));
+  EXPECT_EQ("07.000000",
+            UnlocalizedTimeFormatWithPattern(no_micros, "ss.SSSSSS"));
+  EXPECT_EQ("07.0000000",
+            UnlocalizedTimeFormatWithPattern(no_micros, "ss.SSSSSSS"));
+  EXPECT_EQ("07.SSSSSS",
+            UnlocalizedTimeFormatWithPattern(no_micros, "ss.'SSSSSS'"));
+  EXPECT_EQ("07.000000'000000.07", UnlocalizedTimeFormatWithPattern(
+                                       no_micros, "ss.SSSSSS''SSSSSS.ss"));
+}
+
+TEST(TimeFormattingTest, TimeFormatAsIso8601) {
+  Time time;
+  EXPECT_TRUE(Time::FromUTCExploded(kTestDateTimeExploded, &time));
+  EXPECT_EQ("2011-04-30T22:42:07.000Z", TimeFormatAsIso8601(time));
+}
+
+TEST(TimeFormattingTest, TimeFormatHTTP) {
+  Time time;
+  EXPECT_TRUE(Time::FromUTCExploded(kTestDateTimeExploded, &time));
+  EXPECT_EQ("Sat, 30 Apr 2011 22:42:07 GMT", TimeFormatHTTP(time));
 }
 
 TEST(TimeFormattingTest, TimeDurationFormat) {
@@ -405,7 +471,7 @@ TEST(TimeFormattingTest, TimeIntervalFormat) {
   EXPECT_TRUE(Time::FromUTCExploded(kTestIntervalEndTimeExploded, &end_time));
 
   EXPECT_EQ(
-      u"Saturday, April 30 – Saturday, May 28",
+      u"Saturday, April 30\u2009–\u2009Saturday, May 28",
       DateIntervalFormat(begin_time, end_time, DATE_FORMAT_MONTH_WEEKDAY_DAY));
 
   const Time::Exploded kTestIntervalBeginTimeExploded = {
@@ -415,12 +481,12 @@ TEST(TimeFormattingTest, TimeIntervalFormat) {
   EXPECT_TRUE(
       Time::FromUTCExploded(kTestIntervalBeginTimeExploded, &begin_time));
   EXPECT_EQ(
-      u"Monday, May 16 – Saturday, May 28",
+      u"Monday, May 16\u2009–\u2009Saturday, May 28",
       DateIntervalFormat(begin_time, end_time, DATE_FORMAT_MONTH_WEEKDAY_DAY));
 
   i18n::SetICUDefaultLocale("en_GB");
   EXPECT_EQ(
-      u"Monday 16 May – Saturday 28 May",
+      u"Monday 16\u2009–\u2009Saturday 28 May",
       DateIntervalFormat(begin_time, end_time, DATE_FORMAT_MONTH_WEEKDAY_DAY));
 
   i18n::SetICUDefaultLocale("ja");

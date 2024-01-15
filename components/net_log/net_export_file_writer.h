@@ -8,10 +8,10 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
 #include "base/command_line.h"
 #include "base/files/file.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
@@ -20,7 +20,6 @@
 #include "base/values.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "net/log/net_log_capture_mode.h"
-#include "services/network/public/mojom/net_log.mojom.h"
 #include "services/network/public/mojom/network_service.mojom.h"
 
 namespace base {
@@ -126,7 +125,8 @@ class NetExportFileWriter {
   // log; it's for adding additional info to the log that aren't events.
   void StopNetLog(base::Value::Dict polled_data = base::Value::Dict());
 
-  // Creates a DictionaryValue summary of the state of the NetExportFileWriter
+  // Creates a `base::Value::Dict` summary of the state of the
+  // `NetExportFileWriter`.
   base::Value::Dict GetState() const;
 
   // Gets the log filepath. |path_callback| will be used to notify the caller

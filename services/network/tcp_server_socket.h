@@ -10,13 +10,17 @@
 
 #include "base/component_export.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
+#include "base/types/expected.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "net/base/ip_endpoint.h"
 #include "net/traffic_annotation/network_traffic_annotation.h"
 #include "services/network/public/mojom/tcp_socket.mojom.h"
+
+#if BUILDFLAG(IS_CHROMEOS)
+#include "services/network/public/mojom/socket_connection_tracker.mojom.h"
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
 namespace net {
 class NetLog;
@@ -61,13 +65,19 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) TCPServerSocket
 
   ~TCPServerSocket() override;
 
-  int Listen(const net::IPEndPoint& local_addr,
-             int backlog,
-             net::IPEndPoint* local_addr_out);
+  base::expected<net::IPEndPoint, int32_t> Listen(
+      const net::IPEndPoint& local_addr,
+      int backlog,
+      absl::optional<bool> ipv6_only);
 
   // TCPServerSocket implementation.
   void Accept(mojo::PendingRemote<mojom::SocketObserver> observer,
               AcceptCallback callback) override;
+
+#if BUILDFLAG(IS_CHROMEOS)
+  void AttachConnectionTracker(
+      mojo::PendingRemote<mojom::SocketConnectionTracker>);
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
   // Replaces the underlying socket implementation with |socket| in tests.
   void SetSocketForTest(std::unique_ptr<net::ServerSocket> socket);
@@ -93,6 +103,10 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) TCPServerSocket
   std::unique_ptr<net::StreamSocket> accepted_socket_;
   net::IPEndPoint accepted_address_;
   net::NetworkTrafficAnnotationTag traffic_annotation_;
+
+#if BUILDFLAG(IS_CHROMEOS)
+  mojo::PendingRemote<mojom::SocketConnectionTracker> connection_tracker_;
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
   base::WeakPtrFactory<TCPServerSocket> weak_factory_{this};
 };

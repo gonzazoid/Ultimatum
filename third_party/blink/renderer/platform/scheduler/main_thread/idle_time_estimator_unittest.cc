@@ -6,16 +6,18 @@
 
 #include <memory>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/task/sequence_manager/sequence_manager.h"
+#include "base/task/sequence_manager/task_queue.h"
 #include "base/task/sequence_manager/test/sequence_manager_for_test.h"
-#include "base/task/sequence_manager/test/test_task_queue.h"
 #include "base/task/sequence_manager/test/test_task_time_observer.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/task_environment.h"
 #include "base/time/time.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "third_party/blink/renderer/platform/scheduler/common/task_priority.h"
 #include "third_party/blink/renderer/platform/scheduler/main_thread/main_thread_task_queue.h"
 
 namespace blink {
@@ -32,9 +34,12 @@ class IdleTimeEstimatorTest : public testing::Test {
   ~IdleTimeEstimatorTest() override = default;
 
   void SetUp() override {
+    auto settings = base::sequence_manager::SequenceManager::Settings::Builder()
+                        .SetPrioritySettings(CreatePrioritySettings())
+                        .Build();
     manager_ = base::sequence_manager::SequenceManagerForTest::Create(
         nullptr, task_environment_.GetMainThreadTaskRunner(),
-        task_environment_.GetMockTickClock());
+        task_environment_.GetMockTickClock(), std::move(settings));
     estimator_ = std::make_unique<IdleTimeEstimator>(
         task_environment_.GetMockTickClock(), 10, 50);
     compositor_task_queue_1_ = NewTaskQueue();
@@ -48,7 +53,8 @@ class IdleTimeEstimatorTest : public testing::Test {
   }
 
   scoped_refptr<MainThreadTaskQueue> NewTaskQueue() {
-    return manager_->CreateTaskQueueWithType<MainThreadTaskQueue>(
+    return base::MakeRefCounted<MainThreadTaskQueue>(
+        *manager_.get(),
         base::sequence_manager::TaskQueue::Spec(
             base::sequence_manager::QueueName::TEST_TQ),
         MainThreadTaskQueue::QueueCreationParams(

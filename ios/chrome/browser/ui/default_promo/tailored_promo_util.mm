@@ -5,15 +5,11 @@
 #import "ios/chrome/browser/ui/default_promo/tailored_promo_util.h"
 
 #import "base/notreached.h"
-#import "ios/chrome/grit/ios_google_chrome_strings.h"
+#import "ios/chrome/grit/ios_branded_strings.h"
 #import "ios/chrome/grit/ios_strings.h"
 #import "ios/public/provider/chrome/browser/branded_images/branded_images_api.h"
 #import "ui/base/device_form_factor.h"
 #import "ui/base/l10n/l10n_util_mac.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 using l10n_util::GetNSString;
 
@@ -24,6 +20,7 @@ void SetUpTailoredConsumerWithType(id<TailoredPromoConsumer> consumer,
   UIImage* image;
 
   switch (type) {
+    case DefaultPromoTypeVideo:
     case DefaultPromoTypeGeneral:
       NOTREACHED();  // This type is not supported.
       break;

@@ -6,19 +6,20 @@
 
 #include <stddef.h>
 
+#include <optional>
 #include <set>
 #include <string>
 #include <utility>
 
 #include "apps/switches.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
 #include "base/containers/contains.h"
 #include "base/debug/dump_without_crashing.h"
 #include "base/feature_list.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/lazy_instance.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
@@ -71,6 +72,7 @@
 #include "chrome/browser/ui/startup/web_app_startup_utils.h"
 #include "chrome/browser/ui/ui_features.h"
 #include "chrome/browser/ui/web_applications/web_app_ui_manager_impl.h"
+#include "chrome/browser/web_applications/web_app_ui_manager.h"
 #include "chrome/browser/web_applications/web_app_utils.h"
 #include "chrome/common/buildflags.h"
 #include "chrome/common/chrome_constants.h"
@@ -92,35 +94,39 @@
 #include "extensions/browser/extension_registry.h"
 #include "extensions/common/switches.h"
 #include "printing/buildflags/buildflags.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 #include "ash/constants/ash_switches.h"
 #include "chrome/browser/ash/app_mode/app_launch_utils.h"
 #include "chrome/browser/ash/app_mode/kiosk_app_types.h"
 #include "chrome/browser/ash/app_restore/full_restore_service.h"
+#include "chrome/browser/ash/floating_workspace/floating_workspace_service.h"
+#include "chrome/browser/ash/floating_workspace/floating_workspace_util.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/lifetime/application_lifetime.h"
+#include "chromeos/ash/components/browser_context_helper/browser_context_helper.h"
 #include "chromeos/ash/components/cryptohome/cryptohome_parameters.h"
 #include "components/user_manager/user_manager.h"
 #else
 #include "chrome/browser/extensions/api/messaging/native_messaging_launch_from_native.h"
-#include "chrome/browser/ui/profile_picker.h"
+#include "chrome/browser/ui/profiles/profile_picker.h"
 #endif
 
 #if BUILDFLAG(IS_CHROMEOS_LACROS)
-#include "chrome/browser/ui/startup/lacros_first_run_service.h"
 #include "chromeos/startup/browser_params_proxy.h"
 #endif
 
+#if BUILDFLAG(IS_CHROMEOS_LACROS) || BUILDFLAG(ENABLE_DICE_SUPPORT)
+#include "chrome/browser/ui/startup/first_run_service.h"
+#endif
+
 #if BUILDFLAG(IS_MAC)
-#include "chrome/browser/web_applications/extensions/web_app_extension_shortcut_mac.h"
+#include "chrome/browser/web_applications/app_shim_registry_mac.h"
 #endif
 
 #if BUILDFLAG(IS_WIN)
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
-#include "chrome/browser/metrics/jumplist_metrics_win.h"
 #include "chrome/browser/notifications/notification_platform_bridge_win.h"
 #include "chrome/browser/notifications/win/notification_launch_id.h"
 #include "chrome/browser/ui/startup/credential_provider_signin_dialog_win.h"
@@ -130,7 +136,13 @@
 #endif  // BUILDFLAG(IS_WIN)
 
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_WIN)
+#include "chrome/browser/headless/headless_mode_util.h"
 #include "chrome/browser/ui/startup/web_app_info_recorder_utils.h"
+#include "components/headless/policy/headless_mode_policy.h"
+#endif
+
+#if !BUILDFLAG(IS_CHROMEOS)
+#include "chrome/browser/web_applications/isolated_web_apps/isolated_web_app_installation_manager.h"
 #endif
 
 using content::BrowserThread;
@@ -266,8 +278,7 @@ void DumpBrowserHistograms(const base::FilePath& output_file) {
 
   base::ScopedBlockingCall scoped_blocking_call(FROM_HERE,
                                                 base::BlockingType::MAY_BLOCK);
-  base::WriteFile(output_file, output_string.data(),
-                  static_cast<int>(output_string.size()));
+  base::WriteFile(output_file, output_string);
 }
 
 // Returns whether |profile_info.profile| can be opened during Chrome startup
@@ -286,6 +297,9 @@ bool CanOpenProfileOnStartup(StartupProfileInfo profile_info) {
 
   Profile* profile = profile_info.profile;
 
+  // System profiles are not available.
+  DCHECK(!profile->IsSystemProfile());
+
   // Profiles that require signin are not available.
   ProfileAttributesEntry* entry =
       g_browser_process->profile_manager()
@@ -295,29 +309,30 @@ bool CanOpenProfileOnStartup(StartupProfileInfo profile_info) {
     return false;
   }
 
-#if BUILDFLAG(IS_CHROMEOS_LACROS)
   if (profile->IsGuestSession()) {
-    DCHECK_NE(profile_info.mode, StartupProfileMode::kProfilePicker);
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
     return true;
-  }
+#else
+    // Guest is not available unless a there is already a guest browser open
+    // (for example, launching a new browser after clicking on a downloaded file
+    // in Guest mode).
+    return chrome::GetBrowserCount(
+               profile->GetPrimaryOTRProfile(/*create_if_needed=*/false)) > 0;
 #endif
+  }
 
-  // Guest or system profiles are not available unless a separate process
-  // already has a window open for the profile.
-  return (!profile->IsGuestSession() && !profile->IsSystemProfile()) ||
-         (chrome::GetBrowserCount(
-              profile->GetPrimaryOTRProfile(/*create_if_needed=*/false)) > 0);
+  return true;
 #endif
 }
 
 #if !BUILDFLAG(IS_CHROMEOS_ASH)
-bool ShouldShowProfilePickerAtProcessLaunch(
+StartupProfileModeReason ShouldShowProfilePickerAtProcessLaunch(
     ProfileManager* profile_manager,
     const base::CommandLine& command_line) {
   // Skip the profile picker when Chrome is restarted (e.g. after an update) so
   // that the session can be restored.
   if (StartupBrowserCreator::WasRestarted())
-    return false;
+    return StartupProfileModeReason::kWasRestarted;
 
   // Don't show the picker if a certain profile (or an incognito window in the
   // default profile) is explicitly requested.
@@ -326,7 +341,10 @@ bool ShouldShowProfilePickerAtProcessLaunch(
                                      /*show_warning=*/false) ||
       command_line.HasSwitch(switches::kIncognito) ||
       command_line.HasSwitch(switches::kProfileDirectory)) {
-    return false;
+    // TODO(https://crbug.com/1418976): The profile directory and guest mode
+    // were already tested in the calling function `GetStartupProfilePath()`.
+    // Consolidate these checks.
+    return StartupProfileModeReason::kIncognitoModeRequested;
   }
 
   // Don't show the picker if an app is explicitly requested to open. This URL
@@ -335,7 +353,7 @@ bool ShouldShowProfilePickerAtProcessLaunch(
   // side of not opening the app directly.
   if (command_line.HasSwitch(switches::kApp) ||
       command_line.HasSwitch(switches::kAppId)) {
-    return false;
+    return StartupProfileModeReason::kAppRequested;
   }
 
 #if BUILDFLAG(IS_WIN)
@@ -344,12 +362,12 @@ bool ShouldShowProfilePickerAtProcessLaunch(
   // side of opening the last profile (and maybe fail uninstalling the app
   // there) than to err on the side of unexpectedly showing the picker UI.
   if (command_line.HasSwitch(switches::kUninstallAppId))
-    return false;
+    return StartupProfileModeReason::kUninstallApp;
 
   // Don't show the picker if we want to perform a GCPW Sign In. It will want to
   // only launch an incognito window.
   if (command_line.HasSwitch(credential_provider::kGcpwSigninSwitch))
-    return false;
+    return StartupProfileModeReason::kGcpwSignin;
 
   // If the browser is launched due to activation on Windows native
   // notification, the profile id encoded in the notification launch id should
@@ -357,7 +375,10 @@ bool ShouldShowProfilePickerAtProcessLaunch(
   base::FilePath profile_basename =
       NotificationLaunchId::GetNotificationLaunchProfileBaseName(command_line);
   if (!profile_basename.empty()) {
-    return false;
+    // TODO(https://crbug.com/1418976): The notification ID was already tested
+    // in the calling function `GetStartupProfilePath()`. Consolidate these
+    // checks.
+    return StartupProfileModeReason::kNotificationLaunchIdWin2;
   }
 #endif  // BUILDFLAG(IS_WIN)
 
@@ -365,9 +386,9 @@ bool ShouldShowProfilePickerAtProcessLaunch(
   // will also cause a profile to be loaded which Chrome needs for performing
   // background activity.
   if (StartupBrowserCreator::ShouldLoadProfileWithoutWindow(command_line))
-    return false;
+    return StartupProfileModeReason::kLaunchWithoutWindow;
 
-  return ProfilePicker::ShouldShowAtLaunch();
+  return ProfilePicker::GetStartupModeReason();
 }
 #endif  // !BUILDFLAG(IS_CHROMEOS_ASH)
 
@@ -379,15 +400,6 @@ Profile* GetPrivateProfileIfRequested(const base::CommandLine& command_line,
   bool open_guest_profile = profiles::IsGuestModeRequested(
       command_line, g_browser_process->local_state(),
       /* show_warning= */ true);
-#if BUILDFLAG(IS_CHROMEOS_LACROS)
-  if (profiles::IsGuestModeEnabled()) {
-    const auto* init_params = chromeos::BrowserParamsProxy::Get();
-    open_guest_profile =
-        open_guest_profile ||
-        init_params->InitialBrowserAction() ==
-            crosapi::mojom::InitialBrowserAction::kOpenGuestWindow;
-  }
-#endif
   if (open_guest_profile) {
     Profile* profile = g_browser_process->profile_manager()->GetProfile(
         ProfileManager::GetGuestProfilePath());
@@ -406,12 +418,6 @@ Profile* GetPrivateProfileIfRequested(const base::CommandLine& command_line,
     return profile->GetPrimaryOTRProfile(/*create_if_needed=*/true);
   } else {
     bool expect_incognito = command_line.HasSwitch(switches::kIncognito);
-#if BUILDFLAG(IS_CHROMEOS_LACROS)
-    auto* init_params = chromeos::BrowserParamsProxy::Get();
-    expect_incognito |=
-        init_params->InitialBrowserAction() ==
-        crosapi::mojom::InitialBrowserAction::kOpenIncognitoWindow;
-#endif
     LOG_IF(WARNING, expect_incognito)
         << "Incognito mode disabled by policy, launching a normal "
         << "browser session.";
@@ -419,14 +425,6 @@ Profile* GetPrivateProfileIfRequested(const base::CommandLine& command_line,
 
   return profile;
 }
-
-#if !BUILDFLAG(IS_CHROMEOS_ASH)
-base::FilePath GetProfilePickerStartupProfilePath() {
-  return base::FeatureList::IsEnabled(features::kObserverBasedPostProfileInit)
-             ? base::FilePath()
-             : ProfileManager::GetGuestProfilePath();
-}
-#endif  // !BUILDFLAG(IS_CHROMEOS_ASH)
 
 #if !BUILDFLAG(IS_CHROMEOS_ASH)
 StartupProfileInfo GetProfilePickerStartupProfileInfo() {
@@ -437,31 +435,9 @@ StartupProfileInfo GetProfilePickerStartupProfileInfo() {
   if (!profile_manager->GetProfile(ProfileManager::GetSystemProfilePath()))
     return {.profile = nullptr, .mode = StartupProfileMode::kError};
 
-  if (!base::FeatureList::IsEnabled(features::kObserverBasedPostProfileInit)) {
-    DCHECK_EQ(GetProfilePickerStartupProfilePath(),
-              ProfileManager::GetGuestProfilePath());
-    Profile* guest_profile =
-        profile_manager->GetProfile(ProfileManager::GetGuestProfilePath());
-    if (!guest_profile)
-      return {.profile = nullptr, .mode = StartupProfileMode::kError};
-    DCHECK(guest_profile->IsGuestSession());
-    return {.profile = guest_profile,
-            .mode = StartupProfileMode::kProfilePicker};
-  }
-
   return {.profile = nullptr, .mode = StartupProfileMode::kProfilePicker};
 }
 #endif  // !BUILDFLAG(IS_CHROMEOS_ASH)
-
-void ShowProfilePicker(chrome::startup::IsProcessStartup process_startup) {
-#if !BUILDFLAG(IS_CHROMEOS_ASH)
-  ProfilePicker::Show(ProfilePicker::Params::FromEntryPoint(
-      process_startup == chrome::startup::IsProcessStartup::kYes
-          ? ProfilePicker::EntryPoint::kOnStartup
-          : ProfilePicker::EntryPoint::kNewSessionOnExistingProcess));
-  return;
-#endif  // !BUILDFLAG(IS_CHROMEOS_ASH)
-}
 
 bool IsSilentLaunchEnabled(const base::CommandLine& command_line,
                            const Profile* profile) {
@@ -498,6 +474,10 @@ bool MaybeLaunchAppShortcutWindow(const base::CommandLine& command_line,
                                   const base::FilePath& cur_dir,
                                   chrome::startup::IsFirstRun is_first_run,
                                   Profile* profile) {
+  if (!profile) {
+    return false;
+  }
+
   if (!command_line.HasSwitch(switches::kApp))
     return false;
 
@@ -521,7 +501,7 @@ bool MaybeLaunchAppShortcutWindow(const base::CommandLine& command_line,
       if (web_contents) {
         web_app::startup::FinalizeWebAppLaunch(
             web_app::startup::OpenMode::kInWindowByUrl, command_line,
-            is_first_run, chrome::FindBrowserWithWebContents(web_contents),
+            is_first_run, chrome::FindBrowserWithTab(web_contents),
             apps::LaunchContainer::kLaunchContainerWindow);
         return true;
       }
@@ -578,7 +558,7 @@ void RecordIncognitoForcedStart(bool should_launch_incognito,
   }
 }
 
-#if BUILDFLAG(IS_CHROMEOS_LACROS)
+#if BUILDFLAG(IS_CHROMEOS_LACROS) || BUILDFLAG(ENABLE_DICE_SUPPORT)
 // Launches a browser by using a dedicated `StartupBrowserCreator`, to avoid
 // having to rely on the current instance staying alive while this method is
 // bound as a callback.
@@ -599,8 +579,42 @@ void OpenNewWindowForFirstRun(
   browser_creator.LaunchBrowser(command_line, profile, cur_dir, process_startup,
                                 is_first_run, std::move(launch_mode_recorder));
 }
-#endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
+#endif  // BUILDFLAG(IS_CHROMEOS_LACROS) || BUILDFLAG(ENABLE_DICE_SUPPORT)
 }  // namespace
+
+StartupProfileMode StartupProfileModeFromReason(
+    StartupProfileModeReason reason) {
+  switch (reason) {
+    case StartupProfileModeReason::kError:
+      return StartupProfileMode::kError;
+
+    case StartupProfileModeReason::kMultipleProfiles:
+    case StartupProfileModeReason::kPickerForcedByPolicy:
+      return StartupProfileMode::kProfilePicker;
+
+    case StartupProfileModeReason::kGuestModeRequested:
+    case StartupProfileModeReason::kGuestSessionLacros:
+    case StartupProfileModeReason::kProfileDirSwitch:
+    case StartupProfileModeReason::kProfileEmailSwitch:
+    case StartupProfileModeReason::kIgnoreProfilePicker:
+    case StartupProfileModeReason::kCommandLineTabs:
+    case StartupProfileModeReason::kPickerNotSupported:
+    case StartupProfileModeReason::kWasRestarted:
+    case StartupProfileModeReason::kIncognitoModeRequested:
+    case StartupProfileModeReason::kAppRequested:
+    case StartupProfileModeReason::kUninstallApp:
+    case StartupProfileModeReason::kGcpwSignin:
+    case StartupProfileModeReason::kLaunchWithoutWindow:
+    case StartupProfileModeReason::kNotificationLaunchIdWin1:
+    case StartupProfileModeReason::kNotificationLaunchIdWin2:
+    case StartupProfileModeReason::kPickerDisabledByPolicy:
+    case StartupProfileModeReason::kProfilesDisabledLacros:
+    case StartupProfileModeReason::kSingleProfile:
+    case StartupProfileModeReason::kInactiveProfiles:
+    case StartupProfileModeReason::kUserOptedOut:
+      return StartupProfileMode::kBrowserWindow;
+  }
+}
 
 StartupBrowserCreator::StartupBrowserCreator() = default;
 
@@ -631,7 +645,6 @@ bool StartupBrowserCreator::Start(const base::CommandLine& cmd_line,
                                   StartupProfileInfo profile_info,
                                   const Profiles& last_opened_profiles) {
   TRACE_EVENT0("startup", "StartupBrowserCreator::Start");
-  SCOPED_UMA_HISTOGRAM_TIMER("Startup.StartupBrowserCreator_Start");
   return ProcessCmdLineImpl(cmd_line, cur_dir,
                             chrome::startup::IsProcessStartup::kYes,
                             profile_info, last_opened_profiles);
@@ -649,6 +662,9 @@ void StartupBrowserCreator::LaunchBrowser(
     chrome::startup::IsProcessStartup process_startup,
     chrome::startup::IsFirstRun is_first_run,
     std::unique_ptr<OldLaunchModeRecorder> launch_mode_recorder) {
+  TRACE_EVENT0("ui", "StartupBrowserCreator::LaunchBrowser");
+  SCOPED_UMA_HISTOGRAM_TIMER("Startup.StartupBrowserCreator.LaunchBrowser");
+
   DCHECK(profile);
 #if BUILDFLAG(IS_WIN)
   DCHECK(!command_line.HasSwitch(credential_provider::kGcpwSigninSwitch));
@@ -661,15 +677,14 @@ void StartupBrowserCreator::LaunchBrowser(
       command_line, {profile, StartupProfileMode::kBrowserWindow});
 
   if (!IsSilentLaunchEnabled(command_line, profile)) {
-#if BUILDFLAG(IS_CHROMEOS_LACROS)
-    auto* fre_service =
-        LacrosFirstRunServiceFactory::GetForBrowserContext(profile);
+#if BUILDFLAG(IS_CHROMEOS_LACROS) || BUILDFLAG(ENABLE_DICE_SUPPORT)
+    auto* fre_service = FirstRunServiceFactory::GetForBrowserContext(profile);
     if (fre_service && fre_service->ShouldOpenFirstRun()) {
       // Show the FRE and let `OpenNewWindowForFirstRun()` handle the browser
       // launch. This `StartupBrowserCreator` will get destroyed when the method
       // returns so the relevant data is copied over and passed to the callback.
       fre_service->OpenFirstRunIfNeeded(
-          LacrosFirstRunService::EntryPoint::kProcessStartup,
+          FirstRunService::EntryPoint::kProcessStartup,
           base::BindOnce(&OpenNewWindowForFirstRun, command_line, profile,
                          cur_dir, first_run_tabs_, process_startup,
                          is_first_run, std::move(launch_mode_recorder)));
@@ -695,6 +710,7 @@ void StartupBrowserCreator::LaunchBrowserForLastProfiles(
     chrome::startup::IsFirstRun is_first_run,
     StartupProfileInfo profile_info,
     const Profiles& last_opened_profiles) {
+  TRACE_EVENT0("ui", "StartupBrowserCreator::LaunchBrowserForLastProfiles");
   DCHECK_NE(profile_info.mode, StartupProfileMode::kError);
 
   Profile* profile = profile_info.profile;
@@ -708,7 +724,14 @@ void StartupBrowserCreator::LaunchBrowserForLastProfiles(
 #endif  // BUILDFLAG(IS_WIN)
 
   if (profile_info.mode == StartupProfileMode::kProfilePicker) {
-    ShowProfilePicker(process_startup);
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+    NOTREACHED();
+#else
+    ProfilePicker::Show(ProfilePicker::Params::FromEntryPoint(
+        process_startup == chrome::startup::IsProcessStartup::kYes
+            ? ProfilePicker::EntryPoint::kOnStartup
+            : ProfilePicker::EntryPoint::kNewSessionOnExistingProcess));
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
     return;
   }
 
@@ -728,15 +751,24 @@ void StartupBrowserCreator::LaunchBrowserForLastProfiles(
                                      : profile;
 #if BUILDFLAG(IS_CHROMEOS_ASH)
       if (process_startup == chrome::startup::IsProcessStartup::kYes) {
-        // If FullRestoreService is available for the profile (i.e. the full
-        // restore feature is enabled and the profile is a regular user
-        // profile), defer the browser launching to FullRestoreService code.
-        auto* full_restore_service =
-            ash::full_restore::FullRestoreService::GetForProfile(
-                profile_to_open);
-        if (full_restore_service) {
-          full_restore_service->LaunchBrowserWhenReady();
-          return;
+        if (ash::floating_workspace_util::IsFloatingWorkspaceV2Enabled()) {
+          ash::FloatingWorkspaceService::GetForProfile(profile_to_open);
+        }
+        // If floating workspace is enabled and safe mode is off, floating
+        // workspace will handle the app restore from user's workspace copy.
+        // Otherwise if safe mode is on, floating workspace will only emit
+        // notification and then delegate the actual work to full restore.
+        if (!ash::floating_workspace_util::ShouldHandleRestartRestore()) {
+          // If FullRestoreService is available for the profile (i.e. the full
+          // restore feature is enabled and the profile is a regular user
+          // profile), defer the browser launching to FullRestoreService code.
+          auto* full_restore_service =
+              ash::full_restore::FullRestoreService::GetForProfile(
+                  profile_to_open);
+          if (full_restore_service) {
+            full_restore_service->LaunchBrowserWhenReady();
+            return;
+          }
         }
       }
 #endif
@@ -746,7 +778,15 @@ void StartupBrowserCreator::LaunchBrowserForLastProfiles(
     }
 
     // Show ProfilePicker if `profile` can't be auto opened.
-    ShowProfilePicker(process_startup);
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+    NOTREACHED();
+#else
+    ProfilePicker::Show(ProfilePicker::Params::FromEntryPoint(
+        process_startup == chrome::startup::IsProcessStartup::kYes
+            ? ProfilePicker::EntryPoint::kOnStartupNoProfile
+            : ProfilePicker::EntryPoint::
+                  kNewSessionOnExistingProcessNoProfile));
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
     return;
   }
   ProcessLastOpenedProfiles(command_line, cur_dir, process_startup,
@@ -809,19 +849,6 @@ SessionStartupPref StartupBrowserCreator::GetSessionStartupPref(
   // those as there is nothing to restore.
   bool restore_last_session =
       command_line.HasSwitch(switches::kRestoreLastSession);
-#if BUILDFLAG(IS_CHROMEOS_LACROS)
-  auto* init_params = chromeos::BrowserParamsProxy::Get();
-  if (init_params->InitialBrowserAction() ==
-          crosapi::mojom::InitialBrowserAction::kOpenNewTabPageWindow ||
-      init_params->InitialBrowserAction() ==
-          crosapi::mojom::InitialBrowserAction::kOpenWindowWithUrls) {
-    pref.type = SessionStartupPref::DEFAULT;
-    return pref;
-  }
-  restore_last_session |=
-      init_params->InitialBrowserAction() ==
-      crosapi::mojom::InitialBrowserAction::kRestoreLastSession;
-#endif
   if ((restore_last_session || did_restart) && !profile->IsNewProfile()) {
     pref.type = SessionStartupPref::LAST;
   }
@@ -890,9 +917,10 @@ bool StartupBrowserCreator::ShouldLoadProfileWithoutWindow(
     return true;
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-  // If Lacros is the primary web browser, do not open a browser window.
-  if (crosapi::browser_util::IsLacrosPrimaryBrowser())
+  // If Lacros is enabled, do not open an Ash browser window.
+  if (crosapi::browser_util::IsLacrosEnabled()) {
     return true;
+  }
 #endif
 
   return false;
@@ -907,6 +935,17 @@ bool StartupBrowserCreator::ProcessCmdLineImpl(
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
   DCHECK_NE(profile_info.mode, StartupProfileMode::kError);
   TRACE_EVENT0("startup", "StartupBrowserCreator::ProcessCmdLineImpl");
+  ComputeAndRecordLaunchMode(command_line);
+
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_WIN)
+  if (headless::IsHeadlessMode() &&
+      headless::HeadlessModePolicy::IsHeadlessModeDisabled(
+          g_browser_process->local_state())) {
+    LOG(ERROR) << "Headless mode is disallowed by the system admin.";
+    return false;
+  }
+#endif
+
   if (process_startup == chrome::startup::IsProcessStartup::kYes &&
       command_line.HasSwitch(switches::kDisablePromptOnRepost)) {
     content::NavigationController::DisablePromptOnRepost();
@@ -967,13 +1006,14 @@ bool StartupBrowserCreator::ProcessCmdLineImpl(
     user_manager::User* user =
         ash::ProfileHelper::Get()->GetUserByProfile(profile);
     if (user && user->GetType() == user_manager::USER_TYPE_KIOSK_APP) {
-      chromeos::LaunchAppOrDie(
-          profile, chromeos::KioskAppId::ForChromeApp(
-                       command_line.GetSwitchValueASCII(switches::kAppId)));
+      ash::LaunchAppOrDie(
+          profile, ash::KioskAppId::ForChromeApp(
+                       command_line.GetSwitchValueASCII(switches::kAppId),
+                       user->GetAccountId()));
     } else if (user &&
                user->GetType() == user_manager::USER_TYPE_WEB_KIOSK_APP) {
-      chromeos::LaunchAppOrDie(
-          profile, chromeos::KioskAppId::ForWebApp(user->GetAccountId()));
+      ash::LaunchAppOrDie(profile,
+                          ash::KioskAppId::ForWebApp(user->GetAccountId()));
     } else {
       // If we are here, we are either in ARC kiosk session or the user is
       // invalid. We should terminate the session in such cases.
@@ -985,11 +1025,6 @@ bool StartupBrowserCreator::ProcessCmdLineImpl(
     silent_launch = true;
   }
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
-
-#if BUILDFLAG(IS_MAC)
-  if (web_app::MaybeRebuildShortcut(command_line))
-    return true;
-#endif
 
   if (process_startup == chrome::startup::IsProcessStartup::kNo &&
       command_line.HasSwitch(switches::kDumpBrowserHistograms)) {
@@ -1057,7 +1092,27 @@ bool StartupBrowserCreator::ProcessCmdLineImpl(
       // desired.
     }
   }
-#endif
+
+  if (web_app::IsolatedWebAppInstallationManager::HasIwaInstallSwitch(
+          command_line)) {
+    if (profile_info.mode == StartupProfileMode::kProfilePicker) {
+      auto* profile_manager = g_browser_process->profile_manager();
+      LOG(ERROR) << "Command line switches to install IWAs are incompatible "
+                    "with the Profile Picker. If you have multiple profiles, "
+                    "consider using the --"
+                 << switches::kProfileDirectory
+                 << " switch to select a profile (it accepts the name of a "
+                    "profile directory in "
+                 << profile_manager->user_data_dir() << ", such as '"
+                 << profile_manager->GetLastUsedProfileDir().BaseName()
+                 << "').";
+      return false;
+    } else {
+      web_app::IsolatedWebAppInstallationManager::
+          MaybeInstallIwaFromCommandLine(command_line, *privacy_safe_profile);
+    }
+  }
+#endif  //  !BUILDFLAG(IS_CHROMEOS)
 
   // If --no-startup-window is specified then do not open a new window.
   if (command_line.HasSwitch(switches::kNoStartupWindow)) {
@@ -1067,7 +1122,7 @@ bool StartupBrowserCreator::ProcessCmdLineImpl(
   // If we don't want to launch a new browser window or tab we are done here.
   if (silent_launch) {
     if (process_startup == chrome::startup::IsProcessStartup::kYes)
-      startup_metric_utils::SetNonBrowserUIDisplayed();
+      startup_metric_utils::GetBrowser().SetNonBrowserUIDisplayed();
     return true;
   }
 
@@ -1084,8 +1139,9 @@ bool StartupBrowserCreator::ProcessCmdLineImpl(
     std::string app_id =
         command_line.GetSwitchValueASCII(switches::kUninstallAppId);
 
-    web_app::WebAppUiManagerImpl::Get(
-        web_app::WebAppProvider::GetForWebApps(privacy_safe_profile))
+    web_app::WebAppProvider::GetForWebApps(privacy_safe_profile)
+        ->ui_manager()
+        .AsImpl()
         ->UninstallWebAppFromStartupSwitch(app_id);
 
     // Return true to allow startup to continue and for the main event loop to
@@ -1134,8 +1190,6 @@ bool StartupBrowserCreator::ProcessCmdLineImpl(
     // `switches::kWinJumplistAction` is expected to be set together with a
     // URL to open and with a specific profile dir.
     if (profile_info.mode == StartupProfileMode::kBrowserWindow) {
-      jumplist::LogJumplistActionFromSwitchValue(
-          command_line.GetSwitchValueASCII(switches::kWinJumplistAction));
       // Use a non-NULL pointer to indicate JumpList has been used. We re-use
       // chrome::kJumpListIconDirname as the key to the data.
       privacy_safe_profile->SetUserData(
@@ -1244,9 +1298,16 @@ bool StartupBrowserCreator::ProcessCmdLineImpl(
   // On Chrome OS, app launches are routed through the AppService and
   // WebAppPublisherHelper.
   //
-  // On Mac, PWA launch is handled in web_app_shim_manager_delegate_mac.cc, but
-  // tests still rely on this code.
-  // TODO(crbug.com/1232763): update tests and disable this path on Mac.
+  // On Mac, PWA launch is normally handled in
+  // web_app_shim_manager_delegate_mac.cc, but if an app shim for whatever
+  // reason fails to dlopen chrome we can still end up here. While in that case
+  // the launch behavior here isn't quite the correct behavior for an app launch
+  // on Mac OS, this behavior is better than nothing and should result in the
+  // app shim getting regenerated to hopefully fix future app launches.
+  // TODO(https://crbug.com/1232763): Some integration tests also rely on this
+  // code. Ideally those would be fixed to test the normal app launch path on
+  // Mac instead, and this code should be changed to make it harder to
+  // accidentally write tests that don't test the normal app launch path.
 #if !BUILDFLAG(IS_CHROMEOS_ASH)
   // Try a web app launch.
   if (web_app::startup::MaybeHandleWebAppLaunch(
@@ -1319,11 +1380,14 @@ void StartupBrowserCreator::ProcessLastOpenedProfiles(
 // been launched so the observer knows about all profiles to wait before
 // activation this one.
 #if !BUILDFLAG(IS_CHROMEOS_ASH)
-  if (process_startup == chrome::startup::IsProcessStartup::kYes)
-    ShowProfilePicker(chrome::startup::IsProcessStartup::kYes);
-  else
+  if (process_startup == chrome::startup::IsProcessStartup::kYes) {
+    ProfilePicker::Show(ProfilePicker::Params::FromEntryPoint(
+        ProfilePicker::EntryPoint::kOnStartup));
+  } else  // NOLINT
 #endif
+  {
     profile_launch_observer.Get().set_profile_to_activate(last_used_profile);
+  }
 }
 
 // static
@@ -1361,17 +1425,31 @@ bool StartupBrowserCreator::ProcessLoadApps(
 }
 
 // static
-void StartupBrowserCreator::ProcessCommandLineOnProfileInitialized(
+void StartupBrowserCreator::ProcessCommandLineWithProfile(
     const base::CommandLine& command_line,
     const base::FilePath& cur_dir,
     StartupProfileMode mode,
     Profile* profile) {
-  if (!profile)
+  DCHECK_NE(mode, StartupProfileMode::kError);
+  if (mode == StartupProfileMode::kBrowserWindow && !profile) {
+    LOG(ERROR) << "Failed to load the profile.";
     return;
+  }
+  Profiles last_opened_profiles;
+#if !BUILDFLAG(IS_CHROMEOS_ASH)
+  // On ChromeOS multiple profiles doesn't apply.
+  // If no browser windows are open, i.e. the browser is being kept alive in
+  // background mode or for other processing, restore |last_opened_profiles|.
+  if (chrome::GetTotalBrowserCount() == 0) {
+    last_opened_profiles =
+        g_browser_process->profile_manager()->GetLastOpenedProfiles();
+  }
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+
   StartupBrowserCreator startup_browser_creator;
   startup_browser_creator.ProcessCmdLineImpl(
       command_line, cur_dir, chrome::startup::IsProcessStartup::kNo,
-      {profile, mode}, Profiles());
+      {profile, mode}, last_opened_profiles);
 }
 
 // static
@@ -1379,29 +1457,27 @@ void StartupBrowserCreator::ProcessCommandLineAlreadyRunning(
     const base::CommandLine& command_line,
     const base::FilePath& cur_dir,
     const StartupProfilePathInfo& profile_path_info) {
-  ProfileManager* profile_manager = g_browser_process->profile_manager();
-  Profile* profile = profile_manager->GetProfileByPath(profile_path_info.path);
-
-  // The profile isn't loaded yet and so needs to be loaded asynchronously.
-  if (!profile) {
-    profile_manager->CreateProfileAsync(
-        profile_path_info.path,
-        base::BindOnce(&ProcessCommandLineOnProfileInitialized, command_line,
-                       cur_dir, profile_path_info.mode));
+  if (profile_path_info.reason == StartupProfileModeReason::kError) {
     return;
   }
-  StartupBrowserCreator startup_browser_creator;
-  Profiles last_opened_profiles;
-#if !BUILDFLAG(IS_CHROMEOS_ASH)
-  // On ChromeOS multiple profiles doesn't apply.
-  // If no browser windows are open, i.e. the browser is being kept alive in
-  // background mode or for other processing, restore |last_opened_profiles|.
-  if (chrome::GetTotalBrowserCount() == 0)
-    last_opened_profiles = profile_manager->GetLastOpenedProfiles();
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
-  startup_browser_creator.ProcessCmdLineImpl(
-      command_line, cur_dir, chrome::startup::IsProcessStartup::kNo,
-      {profile, profile_path_info.mode}, last_opened_profiles);
+
+  Profile* profile = nullptr;
+  StartupProfileMode mode =
+      StartupProfileModeFromReason(profile_path_info.reason);
+  bool need_profile = mode == StartupProfileMode::kBrowserWindow;
+  if (need_profile) {
+    ProfileManager* profile_manager = g_browser_process->profile_manager();
+    profile = profile_manager->GetProfileByPath(profile_path_info.path);
+    // The profile isn't loaded yet and so needs to be loaded asynchronously.
+    if (!profile) {
+      profile_manager->CreateProfileAsync(
+          profile_path_info.path, base::BindOnce(&ProcessCommandLineWithProfile,
+                                                 command_line, cur_dir, mode));
+      return;
+    }
+  }
+
+  ProcessCommandLineWithProfile(command_line, cur_dir, mode, profile);
 }
 
 // static
@@ -1452,8 +1528,8 @@ StartupProfilePathInfo GetStartupProfilePath(
   base::FilePath profile_basename =
       NotificationLaunchId::GetNotificationLaunchProfileBaseName(command_line);
   if (!profile_basename.empty()) {
-    return {user_data_dir.Append(profile_basename),
-            StartupProfileMode::kBrowserWindow};
+    return {.path = user_data_dir.Append(profile_basename),
+            .reason = StartupProfileModeReason::kNotificationLaunchIdWin1};
   }
 #endif  // BUILDFLAG(IS_WIN)
 
@@ -1463,22 +1539,40 @@ StartupProfilePathInfo GetStartupProfilePath(
                                      g_browser_process->local_state(),
                                      /* show_warning= */ false)) {
     // TODO(crbug.com/1150326): return a guest profile instead.
-    return {profiles::GetDefaultProfileDir(user_data_dir),
-            StartupProfileMode::kBrowserWindow};
+    return {.path = profiles::GetDefaultProfileDir(user_data_dir),
+            .reason = StartupProfileModeReason::kGuestModeRequested};
   }
 
 #if BUILDFLAG(IS_CHROMEOS_LACROS)
   if (chromeos::BrowserParamsProxy::Get()->SessionType() ==
       crosapi::mojom::SessionType::kGuestSession) {
-    return {ProfileManager::GetGuestProfilePath(),
-            StartupProfileMode::kBrowserWindow};
+    return {.path = ProfileManager::GetGuestProfilePath(),
+            .reason = StartupProfileModeReason::kGuestSessionLacros};
   }
 #endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
 
-  if (command_line.HasSwitch(switches::kProfileDirectory)) {
-    return {user_data_dir.Append(
-                command_line.GetSwitchValuePath(switches::kProfileDirectory)),
-            StartupProfileMode::kBrowserWindow};
+  base::FilePath profile_directory =
+      command_line.GetSwitchValuePath(switches::kProfileDirectory);
+#if BUILDFLAG(IS_MAC)
+  // On Mac OS, when an app shim fails to dlopen chrome, the app shim falls back
+  // to trying to launch chrome passing its app-id on the command line. In this
+  // situation, the profile directory passed on the command line could be an
+  // empty string. When this happens, arbitrarily pick one of the profiles the
+  // app is installed in as profile directory. While this isn't necesarilly the
+  // right profile to use, it is good enough for the purpose of (indirectly)
+  // triggering a rebuild of the app shim, which should resolve whatever
+  // problem existed that let to this situation.
+  if (profile_directory.empty() && command_line.HasSwitch(switches::kAppId)) {
+    std::string app_id = command_line.GetSwitchValueASCII(switches::kAppId);
+    std::set<base::FilePath> profile_paths =
+        AppShimRegistry::Get()->GetInstalledProfilesForApp(app_id);
+    if (!profile_paths.empty())
+      profile_directory = profile_paths.begin()->BaseName();
+  }
+#endif
+  if (!profile_directory.empty()) {
+    return {.path = user_data_dir.Append(profile_directory),
+            .reason = StartupProfileModeReason::kProfileDirSwitch};
   }
 
   if (command_line.HasSwitch(switches::kProfileEmail)) {
@@ -1496,29 +1590,43 @@ StartupProfilePathInfo GetStartupProfilePath(
       base::FilePath profile_dir =
           g_browser_process->profile_manager()->GetProfileDirForEmail(email);
       if (!profile_dir.empty()) {
-        return {profile_dir, StartupProfileMode::kBrowserWindow};
+        return {.path = profile_dir,
+                .reason = StartupProfileModeReason::kProfileEmailSwitch};
       }
     }
   }
 
-#if !BUILDFLAG(IS_CHROMEOS_ASH)
-  if (!ignore_profile_picker &&
-      ShouldShowProfilePickerAtProcessLaunch(profile_manager, command_line)) {
-    // Open the picker only if no URLs have been provided to launch Chrome. If
-    // URLs are provided or if we aren't able to extract them at this stage
-    // (e.g. we need a profile to access search engine preferences and attempt
-    // to resolve a query into a URL), open them in the last profile, instead.
-    auto has_tabs =
-        StartupTabProviderImpl().HasCommandLineTabs(command_line, cur_dir);
-    if (has_tabs == CommandLineTabsPresent::kNo) {
-      return {.path = GetProfilePickerStartupProfilePath(),
-              .mode = StartupProfileMode::kProfilePicker};
-    }
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+  return {.path = profile_manager->GetLastUsedProfileDir(),
+          .reason = StartupProfileModeReason::kPickerNotSupported};
+#else
+  if (ignore_profile_picker) {
+    return {.path = profile_manager->GetLastUsedProfileDir(),
+            .reason = StartupProfileModeReason::kIgnoreProfilePicker};
   }
-#endif  // !BUILDFLAG(IS_CHROMEOS_ASH)
 
-  return {profile_manager->GetLastUsedProfileDir(),
-          StartupProfileMode::kBrowserWindow};
+  // Open the picker only if no URLs have been provided to launch Chrome. If
+  // URLs are provided or if we aren't able to extract them at this stage (e.g.
+  // we need a profile to access search engine preferences and attempt to
+  // resolve a query into a URL), open them in the last profile, instead.
+  auto has_tabs =
+      StartupTabProviderImpl().HasCommandLineTabs(command_line, cur_dir);
+  if (has_tabs != CommandLineTabsPresent::kNo) {
+    return {.path = profile_manager->GetLastUsedProfileDir(),
+            .reason = StartupProfileModeReason::kCommandLineTabs};
+  }
+
+  StartupProfileModeReason show_picker_reason =
+      ShouldShowProfilePickerAtProcessLaunch(profile_manager, command_line);
+
+  if (StartupProfileModeFromReason(show_picker_reason) ==
+      StartupProfileMode::kProfilePicker) {
+    return {.path = base::FilePath(), .reason = show_picker_reason};
+  }
+
+  return {.path = profile_manager->GetLastUsedProfileDir(),
+          .reason = show_picker_reason};
+#endif  // !BUILDFLAG(IS_CHROMEOS_ASH)
 }
 
 #if !BUILDFLAG(IS_CHROMEOS_ASH)
@@ -1527,8 +1635,14 @@ StartupProfileInfo GetStartupProfile(const base::FilePath& cur_dir,
   ProfileManager* profile_manager = g_browser_process->profile_manager();
   StartupProfilePathInfo path_info = GetStartupProfilePath(
       cur_dir, command_line, /*ignore_profile_picker=*/false);
+  DCHECK_NE(path_info.reason, StartupProfileModeReason::kError);
+  StartupProfileMode mode = StartupProfileModeFromReason(path_info.reason);
+  base::UmaHistogramEnumeration("ProfilePicker.StartupMode.GetStartupProfile",
+                                mode);
+  base::UmaHistogramEnumeration("ProfilePicker.StartupReason.GetStartupProfile",
+                                path_info.reason);
 
-  switch (path_info.mode) {
+  switch (mode) {
     case StartupProfileMode::kProfilePicker:
       return GetProfilePickerStartupProfileInfo();
     case StartupProfileMode::kError:

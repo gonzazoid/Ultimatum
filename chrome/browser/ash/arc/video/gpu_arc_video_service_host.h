@@ -6,6 +6,7 @@
 #define CHROME_BROWSER_ASH_ARC_VIDEO_GPU_ARC_VIDEO_SERVICE_HOST_H_
 
 #include "ash/components/arc/mojom/video.mojom.h"
+#include "base/memory/raw_ptr.h"
 #include "base/no_destructor.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "mojo/public/cpp/bindings/receiver_set.h"
@@ -54,6 +55,8 @@ class GpuArcVideoKeyedService : public KeyedService {
   static GpuArcVideoKeyedService* GetForBrowserContext(
       content::BrowserContext* context);
 
+  static void EnsureFactoryBuilt();
+
   GpuArcVideoKeyedService(content::BrowserContext* context,
                           ArcBridgeService* bridge_service);
   GpuArcVideoKeyedService(const GpuArcVideoKeyedService&) = delete;
@@ -61,7 +64,8 @@ class GpuArcVideoKeyedService : public KeyedService {
   ~GpuArcVideoKeyedService() override;
 
  private:
-  ArcBridgeService* const arc_bridge_service_;  // Owned by ArcServiceManager.
+  const raw_ptr<ArcBridgeService>
+      arc_bridge_service_;  // Owned by ArcServiceManager.
 };
 
 }  // namespace arc

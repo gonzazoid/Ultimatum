@@ -7,9 +7,10 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ref_counted.h"
 #include "base/sequence_checker.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
 #include "components/reporting/health/health_module_delegate.h"
 #include "components/reporting/proto/synced/health.pb.h"
@@ -64,7 +65,7 @@ class HealthModule : public base::RefCountedThreadSafe<HealthModule> {
   void PostHealthRecord(HealthDataHistory history);
 
   // Gets health data and send to |cb|.
-  void GetHealthData(base::OnceCallback<void(const ERPHealthData)> cb);
+  void GetHealthData(HealthCallback cb);
 
  protected:
   // Constructor can only be called by |Create| factory method.

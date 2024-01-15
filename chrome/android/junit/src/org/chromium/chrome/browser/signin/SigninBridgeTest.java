@@ -19,22 +19,22 @@ import org.mockito.junit.MockitoJUnit;
 import org.mockito.junit.MockitoRule;
 import org.mockito.quality.Strictness;
 
-import org.chromium.base.metrics.UmaRecorder;
-import org.chromium.base.metrics.UmaRecorderHolder;
 import org.chromium.base.test.BaseRobolectricTestRunner;
+import org.chromium.base.test.util.JniMocker;
 import org.chromium.chrome.browser.preferences.ChromePreferenceKeys;
-import org.chromium.chrome.browser.preferences.SharedPreferencesManager;
+import org.chromium.chrome.browser.preferences.ChromeSharedPreferences;
 import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.signin.services.IdentityServicesProvider;
 import org.chromium.chrome.browser.signin.services.SigninManager;
+import org.chromium.chrome.browser.signin.services.SigninMetricsUtils;
+import org.chromium.chrome.browser.signin.services.SigninMetricsUtilsJni;
 import org.chromium.chrome.browser.signin.services.SigninPreferencesManager;
 import org.chromium.chrome.test.util.browser.signin.AccountManagerTestRule;
 import org.chromium.components.signin.metrics.AccountConsistencyPromoAction;
+import org.chromium.components.signin.metrics.SigninAccessPoint;
 import org.chromium.ui.base.WindowAndroid;
 
-/**
- * JUnit tests for the class {@link SigninBridge}.
- */
+/** JUnit tests for the class {@link SigninBridge}. */
 @RunWith(BaseRobolectricTestRunner.class)
 public class SigninBridgeTest {
     private static final String CONTINUE_URL = "https://test-continue-url.com";
@@ -45,28 +45,25 @@ public class SigninBridgeTest {
     @Rule
     public final MockitoRule mMockitoRule = MockitoJUnit.rule().strictness(Strictness.STRICT_STUBS);
 
-    @Mock
-    private Profile mProfileMock;
+    @Rule public JniMocker mJniMocker = new JniMocker();
 
-    @Mock
-    private IdentityServicesProvider mIdentityServicesProviderMock;
+    @Mock private Profile mProfileMock;
 
-    @Mock
-    private SigninManager mSigninManagerMock;
+    @Mock private IdentityServicesProvider mIdentityServicesProviderMock;
 
-    @Mock
-    private WindowAndroid mWindowAndroidMock;
+    @Mock private SigninManager mSigninManagerMock;
 
-    @Mock
-    private UmaRecorder mUmaRecorderMock;
+    @Mock private WindowAndroid mWindowAndroidMock;
+
+    @Mock private SigninMetricsUtils.Natives mSigninMetricsUtilsJniMock;
 
     @Before
     public void setUp() {
-        UmaRecorderHolder.setNonNativeDelegate(mUmaRecorderMock);
         Profile.setLastUsedProfileForTesting(mProfileMock);
         IdentityServicesProvider.setInstanceForTests(mIdentityServicesProviderMock);
         when(mIdentityServicesProviderMock.getSigninManager(mProfileMock))
                 .thenReturn(mSigninManagerMock);
+        mJniMocker.mock(SigninMetricsUtilsJni.TEST_HOOKS, mSigninMetricsUtilsJniMock);
     }
 
     @After
@@ -79,7 +76,10 @@ public class SigninBridgeTest {
     public void testAccountPickerSuppressedWhenSigninNotAllowed() {
         when(mSigninManagerMock.isSyncOptInAllowed()).thenReturn(false);
         SigninBridge.openAccountPickerBottomSheet(mWindowAndroidMock, CONTINUE_URL);
-        checkHistogramRecording(AccountConsistencyPromoAction.SUPPRESSED_SIGNIN_NOT_ALLOWED);
+        verify(mSigninMetricsUtilsJniMock)
+                .logAccountConsistencyPromoAction(
+                        AccountConsistencyPromoAction.SUPPRESSED_SIGNIN_NOT_ALLOWED,
+                        SigninAccessPoint.WEB_SIGNIN);
     }
 
     @Test
@@ -87,7 +87,10 @@ public class SigninBridgeTest {
     public void testAccountPickerSuppressedWhenNoAccountsOnDevice() {
         when(mSigninManagerMock.isSyncOptInAllowed()).thenReturn(true);
         SigninBridge.openAccountPickerBottomSheet(mWindowAndroidMock, CONTINUE_URL);
-        checkHistogramRecording(AccountConsistencyPromoAction.SUPPRESSED_NO_ACCOUNTS);
+        verify(mSigninMetricsUtilsJniMock)
+                .logAccountConsistencyPromoAction(
+                        AccountConsistencyPromoAction.SUPPRESSED_NO_ACCOUNTS,
+                        SigninAccessPoint.WEB_SIGNIN);
     }
 
     @Test
@@ -95,17 +98,14 @@ public class SigninBridgeTest {
     public void testAccountPickerSuppressedIfDismissLimitReached() {
         when(mSigninManagerMock.isSyncOptInAllowed()).thenReturn(true);
         mAccountManagerTestRule.addAccount("account@test.com");
-        SharedPreferencesManager.getInstance().writeInt(
-                ChromePreferenceKeys.WEB_SIGNIN_ACCOUNT_PICKER_ACTIVE_DISMISSAL_COUNT,
-                SigninBridge.ACCOUNT_PICKER_BOTTOM_SHEET_DISMISS_LIMIT);
+        ChromeSharedPreferences.getInstance()
+                .writeInt(
+                        ChromePreferenceKeys.WEB_SIGNIN_ACCOUNT_PICKER_ACTIVE_DISMISSAL_COUNT,
+                        SigninBridge.ACCOUNT_PICKER_BOTTOM_SHEET_DISMISS_LIMIT);
         SigninBridge.openAccountPickerBottomSheet(mWindowAndroidMock, CONTINUE_URL);
-        checkHistogramRecording(AccountConsistencyPromoAction.SUPPRESSED_CONSECUTIVE_DISMISSALS);
-    }
-
-    private void checkHistogramRecording(@AccountConsistencyPromoAction int action) {
-        verify(mUmaRecorderMock)
-                .recordLinearHistogram("Signin.AccountConsistencyPromoAction", action, 1,
-                        AccountConsistencyPromoAction.MAX_VALUE + 1,
-                        AccountConsistencyPromoAction.MAX_VALUE + 2);
+        verify(mSigninMetricsUtilsJniMock)
+                .logAccountConsistencyPromoAction(
+                        AccountConsistencyPromoAction.SUPPRESSED_CONSECUTIVE_DISMISSALS,
+                        SigninAccessPoint.WEB_SIGNIN);
     }
 }

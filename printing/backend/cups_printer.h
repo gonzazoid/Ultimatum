@@ -42,6 +42,16 @@ class COMPONENT_EXPORT(PRINT_BACKEND) CupsOptionProvider {
   // Returns true if the `value` is supported by option `name`.
   virtual bool CheckOptionSupported(const char* name,
                                     const char* value) const = 0;
+
+  // Returns the IPP "media-col-database" attribute for this printer.
+  // ipp_attribute_t* is owned by CupsOptionProvider.
+  virtual ipp_attribute_t* GetMediaColDatabase() const = 0;
+
+  // Returns the human-readable display name for an option value. Used to get
+  // fallback display names for non-standard values that Chromium doesn't have
+  // built-in localizations for.
+  virtual const char* GetLocalizedOptionValueName(const char* option_name,
+                                                  const char* value) const = 0;
 };
 
 // Represents a CUPS printer.
@@ -50,16 +60,6 @@ class COMPONENT_EXPORT(PRINT_BACKEND) CupsOptionProvider {
 // share an http connection which the CupsConnection closes on destruction.
 class COMPONENT_EXPORT(PRINT_BACKEND) CupsPrinter : public CupsOptionProvider {
  public:
-  // Represents the margins that CUPS reports for some given media.
-  // Its members are valued in PWG units (100ths of mm).
-  // This struct approximates a cups_size_t, which is BLRT.
-  struct CupsMediaMargins {
-    int bottom;
-    int left;
-    int right;
-    int top;
-  };
-
   ~CupsPrinter() override = default;
 
   // Create a printer with a connection defined by `http` and `dest`.
@@ -92,18 +92,19 @@ class COMPONENT_EXPORT(PRINT_BACKEND) CupsPrinter : public CupsOptionProvider {
   virtual ipp_status_t CreateJob(int* job_id,
                                  const std::string& title,
                                  const std::string& username,
-                                 const std::vector<cups_option_t>& options) = 0;
+                                 ipp_t* attributes) = 0;
 
   // Add a document to a print job.  `job_id` must be non-zero and refer to a
   // job started with CreateJob.  `docname` will be displayed in print status
   // if not empty.  `last_doc` should be true if this is the last document for
-  // this print job.  `username` is not sent if empty.  `options` should be IPP
-  // key value pairs for the Send-Document operation.
+  // this print job.  `username` is not sent if empty.  `attributes` should
+  // contain IPP operation and document attributes for the Send-Document
+  // operation.
   virtual bool StartDocument(int job_id,
                              const std::string& docname,
                              bool last_doc,
                              const std::string& username,
-                             const std::vector<cups_option_t>& options) = 0;
+                             ipp_t* attributes) = 0;
 
   // Add data to the current document started by StartDocument.  Calling this
   // without a started document will fail.
@@ -121,16 +122,6 @@ class COMPONENT_EXPORT(PRINT_BACKEND) CupsPrinter : public CupsOptionProvider {
   // Cancel the print job `job_id`.  Returns true if the operation succeeded.
   // Returns false if it failed for any reason.
   virtual bool CancelJob(int job_id) = 0;
-
-  // Queries CUPS for the margins of the media named by `media_id`.
-  //
-  // A `media_id` is any vendor ID known to CUPS for a given printer.
-  // Vendor IDs are exemplified by the keys of the big map in
-  // print_media_l10n.cc.
-  //
-  // Returns all zeroes if the CUPS API call fails.
-  virtual CupsMediaMargins GetMediaMarginsByName(
-      const std::string& media_id) = 0;
 };
 
 }  // namespace printing

@@ -7,10 +7,19 @@
 
 #include "content/public/browser/web_ui_data_source.h"
 
+namespace content {
+class BrowserContext;
+}
+
 namespace webui {
 
 // Creates a data source for for chrome://webui-test/ URLs.
-content::WebUIDataSource* CreateWebUITestDataSource();
+content::WebUIDataSource* CreateAndAddWebUITestDataSource(
+    content::BrowserContext* browser_context);
+
+// Creates a data source for for chrome-untrusted://webui-test/ URLs.
+content::WebUIDataSource* CreateAndAddUntrustedWebUITestDataSource(
+    content::BrowserContext* browser_context);
 
 }  // namespace webui
 

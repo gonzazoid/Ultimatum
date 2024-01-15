@@ -8,8 +8,8 @@
 #include <optional>
 #include <string>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/strings/string_number_conversions.h"
 #include "chrome/browser/ash/login/startup_utils.h"
 #include "chrome/browser/ash/login/wizard_controller.h"
@@ -17,6 +17,7 @@
 #include "chrome/browser/ash/ownership/owner_settings_service_ash_factory.h"
 #include "chrome/browser/ash/settings/cros_settings.h"
 #include "chrome/browser/browser_process.h"
+#include "chrome/browser/enterprise/browser_management/management_service_factory.h"
 #include "chrome/browser/ui/webui/help/help_utils_chromeos.h"
 #include "chrome/grit/generated_resources.h"
 #include "chromeos/ash/components/dbus/update_engine/update_engine_client.h"
@@ -27,16 +28,16 @@
 #include "chromeos/ash/components/settings/cros_settings_names.h"
 #include "chromeos/dbus/power/power_manager_client.h"
 #include "chromeos/strings/grit/chromeos_strings.h"
+#include "components/policy/core/common/management/management_service.h"
 #include "content/public/browser/web_contents.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/cros_system_api/dbus/service_constants.h"
 #include "ui/base/l10n/l10n_util.h"
 
 namespace {
 
+using ::ash::OwnerSettingsServiceAsh;
+using ::ash::OwnerSettingsServiceAshFactory;
 using ::ash::UpdateEngineClient;
-using ::chromeos::OwnerSettingsServiceAsh;
-using ::chromeos::OwnerSettingsServiceAshFactory;
 
 // Network status in the context of device update.
 enum NetworkStatus {
@@ -268,7 +269,7 @@ void VersionUpdaterCros::IsFeatureEnabled(const std::string& feature,
 }
 
 void VersionUpdaterCros::OnIsFeatureEnabled(IsFeatureEnabledCallback callback,
-                                            absl::optional<bool> enabled) {
+                                            std::optional<bool> enabled) {
   std::move(callback).Run(std::move(enabled));
 }
 
@@ -323,7 +324,16 @@ void VersionUpdaterCros::UpdateStatusChanged(
       if (status.last_attempt_error() ==
           static_cast<int32_t>(
               update_engine::ErrorCode::kOmahaUpdateIgnoredPerPolicy)) {
-        my_status = DISABLED_BY_ADMIN;
+        if (policy::ManagementServiceFactory::GetForPlatform()->IsManaged()) {
+          my_status = DISABLED_BY_ADMIN;
+        } else {
+          // Handle the special case where after a consumer rollback,
+          // updating to the previously installed version just rolledback from
+          // is disallowed.
+          // TODO(b/277962165) Update the platform side to expose a more
+          // specific error code for this case.
+          my_status = UPDATE_TO_ROLLBACK_VERSION_DISALLOWED;
+        }
       } else if (status.last_attempt_error() ==
                  static_cast<int32_t>(
                      update_engine::ErrorCode::kOmahaErrorInHTTPResponse)) {

@@ -6,15 +6,11 @@
 #define SERVICES_PREFERENCES_TRACKED_PREF_HASH_STORE_TRANSACTION_H_
 
 #include <string>
+#include <string_view>
 #include <vector>
 
-#include "base/strings/string_piece.h"
+#include "base/values.h"
 #include "services/preferences/public/mojom/tracked_preference_validation_delegate.mojom.h"
-
-namespace base {
-class DictionaryValue;
-class Value;
-}  // namespace base
 
 // Used to perform a series of checks/transformations on a PrefHashStore.
 class PrefHashStoreTransaction {
@@ -24,7 +20,7 @@ class PrefHashStoreTransaction {
 
   // Returns the suffix to be appended to UMA histograms for the store contained
   // in this transaction.
-  virtual base::StringPiece GetStoreUMASuffix() const = 0;
+  virtual std::string_view GetStoreUMASuffix() const = 0;
 
   // Checks |initial_value| against the existing stored value hash.
   virtual prefs::mojom::TrackedPreferenceValidationDelegate::ValueState
@@ -42,13 +38,13 @@ class PrefHashStoreTransaction {
   // changed).
   virtual prefs::mojom::TrackedPreferenceValidationDelegate::ValueState
   CheckSplitValue(const std::string& path,
-                  const base::DictionaryValue* initial_split_value,
+                  const base::Value::Dict* initial_split_value,
                   std::vector<std::string>* invalid_keys) const = 0;
 
   // Stores hashes for the |value| of the split preference at |path|.
   // |split_value| being an empty dictionary or NULL is equivalent.
   virtual void StoreSplitHash(const std::string& path,
-                              const base::DictionaryValue* split_value) = 0;
+                              const base::Value::Dict* split_value) = 0;
 
   // Indicates whether the store contains a hash for the preference at |path|.
   virtual bool HasHash(const std::string& path) const = 0;

@@ -4,10 +4,11 @@
 
 #include "ash/quick_pair/keyed_service/battery_update_message_handler.h"
 
-#include "ash/quick_pair/common/logging.h"
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/containers/adapters.h"
+#include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "components/cross_device/logging/logging.h"
 #include "device/bluetooth/bluetooth_adapter.h"
 #include "device/bluetooth/bluetooth_adapter_factory.h"
 #include "device/bluetooth/bluetooth_device.h"
@@ -20,7 +21,7 @@ device::BluetoothDevice::BatteryInfo GetBatteryInfo(
   if (battery_info->percentage == -1) {
     return device::BluetoothDevice::BatteryInfo(
         battery_type,
-        /*percentage=*/absl::nullopt,
+        /*percentage=*/std::nullopt,
         battery_info->is_charging
             ? device::BluetoothDevice::BatteryInfo::ChargeState::kCharging
             : device::BluetoothDevice::BatteryInfo::ChargeState::kDischarging);
@@ -104,7 +105,8 @@ void BatteryUpdateMessageHandler::SetBatteryInfo(
     const mojom::BatteryUpdatePtr& battery_update) {
   device::BluetoothDevice* device = adapter_->GetDevice(device_address);
   if (!device) {
-    QP_LOG(INFO) << "Device lost from adapter before battery info was set.";
+    CD_LOG(INFO, Feature::FP)
+        << "Device lost from adapter before battery info was set.";
     CleanUpMessageStream(device_address);
     return;
   }
@@ -129,8 +131,9 @@ void BatteryUpdateMessageHandler::SetBatteryInfo(
 
 void BatteryUpdateMessageHandler::CleanUpMessageStream(
     const std::string& device_address) {
-  if (message_streams_.find(device_address) == message_streams_.end())
+  if (!base::Contains(message_streams_, device_address)) {
     return;
+  }
 
   message_streams_[device_address]->RemoveObserver(this);
   message_streams_.erase(device_address);

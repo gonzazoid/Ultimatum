@@ -6,8 +6,9 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
 #include "chromeos/ash/components/dbus/rgbkbd/fake_rgbkbd_client.h"
 #include "dbus/bus.h"
 #include "dbus/message.h"
@@ -68,6 +69,23 @@ class RgbkbdClientImpl : public RgbkbdClient {
                               base::DoNothing());
   }
 
+  void SetZoneColor(int zone, uint8_t r, uint8_t g, uint8_t b) override {
+    VLOG(1) << "rgbkbd: SetZoneColor Zone: " << zone
+            << "R: " << static_cast<int>(r) << "G: " << static_cast<int>(g)
+            << "B: " << static_cast<int>(b);
+    dbus::MethodCall method_call(rgbkbd::kRgbkbdServiceName,
+                                 rgbkbd::kSetZoneColor);
+    dbus::MessageWriter writer(&method_call);
+    writer.AppendInt32(zone);
+    writer.AppendByte(r);
+    writer.AppendByte(g);
+    writer.AppendByte(b);
+    CHECK(rgbkbd_proxy_);
+    rgbkbd_proxy_->CallMethod(&method_call,
+                              dbus::ObjectProxy::TIMEOUT_USE_DEFAULT,
+                              base::DoNothing());
+  }
+
   void SetRainbowMode() override {
     VLOG(1) << "rgbkbd: SetRainbowMode";
     dbus::MethodCall method_call(rgbkbd::kRgbkbdServiceName,
@@ -98,7 +116,7 @@ class RgbkbdClientImpl : public RgbkbdClient {
     if (!response) {
       VLOG(1)
           << "rgbkbd: No Dbus response received for GetRgbKeyboardCapabilities";
-      std::move(callback).Run(absl::nullopt);
+      std::move(callback).Run(std::nullopt);
       return;
     }
     dbus::MessageReader reader(response);
@@ -108,7 +126,7 @@ class RgbkbdClientImpl : public RgbkbdClient {
       LOG(ERROR)
           << "rgbkbd: Error reading GetRgbKeyboardCapabilities response: "
           << response->ToString();
-      std::move(callback).Run(absl::nullopt);
+      std::move(callback).Run(std::nullopt);
       return;
     }
     VLOG(1) << "rgbkbd: Value for keyboard capabilities is: "
@@ -139,7 +157,7 @@ class RgbkbdClientImpl : public RgbkbdClient {
         << "Failed to connect to CapabilityUpdatedForTesting signal.";
   }
 
-  dbus::ObjectProxy* rgbkbd_proxy_ = nullptr;
+  raw_ptr<dbus::ObjectProxy> rgbkbd_proxy_ = nullptr;
 
   // Note: This should remain the last member so it'll be destroyed and
   // invalidate its weak pointers before any other members are destroyed.

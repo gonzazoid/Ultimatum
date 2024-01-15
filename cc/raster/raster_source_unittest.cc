@@ -17,9 +17,14 @@
 #include "cc/test/test_skcanvas.h"
 #include "cc/tiles/software_image_decode_cache.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "third_party/skia/include/core/SkBitmap.h"
+#include "third_party/skia/include/core/SkCanvas.h"
+#include "third_party/skia/include/core/SkColor.h"
 #include "third_party/skia/include/core/SkPixelRef.h"
 #include "third_party/skia/include/core/SkRefCnt.h"
+#include "third_party/skia/include/core/SkScalar.h"
 #include "third_party/skia/include/core/SkShader.h"
+#include "third_party/skia/include/core/SkSurfaceProps.h"
 #include "ui/gfx/geometry/axis_transform2d.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/geometry/size_conversions.h"
@@ -226,10 +231,11 @@ TEST(RasterSourceTest, PixelRefIteratorDiscardableRefsOneTile) {
     TargetColorParams target_color_params;
     std::vector<const DrawImage*> images;
     raster->GetDiscardableImagesInRect(gfx::Rect(0, 0, 256, 256), &images);
-    EXPECT_EQ(1u, images.size());
+    ASSERT_EQ(1u, images.size());
     DrawImage image(*images[0], 1.f, PaintImage::kDefaultFrameIndex,
                     target_color_params);
-    EXPECT_EQ(discardable_image[0][0], images[0]->paint_image());
+    EXPECT_TRUE(
+        discardable_image[0][0].IsSameForTesting(images[0]->paint_image()));
     EXPECT_EQ(target_color_params.color_space, image.target_color_space());
   }
   // Shifted tile sized iterators. These should find only one pixel ref.
@@ -238,10 +244,11 @@ TEST(RasterSourceTest, PixelRefIteratorDiscardableRefsOneTile) {
     target_color_params.color_space = gfx::ColorSpace::CreateXYZD50();
     std::vector<const DrawImage*> images;
     raster->GetDiscardableImagesInRect(gfx::Rect(260, 260, 256, 256), &images);
-    EXPECT_EQ(1u, images.size());
+    ASSERT_EQ(1u, images.size());
     DrawImage image(*images[0], 1.f, PaintImage::kDefaultFrameIndex,
                     target_color_params);
-    EXPECT_EQ(discardable_image[1][1], images[0]->paint_image());
+    EXPECT_TRUE(
+        discardable_image[1][1].IsSameForTesting(images[0]->paint_image()));
     EXPECT_EQ(target_color_params.color_space, image.target_color_space());
   }
   // Ensure there's no discardable pixel refs in the empty cell
@@ -254,10 +261,13 @@ TEST(RasterSourceTest, PixelRefIteratorDiscardableRefsOneTile) {
   {
     std::vector<const DrawImage*> images;
     raster->GetDiscardableImagesInRect(gfx::Rect(0, 0, 512, 512), &images);
-    EXPECT_EQ(3u, images.size());
-    EXPECT_EQ(discardable_image[0][0], images[0]->paint_image());
-    EXPECT_EQ(discardable_image[0][1], images[1]->paint_image());
-    EXPECT_EQ(discardable_image[1][1], images[2]->paint_image());
+    ASSERT_EQ(3u, images.size());
+    EXPECT_TRUE(
+        discardable_image[0][0].IsSameForTesting(images[0]->paint_image()));
+    EXPECT_TRUE(
+        discardable_image[0][1].IsSameForTesting(images[1]->paint_image()));
+    EXPECT_TRUE(
+        discardable_image[1][1].IsSameForTesting(images[2]->paint_image()));
   }
 }
 
@@ -562,10 +572,10 @@ TEST(RasterSourceTest, RasterPartialClear) {
   recording_source->SetRequiresClear(true);
 
   // First record everything as white.
-  const unsigned alpha_dark = 10u;
+  const float alpha_dark = 0.04f;
   PaintFlags white_flags;
   white_flags.setColor(SK_ColorWHITE);
-  white_flags.setAlpha(alpha_dark);
+  white_flags.setAlphaf(alpha_dark);
   recording_source->add_draw_rect_with_flags(gfx::Rect(layer_bounds),
                                              white_flags);
   recording_source->Rerecord();
@@ -588,7 +598,7 @@ TEST(RasterSourceTest, RasterPartialClear) {
       gfx::AxisTransform2d(contents_scale, gfx::Vector2dF()),
       RasterSource::PlaybackSettings());
 
-  SkColor pixel_dark = SkColorSetARGB(alpha_dark, 255, 255, 255);
+  SkColor pixel_dark = SkColor4f{1, 1, 1, alpha_dark}.toSkColor();
   for (int i = 0; i < bitmap.width(); ++i) {
     for (int j = 0; j < bitmap.height(); ++j)
       EXPECT_COLOR_EQ(pixel_dark, bitmap.getColor(i, j)) << i << "," << j;
@@ -600,8 +610,8 @@ TEST(RasterSourceTest, RasterPartialClear) {
   recording_source_light->SetRequiresClear(true);
 
   // Record everything as a slightly lighter white.
-  const unsigned alpha_light = 18u;
-  white_flags.setAlpha(alpha_light);
+  const float alpha_light = 0.1f;
+  white_flags.setAlphaf(alpha_light);
   recording_source_light->add_draw_rect_with_flags(gfx::Rect(layer_bounds),
                                                    white_flags);
   recording_source_light->Rerecord();
@@ -620,7 +630,7 @@ TEST(RasterSourceTest, RasterPartialClear) {
       RasterSource::PlaybackSettings());
 
   // Test that the whole playback_rect was cleared and repainted with new alpha.
-  SkColor pixel_light = SkColorSetARGB(alpha_light, 255, 255, 255);
+  SkColor pixel_light = SkColor4f{1, 1, 1, alpha_light}.toSkColor();
   for (int i = 0; i < playback_rect.width(); ++i) {
     for (int j = 0; j < playback_rect.height(); ++j)
       EXPECT_COLOR_EQ(pixel_light, bitmap.getColor(i, j)) << i << "," << j;

@@ -10,9 +10,7 @@
 
 #if BUILDFLAG(USE_V4L2_CODEC)
 #include <linux/videodev2.h>
-#endif  // BUILDFLAG(USE_V4L2_CODEC)
-
-#if BUILDFLAG(USE_VAAPI)
+#elif BUILDFLAG(USE_VAAPI)
 #include <va/va.h>
 #endif  // BUILDFLAG(USE_VAAPI)
 
@@ -35,9 +33,13 @@ absl::optional<Fourcc> Fourcc::FromUint32(uint32_t fourcc) {
     case MT21:
     case MM21:
     case P010:
+    case MT2T:
+    case AR24:
+    case Q08C:
+    case Q10C:
       return Fourcc(static_cast<Value>(fourcc));
   }
-  DVLOGF(3) << "Unmapped fourcc: " << FourccToString(fourcc);
+  DVLOGF(4) << "Unmapped fourcc: " << FourccToString(fourcc);
   return absl::nullopt;
 }
 
@@ -61,10 +63,11 @@ absl::optional<Fourcc> Fourcc::FromVideoPixelFormat(
         return Fourcc(YU16);
       case PIXEL_FORMAT_P016LE:
         return Fourcc(P010);
+      case PIXEL_FORMAT_ARGB:
+        return Fourcc(AR24);
       case PIXEL_FORMAT_UYVY:
         NOTREACHED();
         [[fallthrough]];
-      case PIXEL_FORMAT_ARGB:
       case PIXEL_FORMAT_ABGR:
       case PIXEL_FORMAT_XRGB:
       case PIXEL_FORMAT_XBGR:
@@ -183,6 +186,22 @@ VideoPixelFormat Fourcc::ToVideoPixelFormat() const {
       return PIXEL_FORMAT_NV12;
     case P010:
       return PIXEL_FORMAT_P016LE;
+    case MT2T:
+      return PIXEL_FORMAT_P016LE;
+    case AR24:
+      return PIXEL_FORMAT_ARGB;
+    // V4L2_PIX_FMT_QC08C is a proprietary Qualcomm compressed format that can
+    // only be scanned out directly or composited with the gpu. It has the
+    // same bitdepth and internal layout as NV12 (with additional space for
+    // the compressed data).
+    case Q08C:
+      return PIXEL_FORMAT_NV12;
+    // V4L2_PIX_FMT_QC10C is similar to V4L2_PIX_FMT_QC08C, but has the same
+    // bitdepth and internal layout as P010.
+    case Q10C:
+      return PIXEL_FORMAT_P016LE;
+    case UNDEFINED:
+      break;
   }
   NOTREACHED() << "Unmapped Fourcc: " << ToString();
   return PIXEL_FORMAT_UNKNOWN;
@@ -201,9 +220,7 @@ uint32_t Fourcc::ToV4L2PixFmt() const {
   // Fourcc as V4L2.
   return static_cast<uint32_t>(value_);
 }
-#endif  // BUILDFLAG(USE_V4L2_CODEC)
-
-#if BUILDFLAG(USE_VAAPI)
+#elif BUILDFLAG(USE_VAAPI)
 // static
 absl::optional<Fourcc> Fourcc::FromVAFourCC(uint32_t va_fourcc) {
   switch (va_fourcc) {
@@ -219,6 +236,8 @@ absl::optional<Fourcc> Fourcc::FromVAFourCC(uint32_t va_fourcc) {
       return Fourcc(YUYV);
     case VA_FOURCC_P010:
       return Fourcc(P010);
+    case VA_FOURCC_ARGB:
+      return Fourcc(AR24);
   }
   DVLOGF(3) << "Unmapped VAFourCC: " << FourccToString(va_fourcc);
   return absl::nullopt;
@@ -238,6 +257,8 @@ absl::optional<uint32_t> Fourcc::ToVAFourCC() const {
       return VA_FOURCC_YUY2;
     case P010:
       return VA_FOURCC_P010;
+    case AR24:
+      return VA_FOURCC_ARGB;
     case YM12:
     case YM21:
     case NM12:
@@ -246,6 +267,10 @@ absl::optional<uint32_t> Fourcc::ToVAFourCC() const {
     case YM16:
     case MT21:
     case MM21:
+    case MT2T:
+    case Q08C:
+    case Q10C:
+    case UNDEFINED:
       // VAAPI does not know about these formats, so signal this by returning
       // nullopt.
       DVLOGF(3) << "Fourcc not convertible to VaFourCC: " << ToString();
@@ -266,6 +291,8 @@ absl::optional<Fourcc> Fourcc::ToSinglePlanar() const {
     case NV21:
     case P010:
     case MM21:
+    case MT2T:
+    case AR24:
       return Fourcc(value_);
     case YM12:
       return Fourcc(YU12);
@@ -279,6 +306,9 @@ absl::optional<Fourcc> Fourcc::ToSinglePlanar() const {
     case YM16:
       return Fourcc(YU16);
     case MT21:
+    case Q08C:
+    case Q10C:
+    case UNDEFINED:
       return absl::nullopt;
   }
 }
@@ -296,6 +326,11 @@ bool Fourcc::IsMultiPlanar() const {
     case NV21:
     case YU16:
     case P010:
+    case MT2T:
+    case AR24:
+    case Q08C:
+    case Q10C:
+    case UNDEFINED:
       return false;
     case YM12:
     case YM21:
@@ -324,10 +359,21 @@ static_assert(Fourcc::NM12 == V4L2_PIX_FMT_NV12M, "Mismatch Fourcc");
 static_assert(Fourcc::NM21 == V4L2_PIX_FMT_NV21M, "Mismatch Fourcc");
 static_assert(Fourcc::YU16 == V4L2_PIX_FMT_YUV422P, "Mismatch Fourcc");
 static_assert(Fourcc::YM16 == V4L2_PIX_FMT_YUV422M, "Mismatch Fourcc");
-static_assert(Fourcc::MT21 == V4L2_PIX_FMT_MT21C, "Mismatch Fourcc");
-#ifdef V4L2_PIX_FMT_MM21
-// V4L2_PIX_FMT_MM21 is not yet upstreamed.
 static_assert(Fourcc::MM21 == V4L2_PIX_FMT_MM21, "Mismatch Fourcc");
-#endif  // V4L2_PIX_FMT_MM21
+static_assert(Fourcc::MT21 == V4L2_PIX_FMT_MT21C, "Mismatch Fourcc");
+static_assert(Fourcc::AR24 == V4L2_PIX_FMT_ABGR32, "Mismatch Fourcc");
+static_assert(Fourcc::P010 == V4L2_PIX_FMT_P010, "Mismatch Fourcc");
+// MT2T has not been upstreamed yet
+#ifdef V4L2_PIX_FMT_MT2T
+static_assert(Fourcc::MT2T == V4L2_PIX_FMT_MT2T, "Mismatch Fourcc");
+#endif  // V4L2_PIX_FMT_MT2T
+// TODO(b/189218019): The following formats are upstream, but not in the
+// ChromeOS headers
+#ifdef V4L2_PIX_FMT_QC08C
+static_assert(Fourcc::Q08C == V4L2_PIX_FMT_QC08C, "Mismatch Fourcc");
+#endif  // V4L2_PIX_FMT_QC08C
+#ifdef V4L2_PIX_FMT_QC10C
+static_assert(Fourcc::Q10C == V4L2_PIX_FMT_QC10C, "Mismatch Fourcc");
+#endif  // V4L2_PIX_FMT_QC10C
 #endif  // BUILDFLAG(USE_V4L2_CODEC)
 }  // namespace media

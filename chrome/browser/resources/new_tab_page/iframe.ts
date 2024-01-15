@@ -4,8 +4,8 @@
 
 import {assert} from 'chrome://resources/js/assert.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
-import {getTemplate} from './iframe.html.js';
 
+import {getTemplate} from './iframe.html.js';
 import {strictQuery} from './utils.js';
 import {WindowProxy} from './window_proxy.js';
 
@@ -50,7 +50,7 @@ export class IframeElement extends PolymerElement {
   postMessage(message: any) {
     assert(this.shadowRoot);
     WindowProxy.getInstance().postMessage(
-        strictQuery(this.shadowRoot!, '#iframe', HTMLIFrameElement), message,
+        strictQuery(this.shadowRoot, '#iframe', HTMLIFrameElement), message,
         new URL(this.src).origin);
   }
 

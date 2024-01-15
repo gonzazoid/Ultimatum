@@ -2,11 +2,43 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// Note: The following chrome:// URLs are not actually fetched at runtime. They
+// are handled in
+// components/security_interstitials/core/browser/resources:bundle_js, which
+// finds the correct files and inlines them.
+import {HIDDEN_CLASS, preventDefaultOnPoundLinkClicks, SecurityInterstitialCommandId, sendCommand} from 'chrome://interstitials/common/resources/interstitial_common.js';
+import {mobileNav} from 'chrome://interstitials/common/resources/interstitial_mobile_nav.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
+
+import {setupEnhancedProtectionMessage} from './enhanced_protection_message.js';
+import {setupExtendedReportingCheckbox} from './extended_reporting.js';
+import {setupSSLDebuggingInfo} from './ssl.js';
+
 // This is the shared code for the new (Chrome 37) security interstitials. It is
 // used for both SSL interstitials and Safe Browsing interstitials.
 
 let expandedDetails = false;
 let keyPressState = 0;
+
+// Only begin clickjacking delay tracking when the DOM contents have
+// fully loaded.
+let timePageLastFocused = null;
+
+// The amount of delay (in ms) before the proceed button accepts
+// a "click" event.
+const PROCEED_CLICKJACKING_DELAY = 500;
+
+/**
+ * This checks whether the clickjacking delay has been passed
+ * since page was first loaded or last focused.
+ * @return {boolean} Whether the clickjacking delay has passed or not.
+ */
+function clickjackingDelayHasPassed() {
+  return (
+      timePageLastFocused != null &&
+      (window.performance.now() - timePageLastFocused >=
+       PROCEED_CLICKJACKING_DELAY));
+}
 
 /**
  * This allows errors to be skippped by typing a secret phrase into the page.
@@ -28,44 +60,10 @@ function handleKeypress(e) {
   }
 }
 
-/**
- * This appends a piece of debugging information to the end of the warning.
- * When complete, the caller must also make the debugging div
- * (error-debugging-info) visible.
- * @param {string} title  The name of this debugging field.
- * @param {string} value  The value of the debugging field.
- * @param {boolean=} fixedWidth If true, the value field is displayed fixed
- *                              width.
- */
-function appendDebuggingField(title, value, fixedWidth) {
-  // The values input here are not trusted. Never use innerHTML on these
-  // values!
-  const spanTitle = document.createElement('span');
-  spanTitle.classList.add('debugging-title');
-  spanTitle.innerText = title + ': ';
-
-  const spanValue = document.createElement('span');
-  spanValue.classList.add('debugging-content');
-  if (fixedWidth) {
-    spanValue.classList.add('debugging-content-fixed-width');
-  }
-  spanValue.innerText = value;
-
-  const pElem = document.createElement('p');
-  pElem.classList.add('debugging-content');
-  pElem.appendChild(spanTitle);
-  pElem.appendChild(spanValue);
-  document.querySelector('#error-debugging-info').appendChild(pElem);
-}
-
-function toggleDebuggingInfo() {
-  const hiddenDebug = document.querySelector('#error-debugging-info')
-                          .classList.toggle(HIDDEN_CLASS);
-  document.querySelector('#error-code')
-      .setAttribute('aria-expanded', !hiddenDebug);
-}
-
 function setupEvents() {
+  // `loadTimeDataRaw` is injected to the `window` scope from C++.
+  loadTimeData.data = window.loadTimeDataRaw;
+
   const overridable = loadTimeData.getBoolean('overridable');
   const interstitialType = loadTimeData.getString('type');
   const ssl = interstitialType === 'SSL';
@@ -77,10 +75,15 @@ function setupEvents() {
   const blockedInterception = interstitialType === 'BLOCKED_INTERCEPTION';
   const insecureForm = interstitialType == 'INSECURE_FORM';
   const httpsOnly = interstitialType == 'HTTPS_ONLY';
+  const enterpriseBlock = interstitialType === 'ENTERPRISE_BLOCK';
   const enterpriseWarn = interstitialType === 'ENTERPRISE_WARN';
   const hidePrimaryButton = loadTimeData.getBoolean('hide_primary_button');
-  const showRecurrentErrorParagraph = loadTimeData.getBoolean(
-    'show_recurrent_error_paragraph');
+  const showRecurrentErrorParagraph =
+      loadTimeData.getBoolean('show_recurrent_error_paragraph');
+  const shouldUseNewDangerIcon =
+      loadTimeData.valueExists('shouldUseNewDangerIcon') ?
+      loadTimeData.getBoolean('shouldUseNewDangerIcon') :
+      false;
 
   const body = document.querySelector('#body');
   if (ssl || blockedInterception) {
@@ -100,13 +103,15 @@ function setupEvents() {
     body.classList.add('insecure-form');
   } else if (httpsOnly) {
     body.classList.add('https-only');
+  } else if (enterpriseBlock) {
+    body.classList.add('enterprise-block');
   } else if (enterpriseWarn) {
     body.classList.add('enterprise-warn');
   } else {
     body.classList.add('safe-browsing');
     // Override the default theme color.
-    document.querySelector('meta[name=theme-color]').setAttribute('content',
-      'rgb(217, 48, 37)');
+    document.querySelector('meta[name=theme-color]')
+        .setAttribute('content', 'rgb(217, 48, 37)');
   }
 
   document.querySelector('#icon').classList.add('icon');
@@ -132,6 +137,7 @@ function setupEvents() {
           break;
 
         case 'SAFEBROWSING':
+        case 'ENTERPRISE_BLOCK':
         case 'ENTERPRISE_WARN':
         case 'ORIGIN_POLICY':
           sendCommand(SecurityInterstitialCommandId.CMD_DONT_PROCEED);
@@ -153,7 +159,9 @@ function setupEvents() {
     proceedButton.classList.remove(HIDDEN_CLASS);
     proceedButton.textContent = loadTimeData.getString('proceedButtonText');
     proceedButton.addEventListener('click', function(event) {
-      sendCommand(SecurityInterstitialCommandId.CMD_PROCEED);
+      if (clickjackingDelayHasPassed()) {
+        sendCommand(SecurityInterstitialCommandId.CMD_PROCEED);
+      }
     });
   }
   if (lookalike) {
@@ -173,7 +181,9 @@ function setupEvents() {
         document.querySelector(billing ? '#proceed-button' : '#proceed-link');
     // Captive portal page isn't overridable.
     overrideElement.addEventListener('click', function(event) {
-      sendCommand(SecurityInterstitialCommandId.CMD_PROCEED);
+      if (!billing || clickjackingDelayHasPassed()) {
+        sendCommand(SecurityInterstitialCommandId.CMD_PROCEED);
+      }
     });
 
     if (ssl) {
@@ -210,9 +220,10 @@ function setupEvents() {
 
   const detailsButton = document.querySelector('#details-button');
   if (captivePortal || billing || lookalike || insecureForm || httpsOnly ||
-      enterpriseWarn) {
-    // Captive portal, billing, lookalike pages, enterprise warn, insecure form
-    // , and HTTPS only mode interstitials don't have details buttons.
+      enterpriseWarn || enterpriseBlock) {
+    // Captive portal, billing, lookalike pages, insecure form, enterprise warn,
+    // enterprise block, and HTTPS only mode interstitials don't
+    // have details buttons.
     detailsButton.classList.add('hidden');
   } else {
     detailsButton.setAttribute(
@@ -253,11 +264,23 @@ function setupEvents() {
     console.warn(loadTimeData.getString('lookalikeConsoleMessage'));
   }
 
+  if (shouldUseNewDangerIcon) {
+    // If red interstitial facelift is enabled, use new stop sign icons.
+    if (document.getElementById('icon')) {
+      document.getElementById('icon').classList.add('new-icon');
+    }
+  }
+
   preventDefaultOnPoundLinkClicks();
   setupExtendedReportingCheckbox();
   setupEnhancedProtectionMessage();
   setupSSLDebuggingInfo();
   document.addEventListener('keypress', handleKeypress);
+
+  // Begin tracking for the clickjacking delay.
+  timePageLastFocused = window.performance.now();
+  window.addEventListener(
+      'focus', () => timePageLastFocused = window.performance.now());
 }
 
 document.addEventListener('DOMContentLoaded', setupEvents);

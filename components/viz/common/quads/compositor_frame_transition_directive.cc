@@ -11,6 +11,32 @@
 
 namespace viz {
 
+// static
+CompositorFrameTransitionDirective
+CompositorFrameTransitionDirective::CreateSave(
+    NavigationID navigation_id,
+    uint32_t sequence_id,
+    std::vector<SharedElement> shared_elements) {
+  return CompositorFrameTransitionDirective(
+      navigation_id, sequence_id, Type::kSave, std::move(shared_elements));
+}
+
+// static
+CompositorFrameTransitionDirective
+CompositorFrameTransitionDirective::CreateAnimate(NavigationID navigation_id,
+                                                  uint32_t sequence_id) {
+  return CompositorFrameTransitionDirective(navigation_id, sequence_id,
+                                            Type::kAnimateRenderer);
+}
+
+// static
+CompositorFrameTransitionDirective
+CompositorFrameTransitionDirective::CreateRelease(NavigationID navigation_id,
+                                                  uint32_t sequence_id) {
+  return CompositorFrameTransitionDirective(navigation_id, sequence_id,
+                                            Type::kRelease);
+}
+
 CompositorFrameTransitionDirective::CompositorFrameTransitionDirective() =
     default;
 
@@ -52,7 +78,8 @@ CompositorFrameTransitionDirective::SharedElement::operator=(SharedElement&&) =
 bool CompositorFrameTransitionDirective::SharedElement::operator==(
     const SharedElement& other) const {
   return render_pass_id == other.render_pass_id &&
-         shared_element_resource_id == other.shared_element_resource_id;
+         view_transition_element_resource_id ==
+             other.view_transition_element_resource_id;
 }
 
 bool CompositorFrameTransitionDirective::SharedElement::operator!=(

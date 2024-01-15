@@ -4,7 +4,7 @@
 
 #include "components/signin/internal/identity_manager/accounts_mutator_impl.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/test/gtest_util.h"
 #include "base/test/task_environment.h"
@@ -142,10 +142,10 @@ TEST_F(AccountsMutatorTest, UpdateAccountInfo) {
   identity_manager_observer()->SetOnRefreshTokenUpdatedCallback(
       run_loop.QuitClosure());
 
-  CoreAccountId account_id =
-      identity_test_env()
-          ->MakePrimaryAccountAvailable(kTestEmail, signin::ConsentLevel::kSync)
-          .account_id;
+  CoreAccountId account_id = identity_test_env()
+                                 ->MakePrimaryAccountAvailable(
+                                     kTestEmail, signin::ConsentLevel::kSignin)
+                                 .account_id;
   run_loop.Run();
 
   EXPECT_EQ(identity_manager()->GetAccountsWithRefreshTokens().size(), 1U);
@@ -223,6 +223,7 @@ TEST_F(AccountsMutatorTest, AddOrUpdateAccount_AddNewAccount) {
   CoreAccountId account_id = accounts_mutator()->AddOrUpdateAccount(
       kTestGaiaId, kTestEmail, kRefreshToken,
       /*is_under_advanced_protection=*/false,
+      signin_metrics::AccessPoint::ACCESS_POINT_SETTINGS,
       signin_metrics::SourceForRefreshTokenOperation::kUnknown);
   run_loop.Run();
 
@@ -235,6 +236,8 @@ TEST_F(AccountsMutatorTest, AddOrUpdateAccount_AddNewAccount) {
       identity_manager()->FindExtendedAccountInfoByAccountId(account_id);
   EXPECT_EQ(account_info.account_id, account_id);
   EXPECT_EQ(account_info.email, kTestEmail);
+  EXPECT_EQ(account_info.access_point,
+            signin_metrics::AccessPoint::ACCESS_POINT_SETTINGS);
   EXPECT_EQ(identity_manager()->GetAccountsWithRefreshTokens().size(), 1U);
 }
 
@@ -254,6 +257,7 @@ TEST_F(AccountsMutatorTest, AddOrUpdateAccount_UpdateExistingAccount) {
   CoreAccountId account_id = accounts_mutator()->AddOrUpdateAccount(
       kTestGaiaId, kTestEmail, kRefreshToken,
       /*is_under_advanced_protection=*/false,
+      signin_metrics::AccessPoint::ACCESS_POINT_SETTINGS,
       signin_metrics::SourceForRefreshTokenOperation::kUnknown);
   run_loop.Run();
 
@@ -288,6 +292,7 @@ TEST_F(AccountsMutatorTest, AddOrUpdateAccount_UpdateExistingAccount) {
   accounts_mutator()->AddOrUpdateAccount(
       kTestGaiaId, maybe_updated_email, kRefreshToken,
       /*is_under_advanced_protection=*/true,
+      signin_metrics::AccessPoint::ACCESS_POINT_UNKNOWN,
       signin_metrics::SourceForRefreshTokenOperation::kUnknown);
   run_loop2.Run();
 
@@ -303,6 +308,9 @@ TEST_F(AccountsMutatorTest, AddOrUpdateAccount_UpdateExistingAccount) {
   EXPECT_EQ(account_info.account_id, updated_account_info.account_id);
   EXPECT_EQ(account_info.gaia, updated_account_info.gaia);
   EXPECT_EQ(updated_account_info.email, maybe_updated_email);
+  // The access point was not updated to `ACCESS_POINT_UNKNOWN`.
+  EXPECT_EQ(account_info.access_point,
+            signin_metrics::AccessPoint::ACCESS_POINT_SETTINGS);
   if (use_gaia_as_account_id) {
     EXPECT_NE(updated_account_info.email, account_info.email);
     EXPECT_EQ(updated_account_info.email, kTestEmail2);
@@ -320,7 +328,7 @@ TEST_F(AccountsMutatorTest,
   // Set up the primary account.
   std::string primary_account_email("primary.account@example.com");
   AccountInfo primary_account_info = MakePrimaryAccountAvailable(
-      identity_manager(), primary_account_email, signin::ConsentLevel::kSync);
+      identity_manager(), primary_account_email, signin::ConsentLevel::kSignin);
 
   // Now try invalidating the primary account, and check that it gets updated.
   base::RunLoop run_loop;
@@ -358,7 +366,7 @@ TEST_F(
   // Set up the primary account.
   std::string primary_account_email("primary.account@example.com");
   AccountInfo primary_account_info = MakePrimaryAccountAvailable(
-      identity_manager(), primary_account_email, signin::ConsentLevel::kSync);
+      identity_manager(), primary_account_email, signin::ConsentLevel::kSignin);
 
   // Next, add a secondary account.
   base::RunLoop run_loop;
@@ -368,6 +376,7 @@ TEST_F(
   CoreAccountId account_id = accounts_mutator()->AddOrUpdateAccount(
       kTestGaiaId, kTestEmail, kRefreshToken,
       /*is_under_advanced_protection=*/false,
+      signin_metrics::AccessPoint::ACCESS_POINT_UNKNOWN,
       signin_metrics::SourceForRefreshTokenOperation::kUnknown);
   run_loop.Run();
 
@@ -419,7 +428,7 @@ TEST_F(AccountsMutatorTest,
     return;
 
   EXPECT_FALSE(
-      identity_manager()->HasPrimaryAccount(signin::ConsentLevel::kSync));
+      identity_manager()->HasPrimaryAccount(signin::ConsentLevel::kSignin));
 
   // Now try invalidating the primary account, and make sure the test
   // expectedly fails, since the primary account is not set.
@@ -445,15 +454,15 @@ TEST_F(AccountsMutatorTest, RemoveAccount_NonExistingAccount) {
       }));
 
   accounts_mutator()->RemoveAccount(
-      CoreAccountId(kTestGaiaId),
+      CoreAccountId::FromGaiaId(kTestGaiaId),
       signin_metrics::SourceForRefreshTokenOperation::kUnknown);
   run_loop.RunUntilIdle();
 
   EXPECT_FALSE(identity_manager()->HasAccountWithRefreshToken(
-      CoreAccountId(kTestGaiaId)));
+      CoreAccountId::FromGaiaId(kTestGaiaId)));
   EXPECT_FALSE(
       identity_manager()->HasAccountWithRefreshTokenInPersistentErrorState(
-          CoreAccountId(kTestGaiaId)));
+          CoreAccountId::FromGaiaId(kTestGaiaId)));
   EXPECT_EQ(identity_manager()->GetAccountsWithRefreshTokens().size(), 0U);
 }
 
@@ -472,6 +481,7 @@ TEST_F(AccountsMutatorTest, RemoveAccount_ExistingAccount) {
   CoreAccountId account_id = accounts_mutator()->AddOrUpdateAccount(
       kTestGaiaId, kTestEmail, kRefreshToken,
       /*is_under_advanced_protection=*/false,
+      signin_metrics::AccessPoint::ACCESS_POINT_UNKNOWN,
       signin_metrics::SourceForRefreshTokenOperation::kUnknown);
   run_loop.Run();
 
@@ -516,6 +526,7 @@ TEST_F(AccountsMutatorTest, RemoveAllAccounts) {
   CoreAccountId account_id = accounts_mutator()->AddOrUpdateAccount(
       kTestGaiaId, kTestEmail, kRefreshToken,
       /*is_under_advanced_protection=*/false,
+      signin_metrics::AccessPoint::ACCESS_POINT_UNKNOWN,
       signin_metrics::SourceForRefreshTokenOperation::kUnknown);
   run_loop.Run();
 
@@ -533,6 +544,7 @@ TEST_F(AccountsMutatorTest, RemoveAllAccounts) {
   CoreAccountId account_id2 = accounts_mutator()->AddOrUpdateAccount(
       kTestGaiaId2, kTestEmail2, kRefreshToken2,
       /*is_under_advanced_protection=*/false,
+      signin_metrics::AccessPoint::ACCESS_POINT_UNKNOWN,
       signin_metrics::SourceForRefreshTokenOperation::kUnknown);
   run_loop2.Run();
 
@@ -562,6 +574,7 @@ TEST_F(AccountsMutatorTest, UpdateAccessTokenFromSource) {
   // Add a default account.
   CoreAccountId account_id = accounts_mutator()->AddOrUpdateAccount(
       kTestGaiaId, kTestEmail, "refresh_token", false,
+      signin_metrics::AccessPoint::ACCESS_POINT_UNKNOWN,
       signin_metrics::SourceForRefreshTokenOperation::kUnknown);
   EXPECT_EQ(
       account_id,
@@ -574,6 +587,7 @@ TEST_F(AccountsMutatorTest, UpdateAccessTokenFromSource) {
   // Update the default account with different source.
   accounts_mutator()->AddOrUpdateAccount(
       kTestGaiaId, kTestEmail, "refresh_token2", true,
+      signin_metrics::AccessPoint::ACCESS_POINT_UNKNOWN,
       signin_metrics::SourceForRefreshTokenOperation::kSettings_Signout);
   EXPECT_EQ(
       account_id,
@@ -592,6 +606,7 @@ TEST_F(AccountsMutatorTest, RemoveRefreshTokenFromSource) {
   // Add a default account.
   CoreAccountId account_id = accounts_mutator()->AddOrUpdateAccount(
       kTestGaiaId, kTestEmail, "refresh_token", false,
+      signin_metrics::AccessPoint::ACCESS_POINT_UNKNOWN,
       signin_metrics::SourceForRefreshTokenOperation::kSettings_Signout);
 
   // Remove the default account.
@@ -621,14 +636,14 @@ TEST_F(AccountsMutatorTest, MoveAccount) {
   auto* other_accounts_mutator =
       other_identity_test_env.identity_manager()->GetAccountsMutator();
 
-  std::string device_id_1 = GetOrCreateScopedDeviceId(pref_service());
+  std::string device_id_1 = GetSigninScopedDeviceId(pref_service());
   EXPECT_FALSE(device_id_1.empty());
 
   accounts_mutator()->MoveAccount(other_accounts_mutator,
                                   account_info.account_id);
   EXPECT_EQ(0U, identity_manager()->GetAccountsWithRefreshTokens().size());
 
-  std::string device_id_2 = GetOrCreateScopedDeviceId(pref_service());
+  std::string device_id_2 = GetSigninScopedDeviceId(pref_service());
   EXPECT_FALSE(device_id_2.empty());
   // |device_id_1| and |device_id_2| should be different as the device ID is
   // recreated in MoveAccount().

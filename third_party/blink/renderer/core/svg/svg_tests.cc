@@ -39,9 +39,6 @@ SVGTests::SVGTests(SVGElement* context_element)
           SVGStaticStringList::Create<','>(context_element,
                                            svg_names::kSystemLanguageAttr)) {
   DCHECK(context_element);
-
-  context_element->AddToPropertyMap(required_extensions_);
-  context_element->AddToPropertyMap(system_language_);
 }
 
 void SVGTests::Trace(Visitor* visitor) const {
@@ -57,6 +54,23 @@ SVGStringListTearOff* SVGTests::systemLanguage() {
   return system_language_->TearOff();
 }
 
+SVGAnimatedPropertyBase* SVGTests::PropertyFromAttribute(
+    const QualifiedName& attribute_name) const {
+  if (attribute_name == svg_names::kRequiredExtensionsAttr) {
+    return required_extensions_.Get();
+  } else if (attribute_name == svg_names::kSystemLanguageAttr) {
+    return system_language_.Get();
+  } else {
+    return nullptr;
+  }
+}
+
+void SVGTests::SynchronizeAllSVGAttributes() const {
+  SVGAnimatedPropertyBase* attrs[]{required_extensions_.Get(),
+                                   system_language_.Get()};
+  SVGElement::SynchronizeListOfSVGAttributes(attrs);
+}
+
 static bool IsLangTagPrefix(const String& lang_tag, const String& language) {
   if (!lang_tag.StartsWithIgnoringASCIICase(language))
     return false;
@@ -65,7 +79,7 @@ static bool IsLangTagPrefix(const String& lang_tag, const String& language) {
 }
 
 static bool MatchLanguageList(const String& lang_tag,
-                                 const Vector<String>& languages) {
+                              const Vector<String>& languages) {
   for (const auto& value : languages) {
     if (IsLangTagPrefix(lang_tag, value))
       return true;
@@ -101,9 +115,9 @@ bool SVGTests::IsValid() const {
       return false;
     for (const auto& extension : extensions) {
       if (extension != html_names::xhtmlNamespaceURI &&
-          (!RuntimeEnabledFeatures::MathMLCoreEnabled() ||
-           extension != mathml_names::kNamespaceURI))
+          extension != mathml_names::kNamespaceURI) {
         return false;
+      }
     }
   }
   return true;

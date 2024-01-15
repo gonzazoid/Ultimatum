@@ -22,17 +22,18 @@ import org.chromium.base.Log;
 import org.chromium.base.metrics.RecordHistogram;
 import org.chromium.components.browser_ui.notifications.channels.ChannelsInitializer;
 
-/**
- * Wraps a {@link NotificationCompat.Builder} object.
- */
+/** Wraps a {@link NotificationCompat.Builder} object. */
 public class NotificationWrapperCompatBuilder implements NotificationWrapperBuilder {
     private static final String TAG = "NotifCompatBuilder";
     private final NotificationCompat.Builder mBuilder;
     private final NotificationMetadata mMetadata;
     private final Context mContext;
 
-    public NotificationWrapperCompatBuilder(Context context, String channelId,
-            ChannelsInitializer channelsInitializer, NotificationMetadata metadata) {
+    public NotificationWrapperCompatBuilder(
+            Context context,
+            String channelId,
+            ChannelsInitializer channelsInitializer,
+            NotificationMetadata metadata) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             channelsInitializer.safeInitialize(channelId);
         }
@@ -79,9 +80,7 @@ public class NotificationWrapperCompatBuilder implements NotificationWrapperBuil
 
     @Override
     public NotificationWrapperBuilder setSmallIcon(Icon icon) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            mBuilder.setSmallIcon(IconCompat.createFromIcon(mContext, icon));
-        }
+        mBuilder.setSmallIcon(IconCompat.createFromIcon(mContext, icon));
         return this;
     }
 
@@ -142,10 +141,10 @@ public class NotificationWrapperCompatBuilder implements NotificationWrapperBuil
     @Override
     public NotificationWrapperBuilder addAction(
             int icon, CharSequence title, PendingIntent intent) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && icon != 0) {
+        if (icon != 0) {
             mBuilder.addAction(
-                    new NotificationCompat.Action
-                            .Builder(IconCompat.createWithResource(mContext, icon), title, intent)
+                    new NotificationCompat.Action.Builder(
+                                    IconCompat.createWithResource(mContext, icon), title, intent)
                             .build());
         } else {
             mBuilder.addAction(icon, title, intent);
@@ -154,8 +153,11 @@ public class NotificationWrapperCompatBuilder implements NotificationWrapperBuil
     }
 
     @Override
-    public NotificationWrapperBuilder addAction(int icon, CharSequence title,
-            PendingIntentProvider pendingIntentProvider, int actionType) {
+    public NotificationWrapperBuilder addAction(
+            int icon,
+            CharSequence title,
+            PendingIntentProvider pendingIntentProvider,
+            int actionType) {
         addAction(icon, title, pendingIntentProvider.getPendingIntent());
         return this;
     }
@@ -182,8 +184,9 @@ public class NotificationWrapperCompatBuilder implements NotificationWrapperBuil
     @Override
     public NotificationWrapperBuilder addAction(
             NotificationCompat.Action action, int flags, int actionType, int requestCode) {
-        action.actionIntent = new PendingIntentProvider(action.actionIntent, flags, requestCode)
-                                      .getPendingIntent();
+        action.actionIntent =
+                new PendingIntentProvider(action.actionIntent, flags, requestCode)
+                        .getPendingIntent();
         addAction(action);
         return this;
     }
@@ -215,12 +218,6 @@ public class NotificationWrapperCompatBuilder implements NotificationWrapperBuil
     @Override
     public NotificationWrapperBuilder setSubText(CharSequence text) {
         mBuilder.setSubText(text);
-        return this;
-    }
-
-    @Override
-    public NotificationWrapperBuilder setContentInfo(String info) {
-        mBuilder.setContentInfo(info);
         return this;
     }
 
@@ -283,11 +280,9 @@ public class NotificationWrapperCompatBuilder implements NotificationWrapperBuil
             Bitmap bigPicture, CharSequence summaryText) {
         NotificationCompat.BigPictureStyle style =
                 new NotificationCompat.BigPictureStyle().bigPicture(bigPicture);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            // Android N doesn't show content text when expanded, so duplicate body text as a
-            // summary for the big picture.
-            style.setSummaryText(summaryText);
-        }
+        // Android N doesn't show content text when expanded, so duplicate body text as a  summary
+        // for the big picture.
+        style.setSummaryText(summaryText);
         mBuilder.setStyle(style);
         return this;
     }

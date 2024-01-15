@@ -22,7 +22,8 @@ Prefs:
 
 * *Are not* directly surfaced to the user
 * *Are not* localized into the user's language
-* *Are* configurable via enterprise policy
+* *Are* configurable via enterprise policy if a policy exists for the pref
+  (there is no catch-all policy that allows setting arbitrary prefs)
 * *Are not* reported via UMA when in use
 * *Are not* included in chrome://version
 * *Are* automatically persistent across restarts (usually)
@@ -65,7 +66,7 @@ Switches:
 
 * *Are not* directly surfaced to the user
 * *Are not* localized into the user's language
-* *Are* configurable via enterprise policy
+* *Are not* configurable via enterprise policy (except on Chrome OS, via FeatureFlagsProto)
 * *Are not* reported via UMA when in use
 * *Are* included in chrome://version
 * *Are not* automatically persistent across restarts
@@ -107,7 +108,7 @@ Flags:
 
 * *Are* directly surfaced to the user
 * *Are not* localized into the user's language
-* *Are* configurable via enterprise policy
+* *Are not* configurable via enterprise policy
 * *Are* reported via UMA when in use (via Launch.FlagsAtStartup)
 * *Are not* included in chrome://version
 * *Are* automatically persistent across restarts
@@ -136,6 +137,16 @@ Settings:
 You should add a setting if end-users might want to change this behavior. A
 decent litmus test for whether something should be a flag or a setting is: "will
 someone who can't read or write code want to change this?"
+
+## Summary Table
+|                                              | Prefs       | Features       | Switches | Flags                               | Settings                          |
+| :-                                           | :-          | :-             | :--:     | :--:                                | :-                                |
+| Directly surfaced to the user                | ❌          | ❌            | ❌       | ✅                                  | ✅                                |
+| Localized into the user's language           | ❌          | ❌            | ❌       | ❌                                  | ✅                                |
+| Configurable via enterprise policy           | ✅ if a policy<br>maps to the pref | ❌ | ❌ except on ChromeOS | ❌         | ❌ but their backing prefs may be |
+| Reported when in use                         | ❌          | via UMA/crash |  ❌      | via UMA<br> `Launch.FlagsAtStartup` | ❌                                |
+| Included in chrome://version                 | ❌          | ✅            | ✅       | ❌                                  | ❌                                |
+| Automatically persistent<br> across restarts | ✅ usually  | ❌            | ❌       | ✅                                  | ✅ via backing prefs              |
 
 ## Related Documents
 

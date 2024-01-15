@@ -4,7 +4,7 @@
 
 #import "ios/chrome/credential_provider_extension/ui/credential_list_view_controller.h"
 
-#import "base/mac/foundation_util.h"
+#import "base/apple/foundation_util.h"
 #import "base/numerics/safe_conversions.h"
 #import "ios/chrome/common/app_group/app_group_constants.h"
 #import "ios/chrome/common/app_group/app_group_metrics.h"
@@ -18,11 +18,6 @@
 #import "ios/chrome/credential_provider_extension/metrics_util.h"
 #import "ios/chrome/credential_provider_extension/ui/credential_list_global_header_view.h"
 #import "ios/chrome/credential_provider_extension/ui/credential_list_header_view.h"
-#import "ios/chrome/credential_provider_extension/ui/feature_flags.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace {
 
@@ -45,25 +40,6 @@ UIColor* BackgroundColor() {
 @end
 
 @implementation CredentialListCell
-
-- (instancetype)initWithStyle:(UITableViewCellStyle)style
-              reuseIdentifier:(NSString*)reuseIdentifier {
-  self = [super initWithStyle:style reuseIdentifier:reuseIdentifier];
-  if (self) {
-    [self addInteraction:[[ViewPointerInteraction alloc] init]];
-  }
-  return self;
-}
-
-@end
-
-// This cell just adds a simple hover pointer interaction to the TableViewCell.
-// TODO(crbug.com/1300569): Remove this when kEnableFaviconForPasswords flag is
-// removed.
-@interface LegacyCredentialListCell : UITableViewCell
-@end
-
-@implementation LegacyCredentialListCell
 
 - (instancetype)initWithStyle:(UITableViewCellStyle)style
               reuseIdentifier:(NSString*)reuseIdentifier {
@@ -109,15 +85,9 @@ UIColor* BackgroundColor() {
 - (void)viewDidLoad {
   [super viewDidLoad];
 
-  if (IsPasswordManagerBrandingUpdateEnable()) {
-    self.title = NSLocalizedString(
-        @"IDS_IOS_CREDENTIAL_PROVIDER_CREDENTIAL_LIST_BRANDED_TITLE",
-        @"Google Password Manager");
-  } else {
-    self.title =
-        NSLocalizedString(@"IDS_IOS_CREDENTIAL_PROVIDER_CREDENTIAL_LIST_TITLE",
-                          @"AutoFill Chrome Password");
-  }
+  self.title = NSLocalizedString(
+      @"IDS_IOS_CREDENTIAL_PROVIDER_CREDENTIAL_LIST_BRANDED_TITLE",
+      @"Google Password Manager");
 
   self.view.backgroundColor = BackgroundColor();
   self.navigationItem.leftBarButtonItem = [self navigationCancelButton];
@@ -232,7 +202,6 @@ UIColor* BackgroundColor() {
   UITableViewCell* cell =
       [tableView dequeueReusableCellWithIdentifier:kCredentialCellIdentifier];
 
-  if (IsFaviconEnabled()) {
     if (!cell) {
       cell =
           [[CredentialListCell alloc] initWithStyle:UITableViewCellStyleDefault
@@ -241,7 +210,7 @@ UIColor* BackgroundColor() {
     }
 
     CredentialListCell* credentialCell =
-        base::mac::ObjCCastStrict<CredentialListCell>(cell);
+        base::apple::ObjCCastStrict<CredentialListCell>(cell);
 
     credentialCell.textLabel.text = credential.serviceName;
     credentialCell.detailTextLabel.text = credential.user;
@@ -267,23 +236,6 @@ UIColor* BackgroundColor() {
     [credentialCell.faviconView
         configureWithAttributes:self.defaultWorldIconAttributes];
     return credentialCell;
-  } else {
-    if (!cell) {
-      cell = [[LegacyCredentialListCell alloc]
-            initWithStyle:UITableViewCellStyleSubtitle
-          reuseIdentifier:kCredentialCellIdentifier];
-      cell.accessoryView = [self infoIconButton];
-    }
-
-    cell.textLabel.text = credential.serviceName;
-    cell.textLabel.textColor = [UIColor colorNamed:kTextPrimaryColor];
-    cell.detailTextLabel.text = credential.user;
-    cell.detailTextLabel.textColor = [UIColor colorNamed:kTextSecondaryColor];
-    cell.selectionStyle = UITableViewCellSelectionStyleDefault;
-    cell.backgroundColor = [UIColor colorNamed:kBackgroundColor];
-    cell.accessibilityTraits |= UIAccessibilityTraitButton;
-    return cell;
-  }
 }
 
 // Asynchronously loads favicon for given index path. The loads are cancelled
@@ -294,7 +246,7 @@ UIColor* BackgroundColor() {
   DCHECK(credential);
   DCHECK(cell);
   CredentialListCell* credentialCell =
-      base::mac::ObjCCastStrict<CredentialListCell>(cell);
+      base::apple::ObjCCastStrict<CredentialListCell>(cell);
   NSString* serviceIdentifier = credential.serviceIdentifier;
 
   dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_LOW, 0), ^{
@@ -423,9 +375,9 @@ UIColor* BackgroundColor() {
 
 // Called when info icon is tapped.
 - (void)infoIconButtonTapped:(id)sender event:(id)event {
-  CGPoint hitPoint =
-      [base::mac::ObjCCastStrict<UIButton>(sender) convertPoint:CGPointZero
-                                                         toView:self.tableView];
+  CGPoint hitPoint = [base::apple::ObjCCastStrict<UIButton>(sender)
+      convertPoint:CGPointZero
+            toView:self.tableView];
   NSIndexPath* indexPath = [self.tableView indexPathForRowAtPoint:hitPoint];
   id<Credential> credential = [self credentialForIndexPath:indexPath];
   if (!credential) {
@@ -463,8 +415,7 @@ UIColor* BackgroundColor() {
 
 // Returns YES if given section is for global header.
 - (BOOL)isGlobalHeaderSection:(int)section {
-  return section == 0 && IsPasswordManagerBrandingUpdateEnable() &&
-         ![self isEmptyTable];
+  return section == 0 && ![self isEmptyTable];
 }
 
 // Returns the credential at the passed index.

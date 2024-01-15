@@ -111,8 +111,8 @@ class GamepadServiceTest : public testing::Test {
 
  private:
   base::test::SingleThreadTaskEnvironment task_environment_;
-  raw_ptr<MockGamepadDataFetcher> fetcher_;
-  raw_ptr<GamepadService> service_;
+  raw_ptr<MockGamepadDataFetcher, AcrossTasksDanglingUntriaged> fetcher_;
+  raw_ptr<GamepadService, AcrossTasksDanglingUntriaged> service_;
   std::vector<std::unique_ptr<MockGamepadConsumer>> consumers_;
   Gamepads test_data_;
 };
@@ -320,7 +320,8 @@ TEST_F(GamepadServiceTest, ConnectWhileInactiveTest) {
   }
 }
 
-TEST_F(GamepadServiceTest, ConnectAndDisconnectWhileInactiveTest) {
+// https://crbug.com/1405460: Flaky on Android.
+TEST_F(GamepadServiceTest, DISABLED_ConnectAndDisconnectWhileInactiveTest) {
   // Create two active consumers.
   auto* consumer1 = CreateConsumer();
   auto* consumer2 = CreateConsumer();

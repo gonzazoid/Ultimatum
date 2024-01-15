@@ -7,8 +7,8 @@ package org.chromium.chrome.test.util.browser;
 import org.chromium.base.BaseSwitches;
 import org.chromium.base.CommandLine;
 import org.chromium.chrome.browser.flags.AllCachedFieldTrialParameters;
-import org.chromium.chrome.browser.flags.CachedFeatureFlags;
 import org.chromium.chrome.browser.flags.CachedFieldTrialParameter;
+import org.chromium.chrome.browser.flags.CachedFlag;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -18,13 +18,12 @@ import java.util.Set;
 
 /**
  * Helps with setting Field Trial parameters during instrumentation tests. It parses the field
- * trials info from CommandLine, and applies the overrides to {@link CachedFeatureFlags}.
+ * trials info from CommandLine, and applies the overrides to {@link CachedFlag}.
  */
 public class FieldTrials {
     private static FieldTrials sInstance;
     private final Map<String, Map<String, String>> mTrialToParamValueMap = new HashMap<>();
     private final Map<String, Set<String>> mTrialToFeatureNameMap = new HashMap<>();
-    private static final String TAG = "FieldTrials";
 
     private FieldTrials() {}
 
@@ -49,21 +48,26 @@ public class FieldTrials {
             // "Trial1.Group1:param1/value1/param2/value2".
             int separatorIndex = fieldTrialParam.indexOf(".");
             if (separatorIndex == -1) {
-                throw new Exception("The trial name and group name should be"
-                        + " separated by a '.'.");
+                throw new Exception(
+                        "The trial name and group name should be" + " separated by a '.'.");
             }
 
             String trialName = fieldTrialParam.substring(0, separatorIndex);
             String[] groupParamPairs = fieldTrialParam.substring(separatorIndex + 1).split(":");
             if (groupParamPairs.length != 2) {
-                throw new Exception("The group name and field trial parameters"
-                        + " should be separated by a ':'.");
+                throw new Exception(
+                        "The group name and field trial parameters"
+                                + " should be separated by a ':'.");
             }
 
             String[] paramValuePair = groupParamPairs[1].split("/");
             if (paramValuePair.length % 2 != 0) {
-                throw new Exception("The param and value of the field trial group:" + trialName
-                        + "." + groupParamPairs[0] + " isn't paired up!");
+                throw new Exception(
+                        "The param and value of the field trial group:"
+                                + trialName
+                                + "."
+                                + groupParamPairs[0]
+                                + " isn't paired up!");
             }
 
             Map<String, String> paramValueMap = mTrialToParamValueMap.get(trialName);
@@ -122,7 +126,7 @@ public class FieldTrials {
             for (String enabledFeature : enableFeaturesSet) {
                 enabledFeaturesMap.put(cleanupFeatureName(enabledFeature), true);
             }
-            CachedFeatureFlags.setFeaturesForTesting(enabledFeaturesMap);
+            CachedFlag.setFeaturesForTesting(enabledFeaturesMap);
         }
 
         if (forceFieldTrials == null || forceFieldTrialParams == null || enableFeatures == null) {
@@ -147,11 +151,22 @@ public class FieldTrials {
                 }
             }
         } catch (Exception e) {
-            assert false : e.toString() + "\n"
-                    + "The format of field trials parameters declared isn't correct:"
-                    + BaseSwitches.FORCE_FIELD_TRIALS + "=" + forceFieldTrials + ", "
-                    + BaseSwitches.FORCE_FIELD_TRIAL_PARAMS + "=" + forceFieldTrialParams + ", "
-                    + BaseSwitches.ENABLE_FEATURES + "=" + enableFeatures + ".";
+            assert false
+                    : e.toString()
+                            + "\n"
+                            + "The format of field trials parameters declared isn't correct:"
+                            + BaseSwitches.FORCE_FIELD_TRIALS
+                            + "="
+                            + forceFieldTrials
+                            + ", "
+                            + BaseSwitches.FORCE_FIELD_TRIAL_PARAMS
+                            + "="
+                            + forceFieldTrialParams
+                            + ", "
+                            + BaseSwitches.ENABLE_FEATURES
+                            + "="
+                            + enableFeatures
+                            + ".";
         }
     }
 

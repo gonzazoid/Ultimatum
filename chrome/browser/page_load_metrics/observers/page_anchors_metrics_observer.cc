@@ -4,62 +4,37 @@
 
 #include "chrome/browser/page_load_metrics/observers/page_anchors_metrics_observer.h"
 
-#include "content/public/browser/web_contents_user_data.h"
+#include "base/debug/dump_without_crashing.h"
+#include "chrome/browser/navigation_predictor/navigation_predictor_metrics_document_data.h"
+#include "content/public/browser/navigation_handle.h"
+#include "services/metrics/public/cpp/metrics_utils.h"
 #include "services/metrics/public/cpp/ukm_builders.h"
 
-PageAnchorsMetricsObserver::AnchorsData::AnchorsData(
-    content::WebContents* contents)
-    : content::WebContentsUserData<AnchorsData>(*contents) {}
-
-PageAnchorsMetricsObserver::AnchorsData::~AnchorsData() = default;
-
-int PageAnchorsMetricsObserver::AnchorsData::MedianLinkLocation() {
-  DCHECK(!link_locations_.empty());
-  sort(link_locations_.begin(), link_locations_.end());
-  size_t idx = link_locations_.size() / 2;
-  if (link_locations_.size() % 2 == 0) {
-    return (link_locations_[idx - 1] + link_locations_[idx]) * 50;
-  }
-  return link_locations_[link_locations_.size() / 2] * 100;
-}
-
-void PageAnchorsMetricsObserver::AnchorsData::Clear() {
-  number_of_anchors_same_host_ = 0;
-  number_of_anchors_contains_image_ = 0;
-  number_of_anchors_in_iframe_ = 0;
-  number_of_anchors_url_incremented_ = 0;
-  number_of_anchors_ = 0;
-  total_clickable_space_ = 0;
-  viewport_height_ = 0;
-  viewport_width_ = 0;
-  link_locations_.clear();
-}
-
-WEB_CONTENTS_USER_DATA_KEY_IMPL(PageAnchorsMetricsObserver::AnchorsData);
-
-void PageAnchorsMetricsObserver::RecordUkm() {
-  PageAnchorsMetricsObserver::AnchorsData* data =
-      PageAnchorsMetricsObserver::AnchorsData::FromWebContents(web_contents_);
-  if (!data || data->number_of_anchors_ == 0) {
-    // NavigationPredictor did not record any anchor data, don't log anything.
+void PageAnchorsMetricsObserver::RecordAnchorElementMetricsDataToUkm() {
+  content::RenderFrameHost* rfh = render_frame_host();
+  if (!rfh) {
     return;
   }
-  ukm::builders::NavigationPredictorPageLinkMetrics builder(
-      GetDelegate().GetPageUkmSourceId());
-  builder.SetMedianLinkLocation(data->MedianLinkLocation());
-  builder.SetNumberOfAnchors_ContainsImage(
-      data->number_of_anchors_contains_image_);
-  builder.SetNumberOfAnchors_InIframe(data->number_of_anchors_in_iframe_);
-  builder.SetNumberOfAnchors_SameHost(data->number_of_anchors_same_host_);
-  builder.SetNumberOfAnchors_Total(data->number_of_anchors_);
-  builder.SetNumberOfAnchors_URLIncremented(
-      data->number_of_anchors_url_incremented_);
-  builder.SetTotalClickableSpace(data->total_clickable_space_);
-  builder.SetViewport_Height(data->viewport_height_);
-  builder.SetViewport_Width(data->viewport_width_);
-  builder.Record(ukm::UkmRecorder::Get());
-  // Clear the AnchorsData for the next page load.
-  data->Clear();
+  NavigationPredictorMetricsDocumentData* data =
+      NavigationPredictorMetricsDocumentData::GetOrCreateForCurrentDocument(
+          rfh);
+  CHECK(data);
+  data->RecordAnchorElementMetricsData(ukm_source_id_);
+}
+
+void PageAnchorsMetricsObserver::RecordDataToUkm() {
+  // `AnchorElementMetricsData` are already recorded to UKM as we receive them,
+  // and we don't need to record them again here. The edge case scenario is
+  // handled separately in `OnRestoreFromBackForwardCache`.
+  content::RenderFrameHost* rfh = render_frame_host();
+  if (!rfh) {
+    return;
+  }
+  NavigationPredictorMetricsDocumentData* data =
+      NavigationPredictorMetricsDocumentData::GetOrCreateForCurrentDocument(
+          rfh);
+  CHECK(data);
+  data->RecordDataToUkm(ukm_source_id_);
 }
 
 page_load_metrics::PageLoadMetricsObserver::ObservePolicy
@@ -84,9 +59,9 @@ void PageAnchorsMetricsObserver::OnComplete(
   // Do not report Ukm while prerendering.
   if (is_in_prerendered_page_)
     return;
-
-  RecordUkm();
+  RecordDataToUkm();
 }
+
 page_load_metrics::PageLoadMetricsObserver::ObservePolicy
 PageAnchorsMetricsObserver::FlushMetricsOnAppEnterBackground(
     const page_load_metrics::mojom::PageLoadTiming&) {
@@ -94,12 +69,65 @@ PageAnchorsMetricsObserver::FlushMetricsOnAppEnterBackground(
   if (is_in_prerendered_page_)
     return CONTINUE_OBSERVING;
 
-  RecordUkm();
+  RecordDataToUkm();
   return STOP_OBSERVING;
+}
+
+void PageAnchorsMetricsObserver::UpdateRenderFrameHostAndSourceId(
+    content::NavigationHandle* navigation_handle) {
+  render_frame_host_id_ =
+      navigation_handle->GetRenderFrameHost()->GetGlobalId();
+  ukm_source_id_ = ukm::ConvertToSourceId(navigation_handle->GetNavigationId(),
+                                          ukm::SourceIdType::NAVIGATION_ID);
+
+  NavigationPredictorMetricsDocumentData* data =
+      NavigationPredictorMetricsDocumentData::GetOrCreateForCurrentDocument(
+          render_frame_host());
+  CHECK(data);
+  data->SetUkmSourceId(ukm_source_id_);
+  data->SetNavigationStartTime(GetDelegate().GetNavigationStart());
 }
 
 void PageAnchorsMetricsObserver::DidActivatePrerenderedPage(
     content::NavigationHandle* navigation_handle) {
   DCHECK(is_in_prerendered_page_);
   is_in_prerendered_page_ = false;
+  UpdateRenderFrameHostAndSourceId(navigation_handle);
+}
+
+page_load_metrics::PageLoadMetricsObserver::ObservePolicy
+PageAnchorsMetricsObserver::OnCommit(
+    content::NavigationHandle* navigation_handle) {
+  UpdateRenderFrameHostAndSourceId(navigation_handle);
+  return CONTINUE_OBSERVING;
+}
+
+void PageAnchorsMetricsObserver::OnRestoreFromBackForwardCache(
+    const page_load_metrics::mojom::PageLoadTiming& timing,
+    content::NavigationHandle* navigation_handle) {
+  UpdateRenderFrameHostAndSourceId(navigation_handle);
+  RecordAnchorElementMetricsDataToUkm();
+}
+
+void PageAnchorsMetricsObserver::OnRenderFrameDeleted(
+    content::RenderFrameHost* rfh) {
+  // OnRenderFrameDeleted is called when RenderFrameHost for a frame is deleted.
+  // Including the sub-frames.
+  if (render_frame_host() == rfh) {
+    if (!is_in_prerendered_page_) {
+      RecordDataToUkm();
+    }
+    render_frame_host_id_.reset();
+  }
+}
+
+page_load_metrics::PageLoadMetricsObserver::ObservePolicy
+PageAnchorsMetricsObserver::OnEnterBackForwardCache(
+    const page_load_metrics::mojom::PageLoadTiming&) {
+  if (is_in_prerendered_page_) {
+    return CONTINUE_OBSERVING;
+  }
+
+  RecordDataToUkm();
+  return CONTINUE_OBSERVING;
 }

@@ -19,7 +19,8 @@ class NATIVE_THEME_EXPORT NativeThemeAura : public NativeThemeBase {
 
   NativeThemeAura(bool use_overlay_scrollbars,
                   bool should_only_use_dark_colors,
-                  ui::SystemTheme system_theme = ui::SystemTheme::kDefault);
+                  ui::SystemTheme system_theme = ui::SystemTheme::kDefault,
+                  NativeTheme* theme_to_update = nullptr);
 
   NativeThemeAura(const NativeThemeAura&) = delete;
   NativeThemeAura& operator=(const NativeThemeAura&) = delete;
@@ -29,7 +30,7 @@ class NATIVE_THEME_EXPORT NativeThemeAura : public NativeThemeBase {
   static NativeThemeAura* web_instance();
 
   // Overridden from NativeTheme:
-  SkColor FocusRingColorForBaseColor(SkColor base_color) const override;
+  SkColor4f FocusRingColorForBaseColor(SkColor4f base_color) const override;
 
   // NativeThemeBase:
   void PaintMenuPopupBackground(
@@ -63,12 +64,13 @@ class NATIVE_THEME_EXPORT NativeThemeAura : public NativeThemeBase {
                            Part part,
                            State state,
                            const gfx::Rect& rect,
-                           ScrollbarOverlayColorTheme theme,
+                           const ScrollbarThumbExtraParams& extra_params,
                            ColorScheme color_scheme) const override;
   void PaintScrollbarCorner(cc::PaintCanvas* canvas,
                             const ColorProvider* color_provider,
                             State state,
                             const gfx::Rect& rect,
+                            const ScrollbarTrackExtraParams& extra_params,
                             ColorScheme color_scheme) const override;
   gfx::Size GetPartSize(Part part,
                         State state,

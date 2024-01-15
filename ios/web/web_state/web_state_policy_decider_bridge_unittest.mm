@@ -4,14 +4,10 @@
 
 #import "ios/web/public/navigation/web_state_policy_decider_bridge.h"
 
-#import "base/callback_helpers.h"
+#import "base/functional/callback_helpers.h"
 #import "ios/web/public/test/fakes/crw_fake_web_state_policy_decider.h"
 #import "ios/web/public/test/fakes/fake_web_state.h"
 #import "testing/platform_test.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace web {
 

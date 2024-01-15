@@ -5,6 +5,7 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_CSS_REMOTE_FONT_FACE_SOURCE_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_CSS_REMOTE_FONT_FACE_SOURCE_H_
 
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "third_party/blink/renderer/core/css/css_font_face_source.h"
 #include "third_party/blink/renderer/core/execution_context/security_context.h"
@@ -120,8 +121,9 @@ class RemoteFontFaceSource final : public CSSFontFaceSource,
     void MaySetDataSource(DataSource);
 
     static DataSource DataSourceForLoadFinish(const FontResource* font) {
-      if (font->Url().ProtocolIsData())
+      if (font->Url().ProtocolIsData()) {
         return kFromDataURL;
+      }
       return font->GetResponse().WasCached() ? kFromDiskCache : kFromNetwork;
     }
 
@@ -154,11 +156,6 @@ class RemoteFontFaceSource final : public CSSFontFaceSource,
   // Our owning font face.
   Member<CSSFontFace> face_;
   Member<FontSelector> font_selector_;
-
-#if defined(USE_PARALLEL_TEXT_SHAPING)
-  // Post `BeginLoadIfNeeded()` unless context thread.
-  scoped_refptr<base::SingleThreadTaskRunner> task_runner_;
-#endif
 
   // |nullptr| if font is not loaded or failed to decode.
   scoped_refptr<FontCustomPlatformData> custom_font_data_;

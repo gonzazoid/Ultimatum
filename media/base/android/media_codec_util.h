@@ -6,8 +6,10 @@
 #define MEDIA_BASE_ANDROID_MEDIA_CODEC_UTIL_H_
 
 #include <jni.h>
+
 #include <set>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "base/compiler_specific.h"
@@ -16,6 +18,8 @@
 #include "media/base/media_export.h"
 #include "media/base/sample_format.h"
 #include "media/base/video_codecs.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "ui/gfx/geometry/size.h"
 
 namespace media {
 
@@ -30,9 +34,6 @@ class MEDIA_EXPORT MediaCodecUtil {
   static std::string CodecToAndroidMimeType(AudioCodec codec,
                                             SampleFormat sample_format);
   static std::string CodecToAndroidMimeType(VideoCodec codec);
-
-  // Returns true if MediaCodec supports CBCS Encryption.
-  static bool PlatformSupportsCbcsEncryption(int sdk);
 
   // Indicates if the vp8 decoder or encoder is available on this device.
   static bool IsVp8DecoderAvailable();
@@ -54,6 +55,9 @@ class MEDIA_EXPORT MediaCodecUtil {
   static bool IsHEVCDecoderAvailable();
 #endif
 
+  // Indicates if the AAC encoder is available on this device.
+  static bool IsAACEncoderAvailable();
+
   // Indicates if SurfaceView and MediaCodec work well together on this device.
   static bool IsSurfaceViewOutputSupported();
 
@@ -63,6 +67,17 @@ class MEDIA_EXPORT MediaCodecUtil {
   // Return true if the compressed audio |codec| will pass through the media
   // pipelines without decompression.
   static bool IsPassthroughAudioFormat(AudioCodec codec);
+
+  // Returns a known alignment which can be used to translate visible size into
+  // coded size. E.g., a size of (1, 1) means no alignment while a size of
+  // (64, 1) would mean visible width should be rounded up to the nearest
+  // multiple of 64 and height should be left untouched.
+  //
+  // Returns absl::nullopt if the decoder isn't recognized. `host_sdk_int` may
+  // be set for testing purposes.
+  static absl::optional<gfx::Size> LookupCodedSizeAlignment(
+      std::string_view name,
+      absl::optional<int> host_sdk_int = absl::nullopt);
 
   //
   // ***************************************************************

@@ -11,9 +11,9 @@
 #include <map>
 
 #include "base/base_export.h"
-#include "base/containers/stack_container.h"
 #include "base/files/scoped_file.h"
 #include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "base/message_loop/message_pump.h"
@@ -21,6 +21,7 @@
 #include "base/message_loop/watchable_io_message_pump_posix.h"
 #include "base/threading/thread_checker.h"
 #include "base/time/time.h"
+#include "third_party/abseil-cpp/absl/container/inlined_vector.h"
 
 namespace base {
 
@@ -70,6 +71,10 @@ class BASE_EXPORT MessagePumpEpoll : public MessagePump,
     EpollEventEntry& operator=(const EpollEventEntry&) = delete;
     ~EpollEventEntry();
 
+    static EpollEventEntry& FromEpollEvent(epoll_event& e) {
+      return *static_cast<EpollEventEntry*>(e.data.ptr);
+    }
+
     // Returns the combined set of epoll event flags which should be monitored
     // by the epoll instance for `fd`. This is based on a combination of the
     // parameters of all currently active elements in `interests`. Namely:
@@ -90,7 +95,18 @@ class BASE_EXPORT MessagePumpEpoll : public MessagePump,
     // all real scenarios, since there's little practical value in having more
     // than two controllers (e.g. one reader and one writer) watch the same
     // descriptor on the same thread.
-    StackVector<scoped_refptr<Interest>, 2> interests;
+    absl::InlinedVector<scoped_refptr<Interest>, 2> interests;
+
+    // Temporary pointer to an active epoll_event structure which refers to
+    // this entry. This is set immediately upon returning from epoll_wait() and
+    // cleared again immediately before dispatching to any registered interests,
+    // so long as this entry isn't destroyed in the interim.
+    raw_ptr<epoll_event> active_event = nullptr;
+
+    // If the file descriptor is disconnected and no active `interests`, remove
+    // it from the epoll interest list to avoid unconditionally epoll_wait
+    // return, and prevent any future update on this `EpollEventEntry`.
+    bool stopped = false;
   };
 
   // State which lives on the stack within Run(), to support nested run loops.
@@ -107,9 +123,10 @@ class BASE_EXPORT MessagePumpEpoll : public MessagePump,
 
   void AddEpollEvent(EpollEventEntry& entry);
   void UpdateEpollEvent(EpollEventEntry& entry);
+  void StopEpollEvent(EpollEventEntry& entry);
   void UnregisterInterest(const scoped_refptr<Interest>& interest);
-  bool WaitForEpollEvent(TimeDelta timeout);
-  void OnEpollEvent(const epoll_event& e);
+  bool WaitForEpollEvents(TimeDelta timeout, Delegate* delegate);
+  void OnEpollEvent(EpollEventEntry& entry, uint32_t events);
   void HandleEvent(int fd,
                    bool can_read,
                    bool can_write,
@@ -118,7 +135,12 @@ class BASE_EXPORT MessagePumpEpoll : public MessagePump,
 
   // Null if Run() is not currently executing. Otherwise it's a pointer into the
   // stack of the innermost nested Run() invocation.
-  RunState* run_state_ = nullptr;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter for:
+  // #addr-of
+  RAW_PTR_EXCLUSION RunState* run_state_ = nullptr;
+
+  // This flag is set if epoll has processed I/O events.
+  bool processed_io_events_ = false;
 
   // Mapping of all file descriptors currently watched by this message pump.
   // std::map was chosen because (1) the number of elements can vary widely,

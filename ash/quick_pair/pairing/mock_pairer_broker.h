@@ -5,17 +5,18 @@
 #ifndef ASH_QUICK_PAIR_PAIRING_MOCK_PAIRER_BROKER_H_
 #define ASH_QUICK_PAIR_PAIRING_MOCK_PAIRER_BROKER_H_
 
+#include <optional>
+
 #include "ash/quick_pair/common/pair_failure.h"
 #include "ash/quick_pair/common/protocol.h"
 #include "ash/quick_pair/pairing/pairer_broker.h"
 #include "base/observer_list.h"
 #include "testing/gmock/include/gmock/gmock.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace ash {
 namespace quick_pair {
 
-struct Device;
+class Device;
 enum class AccountKeyFailure;
 
 class MockPairerBroker : public PairerBroker {
@@ -31,10 +32,13 @@ class MockPairerBroker : public PairerBroker {
 
   void AddObserver(Observer* observer) override;
   void RemoveObserver(Observer* observer) override;
+  void NotifyPairingStart(scoped_refptr<Device> device);
+  void NotifyHandshakeComplete(scoped_refptr<Device> device);
   void NotifyDevicePaired(scoped_refptr<Device> device);
   void NotifyPairFailure(scoped_refptr<Device> device, PairFailure failure);
+  void NotifyPairComplete(scoped_refptr<Device> device);
   void NotifyAccountKeyWrite(scoped_refptr<Device> device,
-                             absl::optional<AccountKeyFailure> error);
+                             std::optional<AccountKeyFailure> error);
 
  private:
   base::ObserverList<Observer> observers_;

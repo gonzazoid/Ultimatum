@@ -5,8 +5,7 @@
 #ifndef EXTENSIONS_BROWSER_API_RUNTIME_RUNTIME_API_DELEGATE_H_
 #define EXTENSIONS_BROWSER_API_RUNTIME_RUNTIME_API_DELEGATE_H_
 
-#include "base/callback.h"
-#include "base/version.h"
+#include "base/functional/callback.h"
 #include "extensions/common/api/runtime.h"
 
 class GURL;
@@ -33,7 +32,7 @@ class RuntimeAPIDelegate {
                       const std::string& version);
   };
 
-  virtual ~RuntimeAPIDelegate() {}
+  virtual ~RuntimeAPIDelegate() = default;
 
   // The callback given to RequestUpdateCheck.
   using UpdateCheckCallback =

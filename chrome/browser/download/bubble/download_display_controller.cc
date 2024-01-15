@@ -1,16 +1,19 @@
 // Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
 #include "chrome/browser/download/bubble/download_display_controller.h"
 
+#include "base/functional/bind.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/power_monitor/power_monitor.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
-#include "chrome/browser/download/bubble/download_bubble_controller.h"
+#include "chrome/browser/download/bubble/download_bubble_display_info.h"
 #include "chrome/browser/download/bubble/download_bubble_prefs.h"
-#include "chrome/browser/download/bubble/download_display.h"
-#include "chrome/browser/download/bubble/download_icon_state.h"
+#include "chrome/browser/download/bubble/download_bubble_ui_controller.h"
+#include "chrome/browser/download/bubble/download_bubble_utils.h"
 #include "chrome/browser/download/download_core_service.h"
 #include "chrome/browser/download/download_core_service_factory.h"
 #include "chrome/browser/download/download_item_model.h"
@@ -22,80 +25,48 @@
 #include "chrome/browser/ui/exclusive_access/exclusive_access_bubble_type.h"
 #include "chrome/browser/ui/exclusive_access/exclusive_access_context.h"
 #include "chrome/browser/ui/exclusive_access/exclusive_access_manager.h"
+#include "chrome/browser/ui/views/frame/browser_view.h"
+#include "components/download/public/common/download_danger_type.h"
 #include "components/offline_items_collection/core/offline_item.h"
 #include "components/offline_items_collection/core/offline_item_state.h"
 
+#if BUILDFLAG(IS_MAC)
+#include "chrome/browser/ui/fullscreen_util_mac.h"
+#endif
+
 namespace {
 
-using DownloadIconState = download::DownloadIconState;
+using DownloadIconActive = DownloadDisplay::IconActive;
+using DownloadIconState = DownloadDisplay::IconState;
+using DownloadUIModelPtr = DownloadUIModel::DownloadUIModelPtr;
 
 // The amount of time for the toolbar icon to be visible after a download is
 // completed.
-constexpr base::TimeDelta kToolbarIconVisibilityTimeInterval = base::Hours(24);
+constexpr base::TimeDelta kToolbarIconVisibilityTimeInterval =
+    base::Minutes(60);
 
 // The amount of time for the toolbar icon to stay active after a download is
 // completed. If the download completed while full screen, the timer is started
 // after user comes out of the full screen.
 constexpr base::TimeDelta kToolbarIconActiveTimeInterval = base::Minutes(1);
 
-// From the button UI's perspective, whether the download is considered in
-// progress.
-bool IsModelInProgress(const DownloadUIModel* model) {
-  // Consider dangerous downloads as completed, because we don't want to
-  // encourage users to interact with them. However, consider downloads pending
-  // scanning as in progress, because we do want users to scan potential
-  // dangerous downloads.
-  if (model->IsDangerous() &&
-      model->GetDangerType() !=
-          download::DOWNLOAD_DANGER_TYPE_PROMPT_FOR_SCANNING) {
+// Whether there are no more in-progress downloads that are not paused, i.e.,
+// whether all actively downloading items are done.
+bool IsAllDone(const DownloadBubbleDisplayInfo& info) {
+  return info.in_progress_count == info.paused_count;
+}
+
+// Whether the last download complete time is more recent than `interval` ago.
+bool HasRecentCompleteDownload(base::TimeDelta interval,
+                               base::Time last_complete_time) {
+  if (last_complete_time.is_null()) {
     return false;
   }
-  return model->GetState() == download::DownloadItem::IN_PROGRESS;
+  base::TimeDelta time_since_last_completion =
+      base::Time::Now() - last_complete_time;
+  return time_since_last_completion < interval;
 }
 
-bool HasDeepScanningDownload(
-    std::vector<std::unique_ptr<DownloadUIModel>>& all_models) {
-  for (const auto& model : all_models) {
-    if (model->GetDangerType() ==
-            download::DOWNLOAD_DANGER_TYPE_ASYNC_SCANNING &&
-        model->GetState() != download::DownloadItem::CANCELLED) {
-      return true;
-    }
-  }
-  return false;
-}
-
-int InProgressDownloadCount(
-    std::vector<std::unique_ptr<DownloadUIModel>>& all_models) {
-  int in_progress_count = 0;
-  for (const auto& model : all_models) {
-    if (IsModelInProgress(model.get())) {
-      in_progress_count++;
-    }
-  }
-  return in_progress_count;
-}
-
-int PausedDownloadCount(
-    std::vector<std::unique_ptr<DownloadUIModel>>& all_models) {
-  int paused_count = 0;
-  for (const auto& model : all_models) {
-    if (IsModelInProgress(model.get()) && model->IsPaused()) {
-      paused_count++;
-    }
-  }
-  return paused_count;
-}
-
-bool HasUnactionedDownload(
-    std::vector<std::unique_ptr<DownloadUIModel>>& all_models) {
-  for (const auto& model : all_models) {
-    if (!model->WasActionedOn()) {
-      return true;
-    }
-  }
-  return false;
-}
 }  // namespace
 
 DownloadDisplayController::DownloadDisplayController(
@@ -104,13 +75,12 @@ DownloadDisplayController::DownloadDisplayController(
     DownloadBubbleUIController* bubble_controller)
     : display_(display),
       browser_(browser),
-      download_manager_(browser_->profile()->GetDownloadManager()),
-      download_notifier_(download_manager_, this),
       bubble_controller_(bubble_controller) {
-  bubble_controller_->InitOfflineItems(
-      this,
-      base::BindOnce(&DownloadDisplayController::MaybeShowButtonWhenCreated,
-                     weak_factory_.GetWeakPtr()));
+  bubble_controller_->SetDownloadDisplayController(this);
+  // |display| can be null in tests.
+  if (display) {
+    MaybeShowButtonWhenCreated();
+  }
   base::PowerMonitor::AddPowerSuspendObserver(this);
 }
 
@@ -118,18 +88,13 @@ DownloadDisplayController::~DownloadDisplayController() {
   base::PowerMonitor::RemovePowerSuspendObserver(this);
 }
 
-void DownloadDisplayController::OnNewItem(bool show_details) {
+void DownloadDisplayController::OnNewItem(bool show_animation) {
   if (!download::ShouldShowDownloadBubble(browser_->profile())) {
     return;
   }
 
-  std::vector<std::unique_ptr<DownloadUIModel>> all_models =
-      bubble_controller_->GetAllItemsToDisplay();
-  UpdateToolbarButtonState(all_models);
-  if (!show_details) {
-    return;
-  }
-  if (display_->IsFullscreenWithParentViewHidden()) {
+  UpdateButtonStateFromUpdateService();
+  if (display_->ShouldShowExclusiveAccessBubble()) {
     fullscreen_notification_shown_ = true;
     ExclusiveAccessContext* exclusive_access_context =
         browser_->exclusive_access_manager()->context();
@@ -141,54 +106,55 @@ void DownloadDisplayController::OnNewItem(bool show_details) {
           /*notify_download=*/true,
           /*force_update=*/true);
     }
-  } else if (download::ShouldShowDetailsAutomatically(browser_->profile())) {
-    display_->ShowDetails();
+  } else {
+    DownloadDisplay::IconUpdateInfo updates;
+    updates.show_animation = show_animation;
+    display_->UpdateDownloadIcon(updates);
   }
 }
 
 void DownloadDisplayController::OnUpdatedItem(bool is_done,
-                                              bool show_details_if_done) {
+                                              bool may_show_details) {
   if (!download::ShouldShowDownloadBubble(browser_->profile())) {
     return;
   }
+  const DownloadBubbleDisplayInfo& info = UpdateButtonStateFromUpdateService();
+  bool will_show_details = may_show_details && is_done && IsAllDone(info);
   if (is_done) {
     ScheduleToolbarDisappearance(kToolbarIconVisibilityTimeInterval);
-    if (show_details_if_done) {
-      if (display_->IsFullscreenWithParentViewHidden()) {
-        // Suppress the complete event for now because the parent view is
-        // hidden.
-        download_completed_while_fullscreen_ = true;
-      } else if (download::ShouldShowDetailsAutomatically(
-                     browser_->profile())) {
-        display_->ShowDetails();
-      }
-    }
   }
-  std::vector<std::unique_ptr<DownloadUIModel>> all_models =
-      bubble_controller_->GetAllItemsToDisplay();
-  UpdateToolbarButtonState(all_models);
+  if (will_show_details && display_->IsFullscreenWithParentViewHidden()) {
+    // If we would show the details, but the user is in fullscreen (and is
+    // capable of exiting), we should instead show the details once the user
+    // exits fullscreen.
+    should_show_details_on_exit_fullscreen_ =
+        display_->ShouldShowExclusiveAccessBubble();
+    // Show the details if we are in immersive fullscreen.
+    BrowserView* browser_view = BrowserView::GetBrowserViewForBrowser(browser_);
+    will_show_details = browser_view && browser_view->IsImmersiveModeEnabled();
+  }
+
+  // At this point, we are possibly in fullscreen. If we're in immersive
+  // fullscreen on macOS, it's OK to show the details bubble because the
+  // toolbar is either visible or it can be made visible. However, if we're
+  // in content/HTML fullscreen, the toolbar is not visible and we should not
+  // show the bubble. So, check our fullscreen state here and avoid showing
+  // the bubble if we're in content fullscreen.
+#if BUILDFLAG(IS_MAC)
+  will_show_details =
+      will_show_details && !fullscreen_utils::IsInContentFullscreen(browser_);
+#endif
+
+  if (will_show_details) {
+    display_->ShowDetails();
+  }
 }
 
 void DownloadDisplayController::OnRemovedItem(const ContentId& id) {
   if (!download::ShouldShowDownloadBubble(browser_->profile())) {
     return;
   }
-  std::vector<std::unique_ptr<DownloadUIModel>> all_models =
-      bubble_controller_->GetAllItemsToDisplay();
-  // Hide the button if there is only one download item left and that item is
-  // about to be removed.
-  if (all_models.size() == 1 && all_models[0]->GetContentId() == id) {
-    HideToolbarButton();
-    return;
-  }
-  UpdateToolbarButtonState(all_models);
-}
-
-void DownloadDisplayController::OnManagerGoingDown(
-    content::DownloadManager* manager) {
-  if (download_manager_ == manager) {
-    download_manager_ = nullptr;
-  }
+  UpdateButtonStateFromUpdateService();
 }
 
 void DownloadDisplayController::OnButtonPressed() {
@@ -204,10 +170,11 @@ void DownloadDisplayController::OnButtonPressed() {
 void DownloadDisplayController::HandleButtonPressed() {
   // If the current state is kComplete, set the icon to inactive because of the
   // user action.
-  if (icon_info_.icon_state == DownloadIconState::kComplete) {
-    icon_info_.is_active = false;
+  if (display_->GetIconState() == DownloadIconState::kComplete) {
+    DownloadDisplay::IconUpdateInfo updates;
+    updates.new_active = DownloadIconActive::kInactive;
+    display_->UpdateDownloadIcon(updates);
   }
-  display_->UpdateDownloadIcon();
 }
 
 void DownloadDisplayController::ShowToolbarButton() {
@@ -218,6 +185,7 @@ void DownloadDisplayController::ShowToolbarButton() {
 }
 
 void DownloadDisplayController::HideToolbarButton() {
+  // TODO(chlily): This should only hide the bubble/button when it is not open.
   if (display_->IsShowing()) {
     display_->Hide();
   }
@@ -229,81 +197,113 @@ void DownloadDisplayController::HideBubble() {
   }
 }
 
+bool DownloadDisplayController::OpenMostSpecificDialog(
+    const offline_items_collection::ContentId& content_id) {
+  // This method is currently used only for Lacros download notifications.
+  // This is called when a notification is clicked, and shows the download
+  // bubble in the Lacros browser window. In Lacros browser fullscreen (always
+  // immersive), the immersive fullscreen toolbar is shown (handled by display_)
+  // so no special case is needed here. In Lacros tab fullscreen (not
+  // immersive), the notification is not visible and can't be clicked, so we
+  // don't need to check display_->IsFullscreenWithParentViewHidden() here.
+  return display_->OpenMostSpecificDialog(content_id);
+}
+
 void DownloadDisplayController::ListenToFullScreenChanges() {
   observation_.Observe(
       browser_->exclusive_access_manager()->fullscreen_controller());
 }
 
 void DownloadDisplayController::OnFullscreenStateChanged() {
-  if (!fullscreen_notification_shown_ ||
+  if ((!fullscreen_notification_shown_ &&
+       !should_show_details_on_exit_fullscreen_) ||
       display_->IsFullscreenWithParentViewHidden()) {
     return;
   }
   fullscreen_notification_shown_ = false;
 
-  std::vector<std::unique_ptr<DownloadUIModel>> all_models =
-      bubble_controller_->GetAllItemsToDisplay();
-  UpdateToolbarButtonState(all_models);
-  int in_progress_count = InProgressDownloadCount(all_models);
-  if (in_progress_count > 0 &&
-      download::ShouldShowDetailsAutomatically(browser_->profile())) {
+  UpdateButtonStateFromUpdateService();
+  if (download::ShouldShowDownloadBubble(browser_->profile()) &&
+      should_show_details_on_exit_fullscreen_) {
     display_->ShowDetails();
+    should_show_details_on_exit_fullscreen_ = false;
   }
 }
 
 void DownloadDisplayController::OnResume() {
-  std::vector<std::unique_ptr<DownloadUIModel>> all_models =
-      bubble_controller_->GetAllItemsToDisplay();
-  UpdateToolbarButtonState(all_models);
+  UpdateButtonStateFromUpdateService();
+}
+
+void DownloadDisplayController::OpenSecuritySubpage(
+    const offline_items_collection::ContentId& id) {
+  display_->OpenSecuritySubpage(id);
 }
 
 void DownloadDisplayController::UpdateToolbarButtonState(
-    std::vector<std::unique_ptr<DownloadUIModel>>& all_models) {
-  if (all_models.empty()) {
+    const DownloadBubbleDisplayInfo& info,
+    const DownloadDisplay::ProgressInfo& progress_info) {
+  if (info.all_models_size == 0) {
     HideToolbarButton();
     return;
   }
-  int in_progress_count = InProgressDownloadCount(all_models);
-  int paused_count = PausedDownloadCount(all_models);
-  bool has_deep_scanning_download = HasDeepScanningDownload(all_models);
-  base::Time last_complete_time =
-      GetLastCompleteTime(bubble_controller_->GetOfflineItems());
 
-  if (in_progress_count > 0) {
-    icon_info_.icon_state = DownloadIconState::kProgress;
-    icon_info_.is_active = paused_count >= in_progress_count ? false : true;
+  DownloadDisplay::IconUpdateInfo updates;
+
+  if (info.in_progress_count > 0) {
+    updates.new_state = DownloadIconState::kProgress;
+    updates.new_active = info.paused_count < info.in_progress_count
+                             ? DownloadIconActive::kActive
+                             : DownloadIconActive::kInactive;
   } else {
-    icon_info_.icon_state = DownloadIconState::kComplete;
-    if (HasRecentCompleteDownload(kToolbarIconActiveTimeInterval,
-                                  last_complete_time) &&
-        HasUnactionedDownload(all_models)) {
-      icon_info_.is_active = true;
+    updates.new_state = DownloadIconState::kComplete;
+    bool complete_unactioned =
+        HasRecentCompleteDownload(kToolbarIconActiveTimeInterval,
+                                  info.last_completed_time) &&
+        info.has_unactioned;
+    bool exited_fullscreen_owed_details =
+        !display_->IsFullscreenWithParentViewHidden() &&
+        should_show_details_on_exit_fullscreen_;
+    if (complete_unactioned || exited_fullscreen_owed_details) {
+      updates.new_active = DownloadIconActive::kActive;
       ScheduleToolbarInactive(kToolbarIconActiveTimeInterval);
-    } else if (!display_->IsFullscreenWithParentViewHidden() &&
-               download_completed_while_fullscreen_) {
-      icon_info_.is_active = true;
-      ScheduleToolbarInactive(kToolbarIconActiveTimeInterval);
-      download_completed_while_fullscreen_ = false;
     } else {
-      icon_info_.is_active = false;
+      updates.new_active = DownloadIconActive::kInactive;
     }
   }
 
-  if (has_deep_scanning_download) {
-    icon_info_.icon_state = DownloadIconState::kDeepScanning;
+  if (info.has_deep_scanning) {
+    updates.new_state = DownloadIconState::kDeepScanning;
   }
 
-  if (icon_info_.icon_state != DownloadIconState::kComplete ||
+  if (updates.new_state != DownloadIconState::kComplete ||
       HasRecentCompleteDownload(kToolbarIconVisibilityTimeInterval,
-                                last_complete_time)) {
+                                info.last_completed_time)) {
     ShowToolbarButton();
   }
-  display_->UpdateDownloadIcon();
+
+  updates.new_progress = progress_info;
+
+  display_->UpdateDownloadIcon(updates);
 }
 
 void DownloadDisplayController::UpdateDownloadIconToInactive() {
-  icon_info_.is_active = false;
-  display_->UpdateDownloadIcon();
+  DownloadDisplay::IconUpdateInfo updates;
+  updates.new_active = DownloadIconActive::kInactive;
+  display_->UpdateDownloadIcon(updates);
+}
+
+const DownloadBubbleDisplayInfo&
+DownloadDisplayController::UpdateButtonStateFromUpdateService() {
+  const DownloadBubbleDisplayInfo& info =
+      bubble_controller_->update_service()->GetDisplayInfo(
+          GetWebAppIdForBrowser(browser_));
+  DownloadDisplay::ProgressInfo progress_info =
+      bubble_controller_->update_service()->GetProgressInfo(
+          GetWebAppIdForBrowser(browser_));
+
+  UpdateToolbarButtonState(info, progress_info);
+
+  return info;
 }
 
 void DownloadDisplayController::ScheduleToolbarDisappearance(
@@ -321,78 +321,19 @@ void DownloadDisplayController::ScheduleToolbarInactive(
       &DownloadDisplayController::UpdateDownloadIconToInactive);
 }
 
-base::Time DownloadDisplayController::GetLastCompleteTime(
-    const offline_items_collection::OfflineContentAggregator::OfflineItemList&
-        offline_items) {
-  base::Time last_time = DownloadPrefs::FromDownloadManager(download_manager_)
-                             ->GetLastCompleteTime();
-  for (const auto& offline_item : offline_items) {
-    if (last_time < offline_item.completion_time)
-      last_time = offline_item.completion_time;
-  }
-  return last_time;
-}
-
 void DownloadDisplayController::MaybeShowButtonWhenCreated() {
   if (!download::ShouldShowDownloadBubble(browser_->profile())) {
     return;
   }
 
-  std::vector<std::unique_ptr<DownloadUIModel>> all_models =
-      bubble_controller_->GetAllItemsToDisplay();
-  UpdateToolbarButtonState(all_models);
+  const DownloadBubbleDisplayInfo& info = UpdateButtonStateFromUpdateService();
   if (display_->IsShowing()) {
+    base::Time disappearance_time =
+        info.last_completed_time + kToolbarIconVisibilityTimeInterval;
+    base::TimeDelta interval_until_disappearance =
+        disappearance_time - base::Time::Now();
+    // Avoid passing a negative time interval.
     ScheduleToolbarDisappearance(
-        kToolbarIconVisibilityTimeInterval -
-        (base::Time::Now() -
-         GetLastCompleteTime(bubble_controller_->GetOfflineItems())));
+        std::max(base::TimeDelta(), interval_until_disappearance));
   }
-}
-
-bool DownloadDisplayController::HasRecentCompleteDownload(
-    base::TimeDelta interval,
-    base::Time last_complete_time) {
-  base::Time current_time = base::Time::Now();
-  base::TimeDelta time_since_last_completion =
-      current_time - last_complete_time;
-  // Also check that the current time is not smaller than the last complete
-  // time, this can happen if the system clock has moved backward.
-  return time_since_last_completion < interval &&
-         current_time >= last_complete_time;
-}
-
-DownloadDisplayController::IconInfo DownloadDisplayController::GetIconInfo() {
-  return icon_info_;
-}
-
-bool DownloadDisplayController::IsDisplayShowingDetails() {
-  return display_->IsShowingDetails();
-}
-
-DownloadDisplayController::ProgressInfo
-DownloadDisplayController::GetProgress() {
-  ProgressInfo progress_info;
-  std::vector<std::unique_ptr<DownloadUIModel>> all_models =
-      bubble_controller_->GetAllItemsToDisplay();
-  int64_t received_bytes = 0;
-  int64_t total_bytes = 0;
-
-  for (const auto& model : all_models) {
-    if (IsModelInProgress(model.get())) {
-      ++progress_info.download_count;
-      if (model->GetTotalBytes() <= 0) {
-        // There may or may not be more data coming down this pipe.
-        progress_info.progress_certain = false;
-      } else {
-        received_bytes += model->GetCompletedBytes();
-        total_bytes += model->GetTotalBytes();
-      }
-    }
-  }
-
-  if (total_bytes > 0) {
-    progress_info.progress_percentage =
-        base::ClampFloor(received_bytes * 100.0 / total_bytes);
-  }
-  return progress_info;
 }

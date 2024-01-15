@@ -7,9 +7,10 @@
 
 #include "base/containers/flat_set.h"
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
+#include "base/scoped_observation_traits.h"
 #include "base/sequence_checker.h"
 #include "services/metrics/public/cpp/ukm_source_id.h"
 
@@ -23,7 +24,7 @@ class UkmDatabase;
 // before being written to the database.
 class UrlSignalHandler {
  public:
-  using FindCallback = base::OnceCallback<void(bool)>;
+  using FindCallback = base::OnceCallback<void(bool, const std::string&)>;
 
   // Delegate class, usually one per each HistoryService, used for checking if
   // an URL is part of the history database on-demand.
@@ -35,6 +36,8 @@ class UrlSignalHandler {
     virtual bool FastCheckUrl(const GURL& url);
     // Query the history database to check if the |url| is part of the database.
     virtual void FindUrlInHistory(const GURL& url, FindCallback callback) = 0;
+    // Getters for getting profile id.
+    virtual const std::string& profile_id() = 0;
 
     virtual ~HistoryDelegate() = default;
   };
@@ -42,8 +45,8 @@ class UrlSignalHandler {
   explicit UrlSignalHandler(UkmDatabase* ukm_database);
   ~UrlSignalHandler();
 
-  UrlSignalHandler(UrlSignalHandler&) = delete;
-  UrlSignalHandler& operator=(UrlSignalHandler&) = delete;
+  UrlSignalHandler(const UrlSignalHandler&) = delete;
+  UrlSignalHandler& operator=(const UrlSignalHandler&) = delete;
 
   // Called by UKM observer when source URL for the |source_id| is updated.
   void OnUkmSourceUpdated(ukm::SourceId source_id,
@@ -52,7 +55,7 @@ class UrlSignalHandler {
   // Called by history service when a visit is added for the |url|. This
   // notification should mean that the |url| will be stored in history database
   // URL table until it is removed by OnUrlsRemovedFromHistory().
-  void OnHistoryVisit(const GURL& url);
+  void OnHistoryVisit(const GURL& url, const std::string& profile_id);
 
   // Called when |urls| are removed from the history database.
   void OnUrlsRemovedFromHistory(const std::vector<GURL>& urls, bool all_urls);
@@ -72,12 +75,14 @@ class UrlSignalHandler {
       const GURL& url,
       std::unique_ptr<base::flat_set<HistoryDelegate*>> delegates_checked,
       FindCallback callback,
-      bool found);
+      bool found,
+      const std::string& profile_id);
 
   // Called when finished checking all the history delegates.
   void OnCheckedHistory(ukm::SourceId source_id,
                         const GURL& url,
-                        bool in_history);
+                        bool in_history,
+                        const std::string& profile_id);
 
   raw_ptr<UkmDatabase> ukm_database_;
 
@@ -92,5 +97,25 @@ class UrlSignalHandler {
 };
 
 }  // namespace segmentation_platform
+
+namespace base {
+
+template <>
+struct ScopedObservationTraits<
+    segmentation_platform::UrlSignalHandler,
+    segmentation_platform::UrlSignalHandler::HistoryDelegate> {
+  static void AddObserver(
+      segmentation_platform::UrlSignalHandler* source,
+      segmentation_platform::UrlSignalHandler::HistoryDelegate* observer) {
+    source->AddHistoryDelegate(observer);
+  }
+  static void RemoveObserver(
+      segmentation_platform::UrlSignalHandler* source,
+      segmentation_platform::UrlSignalHandler::HistoryDelegate* observer) {
+    source->RemoveHistoryDelegate(observer);
+  }
+};
+
+}  // namespace base
 
 #endif  // COMPONENTS_SEGMENTATION_PLATFORM_INTERNAL_SIGNALS_URL_SIGNAL_HANDLER_H_

@@ -6,21 +6,29 @@
 
 #include <atomic>
 #include <memory>
+#include <optional>
 
 #include "base/check.h"
 #include "base/check_op.h"
+#include "base/command_line.h"
+#include "base/debug/dump_without_crashing.h"
 #include "base/feature_list.h"
+#include "base/files/file_path.h"
+#include "base/functional/bind.h"
+#include "base/json/values_util.h"
 #include "base/memory/raw_ptr.h"
-#include "base/metrics/histogram_base.h"
-#include "base/metrics/histogram_macros.h"
-#include "base/metrics/histogram_macros_internal.h"
+#include "base/metrics/histogram_functions.h"
+#include "base/numerics/safe_conversions.h"
 #include "base/one_shot_event.h"
+#include "base/strings/stringprintf.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
-#include "base/trace_event/typed_macros.h"
-#include "base/tracing/protos/chrome_track_event.pbzero.h"
+#include "base/values.h"
 #include "build/buildflag.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/app_mode/app_mode_utils.h"
+#include "chrome/browser/apps/app_service/app_launch_params.h"
+#include "chrome/browser/apps/app_service/launch_utils.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profiles_state.h"
 #include "chrome/browser/sessions/app_session_service.h"
@@ -39,7 +47,11 @@
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/browser/ui/web_applications/app_browser_controller.h"
 #include "chrome/browser/ui/web_applications/web_app_browser_controller.h"
+#include "chrome/browser/ui/web_applications/web_app_launch_process.h"
+#include "chrome/browser/ui/web_applications/web_app_launch_utils.h"
 #include "chrome/browser/ui/web_applications/web_app_tabbed_utils.h"
+#include "chrome/browser/web_applications/locks/app_lock.h"
+#include "chrome/browser/web_applications/os_integration/os_integration_manager.h"
 #include "chrome/browser/web_applications/web_app_constants.h"
 #include "chrome/browser/web_applications/web_app_helpers.h"
 #include "chrome/browser/web_applications/web_app_install_utils.h"
@@ -47,16 +59,19 @@
 #include "chrome/browser/web_applications/web_app_registrar.h"
 #include "chrome/browser/web_applications/web_app_sync_bridge.h"
 #include "chrome/browser/web_applications/web_app_tab_helper.h"
+#include "chrome/browser/web_applications/web_app_ui_manager.h"
 #include "chrome/browser/web_applications/web_app_utils.h"
 #include "chrome/common/chrome_features.h"
+#include "chromeos/constants/chromeos_features.h"
 #include "components/services/app_service/public/cpp/app_launch_util.h"
 #include "components/site_engagement/content/site_engagement_service.h"
 #include "content/public/browser/navigation_controller.h"
 #include "content/public/browser/navigation_entry.h"
 #include "content/public/browser/render_frame_host.h"
+#include "content/public/browser/site_instance.h"
 #include "content/public/browser/web_contents.h"
 #include "extensions/buildflags/buildflags.h"
-#include "extensions/common/constants.h"
+#include "third_party/blink/public/common/features.h"
 #include "third_party/blink/public/common/renderer_preferences/renderer_preferences.h"
 #include "ui/base/page_transition_types.h"
 #include "ui/base/ui_base_types.h"
@@ -69,31 +84,44 @@
 #include "extensions/common/extension.h"
 #endif
 
+#if BUILDFLAG(IS_CHROMEOS)
+#include "chromeos/components/kiosk/kiosk_utils.h"
+#endif  // BUILDFLAG(IS_CHROMEOS)
+
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 #include "chrome/browser/ash/app_mode/web_app/web_kiosk_browser_controller_ash.h"
 #include "chrome/browser/ash/system_web_apps/system_web_app_manager.h"
 #include "chrome/browser/ash/system_web_apps/types/system_web_app_delegate.h"
 #include "chrome/browser/ui/ash/system_web_apps/system_web_app_ui_utils.h"
-#include "components/user_manager/user_manager.h"
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+#include "chromeos/constants/chromeos_features.h"
+#endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
+
+#if BUILDFLAG(IS_WIN)
+#include "base/strings/utf_string_conversions.h"
+#endif
 
 namespace web_app {
 
 namespace {
 
-ui::WindowShowState DetermineWindowShowState() {
-  if (chrome::IsRunningInForcedAppMode())
+ui::WindowShowState DetermineWindowShowState(bool is_system_web_app) {
+  // Show SWAs in Kiosk non-fullscreen.
+  if (chrome::IsRunningInForcedAppMode() && !is_system_web_app) {
     return ui::SHOW_STATE_FULLSCREEN;
+  }
 
   return ui::SHOW_STATE_DEFAULT;
 }
 
 Browser* ReparentWebContentsIntoAppBrowser(content::WebContents* contents,
                                            Browser* target_browser,
-                                           const AppId& app_id,
+                                           const webapps::AppId& app_id,
                                            bool as_pinned_home_tab) {
   DCHECK(target_browser->is_type_app());
-  Browser* source_browser = chrome::FindBrowserWithWebContents(contents);
+  Browser* source_browser = chrome::FindBrowserWithTab(contents);
 
   // In a reparent, the owning session service needs to be told it's tab
   // has been removed, otherwise it will reopen the tab on restoration.
@@ -106,8 +134,9 @@ Browser* ReparentWebContentsIntoAppBrowser(content::WebContents* contents,
 
   // Avoid causing the existing browser window to close if this is the last tab
   // remaining.
-  if (source_tabstrip->count() == 1)
+  if (source_tabstrip->count() == 1) {
     chrome::NewTab(source_browser);
+  }
 
   if (as_pinned_home_tab) {
     if (HasPinnedHomeTab(target_tabstrip)) {
@@ -148,14 +177,30 @@ Browser* ReparentWebContentsIntoAppBrowser(content::WebContents* contents,
   return target_browser;
 }
 
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+const ash::SystemWebAppDelegate* GetSystemWebAppDelegate(
+    Browser* browser,
+    const webapps::AppId& app_id) {
+  auto system_app_type =
+      ash::GetSystemWebAppTypeForAppId(browser->profile(), app_id);
+  if (system_app_type) {
+    return ash::SystemWebAppManager::Get(browser->profile())
+        ->GetSystemApp(*system_app_type);
+  }
+  return nullptr;
+}
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+
 #if BUILDFLAG(IS_CHROMEOS)
 std::unique_ptr<AppBrowserController> CreateWebKioskBrowserController(
     Browser* browser,
     WebAppProvider* provider,
-    const AppId& app_id) {
+    const webapps::AppId& app_id) {
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-  return std::make_unique<ash::WebKioskBrowserControllerAsh>(*provider, browser,
-                                                             app_id);
+  const ash::SystemWebAppDelegate* system_app =
+      GetSystemWebAppDelegate(browser, app_id);
+  return std::make_unique<ash::WebKioskBrowserControllerAsh>(
+      *provider, browser, app_id, system_app);
 #else
   // TODO(b/242023891): Add web Kiosk browser controller for Lacros.
   return nullptr;
@@ -163,24 +208,10 @@ std::unique_ptr<AppBrowserController> CreateWebKioskBrowserController(
 }
 #endif  // BUILDFLAG(IS_CHROMEOS)
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-const ash::SystemWebAppDelegate* GetSystemWebAppDelegate(Browser* browser,
-                                                         const AppId& app_id) {
-  auto system_app_type =
-      ash::GetSystemWebAppTypeForAppId(browser->profile(), app_id);
-  if (system_app_type) {
-    return ash::SystemWebAppManager::GetForLocalAppsUnchecked(
-               browser->profile())
-        ->GetSystemApp(*system_app_type);
-  }
-  return nullptr;
-}
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
-
 std::unique_ptr<AppBrowserController> CreateWebAppBrowserController(
     Browser* browser,
     WebAppProvider* provider,
-    const AppId& app_id) {
+    const webapps::AppId& app_id) {
   bool should_have_tab_strip_for_swa = false;
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   const ash::SystemWebAppDelegate* system_app =
@@ -191,7 +222,7 @@ std::unique_ptr<AppBrowserController> CreateWebAppBrowserController(
   const bool has_tab_strip =
       !browser->is_type_app_popup() &&
       (should_have_tab_strip_for_swa ||
-       provider->registrar().IsTabbedWindowModeEnabled(app_id));
+       provider->registrar_unsafe().IsTabbedWindowModeEnabled(app_id));
   return std::make_unique<WebAppBrowserController>(*provider, browser, app_id,
 #if BUILDFLAG(IS_CHROMEOS_ASH)
                                                    system_app,
@@ -201,7 +232,7 @@ std::unique_ptr<AppBrowserController> CreateWebAppBrowserController(
 
 std::unique_ptr<AppBrowserController> MaybeCreateHostedAppBrowserController(
     Browser* browser,
-    const AppId& app_id) {
+    const webapps::AppId& app_id) {
 #if BUILDFLAG(ENABLE_EXTENSIONS)
   const extensions::Extension* extension =
       extensions::ExtensionRegistry::Get(browser->profile())
@@ -213,19 +244,56 @@ std::unique_ptr<AppBrowserController> MaybeCreateHostedAppBrowserController(
   return nullptr;
 }
 
+base::Value::Dict ToDebugDict(const apps::AppLaunchParams& params) {
+  base::Value::Dict value;
+  value.Set("app_id", params.app_id);
+  value.Set("launch_id", params.launch_id);
+  value.Set("container", static_cast<int>(params.container));
+  value.Set("disposition", static_cast<int>(params.disposition));
+  value.Set("override_url", params.override_url.spec());
+  value.Set("override_bounds", params.override_bounds.ToString());
+  value.Set("override_app_name", params.override_app_name);
+  value.Set("restore_id", params.restore_id);
+#if BUILDFLAG(IS_WIN)
+  value.Set("command_line",
+            base::WideToUTF8(params.command_line.GetCommandLineString()));
+#else
+  value.Set("command_line", params.command_line.GetCommandLineString());
+#endif
+  value.Set("current_directory",
+            base::FilePathToValue(params.current_directory));
+  value.Set("launch_source", static_cast<int>(params.launch_source));
+  value.Set("display_id", base::saturated_cast<int>(params.display_id));
+  base::Value::List files_list;
+  for (const base::FilePath& file : params.launch_files) {
+    files_list.Append(base::FilePathToValue(file));
+  }
+  value.Set("launch_files", std::move(files_list));
+  value.Set("intent", params.intent ? "<set>" : "<not set>");
+  value.Set("url_handler_launch_url",
+            params.url_handler_launch_url.value_or(GURL()).spec());
+  value.Set("protocol_handler_launch_url",
+            params.protocol_handler_launch_url.value_or(GURL()).spec());
+  value.Set("omit_from_session_restore", params.omit_from_session_restore);
+  return value;
+}
+
 }  // namespace
 
-absl::optional<AppId> GetWebAppForActiveTab(Browser* browser) {
-  WebAppProvider* provider = WebAppProvider::GetForWebApps(browser->profile());
-  if (!provider)
-    return absl::nullopt;
+std::optional<webapps::AppId> GetWebAppForActiveTab(const Browser* browser) {
+  const WebAppProvider* const provider =
+      WebAppProvider::GetForWebApps(browser->profile());
+  if (!provider) {
+    return std::nullopt;
+  }
 
-  content::WebContents* web_contents =
+  const content::WebContents* const web_contents =
       browser->tab_strip_model()->GetActiveWebContents();
-  if (!web_contents)
-    return absl::nullopt;
+  if (!web_contents) {
+    return std::nullopt;
+  }
 
-  return provider->registrar().FindInstalledAppWithUrlInScope(
+  return provider->registrar_unsafe().FindInstalledAppWithUrlInScope(
       web_contents->GetPrimaryMainFrame()->GetLastCommittedURL());
 }
 
@@ -233,8 +301,9 @@ void PrunePreScopeNavigationHistory(const GURL& scope,
                                     content::WebContents* contents) {
   content::NavigationController& navigation_controller =
       contents->GetController();
-  if (!navigation_controller.CanPruneAllButLastCommitted())
+  if (!navigation_controller.CanPruneAllButLastCommitted()) {
     return;
+  }
 
   int index = navigation_controller.GetEntryCount() - 1;
   while (index >= 0 &&
@@ -250,15 +319,16 @@ void PrunePreScopeNavigationHistory(const GURL& scope,
 }
 
 Browser* ReparentWebAppForActiveTab(Browser* browser) {
-  absl::optional<AppId> app_id = GetWebAppForActiveTab(browser);
-  if (!app_id)
+  std::optional<webapps::AppId> app_id = GetWebAppForActiveTab(browser);
+  if (!app_id) {
     return nullptr;
+  }
   return ReparentWebContentsIntoAppBrowser(
       browser->tab_strip_model()->GetActiveWebContents(), *app_id);
 }
 
 Browser* ReparentWebContentsIntoAppBrowser(content::WebContents* contents,
-                                           const AppId& app_id) {
+                                           const webapps::AppId& app_id) {
   Profile* profile = Profile::FromBrowserContext(contents->GetBrowserContext());
   // Incognito tabs reparent correctly, but remain incognito without any
   // indication to the user, so disallow it.
@@ -268,12 +338,18 @@ Browser* ReparentWebContentsIntoAppBrowser(content::WebContents* contents,
   // entered the app's scope. The minimal-ui Back button will be initially
   // disabled if the previous page was outside scope. Packaged apps are not
   // affected.
-  WebAppRegistrar& registrar =
-      WebAppProvider::GetForWebApps(profile)->registrar();
+  WebAppProvider* provider = WebAppProvider::GetForWebApps(profile);
+  WebAppRegistrar& registrar = provider->registrar_unsafe();
+  const WebApp* web_app = registrar.GetAppById(app_id);
+  if (!web_app) {
+    return nullptr;
+  }
+
   if (registrar.IsInstalled(app_id)) {
-    absl::optional<GURL> app_scope = registrar.GetAppScope(app_id);
-    if (!app_scope)
+    std::optional<GURL> app_scope = registrar.GetAppScope(app_id);
+    if (!app_scope) {
       app_scope = registrar.GetAppStartUrl(app_id).GetWithoutFilename();
+    }
 
     PrunePreScopeNavigationHistory(*app_scope, contents);
   }
@@ -281,29 +357,55 @@ Browser* ReparentWebContentsIntoAppBrowser(content::WebContents* contents,
   auto launch_url = contents->GetLastCommittedURL();
   UpdateLaunchStats(contents, app_id, launch_url);
   RecordLaunchMetrics(app_id, apps::LaunchContainer::kLaunchContainerWindow,
-                      extensions::AppLaunchSource::kSourceReparenting,
-                      launch_url, contents);
+                      apps::LaunchSource::kFromReparenting, launch_url,
+                      contents);
 
-  bool as_pinned_home_tab = IsPinnedHomeTabUrl(registrar, app_id, launch_url);
-
-  if (registrar.IsTabbedWindowModeEnabled(app_id)) {
-    for (Browser* browser : *BrowserList::GetInstance()) {
-      if (AppBrowserController::IsForWebApp(browser, app_id))
-        return ReparentWebContentsIntoAppBrowser(contents, browser, app_id,
-                                                 as_pinned_home_tab);
+  if (web_app->launch_handler()
+          .value_or(LaunchHandler{})
+          .TargetsExistingClients() ||
+      registrar.IsPreventCloseEnabled(web_app->app_id())) {
+    if (AppBrowserController::FindForWebApp(*profile, app_id)) {
+      // TODO(crbug.com/1385226): Use apps::AppServiceProxy::LaunchAppWithUrl()
+      // instead to ensure all the usual wrapping code around web app launches
+      // gets executed.
+      apps::AppLaunchParams params(
+          app_id, apps::LaunchContainer::kLaunchContainerWindow,
+          WindowOpenDisposition::CURRENT_TAB, apps::LaunchSource::kFromOmnibox);
+      params.override_url = launch_url;
+      content::WebContents* new_web_contents =
+          WebAppLaunchProcess::CreateAndRun(
+              *profile, registrar, provider->os_integration_manager(), params);
+      contents->Close();
+      return chrome::FindBrowserWithTab(new_web_contents);
     }
   }
 
-  return ReparentWebContentsIntoAppBrowser(
-      contents,
-      Browser::Create(Browser::CreateParams::CreateForApp(
-          GenerateApplicationNameFromAppId(app_id), true /* trusted_source */,
-          gfx::Rect(), profile, true /* user_gesture */)),
-      app_id, as_pinned_home_tab);
+  Browser* browser = nullptr;
+
+  if (registrar.IsTabbedWindowModeEnabled(app_id)) {
+    browser = AppBrowserController::FindForWebApp(*profile, app_id);
+  }
+
+  if (!browser) {
+    browser = Browser::Create(Browser::CreateParams::CreateForApp(
+        GenerateApplicationNameFromAppId(app_id), true /* trusted_source */,
+        gfx::Rect(), profile, true /* user_gesture */));
+
+    // If the current url isn't in scope, then set the initial url on the
+    // AppBrowserController so that the 'x' button still shows up.
+    CHECK(browser->app_controller());
+    browser->app_controller()->MaybeSetInitialUrlOnReparentTab();
+  }
+
+  bool as_pinned_home_tab =
+      browser->app_controller()->IsUrlInHomeTabScope(launch_url);
+
+  return ReparentWebContentsIntoAppBrowser(contents, browser, app_id,
+                                           as_pinned_home_tab);
 }
 
 void SetWebContentsActingAsApp(content::WebContents* contents,
-                               const AppId& app_id) {
+                               const webapps::AppId& app_id) {
   auto* helper = WebAppTabHelper::FromWebContents(contents);
   helper->SetAppId(app_id);
   helper->set_acting_as_app(true);
@@ -331,13 +433,13 @@ void ClearAppPrefsForWebContents(content::WebContents* web_contents) {
 std::unique_ptr<AppBrowserController> MaybeCreateAppBrowserController(
     Browser* browser) {
   std::unique_ptr<AppBrowserController> controller;
-  const AppId app_id = GetAppIdFromApplicationName(browser->app_name());
+  const webapps::AppId app_id =
+      GetAppIdFromApplicationName(browser->app_name());
   auto* const provider =
       WebAppProvider::GetForLocalAppsUnchecked(browser->profile());
-  if (provider && provider->registrar().IsInstalled(app_id)) {
+  if (provider && provider->registrar_unsafe().IsInstalled(app_id)) {
 #if BUILDFLAG(IS_CHROMEOS)
-    if (profiles::IsKioskSession() &&
-        base::FeatureList::IsEnabled(features::kKioskEnableAppService)) {
+    if (chromeos::IsKioskSession()) {
       controller = CreateWebKioskBrowserController(browser, provider, app_id);
     } else {
       controller = CreateWebAppBrowserController(browser, provider, app_id);
@@ -348,15 +450,17 @@ std::unique_ptr<AppBrowserController> MaybeCreateAppBrowserController(
   } else {
     controller = MaybeCreateHostedAppBrowserController(browser, app_id);
   }
-  if (controller)
+  if (controller) {
     controller->Init();
+  }
   return controller;
 }
 
 void MaybeAddPinnedHomeTab(Browser* browser, const std::string& app_id) {
   WebAppRegistrar& registrar =
-      WebAppProvider::GetForLocalAppsUnchecked(browser->profile())->registrar();
-  absl::optional<GURL> pinned_home_tab_url =
+      WebAppProvider::GetForLocalAppsUnchecked(browser->profile())
+          ->registrar_unsafe();
+  std::optional<GURL> pinned_home_tab_url =
       registrar.GetAppPinnedHomeTabUrl(app_id);
 
   if (registrar.IsTabbedWindowModeEnabled(app_id) &&
@@ -384,6 +488,8 @@ Browser* CreateWebApplicationWindow(Profile* profile,
                                     bool omit_from_session_restore,
                                     bool can_resize,
                                     bool can_maximize,
+                                    bool can_fullscreen,
+                                    bool is_system_web_app,
                                     const gfx::Rect initial_bounds) {
   std::string app_name = GenerateApplicationNameFromAppId(app_id);
   Browser::CreateParams browser_params =
@@ -394,14 +500,15 @@ Browser* CreateWebApplicationWindow(Profile* profile,
           : Browser::CreateParams::CreateForApp(
                 app_name, /*trusted_source=*/true, initial_bounds, profile,
                 /*user_gesture=*/true);
-  browser_params.initial_show_state = DetermineWindowShowState();
+  browser_params.initial_show_state =
+      DetermineWindowShowState(is_system_web_app);
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   browser_params.restore_id = restore_id;
 #endif
   browser_params.omit_from_session_restore = omit_from_session_restore;
   browser_params.can_resize = can_resize;
   browser_params.can_maximize = can_maximize;
-  browser_params.are_tab_groups_enabled = false;
+  browser_params.can_fullscreen = can_fullscreen;
   Browser* browser = Browser::Create(browser_params);
   MaybeAddPinnedHomeTab(browser, app_id);
   return browser;
@@ -419,11 +526,9 @@ content::WebContents* NavigateWebApplicationWindow(
 
 content::WebContents* NavigateWebAppUsingParams(const std::string& app_id,
                                                 NavigateParams& nav_params) {
-  WebAppRegistrar& registrar =
-      WebAppProvider::GetForLocalAppsUnchecked(nav_params.browser->profile())
-          ->registrar();
-
-  if (IsPinnedHomeTabUrl(registrar, app_id, nav_params.url)) {
+  if (nav_params.browser->app_controller() &&
+      nav_params.browser->app_controller()->IsUrlInHomeTabScope(
+          nav_params.url)) {
     // Navigations to the home tab URL in tabbed apps should happen in the home
     // tab.
     nav_params.browser->tab_strip_model()->ActivateTabAt(0);
@@ -439,46 +544,54 @@ content::WebContents* NavigateWebAppUsingParams(const std::string& app_id,
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   Browser* browser = nav_params.browser;
-  const absl::optional<ash::SystemWebAppType> capturing_system_app_type =
+  const std::optional<ash::SystemWebAppType> capturing_system_app_type =
       ash::GetCapturingSystemAppForURL(browser->profile(), nav_params.url);
-  // TODO(crbug.com/1201820): This block creates conditions where Navigate()
-  // returns early and causes a crash. Fail gracefully instead. Further
-  // debugging state will be implemented via Chrometto UMA traces.
   if (capturing_system_app_type &&
       (!browser ||
        !IsBrowserForSystemWebApp(browser, capturing_system_app_type.value()))) {
-    auto* user_manager = user_manager::UserManager::Get();
-    bool is_kiosk = user_manager && user_manager->IsLoggedInAsAnyKioskApp();
-    AppBrowserController* app_controller = browser->app_controller();
-    WebAppProvider* web_app_provider =
-        WebAppProvider::GetForLocalAppsUnchecked(browser->profile());
-    DCHECK(web_app_provider);
-    ash::SystemWebAppManager* swa_manager =
-        ash::SystemWebAppManager::GetForLocalAppsUnchecked(browser->profile());
-    DCHECK(swa_manager);
-
-    TRACE_EVENT_INSTANT(
-        "system_apps", "BadNavigate", [&](perfetto::EventContext ctx) {
-          auto* bad_navigate =
-              ctx.event<perfetto::protos::pbzero::ChromeTrackEvent>()
-                  ->set_chrome_web_app_bad_navigate();
-          bad_navigate->set_is_kiosk(is_kiosk);
-          bad_navigate->set_has_hosted_app_controller(!!app_controller);
-          bad_navigate->set_app_name(browser->app_name());
-          if (app_controller && app_controller->system_app()) {
-            bad_navigate->set_system_app_type(
-                static_cast<uint32_t>(app_controller->system_app()->GetType()));
-          }
-          bad_navigate->set_web_app_provider_registry_ready(
-              web_app_provider->on_registry_ready().is_signaled());
-          bad_navigate->set_system_web_app_manager_synchronized(
-              swa_manager->on_apps_synchronized().is_signaled());
-        });
-    UMA_HISTOGRAM_ENUMERATION("WebApp.SystemApps.BadNavigate.Type",
-                              capturing_system_app_type.value());
+    // Web app launch process should receive the correct `NavigateParams`
+    // argument from system web app launches, so that Navigate() call below
+    // succeeds (i.e. don't trigger system web app link capture).
+    //
+    // This block safe guards against misuse of APIs (that can cause
+    // GetCapturingSystemAppForURL returning the wrong value).
+    //
+    // TODO(http://crbug.com/1408946): Remove this block when we find a better
+    // way to prevent API misuse (e.g. by ensuring test coverage for new
+    // features that could trigger this code) or this code path is no longer
+    // possible.
+    base::debug::DumpWithoutCrashing();
     return nullptr;
   }
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+  // Highly experimental feature to isolate web app application with a different
+  // storage partition.
+  if (base::FeatureList::IsEnabled(
+          chromeos::features::kExperimentalWebAppStoragePartitionIsolation)) {
+    // TODO(crbug.com/1425284): Cover other app launch paths (e.g. restore
+    // apps).
+    auto partition_config = content::StoragePartitionConfig::Create(
+        nav_params.browser->profile(),
+        /*partition_domain=*/kExperimentalWebAppStorageParitionDomain,
+        /*partition_name=*/app_id, /*in_memory=*/false);
+
+    auto site_instance = content::SiteInstance::CreateForFixedStoragePartition(
+        nav_params.browser->profile(), nav_params.url, partition_config);
+
+    content::WebContents::CreateParams params(nav_params.browser->profile(),
+                                              std::move(site_instance));
+    std::unique_ptr<content::WebContents> new_contents =
+        content::WebContents::Create(params);
+    content::NavigationController::LoadURLParams load_url_params(
+        nav_params.url);
+
+    new_contents->GetController().LoadURLWithParams(load_url_params);
+
+    nav_params.contents_to_insert = std::move(new_contents);
+  }
+#endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
 
   Navigate(&nav_params);
 
@@ -493,24 +606,80 @@ content::WebContents* NavigateWebAppUsingParams(const std::string& app_id,
   return web_contents;
 }
 
-void RecordAppWindowLaunchMetric(Profile* profile, const std::string& app_id) {
+void RecordAppWindowLaunchMetric(Profile* profile,
+                                 const std::string& app_id,
+                                 apps::LaunchSource launch_source) {
   WebAppProvider* provider = WebAppProvider::GetForLocalAppsUnchecked(profile);
-  if (!provider)
+  if (!provider) {
     return;
+  }
+
+  const WebApp* web_app = provider->registrar_unsafe().GetAppById(app_id);
+  if (!web_app) {
+    return;
+  }
 
   DisplayMode display =
-      provider->registrar().GetEffectiveDisplayModeFromManifest(app_id);
-  if (display == DisplayMode::kUndefined)
-    return;
+      provider->registrar_unsafe().GetEffectiveDisplayModeFromManifest(app_id);
+  if (display != DisplayMode::kUndefined) {
+    DCHECK_LT(DisplayMode::kUndefined, display);
+    DCHECK_LE(display, DisplayMode::kMaxValue);
+    base::UmaHistogramEnumeration("Launch.WebAppDisplayMode", display);
+    if (provider->registrar_unsafe().IsShortcutApp(app_id)) {
+      base::UmaHistogramEnumeration(
+          "Launch.Window.CreateShortcutApp.WebAppDisplayMode", display);
+    }
+  }
 
-  DCHECK_LT(DisplayMode::kUndefined, display);
-  DCHECK_LE(display, DisplayMode::kMaxValue);
-  UMA_HISTOGRAM_ENUMERATION("Launch.WebAppDisplayMode", display);
+  // Reparenting launches don't respect the launch_handler setting.
+  if (launch_source != apps::LaunchSource::kFromReparenting &&
+      base::FeatureList::IsEnabled(
+          blink::features::kWebAppEnableLaunchHandler)) {
+    base::UmaHistogramEnumeration(
+        "Launch.WebAppLaunchHandlerClientMode",
+        web_app->launch_handler().value_or(LaunchHandler()).client_mode);
+  }
 }
 
-void RecordLaunchMetrics(const AppId& app_id,
+void RecordAppTabLaunchMetric(Profile* profile,
+                              const std::string& app_id,
+                              apps::LaunchSource launch_source) {
+  WebAppProvider* provider = WebAppProvider::GetForLocalAppsUnchecked(profile);
+  if (!provider) {
+    return;
+  }
+
+  const WebApp* web_app = provider->registrar_unsafe().GetAppById(app_id);
+  if (!web_app) {
+    return;
+  }
+
+  DisplayMode display =
+      provider->registrar_unsafe().GetEffectiveDisplayModeFromManifest(app_id);
+  if (display != DisplayMode::kUndefined) {
+    DCHECK_LT(DisplayMode::kUndefined, display);
+    DCHECK_LE(display, DisplayMode::kMaxValue);
+    base::UmaHistogramEnumeration("Launch.BrowserTab.WebAppDisplayMode",
+                                  display);
+    if (provider->registrar_unsafe().IsShortcutApp(app_id)) {
+      base::UmaHistogramEnumeration(
+          "Launch.BrowserTab.CreateShortcutApp.WebAppDisplayMode", display);
+    }
+  }
+
+  // Reparenting launches don't respect the launch_handler setting.
+  if (launch_source != apps::LaunchSource::kFromReparenting &&
+      base::FeatureList::IsEnabled(
+          blink::features::kWebAppEnableLaunchHandler)) {
+    base::UmaHistogramEnumeration(
+        "Launch.BrowserTab.WebAppLaunchHandlerClientMode",
+        web_app->launch_handler().value_or(LaunchHandler()).client_mode);
+  }
+}
+
+void RecordLaunchMetrics(const webapps::AppId& app_id,
                          apps::LaunchContainer container,
-                         extensions::AppLaunchSource launch_source,
+                         apps::LaunchSource launch_source,
                          const GURL& launch_url,
                          content::WebContents* web_contents) {
   Profile* profile =
@@ -524,23 +693,26 @@ void RecordLaunchMetrics(const AppId& app_id,
       << "System web apps shouldn't be included in web app launch metrics";
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
-  if (container == apps::LaunchContainer::kLaunchContainerWindow)
-    RecordAppWindowLaunchMetric(profile, app_id);
+  if (container == apps::LaunchContainer::kLaunchContainerWindow) {
+    RecordAppWindowLaunchMetric(profile, app_id, launch_source);
+  }
+  if (container == apps::LaunchContainer::kLaunchContainerTab) {
+    RecordAppTabLaunchMetric(profile, app_id, launch_source);
+  }
 
-  // TODO(crbug.com/1014328): Populate WebApp metrics instead of Extensions.
-  UMA_HISTOGRAM_ENUMERATION("Extensions.BookmarkAppLaunchSource",
-                            launch_source);
-  UMA_HISTOGRAM_ENUMERATION("Extensions.BookmarkAppLaunchContainer", container);
+  base::UmaHistogramEnumeration("WebApp.LaunchSource", launch_source);
+  base::UmaHistogramEnumeration("WebApp.LaunchContainer", container);
 }
 
 void UpdateLaunchStats(content::WebContents* web_contents,
-                       const AppId& app_id,
+                       const webapps::AppId& app_id,
                        const GURL& launch_url) {
+  CHECK(web_contents != nullptr);
   Profile* profile =
       Profile::FromBrowserContext(web_contents->GetBrowserContext());
 
   WebAppProvider::GetForLocalAppsUnchecked(profile)
-      ->sync_bridge()
+      ->sync_bridge_unsafe()
       .SetAppLastLaunchTime(app_id, base::Time::Now());
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
@@ -554,11 +726,91 @@ void UpdateLaunchStats(content::WebContents* web_contents,
   // app launch will provide an engagement boost to the origin.
   site_engagement::SiteEngagementService::Get(profile)
       ->SetLastShortcutLaunchTime(web_contents, launch_url);
+}
 
-  // Refresh the app banner added to homescreen event. The user may have
-  // cleared their browsing data since installing the app, which removes the
-  // event and will potentially permit a banner to be shown for the site.
-  RecordAppBanner(web_contents, launch_url);
+void LaunchWebApp(apps::AppLaunchParams params,
+                  LaunchWebAppWindowSetting launch_setting,
+                  Profile& profile,
+                  WithAppResources& lock,
+                  LaunchWebAppDebugValueCallback callback) {
+  base::Value::Dict debug_value;
+  debug_value.Set("launch_params", ToDebugDict(params));
+  debug_value.Set("launch_window_setting", static_cast<int>(launch_setting));
+
+  if (launch_setting == LaunchWebAppWindowSetting::kOverrideWithWebAppConfig) {
+    DisplayMode display_mode =
+        lock.registrar().GetAppEffectiveDisplayMode(params.app_id);
+    switch (display_mode) {
+      case DisplayMode::kUndefined:
+      case DisplayMode::kFullscreen:
+      case DisplayMode::kBrowser:
+        params.container = apps::LaunchContainer::kLaunchContainerTab;
+        break;
+      case DisplayMode::kMinimalUi:
+      case DisplayMode::kWindowControlsOverlay:
+      case DisplayMode::kTabbed:
+      case DisplayMode::kBorderless:
+      case DisplayMode::kStandalone:
+        params.container = apps::LaunchContainer::kLaunchContainerWindow;
+        break;
+    }
+  }
+
+#if BUILDFLAG(IS_CHROMEOS)
+  // With Shortstand enabled all browser shortcuts (backed by shortcut web apps)
+  // open in a browser tab and all non-shortcut web apps open in a standalone
+  // window.
+  if (chromeos::features::IsCrosShortstandEnabled()) {
+    bool is_shortcut_app = lock.registrar().IsShortcutApp(params.app_id);
+    params.container = is_shortcut_app
+                           ? apps::LaunchContainer::kLaunchContainerTab
+                           : apps::LaunchContainer::kLaunchContainerWindow;
+    debug_value.Set("is_shortcut", is_shortcut_app);
+  }
+#endif
+
+  DCHECK_NE(params.container, apps::LaunchContainer::kLaunchContainerNone);
+
+  apps::LaunchContainer container;
+  Browser* browser = nullptr;
+  content::WebContents* web_contents = nullptr;
+  // Do not launch anything if the profile is being deleted.
+  if (Browser::GetCreationStatusForProfile(&profile) ==
+      Browser::CreationStatus::kOk) {
+    if (lock.registrar().IsInstalled(params.app_id)) {
+      container = params.container;
+      if (WebAppLaunchProcess::GetOpenApplicationCallbackForTesting()) {
+        web_contents =
+            WebAppLaunchProcess::GetOpenApplicationCallbackForTesting().Run(
+                std::move(params));
+      } else {
+        web_contents = WebAppLaunchProcess::CreateAndRun(
+            profile, lock.registrar(), lock.os_integration_manager(), params);
+      }
+      if (web_contents) {
+        browser = chrome::FindBrowserWithTab(web_contents);
+      }
+    } else {
+      debug_value.Set("error", "Unknown app id.");
+      // Open an empty browser window as the app_id is invalid.
+      DVLOG(1) << "Cannot launch app with unknown id: " << params.app_id;
+      container = apps::LaunchContainer::kLaunchContainerNone;
+      browser = apps::CreateBrowserWithNewTabPage(&profile);
+    }
+  } else {
+    std::string error_str = base::StringPrintf(
+        "Cannot launch app %s without profile creation: %d",
+        params.app_id.c_str(),
+        static_cast<int>(Browser::GetCreationStatusForProfile(&profile)));
+    debug_value.Set("error", error_str);
+    DVLOG(1) << error_str;
+  }
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE,
+      base::BindOnce(std::move(callback),
+                     browser ? browser->AsWeakPtr() : nullptr,
+                     web_contents ? web_contents->GetWeakPtr() : nullptr,
+                     container, base::Value(std::move(debug_value))));
 }
 
 }  // namespace web_app

@@ -9,7 +9,7 @@ import "mojo/public/mojom/base/time.mojom";
 import "ui/gfx/geometry/mojom/geometry.mojom";
 import "url/mojom/url.mojom";
 
-// Next MinVersion: 16
+// Next MinVersion: 20
 
 [Stable, Extensible]
 enum MediaPlaybackState {
@@ -37,6 +37,9 @@ enum MediaSessionAction {
   [MinVersion=11] kHangUp,
   [MinVersion=12] kRaise,
   [MinVersion=13] kSetMute,
+  [MinVersion=18] kPreviousSlide,
+  [MinVersion=18] kNextSlide,
+  [MinVersion=19] kEnterAutoPictureInPicture,
 };
 
 [Stable, Extensible]
@@ -71,6 +74,15 @@ struct MediaImage {
   url.mojom.Url src;
   mojo_base.mojom.String16 type;
   array<gfx.mojom.Size> sizes;
+};
+
+// Chapter info in MediaMetadata
+// Spec: https://wicg.github.io/mediasession/
+[Stable]
+struct ChapterInformation {
+  mojo_base.mojom.String16 title;
+  mojo_base.mojom.TimeDelta startTime;
+  array<MediaImage> artwork;
 };
 
 // MediaMetadata
@@ -130,9 +142,13 @@ enum CameraState {
 
 [Stable]
 struct RemotePlaybackMetadata {
-  string video_codec;
-  string audio_codec;
-  bool remote_playback_disabled;
+  string video_codec@0;
+  string audio_codec@1;
+  bool remote_playback_disabled@2;
+  [MinVersion=17] bool remote_playback_started@3;
+  // Deprecated, was remoting_device_friendly_name
+  [MinVersion=17] string? unused_field@4;
+  [MinVersion=18] bool is_encrypted_media@5;
 };
 
 // Contains state information about a MediaSession.
@@ -206,6 +222,9 @@ struct MediaSessionInfo {
 
   // Stores the Media metadata used for Remote Playback.
   [MinVersion=15] RemotePlaybackMetadata? remote_playback_metadata;
+
+  // If true then media metadata will be hidden from the OS' media controllers.
+  [MinVersion=16] bool hide_metadata;
 };
 
 // Contains debugging information about a MediaSession. This will be displayed
@@ -248,7 +267,7 @@ interface MediaSessionObserver {
 
 // A MediaSession manages the media session and audio focus for a given
 // WebContents or ARC app.
-// Next Method ID: 23
+// Next Method ID: 24
 [Stable]
 interface MediaSession {
   [Stable, Extensible]
@@ -351,4 +370,17 @@ interface MediaSession {
 
   // Mute or unmute the media player.
   [MinVersion=13] SetMute@22(bool mute);
+
+  // Request Media Remoting once there are available sinks.
+  [MinVersion=16] RequestMediaRemoting@23();
+
+  // Go back to previous slide.
+  [MinVersion=18] PreviousSlide@24();
+
+  // Go to next slide.
+  [MinVersion=18] NextSlide@25();
+
+  // Automatically enter picture-in-picture from a non-user source (e.g. in
+  // reaction to content being hidden).
+  [MinVersion=19] EnterAutoPictureInPicture@26();
 };

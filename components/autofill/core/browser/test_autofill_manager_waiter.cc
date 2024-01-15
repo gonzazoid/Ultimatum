@@ -4,9 +4,11 @@
 
 #include "components/autofill/core/browser/test_autofill_manager_waiter.h"
 
+#include <vector>
+
 #include "base/check_op.h"
-#include "base/containers/contains.h"
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
 #include "base/test/scoped_run_loop_timeout.h"
@@ -17,108 +19,178 @@ TestAutofillManagerWaiter::State::State() = default;
 TestAutofillManagerWaiter::State::~State() = default;
 
 TestAutofillManagerWaiter::EventCount* TestAutofillManagerWaiter::State::Get(
-    AfterEvent event) {
-  auto it = base::ranges::find(events, event, &EventCount::event);
-  return it != events.end() ? &*it : nullptr;
+    Event event) {
+  auto it = events.find(event);
+  return it != events.end() ? &it->second : nullptr;
 }
 
 TestAutofillManagerWaiter::EventCount&
-TestAutofillManagerWaiter::State::GetOrCreate(AfterEvent event,
+TestAutofillManagerWaiter::State::GetOrCreate(Event event,
                                               base::Location location) {
-  if (EventCount* e = Get(event))
+  if (EventCount* e = Get(event)) {
     return *e;
-  return *events.insert(events.end(), {event, location});
+  }
+  EventCount& e = events[event];
+  e = EventCount{.location = location};
+  return e;
 }
 
 size_t TestAutofillManagerWaiter::State::num_pending_calls() const {
   size_t pending_calls = 0;
-  for (const EventCount& e : events)
-    pending_calls += e.num_pending_calls;
+  for (const auto& [_, event_count] : events) {
+    pending_calls += event_count.num_pending_calls;
+  }
   return pending_calls;
 }
 
 size_t TestAutofillManagerWaiter::State::num_total_calls() const {
   size_t total_calls = 0;
-  for (const EventCount& e : events)
-    total_calls += e.num_total_calls;
+  for (const auto& [_, event_count] : events) {
+    total_calls += event_count.num_total_calls;
+  }
   return total_calls;
 }
 
 std::string TestAutofillManagerWaiter::State::Describe() const {
   std::vector<std::string> strings;
-  for (const auto& e : events) {
-    strings.push_back(base::StringPrintf(
-        "[event=%s, pending=%zu, total=%zu]", e.location.function_name(),
-        e.num_pending_calls, e.num_total_calls));
+  for (const auto& [_, event_count] : events) {
+    strings.push_back(base::StringPrintf("[event=%s, pending=%zu, total=%zu]",
+                                         event_count.location.function_name(),
+                                         event_count.num_pending_calls,
+                                         event_count.num_total_calls));
   }
   return base::JoinString(strings, ", ");
 }
 
 TestAutofillManagerWaiter::TestAutofillManagerWaiter(
     AutofillManager& manager,
-    std::initializer_list<AfterEvent> relevant_events)
+    DenseSet<Event> relevant_events)
     : relevant_events_(relevant_events) {
   observation_.Observe(&manager);
 }
 
 TestAutofillManagerWaiter::~TestAutofillManagerWaiter() = default;
 
-void TestAutofillManagerWaiter::OnAutofillManagerDestroyed() {
+void TestAutofillManagerWaiter::OnAutofillManagerDestroyed(
+    AutofillManager& manager) {
   observation_.Reset();
 }
 
-void TestAutofillManagerWaiter::OnAutofillManagerReset() {
+void TestAutofillManagerWaiter::OnAutofillManagerReset(
+    AutofillManager& manager) {
   Reset();
 }
 
-void TestAutofillManagerWaiter::OnBeforeLanguageDetermined() {
-  Increment(&AutofillManager::Observer::OnAfterLanguageDetermined);
+void TestAutofillManagerWaiter::OnBeforeLanguageDetermined(
+    AutofillManager& manager) {
+  Increment(Event::kLanguageDetermined);
 }
 
-void TestAutofillManagerWaiter::OnAfterLanguageDetermined() {
-  Decrement(&AutofillManager::Observer::OnAfterLanguageDetermined);
+void TestAutofillManagerWaiter::OnAfterLanguageDetermined(
+    AutofillManager& manager) {
+  Decrement(Event::kLanguageDetermined);
 }
 
-void TestAutofillManagerWaiter::OnBeforeFormsSeen() {
-  Increment(&AutofillManager::Observer::OnAfterFormsSeen);
+void TestAutofillManagerWaiter::OnBeforeFormsSeen(
+    AutofillManager& manager,
+    base::span<const FormGlobalId> forms) {
+  Increment(Event::kFormsSeen);
 }
 
-void TestAutofillManagerWaiter::OnAfterFormsSeen() {
-  Decrement(&AutofillManager::Observer::OnAfterFormsSeen);
+void TestAutofillManagerWaiter::OnAfterFormsSeen(
+    AutofillManager& manager,
+    base::span<const FormGlobalId> forms) {
+  Decrement(Event::kFormsSeen);
 }
 
-void TestAutofillManagerWaiter::OnBeforeTextFieldDidChange() {
-  Increment(&AutofillManager::Observer::OnAfterTextFieldDidChange);
+void TestAutofillManagerWaiter::OnBeforeTextFieldDidChange(
+    AutofillManager& manager,
+    FormGlobalId form,
+    FieldGlobalId field) {
+  Increment(Event::kTextFieldDidChange);
 }
 
-void TestAutofillManagerWaiter::OnAfterTextFieldDidChange() {
-  Decrement(&AutofillManager::Observer::OnAfterTextFieldDidChange);
+void TestAutofillManagerWaiter::OnAfterTextFieldDidChange(
+    AutofillManager& manager,
+    FormGlobalId form,
+    FieldGlobalId field,
+    const std::u16string& text_value) {
+  Decrement(Event::kTextFieldDidChange);
 }
 
-void TestAutofillManagerWaiter::OnBeforeAskForValuesToFill() {
-  Increment(&AutofillManager::Observer::OnAfterAskForValuesToFill);
+void TestAutofillManagerWaiter::OnBeforeTextFieldDidScroll(
+    AutofillManager& manager,
+    FormGlobalId form,
+    FieldGlobalId field) {
+  Increment(Event::kTextFieldDidScroll);
 }
 
-void TestAutofillManagerWaiter::OnAfterAskForValuesToFill() {
-  Decrement(&AutofillManager::Observer::OnAfterAskForValuesToFill);
+void TestAutofillManagerWaiter::OnAfterTextFieldDidScroll(
+    AutofillManager& manager,
+    FormGlobalId form,
+    FieldGlobalId field) {
+  Decrement(Event::kTextFieldDidScroll);
 }
 
-void TestAutofillManagerWaiter::OnBeforeDidFillAutofillFormData() {
-  Increment(&AutofillManager::Observer::OnAfterDidFillAutofillFormData);
+void TestAutofillManagerWaiter::OnBeforeSelectControlDidChange(
+    AutofillManager& manager,
+    FormGlobalId form,
+    FieldGlobalId field) {
+  Increment(Event::kSelectControlDidChange);
 }
 
-void TestAutofillManagerWaiter::OnAfterDidFillAutofillFormData() {
-  Decrement(&AutofillManager::Observer::OnAfterDidFillAutofillFormData);
+void TestAutofillManagerWaiter::OnAfterSelectControlDidChange(
+    AutofillManager& manager,
+    FormGlobalId form,
+    FieldGlobalId field) {
+  Decrement(Event::kSelectControlDidChange);
 }
 
-void TestAutofillManagerWaiter::OnBeforeJavaScriptChangedAutofilledValue() {
-  Increment(
-      &AutofillManager::Observer::OnAfterJavaScriptChangedAutofilledValue);
+void TestAutofillManagerWaiter::OnBeforeAskForValuesToFill(
+    AutofillManager& manager,
+    FormGlobalId form,
+    FieldGlobalId field,
+    const FormData& form_data) {
+  Increment(Event::kAskForValuesToFill);
 }
 
-void TestAutofillManagerWaiter::OnAfterJavaScriptChangedAutofilledValue() {
-  Decrement(
-      &AutofillManager::Observer::OnAfterJavaScriptChangedAutofilledValue);
+void TestAutofillManagerWaiter::OnAfterAskForValuesToFill(
+    AutofillManager& manager,
+    FormGlobalId form,
+    FieldGlobalId field) {
+  Decrement(Event::kAskForValuesToFill);
+}
+
+void TestAutofillManagerWaiter::OnBeforeDidFillAutofillFormData(
+    AutofillManager& manager,
+    FormGlobalId form) {
+  Increment(Event::kDidFillAutofillFormData);
+}
+
+void TestAutofillManagerWaiter::OnAfterDidFillAutofillFormData(
+    AutofillManager& manager,
+    FormGlobalId form) {
+  Decrement(Event::kDidFillAutofillFormData);
+}
+
+void TestAutofillManagerWaiter::OnBeforeJavaScriptChangedAutofilledValue(
+    AutofillManager& manager,
+    FormGlobalId form,
+    FieldGlobalId field) {
+  Increment(Event::kJavaScriptChangedAutofilledValue);
+}
+
+void TestAutofillManagerWaiter::OnAfterJavaScriptChangedAutofilledValue(
+    AutofillManager& manager,
+    FormGlobalId form,
+    FieldGlobalId field) {
+  Decrement(Event::kJavaScriptChangedAutofilledValue);
+}
+
+void TestAutofillManagerWaiter::OnFormSubmitted(AutofillManager& manager,
+                                                FormGlobalId form) {
+  Increment(Event::kFormSubmitted);
+  Decrement(Event::kFormSubmitted);
 }
 
 void TestAutofillManagerWaiter::Reset() {
@@ -132,11 +204,11 @@ void TestAutofillManagerWaiter::Reset() {
   swap(state_, state);
 }
 
-bool TestAutofillManagerWaiter::IsRelevant(AfterEvent event) const {
-  return relevant_events_.empty() || base::Contains(relevant_events_, event);
+bool TestAutofillManagerWaiter::IsRelevant(Event event) const {
+  return relevant_events_.empty() || relevant_events_.contains(event);
 }
 
-void TestAutofillManagerWaiter::Increment(AfterEvent event,
+void TestAutofillManagerWaiter::Increment(Event event,
                                           base::Location location) {
   base::AutoLock lock(state_->lock);
   if (!IsRelevant(event)) {
@@ -156,7 +228,7 @@ void TestAutofillManagerWaiter::Increment(AfterEvent event,
   ++e.num_pending_calls;
 }
 
-void TestAutofillManagerWaiter::Decrement(AfterEvent event,
+void TestAutofillManagerWaiter::Decrement(Event event,
                                           base::Location location) {
   base::AutoLock lock(state_->lock);
   if (!IsRelevant(event)) {
@@ -194,12 +266,93 @@ testing::AssertionResult TestAutofillManagerWaiter::Wait(
   if (state_->num_pending_calls() > 0 || num_awaiting_calls > 0) {
     base::test::ScopedRunLoopTimeout run_loop_timeout(
         FROM_HERE, timeout_,
-        base::BindRepeating(&State::Describe, base::Unretained(state_.get())));
+        base::BindRepeating(
+            [](State* state) {
+              state->timed_out = true;
+              return state->Describe();
+            },
+            base::Unretained(state_.get())));
     state_->num_awaiting_total_calls = num_awaiting_calls;
     lock.Release();
     state_->run_loop.Run();
   }
-  return testing::AssertionSuccess();
+  return !state_->timed_out ? testing::AssertionSuccess()
+                            : testing::AssertionFailure() << "Waiter timed out";
+}
+
+const FormStructure* WaitForMatchingForm(
+    AutofillManager* manager,
+    base::RepeatingCallback<bool(const FormStructure&)> pred,
+    base::TimeDelta timeout) {
+  class Waiter : public AutofillManager::Observer {
+   public:
+    explicit Waiter(AutofillManager* manager,
+                    base::RepeatingCallback<bool(const FormStructure&)> pred)
+        : manager_(manager), pred_(std::move(pred)) {
+      observation_.Observe(manager);
+    }
+
+    const FormStructure* Wait(base::TimeDelta timeout) {
+      DCHECK(observation_.IsObserving());
+      DCHECK(!matching_form_);
+      matching_form_ = FindForm();
+      if (!matching_form_) {
+        base::test::ScopedRunLoopTimeout run_loop_timeout(
+            FROM_HERE, timeout,
+            base::BindRepeating(
+                [](const Waiter* self) {
+                  return std::string("Didn't see a matching form ") +
+                         (self->observation_.IsObserving()
+                              ? "within the timeout"
+                              : "before the AutofillManager was reset or "
+                                "destroyed");
+                },
+                base::Unretained(this)));
+        run_loop_.Run();
+      }
+      return std::exchange(matching_form_, nullptr);
+    }
+
+   private:
+    void OnAutofillManagerDestroyed(AutofillManager& manager) override {
+      DCHECK_EQ(&manager, manager_.get());
+      manager_ = nullptr;
+      run_loop_.Quit();
+      observation_.Reset();
+    }
+
+    void OnAutofillManagerReset(AutofillManager& manager) override {
+      DCHECK_EQ(&manager, manager_.get());
+      manager_ = nullptr;
+      run_loop_.Quit();
+      observation_.Reset();
+    }
+
+    void OnAfterFormsSeen(AutofillManager& manager,
+                          base::span<const FormGlobalId> forms) override {
+      DCHECK_EQ(&manager, manager_.get());
+      if (const auto* form = FindForm()) {
+        matching_form_ = form;
+        run_loop_.Quit();
+      }
+    }
+
+    FormStructure* FindForm() const {
+      auto it = base::ranges::find_if(
+          manager_->form_structures(),
+          [&](const auto& p) { return pred_.Run(*p.second); });
+      return it != manager_->form_structures().end() ? it->second.get()
+                                                     : nullptr;
+    }
+
+    base::ScopedObservation<AutofillManager, AutofillManager::Observer>
+        observation_{this};
+    raw_ptr<AutofillManager> manager_;
+    base::RepeatingCallback<bool(const FormStructure&)> pred_;
+    base::RunLoop run_loop_;
+    raw_ptr<const FormStructure> matching_form_ = nullptr;
+  };
+  return Waiter(manager, std::move(pred)).Wait(timeout);
 }
 
 }  // namespace autofill

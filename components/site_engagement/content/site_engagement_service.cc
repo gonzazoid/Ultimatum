@@ -9,7 +9,7 @@
 #include <algorithm>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/metrics/field_trial.h"
 #include "base/observer_list.h"
@@ -74,20 +74,13 @@ class StoppedClock : public base::Clock {
   const base::Time time_;
 };
 
-// Helpers for fetching content settings for one type.
-ContentSettingsForOneType GetContentSettingsFromMap(HostContentSettingsMap* map,
-                                                    ContentSettingsType type) {
-  ContentSettingsForOneType content_settings;
-  map->GetSettingsForOneType(type, &content_settings);
-  return content_settings;
-}
-
+// Helper for fetching content settings for one type.
 ContentSettingsForOneType GetContentSettingsFromBrowserContext(
     content::BrowserContext* browser_context,
     ContentSettingsType type) {
-  return GetContentSettingsFromMap(
-      permissions::PermissionsClient::Get()->GetSettingsMap(browser_context),
-      type);
+  return permissions::PermissionsClient::Get()
+      ->GetSettingsMap(browser_context)
+      ->GetSettingsForOneType(type);
 }
 
 // Returns the combined list of origins which either have site engagement
@@ -98,7 +91,7 @@ std::set<GURL> GetEngagementOriginsFromContentSettings(
 
   // Fetch URLs of sites with engagement details stored.
   for (const auto& site :
-       GetContentSettingsFromMap(map, ContentSettingsType::SITE_ENGAGEMENT)) {
+       map->GetSettingsForOneType(ContentSettingsType::SITE_ENGAGEMENT)) {
     urls.insert(GURL(site.primary_pattern.ToString()));
   }
 
@@ -118,7 +111,6 @@ mojom::SiteEngagementDetails GetDetailsImpl(base::Clock* clock,
 }
 
 std::vector<mojom::SiteEngagementDetails> GetAllDetailsImpl(
-    browsing_data::TimePeriod time_period,
     base::Clock* clock,
     HostContentSettingsMap* map) {
   std::set<GURL> origins = GetEngagementOriginsFromContentSettings(map);
@@ -126,19 +118,10 @@ std::vector<mojom::SiteEngagementDetails> GetAllDetailsImpl(
   std::vector<mojom::SiteEngagementDetails> details;
   details.reserve(origins.size());
 
-  auto begin_time = browsing_data::CalculateBeginDeleteTime(time_period);
-  auto end_time = browsing_data::CalculateEndDeleteTime(time_period);
-
   for (const GURL& origin : origins) {
     if (!origin.is_valid())
       continue;
-
-    auto score = CreateEngagementScoreImpl(clock, origin, map);
-    auto last_engagement_time = score.last_engagement_time();
-    if (begin_time > last_engagement_time || end_time < last_engagement_time)
-      continue;
-
-    details.push_back(score.GetDetails());
+    details.push_back(GetDetailsImpl(clock, origin, map));
   }
 
   return details;
@@ -224,8 +207,7 @@ SiteEngagementService::GetAllDetailsInBackground(
     scoped_refptr<HostContentSettingsMap> map) {
   StoppedClock clock(now);
   base::AssertLongCPUWorkAllowed();
-  return GetAllDetailsImpl(browsing_data::TimePeriod::ALL_TIME, &clock,
-                           map.get());
+  return GetAllDetailsImpl(&clock, map.get());
 }
 
 // static
@@ -284,18 +266,7 @@ std::vector<mojom::SiteEngagementDetails> SiteEngagementService::GetAllDetails()
   if (IsLastEngagementStale())
     CleanupEngagementScores(true);
   return GetAllDetailsImpl(
-      browsing_data::TimePeriod::ALL_TIME, clock_,
-      permissions::PermissionsClient::Get()->GetSettingsMap(browser_context_));
-}
-
-std::vector<mojom::SiteEngagementDetails>
-SiteEngagementService::GetAllDetailsEngagedInTimePeriod(
-    browsing_data::TimePeriod time_period) const {
-  if (IsLastEngagementStale())
-    CleanupEngagementScores(true);
-
-  return GetAllDetailsImpl(
-      time_period, clock_,
+      clock_,
       permissions::PermissionsClient::Get()->GetSettingsMap(browser_context_));
 }
 
@@ -335,14 +306,7 @@ void SiteEngagementService::SetLastShortcutLaunchTime(
     const GURL& url) {
   SiteEngagementScore score = CreateEngagementScore(url);
 
-  // Record the number of days since the last launch in UMA. If the user's clock
-  // has changed back in time, set this to 0.
   base::Time now = clock_->Now();
-  base::Time last_launch = score.last_shortcut_launch_time();
-  if (!last_launch.is_null()) {
-    SiteEngagementMetrics::RecordDaysSinceLastShortcutLaunch(
-        std::max(0, (now - last_launch).InDays()));
-  }
 
   score.set_last_shortcut_launch_time(now);
   score.Commit();
@@ -541,10 +505,7 @@ void SiteEngagementService::RecordMetrics(
   int total_origins = details.size();
 
   double total_engagement = 0;
-  int origins_with_max_engagement = 0;
   for (const auto& detail : details) {
-    if (detail.total_score == SiteEngagementScore::kMaxPoints)
-      ++origins_with_max_engagement;
     total_engagement += detail.total_score;
   }
 
@@ -552,14 +513,10 @@ void SiteEngagementService::RecordMetrics(
       (total_origins == 0 ? 0 : total_engagement / total_origins);
 
   SiteEngagementMetrics::RecordTotalOriginsEngaged(total_origins);
-  SiteEngagementMetrics::RecordTotalSiteEngagement(total_engagement);
   SiteEngagementMetrics::RecordMeanEngagement(mean_engagement);
   SiteEngagementMetrics::RecordMedianEngagement(
       GetMedianEngagementFromSortedDetails(details));
   SiteEngagementMetrics::RecordEngagementScores(details);
-
-  SiteEngagementMetrics::RecordOriginsWithMaxEngagement(
-      origins_with_max_engagement);
 }
 
 bool SiteEngagementService::ShouldRecordEngagement(const GURL& url) const {

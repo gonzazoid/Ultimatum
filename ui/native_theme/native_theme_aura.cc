@@ -16,7 +16,6 @@
 #include "cc/paint/paint_canvas.h"
 #include "cc/paint/paint_flags.h"
 #include "third_party/skia/include/core/SkPath.h"
-#include "ui/base/layout.h"
 #include "ui/base/ui_base_features.h"
 #include "ui/color/color_provider.h"
 #include "ui/gfx/animation/tween.h"
@@ -30,15 +29,13 @@
 #include "ui/gfx/image/image_skia.h"
 #include "ui/native_theme/common_theme.h"
 #include "ui/native_theme/native_theme_features.h"
-#include "ui/native_theme/overlay_scrollbar_constants_aura.h"
-
-#if BUILDFLAG(IS_WIN)
 #include "ui/native_theme/native_theme_fluent.h"
-#endif  // BUILDFLAG(IS_WIN)
+#include "ui/native_theme/overlay_scrollbar_constants_aura.h"
 
 namespace ui {
 
 namespace {
+
 // Constants for painting overlay scrollbars. Other properties needed outside
 // this painting code are defined in overlay_scrollbar_constants_aura.h.
 constexpr int kOverlayScrollbarMinimumLength = 32;
@@ -47,8 +44,17 @@ constexpr int kOverlayScrollbarMinimumLength = 32;
 // color. This prevents color interpolation between the patches.
 constexpr int kOverlayScrollbarBorderPatchWidth = 2;
 constexpr int kOverlayScrollbarCenterPatchSize = 1;
-const SkScalar kScrollRadius =
-    1;  // select[multiple] radius+width are set in css
+
+// This radius let scrollbar arrows fit in the default rounded border of some
+// form controls. TODO(crbug.com/1493088): We should probably let blink pass
+// the actual border radii.
+const SkScalar kScrollbarArrowRadius = 1;
+// Killswitch for the changed behavior (only drawing rounded corner for form
+// controls). Should remove after M120 ships.
+BASE_FEATURE(kNewScrollbarArrowRadius,
+             "NewScrollbarArrowRadius",
+             base::FEATURE_ENABLED_BY_DEFAULT);
+
 }  // namespace
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -57,22 +63,27 @@ const SkScalar kScrollRadius =
 #if !BUILDFLAG(IS_APPLE)
 // static
 NativeTheme* NativeTheme::GetInstanceForWeb() {
-#if BUILDFLAG(IS_WIN)
-  if (IsFluentScrollbarEnabled())
+  if (IsFluentScrollbarEnabled()) {
     return NativeThemeFluent::web_instance();
-#endif  // BUILDFLAG(IS_WIN)
+  }
   return NativeThemeAura::web_instance();
 }
 
 #if !BUILDFLAG(IS_WIN)
 // static
 NativeTheme* NativeTheme::GetInstanceForNativeUi() {
-  static base::NoDestructor<NativeThemeAura> s_native_theme(false, false);
+  static base::NoDestructor<NativeThemeAura> s_native_theme(
+      /*use_overlay_scrollbars=*/false,
+      /*should_only_use_dark_colors=*/false,
+      /*system_theme=*/ui::SystemTheme::kDefault,
+      /*theme_to_update=*/NativeTheme::GetInstanceForWeb());
   return s_native_theme.get();
 }
 
 NativeTheme* NativeTheme::GetInstanceForDarkUI() {
-  static base::NoDestructor<NativeThemeAura> s_native_theme(false, true);
+  static base::NoDestructor<NativeThemeAura> s_native_theme(
+      /*use_overlay_scrollbars=*/false,
+      /*should_only_use_dark_colors=*/true);
   return s_native_theme.get();
 }
 #endif  // !BUILDFLAG(IS_WIN)
@@ -83,8 +94,11 @@ NativeTheme* NativeTheme::GetInstanceForDarkUI() {
 
 NativeThemeAura::NativeThemeAura(bool use_overlay_scrollbars,
                                  bool should_only_use_dark_colors,
-                                 ui::SystemTheme system_theme)
-    : NativeThemeBase(should_only_use_dark_colors, system_theme),
+                                 ui::SystemTheme system_theme,
+                                 NativeTheme* theme_to_update)
+    : NativeThemeBase(should_only_use_dark_colors,
+                      system_theme,
+                      theme_to_update),
       use_overlay_scrollbars_(use_overlay_scrollbars) {
 // We don't draw scrollbar buttons.
 #if BUILDFLAG(IS_CHROMEOS)
@@ -108,15 +122,17 @@ NativeThemeAura::~NativeThemeAura() {}
 // static
 NativeThemeAura* NativeThemeAura::web_instance() {
   static base::NoDestructor<NativeThemeAura> s_native_theme_for_web(
-      IsOverlayScrollbarEnabled(), false);
+      /*use_overlay_scrollbars=*/IsOverlayScrollbarEnabled(),
+      /*should_only_use_dark_colors=*/false);
   return s_native_theme_for_web.get();
 }
 
-SkColor NativeThemeAura::FocusRingColorForBaseColor(SkColor base_color) const {
+SkColor4f NativeThemeAura::FocusRingColorForBaseColor(
+    SkColor4f base_color) const {
 #if BUILDFLAG(IS_APPLE)
   // On Mac OSX, the system Accent Color setting is darkened a bit
   // for better contrast.
-  return SkColorSetA(base_color, 166);
+  return SkColor4f(base_color.fR, base_color.fG, base_color.fB, 166 / 255.0f);
 #else
   return base_color;
 #endif  // BUILDFLAG(IS_APPLE)
@@ -198,31 +214,53 @@ void NativeThemeAura::PaintArrowButton(
     case kNumStates:
       break;
   }
+  if (arrow.thumb_color.has_value() &&
+      arrow.thumb_color.value() == gfx::kPlaceholderColor) {
+     // TODO(crbug.com/1473075): Remove this and the below checks for placeholderColor.
+     DLOG(ERROR) << "thumb_color with a placeholderColor value encountered";
+  }
+  if (arrow.thumb_color.has_value() &&
+      arrow.thumb_color.value() != gfx::kPlaceholderColor) {
+    // TODO(crbug.com/891944): Adjust thumb_color based on `state`.
+    arrow_color = arrow.thumb_color.value();
+  }
+  if (arrow.track_color.has_value() &&
+      arrow.track_color.value() != gfx::kPlaceholderColor) {
+    // TODO(crbug.com/891944): Adjust track_color based on `state`.
+    bg_color = arrow.track_color.value();
+  }
   DCHECK_NE(arrow_color, gfx::kPlaceholderColor);
 
   cc::PaintFlags flags;
   flags.setColor(bg_color);
 
-  SkScalar upper_left_radius = 0;
-  SkScalar lower_left_radius = 0;
-  SkScalar upper_right_radius = 0;
-  SkScalar lower_right_radius = 0;
-  float zoom = arrow.zoom ? arrow.zoom : 1.0;
-  if (direction == kScrollbarUpArrow) {
-    if (arrow.right_to_left) {
-      upper_left_radius = kScrollRadius * zoom;
-    } else {
-      upper_right_radius = kScrollRadius * zoom;
+  if (base::FeatureList::IsEnabled(kNewScrollbarArrowRadius) &&
+      !arrow.needs_rounded_corner) {
+    canvas->drawIRect(gfx::RectToSkIRect(rect), flags);
+  } else {
+    // TODO(crbug.com/1493088): Also draw rounded corner for left and right
+    // buttons when needed.
+    SkScalar upper_left_radius = 0;
+    SkScalar lower_left_radius = 0;
+    SkScalar upper_right_radius = 0;
+    SkScalar lower_right_radius = 0;
+    float zoom = arrow.zoom ? arrow.zoom : 1.0;
+    if (direction == kScrollbarUpArrow) {
+      if (arrow.right_to_left) {
+        upper_left_radius = kScrollbarArrowRadius * zoom;
+      } else {
+        upper_right_radius = kScrollbarArrowRadius * zoom;
+      }
+    } else if (direction == kScrollbarDownArrow) {
+      if (arrow.right_to_left) {
+        lower_left_radius = kScrollbarArrowRadius * zoom;
+      } else {
+        lower_right_radius = kScrollbarArrowRadius * zoom;
+      }
     }
-  } else if (direction == kScrollbarDownArrow) {
-    if (arrow.right_to_left) {
-      lower_left_radius = kScrollRadius * zoom;
-    } else {
-      lower_right_radius = kScrollRadius * zoom;
-    }
+    DrawPartiallyRoundRect(canvas, rect, upper_left_radius, upper_right_radius,
+                           lower_right_radius, lower_left_radius, flags);
   }
-  DrawPartiallyRoundRect(canvas, rect, upper_left_radius, upper_right_radius,
-                         lower_right_radius, lower_left_radius, flags);
 
   PaintArrow(canvas, rect, direction, arrow_color);
 }
@@ -239,18 +277,21 @@ void NativeThemeAura::PaintScrollbarTrack(
   DCHECK(!use_overlay_scrollbars_);
   cc::PaintFlags flags;
   const SkColor track_color =
-      GetControlColor(kScrollbarTrack, color_scheme, color_provider);
+      extra_params.track_color.has_value()
+          ? extra_params.track_color.value()
+          : GetControlColor(kScrollbarTrack, color_scheme, color_provider);
   flags.setColor(track_color);
   canvas->drawIRect(gfx::RectToSkIRect(rect), flags);
 }
 
-void NativeThemeAura::PaintScrollbarThumb(cc::PaintCanvas* canvas,
-                                          const ColorProvider* color_provider,
-                                          Part part,
-                                          State state,
-                                          const gfx::Rect& rect,
-                                          ScrollbarOverlayColorTheme theme,
-                                          ColorScheme color_scheme) const {
+void NativeThemeAura::PaintScrollbarThumb(
+    cc::PaintCanvas* canvas,
+    const ColorProvider* color_provider,
+    Part part,
+    State state,
+    const gfx::Rect& rect,
+    const ScrollbarThumbExtraParams& extra_params,
+    ColorScheme color_scheme) const {
   // Do not paint if state is disabled.
   if (state == kDisabled)
     return;
@@ -258,7 +299,7 @@ void NativeThemeAura::PaintScrollbarThumb(cc::PaintCanvas* canvas,
   TRACE_EVENT0("blink", "NativeThemeAura::PaintScrollbarThumb");
 
   gfx::Rect thumb_rect(rect);
-  SkColor thumb_color;
+  SkColor default_thumb_color;
 
   if (use_overlay_scrollbars_) {
     if (state == NativeTheme::kDisabled)
@@ -291,9 +332,10 @@ void NativeThemeAura::PaintScrollbarThumb(cc::PaintCanvas* canvas,
         });
 
     DCHECK(color_provider);
-    thumb_color = color_provider->GetColor(kFillIdMap.at(theme)[hovered]);
-    const SkColor stroke_color =
-        color_provider->GetColor(kStrokeIdMap.at(theme)[hovered]);
+    default_thumb_color = color_provider->GetColor(
+        kFillIdMap.at(extra_params.scrollbar_theme)[hovered]);
+    const SkColor stroke_color = color_provider->GetColor(
+        kStrokeIdMap.at(extra_params.scrollbar_theme)[hovered]);
 
     // In overlay mode, draw a stroke (border).
     constexpr int kStrokeWidth = kOverlayScrollbarStrokeWidth;
@@ -344,28 +386,29 @@ void NativeThemeAura::PaintScrollbarThumb(cc::PaintCanvas* canvas,
     else
       thumb_rect.Inset(gfx::Insets::VH(kThumbPadding, extra_padding));
 
-    thumb_color = GetControlColor(color_id, color_scheme, color_provider);
+    default_thumb_color =
+        GetControlColor(color_id, color_scheme, color_provider);
   }
 
   cc::PaintFlags flags;
-  flags.setColor(thumb_color);
+  flags.setColor(extra_params.thumb_color.value_or(default_thumb_color));
   canvas->drawIRect(gfx::RectToSkIRect(thumb_rect), flags);
 }
 
-void NativeThemeAura::PaintScrollbarCorner(cc::PaintCanvas* canvas,
-                                           const ColorProvider* color_provider,
-                                           State state,
-                                           const gfx::Rect& rect,
-                                           ColorScheme color_scheme) const {
+void NativeThemeAura::PaintScrollbarCorner(
+    cc::PaintCanvas* canvas,
+    const ColorProvider* color_provider,
+    State state,
+    const gfx::Rect& rect,
+    const ScrollbarTrackExtraParams& extra_params,
+    ColorScheme color_scheme) const {
   // Overlay Scrollbar should never paint a scrollbar corner.
   DCHECK(!use_overlay_scrollbars_);
+  const SkColor default_corner_color = GetControlColor(
+      kScrollbarCornerControlColorId, color_scheme, color_provider);
+
   cc::PaintFlags flags;
-  // TODO(crbug.com/1374573): use the system color for the high contrast mode.
-  // Move the definition to the NativeThemeBase::GetControlColor().
-  SkColor bg_color = color_scheme == ui::NativeTheme::ColorScheme::kDark
-                         ? SkColorSetRGB(0x12, 0x12, 0x12)
-                         : SkColorSetRGB(0xDC, 0xDC, 0xDC);
-  flags.setColor(bg_color);
+  flags.setColor(extra_params.track_color.value_or(default_corner_color));
   canvas->drawIRect(RectToSkIRect(rect), flags);
 }
 

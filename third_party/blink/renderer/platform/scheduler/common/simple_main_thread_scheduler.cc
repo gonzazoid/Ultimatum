@@ -4,7 +4,7 @@
 
 #include "third_party/blink/renderer/platform/scheduler/common/simple_main_thread_scheduler.h"
 
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "third_party/blink/public/platform/scheduler/web_agent_group_scheduler.h"
 #include "third_party/blink/renderer/platform/wtf/functional.h"
@@ -38,19 +38,26 @@ void SimpleMainThreadScheduler::AddRAILModeObserver(
 void SimpleMainThreadScheduler::RemoveRAILModeObserver(
     RAILModeObserver const* observer) {}
 
+void SimpleMainThreadScheduler::ForEachMainThreadIsolate(
+    base::RepeatingCallback<void(v8::Isolate* isolate)> callback) {
+  if (isolate_) {
+    callback.Run(isolate_.get());
+  }
+}
+
 scoped_refptr<base::SingleThreadTaskRunner>
 SimpleMainThreadScheduler::V8TaskRunner() {
-  return base::ThreadTaskRunnerHandle::Get();
+  return base::SingleThreadTaskRunner::GetCurrentDefault();
 }
 
 scoped_refptr<base::SingleThreadTaskRunner>
 SimpleMainThreadScheduler::CleanupTaskRunner() {
-  return base::ThreadTaskRunnerHandle::Get();
+  return base::SingleThreadTaskRunner::GetCurrentDefault();
 }
 
 scoped_refptr<base::SingleThreadTaskRunner>
 SimpleMainThreadScheduler::NonWakingTaskRunner() {
-  return base::ThreadTaskRunnerHandle::Get();
+  return base::SingleThreadTaskRunner::GetCurrentDefault();
 }
 
 AgentGroupScheduler* SimpleMainThreadScheduler::CreateAgentGroupScheduler() {
@@ -89,5 +96,7 @@ void SimpleMainThreadScheduler::SetV8Isolate(v8::Isolate* isolate) {
 v8::Isolate* SimpleMainThreadScheduler::Isolate() {
   return isolate_;
 }
+
+void SimpleMainThreadScheduler::StartIdlePeriodForTesting() {}
 
 }  // namespace blink::scheduler

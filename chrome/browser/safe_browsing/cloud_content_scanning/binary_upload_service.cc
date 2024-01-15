@@ -67,15 +67,31 @@ std::string BinaryUploadService::ResultToString(Result result) {
       return "UNAUTHORIZED";
     case Result::FILE_ENCRYPTED:
       return "FILE_ENCRYPTED";
-    case Result::DLP_SCAN_UNSUPPORTED_FILE_TYPE:
-      return "DLP_SCAN_UNSUPPORTED_FILE_TYPE";
     case Result::TOO_MANY_REQUESTS:
       return "TOO_MANY_REQUESTS";
   }
 }
 
 BinaryUploadService::Request::Data::Data() = default;
+
+BinaryUploadService::Request::Data::Data(const Data& other) {
+  operator=(other);
+}
+
 BinaryUploadService::Request::Data::Data(Data&&) = default;
+
+BinaryUploadService::Request::Data&
+BinaryUploadService::Request::Data::operator=(
+    const BinaryUploadService::Request::Data& other) {
+  contents = other.contents;
+  path = other.path;
+  hash = other.hash;
+  size = other.size;
+  mime_type = other.mime_type;
+  page = other.page.Duplicate();
+  return *this;
+}
+
 BinaryUploadService::Request::Data&
 BinaryUploadService::Request::Data::operator=(
     BinaryUploadService::Request::Data&& other) = default;
@@ -87,14 +103,22 @@ BinaryUploadService::Request::Request(
     : content_analysis_callback_(std::move(callback)),
       cloud_or_local_settings_(std::move(settings)) {}
 
+BinaryUploadService::Request::Request(
+    ContentAnalysisCallback content_analysis_callback,
+    enterprise_connectors::CloudOrLocalAnalysisSettings settings,
+    Request::RequestStartCallback start_callback)
+    : content_analysis_callback_(std::move(content_analysis_callback)),
+      request_start_callback_(std::move(start_callback)),
+      cloud_or_local_settings_(std::move(settings)) {}
+
 BinaryUploadService::Request::~Request() = default;
 
-void BinaryUploadService::Request::set_tab_url(const GURL& tab_url) {
-  tab_url_ = tab_url;
+void BinaryUploadService::Request::set_id(Id id) {
+  id_ = id;
 }
 
-const GURL& BinaryUploadService::Request::tab_url() const {
-  return tab_url_;
+BinaryUploadService::Request::Id BinaryUploadService::Request::id() const {
+  return id_;
 }
 
 void BinaryUploadService::Request::set_per_profile_request(
@@ -185,12 +209,39 @@ void BinaryUploadService::Request::set_user_action_requests_count(
       user_action_requests_count);
 }
 
+void BinaryUploadService::Request::set_tab_url(const GURL& tab_url) {
+  content_analysis_request_.mutable_request_data()->set_tab_url(tab_url.spec());
+}
+
+void BinaryUploadService::Request::set_printer_name(
+    const std::string& printer_name) {
+  content_analysis_request_.mutable_request_data()
+      ->mutable_print_metadata()
+      ->set_printer_name(printer_name);
+}
+
+void BinaryUploadService::Request::set_printer_type(
+    enterprise_connectors::ContentMetaData::PrintMetadata::PrinterType
+        printer_type) {
+  content_analysis_request_.mutable_request_data()
+      ->mutable_print_metadata()
+      ->set_printer_type(printer_type);
+}
+
+void BinaryUploadService::Request::set_password(const std::string& password) {
+  content_analysis_request_.mutable_request_data()->set_decryption_key(
+      password);
+}
+
+void BinaryUploadService::Request::set_reason(
+    enterprise_connectors::ContentAnalysisRequest::Reason reason) {
+  content_analysis_request_.set_reason(reason);
+}
+
 std::string BinaryUploadService::Request::SetRandomRequestToken() {
   DCHECK(request_token().empty());
-
-  std::string token = base::RandBytesAsString(128);
   content_analysis_request_.set_request_token(
-      base::HexEncode(token.data(), token.size()));
+      base::HexEncode(base::RandBytesAsVector(128)));
   return content_analysis_request_.request_token();
 }
 
@@ -228,8 +279,42 @@ const std::string& BinaryUploadService::Request::user_action_id() const {
   return content_analysis_request_.user_action_id();
 }
 
+const std::string& BinaryUploadService::Request::tab_title() const {
+  return content_analysis_request_.request_data().tab_title();
+}
+
+const std::string& BinaryUploadService::Request::printer_name() const {
+  return content_analysis_request_.request_data()
+      .print_metadata()
+      .printer_name();
+}
+
 uint64_t BinaryUploadService::Request::user_action_requests_count() const {
   return content_analysis_request_.user_action_requests_count();
+}
+
+GURL BinaryUploadService::Request::tab_url() const {
+  if (!content_analysis_request_.has_request_data())
+    return GURL();
+  return GURL(content_analysis_request_.request_data().tab_url());
+}
+
+base::optional_ref<const std::string> BinaryUploadService::Request::password()
+    const {
+  return content_analysis_request_.request_data().has_decryption_key()
+             ? base::optional_ref(
+                   content_analysis_request_.request_data().decryption_key())
+             : absl::nullopt;
+}
+
+enterprise_connectors::ContentAnalysisRequest::Reason
+BinaryUploadService::Request::reason() const {
+  return content_analysis_request_.reason();
+}
+
+void BinaryUploadService::Request::StartRequest() {
+  if (!request_start_callback_.is_null())
+    std::move(request_start_callback_).Run(*this);
 }
 
 void BinaryUploadService::Request::FinishRequest(

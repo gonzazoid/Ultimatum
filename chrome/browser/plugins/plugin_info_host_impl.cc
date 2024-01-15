@@ -10,10 +10,10 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/containers/cxx20_erase.h"
+#include "base/functional/bind.h"
+#include "base/i18n/rtl.h"
 #include "base/memory/singleton.h"
-#include "base/strings/utf_string_conversions.h"
 #include "build/branding_buildflags.h"
 #include "build/build_config.h"
 #include "chrome/browser/browser_process.h"
@@ -27,16 +27,14 @@
 #include "chrome/common/buildflags.h"
 #include "chrome/common/chrome_content_client.h"
 #include "chrome/common/plugin.mojom.h"
-#include "chrome/common/pref_names.h"
 #include "components/component_updater/component_updater_service.h"
 #include "components/content_settings/core/browser/content_settings_utils.h"
 #include "components/content_settings/core/browser/host_content_settings_map.h"
 #include "components/content_settings/core/common/content_settings.h"
 #include "components/keyed_service/content/browser_context_keyed_service_shutdown_notifier_factory.h"
 #include "components/nacl/common/buildflags.h"
-#include "components/pref_registry/pref_registry_syncable.h"
 #include "components/prefs/pref_service.h"
-#include "content/public/browser/browser_task_traits.h"
+#include "content/public/browser/browser_thread.h"
 #include "content/public/browser/plugin_service.h"
 #include "content/public/browser/plugin_service_filter.h"
 #include "content/public/browser/render_frame_host.h"
@@ -98,23 +96,30 @@ std::unique_ptr<PluginMetadata> GetPluginMetadata(const WebPluginInfo& plugin) {
   // Gets the plugin group name as the plugin name if it is not empty, or the
   // filename without extension if the name is empty.
   std::u16string group_name = plugin.name;
-  if (group_name.empty())
+  if (group_name.empty()) {
     group_name = plugin.path.BaseName().RemoveExtension().AsUTF16Unsafe();
+  } else {
+    // Remove any unwanted locale direction characters from the group name.
+    // For extension-based plugins, the plugin name is derived from the
+    // extension name, and `extensions::Extension::LoadName()` may add locale
+    // direction characters to the extension name.
+    base::i18n::UnadjustStringForLocaleDirection(&group_name);
+  }
 
   // Treat plugins as requiring authorization by default.
   PluginMetadata::SecurityStatus security_status =
       PluginMetadata::SECURITY_STATUS_REQUIRES_AUTHORIZATION;
 
   // Handle the PDF plugins specially.
-  std::string plugin_name = base::UTF16ToUTF8(plugin.name);
-  if (plugin_name == ChromeContentClient::kPDFExtensionPluginName) {
+  if (plugin.path.value() == ChromeContentClient::kPDFExtensionPluginPath) {
 #if BUILDFLAG(GOOGLE_CHROME_BRANDING)
     identifier = "google-chrome-pdf";
 #else
     identifier = "chromium-pdf";
 #endif  // BUILDFLAG(GOOGLE_CHROME_BRANDING)
     security_status = PluginMetadata::SECURITY_STATUS_FULLY_TRUSTED;
-  } else if (plugin_name == ChromeContentClient::kPDFInternalPluginName) {
+  } else if (plugin.path.value() ==
+             ChromeContentClient::kPDFInternalPluginPath) {
 #if BUILDFLAG(GOOGLE_CHROME_BRANDING)
     identifier = "google-chrome-pdf-plugin";
 #else
@@ -169,16 +174,9 @@ PluginInfoHostImpl::Context::Context(int render_process_id, Profile* profile)
       host_content_settings_map_(
           HostContentSettingsMapFactory::GetForProfile(profile)),
       plugin_prefs_(PluginPrefs::GetForProfile(profile)) {
-  allow_outdated_plugins_.Init(prefs::kPluginsAllowOutdated,
-                               profile->GetPrefs());
 }
 
-PluginInfoHostImpl::Context::~Context() {}
-
-void PluginInfoHostImpl::Context::ShutdownOnUIThread() {
-  DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
-  allow_outdated_plugins_.Destroy();
-}
+PluginInfoHostImpl::Context::~Context() = default;
 
 PluginInfoHostImpl::PluginInfoHostImpl(int render_process_id, Profile* profile)
     : context_(render_process_id, profile) {
@@ -191,17 +189,10 @@ PluginInfoHostImpl::PluginInfoHostImpl(int render_process_id, Profile* profile)
 
 void PluginInfoHostImpl::ShutdownOnUIThread() {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
-  context_.ShutdownOnUIThread();
   shutdown_subscription_ = {};
 }
 
-// static
-void PluginInfoHostImpl::RegisterUserPrefs(
-    user_prefs::PrefRegistrySyncable* registry) {
-  registry->RegisterBooleanPref(prefs::kPluginsAllowOutdated, false);
-}
-
-PluginInfoHostImpl::~PluginInfoHostImpl() {}
+PluginInfoHostImpl::~PluginInfoHostImpl() = default;
 
 struct PluginInfoHostImpl::GetPluginInfo_Params {
   GURL url;
@@ -374,6 +365,11 @@ void PluginInfoHostImpl::GetPluginInfoFinish(
   context_.MaybeGrantAccess(output->status, output->plugin.path);
 
   std::move(callback).Run(std::move(output));
+}
+
+// static
+void PluginInfoHostImpl::EnsureFactoryBuilt() {
+  PluginInfoHostImplShutdownNotifierFactory::GetInstance();
 }
 
 void PluginInfoHostImpl::Context::MaybeGrantAccess(

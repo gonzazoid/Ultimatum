@@ -5,14 +5,14 @@
 #include "chrome/browser/offline_pages/android/offline_page_archive_publisher_impl.h"
 
 #include "base/android/build_info.h"
-#include "base/bind.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
 #include "base/memory/weak_ptr.h"
 #include "base/task/sequenced_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/test_simple_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "components/offline_pages/core/archive_manager.h"
 #include "components/offline_pages/core/model/offline_page_item_generator.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -23,13 +23,11 @@ const int64_t kDownloadId = 42LL;
 
 namespace offline_pages {
 
-class OfflinePageArchivePublisherImplTest
-    : public testing::Test,
-      public base::SupportsWeakPtr<OfflinePageArchivePublisherImplTest> {
+class OfflinePageArchivePublisherImplTest : public testing::Test {
  public:
   OfflinePageArchivePublisherImplTest()
       : task_runner_(new base::TestSimpleTaskRunner),
-        task_runner_handle_(task_runner_) {}
+        task_runner_current_default_handle_(task_runner_) {}
   ~OfflinePageArchivePublisherImplTest() override {}
 
   void SetUp() override;
@@ -66,7 +64,8 @@ class OfflinePageArchivePublisherImplTest
   OfflinePageItemGenerator page_generator_;
   PublishArchiveResult publish_archive_result_;
   scoped_refptr<base::TestSimpleTaskRunner> task_runner_;
-  base::ThreadTaskRunnerHandle task_runner_handle_;
+  base::SingleThreadTaskRunner::CurrentDefaultHandle
+      task_runner_current_default_handle_;
   base::WeakPtrFactory<OfflinePageArchivePublisherImplTest> weak_ptr_factory_{
       this};
 };
@@ -132,7 +131,7 @@ TEST_F(OfflinePageArchivePublisherImplTest, PublishArchive) {
       public_archive_dir_path().Append(offline_page.file_path.BaseName());
 
   publisher.PublishArchive(
-      offline_page, base::ThreadTaskRunnerHandle::Get(),
+      offline_page, base::SingleThreadTaskRunner::GetCurrentDefault(),
       base::BindOnce(&OfflinePageArchivePublisherImplTest::PublishArchiveDone,
                      get_weak_ptr()));
   PumpLoop();

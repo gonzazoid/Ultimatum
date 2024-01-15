@@ -12,7 +12,7 @@
 #include <algorithm>
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "base/message_loop/message_pump_for_io.h"
@@ -20,7 +20,6 @@
 #include "base/synchronization/lock.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/threading/simple_thread.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/trace_event/trace_event.h"
 #include "ipc/ipc_listener.h"
 #include "ipc/ipc_logging.h"
@@ -172,14 +171,14 @@ bool ChannelNacl::Connect() {
                           weak_ptr_factory_.GetWeakPtr()),
       base::BindRepeating(&ChannelNacl::ReadDidFail,
                           weak_ptr_factory_.GetWeakPtr()),
-      base::ThreadTaskRunnerHandle::Get());
+      base::SingleThreadTaskRunner::GetCurrentDefault());
   reader_thread_ = std::make_unique<base::DelegateSimpleThread>(
       reader_thread_runner_.get(), "ipc_channel_nacl reader thread");
   reader_thread_->Start();
   waiting_connect_ = false;
   // If there were any messages queued before connection, send them.
   ProcessOutgoingMessages();
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&ChannelNacl::CallOnChannelConnected,
                                 weak_ptr_factory_.GetWeakPtr()));
 
@@ -296,9 +295,8 @@ bool ChannelNacl::ProcessOutgoingMessages() {
                         .TakePlatformFile());
     }
 
-    NaClAbiNaClImcMsgIoVec iov = {
-      const_cast<void*>(msg->data()), msg->size()
-    };
+    NaClAbiNaClImcMsgIoVec iov = {const_cast<uint8_t*>(msg->data()),
+                                  msg->size()};
     NaClAbiNaClImcMsgHdr msgh = {&iov, 1, fds.data(), num_fds};
     ssize_t bytes_written = imc_sendmsg(pipe_, &msgh, 0);
 

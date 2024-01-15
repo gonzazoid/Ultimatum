@@ -10,7 +10,7 @@
 #include <memory>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "net/base/completion_once_callback.h"
@@ -41,7 +41,8 @@ class ArcDocumentsProviderFileStreamWriter : public storage::FileStreamWriter {
             int bufffer_length,
             net::CompletionOnceCallback callback) override;
   int Cancel(net::CompletionOnceCallback callback) override;
-  int Flush(net::CompletionOnceCallback callback) override;
+  int Flush(storage::FlushMode flush_mode,
+            net::CompletionOnceCallback callback) override;
 
  private:
   void OnResolveToContentUrl(const GURL& content_url);
@@ -49,7 +50,8 @@ class ArcDocumentsProviderFileStreamWriter : public storage::FileStreamWriter {
                        int buffer_length,
                        net::CompletionOnceCallback callback);
   void RunPendingCancel(net::CompletionOnceCallback callback);
-  void RunPendingFlush(net::CompletionOnceCallback callback);
+  void RunPendingFlush(storage::FlushMode flush_mode,
+                       net::CompletionOnceCallback callback);
   const int64_t offset_;
   bool content_url_resolved_;
   const storage::FileSystemURL arc_url_;

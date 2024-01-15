@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/values.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/browser_process.h"
@@ -15,6 +15,7 @@
 #include "chrome/browser/ui/managed_ui.h"
 #include "chrome/common/pref_names.h"
 #include "chrome/common/webui_url_constants.h"
+#include "components/supervised_user/core/common/pref_names.h"
 #include "content/public/browser/web_ui.h"
 #include "content/public/browser/web_ui_data_source.h"
 
@@ -111,6 +112,8 @@ void ManagedUIHandler::RemoveObservers() {
 
 base::Value::Dict ManagedUIHandler::GetDataSourceUpdate() const {
   base::Value::Dict update;
+  update.Set("managedByIcon", chrome::GetManagedUiWebUIIcon(profile_));
+  update.Set("managementPageUrl", chrome::GetManagedUiUrl(profile_).spec());
   update.Set("browserManagedByOrg", chrome::GetManagedUiWebUILabel(profile_));
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   update.Set("deviceManagedByOrg", chrome::GetDeviceManagedUiWebUILabel());

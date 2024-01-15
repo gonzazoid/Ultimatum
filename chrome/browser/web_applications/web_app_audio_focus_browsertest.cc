@@ -47,24 +47,15 @@ class WebAppAudioFocusBrowserTest : public WebAppControllerBrowserTest {
   }
 
   bool IsPaused(content::WebContents* web_contents) {
-    bool result = false;
-    EXPECT_TRUE(content::ExecuteScriptAndExtractBool(web_contents, "isPaused()",
-                                                     &result));
-    return result;
+    return content::EvalJs(web_contents, "isPaused()").ExtractBool();
   }
 
   bool WaitForPause(content::WebContents* web_contents) {
-    bool result = false;
-    EXPECT_TRUE(content::ExecuteScriptAndExtractBool(
-        web_contents, "waitForPause()", &result));
-    return result;
+    return content::EvalJs(web_contents, "waitForPause()").ExtractBool();
   }
 
   bool StartPlaying(content::WebContents* web_contents) {
-    bool result = false;
-    return content::ExecuteScriptAndExtractBool(web_contents, "startPlaying()",
-                                                &result) &&
-           result;
+    return content::EvalJs(web_contents, "startPlaying()").ExtractBool();
   }
 
   content::WebContents* AddTestPageTabAtIndex(int index) {
@@ -91,7 +82,7 @@ IN_PROC_BROWSER_TEST_F(WebAppAudioFocusBrowserTest, AppHasDifferentAudioFocus) {
   ASSERT_TRUE(embedded_test_server()->Start());
   GURL app_url = embedded_test_server()->GetURL(kAudioFocusTestPageURL);
 
-  AppId app_id = InstallPWA(app_url);
+  webapps::AppId app_id = InstallPWA(app_url);
 
   // Launch browser with media page.
   content::WebContents* tab1 = AddTestPageTabAtIndex(0);
@@ -175,7 +166,7 @@ IN_PROC_BROWSER_TEST_F(WebAppAudioFocusBrowserTest, WebAppHasSameAudioFocus) {
   ASSERT_TRUE(embedded_test_server()->Start());
   GURL app_url = embedded_test_server()->GetURL(kAudioFocusTestPageURL);
 
-  AppId app_id = InstallPWA(app_url);
+  webapps::AppId app_id = InstallPWA(app_url);
 
   ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), app_url));
   content::WebContents* web_contents =

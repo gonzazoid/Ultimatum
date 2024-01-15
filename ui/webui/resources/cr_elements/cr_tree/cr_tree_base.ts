@@ -2,8 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {assert} from '../../js/assert_ts.js';
-import {CustomElement} from '../../js/custom_element.js';
+import {assert} from '//resources/js/assert.js';
+import {CustomElement} from '//resources/js/custom_element.js';
 
 export const EXPANDED_ATTR: string = 'expanded';
 
@@ -33,8 +33,8 @@ export abstract class CrTreeBaseElement extends CustomElement {
   }
 
   get items(): CrTreeBaseElement[] {
-    return Array.from(this.itemsRoot.querySelectorAll('cr-tree-item')) as
-        CrTreeBaseElement[];
+    return Array.from(
+        this.itemsRoot.querySelectorAll<CrTreeBaseElement>('cr-tree-item'));
   }
 
   abstract get depth(): number;

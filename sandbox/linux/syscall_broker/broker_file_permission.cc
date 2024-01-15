@@ -7,13 +7,14 @@
 #include <fcntl.h>
 #include <stddef.h>
 #include <string.h>
+#include <sys/inotify.h>
 #include <unistd.h>
 
 #include <ostream>
 #include <string>
 
 #include "base/check.h"
-#include "base/check_op.h"
+#include "base/strings/string_util.h"
 #include "sandbox/linux/syscall_broker/broker_command.h"
 
 namespace sandbox {
@@ -29,31 +30,44 @@ BrokerFilePermission& BrokerFilePermission::operator=(
 
 BrokerFilePermission::~BrokerFilePermission() = default;
 
-bool BrokerFilePermission::ValidatePath(const char* path) {
-  if (!path)
-    return false;
-
-  const size_t len = strlen(path);
-  // No empty paths
-  if (len == 0)
-    return false;
-  // Paths must be absolute and not relative
-  if (path[0] != '/')
-    return false;
-  // No trailing / (but "/" is valid)
-  if (len > 1 && path[len - 1] == '/')
-    return false;
+namespace {
+bool ContainsParentReference(const char* path, size_t len) {
   // No trailing /..
   if (len >= 3 && path[len - 3] == '/' && path[len - 2] == '.' &&
-      path[len - 1] == '.')
-    return false;
-  // No /../ anywhere
+      path[len - 1] == '.') {
+    return true;
+  }
   for (size_t i = 0; i < len; i++) {
     if (path[i] == '/' && (len - i) > 3) {
       if (path[i + 1] == '.' && path[i + 2] == '.' && path[i + 3] == '/') {
-        return false;
+        return true;
       }
     }
+  }
+  return false;
+}
+}  // namespace
+
+bool BrokerFilePermission::ValidatePath(const char* path) {
+  if (!path) {
+    return false;
+  }
+
+  const size_t len = strlen(path);
+  // No empty paths
+  if (len == 0) {
+    return false;
+  }
+  // Paths must be absolute and not relative
+  if (path[0] != '/') {
+    return false;
+  }
+  // No trailing / (but "/" is valid)
+  if (len > 1 && path[len - 1] == '/') {
+    return false;
+  }
+  if (ContainsParentReference(path, len)) {
+    return false;
   }
   return true;
 }
@@ -75,35 +89,28 @@ bool BrokerFilePermission::MatchPath(const char* requested_filename) const {
   // the system needs to ensure symlinks can not be created!
   // That said if an attacker can convert any of the absolute paths
   // to a symlink they can control any file on the system also.
-  return recursive()
-             ? strncmp(requested_filename, path_.c_str(), path_.length()) == 0
-             : strcmp(requested_filename, path_.c_str()) == 0;
+  return recursive() ? base::StartsWith(requested_filename, path_)
+                     : requested_filename == path_;
 }
 
-// Async signal safe.
-// External call to std::string::c_str() is
-// called in MatchPath.
-// TODO(leecam): remove dependency on std::string
-bool BrokerFilePermission::CheckAccess(const char* requested_filename,
-                                       int mode,
-                                       const char** file_to_access) const {
+const char* BrokerFilePermission::CheckAccess(const char* requested_filename,
+                                              int mode) const {
   // First, check if |mode| is existence, ability to read or ability
   // to write. We do not support X_OK.
   if (mode != F_OK && mode & ~(R_OK | W_OK))
-    return false;
+    return nullptr;
 
   if (!ValidatePath(requested_filename))
-    return false;
+    return nullptr;
 
-  return CheckAccessInternal(requested_filename, mode, file_to_access);
+  return CheckAccessInternal(requested_filename, mode);
 }
 
-bool BrokerFilePermission::CheckAccessInternal(
+const char* BrokerFilePermission::CheckAccessInternal(
     const char* requested_filename,
-    int mode,
-    const char** file_to_access) const {
+    int mode) const {
   if (!MatchPath(requested_filename))
-    return false;
+    return nullptr;
 
   bool allowed = false;
   switch (mode) {
@@ -123,66 +130,58 @@ bool BrokerFilePermission::CheckAccessInternal(
       break;
   }
   if (!allowed)
-    return false;
+    return nullptr;
 
-  if (file_to_access)
-    *file_to_access = recursive() ? requested_filename : path_.c_str();
-
-  return true;
+  return recursive() ? requested_filename : path_.c_str();
 }
 
-// Async signal safe.
-// External call to std::string::c_str() is
-// called in MatchPath.
-// TODO(leecam): remove dependency on std::string
-bool BrokerFilePermission::CheckOpen(const char* requested_filename,
-                                     int flags,
-                                     const char** file_to_open,
-                                     bool* unlink_after_open) const {
+std::pair<const char*, bool> BrokerFilePermission::CheckOpen(
+    const char* requested_filename,
+    int flags) const {
   if (!ValidatePath(requested_filename))
-    return false;
+    return {nullptr, false};
 
   if (!MatchPath(requested_filename))
-    return false;
+    return {nullptr, false};
 
   // First, check the access mode is valid.
   const int access_mode = flags & O_ACCMODE;
   if (access_mode != O_RDONLY && access_mode != O_WRONLY &&
       access_mode != O_RDWR) {
-    return false;
+    return {nullptr, false};
   }
 
   // Check if read is allowed.
   if (!allow_read() && (access_mode == O_RDONLY || access_mode == O_RDWR)) {
-    return false;
+    return {nullptr, false};
   }
 
   // Check if write is allowed.
   if (!allow_write() && (access_mode == O_WRONLY || access_mode == O_RDWR)) {
-    return false;
+    return {nullptr, false};
   }
 
   // Check if file creation is allowed.
   if (!allow_create() && (flags & O_CREAT)) {
-    return false;
+    return {nullptr, false};
   }
 
   // If this file is to be temporary, ensure it is created, not pre-existing.
   // See https://crbug.com/415681#c17
   if (temporary_only() && (!(flags & O_CREAT) || !(flags & O_EXCL))) {
-    return false;
+    return {nullptr, false};
   }
 
   // Some flags affect the behavior of the current process. We don't support
   // them and don't allow them for now.
   if (flags & kCurrentProcessOpenFlagsMask) {
-    return false;
+    return {nullptr, false};
   }
 
   // The effect of (O_RDONLY | O_TRUNC) is undefined, and in some cases it
   // actually truncates, so deny.
   if (access_mode == O_RDONLY && (flags & O_TRUNC) != 0) {
-    return false;
+    return {nullptr, false};
   }
 
   // Now check that all the flags are known to us.
@@ -194,51 +193,89 @@ bool BrokerFilePermission::CheckOpen(const char* requested_filename,
 
   const int unknown_flags = ~known_flags;
   const bool has_unknown_flags = creation_and_status_flags & unknown_flags;
-  if (has_unknown_flags)
-    return false;
+  if (has_unknown_flags) {
+    return {nullptr, false};
+  }
 
-  if (file_to_open)
-    *file_to_open = recursive() ? requested_filename : path_.c_str();
-
-  if (unlink_after_open)
-    *unlink_after_open = temporary_only();
-
-  return true;
+  return {recursive() ? requested_filename : path_.c_str(), temporary_only()};
 }
 
-bool BrokerFilePermission::CheckStat(const char* requested_filename,
-                                     const char** file_to_access) const {
-  if (!ValidatePath(requested_filename))
-    return false;
+const char* BrokerFilePermission::CheckStatWithIntermediates(
+    const char* requested_filename) const {
+  if (!ValidatePath(requested_filename)) {
+    return nullptr;
+  }
 
   // Ability to access implies ability to stat().
-  if (CheckAccessInternal(requested_filename, F_OK, file_to_access))
-    return true;
+  const char* ret = CheckAccessInternal(requested_filename, F_OK);
+  if (ret) {
+    return ret;
+  }
 
   // Allow stat() on leading directories if have create or stat() permission.
-  if (!(allow_create() || allow_stat_with_intermediates()))
-    return false;
+  if (!(allow_create() || allow_stat_with_intermediates())) {
+    return nullptr;
+  }
 
-  // NOTE: ValidatePath proved requested_length != 0;
+  // |allow_stat_with_intermediates()| can match on the full path, and
+  // |allow_create()| only matches a leading directory.
+  if (!CheckIntermediates(
+          requested_filename,
+          /*can_match_full_path=*/allow_stat_with_intermediates())) {
+    return nullptr;
+  }
+
+  return requested_filename;
+}
+
+const char* BrokerFilePermission::CheckInotifyAddWatchWithIntermediates(
+    const char* requested_filename,
+    uint32_t mask) const {
+  if (!allow_inotify_add_watch_with_intermediates()) {
+    return nullptr;
+  }
+
+  if (!ValidatePath(requested_filename)) {
+    return nullptr;
+  }
+
+  // Allow only this exact mask as it is used by
+  // base/files/file_path_watcher_inotify.cc.
+  if (mask != (IN_ATTRIB | IN_CREATE | IN_DELETE | IN_CLOSE_WRITE | IN_MOVE |
+               IN_ONLYDIR)) {
+    return nullptr;
+  }
+
+  // If this permission is recursive and a prefix of `requested_filename`
+  // matches this permission, allow. Otherwise check intermediates.
+  if (!(recursive() && MatchPath(requested_filename)) &&
+      !CheckIntermediates(requested_filename,
+                          /*can_match_full_path=*/true)) {
+    return nullptr;
+  }
+
+  return requested_filename;
+}
+
+bool BrokerFilePermission::CheckIntermediates(const char* requested_filename,
+                                              bool can_match_full_path) const {
+  // NOTE: ValidatePath proves requested_length != 0 and |requested_filename| is
+  // absolute.
   size_t requested_length = strlen(requested_filename);
   CHECK(requested_length);
+  CHECK(requested_filename[0] == '/');
 
   // Special case for root: only one slash, otherwise must have a second
   // slash in the right spot to avoid substring matches.
-  // |allow_stat_with_intermediates()| can match on the full path, and
-  // |allow_create()| only matches a leading directory.
-  if ((requested_length == 1 && requested_filename[0] == '/') ||
-      (allow_stat_with_intermediates() && path_ == requested_filename) ||
-      (requested_length < path_.length() &&
-       memcmp(path_.c_str(), requested_filename, requested_length) == 0 &&
-       path_.c_str()[requested_length] == '/')) {
-    if (file_to_access)
-      *file_to_access = requested_filename;
-
-    return true;
-  }
-
-  return false;
+  return (requested_length == 1 && requested_filename[0] == '/') ||
+         // If this permission can match the full path, compare directly to the
+         // requested filename.
+         (can_match_full_path && path_ == requested_filename) ||
+         // Check whether |requested_filename| matches a leading directory of
+         // |path_|.
+         (requested_length < path_.length() &&
+          memcmp(path_.c_str(), requested_filename, requested_length) == 0 &&
+          path_.c_str()[requested_length] == '/');
 }
 
 const char* BrokerFilePermission::GetErrorMessageForTests() {
@@ -256,12 +293,15 @@ void BrokerFilePermission::DieOnInvalidPermission() {
   if (temporary_only())
     CHECK(allow_create()) << GetErrorMessageForTests();
 
-  // Recursive paths must have a trailing slash, absolutes must not.
-  const char last_char = *(path_.rbegin());
-  if (recursive())
+  // Recursive paths must have a trailing slash, absolutes must not (except
+  // root).
+  const char last_char = path_.back();
+  if (recursive() || path_.length() == 1)
     CHECK(last_char == '/') << GetErrorMessageForTests();
   else
     CHECK(last_char != '/') << GetErrorMessageForTests();
+
+  CHECK(!ContainsParentReference(path_.c_str(), path_.length()));
 }
 
 BrokerFilePermission::BrokerFilePermission(std::string path, uint64_t flags)
@@ -276,7 +316,8 @@ BrokerFilePermission::BrokerFilePermission(
     ReadPermission read_perm,
     WritePermission write_perm,
     CreatePermission create_perm,
-    StatWithIntermediatesPermission stat_perm)
+    StatWithIntermediatesPermission stat_perm,
+    InotifyAddWatchWithIntermediatesPermission inotify_perm)
     : path_(std::move(path)) {
   flags_[kRecursiveBitPos] = recurse_opt == RecursionOption::kRecursive;
   flags_[kTemporaryOnlyBitPos] =
@@ -286,6 +327,9 @@ BrokerFilePermission::BrokerFilePermission(
   flags_[kAllowCreateBitPos] = create_perm == CreatePermission::kAllowCreate;
   flags_[kAllowStatWithIntermediatesBitPos] =
       stat_perm == StatWithIntermediatesPermission::kAllowStatWithIntermediates;
+  flags_[kAllowInotifyAddWatchWithIntermediates] =
+      inotify_perm == InotifyAddWatchWithIntermediatesPermission::
+                          kAllowInotifyAddWatchWithIntermediates;
 
   DieOnInvalidPermission();
 }

@@ -5,27 +5,8 @@
 import {ENTRIES, RootPath, sendTestMessage} from '../test_util.js';
 import {testcase} from '../testcase.js';
 
-import {IGNORE_APP_ERRORS, remoteCall, setupAndWaitUntilReady} from './background.js';
-
-/**
- * Tests that Guest OS entries don't show up if the flag controlling guest os +
- * files app integration is disabled.
- */
-testcase.notListedWithoutFlag = async () => {
-  // Prepopulate the list with a bunch of guests.
-  const names = ['Electra', 'Etcetera', 'Jemima'];
-  for (const name of names) {
-    await sendTestMessage({name: 'registerMountableGuest', displayName: name});
-  }
-
-  // Open the files app.
-  const appId =
-      await setupAndWaitUntilReady(RootPath.DOWNLOADS, [ENTRIES.hello], []);
-
-  // Check that we have no Guest OS entries.
-  const query = '#directory-tree [root-type-icon=bruschetta]';
-  await remoteCall.waitForElementsCount(appId, [query], 0);
-};
+import {remoteCall, setupAndWaitUntilReady} from './background.js';
+import {DirectoryTreePageObject} from './page_objects/directory_tree.js';
 
 /**
  * Tests that Guest OS entries show up in the sidebar at files app launch.
@@ -42,9 +23,10 @@ testcase.fakesListed = async () => {
       await setupAndWaitUntilReady(RootPath.DOWNLOADS, [ENTRIES.hello], []);
 
   // Check that our guests are listed.
+  const directoryTree = await DirectoryTreePageObject.create(appId, remoteCall);
+
   for (const name of names) {
-    await remoteCall.waitForElement(
-        appId, `#directory-tree [entry-label="${name}"]`);
+    await directoryTree.waitForItemByLabel(name);
   }
 };
 
@@ -57,11 +39,10 @@ testcase.listUpdatedWhenGuestsChanged = async () => {
   const appId =
       await setupAndWaitUntilReady(RootPath.DOWNLOADS, [ENTRIES.hello], []);
 
-  // We'll use this query a lot to check how many guests we have.
-  const query = '#directory-tree [root-type-icon=android_files]';
-
   const names = ['Etcetera', 'Electra'];
   const ids = [];
+
+  const directoryTree = await DirectoryTreePageObject.create(appId, remoteCall);
 
   for (const name of names) {
     // Add a guest...
@@ -69,12 +50,12 @@ testcase.listUpdatedWhenGuestsChanged = async () => {
         {name: 'registerMountableGuest', displayName: name, vmType: 'arcvm'}));
 
     // ...and it should show up.
-    await remoteCall.waitForElement(
-        appId, `#directory-tree [entry-label="${name}"]`);
+    await directoryTree.waitForItemByLabel(name);
   }
 
   // Check that we have the right number of entries.
-  await remoteCall.waitForElementsCount(appId, [query], ids.length);
+  await directoryTree.waitForPlaceholderItemsCountByType(
+      'android_files', ids.length);
 
   // Remove the guests...
   for (const guestId of ids) {
@@ -82,14 +63,15 @@ testcase.listUpdatedWhenGuestsChanged = async () => {
   }
 
   // ...and they should all be gone.
-  await remoteCall.waitForElementsCount(appId, [query], 0);
+  await directoryTree.waitForPlaceholderItemsCountByType('android_files', 0);
 
   // Then add them back for good measure.
   for (const name of names) {
     await sendTestMessage(
         {name: 'registerMountableGuest', displayName: name, vmType: 'arcvm'});
   }
-  await remoteCall.waitForElementsCount(appId, [query], names.length);
+  await directoryTree.waitForPlaceholderItemsCountByType(
+      'android_files', names.length);
 };
 
 /**
@@ -109,25 +91,21 @@ testcase.mountGuestSuccess = async () => {
   // Open the files app.
   const appId =
       await setupAndWaitUntilReady(RootPath.DOWNLOADS, [ENTRIES.hello], []);
+  const directoryTree = await DirectoryTreePageObject.create(appId, remoteCall);
 
   // Wait for our guest to appear and click it.
-  const placeholderQuery = '#directory-tree [root-type-icon=bruschetta]';
-  const volumeQuery =
-      `.tree-item[volume-type-for-testing="guest_os"][entry-label="${
-          guestName}"]`;
-  await remoteCall.waitAndClickElement(appId, placeholderQuery);
+  await directoryTree.selectPlaceholderItemByType('bruschetta');
 
   // Wait until it's loaded.
   await remoteCall.waitForElement(
       appId, `#breadcrumbs[path="My files/${guestName}"]`);
 
   // We should have a volume in the sidebar.
-  await remoteCall.waitForElement(appId, volumeQuery);
-  await remoteCall.waitForElement(
-      appId, '#directory-tree [volume-type-icon=bruschetta]');
+  await directoryTree.waitForItemByLabel(guestName);
+  await directoryTree.waitForItemByType('bruschetta');
 
   // We should no longer have a fake.
-  await remoteCall.waitForElementsCount(appId, [placeholderQuery], 0);
+  await directoryTree.waitForPlaceholderItemLostByType('bruschetta');
 
   // And the volume should be focused in the main window.
   await remoteCall.waitForElement(
@@ -143,10 +121,10 @@ testcase.mountGuestSuccess = async () => {
   });
 
   // We should have our fake back.
-  await remoteCall.waitForElementsCount(appId, [placeholderQuery], 1);
+  await directoryTree.waitForPlaceholderItemByType('bruschetta');
 
   // And no more volume.
-  await remoteCall.waitForElementsCount(appId, [volumeQuery], 0);
+  await directoryTree.waitForItemLostByType('bruschetta');
 };
 
 /**
@@ -169,24 +147,19 @@ testcase.mountAndroidVolumeSuccess = async () => {
       await setupAndWaitUntilReady(RootPath.DOWNLOADS, [ENTRIES.hello], []);
 
   // Wait for our guest to appear and click it.
-  const placeholderQuery = '#directory-tree [root-type-icon=android_files]';
-  const volumeQuery =
-      `.tree-item[volume-type-for-testing="android_files"][entry-label="${
-          guestName}"]`;
-
-  await remoteCall.waitAndClickElement(appId, placeholderQuery);
+  const directoryTree = await DirectoryTreePageObject.create(appId, remoteCall);
+  await directoryTree.selectPlaceholderItemByType('android_files');
 
   // Wait until it's loaded.
   await remoteCall.waitForElement(
       appId, `#breadcrumbs[path="My files/${guestName}"]`);
 
   // We should have a volume in the sidebar.
-  await remoteCall.waitForElement(appId, volumeQuery);
-  await remoteCall.waitForElement(
-      appId, '#directory-tree [volume-type-icon=android_files]');
+  await directoryTree.waitForItemByLabel(guestName);
+  await directoryTree.waitForItemByType('android_files');
 
   // We should no longer have a fake.
-  await remoteCall.waitForElementsCount(appId, [placeholderQuery], 0);
+  await directoryTree.waitForPlaceholderItemLostByType('android_files');
 
   // And the volume should be focused in the main window.
   await remoteCall.waitForElement(
@@ -202,8 +175,8 @@ testcase.mountAndroidVolumeSuccess = async () => {
   });
 
   // We should have our fake back.
-  await remoteCall.waitForElementsCount(appId, [placeholderQuery], 1);
+  await directoryTree.waitForPlaceholderItemByType('android_files');
 
   // And no more volume.
-  await remoteCall.waitForElementsCount(appId, [volumeQuery], 0);
+  await directoryTree.waitForItemLostByType('android_files');
 };

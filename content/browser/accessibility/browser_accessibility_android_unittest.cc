@@ -11,8 +11,8 @@
 #include "content/browser/accessibility/browser_accessibility_manager.h"
 #include "content/browser/accessibility/browser_accessibility_manager_android.h"
 #include "content/browser/accessibility/test_browser_accessibility_delegate.h"
-#include "content/public/browser/browser_accessibility_state.h"
 #include "content/public/test/browser_task_environment.h"
+#include "content/public/test/scoped_accessibility_mode_override.h"
 #include "content/test/test_content_client.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/strings/grit/blink_accessibility_strings.h"
@@ -65,7 +65,7 @@ class BrowserAccessibilityAndroidTest : public ::testing::Test {
  private:
   void SetUp() override;
   MockContentClient client_;
-  std::unique_ptr<content::testing::ScopedContentAXModeSetter> ax_mode_setter_;
+  std::unique_ptr<ScopedAccessibilityModeOverride> ax_mode_override_;
 
   // This is needed to prevent a DCHECK failure when OnAccessibilityApiUsage
   // is called in BrowserAccessibility::GetRole.
@@ -80,9 +80,8 @@ void BrowserAccessibilityAndroidTest::SetUp() {
   test_browser_accessibility_delegate_ =
       std::make_unique<TestBrowserAccessibilityDelegate>();
   SetContentClient(&client_);
-  ax_mode_setter_ =
-      std::make_unique<content::testing::ScopedContentAXModeSetter>(
-          ui::kAXModeComplete);
+  ax_mode_override_ =
+      std::make_unique<ScopedAccessibilityModeOverride>(ui::kAXModeComplete);
 }
 
 TEST_F(BrowserAccessibilityAndroidTest, TestRetargetTextOnly) {
@@ -351,48 +350,24 @@ TEST_F(BrowserAccessibilityAndroidTest, TestGetTextContent) {
       BrowserAccessibilityManager::Create(
           MakeAXTreeUpdateForTesting(root, container_para, text1, text2, text3),
           test_browser_accessibility_delegate_.get()));
-  {
-    base::test::ScopedFeatureList features;
-    features.InitAndEnableFeature(features::kOptimizeAccessibilityUiThreadWork);
+  BrowserAccessibility* container_obj = manager->GetFromID(11);
+  // Default caller gets full text.
+  EXPECT_EQ(u"1Foo2Bar3Baz", container_obj->GetTextContentUTF16());
 
-    BrowserAccessibility* container_obj = manager->GetFromID(11);
-    // Default caller gets full text.
-    EXPECT_EQ(u"1Foo2Bar3Baz", container_obj->GetTextContentUTF16());
-
-    BrowserAccessibilityAndroid* node =
-        static_cast<BrowserAccessibilityAndroid*>(container_obj);
-    // No predicate returns all text.
-    EXPECT_EQ(u"1Foo2Bar3Baz",
-              node->GetSubstringTextContentUTF16(absl::nullopt));
-    // Non-empty predicate terminates after one text node.
-    EXPECT_EQ(u"1Foo", node->GetSubstringTextContentUTF16(
-                           BrowserAccessibilityAndroid::NonEmptyPredicate()));
-    // Length of 5 not satisfied by one node.
-    EXPECT_EQ(u"1Foo2Bar", node->GetSubstringTextContentUTF16(
-                               BrowserAccessibilityAndroid::LengthAtLeast(5)));
-    // Length of 10 not satisfied by two nodes.
-    EXPECT_EQ(u"1Foo2Bar3Baz",
-              node->GetSubstringTextContentUTF16(
-                  BrowserAccessibilityAndroid::LengthAtLeast(10)));
-  }
-  {
-    // With experiment disabled, predicate checks are disabled.
-    BrowserAccessibility* container_obj = manager->GetFromID(11);
-    // Default caller gets full text.
-    EXPECT_EQ(u"1Foo2Bar3Baz", container_obj->GetTextContentUTF16());
-
-    BrowserAccessibilityAndroid* node =
-        static_cast<BrowserAccessibilityAndroid*>(container_obj);
-    EXPECT_EQ(u"1Foo2Bar3Baz",
-              node->GetSubstringTextContentUTF16(absl::nullopt));
-    EXPECT_EQ(u"1Foo2Bar3Baz",
-              node->GetSubstringTextContentUTF16(
-                  BrowserAccessibilityAndroid::NonEmptyPredicate()));
-    EXPECT_EQ(u"1Foo2Bar3Baz",
-              node->GetSubstringTextContentUTF16(
-                  BrowserAccessibilityAndroid::LengthAtLeast(5)));
-  }
-
+  BrowserAccessibilityAndroid* node =
+      static_cast<BrowserAccessibilityAndroid*>(container_obj);
+  // No predicate returns all text.
+  EXPECT_EQ(u"1Foo2Bar3Baz", node->GetSubstringTextContentUTF16(std::nullopt));
+  // Non-empty predicate terminates after one text node.
+  EXPECT_EQ(u"1Foo", node->GetSubstringTextContentUTF16(
+                         BrowserAccessibilityAndroid::NonEmptyPredicate()));
+  // Length of 5 not satisfied by one node.
+  EXPECT_EQ(u"1Foo2Bar", node->GetSubstringTextContentUTF16(
+                             BrowserAccessibilityAndroid::LengthAtLeast(5)));
+  // Length of 10 not satisfied by two nodes.
+  EXPECT_EQ(u"1Foo2Bar3Baz",
+            node->GetSubstringTextContentUTF16(
+                BrowserAccessibilityAndroid::LengthAtLeast(10)));
   manager.reset();
 }
 

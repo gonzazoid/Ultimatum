@@ -6,6 +6,7 @@
 
 #include "base/location.h"
 #include "base/task/sequence_manager/task_queue.h"
+#include "base/task/single_thread_task_runner.h"
 #include "third_party/blink/renderer/platform/scheduler/main_thread/main_thread_scheduler_impl.h"
 
 namespace blink {
@@ -18,11 +19,6 @@ MainThreadImpl::~MainThreadImpl() = default;
 
 blink::ThreadScheduler* MainThreadImpl::Scheduler() {
   return scheduler_;
-}
-
-scoped_refptr<base::SingleThreadTaskRunner>
-MainThreadImpl::GetDeprecatedTaskRunner() const {
-  return task_runner_;
 }
 
 scoped_refptr<base::SingleThreadTaskRunner> MainThreadImpl::GetTaskRunner(

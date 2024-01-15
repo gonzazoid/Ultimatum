@@ -9,14 +9,18 @@
 #include <string>
 #include <vector>
 
+#include "base/memory/raw_ptr_exclusion.h"
 #include "base/observer_list.h"
 #include "base/observer_list_types.h"
+#include "base/strings/utf_string_conversions.h"
+#include "chrome/browser/ui/color/chrome_color_id.h"
+#include "chrome/browser/ui/views/side_panel/read_anything/read_anything_menu_model.h"
 #include "chrome/common/accessibility/read_anything.mojom.h"
-#include "third_party/skia/include/core/SkColor.h"
-#include "ui/accessibility/ax_node_id_forward.h"
-#include "ui/accessibility/ax_tree_update.h"
+#include "chrome/common/accessibility/read_anything_constants.h"
 #include "ui/base/models/combobox_model.h"
-#include "ui/color/color_id.h"
+
+using read_anything::mojom::LetterSpacing;
+using read_anything::mojom::LineSpacing;
 
 ///////////////////////////////////////////////////////////////////////////////
 // ReadAnythingFontModel
@@ -32,16 +36,41 @@ class ReadAnythingFontModel : public ui::ComboboxModel {
   ReadAnythingFontModel& operator=(const ReadAnythingFontModel&) = delete;
   ~ReadAnythingFontModel() override;
 
+  // The name of the font
+  std::u16string name;
+
   std::string GetFontNameAt(size_t index);
-  bool IsValidFontName(const std::string& font_name);
   bool IsValidFontIndex(size_t index);
-  void SetDefaultIndexFromPrefsFontName(std::string prefs_font_name);
-  std::string GetLabelFontListAt(size_t index);
-  size_t GetStartingStateIndex() { return GetDefaultIndex().value(); }
+  void SetDefaultLanguage(const std::string& lang);
+  size_t GetFontNameIndex(std::string font_name);
+  void SetSelectedIndex(size_t index);
+  size_t GetSelectedIndex() { return selected_index_; }
+
+  std::optional<ui::ColorId> GetDropdownForegroundColorIdAt(
+      size_t index) const override;
+  std::optional<ui::ColorId> GetDropdownBackgroundColorIdAt(
+      size_t index) const override;
+  std::optional<ui::ColorId> GetDropdownSelectedBackgroundColorIdAt(
+      size_t index) const override;
+
+  void SetForegroundColorId(ui::ColorId foreground_color) {
+    foreground_color_id_ = foreground_color;
+  }
+
+  void SetBackgroundColorId(ui::ColorId background_color) {
+    background_color_id_ = background_color;
+  }
+
+  void SetSelectedBackgroundColorId(ui::ColorId selected_color) {
+    selected_color_id_ = selected_color;
+  }
+
+  // Used by tests only.
+  std::optional<size_t> GetDefaultIndexForTesting();
 
  protected:
   // ui::Combobox implementation:
-  absl::optional<size_t> GetDefaultIndex() const override;
+  std::optional<size_t> GetDefaultIndex() const override;
   size_t GetItemCount() const override;
   std::u16string GetItemAt(size_t index) const override;
   std::u16string GetDropDownTextAt(size_t index) const override;
@@ -50,8 +79,11 @@ class ReadAnythingFontModel : public ui::ComboboxModel {
   // Styled font names for the drop down options in front-end.
   std::vector<std::u16string> font_choices_;
 
-  // Default index for drop down, either zero or populated from prefs.
-  size_t default_index_ = 0;
+  size_t selected_index_ = 0;
+
+  std::optional<ui::ColorId> foreground_color_id_;
+  std::optional<ui::ColorId> background_color_id_;
+  std::optional<ui::ColorId> selected_color_id_;
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -61,15 +93,24 @@ class ReadAnythingFontModel : public ui::ComboboxModel {
 //  This class is owned by the ReadAnythingModel and has the same lifetime as
 //  the browser.
 //
-class ReadAnythingColorsModel : public ui::ComboboxModel {
+class ReadAnythingColorsModel : public ReadAnythingMenuModel {
  public:
-  ReadAnythingColorsModel();
-  ReadAnythingColorsModel(const ReadAnythingColorsModel&) = delete;
-  ReadAnythingColorsModel& operator=(const ReadAnythingColorsModel&) = delete;
-  ~ReadAnythingColorsModel() override;
-
   // Simple struct to hold the various colors to keep code cleaner.
   struct ColorInfo {
+    ColorInfo(std::u16string name,
+              int icon_asset,
+              ui::ColorId foreground_color_id,
+              ui::ColorId background_color_id,
+              ui::ColorId separator_color_id,
+              ui::ColorId dropdown_color_id,
+              ui::ColorId selected_color_id,
+              ui::ColorId focus_ring_color_id);
+    ColorInfo(const ColorInfo& other);
+    ColorInfo(ColorInfo&&);
+    ColorInfo& operator=(const ColorInfo&);
+    ColorInfo& operator=(ColorInfo&&);
+    ~ColorInfo();
+
     // The name of the colors, e.g. Default, Light, Dark.
     std::u16string name;
 
@@ -77,41 +118,38 @@ class ReadAnythingColorsModel : public ui::ComboboxModel {
     int icon_asset;
 
     // The foreground color, used for text and icon hints.
-    SkColor foreground;
+    ui::ColorId foreground_color_id;
 
     // The background color, used for text background.
-    SkColor background;
+    ui::ColorId background_color_id;
 
-    // The foreground color as a ColorId, used for separators.
-    ui::ColorId foreground_color_id;
+    // The separator color, used for visual separators between elements in the
+    // toolbar.
+    ui::ColorId separator_color_id;
+
+    // The color of the dropdown menu, used for the combobox menu model.
+    ui::ColorId dropdown_color_id;
+
+    // The selected / hover color of the dropdown menu, used for the combobox
+    // menu model.
+    ui::ColorId selected_dropdown_color_id;
+
+    // The color of the focus ring, used for all elements in the toolbar.
+    ui::ColorId focus_ring_color_id;
   };
 
-  bool IsValidColorsIndex(size_t index);
-  void SetDefaultColorsIndexFromPref(size_t index);
+  ReadAnythingColorsModel();
+  ReadAnythingColorsModel(const ReadAnythingColorsModel&) = delete;
+  ReadAnythingColorsModel& operator=(const ReadAnythingColorsModel&) = delete;
+  ~ReadAnythingColorsModel() override;
+
+  bool IsValidIndex(size_t index) override;
   ColorInfo& GetColorsAt(size_t index);
-  ui::ColorId GetForegroundColorId(size_t index);
-  void SetIconColorId(ui::ColorId color_id);
-
-  // Simple pass-through method so Init can set the starting state colors.
-  size_t GetStartingStateIndex() { return GetDefaultIndex().value(); }
-
- protected:
-  // ui::Combobox implementation:
-  absl::optional<size_t> GetDefaultIndex() const override;
-  size_t GetItemCount() const override;
-  ui::ImageModel GetIconAt(size_t index) const override;
-  ui::ImageModel GetDropDownIconAt(size_t index) const override;
-  std::u16string GetItemAt(size_t index) const override;
-  std::u16string GetDropDownTextAt(size_t index) const override;
+  ui::ImageModel GetDropDownIconAt(size_t index) const;
 
  private:
   // Individual combobox choices for colors presented in front-end.
   std::vector<ColorInfo> colors_choices_;
-
-  // Default index for drop down, either zero or populated from prefs.
-  size_t default_index_ = 0;
-
-  ui::ColorId icon_color_id_;
 };
 
 //////////////////////////////////////////////////////////////////////////////
@@ -121,7 +159,7 @@ class ReadAnythingColorsModel : public ui::ComboboxModel {
 //  This class is owned by the ReadAnythingModel and has the same lifetime as
 //  the browser.
 //
-class ReadAnythingLineSpacingModel : public ui::ComboboxModel {
+class ReadAnythingLineSpacingModel : public ReadAnythingMenuModel {
  public:
   ReadAnythingLineSpacingModel();
   ReadAnythingLineSpacingModel(const ReadAnythingLineSpacingModel&) = delete;
@@ -129,35 +167,27 @@ class ReadAnythingLineSpacingModel : public ui::ComboboxModel {
       delete;
   ~ReadAnythingLineSpacingModel() override;
 
-  bool IsValidLineSpacingIndex(size_t index);
-  void SetDefaultLineSpacingIndexFromPref(size_t index);
-  void SetIconColorId(ui::ColorId color_id);
-  read_anything::mojom::Spacing GetLineSpacingAt(size_t index);
+  // Simple struct to hold the various spacings to keep code cleaner.
+  struct LineSpacingInfo {
+    // The enum value of the line spacing.
+    read_anything::mojom::LineSpacing enum_value;
 
-  // Simple pass-through method so Init can set the starting state.
-  size_t GetStartingStateIndex() { return GetDefaultIndex().value(); }
+    // The name of the line spacing, e.g. Standard, Loose, Very Loose.
+    std::u16string name;
 
- protected:
-  // ui::Combobox implementation:
-  absl::optional<size_t> GetDefaultIndex() const override;
-  size_t GetItemCount() const override;
-  std::u16string GetItemAt(size_t index) const override;
-  ui::ImageModel GetIconAt(size_t index) const override;
-  ui::ImageModel GetDropDownIconAt(size_t index) const override;
-  std::u16string GetDropDownTextAt(size_t index) const override;
+    // The resources value/identifier for the icon image asset.
+    // This field is not a raw_ref<> because it was filtered by the rewriter
+    // for: #constexpr-ctor-field-initializer
+    RAW_PTR_EXCLUSION const gfx::VectorIcon& icon_asset;
+  };
+
+  bool IsValidIndex(size_t index) override;
+  size_t GetIndexForLineSpacing(read_anything::mojom::LineSpacing line_spacing);
+  read_anything::mojom::LineSpacing GetLineSpacingAt(size_t index);
 
  private:
   // Names for the drop down options in front-end.
-  std::vector<read_anything::mojom::Spacing> lines_choices_;
-
-  // Default index for drop down, either one or populated from prefs.
-  size_t default_index_ = 1;
-
-  // Display names for line spacing choices
-  std::u16string GetLineSpacingName(
-      read_anything::mojom::Spacing line_spacing) const;
-
-  ui::ColorId icon_color_id_;
+  std::vector<LineSpacingInfo> lines_choices_;
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -167,7 +197,8 @@ class ReadAnythingLineSpacingModel : public ui::ComboboxModel {
 //  This class is owned by the ReadAnythingModel and has the same lifetime as
 //  the browser.
 //
-class ReadAnythingLetterSpacingModel : public ui::ComboboxModel {
+
+class ReadAnythingLetterSpacingModel : public ReadAnythingMenuModel {
  public:
   ReadAnythingLetterSpacingModel();
   ReadAnythingLetterSpacingModel(const ReadAnythingLetterSpacingModel&) =
@@ -176,35 +207,30 @@ class ReadAnythingLetterSpacingModel : public ui::ComboboxModel {
       const ReadAnythingLetterSpacingModel&) = delete;
   ~ReadAnythingLetterSpacingModel() override;
 
-  bool IsValidLetterSpacingIndex(size_t index);
-  void SetDefaultLetterSpacingIndexFromPref(size_t index);
-  read_anything::mojom::Spacing GetLetterSpacingAt(size_t index);
-  size_t GetStartingStateIndex() { return GetDefaultIndex().value(); }
-  void SetIconColorId(ui::ColorId color_id);
+  // Simple struct to hold the various spacings to keep code cleaner.
+  struct LetterSpacingInfo {
+    // The enum value of the letter spacing.
+    read_anything::mojom::LetterSpacing enum_value;
 
- protected:
-  // ui::Combobox implementation:
-  absl::optional<size_t> GetDefaultIndex() const override;
-  size_t GetItemCount() const override;
-  ui::ImageModel GetIconAt(size_t index) const override;
-  std::u16string GetItemAt(size_t index) const override;
-  std::u16string GetDropDownTextAt(size_t index) const override;
-  ui::ImageModel GetDropDownIconAt(size_t index) const override;
+    // The name of the letter spacing, e.g. Standard, Wide, Very Wide.
+    std::u16string name;
+
+    // The resources value/identifier for the icon image asset.
+    // This field is not a raw_ref<> because it was filtered by the rewriter
+    // for: #constexpr-ctor-field-initializer
+    RAW_PTR_EXCLUSION const gfx::VectorIcon& icon_asset;
+  };
+
+  bool IsValidIndex(size_t index) override;
+  size_t GetIndexForLetterSpacing(
+      read_anything::mojom::LetterSpacing letter_spacing);
+  read_anything::mojom::LetterSpacing GetLetterSpacingAt(size_t index);
 
  private:
   // Letter spacing choices for the drop down options in front-end.
-  std::vector<read_anything::mojom::Spacing> letter_spacing_choices_;
-
-  // Default index for drop down, either one (normal spacing) or populated from
-  // prefs.
-  size_t default_index_ = 1;
-
-  // Display names for each letter spacing choice
-  std::u16string GetLetterSpacingName(
-      read_anything::mojom::Spacing letter_spacing) const;
-
-  ui::ColorId icon_color_id_;
+  std::vector<LetterSpacingInfo> letters_choices_;
 };
+
 ///////////////////////////////////////////////////////////////////////////////
 // ReadAnythingModel
 //
@@ -216,11 +242,17 @@ class ReadAnythingModel {
  public:
   class Observer : public base::CheckedObserver {
    public:
-    virtual void OnAXTreeDistilled(
-        const ui::AXTreeUpdate& snapshot,
-        const std::vector<ui::AXNodeID>& content_node_ids) {}
     virtual void OnReadAnythingThemeChanged(
-        read_anything::mojom::ReadAnythingThemePtr new_theme) = 0;
+        const std::string& font_name,
+        double font_scale,
+        ui::ColorId foreground_color_id,
+        ui::ColorId background_color_id,
+        ui::ColorId separator_color_id,
+        ui::ColorId dropdown_color_id,
+        ui::ColorId selected_color_id,
+        ui::ColorId focus_ring_color_id,
+        read_anything::mojom::LineSpacing line_spacing,
+        read_anything::mojom::LetterSpacing letter_spacing) = 0;
   };
 
   ReadAnythingModel();
@@ -228,17 +260,15 @@ class ReadAnythingModel {
   ReadAnythingModel& operator=(const ReadAnythingModel&) = delete;
   ~ReadAnythingModel();
 
-  void Init(std::string& font_name,
+  void Init(const std::string& lang_code,
+            const std::string& font_name,
             double font_scale,
             read_anything::mojom::Colors colors,
-            read_anything::mojom::Spacing line_spacing,
-            read_anything::mojom::Spacing letter_spacing);
+            read_anything::mojom::LineSpacing line_spacing,
+            read_anything::mojom::LetterSpacing letter_spacing);
 
   void AddObserver(Observer* obs);
   void RemoveObserver(Observer* obs);
-
-  void SetDistilledAXTree(ui::AXTreeUpdate snapshot,
-                          std::vector<ui::AXNodeID> content_node_ids);
 
   void SetSelectedFontByIndex(size_t new_index);
   double GetValidFontScale(double font_scale);
@@ -247,43 +277,47 @@ class ReadAnythingModel {
   void SetSelectedColorsByIndex(size_t new_index);
   void SetSelectedLineSpacingByIndex(size_t new_index);
   void SetSelectedLetterSpacingByIndex(size_t new_index);
+  void OnSystemThemeChanged();
 
   ReadAnythingFontModel* GetFontModel() { return font_model_.get(); }
   double GetFontScale() { return font_scale_; }
   ReadAnythingColorsModel* GetColorsModel() { return colors_model_.get(); }
-  ui::ColorId GetForegroundColorId();
   ReadAnythingLineSpacingModel* GetLineSpacingModel() {
     return line_spacing_model_.get();
   }
+  read_anything::mojom::LineSpacing line_spacing() { return line_spacing_; }
   ReadAnythingLetterSpacingModel* GetLetterSpacingModel() {
     return letter_spacing_model_.get();
   }
+  read_anything::mojom::LetterSpacing letter_spacing() {
+    return letter_spacing_;
+  }
 
  private:
-  void NotifyAXTreeDistilled();
   void NotifyThemeChanged();
-  void SetIconColorIds(ui::ColorId color_id);
 
   // State:
 
   // Members of read_anything::mojom::ReadAnythingTheme:
-  std::string font_name_;
-  SkColor foreground_color_;
-  SkColor background_color_;
+  std::string font_name_ = string_constants::kReadAnythingPlaceholderFontName;
+  ui::ColorId foreground_color_id_ = kColorReadAnythingForeground;
+  ui::ColorId background_color_id_ = kColorReadAnythingBackground;
+
+  // Additional theme colors.
+  ui::ColorId separator_color_id_ = kColorReadAnythingSeparator;
+  ui::ColorId dropdown_color_id_ = kColorReadAnythingDropdownBackground;
+  ui::ColorId selected_dropdown_color_id_ = kColorReadAnythingDropdownSelected;
+  ui::ColorId focus_ring_color_id_ = kColorReadAnythingFocusRingBackground;
 
   // A scale multiplier for font size (internal use only, not shown to user).
-  float font_scale_;
+  float font_scale_ = kReadAnythingDefaultFontScale;
 
-  read_anything::mojom::Spacing line_spacing_;
-  read_anything::mojom::Spacing letter_spacing_;
+  read_anything::mojom::LineSpacing line_spacing_ = LineSpacing::kDefaultValue;
+  read_anything::mojom::LetterSpacing letter_spacing_ =
+      LetterSpacing::kDefaultValue;
 
   // Currently selected index for colors combobox
-  int colors_combobox_index_;
-
-  // TODO(crbug.com/1266555): Use |snapshot_| and |content_node_ids_| to keep
-  // scrolls in sync.
-  ui::AXTreeUpdate snapshot_;
-  std::vector<ui::AXNodeID> content_node_ids_;
+  int colors_combobox_index_ = 0;
 
   base::ObserverList<Observer> observers_;
   const std::unique_ptr<ReadAnythingFontModel> font_model_;

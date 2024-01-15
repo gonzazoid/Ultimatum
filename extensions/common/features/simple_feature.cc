@@ -6,25 +6,29 @@
 
 #include <algorithm>
 #include <map>
+#include <string_view>
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/containers/contains.h"
+#include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/strings/string_number_conversions.h"
-#include "base/strings/string_piece.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
 #include "components/crx_file/id_util.h"
+#include "content/public/common/content_features.h"
 #include "extensions/common/extension_api.h"
 #include "extensions/common/extension_features.h"
+#include "extensions/common/features/feature.h"
 #include "extensions/common/features/feature_channel.h"
 #include "extensions/common/features/feature_developer_mode_only.h"
 #include "extensions/common/features/feature_flags.h"
 #include "extensions/common/features/feature_provider.h"
 #include "extensions/common/features/feature_session_type.h"
 #include "extensions/common/manifest_handlers/background_info.h"
+#include "extensions/common/mojom/context_type.mojom.h"
 #include "extensions/common/switches.h"
 
 using crx_file::id_util::HashedIdInHex;
@@ -39,16 +43,7 @@ struct AllowlistInfo {
     const std::string& allowlisted_extension_id =
         base::CommandLine::ForCurrentProcess()->GetSwitchValueASCII(
             switches::kAllowlistedExtensionID);
-
-    if (!allowlisted_extension_id.empty()) {
-      hashed_id = HashedIdInHex(allowlisted_extension_id);
-    } else {
-      // Check the deprecated switch if the main one is not set. If both of them
-      // are empty, `hash_id` will contain the hash of an empty string.
-      hashed_id = HashedIdInHex(
-          base::CommandLine::ForCurrentProcess()->GetSwitchValueASCII(
-              switches::kDEPRECATED_AllowlistedExtensionID));
-    }
+    hashed_id = HashedIdInHex(allowlisted_extension_id);
   }
   std::string hashed_id;
 };
@@ -107,32 +102,34 @@ std::string GetDisplayName(Manifest::Type type) {
 
 // Gets a human-readable name for the given context type, suitable for giving
 // to developers in an error message.
-std::string GetDisplayName(Feature::Context context) {
+std::string GetDisplayName(mojom::ContextType context) {
   switch (context) {
-    case Feature::UNSPECIFIED_CONTEXT:
+    case mojom::ContextType::kUnspecified:
       return "unknown";
-    case Feature::BLESSED_EXTENSION_CONTEXT:
+    case mojom::ContextType::kPrivilegedExtension:
       // "privileged" is vague but hopefully the developer will understand that
       // means background or app window.
       return "privileged page";
-    case Feature::UNBLESSED_EXTENSION_CONTEXT:
+    case mojom::ContextType::kUnprivilegedExtension:
       // "iframe" is a bit of a lie/oversimplification, but that's the most
       // common unblessed context.
       return "extension iframe";
-    case Feature::CONTENT_SCRIPT_CONTEXT:
+    case mojom::ContextType::kContentScript:
       return "content script";
-    case Feature::WEB_PAGE_CONTEXT:
+    case mojom::ContextType::kWebPage:
       return "web page";
-    case Feature::BLESSED_WEB_PAGE_CONTEXT:
+    case mojom::ContextType::kPrivilegedWebPage:
       return "hosted app";
-    case Feature::WEBUI_CONTEXT:
+    case mojom::ContextType::kWebUi:
       return "webui";
-    case Feature::WEBUI_UNTRUSTED_CONTEXT:
+    case mojom::ContextType::kUntrustedWebUi:
       return "webui untrusted";
-    case Feature::LOCK_SCREEN_EXTENSION_CONTEXT:
+    case mojom::ContextType::kLockscreenExtension:
       return "lock screen app";
-    case Feature::OFFSCREEN_EXTENSION_CONTEXT:
+    case mojom::ContextType::kOffscreenExtension:
       return "offscreen document";
+    case mojom::ContextType::kUserScript:
+      return "user script";
   }
   NOTREACHED();
   return "";
@@ -225,7 +222,7 @@ SimpleFeature::SimpleFeature()
       is_internal_(false),
       disallow_for_service_workers_(false) {}
 
-SimpleFeature::~SimpleFeature() {}
+SimpleFeature::~SimpleFeature() = default;
 
 Feature::Availability SimpleFeature::IsAvailableToManifest(
     const HashedExtensionId& hashed_id,
@@ -251,27 +248,48 @@ Feature::Availability SimpleFeature::IsAvailableToManifest(
 
 Feature::Availability SimpleFeature::IsAvailableToContextForBind(
     const Extension* extension,
-    Feature::Context context,
+    mojom::ContextType context,
     const GURL& url,
     Feature::Platform platform,
     int context_id,
+    const ContextData* context_data,
     const Feature* feature) {
+  CHECK(feature);
+  CHECK(context_data);
   return feature->IsAvailableToContextImpl(extension, context, url, platform,
-                                           context_id, true);
+                                           context_id, true, *context_data);
 }
 
 Feature::Availability SimpleFeature::IsAvailableToContextImpl(
     const Extension* extension,
-    Feature::Context context,
+    mojom::ContextType context,
     const GURL& url,
     Platform platform,
     int context_id,
-    bool check_developer_mode) const {
+    bool check_developer_mode,
+    const ContextData& context_data) const {
+  // Check the environment availability first. This is because, for features
+  // that use delegated availability checks, those checks should also include
+  // environment availability checks. By checking the environment first, if the
+  // feature isn't intended for the current environment, it will fail the
+  // availability check here first. If it passes the environment check, then the
+  // delegated availability check will run and we can return that result, either
+  // pass or fail. This also allows features that don't require delegated
+  // availability checks to proceed through their normal checks from environment
+  // on to manifest and then context availability.
   Availability environment_availability = GetEnvironmentAvailability(
       platform, GetCurrentChannel(), GetCurrentFeatureSessionType(), context_id,
       check_developer_mode);
   if (!environment_availability.is_available())
     return environment_availability;
+
+  if (RequiresDelegatedAvailabilityCheck()) {
+    return HasDelegatedAvailabilityCheckHandler()
+               ? RunDelegatedAvailabilityCheck(
+                     extension, context, url, platform, context_id,
+                     check_developer_mode, std::move(context_data))
+               : CreateAvailability(MISSING_DELEGATED_AVAILABILITY_CHECK);
+  }
 
   if (extension) {
     Availability manifest_availability = GetManifestAvailability(
@@ -298,9 +316,10 @@ Feature::Availability SimpleFeature::IsAvailableToContextImpl(
 
   // TODO(kalman): Assert that if the context was a webpage or WebUI context
   // then at some point a "matches" restriction was checked.
+
   return CheckDependencies(base::BindRepeating(
       &IsAvailableToContextForBind, base::RetainedRef(extension), context, url,
-      platform, context_id));
+      platform, context_id, base::Unretained(&context_data)));
 }
 
 Feature::Availability SimpleFeature::IsAvailableToEnvironment(
@@ -318,7 +337,7 @@ std::string SimpleFeature::GetAvailabilityMessage(
     AvailabilityResult result,
     Manifest::Type type,
     const GURL& url,
-    Context context,
+    mojom::ContextType context,
     version_info::Channel channel,
     mojom::FeatureSessionType session_type) const {
   switch (result) {
@@ -343,8 +362,8 @@ std::string SimpleFeature::GetAvailabilityMessage(
       DCHECK(contexts_);
       return base::StringPrintf(
           "'%s' is only allowed to run in %s, but this is a %s", name().c_str(),
-          ListDisplayNames(
-              std::vector<Context>(contexts_->begin(), contexts_->end()))
+          ListDisplayNames(std::vector<mojom::ContextType>(contexts_->begin(),
+                                                           contexts_->end()))
               .c_str(),
           GetDisplayName(context).c_str());
     case INVALID_LOCATION:
@@ -396,6 +415,12 @@ std::string SimpleFeature::GetAvailabilityMessage(
       return base::StringPrintf(
           "'%s' requires the user to have developer mode enabled.",
           name().c_str());
+    case MISSING_DELEGATED_AVAILABILITY_CHECK:
+      return base::StringPrintf(
+          "'%s' is missing its delegated availability check", name().c_str());
+    case FAILED_DELEGATED_AVAILABILITY_CHECK:
+      return base::StringPrintf("'%s' failed its delegated availability check.",
+                                name().c_str());
   }
 
   NOTREACHED();
@@ -406,7 +431,7 @@ Feature::Availability SimpleFeature::CreateAvailability(
     AvailabilityResult result) const {
   return Availability(
       result, GetAvailabilityMessage(result, Manifest::TYPE_UNKNOWN, GURL(),
-                                     UNSPECIFIED_CONTEXT,
+                                     mojom::ContextType::kUnspecified,
                                      version_info::Channel::UNKNOWN,
                                      mojom::FeatureSessionType::kUnknown));
 }
@@ -414,7 +439,8 @@ Feature::Availability SimpleFeature::CreateAvailability(
 Feature::Availability SimpleFeature::CreateAvailability(
     AvailabilityResult result, Manifest::Type type) const {
   return Availability(
-      result, GetAvailabilityMessage(result, type, GURL(), UNSPECIFIED_CONTEXT,
+      result, GetAvailabilityMessage(result, type, GURL(),
+                                     mojom::ContextType::kUnspecified,
                                      version_info::Channel::UNKNOWN,
                                      mojom::FeatureSessionType::kUnknown));
 }
@@ -424,14 +450,14 @@ Feature::Availability SimpleFeature::CreateAvailability(
     const GURL& url) const {
   return Availability(
       result, GetAvailabilityMessage(result, Manifest::TYPE_UNKNOWN, url,
-                                     UNSPECIFIED_CONTEXT,
+                                     mojom::ContextType::kUnspecified,
                                      version_info::Channel::UNKNOWN,
                                      mojom::FeatureSessionType::kUnknown));
 }
 
 Feature::Availability SimpleFeature::CreateAvailability(
     AvailabilityResult result,
-    Context context) const {
+    mojom::ContextType context) const {
   return Availability(
       result, GetAvailabilityMessage(result, Manifest::TYPE_UNKNOWN, GURL(),
                                      context, version_info::Channel::UNKNOWN,
@@ -443,7 +469,7 @@ Feature::Availability SimpleFeature::CreateAvailability(
     version_info::Channel channel) const {
   return Availability(
       result, GetAvailabilityMessage(result, Manifest::TYPE_UNKNOWN, GURL(),
-                                     UNSPECIFIED_CONTEXT, channel,
+                                     mojom::ContextType::kUnspecified, channel,
                                      mojom::FeatureSessionType::kUnknown));
 }
 
@@ -451,9 +477,10 @@ Feature::Availability SimpleFeature::CreateAvailability(
     AvailabilityResult result,
     mojom::FeatureSessionType session_type) const {
   return Availability(
-      result, GetAvailabilityMessage(
-                  result, Manifest::TYPE_UNKNOWN, GURL(), UNSPECIFIED_CONTEXT,
-                  version_info::Channel::UNKNOWN, session_type));
+      result,
+      GetAvailabilityMessage(result, Manifest::TYPE_UNKNOWN, GURL(),
+                             mojom::ContextType::kUnspecified,
+                             version_info::Channel::UNKNOWN, session_type));
 }
 
 bool SimpleFeature::IsInternal() const {
@@ -524,6 +551,21 @@ bool SimpleFeature::MatchesSessionTypes(
          base::Contains(session_types_, mojom::FeatureSessionType::kKiosk);
 }
 
+bool SimpleFeature::RequiresDelegatedAvailabilityCheck() const {
+  return requires_delegated_availability_check_;
+}
+
+bool SimpleFeature::HasDelegatedAvailabilityCheckHandler() const {
+  return !delegated_availability_check_handler_.is_null();
+}
+
+void SimpleFeature::SetDelegatedAvailabilityCheckHandler(
+    DelegatedAvailabilityCheckHandler handler) {
+  DCHECK(RequiresDelegatedAvailabilityCheck());
+  DCHECK(!HasDelegatedAvailabilityCheckHandler());
+  delegated_availability_check_handler_ = handler;
+}
+
 Feature::Availability SimpleFeature::CheckDependencies(
     const base::RepeatingCallback<Availability(const Feature*)>& checker)
     const {
@@ -562,11 +604,12 @@ void SimpleFeature::set_blocklist(
 }
 
 void SimpleFeature::set_command_line_switch(
-    base::StringPiece command_line_switch) {
+    std::string_view command_line_switch) {
   command_line_switch_ = std::string(command_line_switch);
 }
 
-void SimpleFeature::set_contexts(std::initializer_list<Context> contexts) {
+void SimpleFeature::set_contexts(
+    std::initializer_list<mojom::ContextType> contexts) {
   contexts_ = contexts;
 }
 
@@ -580,24 +623,13 @@ void SimpleFeature::set_extension_types(
   extension_types_ = types;
 }
 
-void SimpleFeature::set_feature_flag(base::StringPiece feature_flag) {
+void SimpleFeature::set_feature_flag(std::string_view feature_flag) {
   feature_flag_ = std::string(feature_flag);
 }
 
 void SimpleFeature::set_session_types(
     std::initializer_list<mojom::FeatureSessionType> types) {
   session_types_ = types;
-}
-
-void SimpleFeature::set_disallow_for_service_workers(bool disallow) {
-  if (base::FeatureList::IsEnabled(
-          extensions_features::kExtensionsFSPInServiceWorkers) &&
-      disallow &&
-      (name() == "fileSystemProvider" ||
-       name() == "fileSystemProviderInternal")) {
-    return;
-  }
-  disallow_for_service_workers_ = disallow;
 }
 
 void SimpleFeature::set_matches(
@@ -705,7 +737,7 @@ Feature::Availability SimpleFeature::GetManifestAvailability(
 }
 
 Feature::Availability SimpleFeature::GetContextAvailability(
-    Feature::Context context,
+    mojom::ContextType context,
     const GURL& url,
     bool is_for_service_worker) const {
   // TODO(lazyboy): This isn't quite right for Extension Service Worker
@@ -718,9 +750,10 @@ Feature::Availability SimpleFeature::GetContextAvailability(
   // TODO(kalman): Consider checking |matches_| regardless of context type.
   // Fewer surprises, and if the feature configuration wants to isolate
   // "matches" from say "blessed_extension" then they can use complex features.
-  const bool supports_url_matching = context == WEB_PAGE_CONTEXT ||
-                                     context == WEBUI_CONTEXT ||
-                                     context == WEBUI_UNTRUSTED_CONTEXT;
+  const bool supports_url_matching =
+      context == mojom::ContextType::kWebPage ||
+      context == mojom::ContextType::kWebUi ||
+      context == mojom::ContextType::kUntrustedWebUi;
   if (supports_url_matching && !matches_.MatchesURL(url)) {
     return CreateAvailability(INVALID_URL, url);
   }
@@ -728,6 +761,24 @@ Feature::Availability SimpleFeature::GetContextAvailability(
   if (is_for_service_worker && disallow_for_service_workers_)
     return CreateAvailability(INVALID_CONTEXT);
 
+  return CreateAvailability(IS_AVAILABLE);
+}
+
+Feature::Availability SimpleFeature::RunDelegatedAvailabilityCheck(
+    const Extension* extension,
+    mojom::ContextType context,
+    const GURL& url,
+    Platform platform,
+    int context_id,
+    bool check_developer_mode,
+    const ContextData& context_data) const {
+  DCHECK(RequiresDelegatedAvailabilityCheck());
+  DCHECK(HasDelegatedAvailabilityCheckHandler());
+  if (!delegated_availability_check_handler_.Run(
+          name_, extension, context, url, platform, context_id,
+          check_developer_mode, context_data)) {
+    return CreateAvailability(FAILED_DELEGATED_AVAILABILITY_CHECK);
+  }
   return CreateAvailability(IS_AVAILABLE);
 }
 

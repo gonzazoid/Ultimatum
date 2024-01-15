@@ -31,16 +31,26 @@
   bool overrideTitlebarHeight = false;
   float titlebarHeight = 0;
 
-  if (!_inFullScreen) {
-    auto* window = base::mac::ObjCCast<NativeWidgetMacNSWindow>([self window]);
-    remote_cocoa::NativeWidgetNSWindowBridge* bridge = [window bridge];
-    if (bridge) {
-      bridge->host()->GetWindowFrameTitlebarHeight(&overrideTitlebarHeight,
-                                                   &titlebarHeight);
-    }
+  auto* window = base::apple::ObjCCast<NativeWidgetMacNSWindow>([self window]);
+  remote_cocoa::NativeWidgetNSWindowBridge* bridge = [window bridge];
+  if (!bridge) {
+    return [super _titlebarHeight];
   }
-  if (overrideTitlebarHeight)
+
+  // Ignore the overridden titlebar height when in fullscreen unless
+  // kImmersiveFullscreenTabs is enabled and the toolbar is visible. The
+  // toolbar is hidden during content fullscreen.
+  // In short the titlebar will be the same size during non-fullscreen and
+  // kImmersiveFullscreenTabs fullscreen. During content fullscreen the toolbar
+  // is hidden and the titlebar will be smaller default height.
+  if (!_inFullScreen || bridge->ShouldUseCustomTitlebarHeightForFullscreen()) {
+    bridge->host()->GetWindowFrameTitlebarHeight(&overrideTitlebarHeight,
+                                                 &titlebarHeight);
+  }
+
+  if (overrideTitlebarHeight) {
     return titlebarHeight;
+  }
   return [super _titlebarHeight];
 }
 
@@ -64,6 +74,38 @@
   if ([BrowserWindowFrame class])
     return [BrowserWindowFrame class];
   return [super frameViewClassForStyleMask:windowStyle];
+}
+
+- (instancetype)initWithContentRect:(NSRect)contentRect
+                          styleMask:(NSUInteger)windowStyle
+                            backing:(NSBackingStoreType)bufferingType
+                              defer:(BOOL)deferCreation {
+  if ((self = [super initWithContentRect:contentRect
+                               styleMask:windowStyle
+                                 backing:bufferingType
+                                   defer:deferCreation])) {
+    [NSNotificationCenter.defaultCenter
+        addObserver:self
+           selector:@selector(windowDidBecomeKey:)
+               name:NSWindowDidBecomeKeyNotification
+             object:nil];
+  }
+  return self;
+}
+
+- (void)dealloc {
+  [NSNotificationCenter.defaultCenter removeObserver:self];
+}
+
+- (void)windowDidBecomeKey:(NSNotification*)notify {
+  // NSToolbarFullScreenWindow should never become the key window, otherwise
+  // the browser window will appear inactive. Activate the browser window
+  // when this happens.
+  NSWindow* toolbarWindow = notify.object;
+  if (toolbarWindow.parentWindow == self &&
+      remote_cocoa::IsNSToolbarFullScreenWindow(toolbarWindow)) {
+    [self makeKeyAndOrderFront:nil];
+  }
 }
 
 // The base implementation returns YES if the window's frame view is a custom

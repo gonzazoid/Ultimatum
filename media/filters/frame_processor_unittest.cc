@@ -11,7 +11,7 @@
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_split.h"
@@ -251,7 +251,6 @@ class FrameProcessorTest : public ::testing::TestWithParam<bool> {
   // range in integer milliseconds.
   void CheckExpectedRangesByTimestamp(ChunkDemuxerStream* stream,
                                       const std::string& expected) {
-    // Note, DemuxerStream::TEXT streams return [0,duration (==infinity here))
     Ranges<base::TimeDelta> r = stream->GetBufferedRanges(kInfiniteDuration);
 
     std::stringstream ss;
@@ -270,8 +269,8 @@ class FrameProcessorTest : public ::testing::TestWithParam<bool> {
 
     do {
       read_callback_called_ = false;
-      stream->Read(base::BindOnce(&FrameProcessorTest::StoreStatusAndBuffer,
-                                  base::Unretained(this)));
+      stream->Read(1, base::BindOnce(&FrameProcessorTest::StoreStatusAndBuffer,
+                                     base::Unretained(this)));
       base::RunLoop().RunUntilIdle();
     } while (++loop_count < 2 && read_callback_called_ &&
              last_read_status_ == DemuxerStream::kAborted);
@@ -314,7 +313,8 @@ class FrameProcessorTest : public ::testing::TestWithParam<bool> {
 
       do {
         read_callback_called_ = false;
-        stream->Read(base::BindOnce(&FrameProcessorTest::StoreStatusAndBuffer,
+        stream->Read(1,
+                     base::BindOnce(&FrameProcessorTest::StoreStatusAndBuffer,
                                     base::Unretained(this)));
         base::RunLoop().RunUntilIdle();
         EXPECT_TRUE(read_callback_called_);
@@ -398,7 +398,12 @@ class FrameProcessorTest : public ::testing::TestWithParam<bool> {
 
  private:
   void StoreStatusAndBuffer(DemuxerStream::Status status,
-                            scoped_refptr<DecoderBuffer> buffer) {
+                            DemuxerStream::DecoderBufferVector buffers) {
+    DCHECK_LE(buffers.size(), 1u)
+        << "FrameProcessorTest only reads a single-buffer.";
+    scoped_refptr<DecoderBuffer> buffer =
+        (buffers.empty() ? nullptr : std::move(buffers[0]));
+
     if (status == DemuxerStream::kOk && buffer.get()) {
       DVLOG(3) << __func__ << "status: " << status
                << " ts: " << buffer->timestamp().InSecondsF();
@@ -451,8 +456,6 @@ class FrameProcessorTest : public ::testing::TestWithParam<bool> {
         stream = video_.get();
         break;
       }
-      // TODO(wolenetz): Test text coded frame processing.
-      case DemuxerStream::TEXT:
       case DemuxerStream::UNKNOWN: {
         ASSERT_FALSE(true);
       }

@@ -5,19 +5,21 @@
 #ifndef CHROME_BROWSER_UI_VIEWS_TOOLBAR_CHROME_LABS_COORDINATOR_H_
 #define CHROME_BROWSER_UI_VIEWS_TOOLBAR_CHROME_LABS_COORDINATOR_H_
 
-#include "chrome/browser/ui/views/toolbar/chrome_labs_bubble_view_model.h"
-
 #include "base/memory/raw_ptr.h"
+#include "build/buildflag.h"
+#include "build/chromeos_buildflags.h"
+#include "chrome/browser/ui/toolbar/chrome_labs_model.h"
 #include "components/flags_ui/flags_state.h"
 #include "components/flags_ui/flags_storage.h"
 #include "ui/views/view_observer.h"
+#include "ui/views/view_tracker.h"
 
 class Browser;
 class ChromeLabsButton;
 class ChromeLabsBubbleView;
 class ChromeLabsViewController;
 
-class ChromeLabsCoordinator : public views::ViewObserver {
+class ChromeLabsCoordinator {
  public:
   enum class ShowUserType {
     // The default user type that accounts for most users.
@@ -29,8 +31,8 @@ class ChromeLabsCoordinator : public views::ViewObserver {
 
   ChromeLabsCoordinator(ChromeLabsButton* anchor_view,
                         Browser* browser,
-                        const ChromeLabsBubbleViewModel* model);
-  ~ChromeLabsCoordinator() override;
+                        const ChromeLabsModel* model);
+  ~ChromeLabsCoordinator();
 
   bool BubbleExists();
 
@@ -38,9 +40,10 @@ class ChromeLabsCoordinator : public views::ViewObserver {
 
   void Hide();
 
-  ChromeLabsBubbleView* GetChromeLabsBubbleViewForTesting() {
-    return chrome_labs_bubble_view_;
-  }
+  // Toggles the visibility of the bubble.
+  void ShowOrHide();
+
+  ChromeLabsBubbleView* GetChromeLabsBubbleView();
 
   flags_ui::FlagsState* GetFlagsStateForTesting() { return flags_state_; }
 
@@ -48,20 +51,25 @@ class ChromeLabsCoordinator : public views::ViewObserver {
     return controller_.get();
   }
 
- private:
-  // views::ViewObserver
-  void OnViewIsDeleting(views::View* observed_view) override;
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+  void SetShouldCircumventDeviceCheckForTesting(bool should_circumvent) {
+    should_circumvent_device_check_for_testing_ = should_circumvent;
+  }
+#endif
 
+ private:
   raw_ptr<ChromeLabsButton, DanglingUntriaged> anchor_view_;
   raw_ptr<Browser, DanglingUntriaged> browser_;
-  raw_ptr<const ChromeLabsBubbleViewModel, DanglingUntriaged>
+  raw_ptr<const ChromeLabsModel, AcrossTasksDanglingUntriaged>
       chrome_labs_model_;
-  raw_ptr<ChromeLabsBubbleView, DanglingUntriaged> chrome_labs_bubble_view_ =
-      nullptr;
-
   std::unique_ptr<flags_ui::FlagsStorage> flags_storage_;
-  raw_ptr<flags_ui::FlagsState> flags_state_;
+  raw_ptr<flags_ui::FlagsState, DanglingUntriaged> flags_state_;
   std::unique_ptr<ChromeLabsViewController> controller_;
+  views::ViewTracker chrome_labs_bubble_view_tracker_;
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+  bool is_waiting_to_show_ = false;
+  bool should_circumvent_device_check_for_testing_ = false;
+#endif
 };
 
 #endif  // CHROME_BROWSER_UI_VIEWS_TOOLBAR_CHROME_LABS_COORDINATOR_H_

@@ -11,6 +11,7 @@
 #include <utility>
 
 #include "base/big_endian.h"
+#include "base/bits.h"
 #include "base/check_op.h"
 #include "base/containers/span.h"
 #include "base/notreached.h"
@@ -49,6 +50,17 @@ constexpr unsigned char kIndexedDBKeyNumberTypeByte = 3;
 constexpr unsigned char kIndexedDBKeyArrayTypeByte = 4;
 constexpr unsigned char kIndexedDBKeyMinKeyTypeByte = 5;
 constexpr unsigned char kIndexedDBKeyBinaryTypeByte = 6;
+
+constexpr unsigned char kSentinel = 0x0;
+// These values are used with sentinel-based encoding. The relative order is
+// important as it matches the standard algorithm to compare two keys:
+// https://w3c.github.io/IndexedDB/#compare-two-keys
+// Gaps are left between values in case we need to insert new types.
+constexpr unsigned char kOrderedNumberTypeByte = 0x10;
+constexpr unsigned char kOrderedDateTypeByte = 0x20;
+constexpr unsigned char kOrderedStringTypeByte = 0x30;
+constexpr unsigned char kOrderedBinaryTypeByte = 0x40;
+constexpr unsigned char kOrderedArrayTypeByte = 0x50;
 
 constexpr unsigned char kIndexedDBKeyPathTypeCodedByte1 = 0;
 constexpr unsigned char kIndexedDBKeyPathTypeCodedByte2 = 0;
@@ -92,6 +104,61 @@ inline void EncodeIntSafely(int64_t value, int64_t max, std::string* into) {
   return EncodeInt(value, into);
 }
 
+// This doubles the length of the data; a variable length encoding would be more
+// efficient. TODO(estade): use variable length encoding.
+void EncodeStringWithSentinel(const std::u16string& value, std::string* into) {
+  size_t length = value.length();
+  into->reserve(into->size() + length * sizeof(char16_t) * 2 + 1);
+
+  for (char16_t c : value) {
+    into->push_back(1);
+    into->push_back(0);
+    into->push_back(static_cast<char>(c >> 8));
+    into->push_back(static_cast<char>(c));
+  }
+
+  into->push_back(kSentinel);
+}
+
+// This doubles the length of the data; a variable length encoding would be more
+// efficient. TODO(estade): use variable length encoding.
+void EncodeBinaryWithSentinel(const std::string& value, std::string* into) {
+  size_t length = value.length();
+  into->reserve(into->size() + length * sizeof(char) * 2 + 1);
+
+  for (char c : value) {
+    into->push_back(0x01);
+    into->push_back(c);
+  }
+
+  into->push_back(kSentinel);
+}
+
+void EncodeSortableDouble(double value, std::string* into) {
+  CHECK(!std::isnan(value));
+
+  uint64_t double_bits = 0;
+  std::memcpy(&double_bits, &value, sizeof(value));
+
+  // When interpreted as plain bits, negative doubles will sort in reverse, so
+  // invert the bits. For positive doubles we only have to invert the sign bit
+  // so they sort higher than the negatives. The one exception to this is -0,
+  // which should be normalized to positive zero. This aligns with this spec
+  // proposal: https://github.com/w3c/IndexedDB/pull/386
+  // TODO(estade): revisit if this spec PR is not accepted.
+  uint64_t modified_bits = 0;
+  if (std::signbit(value) && value != -0.0) {
+    modified_bits = double_bits ^ std::numeric_limits<uint64_t>::max();
+  } else {
+    static constexpr uint64_t kSignBit = base::bits::LeftmostBit<uint64_t>();
+    modified_bits = kSignBit | double_bits;
+  }
+
+  uint64_t big_endian_bits = base::HostToNet64(modified_bits);
+  const char* p = reinterpret_cast<char*>(&big_endian_bits);
+  into->insert(into->end(), p, p + sizeof(big_endian_bits));
+}
+
 }  // namespace
 
 const unsigned char kMinimumIndexId = 30;
@@ -133,15 +200,13 @@ void EncodeInt(int64_t value, std::string* into) {
 void EncodeString(const std::u16string& value, std::string* into) {
   if (value.empty())
     return;
-  // Backing store is UTF-16BE, convert from host endianness.
-  size_t length = value.length();
-  size_t current = into->size();
-  into->resize(into->size() + length * sizeof(char16_t));
 
-  const char16_t* src = value.c_str();
-  char16_t* dst = reinterpret_cast<char16_t*>(&*into->begin() + current);
-  for (unsigned i = 0; i < length; ++i)
-    *dst++ = base::HostToNet16(*src++);
+  // Backing store is UTF-16BE, convert from host endianness.
+  into->reserve(into->size() + value.length() * 2);
+  for (char16_t c : value) {
+    into->push_back(static_cast<char>(c >> 8));
+    into->push_back(static_cast<char>(c));
+  }
 }
 
 void EncodeBinary(const std::string& value, std::string* into) {
@@ -167,46 +232,102 @@ void EncodeDouble(double value, std::string* into) {
   into->insert(into->end(), p, p + sizeof(value));
 }
 
-void EncodeIDBKey(const IndexedDBKey& value, std::string* into) {
+// Return value is true iff successful.
+[[nodiscard]] bool EncodeIDBKeyRecursively(const IndexedDBKey& value,
+                                           std::string* into,
+                                           size_t recursion_level) {
+  // The recursion level is enforced in the renderer (in V8). If this check
+  // fails, it suggests a compromised renderer.
+  if (recursion_level > IndexedDBKey::kMaximumDepth) {
+    return false;
+  }
+
   size_t previous_size = into->size();
-  DCHECK(value.IsValid());
   switch (value.type()) {
     case blink::mojom::IDBKeyType::Array: {
       EncodeByte(kIndexedDBKeyArrayTypeByte, into);
       size_t length = value.array().size();
       EncodeVarInt(length, into);
-      for (size_t i = 0; i < length; ++i)
-        EncodeIDBKey(value.array()[i], into);
+      for (size_t i = 0; i < length; ++i) {
+        if (!EncodeIDBKeyRecursively(value.array()[i], into,
+                                     1 + recursion_level)) {
+          return false;
+        }
+      }
       DCHECK_GT(into->size(), previous_size);
-      return;
+      return true;
     }
     case blink::mojom::IDBKeyType::Binary:
       EncodeByte(kIndexedDBKeyBinaryTypeByte, into);
       EncodeBinary(value.binary(), into);
       DCHECK_GT(into->size(), previous_size);
-      return;
+      return true;
     case blink::mojom::IDBKeyType::String:
       EncodeByte(kIndexedDBKeyStringTypeByte, into);
       EncodeStringWithLength(value.string(), into);
       DCHECK_GT(into->size(), previous_size);
-      return;
+      return true;
     case blink::mojom::IDBKeyType::Date:
       EncodeByte(kIndexedDBKeyDateTypeByte, into);
       EncodeDouble(value.date(), into);
       DCHECK_EQ(9u, static_cast<size_t>(into->size() - previous_size));
-      return;
+      return true;
     case blink::mojom::IDBKeyType::Number:
       EncodeByte(kIndexedDBKeyNumberTypeByte, into);
       EncodeDouble(value.number(), into);
       DCHECK_EQ(9u, static_cast<size_t>(into->size() - previous_size));
+      return true;
+    case blink::mojom::IDBKeyType::None:
+    case blink::mojom::IDBKeyType::Invalid:
+    case blink::mojom::IDBKeyType::Min:
+    default:
+      return false;
+  }
+}
+
+// This function must be a thin wrapper around `MaybeEncodeIDBKey` to ensure
+// comprehensive test coverage.
+void EncodeIDBKey(const IndexedDBKey& value, std::string* into) {
+  CHECK(MaybeEncodeIDBKey(value, into));
+}
+
+bool MaybeEncodeIDBKey(const IndexedDBKey& value, std::string* into) {
+  return EncodeIDBKeyRecursively(value, into, 0);
+}
+
+void EncodeSortableIDBKey(const IndexedDBKey& value, std::string* into) {
+  size_t previous_size = into->size();
+  switch (value.type()) {
+    case blink::mojom::IDBKeyType::Array: {
+      EncodeByte(kOrderedArrayTypeByte, into);
+      for (const IndexedDBKey& key : value.array()) {
+        EncodeSortableIDBKey(key, into);
+      }
+      EncodeByte(kSentinel, into);
+      DCHECK_GT(into->size(), previous_size);
+      return;
+    }
+    case blink::mojom::IDBKeyType::Binary:
+      EncodeByte(kOrderedBinaryTypeByte, into);
+      EncodeBinaryWithSentinel(value.binary(), into);
+      return;
+    case blink::mojom::IDBKeyType::String:
+      EncodeByte(kOrderedStringTypeByte, into);
+      EncodeStringWithSentinel(value.string(), into);
+      return;
+    case blink::mojom::IDBKeyType::Date:
+      EncodeByte(kOrderedDateTypeByte, into);
+      EncodeSortableDouble(value.date(), into);
+      return;
+    case blink::mojom::IDBKeyType::Number:
+      EncodeByte(kOrderedNumberTypeByte, into);
+      EncodeSortableDouble(value.number(), into);
       return;
     case blink::mojom::IDBKeyType::None:
     case blink::mojom::IDBKeyType::Invalid:
     case blink::mojom::IDBKeyType::Min:
     default:
-      NOTREACHED();
-      EncodeByte(kIndexedDBKeyNullTypeByte, into);
-      return;
+      NOTREACHED_NORETURN();
   }
 }
 
@@ -301,9 +422,11 @@ bool DecodeString(StringPiece* slice, std::u16string* value) {
   size_t length = slice->size() / sizeof(char16_t);
   std::u16string decoded;
   decoded.reserve(length);
-  const char16_t* encoded = reinterpret_cast<const char16_t*>(slice->begin());
-  for (unsigned i = 0; i < length; ++i)
-    decoded.push_back(base::NetToHost16(*encoded++));
+  for (size_t i = 0; i < length; ++i) {
+    uint8_t hi = static_cast<uint8_t>((*slice)[2 * i]);
+    uint8_t lo = static_cast<uint8_t>((*slice)[2 * i + 1]);
+    decoded.push_back((char16_t{hi} << 8) | char16_t{lo});
+  }
 
   *value = decoded;
   slice->remove_prefix(length * sizeof(char16_t));
@@ -321,7 +444,7 @@ bool DecodeStringWithLength(StringPiece* slice, std::u16string* value) {
   if (slice->size() < bytes)
     return false;
 
-  StringPiece subpiece(slice->begin(), bytes);
+  StringPiece subpiece = slice->substr(0, bytes);
   slice->remove_prefix(bytes);
   if (!DecodeString(&subpiece, value))
     return false;
@@ -375,8 +498,7 @@ bool DecodeIDBKeyRecursive(StringPiece* slice,
 
   switch (type) {
     case kIndexedDBKeyNullTypeByte:
-      *value = std::make_unique<IndexedDBKey>();
-      return true;
+      return false;
 
     case kIndexedDBKeyArrayTypeByte: {
       int64_t length = 0;
@@ -423,12 +545,10 @@ bool DecodeIDBKeyRecursive(StringPiece* slice,
       return true;
     }
     case kIndexedDBKeyMinKeyTypeByte: {
-      *value = std::make_unique<IndexedDBKey>(blink::mojom::IDBKeyType::Min);
-      return true;
+      return false;
     }
   }
 
-  NOTREACHED();
   return false;
 }
 
@@ -1214,13 +1334,8 @@ std::string IndexedDBKeyToDebugString(base::StringPiece key) {
   return result.str();
 }
 
-PartitionedLockId GetDatabaseLockId(int64_t database_id) {
-  // These keys used to attempt to be bytewise-comparable, which is why
-  // it uses big-endian encoding here. There was a goal to match the
-  // existing leveldb key scheme used by IndexedDB. This is no longer a goal.
-  uint64_t key[1] = {ByteSwapToBE64(static_cast<uint64_t>(database_id))};
-  return {kDatabaseLockPartition,
-          std::string(reinterpret_cast<char*>(&key), sizeof(key))};
+PartitionedLockId GetDatabaseLockId(std::u16string database_name) {
+  return {kDatabaseLockPartition, base::UTF16ToUTF8(database_name)};
 }
 
 PartitionedLockId GetObjectStoreLockId(int64_t database_id,
@@ -1311,19 +1426,19 @@ bool KeyPrefix::Decode(StringPiece* slice, KeyPrefix* result) {
     return false;
 
   {
-    StringPiece tmp(slice->begin(), database_id_bytes);
+    StringPiece tmp = slice->substr(0, database_id_bytes);
     if (!DecodeInt(&tmp, &result->database_id_))
       return false;
   }
   slice->remove_prefix(database_id_bytes);
   {
-    StringPiece tmp(slice->begin(), object_store_id_bytes);
+    StringPiece tmp = slice->substr(0, object_store_id_bytes);
     if (!DecodeInt(&tmp, &result->object_store_id_))
       return false;
   }
   slice->remove_prefix(object_store_id_bytes);
   {
-    StringPiece tmp(slice->begin(), index_id_bytes);
+    StringPiece tmp = slice->substr(0, index_id_bytes);
     if (!DecodeInt(&tmp, &result->index_id_))
       return false;
   }

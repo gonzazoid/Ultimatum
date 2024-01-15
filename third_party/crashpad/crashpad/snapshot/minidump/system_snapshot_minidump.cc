@@ -68,6 +68,8 @@ CPUArchitecture SystemSnapshotMinidump::GetCPUArchitecture() const {
     case kMinidumpCPUArchitectureMIPS:
       return kCPUArchitectureMIPSEL;
     // No word on how MIPS64 is signalled
+    case kMinidumpCPUArchitectureRISCV64Breakpad:
+      return kCPUArchitectureRISCV64;
 
     default:
       return CPUArchitecture::kCPUArchitectureUnknown;
@@ -193,6 +195,12 @@ void SystemSnapshotMinidump::TimeZone(DaylightSavingTimeStatus* dst_status,
                                       std::string* daylight_name) const {
   INITIALIZATION_STATE_DCHECK_VALID(initialized_);
   NOTREACHED();  // https://crashpad.chromium.org/bug/10
+}
+
+uint64_t SystemSnapshotMinidump::AddressMask() const {
+  INITIALIZATION_STATE_DCHECK_VALID(initialized_);
+  NOTREACHED();  // https://crashpad.chromium.org/bug/10
+  return 0;
 }
 
 }  // namespace internal

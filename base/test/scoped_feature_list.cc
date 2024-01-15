@@ -11,6 +11,7 @@
 #include "base/check_op.h"
 #include "base/containers/contains.h"
 #include "base/containers/cxx20_erase_vector.h"
+#include "base/containers/flat_map.h"
 #include "base/memory/ptr_util.h"
 #include "base/metrics/field_trial_param_associator.h"
 #include "base/strings/string_number_conversions.h"
@@ -23,14 +24,6 @@
 
 namespace base {
 namespace test {
-namespace {
-
-// A monotonically increasing id, passed to `FeatureList`s as they are created
-// to invalidate the cache member of `base::Feature` objects that were queried
-// with a different `FeatureList` installed.
-uint16_t g_current_caching_context = 1;
-
-}  // namespace
 
 // A struct describes ParsedEnableFeatures()' result.
 struct ScopedFeatureList::FeatureWithStudyGroup {
@@ -259,7 +252,7 @@ std::string HexDecodeString(const std::string& input) {
 }
 
 // Returns a command line string suitable to pass to
-// FeatureList::InitializeFromCommandLine(). For example,
+// FeatureList::InitFromCommandLine(). For example,
 // {{"Feature1", "Study1", "Group1", "Param1/Value1/"}, {"Feature2"}} returns:
 // - |enabled_feature|=true -> "Feature1<Study1.Group1:Param1/Value1/,Feature2"
 // - |enabled_feature|=false -> "Feature1<Study1.Group1,Feature2"
@@ -392,7 +385,6 @@ void ScopedFeatureList::InitWithFeatureList(
       "ScopedFeatureList must be Init from the test main thread");
 
   original_feature_list_ = FeatureList::ClearInstanceForTesting();
-  feature_list->SetCachingContextForTesting(++g_current_caching_context);
   FeatureList::SetInstance(std::move(feature_list));
   init_called_ = true;
 }
@@ -435,6 +427,19 @@ void ScopedFeatureList::InitWithFeatureState(const Feature& feature,
   }
 }
 
+void ScopedFeatureList::InitWithFeatureStates(
+    const flat_map<FeatureRef, bool>& feature_states) {
+  std::vector<FeatureRef> enabled_features, disabled_features;
+  for (const auto& [feature, enabled] : feature_states) {
+    if (enabled) {
+      enabled_features.push_back(feature);
+    } else {
+      disabled_features.push_back(feature);
+    }
+  }
+  InitWithFeaturesImpl(enabled_features, {}, disabled_features);
+}
+
 void ScopedFeatureList::InitWithFeaturesImpl(
     const std::vector<FeatureRef>& enabled_features,
     const std::vector<FeatureRefAndParams>& enabled_features_and_params,
@@ -448,7 +453,7 @@ void ScopedFeatureList::InitWithFeaturesImpl(
   if (!enabled_features_and_params.empty()) {
     for (const auto& feature : enabled_features_and_params) {
       std::string trial_name = "scoped_feature_list_trial_for_";
-      trial_name += feature.feature.name;
+      trial_name += feature.feature->name;
 
       // If features.params has 2 params whose values are value1 and value2,
       // |params| will be "param1/value1/param2/value2/".
@@ -463,7 +468,7 @@ void ScopedFeatureList::InitWithFeaturesImpl(
       }
 
       merged_features.enabled_feature_list.emplace_back(
-          feature.feature.name, trial_name, kTrialGroup, params);
+          feature.feature->name, trial_name, kTrialGroup, params);
     }
     create_associated_field_trials = true;
   } else {
@@ -544,7 +549,7 @@ void ScopedFeatureList::InitWithMergedFeatures(
     // If |create_associated_field_trials| is true, we want to match the
     // behavior of VariationsFieldTrialCreator to always associate a field
     // trial, even when there no params. Since
-    // FeatureList::InitializeFromCommandLine() doesn't associate a field trial
+    // FeatureList::InitFromCommandLine() doesn't associate a field trial
     // when there are no params, we do it here.
     if (!feature.has_params()) {
       scoped_refptr<FieldTrial> field_trial_without_params =
@@ -584,7 +589,7 @@ void ScopedFeatureList::InitWithMergedFeatures(
       merged_features.disabled_feature_list, /*enable_features=*/false);
 
   std::unique_ptr<FeatureList> new_feature_list(new FeatureList);
-  new_feature_list->InitializeFromCommandLine(enabled, disabled);
+  new_feature_list->InitFromCommandLine(enabled, disabled);
   InitWithFeatureList(std::move(new_feature_list));
 }
 

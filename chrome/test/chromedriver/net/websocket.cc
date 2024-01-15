@@ -13,8 +13,8 @@
 #include <vector>
 
 #include "base/base64.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/hash/sha1.h"
 #include "base/json/json_writer.h"
 #include "base/rand_util.h"
@@ -67,7 +67,7 @@ WebSocket::WebSocket(const GURL& url,
       listener_(listener),
       state_(INITIALIZED),
       write_buffer_(base::MakeRefCounted<net::DrainableIOBuffer>(
-          base::MakeRefCounted<net::IOBuffer>(0),
+          base::MakeRefCounted<net::IOBufferWithSize>(),
           0)),
       read_buffer_(
           base::MakeRefCounted<net::IOBufferWithSize>(read_buffer_size)) {}
@@ -90,7 +90,7 @@ void WebSocket::Connect(net::CompletionOnceCallback callback) {
       std::move(callback).Run(net::ERR_ADDRESS_UNREACHABLE);
       return;
     }
-    base::ListValue endpoints;
+    base::Value::List endpoints;
     for (auto endpoint : addresses)
       endpoints.Append(endpoint.ToStringWithoutPort());
     std::string json;
@@ -158,7 +158,7 @@ void WebSocket::OnSocketConnect(int code) {
     return;
   }
 
-  base::Base64Encode(base::RandBytesAsString(16), &sec_key_);
+  sec_key_ = base::Base64Encode(base::RandBytesAsVector(16));
   std::string handshake = base::StringPrintf(
       "GET %s HTTP/1.1\r\n"
       "Host: %s\r\n"
@@ -208,9 +208,10 @@ void WebSocket::ContinueWritingIfNecessary() {
   if (!write_buffer_->BytesRemaining()) {
     if (pending_write_.empty())
       return;
+    const size_t pending_write_length = pending_write_.length();
     write_buffer_ = base::MakeRefCounted<net::DrainableIOBuffer>(
-        base::MakeRefCounted<net::StringIOBuffer>(pending_write_),
-        pending_write_.length());
+        base::MakeRefCounted<net::StringIOBuffer>(std::move(pending_write_)),
+        pending_write_length);
     pending_write_.clear();
   }
   int code = socket_->Write(
@@ -236,9 +237,23 @@ void WebSocket::Read() {
 }
 
 void WebSocket::OnRead(bool read_again, int code) {
-  if (code <= 0) {
+  if (code == 0) {
+    // On POSIX and FUCHSIA:
+    //   code >= 0 is the result of POSIX read function call:
+    //     code > 0 denotes the amount of successfully read bytes
+    //     code == 0 means that we have reached EOF.
+    //       The latter one is issued upon receiving a FIN packet.
+    //   code < 0 is an error code
+    // On Windows:
+    //   code >=0 is the result of recv function call (winsocks.h)
+    //     It has the same semantic as in the POSIX case
+    //   code < 0 is an error code
+    code = net::ERR_CONNECTION_CLOSED;
+  }
+
+  if (code < 0) {
     VLOG(4) << "WebSocket::OnRead error " << net::ErrorToShortString(code);
-    Close(code ? code : net::ERR_FAILED);
+    Close(code);
     return;
   }
 

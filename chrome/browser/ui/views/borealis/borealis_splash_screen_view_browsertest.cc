@@ -17,8 +17,7 @@
 #include "chrome/browser/ash/borealis/borealis_task.h"
 #include "chrome/browser/ash/borealis/borealis_util.h"
 #include "chrome/browser/ash/borealis/borealis_window_manager_mock.h"
-#include "chrome/browser/ash/borealis/borealis_window_manager_test_helper.h"
-#include "chrome/browser/ash/borealis/infra/expected.h"
+#include "chrome/browser/ash/borealis/testing/windows.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/test/test_browser_dialog.h"
@@ -33,11 +32,9 @@ namespace {
 class FakeBorealisContextManager : public BorealisContextManager {
  public:
   void StartBorealis(ResultCallback callback) override {
-    std::move(callback).Run(
-        BorealisContextManager::ContextOrFailure::Unexpected(
-            Described<BorealisStartupResult>(
-                BorealisStartupResult::kMountFailed,
-                "failed on purpose for testing")));
+    std::move(callback).Run(base::unexpected(Described<BorealisStartupResult>(
+        BorealisStartupResult::kDiskImageFailed,
+        "failed on purpose for testing")));
   }
 
   bool IsRunning() override { return false; }
@@ -59,7 +56,7 @@ class BorealisSplashScreenViewBrowserTest : public DialogBrowserTest {
  public:
   BorealisSplashScreenViewBrowserTest() {
     feature_list_.InitWithFeatures(
-        {features::kBorealis, chromeos::features::kBorealisPermitted}, {});
+        {features::kBorealis, ash::features::kBorealisPermitted}, {});
   }
 
   // DialogBrowserTest:
@@ -101,7 +98,7 @@ IN_PROC_BROWSER_TEST_F(BorealisSplashScreenViewBrowserTest,
   EXPECT_TRUE(VerifyUi());
   EXPECT_NE(nullptr, BorealisSplashScreenView::GetActiveViewForTesting());
   MakeAndTrackWindow(
-      "org.chromium.borealis.foobarbaz",
+      "org.chromium.guest_os.borealis.foobarbaz",
       &borealis::BorealisService::GetForProfile(browser()->profile())
            ->WindowManager());
   base::RunLoop().RunUntilIdle();
@@ -121,8 +118,11 @@ IN_PROC_BROWSER_TEST_F(BorealisSplashScreenViewBrowserTest,
   launcher.Launch("foo.desktop", callback_check.BindOnce());
   base::RunLoop().RunUntilIdle();
 
-  EXPECT_FALSE(VerifyUi());
+  // The splash screen should have disappeared.
   EXPECT_EQ(nullptr, BorealisSplashScreenView::GetActiveViewForTesting());
+
+  // We should now see an error dialog instead.
+  EXPECT_TRUE(VerifyUi());
 }
 
 }  // namespace

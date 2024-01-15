@@ -7,10 +7,11 @@
 
 #include <memory>
 
-#include "ash/services/device_sync/public/cpp/device_sync_client.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "chromeos/ash/components/multidevice/remote_device_ref.h"
 #include "chromeos/ash/components/tether/tether_host_fetcher.h"
+#include "chromeos/ash/services/device_sync/public/cpp/device_sync_client.h"
 #include "chromeos/ash/services/multidevice_setup/public/cpp/multidevice_setup_client.h"
 
 namespace ash {
@@ -80,8 +81,8 @@ class TetherHostFetcherImpl
   void CacheCurrentTetherHosts();
   multidevice::RemoteDeviceRefList GenerateHostDeviceList();
 
-  device_sync::DeviceSyncClient* device_sync_client_;
-  multidevice_setup::MultiDeviceSetupClient* multidevice_setup_client_;
+  raw_ptr<device_sync::DeviceSyncClient> device_sync_client_;
+  raw_ptr<multidevice_setup::MultiDeviceSetupClient> multidevice_setup_client_;
 
   multidevice::RemoteDeviceRefList current_remote_device_list_;
   base::WeakPtrFactory<TetherHostFetcherImpl> weak_ptr_factory_{this};

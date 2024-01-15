@@ -7,29 +7,28 @@
  * the ambient mode settings.
  */
 
-import '../../css/common.css.js';
+import 'chrome://resources/ash/common/personalization/common.css.js';
 import './albums_subpage_element.js';
+import './ambient_preview_small_element.js';
+import './ambient_theme_list_element.js';
 import './ambient_weather_element.js';
-import './ambient_preview_element.js';
-import './animation_theme_list_element.js';
 import './toggle_row_element.js';
 import './topic_source_list_element.js';
 
-import {assert} from 'chrome://resources/js/assert_ts.js';
+import {assert} from 'chrome://resources/js/assert.js';
 import {afterNextRender} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
-import {AmbientModeAlbum, AnimationTheme, TemperatureUnit, TopicSource} from '../personalization_app.mojom-webui.js';
-import {isAmbientModeAllowed, Paths} from '../personalization_router_element.js';
+import {AmbientModeAlbum, AmbientTheme, TemperatureUnit, TopicSource} from '../../personalization_app.mojom-webui.js';
+import {isAmbientModeAllowed, isPersonalizationJellyEnabled, isScreenSaverDurationEnabled} from '../load_time_booleans.js';
+import {Paths, ScrollableTarget} from '../personalization_router_element.js';
 import {WithPersonalizationStore} from '../personalization_store.js';
 
-import {setAmbientModeEnabled} from './ambient_controller.js';
+import {dismissTimeOfDayBanner, setAmbientModeEnabled} from './ambient_controller.js';
 import {getAmbientProvider} from './ambient_interface_provider.js';
 import {AmbientObserver} from './ambient_observer.js';
 import {getTemplate} from './ambient_subpage_element.html.js';
-import {ToggleRow} from './toggle_row_element.js';
-import {getZerosArray} from './utils.js';
 
-export class AmbientSubpage extends WithPersonalizationStore {
+export class AmbientSubpageElement extends WithPersonalizationStore {
   static get is() {
     return 'ambient-subpage';
   }
@@ -46,28 +45,66 @@ export class AmbientSubpage extends WithPersonalizationStore {
         type: Array,
         value: null,
       },
-      animationTheme_: {
+      ambientTheme_: {
         type: Object,
         value: null,
       },
-      ambientModeEnabled_: Boolean,
-      temperatureUnit_: Number,
-      topicSource_: Number,
-      loadingSettings_: {
+      ambientModeEnabled_: {
+        type: Boolean,
+        value: null,
+        observer: 'onAmbientModeEnabledChanged_',
+      },
+      duration_: {
+        type: Number,
+        value: null,
+      },
+      temperatureUnit_: {
+        type: Number,
+        value: null,
+      },
+      topicSource_: {
+        type: Number,
+        value: null,
+      },
+      loading_: {
         type: Boolean,
         computed:
-            'computeLoadingSettings_(albums_, temperatureUnit_, topicSource_)',
+            'computeLoading_(ambientModeEnabled_, albums_, temperatureUnit_, topicSource_, isOnline_)',
+        observer: 'onLoadingChanged_',
+      },
+      isPersonalizationJellyEnabled_: {
+        type: Boolean,
+        value() {
+          return isPersonalizationJellyEnabled();
+        },
+      },
+      isScreenSaverDurationEnabled_: {
+        readOnly: true,
+        type: Boolean,
+        value() {
+          return isScreenSaverDurationEnabled();
+        },
+      },
+      isOnline_: {
+        type: Boolean,
+        value() {
+          return window.navigator.onLine;
+        },
       },
     };
   }
 
   path: Paths;
   queryParams: Record<string, string>;
-  private albums_: AmbientModeAlbum[]|null = null;
-  private ambientModeEnabled_: boolean|null = null;
-  private animationTheme_: AnimationTheme|null = null;
-  private temperatureUnit_: TemperatureUnit|null = null;
-  private topicSource_: TopicSource|null = null;
+  private albums_: AmbientModeAlbum[]|null;
+  private ambientModeEnabled_: boolean|null;
+  private ambientTheme_: AmbientTheme|null;
+  private duration_: number|null;
+  private temperatureUnit_: TemperatureUnit|null;
+  private topicSource_: TopicSource|null;
+  private isScreenSaverDurationEnabled_: boolean;
+  private isPersonalizationJellyEnabled_: boolean;
+  private isOnline_: boolean;
 
   // Refetch albums if the user is currently viewing ambient subpage, focuses
   // another window, and then re-focuses personalization app.
@@ -85,6 +122,13 @@ export class AmbientSubpage extends WithPersonalizationStore {
         elem.focus();
       }
     });
+
+    window.addEventListener('online', () => {
+      this.isOnline_ = true;
+    });
+    window.addEventListener('offline', () => {
+      this.isOnline_ = false;
+    });
   }
 
   override connectedCallback() {
@@ -94,16 +138,18 @@ export class AmbientSubpage extends WithPersonalizationStore {
 
     super.connectedCallback();
     AmbientObserver.initAmbientObserverIfNeeded();
-    this.watch<AmbientSubpage['albums_']>(
+    this.watch<AmbientSubpageElement['albums_']>(
         'albums_', state => state.ambient.albums);
-    this.watch<AmbientSubpage['ambientModeEnabled_']>(
+    this.watch<AmbientSubpageElement['ambientModeEnabled_']>(
         'ambientModeEnabled_', state => state.ambient.ambientModeEnabled);
-    this.watch<AmbientSubpage['animationTheme_']>(
-        'animationTheme_', state => state.ambient.animationTheme);
-    this.watch<AmbientSubpage['temperatureUnit_']>(
+    this.watch<AmbientSubpageElement['ambientTheme_']>(
+        'ambientTheme_', state => state.ambient.ambientTheme);
+    this.watch<AmbientSubpageElement['temperatureUnit_']>(
         'temperatureUnit_', state => state.ambient.temperatureUnit);
-    this.watch<AmbientSubpage['topicSource_']>(
+    this.watch<AmbientSubpageElement['topicSource_']>(
         'topicSource_', state => state.ambient.topicSource);
+    this.watch<AmbientSubpageElement['duration_']>(
+        'duration_', state => state.ambient.duration);
     this.updateFromStore();
 
     getAmbientProvider().setPageViewed();
@@ -116,15 +162,28 @@ export class AmbientSubpage extends WithPersonalizationStore {
     window.removeEventListener('focus', this.onFocus_);
   }
 
-  private onClickAmbientModeButton_(event: Event) {
-    event.stopPropagation();
-    this.setAmbientModeEnabled_(!this.ambientModeEnabled_);
+  // Scroll down to the topic source list.
+  private scrollToTopicSourceList_() {
+    const elem = this.shadowRoot!.querySelector('topic-source-list');
+    if (elem) {
+      elem.scrollIntoView();
+      elem.focus();
+    }
   }
 
-  private onToggleStateChanged_(event: Event) {
-    const toggleRow = event.currentTarget as ToggleRow;
-    const ambientModeEnabled = toggleRow!.checked;
-    this.setAmbientModeEnabled_(ambientModeEnabled);
+  private onAmbientModeEnabledChanged_(value: boolean) {
+    if (value) {
+      // Dismisses the banner after the user visits this subpage and ambient
+      // mode is enabled.
+      dismissTimeOfDayBanner(this.getStore());
+    }
+  }
+
+  private onLoadingChanged_(value: boolean) {
+    if (!value && !!this.queryParams &&
+        this.queryParams['scrollTo'] === ScrollableTarget.TOPIC_SOURCE_LIST) {
+      afterNextRender(this, () => this.scrollToTopicSourceList_());
+    }
   }
 
   private setAmbientModeEnabled_(ambientModeEnabled: boolean) {
@@ -174,22 +233,16 @@ export class AmbientSubpage extends WithPersonalizationStore {
     return path === Paths.AMBIENT_ALBUMS;
   }
 
-  private loadingAmbientMode_(): boolean {
-    return this.ambientModeEnabled_ === null;
-  }
-
-  private computeLoadingSettings_(): boolean {
-    return this.albums_ === null || this.topicSource_ === null ||
-        this.temperatureUnit_ === null;
+  private computeLoading_(): boolean {
+    return this.ambientModeEnabled_ === null || this.albums_ === null ||
+        this.topicSource_ === null || this.temperatureUnit_ === null ||
+        (this.isScreenSaverDurationEnabled_ && this.duration_ === null) ||
+        !this.isOnline_;
   }
 
   private getPlaceholders_(x: number): number[] {
-    return getZerosArray(x);
-  }
-
-  private getClassContainer_(x: number): string {
-    return `ambient-text-placeholder-${x}`;
+    return new Array(x).fill(0);
   }
 }
 
-customElements.define(AmbientSubpage.is, AmbientSubpage);
+customElements.define(AmbientSubpageElement.is, AmbientSubpageElement);

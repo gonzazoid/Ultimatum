@@ -8,7 +8,7 @@
 #include <memory>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "ui/display/types/native_display_observer.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/ozone/demo/renderer_factory.h"
@@ -41,7 +41,8 @@ class WindowManager : public display::NativeDisplayObserver {
 
  private:
   void OnDisplaysAcquired(
-      const std::vector<display::DisplaySnapshot*>& displays);
+      const std::vector<raw_ptr<display::DisplaySnapshot, VectorExperimental>>&
+          displays);
   void OnDisplayConfigured(const int64_t display_id,
                            const gfx::Rect& bounds,
                            bool config_success);

@@ -4,6 +4,7 @@
 
 #include "third_party/blink/renderer/modules/ml/webnn/ml_operand.h"
 
+#include "components/ml/webnn/graph_validation_utils.h"
 #include "third_party/blink/renderer/modules/ml/webnn/ml_graph_builder.h"
 #include "third_party/blink/renderer/modules/ml/webnn/ml_operator.h"
 
@@ -11,163 +12,148 @@ namespace blink {
 
 namespace {
 
-DOMArrayBufferView::ViewType GetArrayBufferViewType(
-    V8MLOperandType::Enum operand_type) {
+size_t GetBytesPerElement(V8MLOperandDataType::Enum operand_type) {
   switch (operand_type) {
-    case V8MLOperandType::Enum::kFloat32:
-      return DOMArrayBufferView::ViewType::kTypeFloat32;
-    case V8MLOperandType::Enum::kFloat16:
-      // Using Uint16Array for float16 is a workaround of WebNN spec issue:
-      // https://github.com/webmachinelearning/webnn/issues/127
-      return DOMArrayBufferView::ViewType::kTypeUint16;
-    case V8MLOperandType::Enum::kInt32:
-      return DOMArrayBufferView::ViewType::kTypeInt32;
-    case V8MLOperandType::Enum::kUint32:
-      return DOMArrayBufferView::ViewType::kTypeUint32;
-    case V8MLOperandType::Enum::kInt8:
-      return DOMArrayBufferView::ViewType::kTypeInt8;
-    case V8MLOperandType::Enum::kUint8:
-      return DOMArrayBufferView::ViewType::kTypeUint8;
-  }
-}
-
-size_t GetBytesPerElement(V8MLOperandType::Enum operand_type) {
-  switch (operand_type) {
-    case V8MLOperandType::Enum::kFloat32:
+    case V8MLOperandDataType::Enum::kFloat32:
       return sizeof(float);
-    case V8MLOperandType::Enum::kFloat16:
+    case V8MLOperandDataType::Enum::kFloat16:
       // Using Uint16Array for float16 is a workaround of WebNN spec issue:
       // https://github.com/webmachinelearning/webnn/issues/127
       return sizeof(uint16_t);
-    case V8MLOperandType::Enum::kInt32:
+    case V8MLOperandDataType::Enum::kInt32:
       return sizeof(int32_t);
-    case V8MLOperandType::Enum::kUint32:
+    case V8MLOperandDataType::Enum::kUint32:
       return sizeof(uint32_t);
-    case V8MLOperandType::Enum::kInt8:
+    case V8MLOperandDataType::Enum::kInt64:
+      return sizeof(int64_t);
+    case V8MLOperandDataType::Enum::kUint64:
+      return sizeof(uint64_t);
+    case V8MLOperandDataType::Enum::kInt8:
       return sizeof(int8_t);
-    case V8MLOperandType::Enum::kUint8:
+    case V8MLOperandDataType::Enum::kUint8:
       return sizeof(uint8_t);
   }
 }
 
-absl::optional<size_t> ValidateAndCalculateElementsNumber(
-    const Vector<uint32_t>& dimensions,
-    String& error_message) {
-  if (dimensions.empty()) {
-    error_message = "The dimensions is empty.";
-    return absl::nullopt;
+base::expected<size_t, String> ValidateAndCalculateElementsNumber(
+    const Vector<uint32_t>& dimensions) {
+  auto number_of_elements =
+      webnn::ValidateAndCalculateElementsNumber(base::make_span(dimensions));
+  if (!number_of_elements.has_value()) {
+    return base::unexpected(WTF::String::FromUTF8(number_of_elements.error()));
   }
-  base::CheckedNumeric<size_t> checked_number_of_elements = 1;
-  for (auto& d : dimensions) {
-    if (d == 0) {
-      error_message = "All dimensions should be positive.";
-      return absl::nullopt;
-    }
-    checked_number_of_elements *= d;
-  }
-  if (!checked_number_of_elements.IsValid()) {
-    error_message = "The number of elements is too large.";
-    return absl::nullopt;
-  }
-  return checked_number_of_elements.ValueOrDie();
+  return number_of_elements.value();
 }
 
-absl::optional<size_t> ValidateAndCalculateByteLength(
-    V8MLOperandType::Enum type,
-    const Vector<uint32_t>& dimensions,
-    String& error_message) {
-  absl::optional<size_t> elements_num =
-      ValidateAndCalculateElementsNumber(dimensions, error_message);
-  if (!elements_num) {
-    return absl::nullopt;
+base::expected<size_t, String> ValidateAndCalculateByteLength(
+    V8MLOperandDataType::Enum data_type,
+    const Vector<uint32_t>& dimensions) {
+  auto byte_length = webnn::ValidateAndCalculateByteLength(
+      GetBytesPerElement(data_type), base::make_span(dimensions));
+  if (!byte_length.has_value()) {
+    return base::unexpected(WTF::String::FromUTF8(byte_length.error()));
   }
-  auto checked_byte_length =
-      base::MakeCheckedNum<size_t>(elements_num.value()) *
-      GetBytesPerElement(type);
-  if (!checked_byte_length.IsValid()) {
-    error_message = "The byte length is too large.";
-    return absl::nullopt;
-  }
-  return checked_byte_length.ValueOrDie();
+  return byte_length.value();
 }
 
 }  // namespace
 
+DOMArrayBufferView::ViewType GetArrayBufferViewType(
+    V8MLOperandDataType::Enum operand_type) {
+  switch (operand_type) {
+    case V8MLOperandDataType::Enum::kFloat32:
+      return DOMArrayBufferView::ViewType::kTypeFloat32;
+    case V8MLOperandDataType::Enum::kFloat16:
+      // Using Uint16Array for float16 is a workaround of WebNN spec issue:
+      // https://github.com/webmachinelearning/webnn/issues/127
+      return DOMArrayBufferView::ViewType::kTypeUint16;
+    case V8MLOperandDataType::Enum::kInt32:
+      return DOMArrayBufferView::ViewType::kTypeInt32;
+    case V8MLOperandDataType::Enum::kUint32:
+      return DOMArrayBufferView::ViewType::kTypeUint32;
+    case V8MLOperandDataType::Enum::kInt64:
+      return DOMArrayBufferView::ViewType::kTypeBigInt64;
+    case V8MLOperandDataType::Enum::kUint64:
+      return DOMArrayBufferView::ViewType::kTypeBigUint64;
+    case V8MLOperandDataType::Enum::kInt8:
+      return DOMArrayBufferView::ViewType::kTypeInt8;
+    case V8MLOperandDataType::Enum::kUint8:
+      return DOMArrayBufferView::ViewType::kTypeUint8;
+  }
+}
+
 // static
-MLOperand* MLOperand::ValidateAndCreateInput(MLGraphBuilder* builder,
-                                             const V8MLOperandType::Enum type,
-                                             Vector<uint32_t> dimensions,
-                                             String name,
-                                             String& error_message) {
+base::expected<MLOperand*, String> MLOperand::ValidateAndCreateInput(
+    MLGraphBuilder* builder,
+    const V8MLOperandDataType::Enum data_type,
+    Vector<uint32_t> dimensions,
+    String name) {
   if (name.empty()) {
-    error_message = "The name is empty.";
-    return nullptr;
+    return base::unexpected("The name is empty.");
   }
-  if (!ValidateAndCalculateByteLength(type, dimensions, error_message)) {
-    error_message = "Invalid operand descriptor: " + error_message;
-    return nullptr;
+  auto result = ValidateAndCalculateByteLength(data_type, dimensions);
+  if (!result.has_value()) {
+    return base::unexpected("Invalid operand descriptor: " + result.error());
   }
-  auto* input = MakeGarbageCollected<MLOperand>(builder, OperandKind::kInput,
-                                                type, std::move(dimensions));
+  auto* input = MakeGarbageCollected<MLOperand>(
+      builder, OperandKind::kInput, data_type, std::move(dimensions));
   input->name_ = std::move(name);
   return input;
 }
 
 // static
-MLOperand* MLOperand::ValidateAndCreateConstant(
+base::expected<MLOperand*, String> MLOperand::ValidateAndCreateConstant(
     MLGraphBuilder* builder,
-    const V8MLOperandType::Enum type,
+    const V8MLOperandDataType::Enum data_type,
     Vector<uint32_t> dimensions,
-    const DOMArrayBufferView* array_buffer_view,
-    String& error_message) {
+    const DOMArrayBufferView* array_buffer_view) {
   DCHECK(array_buffer_view);
-  if (GetArrayBufferViewType(type) != array_buffer_view->GetType()) {
-    error_message = "The buffer view type doesn't match the operand type.";
-    return nullptr;
+  if (GetArrayBufferViewType(data_type) != array_buffer_view->GetType()) {
+    return base::unexpected(
+        "The buffer view type doesn't match the operand data type.");
   }
-  absl::optional<size_t> expected_byte_length =
-      ValidateAndCalculateByteLength(type, dimensions, error_message);
-  if (!expected_byte_length) {
-    error_message = "Invalid operand descriptor: " + error_message;
-    return nullptr;
+  auto expected_byte_length =
+      ValidateAndCalculateByteLength(data_type, dimensions);
+  if (!expected_byte_length.has_value()) {
+    return base::unexpected("Invalid operand descriptor: " +
+                            expected_byte_length.error());
   }
   if (expected_byte_length.value() != array_buffer_view->byteLength()) {
-    error_message = String::Format(
+    return base::unexpected(String::Format(
         "The buffer view byte length (%zu) doesn't match the "
         "expected byte length (%zu).",
-        array_buffer_view->byteLength(), expected_byte_length.value());
-    return nullptr;
+        array_buffer_view->byteLength(), expected_byte_length.value()));
   }
   auto* constant = MakeGarbageCollected<MLOperand>(
-      builder, OperandKind::kConstant, type, std::move(dimensions));
+      builder, OperandKind::kConstant, data_type, std::move(dimensions));
   constant->array_buffer_view_ = array_buffer_view;
   return constant;
 }
 
 // static
-MLOperand* MLOperand::ValidateAndCreateOutput(MLGraphBuilder* builder,
-                                              const V8MLOperandType::Enum type,
-                                              Vector<uint32_t> dimensions,
-                                              const MLOperator* ml_operator,
-                                              String& error_message) {
+base::expected<MLOperand*, String> MLOperand::ValidateAndCreateOutput(
+    MLGraphBuilder* builder,
+    const V8MLOperandDataType::Enum data_type,
+    Vector<uint32_t> dimensions,
+    const MLOperator* ml_operator) {
   DCHECK(ml_operator);
-  if (!ValidateAndCalculateByteLength(type, dimensions, error_message)) {
-    error_message = "Invalid output operand: " + error_message;
-    return nullptr;
+  auto result = ValidateAndCalculateByteLength(data_type, dimensions);
+  if (!result.has_value()) {
+    return base::unexpected("Invalid output operand: " + result.error());
   }
-  auto* output = MakeGarbageCollected<MLOperand>(builder, OperandKind::kOutput,
-                                                 type, std::move(dimensions));
+  auto* output = MakeGarbageCollected<MLOperand>(
+      builder, OperandKind::kOutput, data_type, std::move(dimensions));
   output->operator_ = ml_operator;
   return output;
 }
 
 MLOperand::MLOperand(MLGraphBuilder* builder,
                      OperandKind kind,
-                     const V8MLOperandType::Enum type,
+                     const V8MLOperandDataType::Enum data_type,
                      Vector<uint32_t> dimensions)
     : builder_(builder),
       kind_(kind),
-      type_(type),
+      data_type_(data_type),
       dimensions_(std::move(dimensions)) {}
 
 MLOperand::~MLOperand() = default;
@@ -180,8 +166,8 @@ MLOperand::OperandKind MLOperand::Kind() const {
   return kind_;
 }
 
-V8MLOperandType::Enum MLOperand::Type() const {
-  return type_;
+V8MLOperandDataType::Enum MLOperand::DataType() const {
+  return data_type_;
 }
 
 const Vector<uint32_t>& MLOperand::Dimensions() const {
@@ -204,19 +190,23 @@ const MLOperator* MLOperand::Operator() const {
 }
 
 size_t MLOperand::NumberOfElements() const {
-  String error_message;
-  auto elements_number =
-      ValidateAndCalculateElementsNumber(dimensions_, error_message);
-  DCHECK(elements_number);
+  auto elements_number = ValidateAndCalculateElementsNumber(dimensions_);
+  DCHECK(elements_number.has_value());
   return elements_number.value();
 }
 
 size_t MLOperand::ByteLength() const {
-  String error_message;
-  auto byte_length =
-      ValidateAndCalculateByteLength(type_, dimensions_, error_message);
-  DCHECK(byte_length);
+  auto byte_length = ValidateAndCalculateByteLength(data_type_, dimensions_);
+  DCHECK(byte_length.has_value());
   return byte_length.value();
+}
+
+Vector<uint32_t> MLOperand::shape() const {
+  return dimensions_;
+}
+
+V8MLOperandDataType MLOperand::dataType() const {
+  return V8MLOperandDataType(data_type_);
 }
 
 void MLOperand::Trace(Visitor* visitor) const {

@@ -29,6 +29,7 @@ class Origin;
 namespace content {
 
 class BrowserContext;
+class PermissionServiceContextTest;
 class RenderFrameHost;
 class RenderProcessHost;
 
@@ -40,8 +41,9 @@ class RenderProcessHost;
 //
 // PermissionServiceContext instances associated with a RenderFrameHost must be
 // created via the DocumentUserData static factories, as these
-// instances are deleted when a new document is commited.
-class PermissionServiceContext : public RenderProcessHostObserver {
+// instances are deleted when a new document is committed.
+class CONTENT_EXPORT PermissionServiceContext
+    : public RenderProcessHostObserver {
  public:
   explicit PermissionServiceContext(RenderProcessHost* render_process_host);
   PermissionServiceContext(const PermissionServiceContext&) = delete;
@@ -49,7 +51,12 @@ class PermissionServiceContext : public RenderProcessHostObserver {
   ~PermissionServiceContext() override;
 
   // Return PermissionServiceContext associated with the current document in the
-  // given RenderFrameHost, lazily creatin gone, if needed.
+  // given RenderFrameHost, lazily creating one, if needed.
+  static PermissionServiceContext* GetOrCreateForCurrentDocument(
+      RenderFrameHost* render_frame_host);
+
+  // Return PermissionServiceContext associated with the current document.
+  // Return null if there's no associated one.
   static PermissionServiceContext* GetForCurrentDocument(
       RenderFrameHost* render_frame_host);
 
@@ -62,8 +69,8 @@ class PermissionServiceContext : public RenderProcessHostObserver {
   void CreateSubscription(
       blink::PermissionType permission_type,
       const url::Origin& origin,
-      blink::mojom::PermissionStatus current_status,
-      blink::mojom::PermissionStatus last_known_status,
+      PermissionStatus current_status,
+      PermissionStatus last_known_status,
       mojo::PendingRemote<blink::mojom::PermissionObserver> observer);
 
   // Called when the connection to a PermissionObserver has an error.
@@ -83,9 +90,17 @@ class PermissionServiceContext : public RenderProcessHostObserver {
   // RenderProcessHostObserver:
   void RenderProcessHostDestroyed(RenderProcessHost* host) override;
 
+  void StoreStatusAtBFCacheEntry();
+  void NotifyPermissionStatusChangedIfNeeded();
+
+  std::set<blink::PermissionType>& GetOnchangeEventListeners() {
+    return onchange_event_listeners_;
+  }
+
  private:
   class PermissionSubscription;
   struct DocumentPermissionServiceContextHolder;
+  friend class PermissionServiceContextTest;
 
   // Use DocumentUserData static methods to create instances attached
   // to a RenderFrameHost.
@@ -97,6 +112,8 @@ class PermissionServiceContext : public RenderProcessHostObserver {
   std::unordered_map<PermissionController::SubscriptionId,
                      std::unique_ptr<PermissionSubscription>>
       subscriptions_;
+
+  std::set<blink::PermissionType> onchange_event_listeners_;
 };
 
 }  // namespace content

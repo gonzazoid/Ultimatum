@@ -14,7 +14,6 @@
 #include "content/browser/renderer_host/frame_tree_node.h"
 #include "content/browser/web_package/mock_signed_exchange_handler.h"
 #include "content/browser/web_package/signed_exchange_devtools_proxy.h"
-#include "content/browser/web_package/signed_exchange_prefetch_metric_recorder.h"
 #include "content/browser/web_package/signed_exchange_reporter.h"
 #include "mojo/public/cpp/system/data_pipe_producer.h"
 #include "mojo/public/cpp/system/string_data_source.h"
@@ -58,7 +57,7 @@ class SignedExchangeLoaderTest : public testing::Test {
     MOCK_METHOD3(OnReceiveResponse,
                  void(const network::mojom::URLResponseHeadPtr,
                       mojo::ScopedDataPipeConsumerHandle,
-                      absl::optional<mojo_base::BigBuffer>));
+                      std::optional<mojo_base::BigBuffer>));
     MOCK_METHOD2(OnReceiveRedirect,
                  void(const net::RedirectInfo&,
                       network::mojom::URLResponseHeadPtr));
@@ -87,7 +86,7 @@ class SignedExchangeLoaderTest : public testing::Test {
                  void(const std::vector<std::string>&,
                       const net::HttpRequestHeaders&,
                       const net::HttpRequestHeaders&,
-                      const absl::optional<GURL>&));
+                      const std::optional<GURL>&));
     MOCK_METHOD2(SetPriority,
                  void(net::RequestPriority priority,
                       int32_t intra_priority_value));
@@ -142,7 +141,7 @@ TEST_F(SignedExchangeLoaderTest, Simple) {
           nullptr /* reporter */, nullptr /* url_loader_factory */,
           SignedExchangeLoader::URLLoaderThrottlesGetter(),
           net::NetworkAnonymizationKey(),
-          FrameTreeNode::kFrameTreeNodeInvalidId, nullptr /* metric_recorder */,
+          FrameTreeNode::kFrameTreeNodeInvalidId,
           std::string() /* accept_langs */,
           false /* keep_entry_for_prefetch_cache */);
 

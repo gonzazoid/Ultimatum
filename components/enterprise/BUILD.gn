@@ -22,8 +22,11 @@ static_library("enterprise") {
     "browser/reporting/policy_info.h",
     "browser/reporting/profile_report_generator.cc",
     "browser/reporting/profile_report_generator.h",
+    "browser/reporting/real_time_report_controller.cc",
+    "browser/reporting/real_time_report_controller.h",
     "browser/reporting/real_time_report_generator.cc",
     "browser/reporting/real_time_report_generator.h",
+    "browser/reporting/real_time_report_type.h",
     "browser/reporting/real_time_uploader.cc",
     "browser/reporting/real_time_uploader.h",
     "browser/reporting/report_generator.cc",
@@ -129,6 +132,7 @@ source_set("unit_tests") {
   testonly = true
 
   sources = [
+    "browser/identifiers/profile_id_service_unittest.cc",
     "browser/reporting/chrome_profile_request_generator_unittest.cc",
     "browser/reporting/report_uploader_unittest.cc",
     "common/proto/connectors_unittest.cc",
@@ -140,7 +144,10 @@ source_set("unit_tests") {
     "common/proto:connectors_proto",
     "//base/test:test_support",
     "//build:chromeos_buildflags",
+    "//components/enterprise/browser/identifiers",
+    "//components/enterprise/browser/identifiers:test_support",
     "//components/policy/core/common:test_support",
+    "//components/prefs:test_support",
     "//components/version_info",
     "//testing/gmock",
     "//testing/gtest",
@@ -157,7 +164,6 @@ source_set("unit_tests") {
       ":test_support",
       "//base",
       "//components/policy/core/browser:test_support",
-      "//components/prefs:test_support",
     ]
   }
 

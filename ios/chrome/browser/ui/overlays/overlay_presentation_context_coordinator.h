@@ -7,8 +7,8 @@
 
 #import <UIKit/UIKit.h>
 
-#include "ios/chrome/browser/overlays/public/overlay_modality.h"
-#import "ios/chrome/browser/ui/coordinators/chrome_coordinator.h"
+#include "ios/chrome/browser/overlays/model/public/overlay_modality.h"
+#import "ios/chrome/browser/shared/coordinator/chrome_coordinator/chrome_coordinator.h"
 
 class OverlayPresentationContextImpl;
 

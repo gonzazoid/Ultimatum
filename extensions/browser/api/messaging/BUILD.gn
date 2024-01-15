@@ -17,11 +17,14 @@ source_set("messaging") {
     "message_port.h",
     "message_service.cc",
     "message_service.h",
+    "message_service_bindings.cc",
     "messaging_api_message_filter.cc",
     "messaging_api_message_filter.h",
     "messaging_delegate.cc",
     "messaging_delegate.h",
   ]
+
+  configs += [ "//build/config/compiler:wexit_time_destructors" ]
 
   deps = [
     ":native_messaging",
@@ -31,7 +34,7 @@ source_set("messaging") {
     "//components/keyed_service/content:content",
     "//content/public/browser",
     "//content/public/common",
-    "//extensions/browser/api",
+    "//extensions/buildflags",
     "//extensions/common",
     "//extensions/common/api",
   ]
@@ -46,6 +49,8 @@ source_set("native_messaging") {
     "native_message_host.h",
     "native_messaging_channel.h",
   ]
+
+  configs += [ "//build/config/compiler:wexit_time_destructors" ]
 
   deps = [
     "//base",

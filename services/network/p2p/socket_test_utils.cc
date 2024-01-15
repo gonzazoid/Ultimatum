@@ -6,13 +6,13 @@
 
 #include <stddef.h>
 
-#include "base/bind.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
 #include "base/notreached.h"
 #include "base/ranges/algorithm.h"
 #include "base/sys_byteorder.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/bind.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "net/base/io_buffer.h"
 #include "net/base/ip_address.h"
 #include "net/traffic_annotation/network_traffic_annotation.h"
@@ -118,7 +118,7 @@ int FakeSocket::Write(
   DCHECK(!write_pending_);
 
   if (async_write_) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(&FakeSocket::DoAsyncWrite, base::Unretained(this),
                        scoped_refptr<net::IOBuffer>(buf), buf_len,
@@ -191,10 +191,6 @@ bool FakeSocket::WasEverUsed() const {
   return true;
 }
 
-bool FakeSocket::WasAlpnNegotiated() const {
-  return false;
-}
-
 net::NextProto FakeSocket::GetNegotiatedProtocol() const {
   return net::kProtoUnknown;
 }
@@ -218,7 +214,24 @@ FakeSocketClient::FakeSocketClient(
 
 FakeSocketClient::~FakeSocketClient() {}
 
-void CreateRandomPacket(std::vector<int8_t>* packet) {
+FakeNetworkNotificationClient::FakeNetworkNotificationClient(
+    base::OnceClosure closure,
+    mojo::PendingReceiver<mojom::P2PNetworkNotificationClient>
+        notification_client)
+    : notification_client_(this, std::move(notification_client)),
+      closure_(std::move(closure)) {}
+
+FakeNetworkNotificationClient::~FakeNetworkNotificationClient() = default;
+
+void FakeNetworkNotificationClient::NetworkListChanged(
+    const std::vector<::net::NetworkInterface>& networks,
+    const ::net::IPAddress& default_ipv4_local_address,
+    const ::net::IPAddress& default_ipv6_local_address) {
+  network_list_changed_ = true;
+  std::move(closure_).Run();
+}
+
+void CreateRandomPacket(std::vector<uint8_t>* packet) {
   size_t size = kStunHeaderSize + rand() % 1000;
   packet->resize(size);
   for (size_t i = 0; i < size; i++) {
@@ -229,7 +242,7 @@ void CreateRandomPacket(std::vector<int8_t>* packet) {
   (*packet)[0] = (*packet)[0] | 0x80;
 }
 
-static void CreateStunPacket(std::vector<int8_t>* packet, uint16_t type) {
+static void CreateStunPacket(std::vector<uint8_t>* packet, uint16_t type) {
   CreateRandomPacket(packet);
   *reinterpret_cast<uint16_t*>(&*packet->begin()) = base::HostToNet16(type);
   *reinterpret_cast<uint16_t*>(&*packet->begin() + 2) =
@@ -238,15 +251,15 @@ static void CreateStunPacket(std::vector<int8_t>* packet, uint16_t type) {
       base::HostToNet32(kStunMagicCookie);
 }
 
-void CreateStunRequest(std::vector<int8_t>* packet) {
+void CreateStunRequest(std::vector<uint8_t>* packet) {
   CreateStunPacket(packet, kStunBindingRequest);
 }
 
-void CreateStunResponse(std::vector<int8_t>* packet) {
+void CreateStunResponse(std::vector<uint8_t>* packet) {
   CreateStunPacket(packet, kStunBindingResponse);
 }
 
-void CreateStunError(std::vector<int8_t>* packet) {
+void CreateStunError(std::vector<uint8_t>* packet) {
   CreateStunPacket(packet, kStunBindingError);
 }
 

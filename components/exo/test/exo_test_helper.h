@@ -8,6 +8,7 @@
 #include <memory>
 
 #include "base/compiler_specific.h"
+#include "base/memory/raw_ptr.h"
 #include "chromeos/ui/base/window_state_type.h"
 #include "components/exo/client_controlled_shell_surface.h"
 #include "ui/gfx/buffer_types.h"
@@ -40,7 +41,7 @@ class ClientControlledShellSurfaceDelegate
   ClientControlledShellSurfaceDelegate& operator=(
       const ClientControlledShellSurfaceDelegate&) = delete;
 
- private:
+ protected:
   // ClientControlledShellSurface::Delegate:
   void OnGeometryChanged(const gfx::Rect& geometry) override;
   void OnStateChanged(chromeos::WindowStateType old_state_type,
@@ -56,7 +57,7 @@ class ClientControlledShellSurfaceDelegate
   void OnZoomLevelChanged(ZoomChange zoom_change) override;
   void Commit();
 
-  ClientControlledShellSurface* shell_surface_;
+  raw_ptr<ClientControlledShellSurface> shell_surface_;
   bool delay_commit_;
 };
 

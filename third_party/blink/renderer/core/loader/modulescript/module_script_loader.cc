@@ -216,11 +216,6 @@ void ModuleScriptLoader::FetchInternal(
   fetch_params.SetRenderBlockingBehavior(
       module_request.Options().GetRenderBlockingBehavior());
 
-  // [nospec] Unlike defer/async classic scripts, module scripts are fetched at
-  // High priority.
-  fetch_params.MutableResourceRequest().SetPriority(
-      ResourceLoadPriority::kHigh);
-
   // <spec step="12.1">Let source text be the result of UTF-8 decoding
   // response's body.</spec>
   fetch_params.SetDecoderOptions(
@@ -274,6 +269,18 @@ void ModuleScriptLoader::NotifyFetchFinishedSuccess(
   // <spec step="12.2">Set module script to the result of creating a JavaScript
   // module script given source text, module map settings object, response's
   // url, and options.</spec>
+
+  // <spec step="12.6">If referrerPolicy is not the empty string, set options's
+  // referrer policy to referrerPolicy.</spec>
+  //
+  // Note that the "empty string" referrer policy corresponds to `kDefault`, so
+  // we only use the response referrer policy if it is *not* `kDefault`.
+  if (params.ResponseReferrerPolicy() !=
+      network::mojom::ReferrerPolicy::kDefault) {
+    options_.UpdateReferrerPolicyAfterResponseReceived(
+        params.ResponseReferrerPolicy());
+  }
+
   switch (params.GetModuleType()) {
     case ModuleType::kJSON:
       module_script_ = ValueWrapperSyntheticModuleScript::

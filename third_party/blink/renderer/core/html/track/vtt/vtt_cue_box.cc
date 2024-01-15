@@ -34,8 +34,7 @@
 #include "third_party/blink/renderer/core/html/track/text_track_container.h"
 #include "third_party/blink/renderer/core/html/track/vtt/vtt_cue.h"
 #include "third_party/blink/renderer/core/html/track/vtt/vtt_cue_layout_algorithm.h"
-#include "third_party/blink/renderer/core/layout/layout_block_flow.h"
-#include "third_party/blink/renderer/core/layout/layout_object_factory.h"
+#include "third_party/blink/renderer/core/layout/layout_ng_block_flow.h"
 #include "third_party/blink/renderer/core/resize_observer/resize_observer.h"
 #include "third_party/blink/renderer/core/resize_observer/resize_observer_entry.h"
 #include "third_party/blink/renderer/platform/instrumentation/use_counter.h"
@@ -135,26 +134,28 @@ void VTTCueBox::ApplyCSSProperties(
     SetInlineStyleProperty(CSSPropertyID::kTransform,
                            String::Format("translate(-%.2f%%, -%.2f%%)",
                                           position.x(), position.y()));
-    SetInlineStyleProperty(CSSPropertyID::kWhiteSpace, CSSValueID::kPre);
+    // Longhands of `white-space: pre`.
+    SetInlineStyleProperty(CSSPropertyID::kWhiteSpaceCollapse,
+                           CSSValueID::kPreserve);
+    SetInlineStyleProperty(CSSPropertyID::kTextWrap, CSSValueID::kNowrap);
   }
 
   // The snap-to-lines position is propagated to VttCueLayoutAlgorithm.
   snap_to_lines_position_ = display_parameters.snap_to_lines_position;
 }
 
-LayoutObject* VTTCueBox::CreateLayoutObject(const ComputedStyle& style,
-                                            LegacyLayout legacy) {
+LayoutObject* VTTCueBox::CreateLayoutObject(const ComputedStyle& style) {
   // If WebVTT Regions are used, the regular WebVTT layout algorithm is no
   // longer necessary, since cues having the region parameter set do not have
   // any positioning parameters. Also, in this case, the regions themselves
   // have positioning information.
   if (IsInRegion())
-    return HTMLDivElement::CreateLayoutObject(style, legacy);
+    return HTMLDivElement::CreateLayoutObject(style);
 
   // We create a standard block-flow container.
   // See the comment in vtt_cue_layout_algorithm.h about how we adjust
   // VTTCueBox positions.
-  return LayoutObjectFactory::CreateBlockFlow(*this, style, legacy);
+  return MakeGarbageCollected<LayoutNGBlockFlow>(this);
 }
 
 Node::InsertionNotificationRequest VTTCueBox::InsertedInto(

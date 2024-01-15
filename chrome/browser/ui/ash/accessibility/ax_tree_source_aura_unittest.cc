@@ -7,6 +7,7 @@
 #include <memory>
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/test/views/chrome_views_test_base.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -32,13 +33,15 @@ using views::Textfield;
 using views::View;
 using views::Widget;
 
-using AuraAXTreeSerializer = ui::AXTreeSerializer<views::AXAuraObjWrapper*>;
+using AuraAXTreeSerializer =
+    ui::AXTreeSerializer<views::AXAuraObjWrapper*,
+                         std::vector<views::AXAuraObjWrapper*>>;
 
 // Helper to count the number of nodes in a tree.
 size_t GetSize(AXAuraObjWrapper* tree) {
   size_t count = 1;
 
-  std::vector<AXAuraObjWrapper*> out_children;
+  std::vector<raw_ptr<AXAuraObjWrapper, VectorExperimental>> out_children;
   tree->GetChildren(&out_children);
 
   for (size_t i = 0; i < out_children.size(); ++i)
@@ -71,7 +74,7 @@ class AXTreeSourceAuraTest : public ChromeViewsTestBase {
 
     textfield_ = new Textfield();
     textfield_->SetText(u"Value");
-    content_->AddChildView(textfield_);
+    content_->AddChildView(textfield_.get());
     widget_->Show();
   }
 
@@ -82,9 +85,9 @@ class AXTreeSourceAuraTest : public ChromeViewsTestBase {
   }
 
  protected:
-  Widget* widget_;
-  View* content_;
-  Textfield* textfield_;
+  raw_ptr<Widget, DanglingUntriaged> widget_;
+  raw_ptr<View, DanglingUntriaged> content_;
+  raw_ptr<Textfield, DanglingUntriaged> textfield_;
   AXAuraObjCache cache_;
   // A simulated desktop root with no delegate.
   AXRootObjWrapper root_wrapper_{nullptr, &cache_};
@@ -103,17 +106,18 @@ TEST_F(AXTreeSourceAuraTest, Accessors) {
 
   // Grab the content view directly from cache to avoid walking down the tree.
   AXAuraObjWrapper* content = cache_.GetOrCreate(content_);
-  std::vector<AXAuraObjWrapper*> content_children;
-  ax_tree.GetChildren(content, &content_children);
-  ASSERT_EQ(1U, content_children.size());
+  ax_tree.CacheChildrenIfNeeded(content);
+  ASSERT_EQ(1U, ax_tree.GetChildCount(content));
 
   // Walk down to the text field and assert it is what we expect.
-  AXAuraObjWrapper* textfield = content_children[0];
+  AXAuraObjWrapper* textfield = ax_tree.ChildAt(content, 0);
   AXAuraObjWrapper* cached_textfield = cache_.GetOrCreate(textfield_);
   ASSERT_EQ(cached_textfield, textfield);
-  std::vector<AXAuraObjWrapper*> textfield_children;
-  ax_tree.GetChildren(textfield, &textfield_children);
-  ASSERT_EQ(0u, textfield_children.size());
+  ax_tree.CacheChildrenIfNeeded(textfield);
+  ASSERT_EQ(0u, ax_tree.GetChildCount(textfield));
+  ax_tree.ClearChildCache(textfield);
+
+  ax_tree.ClearChildCache(content);
 
   ASSERT_EQ(content, textfield->GetParent());
 
@@ -173,7 +177,7 @@ TEST_F(AXTreeSourceAuraTest, Serialize) {
 
   // Try removing some child views and re-adding which should fire some events.
   content_->RemoveAllChildViewsWithoutDeleting();
-  content_->AddChildView(textfield_);
+  content_->AddChildView(textfield_.get());
 
   // Grab the textfield since serialization only walks up the tree (not down
   // from root).

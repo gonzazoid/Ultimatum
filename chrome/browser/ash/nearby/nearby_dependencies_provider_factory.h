@@ -5,8 +5,8 @@
 #ifndef CHROME_BROWSER_ASH_NEARBY_NEARBY_DEPENDENCIES_PROVIDER_FACTORY_H_
 #define CHROME_BROWSER_ASH_NEARBY_NEARBY_DEPENDENCIES_PROVIDER_FACTORY_H_
 
-#include "base/memory/singleton.h"
-#include "components/keyed_service/content/browser_context_keyed_service_factory.h"
+#include "base/no_destructor.h"
+#include "chrome/browser/profiles/profile_keyed_service_factory.h"
 
 class Profile;
 
@@ -14,8 +14,7 @@ namespace ash::nearby {
 
 class NearbyDependenciesProvider;
 
-class NearbyDependenciesProviderFactory
-    : public BrowserContextKeyedServiceFactory {
+class NearbyDependenciesProviderFactory : public ProfileKeyedServiceFactory {
  public:
   static NearbyDependenciesProvider* GetForProfile(Profile* profile);
 
@@ -27,22 +26,17 @@ class NearbyDependenciesProviderFactory
       const NearbyDependenciesProviderFactory&) = delete;
 
  private:
-  friend struct base::DefaultSingletonTraits<NearbyDependenciesProviderFactory>;
+  friend base::NoDestructor<NearbyDependenciesProviderFactory>;
 
   NearbyDependenciesProviderFactory();
   ~NearbyDependenciesProviderFactory() override;
 
   // BrowserContextKeyedServiceFactory:
-  KeyedService* BuildServiceInstanceFor(
+  std::unique_ptr<KeyedService> BuildServiceInstanceForBrowserContext(
       content::BrowserContext* context) const override;
   bool ServiceIsCreatedWithBrowserContext() const override;
 };
 
 }  // namespace ash::nearby
-
-// TODO(https://crbug.com/1164001): remove after the migration is finished.
-namespace chromeos::nearby {
-using ::ash::nearby::NearbyDependenciesProviderFactory;
-}  // namespace chromeos::nearby
 
 #endif  // CHROME_BROWSER_ASH_NEARBY_NEARBY_DEPENDENCIES_PROVIDER_FACTORY_H_

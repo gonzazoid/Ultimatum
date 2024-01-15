@@ -7,7 +7,6 @@
 
 #include <map>
 #include <memory>
-#include <string>
 #include <utility>
 
 #include "base/callback_list.h"
@@ -16,14 +15,15 @@
 #include "base/scoped_observation.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
-#include "chrome/browser/preloading/chrome_preloading.h"
 #include "chrome/browser/preloading/prefetch/search_prefetch/search_prefetch_request.h"
+#include "chrome/browser/preloading/prefetch/search_prefetch/search_prefetch_url_loader.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "components/omnibox/browser/autocomplete_match.h"
 #include "components/omnibox/browser/omnibox.mojom-shared.h"
 #include "components/search_engines/template_url_data.h"
 #include "components/search_engines/template_url_service.h"
 #include "components/search_engines/template_url_service_observer.h"
+#include "content/public/browser/preloading.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
 
@@ -31,7 +31,6 @@ struct AutocompleteMatch;
 struct OmniboxLog;
 class PrefRegistrySimple;
 class Profile;
-class SearchPrefetchURLLoader;
 class AutocompleteResult;
 
 namespace content {
@@ -45,6 +44,11 @@ struct ResourceRequest;
 // These values are persisted to logs. Entries should not be renumbered and
 // numeric values should never be reused.
 // Any updates to this class need to be propagated to enums.xml.
+
+// If you change this, please follow the process in
+// go/preloading-dashboard-updates to update the mapping reflected in
+// dashboard, or if you are not a Googler, please file an FYI bug on
+// https://crbug.new with component Internals>Preload.
 enum class SearchPrefetchEligibilityReason {
   // The prefetch was started.
   kPrefetchStarted = 0,
@@ -134,29 +138,16 @@ class SearchPrefetchService : public KeyedService,
   void UpdateServeTime(const GURL& navigation_url);
 
   // Takes the response from this object if |url| matches a prefetched URL.
-  std::unique_ptr<SearchPrefetchURLLoader> TakePrefetchResponseFromMemoryCache(
+  SearchPrefetchURLLoader::RequestHandler TakePrefetchResponseFromMemoryCache(
       const network::ResourceRequest& tentative_resource_request);
 
   // Creates a cache loader to serve a cache only response with fallback to
   // network fetch.
-  std::unique_ptr<SearchPrefetchURLLoader> TakePrefetchResponseFromDiskCache(
+  SearchPrefetchURLLoader::RequestHandler TakePrefetchResponseFromDiskCache(
       const GURL& navigation_url);
 
-  // Allows search prerender to use a CacheAliasSearchPrefetchURLLoader for
-  // restore-style navigations.
-  // Called on prerender activation. Search prerender emplaces a new mapping
-  // relationship:
-  // key  : The URL displayed on the location bar, The prerendered
-  // page changes the `prerendering_url` by updating some parameters, so it
-  // differs from `prerendering_url`.
-  // value: The URL sent by the corresponding prefetch request.
-  // TODO(https://crbug.com/1295170): This is a workaround. Remove this method
-  // after the unification work is done.
-  void AddCacheEntryForPrerender(const GURL& updated_prerendered_url,
-                                 const GURL& prerendering_url);
-
   // Called by `SearchPrerenderTask` upon prerender activation.
-  void OnPrerenderedRequestUsed(const std::u16string& search_terms,
+  void OnPrerenderedRequestUsed(const GURL& canonical_search_url,
                                 const GURL& navigation_url);
 
   // A prefetch hint can be upgraded to prerender hint. Once the upgrade
@@ -165,12 +156,19 @@ class SearchPrefetchService : public KeyedService,
   // the prefetched response without removing the response from MemoryCache, to
   // stop this from starting another prefetch attempt after prerender takes the
   // response away.
-  std::unique_ptr<SearchPrefetchURLLoader> TakePrerenderFromMemoryCache(
+  SearchPrefetchURLLoader::RequestHandler TakePrerenderFromMemoryCache(
       const network::ResourceRequest& tentative_resource_request);
 
-  // Reports the status of a prefetch for a given search term.
+  // Creates a response reader if this instance has prefetched a response for
+  // the given `tentative_resource_request`, and the caller can read the
+  // response with the returned value. Returns an empty callback if the response
+  // is not found.
+  SearchPrefetchURLLoader::RequestHandler MaybeCreateResponseReader(
+      const network::ResourceRequest& tentative_resource_request);
+
+  // Reports the status of a prefetch for a given search suggestion URL.
   absl::optional<SearchPrefetchStatus> GetSearchPrefetchStatusForTesting(
-      std::u16string search_terms);
+      const GURL& canonical_search_url);
 
   // Calls |LoadFromPrefs()|.
   bool LoadFromPrefsForTesting();
@@ -186,8 +184,9 @@ class SearchPrefetchService : public KeyedService,
   // |web_contents| represents the active WebContents this prefetch is started
   // which can be nullptr in case no active WebContents is present.
   // |navigation_predictor| indicates the omnibox event type that
-  // indicated a likely navigation.
-  void OnNavigationLikely(
+  // indicated a likely navigation. Returns whether or not a prefetch was
+  // started.
+  bool OnNavigationLikely(
       size_t index,
       const AutocompleteMatch& match,
       omnibox::mojom::NavigationPredictor navigation_predictor,
@@ -196,18 +195,25 @@ class SearchPrefetchService : public KeyedService,
   // If the navigation URL matches with a prefetch that can be served, this
   // function marks that prefetch as clicked to prevent deletion when omnibox
   // closes.
-  void OnURLOpenedFromOmnibox(OmniboxLog* log,
-                              content::WebContents* web_contents);
+  void OnURLOpenedFromOmnibox(OmniboxLog* log);
 
   // Fires all timers.
   void FireAllExpiryTimerForTesting();
 
+  // For a given `canonical_search_url`, tells its corresponding
+  // StreamingSearchPrefetchURLLoader to run the callback upon destruction.
+  void SetLoaderDestructionCallbackForTesting(
+      const GURL& canonical_search_url,
+      base::OnceClosure streaming_url_loader_destruction_callback);
+
  private:
+  friend class PrerenderOmniboxSearchSuggestionBrowserTest;
+
   // Returns whether the prefetch started or not.
   bool MaybePrefetchURL(const GURL& url,
                         bool navigation_prefetch,
                         content::WebContents* web_contents,
-                        ChromePreloadingPredictor predictor);
+                        content::PreloadingPredictor predictor);
 
   // Adds |this| as an observer of |template_url_service| if not added already.
   void ObserveTemplateURLService(TemplateURLService* template_url_service);
@@ -218,7 +224,7 @@ class SearchPrefetchService : public KeyedService,
   // Removes the prefetch and prefetch timers associated with |search_terms|.
   // Note: Always call this method to remove prefetch requests from memory
   // cache; Do not delete it from `prefetches_` directly.
-  void DeletePrefetch(std::u16string search_terms);
+  void DeletePrefetch(GURL canonical_search_url);
 
   // Records metrics around the error rate of prefetches. When |error| is true,
   // records the current time to prevent prefetches for a set duration.
@@ -233,7 +239,7 @@ class SearchPrefetchService : public KeyedService,
   void SaveToPrefs() const;
 
   // Retrieved the started prefetches by search_terms.
-  std::map<std::u16string, std::unique_ptr<SearchPrefetchRequest>>::iterator
+  std::map<GURL, std::unique_ptr<SearchPrefetchRequest>>::iterator
   RetrieveSearchTermsInMemoryCache(
       const network::ResourceRequest& tentative_resource_request,
       SearchPrefetchServingReasonRecorder& recorder);
@@ -247,16 +253,15 @@ class SearchPrefetchService : public KeyedService,
   void CoordinatePrefetchWithPrerender(const AutocompleteMatch& match,
                                        content::WebContents* web_contents,
                                        TemplateURLService* template_url_service,
-                                       std::u16string search_terms);
+                                       const GURL& canonical_search_url);
 
   // Prefetches that are started are stored using search terms as a key. Only
   // one prefetch should be started for a given search term until the old
   // prefetch expires.
-  std::map<std::u16string, std::unique_ptr<SearchPrefetchRequest>> prefetches_;
+  std::map<GURL, std::unique_ptr<SearchPrefetchRequest>> prefetches_;
 
   // A group of timers to expire |prefetches_| based on the same key.
-  std::map<std::u16string, std::unique_ptr<base::OneShotTimer>>
-      prefetch_expiry_timers_;
+  std::map<GURL, std::unique_ptr<base::OneShotTimer>> prefetch_expiry_timers_;
 
   // The time of the last prefetch network/server error.
   base::TimeTicks last_error_time_ticks_;

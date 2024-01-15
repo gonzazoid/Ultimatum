@@ -4,9 +4,7 @@
 
 #include "chrome/browser/enterprise/connectors/enterprise_connectors_policy_handler.h"
 
-#include "base/feature_list.h"
 #include "base/values.h"
-#include "chrome/browser/enterprise/connectors/analysis/content_analysis_features.h"
 #include "chrome/browser/enterprise/connectors/connectors_prefs.h"
 #include "chrome/browser/enterprise/connectors/service_provider_config.h"
 #include "components/policy/core/browser/policy_error_map.h"
@@ -17,58 +15,6 @@
 #include "components/strings/grit/components_strings.h"
 
 namespace enterprise_connectors {
-
-namespace {
-
-bool IsContentAnalysisPref(const char* pref) {
-  return pref == kOnFileAttachedPref || pref == kOnFileDownloadedPref ||
-         pref == kOnBulkDataEntryPref || pref == kOnPrintPref;
-}
-
-bool CanUseNonCloudPolicySource(const char* pref,
-                                const policy::PolicyMap::Entry* policy) {
-  DCHECK(policy);
-  if (!base::FeatureList::IsEnabled(kLocalContentAnalysisEnabled))
-    return false;
-
-  // Only content analysis policies with a LCA provider are exempt from using
-  // cloud policies.
-  if (!IsContentAnalysisPref(pref))
-    return false;
-
-  const base::Value* value = policy->value_unsafe();
-  if (!value)
-    return false;
-
-  // Content analysis policies have the following format:
-  // [
-  //   {
-  //     "service_provider": "foo",
-  //     "other_param_1": { ... },
-  //     "other_param_2": { ... },
-  //   },
-  // ]
-  //
-  // So we simply need to validate that the service provider is valid for LCA.
-  if (!value->is_list() || value->GetList().empty())
-    return false;
-
-  const base::Value::List& configs = value->GetList();
-  if (!configs[0].is_dict() ||
-      !configs[0].GetDict().FindString("service_provider")) {
-    return false;
-  }
-
-  const std::string* service_provider =
-      configs[0].GetDict().FindString("service_provider");
-  const ServiceProviderConfig* service_providers = GetServiceProviderConfig();
-
-  return service_providers->count(*service_provider) &&
-         service_providers->at(*service_provider).analysis &&
-         service_providers->at(*service_provider).analysis->local_path;
-}
-
-}  // namespace
 
 EnterpriseConnectorsPolicyHandler::EnterpriseConnectorsPolicyHandler(
     const char* policy_name,
@@ -84,7 +30,7 @@ EnterpriseConnectorsPolicyHandler::EnterpriseConnectorsPolicyHandler(
     const char* pref_path,
     const char* pref_scope_path,
     policy::Schema schema)
-    : SchemaValidatingPolicyHandler(
+    : policy::CloudOnlyPolicyHandler(
           policy_name,
           schema.GetKnownProperty(policy_name),
           policy::SchemaOnErrorStrategy::SCHEMA_ALLOW_UNKNOWN),
@@ -93,24 +39,6 @@ EnterpriseConnectorsPolicyHandler::EnterpriseConnectorsPolicyHandler(
 
 EnterpriseConnectorsPolicyHandler::~EnterpriseConnectorsPolicyHandler() =
     default;
-
-bool EnterpriseConnectorsPolicyHandler::CheckPolicySettings(
-    const policy::PolicyMap& policies,
-    policy::PolicyErrorMap* errors) {
-  const policy::PolicyMap::Entry* policy = policies.Get(policy_name());
-
-  if (!policy)
-    return true;
-
-  if (!CanUseNonCloudPolicySource(pref_path_, policy) &&
-      policy->source != policy::POLICY_SOURCE_CLOUD &&
-      policy->source != policy::POLICY_SOURCE_CLOUD_FROM_ASH) {
-    errors->AddError(policy_name(), IDS_POLICY_CLOUD_SOURCE_ONLY_ERROR);
-    return false;
-  }
-
-  return SchemaValidatingPolicyHandler::CheckPolicySettings(policies, errors);
-}
 
 void EnterpriseConnectorsPolicyHandler::ApplyPolicySettings(
     const policy::PolicyMap& policies,

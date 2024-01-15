@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "base/memory/weak_ptr.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
 #include "google_apis/gcm/engine/connection_handler.h"
@@ -28,9 +29,9 @@ class GCM_EXPORT ConnectionHandlerImpl : public ConnectionHandler {
  public:
   // Must be called on |io_task_runner|.
   // |io_task_runner|: for running IO tasks. When provided, it could be a
-  //     wrapper on top of base::ThreadTaskRunnerHandle::Get() to provide power
-  //     management featueres so that a delayed task posted to it can wake the
-  //     system up from sleep to perform the task.
+  //     wrapper on top of base::SingleThreadTaskRunner::GetCurrentDefault() to
+  //     provide power management featueres so that a delayed task posted to it
+  //     can wake the system up from sleep to perform the task.
   // |read_callback| will be invoked with the contents of any received protobuf
   // message.
   // |write_callback| will be invoked anytime a message has been successfully

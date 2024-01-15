@@ -24,9 +24,9 @@
 #include "third_party/blink/renderer/core/dom/node_computed_style.h"
 #include "third_party/blink/renderer/core/dom/shadow_root.h"
 #include "third_party/blink/renderer/core/frame/web_feature.h"
-#include "third_party/blink/renderer/core/html/html_div_element.h"
 #include "third_party/blink/renderer/core/html/html_slot_element.h"
 #include "third_party/blink/renderer/core/html/parser/html_parser_idioms.h"
+#include "third_party/blink/renderer/core/html/shadow/meter_shadow_element.h"
 #include "third_party/blink/renderer/core/html/shadow/shadow_element_names.h"
 #include "third_party/blink/renderer/core/html_names.h"
 #include "third_party/blink/renderer/core/style/computed_style.h"
@@ -45,8 +45,7 @@ HTMLMeterElement::HTMLMeterElement(Document& document)
 
 HTMLMeterElement::~HTMLMeterElement() = default;
 
-LayoutObject* HTMLMeterElement::CreateLayoutObject(const ComputedStyle& style,
-                                                   LegacyLayout legacy) {
+LayoutObject* HTMLMeterElement::CreateLayoutObject(const ComputedStyle& style) {
   switch (style.EffectiveAppearance()) {
     case kMeterPart:
       UseCounter::Count(GetDocument(),
@@ -59,7 +58,7 @@ LayoutObject* HTMLMeterElement::CreateLayoutObject(const ComputedStyle& style,
     default:
       break;
   }
-  return HTMLElement::CreateLayoutObject(style, legacy);
+  return HTMLElement::CreateLayoutObject(style);
 }
 
 void HTMLMeterElement::ParseAttribute(
@@ -177,20 +176,20 @@ void HTMLMeterElement::DidElementStateChange() {
 void HTMLMeterElement::DidAddUserAgentShadowRoot(ShadowRoot& root) {
   DCHECK(!value_);
 
-  auto* inner = MakeGarbageCollected<HTMLDivElement>(GetDocument());
+  auto* inner = MakeGarbageCollected<MeterShadowElement>(GetDocument());
   inner->SetShadowPseudoId(shadow_element_names::kPseudoMeterInnerElement);
   root.AppendChild(inner);
 
-  auto* bar = MakeGarbageCollected<HTMLDivElement>(GetDocument());
+  auto* bar = MakeGarbageCollected<MeterShadowElement>(GetDocument());
   bar->SetShadowPseudoId(AtomicString("-webkit-meter-bar"));
 
-  value_ = MakeGarbageCollected<HTMLDivElement>(GetDocument());
+  value_ = MakeGarbageCollected<MeterShadowElement>(GetDocument());
   UpdateValueAppearance(0);
   bar->AppendChild(value_);
 
   inner->AppendChild(bar);
 
-  auto* fallback = MakeGarbageCollected<HTMLDivElement>(GetDocument());
+  auto* fallback = MakeGarbageCollected<MeterShadowElement>(GetDocument());
   fallback->AppendChild(MakeGarbageCollected<HTMLSlotElement>(GetDocument()));
   fallback->SetShadowPseudoId(AtomicString("-internal-fallback"));
   root.AppendChild(fallback);
@@ -204,7 +203,9 @@ void HTMLMeterElement::UpdateValueAppearance(double percentage) {
   DEFINE_STATIC_LOCAL(AtomicString, even_less_good_pseudo_id,
                       ("-webkit-meter-even-less-good-value"));
 
-  value_->SetInlineStyleProperty(CSSPropertyID::kWidth, percentage,
+  value_->SetInlineStyleProperty(CSSPropertyID::kInlineSize, percentage,
+                                 CSSPrimitiveValue::UnitType::kPercentage);
+  value_->SetInlineStyleProperty(CSSPropertyID::kBlockSize, 100,
                                  CSSPrimitiveValue::UnitType::kPercentage);
   switch (GetGaugeRegion()) {
     case kGaugeRegionOptimum:

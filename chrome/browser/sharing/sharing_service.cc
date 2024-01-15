@@ -4,8 +4,8 @@
 
 #include "chrome/browser/sharing/sharing_service.h"
 
-#include "base/bind.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/time/time.h"
 #include "chrome/browser/sharing/features.h"
 #include "chrome/browser/sharing/sharing_constants.h"
@@ -16,10 +16,10 @@
 #include "chrome/browser/sharing/sharing_message_handler.h"
 #include "chrome/browser/sharing/sharing_metrics.h"
 #include "chrome/browser/sharing/sharing_sync_preference.h"
+#include "chrome/browser/sharing/sharing_target_device_info.h"
 #include "chrome/browser/sharing/sharing_utils.h"
 #include "chrome/browser/sharing/vapid_key_manager.h"
-#include "components/sync/driver/sync_service.h"
-#include "components/sync_device_info/device_info.h"
+#include "components/sync/service/sync_service.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
 
@@ -63,7 +63,7 @@ SharingService::~SharingService() {
     sync_service_->RemoveObserver(this);
 }
 
-std::unique_ptr<syncer::DeviceInfo> SharingService::GetDeviceByGuid(
+std::unique_ptr<SharingTargetDeviceInfo> SharingService::GetDeviceByGuid(
     const std::string& guid) const {
   return device_source_->GetDeviceByGuid(guid);
 }
@@ -74,7 +74,7 @@ SharingService::SharingDeviceList SharingService::GetDeviceCandidates(
 }
 
 base::OnceClosure SharingService::SendMessageToDevice(
-    const syncer::DeviceInfo& device,
+    const SharingTargetDeviceInfo& device,
     base::TimeDelta response_timeout,
     chrome_browser_sharing::SharingMessage message,
     SharingMessageSender::ResponseCallback callback) {
@@ -181,7 +181,6 @@ void SharingService::UnregisterDevice() {
 
 void SharingService::OnDeviceRegistered(
     SharingDeviceRegistrationResult result) {
-  LogSharingRegistrationResult(result);
   switch (result) {
     case SharingDeviceRegistrationResult::kSuccess:
       backoff_entry_.InformOfRequest(true);
@@ -229,7 +228,6 @@ void SharingService::OnDeviceRegistered(
 
 void SharingService::OnDeviceUnregistered(
     SharingDeviceRegistrationResult result) {
-  LogSharingUnregistrationResult(result);
   if (IsSyncEnabledForSharing(sync_service_)) {
     // In case sync is enabled during un-registration, register it.
     state_ = State::REGISTERING;

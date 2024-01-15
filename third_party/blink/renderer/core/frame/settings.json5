@@ -170,8 +170,9 @@
     },
 
     {
-      name: "preferCompositingToLCDTextEnabled",
-      initial: false,
+      name: "LCDTextPreference",
+      type: "LCDTextPreference",
+      initial: "LCDTextPreference::kStronglyPreferred",
       invalidate: ["AcceleratedCompositing"],
     },
 
@@ -237,22 +238,12 @@
     {
       name: "immersiveModeEnabled",
       initial: false,
-      invalidate: ["MediaControls"],
     },
 
     // Only affects main thread scrolling
     {
       name: "scrollAnimatorEnabled",
       initial: true,
-    },
-
-    // Used to disable threaded, compositor scrolling for testing purposes.
-    // crbug.com/410974 tracks removal once alternative solutions for selective
-    // main thread scrolling are supported.
-    {
-      name: "threadedScrollingEnabled",
-      initial: true,
-      invalidate: ["Style", "ViewportPaintProperties"],
     },
 
     // Used in web tests for gesture tap highlights. Makes the highlights square
@@ -330,7 +321,6 @@
     {
       name: "spatialNavigationEnabled",
       initial: false,
-      invalidate: ["SpatialNavigation"],
     },
 
     // This setting adds a means to enable/disable touch initiated drag & drop. If
@@ -376,11 +366,6 @@
     },
 
     //////////////// Settings used by Android WebView below ////////////////
-
-    {
-      name: "useLegacyBackgroundSizeShorthandBehavior",
-      initial: false,
-    },
 
     // This quirk is to maintain compatibility with Android apps built on
     // the Android SDK prior to and including version 18.
@@ -493,6 +478,20 @@
       type: "double",
     },
 
+    // Font weight adjustment for accessibility, set at OS-level.
+    {
+      name: "accessibilityFontWeightAdjustment",
+      initial: "0",
+      type: "int",
+    },
+
+    // Text size contrast factor for accessibility, applied as part of page zoom.
+    {
+      name: "accessibilityTextSizeContrastFactor",
+      initial: "0",
+      type: "int",
+    },
+
     // Only used by web tests and inspector emulation.
     {
       name: "mediaTypeOverride",
@@ -505,6 +504,22 @@
       initial: "blink::mojom::DisplayMode::kUndefined",
       invalidate: ["MediaQuery"],
       type: "blink::mojom::DisplayMode",
+    },
+
+    // Only used by web tests.
+    {
+      name: "windowShowState",
+      initial: "ui::WindowShowState::SHOW_STATE_DEFAULT",
+      invalidate: ["MediaQuery"],
+      type: "ui::WindowShowState",
+    },
+
+    // Only used by web tests.
+    {
+      name: "resizable",
+      initial: true,
+      invalidate: ["MediaQuery"],
+      type: "bool",
     },
 
     // loadsImagesAutomatically only suppresses the network load of
@@ -570,6 +585,7 @@
     {
       name: "scriptEnabled",
       initial: false,
+      invalidate: ["MediaQuery"],
     },
 
     {
@@ -666,15 +682,20 @@
       type: "mojom::blink::HoverType",
     },
 
+    // The ability of the output device to modify the appearance of content once
+    // it has been rendered:
+    // kSlowType: E-ink screens or severely under-powered devices.
+    // kFastType: Computer screens.
+    {
+      name: "outputDeviceUpdateAbilityType",
+      initial: "mojom::blink::OutputDeviceUpdateAbilityType::kFastType",
+      invalidate: ["MediaQuery"],
+      type: "mojom::blink::OutputDeviceUpdateAbilityType",
+    },
+
     // If true, the value in password fields is exposed to assistive technologies.
     {
       name: "accessibilityPasswordValuesEnabled",
-      initial: false,
-    },
-
-    // If true, static text nodes expose inline text box children.
-    {
-      name: "inlineTextBoxAccessibilityEnabled",
       initial: false,
     },
 
@@ -878,6 +899,21 @@
       initial: "AutoplayPolicy::Type::kNoUserGestureRequired",
     },
 
+    // `getDisplayMedia()`'s transient activation requirement can be bypassed via
+    // `ScreenCaptureWithoutGestureAllowedForOrigins` policy.
+    {
+      name: "requireTransientActivationForGetDisplayMedia",
+      initial: true,
+    },
+
+    // `show{OpenFile|SaveFile|Directory}Picker()`'s transient activation
+    // requirement can be bypassed via
+    // `FileOrDirectoryPickerWithoutGestureAllowedForOrigins` policy.
+    {
+      name: "requireTransientActivationForShowFileOrDirectoryPicker",
+      initial: true,
+    },
+
     //
     // Dark mode
     //
@@ -940,35 +976,35 @@
     },
 
     //
-    // Lazy image loading distance-from-viewport thresholds for different effective connection types.
+    // Lazy loading image margins for different effective connection types.
     //
     {
-      name: "lazyImageLoadingDistanceThresholdPxUnknown",
+      name: "lazyLoadingImageMarginPxUnknown",
       initial: 3000,
       type: "int",
     },
     {
-      name: "lazyImageLoadingDistanceThresholdPxOffline",
+      name: "lazyLoadingImageMarginPxOffline",
       initial: 8000,
       type: "int",
     },
     {
-      name: "lazyImageLoadingDistanceThresholdPxSlow2G",
+      name: "lazyLoadingImageMarginPxSlow2G",
       initial: 8000,
       type: "int",
     },
     {
-      name: "lazyImageLoadingDistanceThresholdPx2G",
+      name: "lazyLoadingImageMarginPx2G",
       initial: 6000,
       type: "int",
     },
     {
-      name: "lazyImageLoadingDistanceThresholdPx3G",
+      name: "lazyLoadingImageMarginPx3G",
       initial: 2500,
       type: "int",
     },
     {
-      name: "lazyImageLoadingDistanceThresholdPx4G",
+      name: "lazyLoadingImageMarginPx4G",
       initial: 1250,
       type: "int",
     },
@@ -995,6 +1031,22 @@
     // renderer for evaluating the prefers-reduced-motion media query.
     {
       name: "prefersReducedMotion",
+      initial: false,
+      invalidate: ["MediaQuery"],
+    },
+
+    // Preferred transparency-reduction setting from the OS/application passed to the
+    // renderer for evaluating the prefers-reduced-transparency media query.
+    {
+      name: "prefersReducedTransparency",
+      initial: false,
+      invalidate: ["MediaQuery"],
+    },
+
+    // inverted-colors setting from the OS/application passed to the
+    // renderer for evaluating the inverted-colors media query.
+    {
+      name: "invertedColors",
       initial: false,
       invalidate: ["MediaQuery"],
     },
@@ -1064,6 +1116,15 @@
       name: "modalContextMenu",
       initial: true,
       type: "bool",
-    }
+    },
+    {
+      // This number determines how small we are willing to reduce the page
+      // content in order to accommodate the widest piece of content. If the
+      // page would have to be reduced smaller to make the widest line fit, we
+      // just clip instead.
+      name: "printingMaximumShrinkFactor",
+      initial: 1.5,
+      type: "float",
+    },
   ],
 }

@@ -4,8 +4,9 @@
 
 package org.chromium.content.browser.fakes;
 
-import org.chromium.base.annotations.CalledByNative;
-import org.chromium.base.annotations.JNINamespace;
+import org.jni_zero.CalledByNative;
+import org.jni_zero.JNINamespace;
+
 import org.chromium.ui.base.ViewAndroidDelegate;
 
 /**
@@ -17,9 +18,7 @@ class TestViewAndroidDelegate extends ViewAndroidDelegate {
     /** Stores the Visual Viewport bottom inset when under test, just like the real one. */
     private int mApplicationViewportInsetBottomPx;
 
-    /**
-     * Private constructor called by the create method from native.
-     */
+    /** Private constructor called by the create method from native. */
     private TestViewAndroidDelegate() {
         super(null);
     }

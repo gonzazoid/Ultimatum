@@ -2,90 +2,108 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {ENTRIES, EntryType, RootPath, TestEntryInfo} from '../test_util.js';
+import {addEntries, ENTRIES, EntryType, getCaller, pending, repeatUntil, RootPath, sendTestMessage, TestEntryInfo} from '../test_util.js';
 import {testcase} from '../testcase.js';
 
-import {navigateWithDirectoryTree, recursiveExpand, remoteCall, setupAndWaitUntilReady} from './background.js';
+import {remoteCall, setupAndWaitUntilReady} from './background.js';
+import {DirectoryTreePageObject} from './page_objects/directory_tree.js';
 import {BASIC_LOCAL_ENTRY_SET} from './test_data.js';
 
 /**
- * Tests that when the current folder is changed, the 'active' attribute
- * appears in the active folder .tree-row.
+ * Tests that when the current folder is changed, the 'selected' attribute
+ * appears in the selected folder .tree-row and the "Current directory" aria
+ * description is present on the corresponding tree item.
  */
 testcase.directoryTreeActiveDirectory = async () => {
-  const activeRow = '.tree-row[selected][active]';
-
   // Open FilesApp on Downloads.
   const appId = await setupAndWaitUntilReady(RootPath.DOWNLOADS);
+  const directoryTree = await DirectoryTreePageObject.create(appId, remoteCall);
 
   // Change to My files folder.
-  await navigateWithDirectoryTree(appId, '/My files');
+  await directoryTree.navigateToPath('/My files');
 
-  // Check: the My files folder should be the active tree row.
-  const myFiles = await remoteCall.waitForElement(appId, activeRow);
-  chrome.test.assertTrue(myFiles.text.includes('My files'));
+  // Check: the My files folder should be the selected tree row.
+  await directoryTree.waitForSelectedItemByLabel('My files');
+  // Check: the corresponding tree item should be focused and have the "Current
+  // directory" aria description.
+  await directoryTree.waitForFocusedItemByLabel('My files');
+  await directoryTree.waitForCurrentDirectoryItemByLabel('My files');
 
   // Change to Downloads folder.
-  await navigateWithDirectoryTree(appId, '/My files/Downloads');
+  await directoryTree.navigateToPath('/My files/Downloads');
 
-  // Check: the Downloads folder should be the active tree row.
-  const downloads = await remoteCall.waitForElement(appId, activeRow);
-  chrome.test.assertTrue(downloads.text.includes('Downloads'));
+  // Check: the Downloads folder should be the selected tree row.
+  await directoryTree.waitForSelectedItemByLabel('Downloads');
+  // Check: the corresponding tree item should be focused and have the "Current
+  // directory" aria description.
+  await directoryTree.waitForFocusedItemByLabel('Downloads');
+  await directoryTree.waitForCurrentDirectoryItemByLabel('Downloads');
 
   // Change to Google Drive volume's My Drive folder.
-  await navigateWithDirectoryTree(appId, '/My Drive');
+  await directoryTree.navigateToPath('/My Drive');
 
-  // Check: the My Drive folder should be the active tree row.
-  const myDrive = await remoteCall.waitForElement(appId, activeRow);
-  chrome.test.assertTrue(myDrive.text.includes('My Drive'));
+  // Check: the My Drive folder should be the selected tree row.
+  await directoryTree.waitForSelectedItemByLabel('My Drive');
+  // Check: the corresponding tree item should be focused and have the "Current
+  // directory" aria description.
+  await directoryTree.waitForFocusedItemByLabel('My Drive');
+  await directoryTree.waitForCurrentDirectoryItemByLabel('My Drive');
 
   // Change to Recent folder.
-  await navigateWithDirectoryTree(appId, '/Recent');
+  await directoryTree.navigateToPath('/Recent');
 
-  // Check: the Recent folder should be the active tree row.
-  const recent = await remoteCall.waitForElement(appId, activeRow);
-  chrome.test.assertTrue(recent.text.includes('Recent'));
+  // Check: the Recent folder should be the selected tree row.
+  await directoryTree.waitForSelectedItemByLabel('Recent');
+  // Check: the corresponding tree item should be focused and have the "Current
+  // directory" aria description.
+  await directoryTree.waitForFocusedItemByLabel('Recent');
+  await directoryTree.waitForCurrentDirectoryItemByLabel('Recent');
 };
 
 /**
- * Tests that the active folder does not change when the directory tree
- * selected folder is changed, but does change when the selected folder
- * is activated (via the Enter key for example).
+ * Tests that when the selected folder in the directory tree changes, the
+ * selected folder and the tree item that has the "Current directory" aria
+ * description do not change. Also tests that when the focused folder is
+ * activated (via the Enter key for example), both the selected folder and the
+ * tree item with a "Current directory" aria description are updated.
  */
 testcase.directoryTreeSelectedDirectory = async () => {
   // Open FilesApp on Downloads.
   const appId = await setupAndWaitUntilReady(RootPath.DOWNLOADS);
+  const directoryTree = await DirectoryTreePageObject.create(appId, remoteCall);
 
   // Change to My files folder.
-  await navigateWithDirectoryTree(appId, '/My files');
+  await directoryTree.navigateToPath('/My files');
 
-  // Check: the My files folder should be [selected] and [active].
-  const selectedActiveRow = '.tree-row[selected][active]';
-  let treeRow = await remoteCall.waitForElement(appId, selectedActiveRow);
-  chrome.test.assertTrue(treeRow.text.includes('My files'));
+  // Check: the My files folder should be selected.
+  await directoryTree.waitForSelectedItemByLabel('My files');
+  // Check: the corresponding tree item should be focused and have the "Current
+  // directory" aria description.
+  await directoryTree.waitForFocusedItemByLabel('My files');
+  await directoryTree.waitForCurrentDirectoryItemByLabel('My files');
 
-  // Send ArrowUp key to change the selected folder.
-  const arrowUp = ['#directory-tree', 'ArrowUp', false, false, false];
-  await remoteCall.callRemoteTestUtil('fakeKeyDown', appId, arrowUp);
+  // Send ArrowUp key to change the focused folder.
+  await directoryTree.focusPreviousItem();
 
-  // Check: no folder should be [selected] and [active].
-  await remoteCall.waitForElementLost(appId, selectedActiveRow);
+  await directoryTree.waitForFocusedItemByLabel('Recent');
+  // Check: the My files folder should be selected.
+  await directoryTree.waitForSelectedItemByLabel('My files');
+  // Check: the corresponding tree item should have the "Current directory" aria
+  // description.
+  await directoryTree.waitForCurrentDirectoryItemByLabel('My files');
 
-  // Check: the My files folder should be [active].
-  treeRow = await remoteCall.waitForElement(appId, '.tree-row[active]');
-  chrome.test.assertTrue(treeRow.text.includes('My files'));
+  // Check: the Recent Media View folder should be focused.
+  await directoryTree.waitForFocusedItemByLabel('Recent');
 
-  // Check: the Recent Media View folder should be [selected].
-  treeRow = await remoteCall.waitForElement(appId, '.tree-row[selected]');
-  chrome.test.assertTrue(treeRow.text.includes('Recent'));
+  // Send Enter key to activate the focused folder.
+  await directoryTree.selectFocusedItem();
 
-  // Send Enter key to activate the selected folder.
-  const enter = ['#directory-tree', 'Enter', false, false, false];
-  await remoteCall.callRemoteTestUtil('fakeKeyDown', appId, enter);
-
-  // Check: the Recent folder should be [selected] and [active].
-  treeRow = await remoteCall.waitForElement(appId, selectedActiveRow);
-  chrome.test.assertTrue(treeRow.text.includes('Recent'));
+  // Check: the Recent folder should be focused and selected.
+  await directoryTree.waitForSelectedItemByLabel('Recent');
+  // Check: the corresponding tree item should be focused and have the "Current
+  // directory" aria description.
+  await directoryTree.waitForFocusedItemByLabel('Recent');
+  await directoryTree.waitForCurrentDirectoryItemByLabel('Recent');
 };
 
 /**
@@ -108,21 +126,21 @@ testcase.directoryTreeVerticalScroll = async () => {
 
   // Open FilesApp on Downloads and expand the tree view of Downloads.
   const appId = await setupAndWaitUntilReady(RootPath.DOWNLOADS, folders, []);
-  await recursiveExpand(appId, '/My files/Downloads');
+  const directoryTree = await DirectoryTreePageObject.create(appId, remoteCall);
+  await directoryTree.recursiveExpand('/My files/Downloads');
 
   // Verify the directory tree is not vertically scrolled.
-  const directoryTree = '#directory-tree';
   const original = await remoteCall.waitForElementStyles(
-      appId, directoryTree, ['scrollTop']);
+      appId, directoryTree.rootSelector, ['scrollTop']);
   chrome.test.assertTrue(original.scrollTop === 0);
 
   // Scroll the directory tree down (vertical scroll).
   await remoteCall.callRemoteTestUtil(
-      'setScrollTop', appId, [directoryTree, 100]);
+      'setScrollTop', appId, [directoryTree.rootSelector, 100]);
 
   // Check: the directory tree should be vertically scrolled.
   const scrolled = await remoteCall.waitForElementStyles(
-      appId, directoryTree, ['scrollTop']);
+      appId, directoryTree.rootSelector, ['scrollTop']);
   const scrolledDown = scrolled.scrollTop === 100;
   chrome.test.assertTrue(scrolledDown, 'Tree should scroll down');
 };
@@ -134,60 +152,32 @@ testcase.directoryTreeHorizontalScroll = async () => {
   // Open FilesApp on Downloads and expand the tree view of Downloads.
   const appId = await setupAndWaitUntilReady(
       RootPath.DOWNLOADS, BASIC_LOCAL_ENTRY_SET, []);
-  await recursiveExpand(appId, '/My files/Downloads');
+  const directoryTree = await DirectoryTreePageObject.create(appId, remoteCall);
+  await directoryTree.recursiveExpand('/My files/Downloads');
 
   // Verify the directory tree is not horizontally scrolled.
-  const directoryTree = '#directory-tree';
   const original = await remoteCall.waitForElementStyles(
-      appId, directoryTree, ['scrollLeft']);
+      appId, directoryTree.rootSelector, ['scrollLeft']);
   chrome.test.assertTrue(original.scrollLeft === 0);
 
-  // Shrink the tree to 50px. TODO(files-ng): consider using 150px?
-  const navigationList = '.dialog-navigation-list';
+  // Shrink the tree to 50px.
   await remoteCall.callRemoteTestUtil(
-      'setElementStyles', appId, [navigationList, {width: '50px'}]);
+      'setElementStyles', appId,
+      [directoryTree.containerSelector, {width: '50px'}]);
 
   // Scroll the directory tree left (horizontal scroll).
   await remoteCall.callRemoteTestUtil(
-      'setScrollLeft', appId, [directoryTree, 100]);
+      'setScrollLeft', appId, [directoryTree.rootSelector, 100]);
 
   // Check: the directory tree should not be horizontally scrolled.
-  const scrolled = await remoteCall.waitForElementStyles(
-      appId, directoryTree, ['scrollLeft']);
-  const noScrollLeft = scrolled.scrollLeft === 0;
-  chrome.test.assertTrue(noScrollLeft, 'Tree should not scroll left');
-};
-
-/**
- * Tests that clicking a directory tree recent subtype {audio,image,video}
- * tab does not vertically scroll the tree.
- */
-testcase.directoryTreeRecentsSubtypeScroll = async () => {
-  // Open FilesApp on Downloads.
-  const appId = await setupAndWaitUntilReady(
-      RootPath.DOWNLOADS, BASIC_LOCAL_ENTRY_SET, []);
-
-  // Set window height to 400px so the tree has a vertical scroll bar.
-  await remoteCall.callRemoteTestUtil('resizeWindow', appId, [680, 400]);
-  await remoteCall.waitForWindowGeometry(appId, 680, 400);
-
-  // Wait for the recent image tab and save its element properties.
-  const recentQuery =
-      '#directory-tree [root-type-icon="recent"][recent-file-type="image"]';
-  const savedElement =
-      await remoteCall.waitForElementStyles(appId, recentQuery, ['display']);
-  chrome.test.assertTrue(savedElement.renderedTop > 0);
-
-  // Click recent image tab and wait for its file-list content to appear.
-  await remoteCall.waitAndClickElement(appId, recentQuery);
-  const file = TestEntryInfo.getExpectedRows([ENTRIES.desktop]);
-  await remoteCall.waitForFiles(appId, file, {ignoreLastModifiedTime: true});
-
-  // Check: the recent image tab element.renderedTop should not change.
-  const resultElement =
-      await remoteCall.waitForElementStyles(appId, recentQuery, ['display']);
-  const notScrolled = savedElement.renderedTop === resultElement.renderedTop;
-  chrome.test.assertTrue(notScrolled, 'Tree should not vertically scroll');
+  const caller = getCaller();
+  await repeatUntil(async () => {
+    const scrolled = await remoteCall.waitForElementStyles(
+        appId, directoryTree.rootSelector, ['scrollLeft']);
+    if (scrolled.scrollLeft !== 0) {
+      return pending(caller, 'Tree should not scroll left');
+    }
+  });
 };
 
 /**
@@ -222,26 +212,25 @@ testcase.directoryTreeExpandHorizontalScroll = async () => {
   // Open FilesApp on Downloads containing the folder test entries.
   const appId = await setupAndWaitUntilReady(
       RootPath.DOWNLOADS, nestedFolderTestEntries, []);
+  const directoryTree = await DirectoryTreePageObject.create(appId, remoteCall);
 
   // Verify the directory tree is not horizontally scrolled.
-  const directoryTree = '#directory-tree';
   const original = await remoteCall.waitForElementStyles(
-      appId, directoryTree, ['scrollLeft']);
+      appId, directoryTree.rootSelector, ['scrollLeft']);
   chrome.test.assertTrue(original.scrollLeft === 0);
 
   // Shrink the tree to 150px, enough to hide the deep folder names.
-  const navigationList = '.dialog-navigation-list';
   await remoteCall.callRemoteTestUtil(
-      'setElementStyles', appId, [navigationList, {width: '150px'}]);
+      'setElementStyles', appId,
+      [directoryTree.containerSelector, {width: '150px'}]);
 
   // Expand the tree Downloads > nested-folder1 > nested-folder2 ...
   const lastFolderPath = nestedFolderTestEntries.pop().targetPath;
-  await navigateWithDirectoryTree(
-      appId, `/My files/Downloads/${lastFolderPath}`);
+  await directoryTree.navigateToPath(`/My files/Downloads/${lastFolderPath}`);
 
   // Check: the directory tree should be showing the last test entry.
-  await remoteCall.waitForElement(
-      appId, '.tree-item[entry-label="nested-folder5"]:not([hidden])');
+  const folder5Item = await directoryTree.waitForItemByLabel('nested-folder5');
+  chrome.test.assertFalse(!!folder5Item.attributes.hidden);
 
   // Ensure the directory tree scroll event handling is complete.
   chrome.test.assertTrue(
@@ -249,7 +238,7 @@ testcase.directoryTreeExpandHorizontalScroll = async () => {
 
   // Check: the directory tree should not be horizontally scrolled.
   const scrolled = await remoteCall.waitForElementStyles(
-      appId, directoryTree, ['scrollLeft']);
+      appId, directoryTree.rootSelector, ['scrollLeft']);
   const notScrolled = scrolled.scrollLeft === 0;
   chrome.test.assertTrue(notScrolled, 'Tree should not scroll left');
 };
@@ -286,37 +275,36 @@ testcase.directoryTreeExpandHorizontalScrollRTL = async () => {
   // Open FilesApp on Downloads containing the folder test entries.
   const appId = await setupAndWaitUntilReady(
       RootPath.DOWNLOADS, nestedFolderTestEntries, []);
+  const directoryTree = await DirectoryTreePageObject.create(appId, remoteCall);
 
   // Redraw FilesApp with text direction RTL.
   chrome.test.assertTrue(await remoteCall.callRemoteTestUtil(
       'renderWindowTextDirectionRTL', appId, []));
 
   // Verify the directory tree is not horizontally scrolled.
-  const directoryTree = '#directory-tree';
   const original = await remoteCall.waitForElementStyles(
-      appId, directoryTree, ['scrollLeft']);
+      appId, directoryTree.rootSelector, ['scrollLeft']);
   chrome.test.assertTrue(original.scrollLeft === 0);
 
   // Shrink the tree to 150px, enough to hide the deep folder names.
-  const navigationList = '.dialog-navigation-list';
   await remoteCall.callRemoteTestUtil(
-      'setElementStyles', appId, [navigationList, {width: '150px'}]);
+      'setElementStyles', appId,
+      [directoryTree.containerSelector, {width: '150px'}]);
 
   // Expand the tree Downloads > nested-folder1 > nested-folder2 ...
   const lastFolderPath = nestedFolderTestEntries.pop().targetPath;
-  await navigateWithDirectoryTree(
-      appId, `/My files/Downloads/${lastFolderPath}`);
+  await directoryTree.navigateToPath(`/My files/Downloads/${lastFolderPath}`);
 
   // Check: the directory tree should be showing the last test entry.
-  await remoteCall.waitForElement(
-      appId, '.tree-item[entry-label="nested-folder5"]:not([hidden])');
+  const folder5Item = await directoryTree.waitForItemByLabel('nested-folder5');
+  chrome.test.assertFalse(!!folder5Item.attributes.hidden);
 
   // Ensure the directory tree scroll event handling is complete.
   chrome.test.assertTrue(
       await remoteCall.callRemoteTestUtil('requestAnimationFrame', appId, []));
 
   const scrolled = await remoteCall.waitForElementStyles(
-      appId, directoryTree, ['scrollLeft']);
+      appId, directoryTree.rootSelector, ['scrollLeft']);
 
   // Check: the directory tree should not be horizontally scrolled.
   const notScrolled = scrolled.scrollLeft === 0;
@@ -372,29 +360,24 @@ testcase.directoryTreeExpandFolder = async () => {
 
   // Open FilesApp on Downloads.
   const appId = await setupAndWaitUntilReady(RootPath.DOWNLOADS, entries, []);
+  const directoryTree = await DirectoryTreePageObject.create(appId, remoteCall);
 
   const start = Date.now();
 
   // Expand the large-folder-0.
-  await recursiveExpand(appId, '/My files/Downloads/large-folder-0');
+  await directoryTree.recursiveExpand('/My files/Downloads/large-folder-0');
 
   // Wait for all sub-folders to have the expand icon.
-  const querySubFolderExpandIcons =
-      ['#directory-tree [entry-label="large-folder-0"] > ' +
-       '.tree-children > .tree-item > .tree-row[has-children="true"]'];
-  await remoteCall.waitForElementsCount(
-      appId, querySubFolderExpandIcons, numberOfSubFolders);
+  await directoryTree.waitForChildItemsCountByLabel(
+      'large-folder-0', numberOfSubFolders, /* excludeEmptyChild= */ true);
 
   // Expand a sub-folder.
-  await recursiveExpand(
-      appId, '/My files/Downloads/large-folder-0/sub-folder-0');
+  await directoryTree.recursiveExpand(
+      '/My files/Downloads/large-folder-0/sub-folder-0');
 
   // Wait sub-folder to have its 1k sub-sub-folders.
-  const querySubSubFolderItems =
-      ['#directory-tree [entry-label="sub-folder-0"] > ' +
-       '.tree-children > .tree-item'];
-  await remoteCall.waitForElementsCount(
-      appId, querySubSubFolderItems, numberOfSubSubFolders);
+  await directoryTree.waitForChildItemsCountByLabel(
+      'sub-folder-0', numberOfSubSubFolders);
 
   const testTime = Date.now() - start;
   console.log(`[measurement] Test time: ${testTime}ms`);
@@ -414,16 +397,14 @@ testcase.directoryTreeExpandFolderWithHiddenFileAndShowHiddenFilesOff =
 
   // Opens FilesApp on downloads.
   const appId = await setupAndWaitUntilReady(RootPath.DOWNLOADS, entries, []);
+  const directoryTree = await DirectoryTreePageObject.create(appId, remoteCall);
 
   // Expand all sub-directories in downloads.
-  await recursiveExpand(appId, '/My files/Downloads');
-
-  // Target the non-hidden folder.
-  const normalFolder = '#directory-tree [entry-label="normal-folder"]';
-  const response = await remoteCall.waitForElement(appId, normalFolder);
+  await directoryTree.recursiveExpand('/My files/Downloads');
 
   // Assert that the expand icon will not show up.
-  chrome.test.assertTrue(response.attributes['has-children'] === 'false');
+  await directoryTree.waitForItemToHaveChildrenByLabel(
+      'normal-folder', /* hasChildren= */ false);
 };
 
 /**
@@ -440,6 +421,7 @@ testcase.directoryTreeExpandFolderWithHiddenFileAndShowHiddenFilesOn =
 
   // Opens FilesApp on downloads.
   const appId = await setupAndWaitUntilReady(RootPath.DOWNLOADS, entries, []);
+  const directoryTree = await DirectoryTreePageObject.create(appId, remoteCall);
 
   // Enable show hidden files.
   await remoteCall.waitAndClickElement(appId, '#gear-button');
@@ -449,10 +431,175 @@ testcase.directoryTreeExpandFolderWithHiddenFileAndShowHiddenFilesOn =
           ':not([checked]):not([hidden])');
 
   // Expand all sub-directories in Downloads.
-  await recursiveExpand(appId, '/My files/Downloads');
+  await directoryTree.recursiveExpand('/My files/Downloads');
 
   // Assert that the expand icon shows up.
-  const normalFolder =
-      '#directory-tree [entry-label="normal-folder"][has-children="true"]';
-  await remoteCall.waitForElement(appId, normalFolder);
+  await directoryTree.waitForItemToHaveChildrenByLabel(
+      'normal-folder', /* hasChildren= */ true);
+};
+
+/**
+ * Tests that the "expand icon" on directory tree items is correctly
+ * shown for directories on the "My Files" volume. Volumes such as
+ * this, which do not delay expansion, eagerly traverse into children
+ * directories of the current directory to see if the children have
+ * children: if they do, an expand icon is shown, if not, it is hidden.
+ */
+testcase.directoryTreeExpandFolderOnNonDelayExpansionVolume = async () => {
+  // Create a parent folder with a child folder inside it.
+  const entries = [
+    createFolderTestEntry('parent-folder'),
+    createFolderTestEntry('parent-folder/empty-child-folder'),
+    createFolderTestEntry('parent-folder/non-empty-child-folder'),
+    createFolderTestEntry('parent-folder/non-empty-child-folder/child'),
+  ];
+
+  // Opens FilesApp on downloads with the folders above.
+  const appId = await setupAndWaitUntilReady(RootPath.DOWNLOADS, entries, []);
+  const directoryTree = await DirectoryTreePageObject.create(appId, remoteCall);
+
+  // Expand the parent folder, which should check if the child folder
+  // itself has children.
+  await directoryTree.recursiveExpand('/My files/Downloads/parent-folder');
+
+  // Check that the empty child folder has been checked for children, and was
+  // found to have none. This ensures the expand icon is hidden.
+  await directoryTree.waitForItemToHaveChildrenByLabel(
+      'empty-child-folder', /* hasChildren= */ false);
+
+  // Check that the non-empty child folder has been checked for children, and
+  // was found to have some. This ensures the expand icon is shown.
+  await directoryTree.waitForItemToHaveChildrenByLabel(
+      'non-empty-child-folder', /* hasChildren= */ true);
+};
+
+/**
+ * Tests that the "expand icon" on directory tree items is correctly
+ * shown for directories on an SMB volume. Volumes such as this, which
+ * do delay expansion, don't eagerly traverse into children directories
+ * of the current directory to see if the children have children, but
+ * instead give every child directory a 'tentative' expand icon. When
+ * that icon is clicked, the child directory is read and the icon will
+ * only remain if the child really has children.
+ */
+testcase.directoryTreeExpandFolderOnDelayExpansionVolume = async () => {
+  // Create a parent folder with a child folder inside it, and another
+  // where the child also has a child.
+  const entries = [
+    createFolderTestEntry('parent-folder'),
+    createFolderTestEntry('parent-folder/child-folder'),
+    createFolderTestEntry('grandparent-folder'),
+    createFolderTestEntry('grandparent-folder/middle-child-folder'),
+    createFolderTestEntry(
+        'grandparent-folder/middle-child-folder/grandchild-folder'),
+  ];
+
+  // Open Files app.
+  const appId = await setupAndWaitUntilReady(null, [], []);
+  const directoryTree = await DirectoryTreePageObject.create(appId, remoteCall);
+
+  // Populate Smbfs with the directories.
+  await addEntries(['smbfs'], entries);
+
+  // Mount Smbfs volume.
+  await sendTestMessage({name: 'mountSmbfs'});
+
+  // Click to open the Smbfs volume.
+  await directoryTree.selectItemByType('smb');
+
+  // Expand the parent folder.
+  await directoryTree.recursiveExpand('/SMB Share/parent-folder');
+
+  // The child folder should have the 'may-have-children' attribute and
+  // should not have the 'has-children' attribute. In this state, it
+  // will display an expansion icon (until it's expanded and Files app
+  // *knows* it has no children.
+  await directoryTree.waitForItemToMayHaveChildrenByLabel('child-folder');
+
+  // Expand the child folder, which will discover it has no children and
+  // remove its expansion icon.
+  await directoryTree.expandTreeItemByLabel(
+      'child-folder', /* allowEmpty= */ true);
+
+  // The child folder should now have the 'has-children' attribute and
+  // it should be false.
+  await directoryTree.waitForItemToHaveChildrenByLabel(
+      'child-folder', /* hasChildren= */ false);
+
+  // Expand the grandparent that has a middle child with a child.
+  await directoryTree.recursiveExpand('/SMB Share/grandparent-folder');
+
+  // The middle child should have an (eager) expand icon.
+  await directoryTree.waitForItemToMayHaveChildrenByLabel(
+      'middle-child-folder');
+
+  // Expand the middle child, which will discover it does actually have
+  // children.
+  await directoryTree.expandTreeItemByLabel('middle-child-folder');
+
+  // The middle child folder should now have the 'has-children' attribute
+  // and it should be true (eg. it will retain its expand icon).
+  await directoryTree.waitForItemToHaveChildrenByLabel(
+      'middle-child-folder', /* hasChildren= */ true);
+};
+
+/**
+ * When drag a file and hover over the directory tree item, the item should be
+ * expanded and selected, current directory should also change to that folder.
+ */
+testcase.directoryTreeExpandAndSelectedOnDragMove = async () => {
+  // Create a file and a folder.
+  const entries = [
+    // file to drag.
+    ENTRIES.hello,
+    // folder to drag over and drop.
+    createFolderTestEntry('aaa'),
+  ];
+
+  // Open Files app.
+  const appId = await setupAndWaitUntilReady(RootPath.DOWNLOADS, entries, []);
+  const directoryTree = await DirectoryTreePageObject.create(appId, remoteCall);
+  await directoryTree.waitForSelectedItemByLabel('Downloads');
+
+  // File to drag.
+  const source =
+      `#file-list li[file-name="${ENTRIES.hello.nameText}"] .entry-name`;
+
+  // Drag file to the Downloads folder without drop.
+  const finishDragToDownloads = await directoryTree.dragFilesToItemByLabel(
+      source, 'Downloads', /* skipDrop= */ true);
+
+  // Downloads folder should be expanded.
+  await directoryTree.waitForItemToExpandByLabel('Downloads');
+
+  // Send dragleave on the Downloads folder and move the drag to aaa folder.
+  await finishDragToDownloads(
+      directoryTree.itemSelectorByLabel('Downloads'), /* dragleave= */ true);
+  await directoryTree.dragFilesToItemByLabel(
+      source, 'aaa', /* skipDrop= */ true);
+
+  // aaa folder should be expanded and selected.
+  await remoteCall.waitUntilCurrentDirectoryIsChanged(
+      appId, '/My files/Downloads/aaa');
+  await directoryTree.waitForSelectedItemByLabel('aaa');
+};
+
+
+/**
+ * When My Drive is active, clicking Google Drive shouldn't change the current
+ * directory.
+ */
+testcase.directoryTreeClickDriveRootWhenMyDriveIsActive = async () => {
+  // Open Files app.
+  const appId = await setupAndWaitUntilReady(RootPath.DRIVE, []);
+  const directoryTree = await DirectoryTreePageObject.create(appId, remoteCall);
+  await directoryTree.waitForSelectedItemByLabel('My Drive');
+
+  // Select Google Drive.
+  await directoryTree.selectItemByLabel('Google Drive');
+
+  // My Drive should still be selected.
+  await directoryTree.waitForSelectedItemByLabel('My Drive');
+  // Current directory is still My Drive, not Google Drive.
+  await remoteCall.waitUntilCurrentDirectoryIsChanged(appId, '/My Drive');
 };

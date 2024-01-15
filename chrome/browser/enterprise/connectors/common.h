@@ -10,7 +10,7 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "base/supports_user_data.h"
 #include "chrome/browser/enterprise/connectors/analysis/analysis_settings.h"
@@ -52,7 +52,6 @@ constexpr char kKeyTags[] = "tags";
 constexpr char kKeyBlockUntilVerdict[] = "block_until_verdict";
 constexpr char kKeyBlockPasswordProtected[] = "block_password_protected";
 constexpr char kKeyBlockLargeFiles[] = "block_large_files";
-constexpr char kKeyBlockUnsupportedFileTypes[] = "block_unsupported_file_types";
 constexpr char kKeyMinimumDataSize[] = "minimum_data_size";
 constexpr char kKeyEnabledEventNames[] = "enabled_event_names";
 constexpr char kKeyCustomMessages[] = "custom_messages";
@@ -62,10 +61,15 @@ constexpr char kKeyCustomMessagesMessage[] = "message";
 constexpr char kKeyCustomMessagesLearnMoreUrl[] = "learn_more_url";
 constexpr char kKeyMimeTypes[] = "mime_types";
 constexpr char kKeyEnterpriseId[] = "enterprise_id";
+constexpr char kKeyDefaultAction[] = "default_action";
 constexpr char kKeyDomain[] = "domain";
 constexpr char kKeyEnabledOptInEvents[] = "enabled_opt_in_events";
 constexpr char kKeyOptInEventName[] = "name";
 constexpr char kKeyOptInEventUrlPatterns[] = "url_patterns";
+
+// Available tags.
+constexpr char kDlpTag[] = "dlp";
+constexpr char kMalwareTag[] = "malware";
 
 // A MIME type string that matches all MIME types.
 constexpr char kWildcardMimeType[] = "*";
@@ -76,10 +80,6 @@ constexpr base::FilePath::CharType RC_BASE_DIR[] =
 
 enum class ReportingConnector {
   SECURITY_EVENT,
-};
-
-enum class FileSystemConnector {
-  SEND_DOWNLOAD_TO_CLOUD,
 };
 
 // Struct holding the necessary data to tweak the behavior of the reporting
@@ -102,35 +102,9 @@ struct ReportingSettings {
   bool per_profile = false;
 };
 
-// Struct holding the necessary data to tweak the behavior of the file system
-// Connector.
-struct FileSystemSettings {
-  FileSystemSettings();
-  FileSystemSettings(const FileSystemSettings&);
-  FileSystemSettings(FileSystemSettings&&);
-  FileSystemSettings& operator=(const FileSystemSettings&);
-  FileSystemSettings& operator=(FileSystemSettings&&);
-  ~FileSystemSettings();
-
-  std::string service_provider;
-  GURL home;
-  GURL authorization_endpoint;
-  GURL token_endpoint;
-  std::string enterprise_id;
-  std::string email_domain;
-  std::string client_id;
-  std::string client_secret;
-  std::vector<std::string> scopes;
-  size_t max_direct_size;
-  std::set<std::string> mime_types;
-  // Indicates whether `mime_types` is to be used for enabling or disabling.
-  bool enable_with_mime_types;
-};
-
 // Returns the pref path corresponding to a connector.
 const char* ConnectorPref(AnalysisConnector connector);
 const char* ConnectorPref(ReportingConnector connector);
-const char* ConnectorPref(FileSystemConnector connector);
 const char* ConnectorScopePref(AnalysisConnector connector);
 const char* ConnectorScopePref(ReportingConnector connector);
 
@@ -185,17 +159,20 @@ enum class FinalContentAnalysisResult {
   // Show that an issue was found and that the upload is blocked.
   FAILURE = 0,
 
+  // Show that the scan failed and that the upload is blocked.
+  FAIL_CLOSED = 1,
+
   // Show that files were not uploaded since they were too large.
-  LARGE_FILES = 1,
+  LARGE_FILES = 2,
 
   // Show that files were not uploaded since they were encrypted.
-  ENCRYPTED_FILES = 2,
+  ENCRYPTED_FILES = 3,
 
   // Show that DLP checks failed, but that the user can proceed if they want.
-  WARNING = 3,
+  WARNING = 4,
 
   // Show that no issue was found and that the user may proceed.
-  SUCCESS = 4,
+  SUCCESS = 5,
 };
 
 // Result for a single request of the RequestHandler classes.
@@ -203,6 +180,7 @@ struct RequestHandlerResult {
   bool complies;
   FinalContentAnalysisResult final_result;
   std::string tag;
+  std::string request_token;
 };
 
 // Calculates the result for the request handler based on the upload result and
@@ -210,7 +188,7 @@ struct RequestHandlerResult {
 RequestHandlerResult CalculateRequestHandlerResult(
     const AnalysisSettings& settings,
     safe_browsing::BinaryUploadService::Result upload_result,
-    ContentAnalysisResponse response);
+    const ContentAnalysisResponse& response);
 
 // Determines if a request result should be used to allow a data use or to
 // block it.
@@ -269,13 +247,18 @@ void ShowDownloadReviewDialog(const std::u16string& filename,
                               base::OnceClosure keep_closure,
                               base::OnceClosure discard_closure);
 
-// Returns true if `result` as returned by FileAnalysisRequest is considered a
+// Returns true if `result` as returned by BinaryUploadService is considered a
 // a failed result when attempting a cloud-based content analysis.
 bool CloudResultIsFailure(safe_browsing::BinaryUploadService::Result result);
 
-// Returns true if `result` as returned by FileAnalysisRequest is considered a
+// Returns true if `result` as returned by BinaryUploadService is considered a
 // a failed result when attempting a local content analysis.
 bool LocalResultIsFailure(safe_browsing::BinaryUploadService::Result result);
+
+// Returns true if `result` as returned by BinaryUploadService is considered a
+// fail-closed result, regardless of attempting a cloud-based or a local-based
+// content analysis.
+bool ResultIsFailClosed(safe_browsing::BinaryUploadService::Result result);
 
 #if BUILDFLAG(IS_CHROMEOS_LACROS)
 // Returns the single main profile, or nullptr if none is found.

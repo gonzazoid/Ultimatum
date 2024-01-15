@@ -9,8 +9,7 @@
 #include "ui/accessibility/ax_node_data.h"
 #include "ui/views/view.h"
 
-namespace views {
-namespace test {
+namespace views::test {
 
 AXEventCounter::AXEventCounter(views::AXEventManager* event_manager) {
   tree_observation_.Observe(event_manager);
@@ -21,6 +20,8 @@ AXEventCounter::~AXEventCounter() = default;
 void AXEventCounter::OnViewEvent(views::View* view,
                                  ax::mojom::Event event_type) {
   ++event_counts_[event_type];
+
+  ++event_counts_for_view_[std::make_pair(event_type, view)];
 
   // TODO(accessibility): There are a non-trivial number of events, mostly
   // kChildrenChanged, being fired during the creation process. When this
@@ -40,18 +41,24 @@ void AXEventCounter::OnViewEvent(views::View* view,
   }
 }
 
-int AXEventCounter::GetCount(ax::mojom::Event event_type) {
+int AXEventCounter::GetCount(ax::mojom::Event event_type) const {
   return event_counts_[event_type];
 }
 
 int AXEventCounter::GetCount(ax::mojom::Event event_type,
-                             ax::mojom::Role role) {
+                             ax::mojom::Role role) const {
   return event_counts_for_role_[std::make_pair(event_type, role)];
+}
+
+int AXEventCounter::GetCount(ax::mojom::Event event_type,
+                             views::View* view) const {
+  return event_counts_for_view_[std::make_pair(event_type, view)];
 }
 
 void AXEventCounter::ResetAllCounts() {
   event_counts_.clear();
   event_counts_for_role_.clear();
+  event_counts_for_view_.clear();
 }
 
 void AXEventCounter::WaitForEvent(ax::mojom::Event event_type) {
@@ -62,5 +69,4 @@ void AXEventCounter::WaitForEvent(ax::mojom::Event event_type) {
   run_loop_ = nullptr;
 }
 
-}  // namespace test
-}  // namespace views
+}  // namespace views::test

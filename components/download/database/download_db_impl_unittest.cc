@@ -7,9 +7,9 @@
 #include <algorithm>
 #include <memory>
 
-#include "base/bind.h"
-#include "base/guid.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
+#include "base/uuid.h"
 #include "components/download/database/download_db_conversions.h"
 #include "components/download/database/download_db_entry.h"
 #include "components/download/database/proto/download_entry.pb.h"
@@ -26,7 +26,7 @@ namespace {
 DownloadDBEntry CreateDownloadDBEntry() {
   DownloadDBEntry entry;
   DownloadInfo download_info;
-  download_info.guid = base::GenerateGUID();
+  download_info.guid = base::Uuid::GenerateRandomV4().AsLowercaseString();
   entry.download_info = download_info;
   return entry;
 }
@@ -90,7 +90,9 @@ class DownloadDBTest : public testing::Test {
 
  protected:
   std::map<std::string, download_pb::DownloadDBEntry> db_entries_;
-  raw_ptr<leveldb_proto::test::FakeDB<download_pb::DownloadDBEntry>> db_;
+  raw_ptr<leveldb_proto::test::FakeDB<download_pb::DownloadDBEntry>,
+          DanglingUntriaged>
+      db_;
   std::unique_ptr<DownloadDBImpl> download_db_;
   bool init_success_;
 };
@@ -182,10 +184,6 @@ TEST_F(DownloadDBTest, ReplaceEntry) {
   in_progress_info.current_path =
       base::FilePath(FILE_PATH_LITERAL("/tmp.crdownload"));
   in_progress_info.target_path = base::FilePath(FILE_PATH_LITERAL("/tmp"));
-  in_progress_info.reroute_info = DownloadItemRerouteInfo();
-  in_progress_info.reroute_info.set_service_provider(
-      enterprise_connectors::BOX);
-  in_progress_info.reroute_info.mutable_box()->set_file_id("12345");
   in_progress_info.url_chain.emplace_back("http://foo");
   in_progress_info.url_chain.emplace_back("http://foo2");
   first.download_info->in_progress_info = in_progress_info;

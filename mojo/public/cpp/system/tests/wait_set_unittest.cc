@@ -5,10 +5,11 @@
 #include "mojo/public/cpp/system/wait_set.h"
 
 #include <set>
+#include <string_view>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/ptr_util.h"
 #include "base/synchronization/waitable_event.h"
 #include "base/threading/platform_thread.h"
@@ -23,7 +24,7 @@ namespace {
 using WaitSetTest = testing::Test;
 
 void WriteMessage(const ScopedMessagePipeHandle& handle,
-                  const base::StringPiece& message) {
+                  const std::string_view& message) {
   MojoResult rv = WriteMessageRaw(handle.get(), message.data(),
                                   static_cast<uint32_t>(message.size()),
                                   nullptr, 0, MOJO_WRITE_MESSAGE_FLAG_NONE);

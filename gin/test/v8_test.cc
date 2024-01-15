@@ -4,7 +4,7 @@
 
 #include "gin/test/v8_test.h"
 
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "gin/array_buffer.h"
 #include "gin/public/isolate_holder.h"
 #include "gin/v8_initializer.h"
@@ -35,6 +35,9 @@ void V8Test::SetUp() {
                                  gin::ArrayBufferAllocator::SharedInstance());
 
   instance_ = CreateIsolateHolder();
+  if (AccessMode() == gin::IsolateHolder::AccessMode::kUseLocker) {
+    locker_.emplace(instance_->isolate());
+  }
   instance_->isolate()->Enter();
   HandleScope handle_scope(instance_->isolate());
   context_.Reset(instance_->isolate(), Context::New(instance_->isolate()));
@@ -48,13 +51,18 @@ void V8Test::TearDown() {
     context_.Reset();
   }
   instance_->isolate()->Exit();
+  locker_.reset();
   instance_.reset();
 }
 
 std::unique_ptr<gin::IsolateHolder> V8Test::CreateIsolateHolder() const {
   return std::make_unique<gin::IsolateHolder>(
-      base::ThreadTaskRunnerHandle::Get(),
+      base::SingleThreadTaskRunner::GetCurrentDefault(), AccessMode(),
       gin::IsolateHolder::IsolateType::kBlinkMainThread);
+}
+
+gin::IsolateHolder::AccessMode V8Test::AccessMode() const {
+  return gin::IsolateHolder::AccessMode::kSingleThread;
 }
 
 }  // namespace gin

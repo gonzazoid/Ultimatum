@@ -12,7 +12,6 @@
 #include "base/win/registry.h"
 #include "base/win/startup_information.h"
 #include "base/win/win_util.h"
-#include "base/win/windows_version.h"
 #include "sandbox/win/tests/common/controller.h"
 #include "sandbox/win/tests/integration_tests/hooking_dll.h"
 #include "sandbox/win/tests/integration_tests/hooking_win_proc.h"
@@ -364,9 +363,6 @@ namespace sandbox {
 // This test validates that setting the MITIGATION_EXTENSION_POINT_DISABLE
 // mitigation enables the setting on a process.
 TEST(ProcessMitigationsTest, CheckWin8ExtensionPointPolicySuccess) {
-  if (base::win::GetVersion() < base::win::Version::WIN8)
-    return;
-
   std::wstring test_command = L"CheckPolicy ";
   test_command += std::to_wstring(sandbox::TESTPOLICY_EXTENSIONPOINT);
 
@@ -400,9 +396,6 @@ TEST(ProcessMitigationsTest, CheckWin8ExtensionPointPolicySuccess) {
 // MANUAL testing only.
 TEST(ProcessMitigationsTest,
      DISABLED_CheckWin8ExtensionPoint_GlobalHook_Success) {
-  if (base::win::GetVersion() < base::win::Version::WIN8)
-    return;
-
   ScopedTestMutex mutex(g_extension_point_test_mutex);
 
   TestWin8ExtensionPointHookWrapper(true /* is_success_test */,
@@ -415,9 +408,6 @@ TEST(ProcessMitigationsTest,
 // MANUAL testing only.
 TEST(ProcessMitigationsTest,
      DISABLED_CheckWin8ExtensionPoint_GlobalHook_Failure) {
-  if (base::win::GetVersion() < base::win::Version::WIN8)
-    return;
-
   ScopedTestMutex mutex(g_extension_point_test_mutex);
 
   TestWin8ExtensionPointHookWrapper(false /* is_success_test */,
@@ -429,9 +419,6 @@ TEST(ProcessMitigationsTest,
 //
 // MANUAL testing only.
 TEST(ProcessMitigationsTest, DISABLED_CheckWin8ExtensionPoint_Hook_Success) {
-  if (base::win::GetVersion() < base::win::Version::WIN8)
-    return;
-
   ScopedTestMutex mutex(g_extension_point_test_mutex);
 
   TestWin8ExtensionPointHookWrapper(true /* is_success_test */,
@@ -446,9 +433,6 @@ TEST(ProcessMitigationsTest, DISABLED_CheckWin8ExtensionPoint_Hook_Success) {
 //
 // MANUAL testing only.
 TEST(ProcessMitigationsTest, DISABLED_CheckWin8ExtensionPoint_Hook_Failure) {
-  if (base::win::GetVersion() < base::win::Version::WIN8)
-    return;
-
   ScopedTestMutex mutex(g_extension_point_test_mutex);
 
   TestWin8ExtensionPointHookWrapper(false /* is_success_test */,
@@ -461,9 +445,6 @@ TEST(ProcessMitigationsTest, DISABLED_CheckWin8ExtensionPoint_Hook_Failure) {
 // MANUAL testing only.
 // Must run this test as admin/elevated.
 TEST(ProcessMitigationsTest, DISABLED_CheckWin8ExtensionPoint_AppInit_Success) {
-  if (base::win::GetVersion() < base::win::Version::WIN8)
-    return;
-
   ScopedTestMutex mutex(g_extension_point_test_mutex);
 
   TestWin8ExtensionPointAppInitWrapper(true /* is_success_test */);
@@ -475,9 +456,6 @@ TEST(ProcessMitigationsTest, DISABLED_CheckWin8ExtensionPoint_AppInit_Success) {
 // MANUAL testing only.
 // Must run this test as admin/elevated.
 TEST(ProcessMitigationsTest, DISABLED_CheckWin8ExtensionPoint_AppInit_Failure) {
-  if (base::win::GetVersion() < base::win::Version::WIN8)
-    return;
-
   ScopedTestMutex mutex(g_extension_point_test_mutex);
 
   TestWin8ExtensionPointAppInitWrapper(false /* is_success_test */);

@@ -72,7 +72,7 @@ class NetworkConfigurationPolicyHandler : public TypeCheckingPolicyHandler {
   // that contains a pretty-printed and sanitized version. In particular, we
   // remove any Passphrases that may be contained in the JSON. Ownership of the
   // return value is transferred to the caller.
-  static absl::optional<base::Value> SanitizeNetworkConfig(
+  static std::optional<base::Value> SanitizeNetworkConfig(
       const base::Value* config);
 
   // The kind of ONC source that this handler represents. ONCSource
@@ -105,7 +105,7 @@ class PinnedLauncherAppsPolicyHandler : public ListPolicyHandler {
 
   // Converts the list of strings |filtered_list| to a list of dictionaries and
   // sets the pref.
-  void ApplyList(base::Value filtered_list, PrefValueMap* prefs) override;
+  void ApplyList(base::Value::List filtered_list, PrefValueMap* prefs) override;
 };
 
 // Maps the DefaultHandlersForFileExtensions policy to the corresponding pref.
@@ -119,6 +119,8 @@ class DefaultHandlersForFileExtensionsPolicyHandler
                            PolicyErrorMap* errors) override;
   void ApplyPolicySettings(const PolicyMap& policies,
                            PrefValueMap* prefs) override;
+
+  bool IsValidPolicyId(base::StringPiece policy_id) const;
 };
 
 class ScreenMagnifierPolicyHandler : public IntRangePolicyHandlerBase {

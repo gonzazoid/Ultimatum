@@ -6,8 +6,8 @@
 
 #include <numeric>
 
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "base/ranges/algorithm.h"
@@ -18,6 +18,7 @@
 #include "media/base/media_util.h"
 #include "media/base/video_decoder_config.h"
 #include "media/base/video_frame.h"
+#include "media/filters/dav1d_video_decoder.h"
 #include "media/filters/ffmpeg_video_decoder.h"
 #include "media/filters/vpx_video_decoder.h"
 #include "media/gpu/macros.h"
@@ -35,6 +36,13 @@ std::unique_ptr<VideoDecoder> CreateDecoder(
     VideoCodec codec,
     std::unique_ptr<MediaLog>* media_log) {
   std::unique_ptr<VideoDecoder> decoder;
+
+  if (codec == VideoCodec::kAV1) {
+#if BUILDFLAG(ENABLE_DAV1D_DECODER)
+    *media_log = std::make_unique<NullMediaLog>();
+    decoder = std::make_unique<Dav1dVideoDecoder>((*media_log)->Clone());
+#endif
+  }
 
   if (codec == VideoCodec::kVP8 || codec == VideoCodec::kVP9) {
 #if BUILDFLAG(ENABLE_LIBVPX)
@@ -178,6 +186,10 @@ void BitstreamValidator::ProcessBitstream(scoped_refptr<BitstreamRef> bitstream,
   LOG_ASSERT(frame_index <= last_frame_index_)
       << "frame_index is larger than last frame index, frame_index="
       << frame_index << ", last_frame_index_=" << last_frame_index_;
+  if (bitstream->metadata.dropped_frame()) {
+    // Drop frame. Do nothing.
+    return;
+  }
   base::AutoLock lock(validator_lock_);
   // If many pending buffers are accumulated in this validator class and the
   // allocated memory size becomes large, the test process is killed by the
@@ -284,16 +296,6 @@ void BitstreamValidator::DecodeDone(int64_t timestamp, DecoderStatus status) {
     validator_cv_.Signal();
     return;
   }
-
-  // This validator and |decoder_| don't use bitstream any more. Release here,
-  // so that a caller can use the bitstream buffer and proceed.
-  auto it = decoding_buffers_.Peek(timestamp);
-  if (it == decoding_buffers_.end()) {
-    // This occurs when VerifyfOutputFrame() is called before DecodeDone() and
-    // the entry has been deleted.
-    return;
-  }
-  it->second.second.reset();
 }
 
 void BitstreamValidator::OutputFrameProcessed() {

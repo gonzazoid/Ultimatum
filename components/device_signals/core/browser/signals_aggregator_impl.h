@@ -29,15 +29,20 @@ class SignalsAggregatorImpl : public SignalsAggregator {
   ~SignalsAggregatorImpl() override;
 
   // SignalsAggregator:
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX)
+  void GetSignalsForUser(const UserContext& user_context,
+                         const SignalsAggregationRequest& request,
+                         GetSignalsCallback callback) override;
+#endif  // BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX)
   void GetSignals(const SignalsAggregationRequest& request,
                   GetSignalsCallback callback) override;
 
  private:
-  void OnUserPermissionChecked(const SignalsAggregationRequest& request,
-                               GetSignalsCallback callback,
-                               const UserPermission user_permission);
+  void GetSignalsWithPermission(const UserPermission user_permission,
+                                const SignalsAggregationRequest& request,
+                                GetSignalsCallback callback);
 
-  base::raw_ptr<UserPermissionService> permission_service_;
+  raw_ptr<UserPermissionService> permission_service_;
   std::vector<std::unique_ptr<SignalsCollector>> collectors_;
 
   base::WeakPtrFactory<SignalsAggregatorImpl> weak_factory_{this};

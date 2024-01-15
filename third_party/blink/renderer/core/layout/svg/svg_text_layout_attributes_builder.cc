@@ -1,254 +1,417 @@
-/*
- * Copyright (C) Research In Motion Limited 2010-2011. All rights reserved.
- *
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Library General Public
- * License as published by the Free Software Foundation; either
- * version 2 of the License, or (at your option) any later version.
- *
- * This library is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Library General Public License for more details.
- *
- * You should have received a copy of the GNU Library General Public License
- * along with this library; see the file COPYING.LIB.  If not, write to
- * the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
- * Boston, MA 02110-1301, USA.
- */
+// Copyright 2021 The Chromium Authors
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
 
 #include "third_party/blink/renderer/core/layout/svg/svg_text_layout_attributes_builder.h"
 
-#include "third_party/blink/renderer/core/layout/api/line_layout_svg_inline_text.h"
-#include "third_party/blink/renderer/core/layout/svg/layout_svg_inline.h"
-#include "third_party/blink/renderer/core/layout/svg/layout_svg_inline_text.h"
-#include "third_party/blink/renderer/core/layout/svg/layout_svg_text.h"
+#include "base/containers/adapters.h"
+#include "base/ranges/algorithm.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "third_party/blink/renderer/core/layout/inline/inline_item.h"
+#include "third_party/blink/renderer/core/layout/inline/inline_node.h"
+#include "third_party/blink/renderer/core/svg/svg_animated_length.h"
 #include "third_party/blink/renderer/core/svg/svg_animated_length_list.h"
 #include "third_party/blink/renderer/core/svg/svg_animated_number_list.h"
 #include "third_party/blink/renderer/core/svg/svg_length_context.h"
-#include "third_party/blink/renderer/core/svg/svg_length_list.h"
-#include "third_party/blink/renderer/core/svg/svg_number_list.h"
 #include "third_party/blink/renderer/core/svg/svg_text_positioning_element.h"
+
+namespace blink {
+
+struct SVGTextLengthContext {
+  DISALLOW_NEW();
+
+ public:
+  void Trace(Visitor* visitor) const { visitor->Trace(layout_object); }
+
+  Member<const LayoutObject> layout_object;
+  unsigned start_index;
+};
+
+}  // namespace blink
+
+WTF_ALLOW_MOVE_INIT_AND_COMPARE_WITH_MEM_FUNCTIONS(blink::SVGTextLengthContext)
 
 namespace blink {
 
 namespace {
 
-void UpdateLayoutAttributes(LayoutSVGInlineText& text,
-                            unsigned& value_list_position,
-                            const SVGCharacterDataMap& all_characters_map) {
-  SVGCharacterDataMap& character_data_map = text.CharacterDataMap();
-  character_data_map.clear();
+// Iterates over x/y/dx/dy/rotate attributes on an SVGTextPositioningElement.
+//
+// This class is used only by LayoutAttributesStack.
+// This class is not copyable.
+class LayoutAttributesIterator final
+    : public GarbageCollected<LayoutAttributesIterator> {
+ public:
+  LayoutAttributesIterator(const LayoutObject& layout_object, bool in_text_path)
+      : element_(To<SVGTextPositioningElement>(layout_object.GetNode())),
+        x_(element_->x()->CurrentValue()),
+        y_(element_->y()->CurrentValue()),
+        dx_(element_->dx()->CurrentValue()),
+        dy_(element_->dy()->CurrentValue()),
+        rotate_(element_->rotate()->CurrentValue()),
+        in_text_path_(in_text_path) {}
+  LayoutAttributesIterator(const LayoutAttributesIterator&) = delete;
+  LayoutAttributesIterator& operator=(const LayoutAttributesIterator&) = delete;
 
-  LineLayoutSVGInlineText text_line_layout(&text);
-  for (SVGInlineTextMetricsIterator iterator(text_line_layout);
-       !iterator.IsAtEnd(); iterator.Next()) {
-    if (iterator.Metrics().IsEmpty())
-      continue;
-
-    auto it = all_characters_map.find(value_list_position + 1);
-    if (it != all_characters_map.end())
-      character_data_map.Set(iterator.CharacterOffset() + 1, it->value);
-
-    // Increase the position in the value/attribute list with one for each
-    // "character unit" (that will be displayed.)
-    value_list_position++;
-  }
-}
-
-}  // namespace
-
-SVGTextLayoutAttributesBuilder::SVGTextLayoutAttributesBuilder(
-    LayoutSVGText& text_root)
-    : text_root_(text_root), character_count_(0) {}
-
-void SVGTextLayoutAttributesBuilder::BuildLayoutAttributes() {
-  character_data_map_.clear();
-
-  if (text_positions_.empty()) {
-    character_count_ = 0;
-    CollectTextPositioningElements(text_root_);
+  void Trace(Visitor* visitor) const {
+    visitor->Trace(element_);
+    visitor->Trace(x_);
+    visitor->Trace(y_);
+    visitor->Trace(dx_);
+    visitor->Trace(dy_);
+    visitor->Trace(rotate_);
   }
 
-  if (!character_count_)
-    return;
+  bool HasX() const { return consumed_ < x_->length(); }
+  bool HasY() const { return consumed_ < y_->length(); }
+  bool HasDx() const { return consumed_ < dx_->length(); }
+  bool HasDy() const { return consumed_ < dy_->length(); }
 
-  BuildCharacterDataMap(text_root_);
+  float X() const {
+    return x_->at(consumed_)->Value(SVGLengthContext(element_));
+  }
+  float Y() const {
+    return y_->at(consumed_)->Value(SVGLengthContext(element_));
+  }
+  float Dx() const {
+    return dx_->at(consumed_)->Value(SVGLengthContext(element_));
+  }
+  float Dy() const {
+    return dy_->at(consumed_)->Value(SVGLengthContext(element_));
+  }
 
-  unsigned value_list_position = 0;
-  LayoutObject* child = text_root_.FirstChild();
-  while (child) {
-    if (child->IsSVGInlineText()) {
-      UpdateLayoutAttributes(To<LayoutSVGInlineText>(*child),
-                             value_list_position, character_data_map_);
-    } else if (child->IsSVGInline()) {
-      // Visit children of text content elements.
-      if (LayoutObject* inline_child =
-              To<LayoutSVGInline>(child)->FirstChild()) {
-        child = inline_child;
-        continue;
-      }
+  float MatchedOrLastRotate() const {
+    uint32_t length = rotate_->length();
+    if (length == 0) {
+      return SvgCharacterData::EmptyValue();
     }
-    child = child->NextInPreOrderAfterChildren(&text_root_);
-  }
-}
-
-static inline unsigned CountCharactersInTextNode(
-    const LayoutSVGInlineText& text) {
-  unsigned num_characters = 0;
-  for (const SVGTextMetrics& metrics : text.MetricsList()) {
-    if (metrics.IsEmpty())
-      continue;
-    num_characters++;
-  }
-  return num_characters;
-}
-
-static SVGTextPositioningElement* PositioningElementFromLayoutObject(
-    LayoutObject& layout_object) {
-  DCHECK(layout_object.IsSVGText() || layout_object.IsSVGInline());
-
-  Node* node = layout_object.GetNode();
-  DCHECK(node);
-  DCHECK(node->IsSVGElement());
-
-  return DynamicTo<SVGTextPositioningElement>(node);
-}
-
-void SVGTextLayoutAttributesBuilder::CollectTextPositioningElements(
-    LayoutBoxModelObject& start) {
-  DCHECK(!start.IsSVGText() || text_positions_.empty());
-  SVGTextPositioningElement* element =
-      PositioningElementFromLayoutObject(start);
-  unsigned at_position = text_positions_.size();
-  if (element)
-    text_positions_.push_back(TextPosition(element, character_count_));
-
-  for (LayoutObject* child = start.SlowFirstChild(); child;
-       child = child->NextSibling()) {
-    if (child->IsSVGInlineText()) {
-      character_count_ +=
-          CountCharactersInTextNode(To<LayoutSVGInlineText>(*child));
-      continue;
+    if (consumed_ < length) {
+      return rotate_->at(consumed_)->Value();
     }
-
-    if (child->IsSVGInline()) {
-      CollectTextPositioningElements(To<LayoutSVGInline>(*child));
-      continue;
-    }
+    return rotate_->at(length - 1)->Value();
   }
 
-  if (!element)
-    return;
+  bool InTextPath() const { return in_text_path_; }
 
-  // Compute the length of the subtree after all children have been visited.
-  TextPosition& position = text_positions_[at_position];
-  DCHECK(!position.length);
-  position.length = character_count_ - position.start;
-}
+  // This function should be called whenever we handled an addressable
+  // character in a descendant LayoutText.
+  void Advance() { ++consumed_; }
 
-void SVGTextLayoutAttributesBuilder::BuildCharacterDataMap(
-    LayoutSVGText& text_root) {
-  // Fill character data map using text positioning elements in top-down order.
-  for (const TextPosition& position : text_positions_)
-    FillCharacterDataMap(position);
+ private:
+  // The following six Member<>s never be null.
+  const Member<const SVGTextPositioningElement> element_;
+  const Member<const SVGLengthList> x_;
+  const Member<const SVGLengthList> y_;
+  const Member<const SVGLengthList> dx_;
+  const Member<const SVGLengthList> dy_;
+  const Member<const SVGNumberList> rotate_;
+  const bool in_text_path_;
+  // How many addressable characters in this element are consumed.
+  unsigned consumed_ = 0;
+};
 
-  // Handle x/y default attributes.
-  SVGCharacterData& data =
-      character_data_map_.insert(1, SVGCharacterData()).stored_value->value;
-  if (!data.HasX())
-    data.x = 0;
-  if (!data.HasY())
-    data.y = 0;
-}
-
-namespace {
-
-class AttributeListsIterator {
+// A stack of LayoutAttributesIterator.
+// This class is not copyable.
+class LayoutAttributesStack final {
   STACK_ALLOCATED();
 
  public:
-  AttributeListsIterator(SVGTextPositioningElement*);
+  LayoutAttributesStack() = default;
+  ~LayoutAttributesStack() { DCHECK_EQ(stack_.size(), 0u); }
+  LayoutAttributesStack(const LayoutAttributesStack&) = delete;
+  LayoutAttributesStack& operator=(const LayoutAttributesStack&) = delete;
 
-  bool HasAttributes() const {
-    return x_list_remaining_ || y_list_remaining_ || dx_list_remaining_ ||
-           dy_list_remaining_ || rotate_list_remaining_;
+  void Push(const LayoutObject& layout_object, bool in_text_path) {
+    stack_.push_back(MakeGarbageCollected<LayoutAttributesIterator>(
+        layout_object, in_text_path));
   }
-  void UpdateCharacterData(wtf_size_t index, SVGCharacterData&);
+  void Pop() { stack_.pop_back(); }
+
+  // Advance all of iterators in the stack.
+  void Advance() {
+    DCHECK_GT(stack_.size(), 0u);
+    for (auto& iterator : stack_) {
+      iterator->Advance();
+    }
+  }
+
+  // X(), Y(), Dx(), and Dy() return an effective 'x, 'y', 'dx', or 'dy' value,
+  // or EmptyValue().
+
+  float X() const {
+    auto it = base::ranges::find_if(base::Reversed(stack_),
+                                    &LayoutAttributesIterator::HasX);
+    return it != stack_.rend() ? (*it)->X() : SvgCharacterData::EmptyValue();
+  }
+  float Y() const {
+    auto it = base::ranges::find_if(base::Reversed(stack_),
+                                    &LayoutAttributesIterator::HasY);
+    return it != stack_.rend() ? (*it)->Y() : SvgCharacterData::EmptyValue();
+  }
+  float Dx() const {
+    auto it = base::ranges::find_if(base::Reversed(stack_),
+                                    &LayoutAttributesIterator::HasDx);
+    return it != stack_.rend() ? (*it)->Dx() : SvgCharacterData::EmptyValue();
+  }
+  float Dy() const {
+    auto it = base::ranges::find_if(base::Reversed(stack_),
+                                    &LayoutAttributesIterator::HasDy);
+    return it != stack_.rend() ? (*it)->Dy() : SvgCharacterData::EmptyValue();
+  }
+
+  float MatchedOrLastRotate() const {
+    for (const auto& attrs : base::Reversed(stack_)) {
+      float rotate = attrs->MatchedOrLastRotate();
+      if (!SvgCharacterData::IsEmptyValue(rotate)) {
+        return rotate;
+      }
+    }
+    return SvgCharacterData::EmptyValue();
+  }
+
+  bool ShouldStartAnchoredChunk(bool horizontal) const {
+    // According to the algorithm, the x/y attributes on the nearest
+    // SVGTextPositioningElement should overwrite |anchored chunk| flag set by
+    // ancestors.  It's incorrect.
+    // https://github.com/w3c/svgwg/issues/839
+    //
+    // If the current position is not in a <textPath>, we should just check
+    // existence of available x/y attributes in ancestors.
+    // Otherwise, we should check available x/y attributes declared in the
+    // <textPath> descendants.
+
+    if (!stack_.back()->InTextPath()) {
+      return !SvgCharacterData::IsEmptyValue(X()) ||
+             !SvgCharacterData::IsEmptyValue(Y());
+    }
+
+    for (const auto& attrs : base::Reversed(stack_)) {
+      if (!attrs->InTextPath()) {
+        return false;
+      }
+      if (horizontal) {
+        if (attrs->HasX()) {
+          return true;
+        }
+      } else {
+        if (attrs->HasY()) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
 
  private:
-  SVGLengthContext length_context_;
-  const SVGLengthList* x_list_;
-  unsigned x_list_remaining_;
-  const SVGLengthList* y_list_;
-  unsigned y_list_remaining_;
-  const SVGLengthList* dx_list_;
-  unsigned dx_list_remaining_;
-  const SVGLengthList* dy_list_;
-  unsigned dy_list_remaining_;
-  const SVGNumberList* rotate_list_;
-  unsigned rotate_list_remaining_;
+  HeapVector<Member<LayoutAttributesIterator>> stack_;
 };
 
-AttributeListsIterator::AttributeListsIterator(
-    SVGTextPositioningElement* element)
-    : length_context_(element),
-      x_list_(element->x()->CurrentValue()),
-      x_list_remaining_(x_list_->length()),
-      y_list_(element->y()->CurrentValue()),
-      y_list_remaining_(y_list_->length()),
-      dx_list_(element->dx()->CurrentValue()),
-      dx_list_remaining_(dx_list_->length()),
-      dy_list_(element->dy()->CurrentValue()),
-      dy_list_remaining_(dy_list_->length()),
-      rotate_list_(element->rotate()->CurrentValue()),
-      rotate_list_remaining_(rotate_list_->length()) {}
-
-inline void AttributeListsIterator::UpdateCharacterData(
-    wtf_size_t index,
-    SVGCharacterData& data) {
-  if (x_list_remaining_) {
-    data.x = x_list_->at(index)->Value(length_context_);
-    --x_list_remaining_;
-  }
-  if (y_list_remaining_) {
-    data.y = y_list_->at(index)->Value(length_context_);
-    --y_list_remaining_;
-  }
-  if (dx_list_remaining_) {
-    data.dx = dx_list_->at(index)->Value(length_context_);
-    --dx_list_remaining_;
-  }
-  if (dy_list_remaining_) {
-    data.dy = dy_list_->at(index)->Value(length_context_);
-    --dy_list_remaining_;
-  }
-  if (rotate_list_remaining_) {
-    data.rotate =
-        rotate_list_->at(std::min(index, rotate_list_->length() - 1))->Value();
-    // The last rotation value spans the whole scope.
-    if (rotate_list_remaining_ > 1)
-      --rotate_list_remaining_;
-  }
+bool HasUpdated(const SvgCharacterData& data) {
+  return data.HasX() || data.HasY() || data.HasDx() || data.HasDy() ||
+         data.HasRotate() || data.anchored_chunk;
 }
 
-}  // namespace
-
-void SVGTextLayoutAttributesBuilder::FillCharacterDataMap(
-    const TextPosition& position) {
-  AttributeListsIterator attr_lists(position.element);
-  for (wtf_size_t i = 0; attr_lists.HasAttributes() && i < position.length;
-       ++i) {
-    SVGCharacterData& data =
-        character_data_map_.insert(position.start + i + 1, SVGCharacterData())
-            .stored_value->value;
-    attr_lists.UpdateCharacterData(i, data);
+bool HasValidTextLength(const LayoutObject& layout_object) {
+  if (auto* element =
+          DynamicTo<SVGTextContentElement>(layout_object.GetNode())) {
+    if (element->TextLengthIsSpecifiedByUser()) {
+      float text_length = element->textLength()->CurrentValue()->Value(
+          SVGLengthContext(element));
+      // text_length is 0.0 if the textLength attribute has an invalid
+      // string. Legacy SVG <text> skips textLength processing if the
+      // attribute is "0" or invalid. Firefox skips textLength processing if
+      // textLength value is smaller than the intrinsic width of the text.
+      // This code follows the legacy behavior.
+      return text_length > 0.0f;
+    }
   }
+  return false;
 }
 
-void SVGTextLayoutAttributesBuilder::TextPosition::Trace(
-    blink::Visitor* visitor) const {
-  visitor->Trace(element);
+}  // anonymous namespace
+
+SvgTextLayoutAttributesBuilder::SvgTextLayoutAttributesBuilder(InlineNode ifc)
+    : block_flow_(To<LayoutBlockFlow>(ifc.GetLayoutBox())) {}
+
+// This is an implementation of "3. Resolve character positioning" in [1],
+// without recursion.
+//
+// An SVGCharacterDataWithAnchor stores resolve_x, resolve_y, resolve_dx,
+// resolve_dy, "rotate" of result[], and "anchored chunk" of result[].
+//
+// [1]: https://svgwg.org/svg2-draft/text.html#TextLayoutAlgorithm
+void SvgTextLayoutAttributesBuilder::Build(
+    const String& ifc_text_content,
+    const HeapVector<InlineItem>& items) {
+  LayoutAttributesStack attr_stack;
+  HeapVector<SVGTextLengthContext> text_length_stack;
+  unsigned addressable_index = 0;
+  bool is_first_char = true;
+  bool in_text_path = false;
+  absl::optional<unsigned> text_path_start;
+  bool first_char_in_text_path = false;
+  const bool horizontal =
+      IsHorizontalWritingMode(block_flow_->StyleRef().GetWritingMode());
+
+  attr_stack.Push(*block_flow_, in_text_path);
+  if (HasValidTextLength(*block_flow_)) {
+    text_length_stack.push_back(
+        SVGTextLengthContext{block_flow_, addressable_index});
+  }
+  for (const auto& item : items) {
+    const LayoutObject* object = item.GetLayoutObject();
+
+    if (item.Type() == InlineItem::kOpenTag) {
+      if (object->IsSVGTSpan()) {
+        attr_stack.Push(*object, in_text_path);
+      } else if (object->IsSVGTextPath()) {
+        // 2.2. Set the "anchored chunk" flag of result[index] to true.
+        first_char_in_text_path = true;
+        // 2.3. Set in_text_path flag true.
+        in_text_path = true;
+        text_path_start = addressable_index;
+      }
+      if (HasValidTextLength(*object)) {
+        text_length_stack.push_back(
+            SVGTextLengthContext{object, addressable_index});
+      }
+
+    } else if (item.Type() == InlineItem::kCloseTag) {
+      if (object->IsSVGTSpan()) {
+        attr_stack.Pop();
+      } else if (object->IsSVGTextPath()) {
+        // 4.1. Set "in_text_path" flag false.
+        // According to the specification, <textPath> can't be nested.
+        in_text_path = false;
+        first_char_in_text_path = false;
+        DCHECK(text_path_start);
+        if (addressable_index != *text_path_start) {
+          text_path_range_list_.push_back(SvgTextContentRange{
+              object, *text_path_start, addressable_index - 1});
+        }
+        text_path_start.reset();
+      }
+      if (text_length_stack.size() > 0u &&
+          text_length_stack.back().layout_object == object) {
+        if (text_length_stack.back().start_index != addressable_index) {
+          text_length_range_list_.push_back(
+              SvgTextContentRange{object, text_length_stack.back().start_index,
+                                  addressable_index - 1});
+        }
+        text_length_stack.pop_back();
+      }
+
+    } else if (item.Type() != InlineItem::kText) {
+      continue;
+    }
+
+    StringView item_string(ifc_text_content, item.StartOffset(), item.Length());
+    for (unsigned i = 0; i < item.Length();) {
+      SvgCharacterData data;
+
+      // 2.2. Set the "anchored chunk" flag of result[index] to true.
+      // 1.6.1.1. If i < new_check_count, then set the "anchored chunk" flag
+      // of result[index + j] to true. Else set the flag to false.
+      if (first_char_in_text_path) {
+        data.anchored_chunk = true;
+      } else {
+        data.anchored_chunk = attr_stack.ShouldStartAnchoredChunk(horizontal);
+      }
+
+      // 1.6.1.2. If i < length of x, then set resolve_x[index + j] to x[i].
+      data.x = attr_stack.X();
+
+      // 1.6.1.3. If "in_text_path" flag is true and the "horizontal" flag is
+      // false, unset resolve_x[index].
+      if (in_text_path && !horizontal) {
+        data.x = SvgCharacterData::EmptyValue();
+      }
+      // Not in the specification; Set X of the first character in a
+      // <textPath> to 0 in order to:
+      //   - Reset dx in AdjustPositionsDxDy().
+      //   - Anchor at 0 in ApplyAnchoring().
+      // https://github.com/w3c/svgwg/issues/274
+      if (first_char_in_text_path && horizontal && !data.HasX()) {
+        data.x = 0.0f;
+      }
+
+      // 1.6.1.4. If i < length of y, then set resolve_y[index + j] to y[i].
+      data.y = attr_stack.Y();
+
+      // 1.6.1.5. If "in_text_path" flag is true and the "horizontal" flag is
+      // true, unset resolve_y[index].
+      if (in_text_path && horizontal) {
+        data.y = SvgCharacterData::EmptyValue();
+      }
+      // Not in the specification; Set Y of the first character in a
+      // <textPath> to 0 in order to:
+      //   - Reset dy in AdjustPositionsDxDy().
+      //   - Anchor at 0 in ApplyAnchoring().
+      // https://github.com/w3c/svgwg/issues/274
+      if (first_char_in_text_path && !horizontal && !data.HasY()) {
+        data.y = 0.0f;
+      }
+
+      first_char_in_text_path = false;
+
+      // Not in the specification; The following code sets the initial inline
+      // offset of 'current text position' to 0.
+      // See InlineLayoutAlgorithm::CreateLine() for the initial block offset.
+      if (is_first_char) {
+        is_first_char = false;
+        if (horizontal) {
+          if (!data.HasX()) {
+            data.x = 0.0f;
+          }
+        } else {
+          if (!data.HasY()) {
+            data.y = 0.0f;
+          }
+        }
+      }
+
+      // 1.6.1.6. If i < length of dx, then set resolve_dx[index + j] to dx[i].
+      data.dx = attr_stack.Dx();
+
+      // 1.6.1.7. If i < length of dy, then set resolve_dy[index + j] to dy[i].
+      data.dy = attr_stack.Dy();
+
+      // 1.6.1.8. If i < length of rotate, then set the angle value of
+      // result[index + j] to rotate[i]. Otherwise, if rotate is not empty,
+      // then set result[index + j] to result[index + j − 1].
+      data.rotate = attr_stack.MatchedOrLastRotate();
+
+      if (HasUpdated(data)) {
+        resolved_.push_back(std::make_pair(addressable_index, data));
+        ifc_text_content_offsets_.push_back(item.StartOffset() + i);
+      }
+      ++addressable_index;
+      attr_stack.Advance();
+      i = item_string.NextCodePointOffset(i);
+    }
+  }
+  if (text_length_stack.size() > 0u) {
+    DCHECK_EQ(text_length_stack.back().layout_object, block_flow_);
+    DCHECK_EQ(text_length_stack.back().start_index, 0u);
+    text_length_range_list_.push_back(
+        SvgTextContentRange{block_flow_, 0u, addressable_index - 1});
+    text_length_stack.pop_back();
+  }
+  attr_stack.Pop();
+  DCHECK_EQ(resolved_.size(), ifc_text_content_offsets_.size());
+}
+
+SvgInlineNodeData* SvgTextLayoutAttributesBuilder::CreateSvgInlineNodeData() {
+  auto* svg_node_data = MakeGarbageCollected<SvgInlineNodeData>();
+  svg_node_data->character_data_list = std::move(resolved_);
+  svg_node_data->text_length_range_list = std::move(text_length_range_list_);
+  svg_node_data->text_path_range_list = std::move(text_path_range_list_);
+  return svg_node_data;
+}
+
+unsigned SvgTextLayoutAttributesBuilder::IfcTextContentOffsetAt(
+    wtf_size_t index) {
+  return ifc_text_content_offsets_.at(index);
 }
 
 }  // namespace blink

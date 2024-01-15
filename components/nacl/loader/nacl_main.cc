@@ -8,19 +8,16 @@
 #include "base/feature_list.h"
 #include "base/message_loop/message_pump_type.h"
 #include "base/power_monitor/power_monitor.h"
-#include "base/power_monitor/power_monitor_device_source.h"
+#include "base/power_monitor/power_monitor_source.h"
 #include "base/task/single_thread_task_executor.h"
 #include "base/timer/hi_res_timer_manager.h"
 #include "build/build_config.h"
 #include "components/nacl/loader/nacl_listener.h"
 #include "components/nacl/loader/nacl_main_platform_delegate.h"
+#include "components/power_monitor/make_power_monitor_device_source.h"
 #include "content/public/common/main_function_params.h"
 #include "mojo/core/embedder/embedder.h"
 #include "sandbox/policy/switches.h"
-
-#if BUILDFLAG(IS_WIN)
-#include "base/win/win_util.h"
-#endif
 
 // main() routine for the NaCl loader process.
 int NaClMain(content::MainFunctionParams parameters) {
@@ -34,22 +31,13 @@ int NaClMain(content::MainFunctionParams parameters) {
   base::SingleThreadTaskExecutor main_task_executor(base::MessagePumpType::IO);
   base::PlatformThread::SetName("CrNaClMain");
 
-  base::PowerMonitor::Initialize(
-      std::make_unique<base::PowerMonitorDeviceSource>());
+  base::PowerMonitor::Initialize(MakePowerMonitorDeviceSource());
   base::HighResolutionTimerManager hi_res_timer_manager;
 
-#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_APPLE) || BUILDFLAG(IS_LINUX) || \
-    BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_ANDROID)
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_ANDROID)
   NaClMainPlatformDelegate platform;
   bool no_sandbox =
       parsed_command_line.HasSwitch(sandbox::policy::switches::kNoSandbox);
-
-#if BUILDFLAG(IS_WIN)
-  // NaCl processes exit differently from other Chromium processes (see NaClExit
-  // in native_client/src/shared/platform/win/nacl_exit.c) and so do not want
-  // default Chromium process exit behavior.
-  base::win::SetShouldCrashOnProcessDetach(false);
-#endif
 
 #if BUILDFLAG(IS_POSIX)
   // The number of cores must be obtained before the invocation of

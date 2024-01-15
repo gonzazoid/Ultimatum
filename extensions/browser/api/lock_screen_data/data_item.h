@@ -9,16 +9,17 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
-#include "base/memory/ref_counted.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
+#include "base/values.h"
+#include "extensions/common/extension_id.h"
 
 namespace content {
 class BrowserContext;
 }
 
 namespace base {
-class DictionaryValue;
 class SequencedTaskRunner;
 }  // namespace base
 
@@ -39,10 +40,10 @@ class DataItem {
                               std::unique_ptr<std::vector<char>> data)>;
   using RegisteredValuesCallback =
       base::OnceCallback<void(OperationResult result,
-                              std::unique_ptr<base::DictionaryValue> values)>;
+                              base::Value::Dict values)>;
 
   // Gets all registered data items for the extension with the provided
-  // extension ID - the items are returned as a DictionaryValue with keys set
+  // extension ID - the items are returned as a Value::Dict with keys set
   // to data item IDs.
   static void GetRegisteredValuesForExtension(
       content::BrowserContext* context,
@@ -102,7 +103,7 @@ class DataItem {
 
   const std::string& id() const { return id_; }
 
-  const std::string& extension_id() const { return extension_id_; }
+  const ExtensionId& extension_id() const { return extension_id_; }
 
  private:
   // Internal callback for write operations - wraps |callback| to ensure
@@ -120,16 +121,16 @@ class DataItem {
   std::string id_;
 
   // The ID of the extension that owns the data item.
-  std::string extension_id_;
+  ExtensionId extension_id_;
 
-  content::BrowserContext* context_;
+  raw_ptr<content::BrowserContext> context_;
 
   // Cache used to retrieve the values store to which the data item should be
   // saved - the value stores are mapped by the extension ID.
-  ValueStoreCache* value_store_cache_;
+  raw_ptr<ValueStoreCache> value_store_cache_;
 
   // Task runner on which value store should be accessed.
-  base::SequencedTaskRunner* task_runner_;
+  raw_ptr<base::SequencedTaskRunner> task_runner_;
 
   // They symmetric AES key that should be used to encrypt data item content
   // when the content is written to the storage, and to decrypt item content

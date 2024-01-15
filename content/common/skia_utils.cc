@@ -27,7 +27,7 @@ const size_t kImageCacheSingleAllocationByteLimit = 64 * 1024 * 1024;
 // Decreases the size of the font cache to 1MiB.
 BASE_FEATURE(kSmallerFontCache,
              "SmallerFontCache",
-             base::FEATURE_DISABLED_BY_DEFAULT);
+             base::FEATURE_ENABLED_BY_DEFAULT);
 
 }  // namespace
 
@@ -42,7 +42,8 @@ void InitializeSkia() {
   const int kMB = 1024 * 1024;
   size_t font_cache_limit;
 #if BUILDFLAG(IS_ANDROID)
-  font_cache_limit = base::SysInfo::IsLowEndDevice() ? kMB : 8 * kMB;
+  font_cache_limit =
+      base::SysInfo::IsLowEndDeviceOrPartialLowEndModeEnabled() ? kMB : 8 * kMB;
   SkGraphics::SetFontCacheLimit(font_cache_limit);
 #else
   if (cmd.HasSwitch(switches::kSkiaFontCacheLimitMb)) {

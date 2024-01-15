@@ -11,6 +11,7 @@
 #include "third_party/blink/renderer/platform/bindings/exception_code.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
 #include "third_party/blink/renderer/platform/bindings/script_state.h"
+#include "third_party/blink/renderer/platform/testing/task_environment.h"
 
 namespace blink {
 namespace {
@@ -19,12 +20,13 @@ const char kValidPaymentMethod[] = "basic-card";
 const char kValidURL[] = "https://example.test";
 
 TEST(MerchantValidationEventTest, ValidInitializer) {
+  test::TaskEnvironment task_environment;
   V8TestingScope scope;
   MerchantValidationEventInit initializer;
   initializer.setMethodName(kValidPaymentMethod);
   initializer.setValidationURL(kValidURL);
   MerchantValidationEvent* event = MerchantValidationEvent::Create(
-      scope.GetScriptState(), "merchantvalidation", &initializer,
+      scope.GetScriptState(), AtomicString("merchantvalidation"), &initializer,
       scope.GetExceptionState());
   EXPECT_FALSE(scope.GetExceptionState().HadException());
   EXPECT_EQ(kValidPaymentMethod, event->methodName());
@@ -32,12 +34,13 @@ TEST(MerchantValidationEventTest, ValidInitializer) {
 }
 
 TEST(MerchantValidationEventTest, EmptyPaymentMethodIsValid) {
+  test::TaskEnvironment task_environment;
   V8TestingScope scope;
   MerchantValidationEventInit initializer;
   initializer.setMethodName("");
   initializer.setValidationURL(kValidURL);
   MerchantValidationEvent* event = MerchantValidationEvent::Create(
-      scope.GetScriptState(), "merchantvalidation", &initializer,
+      scope.GetScriptState(), AtomicString("merchantvalidation"), &initializer,
       scope.GetExceptionState());
   EXPECT_FALSE(scope.GetExceptionState().HadException());
   EXPECT_TRUE(event->methodName().empty());
@@ -45,12 +48,13 @@ TEST(MerchantValidationEventTest, EmptyPaymentMethodIsValid) {
 }
 
 TEST(MerchantValidationEventTest, InvalidPaymentMethod) {
+  test::TaskEnvironment task_environment;
   V8TestingScope scope;
   MerchantValidationEventInit initializer;
   initializer.setMethodName("-123");
   initializer.setValidationURL(kValidURL);
   MerchantValidationEvent* event = MerchantValidationEvent::Create(
-      scope.GetScriptState(), "merchantvalidation", &initializer,
+      scope.GetScriptState(), AtomicString("merchantvalidation"), &initializer,
       scope.GetExceptionState());
   EXPECT_TRUE(scope.GetExceptionState().HadException());
   EXPECT_EQ(ESErrorType::kRangeError,
@@ -59,12 +63,13 @@ TEST(MerchantValidationEventTest, InvalidPaymentMethod) {
 }
 
 TEST(MerchantValidationEventTest, InvalidValidationURL) {
+  test::TaskEnvironment task_environment;
   V8TestingScope scope;
   MerchantValidationEventInit initializer;
   initializer.setMethodName("");
   initializer.setValidationURL("not a URL");
   MerchantValidationEvent* event = MerchantValidationEvent::Create(
-      scope.GetScriptState(), "merchantvalidation", &initializer,
+      scope.GetScriptState(), AtomicString("merchantvalidation"), &initializer,
       scope.GetExceptionState());
   EXPECT_TRUE(scope.GetExceptionState().HadException());
   EXPECT_EQ(ESErrorType::kTypeError,
@@ -73,12 +78,13 @@ TEST(MerchantValidationEventTest, InvalidValidationURL) {
 }
 
 TEST(MerchantValidationEventTest, EventMustBeTrusted) {
+  test::TaskEnvironment task_environment;
   V8TestingScope scope;
   MerchantValidationEventInit initializer;
   initializer.setMethodName("");
   initializer.setValidationURL(kValidURL);
   MerchantValidationEvent* event = MerchantValidationEvent::Create(
-      scope.GetScriptState(), "merchantvalidation", &initializer,
+      scope.GetScriptState(), AtomicString("merchantvalidation"), &initializer,
       scope.GetExceptionState());
   EXPECT_FALSE(scope.GetExceptionState().HadException());
   ASSERT_FALSE(event->isTrusted());

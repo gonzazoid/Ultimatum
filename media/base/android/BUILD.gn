@@ -9,6 +9,7 @@ import("//media/media_options.gni")
 
 if (is_android) {
   import("//build/config/android/rules.gni")
+  import("//third_party/jni_zero/jni_zero.gni")
 
   # This is bundled into //media, so all dependencies should be on //media.
   # APK targets that depend on this indirectly, should also
@@ -70,6 +71,7 @@ if (is_android) {
       "//media/cdm",
       "//media/formats",
       "//net",
+      "//third_party/re2",
       "//third_party/widevine/cdm:headers",
       "//ui/gl",
       "//url",
@@ -140,7 +142,7 @@ if (is_android) {
       "java/src/org/chromium/media/MediaPlayerBridge.java",
       "java/src/org/chromium/media/MediaPlayerListener.java",
       "java/src/org/chromium/media/MediaServerCrashListener.java",
-      "java/src/org/chromium/media/VideoEncodeAcceleratorUtil.java",
+      "java/src/org/chromium/media/VideoAcceleratorUtil.java",
     ]
   }
 
@@ -148,6 +150,7 @@ if (is_android) {
     sources = [
       "media_codec_bridge.h",
       "media_codec_direction.h",
+      "media_drm_bridge.h",
     ]
   }
 
@@ -165,14 +168,15 @@ if (is_android) {
       ":display_java",
       ":media_java_resources",
       "//base:base_java",
-      "//base:jni_java",
       "//build/android:build_java",
       "//third_party/androidx:androidx_annotation_annotation_java",
+      "//third_party/jni_zero:jni_zero_java",
     ]
-    annotation_processor_deps = [ "//base/android/jni_generator:jni_processor" ]
+
     srcjar_deps = [
       ":java_enums",
       ":java_switches",
+      ":media_jni_headers",
       "//media/base:java_enums",
     ]
     resources_package = "org.chromium.media"
@@ -199,7 +203,7 @@ if (is_android) {
       "java/src/org/chromium/media/MediaPlayerListener.java",
       "java/src/org/chromium/media/MediaServerCrashListener.java",
       "java/src/org/chromium/media/ScreenResolutionUtil.java",
-      "java/src/org/chromium/media/VideoEncodeAcceleratorUtil.java",
+      "java/src/org/chromium/media/VideoAcceleratorUtil.java",
     ]
   }
 
@@ -220,6 +224,7 @@ if (is_android) {
       ":media_java",
       "//base:base_java",
       "//base:base_java_test_support",
+      "//base:base_junit_test_support",
       "//third_party/androidx:androidx_test_runner_java",
       "//third_party/junit",
     ]

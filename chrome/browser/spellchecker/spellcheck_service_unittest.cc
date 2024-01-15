@@ -26,6 +26,7 @@
 #include "components/user_prefs/user_prefs.h"
 #include "content/public/test/browser_task_environment.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 
 struct TestCase {
   TestCase(
@@ -98,12 +99,6 @@ class SpellcheckServiceUnitTestBase : public testing::Test {
 
  protected:
   void SetUp() override {
-#if BUILDFLAG(IS_WIN)
-    // Tests were designed assuming Hunspell dictionary used and may fail when
-    // Windows spellcheck is enabled by default.
-    feature_list_.InitAndDisableFeature(spellcheck::kWinUseBrowserSpellChecker);
-#endif  // BUILDFLAG(IS_WIN)
-
     // Use SetTestingFactoryAndUse to force creation and initialization.
     SpellcheckServiceFactory::GetInstance()->SetTestingFactoryAndUse(
         &profile_, base::BindRepeating(&BuildSpellcheckService));
@@ -111,15 +106,18 @@ class SpellcheckServiceUnitTestBase : public testing::Test {
 
   content::BrowserTaskEnvironment task_environment_;
 
-#if BUILDFLAG(IS_WIN)
-  // feature_list_ needs to be destroyed after profile_.
-  base::test::ScopedFeatureList feature_list_;
-#endif  // BUILDFLAG(IS_WIN)
   TestingProfile profile_;
 };
 
 class SpellcheckServiceUnitTest : public SpellcheckServiceUnitTestBase,
                                   public testing::WithParamInterface<TestCase> {
+ private:
+#if BUILDFLAG(IS_WIN)
+  // Tests were designed assuming Hunspell dictionary used and may fail when
+  // Windows spellcheck is enabled by default.
+  spellcheck::ScopedDisableBrowserSpellCheckerForTesting
+      disable_browser_spell_checker_;
+#endif  // BUILDFLAG(IS_WIN)
 };
 
 INSTANTIATE_TEST_SUITE_P(
@@ -162,12 +160,12 @@ INSTANTIATE_TEST_SUITE_P(
 TEST_P(SpellcheckServiceUnitTest, GetDictionaries) {
   prefs()->SetString(language::prefs::kAcceptLanguages,
                      GetParam().accept_languages);
-  base::ListValue spellcheck_dictionaries;
+  base::Value::List spellcheck_dictionaries;
   for (const std::string& dictionary : GetParam().spellcheck_dictionaries) {
     spellcheck_dictionaries.Append(dictionary);
   }
-  prefs()->Set(spellcheck::prefs::kSpellCheckDictionaries,
-               spellcheck_dictionaries);
+  prefs()->SetList(spellcheck::prefs::kSpellCheckDictionaries,
+                   std::move(spellcheck_dictionaries));
 
   std::vector<SpellcheckService::Dictionary> dictionaries;
   SpellcheckService::GetDictionaries(browser_context(), &dictionaries);
@@ -190,9 +188,7 @@ class SpellcheckServiceHybridUnitTestBase
         &profile_, base::BindRepeating(&BuildSpellcheckService));
   }
 
-  virtual void InitFeatures() {
-    feature_list_.InitAndEnableFeature(spellcheck::kWinUseBrowserSpellChecker);
-  }
+  virtual void InitFeatures() {}
 
   virtual void InitializeSpellcheckService(
       const std::vector<std::string>& spellcheck_languages_for_testing) {
@@ -223,6 +219,8 @@ class SpellcheckServiceHybridUnitTestBase
   static const std::vector<std::string>
       windows_spellcheck_languages_for_testing_;
 
+  base::test::ScopedFeatureList feature_list_;
+
   raw_ptr<SpellcheckService> spellcheck_service_;
 };
 
@@ -230,16 +228,13 @@ void SpellcheckServiceHybridUnitTestBase::RunGetDictionariesTest(
     const std::string accept_languages,
     const std::vector<std::string> spellcheck_dictionaries,
     const std::vector<SpellcheckService::Dictionary> expected_dictionaries) {
-  if (!spellcheck::WindowsVersionSupportsSpellchecker())
-    return;
-
   prefs()->SetString(language::prefs::kAcceptLanguages, accept_languages);
-  base::ListValue spellcheck_dictionaries_list;
+  base::Value::List spellcheck_dictionaries_list;
   for (std::string dict : spellcheck_dictionaries) {
     spellcheck_dictionaries_list.Append(dict);
   }
-  prefs()->Set(spellcheck::prefs::kSpellCheckDictionaries,
-               spellcheck_dictionaries_list);
+  prefs()->SetList(spellcheck::prefs::kSpellCheckDictionaries,
+                   std::move(spellcheck_dictionaries_list));
 
   // Simulate first-run scenario (method is normally called during browser
   // start-up). If the primary accept language has no dictionary support, it is
@@ -260,9 +255,6 @@ void SpellcheckServiceHybridUnitTestBase::RunDictionaryMappingTest(
     const std::string expected_tag_passed_to_spellcheck,
     const std::string expected_accept_language_generic,
     const std::string expected_tag_passed_to_spellcheck_generic) {
-  if (!spellcheck::WindowsVersionSupportsSpellchecker())
-    return;
-
   InitializeSpellcheckService({full_tag});
 
   std::string supported_dictionary;
@@ -348,9 +340,8 @@ class GetDictionariesHybridUnitTestNoDelayInit
   void InitFeatures() override {
     // Disable kWinDelaySpellcheckServiceInit, as the case where it's enabled
     // is tested in SpellcheckServiceWindowsDictionaryMappingUnitTestDelayInit.
-    feature_list_.InitWithFeatures(
-        /*enabled_features=*/{spellcheck::kWinUseBrowserSpellChecker},
-        /*disabled_features=*/{spellcheck::kWinDelaySpellcheckServiceInit});
+    feature_list_.InitAndDisableFeature(
+        spellcheck::kWinDelaySpellcheckServiceInit);
   }
 };
 
@@ -445,9 +436,8 @@ class SpellcheckServiceWindowsDictionaryMappingUnitTest
   void InitFeatures() override {
     // Disable kWinDelaySpellcheckServiceInit, as the case where it's enabled
     // is tested in SpellcheckServiceWindowsDictionaryMappingUnitTestDelayInit.
-    feature_list_.InitWithFeatures(
-        /*enabled_features=*/{spellcheck::kWinUseBrowserSpellChecker},
-        /*disabled_features=*/{spellcheck::kWinDelaySpellcheckServiceInit});
+    feature_list_.InitAndDisableFeature(
+        spellcheck::kWinDelaySpellcheckServiceInit);
   }
 };
 
@@ -499,10 +489,8 @@ class SpellcheckServiceHybridUnitTestDelayInitBase
  protected:
   void InitFeatures() override {
     // Don't initialize the SpellcheckService on browser launch.
-    feature_list_.InitWithFeatures(
-        /*enabled_features=*/{spellcheck::kWinUseBrowserSpellChecker,
-                              spellcheck::kWinDelaySpellcheckServiceInit},
-        /*disabled_features=*/{});
+    feature_list_.InitAndEnableFeature(
+        spellcheck::kWinDelaySpellcheckServiceInit);
   }
 
   void InitializeSpellcheckService(

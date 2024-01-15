@@ -8,7 +8,7 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/numerics/safe_conversions.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -150,10 +150,12 @@ class OverflowViewTest : public testing::Test {
   static constexpr gfx::Size kPreferredSize2{55, 50};
   static constexpr gfx::Size kMinimumSize2{25, 30};
   std::unique_ptr<views::View> parent_view_;
-  raw_ptr<OverflowView> overflow_view_ = nullptr;
-  raw_ptr<views::StaticSizedView> primary_view_ = nullptr;
-  raw_ptr<views::StaticSizedView> prefix_indicator_view_ = nullptr;
-  raw_ptr<views::StaticSizedView> postfix_indicator_view_ = nullptr;
+  raw_ptr<OverflowView, DanglingUntriaged> overflow_view_ = nullptr;
+  raw_ptr<views::StaticSizedView, DanglingUntriaged> primary_view_ = nullptr;
+  raw_ptr<views::StaticSizedView, DanglingUntriaged> prefix_indicator_view_ =
+      nullptr;
+  raw_ptr<views::StaticSizedView, DanglingUntriaged> postfix_indicator_view_ =
+      nullptr;
 };
 
 constexpr gfx::Size OverflowViewTest::kDefaultParentSize;

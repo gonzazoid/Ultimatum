@@ -15,7 +15,6 @@
 #include "chrome/android/chrome_jni_headers/BrowsingHistoryBridge_jni.h"
 #include "chrome/browser/history/history_service_factory.h"
 #include "chrome/browser/profiles/profile_android.h"
-#include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/sync/sync_service_factory.h"
 #include "components/history/core/browser/browsing_history_service.h"
 #include "components/keyed_service/core/service_access_type.h"
@@ -105,7 +104,7 @@ void BrowsingHistoryBridge::OnQueryComplete(
     // This relies on |all_timestamps| being a sorted data structure.
     int64_t most_recent_java_timestamp =
         base::Time::FromInternalValue(*entry.all_timestamps.rbegin())
-            .ToJavaTime();
+            .InMillisecondsSinceUnixEpoch();
     std::vector<int64_t> native_timestamps(entry.all_timestamps.begin(),
                                            entry.all_timestamps.end());
 

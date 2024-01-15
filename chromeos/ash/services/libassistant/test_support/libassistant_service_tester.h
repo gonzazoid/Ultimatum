@@ -5,6 +5,7 @@
 #ifndef CHROMEOS_ASH_SERVICES_LIBASSISTANT_TEST_SUPPORT_LIBASSISTANT_SERVICE_TESTER_H_
 #define CHROMEOS_ASH_SERVICES_LIBASSISTANT_TEST_SUPPORT_LIBASSISTANT_SERVICE_TESTER_H_
 
+#include "base/memory/raw_ptr.h"
 #include "base/test/scoped_path_override.h"
 #include "chromeos/ash/services/libassistant/libassistant_service.h"
 #include "chromeos/ash/services/libassistant/public/mojom/audio_input_controller.mojom.h"
@@ -17,13 +18,13 @@
 #include "chromeos/ash/services/libassistant/public/mojom/service_controller.mojom.h"
 #include "chromeos/ash/services/libassistant/public/mojom/speaker_id_enrollment_controller.mojom-forward.h"
 #include "chromeos/assistant/internal/test_support/fake_assistant_manager.h"
-#include "chromeos/assistant/internal/test_support/fake_assistant_manager_internal.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
 
 namespace ash::libassistant {
 
 class AssistantClient;
+class DisplayConnection;
 class FakeLibassistantFactory;
 
 // Helper class that makes it easier to test |LibassistantService|.
@@ -42,8 +43,6 @@ class LibassistantServiceTester {
 
   AssistantClient& assistant_client();
   chromeos::assistant::FakeAssistantManager& assistant_manager();
-  chromeos::assistant::FakeAssistantManagerInternal&
-  assistant_manager_internal();
 
   mojom::AudioInputController& audio_input_controller() {
     return *audio_input_controller_.get();
@@ -63,6 +62,8 @@ class LibassistantServiceTester {
 
   mojo::PendingReceiver<mojom::NotificationDelegate>
   GetNotificationDelegatePendingReceiver();
+
+  DisplayConnection& GetDisplayConnection();
 
   void FlushForTesting();
 
@@ -91,15 +92,10 @@ class LibassistantServiceTester {
   mojo::Remote<mojom::LibassistantService> service_remote_;
   // Our file provider requires the home dir to be overridden.
   base::ScopedPathOverride home_dir_override_;
-  FakeLibassistantFactory* libassistant_factory_ = nullptr;
+  raw_ptr<FakeLibassistantFactory> libassistant_factory_ = nullptr;
   std::unique_ptr<LibassistantService> service_;
 };
 
 }  // namespace ash::libassistant
-
-// TODO(https://crbug.com/1164001): remove when the migration is finished.
-namespace chromeos::libassistant {
-using ::ash::libassistant::LibassistantServiceTester;
-}
 
 #endif  // CHROMEOS_ASH_SERVICES_LIBASSISTANT_TEST_SUPPORT_LIBASSISTANT_SERVICE_TESTER_H_

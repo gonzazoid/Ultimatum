@@ -7,7 +7,7 @@
 
 #include <IOKit/IOKitLib.h>
 
-#include "base/mac/scoped_typeref.h"
+#include "base/apple/scoped_typeref.h"
 
 namespace base::mac {
 
@@ -29,7 +29,7 @@ struct ScopedIOPluginInterfaceTraits {
 // (IOUSBInterfaceStruct and IOUSBDeviceStruct320 in particular).
 template <typename T>
 using ScopedIOPluginInterface =
-    ScopedTypeRef<T**, internal::ScopedIOPluginInterfaceTraits<T**>>;
+    apple::ScopedTypeRef<T**, internal::ScopedIOPluginInterfaceTraits<T**>>;
 
 }  // namespace base::mac
 

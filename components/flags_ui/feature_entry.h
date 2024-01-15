@@ -9,6 +9,7 @@
 
 #include "base/containers/span.h"
 #include "base/feature_list.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "build/chromeos_buildflags.h"
 
 namespace flags_ui {
@@ -79,6 +80,10 @@ struct FeatureEntry {
     // disabled like SINGLE_VALUE.
     ORIGIN_LIST_VALUE,
 
+    // Corresponds to a command line switch where the value is an arbitrary
+    // string. Default state is disabled like SINGLE_VALUE.
+    STRING_VALUE,
+
 #if BUILDFLAG(IS_CHROMEOS_ASH)
     // The below two types are for *platform* features -- that is, those defined
     // and queried via platform2/featured/feature_library.h. Such features
@@ -144,7 +149,9 @@ struct FeatureEntry {
     // get translated. The other parts here use ids for historical reasons and
     // can realistically also be moved to direct description_texts.
     const char* description_text;
-    const FeatureParam* params;
+    // This field is not a raw_ptr<> because it was filtered by the rewriter
+    // for: #global-scope, #constexpr-var-initializer
+    RAW_PTR_EXCLUSION const FeatureParam* params;
     int num_params;
     // A variation id number in the format of
     // VariationsIdsProvider::ForceVariationIds() or nullptr if you do
@@ -192,7 +199,9 @@ struct FeatureEntry {
       // For FEATURE_VALUE or FEATURE_WITH_PARAMS_VALUE, the base::Feature
       // this entry corresponds to. The same feature must not be used in
       // multiple FeatureEntries.
-      const base::Feature* feature;
+      // This field is not a raw_ptr<> because it was filtered by the rewriter
+      // for: #union, #global-scope
+      RAW_PTR_EXCLUSION const base::Feature* feature;
 
       // This describes the options if type is FEATURE_WITH_PARAMS_VALUE.
       // The first variation is the default "Enabled" variation, its

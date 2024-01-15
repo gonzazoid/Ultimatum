@@ -53,7 +53,7 @@ class PLATFORM_EXPORT TransformOperations {
 
   // Constructs a transformation matrix from the operations. The parameter
   // |border_box_size| is used when computing styles that are size-dependent.
-  void Apply(const gfx::SizeF& border_box_size, TransformationMatrix& t) const {
+  void Apply(const gfx::SizeF& border_box_size, gfx::Transform& t) const {
     for (auto& operation : operations_)
       operation->Apply(t, border_box_size);
   }
@@ -64,7 +64,7 @@ class PLATFORM_EXPORT TransformOperations {
   // |border_box_size| is used when computing styles that are size-dependent.
   void ApplyRemaining(const gfx::SizeF& border_box_size,
                       wtf_size_t start,
-                      TransformationMatrix& t) const;
+                      gfx::Transform& t) const;
 
   // Return true if any of the operation types are 3D operation types (even if
   // the values describe affine transforms)
@@ -127,10 +127,10 @@ class PLATFORM_EXPORT TransformOperations {
 
   void clear() { operations_.clear(); }
 
-  Vector<scoped_refptr<TransformOperation>>& Operations() {
+  Vector<scoped_refptr<TransformOperation>, 2>& Operations() {
     return operations_;
   }
-  const Vector<scoped_refptr<TransformOperation>>& Operations() const {
+  const Vector<scoped_refptr<TransformOperation>, 2>& Operations() const {
     return operations_;
   }
 
@@ -145,13 +145,34 @@ class PLATFORM_EXPORT TransformOperations {
                            const double& max_progress,
                            gfx::BoxF* bounds) const;
 
+  // Registered custom property interpolations cannot currently represent
+  // interpolated values if functions need to be combined into a matrix and
+  // those function values depend on the box size via percentage values, since
+  // percentages need to be converted into numbers and the percentages should
+  // be kept for the computed value. Until there is a standardized mix()
+  // function for representing such transform values, make such interpolations
+  // discrete with BoxSizeDependentMatrixBlending::kDisallow.
+  //
+  // The standard CSS transform property still allows such interpolations, but
+  // the computed value in typed-om incorrectly returns values with percentages
+  // resolved in this case. getComputedStyle().transform returns a resolved
+  // value per spec.
+  enum class BoxSizeDependentMatrixBlending {
+    kAllow,
+    kDisallow,
+  };
+
   scoped_refptr<TransformOperation> BlendRemainingByUsingMatrixInterpolation(
       const TransformOperations& from,
       wtf_size_t matching_prefix_length,
-      double progress) const;
+      double progress,
+      BoxSizeDependentMatrixBlending box_size_dependent =
+          BoxSizeDependentMatrixBlending::kAllow) const;
 
   TransformOperations Blend(const TransformOperations& from,
-                            double progress) const;
+                            double progress,
+                            BoxSizeDependentMatrixBlending box_size_dependent =
+                                BoxSizeDependentMatrixBlending::kAllow) const;
   TransformOperations Add(const TransformOperations& addend) const;
   TransformOperations Zoom(double factor) const;
 
@@ -160,7 +181,7 @@ class PLATFORM_EXPORT TransformOperations {
   TransformOperations Accumulate(const TransformOperations& to) const;
 
  private:
-  Vector<scoped_refptr<TransformOperation>> operations_;
+  Vector<scoped_refptr<TransformOperation>, 2> operations_;
 };
 
 }  // namespace blink

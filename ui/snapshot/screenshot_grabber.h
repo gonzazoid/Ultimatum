@@ -8,7 +8,7 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/ref_counted_memory.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
@@ -62,7 +62,7 @@ class SNAPSHOT_EXPORT ScreenshotGrabber {
   class ScopedCursorHider;
 #endif
 
-  void GrabWindowSnapshotAsyncCallback(
+  void GrabSnapshotImageCallback(
       const std::string& window_identifier,
       bool is_partial,
       ScreenshotCallback callback,

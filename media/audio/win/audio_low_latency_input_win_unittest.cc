@@ -11,16 +11,15 @@
 
 #include <memory>
 
-#include "base/bind.h"
 #include "base/environment.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/path_service.h"
 #include "base/run_loop.h"
 #include "base/strings/stringprintf.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/test/metrics/histogram_tester.h"
-#include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
 #include "base/test/test_timeouts.h"
 #include "base/win/scoped_com_initializer.h"
@@ -57,10 +56,11 @@ ACTION_P4(CheckCountAndPostQuitTask, count, limit, task_runner, quit_closure) {
 
 class MockAudioInputCallback : public AudioInputStream::AudioInputCallback {
  public:
-  MOCK_METHOD3(OnData,
+  MOCK_METHOD4(OnData,
                void(const AudioBus* src,
                     base::TimeTicks capture_time,
-                    double volume));
+                    double volume,
+                    const AudioGlitchInfo& glitch_info));
   MOCK_METHOD0(OnError, void());
 };
 
@@ -83,7 +83,8 @@ class FakeAudioInputCallback : public AudioInputStream::AudioInputCallback {
 
   void OnData(const AudioBus* src,
               base::TimeTicks capture_time,
-              double volume) override {
+              double volume,
+              const AudioGlitchInfo& glitch_info) override {
     EXPECT_GE(capture_time, base::TimeTicks());
     num_received_audio_frames_ += src->frames();
     data_event_.Signal();
@@ -136,7 +137,8 @@ class WriteToFileAudioSink : public AudioInputStream::AudioInputCallback {
   // AudioInputStream::AudioInputCallback implementation.
   void OnData(const AudioBus* src,
               base::TimeTicks capture_time,
-              double volume) override {
+              double volume,
+              const AudioGlitchInfo& glitch_info) override {
     const int num_samples = src->frames() * src->channels();
     auto interleaved = std::make_unique<int16_t[]>(num_samples);
     const int bytes_per_sample = sizeof(interleaved[0]);
@@ -384,13 +386,8 @@ TEST_F(WinAudioInputTest, WASAPIAudioInputStreamOpenStartAndClose) {
 }
 
 // Test Open(), Start(), Stop(), Close() calling sequence.
-TEST_P(WinAudioInputTest, WASAPIAudioInputStreamOpenStartStopAndClose) {
+TEST_F(WinAudioInputTest, WASAPIAudioInputStreamOpenStartStopAndClose) {
   ABORT_AUDIO_TEST_IF_NOT(HasCoreAudioAndInputDevices(audio_manager_.get()));
-  base::test::ScopedFeatureList feature_list;
-  const bool use_raw_audio = GetParam();
-  use_raw_audio
-      ? feature_list.InitAndEnableFeature(media::kWasapiRawAudioCapture)
-      : feature_list.InitAndDisableFeature(media::kWasapiRawAudioCapture);
   ScopedAudioInputStream ais(
       CreateDefaultAudioInputStream(audio_manager_.get()));
   EXPECT_TRUE(ais->SetAutomaticGainControl(true));
@@ -465,7 +462,7 @@ TEST_F(WinAudioInputTest, WASAPIAudioInputStreamTestPacketSizes) {
     // All should contain valid packets of the same size and a valid delay
     // estimate.
     base::RunLoop run_loop;
-    EXPECT_CALL(sink, OnData(NotNull(), _, _))
+    EXPECT_CALL(sink, OnData(NotNull(), _, _, _))
         .Times(AtLeast(10))
         .WillRepeatedly(CheckCountAndPostQuitTask(
             &count, 10, task_environment_.GetMainThreadTaskRunner(),
@@ -488,7 +485,7 @@ TEST_F(WinAudioInputTest, WASAPIAudioInputStreamTestPacketSizes) {
 
   {
     base::RunLoop run_loop;
-    EXPECT_CALL(sink, OnData(NotNull(), _, _))
+    EXPECT_CALL(sink, OnData(NotNull(), _, _, _))
         .Times(AtLeast(10))
         .WillRepeatedly(CheckCountAndPostQuitTask(
             &count, 10, task_environment_.GetMainThreadTaskRunner(),
@@ -507,7 +504,7 @@ TEST_F(WinAudioInputTest, WASAPIAudioInputStreamTestPacketSizes) {
 
   {
     base::RunLoop run_loop;
-    EXPECT_CALL(sink, OnData(NotNull(), _, _))
+    EXPECT_CALL(sink, OnData(NotNull(), _, _, _))
         .Times(AtLeast(10))
         .WillRepeatedly(CheckCountAndPostQuitTask(
             &count, 10, task_environment_.GetMainThreadTaskRunner(),
@@ -580,9 +577,6 @@ TEST_F(WinAudioInputTest, DISABLED_WASAPIAudioInputStreamRecordToFile) {
 // capture mode.
 TEST_F(WinAudioInputTest, DISABLED_WASAPIAudioInputStreamRecordToFileRAW) {
   ABORT_AUDIO_TEST_IF_NOT(HasCoreAudioAndInputDevices(audio_manager_.get()));
-
-  base::test::ScopedFeatureList feature_list;
-  feature_list.InitAndEnableFeature(media::kWasapiRawAudioCapture);
 
   // Name of the output PCM file containing captured data. The output file
   // will be stored in the directory containing 'media_unittests.exe'.
@@ -659,9 +653,5 @@ TEST_F(WinAudioInputTest, DISABLED_WASAPIAudioInputStreamResampleToFile) {
     ais.Close();
   }
 }
-
-INSTANTIATE_TEST_SUITE_P(WinAudioInputTests,
-                         WinAudioInputTest,
-                         testing::Bool());
 
 }  // namespace media

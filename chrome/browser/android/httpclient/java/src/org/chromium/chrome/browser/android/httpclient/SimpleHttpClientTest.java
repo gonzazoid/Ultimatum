@@ -8,7 +8,6 @@ import android.content.Context;
 
 import androidx.test.filters.SmallTest;
 
-import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Rule;
@@ -32,16 +31,13 @@ import java.util.HashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
 
-/**
- * Integration test for {@link SimpleHttpClient}.
- */
+/** Integration test for {@link SimpleHttpClient}. */
 @RunWith(ChromeJUnit4ClassRunner.class)
 @Batch(Batch.PER_CLASS)
 public class SimpleHttpClientTest {
     private static final String TEST_PAGE = "/chrome/test/data/android/simple.html";
 
-    @Rule
-    public ChromeBrowserTestRule mTestRule = new ChromeBrowserTestRule();
+    @Rule public ChromeBrowserTestRule mTestRule = new ChromeBrowserTestRule();
 
     private Context mContext;
     private EmbeddedTestServer mTestServer;
@@ -57,18 +53,14 @@ public class SimpleHttpClientTest {
     public void setUp() throws ExecutionException {
         mContext = ContextUtils.getApplicationContext();
         mTestServer = EmbeddedTestServer.createAndStartServer(mContext);
-        mCallback = response -> {
-            mLastAcceptedResponse = response;
-            mCallbackHelper.notifyCalled();
-        };
+        mCallback =
+                response -> {
+                    mLastAcceptedResponse = response;
+                    mCallbackHelper.notifyCalled();
+                };
 
         TestThreadUtils.runOnUiThreadBlocking(
                 () -> mHttpClient = new SimpleHttpClient(Profile.getLastUsedRegularProfile()));
-    }
-
-    @After
-    public void tearDown() throws ExecutionException {
-        mTestServer.stopAndDestroyServer();
     }
 
     @Test
@@ -79,8 +71,12 @@ public class SimpleHttpClientTest {
         String body = "";
 
         TestThreadUtils.runOnUiThreadBlocking(
-                ()
-                        -> mHttpClient.send(gurl, "POST", body.getBytes(), new HashMap<>(),
+                () ->
+                        mHttpClient.send(
+                                gurl,
+                                "POST",
+                                body.getBytes(),
+                                new HashMap<>(),
                                 NetworkTrafficAnnotationTag.TRAFFIC_ANNOTATION_FOR_TESTS,
                                 mCallback));
 

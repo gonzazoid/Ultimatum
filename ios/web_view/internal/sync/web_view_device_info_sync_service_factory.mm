@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/singleton.h"
 #include "base/time/default_clock.h"
 #include "components/keyed_service/ios/browser_state_dependency_manager.h"
@@ -21,10 +21,6 @@
 #import "ios/web_view/internal/sync/web_view_model_type_store_service_factory.h"
 #include "ios/web_view/internal/sync/web_view_sync_invalidations_service_factory.h"
 #include "ios/web_view/internal/web_view_browser_state.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace {
 
@@ -46,36 +42,36 @@ class DeviceInfoSyncClient : public syncer::DeviceInfoSyncClient {
   bool GetSendTabToSelfReceivingEnabled() const override { return false; }
 
   // syncer::DeviceInfoSyncClient:
-  absl::optional<syncer::DeviceInfo::SharingInfo> GetLocalSharingInfo()
+  std::optional<syncer::DeviceInfo::SharingInfo> GetLocalSharingInfo()
       const override {
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   // syncer::DeviceInfoSyncClient:
-  absl::optional<std::string> GetFCMRegistrationToken() const override {
+  std::optional<std::string> GetFCMRegistrationToken() const override {
     if (sync_invalidations_service_) {
       return sync_invalidations_service_->GetFCMRegistrationToken();
     }
     // If the service is not enabled, then the registration token must be empty,
-    // not unknown (absl::nullopt). This is needed to reset previous token if
+    // not unknown (std::nullopt). This is needed to reset previous token if
     // the invalidations have been turned off.
     return std::string();
   }
 
   // syncer::DeviceInfoSyncClient:
-  absl::optional<syncer::ModelTypeSet> GetInterestedDataTypes() const override {
+  std::optional<syncer::ModelTypeSet> GetInterestedDataTypes() const override {
     if (sync_invalidations_service_) {
       return sync_invalidations_service_->GetInterestedDataTypes();
     }
     // If the service is not enabled, then the list of types must be empty, not
-    // unknown (absl::nullopt). This is needed to reset previous types if the
+    // unknown (std::nullopt). This is needed to reset previous types if the
     // invalidations have been turned off.
     return syncer::ModelTypeSet();
   }
 
-  absl::optional<syncer::DeviceInfo::PhoneAsASecurityKeyInfo>
+  syncer::DeviceInfo::PhoneAsASecurityKeyInfo::StatusOrInfo
   GetPhoneAsASecurityKeyInfo() const override {
-    return absl::nullopt;
+    return syncer::DeviceInfo::PhoneAsASecurityKeyInfo::NoSupport();
   }
 
   // syncer::DeviceInfoSyncClient:
@@ -127,7 +123,8 @@ WebViewDeviceInfoSyncServiceFactory::BuildServiceInstanceFor(
       browser_state->GetPrefs(), sync_invalidations_service);
   auto local_device_info_provider =
       std::make_unique<syncer::LocalDeviceInfoProviderImpl>(
-          version_info::Channel::STABLE, version_info::GetVersionNumber(),
+          version_info::Channel::STABLE,
+          std::string(version_info::GetVersionNumber()),
           device_info_sync_client.get());
   auto device_prefs = std::make_unique<syncer::DeviceInfoPrefs>(
       browser_state->GetPrefs(), base::DefaultClock::GetInstance());

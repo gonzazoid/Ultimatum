@@ -7,11 +7,10 @@
  * for testing.
  */
 
-import {assert, assertNotReached} from 'chrome://resources/js/assert.js';
-import {isChromeOS} from 'chrome://resources/js/cr.m.js';
+import {assert, assertNotReached} from 'chrome://resources/ash/common/assert.js';
 
-import {FakeChromeEvent} from '../../fake_chrome_event.js';
-import {TestBrowserProxy} from '../../test_browser_proxy.js';
+import {FakeChromeEvent} from 'chrome://webui-test/fake_chrome_event.js';
+import {TestBrowserProxy} from 'chrome://webui-test/test_browser_proxy.js';
 
 /**
  * Fake of the chrome.languageSettingsPrivate API.
@@ -199,28 +198,20 @@ export class FakeLanguageSettingsPrivate extends TestBrowserProxy {
 
   /**
    * Gets languages available for translate, spell checking, input and locale.
-   * @param {function(!Array<!chrome.languageSettingsPrivate.Language>)}
-   *     callback
+   * @return {!Promise<!Array<!chrome.languageSettingsPrivate.Language>>}
    */
-  getLanguageList(callback) {
-    setTimeout(function() {
-      callback(
-          /** @type {!Array<!chrome.languageSettingsPrivate.Language>} */ (
-              JSON.parse(JSON.stringify(this.languages))));
-    }.bind(this));
+  getLanguageList() {
+    return Promise.resolve(structuredClone(this.languages));
   }
 
   /**
    * Gets languages that should always be automatically translated.
-   * @param {function(!Array<!string>)}
-   *     callback
+   * @return {!Promise<!Array<!string>>}
    */
-  getAlwaysTranslateLanguages(callback) {
-    setTimeout(function() {
-      callback(
-          /** @type {!Array<!string>} */ (
-              this.settingsPrefs_.get('prefs.translate_allowlists.value')));
-    }.bind(this));
+  getAlwaysTranslateLanguages() {
+    const alwaysTranslateMap =
+        this.settingsPrefs_.get('prefs.translate_allowlists.value');
+    return Promise.resolve(Object.keys(alwaysTranslateMap));
   }
 
   /**
@@ -248,15 +239,11 @@ export class FakeLanguageSettingsPrivate extends TestBrowserProxy {
 
   /**
    * Gets languages that should never be offered to translate.
-   * @param {function(!Array<!string>)}
-   *     callback
+   * @return {!Promise<!Array<!string>>}
    */
-  getNeverTranslateLanguages(callback) {
-    setTimeout(() => {
-      callback(
-          /** @type {!Array<!string>} */ (this.settingsPrefs_.get(
-              'prefs.translate_blocked_languages.value')));
-    });
+  getNeverTranslateLanguages() {
+    return Promise.resolve(
+        this.settingsPrefs_.get('prefs.translate_blocked_languages.value'));
   }
 
   /**
@@ -274,10 +261,8 @@ export class FakeLanguageSettingsPrivate extends TestBrowserProxy {
     languages.push(languageCode);
     languageCodes = languages.join(',');
     this.settingsPrefs_.set('prefs.intl.accept_languages.value', languageCodes);
-    if (isChromeOS) {
-      this.settingsPrefs_.set(
-          'prefs.settings.language.preferred_languages.value', languageCodes);
-    }
+    this.settingsPrefs_.set(
+        'prefs.settings.language.preferred_languages.value', languageCodes);
   }
 
   /**
@@ -295,10 +280,8 @@ export class FakeLanguageSettingsPrivate extends TestBrowserProxy {
     languages.splice(index, 1);
     languageCodes = languages.join(',');
     this.settingsPrefs_.set('prefs.intl.accept_languages.value', languageCodes);
-    if (isChromeOS) {
-      this.settingsPrefs_.set(
-          'prefs.settings.language.preferred_languages.value', languageCodes);
-    }
+    this.settingsPrefs_.set(
+        'prefs.settings.language.preferred_languages.value', languageCodes);
   }
 
   /**
@@ -366,18 +349,16 @@ export class FakeLanguageSettingsPrivate extends TestBrowserProxy {
 
     languageCodes = languages.join(',');
     this.settingsPrefs_.set('prefs.intl.accept_languages.value', languageCodes);
-    if (isChromeOS) {
-      this.settingsPrefs_.set(
-          'prefs.settings.language.preferred_languages.value', languageCodes);
-    }
+    this.settingsPrefs_.set(
+        'prefs.settings.language.preferred_languages.value', languageCodes);
   }
 
   /**
    * Gets the translate target language (in most cases, the display locale).
-   * @param {function(string):void} callback
+   * @return {!Promise<string>}
    */
-  getTranslateTargetLanguage(callback) {
-    callback('en');
+  getTranslateTargetLanguage() {
+    return Promise.resolve('en');
   }
 
   /**
@@ -391,21 +372,20 @@ export class FakeLanguageSettingsPrivate extends TestBrowserProxy {
 
   /**
    * Gets the current status of the chosen spell check dictionaries.
-   * @param {function(!Array<
-   *     !chrome.languageSettingsPrivate.SpellcheckDictionaryStatus>):void}
-   *     callback
+   * @return {!Promise<!Array<
+   *     !chrome.languageSettingsPrivate.SpellcheckDictionaryStatus>>}
    */
-  getSpellcheckDictionaryStatuses(callback) {
-    callback([]);
+  getSpellcheckDictionaryStatuses() {
+    return Promise.resolve([]);
   }
 
   /**
    * Gets the custom spell check words, in sorted order.
-   * @param {function(!Array<string>):void} callback
+   * @return {!Promise<string>}
    */
-  getSpellcheckWords(callback) {
-    callback([]);
+  getSpellcheckWords() {
     this.methodCalled('getSpellcheckWords');
+    return Promise.resolve([]);
   }
 
   /**
@@ -429,17 +409,13 @@ export class FakeLanguageSettingsPrivate extends TestBrowserProxy {
   /**
    * Gets all supported input methods, including third-party IMEs. Chrome OS
    * only.
-   * @param {function(!chrome.languageSettingsPrivate.InputMethodLists):void}
-   *     callback
+   * @return {!Promise<!chrome.languageSettingsPrivate.InputMethodLists>}
    */
-  getInputMethodLists(callback) {
-    if (!isChromeOS) {
-      assertNotReached();
-    }
-    callback({
+  getInputMethodLists() {
+    return Promise.resolve({
       componentExtensionImes:
           /** @type {!Array<!chrome.languageSettingsPrivate.InputMethod>} */ (
-              JSON.parse(JSON.stringify(this.componentExtensionImes))),
+              structuredClone(this.componentExtensionImes)),
       thirdPartyExtensionImes: [],
     });
   }
@@ -450,7 +426,6 @@ export class FakeLanguageSettingsPrivate extends TestBrowserProxy {
    * @param {string} inputMethodId
    */
   addInputMethod(inputMethodId) {
-    assert(isChromeOS);
     const inputMethod = this.componentExtensionImes.find(function(ime) {
       return ime.id === inputMethodId;
     });
@@ -468,7 +443,6 @@ export class FakeLanguageSettingsPrivate extends TestBrowserProxy {
    * @param {string} inputMethodId
    */
   removeInputMethod(inputMethodId) {
-    assert(isChromeOS);
     const inputMethod = this.componentExtensionImes.find(function(ime) {
       return ime.id === inputMethodId;
     });
@@ -499,6 +473,16 @@ export class FakeLanguageSettingsPrivate extends TestBrowserProxy {
 // List of language-related preferences suitable for testing.
 export function getFakeLanguagePrefs() {
   const fakePrefs = [
+    {
+      key: 'assistive_input.emoji_suggestion_enabled',
+      type: chrome.settingsPrivate.PrefType.BOOLEAN,
+      value: true,
+    },
+    {
+      key: 'assistive_input.orca_enabled',
+      type: chrome.settingsPrivate.PrefType.BOOLEAN,
+      value: true,
+    },
     {
       key: 'browser.enable_spellchecking',
       type: chrome.settingsPrivate.PrefType.BOOLEAN,
@@ -562,44 +546,42 @@ export function getFakeLanguagePrefs() {
       type: chrome.settingsPrivate.PrefType.STRING,
       value: 'en-US',
     },
-  ];
-  if (isChromeOS) {
-    fakePrefs.push({
+    {
       key: 'settings.language.preferred_languages',
       type: chrome.settingsPrivate.PrefType.STRING,
       value: 'en-US,sw',
-    });
-    fakePrefs.push({
+    },
+    {
       key: 'settings.language.preload_engines',
       type: chrome.settingsPrivate.PrefType.STRING,
       value: '_comp_ime_jkghodnilhceideoidjikpgommlajknkxkb:us::eng,' +
           '_comp_ime_fgoepimhcoialccpbmpnnblemnepkkaoxkb:us:dvorak:eng',
-    });
-    fakePrefs.push({
+    },
+    {
       key: 'settings.language.enabled_extension_imes',
       type: chrome.settingsPrivate.PrefType.STRING,
       value: '',
-    });
-    fakePrefs.push({
+    },
+    {
       key: 'settings.language.ime_menu_activated',
       type: chrome.settingsPrivate.PrefType.BOOLEAN,
       value: false,
-    });
-    fakePrefs.push({
+    },
+    {
       key: 'settings.language.allowed_input_methods',
       type: chrome.settingsPrivate.PrefType.LIST,
       value: [],
-    });
-    fakePrefs.push({
+    },
+    {
       key: 'ash.shortcut_reminders.last_used_ime_dismissed',
       type: chrome.settingsPrivate.PrefType.BOOLEAN,
       value: false,
-    });
-    fakePrefs.push({
+    },
+    {
       key: 'ash.shortcut_reminders.next_ime_dismissed',
       type: chrome.settingsPrivate.PrefType.BOOLEAN,
       value: false,
-    });
-  }
+    },
+  ];
   return fakePrefs;
 }

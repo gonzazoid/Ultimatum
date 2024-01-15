@@ -7,13 +7,9 @@
 
 #import <UIKit/UIKit.h>
 
-#include "ios/web/public/deprecated/url_verification_constants.h"
+#import "base/values.h"
 #import "ios/web/web_state/ui/crw_touch_tracking_recognizer.h"
 #import "ios/web/web_state/ui/crw_web_view_navigation_proxy.h"
-
-namespace base {
-class Value;
-}  // namespace base
 
 namespace web {
 
@@ -24,11 +20,9 @@ enum class WKNavigationState;
 
 }  // namespace web
 
-@class CRWContextMenuItem;
-@class CRWJSInjectionReceiver;
 @protocol CRWScrollableContent;
-@protocol CRWSwipeRecognizerProvider;
 @class CRWWebViewContentView;
+@protocol CRWFindInteraction;
 @protocol CRWWebViewDownload;
 @protocol CRWWebViewDownloadDelegate;
 @protocol CRWWebViewProxy;
@@ -53,9 +47,6 @@ class WebStateImpl;
 // Whether or not a UIWebView is allowed to exist in this CRWWebController.
 // Defaults to NO; this should be enabled before attempting to access the view.
 @property(nonatomic, assign) BOOL webUsageEnabled;
-
-@property(nonatomic, weak) id<CRWSwipeRecognizerProvider>
-    swipeRecognizerProvider;
 
 // The container view used to display content.  If the view has been purged due
 // to low memory, this will recreate it.
@@ -89,12 +80,13 @@ class WebStateImpl;
 // back-forward list navigations.
 @property(nonatomic) BOOL allowsBackForwardNavigationGestures;
 
-@property(strong, nonatomic, readonly)
-    CRWJSInjectionReceiver* jsInjectionReceiver;
-
 // Whether the WebController should attempt to keep the render process alive.
 @property(nonatomic, assign, getter=shouldKeepRenderProcessAlive)
     BOOL keepsRenderProcessAlive;
+
+// Whether or not the web page is in fullscreen mode.
+@property(nonatomic, readonly, getter=isWebPageInFullscreenMode)
+    BOOL webPageInFullscreenMode;
 
 // Designated initializer. Initializes web controller with `webState`. The
 // calling code must retain the ownership of `webState`.
@@ -122,11 +114,9 @@ class WebStateImpl;
 // Returns YES if the current live view is a web view with HTML.
 - (BOOL)contentIsHTML;
 
-// Returns the CRWWebController's view of the current URL. Moreover, this method
-// will set the trustLevel enum to the appropriate level from a security point
-// of view. The caller has to handle the case where `trustLevel` is not
-// appropriate, as this method won't display any error to the user.
-- (GURL)currentURLWithTrustLevel:(web::URLVerificationTrustLevel*)trustLevel;
+// Returns the CRWWebController's view of the current URL. During navigations,
+// this may not be the same as the navigation manager's view of the current URL.
+- (GURL)currentURL;
 
 // Reloads web view. `isRendererInitiated` is YES for renderer-initiated
 // navigation. `isRendererInitiated` is NO for browser-initiated navigation.
@@ -152,8 +142,7 @@ class WebStateImpl;
 // if `URL` matches the current page's URL. This method creates a new navigation
 // entry if `URL` differs from the current page's URL.
 - (void)loadSimulatedRequest:(const GURL&)URL
-          responseHTMLString:(NSString*)responseHTMLString
-    API_AVAILABLE(ios(15.0));
+          responseHTMLString:(NSString*)responseHTMLString;
 
 // Loads the web content from the data you provide as if the data were the
 // response to the request. This method does not create a new navigation entry
@@ -161,7 +150,7 @@ class WebStateImpl;
 // entry if `URL` differs from the current page's URL.
 - (void)loadSimulatedRequest:(const GURL&)URL
                 responseData:(NSData*)responseData
-                    MIMEType:(NSString*)MIMEType API_AVAILABLE(ios(15.0));
+                    MIMEType:(NSString*)MIMEType;
 
 // Stops loading the page.
 - (void)stopLoading;
@@ -203,8 +192,9 @@ class WebStateImpl;
 // Creates a web view if it's not yet created. Returns the web view.
 - (WKWebView*)ensureWebViewCreated;
 
-// Removes the webView from the view hierarchy.
-- (void)removeWebViewFromViewHierarchy;
+// Removes the webView from the view hierarchy. The `shutdown` parameter
+// indicates if this method was called in a shutdown context.
+- (void)removeWebViewFromViewHierarchyForShutdown:(BOOL)shutdown;
 // Adds the webView back in the view hierarchy.
 - (void)addWebViewToViewHierarchy;
 
@@ -220,23 +210,12 @@ class WebStateImpl;
 
 // Gets and sets the web state's state of a permission; for example, the one to
 // use the camera on the device. Only works on iOS 15+.
-- (web::PermissionState)stateForPermission:(web::Permission)permission
-    API_AVAILABLE(ios(15.0));
+- (web::PermissionState)stateForPermission:(web::Permission)permission;
 - (void)setState:(web::PermissionState)state
-    forPermission:(web::Permission)permission API_AVAILABLE(ios(15.0));
+    forPermission:(web::Permission)permission;
 
 // Gets a mapping of all permissions and their states. Only works on iOS 15+.
-- (NSDictionary<NSNumber*, NSNumber*>*)
-    statesForAllPermissions API_AVAILABLE(ios(15.0));
-
-// Injects the windowID into the main frame of the current webpage.
-// TODO(crbug.com/905939): Remove WindowID.
-- (void)injectWindowID;
-
-// Shows a custom iOS context menu with the given `items` for options targeted
-// to the data visible in given window `rect`.
-- (void)showMenuWithItems:(NSArray<CRWContextMenuItem*>*)items
-                     rect:(CGRect)rect;
+- (NSDictionary<NSNumber*, NSNumber*>*)statesForAllPermissions;
 
 // Downloads the file from the `request` at `destination` path.
 // `completion_handler` is used to retrieve the created CRWWebViewDownload, so
@@ -244,8 +223,32 @@ class WebStateImpl;
 - (void)downloadCurrentPageWithRequest:(NSURLRequest*)request
                        destinationPath:(NSString*)destination
                               delegate:(id<CRWWebViewDownloadDelegate>)delegate
-                               handler:(void (^)(id<CRWWebViewDownload>))handler
-    API_AVAILABLE(ios(14.5));
+                               handler:
+                                   (void (^)(id<CRWWebViewDownload>))handler;
+
+// Returns whether the Find interaction is supported and can be enabled.
+- (BOOL)findInteractionSupported;
+
+// Returns whether the Find interaction is enabled on the contained web view, if
+// any.
+- (BOOL)findInteractionEnabled;
+
+// Sets the value of `findInteractionEnabled` to `enabled` on the contained web
+// view, if any.
+- (void)setFindInteractionEnabled:(BOOL)enabled;
+
+// Returns the Find interaction of the contained web view, if any.
+- (id<CRWFindInteraction>)findInteraction API_AVAILABLE(ios(16));
+
+// Returns an opaque activity item that can be passed to a
+// UIActivityViewController to add additional share action for the current URL.
+- (id)activityItem;
+
+// Returns the page theme color.
+- (UIColor*)themeColor;
+
+// Returns the under page background color.
+- (UIColor*)underPageBackgroundColor;
 
 #pragma mark Navigation Message Handlers
 
@@ -256,18 +259,16 @@ class WebStateImpl;
 - (void)handleNavigationWillChangeState;
 
 // Handles a navigation did push state message for the current webpage.
-- (void)handleNavigationDidPushStateMessage:(base::Value*)message;
+- (void)handleNavigationDidPushStateMessage:(base::Value::Dict*)dict;
 
 // Handles a navigation did replace state message for the current webpage.
-- (void)handleNavigationDidReplaceStateMessage:(base::Value*)message;
+- (void)handleNavigationDidReplaceStateMessage:(base::Value::Dict*)dict;
 
-#pragma mark CRWJSInjectionEvaluator
+// Retrieves the existing web frames in `contentWorld`.
+- (void)retrieveExistingFramesInContentWorld:(WKContentWorld*)contentWorld;
 
-// Do not use these executeJavaScript functions directly, prefer
-// WebFrame::CallJavaScriptFunction if possible, otherwise use
-// WebState::ExecuteJavaScript and WebState::ExecuteUserJavaScript.
-- (void)executeJavaScript:(NSString*)javascript
-        completionHandler:(void (^)(id result, NSError* error))completion;
+// Do not call this function directly, instead use
+// WebState::ExecuteUserJavaScript.
 - (void)executeUserJavaScript:(NSString*)javascript
             completionHandler:(void (^)(id result, NSError* error))completion;
 
@@ -293,6 +294,12 @@ class WebStateImpl;
 
 // Loads the HTML into the page at the given URL.
 - (void)loadHTML:(NSString*)HTML forURL:(const GURL&)URL;
+
+// Executes `javascript` in the current page.
+// Prefer `WebFrame::CallJavaScriptFunction` if possible, otherwise
+// use `WebState::ExecuteJavaScript`.
+- (void)executeJavaScript:(NSString*)javascript
+        completionHandler:(void (^)(id result, NSError* error))completion;
 
 @end
 

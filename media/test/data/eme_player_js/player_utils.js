@@ -71,6 +71,9 @@ PlayerUtils.registerEMEEventListeners = function(player) {
                   Utils.convertToUint8Array(item[0]))},status:${item[1]}}`);
         }
         Utils.timeLog('KeyStatusesChange: ' + result.join(','));
+        if (player.testConfig.playCount == 0) {
+          Utils.setResultInTitle('ENDED');
+        }
       });
     }
 
@@ -241,6 +244,13 @@ PlayerUtils.registerEMEEventListeners = function(player) {
         player.testConfig.mediaType == 'video/webm; codecs="opus, vp9"') {
       config.audioCapabilities = [{contentType: 'audio/webm; codecs="opus"'}];
       config.videoCapabilities = [{contentType: 'video/webm; codecs="vp9"'}];
+    } else if (
+        player.testConfig.mediaType ==
+        'video/mp4; codecs="mp4a.40.2, avc1.64001E"') {
+      config.audioCapabilities =
+          [{contentType: 'audio/mp4; codecs="mp4a.40.2"'}];
+      config.videoCapabilities =
+          [{contentType: 'video/mp4; codecs="avc1.64001E"'}];
     }
   } else {
     // Some tests (e.g. mse_different_containers.html) specify audio and
@@ -311,6 +321,7 @@ PlayerUtils.createPlayer = function(video, testConfig) {
         return WidevinePlayer;
       case CLEARKEY:
       case EXTERNAL_CLEARKEY:
+      case MEDIAFOUNDATION_CLEARKEY:
       case MESSAGE_TYPE_TEST_KEYSYSTEM:
       case CRASH_TEST_KEYSYSTEM:
         return ClearKeyPlayer;

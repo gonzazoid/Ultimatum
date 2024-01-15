@@ -33,10 +33,10 @@ TemplateURL* FindURLByPrepopulateID(
     const TemplateURLService::TemplateURLVector& template_urls,
     int prepopulate_id);
 
-typedef enum {
+enum class TemplateURLMergeOption {
   kDefault,
   kOverwriteUserEdits,
-} MergeOptions;
+};
 
 // Modifies `url_to_update` so that it contains user-modified fields from
 // `original_turl`. Both URLs must have the same `prepopulate_id` or
@@ -46,9 +46,10 @@ typedef enum {
 // WARNING: Changing merge_option from the default value will result in loss of
 // user data. It should be set to kDefault unless in very specific circumstances
 // where a reset to defaults is required.
-void MergeIntoEngineData(const TemplateURL* original_turl,
-                         TemplateURLData* url_to_update,
-                         MergeOptions merge_option = MergeOptions::kDefault);
+void MergeIntoEngineData(
+    const TemplateURL* original_turl,
+    TemplateURLData* url_to_update,
+    TemplateURLMergeOption merge_option = TemplateURLMergeOption::kDefault);
 
 // CreateActionsFromCurrentPrepopulateData() and
 // CreateActionsFromStarterPackData() (see below) takes in the current built-in
@@ -121,7 +122,7 @@ void MergeEnginesFromStarterPackData(
     TemplateURLService::OwnedTemplateURLVector* template_urls,
     TemplateURL* default_search_provider,
     std::set<std::string>* removed_keyword_guids,
-    MergeOptions merge_option = MergeOptions::kDefault);
+    TemplateURLMergeOption merge_option = TemplateURLMergeOption::kDefault);
 
 // Given the user's current URLs and the current set of Starter Pack URLs,
 // produces the set of actions (see above) required to make the user's URLs
@@ -134,7 +135,7 @@ void MergeEnginesFromStarterPackData(
 ActionsFromCurrentData CreateActionsFromCurrentStarterPackData(
     std::vector<std::unique_ptr<TemplateURLData>>* starter_pack_urls,
     const TemplateURLService::OwnedTemplateURLVector& existing_urls,
-    MergeOptions merge_option = MergeOptions::kDefault);
+    TemplateURLMergeOption merge_option = TemplateURLMergeOption::kDefault);
 
 // Takes in an ActionsFromCurrentData (see above) and applies the actions (add,
 // edit, or remove) to the user's current URLs.  This is called by
@@ -146,17 +147,29 @@ void ApplyActionsFromCurrentData(
     TemplateURL* default_search_provider,
     std::set<std::string>* removed_keyword_guids);
 
+// Returns the GUID of the default search provider.
+// Migrates `kSyncedDefaultSearchProviderGUID` to `kDefaultSearchProviderGUID`
+// if the latter is empty and the search engine choice feature is enabled.
+// Gets the value of the corresponding preference based on the search engine
+// choice feature flag.
+const std::string& GetDefaultSearchProviderPrefValue(PrefService& prefs);
+
+// Sets the corresponding default search provider preference based on the search
+// engine choice feature flag.
+void SetDefaultSearchProviderPrefValue(PrefService& prefs,
+                                       const std::string& value);
+
 // Processes the results of KeywordWebDataService::GetKeywords, combining it
 // with prepopulated search providers to result in:
 //  * a set of template_urls (search providers). The caller owns the
 //    TemplateURL* returned in template_urls.
-//  * whether there is a new resource keyword version (and the value).
-//    |*new_resource_keyword_version| is set to 0 if no new value. Otherwise,
-//    it is the new value.
+//  * whether the resource keyword data was updated.
+//    `*new_resource_keyword_version` is set to 0 if the data was not updated.
+//    Otherwise, it is the new version number from the prepopulated data.
 // Only pass in a non-NULL value for service if the KeywordWebDataService should
-// be updated. If |removed_keyword_guids| is not NULL, any TemplateURLs removed
+// be updated. If `removed_keyword_guids` is not NULL, any TemplateURLs removed
 // from the keyword table in the KeywordWebDataService will have their Sync
-// GUIDs added to it. |default_search_provider| will be used to prevent removing
+// GUIDs added to it. `default_search_provider` will be used to prevent removing
 // the current user-selected DSE, regardless of changes in prepopulate data.
 void GetSearchProvidersUsingKeywordResult(
     const WDTypedResult& result,

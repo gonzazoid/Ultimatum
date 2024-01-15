@@ -8,7 +8,8 @@
       "custodianApprovalRequired": false,
       "reloading": false,
       "suspiciousInstall": false,
-      "updateRequired": false
+      "updateRequired": false,
+      "publishedInStoreRequired": false
    },
    "errorCollection": {
       "isActive": false,
@@ -33,6 +34,7 @@
    "mustRemainInstalled": false,
    "name": "My extension 3",
    "offlineEnabled": false,
+   "pinnedToToolbar": false,
    "runtimeErrors": [  ],
    "runtimeWarnings": [  ],
    "state": "ENABLED",

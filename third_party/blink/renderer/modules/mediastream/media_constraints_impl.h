@@ -31,14 +31,12 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_MODULES_MEDIASTREAM_MEDIA_CONSTRAINTS_IMPL_H_
 #define THIRD_PARTY_BLINK_RENDERER_MODULES_MEDIASTREAM_MEDIA_CONSTRAINTS_IMPL_H_
 
+#include "third_party/blink/renderer/modules/mediastream/media_constraints.h"
 #include "third_party/blink/renderer/modules/modules_export.h"
-#include "third_party/blink/renderer/platform/mediastream/media_constraints.h"
 
 namespace blink {
 
-class Dictionary;
 class ExecutionContext;
-class MediaErrorState;
 class MediaTrackConstraints;
 
 namespace media_constraints_impl {
@@ -51,10 +49,9 @@ const size_t kMaxConstraintStringLength = 500;
 const size_t kMaxConstraintStringSeqLength = 100;
 
 MediaConstraints Create();
-MediaConstraints Create(ExecutionContext*, const Dictionary&, MediaErrorState&);
 MediaConstraints Create(ExecutionContext*,
                         const MediaTrackConstraints*,
-                        MediaErrorState&);
+                        String&);
 
 // Exported with MODULES_EXPORT for testing
 MODULES_EXPORT MediaTrackConstraints* ConvertConstraints(
@@ -63,7 +60,7 @@ MODULES_EXPORT MediaTrackConstraints* ConvertConstraints(
 // Exported for testing only.
 MODULES_EXPORT MediaConstraints
 ConvertTrackConstraintsToMediaConstraints(const MediaTrackConstraints*,
-                                          MediaErrorState& error_state);
+                                          String&);
 }
 
 }  // namespace blink

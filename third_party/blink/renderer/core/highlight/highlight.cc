@@ -25,7 +25,7 @@ Highlight::~Highlight() = default;
 void Highlight::Trace(blink::Visitor* visitor) const {
   visitor->Trace(highlight_ranges_);
   visitor->Trace(containing_highlight_registries_);
-  EventTargetWithInlineData::Trace(visitor);
+  EventTarget::Trace(visitor);
 }
 
 void Highlight::ScheduleRepaintsInContainingHighlightRegistries() const {
@@ -39,8 +39,9 @@ void Highlight::ScheduleRepaintsInContainingHighlightRegistries() const {
 Highlight* Highlight::addForBinding(ScriptState*,
                                     AbstractRange* range,
                                     ExceptionState&) {
-  if (highlight_ranges_.insert(range).is_new_entry)
+  if (highlight_ranges_.insert(range).is_new_entry) {
     ScheduleRepaintsInContainingHighlightRegistries();
+  }
   return this;
 }
 
@@ -119,13 +120,12 @@ Highlight::IterationSource::IterationSource(const Highlight& highlight)
   }
 }
 
-bool Highlight::IterationSource::Next(ScriptState*,
-                                      Member<AbstractRange>& key,
-                                      Member<AbstractRange>& value,
-                                      ExceptionState&) {
+bool Highlight::IterationSource::FetchNextItem(ScriptState*,
+                                               AbstractRange*& value,
+                                               ExceptionState&) {
   if (index_ >= highlight_ranges_snapshot_.size())
     return false;
-  key = value = highlight_ranges_snapshot_[index_++];
+  value = highlight_ranges_snapshot_[index_++];
   return true;
 }
 
@@ -134,7 +134,7 @@ void Highlight::IterationSource::Trace(blink::Visitor* visitor) const {
   HighlightSetIterable::IterationSource::Trace(visitor);
 }
 
-HighlightSetIterable::IterationSource* Highlight::StartIteration(
+HighlightSetIterable::IterationSource* Highlight::CreateIterationSource(
     ScriptState*,
     ExceptionState&) {
   return MakeGarbageCollected<IterationSource>(*this);

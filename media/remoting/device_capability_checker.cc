@@ -6,14 +6,18 @@
 
 #include "base/strings/string_util.h"
 #include "media/base/audio_codecs.h"
+#include "media/base/video_codec_string_parsers.h"
 #include "media/base/video_codecs.h"
 
 namespace media::remoting {
 
-bool IsChromecast(const std::string& model_name) {
-  // This is a workaround for Nest Hub devices, which do not support remoting.
-  // TODO(crbug.com/1198616): filtering hack should be removed. See b/135725157
-  // for more information.
+bool IsKnownToSupportRemoting(const std::string& model_name) {
+  // This is a workaround to allowlist certain devices known to support
+  // remoting, so that we can only show media sinks that are known to work for
+  // remote playback.
+  //
+  // TODO(crbug.com/1380864): Use a better mechanism to feature detect remoting
+  // support before mirroring begins.
   return base::StartsWith(model_name, "Chromecast",
                           base::CompareCase::SENSITIVE) ||
          base::StartsWith(model_name, "Eureka Dongle",
@@ -22,7 +26,7 @@ bool IsChromecast(const std::string& model_name) {
 
 bool IsVideoCodecCompatible(const std::string& model_name,
                             VideoCodec video_codec) {
-  if (!IsChromecast(model_name)) {
+  if (!IsKnownToSupportRemoting(model_name)) {
     return false;
   }
 
@@ -38,10 +42,35 @@ bool IsVideoCodecCompatible(const std::string& model_name,
 
 bool IsAudioCodecCompatible(const std::string& model_name,
                             AudioCodec audio_codec) {
-  if (!IsChromecast(model_name)) {
+  if (!IsKnownToSupportRemoting(model_name)) {
     return false;
   }
   return (audio_codec == AudioCodec::kAAC) ||
          (audio_codec == AudioCodec::kOpus);
+}
+
+media::VideoCodec ParseVideoCodec(const std::string& codec_str) {
+#if BUILDFLAG(USE_PROPRIETARY_CODECS)
+  // `StringToVideoCodec()` does not parse custom strings like "hevc" and
+  // "h264".
+  if (codec_str == "hevc") {
+    return media::VideoCodec::kHEVC;
+  }
+  if (codec_str == "h264") {
+    return media::VideoCodec::kH264;
+  }
+#endif
+  return media::StringToVideoCodec(codec_str);
+}
+
+media::AudioCodec ParseAudioCodec(const std::string& codec_str) {
+  if (codec_str == "aac") {
+#if BUILDFLAG(USE_PROPRIETARY_CODECS)
+    return media::AudioCodec::kAAC;
+#else
+    return media::AudioCodec::kUnknown;
+#endif
+  }
+  return media::StringToAudioCodec(codec_str);
 }
 }  // namespace media::remoting

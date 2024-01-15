@@ -8,6 +8,8 @@
 #include "ash/ash_export.h"
 #include "ash/login/ui/login_user_view.h"
 #include "ash/login/ui/non_accessible_view.h"
+#include "base/memory/raw_ptr.h"
+#include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/views/view.h"
 
 namespace ash {
@@ -18,6 +20,8 @@ class HoverNotifier;
 // This is the big user view for the public account user. It wraps a UserView
 // and a arrow button below.
 class ASH_EXPORT LoginPublicAccountUserView : public NonAccessibleView {
+  METADATA_HEADER(LoginPublicAccountUserView, NonAccessibleView)
+
  public:
   // TestApi is used for tests to get internal implementation details.
   class ASH_EXPORT TestApi {
@@ -28,7 +32,7 @@ class ASH_EXPORT LoginPublicAccountUserView : public NonAccessibleView {
     views::View* arrow_button() const;
 
    private:
-    LoginPublicAccountUserView* const view_;
+    const raw_ptr<LoginPublicAccountUserView> view_;
   };
 
   using OnPublicAccountTapped = base::RepeatingClosure;
@@ -81,10 +85,10 @@ class ASH_EXPORT LoginPublicAccountUserView : public NonAccessibleView {
   // Used to show an arrow button for public session when hovered.
   std::unique_ptr<HoverNotifier> hover_notifier_;
 
-  ArrowButtonView* arrow_button_ = nullptr;
+  raw_ptr<ArrowButtonView> arrow_button_ = nullptr;
   bool ignore_hover_ = false;
   bool auth_enabled_ = false;
-  LoginUserView* user_view_ = nullptr;
+  raw_ptr<LoginUserView> user_view_ = nullptr;
 };
 
 }  // namespace ash

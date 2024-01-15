@@ -12,10 +12,15 @@
 #include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
+#include "printing/buildflags/buildflags.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/gfx/geometry/size.h"
 
 #if BUILDFLAG(IS_WIN)
+#include "base/win/scoped_hdc.h"
+#include "printing/backend/printing_info_win.h"
+#include "printing/backend/win_helper.h"
+#include "printing/printing_test.h"
 #include "ui/gfx/geometry/rect.h"
 #endif
 
@@ -25,7 +30,7 @@ namespace {
 
 constexpr size_t kTestLength = 8;
 
-#if defined(USE_CUPS) && !BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(USE_CUPS) && !BUILDFLAG(IS_CHROMEOS_ASH)
 constexpr gfx::Size kIsoA4Microns(210000, 297000);
 constexpr gfx::Size kNaLetterMicrons(216000, 279000);
 #endif
@@ -39,6 +44,11 @@ std::string Format(const std::string& owner, const std::string& title) {
   return base::UTF16ToUTF8(FormatDocumentTitleWithOwnerAndLength(
       base::UTF8ToUTF16(owner), base::UTF8ToUTF16(title), kTestLength));
 }
+
+#if BUILDFLAG(IS_WIN)
+// This test is automatically disabled if no printer is available.
+class PrintingUtilsWinTest : public PrintingTest<testing::Test> {};
+#endif  // BUILDFLAG(IS_WIN)
 
 }  // namespace
 
@@ -65,7 +75,7 @@ TEST(PrintingUtilsTest, FormatDocumentTitleWithOwner) {
   EXPECT_EQ("ab...j: ", Format("abcdefghij", "0123456789"));
 }
 
-#if defined(USE_CUPS) && !BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(USE_CUPS) && !BUILDFLAG(IS_CHROMEOS_ASH)
 TEST(PrintingUtilsTest, GetDefaultPaperSizeFromLocaleMicrons) {
   // Valid locales
   EXPECT_EQ(kNaLetterMicrons, GetDefaultPaperSizeFromLocaleMicrons("en-US"));
@@ -108,7 +118,7 @@ TEST(PrintingUtilsTest, SizesEqualWithinEpsilon) {
   EXPECT_TRUE(
       SizesEqualWithinEpsilon(kIsoA4Microns, gfx::Size(210500, 296500), 500));
 }
-#endif  // defined(USE_CUPS) && !BUILDFLAG(IS_CHROMEOS_ASH)
+#endif  // BUILDFLAG(USE_CUPS) && !BUILDFLAG(IS_CHROMEOS_ASH)
 
 #if BUILDFLAG(IS_WIN)
 TEST(PrintingUtilsTest, GetCenteredPageContentRect) {
@@ -150,6 +160,33 @@ TEST(PrintingUtilsTest, GetCenteredPageContentRect) {
   EXPECT_EQ(250, page_content.y());
   EXPECT_EQ(400, page_content.width());
   EXPECT_EQ(1100, page_content.height());
+}
+
+// Disabled - see crbug.com/1231528 for context.
+TEST_F(PrintingUtilsWinTest, DISABLED_GetPrintableAreaDeviceUnits) {
+  if (IsTestCaseDisabled()) {
+    return;
+  }
+
+  std::wstring printer_name = GetDefaultPrinter();
+  ScopedPrinterHandle printer;
+  ASSERT_TRUE(printer.OpenPrinterWithName(printer_name.c_str()));
+
+  const DEVMODE* dev_mode = nullptr;
+  PrinterInfo2 info_2;
+  if (info_2.Init(printer.Get())) {
+    dev_mode = info_2.get()->pDevMode;
+  }
+  ASSERT_TRUE(dev_mode);
+
+  base::win::ScopedCreateDC hdc(
+      CreateDC(L"WINSPOOL", printer_name.c_str(), nullptr, dev_mode));
+  ASSERT_TRUE(hdc.Get());
+
+  // Check that getting printable area is successful and the resulting area is
+  // non-empty.
+  gfx::Rect output = GetPrintableAreaDeviceUnits(hdc.Get());
+  EXPECT_FALSE(output.IsEmpty());
 }
 #endif  // BUILDFLAG(IS_WIN)
 

@@ -7,15 +7,14 @@
 
 #include <map>
 #include <string>
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
 #include "chrome/browser/extensions/api/image_writer_private/image_writer_private_api.h"
 #include "chrome/browser/extensions/api/image_writer_private/operation.h"
 #include "chrome/common/extensions/api/image_writer_private.h"
-#include "content/public/browser/notification_observer.h"
 #include "extensions/browser/browser_context_keyed_api_factory.h"
 #include "extensions/browser/extension_registry.h"
 #include "extensions/browser/extension_registry_observer.h"
@@ -40,8 +39,7 @@ class Operation;
 // and message routing.
 class OperationManager : public BrowserContextKeyedAPI,
                          public ExtensionRegistryObserver,
-                         public ProcessManagerObserver,
-                         public base::SupportsWeakPtr<OperationManager> {
+                         public ProcessManagerObserver {
  public:
   explicit OperationManager(content::BrowserContext* context);
 
@@ -90,6 +88,10 @@ class OperationManager : public BrowserContextKeyedAPI,
   // BrowserContextKeyedAPI
   static BrowserContextKeyedAPIFactory<OperationManager>* GetFactoryInstance();
   static OperationManager* Get(content::BrowserContext* context);
+
+  base::WeakPtr<OperationManager> AsWeakPtr() {
+    return weak_factory_.GetWeakPtr();
+  }
 
  private:
   static const char* service_name() {

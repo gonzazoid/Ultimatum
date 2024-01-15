@@ -10,7 +10,7 @@
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/renderer/core/html/html_document.h"
-#include "third_party/blink/renderer/core/html/parser/html_token_producer.h"
+#include "third_party/blink/renderer/core/html/html_iframe_element.h"
 #include "third_party/blink/renderer/core/html/parser/text_resource_decoder.h"
 #include "third_party/blink/renderer/core/html/parser/text_resource_decoder_builder.h"
 #include "third_party/blink/renderer/core/loader/no_state_prefetch_client.h"
@@ -21,6 +21,7 @@
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/testing/runtime_enabled_features_test_helpers.h"
 #include "third_party/blink/renderer/platform/testing/unit_test_helpers.h"
+#include "third_party/blink/renderer/platform/testing/url_test_helpers.h"
 
 namespace blink {
 
@@ -64,8 +65,9 @@ class HTMLDocumentParserTest
   HTMLDocumentParser* CreateParser(HTMLDocument& document) {
     auto* parser =
         MakeGarbageCollected<HTMLDocumentParser>(document, GetParam());
-    std::unique_ptr<TextResourceDecoder> decoder(BuildTextResourceDecoder(
-        document.GetFrame(), document.Url(), "text/html", g_null_atom));
+    std::unique_ptr<TextResourceDecoder> decoder(
+        BuildTextResourceDecoder(document.GetFrame(), document.Url(),
+                                 AtomicString("text/html"), g_null_atom));
     parser->SetDecoder(std::move(decoder));
     return parser;
   }
@@ -253,23 +255,53 @@ class HTMLDocumentParserProcessImmediatelyTest : public PageTestBase {
     GetDocument().SetURL(KURL("https://example.test"));
   }
 
-  HTMLDocumentParser* CreateParser(HTMLDocument& document) {
+  void TearDown() override {
+    url_test_helpers::UnregisterAllURLsAndClearMemoryCache();
+    PageTestBase::TearDown();
+  }
+
+  static HTMLDocumentParser* CreateParser(HTMLDocument& document) {
     auto* parser = MakeGarbageCollected<HTMLDocumentParser>(
         document, kAllowDeferredParsing);
-    std::unique_ptr<TextResourceDecoder> decoder(BuildTextResourceDecoder(
-        document.GetFrame(), document.Url(), "text/html", g_null_atom));
+    std::unique_ptr<TextResourceDecoder> decoder(
+        BuildTextResourceDecoder(document.GetFrame(), document.Url(),
+                                 AtomicString("text/html"), g_null_atom));
     parser->SetDecoder(std::move(decoder));
     return parser;
   }
 
- private:
+  static HTMLDocumentParser* ConfigureWebViewHelperForChildFrameAndCreateParser(
+      frame_test_helpers::WebViewHelper& web_view_helper) {
+    std::string base_url = "http://internal.test/";
+    url_test_helpers::RegisterMockedURLLoadFromBase(
+        WebString::FromUTF8(base_url), test::CoreTestDataPath(),
+        WebString::FromUTF8("visible_iframe.html"));
+    url_test_helpers::RegisterMockedURLLoadFromBase(
+        WebString::FromUTF8(base_url), test::CoreTestDataPath(),
+        WebString::FromUTF8("single_iframe.html"));
+
+    WebViewImpl* web_view_impl =
+        web_view_helper.InitializeAndLoad(base_url + "single_iframe.html");
+
+    web_view_impl->MainFrameWidget()->UpdateAllLifecyclePhases(
+        DocumentUpdateReason::kTest);
+
+    Document* top_doc =
+        web_view_impl->MainFrameImpl()->GetFrame()->GetDocument();
+    auto* iframe =
+        To<HTMLIFrameElement>(top_doc->QuerySelector(AtomicString("iframe")));
+    Document* child_document = iframe->contentDocument();
+    return child_document ? CreateParser(To<HTMLDocument>(*child_document))
+                          : nullptr;
+  }
 };
 
 TEST_F(HTMLDocumentParserProcessImmediatelyTest, FirstChunk) {
   base::test::ScopedFeatureList scoped_feature_list;
   scoped_feature_list.InitAndEnableFeatureWithParameters(
       features::kProcessHtmlDataImmediately,
-      {{features::kProcessHtmlDataImmediatelyFirstChunk.name, "true"}});
+      {{features::kProcessHtmlDataImmediatelyFirstChunk.name, "true"},
+       {features::kProcessHtmlDataImmediatelyMainFrame.name, "true"}});
   auto& document = To<HTMLDocument>(GetDocument());
   HTMLDocumentParser* parser = CreateParser(document);
   ScopedParserDetacher detacher(parser);
@@ -287,7 +319,8 @@ TEST_F(HTMLDocumentParserProcessImmediatelyTest, SecondChunk) {
   base::test::ScopedFeatureList scoped_feature_list;
   scoped_feature_list.InitAndEnableFeatureWithParameters(
       features::kProcessHtmlDataImmediately,
-      {{features::kProcessHtmlDataImmediatelySubsequentChunks.name, "true"}});
+      {{features::kProcessHtmlDataImmediatelySubsequentChunks.name, "true"},
+       {features::kProcessHtmlDataImmediatelyMainFrame.name, "true"}});
   auto& document = To<HTMLDocument>(GetDocument());
   HTMLDocumentParser* parser = CreateParser(document);
   ScopedParserDetacher detacher(parser);
@@ -307,61 +340,46 @@ TEST_F(HTMLDocumentParserProcessImmediatelyTest, SecondChunk) {
   static_cast<DocumentParser*>(parser)->StopParsing();
 }
 
-class HTMLDocumentParserWithThreadedTokenizerTest : public SimTest {
- protected:
-  HTMLDocumentParserWithThreadedTokenizerTest()
-      : original_force_synchronous_parsing_for_testing_(
-            Document::ForceSynchronousParsingForTesting()) {
-    Document::SetForceSynchronousParsingForTesting(false);
-  }
-  ~HTMLDocumentParserWithThreadedTokenizerTest() override {
-    // Finish the pending tasks which may require the runtime enabled flags,
-    // before restoring the flags.
-    base::RunLoop().RunUntilIdle();
-    Document::SetForceSynchronousParsingForTesting(
-        original_force_synchronous_parsing_for_testing_);
-  }
+TEST_F(HTMLDocumentParserProcessImmediatelyTest, FirstChunkChildFrame) {
+  base::test::ScopedFeatureList scoped_feature_list;
+  scoped_feature_list.InitAndEnableFeatureWithParameters(
+      features::kProcessHtmlDataImmediately,
+      {{features::kProcessHtmlDataImmediatelyChildFrame.name, "true"},
+       {features::kProcessHtmlDataImmediatelyFirstChunk.name, "true"}});
+  frame_test_helpers::WebViewHelper web_view_helper;
+  HTMLDocumentParser* parser =
+      ConfigureWebViewHelperForChildFrameAndCreateParser(web_view_helper);
+  ASSERT_TRUE(parser);
+  ScopedParserDetacher detacher(parser);
+  const char kBytes[] = "<div><div><div>";
+  parser->AppendBytes(kBytes, sizeof(kBytes) - 1);
+  // The first chunk should been processed.
+  EXPECT_TRUE(parser->DidPumpTokenizerForTesting());
 
-  void SetUp() override {
-    SimTest::SetUp();
-    scoped_feature_list_.InitAndEnableFeature(features::kThreadedHtmlTokenizer);
-    GetDocument().SetURL(KURL("https://example.test"));
-  }
-
- private:
-  const bool original_force_synchronous_parsing_for_testing_;
-  base::test::ScopedFeatureList scoped_feature_list_;
-};
-
-TEST_F(HTMLDocumentParserWithThreadedTokenizerTest,
-       LoadedUrlUsesBackgroundTokenizer) {
-  SimRequest main_resource("https://example.com/test.html", "text/html");
-  LoadURL("https://example.com/test.html");
-  ASSERT_TRUE(GetDocument().Parser());
-  auto* token_producer =
-      static_cast<HTMLDocumentParser*>(GetDocument().Parser())
-          ->TokenProducerForTesting();
-  // For normal loading the background tokenizer should be used (with the
-  // feature enabled).
-  EXPECT_TRUE(token_producer->IsUsingBackgroundProducer());
-  main_resource.Complete("<head>");
-  test::RunPendingTasks();
+  // Cancel any pending work to make sure that RuntimeFeatures DCHECKs do not
+  // fire.
+  static_cast<DocumentParser*>(parser)->StopParsing();
 }
 
-TEST_F(HTMLDocumentParserWithThreadedTokenizerTest,
-       EmptyDocumentDoesNotUseBackgroundTokenizer) {
-  ScopedNullExecutionContext execution_context;
-  DocumentInit init =
-      DocumentInit::Create()
-          .ForInitialEmptyDocument(true)
-          .WithExecutionContext(&execution_context.GetExecutionContext())
-          .WithAgent(*execution_context.GetExecutionContext().GetAgent());
-  HTMLDocument* empty_doc = MakeGarbageCollected<HTMLDocument>(init);
-  ASSERT_TRUE(empty_doc->IsInitialEmptyDocument());
-  HTMLDocumentParser* parser = MakeGarbageCollected<HTMLDocumentParser>(
-      *empty_doc, kAllowDeferredParsing);
-  // Empty documents should not use the background tokenizer.
-  EXPECT_FALSE(parser->TokenProducerForTesting()->IsUsingBackgroundProducer());
+TEST_F(HTMLDocumentParserProcessImmediatelyTest, FirstChunkDelayedChildFrame) {
+  base::test::ScopedFeatureList scoped_feature_list;
+  scoped_feature_list.InitAndEnableFeatureWithParameters(
+      features::kProcessHtmlDataImmediately,
+      {{features::kProcessHtmlDataImmediatelyChildFrame.name, "true"},
+       {features::kProcessHtmlDataImmediatelyFirstChunk.name, "false"}});
+  frame_test_helpers::WebViewHelper web_view_helper;
+  HTMLDocumentParser* parser =
+      ConfigureWebViewHelperForChildFrameAndCreateParser(web_view_helper);
+  ASSERT_TRUE(parser);
+  ScopedParserDetacher detacher(parser);
+  const char kBytes[] = "<div><div><div>";
+  parser->AppendBytes(kBytes, sizeof(kBytes) - 1);
+  // The first chunk should not been processed.
+  EXPECT_FALSE(parser->DidPumpTokenizerForTesting());
+
+  // Cancel any pending work to make sure that RuntimeFeatures DCHECKs do not
+  // fire.
+  static_cast<DocumentParser*>(parser)->StopParsing();
 }
 
 }  // namespace blink

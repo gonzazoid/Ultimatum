@@ -20,13 +20,26 @@ class ProxyConfigDictionary;
 namespace extensions {
 namespace proxy_api_helpers {
 
+// The scheme for which to use a manually specified proxy, not of the proxy URI
+// itself.
+enum {
+  SCHEME_ALL = 0,
+  SCHEME_HTTP,
+  SCHEME_HTTPS,
+  SCHEME_FTP,
+  SCHEME_FALLBACK,
+  SCHEME_MAX = SCHEME_FALLBACK  // Keep this value up to date.
+};
+
+// The names of the JavaScript properties to extract from the proxy_rules.
+// These must be kept in sync with the SCHEME_* constants.
+extern const char* const field_name[];
+
 // Conversion between PAC scripts and data-encoding URLs containing these
 // PAC scripts. Data-encoding URLs consist of a data:// prefix, a mime-type and
-// base64 encoded text. The functions return true in case of success.
-// CreatePACScriptFromDataURL should only be called on data-encoding urls
-// created with CreateDataURLFromPACScript.
-bool CreateDataURLFromPACScript(const std::string& pac_script,
-                                std::string* pac_script_url_base64_encoded);
+// base64 encoded text. CreatePACScriptFromDataURL should only be called on
+// data-encoding urls created with CreateDataURLFromPACScript.
+std::string CreateDataURLFromPACScript(const std::string& pac_script);
 bool CreatePACScriptFromDataURL(
     const std::string& pac_script_url_base64_encoded,
     std::string* pac_script);
@@ -77,7 +90,7 @@ bool GetBypassListFromExtensionPref(const base::Value::Dict& proxy_config,
 // Creates and returns a ProxyConfig dictionary (as defined in the extension
 // API) from the given parameters. Ownership is passed to the caller.
 // Depending on the value of |mode_enum|, several of the strings may be empty.
-std::unique_ptr<base::Value> CreateProxyConfigDict(
+absl::optional<base::Value::Dict> CreateProxyConfigDict(
     ProxyPrefs::ProxyMode mode_enum,
     bool pac_mandatory,
     const std::string& pac_url,
@@ -114,9 +127,9 @@ absl::optional<base::Value::Dict> CreateProxyRulesDict(
     const ProxyConfigDictionary& proxy_config);
 
 // Creates and returns a ProxyServer dictionary as defined in the extension API
-// with values from a net::ProxyServer object. Returns an empty dictionary on
+// with values from a net::ProxyChain object. Returns an empty dictionary on
 // error.
-base::Value::Dict CreateProxyServerDict(const net::ProxyServer& proxy);
+base::Value::Dict CreateProxyServerDict(const net::ProxyChain& proxy);
 
 // Creates and returns a PacScript dictionary as defined in the extension API
 // with the values of a ProxyconfigDictionary configured for pac scripts.

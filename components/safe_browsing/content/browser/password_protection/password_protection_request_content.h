@@ -19,6 +19,7 @@
 #include "components/safe_browsing/core/browser/password_protection/metrics_util.h"
 #include "components/safe_browsing/core/browser/password_protection/password_protection_request.h"
 #include "components/safe_browsing/core/common/proto/csd.pb.h"
+#include "mojo/public/cpp/bindings/associated_remote.h"
 
 #if BUILDFLAG(SAFE_BROWSING_AVAILABLE)
 #include "components/safe_browsing/content/common/safe_browsing.mojom.h"
@@ -40,8 +41,27 @@ class PasswordProtectionCommitDeferringCondition;
 
 using password_manager::metrics_util::PasswordType;
 
-class PasswordProtectionRequestContent : public PasswordProtectionRequest {
+class PasswordProtectionRequestContent final
+    : public PasswordProtectionRequest {
  public:
+  // Creates a request instance for testing which will stop short of issuing
+  // real requests. See prevent_initiating_url_loader_for_testing_ in the base
+  // class.
+  static scoped_refptr<PasswordProtectionRequest> CreateForTesting(
+      content::WebContents* web_contents,
+      const GURL& main_frame_url,
+      const GURL& password_form_action,
+      const GURL& password_form_frame_url,
+      const std::string& mime_type,
+      const std::string& username,
+      PasswordType password_type,
+      const std::vector<password_manager::MatchingReusedCredential>&
+          matching_reused_credentials,
+      LoginReputationClientRequest::TriggerType type,
+      bool password_field_exists,
+      PasswordProtectionServiceBase* pps,
+      int request_timeout_in_ms);
+
   PasswordProtectionRequestContent(
       content::WebContents* web_contents,
       const GURL& main_frame_url,
@@ -62,10 +82,6 @@ class PasswordProtectionRequestContent : public PasswordProtectionRequest {
 
   content::WebContents* web_contents() const { return web_contents_; }
 
-  base::WeakPtr<PasswordProtectionRequestContent> AsWeakPtr() {
-    return base::AsWeakPtr(this);
-  }
-
   // Keeps track of deferred navigations.
   void AddDeferredNavigation(
       PasswordProtectionCommitDeferringCondition& condition) {
@@ -84,6 +100,12 @@ class PasswordProtectionRequestContent : public PasswordProtectionRequest {
   std::set<PasswordProtectionCommitDeferringCondition*>&
   get_deferred_navigations_for_testing() {
     return deferred_navigations_;
+  }
+
+  base::WeakPtr<PasswordProtectionRequest> AsWeakPtr() override;
+
+  base::WeakPtr<PasswordProtectionRequestContent> AsWeakPtrImpl() {
+    return weak_factory_.GetWeakPtr();
   }
 
  private:
@@ -110,6 +132,8 @@ class PasswordProtectionRequestContent : public PasswordProtectionRequest {
   void OnGetDomFeatures(mojom::PhishingDetectorResult result,
                         const std::string& verdict);
 
+  void ExtractClientPhishingRequestFeatures(ClientPhishingRequest verdict);
+
   // Called when the DOM feature extraction times out.
   void OnGetDomFeatureTimeout();
 
@@ -118,6 +142,8 @@ class PasswordProtectionRequestContent : public PasswordProtectionRequest {
   // If appropriate, collects visual features, otherwise continues on to sending
   // the request.
   void MaybeCollectVisualFeatures() override;
+
+  bool ShouldCollectVisualFeatures();
 
   // Collects visual features from the current login page.
   void CollectVisualFeatures();
@@ -128,6 +154,7 @@ class PasswordProtectionRequestContent : public PasswordProtectionRequest {
   // Called when the visual feature extraction is complete.
   void OnVisualFeatureCollectionDone(
       std::unique_ptr<VisualFeatures> visual_features);
+
 #endif  // BUILDFLAG(SAFE_BROWSING_AVAILABLE)
 
 #if BUILDFLAG(IS_ANDROID)
@@ -135,7 +162,7 @@ class PasswordProtectionRequestContent : public PasswordProtectionRequest {
 #endif  // BUILDFLAG(IS_ANDROID)
 
   // WebContents of the password protection event.
-  raw_ptr<content::WebContents> web_contents_;
+  raw_ptr<content::WebContents, DanglingUntriaged> web_contents_;
 
   // Cancels the request when it is no longer valid.
   std::unique_ptr<RequestCanceler> request_canceler_;
@@ -152,12 +179,15 @@ class PasswordProtectionRequestContent : public PasswordProtectionRequest {
   base::TimeTicks visual_feature_start_time_;
 
   // The Mojo pipe used for extracting DOM features from the renderer.
-  mojo::Remote<safe_browsing::mojom::PhishingDetector> phishing_detector_;
+  mojo::AssociatedRemote<safe_browsing::mojom::PhishingDetector>
+      phishing_detector_;
 
   // Whether the DOM features collection is finished, either by timeout or by
   // successfully gathering the features.
   bool dom_features_collection_complete_;
 #endif  // BUILDFLAG(SAFE_BROWSING_AVAILABLE)
+
+  base::WeakPtrFactory<PasswordProtectionRequestContent> weak_factory_{this};
 };
 
 }  // namespace safe_browsing

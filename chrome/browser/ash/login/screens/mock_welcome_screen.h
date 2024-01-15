@@ -7,15 +7,17 @@
 
 #include <string>
 
+#include "base/memory/weak_ptr.h"
+#include "base/values.h"
 #include "chrome/browser/ash/login/screens/welcome_screen.h"
-#include "chrome/browser/ui/webui/chromeos/login/welcome_screen_handler.h"
+#include "chrome/browser/ui/webui/ash/login/welcome_screen_handler.h"
 #include "testing/gmock/include/gmock/gmock.h"
 
 namespace ash {
 
 class MockWelcomeScreen : public WelcomeScreen {
  public:
-  MockWelcomeScreen(WelcomeView* view,
+  MockWelcomeScreen(base::WeakPtr<WelcomeView> view,
                     const WelcomeScreen::ScreenExitCallback& exit_callback);
 
   MockWelcomeScreen(const MockWelcomeScreen&) = delete;
@@ -38,14 +40,8 @@ class MockWelcomeView : public WelcomeView {
 
   ~MockWelcomeView() override;
 
-  void Bind(WelcomeScreen* screen) override;
-  void Unbind() override;
-
-  MOCK_METHOD(void, MockBind, (WelcomeScreen * screen));
-  MOCK_METHOD(void, MockUnbind, ());
   MOCK_METHOD(void, Show, ());
-  MOCK_METHOD(void, Hide, ());
-  MOCK_METHOD(void, ReloadLocalizedContent, ());
+  MOCK_METHOD(void, SetLanguageList, (base::Value::List));
   MOCK_METHOD(void, SetInputMethodId, (const std::string& input_method_id));
   MOCK_METHOD(void, SetTimezoneId, (const std::string& timezone_id));
   MOCK_METHOD(void, ShowDemoModeConfirmationDialog, ());
@@ -55,18 +51,9 @@ class MockWelcomeView : public WelcomeView {
   MOCK_METHOD(void, CancelChromeVoxHintIdleDetection, ());
   MOCK_METHOD(void, UpdateA11yState, (const A11yState&));
   MOCK_METHOD(void, SetQuickStartEnabled, ());
-
- private:
-  WelcomeScreen* screen_ = nullptr;
+  MOCK_METHOD(void, ShowQuickStartBluetoothDialog, ());
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove after the //chrome/browser/chromeos
-// source migration is finished.
-namespace chromeos {
-using ::ash::MockWelcomeScreen;
-using ::ash::MockWelcomeView;
-}  // namespace chromeos
 
 #endif  // CHROME_BROWSER_ASH_LOGIN_SCREENS_MOCK_WELCOME_SCREEN_H_

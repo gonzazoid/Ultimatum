@@ -25,7 +25,6 @@
 #include "third_party/blink/renderer/core/html/parser/html_parser_idioms.h"
 #include "third_party/blink/renderer/core/html/shadow/progress_shadow_element.h"
 #include "third_party/blink/renderer/core/html_names.h"
-#include "third_party/blink/renderer/core/layout/layout_object_factory.h"
 #include "third_party/blink/renderer/core/layout/layout_progress.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
@@ -45,16 +44,15 @@ HTMLProgressElement::HTMLProgressElement(Document& document)
 HTMLProgressElement::~HTMLProgressElement() = default;
 
 LayoutObject* HTMLProgressElement::CreateLayoutObject(
-    const ComputedStyle& style,
-    LegacyLayout legacy) {
+    const ComputedStyle& style) {
   if (!style.HasEffectiveAppearance()) {
     UseCounter::Count(GetDocument(),
                       WebFeature::kProgressElementWithNoneAppearance);
-    return LayoutObject::CreateObject(this, style, legacy);
+    return LayoutObject::CreateObject(this, style);
   }
   UseCounter::Count(GetDocument(),
                     WebFeature::kProgressElementWithProgressBarAppearance);
-  return LayoutObjectFactory::CreateProgress(this, style, legacy);
+  return MakeGarbageCollected<LayoutProgress>(*this);
 }
 
 LayoutProgress* HTMLProgressElement::GetLayoutProgress() const {
@@ -119,7 +117,7 @@ bool HTMLProgressElement::IsDeterminate() const {
 }
 
 void HTMLProgressElement::DidElementStateChange() {
-  SetValueWidthPercentage(position() * 100);
+  SetInlineSizePercentage(position() * 100);
   if (LayoutProgress* layout_progress = GetLayoutProgress())
     layout_progress->UpdateFromElement();
 }
@@ -135,7 +133,7 @@ void HTMLProgressElement::DidAddUserAgentShadowRoot(ShadowRoot& root) {
   bar->SetShadowPseudoId(AtomicString("-webkit-progress-bar"));
   value_ = MakeGarbageCollected<ProgressShadowElement>(GetDocument());
   value_->SetShadowPseudoId(AtomicString("-webkit-progress-value"));
-  SetValueWidthPercentage(HTMLProgressElement::kIndeterminatePosition * 100);
+  SetInlineSizePercentage(HTMLProgressElement::kIndeterminatePosition * 100);
   bar->AppendChild(value_);
 
   inner->AppendChild(bar);
@@ -150,8 +148,10 @@ void HTMLProgressElement::Trace(Visitor* visitor) const {
   HTMLElement::Trace(visitor);
 }
 
-void HTMLProgressElement::SetValueWidthPercentage(double width) const {
-  value_->SetInlineStyleProperty(CSSPropertyID::kWidth, width,
+void HTMLProgressElement::SetInlineSizePercentage(double position) const {
+  value_->SetInlineStyleProperty(CSSPropertyID::kInlineSize, position,
+                                 CSSPrimitiveValue::UnitType::kPercentage);
+  value_->SetInlineStyleProperty(CSSPropertyID::kBlockSize, 100,
                                  CSSPrimitiveValue::UnitType::kPercentage);
 }
 

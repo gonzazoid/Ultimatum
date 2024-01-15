@@ -8,14 +8,15 @@
 #include <set>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/logging.h"
 #include "base/memory/raw_ptr.h"
 #include "base/values.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/common/extensions/api/file_browser_handlers/file_browser_handler.h"
+#include "content/public/browser/render_process_host.h"
 #include "extensions/browser/api/file_handlers/app_file_handler_util.h"
 #include "extensions/browser/api/file_handlers/directory_util.h"
 #include "extensions/browser/entry_info.h"
@@ -174,7 +175,9 @@ void FileBrowserHandlerExecutorFlow::PrepareToLaunch() {
   // available, or it might be in the process of being unloaded, in which case
   // the lazy background task queue is used to load the extension and then
   // call back to us.
-  const extensions::LazyContextId context_id(profile_, extension_->id());
+  const auto context_id =
+      extensions::LazyContextId::ForExtension(profile_, extension_.get());
+  CHECK(context_id.IsForBackgroundPage());
   extensions::LazyContextTaskQueue* task_queue = context_id.GetTaskQueue();
 
   if (task_queue->ShouldEnqueueTask(profile_, extension_.get())) {

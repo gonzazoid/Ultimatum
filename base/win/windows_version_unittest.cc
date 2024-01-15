@@ -5,6 +5,10 @@
 #include "base/win/windows_version.h"
 
 #include "base/check_op.h"
+#include "base/file_version_info_win.h"
+#include "base/files/file_path.h"
+#include "base/files/file_util.h"
+#include "base/path_service.h"
 #include "build/build_config.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -17,23 +21,43 @@ TEST(WindowsVersion, GetVersionExAndKernelOsVersionMatch) {
   // Note: not all versions of Windows return identical build numbers e.g.
   // 1909/19H2 kernel32.dll has build number 18362 but OS version build number
   // 18363.
-  EXPECT_EQ(OSInfo::GetInstance()->Kernel32VersionNumber().major,
+  EXPECT_EQ(OSInfo::Kernel32VersionNumber().major,
             OSInfo::GetInstance()->version_number().major);
-  EXPECT_EQ(OSInfo::GetInstance()->Kernel32VersionNumber().minor,
+  EXPECT_EQ(OSInfo::Kernel32VersionNumber().minor,
             OSInfo::GetInstance()->version_number().minor);
 }
 
+TEST(WindowsVersion, CheckDbgHelpVersion) {
+  // Make sure that dbghelp.dll is present and is a recent enough version to
+  // handle large-page PDBs. This requires dbghelp.dll from the Windows 11 SDK
+  // or later.
+  base::FilePath exe_dir;
+  ASSERT_TRUE(base::PathService::Get(base::DIR_EXE, &exe_dir));
+  FilePath dbghelp_path = exe_dir.Append(FILE_PATH_LITERAL("dbghelp.dll"));
+  ASSERT_TRUE(base::PathExists(dbghelp_path));
+  auto file_version =
+      FileVersionInfoWin::CreateFileVersionInfoWin(dbghelp_path);
+  ASSERT_TRUE(file_version);
+  auto version = file_version->GetFileVersion();
+  // Check against Windows 11 SDK version.
+  EXPECT_GE(version, base::Version({10, 0, 22621, 755}));
+}
+
 TEST(OSInfo, MajorMinorBuildToVersion) {
+  EXPECT_EQ(OSInfo::MajorMinorBuildToVersion(11, 0, 0), Version::WIN11);
   EXPECT_EQ(OSInfo::MajorMinorBuildToVersion(10, 0, 32767),
-            Version::WIN11);
-  EXPECT_EQ(OSInfo::MajorMinorBuildToVersion(10, 0, 22000),
-            Version::WIN11);
+            Version::WIN11_22H2);
+  EXPECT_EQ(OSInfo::MajorMinorBuildToVersion(10, 0, 22621),
+            Version::WIN11_22H2);
+  EXPECT_EQ(OSInfo::MajorMinorBuildToVersion(10, 0, 22000), Version::WIN11);
   EXPECT_EQ(OSInfo::MajorMinorBuildToVersion(10, 0, 21999),
             Version::SERVER_2022);
   EXPECT_EQ(OSInfo::MajorMinorBuildToVersion(10, 0, 20348),
             Version::SERVER_2022);
   EXPECT_EQ(OSInfo::MajorMinorBuildToVersion(10, 0, 20347),
-            Version::WIN10_21H2);
+            Version::WIN10_22H2);
+  EXPECT_EQ(OSInfo::MajorMinorBuildToVersion(10, 0, 19045),
+            Version::WIN10_22H2);
   EXPECT_EQ(OSInfo::MajorMinorBuildToVersion(10, 0, 19044),
             Version::WIN10_21H2);
   EXPECT_EQ(OSInfo::MajorMinorBuildToVersion(10, 0, 19043),

@@ -7,12 +7,10 @@
 
 #include <memory>
 #include <string>
-#include "base/callback_forward.h"
 #include "base/containers/flat_set.h"
+#include "base/functional/callback_forward.h"
 
 namespace borealis {
-
-struct HardwareStatsA {};
 
 // A helper class that makes verifying tokens/hardware easier. Users can extend
 // this class and write a method like Check() that calls all the helpers.

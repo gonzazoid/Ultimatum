@@ -8,13 +8,12 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "chromeos/ash/components/dbus/userdataauth/cryptohome_misc_client.h"
 
 namespace ash {
@@ -31,7 +30,7 @@ SystemSaltGetter::~SystemSaltGetter() = default;
 
 void SystemSaltGetter::GetSystemSalt(GetSystemSaltCallback callback) {
   if (!system_salt_.empty()) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(callback), system_salt_));
     return;
   }
@@ -75,7 +74,7 @@ void SystemSaltGetter::DidWaitForServiceToBeAvailable(
 
 void SystemSaltGetter::DidGetSystemSalt(
     GetSystemSaltCallback system_salt_callback,
-    absl::optional<::user_data_auth::GetSystemSaltReply> system_salt_reply) {
+    std::optional<::user_data_auth::GetSystemSaltReply> system_salt_reply) {
   if (system_salt_reply.has_value() && !system_salt_reply->salt().empty() &&
       system_salt_reply->salt().size() % 2 == 0U) {
     raw_salt_ = RawSalt(system_salt_reply->salt().begin(),

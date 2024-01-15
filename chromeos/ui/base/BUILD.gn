@@ -17,8 +17,8 @@ component("base") {
     "display_util.h",
     "file_icon_util.cc",
     "file_icon_util.h",
-    "tablet_state.cc",
-    "tablet_state.h",
+    "nudge_util.cc",
+    "nudge_util.h",
     "window_pin_type.cc",
     "window_pin_type.h",
     "window_properties.cc",
@@ -31,17 +31,25 @@ component("base") {
 
   deps = [
     "//base",
-    "//build:chromeos_buildflags",
     "//chromeos/constants",
     "//chromeos/ui/vector_icons",
     "//skia",
     "//third_party/abseil-cpp:absl",
     "//ui/base",
     "//ui/chromeos/styles:cros_styles_views",
+    "//ui/chromeos/styles:cros_tokens_color_mappings",
+    "//ui/color",
+    "//ui/color:color_headers",
+    "//ui/color:mixers",
     "//ui/display",
     "//ui/gfx",
     "//ui/gfx/geometry",
+    "//ui/native_theme",
   ]
+
+  if (is_chromeos_lacros) {
+    deps += [ "//chromeos/startup" ]
+  }
 }
 
 source_set("unit_tests") {

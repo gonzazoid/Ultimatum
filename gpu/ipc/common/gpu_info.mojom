@@ -10,6 +10,7 @@ import "gpu/ipc/common/dx_diag_node.mojom";
 import "gpu/ipc/common/luid.mojom";
 import "mojo/public/mojom/base/time.mojom";
 import "ui/gfx/geometry/mojom/geometry.mojom";
+import "ui/gl/mojom/gl_implementation.mojom";
 import "ui/gl/mojom/gpu_preference.mojom";
 
 [EnableIf=supports_vulkan]
@@ -57,8 +58,8 @@ enum VideoCodecProfile {
   HEVCPROFILE_MAIN10,
   HEVCPROFILE_MAIN_STILL_PICTURE,
   DOLBYVISION_PROFILE0,
-  DOLBYVISION_PROFILE4,
-  DOLBYVISION_PROFILE5,
+  // Deprecated: DOLBYVISION_PROFILE4 = 20,
+  DOLBYVISION_PROFILE5 = 21,
   DOLBYVISION_PROFILE7,
   THEORAPROFILE_ANY,
   AV1PROFILE_PROFILE_MAIN,
@@ -74,6 +75,21 @@ enum VideoCodecProfile {
   HEVCPROFILE_SCREEN_EXTENDED,
   HEVCPROFILE_SCALABLE_REXT,
   HEVCPROFILE_HIGH_THROUGHPUT_SCREEN_EXTENDED,
+  VVCPROFILE_MAIN10,
+  VVCPROFILE_MAIN12,
+  VVCPROFILE_MAIN12_INTRA,
+  VVCPROIFLE_MULTILAYER_MAIN10,
+  VVCPROFILE_MAIN10_444,
+  VVCPROFILE_MAIN12_444,
+  VVCPROFILE_MAIN16_444,
+  VVCPROFILE_MAIN12_444_INTRA,
+  VVCPROFILE_MAIN16_444_INTRA,
+  VVCPROFILE_MULTILAYER_MAIN10_444,
+  VVCPROFILE_MAIN10_STILL_PICTURE,
+  VVCPROFILE_MAIN12_STILL_PICTURE,
+  VVCPROFILE_MAIN10_444_STILL_PICTURE,
+  VVCPROFILE_MAIN12_444_STILL_PICTURE,
+  VVCPROFILE_MAIN16_444_STILL_PICTURE,
 };
 
 // gpu::VideoDecodeAcceleratorSupportedProfile
@@ -153,6 +169,7 @@ struct GpuInfo {
   string max_msaa_samples;
   string machine_model_name;
   string machine_model_version;
+  string display_type;
   string gl_version;
   string gl_vendor;
   string gl_renderer;
@@ -161,7 +178,7 @@ struct GpuInfo {
   string gl_ws_version;
   string gl_ws_extensions;
   uint32 gl_reset_notification_strategy;
-  bool software_rendering;
+  gl.mojom.GLImplementationParts gl_implementation_parts;
   string direct_rendering_version;
   bool sandboxed;
   bool in_process_gpu;

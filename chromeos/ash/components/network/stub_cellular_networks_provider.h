@@ -7,6 +7,7 @@
 
 #include "base/containers/flat_map.h"
 #include "base/containers/flat_set.h"
+#include "base/memory/raw_ptr.h"
 #include "chromeos/ash/components/network/network_state_handler.h"
 
 namespace ash {
@@ -70,9 +71,10 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) StubCellularNetworksProvider
       const base::flat_set<std::string>* shill_iccids,
       NetworkStateHandler::ManagedStateList& network_list);
 
-  NetworkStateHandler* network_state_handler_ = nullptr;
-  CellularESimProfileHandler* cellular_esim_profile_handler_ = nullptr;
-  ManagedCellularPrefHandler* managed_cellular_pref_handler_ = nullptr;
+  raw_ptr<NetworkStateHandler> network_state_handler_ = nullptr;
+  raw_ptr<CellularESimProfileHandler> cellular_esim_profile_handler_ = nullptr;
+  raw_ptr<ManagedCellularPrefHandler, DanglingUntriaged>
+      managed_cellular_pref_handler_ = nullptr;
 
   // Map which stores the GUID used for stubs created by this class. Each
   // network should use a consistent GUID throughout a session.

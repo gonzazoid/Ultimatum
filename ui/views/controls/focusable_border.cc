@@ -6,6 +6,7 @@
 
 #include "cc/paint/paint_flags.h"
 #include "third_party/skia/include/core/SkPath.h"
+#include "ui/base/ui_base_features.h"
 #include "ui/color/color_id.h"
 #include "ui/color/color_provider.h"
 #include "ui/gfx/canvas.h"
@@ -14,6 +15,7 @@
 #include "ui/gfx/geometry/insets.h"
 #include "ui/gfx/geometry/skia_conversions.h"
 #include "ui/gfx/scoped_canvas.h"
+#include "ui/views/controls/focus_ring.h"
 #include "ui/views/controls/textfield/textfield.h"
 
 namespace {
@@ -24,7 +26,10 @@ constexpr int kInsetSize = 1;
 
 namespace views {
 
-FocusableBorder::FocusableBorder() : insets_(kInsetSize) {}
+FocusableBorder::FocusableBorder(bool should_scale)
+    : insets_(kInsetSize),
+      corner_radius_(FocusRing::kDefaultCornerRadiusDp),
+      should_scale_(should_scale) {}
 
 FocusableBorder::~FocusableBorder() = default;
 
@@ -38,18 +43,18 @@ void FocusableBorder::Paint(const View& view, gfx::Canvas* canvas) {
   flags.setColor(GetCurrentColor(view));
 
   gfx::ScopedCanvas scoped(canvas);
-  float dsf = canvas->UndoDeviceScaleFactor();
+  const float dsf = canvas->UndoDeviceScaleFactor();
 
-  constexpr int kStrokeWidthPx = 1;
-  flags.setStrokeWidth(SkIntToScalar(kStrokeWidthPx));
+  const float kStrokeWidth = should_scale_ ? dsf : 1.0f;
+  flags.setStrokeWidth(kStrokeWidth);
 
   // Scale the rect and snap to pixel boundaries.
   gfx::RectF rect(gfx::ScaleToEnclosedRect(view.GetLocalBounds(), dsf));
-  rect.Inset(gfx::InsetsF(kStrokeWidthPx / 2.0f));
+  rect.Inset(gfx::InsetsF(kStrokeWidth / 2.0f));
 
   SkPath path;
   flags.setAntiAlias(true);
-  float corner_radius_px = kCornerRadiusDp * dsf;
+  float corner_radius_px = corner_radius_ * dsf;
   path.addRoundRect(gfx::RectFToSkRect(rect), corner_radius_px,
                     corner_radius_px);
 
@@ -66,6 +71,10 @@ gfx::Size FocusableBorder::GetMinimumSize() const {
 
 void FocusableBorder::SetInsets(const gfx::Insets& insets) {
   insets_ = insets;
+}
+
+void FocusableBorder::SetCornerRadius(float radius) {
+  corner_radius_ = radius;
 }
 
 SkColor FocusableBorder::GetCurrentColor(const View& view) const {

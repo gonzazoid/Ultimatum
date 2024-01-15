@@ -124,9 +124,6 @@ void Location::WriteIntoTrace(perfetto::TracedValue context) const {
 #define RETURN_ADDRESS() nullptr
 #endif
 
-#if SUPPORTS_LOCATION_BUILTINS
-
-#if BUILDFLAG(ENABLE_LOCATION_SOURCE)
 // static
 NOINLINE Location Location::Current(const char* function_name,
                                     const char* file_name,
@@ -134,20 +131,6 @@ NOINLINE Location Location::Current(const char* function_name,
   return Location(function_name, file_name + kStrippedPrefixLength, line_number,
                   RETURN_ADDRESS());
 }
-#else
-// static
-NOINLINE Location Location::Current(const char* file_name) {
-  return Location(file_name + kStrippedPrefixLength, RETURN_ADDRESS());
-}
-#endif
-
-#else
-
-NOINLINE Location Location::Current() {
-  return Location(nullptr, RETURN_ADDRESS());
-}
-
-#endif
 
 //------------------------------------------------------------------------------
 NOINLINE const void* GetProgramCounter() {

@@ -114,7 +114,7 @@ void CaptureAccessHandlerBase::AddCaptureSession(int render_process_id,
       // Assume that the target is the same tab that is
       // requesting capture, not the display or any particular
       // window. This can be changed by calling UpdateTarget().
-      content::DesktopMediaID::TYPE_WEB_CONTENTS, gfx::kNullNativeWindow};
+      content::DesktopMediaID::TYPE_WEB_CONTENTS, gfx::NativeWindow()};
 
   sessions_.push_back(std::move(session));
 }
@@ -300,8 +300,7 @@ bool CaptureAccessHandlerBase::MatchesSession(const Session& session,
       return target_web_contents == web_contents->GetOutermostWebContents();
   }
 
-  NOTREACHED();
-  return false;
+  NOTREACHED_NORETURN();
 }
 
 void CaptureAccessHandlerBase::UpdateVideoScreenCaptureStatus(

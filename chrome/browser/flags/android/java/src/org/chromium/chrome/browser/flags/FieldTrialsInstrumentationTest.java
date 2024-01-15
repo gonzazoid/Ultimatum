@@ -14,6 +14,7 @@ import org.junit.rules.TestRule;
 import org.junit.runner.RunWith;
 
 import org.chromium.base.test.util.CommandLineFlags;
+import org.chromium.chrome.browser.app.flags.ChromeCachedFlags;
 import org.chromium.chrome.test.ChromeJUnit4ClassRunner;
 import org.chromium.chrome.test.ChromeTabbedActivityTestRule;
 import org.chromium.chrome.test.util.browser.Features;
@@ -22,9 +23,7 @@ import org.chromium.chrome.test.util.browser.FieldTrials;
 import java.util.HashMap;
 import java.util.Map;
 
-/**
- * Tests for {@link FieldTrials}.
- */
+/** Tests for {@link FieldTrials}. */
 @RunWith(ChromeJUnit4ClassRunner.class)
 @CommandLineFlags.Add(ChromeSwitches.DISABLE_FIRST_RUN_EXPERIENCE)
 public final class FieldTrialsInstrumentationTest {
@@ -34,8 +33,7 @@ public final class FieldTrialsInstrumentationTest {
     @Rule
     public ChromeTabbedActivityTestRule mActivityTestRule = new ChromeTabbedActivityTestRule();
 
-    @Rule
-    public TestRule mProcessor = new Features.InstrumentationProcessor();
+    @Rule public TestRule mProcessor = new Features.InstrumentationProcessor();
 
     @Before
     public void setup() {
@@ -44,11 +42,12 @@ public final class FieldTrialsInstrumentationTest {
 
     @Test
     @SmallTest
-    // clang-format off
-    @CommandLineFlags.Add({"enable-features=" + sFeature1 + "<Study",
-            "force-fieldtrials=Study/Group", "force-fieldtrial-params=Study.Group:a1/b1"})
+    @CommandLineFlags.Add({
+        "enable-features=" + sFeature1 + "<Study",
+        "force-fieldtrials=Study/Group",
+        "force-fieldtrial-params=Study.Group:a1/b1"
+    })
     public void testOneFeatureTrialGroup() {
-        // clang-format on
         Assert.assertTrue(ChromeFeatureList.sTestDefaultDisabled.isEnabled());
         Assert.assertEquals("b1", ChromeFeatureList.getFieldTrialParamByFeature(sFeature1, "a1"));
 
@@ -60,11 +59,12 @@ public final class FieldTrialsInstrumentationTest {
 
     @Test
     @SmallTest
-    // clang-format off
-    @CommandLineFlags.Add({"enable-features=" + sFeature1 + "<Study,"  + sFeature2 + "<Study",
-            "force-fieldtrials=Study/Group", "force-fieldtrial-params=Study.Group:a1/b1/a2/b2"})
+    @CommandLineFlags.Add({
+        "enable-features=" + sFeature1 + "<Study," + sFeature2 + "<Study",
+        "force-fieldtrials=Study/Group",
+        "force-fieldtrial-params=Study.Group:a1/b1/a2/b2"
+    })
     public void testTwoFeaturesWithSameTrialGroup() {
-        // clang-format on
         Assert.assertTrue(ChromeFeatureList.isEnabled(sFeature1));
         Assert.assertEquals("b1", ChromeFeatureList.getFieldTrialParamByFeature(sFeature1, "a1"));
         Assert.assertTrue(ChromeFeatureList.isEnabled(sFeature1));
@@ -95,12 +95,12 @@ public final class FieldTrialsInstrumentationTest {
 
     @Test
     @SmallTest
-    // clang-format off
-    @CommandLineFlags.Add({"enable-features=" + sFeature1 + "<Study1,"  + sFeature2 + "<Study2",
-            "force-fieldtrials=Study1/Group1/Study2/Group2",
-            "force-fieldtrial-params=Study1.Group1:a1/0.5/a2/100,Study2.Group2:a3/true"})
+    @CommandLineFlags.Add({
+        "enable-features=" + sFeature1 + "<Study1," + sFeature2 + "<Study2",
+        "force-fieldtrials=Study1/Group1/Study2/Group2",
+        "force-fieldtrial-params=Study1.Group1:a1/0.5/a2/100,Study2.Group2:a3/true"
+    })
     public void testTwoFeaturesWithDifferentTrialGroupsAndMutipleTypesOfValues() {
-        // clang-format on
         Assert.assertTrue(ChromeFeatureList.isEnabled(sFeature1));
         Assert.assertTrue(ChromeFeatureList.isEnabled(sFeature2));
         Assert.assertEquals("0.5", ChromeFeatureList.getFieldTrialParamByFeature(sFeature1, "a1"));
@@ -124,22 +124,22 @@ public final class FieldTrialsInstrumentationTest {
 
     @Test
     @SmallTest
-    // clang-format off
-    @CommandLineFlags.Add({"enable-features=" + sFeature1 + "<Study",
-            "force-fieldtrials=Study/Group"})
+    @CommandLineFlags.Add({
+        "enable-features=" + sFeature1 + "<Study",
+        "force-fieldtrials=Study/Group"
+    })
     public void testFeatureWithoutParams() {
-        // clang-format on
         Assert.assertTrue(ChromeFeatureList.isEnabled(sFeature1));
         Assert.assertTrue(ChromeFeatureList.sTestDefaultDisabled.isEnabled());
     }
 
     @Test
     @SmallTest
-    // clang-format off
-    @CommandLineFlags.Add({"enable-features=" + sFeature1 + "<Study",
-            "force-fieldtrials=Study/Group"})
+    @CommandLineFlags.Add({
+        "enable-features=" + sFeature1 + "<Study",
+        "force-fieldtrials=Study/Group"
+    })
     public void testRuntimeParams() {
-        // clang-format on
         StringCachedFieldTrialParameter parameter =
                 new StringCachedFieldTrialParameter(sFeature1, "a1", "default");
         parameter.setForTesting("b1");
@@ -152,10 +152,11 @@ public final class FieldTrialsInstrumentationTest {
 
     @Test
     @SmallTest
-    // clang-format off
-    @CommandLineFlags.Add({"enable-features=" + sFeature2 + "<Study",
-            "force-fieldtrials=Study/Group",
-            "force-fieldtrial-params=Study.Group:101/x/y/99"})
+    @CommandLineFlags.Add({
+        "enable-features=" + sFeature2 + "<Study",
+        "force-fieldtrials=Study/Group",
+        "force-fieldtrial-params=Study.Group:101/x/y/99"
+    })
     public void testAllCachedFieldTrialParameters() {
         AllCachedFieldTrialParameters parameters = new AllCachedFieldTrialParameters(sFeature2);
         Map<String, String> expectedFeatures = new HashMap<>();
@@ -167,6 +168,6 @@ public final class FieldTrialsInstrumentationTest {
     @Test
     @SmallTest
     public void testGetLastUpdateFromNativeTimeMillis() {
-        Assert.assertNotEquals(0, CachedFeatureFlags.getLastCachedMinimalBrowserFlagsTimeMillis());
+        Assert.assertNotEquals(0, ChromeCachedFlags.getLastCachedMinimalBrowserFlagsTimeMillis());
     }
 }

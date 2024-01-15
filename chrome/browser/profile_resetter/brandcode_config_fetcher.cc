@@ -9,8 +9,8 @@
 #include <memory>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/profile_resetter/brandcoded_default_settings.h"
@@ -107,8 +107,15 @@ void BrandcodeConfigFetcher::SetCallback(FetchCallback callback) {
 
 void BrandcodeConfigFetcher::OnSimpleLoaderComplete(
     std::unique_ptr<std::string> response_body) {
-  if (response_body && simple_url_loader_->ResponseInfo() &&
-      simple_url_loader_->ResponseInfo()->mime_type == "text/xml") {
+  const bool is_valid_response =
+      response_body && simple_url_loader_->ResponseInfo() &&
+      simple_url_loader_->ResponseInfo()->mime_type == "text/xml";
+
+  // Release resources before potentially running the callback.
+  simple_url_loader_.reset();
+  download_timer_.Stop();
+
+  if (is_valid_response) {
     data_decoder::DataDecoder::ParseXmlIsolated(
         *response_body,
         data_decoder::mojom::XmlParser::WhitespaceBehavior::kIgnore,
@@ -117,8 +124,8 @@ void BrandcodeConfigFetcher::OnSimpleLoaderComplete(
   } else {
     std::move(fetch_callback_).Run();
   }
-  simple_url_loader_.reset();
-  download_timer_.Stop();
+
+  // `this` may now be deleted from `fetch_callback_`.
 }
 
 void BrandcodeConfigFetcher::OnXmlConfigParsed(

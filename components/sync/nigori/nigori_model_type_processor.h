@@ -7,6 +7,7 @@
 
 #include <memory>
 #include <utility>
+#include <vector>
 
 #include "base/memory/raw_ptr.h"
 #include "components/sync/engine/model_type_processor.h"
@@ -44,6 +45,9 @@ class NigoriModelTypeProcessor : public ModelTypeProcessor,
                         UpdateResponseDataList updates,
                         absl::optional<sync_pb::GarbageCollectionDirective>
                             gc_directive) override;
+  void StorePendingInvalidations(
+      std::vector<sync_pb::ModelTypeState::Invalidation> invalidations_to_store)
+      override;
 
   // ModelTypeControllerDelegate implementation.
   void OnSyncStarting(const DataTypeActivationRequest& request,
@@ -54,6 +58,8 @@ class NigoriModelTypeProcessor : public ModelTypeProcessor,
       base::OnceCallback<void(const TypeEntitiesCount&)> callback)
       const override;
   void RecordMemoryUsageAndCountsHistograms() override;
+  void ClearMetadataIfStopped() override;
+  void ReportBridgeErrorForTest() override;
 
   // NigoriLocalChangeProcessor implementation.
   void ModelReadyToSync(NigoriSyncBridge* bridge,
@@ -85,7 +91,7 @@ class NigoriModelTypeProcessor : public ModelTypeProcessor,
 
   // The bridge owns this processor instance so the pointer should never become
   // invalid.
-  raw_ptr<NigoriSyncBridge> bridge_;
+  raw_ptr<NigoriSyncBridge> bridge_ = nullptr;
 
   // The model type metadata (progress marker, initial sync done, etc).
   sync_pb::ModelTypeState model_type_state_;

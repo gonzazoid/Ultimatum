@@ -7,18 +7,14 @@
 #import "base/check.h"
 #import "ios/chrome/browser/favicon/favicon_loader.h"
 #import "ios/chrome/browser/favicon/ios_chrome_favicon_loader_factory.h"
-#import "ios/chrome/browser/follow/follow_browser_agent.h"
-#import "ios/chrome/browser/follow/follow_browser_agent_observer_bridge.h"
-#import "ios/chrome/browser/follow/follow_browser_agent_observing.h"
-#import "ios/chrome/browser/net/crurl.h"
+#import "ios/chrome/browser/follow/model/follow_browser_agent.h"
+#import "ios/chrome/browser/follow/model/follow_browser_agent_observer_bridge.h"
+#import "ios/chrome/browser/follow/model/follow_browser_agent_observing.h"
+#import "ios/chrome/browser/net/model/crurl.h"
 #import "ios/chrome/browser/ui/follow/followed_web_channel.h"
 #import "ios/chrome/browser/ui/ntp/feed_management/follow_management_follow_delegate.h"
 #import "ios/chrome/browser/ui/ntp/feed_management/follow_management_ui_updater.h"
 #import "ios/chrome/common/ui/favicon/favicon_constants.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace {
 
@@ -30,7 +26,7 @@ FollowedWebChannel* FollowedWebSiteToFollowedWebChannel(
   web_channel.webPageURL = [[CrURL alloc] initWithNSURL:web_site.webPageURL];
   web_channel.faviconURL = [[CrURL alloc] initWithNSURL:web_site.faviconURL];
   web_channel.rssURL = [[CrURL alloc] initWithNSURL:web_site.RSSURL];
-  web_channel.available = web_site.available;
+  web_channel.state = web_site.state;
   return web_channel;
 }
 
@@ -53,14 +49,14 @@ FollowedWebChannel* FollowedWebSiteToFollowedWebChannel(
   NSMutableArray<id<FollowManagementUIUpdater>>* _updaters;
 }
 
-- (instancetype)initWithBrowser:(Browser*)browser {
+- (instancetype)initWithBrowserAgent:(FollowBrowserAgent*)browserAgent
+                       faviconLoader:(FaviconLoader*)faviconLoader {
   self = [super init];
   if (self) {
-    _faviconLoader = IOSChromeFaviconLoaderFactory::GetForBrowserState(
-        browser->GetBrowserState());
-    _followBrowserAgent = FollowBrowserAgent::FromBrowser(browser);
+    _followBrowserAgent = browserAgent;
     _observer = std::make_unique<FollowBrowserAgentObserverBridge>(
         self, _followBrowserAgent);
+    _faviconLoader = faviconLoader;
     _updaters = [[NSMutableArray alloc] init];
   }
   return self;
@@ -94,6 +90,10 @@ FollowedWebChannel* FollowedWebSiteToFollowedWebChannel(
   return channels;
 }
 
+- (void)loadFollowedWebSites {
+  _followBrowserAgent->LoadFollowedWebSites();
+}
+
 #pragma mark - FollowManagementFollowDelegate
 
 - (void)unfollowFollowedWebChannel:(FollowedWebChannel*)followedWebChannel {
@@ -112,8 +112,8 @@ FollowedWebChannel* FollowedWebSiteToFollowedWebChannel(
 
 #pragma mark - TableViewFaviconDataSource
 
-- (void)faviconForURL:(CrURL*)URL
-           completion:(void (^)(FaviconAttributes*))completion {
+- (void)faviconForPageURL:(CrURL*)URL
+               completion:(void (^)(FaviconAttributes*))completion {
   _faviconLoader->FaviconForPageUrl(
       URL.gurl, kDesiredSmallFaviconSizePt, kMinFaviconSizePt,
       /*fallback_to_google_server=*/true, ^(FaviconAttributes* attributes) {
@@ -138,6 +138,12 @@ FollowedWebChannel* FollowedWebSiteToFollowedWebChannel(
 
   for (id<FollowManagementUIUpdater> updater in _updaters) {
     [updater removeFollowedWebChannel:followedWebChannel];
+  }
+}
+
+- (void)followedWebSitesLoaded {
+  for (id<FollowManagementUIUpdater> updater in _updaters) {
+    [updater updateFollowedWebSites];
   }
 }
 

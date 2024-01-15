@@ -11,8 +11,8 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
 #include "base/values.h"
@@ -68,7 +68,7 @@ class SupportPacketMetadata {
   // Removes all PII sensitive data from metadata except the PII types in
   // `pii_to_keep`. Runs `on_metadata_file_written` when file is written.
   void WriteMetadataFile(base::FilePath target_path,
-                         std::set<feedback::PIIType> pii_to_keep,
+                         std::set<redaction::PIIType> pii_to_keep,
                          base::OnceClosure on_matadata_file_written);
 
  private:

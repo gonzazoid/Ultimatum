@@ -9,6 +9,7 @@
 
 #include "base/memory/weak_ptr.h"
 #include "chromeos/crosapi/mojom/wallpaper.mojom.h"
+#include "extensions/common/extension_id.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/receiver_set.h"
 #include "services/data_decoder/public/cpp/data_decoder.h"
@@ -17,6 +18,7 @@
 
 namespace crosapi {
 
+// Ash implementation of the wallpaper extension API in Lacros.
 class WallpaperAsh : public mojom::Wallpaper {
  public:
   WallpaperAsh();
@@ -27,6 +29,11 @@ class WallpaperAsh : public mojom::Wallpaper {
   void BindReceiver(mojo::PendingReceiver<mojom::Wallpaper> receiver);
 
   // mojom::Wallpaper:
+  // Implementation removed in M116.
+  void SetWallpaperDeprecated(mojom::WallpaperSettingsPtr wallpaper_settings,
+                              const std::string& extension_id,
+                              const std::string& extension_name,
+                              SetWallpaperDeprecatedCallback callback) override;
   void SetWallpaper(mojom::WallpaperSettingsPtr wallpaper_settings,
                     const std::string& extension_id,
                     const std::string& extension_name,
@@ -34,11 +41,13 @@ class WallpaperAsh : public mojom::Wallpaper {
 
  private:
   void OnWallpaperDecoded(mojom::WallpaperSettingsPtr wallpaper_settings,
-                          const std::string& extension_id,
-                          const std::string& extension_name,
                           const SkBitmap& bitmap);
+  void SendErrorResult(const std::string& response);
+  void SendSuccessResult(const std::vector<uint8_t>& thumbnail_data);
 
   mojo::ReceiverSet<mojom::Wallpaper> receivers_;
+  // The ID of the extension making the current SetWallpaper() call.
+  extensions::ExtensionId extension_id_;
   SetWallpaperCallback pending_callback_;
   data_decoder::DataDecoder data_decoder_;
   base::WeakPtrFactory<WallpaperAsh> weak_ptr_factory_{this};
@@ -46,4 +55,4 @@ class WallpaperAsh : public mojom::Wallpaper {
 
 }  // namespace crosapi
 
-#endif
+#endif  // CHROME_BROWSER_ASH_CROSAPI_WALLPAPER_ASH_H_

@@ -4,89 +4,280 @@
 
 #import "ios/chrome/browser/ui/content_suggestions/content_suggestions_mediator.h"
 
+#import "base/memory/scoped_refptr.h"
+#import "base/test/ios/wait_util.h"
 #import "base/test/metrics/histogram_tester.h"
 #import "base/test/scoped_feature_list.h"
+#import "base/test/test_timeouts.h"
 #import "base/time/default_clock.h"
+#import "base/time/time.h"
+#import "components/commerce/core/mock_shopping_service.h"
 #import "components/favicon/core/large_icon_service_impl.h"
 #import "components/favicon/core/test/mock_favicon_service.h"
 #import "components/ntp_tiles/icon_cacher.h"
 #import "components/ntp_tiles/most_visited_sites.h"
+#import "components/password_manager/core/browser/password_manager_test_utils.h"
+#import "components/password_manager/core/browser/password_store/test_password_store.h"
 #import "components/reading_list/core/reading_list_model_impl.h"
+#import "components/segmentation_platform/public/constants.h"
+#import "components/segmentation_platform/public/features.h"
+#import "components/segmentation_platform/public/segmentation_platform_service.h"
+#import "components/signin/public/base/signin_pref_names.h"
 #import "components/sync_preferences/testing_pref_service_syncable.h"
-#import "ios/chrome/browser/browser_state/test_chrome_browser_state.h"
+#import "ios/chrome/browser/commerce/model/shopping_service_factory.h"
+#import "ios/chrome/browser/default_browser/model/utils_test_support.h"
 #import "ios/chrome/browser/favicon/ios_chrome_large_icon_cache_factory.h"
 #import "ios/chrome/browser/favicon/ios_chrome_large_icon_service_factory.h"
-#import "ios/chrome/browser/main/browser.h"
-#import "ios/chrome/browser/main/test_browser.h"
-#import "ios/chrome/browser/reading_list/reading_list_model_factory.h"
-#import "ios/chrome/browser/search_engines/template_url_service_factory.h"
-#import "ios/chrome/browser/ui/commands/browser_coordinator_commands.h"
-#import "ios/chrome/browser/ui/commands/snackbar_commands.h"
+#import "ios/chrome/browser/first_run/model/first_run.h"
+#import "ios/chrome/browser/ntp/model/new_tab_page_tab_helper.h"
+#import "ios/chrome/browser/ntp/model/set_up_list_item_type.h"
+#import "ios/chrome/browser/ntp/model/set_up_list_prefs.h"
+#import "ios/chrome/browser/parcel_tracking/features.h"
+#import "ios/chrome/browser/parcel_tracking/parcel_tracking_util.h"
+#import "ios/chrome/browser/passwords/model/ios_chrome_profile_password_store_factory.h"
+#import "ios/chrome/browser/promos_manager/mock_promos_manager.h"
+#import "ios/chrome/browser/reading_list/model/reading_list_model_factory.h"
+#import "ios/chrome/browser/reading_list/model/reading_list_test_utils.h"
+#import "ios/chrome/browser/safety_check/model/ios_chrome_safety_check_manager_factory.h"
+#import "ios/chrome/browser/search_engines/model/template_url_service_factory.h"
+#import "ios/chrome/browser/segmentation_platform/model/segmentation_platform_service_factory.h"
+#import "ios/chrome/browser/shared/model/browser/browser.h"
+#import "ios/chrome/browser/shared/model/browser/test/test_browser.h"
+#import "ios/chrome/browser/shared/model/browser_state/test_chrome_browser_state.h"
+#import "ios/chrome/browser/shared/model/prefs/pref_names.h"
+#import "ios/chrome/browser/shared/model/web_state_list/web_state_list.h"
+#import "ios/chrome/browser/shared/model/web_state_list/web_state_opener.h"
+#import "ios/chrome/browser/shared/public/commands/browser_coordinator_commands.h"
+#import "ios/chrome/browser/shared/public/commands/snackbar_commands.h"
+#import "ios/chrome/browser/shared/public/features/features.h"
+#import "ios/chrome/browser/signin/model/authentication_service.h"
+#import "ios/chrome/browser/signin/model/authentication_service_factory.h"
+#import "ios/chrome/browser/signin/model/fake_authentication_service_delegate.h"
+#import "ios/chrome/browser/signin/model/identity_manager_factory.h"
+#import "ios/chrome/browser/sync/model/sync_service_factory.h"
 #import "ios/chrome/browser/ui/content_suggestions/cells/content_suggestions_most_visited_action_item.h"
 #import "ios/chrome/browser/ui/content_suggestions/cells/content_suggestions_most_visited_item.h"
+#import "ios/chrome/browser/ui/content_suggestions/cells/content_suggestions_return_to_recent_tab_item.h"
 #import "ios/chrome/browser/ui/content_suggestions/cells/query_suggestion_view.h"
+#import "ios/chrome/browser/ui/content_suggestions/content_suggestions_constants.h"
 #import "ios/chrome/browser/ui/content_suggestions/content_suggestions_consumer.h"
-#import "ios/chrome/browser/ui/content_suggestions/content_suggestions_feature.h"
-#import "ios/chrome/browser/ui/content_suggestions/mediator_util.h"
-#import "ios/chrome/browser/ui/content_suggestions/ntp_home_metrics.h"
+#import "ios/chrome/browser/ui/content_suggestions/content_suggestions_mediator_util.h"
+#import "ios/chrome/browser/ui/content_suggestions/content_suggestions_metrics_recorder.h"
+#import "ios/chrome/browser/ui/content_suggestions/parcel_tracking/parcel_tracking_item.h"
+#import "ios/chrome/browser/ui/content_suggestions/set_up_list/utils.h"
+#import "ios/chrome/browser/ui/first_run/first_run_util.h"
+#import "ios/chrome/browser/ui/ntp/metrics/new_tab_page_metrics_recorder.h"
+#import "ios/chrome/browser/ui/ntp/new_tab_page_metrics_delegate.h"
 #import "ios/chrome/browser/ui/start_surface/start_surface_recent_tab_browser_agent.h"
-#import "ios/chrome/browser/url_loading/fake_url_loading_browser_agent.h"
-#import "ios/chrome/browser/url_loading/url_loading_notifier_browser_agent.h"
-#import "ios/chrome/browser/web_state_list/web_state_list.h"
-#import "ios/chrome/browser/web_state_list/web_state_opener.h"
+#import "ios/chrome/browser/url_loading/model/fake_url_loading_browser_agent.h"
+#import "ios/chrome/browser/url_loading/model/url_loading_notifier_browser_agent.h"
 #import "ios/chrome/test/ios_chrome_scoped_testing_local_state.h"
 #import "ios/web/public/test/fakes/fake_navigation_manager.h"
 #import "ios/web/public/test/fakes/fake_web_state.h"
 #import "ios/web/public/test/web_task_environment.h"
+#import "testing/gtest_mac.h"
 #import "testing/platform_test.h"
 #import "third_party/ocmock/OCMock/OCMock.h"
 #import "third_party/ocmock/gtest_support.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+using set_up_list_prefs::SetUpListItemState;
+using startup_metric_utils::FirstRunSentinelCreationResult;
 
-namespace {
-
-std::unique_ptr<KeyedService> BuildReadingListModel(
-    web::BrowserState* context) {
-  ChromeBrowserState* browser_state =
-      ChromeBrowserState::FromBrowserState(context);
-  std::unique_ptr<ReadingListModelImpl> reading_list_model(
-      new ReadingListModelImpl(nullptr, browser_state->GetPrefs(),
-                               base::DefaultClock::GetInstance()));
-  return reading_list_model;
-}
-
-}  // namespace
+#define EXPECT_SET_MAGIC_STACK_ORDER(consumer, ...)                      \
+  {                                                                      \
+    id block_checker = [OCMArg checkWithBlock:^BOOL(id value) {          \
+      NSArray<NSNumber*>* magic_stack_order = (NSArray*)value;           \
+      std::vector<ContentSuggestionsModuleType> expected_order = {       \
+          __VA_ARGS__};                                                  \
+      EXPECT_EQ(magic_stack_order.count, expected_order.size());         \
+      for (unsigned int i = 0; i < expected_order.size(); i++) {         \
+        EXPECT_EQ(magic_stack_order[i].intValue, int(expected_order[i])) \
+            << "For Magic Stack order index " << i;                      \
+      }                                                                  \
+      return YES;                                                        \
+    }];                                                                  \
+    OCMExpect([consumer setMagicStackOrder:block_checker]);              \
+  }
 
 @protocol ContentSuggestionsMediatorDispatcher <BrowserCoordinatorCommands,
                                                 SnackbarCommands>
 @end
 
+// Fake object to validate configs passed from the mediator.
+@interface FakeContentSuggestionsConsumer
+    : NSObject <ContentSuggestionsConsumer>
+
+@property(nonatomic, copy) NSArray<ParcelTrackingItem*>* parcelTrackingItems;
+
+@end
+
+@implementation FakeContentSuggestionsConsumer
+
+- (void)showReturnToRecentTabTileWithConfig:
+    (ContentSuggestionsReturnToRecentTabItem*)config {
+}
+
+- (void)updateReturnToRecentTabTileWithConfig:
+    (ContentSuggestionsReturnToRecentTabItem*)config {
+}
+
+- (void)hideReturnToRecentTabTile {
+}
+
+- (void)setMostVisitedTilesConfig:(MostVisitedTilesConfig*)config {
+}
+
+- (void)setShortcutTilesConfig:(ShortcutsConfig*)configs {
+}
+
+- (void)setMagicStackOrder:(NSArray<NSNumber*>*)order {
+}
+
+- (void)updateMagicStackOrder:(MagicStackOrderChange)change {
+}
+
+- (void)scrollToNextMagicStackModuleForCompletedModule:
+    (ContentSuggestionsModuleType)moduleType {
+}
+
+- (void)showSetUpListWithItems:(NSArray<SetUpListItemViewData*>*)items {
+}
+
+- (void)markSetUpListItemComplete:(SetUpListItemType)type
+                       completion:(ProceduralBlock)completion {
+}
+
+- (void)hideSetUpListWithAnimations:(ProceduralBlock)animations {
+}
+
+- (void)showSetUpListDoneWithAnimations:(ProceduralBlock)animations {
+}
+
+- (void)showSafetyCheck:(SafetyCheckState*)state {
+}
+
+- (void)showTabResumptionWithItem:(TabResumptionItem*)item {
+}
+
+- (void)hideTabResumption {
+}
+
+- (void)showParcelTrackingItems:(NSArray<ParcelTrackingItem*>*)items {
+  _parcelTrackingItems = items;
+}
+
+@end
+
+@interface ContentSuggestionsMediator ()
+@property(nonatomic, assign, readonly) BOOL hasReceivedMagicStackResponse;
+@end
+
 // Testing Suite for ContentSuggestionsMediator
 class ContentSuggestionsMediatorTest : public PlatformTest {
  public:
-  ContentSuggestionsMediatorTest() {
+  void SetUp() override {
+    // Need to initialize features before constructing
+    // SegmentationPlatformServiceFactory.
+    scoped_feature_list_.InitWithFeaturesAndParameters(
+        {{segmentation_platform::features::kSegmentationPlatformFeature, {}},
+         {segmentation_platform::features::kSegmentationPlatformIosModuleRanker,
+          {{segmentation_platform::kDefaultModelEnabledParam, "true"}}}},
+        {});
+
     TestChromeBrowserState::Builder test_cbs_builder;
+    test_cbs_builder.AddTestingFactory(
+        AuthenticationServiceFactory::GetInstance(),
+        base::BindRepeating(AuthenticationServiceFactory::GetDefaultFactory()));
     test_cbs_builder.AddTestingFactory(
         IOSChromeLargeIconServiceFactory::GetInstance(),
         IOSChromeLargeIconServiceFactory::GetDefaultFactory());
     test_cbs_builder.AddTestingFactory(
         ios::TemplateURLServiceFactory::GetInstance(),
         ios::TemplateURLServiceFactory::GetDefaultFactory());
+    test_cbs_builder.AddTestingFactory(
+        ReadingListModelFactory::GetInstance(),
+        base::BindRepeating(&BuildReadingListModelWithFakeStorage,
+                            std::vector<scoped_refptr<ReadingListEntry>>()));
+    test_cbs_builder.AddTestingFactory(
+        AuthenticationServiceFactory::GetInstance(),
+        base::BindRepeating(AuthenticationServiceFactory::GetDefaultFactory()));
+    test_cbs_builder.AddTestingFactory(
+        segmentation_platform::SegmentationPlatformServiceFactory::
+            GetInstance(),
+        segmentation_platform::SegmentationPlatformServiceFactory::
+            GetDefaultFactory());
+    test_cbs_builder.AddTestingFactory(
+        IOSChromeProfilePasswordStoreFactory::GetInstance(),
+        base::BindRepeating(
+            &password_manager::BuildPasswordStore<
+                web::BrowserState, password_manager::TestPasswordStore>));
+    test_cbs_builder.AddTestingFactory(
+        IOSChromeSafetyCheckManagerFactory::GetInstance(),
+        IOSChromeSafetyCheckManagerFactory::GetDefaultFactory());
     chrome_browser_state_ = test_cbs_builder.Build();
+
+    // Necessary set up for kIOSSetUpList.
+    local_state_.Get()->ClearPref(set_up_list_prefs::kDisabled);
+    ClearDefaultBrowserPromoData();
+    WriteFirstRunSentinel();
+
+    AuthenticationServiceFactory::CreateAndInitializeForBrowserState(
+        chrome_browser_state_.get(),
+        std::make_unique<FakeAuthenticationServiceDelegate>());
     large_icon_service_.reset(new favicon::LargeIconServiceImpl(
         &mock_favicon_service_, nullptr, 32, favicon_base::IconType::kTouchIcon,
         "test_chrome"));
     browser_ = std::make_unique<TestBrowser>(chrome_browser_state_.get());
     web_state_list_ = browser_->GetWebStateList();
     fake_web_state_ = std::make_unique<web::FakeWebState>();
-    InitializeReadingListModel();
+    fake_web_state_->SetBrowserState(chrome_browser_state_.get());
+    NewTabPageTabHelper::CreateForWebState(fake_web_state_.get());
     dispatcher_ =
         OCMProtocolMock(@protocol(ContentSuggestionsMediatorDispatcher));
     consumer_ = OCMProtocolMock(@protocol(ContentSuggestionsConsumer));
 
+    SetUpMediator();
+    mediator_.consumer = consumer_;
+
+    StartSurfaceRecentTabBrowserAgent::CreateForBrowser(browser_.get());
+    UrlLoadingNotifierBrowserAgent::CreateForBrowser(browser_.get());
+    FakeUrlLoadingBrowserAgent::InjectForBrowser(browser_.get());
+    url_loader_ = FakeUrlLoadingBrowserAgent::FromUrlLoadingBrowserAgent(
+        UrlLoadingBrowserAgent::FromBrowser(browser_.get()));
+    histogram_tester_ = std::make_unique<base::HistogramTester>();
+
+    shopping_service_ = std::make_unique<commerce::MockShoppingService>();
+    std::vector<commerce::ParcelTrackingStatus> parcels;
+    commerce::ParcelTrackingStatus out_for_delivery;
+    out_for_delivery.carrier = commerce::ParcelIdentifier::UPS;
+    out_for_delivery.state = commerce::ParcelStatus::OUT_FOR_DELIVERY;
+    out_for_delivery.tracking_id = "abc";
+    out_for_delivery.estimated_delivery_time =
+        base::Time::Now() + base::Hours(3);
+    parcels.emplace_back(out_for_delivery);
+
+    commerce::ParcelTrackingStatus delivered_status;
+    delivered_status.carrier = commerce::ParcelIdentifier::USPS;
+    delivered_status.state = commerce::ParcelStatus::FINISHED;
+    delivered_status.tracking_id = "def";
+    delivered_status.estimated_delivery_time =
+        base::Time::Now() - base::Days(3);
+    parcels.emplace_back(delivered_status);
+
+    commerce::ParcelTrackingStatus in_progress;
+    in_progress.carrier = commerce::ParcelIdentifier::UPS;
+    in_progress.state = commerce::ParcelStatus::WITH_CARRIER;
+    in_progress.tracking_id = "abc";
+    in_progress.estimated_delivery_time = base::Time::Now() + base::Days(3);
+    parcels.emplace_back(in_progress);
+
+    shopping_service_->SetGetAllParcelStatusesCallbackValue(parcels);
+  }
+
+  ~ContentSuggestionsMediatorTest() override { [mediator_ disconnect]; }
+
+ protected:
+  void SetUpMediator() {
     favicon::LargeIconService* largeIconService =
         IOSChromeLargeIconServiceFactory::GetForBrowserState(
             chrome_browser_state_.get());
@@ -97,10 +288,20 @@ class ContentSuggestionsMediatorTest : public PlatformTest {
             &pref_service_, /*top_sites*/ nullptr, /*popular_sites*/ nullptr,
             /*custom_links*/ nullptr, /*icon_cacher*/ nullptr,
             /*supervisor=*/nullptr, true);
-    ntp_tiles::MostVisitedSites::RegisterProfilePrefs(pref_service_.registry());
     ReadingListModel* readingListModel =
         ReadingListModelFactory::GetForBrowserState(
             chrome_browser_state_.get());
+
+    syncer::SyncService* sync_service =
+        SyncServiceFactory::GetForBrowserState(chrome_browser_state_.get());
+
+    AuthenticationService* authentication_service =
+        AuthenticationServiceFactory::GetForBrowserState(
+            chrome_browser_state_.get());
+
+    signin::IdentityManager* identityManager =
+        IdentityManagerFactory::GetForBrowserState(chrome_browser_state_.get());
+
     mediator_ = [[ContentSuggestionsMediator alloc]
              initWithLargeIconService:largeIconService
                        largeIconCache:cache
@@ -108,23 +309,47 @@ class ContentSuggestionsMediatorTest : public PlatformTest {
                      readingListModel:readingListModel
                           prefService:chrome_browser_state_.get()->GetPrefs()
         isGoogleDefaultSearchProvider:NO
+                          syncService:sync_service
+                authenticationService:authentication_service
+                      identityManager:identityManager
+                      shoppingService:shopping_service_.get()
                               browser:browser_.get()];
     mediator_.dispatcher = dispatcher_;
-    mediator_.consumer = consumer_;
     mediator_.webStateList = browser_.get()->GetWebStateList();
     mediator_.webState = fake_web_state_.get();
 
-    StartSurfaceRecentTabBrowserAgent::CreateForBrowser(browser_.get());
-    UrlLoadingNotifierBrowserAgent::CreateForBrowser(browser_.get());
-    FakeUrlLoadingBrowserAgent::InjectForBrowser(browser_.get());
-    url_loader_ = FakeUrlLoadingBrowserAgent::FromUrlLoadingBrowserAgent(
-        UrlLoadingBrowserAgent::FromBrowser(browser_.get()));
-    histogram_tester_.reset(new base::HistogramTester());
+    metrics_recorder_ = [[ContentSuggestionsMetricsRecorder alloc]
+        initWithLocalState:local_state_.Get()];
+    mediator_.contentSuggestionsMetricsRecorder = metrics_recorder_;
+
+    promos_manager_ = std::make_unique<MockPromosManager>();
+    mediator_.promosManager = promos_manager_.get();
+
+    mediator_.NTPMetricsDelegate =
+        OCMProtocolMock(@protocol(NewTabPageMetricsDelegate));
   }
 
- protected:
+  // Clears and re-writes the FirstRun sentinel file, in order to allow Set Up
+  // List to display.
+  void WriteFirstRunSentinel() {
+    base::ScopedAllowBlockingForTesting allow_blocking;
+    FirstRun::RemoveSentinel();
+    base::File::Error file_error = base::File::FILE_OK;
+    FirstRunSentinelCreationResult sentinel_created =
+        FirstRun::CreateSentinel(&file_error);
+    ASSERT_EQ(sentinel_created, FirstRunSentinelCreationResult::kSuccess)
+        << "Error creating FirstRun sentinel: "
+        << base::File::ErrorToString(file_error);
+    FirstRun::LoadSentinelInfo();
+    FirstRun::ClearStateForTesting();
+    EXPECT_FALSE(set_up_list_prefs::IsSetUpListDisabled(local_state_.Get()));
+    EXPECT_FALSE(FirstRun::IsChromeFirstRun());
+    EXPECT_TRUE(set_up_list_utils::IsSetUpListActive(local_state_.Get()));
+  }
+
   std::unique_ptr<web::FakeWebState> CreateWebState(const char* url) {
     auto test_web_state = std::make_unique<web::FakeWebState>();
+    NewTabPageTabHelper::CreateForWebState(test_web_state.get());
     test_web_state->SetCurrentURL(GURL(url));
     test_web_state->SetNavigationManager(
         std::make_unique<web::FakeNavigationManager>());
@@ -132,15 +357,8 @@ class ContentSuggestionsMediatorTest : public PlatformTest {
     return test_web_state;
   }
 
-  // Initialize reading list model and its required tab helpers.
-  void InitializeReadingListModel() {
-    fake_web_state_->SetBrowserState(chrome_browser_state_.get());
-    ReadingListModelFactory::GetInstance()->SetTestingFactoryAndUse(
-        chrome_browser_state_.get(),
-        base::BindRepeating(&BuildReadingListModel));
-  }
-
   web::WebTaskEnvironment task_environment_;
+  base::test::ScopedFeatureList scoped_feature_list_;
   sync_preferences::TestingPrefServiceSyncable pref_service_;
   IOSChromeScopedTestingLocalState local_state_;
   testing::StrictMock<favicon::MockFaviconService> mock_favicon_service_;
@@ -151,9 +369,12 @@ class ContentSuggestionsMediatorTest : public PlatformTest {
   id dispatcher_;
   id consumer_;
   std::unique_ptr<favicon::LargeIconServiceImpl> large_icon_service_;
+  std::unique_ptr<MockPromosManager> promos_manager_;
   ContentSuggestionsMediator* mediator_;
   FakeUrlLoadingBrowserAgent* url_loader_;
   std::unique_ptr<base::HistogramTester> histogram_tester_;
+  ContentSuggestionsMetricsRecorder* metrics_recorder_;
+  std::unique_ptr<commerce::MockShoppingService> shopping_service_;
 };
 
 // Tests that the command is sent to the dispatcher when opening the Reading
@@ -161,16 +382,12 @@ class ContentSuggestionsMediatorTest : public PlatformTest {
 TEST_F(ContentSuggestionsMediatorTest, TestOpenReadingList) {
   OCMExpect([dispatcher_ showReadingList]);
 
-  histogram_tester_->ExpectUniqueSample(
-      "IOS.ContentSuggestions.ActionOnNTP",
-      IOSContentSuggestionsActionType::kShortcuts, 0);
+  OCMExpect([mediator_.NTPMetricsDelegate shortcutTileOpened]);
+
   // Action.
   ContentSuggestionsMostVisitedActionItem* readingList =
       ReadingListActionItem();
   [mediator_ openMostVisitedItem:readingList atIndex:1];
-  histogram_tester_->ExpectUniqueSample(
-      "IOS.ContentSuggestions.ActionOnNTP",
-      IOSContentSuggestionsActionType::kShortcuts, 1);
 
   // Test.
   EXPECT_OCMOCK_VERIFY(dispatcher_);
@@ -182,14 +399,10 @@ TEST_F(ContentSuggestionsMediatorTest, TestOpenMostVisited) {
   ContentSuggestionsMostVisitedItem* item =
       [[ContentSuggestionsMostVisitedItem alloc] init];
   item.URL = url;
-  histogram_tester_->ExpectUniqueSample(
-      "IOS.ContentSuggestions.ActionOnNTP",
-      IOSContentSuggestionsActionType::kMostVisitedTile, 0);
+  OCMExpect([mediator_.NTPMetricsDelegate mostVisitedTileOpened]);
+
   // Action.
   [mediator_ openMostVisitedItem:item atIndex:0];
-  histogram_tester_->ExpectUniqueSample(
-      "IOS.ContentSuggestions.ActionOnNTP",
-      IOSContentSuggestionsActionType::kMostVisitedTile, 1);
 
   // Test.
   EXPECT_EQ(url, url_loader_->last_params.web_params.url);
@@ -198,7 +411,50 @@ TEST_F(ContentSuggestionsMediatorTest, TestOpenMostVisited) {
       url_loader_->last_params.web_params.transition_type));
 }
 
+// Tests that MostRecentTab can be opened and that its title is correct when
+// tab has a title.
 TEST_F(ContentSuggestionsMediatorTest, TestOpenMostRecentTab) {
+  // Create non-NTP WebState
+  auto web_state = CreateWebState("http://chromium.org");
+  web_state->SetTitle(u"title");
+  int recent_tab_index = web_state_list_->InsertWebState(
+      0, std::move(web_state), WebStateList::INSERT_ACTIVATE, WebStateOpener());
+  favicon::WebFaviconDriver::CreateForWebState(
+      web_state_list_->GetActiveWebState(),
+      /*favicon_service=*/nullptr);
+  StartSurfaceRecentTabBrowserAgent* browser_agent =
+      StartSurfaceRecentTabBrowserAgent::FromBrowser(browser_.get());
+  browser_agent->SaveMostRecentTab();
+  // Create NTP
+  web_state_list_->InsertWebState(1, CreateWebState("chrome://newtab"),
+                                  WebStateList::INSERT_ACTIVATE,
+                                  WebStateOpener());
+  web::WebState* ntp_web_state = web_state_list_->GetActiveWebState();
+  mediator_.webState = ntp_web_state;
+  NewTabPageTabHelper::FromWebState(ntp_web_state)->SetShowStartSurface(true);
+
+  OCMExpect([consumer_
+      updateReturnToRecentTabTileWithConfig:
+          [OCMArg
+              checkWithBlock:^(ContentSuggestionsReturnToRecentTabItem* item) {
+                EXPECT_NSEQ(@"title - 12 hours ago", item.subtitle);
+                return YES;
+              }]]);
+  [mediator_
+      configureMostRecentTabItemWithWebState:browser_agent->most_recent_tab()
+                                   timeLabel:@"12 hours ago"];
+
+  OCMExpect([consumer_ hideReturnToRecentTabTile]);
+  OCMExpect([mediator_.NTPMetricsDelegate recentTabTileOpened]);
+
+  [mediator_ openMostRecentTab];
+  // Verify the most recent tab was opened.
+  EXPECT_EQ(recent_tab_index, web_state_list_->active_index());
+}
+
+// Tests that MostRecentTab can be opened and that its title is correct when
+// tab has a no title.
+TEST_F(ContentSuggestionsMediatorTest, TestOpenMostRecentTabNoTitle) {
   // Create non-NTP WebState
   int recent_tab_index = web_state_list_->InsertWebState(
       0, CreateWebState("http://chromium.org"), WebStateList::INSERT_ACTIVATE,
@@ -213,21 +469,25 @@ TEST_F(ContentSuggestionsMediatorTest, TestOpenMostRecentTab) {
   web_state_list_->InsertWebState(1, CreateWebState("chrome://newtab"),
                                   WebStateList::INSERT_ACTIVATE,
                                   WebStateOpener());
+  web::WebState* ntp_web_state = web_state_list_->GetActiveWebState();
+  mediator_.webState = ntp_web_state;
+  NewTabPageTabHelper::FromWebState(ntp_web_state)->SetShowStartSurface(true);
 
-  OCMExpect([consumer_ showReturnToRecentTabTileWithConfig:[OCMArg any]]);
-  mediator_.showingStartSurface = YES;
+  OCMExpect([consumer_
+      updateReturnToRecentTabTileWithConfig:
+          [OCMArg
+              checkWithBlock:^(ContentSuggestionsReturnToRecentTabItem* item) {
+                EXPECT_NSEQ(@"chromium.org - 12 hours ago", item.subtitle);
+                return YES;
+              }]]);
   [mediator_
       configureMostRecentTabItemWithWebState:browser_agent->most_recent_tab()
                                    timeLabel:@"12 hours ago"];
 
   OCMExpect([consumer_ hideReturnToRecentTabTile]);
-  histogram_tester_->ExpectUniqueSample(
-      "IOS.ContentSuggestions.ActionOnStartSurface",
-      IOSContentSuggestionsActionType::kReturnToRecentTab, 0);
+  OCMExpect([mediator_.NTPMetricsDelegate recentTabTileOpened]);
+
   [mediator_ openMostRecentTab];
-  histogram_tester_->ExpectUniqueSample(
-      "IOS.ContentSuggestions.ActionOnStartSurface",
-      IOSContentSuggestionsActionType::kReturnToRecentTab, 1);
   // Verify the most recent tab was opened.
   EXPECT_EQ(recent_tab_index, web_state_list_->active_index());
 }
@@ -249,68 +509,303 @@ TEST_F(ContentSuggestionsMediatorTest, TestStartSurfaceRecentTabObserving) {
                                   WebStateOpener());
   web::WebState* web_state = browser_agent->most_recent_tab();
   [mediator_ configureMostRecentTabItemWithWebState:web_state
-                                          timeLabel:@"12 hours ago"];
+                                          timeLabel:@" - 12 hours ago"];
 
   OCMExpect([consumer_ updateReturnToRecentTabTileWithConfig:[OCMArg any]]);
-  [mediator_ mostRecentTabFaviconUpdatedWithImage:[[UIImage alloc] init]];
+  [mediator_ mostRecentTab:web_state
+      faviconUpdatedWithImage:[[UIImage alloc] init]];
 
   OCMExpect([consumer_ hideReturnToRecentTabTile]);
   [mediator_ mostRecentTabWasRemoved:web_state];
-}
-
-// Tests that the mediator calls the consumer properly in response to a call
-// from TestStartSuggestServiceResponseBridge
-TEST_F(ContentSuggestionsMediatorTest,
-       TestStartSuggestServiceResponseDelegating) {
-  // Expect the consumer is called with something if no suggestions are
-  // returned.
-  OCMExpect([consumer_ setTrendingQueriesWithConfigs:[OCMArg any]]);
-  std::vector<QuerySuggestion> response_queries{
-      {u"query1", GURL("http://test-url.com/query1")},
-      {u"query2", GURL("http://test-url.com/query1")}};
-  [mediator_ suggestionsReceived:std::move(response_queries)];
-
-  // Expect the consumer is called with an empty array if no suggestions are
-  // returned.
-  OCMExpect([consumer_ setTrendingQueriesWithConfigs:@[]]);
-  [mediator_ suggestionsReceived:std::vector<QuerySuggestion>()];
-
-  int index = 1;
-  histogram_tester_->ExpectUniqueSample(
-      "IOS.ContentSuggestions.ActionOnNTP",
-      IOSContentSuggestionsActionType::kTrendingQuery, 0);
-  histogram_tester_->ExpectUniqueSample("IOS.TrendingQueries", index, 0);
-
-  // Test that the mediator loads the URL in the config passed into
-  // loadSuggestedQuery:.
-  GURL url = GURL("http://chromium.org");
-  QuerySuggestionConfig* config = [[QuerySuggestionConfig alloc] init];
-  config.index = index;
-  config.URL = url;
-  [mediator_ loadSuggestedQuery:config];
-  EXPECT_EQ(url, url_loader_->last_params.web_params.url);
-  EXPECT_TRUE(ui::PageTransitionCoreTypeIs(
-      ui::PAGE_TRANSITION_LINK,
-      url_loader_->last_params.web_params.transition_type));
-  histogram_tester_->ExpectUniqueSample(
-      "IOS.ContentSuggestions.ActionOnNTP",
-      IOSContentSuggestionsActionType::kTrendingQuery, 1);
-  histogram_tester_->ExpectUniqueSample("IOS.TrendingQueries", index, 1);
 }
 
 // Tests that the command is sent to the dispatcher when opening the What's new.
 TEST_F(ContentSuggestionsMediatorTest, TestOpenWhatsNew) {
   OCMExpect([dispatcher_ showWhatsNew]);
 
-  histogram_tester_->ExpectUniqueSample(
-      "IOS.ContentSuggestions.ActionOnNTP",
-      IOSContentSuggestionsActionType::kShortcuts, 0);
+  OCMExpect([mediator_.NTPMetricsDelegate shortcutTileOpened]);
+
   // Action.
   ContentSuggestionsMostVisitedActionItem* whatsNew = WhatsNewActionItem();
   [mediator_ openMostVisitedItem:whatsNew atIndex:1];
-  histogram_tester_->ExpectUniqueSample(
-      "IOS.ContentSuggestions.ActionOnNTP",
-      IOSContentSuggestionsActionType::kShortcuts, 1);
   // Test.
   EXPECT_OCMOCK_VERIFY(dispatcher_);
+}
+
+// Tests that the reload logic (e.g. setting the consumer) triggers the correct
+// consumer calls when the Magic Stack feature is enabled.
+TEST_F(ContentSuggestionsMediatorTest, TestMagicStackConsumerCall) {
+  consumer_ = OCMStrictProtocolMock(@protocol(ContentSuggestionsConsumer));
+  scoped_feature_list_.Reset();
+  scoped_feature_list_.InitWithFeatures({kMagicStack}, {});
+  OCMExpect([consumer_ setMagicStackOrder:[OCMArg any]]);
+  OCMExpect([consumer_ showSetUpListWithItems:[OCMArg any]]);
+  OCMExpect([consumer_ setShortcutTilesConfig:[OCMArg any]]);
+  [consumer_ setExpectationOrderMatters:YES];
+  mediator_.consumer = consumer_;
+  EXPECT_OCMOCK_VERIFY(consumer_);
+}
+
+// Tests that the -setMagicStackOrder: consumer call is executed with the
+// correct order when fetching from the SegmentationPlatformService.
+// NOTE: do not add new module features to this test, this one ensures the
+// mediator can handle the fetched module order and filter out any extra modules
+// that aren't enabled/valid for a client. Add new modules to
+// TestMagicStackOrderSegmentationServiceCallWithNewFeatures.
+TEST_F(ContentSuggestionsMediatorTest,
+       TestMagicStackOrderSegmentationServiceCall) {
+  consumer_ = OCMProtocolMock(@protocol(ContentSuggestionsConsumer));
+  mediator_.segmentationService =
+      segmentation_platform::SegmentationPlatformServiceFactory::
+          GetForBrowserState(chrome_browser_state_.get());
+
+  scoped_feature_list_.Reset();
+  scoped_feature_list_.InitWithFeaturesAndParameters(
+      {
+          {segmentation_platform::features::kSegmentationPlatformFeature, {}},
+          {segmentation_platform::features::
+               kSegmentationPlatformIosModuleRanker,
+           {{segmentation_platform::kDefaultModelEnabledParam, "true"}}},
+          {kMagicStack, {{kMagicStackMostVisitedModuleParam, "true"}}},
+      },
+      {});
+
+  EXPECT_SET_MAGIC_STACK_ORDER(
+      consumer_, ContentSuggestionsModuleType::kSetUpListSync,
+      ContentSuggestionsModuleType::kSetUpListDefaultBrowser,
+      ContentSuggestionsModuleType::kSetUpListAutofill,
+      ContentSuggestionsModuleType::kMostVisited,
+      ContentSuggestionsModuleType::kShortcuts, );
+
+  mediator_.consumer = consumer_;
+
+  EXPECT_TRUE(base::test::ios::WaitUntilConditionOrTimeout(
+      TestTimeouts::action_timeout(), true, ^bool() {
+        base::RunLoop().RunUntilIdle();
+        return mediator_.hasReceivedMagicStackResponse;
+      }));
+  EXPECT_OCMOCK_VERIFY(consumer_);
+}
+
+// Tests that the -setMagicStackOrder: consumer call is executed with the
+// correct order INCLUDING new modules when fetching from the
+// SegmentationPlatformService.
+TEST_F(ContentSuggestionsMediatorTest,
+       TestMagicStackOrderSegmentationServiceCallWithNewFeatures) {
+  consumer_ = OCMProtocolMock(@protocol(ContentSuggestionsConsumer));
+  mediator_.segmentationService =
+      segmentation_platform::SegmentationPlatformServiceFactory::
+          GetForBrowserState(chrome_browser_state_.get());
+
+  scoped_feature_list_.Reset();
+  scoped_feature_list_.InitWithFeaturesAndParameters(
+      {{segmentation_platform::features::kSegmentationPlatformFeature, {}},
+       {segmentation_platform::features::kSegmentationPlatformIosModuleRanker,
+        {{segmentation_platform::kDefaultModelEnabledParam, "true"}}},
+       {kMagicStack, {{kMagicStackMostVisitedModuleParam, "true"}}},
+       {kSafetyCheckMagicStack, {}}},
+      {});
+
+  EXPECT_SET_MAGIC_STACK_ORDER(
+      consumer_, ContentSuggestionsModuleType::kSetUpListSync,
+      ContentSuggestionsModuleType::kSetUpListDefaultBrowser,
+      ContentSuggestionsModuleType::kSetUpListAutofill,
+      ContentSuggestionsModuleType::kMostVisited,
+      ContentSuggestionsModuleType::kShortcuts,
+      ContentSuggestionsModuleType::kSafetyCheck, );
+  mediator_.consumer = consumer_;
+
+  EXPECT_TRUE(base::test::ios::WaitUntilConditionOrTimeout(
+      TestTimeouts::action_timeout(), true, ^bool() {
+        base::RunLoop().RunUntilIdle();
+        return mediator_.hasReceivedMagicStackResponse;
+      }));
+  EXPECT_OCMOCK_VERIFY(consumer_);
+}
+
+// Tests that the -setMagicStackOrder: consumer call is executed with the
+// correct order with new modules enabled when fetching from the
+// SegmentationPlatformService with kHideIrrelevantModulesParam enabled. Since
+// the new features are in the back of the order ranking, verify that they are
+// ultimately not in the order passed to the consumer.
+TEST_F(ContentSuggestionsMediatorTest,
+       TestMagicStackOrderSegmentationServiceCallWithNewFeaturesHidden) {
+  scoped_feature_list_.Reset();
+  scoped_feature_list_.InitWithFeaturesAndParameters(
+      {{segmentation_platform::features::kSegmentationPlatformFeature, {}},
+       {segmentation_platform::features::kSegmentationPlatformIosModuleRanker,
+        {{segmentation_platform::kDefaultModelEnabledParam, "true"}}},
+       {kMagicStack,
+        {{kMagicStackMostVisitedModuleParam, "true"},
+         {kHideIrrelevantModulesParam, "true"}}},
+       {kSafetyCheckMagicStack, {}},
+       {kTabResumption, {}}},
+      {});
+
+  [mediator_ disconnect];
+  SetUpMediator();
+  consumer_ = OCMProtocolMock(@protocol(ContentSuggestionsConsumer));
+  mediator_.segmentationService =
+      segmentation_platform::SegmentationPlatformServiceFactory::
+          GetForBrowserState(chrome_browser_state_.get());
+
+  EXPECT_SET_MAGIC_STACK_ORDER(
+      consumer_, ContentSuggestionsModuleType::kSetUpListDefaultBrowser,
+      ContentSuggestionsModuleType::kSetUpListAutofill,
+      ContentSuggestionsModuleType::kSetUpListSync,
+      ContentSuggestionsModuleType::kMostVisited,
+      ContentSuggestionsModuleType::kShortcuts, );
+  mediator_.consumer = consumer_;
+
+  EXPECT_TRUE(base::test::ios::WaitUntilConditionOrTimeout(
+      TestTimeouts::action_timeout(), true, ^bool() {
+        base::RunLoop().RunUntilIdle();
+        return mediator_.hasReceivedMagicStackResponse;
+      }));
+  EXPECT_OCMOCK_VERIFY(consumer_);
+}
+
+TEST_F(ContentSuggestionsMediatorTest, TestSetUpListConsumerCall) {
+  consumer_ = OCMStrictProtocolMock(@protocol(ContentSuggestionsConsumer));
+  OCMExpect([consumer_ showSetUpListWithItems:[OCMArg any]]);
+  mediator_.consumer = consumer_;
+  EXPECT_OCMOCK_VERIFY(consumer_);
+
+  OCMExpect([consumer_ markSetUpListItemComplete:SetUpListItemType::kSignInSync
+                                      completion:[OCMArg any]]);
+  set_up_list_prefs::MarkItemComplete(local_state_.Get(),
+                                      SetUpListItemType::kSignInSync);
+  OCMExpect([consumer_
+      markSetUpListItemComplete:SetUpListItemType::kDefaultBrowser
+                     completion:[OCMArg any]]);
+  set_up_list_prefs::MarkItemComplete(local_state_.Get(),
+                                      SetUpListItemType::kDefaultBrowser);
+  OCMExpect([consumer_ markSetUpListItemComplete:SetUpListItemType::kAutofill
+                                      completion:[OCMArg any]]);
+  set_up_list_prefs::MarkItemComplete(local_state_.Get(),
+                                      SetUpListItemType::kAutofill);
+  EXPECT_OCMOCK_VERIFY(consumer_);
+}
+
+// Tests that when the user changes the setting to disable signin, the
+// SetUpList signin item is marked complete.
+TEST_F(ContentSuggestionsMediatorTest, TestOnServiceStatusChanged) {
+  // Verify the initial state.
+  SetUpListItemState item_state = set_up_list_prefs::GetItemState(
+      local_state_.Get(), SetUpListItemType::kSignInSync);
+  EXPECT_EQ(item_state, SetUpListItemState::kNotComplete);
+
+  // Simulate the user disabling signin.
+  chrome_browser_state_.get()->GetPrefs()->SetBoolean(prefs::kSigninAllowed,
+                                                      false);
+  // Verify that the signin item is complete.
+  item_state = set_up_list_prefs::GetItemState(local_state_.Get(),
+                                               SetUpListItemType::kSignInSync);
+  EXPECT_EQ(item_state, SetUpListItemState::kCompleteInList);
+}
+
+// Tests that the -loadParcelTrackingPage ContentSuggestionsCommands
+// implementation logs the correct metric and loads the passed URL.
+TEST_F(ContentSuggestionsMediatorTest, TestParcelTracking) {
+  GURL parcelTrackingURL = GURL("http://chromium.org");
+  [mediator_ loadParcelTrackingPage:parcelTrackingURL];
+  histogram_tester_->ExpectUniqueSample(
+      "IOS.MagicStack.Module.Click",
+      ContentSuggestionsModuleType::kParcelTracking, 1);
+  EXPECT_EQ(parcelTrackingURL, url_loader_->last_params.web_params.url);
+}
+
+// Tests that logging for IOS.MagicStack.Module.Click.[ModuleName] works
+// correctly.
+TEST_F(ContentSuggestionsMediatorTest, TestModuleClickIndexMetric) {
+  scoped_feature_list_.Reset();
+  scoped_feature_list_.InitWithFeaturesAndParameters(
+      {{segmentation_platform::features::kSegmentationPlatformFeature, {}},
+       {segmentation_platform::features::kSegmentationPlatformIosModuleRanker,
+        {{segmentation_platform::kDefaultModelEnabledParam, "true"}}},
+       {kMagicStack, {{kMagicStackMostVisitedModuleParam, "true"}}}},
+      {});
+
+  mediator_.segmentationService =
+      segmentation_platform::SegmentationPlatformServiceFactory::
+          GetForBrowserState(chrome_browser_state_.get());
+  consumer_ = OCMProtocolMock(@protocol(ContentSuggestionsConsumer));
+  mediator_.consumer = consumer_;
+  EXPECT_TRUE(base::test::ios::WaitUntilConditionOrTimeout(
+      TestTimeouts::action_timeout(), true, ^bool() {
+        base::RunLoop().RunUntilIdle();
+        return mediator_.hasReceivedMagicStackResponse;
+      }));
+
+  [mediator_ logMagicStackEngagementForType:ContentSuggestionsModuleType::
+                                                kSetUpListSync];
+  histogram_tester_->ExpectUniqueSample("IOS.MagicStack.Module.Click.SetUpList",
+                                        0, 1);
+
+  [mediator_
+      openMostVisitedItem:[[ContentSuggestionsMostVisitedItem alloc] init]
+                  atIndex:0];
+  histogram_tester_->ExpectUniqueSample(
+      "IOS.MagicStack.Module.Click.MostVisited", 3, 1);
+
+  [mediator_
+      openMostVisitedItem:[[ContentSuggestionsMostVisitedActionItem alloc] init]
+                  atIndex:0];
+  histogram_tester_->ExpectUniqueSample("IOS.MagicStack.Module.Click.Shortcuts",
+                                        4, 1);
+}
+
+// Tests that the mediator handles the parcels returned from
+// ShoppingService::GetAllParcelStatuses by sending up the parcels to the
+// consumer and includes the parcel tracking module type correctly in the magic
+// stack order.
+TEST_F(ContentSuggestionsMediatorTest, TestParcelTrackingReceived) {
+  scoped_feature_list_.Reset();
+  scoped_feature_list_.InitWithFeaturesAndParameters(
+      {{segmentation_platform::features::kSegmentationPlatformFeature, {}},
+       {segmentation_platform::features::kSegmentationPlatformIosModuleRanker,
+        {{segmentation_platform::kDefaultModelEnabledParam, "true"}}},
+       {kMagicStack, {{kMagicStackMostVisitedModuleParam, "true"}}},
+       {kIOSParcelTracking, {}}},
+      {});
+  [mediator_ disconnect];
+  SetUpMediator();
+  consumer_ = [[FakeContentSuggestionsConsumer alloc] init];
+  mediator_.segmentationService =
+      segmentation_platform::SegmentationPlatformServiceFactory::
+          GetForBrowserState(chrome_browser_state_.get());
+
+  int parcel_tracking_freshness_impression_count =
+      local_state_.Get()->GetInteger(
+          prefs::
+              kIosMagicStackSegmentationParcelTrackingImpressionsSinceFreshness);
+  EXPECT_EQ(parcel_tracking_freshness_impression_count, -1);
+
+  // One of the parcels should be untracked since it was delivered more than two
+  // days ago.
+  EXPECT_CALL(*shopping_service_, StopTrackingParcel(testing::_, testing::_))
+      .Times(1);
+  mediator_.consumer = consumer_;
+
+  EXPECT_TRUE(base::test::ios::WaitUntilConditionOrTimeout(
+      TestTimeouts::action_timeout(), true, ^bool() {
+        base::RunLoop().RunUntilIdle();
+        return [[mediator_ parcelTrackingItems] count] == 3;
+      }));
+  EXPECT_TRUE(base::test::ios::WaitUntilConditionOrTimeout(
+      TestTimeouts::action_timeout(), true, ^bool() {
+        base::RunLoop().RunUntilIdle();
+        return mediator_.hasReceivedMagicStackResponse;
+      }));
+
+  NSArray<ParcelTrackingItem*>* items = [consumer_ parcelTrackingItems];
+  ASSERT_EQ([items count], 1u);
+  ParcelTrackingItem* outForDeliveryItem = items[0];
+  EXPECT_EQ(outForDeliveryItem.parcelType, ParcelType::kUPS);
+  EXPECT_EQ(outForDeliveryItem.status, ParcelState::kOutForDelivery);
+  EXPECT_TRUE(outForDeliveryItem.shouldShowSeeMore);
+
+  parcel_tracking_freshness_impression_count = local_state_.Get()->GetInteger(
+      prefs::kIosMagicStackSegmentationParcelTrackingImpressionsSinceFreshness);
+  EXPECT_EQ(parcel_tracking_freshness_impression_count, 0);
 }

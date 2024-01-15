@@ -38,6 +38,7 @@
 #include "client/crash_report_database.h"
 #include "client/crashpad_client.h"
 #include "client/crashpad_info.h"
+#include "client/ring_buffer_annotation.h"
 #include "client/simple_string_dictionary.h"
 #include "client/simulate_crash.h"
 #include "snapshot/minidump/process_snapshot_minidump.h"
@@ -49,14 +50,13 @@
 #include "util/ios/raw_logging.h"
 #include "util/thread/thread.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 using OperationStatus = crashpad::CrashReportDatabase::OperationStatus;
 using Report = crashpad::CrashReportDatabase::Report;
 
 namespace {
+
+constexpr crashpad::Annotation::Type kRingBufferType =
+    crashpad::Annotation::UserDefinedType(42);
 
 base::FilePath GetDatabaseDir() {
   base::FilePath database_dir([NSFileManager.defaultManager
@@ -106,13 +106,17 @@ GetProcessSnapshotMinidumpFromSinglePending() {
 
 UIWindow* GetAnyWindow() {
 #if defined(__IPHONE_15_0) && __IPHONE_OS_VERSION_MAX_ALLOWED >= __IPHONE_15_0
+  UIWindowScene* scene = reinterpret_cast<UIWindowScene*>(
+      [UIApplication sharedApplication].connectedScenes.anyObject);
   if (@available(iOS 15.0, *)) {
-    UIWindowScene* scene = reinterpret_cast<UIWindowScene*>(
-        [UIApplication sharedApplication].connectedScenes.anyObject);
     return scene.keyWindow;
+  } else {
+    return [scene.windows firstObject];
   }
-#endif
+
+#else
   return [UIApplication sharedApplication].windows[0];
+#endif
 }
 
 [[clang::optnone]] void recurse(int counter) {
@@ -251,7 +255,8 @@ UIWindow* GetAnyWindow() {
   NSDictionary* dict = @{
     @"simplemap" : [@{} mutableCopy],
     @"vector" : [@[] mutableCopy],
-    @"objects" : [@[] mutableCopy]
+    @"objects" : [@[] mutableCopy],
+    @"ringbuffers" : [@[] mutableCopy],
   };
   for (const auto* module : process_snapshot->Modules()) {
     for (const auto& kv : module->AnnotationsSimpleMap()) {
@@ -262,14 +267,18 @@ UIWindow* GetAnyWindow() {
       [dict[@"vector"] addObject:@(annotation.c_str())];
     }
     for (const auto& annotation : module->AnnotationObjects()) {
-      if (annotation.type !=
+      if (annotation.type ==
           static_cast<uint16_t>(crashpad::Annotation::Type::kString)) {
-        continue;
+        std::string value(
+            reinterpret_cast<const char*>(annotation.value.data()),
+            annotation.value.size());
+        [dict[@"objects"]
+            addObject:@{@(annotation.name.c_str()) : @(value.c_str())}];
+      } else if (annotation.type == static_cast<uint16_t>(kRingBufferType)) {
+        NSData* data = [NSData dataWithBytes:annotation.value.data()
+                                      length:annotation.value.size()];
+        [dict[@"ringbuffers"] addObject:@{@(annotation.name.c_str()) : data}];
       }
-      std::string value(reinterpret_cast<const char*>(annotation.value.data()),
-                        annotation.value.size());
-      [dict[@"objects"]
-          addObject:@{@(annotation.name.c_str()) : @(value.c_str())}];
     }
   }
   return [dict passByValue];
@@ -326,6 +335,10 @@ UIWindow* GetAnyWindow() {
                              reason:@"Intentionally throwing error."
                            userInfo:@{NSUnderlyingErrorKey : error}] raise];
   });
+}
+
+- (void)crashNotAnNSException {
+  @throw @"Boom";
 }
 
 - (void)crashUnhandledNSException {
@@ -418,12 +431,23 @@ UIWindow* GetAnyWindow() {
       "#TEST# same-name"};
   static crashpad::StringAnnotation<32> test_annotation_four{
       "#TEST# same-name"};
+  static crashpad::RingBufferAnnotation<32> test_ring_buffer_annotation(
+      kRingBufferType, "#TEST# ring_buffer");
+  static crashpad::RingBufferAnnotation<32> test_busy_ring_buffer_annotation(
+      kRingBufferType, "#TEST# busy_ring_buffer");
 
   test_annotation_one.Set("moocow");
   test_annotation_two.Set("this will be cleared");
   test_annotation_three.Set("same-name 3");
   test_annotation_four.Set("same-name 4");
   test_annotation_two.Clear();
+  test_ring_buffer_annotation.Push("hello", 5);
+  test_ring_buffer_annotation.Push("goodbye", 7);
+  test_busy_ring_buffer_annotation.Push("busy", 4);
+  // Take the scoped spin guard on `test_busy_ring_buffer_annotation` to mimic
+  // an in-flight `Push()` so its contents are not included in the dump.
+  auto guard = test_busy_ring_buffer_annotation.TryCreateScopedSpinGuard(
+      /*timeout_nanos=*/0);
   abort();
 }
 
@@ -478,6 +502,34 @@ class CrashThread : public crashpad::Thread {
   mach_thread.Start();
   signal_thread.Join();
   mach_thread.Join();
+}
+
+class ThrowNSExceptionThread : public crashpad::Thread {
+ public:
+  explicit ThrowNSExceptionThread() : Thread() {}
+
+ private:
+  void ThreadMain() override {
+    for (int i = 0; i < 300; ++i) {
+      @try {
+        NSArray* empty_array = @[];
+        [empty_array objectAtIndex:42];
+      } @catch (NSException* exception) {
+      } @finally {
+      }
+    }
+  }
+};
+
+- (void)catchConcurrentNSException {
+  std::vector<ThrowNSExceptionThread> race_threads(30);
+  for (ThrowNSExceptionThread& race_thread : race_threads) {
+    race_thread.Start();
+  }
+
+  for (ThrowNSExceptionThread& race_thread : race_threads) {
+    race_thread.Join();
+  }
 }
 
 - (void)crashInHandlerReentrant {

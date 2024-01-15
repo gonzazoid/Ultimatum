@@ -24,11 +24,44 @@
 
 #include <memory>
 
+#include "third_party/blink/renderer/core/svg/gradient_attributes.h"
+#include "third_party/blink/renderer/core/svg/svg_length.h"
+#include "third_party/blink/renderer/core/svg/svg_length_context.h"
+#include "third_party/blink/renderer/core/svg/svg_length_functions.h"
 #include "third_party/blink/renderer/platform/graphics/gradient.h"
 #include "third_party/blink/renderer/platform/graphics/graphics_context.h"
 #include "third_party/blink/renderer/platform/graphics/skia/skia_utils.h"
+#include "third_party/blink/renderer/platform/transforms/affine_transform.h"
 
 namespace blink {
+
+namespace {
+
+gfx::SizeF MakeViewport(const SVGViewportResolver& viewport_resolver,
+                        const LengthPoint& point,
+                        SVGUnitTypes::SVGUnitType type) {
+  if (!point.X().IsPercentOrCalc() && !point.Y().IsPercentOrCalc()) {
+    return gfx::SizeF(0, 0);
+  }
+  if (type == SVGUnitTypes::kSvgUnitTypeObjectboundingbox) {
+    return gfx::SizeF(1, 1);
+  }
+  return viewport_resolver.ResolveViewport();
+}
+
+float MakeViewportDimension(const SVGViewportResolver& viewport_resolver,
+                            const Length& radius,
+                            SVGUnitTypes::SVGUnitType type) {
+  if (!radius.IsPercentOrCalc()) {
+    return 0;
+  }
+  if (type == SVGUnitTypes::kSvgUnitTypeObjectboundingbox) {
+    return 1;
+  }
+  return viewport_resolver.ViewportDimension(SVGLengthMode::kOther);
+}
+
+}  // unnamed namespace
 
 struct GradientData {
   USING_FAST_MALLOC(GradientData);
@@ -39,9 +72,7 @@ struct GradientData {
 };
 
 LayoutSVGResourceGradient::LayoutSVGResourceGradient(SVGGradientElement* node)
-    : LayoutSVGResourcePaintServer(node),
-      should_collect_gradient_attributes_(true),
-      gradient_map_(MakeGarbageCollected<GradientMap>()) {}
+    : LayoutSVGResourcePaintServer(node) {}
 
 void LayoutSVGResourceGradient::Trace(Visitor* visitor) const {
   visitor->Trace(gradient_map_);
@@ -50,7 +81,7 @@ void LayoutSVGResourceGradient::Trace(Visitor* visitor) const {
 
 void LayoutSVGResourceGradient::RemoveAllClientsFromCache() {
   NOT_DESTROYED();
-  gradient_map_->clear();
+  gradient_map_.clear();
   should_collect_gradient_attributes_ = true;
   To<SVGGradientElement>(*GetElement()).InvalidateDependentGradients();
   MarkAllClientsForInvalidation(kPaintInvalidation);
@@ -59,15 +90,16 @@ void LayoutSVGResourceGradient::RemoveAllClientsFromCache() {
 bool LayoutSVGResourceGradient::RemoveClientFromCache(
     SVGResourceClient& client) {
   NOT_DESTROYED();
-  auto entry = gradient_map_->find(&client);
-  if (entry == gradient_map_->end())
+  auto entry = gradient_map_.find(&client);
+  if (entry == gradient_map_.end()) {
     return false;
-  gradient_map_->erase(entry);
+  }
+  gradient_map_.erase(entry);
   return true;
 }
 
 std::unique_ptr<GradientData> LayoutSVGResourceGradient::BuildGradientData(
-    const gfx::RectF& object_bounding_box) {
+    const gfx::RectF& object_bounding_box) const {
   NOT_DESTROYED();
   // Create gradient object
   auto gradient_data = std::make_unique<GradientData>();
@@ -76,14 +108,12 @@ std::unique_ptr<GradientData> LayoutSVGResourceGradient::BuildGradientData(
   // gradient. This should avoid tearing down the gradient we're
   // currently working on. Preferably the state validation should have
   // no side-effects though.
-  if (should_collect_gradient_attributes_) {
-    CollectGradientAttributes();
-    should_collect_gradient_attributes_ = false;
-  }
+  const GradientAttributes& attributes = EnsureAttributes();
 
   // We want the text bounding box applied to the gradient space transform
   // now, so the gradient shader can use it.
-  if (GradientUnits() == SVGUnitTypes::kSvgUnitTypeObjectboundingbox) {
+  if (attributes.GradientUnits() ==
+      SVGUnitTypes::kSvgUnitTypeObjectboundingbox) {
     // Spec: When the geometry of the applicable element has no width or height
     // and objectBoundingBox is specified, then the given effect (e.g. a
     // gradient or a filter) will be ignored.
@@ -97,8 +127,9 @@ std::unique_ptr<GradientData> LayoutSVGResourceGradient::BuildGradientData(
 
   // Create gradient object
   gradient_data->gradient = BuildGradient();
+  gradient_data->gradient->AddColorStops(attributes.Stops());
 
-  AffineTransform gradient_transform = CalculateGradientTransform();
+  AffineTransform gradient_transform = attributes.GradientTransform();
   gradient_data->userspace_transform *= gradient_transform;
 
   return gradient_data;
@@ -114,7 +145,7 @@ bool LayoutSVGResourceGradient::ApplyShader(
   ClearInvalidationMask();
 
   std::unique_ptr<GradientData>& gradient_data =
-      gradient_map_->insert(&client, nullptr).stored_value->value;
+      gradient_map_.insert(&client, nullptr).stored_value->value;
   if (!gradient_data)
     gradient_data = BuildGradientData(reference_box);
 
@@ -139,6 +170,29 @@ bool LayoutSVGResourceGradient::IsChildAllowed(LayoutObject* child,
     return false;
 
   return To<LayoutSVGResourceContainer>(child)->IsSVGPaintServer();
+}
+
+gfx::PointF LayoutSVGResourceGradient::ResolvePoint(
+    SVGUnitTypes::SVGUnitType type,
+    const SVGLength& x,
+    const SVGLength& y) const {
+  NOT_DESTROYED();
+  const SVGViewportResolver viewport_resolver(*this);
+  const SVGLengthConversionData conversion_data(*this);
+  const LengthPoint point(x.ConvertToLength(conversion_data),
+                          y.ConvertToLength(conversion_data));
+  return PointForLengthPoint(point,
+                             MakeViewport(viewport_resolver, point, type));
+}
+
+float LayoutSVGResourceGradient::ResolveRadius(SVGUnitTypes::SVGUnitType type,
+                                               const SVGLength& r) const {
+  NOT_DESTROYED();
+  const SVGViewportResolver viewport_resolver(*this);
+  const SVGLengthConversionData conversion_data(*this);
+  const Length& radius = r.ConvertToLength(conversion_data);
+  return FloatValueForLength(
+      radius, MakeViewportDimension(viewport_resolver, radius, type));
 }
 
 GradientSpreadMethod LayoutSVGResourceGradient::PlatformSpreadMethodFromSVGType(

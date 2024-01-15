@@ -5,10 +5,10 @@
 #ifndef ASH_WEBUI_OS_FEEDBACK_UI_BACKEND_OS_FEEDBACK_DELEGATE_H_
 #define ASH_WEBUI_OS_FEEDBACK_UI_BACKEND_OS_FEEDBACK_DELEGATE_H_
 
+#include <optional>
 #include <string>
 
 #include "ash/webui/os_feedback_ui/mojom/os_feedback_ui.mojom.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 class GURL;
 
@@ -23,16 +23,21 @@ using SendReportCallback =
 // Feedback UI.
 class OsFeedbackDelegate {
  public:
+  OsFeedbackDelegate() = default;
   virtual ~OsFeedbackDelegate() = default;
 
   // Gets the application locale so that suggested help contents can display
   // localized titles when available.
   virtual std::string GetApplicationLocale() = 0;
+  // Gets the mac address associated with the current device.
+  virtual std::optional<std::string> GetLinkedPhoneMacAddress() = 0;
   // Returns the last active page url before the feedback tool is opened if any.
-  virtual absl::optional<GURL> GetLastActivePageUrl() = 0;
+  virtual std::optional<GURL> GetLastActivePageUrl() = 0;
   // Returns the normalized email address of the signed-in user associated with
   // the browser context, if any.
-  virtual absl::optional<std::string> GetSignedInUserEmail() const = 0;
+  virtual std::optional<std::string> GetSignedInUserEmail() const = 0;
+  // Returns whether Wifi debug logs are allowed for the user.
+  virtual bool IsWifiDebugLogsAllowed() const = 0;
   // Returns id for performance trace data. If tracing is off, returns zero.
   virtual int GetPerformanceTraceId() = 0;
   // Return the screenshot of the primary display in PNG format. It was taken
@@ -50,6 +55,12 @@ class OsFeedbackDelegate {
   // Open system info dialog (which displays the system logs
   // to be sent with the report if the user has opted in).
   virtual void OpenSystemInfoDialog() = 0;
+  // Open autofill metadata dialog (which displays the autofill logs
+  // to be sent with the report if the user has opted in).
+  virtual void OpenAutofillMetadataDialog(
+      const std::string& autofill_metadata) = 0;
+  // Gets the isChild to check if the account is a unicorn account.
+  virtual bool IsChildAccount() = 0;
 };
 
 }  // namespace ash

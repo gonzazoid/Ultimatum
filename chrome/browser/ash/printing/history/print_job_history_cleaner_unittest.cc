@@ -4,8 +4,8 @@
 
 #include "chrome/browser/ash/printing/history/print_job_history_cleaner.h"
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/run_loop.h"
 #include "base/test/task_environment.h"
 #include "base/time/clock.h"
@@ -32,7 +32,7 @@ PrintJobInfo ConstructPrintJobInfo(const std::string& id,
   PrintJobInfo print_job_info;
   print_job_info.set_id(id);
   print_job_info.set_completion_time(
-      static_cast<int64_t>(completion_time.ToJsTime()));
+      static_cast<int64_t>(completion_time.InMillisecondsFSinceUnixEpoch()));
   return print_job_info;
 }
 

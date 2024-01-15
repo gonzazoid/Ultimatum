@@ -7,12 +7,13 @@
 #include <stdint.h>
 #include <utility>
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
+#include "base/memory/raw_ptr.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "base/trace_event/trace_event.h"
-#include "media/base/bind_to_current_loop.h"
 #include "media/base/timestamp_constants.h"
 #include "media/base/video_frame.h"
 #include "media/base/video_util.h"
@@ -44,7 +45,7 @@ class WebRtcEncodedVideoFrame : public EncodedVideoFrame {
         is_key_frame_(frame.is_key_frame()),
         resolution_(frame.resolution().width, frame.resolution().height) {
     if (frame.color_space()) {
-      color_space_ = WebRtcToMediaVideoColorSpace(*frame.color_space());
+      color_space_ = WebRtcToGfxColorSpace(*frame.color_space());
     }
   }
 
@@ -56,7 +57,7 @@ class WebRtcEncodedVideoFrame : public EncodedVideoFrame {
 
   bool IsKeyFrame() const override { return is_key_frame_; }
 
-  absl::optional<media::VideoColorSpace> ColorSpace() const override {
+  absl::optional<gfx::ColorSpace> ColorSpace() const override {
     return color_space_;
   }
 
@@ -66,7 +67,7 @@ class WebRtcEncodedVideoFrame : public EncodedVideoFrame {
   rtc::scoped_refptr<const webrtc::EncodedImageBufferInterface> buffer_;
   media::VideoCodec codec_;
   bool is_key_frame_;
-  absl::optional<media::VideoColorSpace> color_space_;
+  absl::optional<gfx::ColorSpace> color_space_;
   gfx::Size resolution_;
 };
 
@@ -80,10 +81,11 @@ class MediaStreamRemoteVideoSource::RemoteVideoSourceDelegate
       public rtc::VideoSinkInterface<webrtc::RecordableEncodedFrame> {
  public:
   RemoteVideoSourceDelegate(
-      scoped_refptr<base::SingleThreadTaskRunner> io_task_runner,
+      scoped_refptr<base::SequencedTaskRunner> video_task_runner,
       VideoCaptureDeliverFrameCB new_frame_callback,
       EncodedVideoFrameCB encoded_frame_callback,
-      VideoCaptureCropVersionCB crop_version_callback);
+      VideoCaptureSubCaptureTargetVersionCB
+          sub_capture_target_version_callback);
 
  protected:
   friend class WTF::ThreadSafeRefCounted<RemoteVideoSourceDelegate>;
@@ -104,7 +106,7 @@ class MediaStreamRemoteVideoSource::RemoteVideoSourceDelegate
   void OnEncodedVideoFrameOnIO(scoped_refptr<EncodedVideoFrame> frame,
                                base::TimeTicks estimated_capture_time);
 
-  scoped_refptr<base::SingleThreadTaskRunner> io_task_runner_;
+  scoped_refptr<base::SequencedTaskRunner> video_task_runner_;
 
   // |frame_callback_| is accessed on the IO thread.
   VideoCaptureDeliverFrameCB frame_callback_;
@@ -112,14 +114,14 @@ class MediaStreamRemoteVideoSource::RemoteVideoSourceDelegate
   // |encoded_frame_callback_| is accessed on the IO thread.
   EncodedVideoFrameCB encoded_frame_callback_;
 
-  // |crop_version_callback| is accessed on the IO thread.
-  VideoCaptureCropVersionCB crop_version_callback_;
+  // |sub_capture_target_version_callback| is accessed on the IO thread.
+  VideoCaptureSubCaptureTargetVersionCB sub_capture_target_version_callback_;
 
   // Timestamp of the first received frame.
   absl::optional<base::TimeTicks> start_timestamp_;
 
   // WebRTC real time clock, needed to determine NTP offset.
-  webrtc::Clock* clock_;
+  raw_ptr<webrtc::Clock, ExperimentalRenderer> clock_;
 
   // Offset between NTP clock and WebRTC clock.
   const int64_t ntp_offset_;
@@ -131,14 +133,16 @@ class MediaStreamRemoteVideoSource::RemoteVideoSourceDelegate
 
 MediaStreamRemoteVideoSource::RemoteVideoSourceDelegate::
     RemoteVideoSourceDelegate(
-        scoped_refptr<base::SingleThreadTaskRunner> io_task_runner,
+        scoped_refptr<base::SequencedTaskRunner> video_task_runner,
         VideoCaptureDeliverFrameCB new_frame_callback,
         EncodedVideoFrameCB encoded_frame_callback,
-        VideoCaptureCropVersionCB crop_version_callback)
-    : io_task_runner_(io_task_runner),
+        VideoCaptureSubCaptureTargetVersionCB
+            sub_capture_target_version_callback)
+    : video_task_runner_(video_task_runner),
       frame_callback_(std::move(new_frame_callback)),
       encoded_frame_callback_(std::move(encoded_frame_callback)),
-      crop_version_callback_(std::move(crop_version_callback)),
+      sub_capture_target_version_callback_(
+          std::move(sub_capture_target_version_callback)),
       clock_(webrtc::Clock::GetRealTimeClock()),
       ntp_offset_(clock_->TimeInMilliseconds() -
                   clock_->CurrentNtpInMilliseconds()),
@@ -202,8 +206,7 @@ void MediaStreamRemoteVideoSource::RemoteVideoSourceDelegate::OnFrame(
         incoming_frame.color_space()->matrix() ==
             webrtc::ColorSpace::MatrixID::kUnspecified)) {
     video_frame->set_color_space(
-        WebRtcToMediaVideoColorSpace(*incoming_frame.color_space())
-            .ToGfxColorSpace());
+        WebRtcToGfxColorSpace(*incoming_frame.color_space()));
   }
 
   // Run render smoothness algorithm only when we don't have to render
@@ -257,7 +260,7 @@ void MediaStreamRemoteVideoSource::RemoteVideoSourceDelegate::OnFrame(
   // received frame capture timestamps. If set by us, it's as congruent as we
   // can get with the timestamp sequence of frames we received.
   PostCrossThreadTask(
-      *io_task_runner_, FROM_HERE,
+      *video_task_runner_, FROM_HERE,
       CrossThreadBindOnce(&RemoteVideoSourceDelegate::DoRenderFrameOnIOThread,
                           WrapRefCounted(this), video_frame, render_time));
 }
@@ -265,9 +268,9 @@ void MediaStreamRemoteVideoSource::RemoteVideoSourceDelegate::OnFrame(
 void MediaStreamRemoteVideoSource::RemoteVideoSourceDelegate::
     DoRenderFrameOnIOThread(scoped_refptr<media::VideoFrame> video_frame,
                             base::TimeTicks estimated_capture_time) {
-  DCHECK(io_task_runner_->BelongsToCurrentThread());
+  DCHECK(video_task_runner_->RunsTasksInCurrentSequence());
   TRACE_EVENT0("webrtc", "RemoteVideoSourceDelegate::DoRenderFrameOnIOThread");
-  frame_callback_.Run(std::move(video_frame), {}, estimated_capture_time);
+  frame_callback_.Run(std::move(video_frame), estimated_capture_time);
 }
 
 void MediaStreamRemoteVideoSource::RemoteVideoSourceDelegate::OnFrame(
@@ -285,7 +288,7 @@ void MediaStreamRemoteVideoSource::RemoteVideoSourceDelegate::OnFrame(
   // as congruent as we can get with the timestamp sequence of frames we
   // received.
   PostCrossThreadTask(
-      *io_task_runner_, FROM_HERE,
+      *video_task_runner_, FROM_HERE,
       CrossThreadBindOnce(&RemoteVideoSourceDelegate::OnEncodedVideoFrameOnIO,
                           WrapRefCounted(this),
                           base::MakeRefCounted<WebRtcEncodedVideoFrame>(frame),
@@ -295,7 +298,7 @@ void MediaStreamRemoteVideoSource::RemoteVideoSourceDelegate::OnFrame(
 void MediaStreamRemoteVideoSource::RemoteVideoSourceDelegate::
     OnEncodedVideoFrameOnIO(scoped_refptr<EncodedVideoFrame> frame,
                             base::TimeTicks estimated_capture_time) {
-  DCHECK(io_task_runner_->BelongsToCurrentThread());
+  DCHECK(video_task_runner_->RunsTasksInCurrentSequence());
   encoded_frame_callback_.Run(std::move(frame), estimated_capture_time);
 }
 
@@ -323,12 +326,15 @@ void MediaStreamRemoteVideoSource::OnSourceTerminated() {
 void MediaStreamRemoteVideoSource::StartSourceImpl(
     VideoCaptureDeliverFrameCB frame_callback,
     EncodedVideoFrameCB encoded_frame_callback,
-    VideoCaptureCropVersionCB crop_version_callback) {
+    VideoCaptureSubCaptureTargetVersionCB sub_capture_target_version_callback,
+    // The remote track does not not report frame drops.
+    VideoCaptureNotifyFrameDroppedCB) {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
   DCHECK(!delegate_.get());
   delegate_ = base::MakeRefCounted<RemoteVideoSourceDelegate>(
-      io_task_runner(), std::move(frame_callback),
-      std::move(encoded_frame_callback), std::move(crop_version_callback));
+      video_task_runner(), std::move(frame_callback),
+      std::move(encoded_frame_callback),
+      std::move(sub_capture_target_version_callback));
   scoped_refptr<webrtc::VideoTrackInterface> video_track(
       static_cast<webrtc::VideoTrackInterface*>(observer_->track().get()));
   video_track->AddOrUpdateSink(delegate_.get(), rtc::VideoSinkWants());
@@ -387,7 +393,7 @@ bool MediaStreamRemoteVideoSource::SupportsEncodedOutput() const {
   return video_track->GetSource()->SupportsEncodedOutput();
 }
 
-void MediaStreamRemoteVideoSource::RequestRefreshFrame() {
+void MediaStreamRemoteVideoSource::RequestKeyFrame() {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
   if (!observer_ || !observer_->track()) {
     return;

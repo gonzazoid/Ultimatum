@@ -14,8 +14,8 @@
 #include "base/memory/raw_ptr.h"
 #include "base/numerics/safe_math.h"
 #include "base/run_loop.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/task_environment.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "mojo/public/c/system/macros.h"
 #include "mojo/public/cpp/bindings/connector.h"
 #include "mojo/public/cpp/bindings/lib/validation_errors.h"
@@ -242,28 +242,28 @@ class ValidationTest : public testing::Test {
 
 class ValidationIntegrationTest : public ValidationTest {
  public:
-  ValidationIntegrationTest() : test_message_receiver_(nullptr) {}
-
-  ~ValidationIntegrationTest() override {}
+  ValidationIntegrationTest() = default;
+  ~ValidationIntegrationTest() override = default;
 
   void SetUp() override {
     ScopedMessagePipeHandle tester_endpoint;
     ASSERT_EQ(MOJO_RESULT_OK,
               CreateMessagePipe(nullptr, &tester_endpoint, &testee_endpoint_));
     test_message_receiver_ =
-        new TestMessageReceiver(this, std::move(tester_endpoint));
+        std::make_unique<TestMessageReceiver>(this, std::move(tester_endpoint));
   }
 
   void TearDown() override {
-    delete test_message_receiver_;
-    test_message_receiver_ = nullptr;
+    test_message_receiver_.reset();
 
     // Make sure that the other end receives the OnConnectionError()
     // notification.
     PumpMessages();
   }
 
-  MessageReceiver* test_message_receiver() { return test_message_receiver_; }
+  MessageReceiver* test_message_receiver() {
+    return test_message_receiver_.get();
+  }
 
   ScopedMessagePipeHandle testee_endpoint() {
     return std::move(testee_endpoint_);
@@ -277,7 +277,7 @@ class ValidationIntegrationTest : public ValidationTest {
         : owner_(owner),
           connector_(std::move(handle),
                      mojo::Connector::SINGLE_THREADED_SEND,
-                     base::ThreadTaskRunnerHandle::Get()) {
+                     base::SingleThreadTaskRunner::GetCurrentDefault()) {
       connector_.set_enforce_errors_from_incoming_receiver(false);
     }
     ~TestMessageReceiver() override {}
@@ -293,7 +293,7 @@ class ValidationIntegrationTest : public ValidationTest {
 
   void PumpMessages() { base::RunLoop().RunUntilIdle(); }
 
-  raw_ptr<TestMessageReceiver> test_message_receiver_;
+  std::unique_ptr<TestMessageReceiver> test_message_receiver_;
   ScopedMessagePipeHandle testee_endpoint_;
 };
 

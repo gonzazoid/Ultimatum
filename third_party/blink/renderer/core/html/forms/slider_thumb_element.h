@@ -33,7 +33,7 @@
 #define THIRD_PARTY_BLINK_RENDERER_CORE_HTML_FORMS_SLIDER_THUMB_ELEMENT_H_
 
 #include "third_party/blink/renderer/core/html/html_div_element.h"
-#include "third_party/blink/renderer/platform/geometry/layout_point.h"
+#include "third_party/blink/renderer/core/layout/geometry/physical_offset.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/wtf/casting.h"
 #include "third_party/blink/renderer/platform/wtf/forward.h"
@@ -50,21 +50,20 @@ class SliderThumbElement final : public HTMLDivElement {
 
   void SetPositionFromValue();
 
-  void DragFrom(const LayoutPoint&);
+  void DragFrom(const PhysicalOffset&);
   void DefaultEventHandler(Event&) override;
   bool WillRespondToMouseMoveEvents() const override;
   bool WillRespondToMouseClickEvents() override;
   void DetachLayoutTree(bool performing_reattach) override;
   const AtomicString& ShadowPseudoId() const override;
   HTMLInputElement* HostInput() const;
-  void SetPositionFromPoint(const LayoutPoint&);
+  void SetPositionFromPoint(const PhysicalOffset&);
   void StopDragging();
   bool IsSliderThumbElement() const override { return true; }
 
  private:
-  LayoutObject* CreateLayoutObject(const ComputedStyle&, LegacyLayout) override;
-  scoped_refptr<ComputedStyle> CustomStyleForLayoutObject(
-      const StyleRecalcContext&) final;
+  LayoutObject* CreateLayoutObject(const ComputedStyle&) override;
+  void AdjustStyle(ComputedStyleBuilder&) final;
   Element& CloneWithoutAttributesAndChildren(Document&) const override;
   bool IsDisabledFormControl() const override;
   bool MatchesReadOnlyPseudoClass() const override;
@@ -80,10 +79,11 @@ inline Element& SliderThumbElement::CloneWithoutAttributesAndChildren(
   return *MakeGarbageCollected<SliderThumbElement>(factory);
 }
 
-// FIXME: There are no ways to check if a node is a SliderThumbElement.
 template <>
 struct DowncastTraits<SliderThumbElement> {
-  static bool AllowFrom(const Node& node) { return node.IsHTMLElement(); }
+  static bool AllowFrom(const Element& element) {
+    return element.IsSliderThumbElement();
+  }
 };
 
 class SliderContainerElement final : public HTMLDivElement {
@@ -104,15 +104,15 @@ class SliderContainerElement final : public HTMLDivElement {
   void RemoveAllEventListeners() override;
 
  private:
-  LayoutObject* CreateLayoutObject(const ComputedStyle&, LegacyLayout) override;
+  LayoutObject* CreateLayoutObject(const ComputedStyle&) override;
   const AtomicString& ShadowPseudoId() const override;
-  Direction GetDirection(LayoutPoint&, LayoutPoint&);
+  static Direction GetDirection(const PhysicalOffset&, const PhysicalOffset&);
   bool CanSlide();
 
   bool has_touch_event_handler_ = false;
   bool touch_started_ = false;
   Direction sliding_direction_ = Direction::kNoMove;
-  LayoutPoint start_point_;
+  PhysicalOffset start_point_;
 };
 
 }  // namespace blink

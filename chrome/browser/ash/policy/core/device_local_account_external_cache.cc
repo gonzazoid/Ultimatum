@@ -6,18 +6,21 @@
 
 #include <memory>
 
-#include "base/callback_forward.h"
 #include "base/check_is_test.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/scoped_refptr.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/values.h"
 #include "chrome/browser/ash/crosapi/crosapi_ash.h"
 #include "chrome/browser/ash/crosapi/crosapi_manager.h"
 #include "chrome/browser/ash/crosapi/device_local_account_extension_service_ash.h"
+#include "chrome/browser/ash/extensions/external_cache_impl.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/chromeos/extensions/device_local_account_external_policy_loader.h"
-#include "chrome/browser/chromeos/extensions/external_cache_impl.h"
 #include "chrome/browser/extensions/external_loader.h"
+#include "components/user_manager/user.h"
+#include "components/user_manager/user_manager.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
 
 namespace chromeos {
@@ -78,6 +81,19 @@ void DeviceLocalAccountExternalCache::OnExtensionListsUpdated(
     CHECK_IS_TEST();
   }
   loader_->OnExtensionListsUpdated(prefs);
+}
+
+bool DeviceLocalAccountExternalCache::IsRollbackAllowed() const {
+  return true;
+}
+
+bool DeviceLocalAccountExternalCache::CanRollbackNow() const {
+  // Allow immediate rollback only if current user is not this device local
+  // account.
+  if (auto* user = user_manager::UserManager::Get()->GetPrimaryUser()) {
+    return user_id_ != user->GetAccountId().GetUserEmail();
+  }
+  return true;
 }
 
 scoped_refptr<extensions::ExternalLoader>

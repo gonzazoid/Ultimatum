@@ -51,6 +51,8 @@ enum class MatchVerificationPoint {
   DELETE_MATCH = 3,
   GROUP_BY_SEARCH_VS_URL_BEFORE = 4,
   GROUP_BY_SEARCH_VS_URL_AFTER = 5,
+  ON_TOUCH_MATCH = 6,
+  GET_MATCHING_TAB = 7,
 };
 
 const char* MatchVerificationPointToString(int verification_point) {
@@ -65,9 +67,14 @@ const char* MatchVerificationPointToString(int verification_point) {
       return "Group/Before";
     case MatchVerificationPoint::GROUP_BY_SEARCH_VS_URL_AFTER:
       return "Group/After";
-    default:
+    case MatchVerificationPoint::ON_TOUCH_MATCH:
+      return "OnTouch";
+    case MatchVerificationPoint::GET_MATCHING_TAB:
+      return "GetMatchingTab";
+    case MatchVerificationPoint::INVALID:
       return "Invalid";
   }
+  NOTREACHED();
 }
 
 bool sInvalidMatchMetricsUploaded = false;
@@ -174,8 +181,6 @@ bool AutocompleteResult::VerifyCoherency(
     UMA_HISTOGRAM_ENUMERATION("Android.Omnibox.InvalidMatch",
                               MatchVerificationResult::BAD_RESULT_SIZE,
                               MatchVerificationResult::COUNT);
-    NOTREACHED() << "AutocompletResult objects are of different size: "
-                 << j_matches.size() << " (Java) vs " << size() << " (Native)";
     ReportInvalidMatchData(base::NumberToString(j_matches.size()) +
                                "!=" + base::NumberToString(size()),
                            verification_point);
@@ -186,8 +191,6 @@ bool AutocompleteResult::VerifyCoherency(
     UMA_HISTOGRAM_ENUMERATION("Android.Omnibox.InvalidMatch",
                               MatchVerificationResult::INVALID_MATCH_POSITION,
                               MatchVerificationResult::COUNT);
-    NOTREACHED() << "Requested action index is not valid: " << match_index
-                 << " outside of " << size() << " limit";
     ReportInvalidMatchData(
         base::NumberToString(match_index) + ">=" + base::NumberToString(size()),
         verification_point);
@@ -213,9 +216,6 @@ bool AutocompleteResult::VerifyCoherency(
                                       : u"<null>");
       }
 #endif
-      NOTREACHED()
-          << "AutocompleteMatch mismatch with native-sourced suggestions at "
-          << index;
 
       ReportInvalidMatchData(
           base::NumberToString(index) + "/" + base::NumberToString(size()),

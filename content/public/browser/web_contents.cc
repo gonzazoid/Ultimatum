@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "content/public/common/child_process_host.h"
+#include "content/public/browser/child_process_host.h"
 #include "ipc/ipc_message.h"
 
 namespace content {
@@ -25,5 +25,22 @@ WebContents::CreateParams::CreateParams(BrowserContext* context,
 WebContents::CreateParams::CreateParams(const CreateParams& other) = default;
 
 WebContents::CreateParams::~CreateParams() = default;
+
+WebContents::ScopedIgnoreInputEvents::~ScopedIgnoreInputEvents() = default;
+
+WebContents::ScopedIgnoreInputEvents::ScopedIgnoreInputEvents(
+    ScopedIgnoreInputEvents&& rhs) {
+  on_destruction_cb_ = std::move(rhs.on_destruction_cb_);
+}
+
+WebContents::ScopedIgnoreInputEvents&
+WebContents::ScopedIgnoreInputEvents::operator=(ScopedIgnoreInputEvents&& rhs) {
+  on_destruction_cb_ = std::move(rhs.on_destruction_cb_);
+  return *this;
+}
+
+WebContents::ScopedIgnoreInputEvents::ScopedIgnoreInputEvents(
+    base::OnceClosure on_destruction_cb)
+    : on_destruction_cb_(std::move(on_destruction_cb)) {}
 
 }  // namespace content

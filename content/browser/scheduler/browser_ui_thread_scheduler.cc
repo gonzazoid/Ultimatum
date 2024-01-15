@@ -10,23 +10,32 @@
 #include "base/memory/ptr_util.h"
 #include "base/message_loop/message_pump.h"
 #include "base/message_loop/message_pump_type.h"
+#include "base/notreached.h"
 #include "base/process/process.h"
 #include "base/run_loop.h"
 #include "base/task/sequence_manager/sequence_manager.h"
 #include "base/task/sequence_manager/sequence_manager_impl.h"
 #include "base/task/sequence_manager/task_queue.h"
 #include "base/task/sequence_manager/time_domain.h"
-#include "base/task/task_features.h"
 #include "base/threading/platform_thread.h"
-#include "base/time/time.h"
 #include "base/trace_event/trace_event.h"
 #include "build/build_config.h"
+#include "content/browser/scheduler/browser_task_priority.h"
+#include "content/browser/scheduler/browser_task_queues.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/common/content_features.h"
 
 namespace {
 
 content::BrowserUIThreadScheduler* g_browser_ui_thread_scheduler = nullptr;
+
+bool IsActiveScrollState(
+    content::BrowserUIThreadScheduler::ScrollState scroll_state) {
+  return scroll_state ==
+             content::BrowserUIThreadScheduler::ScrollState::kFlingActive ||
+         scroll_state == content::BrowserUIThreadScheduler::ScrollState::
+                             kGestureScrollActive;
+}
 
 }  // namespace
 namespace content {
@@ -51,6 +60,17 @@ constexpr base::FeatureParam<base::TimeDelta>
     kBrowserPrioritizeNativeWorkAfterInputForNMsParam{
         &kBrowserPrioritizeNativeWork, "prioritize_for_next_ms",
         base::TimeDelta::Max()};
+
+// Feature to defer tasks on the UI thread to prioritise input.
+BASE_FEATURE(kBrowserDeferUIThreadTasks,
+             "BrowserDeferUIThreadTasks",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
+constexpr base::FeatureParam<bool> kDeferNormalOrLessPriorityTasks{
+    &kBrowserDeferUIThreadTasks, "defer_normal_or_less_priority_tasks", false};
+
+constexpr base::FeatureParam<bool> kDeferKnownLongRunningTasks{
+    &kBrowserDeferUIThreadTasks, "defer_known_long_running_tasks", false};
 }  // namespace features
 
 BrowserUIThreadScheduler::UserInputActiveHandle::UserInputActiveHandle(
@@ -117,8 +137,12 @@ BrowserUIThreadScheduler::BrowserUIThreadScheduler()
           base::sequence_manager::CreateUnboundSequenceManager(
               base::sequence_manager::SequenceManager::Settings::Builder()
                   .SetMessagePumpType(base::MessagePumpType::UI)
+                  .SetCanRunTasksByBatches(true)
+                  .SetPrioritySettings(
+                      internal::CreateBrowserTaskPrioritySettings())
                   .Build())),
       task_queues_(BrowserThread::UI, owned_sequence_manager_.get()),
+      queue_enabled_voters_(task_queues_.CreateQueueEnabledVoters()),
       handle_(task_queues_.GetHandle()) {
   CommonSequenceManagerSetup(owned_sequence_manager_.get());
   owned_sequence_manager_->SetDefaultTaskRunner(
@@ -132,6 +156,7 @@ BrowserUIThreadScheduler::BrowserUIThreadScheduler()
 BrowserUIThreadScheduler::BrowserUIThreadScheduler(
     base::sequence_manager::SequenceManager* sequence_manager)
     : task_queues_(BrowserThread::UI, sequence_manager),
+      queue_enabled_voters_(task_queues_.CreateQueueEnabledVoters()),
       handle_(task_queues_.GetHandle()) {
   CommonSequenceManagerSetup(sequence_manager);
   g_browser_ui_thread_scheduler = this;
@@ -139,6 +164,8 @@ BrowserUIThreadScheduler::BrowserUIThreadScheduler(
 
 void BrowserUIThreadScheduler::CommonSequenceManagerSetup(
     base::sequence_manager::SequenceManager* sequence_manager) {
+  DCHECK_EQ(static_cast<size_t>(sequence_manager->GetPriorityCount()),
+            static_cast<size_t>(internal::BrowserTaskPriority::kPriorityCount));
   sequence_manager->EnableCrashKeys("ui_scheduler_async_stack");
 }
 
@@ -148,64 +175,79 @@ BrowserUIThreadScheduler::OnUserInputStart() {
 }
 
 void BrowserUIThreadScheduler::DidStartUserInput() {
-  // Avoiding crashes in tests that doesn't mock sequence manager.
-  if (!owned_sequence_manager_)
+  if (!browser_prioritize_native_work_ ||
+      browser_prioritize_native_work_after_input_end_ms_.is_inf()) {
     return;
-  if (browser_prioritize_native_work_ &&
-      !browser_prioritize_native_work_after_input_end_ms_.is_inf()) {
-    owned_sequence_manager_->PrioritizeYieldingToNative(base::TimeTicks::Max());
   }
-
-  if (browser_enable_periodic_yielding_native_ &&
-      scroll_state_ != kFlingActive) {
-    TRACE_EVENT("input",
-                "RenderWidgetHostImpl::DidStartUserInputExperimentEnabled");
-    owned_sequence_manager_->EnablePeriodicYieldingToNative(
-        yield_to_native_for_normal_input_after_ms_);
-  }
+  owned_sequence_manager_->PrioritizeYieldingToNative(base::TimeTicks::Max());
 }
 
 void BrowserUIThreadScheduler::OnScrollStateUpdate(ScrollState scroll_state) {
+  if (browser_enable_deferring_ui_thread_tasks_) {
+    UpdatePolicyOnScrollStateUpdate(scroll_state_, scroll_state);
+  }
   scroll_state_ = scroll_state;
-  // Avoiding crashes in tests that doesn't mock sequence manager.
-  if (!owned_sequence_manager_ || !browser_enable_periodic_yielding_native_)
+}
+
+void BrowserUIThreadScheduler::UpdatePolicyOnScrollStateUpdate(
+    ScrollState old_state,
+    ScrollState new_state) {
+  TRACE_EVENT("input",
+              "BrowserUIThreadScheduler::UpdatePolicyOnScrollStateUpdate",
+              "enabled", IsActiveScrollState(new_state));
+  bool state_change =
+      IsActiveScrollState(old_state) != IsActiveScrollState(new_state);
+  if (!state_change) {
     return;
-  switch (scroll_state) {
-    case kGestureScrollActive:
-      owned_sequence_manager_->EnablePeriodicYieldingToNative(
-          yield_to_native_for_normal_input_after_ms_);
-      break;
-    case kFlingActive:
-      owned_sequence_manager_->EnablePeriodicYieldingToNative(
-          yield_to_native_for_fling_input_after_ms_);
-      break;
-    case kNone:
-      // if count is > 0 it means touch moves  in flight, leave the frequent
-      // alternation enabled for now.
-      if (user_input_active_handle_count == 0)
-        owned_sequence_manager_->EnablePeriodicYieldingToNative(
-            yield_to_native_for_default_after_ms_);
-      break;
+  }
+
+  current_policy_.should_defer_task_queues_ = IsActiveScrollState(new_state);
+  UpdateTaskQueueStates();
+}
+
+void BrowserUIThreadScheduler::UpdateTaskQueueStates() {
+  for (unsigned int i = 0; i < task_queues_.kNumQueueTypes; i++) {
+    QueueType type = static_cast<QueueType>(i);
+    GetBrowserTaskRunnerVoter(type).SetVoteToEnable(
+        current_policy_.IsQueueEnabled(type));
   }
 }
 
-void BrowserUIThreadScheduler::DidEndUserInput() {
-  // Avoiding crashes in tests that doesn't mock sequence manager.
-  if (!owned_sequence_manager_)
-    return;
-  if (browser_prioritize_native_work_ &&
-      !browser_prioritize_native_work_after_input_end_ms_.is_inf()) {
-    owned_sequence_manager_->PrioritizeYieldingToNative(
-        base::TimeTicks::Now() +
-        browser_prioritize_native_work_after_input_end_ms_);
+bool BrowserUIThreadScheduler::Policy::IsQueueEnabled(
+    BrowserTaskQueues::QueueType task_queue) const {
+  if (!should_defer_task_queues_) {
+    return true;
   }
 
-  // This disables the alternating behaviour if there are no scrolls ongoing.
-  if (browser_enable_periodic_yielding_native_ && scroll_state_ == kNone) {
-    owned_sequence_manager_->EnablePeriodicYieldingToNative(
-        yield_to_native_for_default_after_ms_);
+  switch (task_queue) {
+    case BrowserTaskQueues::QueueType::kDeferrableUserBlocking:
+      return !(should_defer_task_queues_ && defer_known_long_running_tasks_);
+    case BrowserTaskQueues::QueueType::kBestEffort:
+    case BrowserTaskQueues::QueueType::kUserVisible:
+    case BrowserTaskQueues::QueueType::kUserBlocking:
+      return !(should_defer_task_queues_ &&
+               defer_normal_or_lower_priority_tasks_);
+    // TODO(b/261554018): defer the default task queue after pumping the
+    // priority of scoped blocking calls from renderer to UI main to
+    // avoid deadlocks on deferring default queue.
+    case BrowserTaskQueues::QueueType::kDefault:
+    case BrowserTaskQueues::QueueType::kUserInput:
+    case BrowserTaskQueues::QueueType::kNavigationNetworkResponse:
+    case BrowserTaskQueues::QueueType::kServiceWorkerStorageControlResponse:
+    case BrowserTaskQueues::QueueType::kBeforeUnloadBrowserResponse:
+      return true;
   }
-  return;
+  NOTREACHED();
+}
+
+void BrowserUIThreadScheduler::DidEndUserInput() {
+  if (!browser_prioritize_native_work_ ||
+      browser_prioritize_native_work_after_input_end_ms_.is_inf()) {
+    return;
+  }
+  owned_sequence_manager_->PrioritizeYieldingToNative(
+      base::TimeTicks::Now() +
+      browser_prioritize_native_work_after_input_end_ms_);
 }
 
 void BrowserUIThreadScheduler::PostFeatureListSetup() {
@@ -213,10 +255,11 @@ void BrowserUIThreadScheduler::PostFeatureListSetup() {
     EnableBrowserPrioritizesNativeWork();
   }
 
-  if (base::FeatureList::IsEnabled(base::kBrowserPeriodicYieldingToNative)) {
-    EnableAlternatingScheduler();
+  if (base::FeatureList::IsEnabled(features::kBrowserDeferUIThreadTasks)) {
+    EnableDeferringBrowserUIThreadTasks();
   }
 }
+
 void BrowserUIThreadScheduler::EnableBrowserPrioritizesNativeWork() {
   browser_prioritize_native_work_after_input_end_ms_ =
       features::kBrowserPrioritizeNativeWorkAfterInputForNMsParam.Get();
@@ -243,35 +286,15 @@ void BrowserUIThreadScheduler::EnableBrowserPrioritizesNativeWork() {
           base::Unretained(this)));
 }
 
-void BrowserUIThreadScheduler::EnableAlternatingScheduler() {
+void BrowserUIThreadScheduler::EnableDeferringBrowserUIThreadTasks() {
   // Initialize feature parameters. This can't be done in the constructor
   // because the FeatureList hasn't been initialized when the
   // BrowserUIThreadScheduler is created.
-  yield_to_native_for_normal_input_after_ms_ =
-      base::kBrowserPeriodicYieldingToNativeNormalInputAfterMsParam.Get();
-  yield_to_native_for_fling_input_after_ms_ =
-      base::kBrowserPeriodicYieldingToNativeFlingInputAfterMsParam.Get();
-  yield_to_native_for_default_after_ms_ =
-      base::kBrowserPeriodicYieldingToNativeNoInputAfterMsParam.Get();
-
-  // Rather than just enable immediately we post a task at default priority.
-  // This ensures most start up work should be finished before we start using
-  // this policy.
-  //
-  // TODO(nuskos): Switch this to use ThreadControllerObserver after start up
-  // notification once available on android.
-  handle_->GetDefaultTaskRunner()->PostTask(
-      FROM_HERE,
-      base::BindOnce(
-          [](BrowserUIThreadScheduler* scheduler) {
-            scheduler->browser_enable_periodic_yielding_native_ = true;
-            if (!scheduler->scroll_state_)
-              scheduler->owned_sequence_manager_
-                  ->EnablePeriodicYieldingToNative(
-                      scheduler->yield_to_native_for_default_after_ms_);
-            else
-              scheduler->OnScrollStateUpdate(scheduler->scroll_state_);
-          },
-          base::Unretained(this)));
+  current_policy_.defer_normal_or_lower_priority_tasks_ =
+      features::kDeferNormalOrLessPriorityTasks.Get();
+  current_policy_.defer_known_long_running_tasks_ =
+      features::kDeferKnownLongRunningTasks.Get();
+  browser_enable_deferring_ui_thread_tasks_ = true;
 }
+
 }  // namespace content

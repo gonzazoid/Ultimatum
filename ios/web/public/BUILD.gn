@@ -8,6 +8,7 @@ source_set("public") {
   public_deps = [
     ":web_state_observer",
     "//ios/web/public/favicon",
+    "//ios/web/public/js_messaging:content_world_header",
     "//ios/web/public/navigation",
     "//ios/web/public/permissions",
     "//ios/web/public/thread",
@@ -15,14 +16,16 @@ source_set("public") {
     "//net",
     "//services/network/public/cpp",
     "//services/network/public/mojom",
+    "//ui/base",
   ]
 
   deps = [
+    "//build:blink_buildflags",
+    "//components/sessions:session_id",
     "//ios/third_party/webkit",
     "//ios/web/common",
     "//ios/web/common:user_agent",
     "//ios/web/public/deprecated",
-    "//ui/base",
   ]
 
   sources = [
@@ -31,11 +34,10 @@ source_set("public") {
     "web_state.h",
     "web_state_delegate.h",
     "web_state_delegate_bridge.h",
+    "web_state_id.h",
     "web_state_observer_bridge.h",
     "web_state_user_data.h",
   ]
-
-  configs += [ "//build/config/compiler:enable_arc" ]
 }
 
 # Un-separate this once the things in public/deprecated that need it are
@@ -47,6 +49,4 @@ source_set("web_state_observer") {
     "//url",
   ]
   sources = [ "web_state_observer.h" ]
-
-  configs += [ "//build/config/compiler:enable_arc" ]
 }

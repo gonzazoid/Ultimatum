@@ -12,13 +12,14 @@
 #include "ash/constants/ash_features.h"
 #include "ash/webui/common/backend/plural_string_handler.h"
 #include "ash/webui/common/keyboard_diagram_strings.h"
+#include "ash/webui/common/trusted_types_util.h"
+#include "ash/webui/diagnostics_ui/backend/common/histogram_util.h"
+#include "ash/webui/diagnostics_ui/backend/connectivity/network_health_provider.h"
 #include "ash/webui/diagnostics_ui/backend/diagnostics_manager.h"
-#include "ash/webui/diagnostics_ui/backend/histogram_util.h"
-#include "ash/webui/diagnostics_ui/backend/input_data_provider.h"
-#include "ash/webui/diagnostics_ui/backend/network_health_provider.h"
+#include "ash/webui/diagnostics_ui/backend/input/input_data_provider.h"
 #include "ash/webui/diagnostics_ui/backend/session_log_handler.h"
-#include "ash/webui/diagnostics_ui/backend/system_data_provider.h"
-#include "ash/webui/diagnostics_ui/backend/system_routine_controller.h"
+#include "ash/webui/diagnostics_ui/backend/system/system_data_provider.h"
+#include "ash/webui/diagnostics_ui/backend/system/system_routine_controller.h"
 #include "ash/webui/diagnostics_ui/diagnostics_metrics.h"
 #include "ash/webui/diagnostics_ui/diagnostics_metrics_message_handler.h"
 #include "ash/webui/diagnostics_ui/mojom/network_health_provider.mojom.h"
@@ -30,11 +31,12 @@
 #include "base/files/file_path.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_functions.h"
-#include "base/strings/string_piece_forward.h"
+#include "base/strings/string_piece.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/values.h"
-#include "chromeos/login/login_state/login_state.h"
+#include "chromeos/ash/components/login/login_state/login_state.h"
+#include "chromeos/constants/chromeos_features.h"
 #include "chromeos/strings/grit/chromeos_strings.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/browser/web_ui.h"
@@ -43,7 +45,8 @@
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/webui/web_ui_util.h"
 #include "ui/chromeos/strings/network/network_element_localized_strings_provider.h"
-#include "ui/resources/grit/webui_generated_resources.h"
+#include "ui/resources/grit/webui_resources.h"
+#include "ui/webui/color_change_listener/color_change_handler.h"
 
 namespace ash {
 
@@ -94,13 +97,13 @@ std::u16string GetLinkLabel(int string_id, const char* url) {
 base::Value::Dict GetDataSourceUpdate() {
   base::Value::Dict update;
   update.Set("settingsLinkText",
-             base::Value(GetLinkLabel(IDS_DIAGNOSTICS_SETTINGS_LINK_TEXT,
-                                      "chrome://os-settings/")));
-  // TODO(crbug.com/1207678): update this link when the Help Center is ready.
+             GetLinkLabel(IDS_DIAGNOSTICS_SETTINGS_LINK_TEXT,
+                          "chrome://os-settings/"));
   update.Set(
       "keyboardTesterHelpLink",
-      base::Value(GetLinkLabel(IDS_INPUT_DIAGNOSTICS_KEYBOARD_TESTER_HELP_LINK,
-                               "https://support.google.com/chromebook/")));
+      GetLinkLabel(
+          IDS_INPUT_DIAGNOSTICS_KEYBOARD_TESTER_HELP_LINK,
+          "https://support.google.com/chromebook?p=keyboard_troubleshoot"));
   return update;
 }
 
@@ -132,8 +135,6 @@ void AddDiagnosticsStrings(content::WebUIDataSource* html_source) {
       {"captivePortalRoutineText", IDS_NETWORK_DIAGNOSTICS_CAPTIVE_PORTAL},
       {"cellularLabel", IDS_DIAGNOSTICS_NETWORK_TYPE_CELLULAR},
       {"chargeTestResultText", IDS_CHARGE_TEST_RESULT},
-      {"closeDialogShortcutHelpText",
-       IDS_INPUT_DIAGNOSTICS_CLOSE_DIALOG_SHORTCUT_HELP_TEXT},
       {"connectivityText", IDS_DIAGNOSTICS_CONNECTIVITY},
       {"cpuBannerMessage", IDS_DIAGNOSTICS_CPU_BANNER_MESSAGE},
       {"cpuCacheRoutineText", IDS_DIAGNOSTICS_CPU_CACHE_ROUTINE_TEXT},
@@ -158,6 +159,7 @@ void AddDiagnosticsStrings(content::WebUIDataSource* html_source) {
       {"currentNowTooltipText", IDS_DIAGNOSTICS_CURRENT_NOW_TOOLTIP_TEXT},
       {"cycleCount", IDS_DIAGNOSTICS_CYCLE_COUNT_LABEL},
       {"cycleCountTooltipText", IDS_DIAGNOSTICS_CYCLE_COUNT_TOOLTIP_TEXT},
+      {"deviceDisconnected", IDS_INPUT_DIAGNOSTICS_DEVICE_DISCONNECTED},
       {"diagnosticsTitle", IDS_DIAGNOSTICS_TITLE},
       {"disabledText", IDS_DIAGNOSTICS_DISABLED_TEXT},
       {"dischargeTestResultText", IDS_DISCHARGE_TEST_RESULT},
@@ -207,8 +209,16 @@ void AddDiagnosticsStrings(content::WebUIDataSource* html_source) {
       {"inputDescriptionUsbTouchpad", IDS_INPUT_DIAGNOSTICS_USB_TOUCHPAD},
       {"inputDescriptionUsbTouchscreen", IDS_INPUT_DIAGNOSTICS_USB_TOUCHSCREEN},
       {"inputDeviceTest", IDS_INPUT_DIAGNOSTICS_RUN_TEST},
+      {"inputDeviceUntestableNote", IDS_INPUT_DIAGNOSTICS_UNTESTABLE_NOTE},
+      {"inputKeyboardUntestableLidClosedNote",
+       IDS_INPUT_DIAGNOSTICS_KEYBOARD_UNTESTABLE_LID_CLOSED_NOTE},
+      {"inputKeyboardUntestableTabletModeNote",
+       IDS_INPUT_DIAGNOSTICS_KEYBOARD_UNTESTABLE_TABLET_MODE_NOTE},
+      {"inputKeyboardTesterClosedToastLidClosed",
+       IDS_INPUT_DIAGNOSTICS_KEYBOARD_TESTER_CLOSED_LID_CLOSED_NOTE},
+      {"inputKeyboardTesterClosedToastTabletMode",
+       IDS_INPUT_DIAGNOSTICS_KEYBOARD_TESTER_CLOSED_TABLET_MODE_NOTE},
       {"inputTesterDone", IDS_INPUT_DIAGNOSTICS_TESTER_DONE},
-      {"inputText", IDS_DIAGNOSTICS_INPUT},
       {"internetConnectivityGroupLabel",
        IDS_DIAGNOSTICS_INTERNET_CONNECTIVITY_GROUP_LABEL},
       {"ipConfigInfoDrawerGateway",
@@ -221,7 +231,10 @@ void AddDiagnosticsStrings(content::WebUIDataSource* html_source) {
        IDS_INPUT_DIAGNOSTICS_KEYBOARD_TESTER_FOCUS_LOSS_MESSAGE},
       {"keyboardTesterInstruction",
        IDS_INPUT_DIAGNOSTICS_KEYBOARD_TESTER_INSTRUCTION},
+      {"keyboardTesterShortcutInstruction",
+       IDS_INPUT_DIAGNOSTICS_KEYBOARD_TESTER_SHORTCUT_INSTRUCTION},
       {"keyboardTesterTitle", IDS_INPUT_DIAGNOSTICS_KEYBOARD_TESTER_TITLE},
+      {"keyboardText", IDS_DIAGNOSTICS_KEYBOARD},
       {"joinNetworkLinkText", IDS_DIAGNOSTICS_JOIN_NETWORK_LINK_TEXT},
       {"lanConnectivityFailedText",
        IDS_DIAGNOSTICS_LAN_CONNECTIVITY_FAILED_TEXT},
@@ -287,6 +300,8 @@ void AddDiagnosticsStrings(content::WebUIDataSource* html_source) {
       {"noIpAddressText", IDS_NETWORK_DIAGNOSTICS_NO_IP_ADDRESS_TEXT},
       {"notEnoughAvailableMemoryMessage",
        IDS_DIAGNOSTICS_NOT_ENOUGH_AVAILABLE_MEMORY},
+      {"notEnoughAvailableMemoryCpuMessage",
+       IDS_DIAGNOSTICS_NOT_ENOUGH_AVAILABLE_MEMORY_CPU},
       {"percentageLabel", IDS_DIAGNOSTICS_PERCENTAGE_LABEL},
       {"reconnectLinkText", IDS_DIAGNOSTICS_RECONNECT_LINK_TEXT},
       {"remainingCharge", IDS_DIAGNOSTICS_REMAINING_CHARGE_LABEL},
@@ -331,6 +346,7 @@ void AddDiagnosticsStrings(content::WebUIDataSource* html_source) {
       {"testWarningBadgeText", IDS_DIAGNOSTICS_TEST_WARNING_BADGE_TEXT},
       {"testSuccess", IDS_DIAGNOSTICS_TEST_SUCCESS_TEXT},
       {"testSucceededBadgeText", IDS_DIAGNOSTICS_TEST_SUCCESS_BADGE_TEXT},
+      {"touchpadTesterTitleText", IDS_INPUT_DIAGNOSTICS_TOUCHPAD_TESTER_TITLE},
       {"troubleConnecting", IDS_DIAGNOSTICS_TROUBLE_CONNECTING},
       {"troubleshootingText", IDS_DIAGNOSTICS_TROUBLESHOOTING_TEXT},
       {"versionInfo", IDS_DIAGNOSTICS_VERSION_INFO_TEXT},
@@ -360,21 +376,17 @@ void SetUpWebUIDataSource(content::WebUIDataSource* source,
                           int default_resource) {
   source->AddResourcePaths(resources);
   source->AddResourcePath("", default_resource);
-  source->AddResourcePath("test_loader.html", IDR_WEBUI_HTML_TEST_LOADER_HTML);
+  source->AddResourcePath("test_loader.html", IDR_WEBUI_TEST_LOADER_HTML);
   source->AddResourcePath("test_loader.js", IDR_WEBUI_JS_TEST_LOADER_JS);
   source->AddResourcePath("test_loader_util.js",
                           IDR_WEBUI_JS_TEST_LOADER_UTIL_JS);
   source->AddBoolean("isLoggedIn", LoginState::Get()->IsUserLoggedIn());
-  source->AddBoolean("isInputEnabled",
-                     features::IsInputInDiagnosticsAppEnabled());
-  source->AddBoolean("isNetworkingEnabled",
-                     features::IsNetworkingInDiagnosticsAppEnabled());
   source->AddBoolean("isTouchpadEnabled",
                      features::IsTouchpadInDiagnosticsAppEnabled());
   source->AddBoolean("isTouchscreenEnabled",
                      features::IsTouchscreenInDiagnosticsAppEnabled());
-  source->AddBoolean("enableArcNetworkDiagnostics",
-                     features::IsArcNetworkDiagnosticsButtonEnabled());
+  source->AddBoolean("isJellyEnabledForDiagnosticsApp",
+                     ash::features::IsJellyEnabledForDiagnosticsApp());
 }
 
 void SetUpPluralStringHandler(content::WebUI* web_ui) {
@@ -398,9 +410,8 @@ DiagnosticsDialogUI::DiagnosticsDialogUI(
           kChromeUIDiagnosticsAppHost);
   html_source->OverrideContentSecurityPolicy(
       network::mojom::CSPDirectiveName::ScriptSrc,
-      "script-src chrome://resources chrome://test chrome://webui-test "
-      "'self';");
-  html_source->DisableTrustedTypesCSP();
+      "script-src chrome://resources chrome://webui-test 'self';");
+  ash::EnableTrustedTypesCSP(html_source);
 
   const auto resources = base::make_span(kAshDiagnosticsAppResources,
                                          kAshDiagnosticsAppResourcesSize);
@@ -446,12 +457,10 @@ DiagnosticsDialogUI::~DiagnosticsDialogUI() {
 
 void DiagnosticsDialogUI::BindInterface(
     mojo::PendingReceiver<diagnostics::mojom::NetworkHealthProvider> receiver) {
-  if (features::IsNetworkingInDiagnosticsAppEnabled()) {
-    diagnostics::NetworkHealthProvider* network_health_provider =
-        diagnostics_manager_->GetNetworkHealthProvider();
-    if (network_health_provider) {
-      network_health_provider->BindInterface(std::move(receiver));
-    }
+  diagnostics::NetworkHealthProvider* network_health_provider =
+      diagnostics_manager_->GetNetworkHealthProvider();
+  if (network_health_provider) {
+    network_health_provider->BindInterface(std::move(receiver));
   }
 }
 
@@ -481,6 +490,12 @@ void DiagnosticsDialogUI::BindInterface(
   if (input_data_provider) {
     input_data_provider->BindInterface(std::move(receiver));
   }
+}
+
+void DiagnosticsDialogUI::BindInterface(
+    mojo::PendingReceiver<color_change_listener::mojom::PageHandler> receiver) {
+  color_provider_handler_ = std::make_unique<ui::ColorChangeHandler>(
+      web_ui()->GetWebContents(), std::move(receiver));
 }
 
 WEB_UI_CONTROLLER_TYPE_IMPL(DiagnosticsDialogUI)

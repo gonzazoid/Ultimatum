@@ -10,17 +10,20 @@ source_set("passwords") {
     "password_infobar_modal_overlay_mediator.mm",
   ]
 
-  configs += [ "//build/config/compiler:enable_arc" ]
-
   deps = [
     "//base",
-    "//ios/chrome/browser/overlays",
-    "//ios/chrome/browser/overlays/public/common/infobars",
-    "//ios/chrome/browser/overlays/public/infobar_modal",
+    "//ios/chrome/app/strings",
+    "//ios/chrome/browser/overlays/model",
+    "//ios/chrome/browser/overlays/model/public/common/infobars",
+    "//ios/chrome/browser/overlays/model/public/default",
+    "//ios/chrome/browser/overlays/model/public/infobar_modal",
+    "//ios/chrome/browser/passwords/model:infobar_delegates",
+    "//ios/chrome/browser/shared/public/commands",
     "//ios/chrome/browser/ui/infobars/modals",
     "//ios/chrome/browser/ui/overlays:coordinators",
     "//ios/chrome/browser/ui/overlays/infobar_modal:coordinators",
     "//ios/chrome/browser/ui/overlays/infobar_modal:mediators",
+    "//ui/base",
   ]
 }
 
@@ -28,19 +31,19 @@ source_set("unit_tests") {
   testonly = true
   sources = [ "password_infobar_modal_overlay_mediator_unittest.mm" ]
 
-  configs += [ "//build/config/compiler:enable_arc" ]
-
   deps = [
     ":passwords",
     "//base/test:test_support",
     "//components/infobars/core",
-    "//ios/chrome/browser/infobars",
-    "//ios/chrome/browser/infobars/test",
-    "//ios/chrome/browser/overlays",
-    "//ios/chrome/browser/overlays/public/infobar_modal",
-    "//ios/chrome/browser/overlays/test",
-    "//ios/chrome/browser/passwords/test",
-    "//ios/chrome/browser/passwords/test",
+    "//ios/chrome/app/strings",
+    "//ios/chrome/browser/infobars/model",
+    "//ios/chrome/browser/infobars/model/test",
+    "//ios/chrome/browser/overlays/model",
+    "//ios/chrome/browser/overlays/model/public/default",
+    "//ios/chrome/browser/overlays/model/public/infobar_modal",
+    "//ios/chrome/browser/overlays/model/test",
+    "//ios/chrome/browser/passwords/model/test",
+    "//ios/chrome/browser/shared/public/commands",
     "//ios/chrome/browser/ui/infobars/modals/test",
     "//ios/chrome/browser/ui/infobars/test",
     "//ios/chrome/browser/ui/overlays/test",

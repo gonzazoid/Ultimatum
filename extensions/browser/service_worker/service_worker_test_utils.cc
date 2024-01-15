@@ -6,11 +6,17 @@
 
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/service_worker_context.h"
+#include "content/public/browser/storage_partition.h"
 #include "extensions/common/constants.h"
 
 namespace extensions {
 namespace service_worker_test_utils {
 
+content::ServiceWorkerContext* GetServiceWorkerContext(
+    content::BrowserContext* browser_context) {
+  return browser_context->GetDefaultStoragePartition()
+      ->GetServiceWorkerContext();
+}
 // TestRegistrationObserver ----------------------------------------------------
 
 TestRegistrationObserver::TestRegistrationObserver(
@@ -29,6 +35,14 @@ void TestRegistrationObserver::WaitForRegistrationStored() {
   stored_run_loop_.Run();
 }
 
+void TestRegistrationObserver::WaitForWorkerStart() {
+  started_run_loop_.Run();
+}
+
+void TestRegistrationObserver::WaitForWorkerActivated() {
+  activated_run_loop_.Run();
+}
+
 int TestRegistrationObserver::GetCompletedCount(const GURL& scope) const {
   const auto it = registrations_completed_map_.find(scope);
   return it == registrations_completed_map_.end() ? 0 : it->second;
@@ -43,6 +57,18 @@ void TestRegistrationObserver::OnRegistrationStored(int64_t registration_id,
   if (scope.SchemeIs(kExtensionScheme)) {
     stored_run_loop_.Quit();
   }
+}
+
+void TestRegistrationObserver::OnVersionStartedRunning(
+    int64_t version_id,
+    const content::ServiceWorkerRunningInfo& running_info) {
+  running_version_id_ = version_id;
+  started_run_loop_.Quit();
+}
+
+void TestRegistrationObserver::OnVersionActivated(int64_t version_id,
+                                                  const GURL& scope) {
+  activated_run_loop_.Quit();
 }
 
 void TestRegistrationObserver::OnDestruct(

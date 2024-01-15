@@ -18,6 +18,7 @@ class MockSourceObserver : public GarbageCollected<MockSourceObserver>,
                            public MediaStreamSource::Observer {
  public:
   MOCK_METHOD0(SourceChangedState, void());
+  MOCK_METHOD0(SourceChangedCaptureConfiguration, void());
   MOCK_METHOD0(SourceChangedCaptureHandle, void());
 };
 
@@ -27,9 +28,7 @@ class MockMediaStreamComponent
       public MediaStreamComponent {
  public:
   virtual ~MockMediaStreamComponent() = default;
-  MOCK_CONST_METHOD1(
-      Clone,
-      MediaStreamComponent*(std::unique_ptr<MediaStreamTrackPlatform>));
+  MOCK_CONST_METHOD0(Clone, MediaStreamComponent*());
   MOCK_CONST_METHOD0(Source, MediaStreamSource*());
   MOCK_CONST_METHOD0(Id, String());
   MOCK_CONST_METHOD0(UniqueId, int());

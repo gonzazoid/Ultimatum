@@ -8,6 +8,7 @@
 #include <memory>
 #include <vector>
 
+#include <optional>
 #include "base/containers/lru_cache.h"
 #include "base/memory/memory_pressure_listener.h"
 #include "base/memory/raw_ptr.h"
@@ -22,17 +23,23 @@
 #include "gpu/command_buffer/common/gl2_types.h"
 #include "gpu/command_buffer/common/skia_utils.h"
 #include "gpu/command_buffer/service/gl_context_virtual_delegate.h"
-#include "gpu/command_buffer/service/gr_cache_controller.h"
+#include "gpu/command_buffer/service/gr_shader_cache.h"
 #include "gpu/command_buffer/service/memory_tracking.h"
+#include "gpu/command_buffer/service/shared_image/shared_image_format_service_utils.h"
 #include "gpu/config/gpu_preferences.h"
 #include "gpu/gpu_gles2_export.h"
 #include "gpu/ipc/common/command_buffer_id.h"
 #include "gpu/ipc/common/gpu_peak_memory.h"
 #include "gpu/vulkan/buildflags.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "skia/buildflags.h"
 #include "third_party/skia/include/core/SkSurface.h"
 #include "third_party/skia/include/gpu/GrDirectContext.h"
 #include "ui/gl/progress_reporter.h"
+
+#if BUILDFLAG(IS_WIN)
+#include <d3d11.h>
+#include <wrl/client.h>
+#endif
 
 namespace gl {
 class GLContext;
@@ -42,15 +49,20 @@ class GLSurface;
 }  // namespace gl
 
 namespace viz {
-class DawnContextProvider;
 class MetalContextProvider;
 class VulkanContextProvider;
 }  // namespace viz
 
+namespace skgpu::graphite {
+class Context;
+class Recorder;
+}  // namespace skgpu::graphite
+
 namespace gpu {
+class DawnContextProvider;
 class ExternalSemaphorePool;
 class GpuDriverBugWorkarounds;
-class GpuProcessActivityFlags;
+class GpuProcessShmCount;
 class ServiceTransferCache;
 
 namespace gles2 {
@@ -59,7 +71,9 @@ struct ContextState;
 }  // namespace gles2
 
 namespace raster {
+class GrCacheController;
 class GrShaderCache;
+class GraphiteCacheController;
 class RasterDecoderTestBase;
 }  // namespace raster
 
@@ -69,7 +83,8 @@ class GPU_GLES2_EXPORT SharedContextState
       public base::RefCounted<SharedContextState>,
       public GrContextOptions::ShaderErrorHandler {
  public:
-  using ContextLostCallback = base::OnceCallback<void(bool)>;
+  using ContextLostCallback =
+      base::OnceCallback<void(bool, error::ContextLostReason)>;
 
   // TODO(vikassoni): Refactor code to have seperate constructor for GL and
   // Vulkan and not initialize/use GL related info for vulkan and vice-versa.
@@ -79,33 +94,29 @@ class GPU_GLES2_EXPORT SharedContextState
       scoped_refptr<gl::GLContext> context,
       bool use_virtualized_gl_contexts,
       ContextLostCallback context_lost_callback,
-      GrContextType gr_context_type = GrContextType::kGL,
+      GrContextType gr_context_type,
       viz::VulkanContextProvider* vulkan_context_provider = nullptr,
       viz::MetalContextProvider* metal_context_provider = nullptr,
-      viz::DawnContextProvider* dawn_context_provider = nullptr,
+      DawnContextProvider* dawn_context_provider = nullptr,
       base::WeakPtr<gpu::MemoryTracker::Observer> peak_memory_monitor = nullptr,
       bool created_on_compositor_gpu_thread = false);
 
   SharedContextState(const SharedContextState&) = delete;
   SharedContextState& operator=(const SharedContextState&) = delete;
 
-  bool InitializeGrContext(const GpuPreferences& gpu_preferences,
-                           const GpuDriverBugWorkarounds& workarounds,
-                           gpu::raster::GrShaderCache* cache,
-                           GpuProcessActivityFlags* activity_flags = nullptr,
-                           gl::ProgressReporter* progress_reporter = nullptr);
+  bool InitializeSkia(const GpuPreferences& gpu_preferences,
+                      const GpuDriverBugWorkarounds& workarounds,
+                      gpu::raster::GrShaderCache* cache = nullptr,
+                      GpuProcessShmCount* use_shader_cache_shm_count = nullptr,
+                      gl::ProgressReporter* progress_reporter = nullptr);
   bool GrContextIsGL() const {
     return gr_context_type_ == GrContextType::kGL;
   }
   bool GrContextIsVulkan() const {
     return gr_context_type_ == GrContextType::kVulkan;
   }
-  bool GrContextIsMetal() const {
-    return gr_context_type_ == GrContextType::kMetal;
-  }
-  bool GrContextIsDawn() const {
-    return gr_context_type_ == GrContextType::kDawn;
-  }
+  bool IsGraphiteDawnVulkan() const;
+  bool IsGraphiteDawnVulkanSwiftShader() const;
 
   bool InitializeGL(const GpuPreferences& gpu_preferences,
                     scoped_refptr<gles2::FeatureInfo> feature_info);
@@ -126,29 +137,50 @@ class GPU_GLES2_EXPORT SharedContextState
 
   void StoreVkPipelineCacheIfNeeded();
 
-  gl::GLShareGroup* share_group() { return share_group_.get(); }
-  gl::GLContext* context() { return context_.get(); }
-  gl::GLContext* real_context() { return real_context_.get(); }
-  gl::GLSurface* surface() { return surface_.get(); }
-  gl::GLDisplay* display();
-  viz::VulkanContextProvider* vk_context_provider() {
+  void UseShaderCache(
+      std::optional<gpu::raster::GrShaderCache::ScopedCacheUse>& cache_use,
+      int32_t client_id) const;
+
+  GLFormatCaps GetGLFormatCaps() { return GLFormatCaps(feature_info()); }
+
+  gl::GLShareGroup* share_group() const { return share_group_.get(); }
+  gl::GLContext* context() const { return context_.get(); }
+  gl::GLContext* real_context() const { return real_context_.get(); }
+  gl::GLSurface* surface() const { return surface_.get(); }
+  gl::GLDisplay* display();  // non const since it calls GLSurface::GetGLDisplay
+  viz::VulkanContextProvider* vk_context_provider() const {
     return vk_context_provider_;
   }
-  viz::MetalContextProvider* metal_context_provider() {
+  viz::MetalContextProvider* metal_context_provider() const {
     return metal_context_provider_;
   }
-  viz::DawnContextProvider* dawn_context_provider() {
+  DawnContextProvider* dawn_context_provider() const {
     return dawn_context_provider_;
   }
   gl::ProgressReporter* progress_reporter() const { return progress_reporter_; }
-  GrDirectContext* gr_context() { return gr_context_; }
+  // Ganesh/Graphite contexts may only be used on the GPU main thread.
+  GrDirectContext* gr_context() const { return gr_context_; }
+  skgpu::graphite::Context* graphite_context() const {
+    return graphite_context_;
+  }
+  // Graphite recorder for GPU main thread, used by RasterDecoder,
+  // SkiaOutputSurfaceImplOnGpu, etc.
+  skgpu::graphite::Recorder* gpu_main_graphite_recorder() const {
+    return gpu_main_graphite_recorder_.get();
+  }
+  // Graphite recorder for Viz compositor thread, used by SkiaOutputSurfaceImpl.
+  skgpu::graphite::Recorder* viz_compositor_graphite_recorder() const {
+    return viz_compositor_graphite_recorder_.get();
+  }
   GrContextType gr_context_type() const { return gr_context_type_; }
   // Handles Skia-reported shader compilation errors.
-  void compileError(const char* shader, const char* errors) override;
+  void compileError(const char* shader,
+                    const char* errors,
+                    bool shaderWasCached) override;
   gles2::FeatureInfo* feature_info() { return feature_info_.get(); }
   gles2::ContextState* context_state() const { return context_state_.get(); }
   bool context_lost() const { return !!context_lost_reason_; }
-  absl::optional<error::ContextLostReason> context_lost_reason() {
+  std::optional<error::ContextLostReason> context_lost_reason() {
     return context_lost_reason_;
   }
   bool need_context_state_reset() const { return need_context_state_reset_; }
@@ -228,7 +260,14 @@ class GPU_GLES2_EXPORT SharedContextState
   bool CheckResetStatus(bool needs_gl);
   bool device_needs_reset() { return device_needs_reset_; }
 
-  void ScheduleGrContextCleanup();
+  void ScheduleSkiaCleanup();
+
+  int32_t GetMaxTextureSize() const;
+
+#if BUILDFLAG(IS_WIN)
+  // Get the D3D11 device used for the compositing.
+  Microsoft::WRL::ComPtr<ID3D11Device> GetD3D11Device() const;
+#endif
 
  private:
   friend class base::RefCounted<SharedContextState>;
@@ -286,7 +325,17 @@ class GPU_GLES2_EXPORT SharedContextState
 
   ~SharedContextState() override;
 
-  absl::optional<error::ContextLostReason> GetResetStatus(bool needs_gl);
+  bool InitializeGanesh(
+      const GpuPreferences& gpu_preferences,
+      const GpuDriverBugWorkarounds& workarounds,
+      gpu::raster::GrShaderCache* cache,
+      GpuProcessShmCount* use_shader_cache_shm_count = nullptr,
+      gl::ProgressReporter* progress_reporter = nullptr);
+
+  bool InitializeGraphite(const GpuPreferences& gpu_preferences,
+                          const GpuDriverBugWorkarounds& workarounds);
+
+  std::optional<error::ContextLostReason> GetResetStatus(bool needs_gl);
 
   // gpu::GLContextVirtualDelegate implementation.
   bool initialized() const override;
@@ -312,15 +361,19 @@ class GPU_GLES2_EXPORT SharedContextState
   bool support_vulkan_external_object_ = false;
   bool support_gl_external_object_flags_ = false;
   ContextLostCallback context_lost_callback_;
-  GrContextType gr_context_type_ = GrContextType::kGL;
+  const GrContextType gr_context_type_;
   MemoryTrackerObserver memory_tracker_observer_;
   MemoryTracker memory_tracker_;
   gpu::MemoryTypeTracker memory_type_tracker_;
-  const raw_ptr<viz::VulkanContextProvider> vk_context_provider_;
-  const raw_ptr<viz::MetalContextProvider> metal_context_provider_;
-  const raw_ptr<viz::DawnContextProvider> dawn_context_provider_;
+  const raw_ptr<viz::VulkanContextProvider> vk_context_provider_ = nullptr;
+  const raw_ptr<viz::MetalContextProvider> metal_context_provider_ = nullptr;
+  const raw_ptr<DawnContextProvider> dawn_context_provider_ = nullptr;
   bool created_on_compositor_gpu_thread_ = false;
-  raw_ptr<GrDirectContext> gr_context_ = nullptr;
+  raw_ptr<GrDirectContext, DanglingUntriaged> gr_context_ = nullptr;
+  raw_ptr<skgpu::graphite::Context, DanglingUntriaged> graphite_context_ =
+      nullptr;
+  std::unique_ptr<skgpu::graphite::Recorder> gpu_main_graphite_recorder_;
+  std::unique_ptr<skgpu::graphite::Recorder> viz_compositor_graphite_recorder_;
 
   scoped_refptr<gl::GLShareGroup> share_group_;
   scoped_refptr<gl::GLContext> context_;
@@ -330,25 +383,28 @@ class GPU_GLES2_EXPORT SharedContextState
   // Most recent surface that this ShareContextState was made current with.
   // Avoids a call to MakeCurrent with a different surface, if we don't
   // care which surface is current.
-  raw_ptr<gl::GLSurface> last_current_surface_ = nullptr;
+  raw_ptr<gl::GLSurface, DanglingUntriaged> last_current_surface_ = nullptr;
 
   scoped_refptr<gles2::FeatureInfo> feature_info_;
 
   // raster decoders and display compositor share this context_state_.
   std::unique_ptr<gles2::ContextState> context_state_;
 
-  raw_ptr<gl::ProgressReporter> progress_reporter_ = nullptr;
+  raw_ptr<gl::ProgressReporter, DanglingUntriaged> progress_reporter_ = nullptr;
   sk_sp<GrDirectContext> owned_gr_context_;
   std::unique_ptr<ServiceTransferCache> transfer_cache_;
   uint64_t skia_gr_cache_size_ = 0;
   std::vector<uint8_t> scratch_deserialization_buffer_;
-  raw_ptr<gpu::raster::GrShaderCache> gr_shader_cache_ = nullptr;
+  raw_ptr<gpu::raster::GrShaderCache, DanglingUntriaged> gr_shader_cache_ =
+      nullptr;
+  raw_ptr<GpuProcessShmCount, DanglingUntriaged> use_shader_cache_shm_count_ =
+      nullptr;
 
   // |need_context_state_reset| is set whenever Skia may have altered the
   // driver's GL state.
   bool need_context_state_reset_ = false;
 
-  absl::optional<error::ContextLostReason> context_lost_reason_;
+  std::optional<error::ContextLostReason> context_lost_reason_;
   base::ObserverList<ContextLostObserver>::Unchecked context_lost_observers_;
 
   base::LRUCache<void*, sk_sp<SkSurface>> sk_surface_cache_;
@@ -361,7 +417,12 @@ class GPU_GLES2_EXPORT SharedContextState
   std::unique_ptr<ExternalSemaphorePool> external_semaphore_pool_;
 #endif
 
-  absl::optional<raster::GrCacheController> gr_cache_controller_;
+  std::unique_ptr<raster::GrCacheController> gr_cache_controller_;
+
+  // The graphite cache controller for |graphite_context_| and
+  // |gpu_main_graphite_recorder_|.
+  scoped_refptr<raster::GraphiteCacheController>
+      gpu_main_graphite_cache_controller_;
 
   base::WeakPtrFactory<SharedContextState> weak_ptr_factory_{this};
 };

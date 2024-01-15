@@ -4,13 +4,15 @@
 
 #include "chrome/browser/lacros/sync/sync_user_settings_client_lacros.h"
 
+#include <utility>
+
 #include "base/run_loop.h"
 #include "base/test/gmock_callback_support.h"
 #include "base/test/task_environment.h"
 #include "chromeos/crosapi/mojom/sync.mojom.h"
 #include "components/sync/test/fake_sync_mojo_service.h"
 #include "components/sync/test/fake_sync_user_settings_client_ash.h"
-#include "components/sync/test/mock_sync_service.h"
+#include "components/sync/test/sync_user_settings_mock.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -22,36 +24,23 @@ class SyncUserSettingsClientLacrosTest : public testing::Test {
   SyncUserSettingsClientLacrosTest() = default;
   ~SyncUserSettingsClientLacrosTest() override = default;
 
-  void SetUp() override {
-    sync_mojo_service_.BindReceiver(
-        sync_mojo_service_remote_.BindNewPipeAndPassReceiver());
-    client_lacros_ = std::make_unique<SyncUserSettingsClientLacros>(
-        &sync_service_, &sync_mojo_service_remote_);
+  SyncUserSettingsClientLacros CreateClientLacros() {
+    mojo::Remote<crosapi::mojom::SyncUserSettingsClient> remote;
+    client_ash_.BindReceiver(remote.BindNewPipeAndPassReceiver());
+    return SyncUserSettingsClientLacros(std::move(remote),
+                                        &sync_user_settings_);
   }
 
-  syncer::MockSyncService& sync_service() { return sync_service_; }
+  syncer::SyncUserSettingsMock& user_settings() { return sync_user_settings_; }
 
-  syncer::SyncUserSettingsMock& user_settings() {
-    return *sync_service_.GetMockUserSettings();
-  }
-
-  mojo::Remote<crosapi::mojom::SyncService>& sync_mojo_service_remote() {
-    return sync_mojo_service_remote_;
-  }
-
-  syncer::FakeSyncUserSettingsClientAsh& client_ash() {
-    return sync_mojo_service_.GetFakeSyncUserSettingsClientAsh();
-  }
+  syncer::FakeSyncUserSettingsClientAsh& client_ash() { return client_ash_; }
 
  private:
   base::test::SingleThreadTaskEnvironment task_environment_;
 
-  testing::NiceMock<syncer::MockSyncService> sync_service_;
+  testing::NiceMock<syncer::SyncUserSettingsMock> sync_user_settings_;
 
-  mojo::Remote<crosapi::mojom::SyncService> sync_mojo_service_remote_;
-  syncer::FakeSyncMojoService sync_mojo_service_;
-
-  std::unique_ptr<SyncUserSettingsClientLacros> client_lacros_;
+  syncer::FakeSyncUserSettingsClientAsh client_ash_;
 };
 
 TEST_F(SyncUserSettingsClientLacrosTest,
@@ -62,14 +51,12 @@ TEST_F(SyncUserSettingsClientLacrosTest,
       SetAppsSyncEnabledByOs(
           syncer::FakeSyncUserSettingsClientAsh::kDefaultAppsSyncIsEnabled))
       .WillOnce(base::test::RunOnceClosure(run_loop.QuitClosure()));
-  SyncUserSettingsClientLacros client_lacros(&sync_service(),
-                                             &sync_mojo_service_remote());
+  SyncUserSettingsClientLacros client_lacros = CreateClientLacros();
   run_loop.Run();
 }
 
 TEST_F(SyncUserSettingsClientLacrosTest, ShouldHandleAppsSyncEnabledChanges) {
-  SyncUserSettingsClientLacros client_lacros(&sync_service(),
-                                             &sync_mojo_service_remote());
+  SyncUserSettingsClientLacros client_lacros = CreateClientLacros();
   const bool kNonDefaultAppsSyncIsEnabled =
       !syncer::FakeSyncUserSettingsClientAsh::kDefaultAppsSyncIsEnabled;
   base::RunLoop run_loop;

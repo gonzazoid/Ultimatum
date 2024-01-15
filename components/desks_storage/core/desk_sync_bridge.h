@@ -12,15 +12,17 @@
 #include <vector>
 
 #include "base/containers/flat_map.h"
-#include "base/guid.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
 #include "base/time/time.h"
+#include "base/uuid.h"
 #include "components/account_id/account_id.h"
 #include "components/desks_storage/core/desk_model.h"
 #include "components/sync/base/model_type.h"
 #include "components/sync/model/model_type_store.h"
 #include "components/sync/model/model_type_sync_bridge.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace syncer {
 class ModelTypeChangeProcessor;
@@ -47,10 +49,10 @@ class DeskSyncBridge : public syncer::ModelTypeSyncBridge, public DeskModel {
   // syncer::ModelTypeSyncBridge overrides.
   std::unique_ptr<syncer::MetadataChangeList> CreateMetadataChangeList()
       override;
-  absl::optional<syncer::ModelError> MergeSyncData(
+  absl::optional<syncer::ModelError> MergeFullSyncData(
       std::unique_ptr<syncer::MetadataChangeList> metadata_change_list,
       syncer::EntityChangeList entity_data) override;
-  absl::optional<syncer::ModelError> ApplySyncChanges(
+  absl::optional<syncer::ModelError> ApplyIncrementalSyncChanges(
       std::unique_ptr<syncer::MetadataChangeList> metadata_change_list,
       syncer::EntityChangeList entity_changes) override;
   void GetData(StorageKeyList storage_keys, DataCallback callback) override;
@@ -61,20 +63,19 @@ class DeskSyncBridge : public syncer::ModelTypeSyncBridge, public DeskModel {
   // DeskModel overrides.
   DeskModel::GetAllEntriesResult GetAllEntries() override;
   DeskModel::GetEntryByUuidResult GetEntryByUUID(
-      const base::GUID& uuid) override;
+      const base::Uuid& uuid) override;
 
   void AddOrUpdateEntry(std::unique_ptr<ash::DeskTemplate> new_entry,
                         AddOrUpdateEntryCallback callback) override;
-  void DeleteEntry(const base::GUID& uuid,
+  void DeleteEntry(const base::Uuid& uuid,
                    DeleteEntryCallback callback) override;
   void DeleteAllEntries(DeleteEntryCallback callback) override;
   size_t GetEntryCount() const override;
-  size_t GetMaxEntryCount() const override;
   size_t GetSaveAndRecallDeskEntryCount() const override;
   size_t GetDeskTemplateEntryCount() const override;
   size_t GetMaxSaveAndRecallDeskEntryCount() const override;
   size_t GetMaxDeskTemplateEntryCount() const override;
-  std::vector<base::GUID> GetAllEntryUuids() const override;
+  std::set<base::Uuid> GetAllEntryUuids() const override;
   bool IsReady() const override;
   // Whether this sync bridge is syncing local data to sync. This sync bridge
   // still allows user to save desk templates locally when users disable syncing
@@ -84,32 +85,34 @@ class DeskSyncBridge : public syncer::ModelTypeSyncBridge, public DeskModel {
   ash::DeskTemplate* FindOtherEntryWithName(
       const std::u16string& name,
       ash::DeskTemplateType type,
-      const base::GUID& uuid) const override;
+      const base::Uuid& uuid) const override;
+
+  std::string GetCacheGuid() override;
 
   // Other helper methods.
-  bool HasUuid(const base::GUID& uuid) const;
-
-  const ash::DeskTemplate* GetUserEntryByUUID(const base::GUID& uuid) const;
+  bool HasUuid(const base::Uuid& uuid) const;
+  const ash::DeskTemplate* GetUserEntryByUUID(const base::Uuid& uuid) const;
 
  private:
   friend class DeskModelWrapper;
 
   using DeskEntries =
-      base::flat_map<base::GUID, std::unique_ptr<ash::DeskTemplate>>;
+      base::flat_map<base::Uuid, std::unique_ptr<ash::DeskTemplate>>;
 
   DeskModel::DeleteEntryStatus DeleteAllEntriesSync();
 
   // Notify all observers that the model is loaded;
   void NotifyDeskModelLoaded();
 
-  // Notify all observers of any `new_entries` when they are added/updated via
-  // sync.
+  // Notify all observers of any `new_entries` when they are added/updated
+  // via sync.
   void NotifyRemoteDeskTemplateAddedOrUpdated(
-      const std::vector<const ash::DeskTemplate*>& new_entries);
+      const std::vector<raw_ptr<const ash::DeskTemplate, VectorExperimental>>&
+          new_entries);
 
   // Notify all observers when the entries with `uuids` have been removed via
   // sync or disabling sync locally.
-  void NotifyRemoteDeskTemplateDeleted(const std::vector<base::GUID>& uuids);
+  void NotifyRemoteDeskTemplateDeleted(const std::vector<base::Uuid>& uuids);
 
   // Methods used as callbacks given to DataTypeStore.
   void OnStoreCreated(const absl::optional<syncer::ModelError>& error,
@@ -123,7 +126,7 @@ class DeskSyncBridge : public syncer::ModelTypeSyncBridge, public DeskModel {
   // Persists changes in sync store.
   void Commit(std::unique_ptr<syncer::ModelTypeStore::WriteBatch> batch);
 
-  // Uploads data that only exists locally to Sync during MergeSyncData().
+  // Uploads data that only exists locally to Sync during MergeFullSyncData().
   void UploadLocalOnlyData(syncer::MetadataChangeList* metadata_change_list,
                            const syncer::EntityChangeList& entity_data);
 
@@ -137,7 +140,8 @@ class DeskSyncBridge : public syncer::ModelTypeSyncBridge, public DeskModel {
   // is ready to be accessed.
   bool is_ready_;
 
-  // In charge of actually persisting changes to disk, or loading previous data.
+  // In charge of actually persisting changes to disk, or loading previous
+  // data.
   std::unique_ptr<syncer::ModelTypeStore> store_;
 
   // Account ID of the user this class will sync data for.

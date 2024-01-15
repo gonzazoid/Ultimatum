@@ -7,14 +7,13 @@
 #include "base/android/jni_array.h"
 #include "base/android/jni_string.h"
 #include "base/android/scoped_java_ref.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/no_destructor.h"
 #include "base/notreached.h"
 #include "base/task/cancelable_task_tracker.h"
 #include "chrome/browser/android/tab_android.h"
-#include "chrome/browser/feed/android/feed_stream.h"
 #include "chrome/browser/feed/android/jni_headers/WebFeedBridge_jni.h"
 #include "chrome/browser/feed/feed_service_factory.h"
 #include "chrome/browser/feed/web_feed_page_information_fetcher.h"
@@ -22,10 +21,12 @@
 #include "chrome/browser/history/history_service_factory.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_manager.h"
+#include "components/country_codes/country_codes.h"
 #include "components/feed/core/v2/config.h"
 #include "components/feed/core/v2/public/feed_service.h"
 #include "components/feed/core/v2/public/types.h"
 #include "components/feed/core/v2/public/web_feed_subscriptions.h"
+#include "components/feed/feed_feature_list.h"
 #include "components/feed/mojom/rss_link_reader.mojom.h"
 #include "components/history/core/browser/history_service.h"
 #include "components/history/core/browser/history_types.h"
@@ -135,6 +136,15 @@ base::android::ScopedJavaLocalRef<jobject> ToJava(
 
 base::android::ScopedJavaLocalRef<jobject> ToJava(
     JNIEnv* env,
+    const WebFeedSubscriptions::QueryWebFeedResult& result) {
+  return Java_QueryResult_Constructor(
+      env, base::android::ConvertUTF8ToJavaString(env, result.web_feed_id),
+      base::android::ConvertUTF8ToJavaString(env, result.title),
+      base::android::ConvertUTF8ToJavaString(env, result.url));
+}
+
+base::android::ScopedJavaLocalRef<jobject> ToJava(
+    JNIEnv* env,
     history::DailyVisitsResult result) {
   return base::android::ToJavaIntArray(
       env, std::vector<int>({result.total_visits, result.days_with_visits}));
@@ -146,6 +156,19 @@ base::OnceCallback<void(WebFeedMetadata)> AdaptWebFeedMetadataCallback(
                     WebFeedMetadata metadata) {
     JNIEnv* env = base::android::AttachCurrentThread();
     base::android::RunObjectCallbackAndroid(callback, ToJava(env, metadata));
+  };
+
+  return base::BindOnce(adaptor,
+                        base::android::ScopedJavaGlobalRef<jobject>(callback));
+}
+
+base::OnceCallback<void(WebFeedSubscriptions::QueryWebFeedResult)>
+AdaptQueryWebFeedResultCallback(
+    const base::android::JavaParamRef<jobject>& callback) {
+  auto adaptor = [](const base::android::JavaRef<jobject>& callback,
+                    WebFeedSubscriptions::QueryWebFeedResult result) {
+    JNIEnv* env = base::android::AttachCurrentThread();
+    base::android::RunObjectCallbackAndroid(callback, ToJava(env, result));
   };
 
   return base::BindOnce(adaptor,
@@ -197,6 +220,11 @@ static void JNI_WebFeedBridge_FollowWebFeed(
       page_info.web_contents,
       static_cast<feedwire::webfeed::WebFeedChangeReason>(change_reason),
       std::move(callback));
+}
+
+static jboolean JNI_WebFeedBridge_IsCormorantEnabledForLocale(JNIEnv* env) {
+  return feed::IsCormorantEnabledForLocale(
+      country_codes::GetCurrentCountryCode());
 }
 
 static void JNI_WebFeedBridge_FollowWebFeedById(
@@ -351,4 +379,34 @@ static void JNI_WebFeedBridge_IncrementFollowedFromWebPageMenuCount(
   stream->IncrementFollowedFromWebPageMenuCount();
 }
 
+static void JNI_WebFeedBridge_QueryWebFeed(
+    JNIEnv* env,
+    const base::android::JavaParamRef<jstring>& url,
+    const base::android::JavaParamRef<jobject>& j_callback) {
+  base::OnceCallback<void(WebFeedSubscriptions::QueryWebFeedResult)> callback =
+      AdaptQueryWebFeedResultCallback(j_callback);
+  WebFeedSubscriptions* subscriptions = GetSubscriptions();
+  if (!subscriptions) {
+    std::move(callback).Run({});
+    return;
+  }
+  subscriptions->QueryWebFeed(
+      GURL(base::android::ConvertJavaStringToUTF8(env, url)),
+      std::move(callback));
+}
+
+static void JNI_WebFeedBridge_QueryWebFeedId(
+    JNIEnv* env,
+    const base::android::JavaParamRef<jstring>& id,
+    const base::android::JavaParamRef<jobject>& j_callback) {
+  base::OnceCallback<void(WebFeedSubscriptions::QueryWebFeedResult)> callback =
+      AdaptQueryWebFeedResultCallback(j_callback);
+  WebFeedSubscriptions* subscriptions = GetSubscriptions();
+  if (!subscriptions) {
+    std::move(callback).Run({});
+    return;
+  }
+  subscriptions->QueryWebFeedId(base::android::ConvertJavaStringToUTF8(env, id),
+                                std::move(callback));
+}
 }  // namespace feed

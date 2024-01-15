@@ -22,6 +22,7 @@ class ContextProviderCommandBuffer;
 }  // namespace viz
 
 namespace gpu {
+class ContextSupport;
 class GLHelper;
 }  // namespace gpu
 
@@ -47,6 +48,7 @@ class WebGraphicsContext3DProviderImpl
   gpu::gles2::GLES2Interface* ContextGL() override;
   gpu::raster::RasterInterface* RasterInterface() override;
   gpu::webgpu::WebGPUInterface* WebGPUInterface() override;
+  gpu::ContextSupport* ContextSupport() override;
   bool IsContextLost() override;
   GrDirectContext* GetGrContext() override;
   const gpu::Capabilities& GetCapabilities() const override;
@@ -62,6 +64,8 @@ class WebGraphicsContext3DProviderImpl
                       media::VideoFrame* video_frame,
                       cc::PaintCanvas* canvas) override;
   viz::RasterContextProvider* RasterContextProvider() const override;
+  unsigned int GetGrGLTextureFormat(
+      viz::SharedImageFormat format) const override;
 
  private:
   // viz::ContextLostObserver implementation.

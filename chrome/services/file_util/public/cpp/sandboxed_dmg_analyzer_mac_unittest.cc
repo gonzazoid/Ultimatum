@@ -7,23 +7,27 @@
 #include <mach-o/loader.h>
 #include <stdint.h>
 
-#include "base/bind.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/path_service.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
 #include "chrome/common/chrome_paths.h"
 #include "chrome/common/safe_browsing/archive_analyzer_results.h"
+#include "chrome/services/file_util/fake_file_util_service.h"
 #include "chrome/services/file_util/file_util_service.h"
 #include "components/safe_browsing/content/common/file_type_policies.h"
 #include "content/public/test/browser_task_environment.h"
 #include "content/public/test/test_utils.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
+#include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace {
+
+using ::testing::_;
 
 class SandboxedDMGAnalyzerTest : public testing::Test {
  public:
@@ -36,11 +40,12 @@ class SandboxedDMGAnalyzerTest : public testing::Test {
     FileUtilService service(remote.InitWithNewPipeAndPassReceiver());
     base::RunLoop run_loop;
     ResultsGetter results_getter(run_loop.QuitClosure(), results);
-    scoped_refptr<SandboxedDMGAnalyzer> analyzer(new SandboxedDMGAnalyzer(
-        path,
-        safe_browsing::FileTypePolicies::GetInstance()->GetMaxFileSizeToAnalyze(
-            "dmg"),
-        results_getter.GetCallback(), std::move(remote)));
+    std::unique_ptr<SandboxedDMGAnalyzer, base::OnTaskRunnerDeleter> analyzer =
+        SandboxedDMGAnalyzer::CreateAnalyzer(
+            path,
+            safe_browsing::FileTypePolicies::GetInstance()
+                ->GetMaxFileSizeToAnalyze("dmg"),
+            results_getter.GetCallback(), std::move(remote));
     analyzer->Start();
     run_loop.Run();
   }
@@ -97,7 +102,7 @@ TEST_F(SandboxedDMGAnalyzerTest, AnalyzeDMG) {
 
   bool got_executable = false, got_dylib = false;
   for (const auto& binary : results.archived_binary) {
-    const std::string& file_name = binary.file_basename();
+    const std::string& file_name = binary.file_path();
     const google::protobuf::RepeatedPtrField<
         safe_browsing::ClientDownloadRequest_MachOHeaders>& headers =
         binary.image_headers().mach_o_headers();
@@ -144,7 +149,7 @@ TEST_F(SandboxedDMGAnalyzerTest, AnalyzeDMG) {
           "2012CE4987B0FA4A5D285DF7E810560E841CFAB3054BC19E1AAB345F862A6C4E",
           actual_sha256);
     } else {
-      ADD_FAILURE() << "Unexpected result file " << binary.file_basename();
+      ADD_FAILURE() << "Unexpected result file " << binary.file_path();
     }
   }
 
@@ -174,7 +179,7 @@ TEST_F(SandboxedDMGAnalyzerTest, AnalyzeDMGNoPartitionName) {
 
   bool got_executable = false, got_dylib = false;
   for (const auto& binary : results.archived_binary) {
-    const std::string& file_name = binary.file_basename();
+    const std::string& file_name = binary.file_path();
     const google::protobuf::RepeatedPtrField<
         safe_browsing::ClientDownloadRequest_MachOHeaders>& headers =
         binary.image_headers().mach_o_headers();
@@ -221,7 +226,7 @@ TEST_F(SandboxedDMGAnalyzerTest, AnalyzeDMGNoPartitionName) {
           "2012CE4987B0FA4A5D285DF7E810560E841CFAB3054BC19E1AAB345F862A6C4E",
           actual_sha256);
     } else {
-      ADD_FAILURE() << "Unexpected result file " << binary.file_basename();
+      ADD_FAILURE() << "Unexpected result file " << binary.file_path();
     }
   }
 
@@ -275,6 +280,49 @@ TEST_F(SandboxedDMGAnalyzerTest, AnalyzeDmgWithSignature) {
   std::string signature(results.signature_blob.begin(),
                         results.signature_blob.end());
   EXPECT_EQ(from_file, signature);
+}
+
+TEST_F(SandboxedDMGAnalyzerTest, CanDeleteDuringExecution) {
+  base::FilePath file_path;
+  ASSERT_NO_FATAL_FAILURE(file_path = GetFilePath("mach_o_in_dmg.dmg"));
+  base::FilePath temp_path;
+  ASSERT_TRUE(base::CreateTemporaryFile(&temp_path));
+  ASSERT_TRUE(base::CopyFile(file_path, temp_path));
+
+  mojo::PendingRemote<chrome::mojom::FileUtilService> remote;
+  base::RunLoop run_loop;
+
+  FakeFileUtilService service(remote.InitWithNewPipeAndPassReceiver());
+  EXPECT_CALL(service.GetSafeArchiveAnalyzer(), AnalyzeDmgFile(_, _, _))
+      .WillOnce([&](base::File dmg_file,
+                    mojo::PendingRemote<chrome::mojom::TemporaryFileGetter>,
+                    chrome::mojom::SafeArchiveAnalyzer::AnalyzeDmgFileCallback
+                        callback) {
+        EXPECT_TRUE(base::DeleteFile(temp_path));
+        std::move(callback).Run(safe_browsing::ArchiveAnalyzerResults());
+        run_loop.Quit();
+      });
+  std::unique_ptr<SandboxedDMGAnalyzer, base::OnTaskRunnerDeleter> analyzer =
+      SandboxedDMGAnalyzer::CreateAnalyzer(
+          temp_path,
+          safe_browsing::FileTypePolicies::GetInstance()
+              ->GetMaxFileSizeToAnalyze("dmg"),
+          base::DoNothing(), std::move(remote));
+  analyzer->Start();
+  run_loop.Run();
+}
+
+TEST_F(SandboxedDMGAnalyzerTest, InvalidPath) {
+  base::FilePath file_path;
+  EXPECT_TRUE(base::PathService::Get(chrome::DIR_TEST_DATA, &file_path));
+  file_path = file_path.AppendASCII("does_not_exist");
+
+  safe_browsing::ArchiveAnalyzerResults results;
+  AnalyzeFile(file_path, &results);
+
+  EXPECT_FALSE(results.success);
+  EXPECT_EQ(results.analysis_result,
+            safe_browsing::ArchiveAnalysisResult::kFailedToOpen);
 }
 
 }  // namespace

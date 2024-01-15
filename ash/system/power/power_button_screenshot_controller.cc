@@ -8,21 +8,16 @@
 #include "ash/public/cpp/window_properties.h"
 #include "ash/shell.h"
 #include "ash/system/power/power_button_controller.h"
-#include "ash/wm/tablet_mode/tablet_mode_controller.h"
 #include "ash/wm/window_util.h"
-#include "base/bind.h"
-#include "base/metrics/histogram_macros.h"
+#include "base/functional/bind.h"
 #include "base/metrics/user_metrics.h"
 #include "base/time/tick_clock.h"
+#include "ui/display/screen.h"
 #include "ui/events/event.h"
 
 namespace ash {
 
 namespace {
-
-bool IsTabletMode() {
-  return Shell::Get()->tablet_mode_controller()->InTabletMode();
-}
 
 bool VolumeKeyMaybeUsedByApp() {
   aura::Window* active = window_util::GetActiveWindow();
@@ -50,8 +45,9 @@ PowerButtonScreenshotController::~PowerButtonScreenshotController() {
 bool PowerButtonScreenshotController::OnPowerButtonEvent(
     bool down,
     const base::TimeTicks& timestamp) {
-  if (!IsTabletMode())
+  if (!display::Screen::GetScreen()->InTabletMode()) {
     return false;
+  }
 
   power_button_pressed_ = down;
   if (power_button_pressed_) {
@@ -71,8 +67,9 @@ bool PowerButtonScreenshotController::OnPowerButtonEvent(
 }
 
 void PowerButtonScreenshotController::OnKeyEvent(ui::KeyEvent* event) {
-  if (!IsTabletMode())
+  if (!display::Screen::GetScreen()->InTabletMode()) {
     return;
+  }
 
   ui::KeyboardCode key_code = event->key_code();
   if (key_code != ui::VKEY_VOLUME_DOWN && key_code != ui::VKEY_VOLUME_UP)
@@ -158,16 +155,6 @@ bool PowerButtonScreenshotController::InterceptScreenshotChord() {
     return false;
   }
 
-  // Record the delay when power button and volume down/up key are both pressed,
-  // which indicates user might want to use accelerator to take screenshot.
-  // This will help us determine the best chord delay among metrics.
-  const base::TimeDelta key_pressed_delay =
-      volume_down_key_pressed_
-          ? power_button_pressed_time_ - volume_down_key_pressed_time_
-          : power_button_pressed_time_ - volume_up_key_pressed_time_;
-  UMA_HISTOGRAM_TIMES("Ash.PowerButtonScreenshot.DelayBetweenAccelKeyPressed",
-                      key_pressed_delay.magnitude());
-
   base::TimeTicks now = tick_clock_->NowTicks();
   if (now > power_button_pressed_time_ + kScreenshotChordDelay)
     return false;
@@ -180,7 +167,7 @@ bool PowerButtonScreenshotController::InterceptScreenshotChord() {
       now <= volume_up_key_pressed_time_ + kScreenshotChordDelay;
   if (consume_volume_down_ || consume_volume_up_) {
     Shell::Get()->accelerator_controller()->PerformActionIfEnabled(
-        TAKE_SCREENSHOT, {});
+        AcceleratorAction::kTakeScreenshot, {});
 
     base::RecordAction(base::UserMetricsAction("Accel_PowerButton_Screenshot"));
   }
@@ -191,7 +178,8 @@ void PowerButtonScreenshotController::OnVolumeControlTimeout(
     const ui::Accelerator& accelerator,
     bool down) {
   Shell::Get()->accelerator_controller()->PerformActionIfEnabled(
-      down ? VOLUME_DOWN : VOLUME_UP, accelerator);
+      down ? AcceleratorAction::kVolumeDown : AcceleratorAction::kVolumeUp,
+      accelerator);
 }
 
 }  // namespace ash

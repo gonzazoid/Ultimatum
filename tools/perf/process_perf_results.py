@@ -122,6 +122,17 @@ def _upload_perf_results(json_to_upload, name, configuration_name,
   #TODO(crbug.com/1072729): log this in top level
   logging.info('upload_results_to_perf_dashboard: %s.' % args)
 
+  # Duplicate part of the results upload to staging.
+  if configuration_name == 'linux-perf-fyi' and name == 'system_health.common_desktop':
+    try:
+      RESULTS_URL_STAGE = 'https://chromeperf-stage.uc.r.appspot.com'
+      staging_args = [(s if s != RESULTS_URL else RESULTS_URL_STAGE)
+                      for s in args]
+      result = upload_results_to_perf_dashboard.main(staging_args)
+      logging.info('Uploaded results to staging. Return value: %d', result)
+    except Exception as e:
+      logging.info('Failed to upload results to staging: %s', str(e))
+
   return upload_results_to_perf_dashboard.main(args)
 
 def _is_histogram(json_file):
@@ -705,15 +716,18 @@ def _write_perf_data_to_logfile(benchmark_name, output_file,
         logging.error('Error parsing perf results JSON for benchmark  %s' %
               benchmark_name)
     if results:
-      try:
-        output_json_file = logdog_helper.open_text(benchmark_name)
-        json.dump(results, output_json_file,
-                  indent=4, separators=(',', ': '))
-      except ValueError as e:
-        logging.error('ValueError: "%s" while dumping output to logdog' % e)
-      finally:
-        output_json_file.close()
-      viewer_url = output_json_file.get_viewer_url()
+      output_json_file = logdog_helper.open_text(benchmark_name)
+      if output_json_file:
+        viewer_url = output_json_file.get_viewer_url()
+        try:
+          json.dump(results, output_json_file, indent=4, separators=(',', ': '))
+        except ValueError as e:
+          logging.error('ValueError: "%s" while dumping output to logdog' % e)
+        finally:
+          output_json_file.close()
+      else:
+        logging.warning('Could not open output JSON file for benchmark %s' %
+                        benchmark_name)
   else:
     logging.warning("Perf results JSON file doesn't exist for benchmark %s" %
           benchmark_name)

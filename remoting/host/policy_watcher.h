@@ -7,9 +7,9 @@
 
 #include <memory>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/sequence_checker.h"
 #include "base/values.h"
 #include "build/build_config.h"
@@ -37,11 +37,11 @@ namespace remoting {
 class PolicyWatcher : public policy::PolicyService::Observer {
  public:
   // Called first with all policies, and subsequently with any changed policies.
-  typedef base::RepeatingCallback<void(base::Value::Dict)>
-      PolicyUpdatedCallback;
+  using PolicyUpdatedCallback =
+      base::RepeatingCallback<void(base::Value::Dict)>;
 
   // Called after detecting malformed policies.
-  typedef base::RepeatingCallback<void()> PolicyErrorCallback;
+  using PolicyErrorCallback = base::RepeatingCallback<void()>;
 
   PolicyWatcher(const PolicyWatcher&) = delete;
   PolicyWatcher& operator=(const PolicyWatcher&) = delete;
@@ -55,7 +55,7 @@ class PolicyWatcher : public policy::PolicyService::Observer {
   //
   // |policy_error_callback| will be called when malformed policies are detected
   // (i.e. wrong type of policy value, or unparseable files under
-  // /etc/opt/chrome/policies/managed).
+  // $POLICY_PATH/managed).
   // When called, the |policy_error_callback| is responsible for mitigating the
   // security risk of running with incorrectly formulated policies (by either
   // shutting down or locking down the host).
@@ -173,15 +173,15 @@ class PolicyWatcher : public policy::PolicyService::Observer {
   // The set of policy values to use if a policy has not been explicitly set.
   base::Value::Dict default_values_;
 
-  raw_ptr<policy::PolicyService> policy_service_;
-
   // Order of fields below is important to ensure destruction takes object
   // dependencies into account:
+  // - |policy_service_| may be |owned_policy_service_|.
   // - |owned_policy_service_| uses |owned_policy_provider_|
   // - |owned_policy_provider_| uses |owned_schema_registry_|
   std::unique_ptr<policy::SchemaRegistry> owned_schema_registry_;
   std::unique_ptr<policy::ConfigurationPolicyProvider> owned_policy_provider_;
   std::unique_ptr<policy::PolicyService> owned_policy_service_;
+  raw_ptr<policy::PolicyService> policy_service_;
 
 #if BUILDFLAG(IS_WIN)
   // |policy_key_| relies on |policy_service_| to notify the host of policy

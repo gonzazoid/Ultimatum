@@ -5,6 +5,8 @@
 #ifndef UI_EVENTS_OZONE_EVDEV_TABLET_EVENT_CONVERTER_EVDEV_H_
 #define UI_EVENTS_OZONE_EVDEV_TABLET_EVENT_CONVERTER_EVDEV_H_
 
+#include <ostream>
+
 #include "base/component_export.h"
 #include "base/files/file_path.h"
 #include "base/files/scoped_file.h"
@@ -40,8 +42,11 @@ class COMPONENT_EXPORT(EVDEV) TabletEventConverterEvdev
 
   // EventConverterEvdev:
   void OnFileCanReadWithoutBlocking(int fd) override;
+  bool HasGraphicsTablet() const override;
 
   void ProcessEvents(const struct input_event* inputs, int count);
+
+  std::ostream& DescribeForLog(std::ostream& os) const override;
 
  private:
   friend class MockTabletEventConverterEvdev;
@@ -83,8 +88,9 @@ class COMPONENT_EXPORT(EVDEV) TabletEventConverterEvdev
   float pressure_ = 0.0f;
   int pressure_max_;
 
-  // BTN_TOOL_ code for the active device
-  int stylus_ = 0;
+  // Bitfield of currently active tools, with BTN_TOOL_PEN in the least
+  // significant bit up to BTN_TOOL_LENS in the most significant bit.
+  uint8_t active_tools_ = 0;
 
   // Whether we need to move the cursor
   bool abs_value_dirty_ = false;

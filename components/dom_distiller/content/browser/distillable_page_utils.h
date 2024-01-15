@@ -7,7 +7,7 @@
 
 #include <ostream>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/observer_list_types.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
@@ -31,6 +31,7 @@ void IsDistillablePageForDetector(content::WebContents* web_contents,
 struct DistillabilityResult {
   bool is_distillable;
   bool is_last;
+  bool is_long_article;
   bool is_mobile_friendly;
 };
 

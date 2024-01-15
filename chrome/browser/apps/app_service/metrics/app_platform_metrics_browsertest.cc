@@ -6,14 +6,14 @@
 
 #include <memory>
 
+#include "ash/webui/system_apps/public/system_web_app_type.h"
 #include "chrome/browser/apps/app_service/app_service_proxy.h"
 #include "chrome/browser/apps/app_service/app_service_proxy_factory.h"
 #include "chrome/browser/ash/system_web_apps/system_web_app_manager.h"
-#include "chrome/browser/ash/system_web_apps/types/system_web_app_type.h"
 #include "chrome/browser/ui/ash/system_web_apps/system_web_app_ui_utils.h"
 #include "chrome/browser/ui/browser.h"
+#include "chrome/browser/web_applications/mojom/user_display_mode.mojom.h"
 #include "chrome/browser/web_applications/test/web_app_install_test_utils.h"
-#include "chrome/browser/web_applications/user_display_mode.h"
 #include "chrome/browser/web_applications/web_app_install_info.h"
 #include "chrome/browser/web_applications/web_app_provider.h"
 #include "chrome/test/base/in_process_browser_test.h"
@@ -23,14 +23,14 @@
 #include "url/gurl.h"
 
 using apps::GetAppTypeName;
-using web_app::AppId;
+using webapps::AppId;
 
 class AppPlatformMetricsBrowserTest : public InProcessBrowserTest {
  public:
   AppId InstallWebApp(const GURL& start_url,
                       blink::mojom::DisplayMode display_mode,
-                      web_app::UserDisplayMode user_display_mode) {
-    auto web_app_info = std::make_unique<WebAppInstallInfo>();
+                      web_app::mojom::UserDisplayMode user_display_mode) {
+    auto web_app_info = std::make_unique<web_app::WebAppInstallInfo>();
     web_app_info->start_url = start_url;
     web_app_info->scope = start_url.GetWithoutFilename();
     web_app_info->display_mode = display_mode;
@@ -107,10 +107,10 @@ IN_PROC_BROWSER_TEST_F(AppPlatformMetricsBrowserTest, WindowedWebApps) {
   const AppId standalone_app_id = InstallWebApp(
       GURL("https://standalone.example.com/"),
       blink::mojom::DisplayMode::kStandalone,
-      /*user_display_mode=*/web_app::UserDisplayMode::kStandalone);
+      /*user_display_mode=*/web_app::mojom::UserDisplayMode::kStandalone);
   const AppId browser_app_id = InstallWebApp(
       GURL("https://browser.example.com/"), blink::mojom::DisplayMode::kBrowser,
-      /*user_display_mode=*/web_app::UserDisplayMode::kStandalone);
+      /*user_display_mode=*/web_app::mojom::UserDisplayMode::kStandalone);
 
   // When container is specified, |user_display_mode| and |display_mode| are
   // ignored.
@@ -144,13 +144,13 @@ IN_PROC_BROWSER_TEST_F(AppPlatformMetricsBrowserTest, WindowedWebApps) {
 }
 
 IN_PROC_BROWSER_TEST_F(AppPlatformMetricsBrowserTest, TabbedWebApps) {
-  const AppId standalone_app_id =
-      InstallWebApp(GURL("https://standalone.example.com/"),
-                    blink::mojom::DisplayMode::kStandalone,
-                    /*user_display_mode=*/web_app::UserDisplayMode::kBrowser);
+  const AppId standalone_app_id = InstallWebApp(
+      GURL("https://standalone.example.com/"),
+      blink::mojom::DisplayMode::kStandalone,
+      /*user_display_mode=*/web_app::mojom::UserDisplayMode::kBrowser);
   const AppId browser_app_id = InstallWebApp(
       GURL("https://browser.example.com/"), blink::mojom::DisplayMode::kBrowser,
-      /*user_display_mode=*/web_app::UserDisplayMode::kBrowser);
+      /*user_display_mode=*/web_app::mojom::UserDisplayMode::kBrowser);
 
   // When container is specified, |user_display_mode| and |display_mode| are
   // ignored.

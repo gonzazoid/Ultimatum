@@ -98,13 +98,8 @@ CookieSameSite StringToCookieSameSite(const std::string& same_site,
   return samesite;
 }
 
-void RecordCookieSameSiteAttributeValueHistogram(CookieSameSiteString value,
-                                                 bool is_cookie_same_party) {
+void RecordCookieSameSiteAttributeValueHistogram(CookieSameSiteString value) {
   UMA_HISTOGRAM_ENUMERATION("Cookie.SameSiteAttributeValue", value);
-  if (is_cookie_same_party) {
-    base::UmaHistogramEnumeration(
-        "Cookie.SamePartyCookieSameSiteAttributeValue", value);
-  }
 }
 
 CookiePort ReducePortRangeForCookieHistogram(const int port) {
@@ -337,8 +332,6 @@ CookieSourceSchemeName GetSchemeNameEnum(const GURL& url) {
     return CookieSourceSchemeName::kJavaScriptScheme;
   } else if (url.SchemeIs(url::kMailToScheme)) {
     return CookieSourceSchemeName::kMailToScheme;
-  } else if (url.SchemeIs(url::kQuicTransportScheme)) {
-    return CookieSourceSchemeName::kQuicTransportScheme;
   } else if (url.SchemeIs(url::kTelScheme)) {
     return CookieSourceSchemeName::kTelScheme;
   } else if (url.SchemeIs(url::kUrnScheme)) {

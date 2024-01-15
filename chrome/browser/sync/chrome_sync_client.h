@@ -54,26 +54,24 @@ class ChromeSyncClient : public browser_sync::BrowserSyncClient {
   syncer::DeviceInfoSyncService* GetDeviceInfoSyncService() override;
   favicon::FaviconService* GetFaviconService() override;
   history::HistoryService* GetHistoryService() override;
+  ReadingListModel* GetReadingListModel() override;
   send_tab_to_self::SendTabToSelfSyncService* GetSendTabToSelfSyncService()
       override;
   sync_sessions::SessionSyncService* GetSessionSyncService() override;
+  password_manager::PasswordReceiverService* GetPasswordReceiverService()
+      override;
+  password_manager::PasswordSenderService* GetPasswordSenderService() override;
   sync_preferences::PrefServiceSyncable* GetPrefServiceSyncable() override;
   syncer::DataTypeController::TypeVector CreateDataTypeControllers(
       syncer::SyncService* sync_service) override;
-  syncer::TrustedVaultClient* GetTrustedVaultClient() override;
-  invalidation::InvalidationService* GetInvalidationService() override;
+  trusted_vault::TrustedVaultClient* GetTrustedVaultClient() override;
   syncer::SyncInvalidationsService* GetSyncInvalidationsService() override;
   scoped_refptr<syncer::ExtensionsActivity> GetExtensionsActivity() override;
   base::WeakPtr<syncer::ModelTypeControllerDelegate>
   GetControllerDelegateForModelType(syncer::ModelType type) override;
   syncer::SyncApiComponentFactory* GetSyncApiComponentFactory() override;
-  syncer::SyncTypePreferenceProvider* GetPreferenceProvider() override;
+  bool IsCustomPassphraseAllowed() override;
   void OnLocalSyncTransportDataCleared() override;
-
-#if BUILDFLAG(IS_CHROMEOS_LACROS)
-  // Allow app sync on profiles other than the main profile.
-  static void SkipMainProfileCheckForTesting();
-#endif
 
  private:
   // Convenience function used during controller creation.
@@ -97,8 +95,6 @@ class ChromeSyncClient : public browser_sync::BrowserSyncClient {
 
   // The sync api component factory in use by this client.
   std::unique_ptr<browser_sync::SyncApiComponentFactoryImpl> component_factory_;
-
-  std::unique_ptr<syncer::TrustedVaultClient> trusted_vault_client_;
 
   // Members that must be fetched on the UI thread but accessed on their
   // respective backend threads.

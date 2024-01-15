@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/task/single_thread_task_runner.h"
 
 namespace media {
@@ -18,6 +18,13 @@ VideoFrameReceiverOnTaskRunner::VideoFrameReceiverOnTaskRunner(
 
 VideoFrameReceiverOnTaskRunner::~VideoFrameReceiverOnTaskRunner() = default;
 
+void VideoFrameReceiverOnTaskRunner::OnCaptureConfigurationChanged() {
+  task_runner_->PostTask(
+      FROM_HERE,
+      base::BindOnce(&VideoFrameReceiver::OnCaptureConfigurationChanged,
+                     receiver_));
+}
+
 void VideoFrameReceiverOnTaskRunner::OnNewBuffer(
     int buffer_id,
     media::mojom::VideoBufferHandlePtr buffer_handle) {
@@ -27,12 +34,10 @@ void VideoFrameReceiverOnTaskRunner::OnNewBuffer(
 }
 
 void VideoFrameReceiverOnTaskRunner::OnFrameReadyInBuffer(
-    ReadyFrameInBuffer frame,
-    std::vector<ReadyFrameInBuffer> scaled_frames) {
+    ReadyFrameInBuffer frame) {
   task_runner_->PostTask(
-      FROM_HERE,
-      base::BindOnce(&VideoFrameReceiver::OnFrameReadyInBuffer, receiver_,
-                     std::move(frame), std::move(scaled_frames)));
+      FROM_HERE, base::BindOnce(&VideoFrameReceiver::OnFrameReadyInBuffer,
+                                receiver_, std::move(frame)));
 }
 
 void VideoFrameReceiverOnTaskRunner::OnBufferRetired(int buffer_id) {
@@ -53,10 +58,12 @@ void VideoFrameReceiverOnTaskRunner::OnFrameDropped(
       base::BindOnce(&VideoFrameReceiver::OnFrameDropped, receiver_, reason));
 }
 
-void VideoFrameReceiverOnTaskRunner::OnNewCropVersion(uint32_t crop_version) {
-  task_runner_->PostTask(FROM_HERE,
-                         base::BindOnce(&VideoFrameReceiver::OnNewCropVersion,
-                                        receiver_, crop_version));
+void VideoFrameReceiverOnTaskRunner::OnNewSubCaptureTargetVersion(
+    uint32_t sub_capture_target_version) {
+  task_runner_->PostTask(
+      FROM_HERE,
+      base::BindOnce(&VideoFrameReceiver::OnNewSubCaptureTargetVersion,
+                     receiver_, sub_capture_target_version));
 }
 
 void VideoFrameReceiverOnTaskRunner::OnFrameWithEmptyRegionCapture() {

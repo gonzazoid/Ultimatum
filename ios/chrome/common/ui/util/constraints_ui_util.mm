@@ -8,10 +8,6 @@
 
 #import "base/check.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 @implementation ComposedEdgeLayoutGuide
 - (NSLayoutXAxisAnchor*)leadingAnchor {
   return self.leadingAnchorProvider.leadingAnchor
@@ -120,7 +116,7 @@ void AddSameConstraints(id<EdgeLayoutGuideProvider> view1,
 
 void AddSameConstraintsWithInsets(id<EdgeLayoutGuideProvider> innerView,
                                   id<EdgeLayoutGuideProvider> outerView,
-                                  ChromeDirectionalEdgeInsets insets) {
+                                  NSDirectionalEdgeInsets insets) {
   AddSameConstraintsToSidesWithInsets(
       innerView, outerView,
       (LayoutSides::kTop | LayoutSides::kLeading | LayoutSides::kBottom |
@@ -135,14 +131,14 @@ void PinToSafeArea(id<EdgeLayoutGuideProvider> innerView, UIView* outerView) {
 void AddSameConstraintsToSides(id<EdgeLayoutGuideProvider> view1,
                                id<EdgeLayoutGuideProvider> view2,
                                LayoutSides side_flags) {
-  AddSameConstraintsToSidesWithInsets(
-      view1, view2, side_flags, ChromeDirectionalEdgeInsetsMake(0, 0, 0, 0));
+  AddSameConstraintsToSidesWithInsets(view1, view2, side_flags,
+                                      NSDirectionalEdgeInsetsZero);
 }
 
 void AddSameConstraintsToSidesWithInsets(id<EdgeLayoutGuideProvider> innerView,
                                          id<EdgeLayoutGuideProvider> outerView,
                                          LayoutSides side_flags,
-                                         ChromeDirectionalEdgeInsets insets) {
+                                         NSDirectionalEdgeInsets insets) {
   NSMutableArray* constraints = [[NSMutableArray alloc] init];
   if (IsLayoutSidesMaskSet(side_flags, LayoutSides::kTop)) {
     [constraints addObject:[innerView.topAnchor

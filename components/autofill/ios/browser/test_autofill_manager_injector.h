@@ -9,6 +9,7 @@
 #include "components/autofill/core/browser/autofill_client.h"
 #include "components/autofill/core/browser/browser_autofill_manager.h"
 #include "components/autofill/ios/browser/autofill_driver_ios.h"
+#import "components/autofill/ios/browser/autofill_java_script_feature.h"
 #import "ios/web/public/js_messaging/web_frame.h"
 #import "ios/web/public/js_messaging/web_frames_manager.h"
 #import "ios/web/public/web_state.h"
@@ -16,8 +17,9 @@
 
 namespace autofill {
 
-// Upon construction, and in response to WebFrameDidBecomeAvailable, installs an
-// BrowserAutofillManager of type `T`.
+// Upon construction, and in response to WebFrameBecameAvailable, installs an
+// BrowserAutofillManager of type `T` in the main frame of the given `web_state`
+// and all subsequently created frames of the `web_state`.
 //
 // Typical usage as a RAII type:
 //
@@ -25,8 +27,7 @@ namespace autofill {
 //    public:
 //     MockAutofillManager(AutofillDriverIOS* driver,
 //                         AutofillClient* client)
-//         : BrowserAutofillManager(driver, client, "en-US",
-//                                  EnableDownloadManager(true)) {}
+//         : BrowserAutofillManager(driver, client, "en-US") {}
 //     MOCK_METHOD(...);
 //     ...
 //   };
@@ -34,14 +35,18 @@ namespace autofill {
 //   TestAutofillManagerInjector<MockAutofillManager> injector(web_state());
 //   NavigateToURL(...);
 template <typename T>
-class TestAutofillManagerInjector : public web::WebStateObserver {
+class TestAutofillManagerInjector : public web::WebFramesManager::Observer,
+                                    public web::WebStateObserver {
  public:
   // Builds the managers using `T(AutofillDriverIOS*, AutofillClient*)`.
   explicit TestAutofillManagerInjector(web::WebState* web_state)
       : web_state_(web_state) {
-    observation_.Observe(web_state);
-    if (web::WebFrame* main_frame =
-            web_state->GetWebFramesManager()->GetMainWebFrame()) {
+    web_state_observation_.Observe(web_state);
+    web::WebFramesManager* frames_manager =
+        AutofillJavaScriptFeature::GetInstance()->GetWebFramesManager(
+            web_state);
+    frames_manager_observation_.Observe(frames_manager);
+    if (web::WebFrame* main_frame = frames_manager->GetMainWebFrame()) {
       Inject(main_frame);
     }
   }
@@ -49,25 +54,30 @@ class TestAutofillManagerInjector : public web::WebStateObserver {
   ~TestAutofillManagerInjector() override = default;
 
   T* GetForMainFrame() {
-    return GetForFrame(web_state_->GetWebFramesManager()->GetMainWebFrame());
+    web::WebFramesManager* frames_manager =
+        AutofillJavaScriptFeature::GetInstance()->GetWebFramesManager(
+            web_state_);
+    return GetForFrame(frames_manager->GetMainWebFrame());
   }
 
   T* GetForFrame(web::WebFrame* web_frame) {
-    BrowserAutofillManager* autofill_manager =
+    BrowserAutofillManager& autofill_manager =
         AutofillDriverIOS::FromWebStateAndWebFrame(web_state_, web_frame)
-            ->autofill_manager();
-    return static_cast<T*>(autofill_manager);
+            ->GetAutofillManager();
+    return &static_cast<T&>(autofill_manager);
   }
 
  private:
-  // web::WebStateObserver:
-  void WebFrameDidBecomeAvailable(web::WebState* web_state,
-                                  web::WebFrame* web_frame) override {
+  // web::WebFramesManager::Observer:
+  void WebFrameBecameAvailable(web::WebFramesManager* web_frames_manager,
+                               web::WebFrame* web_frame) override {
     Inject(web_frame);
   }
 
+  // web::WebStateObserver:
   void WebStateDestroyed(web::WebState* web_state) override {
-    observation_.Reset();
+    web_state_observation_.Reset();
+    frames_manager_observation_.Reset();
   }
 
   void Inject(web::WebFrame* web_frame) {
@@ -83,11 +93,11 @@ class TestAutofillManagerInjector : public web::WebStateObserver {
   }
 
   web::WebState* web_state_;
-  base::ScopedObservation<web::WebState,
-                          web::WebStateObserver,
-                          &web::WebState::AddObserver,
-                          &web::WebState::RemoveObserver>
-      observation_{this};
+  base::ScopedObservation<web::WebFramesManager,
+                          web::WebFramesManager::Observer>
+      frames_manager_observation_{this};
+  base::ScopedObservation<web::WebState, web::WebStateObserver>
+      web_state_observation_{this};
 };
 
 }  // namespace autofill

@@ -5,7 +5,7 @@
 #ifndef CHROME_BROWSER_APPS_PLATFORM_APPS_APP_LOAD_SERVICE_FACTORY_H_
 #define CHROME_BROWSER_APPS_PLATFORM_APPS_APP_LOAD_SERVICE_FACTORY_H_
 
-#include "base/memory/singleton.h"
+#include "base/no_destructor.h"
 #include "chrome/browser/profiles/profile_keyed_service_factory.h"
 
 namespace content {
@@ -23,13 +23,13 @@ class AppLoadServiceFactory : public ProfileKeyedServiceFactory {
   static AppLoadServiceFactory* GetInstance();
 
  private:
-  friend struct base::DefaultSingletonTraits<AppLoadServiceFactory>;
+  friend base::NoDestructor<AppLoadServiceFactory>;
 
   AppLoadServiceFactory();
   ~AppLoadServiceFactory() override;
 
   // BrowserContextKeyedServiceFactory:
-  KeyedService* BuildServiceInstanceFor(
+  std::unique_ptr<KeyedService> BuildServiceInstanceForBrowserContext(
       content::BrowserContext* context) const override;
   bool ServiceIsCreatedWithBrowserContext() const override;
 };

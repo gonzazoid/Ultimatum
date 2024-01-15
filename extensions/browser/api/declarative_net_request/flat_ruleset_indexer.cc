@@ -34,8 +34,16 @@ using FlatStringListOffset = FlatVectorOffset<flatbuffers::String>;
 
 using FlatIntListOffset = FlatOffset<flatbuffers::Vector<int32_t>>;
 
-// Writes to |builder| a flatbuffer vector of shared strings corresponding to
-// |container| and returns the offset to it. If |container| is empty, returns an
+// Returns if `indexed_rule` should be evaluated before a request has been
+// initiated. This checks that conditions that depend on information from a
+// request's response, such as headers, are empty or not specified.
+bool IsBeforeRequestRule(const IndexedRule& indexed_rule) {
+  return indexed_rule.response_headers.empty() &&
+         indexed_rule.excluded_response_headers.empty();
+}
+
+// Writes to `builder` a flatbuffer vector of shared strings corresponding to
+// `container` and returns the offset to it. If `container` is empty, returns an
 // empty offset.
 template <typename T>
 FlatStringListOffset BuildVectorOfSharedStrings(
@@ -74,16 +82,16 @@ CreateIndexBuilders(flatbuffers::FlatBufferBuilder* builder) {
 FlatOffset<flat::UrlTransform> BuildTransformOffset(
     flatbuffers::FlatBufferBuilder* builder,
     const dnr_api::URLTransform& transform) {
-  auto create_string_offset =
-      [builder](const absl::optional<std::string>& str) {
-        if (!str)
-          return FlatStringOffset();
+  auto create_string_offset = [builder](const std::optional<std::string>& str) {
+    if (!str) {
+      return FlatStringOffset();
+    }
 
-        return builder->CreateSharedString(*str);
-      };
+    return builder->CreateSharedString(*str);
+  };
 
   auto skip_separator_and_create_string_offset =
-      [builder](const absl::optional<std::string>& str, char separator) {
+      [builder](const std::optional<std::string>& str, char separator) {
         if (!str)
           return FlatStringOffset();
 
@@ -93,7 +101,7 @@ FlatOffset<flat::UrlTransform> BuildTransformOffset(
         return builder->CreateSharedString(str->c_str() + 1, str->length() - 1);
       };
 
-  auto should_clear_component = [](const absl::optional<std::string>& str) {
+  auto should_clear_component = [](const std::optional<std::string>& str) {
     return str && str->empty();
   };
 
@@ -178,16 +186,16 @@ FlatVectorOffset<flat::ModifyHeaderInfo> BuildModifyHeaderInfoOffset(
     FlatStringOffset header_value;
 
     switch (header_info.operation) {
-      case dnr_api::HeaderOperation::HEADER_OPERATION_NONE:
-      case dnr_api::HEADER_OPERATION_APPEND:
+      case dnr_api::HeaderOperation::kNone:
+      case dnr_api::HeaderOperation::kAppend:
         operation = flat::HeaderOperation_append;
         header_value = builder->CreateSharedString(*header_info.value);
         break;
-      case dnr_api::HEADER_OPERATION_SET:
+      case dnr_api::HeaderOperation::kSet:
         operation = flat::HeaderOperation_set;
         header_value = builder->CreateSharedString(*header_info.value);
         break;
-      case dnr_api::HEADER_OPERATION_REMOVE:
+      case dnr_api::HeaderOperation::kRemove:
         operation = flat::HeaderOperation_remove;
         break;
     }
@@ -201,11 +209,36 @@ FlatVectorOffset<flat::ModifyHeaderInfo> BuildModifyHeaderInfoOffset(
   return builder->CreateVector(flat_modify_header_list);
 }
 
+FlatVectorOffset<flat::HeaderCondition> BuildHeaderConditionsOffset(
+    flatbuffers::FlatBufferBuilder* builder,
+    const std::vector<dnr_api::HeaderInfo>& header_infos) {
+  std::vector<FlatOffset<flat::HeaderCondition>> flat_header_infos;
+  flat_header_infos.reserve(header_infos.size());
+  for (const dnr_api::HeaderInfo& info : header_infos) {
+    FlatStringOffset header = builder->CreateSharedString(info.header);
+    FlatStringListOffset values =
+        info.values ? BuildVectorOfSharedStrings(builder, *info.values)
+                    : FlatStringListOffset();
+    FlatStringListOffset excluded_values =
+        info.excluded_values
+            ? BuildVectorOfSharedStrings(builder, *info.excluded_values)
+            : FlatStringListOffset();
+
+    flat_header_infos.push_back(
+        flat::CreateHeaderCondition(*builder, header, values, excluded_values));
+  }
+
+  return builder->CreateVector(flat_header_infos);
+}
+
 FlatOffset<flatbuffers::Vector<uint8_t>> BuildEmbedderConditionsOffset(
     flatbuffers::FlatBufferBuilder* builder,
     const IndexedRule& indexed_rule) {
-  if (indexed_rule.tab_ids.empty() && indexed_rule.excluded_tab_ids.empty())
+  if (indexed_rule.tab_ids.empty() && indexed_rule.excluded_tab_ids.empty() &&
+      indexed_rule.response_headers.empty() &&
+      indexed_rule.excluded_response_headers.empty()) {
     return FlatOffset<flatbuffers::Vector<uint8_t>>();
+  }
 
   // Build a nested Flatbuffer for the `flat::EmbedderConditions` table.
   flatbuffers::FlatBufferBuilder nested_builder;
@@ -214,9 +247,16 @@ FlatOffset<flatbuffers::Vector<uint8_t>> BuildEmbedderConditionsOffset(
         BuildIntVector(&nested_builder, indexed_rule.tab_ids);
     FlatIntListOffset tab_ids_excluded_offset =
         BuildIntVector(&nested_builder, indexed_rule.excluded_tab_ids);
+    FlatVectorOffset<flat::HeaderCondition> response_headers_offset =
+        BuildHeaderConditionsOffset(&nested_builder,
+                                    indexed_rule.response_headers);
+    FlatStringListOffset excluded_response_headers_offset =
+        BuildVectorOfSharedStrings(&nested_builder,
+                                   indexed_rule.excluded_response_headers);
 
     auto nested_flatbuffer_root_offset = flat::CreateEmbedderConditions(
-        nested_builder, tab_ids_included_offset, tab_ids_excluded_offset);
+        nested_builder, tab_ids_included_offset, tab_ids_excluded_offset,
+        response_headers_offset, excluded_response_headers_offset);
     nested_builder.Finish(nested_flatbuffer_root_offset,
                           kEmbedderConditionsBufferIdentifier);
   }
@@ -234,7 +274,8 @@ FlatOffset<flatbuffers::Vector<uint8_t>> BuildEmbedderConditionsOffset(
 }  // namespace
 
 FlatRulesetIndexer::FlatRulesetIndexer()
-    : index_builders_(CreateIndexBuilders(&builder_)) {}
+    : before_request_index_builders_(CreateIndexBuilders(&builder_)),
+      headers_received_index_builders_(CreateIndexBuilders(&builder_)) {}
 
 FlatRulesetIndexer::~FlatRulesetIndexer() = default;
 
@@ -270,7 +311,7 @@ void FlatRulesetIndexer::AddUrlRule(const IndexedRule& indexed_rule) {
   if (indexed_rule.url_pattern_type !=
       url_pattern_index::flat::UrlPatternType_REGEXP) {
     std::vector<UrlPatternIndexBuilder*> builders = GetBuilders(indexed_rule);
-    DCHECK(!builders.empty());
+    CHECK(!builders.empty());
     for (UrlPatternIndexBuilder* builder : builders)
       builder->IndexUrlRule(offset);
   } else {
@@ -280,9 +321,15 @@ void FlatRulesetIndexer::AddUrlRule(const IndexedRule& indexed_rule) {
         indexed_rule.regex_substitution
             ? builder_.CreateSharedString(*indexed_rule.regex_substitution)
             : FlatStringOffset();
-    regex_rules_.push_back(flat::CreateRegexRule(
+    auto regex_rule = flat::CreateRegexRule(
         builder_, offset, ConvertToFlatActionType(indexed_rule.action_type),
-        regex_substitution_offset));
+        regex_substitution_offset);
+
+    if (IsBeforeRequestRule(indexed_rule)) {
+      before_request_regex_rules_.push_back(std::move(regex_rule));
+    } else {
+      headers_received_regex_rules_.push_back(std::move(regex_rule));
+    }
   }
 
   FlatStringOffset redirect_url_offset;
@@ -297,10 +344,12 @@ void FlatRulesetIndexer::AddUrlRule(const IndexedRule& indexed_rule) {
   }
 
   FlatVectorOffset<flat::ModifyHeaderInfo> request_headers_offset =
-      BuildModifyHeaderInfoOffset(&builder_, indexed_rule.request_headers);
+      BuildModifyHeaderInfoOffset(&builder_,
+                                  indexed_rule.request_headers_to_modify);
 
   FlatVectorOffset<flat::ModifyHeaderInfo> response_headers_offset =
-      BuildModifyHeaderInfoOffset(&builder_, indexed_rule.response_headers);
+      BuildModifyHeaderInfoOffset(&builder_,
+                                  indexed_rule.response_headers_to_modify);
 
   metadata_.push_back(flat::CreateUrlRuleMetadata(
       builder_, indexed_rule.id,
@@ -312,26 +361,45 @@ flatbuffers::DetachedBuffer FlatRulesetIndexer::FinishAndReleaseBuffer() {
   DCHECK(!finished_);
   finished_ = true;
 
-  std::vector<url_pattern_index::UrlPatternIndexOffset> index_offsets;
-  index_offsets.reserve(index_builders_.size());
-  for (const auto& builder : index_builders_)
-    index_offsets.push_back(builder->Finish());
+  auto create_index_offsets =
+      [this](const std::vector<std::unique_ptr<UrlPatternIndexBuilder>>&
+                 index_builders) {
+        std::vector<url_pattern_index::UrlPatternIndexOffset> index_offsets;
+        index_offsets.reserve(index_builders.size());
+        for (const auto& builder : index_builders) {
+          index_offsets.push_back(builder->Finish());
+        }
+
+        FlatVectorOffset<url_pattern_index::flat::UrlPatternIndex>
+            index_vector_offset = builder_.CreateVector(index_offsets);
+        return index_vector_offset;
+      };
 
   FlatVectorOffset<url_pattern_index::flat::UrlPatternIndex>
-      index_vector_offset = builder_.CreateVector(index_offsets);
+      before_request_index_vector_offset =
+          create_index_offsets(before_request_index_builders_);
+
+  FlatVectorOffset<url_pattern_index::flat::UrlPatternIndex>
+      headers_received_index_vector_offset =
+          create_index_offsets(headers_received_index_builders_);
 
   // Store the extension metadata sorted by ID to support fast lookup through
   // binary search.
   FlatVectorOffset<flat::UrlRuleMetadata> extension_metadata_offset =
       builder_.CreateVectorOfSortedTables(&metadata_);
 
-  FlatVectorOffset<flat::RegexRule> regex_rules_offset =
-      builder_.CreateVector(regex_rules_);
+  FlatVectorOffset<flat::RegexRule> before_request_regex_rules_offset =
+      builder_.CreateVector(before_request_regex_rules_);
+
+  FlatVectorOffset<flat::RegexRule> headers_received_regex_rules_offset =
+      builder_.CreateVector(headers_received_regex_rules_);
 
   FlatOffset<flat::ExtensionIndexedRuleset> root_offset =
-      flat::CreateExtensionIndexedRuleset(builder_, index_vector_offset,
-                                          regex_rules_offset,
-                                          extension_metadata_offset);
+      flat::CreateExtensionIndexedRuleset(
+          builder_, before_request_index_vector_offset,
+          headers_received_index_vector_offset,
+          before_request_regex_rules_offset,
+          headers_received_regex_rules_offset, extension_metadata_offset);
   flat::FinishExtensionIndexedRulesetBuffer(builder_, root_offset);
 
   return builder_.Release();
@@ -339,19 +407,22 @@ flatbuffers::DetachedBuffer FlatRulesetIndexer::FinishAndReleaseBuffer() {
 
 std::vector<FlatRulesetIndexer::UrlPatternIndexBuilder*>
 FlatRulesetIndexer::GetBuilders(const IndexedRule& indexed_rule) {
+  const std::vector<std::unique_ptr<UrlPatternIndexBuilder>>& builders =
+      IsBeforeRequestRule(indexed_rule) ? before_request_index_builders_
+                                        : headers_received_index_builders_;
+
   switch (indexed_rule.action_type) {
-    case dnr_api::RULE_ACTION_TYPE_BLOCK:
-    case dnr_api::RULE_ACTION_TYPE_ALLOW:
-    case dnr_api::RULE_ACTION_TYPE_REDIRECT:
-    case dnr_api::RULE_ACTION_TYPE_UPGRADESCHEME:
-      return {index_builders_
-                  [flat::IndexType_before_request_except_allow_all_requests]
-                      .get()};
-    case dnr_api::RULE_ACTION_TYPE_ALLOWALLREQUESTS:
-      return {index_builders_[flat::IndexType_allow_all_requests].get()};
-    case dnr_api::RULE_ACTION_TYPE_MODIFYHEADERS:
-      return {index_builders_[flat::IndexType_modify_headers].get()};
-    case dnr_api::RULE_ACTION_TYPE_NONE:
+    case dnr_api::RuleActionType::kBlock:
+    case dnr_api::RuleActionType::kAllow:
+    case dnr_api::RuleActionType::kRedirect:
+    case dnr_api::RuleActionType::kUpgradeScheme:
+      return {builders[flat::IndexType_before_request_except_allow_all_requests]
+                  .get()};
+    case dnr_api::RuleActionType::kAllowAllRequests:
+      return {builders[flat::IndexType_allow_all_requests].get()};
+    case dnr_api::RuleActionType::kModifyHeaders:
+      return {builders[flat::IndexType_modify_headers].get()};
+    case dnr_api::RuleActionType::kNone:
       break;
   }
   NOTREACHED();

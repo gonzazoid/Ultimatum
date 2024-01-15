@@ -52,6 +52,8 @@ inspector_protocol_generate("protocol_sources") {
     "inspector/protocol/dom_snapshot.h",
     "inspector/protocol/dom_storage.cc",
     "inspector/protocol/dom_storage.h",
+    "inspector/protocol/event_breakpoints.cc",
+    "inspector/protocol/event_breakpoints.h",
     "inspector/protocol/emulation.cc",
     "inspector/protocol/emulation.h",
     "inspector/protocol/forward.h",
@@ -69,6 +71,8 @@ inspector_protocol_generate("protocol_sources") {
     "inspector/protocol/memory.h",
     "inspector/protocol/network.cc",
     "inspector/protocol/network.h",
+    "inspector/protocol/preload.cc",
+    "inspector/protocol/preload.h",
     "inspector/protocol/overlay.cc",
     "inspector/protocol/overlay.h",
     "inspector/protocol/page.cc",
@@ -82,6 +86,8 @@ inspector_protocol_generate("protocol_sources") {
     "inspector/protocol/runtime.h",
     "inspector/protocol/security.cc",
     "inspector/protocol/security.h",
+    "inspector/protocol/storage.cc",
+    "inspector/protocol/storage.h",
     "inspector/protocol/web_audio.cc",
     "inspector/protocol/web_audio.h",
   ]
@@ -113,5 +119,8 @@ source_set("generated") {
     "//v8",
   ]
 
-  public_deps = [ "//third_party/inspector_protocol:crdtp" ]
+  public_deps = [
+    "//third_party/inspector_protocol:crdtp",
+    "//v8:v8_internal_headers",
+  ]
 }

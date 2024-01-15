@@ -8,8 +8,8 @@
 #include <memory>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/containers/queue.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/time/time.h"
@@ -18,6 +18,7 @@
 #include "components/viz/service/display/output_surface_frame.h"
 #include "components/viz/service/display/overlay_processor_interface.h"
 #include "components/viz/service/display/skia_output_surface.h"
+#include "components/viz/service/viz_service_export.h"
 #include "gpu/command_buffer/common/swap_buffers_complete_params.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/skia/include/core/SkRefCnt.h"
@@ -29,7 +30,7 @@ class SkSurface;
 
 namespace base {
 class SequencedTaskRunner;
-}
+}  // namespace base
 
 namespace gfx {
 class Rect;
@@ -42,18 +43,23 @@ class MemoryTracker;
 class MemoryTypeTracker;
 }  // namespace gpu
 
+namespace skgpu::graphite {
+class Context;
+class Recording;
+}  // namespace skgpu::graphite
+
 namespace ui {
 class LatencyTracker;
-}
+}  // namespace ui
 
 namespace viz {
 
 class VulkanContextProvider;
 
-class SkiaOutputDevice {
+class VIZ_SERVICE_EXPORT SkiaOutputDevice {
  public:
   // A helper class for defining a BeginPaint() and EndPaint() scope.
-  class ScopedPaint {
+  class VIZ_SERVICE_EXPORT ScopedPaint {
    public:
     ScopedPaint(std::vector<GrBackendSemaphore> end_semaphores,
                 SkiaOutputDevice* device,
@@ -67,13 +73,19 @@ class SkiaOutputDevice {
     // This can be null.
     SkSurface* sk_surface() const { return sk_surface_; }
     SkCanvas* GetCanvas();
+
+    // Ganesh
     GrSemaphoresSubmitted Flush(VulkanContextProvider* vulkan_context_provider,
                                 std::vector<GrBackendSemaphore> end_semaphores,
                                 base::OnceClosure on_finished);
     bool Wait(int num_semaphores,
               const GrBackendSemaphore wait_semaphores[],
               bool delete_semaphores_after_wait);
-    bool Draw(sk_sp<const SkDeferredDisplayList> ddl);
+    bool Draw(sk_sp<const GrDeferredDisplayList> ddl);
+
+    // Graphite
+    bool Draw(std::unique_ptr<skgpu::graphite::Recording> graphite_recording,
+              base::OnceClosure on_finished);
 
     std::vector<GrBackendSemaphore> TakeEndPaintSemaphores() {
       std::vector<GrBackendSemaphore> semaphores;
@@ -96,6 +108,7 @@ class SkiaOutputDevice {
                                    gfx::GpuFenceHandle release_fence)>;
   SkiaOutputDevice(
       GrDirectContext* gr_context,
+      skgpu::graphite::Context* graphite_context,
       gpu::MemoryTracker* memory_tracker,
       DidSwapBufferCompleteCallback did_swap_buffer_complete_callback);
 
@@ -111,8 +124,9 @@ class SkiaOutputDevice {
   virtual std::unique_ptr<SkiaOutputDevice::ScopedPaint> BeginScopedPaint();
 
   // Changes the size of draw surface and invalidates it's contents.
-  virtual bool Reshape(const SkSurfaceCharacterization& characterization,
+  virtual bool Reshape(const SkImageInfo& image_info,
                        const gfx::ColorSpace& color_space,
+                       int sample_count,
                        float device_scale_factor,
                        gfx::OverlayTransform transform) = 0;
 
@@ -125,14 +139,12 @@ class SkiaOutputDevice {
   // has finished with all submitted work.
   virtual void Submit(bool sync_cpu, base::OnceClosure callback);
 
-  // Presents the back buffer.
-  virtual void SwapBuffers(BufferPresentedCallback feedback,
-                           OutputSurfaceFrame frame) = 0;
-  virtual void PostSubBuffer(const gfx::Rect& rect,
-                             BufferPresentedCallback feedback,
-                             OutputSurfaceFrame frame);
-  virtual void CommitOverlayPlanes(BufferPresentedCallback feedback,
-                                   OutputSurfaceFrame frame);
+  // Presents the back buffer. Optional `update_rect` represents hint of the
+  // rect that was updated in the back buffer. If not specified the whole buffer
+  // is supposed to be updated.
+  virtual void Present(const absl::optional<gfx::Rect>& update_rect,
+                       BufferPresentedCallback feedback,
+                       OutputSurfaceFrame frame) = 0;
   virtual bool EnsureMinNumberOfBuffers(size_t n);
 
   // Set the rectangle that will be drawn into on the surface.
@@ -142,6 +154,8 @@ class SkiaOutputDevice {
   virtual void SetEnableDCLayers(bool enabled);
 
   virtual void SetGpuVSyncEnabled(bool enabled);
+
+  virtual void SetVSyncDisplayID(int64_t display_id) {}
 
   // Whether the output device's primary plane is an overlay. This returns true
   // is the SchedulePrimaryPlane function is implemented.
@@ -197,7 +211,8 @@ class SkiaOutputDevice {
         gfx::SwapCompletionResult result,
         const absl::optional<gfx::Rect>& damage_area,
         std::vector<gpu::Mailbox> released_overlays,
-        const gpu::Mailbox& primary_plane_mailbox);
+        const gpu::Mailbox& primary_plane_mailbox,
+        int64_t swap_trace_id);
     void CallFeedback();
 
    private:
@@ -224,7 +239,11 @@ class SkiaOutputDevice {
                     const GrBackendSemaphore wait_semaphores[],
                     bool delete_semaphores_after_wait);
   virtual bool Draw(SkSurface* sk_surface,
-                    sk_sp<const SkDeferredDisplayList> ddl);
+                    sk_sp<const GrDeferredDisplayList> ddl);
+  virtual bool Draw(
+      SkSurface* sk_surface,
+      std::unique_ptr<skgpu::graphite::Recording> graphite_recording,
+      base::OnceClosure on_finished);
 
   // Helper method for SwapBuffers() and PostSubBuffer(). It should be called
   // at the beginning of SwapBuffers() and PostSubBuffer() implementations
@@ -240,7 +259,9 @@ class SkiaOutputDevice {
       std::vector<gpu::Mailbox> released_overlays = {},
       const gpu::Mailbox& primary_plane_mailbox = gpu::Mailbox());
 
+  // TODO(crbug.com/1442268): Reset device on context loss to fix dangling ptr.
   const raw_ptr<GrDirectContext, DanglingUntriaged> gr_context_;
+  const raw_ptr<skgpu::graphite::Context> graphite_context_;
 
   OutputSurface::Capabilities capabilities_;
 

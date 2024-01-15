@@ -9,12 +9,11 @@
 #include <memory>
 #include <string>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/win/core_winrt_util.h"
 #include "base/win/post_async_results.h"
 #include "base/win/scoped_hstring.h"
-#include "base/win/windows_version.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/self_owned_receiver.h"
 #include "services/shape_detection/detection_utils_win.h"
@@ -43,22 +42,6 @@ using Microsoft::WRL::ComPtr;
 // static
 void TextDetectionImpl::Create(
     mojo::PendingReceiver<mojom::TextDetection> receiver) {
-  // OcrEngine class is only available in Win 10 onwards (v10.0.10240.0) that
-  // documents in
-  // https://docs.microsoft.com/en-us/uwp/api/windows.media.ocr.ocrengine.
-  if (base::win::GetVersion() < base::win::Version::WIN10) {
-    DVLOG(1) << "Optical character recognition not supported before Windows 10";
-    return;
-  }
-  DCHECK_GE(base::win::OSInfo::GetInstance()->version_number().build, 10240u);
-
-  // Loads functions dynamically at runtime to prevent library dependencies.
-  if (!(base::win::ResolveCoreWinRTDelayload() &&
-        ScopedHString::ResolveCoreWinRTStringDelayload())) {
-    DLOG(ERROR) << "Failed loading functions from combase.dll";
-    return;
-  }
-
   // Text Detection specification only supports Latin-1 text as documented in
   // https://wicg.github.io/shape-detection-api/text.html#text-detection-api.
   // TODO(junwei.fu): https://crbug.com/794097 consider supporting other Latin

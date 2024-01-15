@@ -4,9 +4,9 @@
 
 import 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
-import {assert} from 'chrome://resources/js/assert_ts.js';
-import {sendWithPromise} from 'chrome://resources/js/cr.m.js';
-import {$} from 'chrome://resources/js/util.js';
+import {assert} from 'chrome://resources/js/assert.js';
+import {sendWithPromise} from 'chrome://resources/js/cr.js';
+import {getRequiredElement} from 'chrome://resources/js/util.js';
 
 type NaclInfo = Array<{key: string, value: string}>;
 
@@ -18,8 +18,8 @@ type DomBindElement = HTMLElement&{naclInfo: NaclInfo};
  */
 function initialize() {
   sendWithPromise('requestNaClInfo').then((response: {naclInfo: NaclInfo}) => {
-    $('loading-message').hidden = true;
-    $('body-container').hidden = false;
+    getRequiredElement('loading-message').hidden = true;
+    getRequiredElement('body-container').hidden = false;
 
     const bind = document.body.querySelector<DomBindElement>('dom-bind');
     assert(bind);

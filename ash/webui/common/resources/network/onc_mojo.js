@@ -8,11 +8,12 @@
  * strings and for debugging. They are not intended to be drectly user facing.
  */
 
-import {assert, assertNotReached} from 'chrome://resources/js/assert.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
-import {ActivationStateType, ApnProperties, AuthenticationType, ConfigProperties, DeviceStateProperties as MojomDeviceStateProperties, HiddenSsidMode, InhibitReason, IPConfigProperties, ManagedApnList, ManagedBoolean, ManagedInt32, ManagedProperties, ManagedString, ManagedStringList, ManagedSubjectAltNameMatchList, NetworkStateProperties as MojomNetworkStateProperties, ProxyMode, SecurityType, SIMInfo, SIMLockStatus, SubjectAltName, SubjectAltName_Type, TetherStateProperties, TrafficCounterProperties, VpnType} from 'chrome://resources/mojo/chromeos/services/network_config/public/mojom/cros_network_config.mojom-webui.js';
+import {assert, assertNotReached} from 'chrome://resources/ash/common/assert.js';
+import {loadTimeData} from 'chrome://resources/ash/common/load_time_data.m.js';
+import {ActivationStateType, ApnProperties, AuthenticationType, ConfigProperties, DeviceStateProperties as MojomDeviceStateProperties, HiddenSsidMode, InhibitReason, IPConfigProperties, ManagedApnList, ManagedBoolean, ManagedInt32, ManagedProperties, ManagedString, ManagedStringList, ManagedSubjectAltNameMatchList, MatchType, NetworkStateProperties as MojomNetworkStateProperties, ProxyMode, SecurityType, SIMInfo, SIMLockStatus, SubjectAltName, SubjectAltName_Type, TetherStateProperties, TrafficCounterProperties, VpnType} from 'chrome://resources/mojo/chromeos/services/network_config/public/mojom/cros_network_config.mojom-webui.js';
 import {ConnectionStateType, DeviceStateType, IPConfigType, NetworkType, OncSource, PolicySource, PortalState} from 'chrome://resources/mojo/chromeos/services/network_config/public/mojom/network_types.mojom-webui.js';
 import {IPAddress} from 'chrome://resources/mojo/services/network/public/mojom/ip_address.mojom-webui.js';
+
 
 
 // Used to indicate a saved but unknown credential value. Will appear as
@@ -203,6 +204,7 @@ export class OncMojo {
       case DeviceStateType.kDisabling:
       case DeviceStateType.kEnabling:
       case DeviceStateType.kUnavailable:
+        return true;
       case DeviceStateType.kDisabled:
       case DeviceStateType.kEnabled:
       case DeviceStateType.kProhibited:
@@ -378,10 +380,14 @@ export class OncMojo {
    */
   static getVpnTypeString(value) {
     switch (value) {
+      case VpnType.kIKEv2:
+        return 'IKEv2';
       case VpnType.kL2TPIPsec:
         return 'L2TP-IPsec';
       case VpnType.kOpenVPN:
         return 'OpenVPN';
+      case VpnType.kWireGuard:
+        return 'WireGuard';
       case VpnType.kExtension:
         return 'ThirdPartyVPN';
       case VpnType.kArc:
@@ -389,25 +395,6 @@ export class OncMojo {
     }
     assertNotReached('Unexpected enum value: ' + OncMojo.getEnumString(value));
     return '';
-  }
-
-  /**
-   * @param {string} value
-   * @return {!VpnType}
-   */
-  static getVpnTypeFromString(value) {
-    switch (value) {
-      case 'L2TP-IPsec':
-        return VpnType.kL2TPIPsec;
-      case 'OpenVPN':
-        return VpnType.kOpenVPN;
-      case 'ThirdPartyVPN':
-        return VpnType.kExtension;
-      case 'ARCVPN':
-        return VpnType.kArc;
-    }
-    assertNotReached('Unexpected value: ' + value);
-    return VpnType.kOpenVPN;
   }
 
   /**
@@ -480,46 +467,42 @@ export class OncMojo {
   }
 
   /**
-   * @param {string} networkName
-   * @param {string|undefined} providerName
-   * @return {string}
-   */
-  static getVpnDisplayName(networkName, providerName) {
-    if (providerName) {
-      return loadTimeData.getStringF(
-          'vpnNameTemplate', providerName, networkName);
-    }
-    return networkName;
-  }
-
-  /**
+   * WARNING: The string returned by this method may contain malicious HTML and
+   * should not be used for Polymer bindings in CSS code. For additional
+   * information see b/286254915.
+   *
    * @param {!MojomNetworkStateProperties} network
    * @return {string}
    */
-  static getNetworkStateDisplayName(network) {
+  static getNetworkStateDisplayNameUnsafe(network) {
     if (!network.name) {
       return OncMojo.getNetworkTypeDisplayName(network.type);
     }
     if (network.type === NetworkType.kVPN &&
         network.typeState.vpn.providerName) {
-      return OncMojo.getVpnDisplayName(
-          network.name, network.typeState.vpn.providerName);
+      return loadTimeData.getStringF(
+          'vpnNameTemplate', network.typeState.vpn.providerName, network.name);
     }
     return network.name;
   }
 
   /**
+   * WARNING: The string returned by this method may contain malicious HTML and
+   * should not be used for Polymer bindings in CSS code. For additional
+   * information see b/286254915.
+   *
    * @param {!ManagedProperties} network
    * @return {string}
    */
-  static getNetworkName(network) {
+  static getNetworkNameUnsafe(network) {
     if (!network.name || !network.name.activeValue) {
       return OncMojo.getNetworkTypeDisplayName(network.type);
     }
     if (network.type === NetworkType.kVPN &&
         network.typeProperties.vpn.providerName) {
-      return OncMojo.getVpnDisplayName(
-          network.name.activeValue, network.typeProperties.vpn.providerName);
+      return loadTimeData.getStringF(
+          'vpnNameTemplate', network.typeProperties.vpn.providerName,
+          network.name.activeValue);
     }
     return network.name.activeValue;
   }
@@ -618,6 +601,8 @@ export class OncMojo {
           simLockEnabled: false,
           simLocked: false,
           simLockType: '',
+          hasNickName: false,
+          networkOperator: '',
         };
         break;
       case NetworkType.kEthernet:
@@ -649,6 +634,7 @@ export class OncMojo {
           security: SecurityType.kNone,
           signalStrength: 0,
           ssid: '',
+          passpointId: '',
         };
         break;
       default:
@@ -793,6 +779,8 @@ export class OncMojo {
             signalStrength: 0,
             isSyncable: false,
             isConfiguredByActiveUser: false,
+            passpointId: '',
+            passpointMatchType: MatchType.kNoMatch,
           },
         };
         break;

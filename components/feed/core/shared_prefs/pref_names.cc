@@ -17,12 +17,16 @@ const char kEnableSnippets[] = "ntp_snippets.enable";
 // FEED_ARTICLES_LIST_VISIBLE in ChromePreferenceKeys.java is a pre-native cache
 // and should be consistent with this pref.
 const char kArticlesListVisible[] = "ntp_snippets.list_visible";
-const char kVideoPreviewsType[] = "ntp_snippets.video_previews_type";
+// A boolean pref set to true if swapping out NTP isn't enabled or if DSE is
+// Google.
+// TODO(https://crbug.com/1483475): Inhibit loading feeds in native feeds code
+// when this pref is set to false.
+const char kEnableSnippetsByDse[] = "ntp_snippets_by_dse.enable";
 
 void RegisterFeedSharedProfilePrefs(PrefRegistrySimple* registry) {
   registry->RegisterBooleanPref(kEnableSnippets, true);
   registry->RegisterBooleanPref(kArticlesListVisible, true);
-  registry->RegisterIntegerPref(kVideoPreviewsType, 1);
+  registry->RegisterBooleanPref(kEnableSnippetsByDse, true);
 }
 
 }  // namespace prefs

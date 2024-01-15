@@ -12,17 +12,18 @@
 #include "base/check.h"
 #include "base/containers/flat_map.h"
 #include "base/cpu.h"
-#include "base/guid.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
 #include "base/system/sys_info.h"
+#include "base/uuid.h"
 #include "base/values.h"
 #include "base/version.h"
 #include "build/build_config.h"
 #include "components/update_client/activity_data_service.h"
 #include "components/update_client/persisted_data.h"
+#include "components/update_client/protocol_definition.h"
 #include "components/update_client/update_query_params.h"
 #include "components/update_client/utils.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -68,8 +69,9 @@ base::flat_map<std::string, std::string> FilterInstallerAttributes(
     const InstallerAttributes& installer_attributes) {
   base::flat_map<std::string, std::string> sanitized_attrs;
   for (const auto& attr : installer_attributes) {
-    if (IsValidInstallerAttribute(attr))
+    if (IsValidInstallerAttribute(attr)) {
       sanitized_attrs.insert(attr);
+    }
   }
   return sanitized_attrs;
 }
@@ -108,15 +110,16 @@ protocol_request::Request MakeProtocolRequest(
     const base::flat_map<std::string, std::string>& updater_state_attributes,
     std::vector<protocol_request::App> apps) {
   protocol_request::Request request;
-  request.protocol_version = kProtocolVersion;
+  request.protocol_version = protocol_request::kProtocolVersion;
   request.is_machine = is_machine;
 
   // Session id and request id.
-  DCHECK(!session_id.empty());
-  DCHECK(base::StartsWith(session_id, "{", base::CompareCase::SENSITIVE));
-  DCHECK(base::EndsWith(session_id, "}", base::CompareCase::SENSITIVE));
+  CHECK(!session_id.empty());
+  CHECK(base::StartsWith(session_id, "{", base::CompareCase::SENSITIVE));
+  CHECK(base::EndsWith(session_id, "}", base::CompareCase::SENSITIVE));
   request.session_id = session_id;
-  request.request_id = base::StrCat({"{", base::GenerateGUID(), "}"});
+  request.request_id = base::StrCat(
+      {"{", base::Uuid::GenerateRandomV4().AsLowercaseString(), "}"});
 
   request.updatername = prod_id;
   request.updaterversion = browser_version;
@@ -131,8 +134,9 @@ protocol_request::Request MakeProtocolRequest(
   request.additional_attributes = additional_attributes;
 
 #if BUILDFLAG(IS_WIN)
-  if (base::win::OSInfo::GetInstance()->IsWowX86OnAMD64())
+  if (base::win::OSInfo::GetInstance()->IsWowX86OnAMD64()) {
     request.is_wow64 = true;
+  }
 #endif
 
   // HW platform information.
@@ -155,38 +159,43 @@ protocol_request::Request MakeProtocolRequest(
   if (!updater_state_attributes.empty()) {
     request.updater = absl::make_optional<protocol_request::Updater>();
     auto it = updater_state_attributes.find("name");
-    if (it != updater_state_attributes.end())
+    if (it != updater_state_attributes.end()) {
       request.updater->name = it->second;
+    }
     it = updater_state_attributes.find("version");
-    if (it != updater_state_attributes.end())
+    if (it != updater_state_attributes.end()) {
       request.updater->version = it->second;
+    }
     it = updater_state_attributes.find("ismachine");
     if (it != updater_state_attributes.end()) {
-      DCHECK(it->second == "0" || it->second == "1");
+      CHECK(it->second == "0" || it->second == "1");
       request.updater->is_machine = it->second != "0";
     }
     it = updater_state_attributes.find("autoupdatecheckenabled");
     if (it != updater_state_attributes.end()) {
-      DCHECK(it->second == "0" || it->second == "1");
+      CHECK(it->second == "0" || it->second == "1");
       request.updater->autoupdate_check_enabled = it->second != "0";
     }
     it = updater_state_attributes.find("laststarted");
     if (it != updater_state_attributes.end()) {
       int last_started = 0;
-      if (base::StringToInt(it->second, &last_started))
+      if (base::StringToInt(it->second, &last_started)) {
         request.updater->last_started = last_started;
+      }
     }
     it = updater_state_attributes.find("lastchecked");
     if (it != updater_state_attributes.end()) {
       int last_checked = 0;
-      if (base::StringToInt(it->second, &last_checked))
+      if (base::StringToInt(it->second, &last_checked)) {
         request.updater->last_checked = last_checked;
+      }
     }
     it = updater_state_attributes.find("updatepolicy");
     if (it != updater_state_attributes.end()) {
       int update_policy = 0;
-      if (base::StringToInt(it->second, &update_policy))
+      if (base::StringToInt(it->second, &update_policy)) {
         request.updater->update_policy = update_policy;
+      }
     }
   }
 
@@ -213,7 +222,7 @@ protocol_request::App MakeProtocolApp(
     absl::optional<protocol_request::UpdateCheck> update_check,
     const std::vector<protocol_request::Data>& data,
     absl::optional<protocol_request::Ping> ping,
-    absl::optional<std::vector<base::Value>> events) {
+    absl::optional<std::vector<base::Value::Dict>> events) {
   protocol_request::App app;
   app.app_id = app_id;
   app.version = version.GetString();
@@ -254,7 +263,7 @@ protocol_request::UpdateCheck MakeProtocolUpdateCheck(
 protocol_request::Ping MakeProtocolPing(const std::string& app_id,
                                         const PersistedData* metadata,
                                         bool active) {
-  DCHECK(metadata);
+  CHECK(metadata);
   protocol_request::Ping ping;
 
   if (active) {

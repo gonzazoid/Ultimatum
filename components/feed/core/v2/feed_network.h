@@ -7,7 +7,7 @@
 
 #include <memory>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "components/feed/core/proto/v2/wire/consistency_token.pb.h"
 #include "components/feed/core/proto/v2/wire/feed_query.pb.h"
 #include "components/feed/core/proto/v2/wire/request.pb.h"
@@ -18,11 +18,19 @@
 #include "components/feed/core/v2/enums.h"
 #include "components/feed/core/v2/public/types.h"
 #include "components/feed/core/v2/types.h"
+#include "components/supervised_user/core/browser/proto/get_discover_feed_request.pb.h"
+#include "components/supervised_user/core/browser/proto/get_discover_feed_response.pb.h"
+#include "net/http/http_request_headers.h"
 
 namespace feedwire {
 class Request;
 class Response;
 }  // namespace feedwire
+
+namespace supervised_user {
+class GetDiscoverFeedRequest;
+class GetDiscoverFeedResponse;
+}  // namespace supervised_user
 
 namespace feed {
 struct AccountInfo;
@@ -136,6 +144,28 @@ struct WebFeedListContentsDiscoverApi {
   static bool SendRequestMetadata() { return false; }
 };
 
+struct SingleWebFeedListContentsDiscoverApi {
+  using Request = feedwire::Request;
+  using Response = feedwire::Response;
+  static constexpr NetworkRequestType kRequestType =
+      NetworkRequestType::kSingleWebFeedListContents;
+  static base::StringPiece Method() { return "POST"; }
+  static base::StringPiece RequestPath(const Request&) { return "v1/contents"; }
+  static bool SendRequestMetadata() { return false; }
+};
+
+struct QueryWebFeedDiscoverApi {
+  using Request = feedwire::webfeed::QueryWebFeedRequest;
+  using Response = feedwire::webfeed::QueryWebFeedResponse;
+  static constexpr NetworkRequestType kRequestType =
+      NetworkRequestType::kQueryWebFeed;
+  static base::StringPiece Method() { return "POST"; }
+  static base::StringPiece RequestPath(const Request&) {
+    return "v1:queryWebFeed";
+  }
+  static bool SendRequestMetadata() { return true; }
+};
+
 class FeedNetwork {
  public:
   struct RawResponse {
@@ -154,6 +184,17 @@ class FeedNetwork {
     std::unique_ptr<feedwire::Response> response_body;
     // Whether the request was signed in.
     bool was_signed_in;
+  };
+
+  // Result of SendKidFriendlyApiRequest.
+  struct KidFriendlyQueryRequestResult {
+    KidFriendlyQueryRequestResult();
+    ~KidFriendlyQueryRequestResult();
+    KidFriendlyQueryRequestResult(KidFriendlyQueryRequestResult&&);
+    KidFriendlyQueryRequestResult& operator=(KidFriendlyQueryRequestResult&&);
+    NetworkResponseInfo response_info;
+    // Response body if one was received.
+    std::unique_ptr<supervised_user::GetDiscoverFeedResponse> response_body;
   };
 
   template <typename RESPONSE_MESSAGE>
@@ -180,6 +221,14 @@ class FeedNetwork {
       const AccountInfo& account_info,
       base::OnceCallback<void(QueryRequestResult)> callback) = 0;
 
+  // Send a supervised_user::GetDiscoverFeedRequest, and receive the response in
+  // |callback|. Supports unimplemented overrides on platforms that do not
+  // support supervision.
+  virtual void SendKidFriendlyApiRequest(
+      const supervised_user::GetDiscoverFeedRequest& request,
+      const AccountInfo& account_info,
+      base::OnceCallback<void(KidFriendlyQueryRequestResult)> callback) {}
+
   // Send a Discover API request. Usage:
   // SendApiRequest<UploadActionsDiscoverApi>(request_message, callback).
   template <typename API>
@@ -202,6 +251,14 @@ class FeedNetwork {
         std::move(optional_request_metadata),
         base::BindOnce(&ParseAndForwardApiResponse<API>, std::move(callback)));
   }
+
+  virtual void SendAsyncDataRequest(
+      const GURL& url,
+      base::StringPiece request_method,
+      net::HttpRequestHeaders request_headers,
+      std::string request_body,
+      const AccountInfo& account_info,
+      base::OnceCallback<void(RawResponse)> callback) = 0;
 
   // Cancels all pending requests immediately. This could be used, for example,
   // if there are pending requests for a user who just signed out.

@@ -7,15 +7,21 @@
 
 #include "base/component_export.h"
 #include "base/observer_list_types.h"
+#include "base/process/process_handle.h"
+#include "base/time/time.h"
 #include "chromeos/dbus/common/dbus_method_call_status.h"
+#include "components/memory_pressure/reclaim_target.h"
 
 #include <cstdint>
+#include <vector>
 
 namespace dbus {
 class Bus;
 }
 
 namespace ash {
+
+class FakeResourcedClient;
 
 // ResourcedClient is used to communicate with the org.chromium.ResourceManager
 // service. The browser uses the ResourceManager service to get resource usage
@@ -38,7 +44,7 @@ class COMPONENT_EXPORT(RESOURCED) ResourcedClient {
     ~Observer() override = default;
 
     virtual void OnMemoryPressure(PressureLevel level,
-                                  uint64_t reclaim_target_kb) = 0;
+                                  memory_pressure::ReclaimTarget target) = 0;
   };
 
   enum class PressureLevelArcVm {
@@ -71,6 +77,26 @@ class COMPONENT_EXPORT(RESOURCED) ResourcedClient {
                                   uint64_t reclaim_target_kb) = 0;
   };
 
+  enum class PressureLevelArcContainer {
+    // There is enough memory to use.
+    kNone = 0,
+    // ARC container is advised to kill cached apps to free memory.
+    kCached = 1,
+    // ARC container is advised to kill perceptible apps to free memory.
+    kPerceptible = 2,
+    // ARC container is advised to kill foreground apps to free memory.
+    kForeground = 3,
+  };
+
+  // Observer class for ARC container memory pressure signal.
+  class ArcContainerObserver : public base::CheckedObserver {
+   public:
+    ~ArcContainerObserver() override = default;
+
+    virtual void OnMemoryPressure(PressureLevelArcContainer level,
+                                  uint64_t reclaim_target_kb) = 0;
+  };
+
   ResourcedClient(const ResourcedClient&) = delete;
   ResourcedClient& operator=(const ResourcedClient&) = delete;
 
@@ -78,7 +104,8 @@ class COMPONENT_EXPORT(RESOURCED) ResourcedClient {
   static void Initialize(dbus::Bus* bus);
 
   // Creates and initializes a fake global instance if not already created.
-  static void InitializeFake();
+  // The newly created object will persist until Shutdown() is called.
+  static FakeResourcedClient* InitializeFake();
 
   // Destroys the global instance.
   static void Shutdown();
@@ -105,6 +132,33 @@ class COMPONENT_EXPORT(RESOURCED) ResourcedClient {
                                    uint32_t moderate_bps,
                                    SetMemoryMarginsBpsCallback callback) = 0;
 
+  enum class Component {
+    kAsh = 0,
+    kLacros = 1,
+  };
+
+  virtual void ReportBackgroundProcesses(Component component,
+                                         const std::vector<int32_t>& pids) = 0;
+
+  struct Process {
+    Process(base::ProcessHandle pid,
+            bool is_protected,
+            bool is_visible,
+            bool is_focused)
+        : pid(pid),
+          is_protected(is_protected),
+          is_visible(is_visible),
+          is_focused(is_focused) {}
+    base::ProcessHandle pid;
+    bool is_protected;
+    bool is_visible;
+    bool is_focused;
+  };
+
+  virtual void ReportBrowserProcesses(
+      Component component,
+      const std::vector<Process>& processes) = 0;
+
   // Adds an observer to the observer list to listen on memory pressure events.
   virtual void AddObserver(Observer* observer) = 0;
 
@@ -118,6 +172,10 @@ class COMPONENT_EXPORT(RESOURCED) ResourcedClient {
   // Stops a previously added observer from being called on ARCVM memory
   // pressure signals.
   virtual void RemoveArcVmObserver(ArcVmObserver* observer) = 0;
+
+  virtual void AddArcContainerObserver(ArcContainerObserver* observer) = 0;
+
+  virtual void RemoveArcContainerObserver(ArcContainerObserver* observer) = 0;
 
  protected:
   ResourcedClient();

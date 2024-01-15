@@ -5,6 +5,7 @@
 #include "third_party/blink/renderer/platform/loader/fetch/resource_load_scheduler.h"
 
 #include <memory>
+#include "base/memory/raw_ptr.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/test_mock_time_task_runner.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -66,7 +67,7 @@ class MockClient final : public GarbageCollected<MockClient>,
  private:
   Member<DetachableConsoleLogger> console_logger_ =
       MakeGarbageCollected<DetachableConsoleLogger>();
-  MockClientDelegate* delegate_;
+  raw_ptr<MockClientDelegate, ExperimentalRenderer> delegate_;
   bool was_run_ = false;
 };
 
@@ -98,6 +99,10 @@ class ResourceLoadSchedulerTest : public testing::Test {
         const String&,
         bool discard_duplicates,
         absl::optional<mojom::ConsoleMessageCategory> category) override {
+      has_message_ = true;
+    }
+    void AddConsoleMessageImpl(ConsoleMessage*,
+                               bool discard_duplicates) override {
       has_message_ = true;
     }
     bool has_message_ = false;
@@ -370,12 +375,16 @@ TEST_F(ResourceLoadSchedulerTest, Stopped) {
 }
 
 TEST_F(ResourceLoadSchedulerTest, PriorityIsConsidered) {
-  // Push three requests.
+  // This tests the request limiting logic in the scheduler for
+  // the tight-mode and regular-mode limits as well as the
+  // special-casing for medium-priority requests.
+
+  // Allow 1 overall request as well as 1 special-case medium request
+  // while blocking anly low-priority requests (starts in tight mode)
+  Scheduler()->SetOutstandingLimitForTesting(
+      0 /* tight_limit */, 1 /* normal_limit */, 1 /* tight_medium_limit */);
+
   MockClient* client1 = MakeGarbageCollected<MockClient>();
-
-  // Allows one kHigh priority request by limits below.
-  Scheduler()->SetOutstandingLimitForTesting(0, 1);
-
   ResourceLoadScheduler::ClientId id1 = ResourceLoadScheduler::kInvalidClientId;
   Scheduler()->Request(client1, ThrottleOption::kThrottleable,
                        ResourceLoadPriority::kLowest, 10 /* intra_priority */,
@@ -403,33 +412,66 @@ TEST_F(ResourceLoadSchedulerTest, PriorityIsConsidered) {
                        &id4);
   EXPECT_NE(ResourceLoadScheduler::kInvalidClientId, id4);
 
-  EXPECT_FALSE(client1->WasRun());
-  EXPECT_FALSE(client2->WasRun());
-  EXPECT_FALSE(client3->WasRun());
-  EXPECT_TRUE(client4->WasRun());
+  MockClient* client5 = MakeGarbageCollected<MockClient>();
+  ResourceLoadScheduler::ClientId id5 = ResourceLoadScheduler::kInvalidClientId;
+  Scheduler()->Request(client5, ThrottleOption::kThrottleable,
+                       ResourceLoadPriority::kMedium, 0 /* intra_priority */,
+                       &id5);
+  EXPECT_NE(ResourceLoadScheduler::kInvalidClientId, id5);
 
+  MockClient* client6 = MakeGarbageCollected<MockClient>();
+  ResourceLoadScheduler::ClientId id6 = ResourceLoadScheduler::kInvalidClientId;
+  Scheduler()->Request(client6, ThrottleOption::kThrottleable,
+                       ResourceLoadPriority::kMedium, 0 /* intra_priority */,
+                       &id6);
+  EXPECT_NE(ResourceLoadScheduler::kInvalidClientId, id6);
+
+  // Expect that all 3 kLow requests are held, the one kHigh request
+  // is sent by the normal limit and one of the kMedium requests
+  // was sent using the medium-specific limit.
+  EXPECT_FALSE(client1->WasRun()); /* kLowest */
+  EXPECT_FALSE(client2->WasRun()); /* kLow intra=1 */
+  EXPECT_FALSE(client3->WasRun()); /* kLow intra=3 */
+  EXPECT_TRUE(client4->WasRun());  /* kHigh - Newly run */
+  EXPECT_TRUE(client5->WasRun());  /* kMedium - Newly run */
+  EXPECT_FALSE(client6->WasRun()); /* kMedium */
+
+  // Calling Release() on kMedium schedules another one.
+  EXPECT_TRUE(ReleaseAndSchedule(id5));
+  EXPECT_FALSE(client1->WasRun()); /* kLowest */
+  EXPECT_FALSE(client2->WasRun()); /* kLow intra=1 */
+  EXPECT_FALSE(client3->WasRun()); /* kLow intra=3 */
+  // 4 and 5 were already run and checked
+  EXPECT_TRUE(client6->WasRun()); /* kMedium - Newly run */
+
+  // Calling Release() on the last kMedium does not schedule non-medium.
+  EXPECT_TRUE(ReleaseAndSchedule(id6));
+  EXPECT_FALSE(client1->WasRun()); /* kLowest */
+  EXPECT_FALSE(client2->WasRun()); /* kLow intra=1 */
+  EXPECT_FALSE(client3->WasRun()); /* kLow intra=3 */
+  // 4-6 have already run and been run and validated
+
+  // Increasing the limit to 2 should allow another low-priority request
+  // through, in order of priority (client 3 with the highest intra-priority).
   Scheduler()->SetOutstandingLimitForTesting(2);
+  EXPECT_FALSE(client1->WasRun()); /* kLowest */
+  EXPECT_FALSE(client2->WasRun()); /* kLow intra=1 */
+  EXPECT_TRUE(client3->WasRun());  /* kLow intra=3 - Newly run */
 
-  EXPECT_FALSE(client1->WasRun());
-  EXPECT_FALSE(client2->WasRun());
-  EXPECT_TRUE(client3->WasRun());
-  EXPECT_TRUE(client4->WasRun());
-
+  // Increasing the limit to 3 should allow another low-priority request
+  // through, in order of priority (client 2).
   Scheduler()->SetOutstandingLimitForTesting(3);
+  EXPECT_FALSE(client1->WasRun()); /* kLowest */
+  EXPECT_TRUE(client2->WasRun());  /* kLow intra=1 - Newly run */
+  // 3-6 have already run and been run and validated
 
-  EXPECT_FALSE(client1->WasRun());
-  EXPECT_TRUE(client2->WasRun());
-  EXPECT_TRUE(client3->WasRun());
-  EXPECT_TRUE(client4->WasRun());
-
+  // Increasing the limit to 4 should allow the final (lowest-priority)
+  // request through.
   Scheduler()->SetOutstandingLimitForTesting(4);
-
   EXPECT_TRUE(client1->WasRun());
-  EXPECT_TRUE(client2->WasRun());
-  EXPECT_TRUE(client3->WasRun());
-  EXPECT_TRUE(client4->WasRun());
 
   // Release the rest.
+  EXPECT_TRUE(Release(id4));
   EXPECT_TRUE(Release(id3));
   EXPECT_TRUE(Release(id2));
   EXPECT_TRUE(Release(id1));
@@ -749,8 +791,7 @@ TEST_F(ResourceLoadSchedulerTest, ConsiderNetworkStateInTigtMode) {
   Scheduler()->Request(client2, ThrottleOption::kThrottleable,
                        ResourceLoadPriority::kLow, 5 /* intra_priority */,
                        &id2);
-  Scheduler()->SetConnectionInfo(id2,
-                                 net::HttpResponseInfo::CONNECTION_INFO_HTTP2);
+  Scheduler()->SetConnectionInfo(id2, net::HttpConnectionInfo::kHTTP2);
   EXPECT_NE(ResourceLoadScheduler::kInvalidClientId, id2);
 
   EXPECT_TRUE(client1->WasRun());
@@ -804,8 +845,7 @@ TEST_F(ResourceLoadSchedulerTest,
   Scheduler()->Request(client2, ThrottleOption::kThrottleable,
                        ResourceLoadPriority::kLow, 5 /* intra_priority */,
                        &id2);
-  Scheduler()->SetConnectionInfo(id2,
-                                 net::HttpResponseInfo::CONNECTION_INFO_HTTP2);
+  Scheduler()->SetConnectionInfo(id2, net::HttpConnectionInfo::kHTTP2);
 
   // This request will not run, because we are experiencing a slow connection.
   MockClient* client3 = MakeGarbageCollected<MockClient>();
@@ -813,8 +853,7 @@ TEST_F(ResourceLoadSchedulerTest,
   Scheduler()->Request(client3, ThrottleOption::kThrottleable,
                        ResourceLoadPriority::kLow, 5 /* intra_priority */,
                        &id3);
-  Scheduler()->SetConnectionInfo(id3,
-                                 net::HttpResponseInfo::CONNECTION_INFO_HTTP2);
+  Scheduler()->SetConnectionInfo(id3, net::HttpConnectionInfo::kHTTP2);
 
   EXPECT_TRUE(client1->WasRun());
   EXPECT_TRUE(client2->WasRun());
@@ -822,125 +861,6 @@ TEST_F(ResourceLoadSchedulerTest,
 
   EXPECT_TRUE(Release(id3));
   EXPECT_TRUE(Release(id2));
-  EXPECT_TRUE(Release(id1));
-}
-
-TEST_F(ResourceLoadSchedulerTest, UnbatchedRequestsRunInInsertOrder) {
-  Scheduler()->OnLifecycleStateChanged(
-      scheduler::SchedulingLifecycleState::kThrottled);
-  Scheduler()->SetOutstandingLimitForTesting(2, 5);
-
-  MockClient::MockClientDelegate delegate;
-
-  // Push two requests.
-  MockClient* client1 = MakeGarbageCollected<MockClient>();
-  MockClient* client2 = MakeGarbageCollected<MockClient>();
-
-  client1->SetDelegate(&delegate);
-  client2->SetDelegate(&delegate);
-
-  ResourceLoadScheduler::ClientId id1 = ResourceLoadScheduler::kInvalidClientId;
-  Scheduler()->Request(client1, ThrottleOption::kThrottleable,
-                       ResourceLoadPriority::kLowest, 10 /* intra_priority */,
-                       &id1);
-  EXPECT_NE(ResourceLoadScheduler::kInvalidClientId, id1);
-
-  ResourceLoadScheduler::ClientId id2 = ResourceLoadScheduler::kInvalidClientId;
-  Scheduler()->Request(client2, ThrottleOption::kThrottleable,
-                       ResourceLoadPriority::kHighest, 1 /* intra_priority */,
-                       &id2);
-  EXPECT_NE(ResourceLoadScheduler::kInvalidClientId, id2);
-
-  EXPECT_TRUE(client1->WasRun());
-  EXPECT_TRUE(client2->WasRun());
-
-  // Release all.
-  EXPECT_TRUE(Release(id1));
-  EXPECT_TRUE(Release(id2));
-
-  // Verify low priority request ran first.
-  auto& order = delegate.client_order();
-  EXPECT_EQ(order[0], client1);
-  EXPECT_EQ(order[1], client2);
-}
-
-TEST_F(ResourceLoadSchedulerTest, BatchedRequestsRunInPriorityOrder) {
-  Scheduler()->OnLifecycleStateChanged(
-      scheduler::SchedulingLifecycleState::kThrottled);
-  Scheduler()->SetOutstandingLimitForTesting(2, 5);
-
-  MockClient::MockClientDelegate delegate;
-
-  Scheduler()->StartBatch();
-
-  // Push two requests.
-  MockClient* client1 = MakeGarbageCollected<MockClient>();
-  MockClient* client2 = MakeGarbageCollected<MockClient>();
-
-  client1->SetDelegate(&delegate);
-  client2->SetDelegate(&delegate);
-
-  ResourceLoadScheduler::ClientId id1 = ResourceLoadScheduler::kInvalidClientId;
-  Scheduler()->Request(client1, ThrottleOption::kThrottleable,
-                       ResourceLoadPriority::kLowest, 10 /* intra_priority */,
-                       &id1);
-  EXPECT_NE(ResourceLoadScheduler::kInvalidClientId, id1);
-
-  ResourceLoadScheduler::ClientId id2 = ResourceLoadScheduler::kInvalidClientId;
-  Scheduler()->Request(client2, ThrottleOption::kThrottleable,
-                       ResourceLoadPriority::kHighest, 1 /* intra_priority */,
-                       &id2);
-  EXPECT_NE(ResourceLoadScheduler::kInvalidClientId, id2);
-
-  EXPECT_FALSE(client1->WasRun());
-  EXPECT_FALSE(client2->WasRun());
-
-  Scheduler()->EndBatch();
-
-  EXPECT_TRUE(client1->WasRun());
-  EXPECT_TRUE(client2->WasRun());
-
-  // Release all.
-  EXPECT_TRUE(Release(id1));
-  EXPECT_TRUE(Release(id2));
-
-  // Verify high priority request ran first.
-  auto& order = delegate.client_order();
-  EXPECT_EQ(order[0], client2);
-  EXPECT_EQ(order[1], client1);
-}
-
-TEST_F(ResourceLoadSchedulerTest, NestedBatchesAccumulateCorrectly) {
-  Scheduler()->OnLifecycleStateChanged(
-      scheduler::SchedulingLifecycleState::kThrottled);
-  Scheduler()->SetOutstandingLimitForTesting(2, 5);
-
-  MockClient::MockClientDelegate delegate;
-
-  // Create 2 nested batches
-  Scheduler()->StartBatch();
-  Scheduler()->StartBatch();
-
-  MockClient* client1 = MakeGarbageCollected<MockClient>();
-  client1->SetDelegate(&delegate);
-
-  ResourceLoadScheduler::ClientId id1 = ResourceLoadScheduler::kInvalidClientId;
-  Scheduler()->Request(client1, ThrottleOption::kThrottleable,
-                       ResourceLoadPriority::kLowest, 10 /* intra_priority */,
-                       &id1);
-  EXPECT_NE(ResourceLoadScheduler::kInvalidClientId, id1);
-
-  EXPECT_FALSE(client1->WasRun());
-
-  // Exit the inner batch and make sure the requests are not released
-  Scheduler()->EndBatch();
-  EXPECT_FALSE(client1->WasRun());
-
-  // Exit the outer batch and verify that the requests are no longer accumulated
-  Scheduler()->EndBatch();
-  EXPECT_TRUE(client1->WasRun());
-
-  // Release all.
   EXPECT_TRUE(Release(id1));
 }
 

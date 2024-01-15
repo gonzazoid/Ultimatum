@@ -9,8 +9,8 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/location.h"
 #include "base/memory/ref_counted_delete_on_sequence.h"
 #include "base/numerics/safe_conversions.h"
@@ -18,7 +18,6 @@
 #include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "base/thread_annotations.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "mojo/public/cpp/system/simple_watcher.h"
 
 namespace mojo {
@@ -79,7 +78,7 @@ class DataPipeProducer::SequenceState
       // watcher and complete the read asynchronously.
       watcher_ = std::make_unique<SimpleWatcher>(
           FROM_HERE, SimpleWatcher::ArmingPolicy::AUTOMATIC,
-          base::SequencedTaskRunnerHandle::Get());
+          base::SequencedTaskRunner::GetCurrentDefault());
       watcher_->Watch(producer_handle_.get(), MOJO_HANDLE_SIGNAL_WRITABLE,
                       MOJO_WATCH_CONDITION_SATISFIED,
                       base::BindRepeating(&SequenceState::OnHandleReady, this));
@@ -139,8 +138,10 @@ class DataPipeProducer::SequenceState
       DataSource::ReadResult result =
           data_source_->Read(bytes_transferred_, read_buffer);
       producer_handle_->EndWriteData(result.bytes_read);
-
-      if (result.result != MOJO_RESULT_OK) {
+      // result.bytes_read == 0 is used to determine if the read operation did
+      // not retrieve any bytes, which typically occurs when reaching the end of
+      // the file (EOF).
+      if (result.result != MOJO_RESULT_OK || result.bytes_read == 0) {
         Finish(result.result);
         return;
       }
@@ -202,7 +203,7 @@ void DataPipeProducer::InitializeNewRequest(CompletionCallback callback) {
       std::move(producer_), file_task_runner,
       base::BindOnce(&DataPipeProducer::OnWriteComplete,
                      weak_factory_.GetWeakPtr(), std::move(callback)),
-      base::SequencedTaskRunnerHandle::Get());
+      base::SequencedTaskRunner::GetCurrentDefault());
 }
 
 void DataPipeProducer::OnWriteComplete(CompletionCallback callback,
@@ -211,6 +212,10 @@ void DataPipeProducer::OnWriteComplete(CompletionCallback callback,
   producer_ = std::move(producer);
   sequence_state_ = nullptr;
   std::move(callback).Run(ready_result);
+}
+
+const DataPipeProducerHandle& DataPipeProducer::GetProducerHandle() const {
+  return producer_.get();
 }
 
 }  // namespace mojo

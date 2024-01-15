@@ -91,8 +91,10 @@ class MODULES_EXPORT WebTransport final
   void OnDatagramReceived(base::span<const uint8_t> data) override;
   void OnIncomingStreamClosed(uint32_t stream_id, bool fin_received) override;
   void OnOutgoingStreamClosed(uint32_t stream_id) override;
-  void OnReceivedResetStream(uint32_t stream_id, uint8_t code) override;
-  void OnReceivedStopSending(uint32_t stream_id, uint8_t code) override;
+  void OnReceivedResetStream(uint32_t stream_id,
+                             uint32_t stream_error_code) override;
+  void OnReceivedStopSending(uint32_t stream_id,
+                             uint32_t stream_error_code) override;
   void OnClosed(
       network::mojom::blink::WebTransportCloseInfoPtr close_info) override;
 
@@ -106,10 +108,10 @@ class MODULES_EXPORT WebTransport final
   void SendFin(uint32_t stream_id);
 
   // Forwards a AbortStream() message to the mojo interface.
-  void ResetStream(uint32_t stream_id, uint8_t code);
+  void ResetStream(uint32_t stream_id, uint32_t code);
 
   // Forwards a StopSending() message to the mojo interface.
-  void StopSending(uint32_t stream_id, uint8_t code);
+  void StopSending(uint32_t stream_id, uint32_t code);
 
   // Removes the reference to a stream.
   void ForgetIncomingStream(uint32_t stream_id);
@@ -128,7 +130,9 @@ class MODULES_EXPORT WebTransport final
 
   WebTransport(ScriptState*, const String& url, ExecutionContext* context);
 
-  void Init(const String& url, const WebTransportOptions&, ExceptionState&);
+  void Init(const String& url_for_diagnostics,
+            const WebTransportOptions&,
+            ExceptionState&);
 
   void Dispose();
   void Cleanup(v8::Local<v8::Value> reason,
@@ -170,8 +174,7 @@ class MODULES_EXPORT WebTransport final
   // TODO(ricea): Find out if such large stream ids are possible.
   HeapHashMap<uint32_t,
               Member<IncomingStream>,
-              WTF::DefaultHash<uint32_t>,
-              WTF::UnsignedWithZeroKeyHashTraits<uint32_t>>
+              IntWithZeroKeyHashTraits<uint32_t>>
       incoming_stream_map_;
 
   // Map from stream_id to OutgoingStream.
@@ -180,17 +183,13 @@ class MODULES_EXPORT WebTransport final
   // TODO(ricea): Find out if such large stream ids are possible.
   HeapHashMap<uint32_t,
               Member<OutgoingStream>,
-              WTF::DefaultHash<uint32_t>,
-              WTF::UnsignedWithZeroKeyHashTraits<uint32_t>>
+              IntWithZeroKeyHashTraits<uint32_t>>
       outgoing_stream_map_;
 
   // A map from stream id to whether the fin signal was received. When
   // OnIncomingStreamClosed is called with a stream ID which doesn't have its
   // corresponding incoming stream, the event is recorded here.
-  HashMap<uint32_t,
-          bool,
-          WTF::DefaultHash<uint32_t>,
-          WTF::UnsignedWithZeroKeyHashTraits<uint32_t>>
+  HashMap<uint32_t, bool, IntWithZeroKeyHashTraits<uint32_t>>
       closed_potentially_pending_streams_;
 
   HeapMojoRemote<mojom::blink::WebTransportConnector> connector_;

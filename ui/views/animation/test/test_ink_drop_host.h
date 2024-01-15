@@ -6,7 +6,7 @@
 #define UI_VIEWS_ANIMATION_TEST_TEST_INK_DROP_HOST_H_
 
 #include "base/memory/raw_ptr.h"
-#include "ui/views/animation/ink_drop_host_view.h"
+#include "ui/views/animation/ink_drop_host.h"
 #include "ui/views/animation/ink_drop_impl.h"
 
 namespace views {
@@ -47,8 +47,8 @@ class TestInkDropHost : public View {
   }
 
   // View:
-  void AddLayerBeneathView(ui::Layer* layer) override;
-  void RemoveLayerBeneathView(ui::Layer* layer) override;
+  void AddLayerToRegion(ui::Layer* layer, views::LayerRegion region) override;
+  void RemoveLayerFromRegions(ui::Layer* layer) override;
 
  private:
   int num_ink_drop_layers_added_ = 0;
@@ -59,8 +59,10 @@ class TestInkDropHost : public View {
   mutable int num_ink_drop_ripples_created_ = 0;
   mutable int num_ink_drop_highlights_created_ = 0;
 
-  mutable raw_ptr<const InkDropRipple> last_ink_drop_ripple_ = nullptr;
-  mutable raw_ptr<const InkDropHighlight> last_ink_drop_highlight_ = nullptr;
+  mutable raw_ptr<const InkDropRipple, DanglingUntriaged>
+      last_ink_drop_ripple_ = nullptr;
+  mutable raw_ptr<const InkDropHighlight, DanglingUntriaged>
+      last_ink_drop_highlight_ = nullptr;
 
   // When true, the InkDropRipple/InkDropHighlight instances will have their
   // timers disabled after creation.

@@ -5,8 +5,9 @@
 #ifndef CHROME_BROWSER_ASH_CAMERA_PRESENCE_NOTIFIER_H_
 #define CHROME_BROWSER_ASH_CAMERA_PRESENCE_NOTIFIER_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/sequence_checker.h"
+#include "base/supports_user_data.h"
 #include "base/timer/timer.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "services/video_capture/public/mojom/video_source_provider.mojom.h"
@@ -15,17 +16,22 @@ namespace ash {
 
 // Monitors Camera sources. Establishes connection to source on creation. Fires
 // callbacks on state changes after Start() is called until Stop().
-class CameraPresenceNotifier {
+class CameraPresenceNotifier : public base::SupportsUserData::Data {
  public:
+  // |callback| for notification of camera count changes. Only one
+  // client may monitor per instance.
+  using CameraCountCallback = base::RepeatingCallback<void(int)>;
   // |callback| for notification of camera presence changes. Only one
   // client may monitor per instance.
   using CameraPresenceCallback = base::RepeatingCallback<void(bool)>;
+
+  explicit CameraPresenceNotifier(CameraCountCallback callback);
   explicit CameraPresenceNotifier(CameraPresenceCallback callback);
 
   CameraPresenceNotifier(const CameraPresenceNotifier&) = delete;
   CameraPresenceNotifier& operator=(const CameraPresenceNotifier&) = delete;
 
-  ~CameraPresenceNotifier();
+  ~CameraPresenceNotifier() override;
 
   // Start polling for camera presence changes. A callback always fires after
   // Start() is called since the first result is always a change.
@@ -51,10 +57,10 @@ class CameraPresenceNotifier {
       const std::vector<media::VideoCaptureDeviceInfo>& devices);
 
   // Result of the last presence check.
-  bool camera_present_on_last_check_;
+  int camera_count_on_last_check_{0};
 
   // Callback for presence check results.
-  CameraPresenceCallback callback_;
+  CameraCountCallback callback_;
 
   // Timer for camera check cycle.
   base::RepeatingTimer camera_check_timer_;

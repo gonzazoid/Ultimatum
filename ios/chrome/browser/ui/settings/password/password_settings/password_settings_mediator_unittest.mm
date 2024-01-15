@@ -6,20 +6,22 @@
 
 #import "base/test/scoped_feature_list.h"
 #import "base/test/task_environment.h"
+#import "components/keyed_service/core/service_access_type.h"
+#import "components/password_manager/core/browser/affiliation/fake_affiliation_service.h"
 #import "components/password_manager/core/browser/password_manager_test_utils.h"
-#import "components/password_manager/core/browser/site_affiliation/mock_affiliation_service.h"
-#import "components/password_manager/core/browser/test_password_store.h"
+#import "components/password_manager/core/browser/password_store/test_password_store.h"
 #import "components/password_manager/core/browser/ui/saved_passwords_presenter.h"
+#import "components/password_manager/core/common/password_manager_features.h"
 #import "components/signin/public/identity_manager/objc/identity_manager_observer_bridge.h"
 #import "components/sync/base/features.h"
 #import "components/sync/base/model_type.h"
 #import "components/sync/base/passphrase_enums.h"
 #import "components/sync/test/mock_sync_service.h"
-#import "ios/chrome/browser/browser_state/test_chrome_browser_state.h"
-#import "ios/chrome/browser/passwords/ios_chrome_password_store_factory.h"
-#import "ios/chrome/browser/signin/identity_manager_factory.h"
-#import "ios/chrome/browser/sync/sync_observer_bridge.h"
-#import "ios/chrome/browser/sync/sync_service_factory.h"
+#import "ios/chrome/browser/passwords/model/ios_chrome_profile_password_store_factory.h"
+#import "ios/chrome/browser/shared/model/browser_state/test_chrome_browser_state.h"
+#import "ios/chrome/browser/signin/model/identity_manager_factory.h"
+#import "ios/chrome/browser/sync/model/sync_observer_bridge.h"
+#import "ios/chrome/browser/sync/model/sync_service_factory.h"
 #import "ios/chrome/common/ui/reauthentication/reauthentication_protocol.h"
 #import "ios/web/public/test/web_task_environment.h"
 #import "testing/gmock/include/gmock/gmock.h"
@@ -27,10 +29,6 @@
 #import "testing/gtest_mac.h"
 #import "testing/platform_test.h"
 #import "third_party/ocmock/OCMock/OCMock.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 using password_manager::SavedPasswordsPresenter;
 using password_manager::TestPasswordStore;
@@ -48,45 +46,45 @@ void SetSyncStatus(SyncServiceForPasswordTests* sync_service,
                               ? syncer::SyncService::TransportState::ACTIVE
                               : syncer::SyncService::TransportState::DISABLED));
   ON_CALL(*sync_service, GetActiveDataTypes())
-      .WillByDefault(testing::Return(syncer::ModelTypeSet(syncer::PASSWORDS)));
+      .WillByDefault(
+          testing::Return(syncer::ModelTypeSet({syncer::PASSWORDS})));
   ON_CALL(*(sync_service->GetMockUserSettings()), GetEncryptedDataTypes())
-      .WillByDefault(testing::Return(syncer::ModelTypeSet(syncer::PASSWORDS)));
+      .WillByDefault(
+          testing::Return(syncer::ModelTypeSet({syncer::PASSWORDS})));
   ON_CALL(*(sync_service->GetMockUserSettings()), GetPassphraseType())
       .WillByDefault(testing::Return(passphrase_type));
-}
-
-// Sets up a password store factory for testing, and returns the test store.
-scoped_refptr<TestPasswordStore> CreateAndUseTestPasswordStore(
-    ChromeBrowserState* browser_state) {
-  return base::WrapRefCounted(static_cast<password_manager::TestPasswordStore*>(
-      IOSChromePasswordStoreFactory::GetInstance()
-          ->SetTestingFactoryAndUse(
-              browser_state,
-              base::BindRepeating(&password_manager::BuildPasswordStore<
-                                  web::BrowserState, TestPasswordStore>))
-          .get()));
 }
 
 class PasswordSettingsMediatorTest : public PlatformTest {
  protected:
   void SetUp() override {
     TestChromeBrowserState::Builder builder;
+    builder.AddTestingFactory(
+        IOSChromeProfilePasswordStoreFactory::GetInstance(),
+        base::BindRepeating(
+            &password_manager::BuildPasswordStore<web::BrowserState,
+                                                  TestPasswordStore>));
     browser_state_ = builder.Build();
 
-    password_manager::MockAffiliationService affiliation_service_;
-    store_ = CreateAndUseTestPasswordStore(browser_state_.get());
+    store_ =
+        base::WrapRefCounted(static_cast<password_manager::TestPasswordStore*>(
+            IOSChromeProfilePasswordStoreFactory::GetForBrowserState(
+                browser_state_.get(), ServiceAccessType::EXPLICIT_ACCESS)
+                .get()));
     presenter_ = std::make_unique<SavedPasswordsPresenter>(
-        &affiliation_service_, store_);
+        &affiliation_service_, store_, /*accont_store=*/nullptr);
 
     mediator_ = [[PasswordSettingsMediator alloc]
-        initWithReauthenticationModule:reauth_module_
-               savedPasswordsPresenter:presenter_.get()
-                         exportHandler:export_handler_
-                           prefService:browser_state_->GetPrefs()
-                       identityManager:IdentityManagerFactory::
-                                           GetForBrowserState(
-                                               browser_state_.get())
-                           syncService:&sync_service_];
+           initWithReauthenticationModule:reauth_module_
+                  savedPasswordsPresenter:presenter_.get()
+        bulkMovePasswordsToAccountHandler:
+            bulk_move_passwords_to_account_handler_
+                            exportHandler:export_handler_
+                              prefService:browser_state_->GetPrefs()
+                          identityManager:IdentityManagerFactory::
+                                              GetForBrowserState(
+                                                  browser_state_.get())
+                              syncService:&sync_service_];
     mediator_.consumer = consumer_;
   }
 
@@ -94,23 +92,20 @@ class PasswordSettingsMediatorTest : public PlatformTest {
 
   web::WebTaskEnvironment task_env_;
   SyncServiceForPasswordTests sync_service_;
+  password_manager::FakeAffiliationService affiliation_service_;
   scoped_refptr<TestPasswordStore> store_;
   std::unique_ptr<SavedPasswordsPresenter> presenter_;
   std::unique_ptr<TestChromeBrowserState> browser_state_;
   id consumer_ = OCMProtocolMock(@protocol(PasswordSettingsConsumer));
   id export_handler_ = OCMProtocolMock(@protocol(PasswordExportHandler));
+  id bulk_move_passwords_to_account_handler_ =
+      OCMProtocolMock(@protocol(BulkMoveLocalPasswordsToAccountHandler));
   id reauth_module_ = OCMProtocolMock(@protocol(ReauthenticationProtocol));
   PasswordSettingsMediator* mediator_;
 };
 
 TEST_F(PasswordSettingsMediatorTest,
        SyncChangeTriggersChangeOnDeviceEncryption) {
-  base::test::ScopedFeatureList scoped_feature_list;
-  scoped_feature_list.InitWithFeatures(
-      {syncer::kSyncTrustedVaultPassphraseRecovery,
-       syncer::kSyncTrustedVaultPassphrasePromo},
-      {});
-
   // This was populated when the consumer was initially set.
   [[consumer_ verify] setOnDeviceEncryptionState:
                           PasswordSettingsOnDeviceEncryptionStateNotShown];
@@ -156,4 +151,25 @@ TEST_F(PasswordSettingsMediatorTest,
   [syncObserver onPrimaryAccountChanged:event];
   [[consumer_ verify] setOnDeviceEncryptionState:
                           PasswordSettingsOnDeviceEncryptionStateNotShown];
+}
+
+// Tests that sync state changes trigger updates to showing the move local
+// passwords to account module.
+TEST_F(PasswordSettingsMediatorTest,
+       SyncChangeTriggersBulkMovePasswordsToAccountChange) {
+  base::test::ScopedFeatureList feature_list;
+  feature_list.InitWithFeatures(
+      {password_manager::features::
+           kIOSPasswordSettingsBulkUploadLocalPasswords},
+      /*disabled_features=*/{});
+
+  ASSERT_TRUE(
+      [mediator_ conformsToProtocol:@protocol(SyncObserverModelBridge)]);
+
+  PasswordSettingsMediator<SyncObserverModelBridge>* syncObserver =
+      static_cast<PasswordSettingsMediator<SyncObserverModelBridge>*>(
+          mediator_);
+
+  [syncObserver onSyncStateChanged];
+  [[consumer_ verify] setLocalPasswordsCount:0 withUserEligibility:NO];
 }

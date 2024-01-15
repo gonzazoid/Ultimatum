@@ -2,7 +2,6 @@
 <html>
 <head>
   <title i18n-content="appWindow"></title>
-  <link rel="stylesheet" href="chrome://resources/css/roboto.css">
   <link rel="stylesheet" href="bubble.css">
   <link rel="stylesheet" href="bubble_button.css">
   <link rel="stylesheet" href="chrome://resources/css/overlay.css">
@@ -72,7 +71,8 @@
           </div>
           <div id="backup-restore-preference">
             <label class="layout horizontal section-checkbox-container">
-              <cr-checkbox class="checkbox-option">
+              <cr-checkbox class="checkbox-option"
+                  i18n-values="aria-label-override:textBackupRestoreLabel">
                 <p class="checkbox-text"
                     i18n-values=".innerHTML:textBackupRestore"></p>
               </cr-checkbox>
@@ -112,26 +112,6 @@
         <cr-button class="action-button" id="button-agree">
           <div class="container flex" i18n-content="buttonAgree"></div>
         </cr-button>
-      </div>
-    </div>
-  </div>
-  <div id="active-directory-auth" class="section" hidden>
-    <div class="section-active-directory-auth">
-      <img class="icon-header" src="icon/playstore.svg" aria-hidden="true">
-      <div class="scrollable">
-        <p class="text-active-directory-auth-title"
-            i18n-content="activeDirectoryAuthTitle"></p>
-        <p class="text-active-directory-auth-subtitle"
-            i18n-content="activeDirectoryAuthDesc"></p>
-        <div class="section-active-directory-auth-view"
-            id="active-directory-auth-container">
-          <webview id="active-directory-auth-view"></webview>
-        </div>
-        <div class="section-active-directory-auth-buttons">
-          <cr-button class="button-active-directory-auth"
-              id="button-active-directory-auth-cancel"
-              i18n-content="buttonCancel"></cr-button>
-        </div>
       </div>
     </div>
   </div>

@@ -24,7 +24,12 @@ ModelValidatorKeyedServiceFactory::GetInstance() {
 ModelValidatorKeyedServiceFactory::ModelValidatorKeyedServiceFactory()
     : ProfileKeyedServiceFactory(
           "ModelValidatorKeyedService",
-          ProfileSelections::BuildForRegularAndIncognito()) {
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOwnInstance)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOwnInstance)
+              .Build()) {
   DCHECK(switches::ShouldValidateModel());
   DependsOn(OptimizationGuideKeyedServiceFactory::GetInstance());
 }
@@ -32,9 +37,11 @@ ModelValidatorKeyedServiceFactory::ModelValidatorKeyedServiceFactory()
 ModelValidatorKeyedServiceFactory::~ModelValidatorKeyedServiceFactory() =
     default;
 
-KeyedService* ModelValidatorKeyedServiceFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+  ModelValidatorKeyedServiceFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
-  return new ModelValidatorKeyedService(Profile::FromBrowserContext(context));
+  return std::make_unique<ModelValidatorKeyedService>(
+      Profile::FromBrowserContext(context));
 }
 
 bool ModelValidatorKeyedServiceFactory::ServiceIsCreatedWithBrowserContext()

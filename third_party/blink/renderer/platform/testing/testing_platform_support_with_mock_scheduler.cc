@@ -4,9 +4,10 @@
 
 #include "third_party/blink/renderer/platform/testing/testing_platform_support_with_mock_scheduler.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/task/sequence_manager/test/sequence_manager_for_test.h"
 #include "base/test/test_mock_time_task_runner.h"
+#include "third_party/blink/renderer/platform/scheduler/common/task_priority.h"
 #include "third_party/blink/renderer/platform/scheduler/main_thread/main_thread_scheduler_impl.h"
 #include "third_party/blink/renderer/platform/wtf/wtf.h"
 
@@ -18,9 +19,13 @@ TestingPlatformSupportWithMockScheduler::
           base::TestMockTimeTaskRunner::Type::kStandalone)) {
   DCHECK(IsMainThread());
   test_task_runner_->AdvanceMockTickClock(base::Seconds(1));
+  auto settings = base::sequence_manager::SequenceManager::Settings::Builder()
+                      .SetPrioritySettings(scheduler::CreatePrioritySettings())
+                      .Build();
   std::unique_ptr<base::sequence_manager::SequenceManagerForTest>
       sequence_manager = base::sequence_manager::SequenceManagerForTest::Create(
-          nullptr, test_task_runner_, test_task_runner_->GetMockTickClock());
+          nullptr, test_task_runner_, test_task_runner_->GetMockTickClock(),
+          std::move(settings));
   sequence_manager_ = sequence_manager.get();
 
   scheduler_ = std::make_unique<scheduler::MainThreadSchedulerImpl>(
@@ -59,6 +64,19 @@ void TestingPlatformSupportWithMockScheduler::RunUntilIdle() {
   }
 }
 
+const base::Clock* TestingPlatformSupportWithMockScheduler::GetClock() const {
+  return test_task_runner_->GetMockClock();
+}
+
+const base::TickClock* TestingPlatformSupportWithMockScheduler::GetTickClock()
+    const {
+  return test_task_runner_->GetMockTickClock();
+}
+
+base::TimeTicks TestingPlatformSupportWithMockScheduler::NowTicks() const {
+  return test_task_runner_->NowTicks();
+}
+
 void TestingPlatformSupportWithMockScheduler::RunForPeriodSeconds(
     double seconds) {
   RunForPeriod(base::Seconds(seconds));
@@ -82,10 +100,6 @@ void TestingPlatformSupportWithMockScheduler::AdvanceClock(
 void TestingPlatformSupportWithMockScheduler::SetAutoAdvanceNowToPendingTasks(
     bool auto_advance) {
   auto_advance_ = auto_advance;
-}
-
-base::TimeTicks TestingPlatformSupportWithMockScheduler::NowTicks() const {
-  return test_task_runner_->NowTicks();
 }
 
 scheduler::MainThreadSchedulerImpl*

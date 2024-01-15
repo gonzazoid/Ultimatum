@@ -9,8 +9,8 @@
 
 #include <cstring>
 
-#include "base/bind.h"
 #include "base/files/memory_mapped_file.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "media/base/audio_decoder_config.h"
 #include "media/base/media.h"
@@ -77,6 +77,32 @@ void TestConfigConvertExtraData(
   // Restore orig values for sane cleanup.
   codec_parameters->extradata = orig_extradata;
   codec_parameters->extradata_size = orig_extradata_size;
+}
+
+void VerifyProfileTest(const char* file_name,
+                       VideoCodecProfile expected_profile) {
+  // Open a file to get a real AVStreams from FFmpeg.
+  base::MemoryMappedFile file;
+  ASSERT_TRUE(file.Initialize(GetTestDataFilePath(file_name)));
+  InMemoryUrlProtocol protocol(file.data(), file.length(), false);
+  FFmpegGlue glue(&protocol);
+  ASSERT_TRUE(glue.OpenContext());
+  AVFormatContext* format_context = glue.format_context();
+
+  for (size_t i = 0; i < format_context->nb_streams; ++i) {
+    AVStream* stream = format_context->streams[i];
+    AVCodecParameters* codec_parameters = stream->codecpar;
+    AVMediaType codec_type = codec_parameters->codec_type;
+
+    if (codec_type == AVMEDIA_TYPE_VIDEO) {
+      VideoDecoderConfig video_config;
+      EXPECT_TRUE(AVStreamToVideoDecoderConfig(stream, &video_config));
+      EXPECT_EQ(expected_profile, video_config.profile());
+    } else {
+      // Only process video.
+      continue;
+    }
+  }
 }
 
 TEST_F(FFmpegCommonTest, AVStreamToDecoderConfig) {
@@ -298,80 +324,19 @@ TEST_F(FFmpegCommonTest, VerifyUmaCodecHashes) {
   printf("</enum>\n");
 #endif
 }
+
 #if BUILDFLAG(USE_PROPRIETARY_CODECS)
 TEST_F(FFmpegCommonTest, VerifyH264Profile) {
-  // Open a file to get a real AVStreams from FFmpeg.
-  base::MemoryMappedFile file;
-  ASSERT_TRUE(file.Initialize(GetTestDataFilePath("bear-1280x720.mp4")));
-  InMemoryUrlProtocol protocol(file.data(), file.length(), false);
-  FFmpegGlue glue(&protocol);
-  ASSERT_TRUE(glue.OpenContext());
-  AVFormatContext* format_context = glue.format_context();
-
-  for (size_t i = 0; i < format_context->nb_streams; ++i) {
-    AVStream* stream = format_context->streams[i];
-    AVCodecParameters* codec_parameters = stream->codecpar;
-    AVMediaType codec_type = codec_parameters->codec_type;
-
-    if (codec_type == AVMEDIA_TYPE_VIDEO) {
-      VideoDecoderConfig video_config;
-      EXPECT_TRUE(AVStreamToVideoDecoderConfig(stream, &video_config));
-      EXPECT_EQ(H264PROFILE_HIGH, video_config.profile());
-    } else {
-      // Only process video.
-      continue;
-    }
-  }
+  VerifyProfileTest("bear-1280x720.mp4", H264PROFILE_HIGH);
 }
+
 #if BUILDFLAG(ENABLE_PLATFORM_HEVC)
 TEST_F(FFmpegCommonTest, VerifyH265MainProfile) {
-  // Open a file to get a real AVStreams from FFmpeg.
-  base::MemoryMappedFile file;
-  ASSERT_TRUE(file.Initialize(GetTestDataFilePath("bear-1280x720-hevc.mp4")));
-  InMemoryUrlProtocol protocol(file.data(), file.length(), false);
-  FFmpegGlue glue(&protocol);
-  ASSERT_TRUE(glue.OpenContext());
-  AVFormatContext* format_context = glue.format_context();
-
-  for (size_t i = 0; i < format_context->nb_streams; ++i) {
-    AVStream* stream = format_context->streams[i];
-    AVCodecParameters* codec_parameters = stream->codecpar;
-    AVMediaType codec_type = codec_parameters->codec_type;
-
-    if (codec_type == AVMEDIA_TYPE_VIDEO) {
-      VideoDecoderConfig video_config;
-      EXPECT_TRUE(AVStreamToVideoDecoderConfig(stream, &video_config));
-      EXPECT_EQ(HEVCPROFILE_MAIN, video_config.profile());
-    } else {
-      // Only process video.
-      continue;
-    }
-  }
+  VerifyProfileTest("bear-1280x720-hevc.mp4", HEVCPROFILE_MAIN);
 }
+
 TEST_F(FFmpegCommonTest, VerifyH265Main10Profile) {
-  // Open a file to get a real AVStreams from FFmpeg.
-  base::MemoryMappedFile file;
-  ASSERT_TRUE(
-      file.Initialize(GetTestDataFilePath("bear-1280x720-hevc-10bit.mp4")));
-  InMemoryUrlProtocol protocol(file.data(), file.length(), false);
-  FFmpegGlue glue(&protocol);
-  ASSERT_TRUE(glue.OpenContext());
-  AVFormatContext* format_context = glue.format_context();
-
-  for (size_t i = 0; i < format_context->nb_streams; ++i) {
-    AVStream* stream = format_context->streams[i];
-    AVCodecParameters* codec_parameters = stream->codecpar;
-    AVMediaType codec_type = codec_parameters->codec_type;
-
-    if (codec_type == AVMEDIA_TYPE_VIDEO) {
-      VideoDecoderConfig video_config;
-      EXPECT_TRUE(AVStreamToVideoDecoderConfig(stream, &video_config));
-      EXPECT_EQ(HEVCPROFILE_MAIN10, video_config.profile());
-    } else {
-      // Only process video.
-      continue;
-    }
-  }
+  VerifyProfileTest("bear-1280x720-hevc-10bit.mp4", HEVCPROFILE_MAIN10);
 }
 #endif  // BUILDFLAG(ENABLE_PLATFORM_HEVC)
 #endif  // BUILDFLAG(USE_PROPRIETARY_CODECS)
@@ -395,23 +360,34 @@ TEST_F(FFmpegCommonTest, VerifyHDRMetadataAndColorSpaceInfo) {
   VideoDecoderConfig video_config;
   EXPECT_TRUE(AVStreamToVideoDecoderConfig(stream, &video_config));
   ASSERT_TRUE(video_config.hdr_metadata().has_value());
-  EXPECT_EQ(30.0,
-            video_config.hdr_metadata()->color_volume_metadata.luminance_min);
-  EXPECT_EQ(40.0,
-            video_config.hdr_metadata()->color_volume_metadata.luminance_max);
-  EXPECT_EQ(gfx::PointF(0.1, 0.2),
-            video_config.hdr_metadata()->color_volume_metadata.primary_r);
-  EXPECT_EQ(gfx::PointF(0.1, 0.2),
-            video_config.hdr_metadata()->color_volume_metadata.primary_g);
-  EXPECT_EQ(gfx::PointF(0.1, 0.2),
-            video_config.hdr_metadata()->color_volume_metadata.primary_b);
-  EXPECT_EQ(gfx::PointF(0.1, 0.2),
-            video_config.hdr_metadata()->color_volume_metadata.white_point);
-
+  const auto& smpte_st_2086 =
+      video_config.hdr_metadata()->smpte_st_2086.value();
+  EXPECT_EQ(30.0, smpte_st_2086.luminance_min);
+  EXPECT_EQ(40.0, smpte_st_2086.luminance_max);
+  EXPECT_EQ(0.1f, smpte_st_2086.primaries.fRX);
+  EXPECT_EQ(0.2f, smpte_st_2086.primaries.fRY);
+  EXPECT_EQ(0.1f, smpte_st_2086.primaries.fGX);
+  EXPECT_EQ(0.2f, smpte_st_2086.primaries.fGY);
+  EXPECT_EQ(0.1f, smpte_st_2086.primaries.fBX);
+  EXPECT_EQ(0.2f, smpte_st_2086.primaries.fBY);
+  EXPECT_EQ(0.1f, smpte_st_2086.primaries.fWX);
+  EXPECT_EQ(0.2f, smpte_st_2086.primaries.fWY);
+  const auto& cta_861_3 = video_config.hdr_metadata()->cta_861_3.value();
+  EXPECT_EQ(11.0f, cta_861_3.max_content_light_level);
+  EXPECT_EQ(12.0f, cta_861_3.max_frame_average_light_level);
   EXPECT_EQ(VideoColorSpace(VideoColorSpace::PrimaryID::SMPTEST428_1,
                             VideoColorSpace::TransferID::LOG,
                             VideoColorSpace::MatrixID::RGB,
                             gfx::ColorSpace::RangeID::FULL),
             video_config.color_space_info());
 }
+
+#if BUILDFLAG(ENABLE_AV1_DECODER)
+TEST_F(FFmpegCommonTest, VerifyAv1Profiles) {
+  VerifyProfileTest("blackwhite_yuv444p_av1.mp4", AV1PROFILE_PROFILE_HIGH);
+  VerifyProfileTest("blackwhite_yuv444p_av1.webm", AV1PROFILE_PROFILE_HIGH);
+  VerifyProfileTest("bear-av1.mp4", AV1PROFILE_PROFILE_MAIN);
+}
+#endif
+
 }  // namespace media

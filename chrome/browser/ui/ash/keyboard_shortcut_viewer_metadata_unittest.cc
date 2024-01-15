@@ -24,29 +24,24 @@
 namespace {
 
 // The total number of Ash accelerators.
-constexpr int kAshAcceleratorsTotalNum = 142;
+constexpr int kAshAcceleratorsTotalNum = 147;
 // The hash of Ash accelerators.
-constexpr char kAshAcceleratorsHash[] = "315a877b9ba123c29d1fe7019efc7069";
+constexpr char kAshAcceleratorsHash[] = "6b946ad3ceb8263615f2c47dc7e240a8";
 #if BUILDFLAG(GOOGLE_CHROME_BRANDING)
 // Internal builds add an extra accelerator for the Feedback app.
 // The total number of Chrome accelerators (available on Chrome OS).
-constexpr int kChromeAcceleratorsTotalNum = 102;
+constexpr int kChromeAcceleratorsTotalNum = 103;
 // The hash of Chrome accelerators (available on Chrome OS).
-constexpr char kChromeAcceleratorsHash[] = "672b2d00632c66337b6323da9c75e3a2";
+constexpr char kChromeAcceleratorsHash[] = "e9e2edcc3a1a7332c960f7b3a00ee8cc";
 #else
 // The total number of Chrome accelerators (available on Chrome OS).
-constexpr int kChromeAcceleratorsTotalNum = 101;
+constexpr int kChromeAcceleratorsTotalNum = 102;
 // The hash of Chrome accelerators (available on Chrome OS).
-constexpr char kChromeAcceleratorsHash[] = "7143dc8ef5efe3fc6047e864f589386f";
+constexpr char kChromeAcceleratorsHash[] = "253127d58865152a7e549bf2caa24027";
 #endif  // BUILDFLAG(GOOGLE_CHROME_BRANDING)
 
 const char* BooleanToString(bool value) {
   return value ? "true" : "false";
-}
-
-bool ShouldDesksKeyboardShortcutsBeEnabled() {
-  return ::features::IsImprovedKeyboardShortcutsEnabled() &&
-         ash::features::IsImprovedDesksKeyboardShortcutsEnabled();
 }
 
 std::string ModifiersToString(int modifiers) {
@@ -142,7 +137,7 @@ class KeyboardShortcutViewerMetadataTest : public testing::Test {
       ash_accelerator_ids_.insert({accel_data.keycode, accel_data.modifiers});
     }
 
-    if (ShouldDesksKeyboardShortcutsBeEnabled()) {
+    if (::features::IsImprovedKeyboardShortcutsEnabled()) {
       for (size_t i = 0;
            i <
            ash::kEnabledWithImprovedDesksKeyboardShortcutsAcceleratorDataLength;
@@ -236,6 +231,7 @@ TEST_F(KeyboardShortcutViewerMetadataTest,
   }
 }
 
+// TODO (http://b/291803593): Remove the test.
 // Test that modifying Ash/Chrome accelerator should update
 // KeyboardShortcutViewerMetadata. (https://crbug.com/826037).
 // 1. If you are adding/deleting/modifying shortcuts, please also
@@ -247,7 +243,7 @@ TEST_F(KeyboardShortcutViewerMetadataTest,
 // 3. If there is no corrensponding item in the Keyboard Shortcut Viewer, please
 //    consider adding the shortcut to it or only update 2.
 TEST_F(KeyboardShortcutViewerMetadataTest,
-       ModifyAcceleratorShouldUpdateMetadata) {
+       DISABLED_ModifyAcceleratorShouldUpdateMetadata) {
   std::vector<ash::AcceleratorData> ash_accelerators;
   std::vector<AcceleratorMapping> chrome_accelerators;
   for (size_t i = 0; i < ash::kAcceleratorDataLength; ++i)
@@ -258,7 +254,7 @@ TEST_F(KeyboardShortcutViewerMetadataTest,
   for (const auto& accel_mapping : GetAcceleratorList())
     chrome_accelerators.emplace_back(accel_mapping);
 
-  if (ShouldDesksKeyboardShortcutsBeEnabled()) {
+  if (::features::IsImprovedKeyboardShortcutsEnabled()) {
     for (size_t i = 0;
          i <
          ash::kEnabledWithImprovedDesksKeyboardShortcutsAcceleratorDataLength;

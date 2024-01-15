@@ -10,9 +10,12 @@
 #include "ash/constants/quick_settings_catalogs.h"
 #include "ash/system/model/clock_observer.h"
 #include "ash/system/unified/feature_pod_controller_base.h"
+#include "base/memory/raw_ptr.h"
+#include "base/memory/weak_ptr.h"
 
 namespace ash {
 
+class FeatureTile;
 class UnifiedSystemTrayController;
 
 // Controller of a feature pod button that toggles night light mode.
@@ -31,7 +34,7 @@ class ASH_EXPORT NightLightFeaturePodController
   ~NightLightFeaturePodController() override;
 
   // FeaturePodControllerBase:
-  FeaturePodButton* CreateButton() override;
+  std::unique_ptr<FeatureTile> CreateTile(bool compact = false) override;
   QsFeatureCatalogName GetCatalogName() override;
   void OnIconPressed() override;
   void OnLabelPressed() override;
@@ -47,12 +50,15 @@ class ASH_EXPORT NightLightFeaturePodController
   // current status and schedule type of night light.
   const std::u16string GetPodSubLabel();
 
-  // Updates the toggle state, sub label, and icon tooltip of the `button_`.
-  void UpdateButton();
+  // Updates the toggle state, sub label, and icon tooltip of the `tile_`.
+  void UpdateTile();
 
-  UnifiedSystemTrayController* const tray_controller_;
+  const raw_ptr<UnifiedSystemTrayController, DanglingUntriaged>
+      tray_controller_;
+  // Owned by the views hierarchy.
+  raw_ptr<FeatureTile, DanglingUntriaged> tile_ = nullptr;
 
-  FeaturePodButton* button_ = nullptr;
+  base::WeakPtrFactory<NightLightFeaturePodController> weak_factory_{this};
 };
 
 }  // namespace ash

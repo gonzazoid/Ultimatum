@@ -7,20 +7,22 @@
 
 #include <stdint.h>
 
+#include <optional>
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "build/build_config.h"
 #include "components/viz/common/vertical_scroll_direction.h"
 #include "content/common/content_export.h"
 #include "content/public/common/drop_data.h"
 #include "services/metrics/public/cpp/ukm_recorder.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/input/web_input_event.h"
 #include "third_party/blink/public/common/page/drag_operation.h"
 #include "third_party/blink/public/mojom/frame/lifecycle.mojom.h"
+#include "third_party/blink/public/mojom/input/input_handler.mojom-shared.h"
 #include "third_party/blink/public/mojom/manifest/display_mode.mojom.h"
+#include "ui/base/ui_base_types.h"
 #include "ui/gfx/native_widget_types.h"
 
 namespace blink {
@@ -93,13 +95,6 @@ class CONTENT_EXPORT RenderWidgetHostDelegate {
   virtual KeyboardEventProcessingResult PreHandleKeyboardEvent(
       const NativeWebKeyboardEvent& event);
 
-  // Callback to give the browser a chance to handle the specified mouse
-  // event before sending it to the renderer.
-  // Returns true if the |event| was handled.
-  // TODO(carlosil, nasko): remove once committed interstitial pages are
-  // fully implemented.
-  virtual bool PreHandleMouseEvent(const blink::WebMouseEvent& event);
-
   // Callback to inform the browser that the renderer did not process the
   // specified events. This gives an opportunity to the browser to process the
   // back/forward mouse buttons.
@@ -139,7 +134,7 @@ class CONTENT_EXPORT RenderWidgetHostDelegate {
   // Send OS Cut/Copy/Paste actions to the focused frame.
   virtual void ExecuteEditCommand(
       const std::string& command,
-      const absl::optional<std::u16string>& value) = 0;
+      const std::optional<std::u16string>& value) = 0;
   virtual void Undo() = 0;
   virtual void Redo() = 0;
   virtual void Cut() = 0;
@@ -154,6 +149,12 @@ class CONTENT_EXPORT RenderWidgetHostDelegate {
   // Requests the renderer to select the region between two points in the
   // currently focused frame.
   virtual void SelectRange(const gfx::Point& base, const gfx::Point& extent) {}
+
+  // Requests the renderer to select text around the current caret position.
+  // Currently supports word and sentence granularities.
+  virtual void SelectAroundCaret(blink::mojom::SelectionGranularity granularity,
+                                 bool should_show_handle,
+                                 bool should_show_context_menu) {}
 
   // Request the renderer to Move the caret to the new position.
   virtual void MoveCaret(const gfx::Point& extent) {}
@@ -206,6 +207,13 @@ class CONTENT_EXPORT RenderWidgetHostDelegate {
   // Returns the display mode for all widgets in the frame tree. Only applies
   // to frame-based widgets. Other widgets are always kBrowser.
   virtual blink::mojom::DisplayMode GetDisplayMode() const;
+
+  // Returns the window show state.
+  virtual ui::WindowShowState GetWindowShowState();
+
+  // Returns whether the window can be resized or not. Defaults to true for
+  // desktopOSs and false for mobileOSs.
+  virtual bool GetResizable();
 
   // Returns the Window Control Overlay rectangle. Only applies to an
   // outermost main frame's widget. Other widgets always returns an empty rect.
@@ -262,8 +270,8 @@ class CONTENT_EXPORT RenderWidgetHostDelegate {
   virtual bool IsWidgetForPrimaryMainFrame(RenderWidgetHostImpl*);
 
   // Returns the object that tracks the start of content to visible events for
-  // the WebContents. May return nullptr if there is no RenderWidgetHostView.
-  virtual VisibleTimeRequestTrigger* GetVisibleTimeRequestTrigger();
+  // the WebContents.
+  virtual VisibleTimeRequestTrigger& GetVisibleTimeRequestTrigger() = 0;
 
   // Inner WebContents Helpers -------------------------------------------------
   //
@@ -313,6 +321,11 @@ class CONTENT_EXPORT RenderWidgetHostDelegate {
                                  const gfx::Rect& initial_rect_in_dips,
                                  const gfx::Rect& initial_anchor_rect_in_dips) {
   }
+
+  // Returns the amount that this view has been resized by a showing virtual
+  // keyboard or 0 if the virtual keyboard is hidden or in a mode that doesn't
+  // resize the view.
+  virtual int GetVirtualKeyboardResizeHeight();
 
  protected:
   virtual ~RenderWidgetHostDelegate() {}

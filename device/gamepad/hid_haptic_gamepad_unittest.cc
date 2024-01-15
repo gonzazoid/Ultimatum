@@ -6,10 +6,11 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/run_loop.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/task_environment.h"
 #include "device/gamepad/hid_writer.h"
 #include "device/gamepad/public/mojom/gamepad.mojom.h"
@@ -101,13 +102,13 @@ class HidHapticGamepadTest : public testing::Test {
         mojom::GamepadEffectParameters::New(
             kDurationMillis, start_delay, strong_magnitude, weak_magnitude,
             /*left_trigger=*/0, /*right_trigger=*/0),
-        std::move(callback), base::ThreadTaskRunnerHandle::Get());
+        std::move(callback), base::SingleThreadTaskRunner::GetCurrentDefault());
   }
 
   void PostResetVibration(
       mojom::GamepadHapticsManager::ResetVibrationActuatorCallback callback) {
     gamepad_->ResetVibration(std::move(callback),
-                             base::ThreadTaskRunnerHandle::Get());
+                             base::SingleThreadTaskRunner::GetCurrentDefault());
   }
 
   // Callback for the first PlayEffect or ResetVibration call in a test.
@@ -130,7 +131,7 @@ class HidHapticGamepadTest : public testing::Test {
   int second_callback_count_;
   mojom::GamepadHapticsResult first_callback_result_;
   mojom::GamepadHapticsResult second_callback_result_;
-  raw_ptr<FakeHidWriter> fake_hid_writer_;
+  raw_ptr<FakeHidWriter, DanglingUntriaged> fake_hid_writer_;
   std::unique_ptr<HidHapticGamepad> gamepad_;
   base::test::TaskEnvironment task_environment_{
       base::test::TaskEnvironment::TimeSource::MOCK_TIME};

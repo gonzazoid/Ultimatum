@@ -17,11 +17,13 @@
 #include "ash/public/cpp/window_properties.h"
 #include "ash/shell.h"
 #include "ash/wm/resize_shadow_controller.h"
-#include "base/bind.h"
-#include "base/callback_forward.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_forward.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/singleton.h"
 #include "base/memory/weak_ptr.h"
 #include "base/notreached.h"
+#include "base/task/sequenced_task_runner.h"
 #include "ui/aura/window_observer.h"
 #include "ui/aura/window_tree_host.h"
 #include "ui/wm/public/activation_client.h"
@@ -86,8 +88,8 @@ class WindowActivationObserver : public wm::ActivationChangeObserver,
       return;
     RemoveAllObservers();
     // To avoid nested-activation, here we post the task to the queue.
-    base::SequencedTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                     std::move(on_activated_));
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE, std::move(on_activated_));
     delete this;
   }
 
@@ -96,7 +98,7 @@ class WindowActivationObserver : public wm::ActivationChangeObserver,
       : window_(window), on_activated_(std::move(on_activated)) {
     DCHECK(!on_activated_.is_null());
     ash::Shell::Get()->activation_client()->AddObserver(this);
-    observer_.Observe(window_);
+    observer_.Observe(window_.get());
   }
 
   ~WindowActivationObserver() override { RemoveAllObservers(); }
@@ -106,7 +108,7 @@ class WindowActivationObserver : public wm::ActivationChangeObserver,
     ash::Shell::Get()->activation_client()->RemoveObserver(this);
   }
 
-  aura::Window* const window_;
+  const raw_ptr<aura::Window> window_;
   base::OnceClosure on_activated_;
   base::ScopedObservation<aura::Window, aura::WindowObserver> observer_{this};
 };
@@ -153,12 +155,12 @@ class AppIdObserver : public aura::WindowObserver {
                 base::OnceCallback<void(aura::Window*)> on_ready)
       : window_(window), on_ready_(std::move(on_ready)) {
     DCHECK(!on_ready_.is_null());
-    observer_.Observe(window_);
+    observer_.Observe(window_.get());
   }
 
   ~AppIdObserver() override { observer_.Reset(); }
 
-  aura::Window* const window_;
+  const raw_ptr<aura::Window> window_;
   base::OnceCallback<void(aura::Window*)> on_ready_;
   base::ScopedObservation<aura::Window, aura::WindowObserver> observer_{this};
 };
@@ -252,8 +254,12 @@ void ArcResizeLockManager::OnWindowPropertyChanged(aura::Window* window,
   // kArcResizeLockTypeKey, and the new value is the same as |old| in that case.
   AppIdObserver::RunOnReady(
       window, base::BindOnce(&CompatModeButtonController::Update,
-                             compat_mode_button_controller_->GetWeakPtr(),
-                             pref_delegate_));
+                             compat_mode_button_controller_->GetWeakPtr()));
+}
+
+void ArcResizeLockManager::Shutdown() {
+  compat_mode_button_controller_->ClearPrefDelegate();
+  pref_delegate_ = nullptr;
 }
 
 void ArcResizeLockManager::OnWindowBoundsChanged(
@@ -261,13 +267,20 @@ void ArcResizeLockManager::OnWindowBoundsChanged(
     const gfx::Rect& old_bounds,
     const gfx::Rect& new_bounds,
     ui::PropertyChangeReason reason) {
-  compat_mode_button_controller_->Update(pref_delegate_, window);
+  compat_mode_button_controller_->Update(window);
 }
 
 void ArcResizeLockManager::OnWindowDestroying(aura::Window* window) {
   resize_lock_enabled_windows_.erase(window);
   if (window_observations_.IsObservingSource(window))
     window_observations_.RemoveObservation(window);
+}
+
+void ArcResizeLockManager::SetPrefDelegate(
+    ArcResizeLockPrefDelegate* delegate) {
+  CHECK(!pref_delegate_);
+  pref_delegate_ = delegate;
+  compat_mode_button_controller_->SetPrefDelegate(delegate);
 }
 
 void ArcResizeLockManager::EnableResizeLock(aura::Window* window) {
@@ -350,7 +363,7 @@ void ArcResizeLockManager::UpdateResizeLockState(aura::Window* window) {
 
   // As we updated the resize lock state above, we need to update compat mode
   // button.
-  compat_mode_button_controller_->Update(pref_delegate_, window);
+  compat_mode_button_controller_->Update(window);
 
   // Even if resize lock doesn't get enabled or disabled, we need to ensure to
   // update this as resize shadow can be updated in an intermediate state when
@@ -382,6 +395,11 @@ void ArcResizeLockManager::ShowSplashScreenDialog(aura::Window* window,
   WindowActivationObserver::RunOnActivated(
       window, base::BindOnce(&ArcSplashScreenDialogView::Show, window,
                              is_fully_locked));
+}
+
+// static
+void ArcResizeLockManager::EnsureFactoryBuilt() {
+  ArcResizeLockManagerFactory::GetInstance();
 }
 
 }  // namespace arc

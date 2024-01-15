@@ -7,6 +7,11 @@
 
 #import <Foundation/Foundation.h>
 
+namespace password_manager {
+class AffiliatedGroup;
+struct CredentialUIEntry;
+}  // namespace password_manager
+
 // State of on-device encryption used for
 // ItemTypeOnDeviceEncryptionOptInDescription, ItemTypeOnDeviceEncryptionSetUp
 // and ItemTypeOnDeviceEncryptionSetUp.
@@ -44,9 +49,9 @@ struct CredentialUIEntry;
 
 // Returns string containing the timestamp of the last password check. If the
 // check finished less than 1 minute ago string will look "Last check just
-// now.", otherwise "Last check X minutes/hours... ago.". If check never run
+// now.", otherwise "Last check X minutes/hours... ago.". If check never run,
 // string will be "Check never run.".
-- (NSString*)formatElapsedTimeSinceLastCheck;
+- (NSString*)formattedElapsedTimeSinceLastCheck;
 
 // Returns detailed information about Password Check error if applicable.
 - (NSAttributedString*)passwordCheckErrorInfo;
@@ -54,8 +59,18 @@ struct CredentialUIEntry;
 // Returns the on-device encryption state according to the sync service.
 - (OnDeviceEncryptionState)onDeviceEncryptionState;
 
-// Returns whether or not passwords are currently syncing.
-- (BOOL)isSyncingPasswords;
+// Returns whether a special icon should be shown next to `credential` that
+// indicates it's not backed up to any account.
+- (BOOL)shouldShowLocalOnlyIconForCredential:
+    (const password_manager::CredentialUIEntry&)credential;
+
+// Similar to above but for an affiliated group.
+- (BOOL)shouldShowLocalOnlyIconForGroup:
+    (const password_manager::AffiliatedGroup&)group;
+
+// Tells the delegate that the user has dismissed the Password Manager widget
+// promo. Used to notify the Feature Engagement Tracker of the dismissal.
+- (void)notifyFETOfPasswordManagerWidgetPromoDismissal;
 
 @end
 

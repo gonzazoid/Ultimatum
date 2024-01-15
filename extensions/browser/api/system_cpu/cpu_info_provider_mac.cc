@@ -6,8 +6,8 @@
 
 #include <mach/mach_host.h>
 
+#include "base/apple/scoped_mach_port.h"
 #include "base/mac/mac_util.h"
-#include "base/mac/scoped_mach_port.h"
 #include "base/system/sys_info.h"
 
 namespace extensions {
@@ -27,12 +27,11 @@ bool CpuInfoProvider::QueryCpuTimePerProcessor(
   DCHECK(infos);
 
   natural_t num_of_processors;
-  base::mac::ScopedMachSendRight host(mach_host_self());
+  base::apple::ScopedMachSendRight host(mach_host_self());
   mach_msg_type_number_t type;
   processor_cpu_load_info_data_t* cpu_infos;
 
-  if (host_processor_info(host.get(),
-                          PROCESSOR_CPU_LOAD_INFO,
+  if (host_processor_info(host.get(), PROCESSOR_CPU_LOAD_INFO,
                           &num_of_processors,
                           reinterpret_cast<processor_info_array_t*>(&cpu_infos),
                           &type) == KERN_SUCCESS) {
@@ -53,8 +52,7 @@ bool CpuInfoProvider::QueryCpuTimePerProcessor(
       infos->at(i).usage.total = sys + user + nice + idle;
     }
 
-    vm_deallocate(mach_task_self(),
-                  reinterpret_cast<vm_address_t>(cpu_infos),
+    vm_deallocate(mach_task_self(), reinterpret_cast<vm_address_t>(cpu_infos),
                   num_of_processors * sizeof(processor_cpu_load_info));
 
     return true;

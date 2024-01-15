@@ -15,7 +15,7 @@
 #include "chrome/browser/sync/test/integration/single_client_status_change_checker.h"
 #include "chrome/browser/sync/test/integration/sync_service_impl_harness.h"
 #include "chrome/browser/sync/test/integration/sync_test.h"
-#include "components/sync/driver/sync_token_status.h"
+#include "components/sync/service/sync_token_status.h"
 #include "components/sync/test/fake_server_http_post_provider.h"
 #include "content/public/test/browser_test.h"
 
@@ -169,46 +169,9 @@ class SharingMessageCallbackChecker : public SingleClientStatusChangeChecker {
   base::WeakPtrFactory<SharingMessageCallbackChecker> weak_ptr_factory_{this};
 };
 
-// Used to wait until the sharing message commit was sent to the server
-// (regardless of the commit result). Waits until the last commit message has at
-// least one sharing message with the expected payload.
-class SharingMessageCommitChecker : public SingleClientStatusChangeChecker {
- public:
-  SharingMessageCommitChecker(syncer::SyncServiceImpl* service,
-                              fake_server::FakeServer* fake_server,
-                              const std::string& expected_payload)
-      : SingleClientStatusChangeChecker(service),
-        fake_server_(fake_server),
-        expected_payload_(expected_payload) {}
-
-  bool IsExitConditionSatisfied(std::ostream* os) override {
-    *os << "Waiting for sharing message to be committed.";
-
-    sync_pb::ClientToServerMessage message;
-    fake_server_->GetLastCommitMessage(&message);
-    for (const sync_pb::SyncEntity& entity : message.commit().entries()) {
-      if (entity.specifics().sharing_message().payload() == expected_payload_) {
-        return true;
-      }
-    }
-
-    return false;
-  }
-
- private:
-  const raw_ptr<fake_server::FakeServer> fake_server_ = nullptr;
-  const std::string expected_payload_;
-};
-
 class SingleClientSharingMessageSyncTest : public SyncTest {
  public:
-  SingleClientSharingMessageSyncTest() : SyncTest(SINGLE_CLIENT) {
-    // Replace the default value (5 seconds) with 1 minute to reduce possibility
-    // of test flakiness.
-    features_override_.InitAndEnableFeatureWithParameters(
-        kSharingMessageBridgeTimeout,
-        {{"SharingMessageBridgeTimeoutSeconds", "60"}});
-  }
+  SingleClientSharingMessageSyncTest() : SyncTest(SINGLE_CLIENT) {}
 
   bool WaitForSharingMessage(
       std::vector<SharingMessageSpecifics> expected_specifics) {
@@ -216,9 +179,6 @@ class SingleClientSharingMessageSyncTest : public SyncTest {
                                          std::move(expected_specifics))
         .Wait();
   }
-
- private:
-  base::test::ScopedFeatureList features_override_;
 };
 
 IN_PROC_BROWSER_TEST_F(SingleClientSharingMessageSyncTest, ShouldSubmit) {
@@ -295,8 +255,10 @@ IN_PROC_BROWSER_TEST_F(SingleClientSharingMessageSyncTest,
   EXPECT_TRUE(callback_checker.Wait());
 }
 
+// ChromeOS does not support signing out of a primary account.
+#if !BUILDFLAG(IS_CHROMEOS_ASH)
 IN_PROC_BROWSER_TEST_F(SingleClientSharingMessageSyncTest,
-                       ShouldCleanPendingMessagesAfterSyncPaused) {
+                       ShouldCleanPendingMessagesUponSignout) {
   ASSERT_TRUE(SetupSync());
   SharingMessageCallbackChecker callback_checker(
       GetSyncService(0), sync_pb::SharingMessageCommitError::SYNC_TURNED_OFF);
@@ -309,14 +271,15 @@ IN_PROC_BROWSER_TEST_F(SingleClientSharingMessageSyncTest,
       std::make_unique<SharingMessageSpecifics>(specifics),
       callback_checker.GetCommitFinishedCallback());
 
-  GetClient(0)->StopSyncServiceAndClearData();
-  GetClient(0)->StartSyncService();
+  GetClient(0)->SignOutPrimaryAccount();
+  ASSERT_TRUE(GetClient(0)->SetupSync());
 
   EXPECT_TRUE(callback_checker.Wait());
   EXPECT_TRUE(GetFakeServer()
                   ->GetSyncEntitiesByModelType(syncer::SHARING_MESSAGE)
                   .empty());
 }
+#endif  // !BUILDFLAG(IS_CHROMEOS_ASH)
 
 IN_PROC_BROWSER_TEST_F(
     SingleClientSharingMessageSyncTest,
@@ -362,9 +325,6 @@ IN_PROC_BROWSER_TEST_F(
       std::make_unique<SharingMessageSpecifics>(specifics),
       callback_checker.GetCommitFinishedCallback());
 
-  ASSERT_TRUE(
-      SharingMessageCommitChecker(GetSyncService(0), GetFakeServer(), payload)
-          .Wait());
   ASSERT_TRUE(RetryingAccessTokenFetchChecker(GetSyncService(0)).Wait());
   SetOAuth2TokenResponse(kValidOAuth2Token, net::HTTP_OK, net::OK);
   GetFakeServer()->ClearHttpError();

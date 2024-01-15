@@ -22,8 +22,8 @@
 
 #include <algorithm>
 
+#include "base/apple/mach_logging.h"
 #include "base/logging.h"
-#include "base/mac/mach_logging.h"
 #include "base/strings/stringprintf.h"
 #include "build/build_config.h"
 #include "snapshot/cpu_context.h"
@@ -57,6 +57,7 @@ SystemSnapshotIOSIntermediateDump::SystemSnapshotIOSIntermediateDump()
       daylight_offset_seconds_(0),
       standard_name_(),
       daylight_name_(),
+      address_mask_(0),
       initialized_() {}
 
 SystemSnapshotIOSIntermediateDump::~SystemSnapshotIOSIntermediateDump() {}
@@ -97,6 +98,8 @@ void SystemSnapshotIOSIntermediateDump::Initialize(
     dst_status_ = SystemSnapshot::kDoesNotObserveDaylightSavingTime;
   }
 
+  GetDataValueFromMap(system_data, Key::kAddressMask, &address_mask_);
+
   vm_size_t page_size;
   if (GetDataValueFromMap(system_data, Key::kPageSize, &page_size)) {
     const IOSIntermediateDumpMap* vm_stat =
@@ -115,6 +118,8 @@ void SystemSnapshotIOSIntermediateDump::Initialize(
       free_ *= page_size;
     }
   }
+
+  GetDataValueFromMap(system_data, Key::kCrashpadUptime, &crashpad_uptime_ns_);
 
   INITIALIZATION_STATE_SET_VALID(initialized_);
 }
@@ -239,6 +244,16 @@ void SystemSnapshotIOSIntermediateDump::TimeZone(
   *daylight_offset_seconds = daylight_offset_seconds_;
   standard_name->assign(standard_name_);
   daylight_name->assign(daylight_name_);
+}
+
+uint64_t SystemSnapshotIOSIntermediateDump::AddressMask() const {
+  INITIALIZATION_STATE_DCHECK_VALID(initialized_);
+  return address_mask_;
+}
+
+uint64_t SystemSnapshotIOSIntermediateDump::CrashpadUptime() const {
+  INITIALIZATION_STATE_DCHECK_VALID(initialized_);
+  return crashpad_uptime_ns_;
 }
 
 }  // namespace internal

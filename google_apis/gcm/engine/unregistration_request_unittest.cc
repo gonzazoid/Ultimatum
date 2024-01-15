@@ -10,10 +10,11 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_tokenizer.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
+#include "google_apis/credentials_mode.h"
 #include "google_apis/gcm/engine/gcm_request_test_base.h"
 #include "google_apis/gcm/engine/gcm_unregistration_request_handler.h"
 #include "google_apis/gcm/engine/instance_id_delete_token_request_handler.h"
@@ -106,7 +107,8 @@ void GCMUnregistrationRequestTest::CreateRequest() {
       base::BindOnce(&UnregistrationRequestTest::UnregistrationCallback,
                      base::Unretained(this)),
       max_retry_count_, url_loader_factory(),
-      base::ThreadTaskRunnerHandle::Get(), &recorder_, std::string());
+      base::SingleThreadTaskRunner::GetCurrentDefault(), &recorder_,
+      std::string());
 }
 
 TEST_F(GCMUnregistrationRequestTest, RequestDataPassedToFetcher) {
@@ -117,7 +119,7 @@ TEST_F(GCMUnregistrationRequestTest, RequestDataPassedToFetcher) {
   const network::ResourceRequest* pending_request;
   ASSERT_TRUE(
       test_url_loader_factory()->IsPending(kRegistrationURL, &pending_request));
-  EXPECT_EQ(network::mojom::CredentialsMode::kOmit,
+  EXPECT_EQ(google_apis::GetOmitCredentialsModeForGaiaRequests(),
             pending_request->credentials_mode);
 
   // Verify that authorization header was put together properly.
@@ -323,7 +325,8 @@ void InstaceIDDeleteTokenRequestTest::CreateRequest(
       base::BindOnce(&UnregistrationRequestTest::UnregistrationCallback,
                      base::Unretained(this)),
       max_retry_count(), url_loader_factory(),
-      base::ThreadTaskRunnerHandle::Get(), &recorder_, std::string());
+      base::SingleThreadTaskRunner::GetCurrentDefault(), &recorder_,
+      std::string());
 }
 
 TEST_F(InstaceIDDeleteTokenRequestTest, RequestDataPassedToFetcher) {

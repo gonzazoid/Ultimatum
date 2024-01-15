@@ -2,12 +2,12 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-// clang-format off
-// #import {afterNextRender, Polymer} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
-// #import {$} from 'chrome://resources/js/util.js';
-// #import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
-// #import {assert} from 'chrome://resources/js/assert.js';
-// clang-format on
+import {assert} from '//resources/ash/common/assert.js';
+import {loadTimeData} from '//resources/ash/common/load_time_data.m.js';
+import {$} from '//resources/ash/common/util.js';
+import {afterNextRender} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+
+import {Oobe} from '../cr_ui.js';
 
 /**
  * @fileoverview Common testing utils methods used for OOBE tast tests.
@@ -196,33 +196,6 @@ class NetworkScreenTester extends ScreenElementApi {
   }
 }
 
-class EulaScreenTester extends ScreenElementApi {
-  constructor() {
-    super('oobe-eula-md');
-    this.eulaStep = new PolymerElementApi(this, '#eulaDialog');
-    this.nextButton = new PolymerElementApi(this, '#acceptButton');
-  }
-
-  /** @override */
-  shouldSkip() {
-    // Eula screen should skipped on non-branded build and on CfM devices.
-    return loadTimeData.getBoolean('testapi_shouldSkipEula');
-  }
-
-  /**
-   * Returns if the EULA Screen is ready for test interaction.
-   * @return {boolean}
-   */
-  isReadyForTesting() {
-    return this.isVisible() && this.eulaStep.isVisible() &&
-        this.nextButton.isVisible();
-  }
-
-  getNextButtonName() {
-    return loadTimeData.getString('oobeEulaAcceptAndContinueButtonText');
-  }
-}
-
 class UpdateScreenTester extends ScreenElementApi {
   constructor() {
     super('oobe-update');
@@ -238,7 +211,41 @@ class EnrollmentScreenTester extends ScreenElementApi {
 class UserCreationScreenTester extends ScreenElementApi {
   constructor() {
     super('user-creation');
+    this.personalCrButton = new PolymerElementApi(this, '#selfButton');
+    this.enrollCrButton = new PolymerElementApi(this, '#enrollButton');
+    this.enrollTriageCrButton =
+        new PolymerElementApi(this, '#triageEnrollButton');
     this.nextButton = new PolymerElementApi(this, '#nextButton');
+    this.enrollNextButton =
+        new PolymerElementApi(this, '#enrollTriageNextButton');
+  }
+
+  /**
+   * Presses enroll device button to select it in enroll triage step.
+   */
+  selectEnrollTriageButton() {
+    this.enrollTriageCrButton.click();
+  }
+
+  /**
+   * Presses for personal use button to select it.
+   */
+  selectPersonalUser() {
+    this.personalCrButton.click();
+  }
+
+  /**
+   * Presses for work button to select it.
+   */
+  selectForWork() {
+    this.enrollCrButton.click();
+  }
+
+  /**
+   * Presses next button in enroll-triage step.
+   */
+  clickEnrollNextButton() {
+    this.enrollNextButton.click();
   }
 }
 
@@ -255,8 +262,9 @@ class GaiaScreenTester extends ScreenElementApi {
    * @return {boolean}
    */
   isReadyForTesting() {
-    return this.isVisible() && !this.gaiaLoading.isVisible() &&
-        this.signinFrame.isVisible() && this.gaiaDialog.isVisible();
+    return (
+        this.isVisible() && !this.gaiaLoading.isVisible() &&
+        this.signinFrame.isVisible() && this.gaiaDialog.isVisible());
   }
 }
 
@@ -296,7 +304,7 @@ class AssistantScreenTester extends ScreenElementApi {
   }
   /** @override */
   shouldSkip() {
-    return !loadTimeData.getBoolean('testapi_isLibAssistantEnabled');
+    return loadTimeData.getBoolean('testapi_shouldSkipAssistant');
   }
 
   /**
@@ -304,8 +312,9 @@ class AssistantScreenTester extends ScreenElementApi {
    * @return {boolean}
    */
   isReadyForTesting() {
-    return this.isVisible() &&
-        (this.valueProp.isVisible() || this.relatedInfo.isVisible());
+    return (
+        this.isVisible() &&
+        (this.valueProp.isVisible() || this.relatedInfo.isVisible()));
   }
 
   getSkipButtonName() {
@@ -421,8 +430,9 @@ class ThemeSelectionScreenTester extends ScreenElementApi {
    * @return {boolean}
    */
   isReadyForTesting() {
-    return this.isVisible() && this.lightThemeButton.isVisible() &&
-        this.darkThemeButton.isVisible() && this.autoThemeButton.isVisible();
+    return (
+        this.isVisible() && this.lightThemeButton.isVisible() &&
+        this.darkThemeButton.isVisible() && this.autoThemeButton.isVisible());
   }
 
   /**
@@ -478,9 +488,9 @@ class ConfirmSamlPasswordScreenTester extends ScreenElementApi {
    */
   enterManualPasswords(password) {
     this.passwordInput.typeInto(password);
-    Polymer.RenderStatus.afterNextRender(assert(this.element()), () => {
+    afterNextRender(assert(this.element()), () => {
       this.confirmPasswordInput.typeInto(password);
-      Polymer.RenderStatus.afterNextRender(assert(this.element()), () => {
+      afterNextRender(assert(this.element()), () => {
         this.clickNext();
       });
     });
@@ -545,8 +555,24 @@ class EnrollmentSignInStep extends PolymerElementApi {
    * @return {boolean}
    */
   isReadyForTesting() {
-    return this.isVisible() && this.signInFrame.isVisible() &&
-        this.nextButton.isVisible();
+    return (
+        this.isVisible() && this.signInFrame.isVisible() &&
+        this.nextButton.isVisible());
+  }
+}
+
+class EnrollmentAttributeStep extends PolymerElementApi {
+  constructor(parent) {
+    super(parent, '#step-attribute-prompt');
+    this.skipButton = new PolymerElementApi(parent, '#attributesSkip');
+  }
+
+  isReadyForTesting() {
+    return this.isVisible() && this.skipButton.isVisible();
+  }
+
+  clickSkip() {
+    return this.skipButton.click();
   }
 }
 
@@ -614,6 +640,7 @@ class EnterpriseEnrollmentScreenTester extends ScreenElementApi {
   constructor() {
     super('enterprise-enrollment');
     this.signInStep = new EnrollmentSignInStep(this);
+    this.attributeStep = new EnrollmentAttributeStep(this);
     this.successStep = new EnrollmentSuccessStep(this);
     this.errorStep = new EnrollmentErrorStep(this);
     this.enrollmentInProgressDlg = new PolymerElementApi(this, '#step-working');
@@ -671,6 +698,8 @@ class ErrorScreenTester extends ScreenElementApi {
   constructor() {
     super('error-message');
     this.offlineLink = new PolymerElementApi(this, '#error-offline-login-link');
+    this.errorTitle = new PolymerElementApi(this, '#error-title');
+    this.errorSubtitle = new PolymerElementApi(this, '#error-subtitle');
   }
 
   /**
@@ -678,7 +707,42 @@ class ErrorScreenTester extends ScreenElementApi {
    * @return {boolean}
    */
   isReadyForTesting() {
-    return this.isVisible() && this.offlineLink.isVisible();
+    return this.isVisible();
+  }
+
+  /**
+   *
+   * Returns if offline link is visible.
+   * @return {boolean}
+   */
+  isOfflineLinkVisible() {
+    return this.offlineLink.isVisible();
+  }
+
+  /**
+   * Returns error screen message title.
+   * @return {string}
+   */
+  getErrorTitle() {
+    // If screen is not visible always return empty title.
+    if (!this.isVisible()) {
+      return '';
+    }
+
+    return this.errorTitle.element().innerText.trim();
+  }
+
+  /**
+   * Returns error screen subtitle. Includes all visible error messages.
+   * @return {string}
+   */
+  getErrorReasons() {
+    // If screen is not visible always return empty reasons.
+    if (!this.isVisible()) {
+      return '';
+    }
+
+    return this.errorSubtitle.element().innerText.trim();
   }
 
   /**
@@ -699,25 +763,17 @@ class DemoPreferencesScreenTester extends ScreenElementApi {
   }
 }
 
-class ArcTosScreenTester extends ScreenElementApi {
-  constructor() {
-    super('arc-tos');
-  }
-
-  // Note that the Accept Button text key is different depending on whether
-  // the device in Demo Mode setup. Key for non-demo setup is
-  // "arcTermsOfServiceAcceptButton"
-  getArcTosDemoModeAcceptButtonName() {
-    return loadTimeData.getString('arcTermsOfServiceAcceptAndContinueButton');
-  }
-}
-
-
 class GuestTosScreenTester extends ScreenElementApi {
   constructor() {
     super('guest-tos');
     this.loadedStep = new PolymerElementApi(this, '#loaded');
     this.nextButton = new PolymerElementApi(this, '#acceptButton');
+
+    this.googleEulaDialog = new PolymerElementApi(this, '#googleEulaDialog');
+    this.crosEulaDialog = new PolymerElementApi(this, '#crosEulaDialog');
+
+    this.googleEulaDialogLink = new PolymerElementApi(this, '#googleEulaLink');
+    this.crosEulaDialogLink = new PolymerElementApi(this, '#crosEulaLink');
   }
 
   /** @override */
@@ -734,8 +790,32 @@ class GuestTosScreenTester extends ScreenElementApi {
   getNextButtonName() {
     return loadTimeData.getString('guestTosAccept');
   }
-}
 
+  /** @return {string} */
+  getEulaButtonName() {
+    return loadTimeData.getString('guestTosOk');
+  }
+
+  /** @return {boolean} */
+  isGoogleEulaDialogShown() {
+    return this.googleEulaDialog.isVisible();
+  }
+
+  /** @return {boolean} */
+  isCrosEulaDialogShown() {
+    return this.crosEulaDialog.isVisible();
+  }
+
+  /** @return {string} */
+  getGoogleEulaLinkName() {
+    return this.googleEulaDialogLink.element().text.trim();
+  }
+
+  /** @return {string} */
+  getCrosEulaLinkName() {
+    return this.crosEulaDialogLink.element().text.trim();
+  }
+}
 
 class GestureNavigationScreenTester extends ScreenElementApi {
   constructor() {
@@ -746,6 +826,11 @@ class GestureNavigationScreenTester extends ScreenElementApi {
   getNextButtonName() {
     return loadTimeData.getString('gestureNavigationIntroNextButton');
   }
+
+  /** @return {string} */
+  getSkipButtonName() {
+    return loadTimeData.getString('gestureNavigationIntroSkipButton');
+  }
 }
 
 class ConsolidatedConsentScreenTester extends ScreenElementApi {
@@ -755,6 +840,18 @@ class ConsolidatedConsentScreenTester extends ScreenElementApi {
     this.nextButton = new PolymerElementApi(this, '#acceptButton');
     this.readMoreButton =
         new PolymerElementApi(this.loadedStep, '#readMoreButton');
+    this.recoveryToggle = new PolymerElementApi(this, '#recoveryOptIn');
+
+    this.googleEulaDialog = new PolymerElementApi(this, '#googleEulaDialog');
+    this.crosEulaDialog = new PolymerElementApi(this, '#crosEulaDialog');
+    this.arcTosDialog = new PolymerElementApi(this, '#arcTosDialog');
+    this.privacyPolicyDialog =
+        new PolymerElementApi(this, '#privacyPolicyDialog');
+
+    this.googleEulaLink = new PolymerElementApi(this, '#googleEulaLink');
+    this.crosEulaLink = new PolymerElementApi(this, '#crosEulaLink');
+    this.arcTosLink = new PolymerElementApi(this, '#arcTosLink');
+    this.privacyPolicyLink = new PolymerElementApi(this, '#privacyPolicyLink');
   }
 
   /** @override */
@@ -772,13 +869,74 @@ class ConsolidatedConsentScreenTester extends ScreenElementApi {
     // The read more button is inside a <dom-if> element, if it's hidden, the
     // element would be removed entirely from dom, so we need to check if the
     // element exists before checking if it's visible.
-    return this.readMoreButton.element() != null &&
-        this.readMoreButton.isVisible();
+    return (
+        this.readMoreButton.element() != null &&
+        this.readMoreButton.isVisible());
   }
 
   /** @return {string} */
   getNextButtonName() {
     return loadTimeData.getString('consolidatedConsentAcceptAndContinue');
+  }
+
+  /**
+   * Enable the toggle which controls whether the user opted-in the the
+   * cryptohome recovery feature.
+   */
+  enableRecoveryToggle() {
+    this.recoveryToggle.element().checked = true;
+  }
+
+  /** @return {string} */
+  getEulaOkButtonName() {
+    return loadTimeData.getString('consolidatedConsentOK');
+  }
+
+  /** @return {boolean} */
+  isGoogleEulaDialogShown() {
+    return this.googleEulaDialog.isVisible();
+  }
+
+  /** @return {boolean} */
+  isCrosEulaDialogShown() {
+    return this.crosEulaDialog.isVisible();
+  }
+
+  /** @return {boolean} */
+  isArcTosDialogShown() {
+    return this.arcTosDialog.isVisible();
+  }
+
+  /** @return {boolean} */
+  isPrivacyPolicyDialogShown() {
+    return this.privacyPolicyDialog.isVisible();
+  }
+
+  /** @return {string} */
+  getGoogleEulaLinkName() {
+    return this.googleEulaLink.element().text.trim();
+  }
+
+  /** @return {string} */
+  getCrosEulaLinkName() {
+    return this.crosEulaLink.element().text.trim();
+  }
+
+  /** @return {string} */
+  getArcTosLinkName() {
+    return this.arcTosLink.element().text.trim();
+  }
+
+  /** @return {string} */
+  getPrivacyPolicyLinkName() {
+    return this.privacyPolicyLink.element().text.trim();
+  }
+
+  /**
+   * Click `accept` button to go to the next screen.
+   */
+  clickAcceptButton() {
+    this.nextButton.element().click();
   }
 }
 
@@ -804,13 +962,239 @@ class SmartPrivacyProtectionScreenTester extends ScreenElementApi {
   }
 }
 
-class OobeApiProvider {
+class CryptohomeRecoverySetupScreenTester extends ScreenElementApi {
+  constructor() {
+    super('cryptohome-recovery-setup');
+  }
+}
+
+class LocalPasswordSetupScreenTester extends ScreenElementApi {
+  constructor() {
+    super('local-password-setup');
+    this.passwordInput = new PolymerElementApi(this, '#passwordInput');
+    this.firstInput = new TextFieldApi(this.passwordInput, '#firstInput');
+    this.confirmInput = new TextFieldApi(this.passwordInput, '#confirmInput');
+    this.nextButton = new PolymerElementApi(this, '#nextButton');
+  }
+
+  /** @return {boolean} */
+  isReadyForTesting() {
+    return this.isVisible() && this.firstInput.isVisible() &&
+        this.confirmInput.isVisible();
+  }
+
+  enterPassword(password) {
+    this.firstInput.typeInto(password);
+    afterNextRender(assert(this.element()), () => {
+      this.confirmInput.typeInto(password);
+      afterNextRender(assert(this.element()), () => {
+        this.nextButton.click();
+      });
+    });
+  }
+}
+
+class PasswordFactorSuccessScreenTester extends ScreenElementApi {
+  constructor() {
+    super('factor-setup-success');
+    this.doneButton = new PolymerElementApi(this, '#doneButton');
+    this.nextButton = new PolymerElementApi(this, '#nextButton');
+  }
+
+  /** @return {boolean} */
+  isDone() {
+    return this.isVisible() &&
+        (this.doneButton.isVisible() || this.nextButton.isVisible());
+  }
+
+  clickDone() {
+    if (this.doneButton.isVisible()) {
+      this.doneButton.click();
+      return;
+    }
+    if (this.nextButton.isVisible()) {
+      this.nextButton.click();
+    }
+  }
+}
+
+class GaiaInfoScreenTester extends ScreenElementApi {
+  constructor() {
+    super('gaia-info');
+    this.nextButton = new PolymerElementApi(this, '#nextButton');
+  }
+
+  /** @override */
+  shouldSkip() {
+    return loadTimeData.getBoolean('testapi_shouldSkipGaiaInfoScreen');
+  }
+}
+
+class ConsumerUpdateScreenTester extends ScreenElementApi {
+  constructor() {
+    super('consumer-update');
+    this.skipButton = new PolymerElementApi(this, '#skipButton');
+  }
+
+  clickSkip() {
+    this.skipButton.click();
+  }
+}
+
+class ChoobeScreenTester extends ScreenElementApi {
+  constructor() {
+    super('choobe');
+    this.skipButton = new PolymerElementApi(this, '#skipButton');
+    this.nextButton = new PolymerElementApi(this, '#nextButton');
+    this.choobeScreensList = new PolymerElementApi(this, '#screensList');
+    this.touchpadScrollScreenButton = new PolymerElementApi(
+        this.choobeScreensList, '#cr-button-touchpad-scroll');
+    this.drivePinningScreenButton = new PolymerElementApi(
+        this.choobeScreensList, '#cr-button-drive-pinning');
+    this.displaySizeScreenButton = new PolymerElementApi(
+        this.choobeScreensList, '#cr-button-display-size');
+    this.themeSelectionScreenButton = new PolymerElementApi(
+        this.choobeScreensList, '#cr-button-theme-selection');
+  }
+
+  /** @override */
+  shouldSkip() {
+    return loadTimeData.getBoolean('testapi_shouldSkipChoobe');
+  }
+
+  isReadyForTesting() {
+    return this.isVisible();
+  }
+
+  clickTouchpadScrollScreen() {
+    this.touchpadScrollScreenButton.click();
+  }
+
+  clickDrivePinningScreen() {
+    this.drivePinningScreenButton.click();
+  }
+
+  clickDisplaySizeScreen() {
+    this.displaySizeScreenButton.click();
+  }
+
+  clickThemeSelectionScreen() {
+    this.themeSelectionScreenButton.click();
+  }
+
+  isTouchpadScrollScreenVisible() {
+    return this.touchpadScrollScreenButton.element() != null &&
+        this.touchpadScrollScreenButton.isVisible();
+  }
+
+  isDrivePinningScreenVisible() {
+    return this.drivePinningScreenButton.element() != null &&
+        this.drivePinningScreenButton.isVisible();
+  }
+
+  isDisplaySizeScreenVisible() {
+    return this.displaySizeScreenButton.element() != null &&
+        this.displaySizeScreenButton.isVisible();
+  }
+
+  isThemeSelectionScreenVisible() {
+    return this.themeSelectionScreenButton.element() != null &&
+        this.themeSelectionScreenButton.isVisible();
+  }
+
+  isDrivePinningScreenChecked() {
+    return !!this.drivePinningScreenButton.element().getAttribute('checked');
+  }
+
+  clickNext() {
+    this.nextButton.click();
+  }
+
+  clickSkip() {
+    this.skipButton.click();
+  }
+}
+
+class ChoobeDrivePinningScreenTester extends ScreenElementApi {
+  constructor() {
+    super('drive-pinning');
+    this.nextButton = new PolymerElementApi(this, '#nextButton');
+    this.drivePinningToggle =
+        new PolymerElementApi(this, '#drivePinningToggle');
+    this.drivePinningSpaceInformation =
+        new PolymerElementApi(this, '#spaceInformation');
+  }
+
+  isReadyForTesting() {
+    return this.isVisible() && this.drivePinningToggle.isVisible() &&
+        this.drivePinningSpaceInformation.isVisible();
+  }
+
+  toggleFileSync() {
+    this.drivePinningToggle.click();
+  }
+
+  isFileSyncEnabled() {
+    return !!this.drivePinningToggle.element().checked;
+  }
+
+  getSpaceInformationString() {
+    return this.drivePinningSpaceInformation.element().innerText;
+  }
+
+  clickNext() {
+    this.nextButton.click();
+  }
+}
+
+
+class ChoobeTouchpadScrollScreenTester extends ScreenElementApi {
+  constructor() {
+    super('touchpad-scroll');
+    this.nextButton = new PolymerElementApi(this, '#nextButton');
+  }
+
+  /** @override */
+  shouldSkip() {
+    return loadTimeData.getBoolean('testapi_shouldSkipTouchpadScroll');
+  }
+
+  isReadyForTesting() {
+    return this.isVisible();
+  }
+
+  clickNext() {
+    this.nextButton.click();
+  }
+}
+
+class ChoobeDisplaySizeTester extends ScreenElementApi {
+  constructor() {
+    super('display-size');
+    this.nextButton = new PolymerElementApi(this, '#nextButton');
+  }
+
+  /** @override */
+  shouldSkip() {
+    return loadTimeData.getBoolean('testapi_shouldSkipDisplaySize');
+  }
+
+  isReadyForTesting() {
+    return this.isVisible();
+  }
+
+  clickNext() {
+    this.nextButton.click();
+  }
+}
+
+
+export class OobeApiProvider {
   constructor() {
     this.screens = {
       HIDDetectionScreen: new HIDDetectionScreenTester(),
       WelcomeScreen: new WelcomeScreenTester(),
       NetworkScreen: new NetworkScreenTester(),
-      EulaScreen: new EulaScreenTester(),
       UpdateScreen: new UpdateScreenTester(),
       EnrollmentScreen: new EnrollmentScreenTester(),
       UserCreationScreen: new UserCreationScreenTester(),
@@ -826,11 +1210,19 @@ class OobeApiProvider {
       ErrorScreen: new ErrorScreenTester(),
       OfflineLoginScreen: new OfflineLoginScreenTester(),
       DemoPreferencesScreen: new DemoPreferencesScreenTester(),
-      ArcTosScreen: new ArcTosScreenTester(),
       ThemeSelectionScreen: new ThemeSelectionScreenTester(),
       GestureNavigation: new GestureNavigationScreenTester(),
       ConsolidatedConsentScreen: new ConsolidatedConsentScreenTester(),
       SmartPrivacyProtectionScreen: new SmartPrivacyProtectionScreenTester(),
+      CryptohomeRecoverySetupScreen: new CryptohomeRecoverySetupScreenTester(),
+      LocalPasswordSetupScreen: new LocalPasswordSetupScreenTester(),
+      PasswordFactorSuccessScreen: new PasswordFactorSuccessScreenTester(),
+      GaiaInfoScreen: new GaiaInfoScreenTester(),
+      ConsumerUpdateScreen: new ConsumerUpdateScreenTester(),
+      ChoobeScreen: new ChoobeScreenTester(),
+      ChoobeDrivePinningScreen: new ChoobeDrivePinningScreenTester(),
+      ChoobeTouchpadScrollScreen: new ChoobeTouchpadScrollScreenTester(),
+      ChoobeDisplaySizeScreen: new ChoobeDisplaySizeTester(),
     };
 
     this.loginWithPin = function(username, pin) {
@@ -856,7 +1248,137 @@ class OobeApiProvider {
     this.showGaiaDialog = function() {
       chrome.send('OobeTestApi.showGaiaDialog');
     };
+
+    this.getBrowseAsGuestButtonName = function() {
+      return loadTimeData.getString('testapi_browseAsGuest');
+    };
+
+    this.getCurrentScreenName = function() {
+      return Oobe.getInstance().currentScreen.id.trim();
+    };
+
+    this.getCurrentScreenStep = function() {
+      const step = Oobe.getInstance().currentScreen.getAttribute('multistep');
+      if (step === null) {
+        return 'default';
+      }
+      return step.trim();
+    };
+
+    /**
+     * Returns currently displayed OOBE dialog HTML element.
+     * @returns {Object}
+     */
+    this.getOobeActiveDialog = function() {
+      const adaptiveDialogs =
+          Oobe.getInstance().currentScreen.shadowRoot.querySelectorAll(
+              'oobe-adaptive-dialog');
+      for (const dialog of adaptiveDialogs) {
+        // Only one adaptive dialog could be shown at the same time.
+        if (!dialog.hidden) {
+          return dialog;
+        }
+      }
+
+      // If we didn't find any active adaptive dialog we might currently display
+      // a loading dialog, a special wrapper over oobe-adaptive-dialog to show
+      // loading process.
+      // In this case we can try to fetch all loading dialogs attached to the
+      // current screen and check their internal adaptive dialogs.
+      const loadingDialogs =
+          Oobe.getInstance().currentScreen.shadowRoot.querySelectorAll(
+              'oobe-loading-dialog');
+      for (const dialog of loadingDialogs) {
+        if (!dialog.hidden) {
+          return dialog.shadowRoot.querySelector('oobe-adaptive-dialog');
+        }
+      }
+
+      return null;
+    };
+
+    /**
+     * Returns array of the slot HTML elements with a given slot name.
+     * @param {string} slotName
+     * @returns {!Array<!Element>}
+     */
+    this.findActiveOobeDialogSlotsByName = function(slotName) {
+      const dialog = this.getOobeActiveDialog();
+      if (dialog === null) {
+        return [];
+      }
+
+      if (dialog.children === undefined || dialog.children == null) {
+        return [];
+      }
+
+      // There are cases when we have different element with the same slot, so
+      // we must find all of them for a given adaptive dialog.
+      const result = [];
+
+      for (const child of dialog.children) {
+        if (child.hidden) {
+          continue;
+        }
+
+        const slot = child.slot;
+        if (slot === undefined) {
+          continue;
+        }
+
+        if (typeof slot !== 'string') {
+          continue;
+        }
+
+        if (slot.toLowerCase().trim() === slotName.toLowerCase().trim()) {
+          result.push(child);
+        }
+      }
+
+      return result;
+    };
+
+    /**
+     * Concatenates innerText of all slots with a given name inside a currently
+     * displayed OOBE dialog.
+     * @param {string} slotName
+     * @returns {string}
+     */
+    this.combineTextOfAdaptiveDialogSlots = function(slotName) {
+      const slots = this.findActiveOobeDialogSlotsByName(slotName);
+      let result = '';
+
+      // innerText should be sufficient as it contains only visible text, no
+      // need to manually traverse a DOM tree and check all child elements.
+      for (const slot of slots) {
+        result = result.concat(slot.innerText.trim().concat('\n'));
+      }
+
+      return result;
+    };
+
+    /**
+     * Returns text inside displayed title slots.
+     * @returns {string}
+     */
+    this.getOobeActiveDialogTitleText = function() {
+      return this.combineTextOfAdaptiveDialogSlots('title');
+    };
+
+    /**
+     * Returns text inside displayed subtitle slots.
+     * @returns {string}
+     */
+    this.getOobeActiveDialogSubtitleText = function() {
+      return this.combineTextOfAdaptiveDialogSlots('subtitle');
+    };
+
+    /**
+     * Returns text inside displayed content slots.
+     * @returns {string}
+     */
+    this.getOobeActiveDialogContentText = function() {
+      return this.combineTextOfAdaptiveDialogSlots('content');
+    };
   }
 }
-
-window.OobeAPI = new OobeApiProvider();

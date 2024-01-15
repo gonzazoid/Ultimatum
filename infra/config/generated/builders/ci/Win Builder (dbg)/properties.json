@@ -1,6 +1,9 @@
 {
   "$build/chromium_tests_builder_config": {
     "builder_config": {
+      "additional_exclusions": [
+        "infra/config/generated/builders/ci/Win Builder (dbg)/gn-args.json"
+      ],
       "builder_db": {
         "entries": [
           {
@@ -39,14 +42,22 @@
         {
           "builder": "win_chromium_compile_dbg_ng",
           "group": "tryserver.chromium.win"
+        },
+        {
+          "builder": "win_chromium_compile_siso_dbg_ng",
+          "group": "tryserver.chromium.win"
         }
       ]
     }
   },
   "$build/reclient": {
+    "bootstrap_env": {
+      "RBE_experimental_exit_on_stuck_actions": "true"
+    },
     "instance": "rbe-chromium-trusted",
     "jobs": 250,
-    "metrics_project": "chromium-reclient-metrics"
+    "metrics_project": "chromium-reclient-metrics",
+    "scandeps_server": true
   },
   "$recipe_engine/resultdb/test_presentation": {
     "column_keys": [],

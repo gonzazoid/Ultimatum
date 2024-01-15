@@ -45,9 +45,6 @@ class MockLayoutHost implements LayoutManagerHost, LayoutRenderHost {
     public void didSwapFrame(int pendingFrameCount) {}
 
     @Override
-    public void onSurfaceCreated() {}
-
-    @Override
     public void onSurfaceResized(int width, int height) {}
 
     @Override
@@ -82,11 +79,6 @@ class MockLayoutHost implements LayoutManagerHost, LayoutRenderHost {
     @Override
     public void getViewportFullControls(RectF outRect) {
         outRect.set(0, 0, getWidth(), getHeight());
-    }
-
-    @Override
-    public float getHeightMinusBrowserControls() {
-        return getHeight();
     }
 
     @Override
@@ -132,6 +124,5 @@ class MockLayoutHost implements LayoutManagerHost, LayoutRenderHost {
     public void onContentChanged() {}
 
     @Override
-    public void hideKeyboard(Runnable postHideTask) {
-    }
+    public void hideKeyboard(Runnable postHideTask) {}
 }

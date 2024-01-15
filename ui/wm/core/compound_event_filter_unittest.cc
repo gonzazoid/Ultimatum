@@ -66,20 +66,21 @@ TEST_F(CompoundEventFilterTest, CursorVisibilityChange) {
   aura::test::TestCursorClient cursor_client(root_window());
 
   // Send key event to hide the cursor.
-  ui::KeyEvent key('a', ui::VKEY_A, ui::DomCode::NONE, ui::EF_NONE);
+  ui::KeyEvent key = ui::KeyEvent::FromCharacter(
+      'a', ui::VKEY_A, ui::DomCode::NONE, ui::EF_NONE);
   DispatchEventUsingWindowDispatcher(&key);
   EXPECT_FALSE(cursor_client.IsCursorVisible());
 
   // Synthesized mouse event should not show the cursor.
   ui::MouseEvent enter(ui::ET_MOUSE_ENTERED, gfx::Point(10, 10),
                        gfx::Point(10, 10), ui::EventTimeForNow(), 0, 0);
-  enter.set_flags(enter.flags() | ui::EF_IS_SYNTHESIZED);
+  enter.SetFlags(enter.flags() | ui::EF_IS_SYNTHESIZED);
   DispatchEventUsingWindowDispatcher(&enter);
   EXPECT_FALSE(cursor_client.IsCursorVisible());
 
   ui::MouseEvent move(ui::ET_MOUSE_MOVED, gfx::Point(10, 10),
                       gfx::Point(10, 10), ui::EventTimeForNow(), 0, 0);
-  move.set_flags(enter.flags() | ui::EF_IS_SYNTHESIZED);
+  move.SetFlags(enter.flags() | ui::EF_IS_SYNTHESIZED);
   DispatchEventUsingWindowDispatcher(&move);
   EXPECT_FALSE(cursor_client.IsCursorVisible());
 
@@ -91,20 +92,22 @@ TEST_F(CompoundEventFilterTest, CursorVisibilityChange) {
 
   // Disallow hiding the cursor on keypress.
   cursor_client.set_should_hide_cursor_on_key_event(false);
-  key = ui::KeyEvent('a', ui::VKEY_A, ui::DomCode::NONE, ui::EF_NONE);
+  key = ui::KeyEvent::FromCharacter('a', ui::VKEY_A, ui::DomCode::NONE,
+                                    ui::EF_NONE);
   DispatchEventUsingWindowDispatcher(&key);
   EXPECT_TRUE(cursor_client.IsCursorVisible());
 
   // Allow hiding the cursor on keypress.
   cursor_client.set_should_hide_cursor_on_key_event(true);
-  key = ui::KeyEvent('a', ui::VKEY_A, ui::DomCode::NONE, ui::EF_NONE);
+  key = ui::KeyEvent::FromCharacter('a', ui::VKEY_A, ui::DomCode::NONE,
+                                    ui::EF_NONE);
   DispatchEventUsingWindowDispatcher(&key);
   EXPECT_FALSE(cursor_client.IsCursorVisible());
 
   // Mouse synthesized exit event should not show the cursor.
   ui::MouseEvent exit(ui::ET_MOUSE_EXITED, gfx::Point(10, 10),
                       gfx::Point(10, 10), ui::EventTimeForNow(), 0, 0);
-  exit.set_flags(enter.flags() | ui::EF_IS_SYNTHESIZED);
+  exit.SetFlags(enter.flags() | ui::EF_IS_SYNTHESIZED);
   DispatchEventUsingWindowDispatcher(&exit);
   EXPECT_FALSE(cursor_client.IsCursorVisible());
 
@@ -242,12 +245,12 @@ TEST_F(CompoundEventFilterTest, DontShowCursorOnMouseMovesFromTouch) {
 
   ui::MouseEvent mouse0(ui::ET_MOUSE_MOVED, gfx::Point(10, 10),
                         gfx::Point(10, 10), ui::EventTimeForNow(), 0, 0);
-  mouse0.set_flags(mouse0.flags() | ui::EF_FROM_TOUCH);
+  mouse0.SetFlags(mouse0.flags() | ui::EF_FROM_TOUCH);
 
   DispatchEventUsingWindowDispatcher(&mouse0);
   EXPECT_FALSE(cursor_client.IsMouseEventsEnabled());
 
-  mouse0.set_flags(mouse0.flags() & ~ui::EF_FROM_TOUCH);
+  mouse0.SetFlags(mouse0.flags() & ~ui::EF_FROM_TOUCH);
   DispatchEventUsingWindowDispatcher(&mouse0);
   EXPECT_TRUE(cursor_client.IsMouseEventsEnabled());
 

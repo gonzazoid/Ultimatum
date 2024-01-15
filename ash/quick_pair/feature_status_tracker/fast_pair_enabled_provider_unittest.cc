@@ -7,8 +7,8 @@
 #include <memory>
 
 #include "ash/constants/ash_features.h"
+#include "ash/quick_pair/common/fake_bluetooth_adapter.h"
 #include "ash/quick_pair/feature_status_tracker/bluetooth_enabled_provider.h"
-#include "ash/quick_pair/feature_status_tracker/fake_bluetooth_adapter.h"
 #include "ash/quick_pair/feature_status_tracker/fast_pair_pref_enabled_provider.h"
 #include "ash/quick_pair/feature_status_tracker/logged_in_user_enabled_provider.h"
 #include "ash/quick_pair/feature_status_tracker/mock_bluetooth_enabled_provider.h"
@@ -18,7 +18,7 @@
 #include "ash/quick_pair/feature_status_tracker/mock_screen_state_enabled_provider.h"
 #include "ash/quick_pair/feature_status_tracker/screen_state_enabled_provider.h"
 #include "ash/test/ash_test_base.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/test/mock_callback.h"

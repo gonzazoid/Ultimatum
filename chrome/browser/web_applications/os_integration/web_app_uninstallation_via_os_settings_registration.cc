@@ -5,6 +5,7 @@
 #include "chrome/browser/web_applications/os_integration/web_app_uninstallation_via_os_settings_registration.h"
 
 #include "base/check.h"
+#include "base/files/file_path.h"
 #include "build/build_config.h"
 
 namespace web_app {
@@ -12,26 +13,26 @@ namespace web_app {
 #if !BUILDFLAG(IS_WIN)
 
 // This block defines stub implementations of OS specific methods for
-// uninstallation command. Currently, only Windows has their own implementation.
+// uninstallation command. Currently, only Windows has its own implementation.
 bool ShouldRegisterUninstallationViaOsSettingsWithOs() {
   return false;
 }
 
-void RegisterUninstallationViaOsSettingsWithOs(const AppId& app_id,
-                                               const std::string& app_name,
-                                               Profile* profile) {
-  DCHECK(ShouldRegisterUninstallationViaOsSettingsWithOs());
-  // Stub function for OS's which don't register uninstallation command with the
-  // OS.
+bool RegisterUninstallationViaOsSettingsWithOs(
+    const webapps::AppId& app_id,
+    const std::string& app_name,
+    const base::FilePath& profile_path) {
+  NOTREACHED();
+  return true;
 }
 
-void UnegisterUninstallationViaOsSettingsWithOs(const AppId& app_id,
-                                                Profile* profile) {
-  DCHECK(ShouldRegisterUninstallationViaOsSettingsWithOs());
-  // Stub function for OS's which don't register uninstallation command with the
-  // OS.
+bool UnregisterUninstallationViaOsSettingsWithOs(
+    const webapps::AppId& app_id,
+    const base::FilePath& profile_path) {
+  NOTREACHED();
+  return true;
 }
 
-#endif  //  !defined (OS_WIN)
+#endif  // !BUILDFLAG(IS_WIN)
 
 }  // namespace web_app

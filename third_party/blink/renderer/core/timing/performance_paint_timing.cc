@@ -30,17 +30,20 @@ AtomicString FromPaintTypeToString(PerformancePaintTiming::PaintType type) {
 
 }  // namespace
 
-PerformancePaintTiming::PerformancePaintTiming(PaintType type,
-                                               double start_time,
-                                               uint32_t navigation_id)
+PerformancePaintTiming::PerformancePaintTiming(
+    PaintType type,
+    double start_time,
+    DOMWindow* source,
+    bool is_triggered_by_soft_navigation)
     : PerformanceEntry(FromPaintTypeToString(type),
                        start_time,
                        start_time,
-                       navigation_id) {}
+                       source,
+                       is_triggered_by_soft_navigation) {}
 
 PerformancePaintTiming::~PerformancePaintTiming() = default;
 
-AtomicString PerformancePaintTiming::entryType() const {
+const AtomicString& PerformancePaintTiming::entryType() const {
   return performance_entry_names::kPaint;
 }
 

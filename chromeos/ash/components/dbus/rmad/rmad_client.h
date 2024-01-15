@@ -5,8 +5,10 @@
 #ifndef CHROMEOS_ASH_COMPONENTS_DBUS_RMAD_RMAD_CLIENT_H_
 #define CHROMEOS_ASH_COMPONENTS_DBUS_RMAD_RMAD_CLIENT_H_
 
-#include "base/callback_forward.h"
+#include <string>
+
 #include "base/component_export.h"
+#include "base/functional/callback_forward.h"
 #include "base/observer_list_types.h"
 #include "chromeos/ash/components/dbus/rmad/rmad.pb.h"
 #include "chromeos/dbus/common/dbus_method_call_status.h"
@@ -110,12 +112,29 @@ class COMPONENT_EXPORT(RMAD) RmadClient {
 
   // Save RMA logs to a USB drive.
   virtual void SaveLog(
+      const std::string& diagnostics_log_text,
       chromeos::DBusMethodCallback<rmad::SaveLogReply> callback) = 0;
 
   // Send metrics to the platform side, which will upload them.
   virtual void RecordBrowserActionMetric(
       const rmad::RecordBrowserActionMetricRequest request,
       chromeos::DBusMethodCallback<rmad::RecordBrowserActionMetricReply>
+          callback) = 0;
+
+  // Extracts the diagnostics app from external sources.
+  virtual void ExtractExternalDiagnosticsApp(
+      chromeos::DBusMethodCallback<rmad::ExtractExternalDiagnosticsAppReply>
+          callback) = 0;
+
+  // Installs the diagnostics app extracted by last
+  // `ExtractExternalDiagnosticsApp` call.
+  virtual void InstallExtractedDiagnosticsApp(
+      chromeos::DBusMethodCallback<rmad::InstallExtractedDiagnosticsAppReply>
+          callback) = 0;
+
+  // Gets the installed diagnostics app.
+  virtual void GetInstalledDiagnosticsApp(
+      chromeos::DBusMethodCallback<rmad::GetInstalledDiagnosticsAppReply>
           callback) = 0;
 
   // Adds and removes the observer.

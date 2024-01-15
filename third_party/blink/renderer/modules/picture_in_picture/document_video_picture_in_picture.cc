@@ -45,20 +45,14 @@ ScriptPromise DocumentVideoPictureInPicture::exitPictureInPicture(
     return ScriptPromise();
   }
 
-  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
+  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(
+      script_state, exception_state.GetContext());
   ScriptPromise promise = resolver->Promise();
 
   DCHECK(IsA<HTMLVideoElement>(picture_in_picture_element));
   controller.ExitPictureInPicture(
       To<HTMLVideoElement>(picture_in_picture_element), resolver);
   return promise;
-}
-
-// static
-Element* DocumentVideoPictureInPicture::pictureInPictureElement(
-    TreeScope& scope) {
-  return PictureInPictureController::From(scope.GetDocument())
-      .PictureInPictureElement(scope);
 }
 
 }  // namespace blink

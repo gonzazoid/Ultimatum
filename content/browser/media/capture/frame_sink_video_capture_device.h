@@ -6,12 +6,13 @@
 #define CONTENT_BROWSER_MEDIA_CAPTURE_FRAME_SINK_VIDEO_CAPTURE_DEVICE_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
 
-#include "base/callback_forward.h"
 #include "base/check.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
 #include "build/build_config.h"
@@ -32,7 +33,6 @@
 #include "mojo/public/cpp/bindings/remote.h"
 #include "services/device/public/mojom/wake_lock.mojom.h"
 #include "services/viz/public/cpp/compositing/video_capture_target_mojom_traits.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/compositor/compositor.h"
 
 namespace content {
@@ -86,10 +86,12 @@ class CONTENT_EXPORT FrameSinkVideoCaptureDevice
   void RequestRefreshFrame() final;
   void MaybeSuspend() final;
   void Resume() final;
-  void Crop(const base::Token& crop_id,
-            uint32_t crop_version,
-            base::OnceCallback<void(media::mojom::CropRequestResult)> callback)
-      override;
+  void ApplySubCaptureTarget(
+      media::mojom::SubCaptureTargetType type,
+      const base::Token& target,
+      uint32_t sub_capture_target_version,
+      base::OnceCallback<void(media::mojom::ApplySubCaptureTargetResult)>
+          callback) override;
   void StopAndDeAllocate() final;
   void OnUtilizationReport(media::VideoCaptureFeedback feedback) override;
 
@@ -100,17 +102,17 @@ class CONTENT_EXPORT FrameSinkVideoCaptureDevice
       const gfx::Rect& content_rect,
       mojo::PendingRemote<viz::mojom::FrameSinkVideoConsumerFrameCallbacks>
           callbacks) override;
-  void OnNewCropVersion(uint32_t crop_version) final;
+  void OnNewSubCaptureTargetVersion(uint32_t sub_capture_target_version) final;
   void OnFrameWithEmptyRegionCapture() final;
   void OnStopped() final;
   void OnLog(const std::string& message) final;
 
   // These are called to notify when the capture target has changed or was
-  // permanently lost. NOTE: a target can be temporarily absl::nullopt without
+  // permanently lost. NOTE: a target can be temporarily std::nullopt without
   // being permanently lost.
   virtual void OnTargetChanged(
-      const absl::optional<viz::VideoCaptureTarget>& target,
-      uint32_t crop_version);
+      const std::optional<viz::VideoCaptureTarget>& target,
+      uint32_t sub_capture_target_version);
   virtual void OnTargetPermanentlyLost();
 
  protected:
@@ -185,29 +187,29 @@ class CONTENT_EXPORT FrameSinkVideoCaptureDevice
   // from any thread, will hop to the sequence on which the device was created.
   // This indirection is needed to support cancellation of handed out callbacks.
   void SetGpuCapabilitiesOnDevice(
-      absl::optional<gpu::Capabilities> capabilities);
+      std::optional<gpu::Capabilities> capabilities);
 
   // Current capture target. This is cached to resolve a race where
-  // OnTargetChanged() can be called before the |capturer_| is created in
-  // OnCapturerCreated().
-  absl::optional<viz::VideoCaptureTarget> target_;
+  // `OnTargetChanged()` can be called before the |capturer_| is created in
+  // `OnCapturerCreated()`.
+  std::optional<viz::VideoCaptureTarget> target_;
 
   // The requested format, rate, and other capture constraints.
   media::VideoCaptureParams capture_params_;
 
-  // Set to true when MaybeSuspend() is called, and false when Resume() is
+  // Set to true when `MaybeSuspend()` is called, and false when Resume() is
   // called. This reflects the needs of the downstream client.
   bool suspend_requested_ = false;
 
   // Receives video frames from this capture device, for propagation into the
-  // video capture stack. This is set by AllocateAndStartWithReceiver(), and
-  // cleared by StopAndDeAllocate().
+  // video capture stack. This is set by `AllocateAndStartWithReceiver()`, and
+  // cleared by `StopAndDeAllocate()`.
   std::unique_ptr<media::VideoFrameReceiver> receiver_;
 
   std::unique_ptr<viz::ClientFrameSinkVideoCapturer> capturer_;
 
-  // Capabilities obtained from viz::ContextProvider.
-  absl::optional<gpu::Capabilities> gpu_capabilities_
+  // Capabilities obtained from `viz::ContextProvider`.
+  std::optional<gpu::Capabilities> gpu_capabilities_
       GUARDED_BY_CONTEXT(sequence_checker_);
 
   // Instance that is responsible for monitoring for context loss events on the
@@ -223,9 +225,9 @@ class CONTENT_EXPORT FrameSinkVideoCaptureDevice
   std::vector<mojo::Remote<viz::mojom::FrameSinkVideoConsumerFrameCallbacks>>
       frame_callbacks_;
 
-  // Set when OnFatalError() is called. This prevents any future
+  // Set when `OnFatalError()` is called. This prevents any future
   // AllocateAndStartWithReceiver() calls from succeeding.
-  absl::optional<std::string> fatal_error_message_;
+  std::optional<std::string> fatal_error_message_;
 
   SEQUENCE_CHECKER(sequence_checker_);
 
@@ -236,14 +238,14 @@ class CONTENT_EXPORT FrameSinkVideoCaptureDevice
       cursor_controller_;
 #endif
 
-  // Whenever the crop-target of a stream changes, the associated crop-version
-  // is incremented. This value is used in frames' metadata so as to allow
-  // other modules (mostly Blink) to see which frames are cropped to the
-  // old/new specified crop-target.
-  // The value 0 is used before any crop-target is assigned. (Note that by
-  // cropping and then uncropping, values other than 0 can also be associated
-  // with an uncropped track.)
-  uint32_t crop_version_ = 0;
+  // Whenever the sub-capture-target of a stream changes, the associated
+  // sub-capture-target-version is incremented. This value is used in frames'
+  // metadata so as to allow other modules (mostly Blink) to see which frames
+  // are cropped/restricted to the old/new specified sub-capture-target.
+  // The value 0 is used before any sub-capture-target is assigned.
+  // (Note that by applying and then removing a sub-capture target,
+  // values other than 0 can also be associated with an uncropped track.)
+  uint32_t sub_capture_target_version_ = 0;
 
   // Prevent display sleeping while content capture is in progress.
   mojo::Remote<device::mojom::WakeLock> wake_lock_;

@@ -4,17 +4,13 @@
 
 #import "ios/chrome/app/application_delegate/memory_warning_helper.h"
 
-#import "base/bind.h"
+#import "base/functional/bind.h"
 #import "base/memory/memory_pressure_listener.h"
 #import "base/run_loop.h"
 #import "base/test/task_environment.h"
 #import "base/threading/thread.h"
 #import "components/previous_session_info/previous_session_info.h"
 #import "testing/platform_test.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 using previous_session_info_constants::
     kDidSeeMemoryWarningShortlyBeforeTerminating;

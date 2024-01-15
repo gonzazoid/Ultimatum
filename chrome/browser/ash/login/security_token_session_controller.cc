@@ -9,14 +9,15 @@
 
 #include "ash/constants/notifier_catalogs.h"
 #include "ash/public/cpp/notification_utils.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/containers/flat_map.h"
 #include "base/containers/flat_set.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/notreached.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
+#include "base/trace_event/trace_event.h"
 #include "chrome/browser/ash/crosapi/browser_util.h"
 #include "chrome/browser/ash/login/lock/screen_locker.h"
 #include "chrome/browser/browser_process.h"
@@ -99,24 +100,21 @@ bool SanitizeDomain(const std::string& domain, std::string& sanitized_domain) {
 
 void DisplayNotification(const std::u16string& title,
                          const std::u16string& text) {
-  std::unique_ptr<message_center::Notification> notification =
-      CreateSystemNotification(
-          message_center::NOTIFICATION_TYPE_SIMPLE, kNotificationId, title,
-          text,
-          /*display_source=*/std::u16string(), /*origin_url=*/GURL(),
-          message_center::NotifierId(
-              message_center::NotifierType::SYSTEM_COMPONENT,
-              kNotifierSecurityTokenSession,
-              NotificationCatalogName::kSecurityToken),
-          /*optional_fields=*/{},
-          new message_center::HandleNotificationClickDelegate(
-              base::DoNothingAs<void()>()),
-          chromeos::kEnterpriseIcon,
-          message_center::SystemNotificationWarningLevel::NORMAL);
-  notification->set_fullscreen_visibility(
+  message_center::Notification notification = CreateSystemNotification(
+      message_center::NOTIFICATION_TYPE_SIMPLE, kNotificationId, title, text,
+      /*display_source=*/std::u16string(), /*origin_url=*/GURL(),
+      message_center::NotifierId(message_center::NotifierType::SYSTEM_COMPONENT,
+                                 kNotifierSecurityTokenSession,
+                                 NotificationCatalogName::kSecurityToken),
+      /*optional_fields=*/{},
+      new message_center::HandleNotificationClickDelegate(
+          base::DoNothingAs<void()>()),
+      chromeos::kEnterpriseIcon,
+      message_center::SystemNotificationWarningLevel::NORMAL);
+  notification.set_fullscreen_visibility(
       message_center::FullscreenVisibility::OVER_USER);
-  notification->SetSystemPriority();
-  SystemNotificationHelper::GetInstance()->Display(*notification);
+  notification.SetSystemPriority();
+  SystemNotificationHelper::GetInstance()->Display(notification);
 }
 
 // Loads the persistently stored information about the challenge-response keys
@@ -128,7 +126,7 @@ void LoadStoredChallengeResponseSpkiKeysForUser(
     base::flat_set<std::string>* extension_ids) {
   // TODO(crbug.com/1164373) This approach does not work for ephemeral users.
   // Instead, only get the certificate that was actually used on the last login.
-  const base::Value known_user_value =
+  const base::Value::List known_user_value =
       user_manager::KnownUser(local_state).GetChallengeResponseKeys(account_id);
   std::vector<DeserializedChallengeResponseKey>
       deserialized_challenge_response_keys;
@@ -179,7 +177,7 @@ SecurityTokenSessionController::SecurityTokenSessionController(
   DCHECK(local_state_);
   DCHECK(primary_user_);
   DCHECK(certificate_provider_service_);
-  session_manager_observation_.Observe(session_manager_);
+  session_manager_observation_.Observe(session_manager_.get());
   certificate_provider_ =
       certificate_provider_service_->CreateCertificateProvider();
   LoadStoredChallengeResponseSpkiKeysForUser(
@@ -257,6 +255,8 @@ void SecurityTokenSessionController::OnCertificatesUpdated(
 }
 
 void SecurityTokenSessionController::OnSessionStateChanged() {
+  TRACE_EVENT0("login",
+               "SecurityTokenSessionController::OnSessionStateChanged");
   if (session_manager_->session_state() ==
       session_manager::SessionState::LOCKED) {
     had_lock_screen_transition_ = true;

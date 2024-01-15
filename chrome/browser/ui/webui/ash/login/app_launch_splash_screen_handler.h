@@ -5,17 +5,22 @@
 #ifndef CHROME_BROWSER_UI_WEBUI_ASH_LOGIN_APP_LAUNCH_SPLASH_SCREEN_HANDLER_H_
 #define CHROME_BROWSER_UI_WEBUI_ASH_LOGIN_APP_LAUNCH_SPLASH_SCREEN_HANDLER_H_
 
+#include <optional>
 #include <set>
 #include <string>
+#include <string_view>
 
+#include "base/memory/raw_ptr.h"
+#include "chrome/browser/ash/app_mode/kiosk_app.h"
 #include "chrome/browser/ash/app_mode/kiosk_app_launch_error.h"
 #include "chrome/browser/ash/app_mode/kiosk_app_manager_base.h"
 #include "chrome/browser/ash/login/screens/error_screen.h"
 #include "chrome/browser/ui/webui/ash/login/base_screen_handler.h"
-#include "chrome/browser/ui/webui/chromeos/login/network_state_informer.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "chrome/browser/ui/webui/ash/login/network_state_informer.h"
+#include "ui/gfx/image/image_skia.h"
+#include "url/gurl.h"
 
-namespace chromeos {
+namespace ash {
 
 // Interface for UI implementations of the AppLaunchSplashScreen.
 class AppLaunchSplashScreenView {
@@ -27,19 +32,23 @@ class AppLaunchSplashScreenView {
 
     // Invoked when the network config did prepare network and is closed.
     virtual void OnNetworkConfigFinished() {}
+  };
 
-    // Invoked when network state is changed. `online` is true if the device
-    // is connected to the Internet.
-    virtual void OnNetworkStateChanged(bool online) {}
+  // The data struct needed to populate this view.
+  struct Data {
+    Data(std::string_view name, gfx::ImageSkia icon, const GURL& url);
+    Data(const Data&) = delete;
+    Data(Data&&);
+    Data& operator=(const Data&) = delete;
+    Data& operator=(Data&&);
+    ~Data();
 
-    // Invoked when the splash screen view is being deleted.
-    virtual void OnDeletingSplashScreenView() {}
-
-    // Returns the data needed to be displayed on the splash screen.
-    virtual KioskAppManagerBase::App GetAppData() = 0;
-
-    // Tells whether the network connection is required for app launch.
-    virtual bool IsNetworkRequired() = 0;
+    // The name of the app.
+    std::string name;
+    // The icon of the app.
+    gfx::ImageSkia icon;
+    // The URL of the app.
+    GURL url;
   };
 
   enum class AppLaunchState {
@@ -48,7 +57,6 @@ class AppLaunchSplashScreenView {
     kInstallingApplication,
     kInstallingExtension,
     kWaitingAppWindow,
-    kWaitingAppWindowInstallFailed,
     kNetworkWaitTimeout,
     kShowingNetworkConfigureUI,
   };
@@ -56,13 +64,13 @@ class AppLaunchSplashScreenView {
   inline constexpr static StaticOobeScreenId kScreenId{"app-launch-splash",
                                                        "AppLaunchSplashScreen"};
 
-  virtual ~AppLaunchSplashScreenView() {}
+  virtual ~AppLaunchSplashScreenView() = default;
 
   // Sets screen controller this view belongs to.
   virtual void SetDelegate(Delegate* delegate) = 0;
 
-  // Shows the contents of the screen.
-  virtual void Show() = 0;
+  // Shows or updates the contents of the screen with the given `data`.
+  virtual void Show(Data data) = 0;
 
   // Hides the contents of the screen.
   virtual void Hide() = 0;
@@ -74,23 +82,19 @@ class AppLaunchSplashScreenView {
   virtual void ToggleNetworkConfig(bool visible) = 0;
 
   // Shows the network error and configure UI.
-  virtual void ShowNetworkConfigureUI() = 0;
+  virtual void ShowNetworkConfigureUI(NetworkStateInformer::State state,
+                                      const std::string& network_name) = 0;
 
   // Show a notification bar with error message.
   virtual void ShowErrorMessage(KioskAppLaunchError::Error error) = 0;
-
-  // Returns true if the default network has Internet access.
-  virtual bool IsNetworkReady() = 0;
 
   // Continues app launch after error screen is shown.
   virtual void ContinueAppLaunch() = 0;
 };
 
 // A class that handles the WebUI hooks for the app launch splash screen.
-class AppLaunchSplashScreenHandler
-    : public BaseScreenHandler,
-      public AppLaunchSplashScreenView,
-      public NetworkStateInformer::NetworkStateInformerObserver {
+class AppLaunchSplashScreenHandler : public BaseScreenHandler,
+                                     public AppLaunchSplashScreenView {
  public:
   using TView = AppLaunchSplashScreenView;
 
@@ -107,24 +111,18 @@ class AppLaunchSplashScreenHandler
   // BaseScreenHandler implementation:
   void DeclareLocalizedValues(
       ::login::LocalizedValuesBuilder* builder) override;
-
-  // WebUIMessageHandler implementation:
-  void RegisterMessages() override;
+  void DeclareJSCallbacks() override;
 
   // AppLaunchSplashScreenView implementation:
-  void Show() override;
+  void Show(Data data) override;
   void Hide() override;
   void ToggleNetworkConfig(bool visible) override;
   void UpdateAppLaunchState(AppLaunchState state) override;
   void SetDelegate(Delegate* controller) override;
-  void ShowNetworkConfigureUI() override;
+  void ShowNetworkConfigureUI(NetworkStateInformer::State state,
+                              const std::string& network_name) override;
   void ShowErrorMessage(KioskAppLaunchError::Error error) override;
-  bool IsNetworkReady() override;
   void ContinueAppLaunch() override;
-
-  // NetworkStateInformer::NetworkStateInformerObserver implementation:
-  void OnNetworkReady() override;
-  void UpdateState(NetworkError::ErrorReason reason) override;
 
  private:
   void SetLaunchText(const std::string& text);
@@ -132,28 +130,20 @@ class AppLaunchSplashScreenHandler
   void HandleConfigureNetwork();
   void DoToggleNetworkConfig(bool visible);
 
-  Delegate* delegate_ = nullptr;
+  raw_ptr<Delegate> delegate_ = nullptr;
   bool is_shown_ = false;
   AppLaunchState state_ = AppLaunchState::kPreparingProfile;
 
-  scoped_refptr<NetworkStateInformer> network_state_informer_;
-  ErrorScreen* error_screen_;
+  raw_ptr<ErrorScreen, DanglingUntriaged> error_screen_;
 
   // Whether network configure UI is being shown.
   bool network_config_shown_ = false;
 
   // If this has value it will be populated through ToggleNetworkConfig(value)
   // after screen is shown. Cleared after screen was shown.
-  absl::optional<bool> toggle_network_config_on_show_;
+  std::optional<bool> toggle_network_config_on_show_;
 };
 
-}  // namespace chromeos
-
-// TODO(https://crbug.com/1164001): remove after the //chrome/browser/chromeos
-// source migration is finished.
-namespace ash {
-using ::chromeos::AppLaunchSplashScreenHandler;
-using ::chromeos::AppLaunchSplashScreenView;
 }  // namespace ash
 
 #endif  // CHROME_BROWSER_UI_WEBUI_ASH_LOGIN_APP_LAUNCH_SPLASH_SCREEN_HANDLER_H_

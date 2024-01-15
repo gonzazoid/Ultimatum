@@ -68,29 +68,34 @@ LegalMessageLine::Link::Link(size_t start,
                              const std::string& url_spec)
     : range(start, end), url(url_spec) {}
 
-LegalMessageLine::Link::~Link() {}
+LegalMessageLine::Link::~Link() = default;
 
-LegalMessageLine::LegalMessageLine() {}
+bool LegalMessageLine::Link::operator==(
+    const LegalMessageLine::Link& other) const = default;
+
+LegalMessageLine::LegalMessageLine() = default;
 
 LegalMessageLine::LegalMessageLine(const LegalMessageLine& other) = default;
 
-LegalMessageLine::~LegalMessageLine() {}
+LegalMessageLine::~LegalMessageLine() = default;
+
+bool LegalMessageLine::operator==(const LegalMessageLine& other) const =
+    default;
 
 // static
-bool LegalMessageLine::Parse(const base::Value& legal_message,
+bool LegalMessageLine::Parse(const base::Value::Dict& legal_message,
                              LegalMessageLines* out,
                              bool escape_apostrophes) {
-  DCHECK(legal_message.is_dict());
-  const base::Value* lines_list =
-      legal_message.FindKeyOfType("line", base::Value::Type::LIST);
+  const base::Value::List* lines_list = legal_message.FindList("line");
   if (lines_list) {
     LegalMessageLines lines;
-    lines.reserve(lines_list->GetList().size());
-    for (const base::Value& single_line : lines_list->GetList()) {
+    lines.reserve(lines_list->size());
+    for (const base::Value& single_line : *lines_list) {
       lines.emplace_back();
       if (!single_line.is_dict() ||
-          !lines.back().ParseLine(single_line, escape_apostrophes))
+          !lines.back().ParseLine(single_line.GetDict(), escape_apostrophes)) {
         return false;
+      }
     }
 
     out->swap(lines);
@@ -98,34 +103,32 @@ bool LegalMessageLine::Parse(const base::Value& legal_message,
   return true;
 }
 
-bool LegalMessageLine::ParseLine(const base::Value& line,
+bool LegalMessageLine::ParseLine(const base::Value::Dict& line,
                                  bool escape_apostrophes) {
   DCHECK(text_.empty());
   DCHECK(links_.empty());
-  DCHECK(line.is_dict());
 
   // |display_texts| elements are the strings that will be substituted for
   // "{0}", "{1}", etc. in the template string.
   std::vector<std::u16string> display_texts;
 
   // Process all the template parameters.
-  const base::Value* template_parameters =
-      line.FindKeyOfType("template_parameter", base::Value::Type::LIST);
+  const base::Value::List* template_parameters =
+      line.FindList("template_parameter");
   if (template_parameters) {
-    const base::Value::List& template_parameters_view =
-        template_parameters->GetList();
-    display_texts.reserve(template_parameters_view.size());
-    links_.reserve(template_parameters_view.size());
+    display_texts.reserve(template_parameters->size());
+    links_.reserve(template_parameters->size());
 
-    for (const base::Value& parameter : template_parameters_view) {
+    for (const base::Value& parameter : *template_parameters) {
       if (!parameter.is_dict())
         return false;
 
-      const std::string* display_text = parameter.FindStringKey("display_text");
+      const std::string* display_text =
+          parameter.GetDict().FindString("display_text");
       if (!display_text)
         return false;
 
-      const std::string* url = parameter.FindStringKey("url");
+      const std::string* url = parameter.GetDict().FindString("url");
       if (!url)
         return false;
 
@@ -136,7 +139,7 @@ bool LegalMessageLine::ParseLine(const base::Value& line,
 
   // Read the template string. It's a small subset of the ICU message format
   // syntax.
-  const std::string* template_icu_utf8 = line.FindStringKey("template");
+  const std::string* template_icu_utf8 = line.FindString("template");
   if (!template_icu_utf8)
     return false;
 

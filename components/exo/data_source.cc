@@ -6,9 +6,9 @@
 
 #include <limits>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/i18n/character_encoding.h"
 #include "base/i18n/icu_string_conversions.h"
 #include "base/posix/eintr_wrapper.h"
@@ -215,8 +215,9 @@ void DataSource::DndFinished() {
 }
 
 void DataSource::ReadDataForTesting(const std::string& mime_type,
-                                    ReadDataCallback callback) {
-  ReadData(mime_type, std::move(callback), base::DoNothing());
+                                    ReadDataCallback callback,
+                                    base::RepeatingClosure failure_callback) {
+  ReadData(mime_type, std::move(callback), failure_callback);
 }
 
 void DataSource::ReadData(const std::string& mime_type,
@@ -243,11 +244,13 @@ void DataSource::ReadData(const std::string& mime_type,
           std::move(callback), mime_type, std::move(failure_callback)));
 }
 
-void DataSource::OnDataRead(ReadDataCallback callback,
+// static
+void DataSource::OnDataRead(base::WeakPtr<DataSource> data_source_ptr,
+                            ReadDataCallback callback,
                             const std::string& mime_type,
                             base::OnceClosure failure_callback,
                             const absl::optional<std::vector<uint8_t>>& data) {
-  if (!data) {
+  if (!data_source_ptr || !data) {
     std::move(failure_callback).Run();
     return;
   }

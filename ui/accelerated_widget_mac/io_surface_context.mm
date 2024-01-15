@@ -15,6 +15,30 @@
 #include "ui/gl/gl_switches.h"
 #include "ui/gl/gpu_switching_manager.h"
 
+namespace base::apple {
+
+template <>
+struct ScopedTypeRefTraits<CGLContextObj> {
+  static CGLContextObj InvalidValue() { return nullptr; }
+  static CGLContextObj Retain(CGLContextObj object) {
+    return CGLRetainContext(object);
+  }
+  static void Release(CGLContextObj object) { CGLReleaseContext(object); }
+};
+
+template <>
+struct ScopedTypeRefTraits<CGLPixelFormatObj> {
+  static CGLPixelFormatObj InvalidValue() { return nullptr; }
+  static CGLPixelFormatObj Retain(CGLPixelFormatObj object) {
+    return CGLRetainPixelFormat(object);
+  }
+  static void Release(CGLPixelFormatObj object) {
+    CGLReleasePixelFormat(object);
+  }
+};
+
+}  // namespace base::apple
+
 namespace ui {
 
 namespace {
@@ -42,7 +66,7 @@ IOSurfaceContext::Get(Type type) {
     return found->second;
   }
 
-  base::ScopedTypeRef<CGLContextObj> cgl_context;
+  base::apple::ScopedTypeRef<CGLContextObj> cgl_context;
   CGLError error = kCGLNoError;
 
   // Create the pixel format object for the context.
@@ -53,7 +77,7 @@ IOSurfaceContext::Get(Type type) {
     attribs.push_back(kCGLPFAAllowOfflineRenderers);
   attribs.push_back(static_cast<CGLPixelFormatAttribute>(0));
   GLint number_virtual_screens = 0;
-  base::ScopedTypeRef<CGLPixelFormatObj> pixel_format;
+  base::apple::ScopedTypeRef<CGLPixelFormatObj> pixel_format;
   error = CGLChoosePixelFormat(&attribs.front(),
                                pixel_format.InitializeInto(),
                                &number_virtual_screens);
@@ -67,8 +91,8 @@ IOSurfaceContext::Get(Type type) {
   CGLContextObj share_context = nullptr;
   if (!type_map->empty())
     share_context = type_map->begin()->second->cgl_context();
-  error = CGLCreateContext(
-      pixel_format, share_context, cgl_context.InitializeInto());
+  error = CGLCreateContext(pixel_format.get(), share_context,
+                           cgl_context.InitializeInto());
   if (error != kCGLNoError) {
     LOG(ERROR) << "Failed to create context object.";
     return nullptr;
@@ -82,15 +106,16 @@ void IOSurfaceContext::PoisonContextAndSharegroup() {
     return;
 
   auto* type_map = GetTypeMap();
-  for (TypeMap::iterator it = type_map->begin(); it != type_map->end(); ++it) {
-    it->second->poisoned_ = true;
+  for (auto& it : *type_map) {
+    it.second->poisoned_ = true;
   }
   type_map->clear();
 }
 
 IOSurfaceContext::IOSurfaceContext(
-    Type type, base::ScopedTypeRef<CGLContextObj> cgl_context)
-    : type_(type), cgl_context_(cgl_context), poisoned_(false) {
+    Type type,
+    base::apple::ScopedTypeRef<CGLContextObj> cgl_context)
+    : type_(type), cgl_context_(cgl_context) {
   auto* type_map = GetTypeMap();
   DCHECK(type_map->find(type_) == type_map->end());
   type_map->insert(std::make_pair(type_, this));

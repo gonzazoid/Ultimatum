@@ -5,9 +5,8 @@
 #ifndef COMPONENTS_AUTOFILL_CORE_COMMON_UNIQUE_IDS_H_
 #define COMPONENTS_AUTOFILL_CORE_COMMON_UNIQUE_IDS_H_
 
-#include <stdint.h>
-#include <limits>
 #include <ostream>
+#include <string>
 
 #include "base/types/id_type.h"
 #include "base/unguessable_token.h"
@@ -34,21 +33,53 @@ class TokenType
 
 }  // namespace internal
 
-// LocalFrameToken and RemoteFrameToken identifiers of frames. LocalFrameToken
-// is the unique identifier of the frame, which changes upon a cross-origin
-// navigation in that frame. A RemoteFrameToken is an identifier used by a
-// renderer process for a frame in a different renderer process.
+// LocalFrameToken and RemoteFrameToken identify AutofillDrivers and
+// AutofillAgents.
 //
-// FrameTokens are not necessarily persistent across page loads.
+// TODO(crbug.com/1441921): Implement frame tokens as described below for iOS.
 //
-// They serve the same purpose as blink::LocalFrameToken and
-// blink::RemoteFrameToken, but avoid dependencies on blink since this code is
-// shared with iOS. Also, they default-initialize to zero instead of a random
-// number.
+// Every pair of associated AutofillAgent and AutofillDriver has a
+// LocalFrameToken, which uniquely identifies them and remains stable for their
+// lifetime.
 //
-// They must not be leaked to renderer processes other than the one they
-// originate from, so Autofill should generally not send them to any renderer
-// process.
+// In the //content layer, LocalFrameTokens are a secret between the browser
+// process and the renderer process hosting the respective AutofillAgent.
+// Therefore, cross-process AutofillAgents do not know each other's
+// LocalFrameToken.
+//
+// In such a case, an AutofillAgent A1 refers to another AutofillAgent A2 by
+// a RemoteFrameToken. The associated AutofillDriver D1 can obtain the
+// LocalFrameToken of A2 and its associated AutofillDriver D2 by calling
+// AutofillDriver::Resolve(). RemoteFrameTokens only have weak properties:
+//
+// 1. Different AutofillAgents may refer to A2 by different RemoteFrameTokens.
+//    That is, D1.Resolve(R) == D3.Resolve(R') is possible for distinct
+//    RemoteFrameTokens R, R', especially when A1 and A3 are hosted by different
+//    renderer processes.
+//    Therefore, RemoteFrameTokens are not suitable for discriminating between
+//    AutofillAgents and AutofillDrivers in the browser process.
+//
+// 2. Over time, the same RemoteFrameToken may resolve to different
+//    LocalFrameTokens. Suppose a navigation in A2's frame replaces A2 and D2
+//    with a new objects AutofillAgent A3 and AutofillDriver D3 (this happens on
+//    a renderer process swap, which typically happens on cross-origin
+//    navigations). Then A2 and A3 have distinct LocalFrameTokens, but A1 may
+//    refer to A3 by the same RemoteFrameToken as it did to A2. That is,
+//    D1.Resolve(R) may change over cross-origin navigations.
+//    Therefore, AutofillDriver::Resolve() must not be cached.
+//
+// LocalFrameToken and RemoteFrameToken are Blink and //content layer concepts.
+//
+// If the //content layer is available, AutofillAgent and AutofillDriver inherit
+// their {Local,Remote}FrameToken from blink::Web{Local,Remote}Frame and
+// content::RenderFrameHost.
+//
+// On iOS, AutofillAgent and AutofillDriver inherit their LocalFrameToken from
+// web::WebFrame, and RemoteFrameTokens are generated during form extraction.
+//
+// FrameTokens must not be leaked to renderer processes other than the one
+// they originate from. Therefore, Autofill should generally not send
+// FrameTokens to any renderer process.
 using RemoteFrameToken = internal::TokenType<class RemoteFrameTokenMarker>;
 using LocalFrameToken = internal::TokenType<class LocalFrameTokenMarker>;
 using FrameToken = absl::variant<RemoteFrameToken, LocalFrameToken>;
@@ -103,23 +134,12 @@ struct GlobalId {
   explicit constexpr operator bool() const {
     return static_cast<bool>(renderer_id);
   }
+
+  friend constexpr auto operator<=>(const GlobalId<RendererId>& lhs,
+                                    const GlobalId<RendererId>& rhs) = default;
+  friend constexpr bool operator==(const GlobalId<RendererId>& lhs,
+                                   const GlobalId<RendererId>& rhs) = default;
 };
-
-template <typename RendererId>
-bool operator==(const GlobalId<RendererId>& a, const GlobalId<RendererId>& b) {
-  return a.renderer_id == b.renderer_id && a.frame_token == b.frame_token;
-}
-
-template <typename RendererId>
-bool operator!=(const GlobalId<RendererId>& a, const GlobalId<RendererId>& b) {
-  return !(a == b);
-}
-
-template <typename RendererId>
-bool operator<(const GlobalId<RendererId>& a, const GlobalId<RendererId>& b) {
-  return std::tie(a.frame_token, a.renderer_id) <
-         std::tie(b.frame_token, b.renderer_id);
-}
 
 }  // namespace internal
 

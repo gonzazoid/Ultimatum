@@ -9,41 +9,52 @@
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
-#include "base/containers/span.h"
-#include "base/files/file_enumerator.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
-#include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
-#include "base/no_destructor.h"
 #include "base/run_loop.h"
+#include "base/stl_util.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
-#include "base/synchronization/lock.h"
 #include "base/synchronization/waitable_event.h"
 #include "base/task/lazy_thread_pool_task_runner.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
 #include "base/thread_annotations.h"
 #include "base/threading/thread_restrictions.h"
 #include "build/build_config.h"
-#include "chrome/browser/web_applications/os_integration/web_app_file_handler_registration.h"
+#include "chrome/browser/web_applications/os_integration/file_handling_sub_manager.h"
+#include "chrome/browser/web_applications/proto/web_app_os_integration_state.pb.h"
+#include "chrome/browser/web_applications/web_app.h"
+#include "chrome/browser/web_applications/web_app_constants.h"
 #include "chrome/browser/web_applications/web_app_helpers.h"
+#include "chrome/browser/web_applications/web_app_icon_manager.h"
+#include "chrome/browser/web_applications/web_app_install_info.h"
 #include "chrome/common/chrome_constants.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
 #include "extensions/grit/extensions_browser_resources.h"
 #include "skia/ext/image_operations.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
+#include "third_party/protobuf/src/google/protobuf/repeated_field.h"
+#include "third_party/re2/src/re2/re2.h"
+#include "third_party/skia/include/core/SkBitmap.h"
 #include "ui/base/resource/resource_bundle.h"
 #include "ui/gfx/image/image_skia.h"
+#include "ui/gfx/image/image_skia_rep_default.h"
 
 #if BUILDFLAG(IS_WIN)
 #include "ui/gfx/icon_util.h"
+#endif
+
+#if BUILDFLAG(IS_MAC)
+#include "chrome/browser/web_applications/app_shim_registry_mac.h"
 #endif
 
 using content::BrowserThread;
@@ -86,10 +97,11 @@ size_t GetNumDesiredIconSizesForShortcut() {
 }
 
 void DeleteShortcutInfoOnUIThread(std::unique_ptr<ShortcutInfo> shortcut_info,
-                                  base::OnceClosure callback) {
+                                  ResultCallback callback,
+                                  Result result) {
   shortcut_info.reset();
   if (callback)
-    std::move(callback).Run();
+    std::move(callback).Run(result);
 }
 
 void CreatePlatformShortcutsAndPostCallback(
@@ -120,175 +132,55 @@ void DeleteMultiProfileShortcutsForAppAndPostCallback(const std::string& app_id,
       FROM_HERE, base::BindOnce(std::move(callback), Result::kOk));
 }
 
-struct ShortcutOverrideForTestingState {
-  base::Lock lock;
-  ShortcutOverrideForTesting* global_shortcut_override GUARDED_BY(lock) =
-      nullptr;
-};
-
-ShortcutOverrideForTestingState& GetMutableShortcutOverrideStateForTesting() {
-  static base::NoDestructor<ShortcutOverrideForTestingState>
-      g_shortcut_override;
-  return *g_shortcut_override.get();
+std::vector<WebAppShortcutsMenuItemInfo::Icon>
+ConvertIconProtoDataToShortcutsMenuIcon(
+    const ::google::protobuf::RepeatedPtrField<proto::ShortcutIconData>&
+        shortcut_icon_data) {
+  std::vector<WebAppShortcutsMenuItemInfo::Icon> shortcut_menu_item_icons;
+  for (const auto& icon_data : shortcut_icon_data) {
+    WebAppShortcutsMenuItemInfo::Icon icon;
+    icon.square_size_px = icon_data.icon_size();
+    // The icon url is set to an empty GURL() because we need this data
+    // structure to pass in for OS integration but the url is not used for
+    // setting OS integration.
+    icon.url = GURL();
+    shortcut_menu_item_icons.push_back(std::move(icon));
+  }
+  return shortcut_menu_item_icons;
 }
 
-std::string GetAllFilesInDir(const base::FilePath& file_path) {
-  std::vector<std::string> files_as_strs;
-  base::FileEnumerator files(file_path, true, base::FileEnumerator::FILES);
-  for (base::FilePath current = files.Next(); !current.empty();
-       current = files.Next()) {
-    files_as_strs.push_back(current.AsUTF8Unsafe());
+gfx::ImageFamily PackageIconsIntoImageFamily(
+    bool allow_empty,
+    std::map<SquareSizePx, SkBitmap> icon_bitmaps) {
+  gfx::ImageFamily image_family;
+  for (auto& size_and_bitmap : icon_bitmaps) {
+    image_family.Add(gfx::ImageSkia(
+        gfx::ImageSkiaRep(size_and_bitmap.second, /*scale=*/0.0f)));
   }
-  return base::JoinString(base::make_span(files_as_strs), "\n  ");
+
+  // If the image failed to load, use the standard application icon.
+  if (!allow_empty && image_family.empty()) {
+    SquareSizePx icon_size_in_px = GetDesiredIconSizesForShortcut().back();
+    gfx::ImageSkia image_skia = CreateDefaultApplicationIcon(icon_size_in_px);
+    image_family.Add(gfx::Image(image_skia));
+  }
+
+  return image_family;
+}
+
+std::unique_ptr<ShortcutInfo> SetFavicon(
+    std::unique_ptr<ShortcutInfo> shortcut_info,
+    IconPurpose purpose,
+    gfx::ImageFamily image_family) {
+  if (purpose == IconPurpose::ANY) {
+    shortcut_info->favicon = std::move(image_family);
+  } else if (purpose == IconPurpose::MASKABLE) {
+    shortcut_info->favicon_maskable = std::move(image_family);
+  }
+  return shortcut_info;
 }
 
 }  // namespace
-
-ShortcutOverrideForTesting::BlockingRegistration::BlockingRegistration() =
-    default;
-ShortcutOverrideForTesting::BlockingRegistration::~BlockingRegistration() {
-  base::ScopedAllowBlockingForTesting blocking;
-  base::RunLoop wait_until_destruction_loop;
-  // Lock the global state.
-  {
-    auto& global_state = GetMutableShortcutOverrideStateForTesting();
-    base::AutoLock state_lock(global_state.lock);
-    DCHECK_EQ(global_state.global_shortcut_override, shortcut_override.get());
-
-    // Set the destruction closure for the scoped override object.
-    DCHECK(!shortcut_override->on_destruction)
-        << "Cannot have multiple registrations at the same time.";
-    shortcut_override->on_destruction.ReplaceClosure(
-        wait_until_destruction_loop.QuitClosure());
-
-    // Unregister the override so new handles cannot be acquired.
-    global_state.global_shortcut_override = nullptr;
-  }
-
-  // Release the override & wait until all references are released.
-  // Note: The `shortcut_override` MUST be released before waiting on the run
-  // loop, as then it will hang forever.
-  shortcut_override.reset();
-  wait_until_destruction_loop.Run();
-}
-
-// static
-std::unique_ptr<ShortcutOverrideForTesting::BlockingRegistration>
-ShortcutOverrideForTesting::OverrideForTesting(
-    const base::FilePath& base_path) {
-  auto& state = GetMutableShortcutOverrideStateForTesting();
-  base::AutoLock state_lock(state.lock);
-  DCHECK(!state.global_shortcut_override)
-      << "Cannot have multiple registrations at the same time.";
-  auto shortcut_override =
-      base::WrapRefCounted(new ShortcutOverrideForTesting(base_path));
-  state.global_shortcut_override = shortcut_override.get();
-
-  std::unique_ptr<BlockingRegistration> registration =
-      std::make_unique<BlockingRegistration>();
-  registration->shortcut_override = shortcut_override;
-  return registration;
-}
-
-ShortcutOverrideForTesting::ShortcutOverrideForTesting(
-    const base::FilePath& base_path) {
-  // Initialize all directories used. The success & the DCHECK are separated to
-  // ensure that these function calls occur on release builds.
-  if (!base_path.empty()) {
-#if BUILDFLAG(IS_WIN)
-    bool success = desktop.CreateUniqueTempDirUnderPath(base_path);
-    DCHECK(success);
-    success = application_menu.CreateUniqueTempDirUnderPath(base_path);
-    DCHECK(success);
-    success = quick_launch.CreateUniqueTempDirUnderPath(base_path);
-    DCHECK(success);
-    success = startup.CreateUniqueTempDirUnderPath(base_path);
-    DCHECK(success);
-#elif BUILDFLAG(IS_MAC)
-    bool success = chrome_apps_folder.CreateUniqueTempDirUnderPath(base_path);
-    DCHECK(success);
-#elif BUILDFLAG(IS_LINUX)
-    bool success = desktop.CreateUniqueTempDirUnderPath(base_path);
-    DCHECK(success);
-    success = startup.CreateUniqueTempDirUnderPath(base_path);
-    DCHECK(success);
-#endif
-  } else {
-#if BUILDFLAG(IS_WIN)
-    bool success = desktop.CreateUniqueTempDir();
-    DCHECK(success);
-    success = application_menu.CreateUniqueTempDir();
-    DCHECK(success);
-    success = quick_launch.CreateUniqueTempDir();
-    DCHECK(success);
-    success = startup.CreateUniqueTempDir();
-    DCHECK(success);
-#elif BUILDFLAG(IS_MAC)
-    bool success = chrome_apps_folder.CreateUniqueTempDir();
-    DCHECK(success);
-#elif BUILDFLAG(IS_LINUX)
-    bool success = desktop.CreateUniqueTempDir();
-    DCHECK(success);
-    success = startup.CreateUniqueTempDir();
-    DCHECK(success);
-#endif
-  }
-
-#if BUILDFLAG(IS_LINUX)
-  auto callback =
-      base::BindRepeating([](base::FilePath filename, std::string xdg_command,
-                             std::string file_contents) {
-        auto shortcut_override = GetShortcutOverrideForTesting();
-        DCHECK(shortcut_override);
-        LinuxFileRegistration file_registration = LinuxFileRegistration();
-        file_registration.xdg_command = xdg_command;
-        file_registration.file_contents = file_contents;
-        shortcut_override->linux_file_registration.push_back(file_registration);
-        return true;
-      });
-  SetUpdateMimeInfoDatabaseOnLinuxCallbackForTesting(std::move(callback));
-#endif
-}
-
-ShortcutOverrideForTesting::~ShortcutOverrideForTesting() {
-  std::vector<base::ScopedTempDir*> directories;
-#if BUILDFLAG(IS_WIN)
-  directories = {&desktop, &application_menu, &quick_launch, &startup};
-#elif BUILDFLAG(IS_MAC)
-  directories = {&chrome_apps_folder};
-  // Checks and cleans up possible hidden files in directories.
-  std::vector<std::string> hidden_files{"Icon\r", ".localized"};
-  for (base::ScopedTempDir* dir : directories) {
-    if (dir->IsValid()) {
-      for (auto& f : hidden_files) {
-        base::FilePath path = dir->GetPath().Append(f);
-        if (base::PathExists(path))
-          base::DeletePathRecursively(path);
-      }
-    }
-  }
-#elif BUILDFLAG(IS_LINUX)
-  // Reset the file handling callback.
-  SetUpdateMimeInfoDatabaseOnLinuxCallbackForTesting(
-      UpdateMimeInfoDatabaseOnLinuxCallback());
-  directories = {&desktop};
-#endif
-  for (base::ScopedTempDir* dir : directories) {
-    if (!dir->IsValid())
-      continue;
-    DCHECK(base::IsDirectoryEmpty(dir->GetPath()))
-        << "Directory not empty: " << dir->GetPath().AsUTF8Unsafe()
-        << ". Please uninstall all webapps that have been installed while "
-           "shortcuts were overriden. Contents:\n"
-        << GetAllFilesInDir(dir->GetPath());
-  }
-}
-
-scoped_refptr<ShortcutOverrideForTesting> GetShortcutOverrideForTesting() {
-  auto& state = GetMutableShortcutOverrideStateForTesting();
-  base::AutoLock state_lock(state.lock);
-  return base::WrapRefCounted(state.global_shortcut_override);
-}
 
 ShortcutInfo::ShortcutInfo() = default;
 
@@ -296,12 +188,198 @@ ShortcutInfo::~ShortcutInfo() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 }
 
-std::string GenerateApplicationNameFromInfo(const ShortcutInfo& shortcut_info) {
-  // TODO(loyso): Remove this empty()/non-empty difference.
-  if (shortcut_info.extension_id.empty())
-    return GenerateApplicationNameFromURL(shortcut_info.url);
+std::unique_ptr<ShortcutInfo> BuildShortcutInfoWithoutFavicon(
+    const webapps::AppId& app_id,
+    const GURL& start_url,
+    const base::FilePath& profile_path,
+    const std::string& profile_name,
+    const proto::WebAppOsIntegrationState& state) {
+  auto shortcut_info = std::make_unique<ShortcutInfo>();
 
-  return GenerateApplicationNameFromAppId(shortcut_info.extension_id);
+  shortcut_info->app_id = app_id;
+  shortcut_info->url = start_url;
+  DCHECK(state.has_shortcut());
+  const proto::ShortcutDescription& shortcut_state = state.shortcut();
+  DCHECK(shortcut_state.has_title());
+  shortcut_info->title = base::UTF8ToUTF16(shortcut_state.title());
+  DCHECK(shortcut_state.has_description());
+  shortcut_info->description = base::UTF8ToUTF16(shortcut_state.description());
+  shortcut_info->profile_path = profile_path;
+  shortcut_info->profile_name = profile_name;
+  shortcut_info->is_multi_profile = true;
+
+  if (state.has_file_handling()) {
+    shortcut_info->file_handler_extensions =
+        GetFileExtensionsFromFileHandlingProto(state.file_handling());
+    shortcut_info->file_handler_mime_types =
+        GetMimeTypesFromFileHandlingProto(state.file_handling());
+  }
+
+  if (state.has_protocols_handled()) {
+    for (const auto& protocol_handler : state.protocols_handled().protocols()) {
+      DCHECK(protocol_handler.has_protocol());
+      if (protocol_handler.has_protocol() &&
+          !protocol_handler.protocol().empty()) {
+        shortcut_info->protocol_handlers.emplace(protocol_handler.protocol());
+      }
+    }
+  }
+
+// TODO(crbug.com/1416965): Implement tests on Linux for using shortcuts_menu
+// actions.
+#if BUILDFLAG(IS_LINUX)
+  const std::vector<WebAppShortcutsMenuItemInfo>& shortcuts_menu_item_infos =
+      CreateShortcutsMenuItemInfos(state.shortcut_menus());
+  DCHECK_LE(shortcuts_menu_item_infos.size(), kMaxApplicationDockMenuItems);
+  for (const auto& shortcuts_menu_item_info : shortcuts_menu_item_infos) {
+    if (!shortcuts_menu_item_info.name.empty() &&
+        !shortcuts_menu_item_info.url.is_empty()) {
+      // Generates ID from the name by replacing all characters that are not
+      // numbers, letters, or '-' with '-'.
+      std::string id = base::UTF16ToUTF8(shortcuts_menu_item_info.name);
+      RE2::GlobalReplace(&id, "[^a-zA-Z0-9\\-]", "-");
+      shortcut_info->actions.emplace(
+          id, base::UTF16ToUTF8(shortcuts_menu_item_info.name),
+          shortcuts_menu_item_info.url);
+    }
+  }
+#endif  // BUILDFLAG(IS_LINUX)
+
+#if BUILDFLAG(IS_MAC)
+  shortcut_info->handlers_per_profile =
+      AppShimRegistry::Get()->GetHandlersForApp(app_id);
+#endif
+
+  return shortcut_info;
+}
+
+void PopulateFaviconPurposeForShortcutInfo(
+    const WebApp* app,
+    WebAppIconManager& icon_manager,
+    IconPurpose purpose,
+    base::OnceCallback<void(std::unique_ptr<ShortcutInfo>)> callback,
+    std::unique_ptr<ShortcutInfo> shortcut_info_to_populate) {
+  DCHECK(app);
+
+  // Build a common intersection between desired and downloaded icons.
+  auto icon_sizes_in_px = base::STLSetIntersection<std::vector<SquareSizePx>>(
+      app->downloaded_icon_sizes(purpose), GetDesiredIconSizesForShortcut());
+
+  auto populate_and_return_shortcut_info =
+      base::BindOnce(&SetFavicon, std::move(shortcut_info_to_populate), purpose)
+          .Then(std::move(callback));
+
+  if (!icon_sizes_in_px.empty()) {
+    icon_manager.ReadIcons(
+        app->app_id(), purpose, icon_sizes_in_px,
+        base::BindOnce(&PackageIconsIntoImageFamily,
+                       /*allow_empty=*/purpose != IconPurpose::ANY)
+            .Then(std::move(populate_and_return_shortcut_info)));
+    return;
+  }
+
+  // If there is no single icon at the desired sizes, we will resize what we can
+  // get.
+  SquareSizePx desired_icon_size = GetDesiredIconSizesForShortcut().back();
+  icon_manager.ReadIconAndResize(
+      app->app_id(), purpose, desired_icon_size,
+      base::BindOnce(&PackageIconsIntoImageFamily,
+                     /*allow_empty=*/purpose != IconPurpose::ANY)
+          .Then(std::move(populate_and_return_shortcut_info)));
+}
+
+void PopulateFaviconForShortcutInfo(
+    const WebApp* app,
+    WebAppIconManager& icon_manager,
+    std::unique_ptr<ShortcutInfo> shortcut_info_to_populate,
+    base::OnceCallback<void(std::unique_ptr<ShortcutInfo>)> callback) {
+  DCHECK(app);
+
+  auto populate_favicon_maskable = base::BindOnce(
+      &PopulateFaviconPurposeForShortcutInfo, app, std::ref(icon_manager),
+      IconPurpose::MASKABLE, std::move(callback));
+
+  PopulateFaviconPurposeForShortcutInfo(app, icon_manager, IconPurpose::ANY,
+                                        std::move(populate_favicon_maskable),
+                                        std::move(shortcut_info_to_populate));
+}
+
+std::vector<WebAppShortcutsMenuItemInfo> CreateShortcutsMenuItemInfos(
+    const proto::ShortcutMenus& shortcut_menus) {
+  std::vector<WebAppShortcutsMenuItemInfo> shortcut_menu_item_infos;
+  for (const auto& shortcut_menu_info : shortcut_menus.shortcut_menu_info()) {
+    WebAppShortcutsMenuItemInfo item_info;
+    item_info.name = base::UTF8ToUTF16(shortcut_menu_info.shortcut_name());
+    item_info.url = GURL(shortcut_menu_info.shortcut_launch_url());
+    item_info.any = ConvertIconProtoDataToShortcutsMenuIcon(
+        shortcut_menu_info.icon_data_any());
+    item_info.maskable = ConvertIconProtoDataToShortcutsMenuIcon(
+        shortcut_menu_info.icon_data_maskable());
+    item_info.monochrome = ConvertIconProtoDataToShortcutsMenuIcon(
+        shortcut_menu_info.icon_data_monochrome());
+    shortcut_menu_item_infos.push_back(std::move(item_info));
+  }
+  return shortcut_menu_item_infos;
+}
+
+ShortcutLocations::ShortcutLocations() = default;
+ShortcutLocations::~ShortcutLocations() = default;
+
+base::Value ShortcutLocations::ToDebugValue() const {
+  base::Value::Dict debug_log;
+  debug_log.Set("on_desktop", on_desktop);
+  debug_log.Set("in_quick_launch_bar", in_quick_launch_bar);
+  debug_log.Set("in_startup", in_startup);
+  std::string menu_loc;
+  switch (applications_menu_location) {
+    case APP_MENU_LOCATION_NONE:
+      menu_loc = "LOC_NONE";
+      break;
+    case APP_MENU_LOCATION_SUBDIR_CHROMEAPPS:
+      menu_loc = "SUBDIR_CHROMEAPPS";
+      break;
+    case APP_MENU_LOCATION_HIDDEN:
+      menu_loc = "HIDDEN";
+      break;
+  }
+  debug_log.Set("menu_location", menu_loc);
+  return base::Value(std::move(debug_log));
+}
+
+ShortcutLocations MergeLocations(
+    const ShortcutLocations& user_specified_locations,
+    const ShortcutLocations& creation_locations) {
+  ShortcutLocations merged_locations;
+  merged_locations.on_desktop =
+      creation_locations.on_desktop || user_specified_locations.on_desktop;
+  merged_locations.in_quick_launch_bar =
+      creation_locations.in_quick_launch_bar ||
+      user_specified_locations.in_quick_launch_bar;
+  merged_locations.in_startup =
+      creation_locations.in_startup || user_specified_locations.in_startup;
+  return merged_locations;
+}
+
+bool operator==(const ShortcutLocations& location1,
+                const ShortcutLocations& location2) {
+  return (location1.on_desktop == location2.on_desktop) &&
+         (location1.in_quick_launch_bar == location2.in_quick_launch_bar) &&
+         (location1.in_startup == location2.in_startup) &&
+         (location1.applications_menu_location ==
+          location2.applications_menu_location);
+}
+
+bool operator!=(const ShortcutLocations& location1,
+                const ShortcutLocations& location2) {
+  return !(location1 == location2);
+}
+
+std::string GenerateApplicationNameFromInfo(const ShortcutInfo& shortcut_info) {
+  if (shortcut_info.app_id.empty()) {
+    return GenerateApplicationNameFromURL(shortcut_info.url);
+  }
+
+  return GenerateApplicationNameFromAppId(shortcut_info.app_id);
 }
 
 base::FilePath GetOsIntegrationResourcesDirectoryForApp(
@@ -311,8 +389,9 @@ base::FilePath GetOsIntegrationResourcesDirectoryForApp(
   DCHECK(!profile_path.empty());
   base::FilePath app_data_dir(profile_path.Append(chrome::kWebAppDirname));
 
-  if (!app_id.empty())
+  if (!app_id.empty()) {
     return app_data_dir.AppendASCII(GenerateApplicationNameFromAppId(app_id));
+  }
 
   std::string host(url.host());
   std::string scheme(url.has_scheme() ? url.scheme() : "http");
@@ -361,8 +440,19 @@ namespace internals {
 
 void PostShortcutIOTask(base::OnceCallback<void(const ShortcutInfo&)> task,
                         std::unique_ptr<ShortcutInfo> shortcut_info) {
-  PostShortcutIOTaskAndReply(std::move(task), std::move(shortcut_info),
-                             base::OnceClosure());
+  DCHECK_CURRENTLY_ON(BrowserThread::UI);
+
+  // Ownership of |shortcut_info| moves to the Reply, which is guaranteed to
+  // outlive the const reference.
+  const ShortcutInfo& shortcut_info_ref = *shortcut_info;
+  GetShortcutIOTaskRunner()->PostTaskAndReply(
+      FROM_HERE, base::BindOnce(std::move(task), std::cref(shortcut_info_ref)),
+      base::BindOnce(
+          [](std::unique_ptr<ShortcutInfo> shortcut_info) {
+            // This lambda is to own and delete the shortcut info.
+            shortcut_info.reset();
+          },
+          std::move(shortcut_info)));
 }
 
 void ScheduleCreatePlatformShortcuts(
@@ -400,29 +490,28 @@ void ScheduleDeleteMultiProfileShortcutsForApp(const std::string& app_id,
                      std::move(callback)));
 }
 
-void PostShortcutIOTaskAndReply(
-    base::OnceCallback<void(const ShortcutInfo&)> task,
+void PostShortcutIOTaskAndReplyWithResult(
+    base::OnceCallback<Result(const ShortcutInfo&)> task,
     std::unique_ptr<ShortcutInfo> shortcut_info,
-    base::OnceClosure reply) {
+    ResultCallback reply) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
 
   // Ownership of |shortcut_info| moves to the Reply, which is guaranteed to
   // outlive the const reference.
   const ShortcutInfo& shortcut_info_ref = *shortcut_info;
-  GetShortcutIOTaskRunner()->PostTaskAndReply(
+  GetShortcutIOTaskRunner()->PostTaskAndReplyWithResult(
       FROM_HERE, base::BindOnce(std::move(task), std::cref(shortcut_info_ref)),
       base::BindOnce(&DeleteShortcutInfoOnUIThread, std::move(shortcut_info),
                      std::move(reply)));
 }
 
-scoped_refptr<base::TaskRunner> GetShortcutIOTaskRunner() {
+scoped_refptr<base::SequencedTaskRunner> GetShortcutIOTaskRunner() {
   return g_shortcuts_task_runner.Get();
 }
 
 base::FilePath GetShortcutDataDir(const ShortcutInfo& shortcut_info) {
-  return GetOsIntegrationResourcesDirectoryForApp(shortcut_info.profile_path,
-                                                  shortcut_info.extension_id,
-                                                  shortcut_info.url);
+  return GetOsIntegrationResourcesDirectoryForApp(
+      shortcut_info.profile_path, shortcut_info.app_id, shortcut_info.url);
 }
 
 #if !BUILDFLAG(IS_MAC)
@@ -433,5 +522,4 @@ void DeleteMultiProfileShortcutsForApp(const std::string& app_id) {
 #endif
 
 }  // namespace internals
-
 }  // namespace web_app

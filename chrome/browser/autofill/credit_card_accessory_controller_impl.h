@@ -5,10 +5,11 @@
 #ifndef CHROME_BROWSER_AUTOFILL_CREDIT_CARD_ACCESSORY_CONTROLLER_IMPL_H_
 #define CHROME_BROWSER_AUTOFILL_CREDIT_CARD_ACCESSORY_CONTROLLER_IMPL_H_
 
-#include "base/memory/raw_ptr.h"
-#include "chrome/browser/autofill/credit_card_accessory_controller.h"
+#include <optional>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
+#include "chrome/browser/autofill/credit_card_accessory_controller.h"
 #include "components/autofill/core/browser/personal_data_manager.h"
 #include "content/public/browser/web_contents_user_data.h"
 
@@ -16,7 +17,7 @@ class ManualFillingController;
 
 namespace autofill {
 
-class AutofillManager;
+class BrowserAutofillManager;
 
 // Use either CreditCardAccessoryController::GetOrCreate or
 // CreditCardAccessoryController::GetIfExisting to obtain instances of this
@@ -29,22 +30,19 @@ class CreditCardAccessoryControllerImpl
 
   // AccessoryController:
   void RegisterFillingSourceObserver(FillingSourceObserver observer) override;
-  absl::optional<AccessorySheetData> GetSheetData() const override;
+  std::optional<AccessorySheetData> GetSheetData() const override;
   void OnFillingTriggered(FieldGlobalId focused_field_id,
                           const AccessorySheetField& selection) override;
+  void OnPasskeySelected(const std::vector<uint8_t>& passkey_id) override;
   void OnOptionSelected(AccessoryAction selected_action) override;
   void OnToggleChanged(AccessoryAction toggled_action, bool enabled) override;
 
   // CreditCardAccessoryController:
   void RefreshSuggestions() override;
+  base::WeakPtr<CreditCardAccessoryController> AsWeakPtr() override;
 
   // PersonalDataManagerObserver:
   void OnPersonalDataChanged() override;
-
-  // CreditCardAccessManager::Accessor:
-  void OnCreditCardFetched(CreditCardFetchResult result,
-                           const CreditCard* credit_card,
-                           const std::u16string& cvc) override;
 
   static void CreateForWebContentsForTesting(
       content::WebContents* web_contents,
@@ -82,12 +80,18 @@ class CreditCardAccessoryControllerImpl
   // plaintext and won't require any authentication when filling is triggered.
   std::vector<const CachedServerCardInfo*> GetUnmaskedCreditCards() const;
 
+  // `OnFillingTriggered()` fetches the credit card and calls this function
+  // once the `credit_card` is available. If successful, it fills it.
+  void OnCreditCardFetched(CreditCardFetchResult result,
+                           const CreditCard* credit_card);
+
   // Gets promo code offers from personal data manager.
   std::vector<const AutofillOfferData*> GetPromoCodeOffers() const;
 
   base::WeakPtr<ManualFillingController> GetManualFillingController();
   AutofillDriver* GetDriver();
-  AutofillManager* GetManager() const;
+  const BrowserAutofillManager* GetManager() const;
+  BrowserAutofillManager* GetManager();
 
   content::WebContents& GetWebContents() const;
 
@@ -104,6 +108,9 @@ class CreditCardAccessoryControllerImpl
   FieldGlobalId last_focused_field_id_;
 
   WEB_CONTENTS_USER_DATA_KEY_DECL();
+
+  base::WeakPtrFactory<CreditCardAccessoryControllerImpl> weak_ptr_factory_{
+      this};
 };
 
 }  // namespace autofill

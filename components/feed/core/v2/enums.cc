@@ -36,6 +36,12 @@ std::ostream& operator<<(std::ostream& out, NetworkRequestType value) {
       return out << "kQueryBackgroundFeed";
     case NetworkRequestType::kQueryNextPage:
       return out << "kQueryNextPage";
+    case NetworkRequestType::kSingleWebFeedListContents:
+      return out << "kSingleWebFeedListContents";
+    case NetworkRequestType::kQueryWebFeed:
+      return out << "kQueryWebFeed";
+    case NetworkRequestType::kSupervisedFeed:
+      return out << "kSupervisedFeed";
   }
 #endif
   return out << (static_cast<int>(value));
@@ -108,6 +114,8 @@ std::ostream& operator<<(std::ostream& out, LoadStreamStatus value) {
       return out << "kNetworkFetchTimedOut";
     case LoadStreamStatus::kLoadNotAllowedDisabled:
       return out << "kLoadNotAllowedDisabled";
+    case LoadStreamStatus::kLoadNotAllowedDisabledByDse:
+      return out << "kLoadNotAllowedDisabledByDse";
   }
 #else
   return out << (static_cast<int>(value));
@@ -150,6 +158,7 @@ bool IsLoadingSuccessfulAndFresh(LoadStreamStatus status) {
     case LoadStreamStatus::kAccountTokenFetchTimedOut:
     case LoadStreamStatus::kNetworkFetchTimedOut:
     case LoadStreamStatus::kLoadNotAllowedDisabled:
+    case LoadStreamStatus::kLoadNotAllowedDisabledByDse:
       return false;
   }
 }
@@ -243,6 +252,8 @@ base::StringPiece ToString(UserSettingsOnStart v) {
       return "SignedInNoRecentData";
     case UserSettingsOnStart::kFeedNotEnabled:
       return "FeedNotEnabled";
+    case UserSettingsOnStart::kFeedNotEnabledByDse:
+      return "FeedNotEnabledByDse";
   }
   return "Unknown";
 }

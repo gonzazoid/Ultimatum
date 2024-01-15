@@ -7,6 +7,8 @@
 
 #include "base/component_export.h"
 #include "base/files/file_path.h"
+#include "base/observer_list.h"
+#include "chromeos/ash/components/dbus/spaced/spaced.pb.h"
 #include "chromeos/dbus/common/dbus_client.h"
 #include "chromeos/dbus/common/dbus_method_call_status.h"
 
@@ -19,7 +21,15 @@ namespace ash {
 // A class to make DBus calls for the org.chromium.Spaced service.
 class COMPONENT_EXPORT(SPACED_CLIENT) SpacedClient {
  public:
+  class Observer : public base::CheckedObserver {
+   public:
+    using SpaceEvent = spaced::StatefulDiskSpaceUpdate;
+    // Called when the space is queried periodically.
+    virtual void OnSpaceUpdate(const SpaceEvent& event) = 0;
+  };
+
   using GetSizeCallback = chromeos::DBusMethodCallback<int64_t>;
+  using BoolCallback = chromeos::DBusMethodCallback<bool>;
 
   SpacedClient(const SpacedClient&) = delete;
   SpacedClient& operator=(const SpacedClient&) = delete;
@@ -36,29 +46,60 @@ class COMPONENT_EXPORT(SPACED_CLIENT) SpacedClient {
   // Returns the global instance which may be null if not initialized.
   static SpacedClient* Get();
 
-  // Gets free disk space available for the given file path.
+  // Gets free disk space available in bytes for the given file path.
   virtual void GetFreeDiskSpace(const std::string& path,
                                 GetSizeCallback callback) = 0;
 
-  // Gets total disk space available on the current partition for the given file
-  // path.
+  // Gets total disk space available in bytes on the current partition for the
+  // given file path.
   virtual void GetTotalDiskSpace(const std::string& path,
                                  GetSizeCallback callback) = 0;
 
-  // Gets the total disk space available for usage on the device.
+  // Gets the total disk space available in bytes for usage on the device.
   virtual void GetRootDeviceSize(GetSizeCallback callback) = 0;
+
+  // Gets whether the user's cryptohome is mounted with quota enabled.
+  virtual void IsQuotaSupported(const std::string& path,
+                                BoolCallback callback) = 0;
+
+  // Gets the current disk space used by the given uid.
+  virtual void GetQuotaCurrentSpaceForUid(const std::string& path,
+                                          uint32_t uid,
+                                          GetSizeCallback callback) = 0;
+  // Gets the current disk space used by the given gid.
+  virtual void GetQuotaCurrentSpaceForGid(const std::string& path,
+                                          uint32_t gid,
+                                          GetSizeCallback callback) = 0;
+  // Gets the current disk space used by the given project_id.
+  virtual void GetQuotaCurrentSpaceForProjectId(const std::string& path,
+                                                uint32_t project_id,
+                                                GetSizeCallback callback) = 0;
+
+  // Adds an observer.
+  void AddObserver(Observer* const observer) {
+    observers_.AddObserver(observer);
+  }
+
+  // Removes an observer.
+  void RemoveObserver(Observer* const observer) {
+    observers_.RemoveObserver(observer);
+  }
+
+  // Returns true if the `OnStatefulDiskSpaceUpdate` signal has been connected.
+  bool IsConnected() const { return connected_; }
 
  protected:
   // Initialize/Shutdown should be used instead.
   SpacedClient();
   virtual ~SpacedClient();
+
+  // List of observers.
+  base::ObserverList<Observer> observers_;
+
+  // Whether the `OnStatefulDiskSpaceUpdate` signal has been connected.
+  bool connected_ = false;
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when the migration is finished.
-namespace chromeos {
-using ::ash::SpacedClient;
-}
 
 #endif  // CHROMEOS_ASH_COMPONENTS_DBUS_SPACED_SPACED_CLIENT_H_

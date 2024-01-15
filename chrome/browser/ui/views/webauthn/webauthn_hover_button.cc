@@ -8,12 +8,14 @@
 #include "chrome/browser/ui/views/chrome_layout_provider.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
+#include "ui/base/ui_base_features.h"
 #include "ui/compositor/layer.h"
 #include "ui/gfx/geometry/size.h"
 #include "ui/views/border.h"
 #include "ui/views/controls/label.h"
 #include "ui/views/layout/table_layout.h"
 #include "ui/views/style/typography.h"
+#include "ui/views/style/typography_provider.h"
 #include "ui/views/view_class_properties.h"
 
 namespace {
@@ -23,8 +25,9 @@ namespace {
 // internal class of the same name, but the horizontal spacing applied
 // by that class is incompatible with the WebAuthn UI spec.
 class IconWrapper : public views::View {
+  METADATA_HEADER(IconWrapper, views::View)
+
  public:
-  METADATA_HEADER(IconWrapper);
   explicit IconWrapper(std::unique_ptr<views::View> icon) {
     AddChildView(std::move(icon));
     SetUseDefaultFillLayout(true);
@@ -36,7 +39,7 @@ class IconWrapper : public views::View {
   }
 };
 
-BEGIN_METADATA(IconWrapper, views::View)
+BEGIN_METADATA(IconWrapper)
 END_METADATA
 
 }  // namespace
@@ -57,8 +60,9 @@ WebAuthnHoverButton::WebAuthnHoverButton(
   // ignore the child views created by the LabelButton ancestor. They're not
   // used but must exist to keep things happy. This view should be refactored to
   // descend from views::Button directly.
-  for (auto* child : children())
+  for (views::View* child : children()) {
     layout->SetChildViewIgnoredByLayout(child, true);
+  }
 
   const int icon_padding = layout_provider->GetDistanceMetric(
       views::DISTANCE_RELATED_LABEL_HORIZONTAL);
@@ -87,7 +91,7 @@ WebAuthnHoverButton::WebAuthnHoverButton(
                    /*min_width=*/0);
   }
 
-  const int row_height = views::style::GetLineHeight(
+  const int row_height = views::TypographyProvider::Get().GetLineHeight(
       views::style::CONTEXT_LABEL, views::style::STYLE_PRIMARY);
   const bool is_two_line = !subtitle_text.empty() || force_two_line;
   const int icon_row_span = is_two_line ? 2 : 1;
@@ -104,6 +108,9 @@ WebAuthnHoverButton::WebAuthnHoverButton(
   title_->SetHorizontalAlignment(gfx::ALIGN_LEFT);
   title_->SetProperty(views::kTableColAndRowSpanKey,
                       gfx::Size(/*width=*/1, title_row_span));
+  if (features::IsChromeRefresh2023()) {
+    title_->SetTextStyle(views::style::STYLE_BODY_3_BOLD);
+  }
 
   if (secondary_icon) {
     secondary_icon_view_ =
@@ -115,6 +122,9 @@ WebAuthnHoverButton::WebAuthnHoverButton(
   if (is_two_line && !subtitle_text.empty()) {
     subtitle_ = AddChildView(std::make_unique<views::Label>(subtitle_text));
     subtitle_->SetHorizontalAlignment(gfx::ALIGN_LEFT);
+    if (features::IsChromeRefresh2023()) {
+      subtitle_->SetTextStyle(views::style::STYLE_BODY_3_EMPHASIS);
+    }
   }
 
   SetAccessibleName(subtitle_text.empty()
@@ -127,11 +137,16 @@ WebAuthnHoverButton::WebAuthnHoverButton(
   // icon, the left inset would be 12dp, but we don't currently have a button
   // with such an icon.)
 
-  const int vert_inset = is_two_line ? 8 : 12;
-  constexpr int horz_inset = 8;
+  int vert_inset = is_two_line ? 8 : 12;
+  int left_inset = 8;
+  int right_inset = 8;
+  if (features::IsChromeRefresh2023()) {
+    vert_inset = is_two_line ? 10 : 16;
+    right_inset = 16;
+  }
   SetBorder(views::CreateEmptyBorder(
-      gfx::Insets::TLBR(vert_inset, horz_inset, vert_inset, horz_inset)));
+      gfx::Insets::TLBR(vert_inset, left_inset, vert_inset, right_inset)));
 }
 
-BEGIN_METADATA(WebAuthnHoverButton, HoverButton)
+BEGIN_METADATA(WebAuthnHoverButton)
 END_METADATA

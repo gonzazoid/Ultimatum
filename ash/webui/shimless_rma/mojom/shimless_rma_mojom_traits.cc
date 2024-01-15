@@ -70,6 +70,9 @@ using ProtoUpdateRoFirmwaretatus = rmad::UpdateRoFirmwareStatus;
 using MojomShutdownMethod = ash::shimless_rma::mojom::ShutdownMethod;
 using ProtoShutdownMethod = rmad::RepairCompleteState::ShutdownMethod;
 
+using MojomFeatureLevel = ash::shimless_rma::mojom::FeatureLevel;
+using ProtoFeatureLevel = rmad::UpdateDeviceInfoState::FeatureLevel;
+
 }  // namespace
 
 // The rmad state does not map 1:1 with UI app state, the UI handles more states
@@ -217,6 +220,10 @@ MojomRmadErrorCode EnumTraits<MojomRmadErrorCode, ProtoRmadErrorCode>::ToMojom(
       return MojomRmadErrorCode::kCannotWrite;
     case ProtoRmadErrorCode::RMAD_ERROR_CANNOT_SAVE_LOG:
       return MojomRmadErrorCode::kCannotSaveLog;
+    case ProtoRmadErrorCode::RMAD_ERROR_CANNOT_RECORD_BROWSER_ACTION:
+      return MojomRmadErrorCode::kCannotRecordBrowserAction;
+    case ProtoRmadErrorCode::RMAD_ERROR_USB_NOT_FOUND:
+      return MojomRmadErrorCode::kUsbNotFound;
 
     case ProtoRmadErrorCode::RMAD_ERROR_NOT_SET:
     default:
@@ -367,6 +374,12 @@ bool EnumTraits<MojomRmadErrorCode, ProtoRmadErrorCode>::FromMojom(
       return true;
     case MojomRmadErrorCode::kCannotSaveLog:
       *out = ProtoRmadErrorCode::RMAD_ERROR_CANNOT_SAVE_LOG;
+      return true;
+    case MojomRmadErrorCode::kCannotRecordBrowserAction:
+      *out = ProtoRmadErrorCode::RMAD_ERROR_CANNOT_RECORD_BROWSER_ACTION;
+      return true;
+    case MojomRmadErrorCode::kUsbNotFound:
+      *out = ProtoRmadErrorCode::RMAD_ERROR_USB_NOT_FOUND;
       return true;
 
     case MojomRmadErrorCode::kNotSet:
@@ -1269,6 +1282,49 @@ bool EnumTraits<MojomShutdownMethod, ProtoShutdownMethod>::FromMojom(
       return true;
     case MojomShutdownMethod::kBatteryCutoff:
       *out = rmad::RepairCompleteState::RMAD_REPAIR_COMPLETE_BATTERY_CUTOFF;
+      return true;
+  }
+  NOTREACHED();
+  return false;
+}
+
+// static
+MojomFeatureLevel EnumTraits<MojomFeatureLevel, ProtoFeatureLevel>::ToMojom(
+    ProtoFeatureLevel feature_level) {
+  switch (feature_level) {
+    case rmad::UpdateDeviceInfoState::RMAD_FEATURE_LEVEL_UNSUPPORTED:
+      return MojomFeatureLevel::kRmadFeatureLevelUnsupported;
+    case rmad::UpdateDeviceInfoState::RMAD_FEATURE_LEVEL_UNKNOWN:
+      return MojomFeatureLevel::kRmadFeatureLevelUnknown;
+    case rmad::UpdateDeviceInfoState::RMAD_FEATURE_LEVEL_0:
+      return MojomFeatureLevel::kRmadFeatureLevel0;
+    case rmad::UpdateDeviceInfoState::RMAD_FEATURE_LEVEL_1:
+      return MojomFeatureLevel::kRmadFeatureLevel1;
+
+    default:
+      NOTREACHED();
+      return MojomFeatureLevel::kRmadFeatureLevelUnknown;
+  }
+  NOTREACHED();
+  return MojomFeatureLevel::kRmadFeatureLevelUnknown;
+}
+
+// static
+bool EnumTraits<MojomFeatureLevel, ProtoFeatureLevel>::FromMojom(
+    MojomFeatureLevel feature_level,
+    ProtoFeatureLevel* out) {
+  switch (feature_level) {
+    case MojomFeatureLevel::kRmadFeatureLevelUnsupported:
+      *out = rmad::UpdateDeviceInfoState::RMAD_FEATURE_LEVEL_UNSUPPORTED;
+      return true;
+    case MojomFeatureLevel::kRmadFeatureLevelUnknown:
+      *out = rmad::UpdateDeviceInfoState::RMAD_FEATURE_LEVEL_UNKNOWN;
+      return true;
+    case MojomFeatureLevel::kRmadFeatureLevel0:
+      *out = rmad::UpdateDeviceInfoState::RMAD_FEATURE_LEVEL_0;
+      return true;
+    case MojomFeatureLevel::kRmadFeatureLevel1:
+      *out = rmad::UpdateDeviceInfoState::RMAD_FEATURE_LEVEL_1;
       return true;
   }
   NOTREACHED();

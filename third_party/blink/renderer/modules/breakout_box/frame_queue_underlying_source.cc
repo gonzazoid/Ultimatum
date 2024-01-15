@@ -4,6 +4,7 @@
 
 #include "third_party/blink/renderer/modules/breakout_box/frame_queue_underlying_source.h"
 
+#include "base/feature_list.h"
 #include "base/task/bind_post_task.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_throw_dom_exception.h"
 #include "third_party/blink/renderer/core/dom/dom_exception.h"
@@ -14,21 +15,27 @@
 #include "third_party/blink/renderer/modules/webcodecs/video_frame_monitor.h"
 #include "third_party/blink/renderer/platform/bindings/exception_code.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
+#include "third_party/blink/renderer/platform/bindings/script_wrappable.h"
 #include "third_party/blink/renderer/platform/scheduler/public/post_cross_thread_task.h"
 #include "third_party/blink/renderer/platform/wtf/cross_thread_functional.h"
 #include "third_party/webrtc/api/frame_transformer_interface.h"
+
+BASE_FEATURE(kBreakoutBoxEnqueueInSeparateTask,
+             "BreakoutBoxEnqueueInSeparateTask",
+             base::FEATURE_ENABLED_BY_DEFAULT);
 
 namespace blink {
 
 namespace {
 
-int GetFrameId(const scoped_refptr<media::VideoFrame>& video_frame) {
+media::VideoFrame::ID GetFrameId(
+    const scoped_refptr<media::VideoFrame>& video_frame) {
   return video_frame->unique_id();
 }
 
-int GetFrameId(const scoped_refptr<media::AudioBuffer>&) {
+media::VideoFrame::ID GetFrameId(const scoped_refptr<media::AudioBuffer>&) {
   NOTREACHED();
-  return -1;
+  return media::VideoFrame::ID();
 }
 
 }  // namespace
@@ -72,8 +79,9 @@ FrameQueueUnderlyingSource<NativeFrameType>::FrameQueueUnderlyingSource(
 }
 
 template <typename NativeFrameType>
-ScriptPromise FrameQueueUnderlyingSource<NativeFrameType>::pull(
-    ScriptState* script_state) {
+ScriptPromise FrameQueueUnderlyingSource<NativeFrameType>::Pull(
+    ScriptState* script_state,
+    ExceptionState&) {
   DCHECK(realm_task_runner_->RunsTasksInCurrentSequence());
   {
     base::AutoLock locker(lock_);
@@ -99,7 +107,8 @@ ScriptPromise FrameQueueUnderlyingSource<NativeFrameType>::pull(
 
 template <typename NativeFrameType>
 ScriptPromise FrameQueueUnderlyingSource<NativeFrameType>::Start(
-    ScriptState* script_state) {
+    ScriptState* script_state,
+    ExceptionState& exception_state) {
   DCHECK(realm_task_runner_->RunsTasksInCurrentSequence());
   if (is_closed_) {
     // This was intended to be closed before Start() was called.
@@ -108,11 +117,9 @@ ScriptPromise FrameQueueUnderlyingSource<NativeFrameType>::Start(
     if (!StartFrameDelivery()) {
       // There is only one way in which this can fail for now. Perhaps
       // implementations should return their own failure messages.
-      return ScriptPromise::Reject(
-          script_state,
-          V8ThrowDOMException::CreateOrEmpty(
-              script_state->GetIsolate(), DOMExceptionCode::kInvalidStateError,
-              "Invalid track"));
+      exception_state.ThrowDOMException(DOMExceptionCode::kInvalidStateError,
+                                        "Invalid track");
+      return ScriptPromise();
     }
   }
 
@@ -122,16 +129,11 @@ ScriptPromise FrameQueueUnderlyingSource<NativeFrameType>::Start(
 template <typename NativeFrameType>
 ScriptPromise FrameQueueUnderlyingSource<NativeFrameType>::Cancel(
     ScriptState* script_state,
-    ScriptValue reason) {
+    ScriptValue reason,
+    ExceptionState&) {
   DCHECK(realm_task_runner_->RunsTasksInCurrentSequence());
   Close();
   return ScriptPromise::CastUndefined(script_state);
-}
-
-template <typename NativeFrameType>
-bool FrameQueueUnderlyingSource<NativeFrameType>::HasPendingActivity() const {
-  base::AutoLock locker(lock_);
-  return (num_pending_pulls_ > 0) && GetExecutionContext();
 }
 
 template <typename NativeFrameType>
@@ -309,8 +311,23 @@ void FrameQueueUnderlyingSource<
     if (!media_frame.has_value())
       return;
 
-    int frame_id = MustUseMonitor() ? GetFrameId(media_frame.value()) : -1;
-    Controller()->Enqueue(MakeBlinkFrame(std::move(media_frame.value())));
+    media::VideoFrame::ID frame_id = MustUseMonitor()
+                                         ? GetFrameId(media_frame.value())
+                                         : media::VideoFrame::ID();
+    if (base::FeatureList::IsEnabled(kBreakoutBoxEnqueueInSeparateTask)) {
+      // It has been observed that if the time between JS read() operations
+      // is longer than the time between new frames, other tasks get delayed
+      // and the page freezes. Enqueuing in a separate task avoids this problem.
+      // See https://crbug.com/1490501
+      realm_task_runner_->PostTask(
+          FROM_HERE,
+          WTF::BindOnce(
+              &FrameQueueUnderlyingSource::EnqueueBlinkFrame,
+              WrapPersistent(this),
+              WrapPersistent(MakeBlinkFrame(std::move(media_frame.value())))));
+    } else {
+      Controller()->Enqueue(MakeBlinkFrame(std::move(media_frame.value())));
+    }
     // Update the monitor after creating the Blink VideoFrame to avoid
     // temporarily removing the frame from the monitor.
     MaybeMonitorPopFrameId(frame_id);
@@ -319,6 +336,15 @@ void FrameQueueUnderlyingSource<
       if (--num_pending_pulls_ == 0)
         return;
     }
+  }
+}
+
+template <typename NativeFrameType>
+void FrameQueueUnderlyingSource<NativeFrameType>::EnqueueBlinkFrame(
+    ScriptWrappable* blink_frame) const {
+  DCHECK(realm_task_runner_->RunsTasksInCurrentSequence());
+  if (GetExecutionContext() && !GetExecutionContext()->IsContextDestroyed()) {
+    Controller()->Enqueue(blink_frame);
   }
 }
 
@@ -335,7 +361,7 @@ base::Lock& FrameQueueUnderlyingSource<NativeFrameType>::GetMonitorLock() {
 
 template <typename NativeFrameType>
 void FrameQueueUnderlyingSource<NativeFrameType>::MaybeMonitorPopFrameId(
-    int frame_id) {
+    media::VideoFrame::ID frame_id) {
   if (!MustUseMonitor())
     return;
   VideoFrameMonitor::Instance().OnCloseFrame(device_id_, frame_id);
@@ -345,7 +371,7 @@ template <typename NativeFrameType>
 void FrameQueueUnderlyingSource<NativeFrameType>::MonitorPopFrameLocked(
     const NativeFrameType& media_frame) {
   DCHECK(MustUseMonitor());
-  int frame_id = GetFrameId(media_frame);
+  media::VideoFrame::ID frame_id = GetFrameId(media_frame);
   // Note: This is GetMonitorLock(), which is required, but the static checker
   // doesn't figure it out.
   VideoFrameMonitor::Instance().GetLock().AssertAcquired();
@@ -356,7 +382,7 @@ template <typename NativeFrameType>
 void FrameQueueUnderlyingSource<NativeFrameType>::MonitorPushFrameLocked(
     const NativeFrameType& media_frame) {
   DCHECK(MustUseMonitor());
-  int frame_id = GetFrameId(media_frame);
+  media::VideoFrame::ID frame_id = GetFrameId(media_frame);
   VideoFrameMonitor::Instance().GetLock().AssertAcquired();
   VideoFrameMonitor::Instance().OnOpenFrameLocked(device_id_, frame_id);
 }
@@ -367,7 +393,7 @@ FrameQueueUnderlyingSource<NativeFrameType>::AnalyzeNewFrameLocked(
     const NativeFrameType& new_frame,
     const absl::optional<NativeFrameType>& oldest_frame) {
   DCHECK(MustUseMonitor());
-  absl::optional<int> oldest_frame_id;
+  absl::optional<media::VideoFrame::ID> oldest_frame_id;
   if (oldest_frame.has_value())
     oldest_frame_id = GetFrameId(oldest_frame.value());
 
@@ -379,7 +405,7 @@ FrameQueueUnderlyingSource<NativeFrameType>::AnalyzeNewFrameLocked(
     return NewFrameAction::kPush;
   }
 
-  int new_frame_id = GetFrameId(new_frame);
+  media::VideoFrame::ID new_frame_id = GetFrameId(new_frame);
   if (monitor.NumRefsLocked(device_id_, new_frame_id) > 0) {
     // The new frame is already in another queue or exposed to JS, so adding
     // it to the queue would not count against the limit.

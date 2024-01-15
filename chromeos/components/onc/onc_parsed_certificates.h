@@ -10,18 +10,14 @@
 
 #include "base/component_export.h"
 #include "base/memory/ref_counted.h"
+#include "base/values.h"
 #include "chromeos/components/onc/certificate_scope.h"
-
-namespace base {
-class Value;
-}  // namespace base
 
 namespace net {
 class X509Certificate;
 }
 
-namespace chromeos {
-namespace onc {
+namespace chromeos::onc {
 
 // Represents certificates parsed from the ONC Certificates section.
 class COMPONENT_EXPORT(CHROMEOS_ONC) OncParsedCertificates {
@@ -97,9 +93,8 @@ class COMPONENT_EXPORT(CHROMEOS_ONC) OncParsedCertificates {
   // certificate lists will be empty.
   OncParsedCertificates();
 
-  // Parses |onc_certificates|. This must be a Value of type LIST, corresponding
-  // to the Certificates part of the ONC specification.
-  explicit OncParsedCertificates(const base::Value& onc_certificates);
+  // Parses |onc_certificates|.
+  explicit OncParsedCertificates(const base::Value::List& onc_certificates);
 
   OncParsedCertificates(const OncParsedCertificates&) = delete;
   OncParsedCertificates& operator=(const OncParsedCertificates&) = delete;
@@ -107,7 +102,7 @@ class COMPONENT_EXPORT(CHROMEOS_ONC) OncParsedCertificates {
   ~OncParsedCertificates();
 
   // Returns all certificates that were successfully parsed and had the type
-  // Server or Authoriy.
+  // Server or Authority.
   const std::vector<ServerOrAuthorityCertificate>&
   server_or_authority_certificates() const {
     return server_or_authority_certificates_;
@@ -119,25 +114,24 @@ class COMPONENT_EXPORT(CHROMEOS_ONC) OncParsedCertificates {
     return client_certificates_;
   }
 
-  // Returns true if any parsing error occured. Note that certificates which had
-  // no parsing errors will still be available through
+  // Returns true if any parsing error occurred. Note that certificates which
+  // had no parsing errors will still be available through
   // server_or_authority_certificates() and client_certificates().
   bool has_error() const { return has_error_; }
 
  private:
-  bool ParseCertificate(const base::Value& onc_certificate);
+  bool ParseCertificate(const base::Value::Dict& onc_certificate);
   bool ParseServerOrCaCertificate(ServerOrAuthorityCertificate::Type type,
                                   const std::string& guid,
-                                  const base::Value& onc_certificate);
+                                  const base::Value::Dict& onc_certificate);
   bool ParseClientCertificate(const std::string& guid,
-                              const base::Value& onc_certificate);
+                              const base::Value::Dict& onc_certificate);
 
   std::vector<ServerOrAuthorityCertificate> server_or_authority_certificates_;
   std::vector<ClientCertificate> client_certificates_;
   bool has_error_ = false;
 };
 
-}  // namespace onc
-}  // namespace chromeos
+}  // namespace chromeos::onc
 
 #endif  // CHROMEOS_COMPONENTS_ONC_ONC_PARSED_CERTIFICATES_H_

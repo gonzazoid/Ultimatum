@@ -9,15 +9,15 @@
 #include "build/build_config.h"
 #include "ui/views/views_export.h"
 
-namespace views {
-namespace features {
+namespace views::features {
 
 // Please keep alphabetized.
+VIEWS_EXPORT BASE_DECLARE_FEATURE(kDesktopWidgetReparentAura);
 VIEWS_EXPORT BASE_DECLARE_FEATURE(kEnablePlatformHighContrastInkDrop);
 VIEWS_EXPORT BASE_DECLARE_FEATURE(kEnableViewPaintOptimization);
+VIEWS_EXPORT BASE_DECLARE_FEATURE(kKeyboardAccessibleTooltipInViews);
 VIEWS_EXPORT BASE_DECLARE_FEATURE(kWidgetLayering);
 
-}  // namespace features
-}  // namespace views
+}  // namespace views::features
 
 #endif  // UI_VIEWS_VIEWS_FEATURES_H_

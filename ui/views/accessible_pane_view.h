@@ -24,9 +24,9 @@ class ViewTracker;
 class VIEWS_EXPORT AccessiblePaneView : public View,
                                         public FocusChangeListener,
                                         public FocusTraversable {
- public:
-  METADATA_HEADER(AccessiblePaneView);
+  METADATA_HEADER(AccessiblePaneView, View)
 
+ public:
   AccessiblePaneView();
 
   AccessiblePaneView(const AccessiblePaneView&) = delete;
@@ -53,7 +53,6 @@ class VIEWS_EXPORT AccessiblePaneView : public View,
   FocusTraversable* GetPaneFocusTraversable() override;
   bool AcceleratorPressed(const ui::Accelerator& accelerator) override;
   void SetVisible(bool flag) override;
-  void GetAccessibleNodeData(ui::AXNodeData* node_data) override;
   void RequestFocus() override;
 
   // Overridden from FocusChangeListener:

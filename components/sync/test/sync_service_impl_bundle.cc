@@ -8,7 +8,8 @@
 #include <utility>
 
 #include "components/pref_registry/pref_registry_syncable.h"
-#include "components/sync/base/sync_prefs.h"
+#include "components/signin/public/base/signin_pref_names.h"
+#include "components/sync/service/sync_prefs.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
 #include "services/network/public/cpp/weak_wrapper_shared_url_loader_factory.h"
 #include "services/network/test/test_network_connection_tracker.h"
@@ -22,6 +23,9 @@ using testing::Return;
 SyncServiceImplBundle::SyncServiceImplBundle()
     : identity_test_env_(&test_url_loader_factory_) {
   SyncPrefs::RegisterProfilePrefs(pref_service_.registry());
+  // Pref is registered in signin internal `PrimaryAccountManager`.
+  pref_service_.registry()->RegisterBooleanPref(::prefs::kExplicitBrowserSignin,
+                                                false);
   identity_test_env_.SetAutomaticIssueOfAccessTokens(true);
 }
 
@@ -40,11 +44,9 @@ std::unique_ptr<SyncClientMock> SyncServiceImplBundle::CreateSyncClientMock() {
 }
 
 SyncServiceImpl::InitParams SyncServiceImplBundle::CreateBasicInitParams(
-    SyncServiceImpl::StartBehavior start_behavior,
     std::unique_ptr<SyncClient> sync_client) {
   SyncServiceImpl::InitParams init_params;
 
-  init_params.start_behavior = start_behavior;
   init_params.sync_client = std::move(sync_client);
   init_params.identity_manager = identity_manager();
   init_params.url_loader_factory =

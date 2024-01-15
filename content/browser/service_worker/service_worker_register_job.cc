@@ -8,13 +8,12 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/strings/stringprintf.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "content/browser/devtools/devtools_instrumentation.h"
 #include "content/browser/devtools/devtools_throttle_handle.h"
@@ -22,7 +21,6 @@
 #include "content/browser/renderer_host/private_network_access_util.h"
 #include "content/browser/renderer_host/render_frame_host_impl.h"
 #include "content/browser/service_worker/embedded_worker_instance.h"
-#include "content/browser/service_worker/embedded_worker_status.h"
 #include "content/browser/service_worker/service_worker_consts.h"
 #include "content/browser/service_worker/service_worker_container_host.h"
 #include "content/browser/service_worker/service_worker_context_core.h"
@@ -33,11 +31,14 @@
 #include "content/browser/service_worker/service_worker_registration.h"
 #include "content/browser/service_worker/service_worker_registry.h"
 #include "content/browser/service_worker/service_worker_version.h"
+#include "content/browser/worker_host/worker_script_fetcher.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/common/content_client.h"
 #include "net/base/net_errors.h"
+#include "services/network/public/cpp/ip_address_space_util.h"
 #include "services/network/public/mojom/client_security_state.mojom-forward.h"
+#include "third_party/blink/public/common/service_worker/embedded_worker_status.h"
 #include "third_party/blink/public/common/service_worker/service_worker_scope_match.h"
 #include "third_party/blink/public/common/service_worker/service_worker_type_converters.h"
 #include "third_party/blink/public/mojom/service_worker/service_worker_object.mojom.h"
@@ -125,7 +126,7 @@ void ServiceWorkerRegisterJob::AddCallback(RegistrationCallback callback) {
     callbacks_.emplace_back(std::move(callback));
     return;
   }
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(std::move(callback), promise_resolved_status_,
                      promise_resolved_status_message_,
@@ -162,7 +163,7 @@ void ServiceWorkerRegisterJob::StartImpl() {
   scoped_refptr<ServiceWorkerRegistration> registration =
       context_->registry()->GetUninstallingRegistration(scope_, key_);
   if (registration.get())
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(std::move(next_step),
                        blink::ServiceWorkerStatusCode::kOk, registration));
@@ -362,7 +363,8 @@ bool ServiceWorkerRegisterJob::IsUpdateCheckNeeded() const {
 void ServiceWorkerRegisterJob::OnUpdateCheckFinished(
     ServiceWorkerSingleScriptUpdateChecker::Result result,
     std::unique_ptr<ServiceWorkerSingleScriptUpdateChecker::FailureInfo>
-        failure_info) {
+        failure_info,
+    const std::map<GURL, std::string>& updated_sha256_script_checksums) {
   // Update check failed.
   if (result == ServiceWorkerSingleScriptUpdateChecker::Result::kFailed) {
     DCHECK(failure_info);
@@ -377,6 +379,26 @@ void ServiceWorkerRegisterJob::OnUpdateCheckFinished(
 
   // Update check succeeded.
   if (result == ServiceWorkerSingleScriptUpdateChecker::Result::kIdentical) {
+    if (updated_sha256_script_checksums.size() > 0) {
+      // Update checksums on cached scripts and set it to the map.
+      base::flat_map<int64_t, std::string> updated_checksum_map;
+      ServiceWorkerScriptCacheMap& cache_map =
+          *registration()->GetNewestVersion()->script_cache_map();
+      for (const auto& item : updated_sha256_script_checksums) {
+        cache_map.UpdateSha256Checksum(item.first, item.second);
+        const int64_t resource_id = cache_map.LookupResourceId(item.first);
+        updated_checksum_map.emplace(resource_id, item.second);
+      }
+      // Update resource list on the database. Pass a no-op callback as the
+      // checksums are only used for an optimization and we don't need to wait
+      // for the completion.
+      context_->registry()->UpdateResourceSha256Checksums(
+          registration()->id(), key_, updated_checksum_map,
+          base::BindOnce([](blink::ServiceWorkerStatusCode status) {
+            UMA_HISTOGRAM_ENUMERATION(
+                "ServiceWorker.UpdateResourceSha256ChecksumsResult", status);
+          }));
+    }
     ResolvePromise(blink::ServiceWorkerStatusCode::kOk, std::string(),
                    registration());
     // This terminates the current job (|this|).
@@ -485,7 +507,8 @@ void ServiceWorkerRegisterJob::StartScriptFetchForNewWorker(
               creator_policy_container_policies_.is_web_secure_context,
               creator_policy_container_policies_.ip_address_space,
               DerivePrivateNetworkRequestPolicy(
-                  creator_policy_container_policies_)));
+                  creator_policy_container_policies_,
+                  PrivateNetworkRequestContext::kWorker)));
 
   new_script_fetcher_ = std::make_unique<ServiceWorkerNewScriptFetcher>(
       *context_, version, std::move(loader_factory),
@@ -514,7 +537,26 @@ void ServiceWorkerRegisterJob::OnScriptFetchCompleted(
              message);
     return;
   }
-  DCHECK(version->client_security_state());
+
+  GURL final_response_url = WorkerScriptFetcher::DetermineFinalResponseUrl(
+      version->script_url(), main_script_load_params.get());
+
+  network::mojom::IPAddressSpace response_address_space =
+      network::CalculateResourceAddressSpace(
+          final_response_url,
+          main_script_load_params->response_head->remote_endpoint);
+
+  auto* requesting_render_frame_host =
+      RenderFrameHostImpl::FromID(requesting_frame_id_);
+  // requesting_render_frame_host can be null in many payment tests
+  if (requesting_render_frame_host &&
+      network::IsLessPublicAddressSpace(
+          response_address_space,
+          creator_policy_container_policies_.ip_address_space)) {
+    GetContentClient()->browser()->LogWebFeatureForCurrentPage(
+        requesting_render_frame_host,
+        blink::mojom::WebFeature::kPrivateNetworkAccessFetchedWorkerScript);
+  }
 
   version->set_main_script_load_params(std::move(main_script_load_params));
   StartWorkerForUpdate(std::move(version));
@@ -542,11 +584,9 @@ void ServiceWorkerRegisterJob::StartWorkerForUpdate(
   }
 
   if (update_checker_) {
-    new_version()->PrepareForUpdate(
-        update_checker_->TakeComparedResults(),
-        update_checker_->updated_script_url(),
-        update_checker_->policy_container_host(),
-        update_checker_->cross_origin_embedder_policy());
+    new_version()->PrepareForUpdate(update_checker_->TakeComparedResults(),
+                                    update_checker_->updated_script_url(),
+                                    update_checker_->policy_container_host());
     update_checker_.reset();
   }
 
@@ -571,7 +611,8 @@ void ServiceWorkerRegisterJob::UpdateAndContinue() {
               creator_policy_container_policies_.is_web_secure_context,
               creator_policy_container_policies_.ip_address_space,
               DerivePrivateNetworkRequestPolicy(
-                  creator_policy_container_policies_)));
+                  creator_policy_container_policies_,
+                  PrivateNetworkRequestContext::kWorker)));
   if (!loader_factory) {
     // We can't continue with update checking appropriately without
     // |loader_factory|. Null |loader_factory| means that the storage partition
@@ -597,15 +638,18 @@ void ServiceWorkerRegisterJob::UpdateAndContinue() {
   ServiceWorkerVersion* version_to_update = registration()->GetNewestVersion();
   base::TimeDelta time_since_last_check =
       base::Time::Now() - registration()->last_update_check();
-  std::vector<storage::mojom::ServiceWorkerResourceRecordPtr> resources;
-  version_to_update->script_cache_map()->GetResources(&resources);
+  std::vector<storage::mojom::ServiceWorkerResourceRecordPtr> resources =
+      version_to_update->script_cache_map()->GetResources();
   int64_t script_resource_id =
       version_to_update->script_cache_map()->LookupResourceId(script_url_);
   DCHECK_NE(script_resource_id, blink::mojom::kInvalidServiceWorkerResourceId);
+  const std::optional<std::string> script_sha256_chekcsum =
+      version_to_update->script_cache_map()->LookupSha256Checksum(script_url_);
 
   update_checker_ = std::make_unique<ServiceWorkerUpdateChecker>(
-      std::move(resources), script_url_, script_resource_id, version_to_update,
-      std::move(loader_factory), force_bypass_cache_, worker_script_type_,
+      std::move(resources), script_url_, script_resource_id,
+      script_sha256_chekcsum, version_to_update, std::move(loader_factory),
+      force_bypass_cache_, worker_script_type_,
       registration()->update_via_cache(), time_since_last_check, context_,
       outside_fetch_client_settings_object_.Clone());
   update_checker_->Start(
@@ -680,7 +724,8 @@ void ServiceWorkerRegisterJob::DispatchInstallEvent(
 
   DCHECK_EQ(ServiceWorkerVersion::INSTALLING, new_version()->status())
       << new_version()->status();
-  DCHECK_EQ(EmbeddedWorkerStatus::RUNNING, new_version()->running_status())
+  DCHECK_EQ(blink::EmbeddedWorkerStatus::kRunning,
+            new_version()->running_status())
       << "Worker stopped too soon after it was started.";
   int request_id = new_version()->StartRequest(
       ServiceWorkerMetrics::EventType::INSTALL,
@@ -790,14 +835,17 @@ void ServiceWorkerRegisterJob::CompleteInternal(
           new_version()->SetStartWorkerStatusCode(
               blink::ServiceWorkerStatusCode::kErrorExists);
         } else {
-          const char* error_prefix =
+          const char* const scope = scope_.spec().c_str();
+          const char* const script_url = script_url_.spec().c_str();
+          const std::string error_prefix =
               job_type_ == REGISTRATION_JOB
-                  ? ServiceWorkerConsts::kServiceWorkerRegisterErrorPrefix
-                  : ServiceWorkerConsts::kServiceWorkerUpdateErrorPrefix;
-          new_version()->ReportError(
-              status, base::StringPrintf(error_prefix, scope_.spec().c_str(),
-                                         script_url_.spec().c_str()) +
-                          status_message);
+                  ? base::StringPrintf(
+                        ServiceWorkerConsts::kServiceWorkerRegisterErrorPrefix,
+                        scope, script_url)
+                  : base::StringPrintf(
+                        ServiceWorkerConsts::kServiceWorkerUpdateErrorPrefix,
+                        scope, script_url);
+          new_version()->ReportError(status, error_prefix + status_message);
         }
         registration()->UnsetVersion(new_version());
         new_version()->Doom();
@@ -805,8 +853,8 @@ void ServiceWorkerRegisterJob::CompleteInternal(
       if (!registration()->newest_installed_version()) {
         registration()->NotifyRegistrationFailed();
         if (!registration()->is_deleted()) {
-          context_->registry()->DeleteRegistration(
-              registration(), registration()->key(), base::DoNothing());
+          context_->registry()->DeleteRegistration(registration(),
+                                                   base::DoNothing());
           context_->registry()->NotifyDoneUninstallingRegistration(
               registration(), ServiceWorkerRegistration::Status::kUninstalled);
         }

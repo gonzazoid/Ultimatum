@@ -5,9 +5,8 @@
 #ifndef COMPONENTS_METRICS_DRIVE_METRICS_PROVIDER_H_
 #define COMPONENTS_METRICS_DRIVE_METRICS_PROVIDER_H_
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/gtest_prod_util.h"
-#include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
 #include "components/metrics/metrics_provider.h"

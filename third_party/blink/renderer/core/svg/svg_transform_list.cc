@@ -65,34 +65,48 @@ static_assert(std::size(kRequiredValuesForType) ==
                   std::size(kOptionalValuesForType),
               "the arrays should have the same number of elements");
 
-const unsigned kMaxTransformArguments = 6;
+constexpr size_t kMaxTransformArguments = 6;
 
-using TransformArguments = Vector<float, kMaxTransformArguments>;
+class TransformArguments {
+ public:
+  size_t size() const { return size_; }
+  bool empty() const { return size_ == 0; }
+  void push_back(float value) {
+    DCHECK_LT(size_, kMaxTransformArguments);
+    data_[size_++] = value;
+  }
+  const float& operator[](size_t index) const {
+    DCHECK_LT(index, size_);
+    return data_[index];
+  }
 
-SVGTransform* SkewXTransformValue(float angle) {
-  return MakeGarbageCollected<SVGTransform>(SVGTransformType::kSkewx, angle,
-                                            gfx::PointF(),
-                                            AffineTransform::MakeSkewX(angle));
+ private:
+  std::array<float, kMaxTransformArguments> data_;
+  size_t size_ = 0;
+};
+
+using SVGTransformData = std::tuple<float, gfx::PointF, AffineTransform>;
+
+SVGTransformData SkewXTransformValue(float angle) {
+  return {angle, gfx::PointF(), AffineTransform::MakeSkewX(angle)};
 }
-SVGTransform* SkewYTransformValue(float angle) {
-  return MakeGarbageCollected<SVGTransform>(SVGTransformType::kSkewy, angle,
-                                            gfx::PointF(),
-                                            AffineTransform::MakeSkewY(angle));
+SVGTransformData SkewYTransformValue(float angle) {
+  return {angle, gfx::PointF(), AffineTransform::MakeSkewY(angle)};
 }
-SVGTransform* ScaleTransformValue(float sx, float sy) {
-  return MakeGarbageCollected<SVGTransform>(
-      SVGTransformType::kScale, 0, gfx::PointF(),
-      AffineTransform::MakeScaleNonUniform(sx, sy));
+SVGTransformData ScaleTransformValue(float sx, float sy) {
+  return {0, gfx::PointF(), AffineTransform::MakeScaleNonUniform(sx, sy)};
 }
-SVGTransform* TranslateTransformValue(float tx, float ty) {
-  return MakeGarbageCollected<SVGTransform>(
-      SVGTransformType::kTranslate, 0, gfx::PointF(),
-      AffineTransform::Translation(tx, ty));
+SVGTransformData TranslateTransformValue(float tx, float ty) {
+  return {0, gfx::PointF(), AffineTransform::Translation(tx, ty)};
 }
-SVGTransform* RotateTransformValue(float angle, float cx, float cy) {
-  return MakeGarbageCollected<SVGTransform>(
-      SVGTransformType::kRotate, angle, gfx::PointF(cx, cy),
-      AffineTransform::MakeRotationAroundPoint(angle, cx, cy));
+SVGTransformData RotateTransformValue(float angle, float cx, float cy) {
+  return {angle, gfx::PointF(cx, cy),
+          AffineTransform::MakeRotationAroundPoint(angle, cx, cy)};
+}
+SVGTransformData MatrixTransformValue(const TransformArguments& arguments) {
+  return {0, gfx::PointF(),
+          AffineTransform(arguments[0], arguments[1], arguments[2],
+                          arguments[3], arguments[4], arguments[5])};
 }
 
 template <typename CharType>
@@ -134,8 +148,8 @@ SVGParseStatus ParseTransformArgumentsForType(SVGTransformType type,
   return SVGParseStatus::kNoError;
 }
 
-SVGTransform* CreateTransformFromValues(SVGTransformType type,
-                                        const TransformArguments& arguments) {
+SVGTransformData TransformDataFromValues(SVGTransformType type,
+                                         const TransformArguments& arguments) {
   switch (type) {
     case SVGTransformType::kSkewx:
       return SkewXTransformValue(arguments[0]);
@@ -156,14 +170,17 @@ SVGTransform* CreateTransformFromValues(SVGTransformType type,
         return RotateTransformValue(arguments[0], 0, 0);
       return RotateTransformValue(arguments[0], arguments[1], arguments[2]);
     case SVGTransformType::kMatrix:
-      return MakeGarbageCollected<SVGTransform>(
-          AffineTransform(arguments[0], arguments[1], arguments[2],
-                          arguments[3], arguments[4], arguments[5]));
-    case SVGTransformType::kUnknown: {
+      return MatrixTransformValue(arguments);
+    case SVGTransformType::kUnknown:
       NOTREACHED();
-      return MakeGarbageCollected<SVGTransform>();
-    }
+      return ScaleTransformValue(1, 1);
   }
+}
+
+SVGTransform* CreateTransformFromValues(SVGTransformType type,
+                                        const TransformArguments& arguments) {
+  const auto [angle, center, matrix] = TransformDataFromValues(type, arguments);
+  return MakeGarbageCollected<SVGTransform>(type, angle, center, matrix);
 }
 
 }  // namespace
@@ -244,23 +261,23 @@ CSSValue* CreateTransformCSSValue(const SVGTransform& transform) {
       break;
     case CSSValueID::kMatrix:
       transform_value->Append(*CSSNumericLiteralValue::Create(
-          transform.Matrix().A(), CSSPrimitiveValue::UnitType::kUserUnits));
+          transform.Matrix().A(), CSSPrimitiveValue::UnitType::kNumber));
       transform_value->Append(*CSSNumericLiteralValue::Create(
-          transform.Matrix().B(), CSSPrimitiveValue::UnitType::kUserUnits));
+          transform.Matrix().B(), CSSPrimitiveValue::UnitType::kNumber));
       transform_value->Append(*CSSNumericLiteralValue::Create(
-          transform.Matrix().C(), CSSPrimitiveValue::UnitType::kUserUnits));
+          transform.Matrix().C(), CSSPrimitiveValue::UnitType::kNumber));
       transform_value->Append(*CSSNumericLiteralValue::Create(
-          transform.Matrix().D(), CSSPrimitiveValue::UnitType::kUserUnits));
+          transform.Matrix().D(), CSSPrimitiveValue::UnitType::kNumber));
       transform_value->Append(*CSSNumericLiteralValue::Create(
-          transform.Matrix().E(), CSSPrimitiveValue::UnitType::kUserUnits));
+          transform.Matrix().E(), CSSPrimitiveValue::UnitType::kNumber));
       transform_value->Append(*CSSNumericLiteralValue::Create(
-          transform.Matrix().F(), CSSPrimitiveValue::UnitType::kUserUnits));
+          transform.Matrix().F(), CSSPrimitiveValue::UnitType::kNumber));
       break;
     case CSSValueID::kScale:
       transform_value->Append(*CSSNumericLiteralValue::Create(
-          transform.Matrix().A(), CSSPrimitiveValue::UnitType::kUserUnits));
+          transform.Matrix().A(), CSSPrimitiveValue::UnitType::kNumber));
       transform_value->Append(*CSSNumericLiteralValue::Create(
-          transform.Matrix().D(), CSSPrimitiveValue::UnitType::kUserUnits));
+          transform.Matrix().D(), CSSPrimitiveValue::UnitType::kNumber));
       break;
     case CSSValueID::kTranslate:
       transform_value->Append(*CSSNumericLiteralValue::Create(

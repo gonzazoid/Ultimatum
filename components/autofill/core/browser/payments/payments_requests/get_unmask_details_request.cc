@@ -17,7 +17,7 @@ const char kGetUnmaskDetailsRequestPath[] =
 
 GetUnmaskDetailsRequest::GetUnmaskDetailsRequest(
     base::OnceCallback<void(AutofillClient::PaymentsRpcResult,
-                            PaymentsClient::UnmaskDetails&)> callback,
+                            PaymentsNetworkInterface::UnmaskDetails&)> callback,
     const std::string& app_locale,
     const bool full_sync_enabled)
     : callback_(std::move(callback)),
@@ -35,17 +35,15 @@ std::string GetUnmaskDetailsRequest::GetRequestContentType() {
 }
 
 std::string GetUnmaskDetailsRequest::GetRequestContent() {
-  base::Value request_dict(base::Value::Type::DICTIONARY);
-  base::Value context(base::Value::Type::DICTIONARY);
-  context.SetKey("language_code", base::Value(app_locale_));
-  context.SetKey("billable_service",
-                 base::Value(kUnmaskCardBillableServiceNumber));
-  request_dict.SetKey("context", std::move(context));
+  base::Value::Dict request_dict;
+  base::Value::Dict context;
+  context.Set("language_code", app_locale_);
+  context.Set("billable_service", kUnmaskPaymentMethodBillableServiceNumber);
+  request_dict.Set("context", std::move(context));
 
-  base::Value chrome_user_context(base::Value::Type::DICTIONARY);
-  chrome_user_context.SetKey("full_sync_enabled",
-                             base::Value(full_sync_enabled_));
-  request_dict.SetKey("chrome_user_context", std::move(chrome_user_context));
+  base::Value::Dict chrome_user_context;
+  chrome_user_context.Set("full_sync_enabled", full_sync_enabled_);
+  request_dict.Set("chrome_user_context", std::move(chrome_user_context));
 
   std::string request_content;
   base::JSONWriter::Write(request_dict, &request_content);
@@ -53,8 +51,8 @@ std::string GetUnmaskDetailsRequest::GetRequestContent() {
   return request_content;
 }
 
-void GetUnmaskDetailsRequest::ParseResponse(const base::Value& response) {
-  const auto* method = response.FindStringKey("authentication_method");
+void GetUnmaskDetailsRequest::ParseResponse(const base::Value::Dict& response) {
+  const auto* method = response.FindString("authentication_method");
   if (method) {
     if (*method == "CVC") {
       unmask_details_.unmask_auth_method =
@@ -65,20 +63,19 @@ void GetUnmaskDetailsRequest::ParseResponse(const base::Value& response) {
     }
   }
 
-  const auto* offer_fido_opt_in =
-      response.FindKeyOfType("offer_fido_opt_in", base::Value::Type::BOOLEAN);
-  unmask_details_.offer_fido_opt_in =
-      offer_fido_opt_in && offer_fido_opt_in->GetBool();
+  const std::optional<bool> offer_fido_opt_in =
+      response.FindBool("offer_fido_opt_in");
+  unmask_details_.offer_fido_opt_in = offer_fido_opt_in.value_or(false);
 
-  const auto* dictionary_value = response.FindKeyOfType(
-      "fido_request_options", base::Value::Type::DICTIONARY);
+  const base::Value::Dict* dictionary_value =
+      response.FindDict("fido_request_options");
   if (dictionary_value)
     unmask_details_.fido_request_options = dictionary_value->Clone();
 
   const auto* fido_eligible_card_ids =
-      response.FindKeyOfType("fido_eligible_card_id", base::Value::Type::LIST);
+      response.FindList("fido_eligible_card_id");
   if (fido_eligible_card_ids) {
-    for (const base::Value& result : fido_eligible_card_ids->GetList()) {
+    for (const base::Value& result : *fido_eligible_card_ids) {
       unmask_details_.fido_eligible_card_ids.insert(result.GetString());
     }
   }

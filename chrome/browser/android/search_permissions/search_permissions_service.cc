@@ -6,9 +6,9 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/values.h"
@@ -104,7 +104,14 @@ SearchPermissionsService::Factory::GetInstance() {
 }
 
 SearchPermissionsService::Factory::Factory()
-    : ProfileKeyedServiceFactory("SearchPermissionsService") {
+    : ProfileKeyedServiceFactory(
+          "SearchPermissionsService",
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOriginalOnly)
+              .Build()) {
   DependsOn(HostContentSettingsMapFactory::GetInstance());
   DependsOn(TemplateURLServiceFactory::GetInstance());
 }
@@ -230,9 +237,9 @@ SearchPermissionsService::PrefValue SearchPermissionsService::GetDSEPref() {
   PrefValue pref;
   const std::string* dse_name = dict.FindString(kDSENameKey);
   const std::string* dse_origin = dict.FindString(kDSEOriginKey);
-  absl::optional<int> geolocation_setting_to_restore =
+  std::optional<int> geolocation_setting_to_restore =
       dict.FindInt(kDSEGeolocationSettingKey);
-  absl::optional<int> notifications_setting_to_restore =
+  std::optional<int> notifications_setting_to_restore =
       dict.FindInt(kDSENotificationsSettingKey);
 
   if (dse_name && dse_origin && geolocation_setting_to_restore &&
@@ -310,10 +317,10 @@ void SearchPermissionsService::RecordEffectiveDSEOriginPermissions() {
 void SearchPermissionsService::SetDSEPrefForTesting(
     ContentSetting geolocation_setting_to_restore,
     ContentSetting notifications_setting_to_restore) {
-  base::DictionaryValue dict;
-  dict.SetStringKey(kDSENameKey, delegate_->GetDSEName());
-  dict.SetStringKey(kDSEOriginKey, delegate_->GetDSEOrigin().GetURL().spec());
-  dict.SetIntKey(kDSEGeolocationSettingKey, geolocation_setting_to_restore);
-  dict.SetIntKey(kDSENotificationsSettingKey, notifications_setting_to_restore);
-  pref_service_->Set(prefs::kDSEPermissionsSettings, dict);
+  base::Value::Dict dict;
+  dict.Set(kDSENameKey, delegate_->GetDSEName());
+  dict.Set(kDSEOriginKey, delegate_->GetDSEOrigin().GetURL().spec());
+  dict.Set(kDSEGeolocationSettingKey, geolocation_setting_to_restore);
+  dict.Set(kDSENotificationsSettingKey, notifications_setting_to_restore);
+  pref_service_->SetDict(prefs::kDSEPermissionsSettings, std::move(dict));
 }

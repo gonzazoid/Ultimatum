@@ -9,14 +9,13 @@
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/compiler_specific.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/ref_counted.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "ipc/ipc_channel_factory.h"
 #include "ipc/ipc_listener.h"
@@ -63,6 +62,7 @@ void ChannelProxy::Context::CreateChannel(
   DCHECK(!channel_);
   DCHECK_EQ(factory->GetIPCTaskRunner(), ipc_task_runner_);
   channel_ = factory->BuildChannel(this);
+  channel_->SetUrgentMessageObserver(urgent_message_observer_);
 
   Channel::AssociatedInterfaceSupport* support =
       channel_->GetAssociatedInterfaceSupport();
@@ -224,9 +224,6 @@ void ChannelProxy::Context::Clear() {
 
 // Called on the IPC::Channel thread
 void ChannelProxy::Context::OnSendMessage(std::unique_ptr<Message> message) {
-  if (quota_checker_)
-    quota_checker_->AfterMessagesDequeued(1);
-
   if (!channel_) {
     OnChannelClosed();
     return;
@@ -422,12 +419,15 @@ void ChannelProxy::Context::AddGenericAssociatedInterfaceForIOThread(
 }
 
 void ChannelProxy::Context::Send(Message* message) {
-  if (quota_checker_)
-    quota_checker_->BeforeMessagesEnqueued(1);
-
   ipc_task_runner()->PostTask(
       FROM_HERE, base::BindOnce(&ChannelProxy::Context::OnSendMessage, this,
                                 base::WrapUnique(message)));
+}
+
+// Called on the listener's thread.
+void ChannelProxy::Context::SetUrgentMessageObserver(
+    UrgentMessageObserver* observer) {
+  urgent_message_observer_ = observer;
 }
 
 //-----------------------------------------------------------------------------
@@ -457,23 +457,13 @@ std::unique_ptr<ChannelProxy> ChannelProxy::Create(
   return channel;
 }
 
-ChannelProxy::ChannelProxy(Context* context)
-    : context_(context), did_init_(false) {
-#if defined(ENABLE_IPC_FUZZER)
-  outgoing_message_filter_ = nullptr;
-#endif
-}
+ChannelProxy::ChannelProxy(Context* context) : context_(context) {}
 
 ChannelProxy::ChannelProxy(
     Listener* listener,
     const scoped_refptr<base::SingleThreadTaskRunner>& ipc_task_runner,
     const scoped_refptr<base::SingleThreadTaskRunner>& listener_task_runner)
-    : context_(new Context(listener, ipc_task_runner, listener_task_runner)),
-      did_init_(false) {
-#if defined(ENABLE_IPC_FUZZER)
-  outgoing_message_filter_ = nullptr;
-#endif
-}
+    : context_(new Context(listener, ipc_task_runner, listener_task_runner)) {}
 
 ChannelProxy::~ChannelProxy() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
@@ -502,9 +492,6 @@ void ChannelProxy::Init(std::unique_ptr<ChannelFactory> factory,
                         bool create_pipe_now) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(!did_init_);
-
-  DCHECK(!context_->quota_checker_);
-  context_->quota_checker_ = factory->GetQuotaChecker();
 
   if (create_pipe_now) {
     // Create the channel immediately.  This effectively sets up the
@@ -614,6 +601,12 @@ void ChannelProxy::ClearIPCTaskRunner() {
 }
 
 void ChannelProxy::OnChannelInit() {
+}
+
+void ChannelProxy::SetUrgentMessageObserver(UrgentMessageObserver* observer) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  DCHECK(!did_init_);
+  context_->SetUrgentMessageObserver(observer);
 }
 
 //-----------------------------------------------------------------------------

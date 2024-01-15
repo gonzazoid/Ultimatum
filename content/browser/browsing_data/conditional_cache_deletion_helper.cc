@@ -4,12 +4,11 @@
 
 #include "content/browser/browsing_data/conditional_cache_deletion_helper.h"
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/location.h"
 #include "base/sequence_checker.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "content/public/browser/browser_thread.h"
 
 namespace {
@@ -85,7 +84,7 @@ void ConditionalCacheDeletionHelper::IterateOverEntries(
     if (previous_entry_) {
       if (condition_.Run(previous_entry_.get()))
         previous_entry_->Doom();
-      previous_entry_->Close();
+      previous_entry_.ExtractAsDangling()->Close();
     }
 
     if (result.net_error() == net::ERR_FAILED) {
@@ -93,9 +92,10 @@ void ConditionalCacheDeletionHelper::IterateOverEntries(
       // (e.g. the cache was destroyed). We cannot distinguish between the two,
       // but we know that there is nothing more that we can do, so we return OK.
       DCHECK(completion_callback_);
-      base::ThreadTaskRunnerHandle::Get()->PostTask(
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE, base::BindOnce(std::move(completion_callback_), net::OK));
-      base::ThreadTaskRunnerHandle::Get()->DeleteSoon(FROM_HERE, this);
+      base::SingleThreadTaskRunner::GetCurrentDefault()->DeleteSoon(FROM_HERE,
+                                                                    this);
       return;
     }
 

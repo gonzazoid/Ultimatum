@@ -11,8 +11,8 @@
 #include <memory>
 #include <vector>
 
-#include "base/callback_forward.h"
 #include "base/containers/span.h"
+#include "base/functional/callback_forward.h"
 #include "device/fido/cable/v2_constants.h"
 #include "device/fido/fido_constants.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -64,10 +64,6 @@ class Registration {
     std::array<uint8_t, kPairingIDSize> pairing_id;
     std::array<uint8_t, kClientNonceSize> client_nonce;
     absl::optional<std::vector<uint8_t>> contact_id;
-
-    // protocol_revision can be optionally asserted while we transition from
-    // revision zero to revision one. This might be removed in the future.
-    unsigned protocol_revision = 0;
   };
 
   virtual ~Registration();

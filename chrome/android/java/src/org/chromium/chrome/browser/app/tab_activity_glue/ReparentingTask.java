@@ -15,27 +15,27 @@ import android.text.TextUtils;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
+import org.jni_zero.NativeMethods;
+
 import org.chromium.base.ContextUtils;
 import org.chromium.base.IntentUtils;
+import org.chromium.base.Log;
 import org.chromium.base.UserData;
-import org.chromium.base.annotations.NativeMethods;
 import org.chromium.chrome.browser.IntentHandler;
 import org.chromium.chrome.browser.app.tabmodel.AsyncTabParamsManagerSingleton;
 import org.chromium.chrome.browser.compositor.CompositorViewHolder;
 import org.chromium.chrome.browser.document.ChromeLauncherActivity;
-import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.chrome.browser.tab.TabDelegateFactory;
-import org.chromium.chrome.browser.tab.TabStateAttributes;
 import org.chromium.chrome.browser.tabmodel.TabModelSelector;
 import org.chromium.chrome.browser.tabmodel.TabReparentingParams;
 import org.chromium.content_public.browser.WebContents;
 import org.chromium.ui.base.WindowAndroid;
 
-/**
- * Takes care of reparenting a Tab object from one Activity to another.
- */
+/** Takes care of reparenting a Tab object from one Activity to another. */
 public class ReparentingTask implements UserData {
+    public static final String TAG = "ReparentingTask";
+
     /** Provides data to {@link ReparentingTask} facilitate reparenting tabs. */
     public interface Delegate {
         /**
@@ -75,8 +75,7 @@ public class ReparentingTask implements UserData {
         return reparentingTask;
     }
 
-    @Nullable
-    public static ReparentingTask get(Tab tab) {
+    public static @Nullable ReparentingTask get(Tab tab) {
         return tab.getUserDataHost().getUserData(USER_DATA_KEY);
     }
 
@@ -96,7 +95,10 @@ public class ReparentingTask implements UserData {
      * @param finalizeCallback A callback that will be called after the tab is attached to the new
      *                         host activity in {@link #attachAndFinishReparenting}.
      */
-    public void begin(Context context, Intent intent, Bundle startActivityOptions,
+    public void begin(
+            Context context,
+            Intent intent,
+            Bundle startActivityOptions,
             Runnable finalizeCallback) {
         setupIntent(context, intent, finalizeCallback);
         context.startActivity(intent, startActivityOptions);
@@ -121,21 +123,20 @@ public class ReparentingTask implements UserData {
             intent.setData(Uri.parse(mTab.getUrl().getSpec()));
         }
         if (mTab.isIncognito()) {
-            intent.putExtra(Browser.EXTRA_APPLICATION_ID,
+            intent.putExtra(
+                    Browser.EXTRA_APPLICATION_ID,
                     ContextUtils.getApplicationContext().getPackageName());
             intent.putExtra(IntentHandler.EXTRA_OPEN_NEW_INCOGNITO_TAB, true);
         }
         IntentUtils.addTrustedIntentExtras(intent);
 
-        if (ChromeFeatureList.isEnabled(ChromeFeatureList.TAB_REPARENTING)) {
-            // Add the tab to AsyncTabParamsManager before removing it from the current model to
-            // ensure the global count of tabs is correct. See https://crbug.com/611806.
-            IntentHandler.setTabId(intent, mTab.getId());
-            AsyncTabParamsManagerSingleton.getInstance().add(
-                    mTab.getId(), new TabReparentingParams(mTab, finalizeCallback));
+        // Add the tab to AsyncTabParamsManager before removing it from the current model to
+        // ensure the global count of tabs is correct. See https://crbug.com/611806.
+        IntentHandler.setTabId(intent, mTab.getId());
+        AsyncTabParamsManagerSingleton.getInstance()
+                .add(mTab.getId(), new TabReparentingParams(mTab, finalizeCallback));
 
-            detach();
-        }
+        detach();
     }
 
     /**
@@ -150,7 +151,15 @@ public class ReparentingTask implements UserData {
         // because many code paths (including navigation) expect the tab to always be associated
         // with an activity, and will crash. crbug.com/657007
         WebContents webContents = mTab.getWebContents();
-        if (webContents != null) webContents.setTopLevelNativeWindow(null);
+
+        // TODO(crbug/1463737): We shouldn't be detaching tabs with null WebContents as it can
+        // put the tab into an unexpected detached = false state if a navigation happens on the
+        // detached tab.
+        if (webContents != null) {
+            webContents.setTopLevelNativeWindow(null);
+        } else {
+            Log.e(TAG, "WebContents was null when detaching a tab for reparenting.");
+        }
 
         // TabModelSelector of this Tab, if present, gets notified to remove the tab from
         // the TabModel it belonged to.
@@ -168,7 +177,6 @@ public class ReparentingTask implements UserData {
     public void finish(@NonNull Delegate delegate, @Nullable Runnable finalizeCallback) {
         delegate.getCompositorViewHolder().prepareForTabReparenting();
         attach(delegate.getWindowAndroid(), delegate.getTabDelegateFactory());
-        if (!mTab.isDestroyed()) TabStateAttributes.from(mTab).setIsTabStateDirty(true);
         if (finalizeCallback != null) finalizeCallback.run();
     }
 

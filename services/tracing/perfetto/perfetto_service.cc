@@ -6,13 +6,14 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/no_destructor.h"
 #include "base/process/process_handle.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
+#include "base/task/sequenced_task_runner.h"
 #include "build/build_config.h"
 #include "mojo/public/cpp/bindings/message.h"
 #include "services/tracing/perfetto/consumer_host.h"
@@ -66,9 +67,10 @@ PerfettoService* PerfettoService::GetInstance() {
 
 PerfettoService::PerfettoService(
     scoped_refptr<base::SequencedTaskRunner> task_runner_for_testing)
-    : perfetto_task_runner_(task_runner_for_testing
-                                ? std::move(task_runner_for_testing)
-                                : base::SequencedTaskRunnerHandle::Get()) {
+    : perfetto_task_runner_(
+          task_runner_for_testing
+              ? std::move(task_runner_for_testing)
+              : base::SequencedTaskRunner::GetCurrentDefault()) {
   service_ = perfetto::TracingService::CreateInstance(
       std::make_unique<ChromeBaseSharedMemory::Factory>(),
       &perfetto_task_runner_);
@@ -116,8 +118,8 @@ void PerfettoService::ConnectToProducerHost(
                     base::NumberToString(producer_pid)}),
       std::move(shared_memory), shared_memory_buffer_page_size_bytes);
 
-  base::UmaHistogramEnumeration("Tracing.ProducerHostInitializationResult",
-                                result);
+  // There used to be a histogram that recorded failures, but as of 2022
+  // failures were extremely rare, so we removed it.
 
   if (result == ProducerHost::InitializationResult::kSmbNotAdopted) {
     // When everything else succeeds, but the SMB was not accepted, the producer

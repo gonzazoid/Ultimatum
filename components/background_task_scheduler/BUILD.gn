@@ -95,6 +95,7 @@ if (is_android) {
     deps = [
       ":public_java",
       "internal:internal_java",
+      "//base:base_java",
       "//third_party/androidx:androidx_annotation_annotation_java",
     ]
   }
@@ -104,18 +105,10 @@ if (is_android) {
     sources = [
       "internal/android/java/src/org/chromium/components/background_task_scheduler/internal/BackgroundTaskSchedulerImplWithMockTest.java",
       "internal/android/java/src/org/chromium/components/background_task_scheduler/internal/BackgroundTaskSchedulerJobServiceTest.java",
-      "internal/android/java/src/org/chromium/components/background_task_scheduler/internal/BundleToPersistableBundleConverterTest.java",
       "internal/android/java/src/org/chromium/components/background_task_scheduler/internal/MockBackgroundTaskSchedulerDelegate.java",
-      "internal/android/junit/src/org/chromium/components/background_task_scheduler/internal/BackgroundTaskGcmTaskServiceTest.java",
       "internal/android/junit/src/org/chromium/components/background_task_scheduler/internal/BackgroundTaskJobServiceTest.java",
-      "internal/android/junit/src/org/chromium/components/background_task_scheduler/internal/BackgroundTaskSchedulerAlarmManagerTest.java",
-      "internal/android/junit/src/org/chromium/components/background_task_scheduler/internal/BackgroundTaskSchedulerGcmNetworkManagerTest.java",
       "internal/android/junit/src/org/chromium/components/background_task_scheduler/internal/BackgroundTaskSchedulerImplTest.java",
-      "internal/android/junit/src/org/chromium/components/background_task_scheduler/internal/BackgroundTaskSchedulerPrefsTest.java",
       "internal/android/junit/src/org/chromium/components/background_task_scheduler/internal/BackgroundTaskSchedulerUmaTest.java",
-      "internal/android/junit/src/org/chromium/components/background_task_scheduler/internal/BroadcastReceiverRobolectricTest.java",
-      "internal/android/junit/src/org/chromium/components/background_task_scheduler/internal/ExtrasToProtoConverterTest.java",
-      "internal/android/junit/src/org/chromium/components/background_task_scheduler/internal/ShadowGcmNetworkManager.java",
       "internal/android/junit/src/org/chromium/components/background_task_scheduler/internal/TaskInfoTest.java",
       "internal/android/junit/src/org/chromium/components/background_task_scheduler/internal/TestBackgroundTask.java",
       "internal/android/junit/src/org/chromium/components/background_task_scheduler/internal/TestBackgroundTaskFactory.java",
@@ -123,19 +116,14 @@ if (is_android) {
 
     deps = [
       ":background_task_scheduler_task_ids_java",
-      "$google_play_services_package:google_play_services_auth_base_java",
-      "$google_play_services_package:google_play_services_base_java",
-      "$google_play_services_package:google_play_services_basement_java",
-      "$google_play_services_package:google_play_services_gcm_java",
-      "$google_play_services_package:google_play_services_tasks_java",
       "internal:internal_java",
-      "internal:proto_java",
       "//base:base_java",
       "//base:base_java_test_support",
       "//base:base_junit_test_support",
       "//components/background_task_scheduler:public_java",
       "//content/public/test/android:content_java_test_support",
       "//third_party/android_deps:chromium_play_services_availability_shadows_java",
+      "//third_party/androidx:androidx_annotation_annotation_java",
       "//third_party/junit",
       "//third_party/mockito:mockito_java",
     ]

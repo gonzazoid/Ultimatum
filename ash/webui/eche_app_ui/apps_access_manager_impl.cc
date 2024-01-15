@@ -4,12 +4,12 @@
 
 #include "ash/webui/eche_app_ui/apps_access_manager_impl.h"
 
-#include "ash/components/phonehub/multidevice_feature_access_manager.h"
 #include "ash/constants/ash_features.h"
 #include "ash/webui/eche_app_ui/pref_names.h"
 #include "ash/webui/eche_app_ui/proto/exo_messages.pb.h"
 #include "base/metrics/histogram_functions.h"
 #include "chromeos/ash/components/multidevice/logging/logging.h"
+#include "chromeos/ash/components/phonehub/multidevice_feature_access_manager.h"
 #include "chromeos/ash/services/multidevice_setup/public/cpp/prefs.h"
 #include "components/prefs/pref_registry_simple.h"
 #include "components/prefs/pref_service.h"
@@ -268,13 +268,13 @@ void AppsAccessManagerImpl::UpdateFeatureEnabledState(
         PA_LOG(INFO) << "Enabling Apps when the access is changed from "
                         "kAvailableButNotGranted to kAccessGranted.";
         multidevice_setup_client_->SetFeatureEnabledState(
-            Feature::kEche, /*enabled=*/true, /*auth_token=*/absl::nullopt,
+            Feature::kEche, /*enabled=*/true, /*auth_token=*/std::nullopt,
             base::DoNothing());
       } else if (IsWaitingForAccessToInitiallyEnableApps()) {
         PA_LOG(INFO) << "Enabling Apps for the first time now "
                      << "that access has been granted by the phone.";
         multidevice_setup_client_->SetFeatureEnabledState(
-            Feature::kEche, /*enabled=*/true, /*auth_token=*/absl::nullopt,
+            Feature::kEche, /*enabled=*/true, /*auth_token=*/std::nullopt,
             base::DoNothing());
       }
       break;
@@ -287,7 +287,7 @@ void AppsAccessManagerImpl::UpdateFeatureEnabledState(
         PA_LOG(INFO) << "Disabling kEche feature.";
         multidevice_setup_client_->SetFeatureEnabledState(
             Feature::kEche, /*enabled=*/false,
-            /*auth_token=*/absl::nullopt, base::DoNothing());
+            /*auth_token=*/std::nullopt, base::DoNothing());
       }
       break;
   }

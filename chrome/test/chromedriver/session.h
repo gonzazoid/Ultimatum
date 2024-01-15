@@ -11,7 +11,7 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
 #include "base/values.h"
@@ -23,24 +23,22 @@
 #include "chrome/test/chromedriver/chrome/ui_events.h"
 #include "chrome/test/chromedriver/command_listener.h"
 
-static const char kAccept[] = "accept";
-static const char kAcceptAndNotify[] = "accept and notify";
-static const char kDismiss[] = "dismiss";
-static const char kDismissAndNotify[] = "dismiss and notify";
-static const char kIgnore[] = "ignore";
-
 // Controls whether ChromeDriver operates in W3C mode (when true) by default
 // or legacy mode (when false).
 static const bool kW3CDefault = true;
-
-namespace base {
-class DictionaryValue;
-}
 
 class Chrome;
 class Status;
 class WebDriverLog;
 class WebView;
+
+namespace prompt_behavior {
+static const char kAccept[] = "accept";
+static const char kAcceptAndNotify[] = "accept and notify";
+static const char kDismiss[] = "dismiss";
+static const char kDismissAndNotify[] = "dismiss and notify";
+static const char kIgnore[] = "ignore";
+}  // namespace prompt_behavior
 
 struct FrameInfo {
   FrameInfo(const std::string& parent_frame_id,
@@ -53,21 +51,20 @@ struct FrameInfo {
 };
 
 struct InputCancelListEntry {
-  InputCancelListEntry(base::DictionaryValue* input_state,
+  InputCancelListEntry(base::Value::Dict* input_state,
                        const MouseEvent* mouse_event,
                        const TouchEvent* touch_event,
                        const KeyEvent* key_event);
   InputCancelListEntry(InputCancelListEntry&& other);
   ~InputCancelListEntry();
 
-  raw_ptr<base::DictionaryValue> input_state;
+  raw_ptr<base::Value::Dict> input_state;
   std::unique_ptr<MouseEvent> mouse_event;
   std::unique_ptr<TouchEvent> touch_event;
   std::unique_ptr<KeyEvent> key_event;
 };
 
-typedef base::RepeatingCallback<void(const std::string& /*payload*/)>
-    SendTextFunc;
+typedef base::RepeatingCallback<void(std::string /*payload*/)> SendTextFunc;
 
 typedef base::RepeatingCallback<void()> CloseFunc;
 
@@ -87,6 +84,12 @@ struct Session {
   static const base::TimeDelta kDefaultImplicitWaitTimeout;
   static const base::TimeDelta kDefaultPageLoadTimeout;
   static const base::TimeDelta kDefaultScriptTimeout;
+  // Non-standard timeouts
+  static const base::TimeDelta kDefaultBrowserStartupTimeout;
+  // BiDi channels
+  static const char kChannelSuffix[];
+  static const char kNoChannelSuffix[];
+  static const char kBlockingChannelSuffix[];
 
   explicit Session(const std::string& id);
   Session(const std::string& id, std::unique_ptr<Chrome> chrome);
@@ -102,8 +105,7 @@ struct Session {
   std::string GetCurrentFrameId() const;
   std::vector<WebDriverLog*> GetAllLogs() const;
 
-  bool BidiMapperIsLaunched() const;
-  void OnBidiResponse(base::Value::Dict payload);
+  Status OnBidiResponse(base::Value::Dict payload);
   void AddBidiConnection(int connection_id,
                          SendTextFunc send_response,
                          CloseFunc close_connection);
@@ -115,18 +117,17 @@ struct Session {
   bool webSocketUrl = false;
   bool quit;
   bool detach;
-  bool bidi_mapper_is_launched_ = false;
-  int awaited_bidi_response_id = -1;
+  bool awaiting_bidi_response = false;
   std::unique_ptr<Chrome> chrome;
   std::string window;
   std::string bidi_mapper_web_view_id;
   int sticky_modifiers;
   // List of input sources for each active input. Everytime a new input source
-  // is added, there must be a corresponding entry made in input_state_table.
-  base::ListValue active_input_sources;
+  // is added, there must be a corresponding entry made in `input_state_table`.
+  base::Value::List active_input_sources;
   // Map between input id and input source state for the corresponding input
-  // source. One entry for each item in active_input_sources
-  base::DictionaryValue input_state_table;
+  // source. One entry for each item in `active_input_sources`.
+  base::Value::Dict input_state_table;
   // List of actions for Release Actions command.
   std::vector<InputCancelListEntry> input_cancel_list;
   // List of |FrameInfo|s for each frame to the current target frame from the
@@ -150,7 +151,7 @@ struct Session {
   std::vector<std::unique_ptr<WebDriverLog>> devtools_logs;
   std::unique_ptr<WebDriverLog> driver_log;
   ScopedTempDirWithRetry temp_dir;
-  std::unique_ptr<base::DictionaryValue> capabilities;
+  std::unique_ptr<base::Value::Dict> capabilities;
   // |command_listeners| should be declared after |chrome|. When the |Session|
   // is destroyed, |command_listeners| should be freed first, since some
   // |CommandListener|s might be |CommandListenerProxy|s that forward to
@@ -165,7 +166,6 @@ struct Session {
 
  private:
   void SwitchFrameInternal(bool for_top_frame);
-  void ProcessBidiResponseQueue();
 
   // TODO: for the moment being we support single connection per client
   // In the future (2022Q4) we will probably support multiple bidi connections.
@@ -182,6 +182,12 @@ struct Session {
 
 Session* GetThreadLocalSession();
 
-void SetThreadLocalSession(std::unique_ptr<Session> session);
+void SetThreadLocalSession(std::unique_ptr<Session> new_session);
+
+namespace internal {
+Status SplitChannel(std::string* channel,
+                    int* connection_id,
+                    std::string* suffix);
+}
 
 #endif  // CHROME_TEST_CHROMEDRIVER_SESSION_H_

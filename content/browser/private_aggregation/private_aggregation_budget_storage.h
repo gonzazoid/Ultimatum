@@ -7,7 +7,7 @@
 
 #include <memory>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/sequence_checker.h"
 #include "base/time/time.h"
@@ -16,6 +16,7 @@
 #include "content/common/content_export.h"
 
 namespace base {
+class ElapsedTimer;
 class FilePath;
 class SequencedTaskRunner;
 }  // namespace base
@@ -45,6 +46,16 @@ class PrivateAggregationBudgets;
 // initialization; after that point, it has no specific lifetime requirements.
 class CONTENT_EXPORT PrivateAggregationBudgetStorage {
  public:
+  // These values are persisted to logs. Entries should not be renumbered and
+  // numeric values should never be reused.
+  enum class InitStatus {
+    kSuccess = 0,
+    kFailedToOpenDbInMemory = 1,
+    kFailedToOpenDbFile = 2,
+    kFailedToCreateDir = 3,
+    kMaxValue = kFailedToCreateDir,
+  };
+
   // Constructs and asynchronously initializes a new
   // `PrivateAggregationBudgetStorage`, including posting a task to
   // `db_task_runner` to initialize the underlying database on its sequence.
@@ -104,6 +115,7 @@ class CONTENT_EXPORT PrivateAggregationBudgetStorage {
       std::unique_ptr<PrivateAggregationBudgetStorage> owned_this,
       base::OnceCallback<void(std::unique_ptr<PrivateAggregationBudgetStorage>)>
           on_done_initializing,
+      base::ElapsedTimer elapsed_timer,
       bool was_successful);
 
   scoped_refptr<sqlite_proto::ProtoTableManager> table_manager_;

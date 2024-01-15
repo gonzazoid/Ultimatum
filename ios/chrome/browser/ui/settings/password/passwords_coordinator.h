@@ -5,13 +5,14 @@
 #ifndef IOS_CHROME_BROWSER_UI_SETTINGS_PASSWORD_PASSWORDS_COORDINATOR_H_
 #define IOS_CHROME_BROWSER_UI_SETTINGS_PASSWORD_PASSWORDS_COORDINATOR_H_
 
-#import "ios/chrome/browser/ui/coordinators/chrome_coordinator.h"
+#import "ios/chrome/browser/shared/coordinator/chrome_coordinator/chrome_coordinator.h"
+#import "ios/chrome/browser/ui/settings/password/reauthentication/password_manager_reauthentication_delegate.h"
 
 class Browser;
 @class PasswordsCoordinator;
 
 // Delegate for PasswordsCoordinator.
-@protocol PasswordsCoordinatorDelegate
+@protocol PasswordsCoordinatorDelegate <PasswordManagerReauthenticationDelegate>
 
 // Called when the view controller is removed from navigation controller.
 - (void)passwordsCoordinatorDidRemove:(PasswordsCoordinator*)coordinator;
@@ -37,6 +38,10 @@ class Browser;
 @property(nonatomic, weak) id<PasswordsCoordinatorDelegate> delegate;
 
 @property(nonatomic, strong, readonly) UIViewController* viewController;
+
+// Flag indicating whether the PasswordManagerViewController should be presented
+// in search mode.
+@property(nonatomic, assign) BOOL openViewControllerForPasswordSearch;
 
 @end
 

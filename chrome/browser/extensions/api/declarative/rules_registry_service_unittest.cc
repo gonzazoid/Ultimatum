@@ -9,9 +9,10 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
-#include "base/strings/stringprintf.h"
+#include "base/strings/strcat.h"
+#include "base/values.h"
 #include "chrome/test/base/testing_profile.h"
 #include "components/version_info/channel.h"
 #include "components/version_info/version_info.h"
@@ -26,7 +27,6 @@
 #include "extensions/common/features/feature.h"
 #include "extensions/common/features/feature_channel.h"
 #include "extensions/common/features/feature_provider.h"
-#include "extensions/common/value_builder.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace {
@@ -71,19 +71,13 @@ TEST_F(RulesRegistryServiceTest, TestConstructionAndMultiThreading) {
   RulesRegistryService registry_service(nullptr);
 
   int key = RulesRegistryService::kDefaultRulesRegistryID;
-  TestRulesRegistry* ui_registry =
-      new TestRulesRegistry(content::BrowserThread::UI, "ui", key);
-
-  TestRulesRegistry* io_registry =
-      new TestRulesRegistry(content::BrowserThread::IO, "io", key);
+  TestRulesRegistry* ui_registry = new TestRulesRegistry("ui", key);
 
   // Test registration.
 
   registry_service.RegisterRulesRegistry(base::WrapRefCounted(ui_registry));
-  registry_service.RegisterRulesRegistry(base::WrapRefCounted(io_registry));
 
   EXPECT_TRUE(registry_service.GetRulesRegistry(key, "ui").get());
-  EXPECT_TRUE(registry_service.GetRulesRegistry(key, "io").get());
   EXPECT_FALSE(registry_service.GetRulesRegistry(key, "foo").get());
 
   content::GetUIThreadTaskRunner({})->PostTask(
@@ -91,30 +85,18 @@ TEST_F(RulesRegistryServiceTest, TestConstructionAndMultiThreading) {
       base::BindOnce(&InsertRule, registry_service.GetRulesRegistry(key, "ui"),
                      "ui_task"));
 
-  content::GetIOThreadTaskRunner({})->PostTask(
-      FROM_HERE,
-      base::BindOnce(&InsertRule, registry_service.GetRulesRegistry(key, "io"),
-                     "io_task"));
-
   content::GetUIThreadTaskRunner({})->PostTask(
       FROM_HERE,
       base::BindOnce(&VerifyNumberOfRules,
                      registry_service.GetRulesRegistry(key, "ui"), 1));
 
-  content::GetIOThreadTaskRunner({})->PostTask(
-      FROM_HERE,
-      base::BindOnce(&VerifyNumberOfRules,
-                     registry_service.GetRulesRegistry(key, "io"), 1));
-
   base::RunLoop().RunUntilIdle();
 
   // Test extension uninstalling.
-  std::unique_ptr<base::DictionaryValue> manifest =
-      DictionaryBuilder()
-          .Set("name", "Extension")
-          .Set("version", "1.0")
-          .Set("manifest_version", 2)
-          .Build();
+  base::Value::Dict manifest = base::Value::Dict()
+                                   .Set("name", "Extension")
+                                   .Set("version", "1.0")
+                                   .Set("manifest_version", 2);
   scoped_refptr<const Extension> extension =
       ExtensionBuilder()
           .SetManifest(std::move(manifest))
@@ -126,11 +108,6 @@ TEST_F(RulesRegistryServiceTest, TestConstructionAndMultiThreading) {
       FROM_HERE,
       base::BindOnce(&VerifyNumberOfRules,
                      registry_service.GetRulesRegistry(key, "ui"), 0));
-
-  content::GetIOThreadTaskRunner({})->PostTask(
-      FROM_HERE,
-      base::BindOnce(&VerifyNumberOfRules,
-                     registry_service.GetRulesRegistry(key, "io"), 0));
 
   base::RunLoop().RunUntilIdle();
 }
@@ -145,9 +122,9 @@ TEST_F(RulesRegistryServiceTest, DefaultRulesRegistryRegistered) {
   };
 
   for (const auto& test_case : test_cases) {
-    SCOPED_TRACE(base::StringPrintf(
-        "Testing Channel %s",
-        version_info::GetChannelString(test_case.channel).c_str()));
+    SCOPED_TRACE(
+        base::StrCat({"Testing Channel ",
+                      version_info::GetChannelString(test_case.channel)}));
     ScopedCurrentChannel scoped_channel(test_case.channel);
 
     ASSERT_EQ(test_case.expect_api_enabled,

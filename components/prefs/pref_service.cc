@@ -9,13 +9,14 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check_op.h"
 #include "base/debug/alias.h"
 #include "base/debug/dump_without_crashing.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/json/values_util.h"
 #include "base/location.h"
+#include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "base/metrics/histogram.h"
 #include "base/notreached.h"
@@ -23,7 +24,6 @@
 #include "base/strings/string_piece.h"
 #include "base/strings/string_util.h"
 #include "base/task/sequenced_task_runner.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "base/values.h"
 #include "build/chromeos_buildflags.h"
 #include "components/prefs/default_pref_store.h"
@@ -41,18 +41,6 @@
 
 namespace {
 
-// Returns the WriteablePrefStore::PrefWriteFlags for the pref with the given
-// |path|.
-uint32_t GetWriteFlags(const PrefService::Preference* pref) {
-  uint32_t write_flags = WriteablePrefStore::DEFAULT_PREF_WRITE_FLAGS;
-
-  if (!pref)
-    return write_flags;
-
-  if (pref->registration_flags() & PrefRegistry::LOSSY_PREF)
-    write_flags |= WriteablePrefStore::LOSSY_PREF_WRITE_FLAG;
-  return write_flags;
-}
 
 }  // namespace
 
@@ -236,22 +224,39 @@ void PrefService::IteratePreferenceValues(
     callback.Run(it.first, *GetPreferenceValue(it.first));
 }
 
-base::Value PrefService::GetPreferenceValues(
+base::Value::Dict PrefService::GetPreferenceValues(
     IncludeDefaults include_defaults) const {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-  base::Value out(base::Value::Type::DICTIONARY);
+  base::Value::Dict out;
   for (const auto& it : *pref_registry_) {
     if (include_defaults == INCLUDE_DEFAULTS) {
-      out.SetPath(it.first, GetPreferenceValue(it.first)->Clone());
+      out.SetByDottedPath(it.first, GetPreferenceValue(it.first)->Clone());
     } else {
       const Preference* pref = FindPreference(it.first);
-      if (pref->IsDefaultValue())
+      if (pref->IsDefaultValue()) {
         continue;
-      out.SetPath(it.first, pref->GetValue()->Clone());
+      }
+      out.SetByDottedPath(it.first, pref->GetValue()->Clone());
     }
   }
   return out;
+}
+
+std::vector<PrefService::PreferenceValueAndStore>
+PrefService::GetPreferencesValueAndStore() const {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+
+  std::vector<PreferenceValueAndStore> result;
+  for (const auto& it : *pref_registry_) {
+    auto* preference = FindPreference(it.first);
+    CHECK(preference);
+    PreferenceValueAndStore pref_data{
+        it.first, preference->GetValue()->Clone(),
+        pref_value_store_->ControllingPrefStoreForPref(it.first)};
+    result.emplace_back(std::move(pref_data));
+  }
+  return result;
 }
 
 const PrefService::Preference* PrefService::FindPreference(
@@ -346,7 +351,8 @@ const base::Value* PrefService::GetUserPrefValue(
     return nullptr;
 
   if (value->type() != pref->GetType()) {
-    NOTREACHED() << "Pref value type doesn't match registered type.";
+    DUMP_WILL_BE_NOTREACHED_NORETURN()
+        << "Pref value type doesn't match registered type.";
     return nullptr;
   }
 
@@ -402,10 +408,6 @@ void PrefService::ClearPrefsWithPrefixSilently(const std::string& prefix) {
   user_pref_store_->RemoveValuesByPrefixSilently(prefix);
 }
 
-void PrefService::ClearMutableValues() {
-  user_pref_store_->ClearMutableValues();
-}
-
 void PrefService::OnStoreDeletionFromDisk() {
   user_pref_store_->OnStoreDeletionFromDisk();
 }
@@ -443,7 +445,7 @@ void PrefService::SetDouble(const std::string& path, double value) {
   SetUserPrefValue(path, base::Value(value));
 }
 
-void PrefService::SetString(const std::string& path, const std::string& value) {
+void PrefService::SetString(const std::string& path, base::StringPiece value) {
   SetUserPrefValue(path, base::Value(value));
 }
 
@@ -509,8 +511,7 @@ base::TimeDelta PrefService::GetTimeDelta(const std::string& path) const {
 
 base::Value* PrefService::GetMutableUserPref(const std::string& path,
                                              base::Value::Type type) {
-  CHECK(type == base::Value::Type::DICTIONARY ||
-        type == base::Value::Type::LIST);
+  CHECK(type == base::Value::Type::DICT || type == base::Value::Type::LIST);
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   const Preference* pref = FindPreference(path);
@@ -661,13 +662,6 @@ const base::Value* PrefService::GetPreferenceValue(
     base::StringPiece path) const {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-  // TODO(battre): This is a check for crbug.com/435208. After analyzing some
-  // crash dumps it looks like the PrefService is accessed even though it has
-  // been cleared already.
-  CHECK(pref_registry_);
-  CHECK(pref_registry_->defaults());
-  CHECK(pref_value_store_);
-
   const base::Value* default_value = nullptr;
   if (!pref_registry_->defaults()->GetValue(path, &default_value))
     return nullptr;
@@ -694,12 +688,36 @@ const base::Value* PrefService::GetPreferenceValueChecked(
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 void PrefService::SetStandaloneBrowserPref(const std::string& path,
                                            const base::Value& value) {
+  if (!standalone_browser_pref_store_) {
+    LOG(WARNING) << "Failure to set value of " << path
+                 << " in standalone browser store";
+    return;
+  }
   standalone_browser_pref_store_->SetValue(
       path, value.Clone(), WriteablePrefStore::DEFAULT_PREF_WRITE_FLAGS);
 }
 
 void PrefService::RemoveStandaloneBrowserPref(const std::string& path) {
+  if (!standalone_browser_pref_store_) {
+    LOG(WARNING) << "Failure to remove value of " << path
+                 << " in standalone browser store";
+    return;
+  }
   standalone_browser_pref_store_->RemoveValue(
       path, WriteablePrefStore::DEFAULT_PREF_WRITE_FLAGS);
 }
 #endif
+
+// static
+uint32_t PrefService::GetWriteFlags(const PrefService::Preference* pref) {
+  uint32_t write_flags = WriteablePrefStore::DEFAULT_PREF_WRITE_FLAGS;
+
+  if (!pref) {
+    return write_flags;
+  }
+
+  if (pref->registration_flags() & PrefRegistry::LOSSY_PREF) {
+    write_flags |= WriteablePrefStore::LOSSY_PREF_WRITE_FLAG;
+  }
+  return write_flags;
+}

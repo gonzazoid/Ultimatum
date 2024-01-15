@@ -5,16 +5,13 @@
 #import "ios/web/js_features/window_error/window_error_java_script_feature.h"
 
 #import <memory>
+#import <optional>
 
 #import "base/test/ios/wait_util.h"
 #import "ios/web/js_messaging/java_script_feature_manager.h"
+#import "ios/web/public/js_messaging/java_script_feature_util.h"
 #import "ios/web/public/test/web_test_with_web_state.h"
 #import "testing/gtest_mac.h"
-#import "third_party/abseil-cpp/absl/types/optional.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 using base::test::ios::WaitUntilConditionOrTimeout;
 using base::test::ios::kWaitForJSCompletionTimeout;
@@ -32,16 +29,17 @@ class WindowErrorJavaScriptFeatureTest : public WebTestWithWebState {
 
   void SetUp() override {
     WebTestWithWebState::SetUp();
-    OverrideJavaScriptFeatures({&feature_});
+    OverrideJavaScriptFeatures(
+        {web::java_script_features::GetMessageJavaScriptFeature(), &feature_});
   }
 
-  absl::optional<WindowErrorJavaScriptFeature::ErrorDetails> error_details() {
+  std::optional<WindowErrorJavaScriptFeature::ErrorDetails> error_details() {
     return error_details_;
   }
 
  private:
   WindowErrorJavaScriptFeature feature_;
-  absl::optional<WindowErrorJavaScriptFeature::ErrorDetails> error_details_;
+  std::optional<WindowErrorJavaScriptFeature::ErrorDetails> error_details_;
 };
 
 // Tests that error details are received for a script error occurring in the

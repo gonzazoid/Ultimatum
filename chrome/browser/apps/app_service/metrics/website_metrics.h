@@ -8,10 +8,14 @@
 #include <map>
 
 #include "base/containers/flat_map.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
+#include "base/observer_list.h"
+#include "base/observer_list_types.h"
 #include "base/scoped_multi_source_observation.h"
 #include "base/scoped_observation.h"
 #include "base/time/time.h"
+#include "base/values.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser_list_observer.h"
 #include "chrome/browser/ui/browser_tab_strip_tracker.h"
@@ -22,6 +26,7 @@
 #include "content/public/browser/page.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/browser/web_contents_observer.h"
+#include "services/metrics/public/cpp/ukm_source_id.h"
 #include "ui/aura/window.h"
 #include "ui/aura/window_observer.h"
 #include "ui/wm/public/activation_change_observer.h"
@@ -36,17 +41,6 @@ namespace apps {
 class WebsiteMetricsBrowserTest;
 class TestWebsiteMetrics;
 
-// This is used for logging, so do not remove or reorder existing entries.
-enum class UrlContent {
-  kUnknown = 0,
-  kFullUrl = 1,
-  kScope = 2,
-
-  // Add any new values above this one, and update kMaxValue to the highest
-  // enumerator value.
-  kMaxValue = kScope,
-};
-
 extern const char kWebsiteUsageTime[];
 extern const char kRunningTimeKey[];
 extern const char kUrlContentKey[];
@@ -60,6 +54,42 @@ class WebsiteMetrics : public BrowserListObserver,
                        public wm::ActivationChangeObserver,
                        public history::HistoryServiceObserver {
  public:
+  // Observer that is notified on certain website events like URL opened, URL
+  // closed, etc. Observers are expected to register themselves on session
+  // initialization so they do not miss out on events that happen before they
+  // are registered.
+  class Observer : public base::CheckedObserver {
+   public:
+    Observer() = default;
+    Observer(const Observer&) = delete;
+    Observer& operator=(const Observer&) = delete;
+    ~Observer() override = default;
+
+    // Invoked when a new URL is opened with specified `WebContents`. We also
+    // return the URL that was opened in case there are further updates to
+    // `WebContents` forcing a new URL opened event that will follow as a
+    // separate notification.
+    virtual void OnUrlOpened(const GURL& url_opened,
+                             ::content::WebContents* web_contents) {}
+
+    // Invoked when a URL is closed with specified `WebContents`. `WebContents`
+    // could reflect current URL in case of content navigation, so we also
+    // return the URL that was closed.
+    virtual void OnUrlClosed(const GURL& url_closed,
+                             ::content::WebContents* web_contents) {}
+
+    // Invoked when URL usage metrics are being recorded (per URL that was used,
+    // on a 5 minute interval). `running_time` represents the foreground usage
+    // time in the last 5 minute interval. We do not track usage per
+    // `WebContents` today. There is a possibility of losing out on initial
+    // usage metric records if there are delays in observer registration.
+    virtual void OnUrlUsage(const GURL& url, base::TimeDelta running_time) {}
+
+    // Invoked when the `WebsiteMetrics` component (being observed) is being
+    // destroyed.
+    virtual void OnWebsiteMetricsDestroyed() {}
+  };
+
   WebsiteMetrics(Profile* profile, int user_type_by_device_type);
 
   WebsiteMetrics(const WebsiteMetrics&) = delete;
@@ -96,6 +126,9 @@ class WebsiteMetrics : public BrowserListObserver,
   // Records the usage time UKM each 2 hours.
   void OnTwoHours();
 
+  void AddObserver(Observer* observer);
+  void RemoveObserver(Observer* observer);
+
  private:
   friend class WebsiteMetricsBrowserTest;
   friend class TestWebsiteMetrics;
@@ -125,7 +158,7 @@ class WebsiteMetrics : public BrowserListObserver,
     void OnInstallableWebAppStatusUpdated() override;
 
    private:
-    WebsiteMetrics* owner_;
+    raw_ptr<WebsiteMetrics> owner_;
     base::ScopedObservation<webapps::AppBannerManager,
                             webapps::AppBannerManager::Observer>
         app_banner_manager_observer_{this};
@@ -134,6 +167,7 @@ class WebsiteMetrics : public BrowserListObserver,
   struct UrlInfo {
     UrlInfo() = default;
     explicit UrlInfo(const base::Value& value);
+    ukm::SourceId source_id = ukm::kInvalidSourceId;
     base::TimeTicks start_time;
     // Running time in the past 5 minutes without noise.
     base::TimeDelta running_time_in_five_minutes;
@@ -141,17 +175,16 @@ class WebsiteMetrics : public BrowserListObserver,
     // time1 * noise1 + time2 * noise2 + time3 * noise3....
     base::TimeDelta running_time_in_two_hours;
 
-    UrlContent url_content = UrlContent::kUnknown;
     bool is_activated = false;
     bool promotable = false;
 
-    // Converts the struct UsageTime to base::Value, e.g.:
+    // Converts the struct UsageTime to base::Value::Dict, e.g.:
     // {
     //    "time": "3600",
     //    "url_content": "scope",
     //    "promotable": "false",
     // }
-    base::Value ConvertToValue() const;
+    base::Value::Dict ConvertToDict() const;
   };
 
   // Observes the root window's activation client for the OnWindowActivated
@@ -184,18 +217,14 @@ class WebsiteMetrics : public BrowserListObserver,
 
   // Adds the url info to `url_infos_`.
   void AddUrlInfo(const GURL& url,
+                  ukm::SourceId source_id,
                   const base::TimeTicks& start_time,
-                  UrlContent url_content,
                   bool is_activated,
                   bool promotable);
 
-  // Modifies `old_url` to `new_url` in `url_infos_`, when the website manifest
-  // is updated.
-  void UpdateUrlInfo(const GURL& old_url,
-                     const GURL& new_url,
-                     UrlContent url_content,
-                     bool is_activated,
-                     bool promotable);
+  // Modifies `url_infos_` to set whether the website can be promoted to PWA,
+  // when the website manifest is updated.
+  void UpdateUrlInfo(const GURL& old_url, bool promotable);
 
   void SetWindowActivated(aura::Window* window);
 
@@ -216,9 +245,8 @@ class WebsiteMetrics : public BrowserListObserver,
   // after the user logs in.
   void RecordUsageTimeFromPref();
 
-  void EmitUkm(const GURL& url,
+  void EmitUkm(ukm::SourceId source_id,
                int64_t usage_time,
-               UrlContent url_content,
                bool promotable,
                bool is_from_last_login);
 
@@ -267,6 +295,8 @@ class WebsiteMetrics : public BrowserListObserver,
   base::ScopedObservation<history::HistoryService,
                           history::HistoryServiceObserver>
       history_observation_{this};
+
+  base::ObserverList<Observer> observers_;
 
   base::WeakPtrFactory<WebsiteMetrics> weak_factory_{this};
 };

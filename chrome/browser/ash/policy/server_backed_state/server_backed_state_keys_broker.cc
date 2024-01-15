@@ -4,11 +4,11 @@
 
 #include "chrome/browser/ash/policy/server_backed_state/server_backed_state_keys_broker.h"
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "chromeos/ash/components/dbus/session_manager/session_manager_client.h"
 
@@ -93,7 +93,7 @@ void ServerBackedStateKeysBroker::StoreStateKeys(
 
   request_callbacks_.Notify(state_keys_);
 
-  base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE,
       base::BindOnce(&ServerBackedStateKeysBroker::FetchStateKeys,
                      weak_factory_.GetWeakPtr()),

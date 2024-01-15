@@ -18,7 +18,7 @@ class ExceptionState;
 class Navigator;
 class ScriptPromise;
 class ScriptState;
-class SubAppsAddOptions;
+class SubAppsAddParams;
 
 class SubApps : public ScriptWrappable, public Supplement<Navigator> {
   DEFINE_WRAPPERTYPEINFO();
@@ -37,17 +37,18 @@ class SubApps : public ScriptWrappable, public Supplement<Navigator> {
   // SubApps API.
   ScriptPromise add(
       ScriptState*,
-      const HeapVector<std::pair<String, Member<SubAppsAddOptions>>>& sub_apps,
+      const HeapVector<std::pair<String, Member<SubAppsAddParams>>>&
+          sub_apps_to_add,
       ExceptionState&);
   ScriptPromise list(ScriptState*, ExceptionState&);
   ScriptPromise remove(ScriptState*,
-                       const String& unhashed_app_id,
+                       const Vector<String>& manifest_id_paths,
                        ExceptionState&);
 
  private:
   HeapMojoRemote<mojom::blink::SubAppsService>& GetService();
   void OnConnectionError();
-  bool CheckPreconditionsMaybeThrow(ExceptionState&);
+  bool CheckPreconditionsMaybeThrow(ScriptState*, ExceptionState&);
 
   HeapMojoRemote<mojom::blink::SubAppsService> service_;
 };

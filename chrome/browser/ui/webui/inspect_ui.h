@@ -10,7 +10,6 @@
 #include <string>
 
 #include "base/memory/ref_counted.h"
-#include "base/memory/weak_ptr.h"
 #include "base/values.h"
 #include "components/prefs/pref_change_registrar.h"
 #include "content/public/browser/web_contents_observer.h"
@@ -60,8 +59,6 @@ class InspectUI : public content::WebUIController,
 
   void StartListeningNotifications();
   void StopListeningNotifications();
-
-  content::WebUIDataSource* CreateInspectUIHTMLSource();
 
   void UpdateDiscoverUsbDevicesEnabled();
   void UpdatePortForwardingEnabled();

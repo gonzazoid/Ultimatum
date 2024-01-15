@@ -7,7 +7,6 @@
 #include "third_party/blink/renderer/bindings/core/v8/script_promise.h"
 #include "third_party/blink/renderer/bindings/core/v8/to_v8_traits.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_queuing_strategy_init.h"
-#include "third_party/blink/renderer/bindings/core/v8/v8_throw_dom_exception.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_union_arraybuffer_arraybufferview_blob_usvstring_writeparams.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_write_params.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
@@ -15,19 +14,21 @@
 #include "third_party/blink/renderer/core/streams/writable_stream_default_controller.h"
 #include "third_party/blink/renderer/core/streams/writable_stream_default_writer.h"
 #include "third_party/blink/renderer/modules/file_system_access/file_system_underlying_sink.h"
+#include "third_party/blink/renderer/platform/bindings/exception_state.h"
 
 namespace blink {
 
 FileSystemWritableFileStream* FileSystemWritableFileStream::Create(
     ScriptState* script_state,
     mojo::PendingRemote<mojom::blink::FileSystemAccessFileWriter>
-        writer_pending_remote) {
+        writer_pending_remote,
+    V8FileSystemWritableFileStreamMode lock_mode) {
   DCHECK(writer_pending_remote);
   ScriptState::Scope scope(script_state);
 
   ExecutionContext* context = ExecutionContext::From(script_state);
 
-  auto* stream = MakeGarbageCollected<FileSystemWritableFileStream>();
+  auto* stream = MakeGarbageCollected<FileSystemWritableFileStream>(lock_mode);
 
   auto* underlying_sink = MakeGarbageCollected<FileSystemUnderlyingSink>(
       context, std::move(writer_pending_remote));
@@ -42,19 +43,25 @@ FileSystemWritableFileStream* FileSystemWritableFileStream::Create(
   ScriptValue strategy_value = ScriptValue::From(script_state, strategy);
 
   v8::Isolate* isolate = script_state->GetIsolate();
-  ExceptionState exception_state(isolate, ExceptionState::kConstructionContext,
-                                 "FileSystemWritableFileStream");
+  ExceptionState exception_state(
+      isolate, ExceptionContextType::kConstructorOperationInvoke,
+      "FileSystemWritableFileStream");
   v8::MicrotasksScope microtasks_scope(
       isolate, ToMicrotaskQueue(script_state),
       v8::MicrotasksScope::kDoNotRunMicrotasks);
   stream->InitInternal(script_state, underlying_sink_value, strategy_value,
                        exception_state);
 
-  if (exception_state.HadException())
+  if (exception_state.HadException()) {
     return nullptr;
+  }
 
   return stream;
 }
+
+FileSystemWritableFileStream::FileSystemWritableFileStream(
+    V8FileSystemWritableFileStreamMode lock_mode)
+    : lock_mode_(lock_mode) {}
 
 ScriptPromise FileSystemWritableFileStream::write(
     ScriptState* script_state,
@@ -62,8 +69,9 @@ ScriptPromise FileSystemWritableFileStream::write(
     ExceptionState& exception_state) {
   WritableStreamDefaultWriter* writer =
       WritableStream::AcquireDefaultWriter(script_state, this, exception_state);
-  if (exception_state.HadException())
+  if (exception_state.HadException()) {
     return ScriptPromise();
+  }
 
   v8::Local<v8::Value> v8_data;
   {
@@ -89,11 +97,12 @@ ScriptPromise FileSystemWritableFileStream::truncate(
     ExceptionState& exception_state) {
   WritableStreamDefaultWriter* writer =
       WritableStream::AcquireDefaultWriter(script_state, this, exception_state);
-  if (exception_state.HadException())
+  if (exception_state.HadException()) {
     return ScriptPromise();
+  }
 
   auto* options = WriteParams::Create();
-  options->setType("truncate");
+  options->setType(V8WriteCommandType::Enum::kTruncate);
   options->setSize(size);
 
   ScriptPromise promise = writer->write(
@@ -109,11 +118,12 @@ ScriptPromise FileSystemWritableFileStream::seek(
     ExceptionState& exception_state) {
   WritableStreamDefaultWriter* writer =
       WritableStream::AcquireDefaultWriter(script_state, this, exception_state);
-  if (exception_state.HadException())
+  if (exception_state.HadException()) {
     return ScriptPromise();
+  }
 
   auto* options = WriteParams::Create();
-  options->setType("seek");
+  options->setType(V8WriteCommandType::Enum::kSeek);
   options->setPosition(offset);
 
   ScriptPromise promise = writer->write(
@@ -126,6 +136,10 @@ ScriptPromise FileSystemWritableFileStream::seek(
 void FileSystemWritableFileStream::Trace(Visitor* visitor) const {
   WritableStream::Trace(visitor);
   visitor->Trace(underlying_sink_);
+}
+
+const char* FileSystemWritableFileStream::mode() const {
+  return lock_mode_.AsCStr();
 }
 
 }  // namespace blink

@@ -8,7 +8,10 @@
 #include "base/time/time.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_typedefs.h"
 #include "third_party/blink/renderer/core/animation/scroll_timeline.h"
+#include "third_party/blink/renderer/core/animation/timeline_inset.h"
+#include "third_party/blink/renderer/core/animation/timeline_range.h"
 #include "third_party/blink/renderer/core/core_export.h"
+#include "third_party/blink/renderer/core/layout/layout_box.h"
 #include "third_party/blink/renderer/platform/bindings/script_wrappable.h"
 
 namespace blink {
@@ -27,59 +30,50 @@ class CORE_EXPORT ViewTimeline : public ScrollTimeline {
   DEFINE_WRAPPERTYPEINFO();
 
  public:
-  // https://drafts.csswg.org/scroll-animations-1/#view-timeline-inset
-  struct Inset {
-   public:
-    Inset() = default;
-    Inset(const Length& start_side, const Length& end_side)
-        : start_side(start_side), end_side(end_side) {}
-    bool operator==(const Inset& o) const {
-      return start_side == o.start_side && end_side == o.end_side;
-    }
-    bool operator!=(const Inset& o) const { return !(*this == o); }
-    // Note these represent the logical start/end sides of the source scroller,
-    // not the start/end of the timeline.
-    // https://drafts.csswg.org/css-writing-modes-4/#css-start
-    Length start_side = Length::Fixed();
-    Length end_side = Length::Fixed();
-  };
-
   static ViewTimeline* Create(Document&, ViewTimelineOptions*, ExceptionState&);
 
-  ViewTimeline(Document*, Element* subject, ScrollDirection orientation, Inset);
+  ViewTimeline(Document*, Element* subject, ScrollAxis axis, TimelineInset);
 
   bool IsViewTimeline() const override { return true; }
 
-  AnimationTimeDelta CalculateIntrinsicIterationDuration(
-      const Timing&) override;
+  CSSNumericValue* getCurrentTime(const String& rangeName) override;
 
   // IDL API implementation.
-  Element* subject() const { return ReferenceElement(); }
+  Element* subject() const;
 
-  // Converts a delay that is expressed as a (phase,percentage) pair to
-  // a fractional offset.
-  absl::optional<double> ToFractionalOffset(const Timing::Delay& delay) const;
+  bool Matches(Element* subject, ScrollAxis, const TimelineInset&) const;
 
-  AnimationTimeline::TimeDelayPair TimelineOffsetsToTimeDelays(
-      const Timing& timing) const override;
+  const TimelineInset& GetInset() const;
+
+  CSSNumericValue* startOffset() const;
+  CSSNumericValue* endOffset() const;
+
+  void Trace(Visitor*) const override;
 
  protected:
-  const Inset& GetInset() const { return inset_; }
-
-  absl::optional<ScrollOffsets> CalculateOffsets(
-      PaintLayerScrollableArea* scrollable_area,
-      ScrollOrientation physical_orientation) const override;
+  void CalculateOffsets(PaintLayerScrollableArea* scrollable_area,
+                        ScrollOrientation physical_orientation,
+                        TimelineState* state) const override;
 
  private:
-  // Cache values to make timeline phase conversions more efficient.
-  mutable double target_offset_;
-  mutable double target_size_;
-  mutable double viewport_size_;
-  mutable double start_side_inset_;
-  mutable double end_side_inset_;
-  mutable double start_offset_ = 0;
-  mutable double end_offset_ = 0;
-  Inset inset_;
+  double ToFractionalOffset(const TimelineOffset& timeline_offset) const;
+
+  absl::optional<gfx::SizeF> SubjectSize() const;
+  absl::optional<gfx::PointF> SubjectPosition(Node* resolved_source) const;
+
+  void ApplyStickyAdjustments(ScrollOffsets& scroll_offsets,
+                              ViewOffsets& view_offsets,
+                              double viewport_size,
+                              double target_size,
+                              double target_offset,
+                              ScrollOrientation orientation,
+                              Node* resolved_source) const;
+
+  TimelineInset inset_;
+  // If either of the following elements are non-null, we need to update
+  // |inset_| on a style change.
+  Member<const CSSValue> style_dependant_start_inset_;
+  Member<const CSSValue> style_dependant_end_inset_;
 };
 
 template <>

@@ -5,21 +5,29 @@
 #include "chrome/browser/commerce/shopping_service_factory.h"
 
 #include "chrome/browser/bookmarks/bookmark_model_factory.h"
+#include "chrome/browser/browser_process.h"
+#include "chrome/browser/history/history_service_factory.h"
 #include "chrome/browser/optimization_guide/optimization_guide_keyed_service.h"
 #include "chrome/browser/optimization_guide/optimization_guide_keyed_service_factory.h"
 #include "chrome/browser/persisted_state_db/session_proto_db_factory.h"
 #include "chrome/browser/power_bookmarks/power_bookmark_service_factory.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/signin/identity_manager_factory.h"
+#include "chrome/browser/sync/sync_service_factory.h"
 #include "components/commerce/content/browser/commerce_tab_helper.h"
+#include "components/commerce/content/browser/web_extractor_impl.h"
+#include "components/commerce/core/commerce_feature_list.h"
 #include "components/commerce/core/proto/commerce_subscription_db_content.pb.h"
+#include "components/commerce/core/proto/parcel_tracking_db_content.pb.h"
 #include "components/commerce/core/shopping_service.h"
 #include "components/prefs/pref_service.h"
+#include "components/variations/service/variations_service_utils.h"
 #include "content/public/browser/storage_partition.h"
 
 #if !BUILDFLAG(IS_ANDROID)
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_finder.h"
+#include "components/commerce/core/proto/discounts_db_content.pb.h"  // nogncheck
 #endif
 
 namespace commerce {
@@ -47,29 +55,58 @@ ShoppingService* ShoppingServiceFactory::GetForBrowserContextIfExists(
 ShoppingServiceFactory::ShoppingServiceFactory()
     : ProfileKeyedServiceFactory(
           "ShoppingService",
-          ProfileSelections::BuildRedirectedInIncognito()) {
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kRedirectedToOriginal)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kRedirectedToOriginal)
+              .Build()) {
   DependsOn(BookmarkModelFactory::GetInstance());
-  DependsOn(OptimizationGuideKeyedServiceFactory::GetInstance());
   DependsOn(IdentityManagerFactory::GetInstance());
+  DependsOn(OptimizationGuideKeyedServiceFactory::GetInstance());
+  DependsOn(PowerBookmarkServiceFactory::GetInstance());
   DependsOn(SessionProtoDBFactory<
             commerce_subscription_db::CommerceSubscriptionContentProto>::
                 GetInstance());
-  DependsOn(PowerBookmarkServiceFactory::GetInstance());
+  DependsOn(SessionProtoDBFactory<
+            parcel_tracking_db::ParcelTrackingContent>::GetInstance());
+  DependsOn(HistoryServiceFactory::GetInstance());
+#if !BUILDFLAG(IS_ANDROID)
+  DependsOn(SessionProtoDBFactory<
+            discounts_db::DiscountsContentProto>::GetInstance());
+#endif
+  DependsOn(SyncServiceFactory::GetInstance());
 }
 
-KeyedService* ShoppingServiceFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+ShoppingServiceFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
   Profile* profile = Profile::FromBrowserContext(context);
-  return new ShoppingService(
+  return std::make_unique<ShoppingService>(
+      GetCurrentCountryCode(g_browser_process->variations_service()),
+      g_browser_process->GetApplicationLocale(),
       BookmarkModelFactory::GetInstance()->GetForBrowserContext(context),
-      OptimizationGuideKeyedServiceFactory::GetForProfile(profile),
+      nullptr, OptimizationGuideKeyedServiceFactory::GetForProfile(profile),
       profile->GetPrefs(), IdentityManagerFactory::GetForProfile(profile),
+      SyncServiceFactory::GetForProfile(profile),
       profile->GetDefaultStoragePartition()
           ->GetURLLoaderFactoryForBrowserProcess(),
       SessionProtoDBFactory<commerce_subscription_db::
                                 CommerceSubscriptionContentProto>::GetInstance()
           ->GetForProfile(context),
-      PowerBookmarkServiceFactory::GetForBrowserContext(context));
+      PowerBookmarkServiceFactory::GetForBrowserContext(context),
+#if !BUILDFLAG(IS_ANDROID)
+      SessionProtoDBFactory<discounts_db::DiscountsContentProto>::GetInstance()
+          ->GetForProfile(context),
+#else
+      nullptr,
+#endif
+      SessionProtoDBFactory<
+          parcel_tracking_db::ParcelTrackingContent>::GetInstance()
+          ->GetForProfile(context),
+      HistoryServiceFactory::GetForProfile(profile,
+                                           ServiceAccessType::EXPLICIT_ACCESS),
+      std::make_unique<commerce::WebExtractorImpl>());
 }
 
 bool ShoppingServiceFactory::ServiceIsCreatedWithBrowserContext() const {
@@ -79,27 +116,4 @@ bool ShoppingServiceFactory::ServiceIsCreatedWithBrowserContext() const {
 bool ShoppingServiceFactory::ServiceIsNULLWhileTesting() const {
   return true;
 }
-
-KeyedService* ShoppingServiceFactory::SetTestingFactoryAndUse(
-    content::BrowserContext* context,
-    TestingFactory testing_factory) {
-  KeyedService* mock_shopping_service =
-      ProfileKeyedServiceFactory::SetTestingFactoryAndUse(
-          context, std::move(testing_factory));
-#if !BUILDFLAG(IS_ANDROID)
-  Profile* profile = Profile::FromBrowserContext(context);
-  Browser* browser = chrome::FindBrowserWithProfile(profile);
-  for (int i = 0; i < browser->tab_strip_model()->GetTabCount(); i++) {
-    CommerceTabHelper::FromWebContents(
-        browser->tab_strip_model()->GetWebContentsAt(i))
-        ->SetShoppingServiceForTesting(mock_shopping_service);  // IN-TEST
-  }
-#else
-  // TODO(crbug.com/1356028): Update the ShoppingService in CommerceTabHelper.
-  NOTIMPLEMENTED() << "No implementation for Android yet.";
-#endif
-
-  return mock_shopping_service;
-}
-
 }  // namespace commerce

@@ -23,6 +23,15 @@ enum HoverType {
   kHoverHoverType                            = 2             // 1 << 1
 };
 
+// For media feature update, indicating the update ability of the output display,
+// once renering is done:
+// Slow - e-ink screens, underpowered devices.
+// Fast - regular computer screen.
+enum OutputDeviceUpdateAbilityType {
+  kSlowType,
+  kFastType
+};
+
 // There are multiple editing details that are different on Windows than
 // Macintosh. We use a single switch for all of them. Some examples:
 //
@@ -170,12 +179,14 @@ struct WebPreferences {
   bool password_echo_enabled;
   bool should_clear_document_background;
   bool enable_scroll_animator;
-  bool threaded_scrolling_enabled;
   bool prefers_reduced_motion;
+  bool prefers_reduced_transparency;
+  bool inverted_colors;
   bool touch_event_feature_detection_enabled;
   int32 pointer_events_max_touch_points;
   int32 available_pointer_types;
   PointerType primary_pointer_type;
+  OutputDeviceUpdateAbilityType output_device_update_ability_type;
   int32 available_hover_types;
   HoverType primary_hover_type;
   bool dont_send_key_events_to_javascript;
@@ -201,7 +212,6 @@ struct WebPreferences {
   bool initialize_at_minimum_page_scale;
   bool smart_insert_delete_enabled;
   bool spatial_navigation_enabled;
-  bool navigate_on_drag_drop;
   bool fake_no_alloc_direct_call_for_testing_enabled;
   V8CacheOptions v8_cache_options;
   bool record_whole_document;
@@ -269,6 +279,12 @@ struct WebPreferences {
   float font_scale_factor;
 
   [EnableIf=is_android]
+  int32 font_weight_adjustment;
+
+  [EnableIf=is_android]
+  int32 text_size_contrast_factor;
+
+  [EnableIf=is_android]
   float device_scale_adjustment;
 
   [EnableIf=is_android]
@@ -279,9 +295,6 @@ struct WebPreferences {
 
   [EnableIf=is_android]
   bool support_deprecated_target_density_dpi;
-
-  [EnableIf=is_android]
-  bool use_legacy_background_size_shorthand_behavior;
 
   [EnableIf=is_android]
   bool wide_viewport_quirk;
@@ -347,9 +360,13 @@ struct WebPreferences {
   // Don't accelerate small canvases to avoid crashes TODO(crbug.com/1004304)
   bool disable_accelerated_small_canvases;
 
+  // Disable the Web Authentication (WebAuthn) API.
+  // TODO(crbug.com/1284805): Remove once WebView supports WebAuthn.
   [EnableIf=is_android]
-  // Disable the Web Authentication (WebAuthn) API. Only enabled on Android
-  // because the only context where it might be disabled is WebView/WebLayer.
+  bool disable_webauthn;
+  // TODO(crbug.com/1382970): Remove once all Content embedders on Fuchsia
+  // support WebAuthn.
+  [EnableIf=is_fuchsia]
   bool disable_webauthn;
 
   // Enable forcibly modifying content rendering to result in a light on dark
@@ -379,6 +396,15 @@ struct WebPreferences {
 
   // Defines the current autoplay policy.
   AutoplayPolicy autoplay_policy;
+
+  // `getDisplayMedia()`'s transient activation requirement can be bypassed via
+  // `ScreenCaptureWithoutGestureAllowedForOrigins` policy.
+  bool require_transient_activation_for_get_display_media;
+
+  // `show{OpenFile|SaveFile|Directory}Picker()`'s user activation requirement
+  // can be bypassed via `FileOrDirectoryPickerWithoutGestureAllowedForOrigins`
+  // policy.
+  bool require_transient_activation_for_show_file_or_directory_picker;
 
   // The preferred color scheme for the web content. The scheme is used to
   // evaluate the prefers-color-scheme media query and resolve UA color scheme
@@ -411,15 +437,6 @@ struct WebPreferences {
 
   // Whether lazy loading of frames and images is enabled.
   bool lazy_load_enabled;
-
-  // Specifies how close a lazily loaded iframe or image should be from the
-  // viewport before it should start being loaded in, depending on the effective
-  // connection type of the current network. Blink will use the default distance
-  // threshold for effective connection types that aren't specified here.
-  map<EffectiveConnectionType, int32>
-      lazy_frame_loading_distance_thresholds_px;
-  map<EffectiveConnectionType, int32>
-      lazy_image_loading_distance_thresholds_px;
 
   // Setting to false disables upgrades to HTTPS for HTTP resources in HTTPS
   // sites.

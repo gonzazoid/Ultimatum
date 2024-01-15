@@ -8,8 +8,8 @@
 #include "ash/assistant/util/deep_link_util.h"
 #include "ash/assistant/util/i18n_util.h"
 #include "ash/public/cpp/assistant/controller/assistant_ui_controller.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "chromeos/ash/services/assistant/public/cpp/assistant_prefs.h"
 #include "chromeos/ash/services/assistant/public/cpp/features.h"
 
@@ -44,7 +44,7 @@ void AssistantSetupController::OnDeepLinkReceived(
   if (type != assistant::util::DeepLinkType::kOnboarding)
     return;
 
-  absl::optional<bool> relaunch = assistant::util::GetDeepLinkParamAsBool(
+  std::optional<bool> relaunch = assistant::util::GetDeepLinkParamAsBool(
       params, assistant::util::DeepLinkParam::kRelaunch);
 
   StartOnboarding(relaunch.value_or(false));

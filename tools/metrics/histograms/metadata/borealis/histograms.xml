@@ -22,148 +22,113 @@ chromium-metrics-reviews@google.com.
 
 <histograms>
 
-<histogram name="Borealis.Disk.Client.AvailableSpaceAtRequest" units="MB"
-    expires_after="2023-02-01">
-  <owner>danielng@google.com</owner>
+<histogram name="Borealis.Audio.UsedPath.{Direction}" enum="BorealisAudioPath"
+    expires_after="2024-05-19">
+  <owner>normanbt@google.com</owner>
   <owner>src/chrome/browser/ash/borealis/OWNERS</owner>
   <summary>
-    Amount of space, in MB, that is available on the Borealis VM disk when a
-    client requests for more space. This is recorded each time a client makes a
-    valid RequestSpace request.
+    Record the usage of each audio path. The value will be incremented if the
+    path is open during the check period, which is once every 5 minutes, when
+    Borealis VM is running.
   </summary>
-</histogram>
-
-<histogram name="Borealis.Disk.Client.GetDiskInfoResult"
-    enum="BorealisGetDiskInfoResult" expires_after="2023-02-01">
-  <owner>danielng@google.com</owner>
-  <owner>src/chrome/browser/ash/borealis/OWNERS</owner>
-  <summary>
-    The results of a &quot;GetDiskInfo&quot; request from a client, which will
-    either be a success or an error. This is recorded each time a client makes a
-    GetDiskInfo request.
-  </summary>
-</histogram>
-
-<histogram name="Borealis.Disk.Client.NumRequestsPerSesssion" units="requests"
-    expires_after="2023-04-09">
-  <owner>danielng@google.com</owner>
-  <owner>src/chrome/browser/ash/borealis/OWNERS</owner>
-  <summary>
-    The number of requests made by a client within a session of Borealis. This
-    counts each time a client makes a disk related request (GetDiskInfo,
-    RequestSpace and ReleaseSpace) and is emitted when Borealis is shutdown.
-  </summary>
-</histogram>
-
-<histogram name="Borealis.Disk.Client.ReleaseSpaceResult"
-    enum="BorealisResizeDiskResult" expires_after="2023-02-01">
-  <owner>danielng@google.com</owner>
-  <owner>src/chrome/browser/ash/borealis/OWNERS</owner>
-  <summary>
-    The results of a &quot;ReleaseSpace&quot; request from a client, which will
-    either be a success or an error. This is recorded each time a client makes a
-    ReleaseSpace request.
-  </summary>
-</histogram>
-
-<histogram name="Borealis.Disk.Client.RequestSpaceResult"
-    enum="BorealisResizeDiskResult" expires_after="2023-02-01">
-  <owner>danielng@google.com</owner>
-  <owner>src/chrome/browser/ash/borealis/OWNERS</owner>
-  <summary>
-    The results of a &quot;RequestSpace&quot; request from a client, which will
-    either be a success or an error. This is recorded each time a client makes a
-    RequestSpace request.
-  </summary>
-</histogram>
-
-<histogram name="Borealis.Disk.Client.SpaceReleased" units="MB"
-    expires_after="2023-02-01">
-  <owner>danielng@google.com</owner>
-  <owner>src/chrome/browser/ash/borealis/OWNERS</owner>
-  <summary>
-    Amount of space, in MB, that is freed by the client (via a
-    &quot;ReleaseSpace&quot; request). This is recorded each time a client makes
-    a ReleaseSpace request. This is not necessarily the amount of space that the
-    host frees, it is just the amount that the client signals as free.
-  </summary>
-</histogram>
-
-<histogram name="Borealis.Disk.Client.SpaceRequested" units="MB"
-    expires_after="2023-04-09">
-  <owner>danielng@google.com</owner>
-  <owner>src/chrome/browser/ash/borealis/OWNERS</owner>
-  <summary>
-    Amount of space, in MB, that is requested by the client (via a
-    &quot;RequestSpace&quot; request). This is recorded each time a client makes
-    a RequestSpace request. This is not necessarily the amount of space granted
-    by the client, it is just the amount that the client has requested.
-  </summary>
-</histogram>
-
-<histogram name="Borealis.Disk.Startup.Result"
-    enum="BorealisSyncDiskSizeResult" expires_after="2023-04-16">
-  <owner>danielng@google.com</owner>
-  <owner>src/chrome/browser/ash/borealis/OWNERS</owner>
-  <summary>
-    The results of the disk sync process that is run when Borealis is launched.
-    This relays if the disk needed to be resized, if it was done successfully or
-    what error it faced. This is recorded each time the Borealis VM is launched,
-    if the disk management feature is enabled.
-  </summary>
-</histogram>
-
-<histogram name="Borealis.Disk.Startup.{TypeOfSpace}Space" units="MB"
-    expires_after="2023-02-01">
-  <owner>danielng@google.com</owner>
-  <owner>src/chrome/browser/ash/borealis/OWNERS</owner>
-  <summary>
-    {TypeOfSpace} This is recorded each time the Borealis VM is launched, if the
-    disk management feature is enabled.
-  </summary>
-  <token key="TypeOfSpace">
-    <variant name="Available"
-        summary="Amount of available space, in MB, that Borealis has on its
-                 VM disk when it starts up."/>
-    <variant name="Expandable"
-        summary="Amount of space, in MB, that Borealis can expand its VM disk
-                 by."/>
-    <variant name="Total"
-        summary="Total amount of disk space, in MB, that Borealis has on its
-                 VM disk when it starts up."/>
+  <token key="Direction">
+    <variant name="Input"/>
+    <variant name="Output"/>
   </token>
 </histogram>
 
+<histogram name="Borealis.Audio.UsedSubdevices" units="count"
+    expires_after="2024-05-19">
+  <owner>normanbt@google.com</owner>
+  <owner>src/chrome/browser/ash/borealis/OWNERS</owner>
+  <summary>
+    The number of audio subdevices that are used by games that are running on
+    proton. This is recorded periodically when the game is running.
+  </summary>
+</histogram>
+
+<histogram name="Borealis.Audio.Xrun.Alsa.Output" units="count"
+    expires_after="2024-05-19">
+  <owner>normanbt@google.com</owner>
+  <owner>src/chrome/browser/ash/borealis/OWNERS</owner>
+  <summary>
+    The number of xrun occurences during playback with ALSA device. This is
+    recorded periodically when the game is running.
+  </summary>
+</histogram>
+
+<histogram name="Borealis.Disk.HighestDirtyPagesDaily" units="KiB"
+    expires_after="2024-06-30">
+  <owner>danielng@google.com</owner>
+  <owner>src/chrome/browser/ash/borealis/OWNERS</owner>
+  <summary>
+    The highest dirty page value observed in Borealis that day (taken
+    from`/proc/meminfo`). Reported daily.
+  </summary>
+</histogram>
+
+<histogram name="Borealis.Disk.InodeRatioAtStartup" units="KiB"
+    expires_after="2024-06-24">
+  <owner>danielng@google.com</owner>
+  <owner>src/chrome/browser/ash/borealis/OWNERS</owner>
+  <summary>
+    The amount of bytes used per an inode, on average, in Borealis. This is
+    recorded once during each startup, when maitred emits disk related metrics.
+  </summary>
+</histogram>
+
 <histogram name="Borealis.Disk.StatefulReadsDaily" units="KiB"
-    expires_after="2023-05-05">
+    expires_after="2024-06-30">
   <owner>philpearson@google.com</owner>
   <owner>src/chrome/browser/ash/borealis/OWNERS</owner>
   <summary>Borealis stateful KiB read per day. Reported daily.</summary>
 </histogram>
 
 <histogram name="Borealis.Disk.StatefulWritesDaily" units="KiB"
-    expires_after="2023-05-05">
+    expires_after="2024-06-30">
   <owner>philpearson@google.com</owner>
   <owner>src/chrome/browser/ash/borealis/OWNERS</owner>
   <summary>Borealis stateful KiB written per day. Reported daily.</summary>
 </histogram>
 
 <histogram name="Borealis.Disk.SwapReadsDaily" units="KiB"
-    expires_after="2023-05-05">
+    expires_after="2024-06-30">
   <owner>philpearson@google.com</owner>
   <owner>src/chrome/browser/ash/borealis/OWNERS</owner>
   <summary>Borealis swap file KiB read per day. Reported daily.</summary>
 </histogram>
 
 <histogram name="Borealis.Disk.SwapWritesDaily" units="KiB"
-    expires_after="2023-05-05">
+    expires_after="2024-06-30">
   <owner>philpearson@google.com</owner>
   <owner>src/chrome/browser/ash/borealis/OWNERS</owner>
   <summary>Borealis swap file KiB written per day. Reported daily.</summary>
 </histogram>
 
+<histogram name="Borealis.Disk.VMUsageToTotalSpacePercentageAtStartup"
+    units="%" expires_after="2024-06-24">
+  <owner>danielng@google.com</owner>
+  <owner>src/chrome/browser/ash/borealis/OWNERS</owner>
+  <summary>
+    The percent of space that the VM is using in comparison to the total size of
+    the disk (i.e VM_usage/total_disk_size). This is recorded once during each
+    startup, when maitred emits disk related metrics.
+  </summary>
+</histogram>
+
+<histogram name="Borealis.Disk.VMUsageToTotalUsagePercentageAtStartup"
+    units="%" expires_after="2024-06-24">
+  <owner>danielng@google.com</owner>
+  <owner>src/chrome/browser/ash/borealis/OWNERS</owner>
+  <summary>
+    The percent of space that the VM is using in comparison to the total amount
+    of space being used (i.e VM_usage/total_usage). This is recorded once during
+    each startup, when maitred emits disk related metrics.
+  </summary>
+</histogram>
+
 <histogram name="Borealis.EngagementTime.{Variant}" units="ms"
-    expires_after="2023-02-01">
+    expires_after="2024-06-30">
   <owner>lqu@google.com</owner>
   <owner>src/chrome/browser/ash/borealis/OWNERS</owner>
   <summary>
@@ -183,12 +148,14 @@ chromium-metrics-reviews@google.com.
     <variant name="Foreground"
         summary="Times when a user is engaged and focuses on a Borealis GUI
                  window."/>
-    <variant name="Total" summary="Should be same as BorealisTotal."/>
+    <variant name="Total"
+        summary="Total engagement time (including when Borealis isn't
+                 running)."/>
   </token>
 </histogram>
 
 <histogram name="Borealis.Install.NumAttempts" enum="BooleanAttempted"
-    expires_after="2023-02-01">
+    expires_after="2024-05-12">
   <owner>danielng@google.com</owner>
   <owner>src/chrome/browser/ash/borealis/OWNERS</owner>
   <summary>
@@ -201,7 +168,9 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Borealis.Install.OverallTime" units="ms"
-    expires_after="2023-02-01">
+    expires_after="2024-06-30">
+<!-- NB: deprecated; remove instead of extending its expiry date -->
+
   <owner>danielng@google.com</owner>
   <owner>src/chrome/browser/ash/borealis/OWNERS</owner>
   <summary>
@@ -210,11 +179,29 @@ chromium-metrics-reviews@google.com.
     ends when the install completes successfully, at which point this metric is
     recorded. Note that retries are considered as their own individual
     installation attempts.
+
+    Deprecated; prefer Borealis.Install.OverallTime2.
+  </summary>
+</histogram>
+
+<histogram name="Borealis.Install.OverallTime2" units="ms"
+    expires_after="2024-08-09">
+  <owner>danielng@google.com</owner>
+  <owner>src/chrome/browser/ash/borealis/OWNERS</owner>
+  <improvement direction="LOWER_IS_BETTER"/>
+  <summary>
+    Time taken for a successful installation. An install starts when the
+    &quot;install&quot; or &quot;retry&quot; installer buttons are clicked and
+    ends when the install completes successfully, at which point this metric is
+    recorded. Note that retries are considered as their own individual
+    installation attempts.
+
+    (Same as Borealis.Install.OverallTime but with larger bucket sizes.)
   </summary>
 </histogram>
 
 <histogram name="Borealis.Install.Result" enum="BorealisInstallResult"
-    expires_after="2023-04-09">
+    expires_after="2024-06-09">
   <owner>danielng@google.com</owner>
   <owner>src/chrome/browser/ash/borealis/OWNERS</owner>
   <summary>
@@ -225,7 +212,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Borealis.Shutdown.Attempt" enum="BooleanAttempted"
-    expires_after="2023-02-01">
+    expires_after="2024-04-09">
   <owner>lqu@google.com</owner>
   <owner>src/chrome/browser/ash/borealis/OWNERS</owner>
   <summary>
@@ -235,7 +222,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Borealis.Stability" enum="GuestOsFailureClasses"
-    expires_after="2023-04-09">
+    expires_after="2024-06-30">
   <owner>cpelling@google.com</owner>
   <owner>src/chrome/browser/ash/borealis/OWNERS</owner>
   <summary>
@@ -245,25 +232,60 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
+<histogram name="Borealis.Startup.fsckResult" enum="FsckResult"
+    expires_after="2024-06-24">
+  <owner>danielng@google.com</owner>
+  <owner>src/chrome/browser/ash/borealis/OWNERS</owner>
+  <summary>
+    Return code from running fsck during VM startup. This is recorded once
+    during each startup, when maitred emits disk related metrics.
+  </summary>
+</histogram>
+
+<histogram name="Borealis.Startup.fsckTime" units="ms"
+    expires_after="2024-06-24">
+  <owner>danielng@google.com</owner>
+  <owner>src/chrome/browser/ash/borealis/OWNERS</owner>
+  <summary>
+    The time taken for fsck to complete during VM startup. This is recorded once
+    during each startup, when maitred emits disk related metrics.
+  </summary>
+</histogram>
+
 <histogram name="Borealis.Startup.NumAttempts" enum="BooleanAttempted"
-    expires_after="2023-04-09">
+    expires_after="2024-06-09">
   <owner>danielng@google.com</owner>
   <owner>src/chrome/browser/ash/borealis/OWNERS</owner>
   <summary>Recording every attempt to start Borealis (via the UI).</summary>
 </histogram>
 
 <histogram name="Borealis.Startup.OverallTime" units="ms"
-    expires_after="2023-04-09">
+    expires_after="2024-06-30">
+<!-- NB: deprecated; remove instead of extending its expiry date -->
+
   <owner>danielng@google.com</owner>
   <owner>src/chrome/browser/ash/borealis/OWNERS</owner>
   <summary>
     Recording the time taken for each successful attempt to start Borealis (via
+    the UI). Deprecated; prefer Borealis.Startup.OverallTime2.
+  </summary>
+</histogram>
+
+<histogram name="Borealis.Startup.OverallTime2" units="ms"
+    expires_after="2024-08-09">
+  <owner>danielng@google.com</owner>
+  <owner>src/chrome/browser/ash/borealis/OWNERS</owner>
+  <improvement direction="LOWER_IS_BETTER"/>
+  <summary>
+    Recording the time taken for each successful attempt to start Borealis (via
     the UI).
+
+    (Same as Borealis.Startup.OverallTime but with larger bucket sizes.)
   </summary>
 </histogram>
 
 <histogram name="Borealis.Startup.Result" enum="BorealisStartupResult"
-    expires_after="2023-04-09">
+    expires_after="2024-06-30">
   <owner>danielng@google.com</owner>
   <owner>src/chrome/browser/ash/borealis/OWNERS</owner>
   <summary>

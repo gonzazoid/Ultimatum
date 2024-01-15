@@ -7,17 +7,32 @@
 #include <tuple>
 
 #include "base/notreached.h"
+#include "base/strings/strcat.h"
 #include "net/base/schemeful_site.h"
 
 namespace net {
+
+namespace {
+
+std::string SiteTypeToString(SiteType site_type) {
+  switch (site_type) {
+    case SiteType::kPrimary:
+      return "kPrimary";
+    case SiteType::kAssociated:
+      return "kAssociated";
+    case SiteType::kService:
+      return "kService";
+  }
+}
+
+}  // namespace
 
 FirstPartySetEntry::SiteIndex::SiteIndex() = default;
 
 FirstPartySetEntry::SiteIndex::SiteIndex(uint32_t value) : value_(value) {}
 
-bool FirstPartySetEntry::SiteIndex::operator==(const SiteIndex& other) const {
-  return value_ == other.value_;
-}
+bool FirstPartySetEntry::SiteIndex::operator==(const SiteIndex& other) const =
+    default;
 
 FirstPartySetEntry::FirstPartySetEntry() = default;
 
@@ -29,7 +44,7 @@ FirstPartySetEntry::FirstPartySetEntry(
   switch (site_type_) {
     case SiteType::kPrimary:
     case SiteType::kService:
-      DCHECK(!site_index_.has_value());
+      CHECK(!site_index_.has_value());
       break;
     case SiteType::kAssociated:
       break;
@@ -53,14 +68,11 @@ FirstPartySetEntry& FirstPartySetEntry::operator=(FirstPartySetEntry&&) =
 
 FirstPartySetEntry::~FirstPartySetEntry() = default;
 
-bool FirstPartySetEntry::operator==(const FirstPartySetEntry& other) const {
-  return std::tie(primary_, site_type_, site_index_) ==
-         std::tie(other.primary_, other.site_type_, other.site_index_);
-}
+bool FirstPartySetEntry::operator==(const FirstPartySetEntry& other) const =
+    default;
 
-bool FirstPartySetEntry::operator!=(const FirstPartySetEntry& other) const {
-  return !(*this == other);
-}
+bool FirstPartySetEntry::operator!=(const FirstPartySetEntry& other) const =
+    default;
 
 // static
 absl::optional<net::SiteType> FirstPartySetEntry::DeserializeSiteType(
@@ -76,6 +88,11 @@ absl::optional<net::SiteType> FirstPartySetEntry::DeserializeSiteType(
       NOTREACHED() << "Unknown SiteType: " << value;
   }
   return absl::nullopt;
+}
+
+std::string FirstPartySetEntry::GetDebugString() const {
+  return base::StrCat({"{primary: ", primary_.GetDebugString(),
+                       ", site_type: ", SiteTypeToString(site_type_), "}"});
 }
 
 std::ostream& operator<<(std::ostream& os,

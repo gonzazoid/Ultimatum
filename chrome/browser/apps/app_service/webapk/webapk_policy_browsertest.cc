@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 
 #include <memory>
+#include <optional>
 
 #include "ash/components/arc/arc_features_parser.h"
 #include "ash/components/arc/session/arc_bridge_service.h"
@@ -10,7 +11,7 @@
 #include "ash/components/arc/test/arc_util_test_support.h"
 #include "ash/components/arc/test/fake_webapk_instance.h"
 #include "ash/constants/ash_features.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/test/bind.h"
 #include "chrome/browser/apps/app_service/webapk/webapk_prefs.h"
 #include "chrome/browser/apps/app_service/webapk/webapk_test_server.h"
@@ -24,15 +25,14 @@
 #include "components/prefs/pref_change_registrar.h"
 #include "content/public/test/browser_test.h"
 #include "testing/gmock/include/gmock/gmock-matchers.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace {
 
 constexpr char kWebApkPackageName[] = "org.chromium.webapk.browsertest";
 
-absl::optional<arc::ArcFeatures> GetArcFeatures() {
+std::optional<arc::ArcFeatures> GetArcFeatures() {
   arc::ArcFeatures arc_features;
-  arc_features.build_props["ro.product.cpu.abilist"] = "x86";
+  arc_features.build_props.abi_list = "x86";
   return arc_features;
 }
 
@@ -76,7 +76,7 @@ class WebApkPolicyBrowserTest : public policy::PolicyTest {
 
  private:
   std::unique_ptr<arc::FakeWebApkInstance> fake_webapk_instance_;
-  base::RepeatingCallback<absl::optional<arc::ArcFeatures>()>
+  base::RepeatingCallback<std::optional<arc::ArcFeatures>()>
       arc_features_getter_;
   std::unique_ptr<apps::WebApkTestServer> webapk_test_server_;
 };
@@ -95,9 +95,9 @@ IN_PROC_BROWSER_TEST_F(WebApkPolicyBrowserTest, DefaultInstallWebApk) {
   // installation.
   base::RunLoop run_loop;
   pref_registrar.Add(apps::webapk_prefs::kGeneratedWebApksPref,
-                     base::BindLambdaForTesting([&]() { run_loop.Quit(); }));
+                     run_loop.QuitClosure());
 
-  const web_app::AppId app_id =
+  const webapps::AppId app_id =
       web_app::InstallWebAppFromManifest(browser(), app_url);
   run_loop.Run();
 
@@ -117,7 +117,7 @@ IN_PROC_BROWSER_TEST_F(WebApkPolicyBrowserTest, DisabledByPolicy) {
 
   const GURL app_url =
       embedded_test_server()->GetURL("/web_share_target/charts.html");
-  const web_app::AppId app_id =
+  const webapps::AppId app_id =
       web_app::InstallWebAppFromManifest(browser(), app_url);
 
   // Given that we are testing the absence of any WebAPK, we can't wait for

@@ -3,6 +3,9 @@
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/modules/video_rvfc/video_frame_callback_requester_impl.h"
+#include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ref.h"
+#include "third_party/blink/renderer/core/page/page_animator.h"
 
 #include "base/time/time.h"
 #include "testing/gmock/include/gmock/gmock.h"
@@ -149,12 +152,12 @@ class VfcRequesterParameterVerifierCallback
 
   double TicksToClampedMillisecondsF(base::TimeTicks ticks) {
     return Performance::ClampTimeResolution(
-        timing_.MonotonicTimeToZeroBasedDocumentTime(ticks),
+        timing_->MonotonicTimeToZeroBasedDocumentTime(ticks),
         /*cross_origin_isolated_capability_=*/false);
   }
 
   double TicksToMillisecondsF(base::TimeTicks ticks) {
-    return timing_.MonotonicTimeToZeroBasedDocumentTime(ticks)
+    return timing_->MonotonicTimeToZeroBasedDocumentTime(ticks)
         .InMillisecondsF();
   }
 
@@ -164,7 +167,7 @@ class VfcRequesterParameterVerifierCallback
 
   double now_;
   bool was_invoked_ = false;
-  DocumentLoadTiming& timing_;
+  const raw_ref<DocumentLoadTiming, ExperimentalRenderer> timing_;
 };
 
 }  // namespace
@@ -186,7 +189,7 @@ class VideoFrameCallbackRequesterImplTest : public PageTestBase {
     video_ = MakeGarbageCollected<HTMLVideoElement>(GetDocument());
     GetDocument().body()->appendChild(video_);
 
-    video()->SetSrc("http://example.com/foo.mp4");
+    video()->SetSrc(AtomicString("http://example.com/foo.mp4"));
     test::RunPendingTasks();
     UpdateAllLifecyclePhasesForTest();
   }
@@ -202,8 +205,8 @@ class VideoFrameCallbackRequesterImplTest : public PageTestBase {
   void SimulateFramePresented() { video_->OnRequestVideoFrameCallback(); }
 
   void SimulateVideoFrameCallback(base::TimeTicks now) {
-    GetDocument().GetScriptedAnimationController().ServiceScriptedAnimations(
-        now);
+    PageAnimator::ServiceScriptedAnimations(
+        now, {{GetDocument().GetScriptedAnimationController(), false}});
   }
 
   V8VideoFrameRequestCallback* GetCallback(ScriptState* script_state,
@@ -222,7 +225,7 @@ class VideoFrameCallbackRequesterImplTest : public PageTestBase {
   Persistent<HTMLVideoElement> video_;
 
   // Owned by HTMLVideoElementFrameClient.
-  MockWebMediaPlayer* media_player_;
+  raw_ptr<MockWebMediaPlayer, DanglingUntriaged> media_player_;
 };
 
 class VideoFrameCallbackRequesterImplNullMediaPlayerTest

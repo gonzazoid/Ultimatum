@@ -96,7 +96,10 @@ class SubresourceFilterAbusiveTest
         blocked_content::SafeBrowsingTriggeredPopupBlocker::FromWebContents(
             web_contents());
   }
-
+  void TearDown() override {
+    popup_blocker_ = nullptr;
+    subresource_filter::SubresourceFilterTestHarness::TearDown();
+  }
   void ConfigureUrl(const GURL& url) {
     safe_browsing::ThreatMetadata metadata;
     metadata.subresource_filter_match = GetMatch(abusive_level_, bas_level_);

@@ -21,12 +21,8 @@ class GPU_EXPORT GPUTestConfig {
  public:
   enum OS {
     kOsUnknown = 0,
-    kOsWinXP = 1 << 0,
-    kOsWinVista = 1 << 1,
-    kOsWin7 = 1 << 2,
-    kOsWin8 = 1 << 3,
-    kOsWin10 = 1 << 4,
-    kOsWin = kOsWinXP | kOsWinVista | kOsWin7 | kOsWin8 | kOsWin10,
+    kOsWin10 = 1 << 1,
+    kOsWin = kOsWin10,
     // Jump over a few bits for future Windows versions.
     kOsMacLeopard = 1 << 10,
     kOsMacSnowLeopard = 1 << 11,
@@ -42,15 +38,18 @@ class GPU_EXPORT GPUTestConfig {
     kOsMacBigSur = 1 << 21,
     kOsMacMonterey = 1 << 22,
     kOsMacVentura = 1 << 23,
+    kOsMacSonoma = 1 << 24,
     kOsMac = kOsMacLeopard | kOsMacSnowLeopard | kOsMacLion |
              kOsMacMountainLion | kOsMacMavericks | kOsMacYosemite |
              kOsMacElCapitan | kOsMacSierra | kOsMacHighSierra | kOsMacMojave |
-             kOsMacCatalina | kOsMacBigSur | kOsMacMonterey | kOsMacVentura,
+             kOsMacCatalina | kOsMacBigSur | kOsMacMonterey | kOsMacVentura |
+             kOsMacSonoma,
     // Jump over a few bits for future OSX versions.
     kOsLinux = 1 << 25,
     kOsChromeOS = 1 << 26,
     kOsAndroid = 1 << 27,
     kOsFuchsia = 1 << 28,
+    kOsIOS = 1 << 29,
     // If we run out of bits, please retire older OS versions, like WinXP,
     // MacLeopard, etc., for which we no longer have bots.
   };

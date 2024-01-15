@@ -5,31 +5,23 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
-#include "base/memory/ptr_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/run_loop.h"
 #include "base/strings/stringprintf.h"
 #include "base/test/bind.h"
-#include "base/threading/thread_restrictions.h"
-#include "chrome/browser/ash/login/helper.h"
-#include "chrome/browser/browser_process.h"
-#include "chrome/browser/extensions/api/networking_private/networking_private_ui_delegate_chromeos.h"
+#include "base/test/test_future.h"
+#include "base/values.h"
 #include "chrome/browser/extensions/extension_apitest.h"
 #include "components/onc/onc_constants.h"
-#include "components/onc/onc_pref_names.h"
 #include "components/policy/core/browser/browser_policy_connector.h"
-#include "components/policy/core/common/external_data_fetcher.h"
 #include "components/policy/core/common/mock_configuration_policy_provider.h"
 #include "components/policy/core/common/policy_map.h"
 #include "components/policy/core/common/policy_types.h"
 #include "components/policy/policy_constants.h"
 #include "components/prefs/testing_pref_service.h"
 #include "components/proxy_config/pref_proxy_config_tracker_impl.h"
-#include "components/proxy_config/proxy_config_dictionary.h"
-#include "components/proxy_config/proxy_config_pref_names.h"
 #include "components/sync_preferences/testing_pref_service_syncable.h"
 #include "components/user_manager/user.h"
 #include "components/user_manager/user_manager.h"
@@ -39,15 +31,12 @@
 #include "extensions/browser/api/networking_private/networking_private_chromeos.h"
 #include "extensions/browser/api/networking_private/networking_private_delegate_factory.h"
 #include "extensions/common/switches.h"
-#include "extensions/common/value_builder.h"
 #include "extensions/test/extension_test_message_listener.h"
-#include "testing/gmock/include/gmock/gmock.h"
-#include "third_party/cros_system_api/dbus/service_constants.h"
+#include "third_party/cros_system_api/dbus/shill/dbus-constants.h"
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 #include "ash/constants/ash_switches.h"
 #include "chromeos/ash/components/cryptohome/cryptohome_parameters.h"
-#include "chromeos/ash/components/dbus/dbus_thread_manager.h"
 #include "chromeos/ash/components/dbus/shill/shill_device_client.h"
 #include "chromeos/ash/components/dbus/shill/shill_ipconfig_client.h"
 #include "chromeos/ash/components/dbus/shill/shill_manager_client.h"
@@ -55,23 +44,18 @@
 #include "chromeos/ash/components/dbus/shill/shill_service_client.h"
 #include "chromeos/ash/components/dbus/userdataauth/cryptohome_misc_client.h"
 #include "chromeos/ash/components/dbus/userdataauth/userdataauth_client.h"
-#include "chromeos/ash/components/network/cellular_metrics_logger.h"
 #include "chromeos/ash/components/network/managed_network_configuration_handler.h"
 #include "chromeos/ash/components/network/network_certificate_handler.h"
 #include "chromeos/ash/components/network/network_handler.h"
 #include "chromeos/ash/components/network/network_handler_test_helper.h"
 #include "chromeos/ash/components/network/network_state.h"
 #include "chromeos/ash/components/network/network_state_handler.h"
-#include "chromeos/ash/components/network/network_type_pattern.h"
 #include "chromeos/ash/components/network/onc/network_onc_utils.h"
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
 #if BUILDFLAG(IS_CHROMEOS_LACROS)
-#include "chromeos/crosapi/mojom/test_controller.mojom-test-utils.h"
 #include "chromeos/crosapi/mojom/test_controller.mojom.h"
 #include "chromeos/lacros/lacros_service.h"
-
-using crosapi::mojom::ShillClientTestInterfaceAsyncWaiter;
 #endif
 
 // This tests the Chrome OS implementation of the networkingPrivate API
@@ -79,8 +63,8 @@ using crosapi::mojom::ShillClientTestInterfaceAsyncWaiter;
 // win/mac (NetworkingPrivateServiceClient) are different to reflect the
 // different implementations, but should be kept similar where possible.
 
-using testing::Return;
 using testing::_;
+using testing::Return;
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 using ash::ShillDeviceClient;
@@ -90,9 +74,9 @@ using ash::ShillProfileClient;
 using ash::ShillServiceClient;
 using ash::UserDataAuthClient;
 
+using extensions::NetworkingPrivateChromeOS;
 using extensions::NetworkingPrivateDelegate;
 using extensions::NetworkingPrivateDelegateFactory;
-using extensions::NetworkingPrivateChromeOS;
 #endif
 
 namespace {
@@ -136,22 +120,22 @@ class NetworkingPrivateChromeOSApiTestBase
     AddProfile(kUser1ProfilePath, userhash);
 
     // Add IPConfigs
-    base::DictionaryValue ipconfig;
-    ipconfig.SetKey(shill::kAddressProperty, base::Value("0.0.0.0"));
-    ipconfig.SetKey(shill::kGatewayProperty, base::Value("0.0.0.1"));
-    ipconfig.SetKey(shill::kPrefixlenProperty, base::Value(0));
-    ipconfig.SetKey(shill::kMethodProperty, base::Value(shill::kTypeIPv4));
-    AddIPConfig(kIPConfigPath, ipconfig);
+    base::Value::Dict ipconfig;
+    ipconfig.Set(shill::kAddressProperty, "0.0.0.0");
+    ipconfig.Set(shill::kGatewayProperty, "0.0.0.1");
+    ipconfig.Set(shill::kPrefixlenProperty, 0);
+    ipconfig.Set(shill::kMethodProperty, shill::kTypeIPv4);
+    AddIPConfig(kIPConfigPath, std::move(ipconfig));
 
     // Add Devices
     AddDevice(kEthernetDevicePath, shill::kTypeEthernet,
               "stub_ethernet_device1");
 
     AddDevice(kWifiDevicePath, shill::kTypeWifi, "stub_wifi_device1");
-    base::ListValue wifi_ip_configs;
+    base::Value::List wifi_ip_configs;
     wifi_ip_configs.Append(kIPConfigPath);
     SetDeviceProperty(kWifiDevicePath, shill::kIPConfigsProperty,
-                      wifi_ip_configs);
+                      base::Value(std::move(wifi_ip_configs)));
     SetDeviceProperty(kWifiDevicePath, shill::kAddressProperty,
                       base::Value("001122aabbcc"));
 
@@ -176,16 +160,16 @@ class NetworkingPrivateChromeOSApiTestBase
                        base::Value(true));
     SetServiceProperty(kWifi1ServicePath, shill::kDeviceProperty,
                        base::Value(kWifiDevicePath));
-    base::DictionaryValue static_ipconfig;
-    static_ipconfig.SetKey(shill::kAddressProperty, base::Value("1.2.3.4"));
-    static_ipconfig.SetKey(shill::kGatewayProperty, base::Value("0.0.0.0"));
-    static_ipconfig.SetKey(shill::kPrefixlenProperty, base::Value(1));
+    base::Value::Dict static_ipconfig;
+    static_ipconfig.Set(shill::kAddressProperty, "1.2.3.4");
+    static_ipconfig.Set(shill::kGatewayProperty, "0.0.0.0");
+    static_ipconfig.Set(shill::kPrefixlenProperty, 1);
     SetServiceProperty(kWifi1ServicePath, shill::kStaticIPConfigProperty,
-                       static_ipconfig);
-    base::ListValue frequencies1;
+                       base::Value(std::move(static_ipconfig)));
+    base::Value::List frequencies1;
     frequencies1.Append(2400);
     SetServiceProperty(kWifi1ServicePath, shill::kWifiFrequencyListProperty,
-                       frequencies1);
+                       base::Value(std::move(frequencies1)));
     SetServiceProperty(kWifi1ServicePath, shill::kWifiFrequency,
                        base::Value(2400));
     AddServiceToProfile(kUser1ProfilePath, kWifi1ServicePath);
@@ -199,11 +183,11 @@ class NetworkingPrivateChromeOSApiTestBase
     SetServiceProperty(kWifi2ServicePath, shill::kConnectableProperty,
                        base::Value(true));
 
-    base::ListValue frequencies2;
+    base::Value::List frequencies2;
     frequencies2.Append(2400);
     frequencies2.Append(5000);
     SetServiceProperty(kWifi2ServicePath, shill::kWifiFrequencyListProperty,
-                       frequencies2);
+                       base::Value(std::move(frequencies2)));
     SetServiceProperty(kWifi2ServicePath, shill::kWifiFrequency,
                        base::Value(5000));
     SetServiceProperty(kWifi2ServicePath, shill::kProfileProperty,
@@ -215,7 +199,7 @@ class NetworkingPrivateChromeOSApiTestBase
                        base::Value(shill::kProviderOpenVpn));
     AddServiceToProfile(kUser1ProfilePath, "stub_vpn1");
 
-    AddService("stub_vpn2", "vpn2", shill::kTypeVPN, shill::kStateOffline);
+    AddService("stub_vpn2", "vpn2", shill::kTypeVPN, shill::kStateIdle);
     SetServiceProperty("stub_vpn2", shill::kProviderTypeProperty,
                        base::Value(shill::kProviderThirdPartyVpn));
     SetServiceProperty("stub_vpn2", shill::kProviderHostProperty,
@@ -227,12 +211,12 @@ class NetworkingPrivateChromeOSApiTestBase
     // Add a Cellular GSM Device.
     AddDevice(kCellularDevicePath, shill::kTypeCellular,
               "stub_cellular_device1");
-    base::DictionaryValue home_provider;
-    home_provider.SetStringKey("name", "Cellular1_Provider");
-    home_provider.SetStringKey("code", "000000");
-    home_provider.SetStringKey("country", "us");
+    base::Value::Dict home_provider;
+    home_provider.Set("name", "Cellular1_Provider");
+    home_provider.Set("code", "000000");
+    home_provider.Set("country", "us");
     SetDeviceProperty(kCellularDevicePath, shill::kHomeProviderProperty,
-                      home_provider);
+                      base::Value(std::move(home_provider)));
     SetDeviceProperty(kCellularDevicePath, shill::kTechnologyFamilyProperty,
                       base::Value(shill::kNetworkTechnologyGsm));
     SetDeviceProperty(kCellularDevicePath, shill::kMeidProperty,
@@ -296,7 +280,7 @@ class NetworkingPrivateChromeOSApiTestBase
                                    const std::string& service_path) = 0;
   virtual std::string GetSharedProfilePath() = 0;
   virtual void AddIPConfig(const std::string& ip_config_path,
-                           const base::Value& properties) = 0;
+                           base::Value::Dict properties) = 0;
 };
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
@@ -479,9 +463,9 @@ class NetworkingPrivateChromeOSApiTestAsh
   }
 
   void AddIPConfig(const std::string& ip_config_path,
-                   const base::Value& properties) override {
-    network_handler_test_helper_->ip_config_test()->AddIPConfig(ip_config_path,
-                                                                properties);
+                   base::Value::Dict properties) override {
+    network_handler_test_helper_->ip_config_test()->AddIPConfig(
+        ip_config_path, std::move(properties));
   }
 
   void AddProfile(const std::string& profile_path,
@@ -518,17 +502,18 @@ class NetworkingPrivateChromeOSApiTestLacros
   bool SetUpAsh() {
     auto* service = chromeos::LacrosService::Get();
     if (!service->IsAvailable<crosapi::mojom::TestController>() ||
-        service->GetInterfaceVersion(crosapi::mojom::TestController::Uuid_) <
+        service->GetInterfaceVersion<crosapi::mojom::TestController>() <
             static_cast<int>(crosapi::mojom::TestController::MethodMinVersions::
                                  kBindShillClientTestInterfaceMinVersion)) {
       LOG(ERROR) << "Unsupported ash version.";
       return false;
     }
-    crosapi::mojom::TestControllerAsyncWaiter test_controller_waiter{
-        service->GetRemote<crosapi::mojom::TestController>().get()};
 
-    test_controller_waiter.BindShillClientTestInterface(
-        shill_test_.BindNewPipeAndPassReceiver());
+    base::test::TestFuture<void> future;
+    service->GetRemote<crosapi::mojom::TestController>()
+        ->BindShillClientTestInterface(shill_test_.BindNewPipeAndPassReceiver(),
+                                       future.GetCallback());
+    EXPECT_TRUE(future.Wait());
 
     ConfigFakeNetwork();
 
@@ -540,81 +525,96 @@ class NetworkingPrivateChromeOSApiTestLacros
   std::string GetSanitizedActiveUsername() override {
     auto* service = chromeos::LacrosService::Get();
     if (!service->IsAvailable<crosapi::mojom::TestController>() ||
-        service->GetInterfaceVersion(crosapi::mojom::TestController::Uuid_) <
+        service->GetInterfaceVersion<crosapi::mojom::TestController>() <
             static_cast<int>(crosapi::mojom::TestController::MethodMinVersions::
                                  kGetSanitizedActiveUsernameMinVersion)) {
       LOG(ERROR) << "Unsupported ash version.";
       return "";
     }
 
-    crosapi::mojom::TestControllerAsyncWaiter test_controller_waiter{
-        service->GetRemote<crosapi::mojom::TestController>().get()};
-
-    std::string userhash;
-    test_controller_waiter.GetSanitizedActiveUsername(&userhash);
-    return userhash;
+    base::test::TestFuture<const std::string&> future;
+    service->GetRemote<crosapi::mojom::TestController>()
+        ->GetSanitizedActiveUsername(future.GetCallback());
+    return future.Take();
   }
 
   void AddDevice(const std::string& device_path,
                  const std::string& type,
                  const std::string& name) override {
-    ShillClientTestInterfaceAsyncWaiter(shill_test_.get())
-        .AddDevice(device_path, type, name);
+    base::test::TestFuture<void> future;
+    shill_test_->AddDevice(device_path, type, name, future.GetCallback());
+    ASSERT_TRUE(future.Wait());
   }
 
   void SetDeviceProperty(const std::string& device_path,
                          const std::string& name,
                          const base::Value& value) override {
-    ShillClientTestInterfaceAsyncWaiter(shill_test_.get())
-        .SetDeviceProperty(device_path, name, value.Clone(),
-                           /*notify_changed=*/true);
+    base::test::TestFuture<void> future;
+    shill_test_->SetDeviceProperty(device_path, name, value.Clone(),
+                                   /*notify_changed=*/true,
+                                   future.GetCallback());
+    ASSERT_TRUE(future.Wait());
   }
 
   void SetSimLocked(const std::string& device_path, bool enabled) override {
-    ShillClientTestInterfaceAsyncWaiter(shill_test_.get())
-        .SetSimLocked(device_path, enabled);
+    base::test::TestFuture<void> future;
+    shill_test_->SetSimLocked(device_path, enabled, future.GetCallback());
+    ASSERT_TRUE(future.Wait());
   }
 
   void ClearDevices() override {
-    ShillClientTestInterfaceAsyncWaiter(shill_test_.get()).ClearDevices();
+    base::test::TestFuture<void> future;
+    shill_test_->ClearDevices(future.GetCallback());
+    ASSERT_TRUE(future.Wait());
   }
 
   void AddService(const std::string& service_path,
                   const std::string& name,
                   const std::string& type,
                   const std::string& state) override {
-    ShillClientTestInterfaceAsyncWaiter(shill_test_.get())
-        .AddService(service_path, service_path + "_guid", name, type, state,
-                    true /* add_to_visible */);
+    base::test::TestFuture<void> future;
+    shill_test_->AddService(service_path, service_path + "_guid", name, type,
+                            state, true /* add_to_visible */,
+                            future.GetCallback());
+    ASSERT_TRUE(future.Wait());
   }
 
   void ClearServices() override {
-    ShillClientTestInterfaceAsyncWaiter(shill_test_.get()).ClearServices();
+    base::test::TestFuture<void> future;
+    shill_test_->ClearServices(future.GetCallback());
+    ASSERT_TRUE(future.Wait());
   }
 
   void SetServiceProperty(const std::string& service_path,
                           const std::string& property,
                           const base::Value& value) override {
-    ShillClientTestInterfaceAsyncWaiter(shill_test_.get())
-        .SetServiceProperty(service_path, property, value.Clone());
+    base::test::TestFuture<void> future;
+    shill_test_->SetServiceProperty(service_path, property, value.Clone(),
+                                    future.GetCallback());
+    ASSERT_TRUE(future.Wait());
   }
 
   void AddIPConfig(const std::string& ip_config_path,
-                   const base::Value& properties) override {
-    ShillClientTestInterfaceAsyncWaiter(shill_test_.get())
-        .AddIPConfig(ip_config_path, properties.Clone());
+                   base::Value::Dict properties) override {
+    base::test::TestFuture<void> future;
+    shill_test_->AddIPConfig(ip_config_path, base::Value(std::move(properties)),
+                             future.GetCallback());
+    ASSERT_TRUE(future.Wait());
   }
 
   void AddProfile(const std::string& profile_path,
                   const std::string& userhash) override {
-    ShillClientTestInterfaceAsyncWaiter(shill_test_.get())
-        .AddProfile(profile_path, userhash);
+    base::test::TestFuture<void> future;
+    shill_test_->AddProfile(profile_path, userhash, future.GetCallback());
+    ASSERT_TRUE(future.Wait());
   }
 
   void AddServiceToProfile(const std::string& profile_path,
                            const std::string& service_path) override {
-    ShillClientTestInterfaceAsyncWaiter(shill_test_.get())
-        .AddServiceToProfile(profile_path, service_path);
+    base::test::TestFuture<void> future;
+    shill_test_->AddServiceToProfile(profile_path, service_path,
+                                     future.GetCallback());
+    ASSERT_TRUE(future.Wait());
   }
 
   std::string GetSharedProfilePath() override {
@@ -1017,8 +1017,9 @@ IN_PROC_BROWSER_TEST_F(NetworkingPrivateChromeOSApiTest,
 
 IN_PROC_BROWSER_TEST_F(NetworkingPrivateChromeOSApiTest,
                        GetCaptivePortalStatus) {
-  // Ethernet defaults to online. Set wifi1 to idle -> 'Offline', and wifi2 to
-  // redirect-found -> 'Portal'.
+  // Ethernet defaults to online.
+  // Set wifi1 to idle with captive portal status mapping 'Offline'.
+  // Set wifi2 to redirect-found with captive portal statu smapping 'Portal'.
   SetServiceProperty(kWifi1ServicePath, shill::kStateProperty,
                      base::Value(shill::kStateIdle));
   SetServiceProperty(kWifi2ServicePath, shill::kStateProperty,
@@ -1077,21 +1078,18 @@ IN_PROC_BROWSER_TEST_F(NetworkingPrivateChromeOSApiTest,
 #endif
   SetupCellular();
   // Create fake list of found networks.
-  std::unique_ptr<base::ListValue> found_networks =
-      extensions::ListBuilder()
-          .Append(extensions::DictionaryBuilder()
+  base::Value::List found_networks =
+      base::Value::List()
+          .Append(base::Value::Dict()
                       .Set(shill::kNetworkIdProperty, "network1")
                       .Set(shill::kTechnologyProperty, "GSM")
-                      .Set(shill::kStatusProperty, "current")
-                      .Build())
-          .Append(extensions::DictionaryBuilder()
+                      .Set(shill::kStatusProperty, "current"))
+          .Append(base::Value::Dict()
                       .Set(shill::kNetworkIdProperty, "network2")
                       .Set(shill::kTechnologyProperty, "GSM")
-                      .Set(shill::kStatusProperty, "available")
-                      .Build())
-          .Build();
+                      .Set(shill::kStatusProperty, "available"));
   SetDeviceProperty(kCellularDevicePath, shill::kFoundNetworksProperty,
-                    *found_networks);
+                    base::Value(std::move(found_networks)));
   EXPECT_TRUE(RunNetworkingSubtest("selectCellularMobileNetwork")) << message_;
 }
 
@@ -1109,19 +1107,18 @@ IN_PROC_BROWSER_TEST_F(NetworkingPrivateChromeOSApiTest, CellularSimPuk) {
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 IN_PROC_BROWSER_TEST_F(NetworkingPrivateChromeOSApiTest, GetGlobalPolicy) {
-  base::DictionaryValue global_config;
-  global_config.SetKey(
+  base::Value::Dict global_config;
+  global_config.Set(
       ::onc::global_network_config::kAllowOnlyPolicyNetworksToAutoconnect,
-      base::Value(true));
-  global_config.SetKey(
-      ::onc::global_network_config::kAllowOnlyPolicyWiFiToConnect,
-      base::Value(false));
-  global_config.SetKey("SomeNewGlobalPolicy", base::Value(false));
+      true);
+  global_config.Set(::onc::global_network_config::kAllowOnlyPolicyWiFiToConnect,
+                    false);
+  global_config.Set("SomeNewGlobalPolicy", false);
   ash::NetworkHandler::Get()
       ->managed_network_configuration_handler()
       ->SetPolicy(::onc::ONC_SOURCE_DEVICE_POLICY,
-                  std::string() /* no username hash */, base::ListValue(),
-                  global_config);
+                  /*userhash=*/std::string(),
+                  /*network_configs_onc=*/base::Value::List(), global_config);
   base::RunLoop().RunUntilIdle();
 
   EXPECT_TRUE(RunNetworkingSubtest("getGlobalPolicy")) << message_;

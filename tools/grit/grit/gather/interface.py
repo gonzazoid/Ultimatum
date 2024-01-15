@@ -5,17 +5,13 @@
 '''Interface for all gatherers.
 '''
 
-from __future__ import print_function
-
 import os.path
-
-import six
 
 from grit import clique
 from grit import util
 
 
-class GathererBase(object):
+class GathererBase:
   '''Interface for all gatherer implementations.  Subclasses must implement
   all methods that raise NotImplemented.'''
 
@@ -167,7 +163,7 @@ class GathererBase(object):
     '''A convenience function for subclasses that loads the contents of the
     input file.
     '''
-    if isinstance(self.rc_file, six.string_types):
+    if isinstance(self.rc_file, str):
       return util.ReadFile(self.GetAbsoluteInputPath(), self.encoding)
     else:
       return self.rc_file.read()

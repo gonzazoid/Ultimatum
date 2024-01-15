@@ -6,6 +6,7 @@
 
 #include "base/metrics/histogram_functions.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/task/single_thread_task_runner.h"
 #include "chrome/browser/ash/crostini/crostini_features.h"
 #include "chrome/browser/ash/crostini/crostini_manager.h"
 #include "chrome/browser/ash/crostini/crostini_util.h"
@@ -36,7 +37,7 @@ void crostini::ShowCrostiniRecoveryView(
     crostini::CrostiniUISurface ui_surface,
     const std::string& app_id,
     int64_t display_id,
-    const std::vector<crostini::LaunchArg>& args,
+    const std::vector<guest_os::LaunchArg>& args,
     crostini::CrostiniSuccessCallback callback) {
   CrostiniRecoveryView::Show(profile, app_id, display_id, args,
                              std::move(callback));
@@ -47,7 +48,7 @@ void crostini::ShowCrostiniRecoveryView(
 void CrostiniRecoveryView::Show(Profile* profile,
                                 const std::string& app_id,
                                 int64_t display_id,
-                                const std::vector<crostini::LaunchArg>& args,
+                                const std::vector<guest_os::LaunchArg>& args,
                                 crostini::CrostiniSuccessCallback callback) {
   if (!crostini::CrostiniFeatures::Get()->IsAllowedNow(profile)) {
     std::move(callback).Run(false, "crostini is not allowed");
@@ -82,7 +83,7 @@ void CrostiniRecoveryView::OnStopVm(crostini::CrostiniResult result) {
   if (result != crostini::CrostiniResult::SUCCESS) {
     LOG(ERROR) << "Error stopping VM for recovery: " << (int)result;
   }
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&crostini::LaunchCrostiniApp, profile_, app_id_,
                                 display_id_, args_, std::move(callback_)));
   GetWidget()->CloseWithReason(
@@ -107,7 +108,7 @@ CrostiniRecoveryView::CrostiniRecoveryView(
     Profile* profile,
     const std::string& app_id,
     int64_t display_id,
-    const std::vector<crostini::LaunchArg>& args,
+    const std::vector<guest_os::LaunchArg>& args,
     crostini::CrostiniSuccessCallback callback)
     : profile_(profile),
       app_id_(app_id),
@@ -145,5 +146,5 @@ CrostiniRecoveryView::~CrostiniRecoveryView() {
   g_crostini_recovery_view = nullptr;
 }
 
-BEGIN_METADATA(CrostiniRecoveryView, views::BubbleDialogDelegateView)
+BEGIN_METADATA(CrostiniRecoveryView)
 END_METADATA

@@ -10,18 +10,17 @@ import androidx.annotation.Nullable;
 
 import org.chromium.ui.util.ColorUtils;
 
-/**
- * Object that contains the state of a tab, including its navigation history.
- */
+/** Object that contains the state of a tab, including its navigation history. */
 public class TabState {
-    /** Special value for mTimestampMillis. */
-    private static final long TIMESTAMP_NOT_SET = -1;
+    /** Special value for timestamp related attributes. */
+    public static final long TIMESTAMP_NOT_SET = -1;
 
     /** A theme color that indicates an unspecified state. */
     public static final int UNSPECIFIED_THEME_COLOR = Color.TRANSPARENT;
 
     /** Navigation history of the WebContents. */
     public WebContentsState contentsState;
+
     public int parentId = Tab.INVALID_TAB_ID;
     public int rootId;
 
@@ -41,6 +40,8 @@ public class TabState {
 
     /** Tab level Request Desktop Site setting. */
     public @TabUserAgent int userAgent;
+
+    public long lastNavigationCommittedTimestampMillis = TIMESTAMP_NOT_SET;
 
     public boolean isIncognito() {
         return isIncognito;

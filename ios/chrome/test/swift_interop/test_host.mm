@@ -4,10 +4,6 @@
 
 #import <UIKit/UIKit.h>
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 @interface AppDelegate : UIResponder <UIApplicationDelegate>
 @end
 
@@ -26,15 +22,14 @@
 
 - (void)scene:(UIScene*)scene
     willConnectToSession:(UISceneSession*)session
-                 options:(UISceneConnectionOptions*)connectionOptions
-    API_AVAILABLE(ios(13)) {
+                 options:(UISceneConnectionOptions*)connectionOptions {
   _window =
       [[UIWindow alloc] initWithWindowScene:static_cast<UIWindowScene*>(scene)];
 
   [_window setRootViewController:[[UIViewController alloc] init]];
 }
 
-- (void)sceneDidDisconnect:(UIScene*)scene API_AVAILABLE(ios(13)) {
+- (void)sceneDidDisconnect:(UIScene*)scene {
   _window = nil;
 }
 

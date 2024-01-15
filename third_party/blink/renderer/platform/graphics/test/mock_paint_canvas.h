@@ -26,9 +26,11 @@ class MockPaintCanvas : public cc::PaintCanvas {
   MOCK_METHOD1(setNodeId, void(int));
   MOCK_METHOD0(flush, void());
   MOCK_METHOD0(save, int());
+  MOCK_METHOD1(saveLayer, int(const cc::PaintFlags& flags));
   MOCK_METHOD2(saveLayer,
-               int(const SkRect* bounds, const cc::PaintFlags* flags));
-  MOCK_METHOD2(saveLayerAlpha, int(const SkRect* bounds, uint8_t alpha));
+               int(const SkRect& bounds, const cc::PaintFlags& flags));
+  MOCK_METHOD1(saveLayerAlphaf, int(float alpha));
+  MOCK_METHOD2(saveLayerAlphaf, int(const SkRect& bounds, float alpha));
   MOCK_METHOD0(restore, void());
   MOCK_CONST_METHOD0(getSaveCount, int());
   MOCK_METHOD1(restoreToCount, void(int save_count));
@@ -48,12 +50,9 @@ class MockPaintCanvas : public cc::PaintCanvas {
                     SkClipOp op,
                     bool do_anti_alias,
                     cc::UsePaintCache use_paint_cache));
-  MOCK_CONST_METHOD0(getLocalClipBounds, SkRect());
   MOCK_CONST_METHOD1(getLocalClipBounds, bool(SkRect* bounds));
-  MOCK_CONST_METHOD0(getDeviceClipBounds, SkIRect());
   MOCK_CONST_METHOD1(getDeviceClipBounds, bool(SkIRect* bounds));
   MOCK_METHOD2(drawColor, void(SkColor4f color, SkBlendMode mode));
-  MOCK_METHOD1(clearInt, void(SkColor color));
   MOCK_METHOD1(clear, void(SkColor4f color));
   MOCK_METHOD5(drawLine,
                void(SkScalar x0,
@@ -93,6 +92,11 @@ class MockPaintCanvas : public cc::PaintCanvas {
                     const SkSamplingOptions&,
                     const cc::PaintFlags* flags,
                     SkCanvas::SrcRectConstraint constraint));
+  MOCK_METHOD4(drawVertices,
+               void(scoped_refptr<cc::RefCountedBuffer<SkPoint>> vertices,
+                    scoped_refptr<cc::RefCountedBuffer<SkPoint>> uvs,
+                    scoped_refptr<cc::RefCountedBuffer<uint16_t>> indices,
+                    const cc::PaintFlags& flags));
   MOCK_METHOD6(drawSkottie,
                void(scoped_refptr<cc::SkottieWrapper> skottie,
                     const SkRect& dst,
@@ -117,10 +121,7 @@ class MockPaintCanvas : public cc::PaintCanvas {
                     cc::NodeId node_id,
                     const cc::PaintFlags& flags));
 
-  MOCK_METHOD1(drawPicture, void(sk_sp<const PaintRecord> record));
-  MOCK_CONST_METHOD0(isClipEmpty, bool());
-  MOCK_CONST_METHOD0(isClipRect, bool());
-  MOCK_CONST_METHOD0(getTotalMatrix, SkMatrix());
+  MOCK_METHOD1(drawPicture, void(PaintRecord record));
   MOCK_CONST_METHOD0(getLocalToDevice, SkM44());
 
   MOCK_METHOD3(Annotate,

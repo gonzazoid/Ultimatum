@@ -16,16 +16,21 @@ namespace display {
 
 struct DISPLAY_TYPES_EXPORT DisplayConfigurationParams {
   DisplayConfigurationParams();
-  DisplayConfigurationParams(DisplayConfigurationParams& other);
+  DisplayConfigurationParams(const DisplayConfigurationParams& other);
   DisplayConfigurationParams(DisplayConfigurationParams&& other);
   DisplayConfigurationParams(int64_t id,
                              const gfx::Point& origin,
                              const display::DisplayMode* pmode);
+  DisplayConfigurationParams(int64_t id,
+                             const gfx::Point& origin,
+                             const display::DisplayMode* pmode,
+                             bool enable_vrr);
   ~DisplayConfigurationParams();
 
   int64_t id = 0;
   gfx::Point origin = gfx::Point();
   absl::optional<std::unique_ptr<display::DisplayMode>> mode = absl::nullopt;
+  bool enable_vrr = false;
 };
 
 }  // namespace display

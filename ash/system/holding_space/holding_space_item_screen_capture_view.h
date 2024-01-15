@@ -6,14 +6,10 @@
 #define ASH_SYSTEM_HOLDING_SPACE_HOLDING_SPACE_ITEM_SCREEN_CAPTURE_VIEW_H_
 
 #include "ash/ash_export.h"
-#include "ash/public/cpp/holding_space/holding_space_image.h"
 #include "ash/system/holding_space/holding_space_item_view.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/views/metadata/view_factory.h"
-
-namespace views {
-class ImageView;
-}  // namespace views
 
 namespace ash {
 
@@ -23,9 +19,9 @@ class RoundedImageView;
 
 class ASH_EXPORT HoldingSpaceItemScreenCaptureView
     : public HoldingSpaceItemView {
- public:
-  METADATA_HEADER(HoldingSpaceItemScreenCaptureView);
+  METADATA_HEADER(HoldingSpaceItemScreenCaptureView, HoldingSpaceItemView)
 
+ public:
   HoldingSpaceItemScreenCaptureView(HoldingSpaceViewDelegate* delegate,
                                     const HoldingSpaceItem* item);
   HoldingSpaceItemScreenCaptureView(const HoldingSpaceItemScreenCaptureView&) =
@@ -45,9 +41,7 @@ class ASH_EXPORT HoldingSpaceItemScreenCaptureView
   void UpdateImage();
 
   // Owned by view hierarchy.
-  views::View* border_ = nullptr;
-  RoundedImageView* image_ = nullptr;
-  views::ImageView* play_icon_ = nullptr;
+  raw_ptr<RoundedImageView> image_ = nullptr;
 
   base::CallbackListSubscription image_skia_changed_subscription_;
 };

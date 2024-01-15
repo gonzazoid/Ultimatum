@@ -9,13 +9,18 @@
 
 #include "ash/components/arc/session/arc_bridge_service.h"
 #include "ash/components/arc/session/arc_service_manager.h"
+#include "ash/components/arc/session/arc_session_runner.h"
 #include "ash/components/arc/session/connection_holder.h"
+#include "ash/components/arc/test/fake_arc_session.h"
 #include "ash/components/arc/test/fake_policy_instance.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
-#include "base/run_loop.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
+#include "base/test/test_future.h"
 #include "base/time/time.h"
 #include "chrome/browser/ash/arc/policy/arc_policy_bridge.h"
+#include "chrome/browser/ash/arc/session/arc_session_manager.h"
+#include "chrome/browser/ash/arc/test/test_arc_session_manager.h"
 #include "chrome/test/base/testing_profile.h"
 #include "components/policy/core/common/remote_commands/remote_command_job.h"
 #include "components/policy/proto/device_management_backend.pb.h"
@@ -64,17 +69,22 @@ class UserCommandArcJobTest : public testing::Test {
   // (because BrowserContextKeyedServices are destroyed together with Profile,
   // and ArcPolicyBridge is such a service).
   const std::unique_ptr<arc::ArcServiceManager> arc_service_manager_;
+  std::unique_ptr<arc::ArcSessionManager> arc_session_manager_;
   const std::unique_ptr<TestingProfile> profile_;
-  arc::ArcPolicyBridge* const arc_policy_bridge_;
-  const std::unique_ptr<arc::FakePolicyInstance> policy_instance_;
+  raw_ptr<arc::ArcPolicyBridge> arc_policy_bridge_;
+  std::unique_ptr<arc::FakePolicyInstance> policy_instance_;
 };
 
 UserCommandArcJobTest::UserCommandArcJobTest()
     : arc_service_manager_(std::make_unique<arc::ArcServiceManager>()),
-      profile_(std::make_unique<TestingProfile>()),
-      arc_policy_bridge_(
-          arc::ArcPolicyBridge::GetForBrowserContextForTesting(profile_.get())),
-      policy_instance_(std::make_unique<arc::FakePolicyInstance>()) {
+      profile_(std::make_unique<TestingProfile>()) {
+  ash::ConciergeClient::InitializeFake(nullptr);
+  arc_session_manager_ =
+      CreateTestArcSessionManager(std::make_unique<arc::ArcSessionRunner>(
+          base::BindRepeating(arc::FakeArcSession::Create)));
+  arc_policy_bridge_ =
+      arc::ArcPolicyBridge::GetForBrowserContextForTesting(profile_.get());
+  policy_instance_ = std::make_unique<arc::FakePolicyInstance>();
   arc_service_manager_->arc_bridge_service()->policy()->SetInstance(
       policy_instance_.get());
 }
@@ -88,20 +98,12 @@ TEST_F(UserCommandArcJobTest, TestPayloadReceiving) {
   const std::string kPayload = "testing payload";
   std::unique_ptr<RemoteCommandJob> job =
       CreateArcJob(profile_.get(), base::TimeTicks::Now(), kPayload);
-  base::RunLoop run_loop;
-
-  auto check_result_callback = base::BindOnce(
-      [](base::RunLoop* run_loop, RemoteCommandJob* job,
-         arc::FakePolicyInstance* policy_instance,
-         std::string expected_payload) {
-        EXPECT_EQ(RemoteCommandJob::SUCCEEDED, job->status());
-        EXPECT_EQ(expected_payload, policy_instance->command_payload());
-        run_loop->Quit();
-      },
-      &run_loop, job.get(), policy_instance_.get(), kPayload);
+  base::test::TestFuture<void> job_finished_future;
   EXPECT_TRUE(job->Run(base::Time::Now(), base::TimeTicks::Now(),
-                       std::move(check_result_callback)));
-  run_loop.Run();
+                       job_finished_future.GetCallback()));
+  ASSERT_TRUE(job_finished_future.Wait()) << "Job did not finish.";
+  EXPECT_EQ(RemoteCommandJob::SUCCEEDED, job->status());
+  EXPECT_EQ(kPayload, policy_instance_->command_payload());
 }
 
 }  // namespace policy

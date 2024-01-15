@@ -4,17 +4,16 @@
 
 #include "chrome/updater/policy/manager.h"
 
+#include <optional>
 #include <string>
 #include <vector>
 
+#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/time/time.h"
 #include "chrome/updater/constants.h"
 
 namespace updater {
-
-UpdatesSuppressedTimes::UpdatesSuppressedTimes() = default;
-
-UpdatesSuppressedTimes::~UpdatesSuppressedTimes() = default;
 
 bool UpdatesSuppressedTimes::operator==(
     const UpdatesSuppressedTimes& other) const {
@@ -56,36 +55,35 @@ class DefaultValuesPolicyManager : public PolicyManagerInterface {
   DefaultValuesPolicyManager(const DefaultValuesPolicyManager&) = delete;
   DefaultValuesPolicyManager& operator=(const DefaultValuesPolicyManager&) =
       delete;
-  ~DefaultValuesPolicyManager() override;
 
   std::string source() const override;
 
   bool HasActiveDevicePolicies() const override;
 
-  bool GetLastCheckPeriodMinutes(int* minutes) const override;
-  bool GetUpdatesSuppressedTimes(
-      UpdatesSuppressedTimes* suppressed_times) const override;
-  bool GetDownloadPreferenceGroupPolicy(
-      std::string* download_preference) const override;
-  bool GetPackageCacheSizeLimitMBytes(int* cache_size_limit) const override;
-  bool GetPackageCacheExpirationTimeDays(int* cache_life_limit) const override;
+  std::optional<base::TimeDelta> GetLastCheckPeriod() const override;
+  std::optional<UpdatesSuppressedTimes> GetUpdatesSuppressedTimes()
+      const override;
+  std::optional<std::string> GetDownloadPreference() const override;
+  std::optional<int> GetPackageCacheSizeLimitMBytes() const override;
+  std::optional<int> GetPackageCacheExpirationTimeDays() const override;
+  std::optional<int> GetEffectivePolicyForAppInstalls(
+      const std::string& app_id) const override;
+  std::optional<int> GetEffectivePolicyForAppUpdates(
+      const std::string& app_id) const override;
+  std::optional<std::string> GetTargetVersionPrefix(
+      const std::string& app_id) const override;
+  std::optional<bool> IsRollbackToTargetVersionAllowed(
+      const std::string& app_id) const override;
+  std::optional<std::string> GetProxyMode() const override;
+  std::optional<std::string> GetProxyPacUrl() const override;
+  std::optional<std::string> GetProxyServer() const override;
+  std::optional<std::string> GetTargetChannel(
+      const std::string& app_id) const override;
+  std::optional<std::vector<std::string>> GetForceInstallApps() const override;
+  std::optional<std::vector<std::string>> GetAppsWithPolicy() const override;
 
-  bool GetEffectivePolicyForAppInstalls(const std::string& app_id,
-                                        int* install_policy) const override;
-  bool GetEffectivePolicyForAppUpdates(const std::string& app_id,
-                                       int* update_policy) const override;
-  bool GetTargetVersionPrefix(
-      const std::string& app_id,
-      std::string* target_version_prefix) const override;
-  bool IsRollbackToTargetVersionAllowed(const std::string& app_id,
-                                        bool* rollback_allowed) const override;
-  bool GetProxyMode(std::string* proxy_mode) const override;
-  bool GetProxyPacUrl(std::string* proxy_pac_url) const override;
-  bool GetProxyServer(std::string* proxy_server) const override;
-  bool GetTargetChannel(const std::string& app_id,
-                        std::string* channel) const override;
-  bool GetForceInstallApps(
-      std::vector<std::string>* force_install_apps) const override;
+ private:
+  ~DefaultValuesPolicyManager() override;
 };
 
 DefaultValuesPolicyManager::DefaultValuesPolicyManager() = default;
@@ -97,87 +95,84 @@ bool DefaultValuesPolicyManager::HasActiveDevicePolicies() const {
 }
 
 std::string DefaultValuesPolicyManager::source() const {
-  return std::string("default");
+  return kSourceDefaultValuesPolicyManager;
 }
 
-bool DefaultValuesPolicyManager::GetLastCheckPeriodMinutes(int* minutes) const {
-  *minutes = kDefaultLastCheckPeriod.InMinutes();
-  return true;
+std::optional<base::TimeDelta> DefaultValuesPolicyManager::GetLastCheckPeriod()
+    const {
+  return kDefaultLastCheckPeriod;
 }
 
-bool DefaultValuesPolicyManager::GetUpdatesSuppressedTimes(
-    UpdatesSuppressedTimes* suppressed_times) const {
+std::optional<UpdatesSuppressedTimes>
+DefaultValuesPolicyManager::GetUpdatesSuppressedTimes() const {
+  return std::nullopt;
+}
+
+std::optional<std::string> DefaultValuesPolicyManager::GetDownloadPreference()
+    const {
+  return std::nullopt;
+}
+
+std::optional<int> DefaultValuesPolicyManager::GetPackageCacheSizeLimitMBytes()
+    const {
+  return std::nullopt;
+}
+
+std::optional<int>
+DefaultValuesPolicyManager::GetPackageCacheExpirationTimeDays() const {
+  return std::nullopt;
+}
+
+std::optional<int> DefaultValuesPolicyManager::GetEffectivePolicyForAppInstalls(
+    const std::string& app_id) const {
+  return kInstallPolicyDefault;
+}
+
+std::optional<int> DefaultValuesPolicyManager::GetEffectivePolicyForAppUpdates(
+    const std::string& app_id) const {
+  return kUpdatePolicyDefault;
+}
+
+std::optional<std::string> DefaultValuesPolicyManager::GetTargetVersionPrefix(
+    const std::string& app_id) const {
+  return std::nullopt;
+}
+
+std::optional<bool>
+DefaultValuesPolicyManager::IsRollbackToTargetVersionAllowed(
+    const std::string& app_id) const {
   return false;
 }
 
-bool DefaultValuesPolicyManager::GetDownloadPreferenceGroupPolicy(
-    std::string* download_preference) const {
-  return false;
+std::optional<std::string> DefaultValuesPolicyManager::GetProxyMode() const {
+  return std::nullopt;
 }
 
-bool DefaultValuesPolicyManager::GetPackageCacheSizeLimitMBytes(
-    int* cache_size_limit) const {
-  return false;
+std::optional<std::string> DefaultValuesPolicyManager::GetProxyPacUrl() const {
+  return std::nullopt;
 }
 
-bool DefaultValuesPolicyManager::GetPackageCacheExpirationTimeDays(
-    int* cache_life_limit) const {
-  return false;
+std::optional<std::string> DefaultValuesPolicyManager::GetProxyServer() const {
+  return std::nullopt;
 }
 
-bool DefaultValuesPolicyManager::GetEffectivePolicyForAppInstalls(
-    const std::string& app_id,
-    int* install_policy) const {
-  *install_policy = kInstallPolicyDefault;
-  return true;
+std::optional<std::string> DefaultValuesPolicyManager::GetTargetChannel(
+    const std::string& app_id) const {
+  return std::nullopt;
 }
 
-bool DefaultValuesPolicyManager::GetEffectivePolicyForAppUpdates(
-    const std::string& app_id,
-    int* update_policy) const {
-  *update_policy = kUpdatePolicyDefault;
-  return true;
+std::optional<std::vector<std::string>>
+DefaultValuesPolicyManager::GetForceInstallApps() const {
+  return std::nullopt;
 }
 
-bool DefaultValuesPolicyManager::GetTargetVersionPrefix(
-    const std::string& app_id,
-    std::string* target_version_prefix) const {
-  return false;
+std::optional<std::vector<std::string>>
+DefaultValuesPolicyManager::GetAppsWithPolicy() const {
+  return std::nullopt;
 }
 
-bool DefaultValuesPolicyManager::IsRollbackToTargetVersionAllowed(
-    const std::string& app_id,
-    bool* rollback_allowed) const {
-  *rollback_allowed = false;
-  return true;
-}
-
-bool DefaultValuesPolicyManager::GetProxyMode(std::string* proxy_mode) const {
-  return false;
-}
-
-bool DefaultValuesPolicyManager::GetProxyPacUrl(
-    std::string* proxy_pac_url) const {
-  return false;
-}
-
-bool DefaultValuesPolicyManager::GetProxyServer(
-    std::string* proxy_server) const {
-  return false;
-}
-
-bool DefaultValuesPolicyManager::GetTargetChannel(const std::string& app_id,
-                                                  std::string* channel) const {
-  return false;
-}
-
-bool DefaultValuesPolicyManager::GetForceInstallApps(
-    std::vector<std::string>* /* force_install_apps */) const {
-  return false;
-}
-
-std::unique_ptr<PolicyManagerInterface> GetDefaultValuesPolicyManager() {
-  return std::make_unique<DefaultValuesPolicyManager>();
+scoped_refptr<PolicyManagerInterface> GetDefaultValuesPolicyManager() {
+  return base::MakeRefCounted<DefaultValuesPolicyManager>();
 }
 
 }  // namespace updater

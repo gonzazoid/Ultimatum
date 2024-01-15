@@ -40,6 +40,7 @@ class Component final : public GarbageCollected<Component> {
     kSearch,
     kHash,
   };
+  Type type() const { return type_; }
 
   // A utility function that takes a given `pattern` and compiles it into a
   // Component structure.  If the `pattern` is null, then it will be defaulted
@@ -47,7 +48,8 @@ class Component final : public GarbageCollected<Component> {
   // compiled for.  This will select the correct encoding callback,
   // liburlpattern options, and populate errors messages with the correct
   // component string.
-  static Component* Compile(StringView pattern,
+  static Component* Compile(v8::Isolate* isolate,
+                            StringView pattern,
                             Type type,
                             Component* protocol_component,
                             const URLPatternOptions& external_options,
@@ -83,6 +85,12 @@ class Component final : public GarbageCollected<Component> {
   // treated as a "standard" URL like `https://foo` vs a "path" URL like
   // `data:foo`.  This should only be called for kProtocol components.
   bool ShouldTreatAsStandardURL() const;
+
+  // Returns if this component has at least one part that uses an ECMAScript
+  // regular expression.
+  bool HasRegExpGroups() const { return pattern_.HasRegexGroups(); }
+
+  const std::vector<liburlpattern::Part>& PartList() const;
 
   void Trace(Visitor* visitor) const;
 

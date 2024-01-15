@@ -7,7 +7,9 @@
 #include <string>
 
 #include "base/android/build_info.h"
+#include "base/functional/callback_helpers.h"
 #include "base/lazy_instance.h"
+#include "base/metrics/histogram_macros.h"
 #include "components/viz/common/features.h"
 #include "gpu/config/gpu_finch_features.h"
 #include "ui/gl/gl_bindings.h"
@@ -49,7 +51,6 @@ class AppContextSurface {
   AppContextSurface& operator=(const AppContextSurface&) = delete;
 
   void MakeCurrent() { context_->MakeCurrent(surface_.get()); }
-  void ReleaseCurrent() { context_->ReleaseCurrent(surface_.get()); }
 
  private:
   scoped_refptr<gl::GLSurface> surface_;
@@ -181,6 +182,15 @@ ScopedAppGLStateRestoreImpl::ScopedAppGLStateRestoreImpl(
 }
 
 void ScopedAppGLStateRestoreImpl::SaveHWUIState(bool save_restore) {
+  base::ScopedClosureRunner uma_runner(base::BindOnce(
+      [](base::TimeTicks start_time) {
+        UMA_HISTOGRAM_CUSTOM_MICROSECONDS_TIMES(
+            "Android.WebView.Gfx.SaveHWUIStateNonANGLEMicroseconds",
+            base::TimeTicks::Now() - start_time, base::Microseconds(1),
+            base::Seconds(1), 100);
+      },
+      base::TimeTicks::Now()));
+
   if (g_supports_arm_shader_framebuffer_fetch)
     glGetBooleanv(GL_FETCH_PER_SAMPLE_ARM, &fetch_per_sample_arm_enabled_);
 
@@ -274,7 +284,7 @@ void ScopedAppGLStateRestoreImpl::SaveHWUIState(bool save_restore) {
     glGetVertexAttribiv(i, GL_VERTEX_ATTRIB_ARRAY_STRIDE,
                         &vertex_attrib_[i].stride);
     glGetVertexAttribPointerv(i, GL_VERTEX_ATTRIB_ARRAY_POINTER,
-                              &vertex_attrib_[i].pointer);
+                              &vertex_attrib_[i].pointer.AsEphemeralRawAddr());
     glGetVertexAttribfv(i, GL_CURRENT_VERTEX_ATTRIB,
                         vertex_attrib_[i].current_vertex_attrib);
   }
@@ -299,9 +309,6 @@ void ScopedAppGLStateRestoreImpl::RestoreHWUIState(bool save_restore) {
   // restored.
   if (gl::g_current_gl_driver->fn.glWindowRectanglesEXTFn)
     glWindowRectanglesEXT(GL_EXCLUSIVE_EXT, 0, nullptr);
-
-  if (gl::g_current_gl_driver->fn.glCoverageModulationNVFn)
-    glCoverageModulationNV(GL_NONE);
 
   if (g_supports_arm_shader_framebuffer_fetch)
     GLEnableDisable(GL_FETCH_PER_SAMPLE_ARM, fetch_per_sample_arm_enabled_);
@@ -331,8 +338,7 @@ void ScopedAppGLStateRestoreImpl::RestoreHWUIState(bool save_restore) {
     return;
   }
 
-  if (!save_restore)
-    return;
+  DCHECK(save_restore);
 
   glBindFramebufferEXT(GL_FRAMEBUFFER, framebuffer_binding_ext_);
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, index_array_buffer_binding_);

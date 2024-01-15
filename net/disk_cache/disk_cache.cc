@@ -5,16 +5,16 @@
 #include <utility>
 
 #include "base/barrier_closure.h"
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/metrics/field_trial.h"
 #include "base/task/bind_post_task.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/task/thread_pool/thread_pool_instance.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "build/build_config.h"
 #include "net/base/cache_type.h"
 #include "net/base/net_errors.h"
@@ -30,6 +30,8 @@
 namespace {
 
 using FileEnumerator = disk_cache::BackendFileOperations::FileEnumerator;
+using ApplicationStatusListenerGetter =
+    disk_cache::ApplicationStatusListenerGetter;
 
 // Builds an instance of the backend depending on platform, type, experiments
 // etc. Takes care of the retry state. This object will self-destroy when
@@ -44,7 +46,7 @@ class CacheCreator {
                scoped_refptr<disk_cache::BackendFileOperationsFactory>
                    file_operations_factory,
 #if BUILDFLAG(IS_ANDROID)
-               base::android::ApplicationStatusListener* app_status_listener,
+               ApplicationStatusListenerGetter app_status_listener_getter,
 #endif
                net::NetLog* net_log,
                base::OnceClosure post_cleanup_callback,
@@ -81,7 +83,7 @@ class CacheCreator {
       file_operations_factory_;
   std::unique_ptr<disk_cache::BackendFileOperations> file_operations_;
 #if BUILDFLAG(IS_ANDROID)
-  raw_ptr<base::android::ApplicationStatusListener> app_status_listener_;
+  ApplicationStatusListenerGetter app_status_listener_getter_;
 #endif
   base::OnceClosure post_cleanup_callback_;
   disk_cache::BackendResultCallback callback_;
@@ -98,7 +100,7 @@ CacheCreator::CacheCreator(
     net::BackendType backend_type,
     scoped_refptr<disk_cache::BackendFileOperationsFactory> file_operations,
 #if BUILDFLAG(IS_ANDROID)
-    base::android::ApplicationStatusListener* app_status_listener,
+    ApplicationStatusListenerGetter app_status_listener_getter,
 #endif
     net::NetLog* net_log,
     base::OnceClosure post_cleanup_callback,
@@ -110,7 +112,7 @@ CacheCreator::CacheCreator(
       backend_type_(backend_type),
       file_operations_factory_(std::move(file_operations)),
 #if BUILDFLAG(IS_ANDROID)
-      app_status_listener_(app_status_listener),
+      app_status_listener_getter_(std::move(app_status_listener_getter)),
 #endif
       post_cleanup_callback_(std::move(post_cleanup_callback)),
       callback_(std::move(callback)),
@@ -128,7 +130,7 @@ net::Error CacheCreator::Run() {
   if (!retry_ && reset_handling_ == disk_cache::ResetHandling::kReset) {
     // Pretend that we failed to create a cache, so that we can handle `kReset`
     // and `kResetOnError` in a unified way, in CacheCreator::OnIOComplete.
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(&CacheCreator::OnIOComplete,
                                   base::Unretained(this), net::ERR_FAILED));
     return net::ERR_IO_PENDING;
@@ -142,8 +144,9 @@ net::Error CacheCreator::Run() {
     disk_cache::SimpleBackendImpl* simple_cache = cache.get();
     created_cache_ = std::move(cache);
 #if BUILDFLAG(IS_ANDROID)
-    if (app_status_listener_)
-      simple_cache->set_app_status_listener(app_status_listener_);
+    if (app_status_listener_getter_) {
+      simple_cache->set_app_status_listener_getter(app_status_listener_getter_);
+    }
 #endif
     simple_cache->Init(
         base::BindOnce(&CacheCreator::OnIOComplete, base::Unretained(this)));
@@ -227,7 +230,7 @@ void CacheCreator::OnIOComplete(int result) {
   if (!file_operations_) {
     if (file_operations_factory_) {
       file_operations_ = file_operations_factory_->Create(
-          base::SequencedTaskRunnerHandle::Get());
+          base::SequencedTaskRunner::GetCurrentDefault());
     } else {
       file_operations_ = std::make_unique<disk_cache::TrivialFileOperations>();
     }
@@ -315,7 +318,7 @@ BackendResult CreateCacheBackendImpl(
     int64_t max_bytes,
     ResetHandling reset_handling,
 #if BUILDFLAG(IS_ANDROID)
-    base::android::ApplicationStatusListener* app_status_listener,
+    ApplicationStatusListenerGetter app_status_listener_getter,
 #endif
     net::NetLog* net_log,
     base::OnceClosure post_cleanup_callback,
@@ -331,7 +334,7 @@ BackendResult CreateCacheBackendImpl(
       return BackendResult::Make(std::move(mem_backend_impl));
     } else {
       if (!post_cleanup_callback.is_null())
-        base::SequencedTaskRunnerHandle::Get()->PostTask(
+        base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
             FROM_HERE, std::move(post_cleanup_callback));
       return BackendResult::MakeError(net::ERR_FAILED);
     }
@@ -342,7 +345,7 @@ BackendResult CreateCacheBackendImpl(
       path, reset_handling, max_bytes, type, backend_type,
       std::move(file_operations),
 #if BUILDFLAG(IS_ANDROID)
-      std::move(app_status_listener),
+      std::move(app_status_listener_getter),
 #endif
       net_log, std::move(post_cleanup_callback), std::move(callback));
   if (type == net::DISK_CACHE) {
@@ -365,26 +368,26 @@ BackendResult CreateCacheBackend(
   return CreateCacheBackendImpl(type, backend_type, std::move(file_operations),
                                 path, max_bytes, reset_handling,
 #if BUILDFLAG(IS_ANDROID)
-                                nullptr,
+                                ApplicationStatusListenerGetter(),
 #endif
                                 net_log, base::OnceClosure(),
                                 std::move(callback));
 }
 
 #if BUILDFLAG(IS_ANDROID)
-NET_EXPORT BackendResult CreateCacheBackend(
-    net::CacheType type,
-    net::BackendType backend_type,
-    scoped_refptr<BackendFileOperationsFactory> file_operations,
-    const base::FilePath& path,
-    int64_t max_bytes,
-    ResetHandling reset_handling,
-    net::NetLog* net_log,
-    BackendResultCallback callback,
-    base::android::ApplicationStatusListener* app_status_listener) {
+NET_EXPORT BackendResult
+CreateCacheBackend(net::CacheType type,
+                   net::BackendType backend_type,
+                   scoped_refptr<BackendFileOperationsFactory> file_operations,
+                   const base::FilePath& path,
+                   int64_t max_bytes,
+                   ResetHandling reset_handling,
+                   net::NetLog* net_log,
+                   BackendResultCallback callback,
+                   ApplicationStatusListenerGetter app_status_listener_getter) {
   return CreateCacheBackendImpl(type, backend_type, std::move(file_operations),
                                 path, max_bytes, reset_handling,
-                                std::move(app_status_listener), net_log,
+                                std::move(app_status_listener_getter), net_log,
                                 base::OnceClosure(), std::move(callback));
 }
 #endif
@@ -402,7 +405,7 @@ BackendResult CreateCacheBackend(
   return CreateCacheBackendImpl(type, backend_type, std::move(file_operations),
                                 path, max_bytes, reset_handling,
 #if BUILDFLAG(IS_ANDROID)
-                                nullptr,
+                                ApplicationStatusListenerGetter(),
 #endif
                                 net_log, std::move(post_cleanup_callback),
                                 std::move(callback));
@@ -421,8 +424,7 @@ void FlushCacheThreadAsynchronouslyForTesting(base::OnceClosure callback) {
 
   // For simple backend.
   base::ThreadPoolInstance::Get()->FlushAsyncForTesting(  // IN-TEST
-      base::BindPostTask(base::SequencedTaskRunnerHandle::Get(),
-                         repeating_callback));
+      base::BindPostTaskToCurrentDefault(repeating_callback));
 
   // Block backend.
   BackendImpl::FlushAsynchronouslyForTesting(repeating_callback);
@@ -631,7 +633,7 @@ void TrivialFileOperations::CleanupDirectory(
 
   // This is needed for some unittests.
   if (path.empty()) {
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(callback), false));
     return;
   }

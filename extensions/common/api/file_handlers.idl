@@ -26,8 +26,9 @@
   // A FileHandler registers the ability to read, stream, or edit files of given
   // MIME types and/or file extensions.
   dictionary FileHandler {
-    // TODO(crbug.com/1362192): Include `accept` as an object or any. It is a
-    // dictionary mapping MIME types to extensions.
+    // A mapping of one or more MIME types to one or more file extensions.
+    // e.g. "accept": {"text/csv": ".csv"} or {"text/csv": [".csv", ".txt"]}.
+    object accept;
 
     // Specifies the url after the origin that is the navigation destination for
     // file handling launches.
@@ -36,11 +37,14 @@
     // Description of the file type.
     DOMString name;
 
-    // Array of ImageResources.
+    // Array of ImageResources. Only icons declared at the manifest level are
+    // currently supported. The icon for the extension will appear in the "Open"
+    // menu.
     Icon[]? icons;
 
     // Whether multiple files should be opened in a single client or multiple.
-    // Defaults to `single-client`.
+    // Defaults to `single-client`, which makes all files available in only one
+    // tab. `multiple-client` opens a new tab for each file.
     DOMString? launch_type;
   };
 

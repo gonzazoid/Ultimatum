@@ -8,6 +8,7 @@ import "mojo/public/mojom/base/file_path.mojom";
 import "mojo/public/mojom/base/string16.mojom";
 import "mojo/public/mojom/base/values.mojom";
 import "skia/public/mojom/bitmap.mojom";
+import "third_party/blink/public/mojom/lcp_critical_path_predictor/lcp_critical_path_predictor.mojom"; // presubmit: ignore-long-line
 import "third_party/blink/public/mojom/permissions/permission_status.mojom";
 import "third_party/blink/public/mojom/webpreferences/web_preferences.mojom";
 import "ui/gfx/geometry/mojom/geometry.mojom";
@@ -121,11 +122,16 @@ interface WebTestRenderFrame {
   // Notifies a frame that has been restored from backward/forward cache.
   // This is called on main frames to add them to TestRunner's management list.
   OnReactivated();
-};
 
-// Web test messages related runtime flags sent from the browser process to the
-// renderer. This interface is associated with RenderProcessHost.
-interface WebTestRenderThread {
+  // Prevents a new test from being run by blocking parsing. Parsing will
+  // resume when StartTest is called.
+  BlockTestUntilStart();
+
+  // Notifies the frame that the browser has fully completed any
+  // potentially-renderer-visible changes it needed to make. The frame may now
+  // perform any initialization and start running the test.
+  StartTest();
+
   // Sets up a renderer in a window other than the main test window. This may
   // be for a window opened by javascript (window.open()) or by the test harness
   // (devtools inspector). This should be called as early as possible (as soon
@@ -225,9 +231,9 @@ interface WebTestControlHost {
   // Trigger a loadURL navigation on the main WebView.
   LoadURLForFrame(url.mojom.Url url, string frame_name);
 
-  // Mark the orientation changed in the browser process for the layout tests
+  // Simulate an orientation change in the browser process for the layout tests
   // that request fullscreen on screen orientation change.
-  SetScreenOrientationChanged();
+  SimulateScreenOrientationChanged();
 
   // Sets the permission for |name| to |status| when queried or requested in
   // |origin| from |embedding_origin|.
@@ -337,4 +343,16 @@ interface WebTestControlHost {
 
   // Disable Auto Resize mode, resizing the contents to `new_size`.
   DisableAutoResize(gfx.mojom.Size new_size);
+};
+
+// Web test messages sent from the renderer process to the browser.
+// This provides a message pipe from each renderer to the global
+// WebTestControlHost in the browser.
+// This is very similar to WebTestControlHost, but the interface is not
+// associated to the legacy IPC channel, so can be used from mojo JS binding
+// directly.
+interface NonAssociatedWebTestControlHost {
+  // Provide the specified LCPP navigation time hint to next navigation.
+  SetLCPPNavigationHint(
+      blink.mojom.LCPCriticalPathPredictorNavigationTimeHint hint);
 };

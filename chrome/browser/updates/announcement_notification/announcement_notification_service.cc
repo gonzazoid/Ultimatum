@@ -4,12 +4,11 @@
 
 #include "chrome/browser/updates/announcement_notification/announcement_notification_service.h"
 
-#include "base/bind.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/metrics/field_trial_params.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/clock.h"
 #include "base/time/time.h"
 #include "chrome/browser/browser_process.h"
@@ -193,8 +192,8 @@ class AnnouncementNotificationServiceImpl
     return entry && entry->GetSigninState() != SigninState::kNotSignedIn;
   }
 
-  raw_ptr<Profile> profile_;
-  raw_ptr<PrefService> pref_service_;
+  raw_ptr<Profile, DanglingUntriaged> profile_;
+  raw_ptr<PrefService, DanglingUntriaged> pref_service_;
   std::unique_ptr<Delegate> delegate_;
   raw_ptr<base::Clock> clock_;
 
@@ -241,13 +240,13 @@ void AnnouncementNotificationService::RegisterProfilePrefs(
 }
 
 // static
-AnnouncementNotificationService* AnnouncementNotificationService::Create(
-    Profile* profile,
-    PrefService* pref_service,
-    std::unique_ptr<Delegate> delegate,
-    base::Clock* clock) {
-  return new AnnouncementNotificationServiceImpl(profile, pref_service,
-                                                 std::move(delegate), clock);
+std::unique_ptr<AnnouncementNotificationService>
+AnnouncementNotificationService::Create(Profile* profile,
+                                        PrefService* pref_service,
+                                        std::unique_ptr<Delegate> delegate,
+                                        base::Clock* clock) {
+  return std::make_unique<AnnouncementNotificationServiceImpl>(
+      profile, pref_service, std::move(delegate), clock);
 }
 
 // static

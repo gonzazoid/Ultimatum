@@ -10,8 +10,8 @@
 #include "base/strings/stringprintf.h"
 #include "base/time/time.h"
 #include "base/values.h"
-#include "components/policy/core/browser/browser_policy_connector.h"
 #include "components/policy/core/common/policy_switches.h"
+#include "components/signin/public/identity_manager/account_managed_status_finder.h"
 #include "google_apis/gaia/gaia_constants.h"
 #include "google_apis/gaia/gaia_urls.h"
 #include "google_apis/gaia/google_service_auth_error.h"
@@ -54,11 +54,9 @@ constexpr net::NetworkTrafficAnnotationTag kAnnotation =
     }
     policy {
       cookies_allowed: NO
-      chrome_policy {
-        SigninInterceptionEnabled {
-          SigninInterceptionEnabled: false
-        }
-      }
+      policy_exception_justification:
+          "No policy. The operation is only triggered by a user signing "
+          "into a managed account, and there is no policy to opt out"
     })");
 
 std::unique_ptr<network::SimpleURLLoader> CreateUrlLoader(
@@ -112,10 +110,12 @@ void UserCloudSigninRestrictionPolicyFetcher::GetSecondaryGoogleAccountUsage(
   DCHECK(callback);
   DCHECK(!callback_) << "A request is already in progress";
   callback_ = std::move(callback);
-  if (policy::BrowserPolicyConnector::IsNonEnterpriseUser(email_)) {
+  if (signin::AccountManagedStatusFinder::IsEnterpriseUserBasedOnEmail(
+          email_) == signin::AccountManagedStatusFinder::EmailEnterpriseStatus::
+                         kKnownNonEnterprise) {
     // Non Enterprise accounts do not have restrictions.
     std::move(callback_).Run(/*status=*/Status::kUnsupportedAccountTypeError,
-                             /*policy=*/absl::nullopt,
+                             /*policy=*/std::nullopt,
                              /*domain=*/std::string());
     return;
   }
@@ -144,7 +144,7 @@ void UserCloudSigninRestrictionPolicyFetcher::OnGetTokenFailure(
   LOG(ERROR) << "Failed to fetch access token for consumer: "
              << GetConsumerName() << " with error: " << error.ToString();
   std::move(callback_).Run(/*status=*/Status::kGetTokenError,
-                           /*policy=*/absl::nullopt,
+                           /*policy=*/std::nullopt,
                            /*domain=*/std::string());
 }
 
@@ -167,7 +167,7 @@ void UserCloudSigninRestrictionPolicyFetcher::OnGetUserInfoSuccess(
     // Non Enterprise accounts do not have restrictions.
     DVLOG(1) << "User account is not an Enterprise account";
     std::move(callback_).Run(/*status=*/Status::kUnsupportedAccountTypeError,
-                             /*policy=*/absl::nullopt,
+                             /*policy=*/std::nullopt,
                              /*domain=*/std::string());
   }
 }
@@ -176,7 +176,7 @@ void UserCloudSigninRestrictionPolicyFetcher::OnGetUserInfoFailure(
     const GoogleServiceAuthError& error) {
   LOG(ERROR) << "Failed to fetch user info: " << error.ToString();
   std::move(callback_).Run(/*status=*/Status::kGetUserInfoError,
-                           /*policy=*/absl::nullopt,
+                           /*policy=*/std::nullopt,
                            /*domain=*/std::string());
 }
 
@@ -203,12 +203,12 @@ void UserCloudSigninRestrictionPolicyFetcher::
   base::UmaHistogramMediumTimes(
       kSecondaryGoogleAccountUsageLatencyHistogramName,
       base::TimeTicks::Now() - policy_fetch_start_time_);
-  absl::optional<std::string> restriction;
+  std::optional<std::string> restriction;
   Status status = Status::kUnknownError;
   std::unique_ptr<network::SimpleURLLoader> url_loader = std::move(url_loader_);
 
   GoogleServiceAuthError error = GoogleServiceAuthError::AuthErrorNone();
-  absl::optional<int> response_code;
+  std::optional<int> response_code;
   if (url_loader->ResponseInfo() && url_loader->ResponseInfo()->headers)
     response_code = url_loader->ResponseInfo()->headers->response_code();
 
@@ -234,7 +234,7 @@ void UserCloudSigninRestrictionPolicyFetcher::
   if (error.state() == GoogleServiceAuthError::NONE) {
     auto result = base::JSONReader::Read(*response_body, base::JSON_PARSE_RFC);
     const std::string* policy_value =
-        result ? result->FindStringKey("policyValue") : nullptr;
+        result ? result->GetDict().FindString("policyValue") : nullptr;
 
     if (policy_value) {
       restriction = *policy_value;

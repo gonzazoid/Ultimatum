@@ -5,14 +5,15 @@
 #ifndef COMPONENTS_METRICS_STRUCTURED_EXTERNAL_METRICS_H_
 #define COMPONENTS_METRICS_STRUCTURED_EXTERNAL_METRICS_H_
 
-#include "base/callback.h"
+#include "base/containers/flat_set.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
 
-namespace metrics {
-namespace structured {
+namespace metrics::structured {
 
 class EventsProto;
 class ExternalMetricsTest;
@@ -37,6 +38,12 @@ class ExternalMetrics {
   ExternalMetrics(const ExternalMetrics&) = delete;
   ExternalMetrics& operator=(const ExternalMetrics&) = delete;
 
+  // Adds a project to the disallowed list for testing.
+  void AddDisallowedProjectForTest(uint64_t project_name_hash);
+
+  void EnableRecording();
+  void DisableRecording();
+
  private:
   friend class ExternalMetricsTest;
 
@@ -44,15 +51,23 @@ class ExternalMetrics {
   void CollectEventsAndReschedule();
   void CollectEvents();
 
+  // Builds a cache of disallow projects from the Finch controlled variable.
+  void CacheDisallowedProjectsSet();
+
+  bool recording_enabled_ = false;
+
   const base::FilePath events_directory_;
   const base::TimeDelta collection_interval_;
   MetricsCollectedCallback callback_;
+
+  // A set of projects that are not allowed to be recorded. This is a cache of
+  // GetDisabledProjects().
+  base::flat_set<uint64_t> disallowed_projects_;
 
   scoped_refptr<base::SequencedTaskRunner> task_runner_;
   base::WeakPtrFactory<ExternalMetrics> weak_factory_{this};
 };
 
-}  // namespace structured
-}  // namespace metrics
+}  // namespace metrics::structured
 
 #endif  // COMPONENTS_METRICS_STRUCTURED_EXTERNAL_METRICS_H_

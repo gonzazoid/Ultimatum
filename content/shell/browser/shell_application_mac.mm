@@ -14,13 +14,15 @@
 #include "content/shell/browser/shell_content_browser_client.h"
 #include "url/gurl.h"
 
-@interface ShellCrApplication ()<NativeEventProcessor> {
-  base::ObserverList<content::NativeEventProcessorObserver>::Unchecked
-      _observers;
-}
+@interface ShellCrApplication () <NativeEventProcessor>
 @end
 
-@implementation ShellCrApplication
+@implementation ShellCrApplication {
+  base::ObserverList<content::NativeEventProcessorObserver>::Unchecked
+      _observers;
+
+  BOOL _handlingSendEvent;
+}
 
 - (BOOL)isHandlingSendEvent {
   return _handlingSendEvent;

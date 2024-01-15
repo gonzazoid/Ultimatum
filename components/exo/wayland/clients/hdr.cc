@@ -12,9 +12,9 @@
 #include <memory>
 
 #include "base/at_exit.h"
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/logging.h"
 #include "base/message_loop/message_pump_type.h"
 #include "base/strings/string_number_conversions.h"
@@ -59,7 +59,6 @@ void DrawToGbm(const gfx::Size& size, DrawFunction draw_func, gbm_bo* bo) {
 
   std::move(draw_func).Run(size, canvas.get());
 
-  canvas->flush();
   gbm_bo_unmap(bo, mapped_data);
 }
 
@@ -156,9 +155,10 @@ void HdrClient::InitColorManagement() {
   CHECK(globals_.color_manager)
       << "Server doesn't support zcr_color_manager_v1.";
 
+  // This is only for the single output scenario.
   color_management_output_.reset(
       zcr_color_manager_v1_get_color_management_output(
-          globals_.color_manager.get(), globals_.output.get()));
+          globals_.color_manager.get(), globals_.outputs.back().get()));
   CHECK(color_management_output_) << "Can't create color management output.";
   zcr_color_management_output_v1_add_listener(
       color_management_output_.get(), &kOutputColorMangerListener, this);

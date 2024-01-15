@@ -7,20 +7,23 @@
 #include <stdint.h>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/memory/raw_ptr.h"
+#include "base/metrics/histogram_functions.h"
+#include "base/strings/stringprintf.h"
 #include "base/trace_event/memory_usage_estimator.h"
+#include "base/trace_event/trace_event.h"
 #include "components/sync/base/client_tag_hash.h"
-#include "components/sync/model/client_tag_based_model_type_processor.h"
 #include "components/sync/model/conflict_resolution.h"
+#include "components/sync/model/metadata_batch.h"
 #include "components/sync/model/mutable_data_batch.h"
 #include "components/sync/model/sync_change.h"
-#include "components/sync/model/sync_error_factory.h"
 #include "components/sync/model/syncable_service.h"
 #include "components/sync/protocol/entity_specifics.pb.h"
+#include "components/sync/protocol/model_type_state_helper.h"
 #include "components/sync/protocol/persisted_entity_data.pb.h"
 #include "components/sync/protocol/proto_memory_estimations.h"
 
@@ -203,28 +206,10 @@ class LocalChangeProcessor : public SyncChangeProcessor {
   const base::RepeatingCallback<void(const absl::optional<ModelError>&)>
       error_callback_;
   const raw_ptr<ModelTypeStore> store_;
-  const raw_ptr<SyncableServiceBasedBridge::InMemoryStore> in_memory_store_;
+  const raw_ptr<SyncableServiceBasedBridge::InMemoryStore, DanglingUntriaged>
+      in_memory_store_;
   const raw_ptr<ModelTypeChangeProcessor> other_;
   SEQUENCE_CHECKER(sequence_checker_);
-};
-
-class SyncErrorFactoryImpl : public SyncErrorFactory {
- public:
-  explicit SyncErrorFactoryImpl(ModelType type) : type_(type) {}
-
-  SyncErrorFactoryImpl(const SyncErrorFactoryImpl&) = delete;
-  SyncErrorFactoryImpl& operator=(const SyncErrorFactoryImpl&) = delete;
-
-  ~SyncErrorFactoryImpl() override = default;
-
-  SyncError CreateAndUploadError(const base::Location& location,
-                                 const std::string& message) override {
-    // Uploading is not supported, we simply return the error.
-    return SyncError(location, SyncError::DATATYPE_ERROR, message, type_);
-  }
-
- private:
-  const ModelType type_;
 };
 
 }  // namespace
@@ -236,9 +221,10 @@ SyncableServiceBasedBridge::SyncableServiceBasedBridge(
     SyncableService* syncable_service)
     : ModelTypeSyncBridge(std::move(change_processor)),
       type_(type),
-      syncable_service_(syncable_service),
-      syncable_service_started_(false) {
+      syncable_service_(syncable_service) {
   DCHECK(syncable_service_);
+
+  init_start_time_ = base::Time::Now();
 
   std::move(store_factory)
       .Run(type_, base::BindOnce(&SyncableServiceBasedBridge::OnStoreCreated,
@@ -247,10 +233,10 @@ SyncableServiceBasedBridge::SyncableServiceBasedBridge(
 
 SyncableServiceBasedBridge::~SyncableServiceBasedBridge() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  // Stop the syncable service to make sure instances of LocalChangeProcessor
+  // Inform the syncable service to make sure instances of LocalChangeProcessor
   // are not continued to be used.
   if (syncable_service_started_) {
-    syncable_service_->StopSyncing(type_);
+    syncable_service_->OnBrowserShutdown(type_);
   }
 }
 
@@ -260,7 +246,7 @@ SyncableServiceBasedBridge::CreateMetadataChangeList() {
   return ModelTypeStore::WriteBatch::CreateMetadataChangeList();
 }
 
-absl::optional<ModelError> SyncableServiceBasedBridge::MergeSyncData(
+absl::optional<ModelError> SyncableServiceBasedBridge::MergeFullSyncData(
     std::unique_ptr<MetadataChangeList> metadata_change_list,
     EntityChangeList entity_change_list) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
@@ -278,7 +264,8 @@ absl::optional<ModelError> SyncableServiceBasedBridge::MergeSyncData(
   return StartSyncableService();
 }
 
-absl::optional<ModelError> SyncableServiceBasedBridge::ApplySyncChanges(
+absl::optional<ModelError>
+SyncableServiceBasedBridge::ApplyIncrementalSyncChanges(
     std::unique_ptr<MetadataChangeList> metadata_change_list,
     EntityChangeList entity_change_list) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
@@ -355,16 +342,10 @@ ConflictResolution SyncableServiceBasedBridge::ResolveConflict(
   return ConflictResolution::kUseLocal;
 }
 
-void SyncableServiceBasedBridge::ApplyStopSyncChanges(
+void SyncableServiceBasedBridge::ApplyDisableSyncChanges(
     std::unique_ptr<MetadataChangeList> delete_metadata_change_list) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(store_);
-
-  // If Sync is being stopped only temporarily (i.e. we want to keep tracking
-  // metadata), then there's nothing to do here.
-  if (!delete_metadata_change_list) {
-    return;
-  }
 
   in_memory_store_.clear();
   store_->DeleteAllDataAndMetadata(base::DoNothing());
@@ -437,6 +418,7 @@ void SyncableServiceBasedBridge::OnReadAllDataForInit(
 void SyncableServiceBasedBridge::OnReadAllMetadataForInit(
     const absl::optional<ModelError>& error,
     std::unique_ptr<MetadataBatch> metadata_batch) {
+  TRACE_EVENT0("sync", "SyncableServiceBasedBridge::OnReadAllMetadataForInit");
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(!syncable_service_started_);
 
@@ -452,13 +434,15 @@ void SyncableServiceBasedBridge::OnReadAllMetadataForInit(
 
 void SyncableServiceBasedBridge::OnSyncableServiceReady(
     std::unique_ptr<MetadataBatch> metadata_batch) {
+  TRACE_EVENT0("sync", "SyncableServiceBasedBridge::OnSyncableServiceReady");
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(!syncable_service_started_);
 
   // Guard against inconsistent state, and recover from it by starting from
   // scratch, which will cause the eventual refetching of all entities from the
   // server.
-  if (!metadata_batch->GetModelTypeState().initial_sync_done() &&
+  if (!IsInitialSyncDone(
+          metadata_batch->GetModelTypeState().initial_sync_state()) &&
       !in_memory_store_.empty()) {
     in_memory_store_.clear();
     store_->DeleteAllDataAndMetadata(base::DoNothing());
@@ -472,9 +456,19 @@ void SyncableServiceBasedBridge::OnSyncableServiceReady(
   // If sync was previously enabled according to the loaded metadata, then
   // immediately start the SyncableService to track as many local changes as
   // possible (regardless of whether sync actually starts or not). Otherwise,
-  // the SyncableService will be started from MergeSyncData().
+  // the SyncableService will be started from MergeFullSyncData().
   if (change_processor()->IsTrackingMetadata()) {
-    ReportErrorIfSet(StartSyncableService());
+    if (auto error = StartSyncableService()) {
+      change_processor()->ReportError(*error);
+    } else {
+      // Using the same range as Sync.ModelTypeConfigurationTime.* metric.
+      base::UmaHistogramCustomTimes(
+          base::StringPrintf("Sync.SyncableServiceStartTime.%s",
+                             ModelTypeToHistogramSuffix(type_)),
+          base::Time::Now() - init_start_time_,
+          /*min=*/base::Milliseconds(1),
+          /*max=*/base::Seconds(60), /*buckets=*/50);
+    }
   }
 }
 
@@ -502,8 +496,7 @@ absl::optional<ModelError> SyncableServiceBasedBridge::StartSyncableService() {
 
   const absl::optional<ModelError> merge_error =
       syncable_service_->MergeDataAndStartSyncing(
-          type_, initial_sync_data, std::move(local_change_processor),
-          std::make_unique<SyncErrorFactoryImpl>(type_));
+          type_, initial_sync_data, std::move(local_change_processor));
 
   if (!merge_error) {
     syncable_service_started_ = true;

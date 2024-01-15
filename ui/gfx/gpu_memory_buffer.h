@@ -15,9 +15,9 @@
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/gfx_export.h"
 
-#if defined(USE_OZONE) || BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
+#if BUILDFLAG(IS_OZONE) || BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
 #include "ui/gfx/native_pixmap_handle.h"
-#elif BUILDFLAG(IS_MAC)
+#elif BUILDFLAG(IS_APPLE)
 #include "ui/gfx/mac/io_surface.h"
 #elif BUILDFLAG(IS_WIN)
 #include "base/types/token_type.h"
@@ -77,7 +77,7 @@ struct GFX_EXPORT GpuMemoryBufferHandle {
   uint32_t stride = 0;
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_FUCHSIA)
   NativePixmapHandle native_pixmap_handle;
-#elif BUILDFLAG(IS_MAC)
+#elif BUILDFLAG(IS_APPLE)
   ScopedIOSurface io_surface;
 #elif BUILDFLAG(IS_WIN)
   base::win::ScopedHandle dxgi_handle;
@@ -118,9 +118,12 @@ class GFX_EXPORT GpuMemoryBuffer {
   // plane K is stored at index K-1 of the |stride| array.
   virtual int stride(size_t plane) const = 0;
 
+#if BUILDFLAG(IS_APPLE)
   // Set the color space in which this buffer should be interpreted when used
   // as an overlay. Note that this will not impact texturing from the buffer.
-  virtual void SetColorSpace(const ColorSpace& color_space);
+  // Used only for GMBs backed by an IOSurface.
+  virtual void SetColorSpace(const ColorSpace& color_space) {}
+#endif
 
   // Returns a unique identifier associated with buffer.
   virtual GpuMemoryBufferId GetId() const = 0;

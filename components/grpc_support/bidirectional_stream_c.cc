@@ -10,7 +10,7 @@
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/memory/raw_ptr.h"
@@ -124,7 +124,8 @@ class BidirectionalStreamAdapter
 
   // None of these objects are owned by |this|.
   raw_ptr<net::URLRequestContextGetter> request_context_getter_;
-  raw_ptr<grpc_support::BidirectionalStream> bidirectional_stream_;
+  raw_ptr<grpc_support::BidirectionalStream, AcrossTasksDanglingUntriaged>
+      bidirectional_stream_;
   // C side
   std::unique_ptr<bidirectional_stream> c_stream_;
   raw_ptr<bidirectional_stream_callback> c_callback_;

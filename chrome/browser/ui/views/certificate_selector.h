@@ -37,9 +37,9 @@ namespace chrome {
 // The explanatory text shown to the user must be provided to |InitWithText()|.
 class CertificateSelector : public views::DialogDelegateView,
                             public views::TableViewObserver {
- public:
-  METADATA_HEADER(CertificateSelector);
+  METADATA_HEADER(CertificateSelector, views::DialogDelegateView)
 
+ public:
   // Indicates if the dialog can be successfully shown.
   // TODO(davidben): Remove this when the certificate selector prompt is moved
   // to the WebContentsDelegate. https://crbug.com/456255.
@@ -102,7 +102,8 @@ class CertificateSelector : public views::DialogDelegateView,
   bool show_provider_column_ = false;
   std::unique_ptr<CertificateTableModel> model_;
 
-  const raw_ptr<content::WebContents, DanglingUntriaged> web_contents_;
+  const raw_ptr<content::WebContents, AcrossTasksDanglingUntriaged>
+      web_contents_;
 
   raw_ptr<views::TableView, DanglingUntriaged> table_ = nullptr;
   raw_ptr<views::LabelButton, DanglingUntriaged> view_cert_button_ = nullptr;

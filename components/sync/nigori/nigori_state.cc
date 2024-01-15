@@ -4,20 +4,48 @@
 
 #include "components/sync/nigori/nigori_state.h"
 
+#include <cstdint>
 #include <vector>
 
 #include "base/base64.h"
+#include "base/feature_list.h"
+#include "base/metrics/histogram_functions.h"
 #include "base/notreached.h"
+#include "components/sync/base/features.h"
 #include "components/sync/base/model_type.h"
 #include "components/sync/base/time.h"
+#include "components/sync/engine/nigori/cross_user_sharing_public_key.h"
+#include "components/sync/engine/nigori/key_derivation_params.h"
 #include "components/sync/engine/sync_encryption_handler.h"
 #include "components/sync/nigori/cryptographer_impl.h"
 #include "components/sync/nigori/keystore_keys_cryptographer.h"
 #include "components/sync/protocol/nigori_local_data.pb.h"
+#include "components/sync/protocol/nigori_specifics.pb.h"
 
 namespace syncer {
 
 namespace {
+
+// When enabled, if the local state contains a corrupted cross-user sharing key
+// pair (i.e. the public key does not match the private key), the key pair will
+// be removed and re-generated.
+BASE_FEATURE(kSyncDropCrossUserKeyPairIfCorrupted,
+             "SyncDropCrossUserKeyPairIfCorrupted",
+             base::FEATURE_ENABLED_BY_DEFAULT);
+
+// These values are persisted to UMA. Entries should not be renumbered and
+// numeric values should never be reused.
+enum class CrossUserSharingKeyPairState {
+  kValidKeyPair = 0,
+  kPublicKeyNotInitialized = 1,
+  kPublicKeyVersionInvalid = 2,
+  kCorruptedKeyPair = 3,
+
+  // The key pair can't be checked while pending keys are not decrypted.
+  kPendingKeysNotEmpty = 4,
+
+  kMaxValue = kPendingKeysNotEmpty,
+};
 
 sync_pb::CustomPassphraseKeyDerivationParams
 CustomPassphraseKeyDerivationParamsToProto(const KeyDerivationParams& params) {
@@ -32,31 +60,37 @@ CustomPassphraseKeyDerivationParamsToProto(const KeyDerivationParams& params) {
 
 KeyDerivationParams CustomPassphraseKeyDerivationParamsFromProto(
     const sync_pb::CustomPassphraseKeyDerivationParams& proto) {
-  switch (ProtoKeyDerivationMethodToEnum(
-      proto.custom_passphrase_key_derivation_method())) {
-    case KeyDerivationMethod::PBKDF2_HMAC_SHA1_1003:
+  switch (proto.custom_passphrase_key_derivation_method()) {
+    case sync_pb::NigoriSpecifics::UNSPECIFIED:
+      [[fallthrough]];
+    case sync_pb::NigoriSpecifics::PBKDF2_HMAC_SHA1_1003:
       return KeyDerivationParams::CreateForPbkdf2();
-    case KeyDerivationMethod::SCRYPT_8192_8_11:
+    case sync_pb::NigoriSpecifics::SCRYPT_8192_8_11:
       return KeyDerivationParams::CreateForScrypt(
           proto.custom_passphrase_key_derivation_salt());
-    case KeyDerivationMethod::UNSUPPORTED:
-      break;
   }
+
   NOTREACHED();
-  return KeyDerivationParams::CreateWithUnsupportedMethod();
+  return KeyDerivationParams::CreateForPbkdf2();
 }
 
 // |encrypted| must not be null.
-bool EncryptKeyBag(const CryptographerImpl& cryptographer,
-                   sync_pb::EncryptedData* encrypted) {
+bool EncryptEncryptionKeys(const CryptographerImpl& cryptographer,
+                           sync_pb::EncryptedData* encrypted) {
   DCHECK(encrypted);
   DCHECK(cryptographer.CanEncrypt());
 
   sync_pb::CryptographerData proto = cryptographer.ToProto();
   DCHECK(!proto.key_bag().key().empty());
 
+  sync_pb::EncryptionKeys keys_for_encryption;
+
+  keys_for_encryption.mutable_key()->CopyFrom(proto.key_bag().key());
+  keys_for_encryption.mutable_cross_user_sharing_private_key()->CopyFrom(
+      proto.cross_user_sharing_keys().private_key());
+
   // Encrypt the bag with the default Nigori.
-  return cryptographer.Encrypt(proto.key_bag(), encrypted);
+  return cryptographer.Encrypt(keys_for_encryption, encrypted);
 }
 
 // Writes deprecated per-type encryption fields. Can be removed once <M82
@@ -91,15 +125,58 @@ void UpdateSpecificsFromKeyDerivationParams(
     sync_pb::NigoriSpecifics* specifics) {
   DCHECK_EQ(specifics->passphrase_type(),
             sync_pb::NigoriSpecifics::CUSTOM_PASSPHRASE);
-  DCHECK_NE(params.method(), KeyDerivationMethod::UNSUPPORTED);
   specifics->set_custom_passphrase_key_derivation_method(
       EnumKeyDerivationMethodToProto(params.method()));
   if (params.method() == KeyDerivationMethod::SCRYPT_8192_8_11) {
     // Persist the salt used for key derivation in Nigori if we're using scrypt.
-    std::string encoded_salt;
-    base::Base64Encode(params.scrypt_salt(), &encoded_salt);
+    std::string encoded_salt = base::Base64Encode(params.scrypt_salt());
     specifics->set_custom_passphrase_key_derivation_salt(encoded_salt);
   }
+}
+
+absl::optional<CrossUserSharingPublicKey> PublicKeyFromProto(
+    const sync_pb::CrossUserSharingPublicKey& public_key) {
+  std::vector<uint8_t> key(public_key.x25519_public_key().begin(),
+                           public_key.x25519_public_key().end());
+  return CrossUserSharingPublicKey::CreateByImport(key);
+}
+
+sync_pb::CrossUserSharingPublicKey PublicKeyToProto(
+    const CrossUserSharingPublicKey& public_key,
+    uint32_t key_pair_version) {
+  sync_pb::CrossUserSharingPublicKey output;
+  const auto key = public_key.GetRawPublicKey();
+  output.set_x25519_public_key(std::string(key.begin(), key.end()));
+  output.set_version(key_pair_version);
+  return output;
+}
+
+CrossUserSharingKeyPairState GetCrossUserSharingPublicKeyState(
+    const NigoriState& state) {
+  if (state.pending_keys) {
+    return CrossUserSharingKeyPairState::kPendingKeysNotEmpty;
+  }
+
+  if (!state.cross_user_sharing_public_key.has_value()) {
+    return CrossUserSharingKeyPairState::kPublicKeyNotInitialized;
+  }
+
+  // Key version existence is guaranteed by NigoriState::CreateFromLocalProto().
+  CHECK(state.cross_user_sharing_key_pair_version);
+
+  if (!state.cryptographer->HasKeyPair(
+          state.cross_user_sharing_key_pair_version.value())) {
+    return CrossUserSharingKeyPairState::kPublicKeyVersionInvalid;
+  }
+
+  const CrossUserSharingPublicPrivateKeyPair& key_pair =
+      state.cryptographer->GetCrossUserSharingKeyPair(
+          state.cross_user_sharing_key_pair_version.value());
+  if (key_pair.GetRawPublicKey() !=
+      state.cross_user_sharing_public_key->GetRawPublicKey()) {
+    return CrossUserSharingKeyPairState::kCorruptedKeyPair;
+  }
+  return CrossUserSharingKeyPairState::kValidKeyPair;
 }
 
 }  // namespace
@@ -111,6 +188,11 @@ NigoriState NigoriState::CreateFromLocalProto(
 
   state.cryptographer =
       CryptographerImpl::FromProto(proto.cryptographer_data());
+
+  if (proto.has_cross_user_sharing_public_key()) {
+    state.cryptographer->SelectDefaultCrossUserSharingKey(
+        proto.cross_user_sharing_public_key().version());
+  }
 
   if (proto.has_pending_keys()) {
     state.pending_keys = proto.pending_keys();
@@ -152,6 +234,16 @@ NigoriState NigoriState::CreateFromLocalProto(
   }
 
   state.trusted_vault_debug_info = proto.trusted_vault_debug_info();
+
+  if (proto.has_cross_user_sharing_public_key()) {
+    state.cross_user_sharing_public_key =
+        PublicKeyFromProto(proto.cross_user_sharing_public_key());
+    state.cross_user_sharing_key_pair_version =
+        proto.cross_user_sharing_public_key().version();
+  }
+
+  base::UmaHistogramEnumeration("Sync.CrossUserSharingKeyPairState",
+                                GetCrossUserSharingPublicKeyState(state));
 
   return state;
 }
@@ -216,13 +308,20 @@ sync_pb::NigoriModel NigoriState::ToLocalProto() const {
         *last_default_trusted_vault_key_name);
   }
   *proto.mutable_trusted_vault_debug_info() = trusted_vault_debug_info;
+  if (cross_user_sharing_public_key.has_value() &&
+      cross_user_sharing_key_pair_version.has_value()) {
+    *proto.mutable_cross_user_sharing_public_key() =
+        PublicKeyToProto(cross_user_sharing_public_key.value(),
+                         cross_user_sharing_key_pair_version.value());
+  }
   return proto;
 }
 
 sync_pb::NigoriSpecifics NigoriState::ToSpecificsProto() const {
   sync_pb::NigoriSpecifics specifics;
   if (cryptographer->CanEncrypt()) {
-    EncryptKeyBag(*cryptographer, specifics.mutable_encryption_keybag());
+    EncryptEncryptionKeys(*cryptographer,
+                          specifics.mutable_encryption_keybag());
   } else {
     DCHECK(pending_keys.has_value());
     // This case is reachable only from processor's GetAllNodesForDebugging(),
@@ -242,19 +341,15 @@ sync_pb::NigoriSpecifics NigoriState::ToSpecificsProto() const {
     UpdateSpecificsFromKeyDerivationParams(
         *custom_passphrase_key_derivation_params, &specifics);
   }
-  // TODO(crbug.com/1020084): populate |keystore_decryptor_token| for trusted
-  // vault passphrase to allow rollbacks.
   if (passphrase_type == sync_pb::NigoriSpecifics::KEYSTORE_PASSPHRASE) {
-    // TODO(crbug.com/922900): it seems possible to have corrupted
-    // |pending_keystore_decryptor_token| and an ability to recover it in case
-    // |pending_keys| isn't set and |keystore_keys| contains some keys.
     if (pending_keystore_decryptor_token.has_value()) {
+      DCHECK(pending_keys.has_value());
       *specifics.mutable_keystore_decryptor_token() =
           *pending_keystore_decryptor_token;
     } else {
-      // TODO(crbug.com/922900): error handling (crypto errors, which could
-      // cause empty |keystore_keys_cryptographer| or can occur during
-      // encryption).
+      // TODO(crbug.com/1368018): ensure correct error handling, e.g. in case
+      // of empty |keystore_keys_cryptographer| or crypto errors (should be
+      // impossible, but code doesn't yet guarantee that).
       keystore_keys_cryptographer->EncryptKeystoreDecryptorToken(
           cryptographer->ExportDefaultKey(),
           specifics.mutable_keystore_decryptor_token());
@@ -269,6 +364,14 @@ sync_pb::NigoriSpecifics NigoriState::ToSpecificsProto() const {
         TimeToProtoTime(custom_passphrase_time));
   }
   *specifics.mutable_trusted_vault_debug_info() = trusted_vault_debug_info;
+
+  if (cross_user_sharing_public_key.has_value() &&
+      cross_user_sharing_key_pair_version.has_value()) {
+    *specifics.mutable_cross_user_sharing_public_key() =
+        PublicKeyToProto(cross_user_sharing_public_key.value(),
+                         cross_user_sharing_key_pair_version.value());
+  }
+
   return specifics;
 }
 
@@ -287,6 +390,12 @@ NigoriState NigoriState::Clone() const {
   result.last_default_trusted_vault_key_name =
       last_default_trusted_vault_key_name;
   result.trusted_vault_debug_info = trusted_vault_debug_info;
+  if (cross_user_sharing_public_key.has_value()) {
+    result.cross_user_sharing_public_key =
+        cross_user_sharing_public_key->Clone();
+  }
+  result.cross_user_sharing_key_pair_version =
+      cross_user_sharing_key_pair_version;
   return result;
 }
 
@@ -310,6 +419,46 @@ ModelTypeSet NigoriState::GetEncryptedTypes() const {
   }
 
   return EncryptableUserTypes();
+}
+
+bool NigoriState::NeedsGenerateCrossUserSharingKeyPair() const {
+  // Check the feature toggle before any other conditions to keep it consistent
+  // with the previous code and to avoid changes in groups.
+  if (!base::FeatureList::IsEnabled(kSharingOfferKeyPairBootstrap)) {
+    return false;
+  }
+
+  if (pending_keys || !cryptographer->CanEncrypt()) {
+    // There are pending keys so the current state of the key pair is unknown,
+    // or cryptographer is not ready yet (this should not happen but not using
+    // CHECK because it's difficult to guarantee here).
+    return false;
+  }
+
+  if (cross_user_sharing_public_key.has_value() &&
+      GetCrossUserSharingPublicKeyState(*this) !=
+          CrossUserSharingKeyPairState::kCorruptedKeyPair) {
+    // Key pair is already generated and is not corrupted.
+    return false;
+  }
+
+  // Generate a new key pair if there is no public key in the local state.
+  // Note that this can trigger a key pair generation if the current client
+  // has been just upgraded from the older version (so it wasn't aware of key
+  // pairs). Other clients are expected to apply the newly generated key pair.
+  if (!cross_user_sharing_public_key.has_value()) {
+    return true;
+  }
+
+  // The public key doesn't match the private key. Generate a new key pair and
+  // commit it to the server. Other clients are expected to apply the new
+  // state. This behavior is similar to a client has just been upgraded.
+  // This code also covers the case when the key pair is corrupted on the
+  // server. In this case after browser restart the current client will
+  // generate a new key pair.
+  CHECK_EQ(GetCrossUserSharingPublicKeyState(*this),
+           CrossUserSharingKeyPairState::kCorruptedKeyPair);
+  return base::FeatureList::IsEnabled(kSyncDropCrossUserKeyPairIfCorrupted);
 }
 
 }  // namespace syncer

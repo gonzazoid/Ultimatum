@@ -131,10 +131,10 @@ std::string LoggerImpl::GetLogsAsJson() const {
 }
 
 base::Value LoggerImpl::GetLogsAsValue() const {
-  base::Value entries_val(base::Value::Type::LIST);
+  base::Value::List entries_val;
   for (const auto& entry : entries_)
     entries_val.Append(AsValue(entry));
-  return entries_val;
+  return base::Value(std::move(entries_val));
 }
 
 LoggerImpl::Entry::Entry(Severity severity,
@@ -167,18 +167,18 @@ LoggerImpl::Entry::Entry(Entry&& other)
 LoggerImpl::Entry::~Entry() = default;
 
 // static
-base::Value LoggerImpl::AsValue(const LoggerImpl::Entry& entry) {
-  base::Value entry_val(base::Value::Type::DICTIONARY);
-  entry_val.SetKey("severity", base::Value(AsString(entry.severity)));
-  entry_val.SetKey("category", base::Value(AsString(entry.category)));
-  entry_val.SetKey(
+base::Value::Dict LoggerImpl::AsValue(const LoggerImpl::Entry& entry) {
+  base::Value::Dict entry_val;
+  entry_val.Set("severity", base::Value(AsString(entry.severity)));
+  entry_val.Set("category", base::Value(AsString(entry.category)));
+  entry_val.Set(
       "time",
       base::Value(base::TimeFormatTimeOfDayWithMilliseconds(entry.time)));
-  entry_val.SetKey("component", base::Value(entry.component));
-  entry_val.SetKey("message", base::Value(entry.message));
-  entry_val.SetKey("sinkId", base::Value(entry.sink_id));
-  entry_val.SetKey("mediaSource", base::Value(entry.media_source));
-  entry_val.SetKey("sessionId", base::Value(entry.session_id));
+  entry_val.Set("component", base::Value(entry.component));
+  entry_val.Set("message", base::Value(entry.message));
+  entry_val.Set("sinkId", base::Value(entry.sink_id));
+  entry_val.Set("mediaSource", base::Value(entry.media_source));
+  entry_val.Set("sessionId", base::Value(entry.session_id));
   return entry_val;
 }
 

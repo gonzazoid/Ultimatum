@@ -46,12 +46,44 @@ void PopulateAppRegistryCache(AccountId account_id,
   deltas.push_back(MakeApp(kTestLacrosChromeAppId, "Test Chrome App",
                            apps::AppType::kStandaloneBrowserChromeApp));
 
-  cache->OnApps(std::move(deltas), apps::AppType::kUnknown,
-                /*should_notify_initialized=*/false);
+  cache->OnAppsForTesting(std::move(deltas), apps::AppType::kUnknown,
+                          /*should_notify_initialized=*/false);
 
   cache->SetAccountId(account_id);
 
   apps::AppRegistryCacheWrapper::Get().AddAppRegistryCache(account_id, cache);
+}
+
+void PopulateAdminTestAppRegistryCache(AccountId account_id,
+                                       apps::AppRegistryCache* cache) {
+  std::vector<apps::AppPtr> ash_delta;
+
+  ash_delta.push_back(MakeApp(app_constants::kChromeAppId, "Ash Chrome Browser",
+                              apps::AppType::kChromeApp));
+  cache->OnAppsForTesting(std::move(ash_delta), apps::AppType::kChromeApp,
+                          /*should_notify_initialized=*/true);
+
+  std::vector<apps::AppPtr> lacros_delta;
+
+  lacros_delta.push_back(MakeApp(app_constants::kLacrosAppId,
+                                 "Lacros Chrome Browser",
+                                 apps::AppType::kStandaloneBrowser));
+  cache->OnAppsForTesting(std::move(lacros_delta),
+                          apps::AppType::kStandaloneBrowser,
+                          /*should_notify_initialized=*/true);
+
+  cache->SetAccountId(account_id);
+}
+
+void PopulateFloatingWorkspaceAppRegistryCache(AccountId account_id,
+                                               apps::AppRegistryCache* cache) {
+  PopulateAdminTestAppRegistryCache(account_id, cache);
+  std::vector<apps::AppPtr> deltas;
+  deltas.push_back(
+      MakeApp(kTestSwaAppId, "Test System Web App 1", apps::AppType::kWeb));
+  cache->OnAppsForTesting(std::move(deltas), apps::AppType::kWeb,
+                          /*should_notify_initialized=*/true);
+  cache->SetAccountId(account_id);
 }
 
 void AddAppIdToAppRegistryCache(AccountId account_id,
@@ -64,8 +96,8 @@ void AddAppIdToAppRegistryCache(AccountId account_id,
   // all app_id to it.
   deltas.push_back(MakeApp(app_id, "Arc app", apps::AppType::kArc));
 
-  cache->OnApps(std::move(deltas), apps::AppType::kUnknown,
-                /*should_notify_initialized=*/false);
+  cache->OnAppsForTesting(std::move(deltas), apps::AppType::kUnknown,
+                          /*should_notify_initialized=*/false);
 
   cache->SetAccountId(account_id);
 

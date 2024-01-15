@@ -6,12 +6,11 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/memory/ptr_util.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool.h"
-#include "base/threading/sequenced_task_runner_handle.h"
-#include "base/threading/thread_task_runner_handle.h"
 
 ////////////////////////////////////////////////////////////////////////////////
 //
@@ -36,8 +35,8 @@ bool WebDataRequest::IsActive() {
 WebDataRequest::WebDataRequest(WebDataRequestManager* manager,
                                WebDataServiceConsumer* consumer,
                                WebDataServiceBase::Handle handle)
-    : task_runner_(base::SequencedTaskRunnerHandle::IsSet()
-                       ? base::SequencedTaskRunnerHandle::Get()
+    : task_runner_(base::SequencedTaskRunner::HasCurrentDefault()
+                       ? base::SequencedTaskRunner::GetCurrentDefault()
                        : nullptr),
       atomic_manager_(reinterpret_cast<base::subtle::AtomicWord>(manager)),
       consumer_(consumer ? consumer->GetWebDataServiceConsumerWeakPtr()

@@ -14,9 +14,12 @@ source_set("mac_notifications") {
     "mac_notification_service_utils.mm",
     "notification_category_manager.h",
     "notification_category_manager.mm",
+    "un_user_notifications_spi.h",
     "unnotification_metrics.h",
     "unnotification_metrics.mm",
   ]
+
+  configs += [ "//build/config/compiler:wexit_time_destructors" ]
 
   deps = [
     "//base",
@@ -33,9 +36,9 @@ source_set("mac_notifications") {
     "//mojo/public/mojom/base",
   ]
 
-  frameworks = [ "Foundation.framework" ]
-  weak_frameworks = [
-    "UserNotifications.framework",  # macOS 10.14
+  frameworks = [
+    "UserNotifications.framework",
+    "Foundation.framework",
   ]
 }
 
@@ -59,8 +62,8 @@ source_set("unit_tests") {
     "//third_party/ocmock",
   ]
 
-  frameworks = [ "Foundation.framework" ]
-  weak_frameworks = [
-    "UserNotifications.framework",  # macOS 10.14
+  frameworks = [
+    "UserNotifications.framework",
+    "Foundation.framework",
   ]
 }

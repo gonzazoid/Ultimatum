@@ -8,12 +8,13 @@
 #include <ostream>
 #include <string>
 
-#include "base/callback_forward.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/ref_counted.h"
 #include "base/version.h"
 #include "chrome/updater/enum_traits.h"
+#include "chrome/updater/util/util.h"
 #include "components/update_client/update_client.h"
 
 namespace updater {
@@ -56,7 +57,7 @@ class UpdateService : public base::RefCountedThreadSafe<UpdateService> {
     // concurrently.
     kUpdateInProgress = 1,
 
-    // Not used. TODO(crbug.com/1014591).
+    // Not used. TODO(crbug.com/1290331).
     kUpdateCanceled = 2,
 
     // The function failed because of a throttling policy such as load shedding.
@@ -84,6 +85,10 @@ class UpdateService : public base::RefCountedThreadSafe<UpdateService> {
 
     // Failed to run app installer.
     kInstallFailed = 10,
+
+    // The service has been stopped, because the system is shutting down, or
+    // any other reason.
+    kServiceStopped = 11,
 
     // Update EnumTraits<UpdateService::Result> when adding new values.
   };
@@ -194,7 +199,11 @@ class UpdateService : public base::RefCountedThreadSafe<UpdateService> {
 
     std::string app_id;
     base::Version version;
+    base::FilePath version_path;
+    std::string version_key;
     std::string ap;
+    base::FilePath ap_path;
+    std::string ap_key;
     std::string brand_code;
     base::FilePath brand_path;
     base::FilePath ecp;
@@ -223,11 +232,16 @@ class UpdateService : public base::RefCountedThreadSafe<UpdateService> {
   // applications or doing background updates for registered applications.
   virtual void RunPeriodicTasks(base::OnceClosure callback) = 0;
 
-  // Initiates an update check for all registered applications. Receives state
-  // change notifications through the repeating `state_update` callback.
-  // Calls `callback` once  the operation is complete.
-  virtual void UpdateAll(StateChangeCallback state_update,
-                         Callback callback) = 0;
+  // DEPRECATED - queries the server for updates, gets an update response, but
+  // does not download, install, or run any payload. This is intended to
+  // support the legacy on-demand Omaha interface but it should not be used
+  // by new code. The parameters are similar to the parameters of `Update`.
+  virtual void CheckForUpdate(
+      const std::string& app_id,
+      Priority priority,
+      PolicySameVersionUpdate policy_same_version_update,
+      StateChangeCallback state_update,
+      Callback callback) = 0;
 
   // Updates specified product. This update may be on-demand.
   //
@@ -254,6 +268,12 @@ class UpdateService : public base::RefCountedThreadSafe<UpdateService> {
                       PolicySameVersionUpdate policy_same_version_update,
                       StateChangeCallback state_update,
                       Callback callback) = 0;
+
+  // Initiates an update check for all registered applications. Receives state
+  // change notifications through the repeating `state_update` callback.
+  // Calls `callback` once  the operation is complete.
+  virtual void UpdateAll(StateChangeCallback state_update,
+                         Callback callback) = 0;
 
   // Registers and installs an application from the network.
   //
@@ -314,10 +334,6 @@ class UpdateService : public base::RefCountedThreadSafe<UpdateService> {
                             StateChangeCallback state_update,
                             Callback callback) = 0;
 
-  // Provides a way to commit data or clean up resources before the task
-  // scheduler is shutting down.
-  virtual void Uninitialize() = 0;
-
  protected:
   friend class base::RefCountedThreadSafe<UpdateService>;
 
@@ -329,7 +345,7 @@ template <>
 struct EnumTraits<UpdateService::Result> {
   using Result = UpdateService::Result;
   static constexpr Result first_elem = Result::kSuccess;
-  static constexpr Result last_elem = Result::kInstallFailed;
+  static constexpr Result last_elem = Result::kServiceStopped;
 };
 
 template <>
@@ -345,11 +361,6 @@ struct EnumTraits<UpdateService::ErrorCategory> {
   static constexpr ErrorCategory first_elem = ErrorCategory::kNone;
   static constexpr ErrorCategory last_elem = ErrorCategory::kUpdateCheck;
 };
-
-inline std::ostream& operator<<(std::ostream& os,
-                                const UpdateService::Result& result) {
-  return os << static_cast<int>(result);
-}
 
 std::ostream& operator<<(std::ostream& os,
                          const UpdateService::UpdateState& update_state);

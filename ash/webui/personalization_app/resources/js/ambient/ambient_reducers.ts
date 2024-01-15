@@ -39,23 +39,33 @@ export function ambientModeEnabledReducer(
   }
 }
 
-export function animationThemeReducer(
-    state: AmbientState['animationTheme'], action: Actions,
-    _: PersonalizationState): AmbientState['animationTheme'] {
+export function ambientThemeReducer(
+    state: AmbientState['ambientTheme'], action: Actions,
+    _: PersonalizationState): AmbientState['ambientTheme'] {
   switch (action.name) {
-    case AmbientActionName.SET_ANIMATION_THEME:
-      return action.animationTheme;
+    case AmbientActionName.SET_AMBIENT_THEME:
+      return action.ambientTheme;
     default:
       return state;
   }
 }
 
-export function googlePhotosAlbumsPreviewsReducer(
-    state: AmbientState['googlePhotosAlbumsPreviews'], action: Actions,
-    _: PersonalizationState): AmbientState['googlePhotosAlbumsPreviews'] {
+export function previewsReducer(
+    state: AmbientState['previews'], action: Actions,
+    _: PersonalizationState): AmbientState['previews'] {
   switch (action.name) {
-    case AmbientActionName.SET_GOOGLE_PHOTOS_ALBUMS_PREVIEWS:
+    case AmbientActionName.SET_PREVIEWS:
       return action.previews;
+    default:
+      return state;
+  }
+}
+
+export function screenSaverDurationReducer(
+    state: number|null, action: Actions, _: PersonalizationState): number|null {
+  switch (action.name) {
+    case AmbientActionName.SET_SCREEN_SAVER_DURATION:
+      return action.minutes;
     default:
       return state;
   }
@@ -83,12 +93,49 @@ export function topicSourceReducer(
   }
 }
 
+export function ambientUiVisibilityReducer(
+    state: AmbientState['ambientUiVisibility'], action: Actions,
+    _: PersonalizationState): AmbientState['ambientUiVisibility'] {
+  switch (action.name) {
+    case AmbientActionName.SET_AMBIENT_UI_VISIBILITY:
+      return action.ambientUiVisibility;
+    default:
+      return state;
+  }
+}
+
+export function shouldShowTimeOfDayBannerReducer(
+    state: boolean, action: Actions, _: PersonalizationState): boolean {
+  switch (action.name) {
+    case AmbientActionName.SET_SHOULD_SHOW_TIME_OF_DAY_BANNER:
+      return action.shouldShowTimeOfDayBanner;
+    default:
+      return state;
+  }
+}
+
+export function geolocationPermissionEnabledReducer(
+    state: AmbientState['geolocationPermissionEnabled'], action: Actions,
+    _: PersonalizationState): AmbientState['geolocationPermissionEnabled'] {
+  switch (action.name) {
+    case AmbientActionName.SET_GEOLOCATION_PERMISSION_ENABLED:
+      return action.enabled;
+    default:
+      return state;
+  }
+}
+
+
 export const ambientReducers:
     {[K in keyof AmbientState]: ReducerFunction<AmbientState[K]>} = {
       albums: albumsReducer,
       ambientModeEnabled: ambientModeEnabledReducer,
-      animationTheme: animationThemeReducer,
-      googlePhotosAlbumsPreviews: googlePhotosAlbumsPreviewsReducer,
+      ambientTheme: ambientThemeReducer,
+      duration: screenSaverDurationReducer,
+      previews: previewsReducer,
       temperatureUnit: temperatureUnitReducer,
       topicSource: topicSourceReducer,
+      ambientUiVisibility: ambientUiVisibilityReducer,
+      shouldShowTimeOfDayBanner: shouldShowTimeOfDayBannerReducer,
+      geolocationPermissionEnabled: geolocationPermissionEnabledReducer,
     };

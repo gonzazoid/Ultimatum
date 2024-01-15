@@ -10,9 +10,9 @@
 
 #include <vector>
 
+#include "base/apple/scoped_dispatch_object.h"
 #include "base/files/file_path.h"
 #include "base/files/file_path_watcher.h"
-#include "base/mac/scoped_dispatch_object.h"
 #include "base/memory/weak_ptr.h"
 
 namespace base {
@@ -76,7 +76,7 @@ class FilePathWatcherFSEvents : public FilePathWatcher::PlatformDelegate {
   FilePathWatcher::Callback callback_;
 
   // The dispatch queue on which the event stream is scheduled.
-  ScopedDispatchObject<dispatch_queue_t> queue_;
+  apple::ScopedDispatchObject<dispatch_queue_t> queue_;
 
   // Target path to watch (passed to callback).
   // (Only accessed from the libdispatch queue.)

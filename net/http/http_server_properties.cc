@@ -4,21 +4,21 @@
 
 #include "net/http/http_server_properties.h"
 
-#include "base/bind.h"
 #include "base/check_op.h"
 #include "base/containers/adapters.h"
 #include "base/containers/contains.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/default_clock.h"
 #include "base/time/default_tick_clock.h"
 #include "base/values.h"
 #include "net/base/features.h"
+#include "net/base/network_anonymization_key.h"
 #include "net/base/url_util.h"
 #include "net/http/http_network_session.h"
 #include "net/http/http_server_properties_manager.h"
@@ -141,8 +141,8 @@ HttpServerProperties::HttpServerProperties(
     : tick_clock_(tick_clock ? tick_clock
                              : base::DefaultTickClock::GetInstance()),
       clock_(clock ? clock : base::DefaultClock::GetInstance()),
-      use_network_anonymization_key_(base::FeatureList::IsEnabled(
-          features::kPartitionHttpServerPropertiesByNetworkIsolationKey)),
+      use_network_anonymization_key_(
+          NetworkAnonymizationKey::IsPartitioningEnabled()),
       is_initialized_(pref_delegate.get() == nullptr),
       properties_manager_(
           pref_delegate
@@ -198,8 +198,8 @@ void HttpServerProperties::Clear(base::OnceClosure callback) {
     prefs_update_timer_.Stop();
     WriteProperties(std::move(callback));
   } else if (callback) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                  std::move(callback));
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE, std::move(callback));
   }
 }
 
@@ -405,7 +405,10 @@ base::Value HttpServerProperties::GetAlternativeServiceInfoAsValue() const {
                   server_info.first.network_anonymization_key,
                   use_network_anonymization_key_),
               &brokenness_expiration_ticks)) {
-        // Convert |brokenness_expiration| from TimeTicks to Time
+        // Convert |brokenness_expiration| from TimeTicks to Time.
+        //
+        // Note: Cannot use `base::UnlocalizedTimeFormatWithPattern()` since
+        // `net/DEPS` disallows `base/i18n`.
         base::Time brokenness_expiration =
             now + (brokenness_expiration_ticks - now_ticks);
         base::Time::Exploded exploded;
@@ -1223,7 +1226,6 @@ void HttpServerProperties::OnBrokenAndRecentlyBrokenAlternativeServicesLoaded(
 
 void HttpServerProperties::MaybeQueueWriteProperties() {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-
   if (prefs_update_timer_.IsRunning() || !properties_manager_)
     return;
 
@@ -1236,6 +1238,22 @@ void HttpServerProperties::MaybeQueueWriteProperties() {
       FROM_HERE, kUpdatePrefsDelay,
       base::BindOnce(&HttpServerProperties::WriteProperties,
                      base::Unretained(this), base::OnceClosure()));
+}
+
+void HttpServerProperties::FlushWritePropertiesForTesting(
+    base::OnceClosure callback) {
+  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
+  if (!properties_manager_) {
+    return;
+  }
+
+  // initialising the |properties_manager_| is not a concern here. So skip
+  // it and set |is_initalized_| to true.
+  is_initialized_ = true;
+  // Stop the timer if it's running, since this will write to the properties
+  // file immediately.
+  prefs_update_timer_.Stop();
+  WriteProperties(std::move(callback));
 }
 
 void HttpServerProperties::WriteProperties(base::OnceClosure callback) const {

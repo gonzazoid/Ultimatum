@@ -2,11 +2,15 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {TestRunner} from 'test_runner';
+import {SourcesTestRunner} from 'sources_test_runner';
+
+import * as PerfUI from 'devtools/ui/legacy/components/perf_ui/perf_ui.js';
+import * as SourceFrame from 'devtools/ui/legacy/components/source_frame/source_frame.js';
+import * as SDK from 'devtools/core/sdk/sdk.js';
+
 (async function() {
   TestRunner.addResult(`Tests that a line-level CPU profile is shown in the text editor.\n`);
-  await TestRunner.loadLegacyModule('sources'); await TestRunner.loadTestModule('sources_test_runner');
-  await TestRunner.loadLegacyModule("perf_ui");
-  await TestRunner.loadLegacyModule('source_frame');
   await TestRunner.showPanel('timeline');
   await TestRunner.showPanel('sources');
   await TestRunner.addScriptTag('../resources/empty.js');
@@ -51,7 +55,7 @@
     TestRunner.addResult(TestRunner.formatters.formatAsURL(url));
     cpuProfile.nodes.forEach(n => n.callFrame.url = url);
     const lineProfile = PerfUI.LineLevelProfile.Performance.instance();
-    lineProfile.appendCPUProfile(new SDK.CPUProfileDataModel(cpuProfile));
+    lineProfile.appendCPUProfile(new SDK.CPUProfileDataModel.CPUProfileDataModel(cpuProfile));
     setTimeout(() => TestRunner.completeTest(), 0);
   }
 })();

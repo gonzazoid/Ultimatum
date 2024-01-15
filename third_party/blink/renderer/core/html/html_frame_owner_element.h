@@ -24,6 +24,7 @@
 #include "services/network/public/mojom/trust_tokens.mojom-blink-forward.h"
 #include "third_party/blink/public/common/frame/frame_owner_element_type.h"
 #include "third_party/blink/public/mojom/scroll/scrollbar_mode.mojom-blink.h"
+#include "third_party/blink/public/mojom/timing/resource_timing.mojom-blink.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/frame/dom_window.h"
@@ -68,12 +69,14 @@ class CORE_EXPORT HTMLFrameOwnerElement : public HTMLElement,
 
   virtual FrameOwnerElementType OwnerType() const = 0;
 
+  virtual const QualifiedName& SubResourceAttributeName() const;
+
   Document* getSVGDocument(ExceptionState&) const;
 
   void SetEmbeddedContentView(EmbeddedContentView*);
   EmbeddedContentView* ReleaseEmbeddedContentView();
   EmbeddedContentView* OwnedEmbeddedContentView() const {
-    return embedded_content_view_;
+    return embedded_content_view_.Get();
   }
 
   void SetColorScheme(mojom::blink::ColorScheme);
@@ -99,10 +102,10 @@ class CORE_EXPORT HTMLFrameOwnerElement : public HTMLElement,
   };
 
   // FrameOwner overrides:
-  Frame* ContentFrame() const final { return content_frame_; }
+  Frame* ContentFrame() const final { return content_frame_.Get(); }
   void SetContentFrame(Frame&) final;
   void ClearContentFrame() final;
-  void AddResourceTiming(const ResourceTimingInfo&) final;
+  void AddResourceTiming(mojom::blink::ResourceTimingInfoPtr) final;
   void DispatchLoad() final;
   const FramePolicy& GetFramePolicy() const final { return frame_policy_; }
   void IntrinsicSizingInfoChanged() override {}
@@ -120,6 +123,8 @@ class CORE_EXPORT HTMLFrameOwnerElement : public HTMLElement,
   bool IsDisplayNone() const override { return !embedded_content_view_; }
   mojom::blink::ColorScheme GetColorScheme() const override;
   bool ShouldLazyLoadChildren() const final;
+  void DidReportResourceTiming();
+  bool HasPendingFallbackTimingInfo() const;
 
   // For unit tests, manually trigger the UpdateContainerPolicy method.
   void UpdateContainerPolicyForTests() { UpdateContainerPolicy(); }
@@ -145,7 +150,8 @@ class CORE_EXPORT HTMLFrameOwnerElement : public HTMLElement,
   bool LoadOrRedirectSubframe(const KURL&,
                               const AtomicString& frame_name,
                               bool replace_current_item);
-  bool IsKeyboardFocusable() const override;
+  bool IsKeyboardFocusable(UpdateBehavior update_behavior =
+                               UpdateBehavior::kStyleAndLayout) const override;
   void FrameOwnerPropertiesChanged() override;
 
   void DisposePluginSoon(WebPluginContainerImpl*);
@@ -168,6 +174,10 @@ class CORE_EXPORT HTMLFrameOwnerElement : public HTMLElement,
   // changes.
   void UpdateContainerPolicy();
 
+  // Called when the container policy changes. Typically used to sync a
+  // container policy update to the browser process.
+  virtual void DidChangeContainerPolicy();
+
   // Return a document policy required policy for this frame, based on the
   // frame attributes.
   virtual DocumentPolicyFeatureState ConstructRequiredPolicy() const {
@@ -182,6 +192,7 @@ class CORE_EXPORT HTMLFrameOwnerElement : public HTMLElement,
   // based on the frame attributes.
   virtual network::mojom::blink::TrustTokenParamsPtr ConstructTrustTokenParams()
       const;
+  void ReportFallbackResourceTimingIfNeeded();
 
  protected:
   bool is_swapping_frames() const { return is_swapping_frames_; }
@@ -243,6 +254,7 @@ class CORE_EXPORT HTMLFrameOwnerElement : public HTMLElement,
   FramePolicy frame_policy_;
 
   Member<LazyLoadFrameObserver> lazy_load_frame_observer_;
+  mojom::blink::ResourceTimingInfoPtr fallback_timing_info_;
   bool should_lazy_load_children_;
   bool is_swapping_frames_{false};
 };

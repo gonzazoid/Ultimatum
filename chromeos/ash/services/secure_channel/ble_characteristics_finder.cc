@@ -4,7 +4,7 @@
 
 #include "chromeos/ash/services/secure_channel/ble_characteristics_finder.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/strings/string_util.h"
 #include "chromeos/ash/components/multidevice/logging/logging.h"
 #include "chromeos/ash/services/secure_channel/background_eid_generator.h"
@@ -172,7 +172,7 @@ void BluetoothLowEnergyCharacteristicsFinder::TryToVerifyEid(
 
 void BluetoothLowEnergyCharacteristicsFinder::OnRemoteCharacteristicRead(
     const std::string& service_id,
-    absl::optional<device::BluetoothGattService::GattErrorCode> error_code,
+    std::optional<device::BluetoothGattService::GattErrorCode> error_code,
     const std::vector<uint8_t>& value) {
   auto it = service_ids_pending_eid_read_.find(service_id);
   if (it == service_ids_pending_eid_read_.end()) {

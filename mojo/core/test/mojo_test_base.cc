@@ -37,7 +37,7 @@ MojoTestBase::ClientController& MojoTestBase::StartClient(
 MojoTestBase::ClientController::ClientController(const std::string& client_name,
                                                  MojoTestBase* test,
                                                  LaunchType launch_type) {
-#if !BUILDFLAG(IS_IOS)
+#if BUILDFLAG(USE_BLINK)
   pipe_ = helper_.StartChild(client_name, launch_type);
 #endif
 }
@@ -49,7 +49,7 @@ MojoTestBase::ClientController::~ClientController() {
 
 int MojoTestBase::ClientController::WaitForShutdown() {
   was_shutdown_ = true;
-#if !BUILDFLAG(IS_IOS)
+#if BUILDFLAG(USE_BLINK)
   int retval = helper_.WaitForChildShutdown();
   return retval;
 #else
@@ -207,7 +207,7 @@ MojoHandle MojoTestBase::DuplicateBuffer(MojoHandle h, bool read_only) {
 // static
 void MojoTestBase::WriteToBuffer(MojoHandle h,
                                  size_t offset,
-                                 const base::StringPiece& s) {
+                                 const std::string_view& s) {
   char* data;
   EXPECT_EQ(MOJO_RESULT_OK, MojoMapBuffer(h, offset, s.size(), nullptr,
                                           reinterpret_cast<void**>(&data)));
@@ -218,11 +218,11 @@ void MojoTestBase::WriteToBuffer(MojoHandle h,
 // static
 void MojoTestBase::ExpectBufferContents(MojoHandle h,
                                         size_t offset,
-                                        const base::StringPiece& s) {
+                                        const std::string_view& s) {
   char* data;
   EXPECT_EQ(MOJO_RESULT_OK, MojoMapBuffer(h, offset, s.size(), nullptr,
                                           reinterpret_cast<void**>(&data)));
-  EXPECT_EQ(s, base::StringPiece(data, s.size()));
+  EXPECT_EQ(s, std::string_view(data, s.size()));
   EXPECT_EQ(MOJO_RESULT_OK, MojoUnmapBuffer(static_cast<void*>(data)));
 }
 

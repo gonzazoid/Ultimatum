@@ -7,13 +7,14 @@
 
 #include "ash/ash_export.h"
 #include "ash/capture_mode/capture_mode_types.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/views/view.h"
 
 namespace ash {
 
-class IconButton;
-class IconSwitch;
+class TabSlider;
+class TabSliderButton;
 
 // A view that is part of the CaptureBar view, from which the user can toggle
 // between the three available capture sources (fullscreen, region, and window).
@@ -27,11 +28,15 @@ class ASH_EXPORT CaptureModeSourceView : public views::View {
   CaptureModeSourceView& operator=(const CaptureModeSourceView&) = delete;
   ~CaptureModeSourceView() override;
 
-  IconButton* fullscreen_toggle_button() const {
+  TabSliderButton* fullscreen_toggle_button() const {
     return fullscreen_toggle_button_;
   }
-  IconButton* region_toggle_button() const { return region_toggle_button_; }
-  IconButton* window_toggle_button() const { return window_toggle_button_; }
+  TabSliderButton* region_toggle_button() const {
+    return region_toggle_button_;
+  }
+  TabSliderButton* window_toggle_button() const {
+    return window_toggle_button_;
+  }
 
   // Called when the capture source changes.
   void OnCaptureSourceChanged(CaptureModeSource new_source);
@@ -46,12 +51,12 @@ class ASH_EXPORT CaptureModeSourceView : public views::View {
 
   // Owned by the view hierarchy. Contains fullscreen, region, and window toggle
   // buttons.
-  IconSwitch* capture_source_switch_;
+  raw_ptr<TabSlider> capture_source_switch_;
 
   // Owned by the `capture_source_switch_`.
-  IconButton* fullscreen_toggle_button_;
-  IconButton* region_toggle_button_;
-  IconButton* window_toggle_button_;
+  raw_ptr<TabSliderButton> fullscreen_toggle_button_;
+  raw_ptr<TabSliderButton> region_toggle_button_;
+  raw_ptr<TabSliderButton> window_toggle_button_;
 };
 
 }  // namespace ash

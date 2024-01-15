@@ -7,10 +7,11 @@
 import argparse
 import logging
 import sys
-import time
 
-from common import register_log_args
-from ffx_integration import FfxEmulator
+from contextlib import AbstractContextManager
+
+from common import catch_sigterm, register_log_args, wait_for_sigterm
+from ffx_emulator import FfxEmulator
 
 
 def register_emulator_args(parser: argparse.ArgumentParser,
@@ -36,35 +37,53 @@ def register_emulator_args(parser: argparse.ArgumentParser,
         action='store_true',
         help='Use host GPU hardware instead of Swiftshader.')
     femu_args.add_argument(
-        '--product-bundle',
+        '--product',
         help='Specify a product bundle used for booting the '
         'emulator. Defaults to the terminal product.')
     femu_args.add_argument('--with-network',
                            action='store_true',
                            help='Run emulator with emulated nic via tun/tap.')
+    femu_args.add_argument('--everlasting',
+                           action='store_true',
+                           help='If the emulator should be long-living.')
+    femu_args.add_argument(
+        '--device-spec',
+        help='Configure the virtual device to use. They are usually defined in '
+        'the product-bundle/virtual_devices/manifest.json. If this flag is not '
+        'provided or is an empty string, ffx emu will decide the recommended '
+        'spec.')
 
 
-def create_emulator_from_args(args: argparse.Namespace) -> FfxEmulator:
+def create_emulator_from_args(
+        args: argparse.Namespace) -> AbstractContextManager:
     """Helper method for initializing an FfxEmulator class with parsed
     arguments."""
-    return FfxEmulator(args.enable_graphics, args.hardware_gpu,
-                       args.product_bundle, args.with_network, args.logs_dir)
+    return FfxEmulator(args)
 
 
 def main():
     """Stand-alone function for starting an emulator."""
+
+    catch_sigterm()
+    logging.basicConfig(level=logging.INFO)
     parser = argparse.ArgumentParser()
     register_emulator_args(parser, True)
     register_log_args(parser)
+    parser.add_argument('--target-id-only',
+                        action='store_true',
+                        help='Write only the target emulator id to the ' \
+                             'stdout. It is usually useful in the unattended ' \
+                             'environment.')
     args = parser.parse_args()
-    with create_emulator_from_args(args):
-        try:
-            while True:
-                time.sleep(10000)
-        except KeyboardInterrupt:
-            logging.info('Ctrl-C received; shutting down the emulator.')
-        except SystemExit:
-            logging.info('SIGTERM received; shutting down the emulator.')
+    with create_emulator_from_args(args) as target_id:
+        if args.target_id_only:
+            print(target_id, flush=True)
+        else:
+            logging.info(
+                'Emulator successfully started. You can now run Chrome '
+                'Fuchsia tests with --target-id=%s to target this emulator.',
+                target_id)
+        wait_for_sigterm('shutting down the emulator.')
 
 
 if __name__ == '__main__':

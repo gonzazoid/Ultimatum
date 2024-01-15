@@ -11,7 +11,7 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/singleton.h"
 #include "base/memory/weak_ptr.h"
@@ -24,20 +24,8 @@ class PrefRegistrySimple;
 class Profile;
 
 namespace base {
-// TODO(crbug.com/1187061): Refactor this to remove base::DictionaryValue.
-class DictionaryValue;
 class FilePath;
 }  // namespace base
-
-namespace chromeos {
-
-// Friend function to initialize StartupCustomizationDocument for testing.
-void InitStartupCustomizationDocumentForTesting(const std::string& manifest);
-
-namespace system {
-class StatisticsProvider;
-}  // namespace system
-}  // namespace chromeos
 
 namespace extensions {
 class ExternalLoader;
@@ -54,8 +42,15 @@ class PrefRegistrySyncable;
 
 namespace ash {
 
+namespace system {
+class StatisticsProvider;
+}
+
 class CustomizationWallpaperDownloader;
 class ServicesCustomizationExternalLoader;
+
+// Friend function to initialize StartupCustomizationDocument for testing.
+void InitStartupCustomizationDocumentForTesting(const std::string& manifest);
 
 // Base class for OEM customization document classes.
 class CustomizationDocument {
@@ -119,7 +114,7 @@ class StartupCustomizationDocument : public CustomizationDocument {
   FRIEND_TEST_ALL_PREFIXES(StartupCustomizationDocumentTest, BadManifest);
   FRIEND_TEST_ALL_PREFIXES(ServicesCustomizationDocumentTest, MultiLanguage);
   friend class OobeLocalizationTest;
-  friend void chromeos::InitStartupCustomizationDocumentForTesting(
+  friend void InitStartupCustomizationDocumentForTesting(
       const std::string& manifest);
   friend struct base::DefaultSingletonTraits<StartupCustomizationDocument>;
 
@@ -127,12 +122,12 @@ class StartupCustomizationDocument : public CustomizationDocument {
   StartupCustomizationDocument();
 
   // C-tor for test construction.
-  StartupCustomizationDocument(chromeos::system::StatisticsProvider* provider,
+  StartupCustomizationDocument(system::StatisticsProvider* provider,
                                const std::string& manifest);
 
   ~StartupCustomizationDocument() override;
 
-  void Init(chromeos::system::StatisticsProvider* provider);
+  void Init(system::StatisticsProvider* provider);
 
   std::string initial_locale_;
   std::vector<std::string> configured_locales_;
@@ -158,7 +153,9 @@ class ServicesCustomizationDocument : public CustomizationDocument {
   static void RegisterPrefs(PrefRegistrySimple* registry);
   static void RegisterProfilePrefs(user_prefs::PrefRegistrySyncable* registry);
 
-  static const char kManifestUrl[];
+  // Template URL where to fetch OEM services customization manifest from.
+  static constexpr char kManifestUrl[] =
+      "https://ssl.gstatic.com/chrome/chromeos-customization/%s.json";
 
   // Return true if the customization was applied. Customization is applied only
   // once per machine.
@@ -309,8 +306,9 @@ class ServicesCustomizationDocument : public CustomizationDocument {
   // Manifest fetch is already in progress.
   bool load_started_;
 
-  // Delay between checks for network online state.
-  base::TimeDelta network_delay_;
+  // Delay between checks for network online state. If the optional is empty,
+  // the default value for delay is used.
+  absl::optional<base::TimeDelta> custom_network_delay_ = absl::nullopt;
 
   // Known external loaders.
   ExternalLoaders external_loaders_;
@@ -333,11 +331,5 @@ class ServicesCustomizationDocument : public CustomizationDocument {
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when ChromOS code migration is done.
-namespace chromeos {
-using ::ash::ServicesCustomizationDocument;
-using ::ash::StartupCustomizationDocument;
-}  // namespace chromeos
 
 #endif  // CHROME_BROWSER_ASH_CUSTOMIZATION_CUSTOMIZATION_DOCUMENT_H_

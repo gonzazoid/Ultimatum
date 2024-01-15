@@ -10,7 +10,7 @@
 
 // Bookmark container constants:
 // Accessibility identifier of the Bookmark Home View container.
-extern NSString* const kBookmarkHomeViewContainerIdentifier;
+extern NSString* const kBookmarksHomeViewContainerIdentifier;
 // Accessibility identifier of the Bookmark Edit View container.
 extern NSString* const kBookmarkEditViewContainerIdentifier;
 // Accessibility identifier of the Bookmark Folder Edit View container.
@@ -20,15 +20,15 @@ extern NSString* const kBookmarkFolderCreateViewContainerIdentifier;
 // Accessibility identifier of the Bookmark Folder Picker View container.
 extern NSString* const kBookmarkFolderPickerViewContainerIdentifier;
 // Accessibility identifier of the Bookmark Home TableView.
-extern NSString* const kBookmarkHomeTableViewIdentifier;
+extern NSString* const kBookmarksHomeTableViewIdentifier;
 // Accessibility identifier of the Bookmark Home context menu.
-extern NSString* const kBookmarkHomeContextMenuIdentifier;
+extern NSString* const kBookmarksHomeContextMenuIdentifier;
 
 // UINavigationBar accessibility constants:
 // Accessibility identifier of the Bookmark navigation bar.
 extern NSString* const kBookmarkNavigationBarIdentifier;
-// Accessibility identifier of the BookmarkHome VC navigation bar done button.
-extern NSString* const kBookmarkHomeNavigationBarDoneButtonIdentifier;
+// Accessibility identifier of the BookmarksHome VC navigation bar done button.
+extern NSString* const kBookmarksHomeNavigationBarDoneButtonIdentifier;
 // Accessibility identifier of the BookmarkEdit VC navigation bar done button.
 extern NSString* const kBookmarkEditNavigationBarDoneButtonIdentifier;
 // Accessibility identifier of the BookmarkFolderEdit VC navigation bar done
@@ -40,18 +40,18 @@ extern NSString* const kBookmarkFolderEditNavigationBarDoneButtonIdentifier;
 extern NSString* const kBookmarkEditDeleteButtonIdentifier;
 // Accessibility identifier of the BookmarkFolderEditorVC toolbar delete button.
 extern NSString* const kBookmarkFolderEditorDeleteButtonIdentifier;
-// Accessibility identifier of the BookmarkHomeVC leading button.
-extern NSString* const kBookmarkHomeLeadingButtonIdentifier;
-// Accessibility identifier of the BookmarkHomeVC center button.
-extern NSString* const kBookmarkHomeCenterButtonIdentifier;
-// Accessibility identifier of the BookmarkHomeVC trailing button.
-extern NSString* const kBookmarkHomeTrailingButtonIdentifier;
-// Accessibility identifier of the BookmarkHomeVC UIToolbar.
-extern NSString* const kBookmarkHomeUIToolbarIdentifier;
-// Accessibility identifier of the BookmarkHomeVC search bar.
-extern NSString* const kBookmarkHomeSearchBarIdentifier;
+// Accessibility identifier of the BookmarksHomeVC leading button.
+extern NSString* const kBookmarksHomeLeadingButtonIdentifier;
+// Accessibility identifier of the BookmarksHomeVC center button.
+extern NSString* const kBookmarksHomeCenterButtonIdentifier;
+// Accessibility identifier of the BookmarksHomeVC trailing button.
+extern NSString* const kBookmarksHomeTrailingButtonIdentifier;
+// Accessibility identifier of the BookmarksHomeVC UIToolbar.
+extern NSString* const kBookmarksHomeUIToolbarIdentifier;
+// Accessibility identifier of the BookmarksHomeVC search bar.
+extern NSString* const kBookmarksHomeSearchBarIdentifier;
 // Accessibility identifier of the search scrim.
-extern NSString* const kBookmarkHomeSearchScrimIdentifier;
+extern NSString* const kBookmarksHomeSearchScrimIdentifier;
 
 // Cell Layout constants:
 // The space between UIViews inside the cell.
@@ -66,11 +66,22 @@ extern const CGFloat kBookmarkCellHorizontalTrailingInset;
 extern const CGFloat kBookmarkCellHorizontalAccessoryViewSpacing;
 
 // Cell accessibility constants:
-// Accessibility identifier of the Create NewFolder Button.
-extern NSString* const kBookmarkCreateNewFolderCellIdentifier;
+// Accessibility identifier of the Create NewFolder Button in profile bookmarks
+// section.
+extern NSString* const kBookmarkCreateNewLocalOrSyncableFolderCellIdentifier;
+
+// Cell accessibility constants:
+// Accessibility identifier of the Create NewFolder Button in account bookmarks
+// section.
+extern NSString* const kBookmarkCreateNewAccountFolderCellIdentifier;
 
 // Empty state accessibility constants:
 // Accessibility identifier for the explanatory label in the empty state.
 extern NSString* const kBookmarkEmptyStateExplanatoryLabelIdentifier;
+
+// Accessibility identifiers for batch upload views.
+extern NSString* const kBookmarksHomeBatchUploadRecommendationItemIdentifier;
+extern NSString* const kBookmarksHomeBatchUploadButtonIdentifier;
+extern NSString* const kBookmarksHomeBatchUploadAlertIdentifier;
 
 #endif  // IOS_CHROME_BROWSER_UI_BOOKMARKS_BOOKMARK_UI_CONSTANTS_H_

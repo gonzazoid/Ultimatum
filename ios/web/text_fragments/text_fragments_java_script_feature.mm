@@ -11,12 +11,8 @@
 #import "components/shared_highlighting/ios/parsing_utils.h"
 #import "ios/web/public/js_messaging/script_message.h"
 #import "ios/web/public/js_messaging/web_frame.h"
-#import "ios/web/public/js_messaging/web_frame_util.h"
+#import "ios/web/public/js_messaging/web_frames_manager.h"
 #import "ios/web/text_fragments/text_fragments_manager_impl.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace {
 const char kScriptName[] = "text_fragments";
@@ -32,7 +28,7 @@ namespace web {
 
 TextFragmentsJavaScriptFeature::TextFragmentsJavaScriptFeature()
     : JavaScriptFeature(
-          ContentWorld::kAnyContentWorld,
+          ContentWorld::kIsolatedWorld,
           {FeatureScript::CreateWithFilename(
               kScriptName,
               FeatureScript::InjectionTime::kDocumentStart,
@@ -53,7 +49,7 @@ void TextFragmentsJavaScriptFeature::ProcessTextFragments(
     std::string background_color_hex_rgb,
     std::string foreground_color_hex_rgb) {
   DCHECK(web_state);
-  auto* frame = web::GetMainFrame(web_state);
+  WebFrame* frame = GetWebFramesManager(web_state)->GetMainWebFrame();
   if (!frame) {
     return;
   }
@@ -65,25 +61,24 @@ void TextFragmentsJavaScriptFeature::ProcessTextFragments(
                              ? base::Value()
                              : base::Value(foreground_color_hex_rgb);
 
-  std::vector<base::Value> parameters;
-  parameters.push_back(std::move(parsed_fragments));
-  parameters.emplace_back(/*scroll=*/true);
-  parameters.push_back(std::move(bg_color));
-  parameters.push_back(std::move(fg_color));
-
+  auto parameters = base::Value::List()
+                        .Append(std::move(parsed_fragments))
+                        .Append(/*scroll=*/true)
+                        .Append(std::move(bg_color))
+                        .Append(std::move(fg_color));
   CallJavaScriptFunction(frame, kHandleFragmentsScript, parameters);
 }
 
 void TextFragmentsJavaScriptFeature::RemoveHighlights(WebState* web_state,
                                                       const GURL& new_url) {
   DCHECK(web_state);
-  auto* frame = web::GetMainFrame(web_state);
+  WebFrame* frame = GetWebFramesManager(web_state)->GetMainWebFrame();
   if (!frame) {
     return;
   }
 
-  std::vector<base::Value> parameters;
-  parameters.emplace_back(new_url.is_valid() ? new_url.spec() : "");
+  auto parameters =
+      base::Value::List().Append(new_url.is_valid() ? new_url.spec() : "");
   CallJavaScriptFunction(frame, kRemoveHighlightsScript, parameters);
 }
 
@@ -100,7 +95,9 @@ void TextFragmentsJavaScriptFeature::ScriptMessageReceived(
     return;
   }
 
-  const std::string* command = response->FindStringKey("command");
+  const base::Value::Dict& dict = response->GetDict();
+
+  const std::string* command = dict.FindString("command");
   if (!command) {
     return;
   }
@@ -114,10 +111,10 @@ void TextFragmentsJavaScriptFeature::ScriptMessageReceived(
 
   if (*command == "textFragments.processingComplete") {
     // Extract success metrics.
-    absl::optional<double> optional_fragment_count =
-        response->FindDoublePath("result.fragmentsCount");
-    absl::optional<double> optional_success_count =
-        response->FindDoublePath("result.successCount");
+    std::optional<double> optional_fragment_count =
+        dict.FindDoubleByDottedPath("result.fragmentsCount");
+    std::optional<double> optional_success_count =
+        dict.FindDoubleByDottedPath("result.successCount");
 
     // Since the response can't be trusted, don't log metrics if the results
     // look invalid.
@@ -142,16 +139,15 @@ void TextFragmentsJavaScriptFeature::ScriptMessageReceived(
   } else if (*command == "textFragments.onClick") {
     manager->OnClick();
   } else if (*command == "textFragments.onClickWithSender") {
-    absl::optional<CGRect> rect =
-        shared_highlighting::ParseRect(response->FindDictKey("rect"));
-    const std::string* text = response->FindStringKey("text");
+    std::optional<CGRect> rect =
+        shared_highlighting::ParseRect(dict.FindDict("rect"));
+    const std::string* text = dict.FindString("text");
 
-    const base::Value::List* fragment_values_list =
-        response->GetDict().FindList("fragments");
+    const base::Value::List* fragment_values_list = dict.FindList("fragments");
     std::vector<shared_highlighting::TextFragment> fragments;
     if (fragment_values_list) {
       for (const base::Value& val : *fragment_values_list) {
-        absl::optional<shared_highlighting::TextFragment> fragment =
+        std::optional<shared_highlighting::TextFragment> fragment =
             shared_highlighting::TextFragment::FromValue(&val);
         if (fragment) {
           fragments.push_back(*fragment);
@@ -168,7 +164,7 @@ void TextFragmentsJavaScriptFeature::ScriptMessageReceived(
   }
 }
 
-absl::optional<std::string>
+std::optional<std::string>
 TextFragmentsJavaScriptFeature::GetScriptMessageHandlerName() const {
   return kScriptHandlerName;
 }

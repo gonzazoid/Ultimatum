@@ -7,12 +7,14 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <set>
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/component_export.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/scoped_observation.h"
@@ -23,7 +25,6 @@
 #include "chromeos/ash/components/network/network_state_handler.h"
 #include "chromeos/ash/components/network/network_state_handler_observer.h"
 #include "chromeos/dbus/common/dbus_method_call_status.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace dbus {
 class ObjectPath;
@@ -75,7 +76,7 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) NetworkConfigurationHandler
   // given properties will be merged with the existing settings, and it won't
   // clear any existing properties.
   void SetShillProperties(const std::string& service_path,
-                          const base::Value& shill_properties,
+                          const base::Value::Dict& shill_properties,
                           base::OnceClosure callback,
                           network_handler::ErrorCallback error_callback);
 
@@ -99,7 +100,7 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) NetworkConfigurationHandler
   // Manager.ConfigureServiceForProfile. NOTE: Normally
   // ManagedNetworkConfigurationHandler should be used to call
   // CreateConfiguration. This will set GUID if not provided.
-  void CreateShillConfiguration(const base::Value& shill_properties,
+  void CreateShillConfiguration(const base::Value::Dict& shill_properties,
                                 network_handler::ServiceResultCallback callback,
                                 network_handler::ErrorCallback error_callback);
 
@@ -111,7 +112,7 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) NetworkConfigurationHandler
   // operation and only entries that evaluate to true by applying the confirmer
   // will be removed.
   void RemoveConfiguration(const std::string& service_path,
-                           absl::optional<RemoveConfirmer> remove_confirmer,
+                           std::optional<RemoveConfirmer> remove_confirmer,
                            base::OnceClosure callback,
                            network_handler::ErrorCallback error_callback);
 
@@ -158,7 +159,7 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) NetworkConfigurationHandler
   // (NetworkStateHandler) to update before triggering the callback.
   void ConfigurationCompleted(const std::string& profile_path,
                               const std::string& guid,
-                              base::Value configure_properties,
+                              base::Value::Dict configure_properties,
                               network_handler::ServiceResultCallback callback,
                               const dbus::ObjectPath& service_path);
 
@@ -190,12 +191,12 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) NetworkConfigurationHandler
   // Set the Name and GUID properties correctly and Invoke |callback|.
   void GetPropertiesCallback(network_handler::ResultCallback callback,
                              const std::string& service_path,
-                             absl::optional<base::Value> properties);
+                             std::optional<base::Value::Dict> properties);
 
   // Invoke |callback| and inform NetworkStateHandler to request an update
   // for the service after setting properties.
   void SetPropertiesSuccessCallback(const std::string& service_path,
-                                    base::Value set_properties,
+                                    base::Value::Dict set_properties,
                                     base::OnceClosure callback);
   void SetPropertiesErrorCallback(const std::string& service_path,
                                   network_handler::ErrorCallback error_callback,
@@ -207,7 +208,7 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) NetworkConfigurationHandler
   void ClearPropertiesSuccessCallback(const std::string& service_path,
                                       const std::vector<std::string>& names,
                                       base::OnceClosure callback,
-                                      const base::ListValue& result);
+                                      const base::Value::List& result);
   void ClearPropertiesErrorCallback(
       const std::string& service_path,
       network_handler::ErrorCallback error_callback,
@@ -222,15 +223,15 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) NetworkConfigurationHandler
   void RemoveConfigurationFromProfile(
       const std::string& service_path,
       const std::string& profile_path,
-      absl::optional<RemoveConfirmer> remove_confirmer,
+      std::optional<RemoveConfirmer> remove_confirmer,
       base::OnceClosure callback,
       network_handler::ErrorCallback error_callback);
 
   // Unowned associated Network*Handlers (global or test instance).
-  NetworkStateHandler* network_state_handler_;
+  raw_ptr<NetworkStateHandler> network_state_handler_;
   base::ScopedObservation<NetworkStateHandler, NetworkStateHandlerObserver>
       network_state_handler_observer_{this};
-  NetworkDeviceHandler* network_device_handler_;
+  raw_ptr<NetworkDeviceHandler, DanglingUntriaged> network_device_handler_;
 
   // Map of in-progress deleter instances.
   std::map<std::string, std::unique_ptr<ProfileEntryDeleter>>
@@ -248,10 +249,5 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) NetworkConfigurationHandler
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when the migration is finished.
-namespace chromeos {
-using ::ash::NetworkConfigurationHandler;
-}
 
 #endif  // CHROMEOS_ASH_COMPONENTS_NETWORK_NETWORK_CONFIGURATION_HANDLER_H_

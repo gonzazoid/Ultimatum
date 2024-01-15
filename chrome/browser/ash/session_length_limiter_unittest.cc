@@ -7,11 +7,12 @@
 #include <memory>
 
 #include "base/compiler_specific.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/strings/string_number_conversions.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/power_monitor_test.h"
 #include "base/test/test_mock_time_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "base/values.h"
 #include "chrome/common/pref_names.h"
@@ -46,7 +47,7 @@ class WallClockForwarder {
 
  private:
   // Unowned, must outlive this.
-  base::TestMockTimeTaskRunner* const runner_;
+  const raw_ptr<base::TestMockTimeTaskRunner> runner_;
 
   // Used to simulate a power suspend and resume.
   base::test::ScopedPowerMonitorTestSource fake_power_monitor_source_;
@@ -113,8 +114,9 @@ class SessionLengthLimiterTest : public testing::Test {
   TestingPrefServiceSimple local_state_;
   bool user_activity_seen_;
 
-  MockSessionLengthLimiterDelegate* delegate_;  // Owned by
-                                                // session_length_limiter_.
+  raw_ptr<MockSessionLengthLimiterDelegate, DanglingUntriaged>
+      delegate_;  // Owned by
+                  // session_length_limiter_.
   std::unique_ptr<SessionLengthLimiter> session_length_limiter_;
 };
 
@@ -590,7 +592,7 @@ TEST_F(SessionLengthLimiterTest, UserActivityWhileWaiting) {
 // Creates a SessionLengthLimiter without setting a limit. Verifies that the
 // limiter does not start a timer.
 TEST_F(SessionLengthLimiterTest, RunWithoutLimit) {
-  base::ThreadTaskRunnerHandle runner_handler(runner_);
+  base::SingleThreadTaskRunner::CurrentDefaultHandle runner_handle(runner_);
 
   CreateSessionLengthLimiter(false);
 
@@ -603,7 +605,7 @@ TEST_F(SessionLengthLimiterTest, RunWithoutLimit) {
 // user activity occurs and that when the session length reaches the limit, the
 // session is terminated.
 TEST_F(SessionLengthLimiterTest, RunWithoutUserActivityWhileNotWaiting) {
-  base::ThreadTaskRunnerHandle runner_handler(runner_);
+  base::SingleThreadTaskRunner::CurrentDefaultHandle runner_handle(runner_);
 
   // Set a 60 second session time limit.
   SetSessionLengthLimitPref(base::Seconds(60));
@@ -622,7 +624,7 @@ TEST_F(SessionLengthLimiterTest, RunWithoutUserActivityWhileNotWaiting) {
 // for initial user activity. Verifies that if no user activity occurs, the
 // limiter does not start a timer.
 TEST_F(SessionLengthLimiterTest, RunWithoutUserActivityWhileWaiting) {
-  base::ThreadTaskRunnerHandle runner_handler(runner_);
+  base::SingleThreadTaskRunner::CurrentDefaultHandle runner_handle(runner_);
   SetWaitForInitialUserActivityPref(true);
 
   // Set a 60 second session time limit.
@@ -640,7 +642,7 @@ TEST_F(SessionLengthLimiterTest, RunWithoutUserActivityWhileWaiting) {
 // when the session length reaches the limit, the session is terminated. Also
 // verifies that user activity does not affect the timer.
 TEST_F(SessionLengthLimiterTest, RunWithUserActivityWhileNotWaiting) {
-  base::ThreadTaskRunnerHandle runner_handler(runner_);
+  base::SingleThreadTaskRunner::CurrentDefaultHandle runner_handle(runner_);
 
   // Set a 60 second session time limit.
   SetSessionLengthLimitPref(base::Seconds(60));
@@ -666,7 +668,7 @@ TEST_F(SessionLengthLimiterTest, RunWithUserActivityWhileNotWaiting) {
 // the session is terminated. Also verifies that further user activity does not
 // affect the timer.
 TEST_F(SessionLengthLimiterTest, RunWithUserActivityWhileWaiting) {
-  base::ThreadTaskRunnerHandle runner_handler(runner_);
+  base::SingleThreadTaskRunner::CurrentDefaultHandle runner_handle(runner_);
   SetWaitForInitialUserActivityPref(true);
 
   // Set a 60 second session time limit.
@@ -697,7 +699,7 @@ TEST_F(SessionLengthLimiterTest, RunWithUserActivityWhileWaiting) {
 // Verifies that when the session time reaches the new 90 second limit, the
 // session is terminated.
 TEST_F(SessionLengthLimiterTest, RunAndIncreaseSessionLengthLimit) {
-  base::ThreadTaskRunnerHandle runner_handler(runner_);
+  base::SingleThreadTaskRunner::CurrentDefaultHandle runner_handle(runner_);
 
   // Set a 60 second session time limit.
   SetSessionLengthLimitPref(base::Seconds(60));
@@ -724,7 +726,7 @@ TEST_F(SessionLengthLimiterTest, RunAndIncreaseSessionLengthLimit) {
 // session time have passed, the next timer tick causes the session to be
 // terminated.
 TEST_F(SessionLengthLimiterTest, RunAndDecreaseSessionLengthLimit) {
-  base::ThreadTaskRunnerHandle runner_handler(runner_);
+  base::SingleThreadTaskRunner::CurrentDefaultHandle runner_handle(runner_);
 
   // Set a 60 second session time limit.
   SetSessionLengthLimitPref(base::Seconds(60));
@@ -747,7 +749,7 @@ TEST_F(SessionLengthLimiterTest, RunAndDecreaseSessionLengthLimit) {
 // the limit is removed, the session is not terminated when the session time
 // reaches the original 60 second limit.
 TEST_F(SessionLengthLimiterTest, RunAndRemoveSessionLengthLimit) {
-  base::ThreadTaskRunnerHandle runner_handler(runner_);
+  base::SingleThreadTaskRunner::CurrentDefaultHandle runner_handle(runner_);
 
   // Set a 60 second session time limit.
   SetSessionLengthLimitPref(base::Seconds(60));
@@ -768,7 +770,7 @@ TEST_F(SessionLengthLimiterTest, RunAndRemoveSessionLengthLimit) {
 // Tests that session is stopped immediately if limit was hit with when device
 // was suspended.
 TEST_F(SessionLengthLimiterTest, SuspendAndStop) {
-  base::ThreadTaskRunnerHandle runner_handler(runner_);
+  base::SingleThreadTaskRunner::CurrentDefaultHandle runner_handle(runner_);
 
   // Set a 60 second session time limit.
   SetSessionLengthLimitPref(base::Seconds(60));
@@ -791,7 +793,7 @@ TEST_F(SessionLengthLimiterTest, SuspendAndStop) {
 // Tests that session is stopped withing timeout, even when part of session time
 // device was suspended.
 TEST_F(SessionLengthLimiterTest, SuspendAndRun) {
-  base::ThreadTaskRunnerHandle runner_handler(runner_);
+  base::SingleThreadTaskRunner::CurrentDefaultHandle runner_handle(runner_);
 
   // Set a 60 second session time limit.
   SetSessionLengthLimitPref(base::Seconds(60));

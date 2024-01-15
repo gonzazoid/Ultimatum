@@ -6,10 +6,10 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
 #include "base/files/file.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/process/process_info.h"
 #include "base/values.h"
@@ -55,20 +55,21 @@ void PipeMessagingChannel::Start(EventHandler* event_handler) {
       base::BindOnce(&PipeMessagingChannel::Shutdown, weak_ptr_));
 }
 
-void PipeMessagingChannel::ProcessMessage(
-    std::unique_ptr<base::Value> message) {
+void PipeMessagingChannel::ProcessMessage(base::Value message) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-  if (event_handler_)
+  if (event_handler_) {
     event_handler_->OnMessage(std::move(message));
+  }
 }
 
-void PipeMessagingChannel::SendMessage(std::unique_ptr<base::Value> message) {
+void PipeMessagingChannel::SendMessage(std::optional<base::ValueView> message) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   bool success = message && native_messaging_writer_;
-  if (success)
+  if (success) {
     success = native_messaging_writer_->WriteMessage(*message);
+  }
 
   if (!success) {
     // Close the write pipe so no more responses will be sent.

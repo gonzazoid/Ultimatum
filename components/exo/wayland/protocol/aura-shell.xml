@@ -24,7 +24,7 @@
     DEALINGS IN THE SOFTWARE.
   </copyright>
 
-  <interface name="zaura_shell" version="42">
+  <interface name="zaura_shell" version="64">
     <description summary="aura_shell">
       The global interface exposing aura shell capabilities is used to
       instantiate an interface extension for a wl_surface object.
@@ -158,9 +158,50 @@
   renamed to "destroy" if we move to aura-shell v2.
       </description>
     </request>
+
+    <!-- Version 57 additions -->
+    <event name="set_overview_mode" since="57">
+      <description summary="entered overview mode">
+        Notifies client that the server has entered overview mode. Overview mode
+        displays all app windows associated with the current desk for the user.
+      </description>
+    </event>
+    <event name="unset_overview_mode" since="57">
+      <description summary="exited overview mode">
+        Notifies client that the server has exited overview mode.
+      </description>
+    </event>
+
+    <!-- Version 58 additions -->
+    <event name="compositor_version" since="58">
+      <description summary="sends the server version">
+        Sends the Exo compositor version information.
+      </description>
+      <arg name="version_label" type="string" summary="version string label"/>
+    </event>
+
+    <!-- Version 60 additions -->
+    <event name="all_bug_fixes_sent" since="60">
+      <description summary="completed sending all bug fix ids">
+        Notifies client that all the IDs of a bug fixed on the exo server is
+        sent. Bug fix ids are sent via `bug_fix` events which sends ids one by
+        one, not an array. This event is used to confirm all ids are sent.
+      </description>
+    </event>
+
+    <!-- Version 61 additions -->
+    <event name="window_corners_radii" since="61">
+      <description summary="sends the radius of each corner the window">
+        Sends the radius of each corner of the window to the clients in dips.
+      </description>
+      <arg name="upper_left_radius" type="uint"/>
+      <arg name="upper_right_radius" type="uint"/>
+      <arg name="lower_right_radius" type="uint"/>
+      <arg name="lower_left_radius" type="uint"/>
+    </event>
   </interface>
 
-  <interface name="zaura_surface" version="38">
+  <interface name="zaura_surface" version="51">
     <description summary="aura shell interface to a wl_surface">
       An additional interface to a wl_surface object, which allows the
       client to access aura shell specific functionality for surface.
@@ -296,7 +337,7 @@
     <enum name="fullscreen_mode">
       <description
         summary="Specifies the behavior of the surface in fullscreen.">
-          Possible windowing system behaviors if this surface were to go
+          [Deprecated] Possible windowing system behaviors if this surface were to go
           fullscreen.
       </description>
       <entry
@@ -312,6 +353,7 @@
 
     <request name="set_fullscreen_mode" since="10">
       <description summary="Sets the behavior of the surface in fullscreen.">
+        [Deprecated] Use the set_fullscreen_mode in the toplevel interface.
         Suggests how the windowing system should behave if this surface were
         to go fullscreen. Does not make the surface fullscreen.
 
@@ -352,6 +394,7 @@
 
     <request name="intent_to_snap" since="16">
       <description summary="client intents to snap the surface.">
+        [Deprecated] Use intent_to_snap on zaura_toplevel.
         Notify (or inform) the server the client's intent to snap the window.
         To inform it's no longer willing to snap, send 'none'.
       </description>
@@ -360,18 +403,21 @@
 
     <request name="set_snap_left" since="16">
       <description summary="snap the surface to the left.">
+        [Deprecated] Use set_snap_primary on zaura_toplevel.
         Request that surface is snapped to the left.
       </description>
     </request>
 
     <request name="set_snap_right" since="16">
       <description summary="snap the surface to the right.">
+        [Deprecated] Use set_snap_secondary on zaura_toplevel.
         Request that surface is snapped to the right.
       </description>
     </request>
 
     <request name="unset_snap" since="16">
       <description summary="Unset the surface snap.">
+        [Deprecated] Use unset_snap on zaura_toplevel.
         Request that surface resets snapping.
       </description>
     </request>
@@ -534,9 +580,67 @@
   See zaura_shell.release for destructor naming.
       </description>
     </request>
+
+    <!-- Version 47 additions -->
+    <request name="show_tooltip" since="47">
+      <description summary="show tooltip window">
+        Show tooltip on server side.
+        `x` and `y` specifies the location of tooltip in surface local coordinates.
+        `hide_delay` and `show_delay` specify the time to wait until showing/hiding tooltip.
+        The unit is millisecond.
+      </description>
+      <arg name="text" type="string"/>
+      <arg name="x" type="int"/>
+      <arg name="y" type="int"/>
+      <arg name="tooltip_trigger" type="uint" summary="tooltip_trigger enum"/>
+      <arg name="show_delay" type="uint" summary="delay to show tooltip in millisecond"/>
+      <arg name="hide_delay" type="uint" summary="delay to hide tooltip in millisecond"/>
+    </request>
+
+    <enum name="tooltip_trigger">
+      <description summary="type of tooltip trigger">
+        Describes what triggered tooltip
+      </description>
+      <entry name="cursor" value="0" summary="triggered by cursor"/>
+      <entry name="keyboard" value="1" summary="triggered by keyboard"/>
+    </enum>
+
+    <request name="hide_tooltip" since="47">
+      <description summary="hide tooltip window">
+        Hide tooltip created by the same client on server side.
+        This may be called even when there is no tooltip window to hide.
+      </description>
+    </request>
+
+    <event name="tooltip_shown" since="47">
+      <description summary="tooltip is shown by server side">
+        Informs the client that the tooltip is shown with states.
+        `x` and `y` specifies the location of tooltip in surface local coordinates.
+      </description>
+      <arg name="text" type="string"/>
+      <arg name="x" type="int"/>
+      <arg name="y" type="int"/>
+      <arg name="width" type="int"/>
+      <arg name="height" type="int"/>
+    </event>
+
+    <event name="tooltip_hidden" since="47">
+      <description summary="tooltip is hidden by server side">
+        Informs the client that the tooltip is hidden.
+      </description>
+    </event>
+
+    <!-- Version 51 additions -->
+    <request name="set_accessibility_id" since="51">
+      <description summary="set accessibility ID to the surface">
+        Set accessibility window ID to the surface. A negative number removes
+        the existing accessibility ID from the surface.
+      </description>
+      <arg name="id" type="int" summary="Accessibility ID. Negative number removes existing accessibility ID from the surface."/>
+    </request>
   </interface>
 
-  <interface name="zaura_output" version="38">
+  <interface name="zaura_output" version="45">
     <description summary="aura shell interface to a wl_output">
       An additional interface to a wl_output object, which allows the
       client to access aura shell specific functionality for output.
@@ -642,7 +746,7 @@
     <!-- Version 33 additions -->
 
     <event name="insets" since="33">
-      <description summary="advertise the insets for the output">
+      <description summary="advertise the work area insets for the output">
         This event describes the insets for the output in logical screen
         coordinates, from which the work area can be calculated.
 
@@ -682,9 +786,26 @@
   See zaura_shell.release for destructor naming.
       </description>
     </request>
+
+    <event name="display_id" since="43">
+      <description summary="advertise the output's display id">
+        This event describes the 64bit display id assigned to each display by ChromeOS.
+	The value is opaque and should not be interpreted.
+      </description>
+      <arg name="display_id_hi" type="uint"/>
+      <arg name="display_id_lo" type="uint"/>
+    </event>
+
+    <!-- Version 45 additions -->
+    <event name="activated" since="45">
+      <description summary="target display for new windows">
+        Notifies that this output is now active output. It is typically used as a
+        target when a new window is created without specific bounds.
+      </description>
+    </event>
   </interface>
 
-  <interface name="zaura_toplevel" version="42">
+  <interface name="zaura_toplevel" version="64">
     <description summary="aura shell interface to the toplevel shell">
       An interface to the toplevel shell, which allows the
       client to access shell specific functionality.
@@ -733,20 +854,21 @@
 	Request a new location and bounds of the surface in DP screen
 	coordinates.  The size will be applied to visible bounds used
 	in set_geometry.  The output is a hint for the compositor to
-	determine which output the window should move to.  These
-	parameters are just a request and the compositor may ignore,
-	adjust the size and position based on the rule imposed by the
-	window manager, or may preserve it for future operations. For
-	example, the compositor will not allow a position outside of
-	the output, or the compositor may just store it if the
-	toplevel surface is in maximiezd state, and may use it upon
-	unmaximized.
+	determine which output the window should move to. If the
+	output is null, the compositor should make decision solely by
+	the given bounds. These parameters are just a request and the
+	compositor may ignore, adjust the size and position based on
+	the rule imposed by the window manager, or may preserve it for
+	future operations. For example, the compositor will not allow
+	a position outside of the output, or the compositor may just
+	store it if the toplevel surface is in maximiezd state, and
+	may use it upon unmaximized.
       </description>
       <arg name="x" type="int"/>
       <arg name="y" type="int"/>
       <arg name="width" type="int"/>
       <arg name="height" type="int"/>
-      <arg name="output" type="object" interface="wl_output" summary="the output"/>
+      <arg name="output" type="object" interface="wl_output" summary="the output" allow-null="true"/>
     </request>
 
     <event name="configure" since="29">
@@ -795,6 +917,21 @@
           The window is floated on top of other windows. One floated window is
           allowed per desk. Floating a window when there is already a floated
           window on the same desk will unfloat the floated window.
+        </description>
+      </entry>
+      <entry name="pip" value="105" since="54">
+        <description summary="window is PiP">
+          The window is in PiP mode.
+        </description>
+      </entry>
+      <entry name="pinned" value="106" since="64">
+        <description summary="window is pinned">
+          The window is pinned.
+        </description>
+      </entry>
+      <entry name="trusted_pinned" value="107" since="64">
+        <description summary="window is trusted pinned">
+          The window is trusted pinned.
         </description>
       </entry>
     </enum>
@@ -876,6 +1013,7 @@
     <!-- Version 39 additions -->
     <request name="set_float" since="39">
       <description summary="float the surface on top">
+        [Deprecated] Use set_float_to_location.
         This is a request to place the surface above others.
       </description>
     </request>
@@ -921,7 +1059,7 @@
       <arg name="x" type="int"/>
       <arg name="y" type="int"/>
       <arg name="output" type="object" interface="wl_output" allow-null="true"
-           summary="output to contain the surface"/>
+        summary="output to contain the surface"/>
     </request>
 
     <request name="activate" since="42">
@@ -940,9 +1078,317 @@
         if it deems the client to be misbehaving.
       </description>
     </request>
+
+    <!-- Version 44 additions -->
+    <enum name="fullscreen_mode">
+      <description
+        summary="Specifies the behavior of the surface in fullscreen.">
+          Possible windowing system behaviors if this surface were to go
+          fullscreen.
+      </description>
+       <entry
+        name="plain"
+        value="0"
+        summary="user cannot access system UIs using mouse/touches"/>
+      <entry
+        name="immersive"
+        value="1"
+        summary="user can access system UIs such as the shelf and window frame
+          by pointing to, or swiping over, the screen edge"/>
+    </enum>
+
+    <request name="set_fullscreen_mode" since="44">
+      <description summary="Sets the behavior of the surface in fullscreen.">
+        Suggests how the windowing manager should behave if this surface were
+        to go fullscreen. Does not make the surface fullscreen.
+      </description>
+      <arg name="mode" type="uint" enum="fullscreen_mode"/>
+    </request>
+
+    <!-- Version 46 additions -->
+    <request name="set_scale_factor" since="46">
+      <description summary="Allows the client to set the scale factor for the future buffer commits.">
+        The client has a 32-bit float scale factor that is associated with each
+        zaura toplevel. This scale factor must be propagated exactly to exo. To
+        do so we reinterpret_cast into a 32-bit uint and later cast back into a
+        float. This is because wayland does not support native transport of
+        floats. As different CPU architectures may use different endian
+        representations for IEEE 754 floats, this protocol implicitly assumes
+        that the caller and receiver are the same machine. To avoid redundant
+        messages, this request needs to only be called once when the zaura
+        toplevel scale factor changes. This is double buffered state and will be
+        applied in the next commit.
+      </description>
+      <arg name="scale_factor_as_uint" type="uint"/>
+    </request>
+
+    <!-- Version 48 additions-->
+    <request name="set_snap_primary" since="48">
+      <description summary="snap the surface to the primary snap position.">
+        Request that surface is snapped to the left or top if primary layout,
+        right or bottom otherwise.
+      </description>/>
+      <arg name="snap_ratio_as_uint" type="uint"/>
+    </request>
+
+    <request name="set_snap_secondary" since="48">
+      <description summary="snap the surface to the secondary snap position.">
+        Request that surface is snapped to the right or bottom if primary
+        layout, left or top otherwise.
+      </description>
+      <arg name="snap_ratio_as_uint" type="uint"/>
+    </request>
+
+    <!-- Version 49 additions-->
+    <enum name="snap_direction">
+      <description summary="window snap directions">
+        Window snap directions.
+      </description>
+      <entry name="none" value="0" summary="unsnap the window"/>
+      <entry name="primary" value="1" summary="snap the window to the left or
+        top in primary layout, right or bottom in secondary layout"/>
+      <entry name="secondary" value="2" summary="snap the window to the right
+        or bottom in primary layout, top or left in secondary layout"/>
+    </enum>
+
+    <request name="intent_to_snap" since="49">
+      <description summary="client intents to snap the surface.">
+        Notify (or inform) the server the client's intent to snap the window.
+        To inform it's no longer willing to snap, send 'none'.
+      </description>
+      <arg name="direction" type="uint" enum="snap_direction"/>
+    </request>
+
+    <request name="unset_snap" since="49">
+      <description summary="Unset the window snap.">
+        Request that window unsets snapping.
+      </description>
+    </request>
+
+    <!-- Version 50 additions -->
+    <event name="configure_raster_scale" since="50">
+      <description summary="set the raster scale during a configure">
+        Sets the raster scale of this window. This should be called during a
+        configure event sequence. To do so we reinterpret_cast into a 32-bit
+        uint and later cast back into a float. This is because wayland does not
+        support native transport of floats. As different CPU architectures may
+        use different endian representations for IEEE 754 floats, this protocol
+        implicitly assumes that the caller and receiver are the same machine.
+      </description>
+      <arg name="scale" type="uint" summary="Raster scale, in float format"/>
+    </event>
+
+    <!-- Version 52 additions -->
+    <enum name="persistable">
+      <description summary="Describes whether or not the value is persistable">
+        Binary enum maps to boolean, describes whether or not a value is
+        persistable.
+      </description>
+      <entry name="not_persistable" value="0" summary="the value is not persistable"/>
+      <entry name="persistable" value="1" summary="the value is persistable"/>
+    </enum>
+
+    <request name="set_persistable" since="52">
+      <description summary="Describes if the window is persistable">
+      Request the persistable status of a window.  Sets the persistable status
+      of the window in its window properties.  Should be called before first
+      commit.
+      </description>
+      <arg name="persistable" type="uint" enum="persistable" summary="is the argument persistable"/>
+    </request>
+
+    <!-- Version 53 additions -->
+    <request name="set_shape" since="53">
+      <description summary="set the shape of the surface in DP">
+        Sets the shape of the toplevel window in DP. Passing NULL will reset the
+        shape of the window.
+
+        This should be used only in support of the existing (deprecated) Chrome
+        Apps SetShape API and not for any other purpose.
+      </description>
+      <arg name="region" type="object" interface="wl_region" allow-null="true"/>
+    </request>
+
+    <request name="set_top_inset" since="55">
+      <description summary="set top inset to the surface">
+        Sets the top inset to the surface. This represents the header height
+        and should be non negative.
+      </description>
+      <arg name="height" type="int" summary="Top inset of client window. Should be non negative."/>
+    </request>
+
+    <!-- Version 56 additions -->
+    <enum name="rotate_direction">
+      <entry name="backward" value="0" />
+      <entry name="forward" value="1" />
+    </enum>
+
+    <enum name="rotate_restart_state">
+      <entry name="no_restart" value="0" />
+      <entry name="restart" value="1" />
+    </enum>
+
+    <event name="rotate_focus" since="56">
+      <description summary="rotate focus within window">
+        Rotates focus within the toplevel window. The window must sort its
+        focusable view into a stable and linearly traversable order. Prior to
+        rotating focus, the surface should already be activated and have
+        keyboard focus. If the surface has not been activated or does not have
+        keyboard focus, the server should first activate and enter keyboard
+        focus for the window. An example of event order could be:
+
+        1. activate surface
+        2. enter keyboard focus
+        3. rotate focus
+
+        If the window is not activated or does not have keyboard focus, the
+        client should respond with a "not handled" and not perform any
+        operation.
+
+        To start a new series rotation, the server will set the "restart" arg
+        to true. If the "restart" arg is set to true, the window should set the
+        focus on the first UI element for the given direction and not perform
+        any rotation.
+
+        The client should respond with whether the rotation was successful via
+        the "handled" field in the "ack_rotate_focus" request. The client should
+        pass on the event serial and direction within the ack message.
+      </description>
+      <arg name="serial" type="uint" summary="serial for the rotation event" />
+      <arg name="direction" type="uint" enum="rotate_direction" summary="the direction for linear traversal" />
+      <arg name="restart" type="uint" enum="rotate_restart_state" summary="whether or not to restart traversal" />
+    </event>
+
+    <enum name="rotate_handled_state">
+      <entry name="not_handled" value="0" />
+      <entry name="handled" value="1" />
+    </enum>
+
+    <request name="ack_rotate_focus" since="56">
+      <description summary="status of rotate focus event">
+        If the focus has been successfully rotated between UI elements inside
+        surface, client replies with 'handled'. If the focus didn't rotate, the
+        client reply with 'not_handled'. A server may use this to move the focus
+        to next focusable surface.
+
+        Note that a delay in processing in the client could result in stale acks
+        received by the server.
+      </description>
+      <arg name="serial" type="uint" summary="serial for the original; rotation event" />
+      <arg name="handled" type="uint" enum="rotate_handled_state" summary="whether or not the rotation was successful" />
+    </request>
+
+    <request name="set_can_maximize" since="58">
+      <description summary="Hint that the toplevel surface can be maximized">
+        Hints to the window manager that the toplevel surface can be maximized.
+      </description>
+    </request>
+
+    <request name="unset_can_maximize" since="58">
+      <description summary="Hint that the toplevel surface should not be maximized">
+        Hints to the window manager that the toplevel surface should not be
+        maximized. Note that the window manager might still request the client
+        to be maximized. In such an event, the client should respect the
+        window manager's request and maximize. It may unset the maximized state
+        afterwards.
+      </description>
+    </request>
+
+    <request name="set_can_fullscreen" since="58">
+      <description summary="Hint that the toplevel surface can enter fullscreen">
+        Hints to the window manager that the toplevel surface can enter
+        fullscreen.
+      </description>
+    </request>
+
+    <request name="unset_can_fullscreen" since="58">
+      <description summary="Hint that the toplevel surface should not enter fullscreen">
+        Hints to the window manager that the toplevel surface should not be
+        enter fullscreen. Note that the window manager might still request the
+        client enter fullscreen. In such an event, the client should respect the
+        window manager's request and enter fullscreen. It may exit fullscreen
+        afterwards.
+      </description>
+    </request>
+
+    <!-- Version 59 additions -->
+    <enum name="float_start_location">
+      <description
+        summary="Specifies the location of a surface that just got floated.">
+          Possible start locations if a surface gets floated.
+      </description>
+       <entry
+        name="bottom_right"
+        value="0"
+        summary="On float, surface goes to the bottom right of the work area. This is the default."/>
+      <entry
+        name="bottom_left"
+        value="1"
+        summary="On float, surface goes to the bottom left of the work area."/>
+    </enum>
+    <request name="set_float_to_location" since="59">
+      <description summary="float the surface on top">
+        This is a request to place the surface above others.
+      </description>
+      <arg name="mode" type="uint" enum="float_start_location"/>
+    </request>
+
+    <!-- Version 60 additions -->
+    <request name="set_window_corner_radii" since="60">
+      <description summary="Request to apply rounded corners to the window of the surface.">
+        The client specifies the radius of each corner to be applied to the
+        window in DPs (device independent pixels).
+
+        The window radius is double buffered, and will be applied at the
+        time wl_surface.commit of the corresponding wl_surface is called.
+
+        Note: Rounded corner radii affects the wl_surface tree, including
+        subsurfaces. Once this protocol is called, surfaces cannot set
+        their own rounded corner bounds because rounded window bounds will be
+        applied to the whole surface tree.
+      </description>
+      <arg name="upper_left_radius" type="uint"/>
+      <arg name="upper_right_radius" type="uint"/>
+      <arg name="lower_right_radius" type="uint"/>
+      <arg name="lower_left_radius" type="uint"/>
+    </request>
+
+    <!-- Version 62 additions -->
+    <enum name="in_overview">
+      <description summary="Describes whether or not the value is in overview">
+        Binary enum maps to boolean, describes whether or not a value is in
+        overview.
+      </description>
+      <entry name="not_in_overview" value="0" summary="the value is not in overview"/>
+      <entry name="in_overview" value="1" summary="the value is in overview"/>
+    </enum>
+
+    <event name="overview_change" since="62">
+      <description summary="window is in overview">
+        The window is being shown in overview mode. Note that this is
+        different than shell overview state, as not all windows will be
+        part of the overview grid.
+      </description>
+      <arg name="in_overview" type="uint" enum="in_overview" summary="in overview or not"/>
+    </event>
+
+    <!-- Version 63 additions -->
+    <request name="set_shadow_corner_radii" since="63">
+      <description summary="Request to apply rounded corners to the shadow of the surface.">
+        The client specifies the radius of each corner to be applied to the shadow
+        associated with the aura toplevel surface in device independent pixels (DPs).
+
+        The shadow radius is double buffered, and will be applied at the
+        time wl_surface.commit of the corresponding wl_surface is called.
+      </description>
+      <arg name="upper_left_radius" type="uint"/>
+      <arg name="upper_right_radius" type="uint"/>
+      <arg name="lower_right_radius" type="uint"/>
+      <arg name="lower_left_radius" type="uint"/>
+    </request>
   </interface>
 
-  <interface name="zaura_popup" version="38">
+  <interface name="zaura_popup" version="46">
     <description summary="aura shell interface to the popup shell">
       An interface to the popup shell, which allows the
       client to access shell specific functionality.
@@ -990,5 +1436,207 @@
   See zaura_shell.release for destructor naming.
       </description>
     </request>
+
+    <!-- Version 46 additions -->
+    <request name="set_scale_factor" since="46">
+      <description summary="Allows the client to set the scale factor for the future buffer commits.">
+        The client has a 32-bit float scale factor that is associated with each
+        zaura popup. This scale factor must be propagated exactly to exo. To
+        do so we reinterpret_cast into a 32-bit uint and later cast back into a
+        float. This is because wayland does not support native transport of
+        floats. As different CPU architectures may use different endian
+        representations for IEEE 754 floats, this protocol implicitly assumes
+        that the caller and receiver are the same machine. To avoid redundant
+        messages, this request needs to only be called once when the zaura
+        popup's scale factor changes.
+      </description>
+      <arg name="scale_factor_as_uint" type="uint"/>
+    </request>
+  </interface>
+
+  <interface name="zaura_output_manager" version="3">
+    <description summary="aura shell interface to the output manager">
+      A global responsible for ensuring clients have a complete view of a given
+      output's state immediately following the bind of wl_output, and
+      subsequently as needed.
+
+      Clients can expect that all the manager's events for a given wl_output
+      arrive before the associated wl_output.done event. Clients must bind to
+      the manager global before any output globals.
+    </description>
+
+    <event name="done" since="1">
+      <description summary="sent all information about output">
+        This event is sent after all relevant properties of a
+        zaura_output_manager for a given wl_output have been sent.
+      </description>
+      <arg name="output" type="object" interface="wl_output" />
+    </event>
+
+    <event name="display_id" since="1">
+      <description summary="advertise the output's display id">
+        This event describes the 64bit display id assigned to each display by
+        ChromeOS. The value is opaque and should not be interpreted.
+
+        The event is sent when binding to the output object and subsequently as
+        output state changes.
+      </description>
+      <arg name="output" type="object" interface="wl_output" />
+      <arg name="display_id_hi" type="uint" />
+      <arg name="display_id_lo" type="uint" />
+    </event>
+
+    <event name="logical_position" since="1">
+      <description
+          summary="position of the output within the global compositor space">
+        The position event describes the location of the wl_output within the
+        global compositor space.
+
+        The event is sent when binding to the output object and subsequently as
+        output state changes.
+      </description>
+      <arg name="output" type="object" interface="wl_output" />
+      <arg name="x" type="int"
+          summary="x position within the global compositor space" />
+      <arg name="y" type="int"
+          summary="y position within the global compositor space" />
+    </event>
+
+    <event name="logical_size" since="1">
+      <description summary="size of the output in the global compositor space">
+        The logical_size event describes the logical size of the output in the
+        global compositor space.
+
+        The event is sent when binding to the output object and subsequently as
+        output state changes.
+      </description>
+      <arg name="output" type="object" interface="wl_output" />
+      <arg name="width" type="int" summary="width in global compositor space" />
+      <arg name="height" type="int"
+          summary="height in global compositor space" />
+    </event>
+
+    <event name="physical_size" since="1">
+      <description summary="size of the output in pixels">
+        The physical resolution of the display in pixels. The value should not
+        include any overscan insets or display rotation, except for any panel
+        orientation adjustment.
+
+        The event is sent when binding to the output object and subsequently as
+        output state changes.
+      </description>
+      <arg name="output" type="object" interface="wl_output" />
+      <arg name="width" type="int"
+          summary="width in global compositor space" />
+      <arg name="height" type="int"
+          summary="height in global compositor space" />
+    </event>
+
+    <event name="insets" since="1">
+      <description summary="advertise the work area insets for the output">
+        This event describes the insets for the output in logical screen
+        coordinates, from which the work area can be calculated.
+
+        The event is sent when binding to the output object and subsequently as
+        output state changes.
+      </description>
+      <arg name="output" type="object" interface="wl_output" />
+      <arg name="top" type="int" />
+      <arg name="left" type="int" />
+      <arg name="bottom" type="int" />
+      <arg name="right" type="int" />
+    </event>
+
+    <event name="device_scale_factor" since="1">
+      <description summary="advertise device scale factor for the output">
+        The scale factor of the output device. We reinterpret_cast the float
+        scale factor into a 32-bit uint and later cast back into a float. This
+        is because wayland does not support native transport of floats. As
+        different CPU architectures may use different endian representations for
+        IEEE 754 floats, this protocol implicitly assumes that the caller and
+        receiver are the same machine.
+
+        The event is sent when binding to the output object and subsequently as
+        output state changes.
+      </description>
+      <arg name="output" type="object" interface="wl_output" />
+      <arg name="device_scale_factor" type="uint"
+          summary="display scale factor, in float format" />
+    </event>
+
+    <event name="logical_transform" since="1">
+      <description summary="logical transform of the output">
+        This event describes the logical transform for the output. Whereas
+        panel transform corresponds to the display's panel rotation, the logical
+        transform corresponds to the display's logical rotation.
+
+        The event is sent when binding to the output object and subsequently as
+        output state changes.
+      </description>
+      <arg name="output" type="object" interface="wl_output" />
+      <arg name="transform" type="int" enum="wl_output.transform"
+        summary="transform that maps framebuffer to output" />
+    </event>
+
+    <event name="panel_transform" since="1">
+      <description summary="panel transform of the output">
+        This event describes the panel transform for the output, which is the
+        associated display's panel rotation.
+
+        The event is sent when binding to the output object and subsequently as
+        output state changes.
+      </description>
+      <arg name="output" type="object" interface="wl_output" />
+      <arg name="transform" type="int" enum="wl_output.transform"
+        summary="transform that maps framebuffer to output" />
+    </event>
+
+    <event name="name" since="1">
+      <description summary="human-readable name of this output">
+        The name is a UTF-8 string with no convention defined for its contents.
+
+        The event is sent when binding to the output object and subsequently as
+        output state changes.
+      </description>
+      <arg name="output" type="object" interface="wl_output" />
+      <arg name="name" type="string" summary="output name" />
+    </event>
+
+    <event name="description" since="1">
+      <description summary="human-readable description of this output">
+        The description is a UTF-8 string with no convention defined for its
+        contents.
+
+        The event is sent when binding to the output object and subsequently as
+        output state changes.
+      </description>
+      <arg name="output" type="object" interface="wl_output" />
+      <arg name="description" type="string" summary="output description" />
+    </event>
+
+    <!-- Version 2 additions -->
+    <event name="activated" since="2">
+      <description summary="target display for new windows">
+        Notifies that this output is now active output. It is typically used as
+        a target when a new window is created without specific bounds.
+      </description>
+      <arg name="output" type="object" interface="wl_output" />
+    </event>
+
+    <!-- Version 3 additions -->
+    <event name="overscan_insets" since="3">
+      <description summary="advertise the overscan insets for the output">
+        This event describes the overscan insets for the output in physical
+        pixels.
+
+        The event is sent when binding to the output object and subsequently as
+        output state changes.
+      </description>
+      <arg name="output" type="object" interface="wl_output" />
+      <arg name="top" type="int" />
+      <arg name="left" type="int" />
+      <arg name="bottom" type="int" />
+      <arg name="right" type="int" />
+    </event>
   </interface>
 </protocol>

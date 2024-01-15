@@ -4,8 +4,9 @@
 
 #include "chrome/browser/browsing_data/counters/site_data_counting_helper.h"
 
-#include "base/bind.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/feature_list.h"
+#include "base/functional/bind.h"
+#include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
 #include "chrome/browser/content_settings/host_content_settings_map_factory.h"
 #include "chrome/browser/profiles/profile.h"
@@ -18,9 +19,12 @@
 #include "content/public/browser/session_storage_usage_info.h"
 #include "content/public/browser/storage_partition.h"
 #include "content/public/browser/storage_usage_info.h"
+#include "mojo/public/cpp/bindings/callback_helpers.h"
 #include "net/cookies/cookie_util.h"
 #include "ppapi/buildflags/buildflags.h"
+#include "services/network/public/cpp/features.h"
 #include "services/network/public/mojom/cookie_manager.mojom.h"
+#include "services/network/public/mojom/network_context.mojom.h"
 #include "storage/browser/file_system/file_system_context.h"
 #include "storage/browser/quota/quota_manager.h"
 #include "third_party/blink/public/common/storage_key/storage_key.h"
@@ -106,15 +110,26 @@ void SiteDataCountingHelper::CountAndDestroySelfWhenFinished() {
     tasks_ += 1;
     GetOriginsFromHostContentSettignsMap(hcsm, type);
   }
+
+  if (base::FeatureList::IsEnabled(
+          network::features::kCompressionDictionaryTransportBackend)) {
+    tasks_ += 1;
+    partition->GetNetworkContext()->GetSharedDictionaryOriginsBetween(
+        begin_, end_,
+        mojo::WrapCallbackWithDefaultInvokeIfNotRun(
+            base::BindOnce(
+                &SiteDataCountingHelper::GetSharedDictionaryOriginsCallback,
+                base::Unretained(this)),
+            std::vector<url::Origin>()));
+  }
 }
 
 void SiteDataCountingHelper::GetOriginsFromHostContentSettignsMap(
     HostContentSettingsMap* hcsm,
     ContentSettingsType type) {
   std::set<GURL> origins;
-  ContentSettingsForOneType settings;
-  hcsm->GetSettingsForOneType(type, &settings);
-  for (const ContentSettingPatternSource& rule : settings) {
+  for (const ContentSettingPatternSource& rule :
+       hcsm->GetSettingsForOneType(type)) {
     GURL url(rule.primary_pattern.ToString());
     if (!url.is_empty()) {
       origins.insert(url);
@@ -139,8 +154,7 @@ void SiteDataCountingHelper::GetCookiesCallback(
 }
 
 void SiteDataCountingHelper::GetQuotaBucketsCallback(
-    const std::set<storage::BucketLocator>& buckets,
-    blink::mojom::StorageType type) {
+    const std::set<storage::BucketLocator>& buckets) {
   DCHECK_CURRENTLY_ON(BrowserThread::IO);
   std::set<GURL> urls;
   for (const storage::BucketLocator& bucket : buckets)
@@ -149,6 +163,16 @@ void SiteDataCountingHelper::GetQuotaBucketsCallback(
       FROM_HERE,
       base::BindOnce(&SiteDataCountingHelper::Done, base::Unretained(this),
                      std::vector<GURL>(urls.begin(), urls.end())));
+}
+
+void SiteDataCountingHelper::GetSharedDictionaryOriginsCallback(
+    const std::vector<url::Origin>& origins) {
+  DCHECK_CURRENTLY_ON(BrowserThread::UI);
+  std::vector<GURL> urls;
+  for (const url::Origin& origin : origins) {
+    urls.emplace_back(origin.GetURL());
+  }
+  Done(urls);
 }
 
 void SiteDataCountingHelper::GetLocalStorageUsageInfoCallback(
@@ -174,8 +198,9 @@ void SiteDataCountingHelper::Done(const std::vector<GURL>& origins) {
   }
   if (--tasks_ > 0)
     return;
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(std::move(completion_callback_), unique_hosts_.size()));
-  base::ThreadTaskRunnerHandle::Get()->DeleteSoon(FROM_HERE, this);
+  base::SingleThreadTaskRunner::GetCurrentDefault()->DeleteSoon(FROM_HERE,
+                                                                this);
 }

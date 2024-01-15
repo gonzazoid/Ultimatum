@@ -13,6 +13,7 @@
 #include "services/network/public/cpp/net_ipc_param_traits.h"
 #include "services/network/public/cpp/url_loader_completion_status.h"
 #include "services/network/public/mojom/blocked_by_response_reason.mojom-shared.h"
+#include "services/network/public/mojom/cors.mojom-shared.h"
 #include "services/network/public/mojom/url_loader_completion_status.mojom-shared.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
@@ -82,6 +83,12 @@ class COMPONENT_EXPORT(NETWORK_CPP_BASE)
     return status.cors_error_status;
   }
 
+  static network::mojom::PrivateNetworkAccessPreflightResult
+  private_network_access_preflight_result(
+      const network::URLLoaderCompletionStatus& status) {
+    return status.private_network_access_preflight_result;
+  }
+
   static network::mojom::TrustTokenOperationStatus trust_token_operation_status(
       const network::URLLoaderCompletionStatus& status) {
     return status.trust_token_operation_status;
@@ -102,11 +109,6 @@ class COMPONENT_EXPORT(NETWORK_CPP_BASE)
     return status.should_report_corb_blocking;
   }
 
-  static const net::ProxyServer& proxy_server(
-      const network::URLLoaderCompletionStatus& status) {
-    return status.proxy_server;
-  }
-
   static const net::ResolveErrorInfo& resolve_error_info(
       const network::URLLoaderCompletionStatus& status) {
     return status.resolve_error_info;
@@ -115,11 +117,6 @@ class COMPONENT_EXPORT(NETWORK_CPP_BASE)
   static bool should_collapse_initiator(
       const network::URLLoaderCompletionStatus& status) {
     return status.should_collapse_initiator;
-  }
-
-  static bool pervasive_payload_requested(
-      const network::URLLoaderCompletionStatus& status) {
-    return status.pervasive_payload_requested;
   }
 
   static bool Read(network::mojom::URLLoaderCompletionStatusDataView data,

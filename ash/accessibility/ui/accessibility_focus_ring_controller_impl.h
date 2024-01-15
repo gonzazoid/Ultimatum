@@ -5,6 +5,7 @@
 #ifndef ASH_ACCESSIBILITY_UI_ACCESSIBILITY_FOCUS_RING_CONTROLLER_IMPL_H_
 #define ASH_ACCESSIBILITY_UI_ACCESSIBILITY_FOCUS_RING_CONTROLLER_IMPL_H_
 
+#include <map>
 #include <memory>
 #include <vector>
 
@@ -15,7 +16,7 @@
 #include "ash/accessibility/ui/layer_animation_info.h"
 #include "ash/ash_export.h"
 #include "ash/public/cpp/accessibility_focus_ring_controller.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/time/time.h"
 #include "third_party/skia/include/core/SkColor.h"
 #include "ui/gfx/geometry/rect.h"
@@ -48,6 +49,8 @@ class ASH_EXPORT AccessibilityFocusRingControllerImpl
   void SetHighlights(const std::vector<gfx::Rect>& rects,
                      SkColor color) override;
   void HideHighlights() override;
+  void SetFocusRingObserverForTesting(
+      base::RepeatingCallback<void()> observer) override;
 
   // Draw a ring around the mouse cursor. It fades out automatically.
   void SetCursorRing(const gfx::Point& location);
@@ -113,6 +116,8 @@ class ASH_EXPORT AccessibilityFocusRingControllerImpl
   std::unique_ptr<AccessibilityHighlightLayer> highlight_layer_;
   SkColor highlight_color_ = SK_ColorBLACK;
   float highlight_opacity_ = 0.f;
+
+  base::RepeatingCallback<void()> focus_ring_observer_for_test_;
 
   bool no_fade_for_testing_ = false;
 };

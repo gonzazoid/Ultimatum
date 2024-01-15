@@ -4,44 +4,35 @@
 
 package org.chromium.net.test;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.fail;
+import static com.google.common.truth.Truth.assertThat;
 
-import android.support.test.runner.AndroidJUnit4;
+import static org.junit.Assert.assertThrows;
 
+import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.filters.SmallTest;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
-/**
- * Test functionality of UrlResponseMatcher.
- */
+/** Test functionality of UrlResponseMatcher. */
 @RunWith(AndroidJUnit4.class)
 public class UrlResponseMatcherTest {
     @Test
     @SmallTest
     public void testCheckUrlNotNull() {
-        try {
-            UrlResponseMatcher matcher =
-                    new UrlResponseMatcher(null, new FakeUrlResponse.Builder().build());
-            fail("URL not null-checked");
-        } catch (NullPointerException e) {
-            assertEquals("URL is required.", e.getMessage());
-        }
+        NullPointerException e =
+                assertThrows(
+                        NullPointerException.class,
+                        () -> new UrlResponseMatcher(null, new FakeUrlResponse.Builder().build()));
+        assertThat(e).hasMessageThat().isEqualTo("URL is required.");
     }
 
     @Test
     @SmallTest
     public void testCheckResponseNotNull() {
-        try {
-            UrlResponseMatcher matcher = new UrlResponseMatcher("url", null);
-            fail("Response not null-checked");
-        } catch (NullPointerException e) {
-            assertEquals("Response is required.", e.getMessage());
-        }
+        NullPointerException e =
+                assertThrows(NullPointerException.class, () -> new UrlResponseMatcher("url", null));
+        assertThat(e).hasMessageThat().isEqualTo("Response is required.");
     }
 
     @Test
@@ -54,8 +45,7 @@ public class UrlResponseMatcherTest {
 
         FakeUrlResponse found = matcher.getMatchingResponse(url, null, null, null);
 
-        assertNotNull(found);
-        assertEquals(found, response);
+        assertThat(found).isEqualTo(response);
     }
 
     @Test
@@ -70,6 +60,6 @@ public class UrlResponseMatcherTest {
         FakeUrlResponse notFound =
                 matcher.getMatchingResponse(urlWithoutResponse, null, null, null);
 
-        assertNull(notFound);
+        assertThat(notFound).isNull();
     }
 }

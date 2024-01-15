@@ -91,6 +91,7 @@ cast_source_set("named_message_port_connector_cast") {
   deps = [
     "//base",
     "//chromecast/browser:public",
+    "//components/cast/message_port:blink_message_port_adapter",
     "//components/cast/message_port:message_port_cast",
     "//components/cast/named_message_port_connector",
     "//components/on_load_script_injector/browser",
@@ -252,7 +253,9 @@ cast_source_set("browser") {
     "//chromecast/service",
     "//chromecast/ui:display_settings_manager",
     "//chromecast/ui:display_settings_public",
+    "//components/cast/message_port:blink_message_port_adapter",
     "//components/cast/message_port:message_port_cast",
+    "//components/cast_receiver/browser:permissions_manager",
     "//components/download/public/common:public",
     "//components/heap_profiling/multi_process",
     "//components/media_control/browser",
@@ -274,7 +277,6 @@ cast_source_set("browser") {
     "//components/proxy_config",
     "//components/safe_search_api",
     "//components/safe_search_api:safe_search_client",
-    "//components/services/app_service/public/mojom",
     "//components/services/heap_profiling",
     "//components/services/heap_profiling/public/cpp",
     "//components/services/heap_profiling/public/mojom",
@@ -323,7 +325,7 @@ cast_source_set("browser") {
       "android/cast_web_service_android.cc",
     ]
     deps += [
-      ":jni_headers",
+      "//chromecast/browser/android:jni_headers",
       "//components/embedder_support/android:view",
     ]
   } else {
@@ -629,15 +631,6 @@ cast_source_set("unittests") {
 }
 
 if (is_android) {
-  generate_jni("jni_headers") {
-    sources = [
-      "android/apk/src/org/chromium/chromecast/shell/CastAccessibilityHelper.java",
-      "android/apk/src/org/chromium/chromecast/shell/CastContentWindowAndroid.java",
-      "android/apk/src/org/chromium/chromecast/shell/CastCrashHandler.java",
-      "android/apk/src/org/chromium/chromecast/shell/CastMetricsHelper.java",
-    ]
-  }
-
   java_cpp_enum("java_enums") {
     sources = [ "visibility_types.h" ]
   }

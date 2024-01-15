@@ -16,14 +16,15 @@ import '../site_favicon.js';
 
 import {CrIconButtonElement} from 'chrome://resources/cr_elements/cr_icon_button/cr_icon_button.js';
 import {CrLazyRenderElement} from 'chrome://resources/cr_elements/cr_lazy_render/cr_lazy_render.js';
+import {FocusRowMixin} from 'chrome://resources/cr_elements/focus_row_mixin.js';
 import {I18nMixin} from 'chrome://resources/cr_elements/i18n_mixin.js';
-import {assert, assertNotReached} from 'chrome://resources/js/assert_ts.js';
+import {assert, assertNotReached} from 'chrome://resources/js/assert.js';
 import {EventTracker} from 'chrome://resources/js/event_tracker.js';
-import {FocusRowMixin} from 'chrome://resources/js/focus_row_mixin.js';
 import {IronCollapseElement} from 'chrome://resources/polymer/v3_0/iron-collapse/iron-collapse.js';
 import {afterNextRender, DomRepeatEvent, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {BaseMixin} from '../base_mixin.js';
+import {loadTimeData} from '../i18n_setup.js';
 import {routes} from '../route.js';
 import {Router} from '../router.js';
 
@@ -42,6 +43,7 @@ export interface SiteEntryElement {
     displayName: HTMLElement,
     originList: CrLazyRenderElement<IronCollapseElement>,
     toggleButton: HTMLElement,
+    extensionIdDescription: HTMLElement,
   };
 }
 
@@ -92,6 +94,11 @@ export class SiteEntryElement extends SiteEntryElementBase {
        * Mock preference used to power managed policy icon for first party sets.
        */
       fpsEnterprisePref_: Object,
+
+      /**
+       * Whether site entry is shown with a first party set filter search.
+       */
+      isFpsFiltered: Boolean,
 
       /**
        * The position of this site-entry in its parent list.
@@ -147,6 +154,7 @@ export class SiteEntryElement extends SiteEntryElementBase {
   private displayName_: string;
   private cookieString_: string;
   private fpsMembershipLabel_: string;
+  isFpsFiltered: boolean;
   listIndex: number;
   private overallUsageString_: string;
   private originUsages_: string[];
@@ -190,23 +198,14 @@ export class SiteEntryElement extends SiteEntryElementBase {
 
   /**
    * Returns a user-friendly name for the siteGroup.
-   * If grouped_() is true and eTLD+1 is available, returns the eTLD+1,
-   * otherwise return the origin representation for the first origin.
-   * @param siteGroup The eTLD+1 group of origins.
+   * @param siteGroup The group of origins.
    * @return The user-friendly name.
    */
   private siteGroupRepresentation_(siteGroup: SiteGroup): string {
     if (!siteGroup) {
       return '';
     }
-    if (this.grouped_(siteGroup)) {
-      if (siteGroup.etldPlus1 !== '') {
-        return siteGroup.etldPlus1;
-      }
-      // Fall back onto using the host of the first origin, if no eTLD+1 name
-      // was computed.
-    }
-    return this.originRepresentation(siteGroup.origins[0].origin);
+    return siteGroup.displayName;
   }
 
   /**
@@ -239,8 +238,7 @@ export class SiteEntryElement extends SiteEntryElementBase {
       this.cookieString_ = string;
     });
     this.updateOrigins_(this.sortMethod);
-    this.displayName_ = siteGroup.isolatedWebAppName ??
-        this.siteGroupRepresentation_(siteGroup);
+    this.displayName_ = this.siteGroupRepresentation_(siteGroup);
   }
 
   /**
@@ -288,8 +286,9 @@ export class SiteEntryElement extends SiteEntryElementBase {
     // origin. Otherwise find the origin with largest storage, and use the
     // number of cookies as a tie breaker.
     for (const originInfo of origins) {
-      if (this.toUrl(originInfo.origin)!.host ===
-          'www.' + siteGroup.etldPlus1) {
+      if (siteGroup.etldPlus1 &&
+          this.toUrl(originInfo.origin)!.host ===
+              'www.' + siteGroup.etldPlus1) {
         return originInfo.origin;
       }
     }
@@ -319,9 +318,17 @@ export class SiteEntryElement extends SiteEntryElementBase {
     });
   }
 
-
   private isFpsMember_(): boolean {
-    return this.siteGroup.fpsOwner !== undefined;
+    return !!this.siteGroup && this.siteGroup.fpsOwner !== undefined;
+  }
+
+  /**
+   * Evaluates whether the three dot menu should be shown for the site entry.
+   * @returns True if site group is a first party set member and filter by
+   * first party set owner is not applied.
+   */
+  private shouldShowOverflowMenu(): boolean {
+    return this.isFpsMember_() && !this.isFpsFiltered;
   }
 
   /**
@@ -383,7 +390,7 @@ export class SiteEntryElement extends SiteEntryElementBase {
     const isCurrentlyFocused = this.isFocused;
     afterNextRender(this, () => {
       if (isCurrentlyFocused) {
-        (this.isFpsMember_() ?
+        (this.shouldShowOverflowMenu() ?
              this.$$<CrIconButtonElement>('#fpsOverflowMenuButton') :
              this.$$<CrIconButtonElement>('#removeSiteButton'))!.focus();
       }
@@ -423,7 +430,7 @@ export class SiteEntryElement extends SiteEntryElementBase {
   /**
    * A handler for selecting a site (by clicking on the origin).
    */
-  private onOriginTap_(e: DomRepeatEvent<OriginInfo>) {
+  private onOriginClick_(e: DomRepeatEvent<OriginInfo>) {
     if (this.siteGroup.origins[e.model.index].isPartitioned) {
       return;
     }
@@ -436,7 +443,7 @@ export class SiteEntryElement extends SiteEntryElementBase {
    * A handler for clicking on a site-entry heading. This will either show a
    * list of origins or directly navigates to Site Details if there is only one.
    */
-  private onSiteEntryTap_() {
+  private onSiteEntryClick_() {
     // Individual origins don't expand - just go straight to Site Details.
     if (!this.grouped_(this.siteGroup)) {
       this.navigateToSiteDetails_(this.siteGroup.origins[0].origin);
@@ -503,8 +510,7 @@ export class SiteEntryElement extends SiteEntryElementBase {
 
   private getSubpageLabel_(target: string): string {
     return this.i18n(
-        'siteSettingsSiteDetailsSubpageAccessibilityLabel',
-        this.originRepresentation(target));
+        'siteSettingsSiteDetailsSubpageAccessibilityLabel', target);
   }
 
   private getRemoveOriginButtonTitle_(origin: string): string {
@@ -514,7 +520,7 @@ export class SiteEntryElement extends SiteEntryElementBase {
 
   private getMoreActionsLabel_(): string {
     return this.i18n(
-        'firstPartySetsMoreActionsTitle', this.siteGroup.etldPlus1);
+        'firstPartySetsMoreActionsTitle', this.siteGroup.displayName);
   }
   /**
    * Update the order and data display text for origins.
@@ -569,6 +575,21 @@ export class SiteEntryElement extends SiteEntryElementBase {
       };
     }
     assertNotReached();
+  }
+
+  /**
+   * Get extension id description string for an extension |siteGroup|.
+   */
+  private extensionIdDescription_(siteGroup: SiteGroup): string {
+    const id = this.originRepresentation(siteGroup.origins[0].origin);
+    return loadTimeData.getStringF('siteSettingsExtensionIdDescription', id);
+  }
+
+  /**
+   * Check if the given |siteGroup| is an extension.
+   */
+  private isExtension_(siteGroup: SiteGroup): boolean {
+    return this.siteGroupScheme_(siteGroup) === 'chrome-extension';
   }
 }
 

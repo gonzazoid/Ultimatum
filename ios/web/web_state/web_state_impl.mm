@@ -12,9 +12,14 @@
 #import "base/feature_list.h"
 #import "base/time/time.h"
 #import "ios/web/common/features.h"
+#import "ios/web/js_messaging/web_frames_manager_impl.h"
 #import "ios/web/public/js_messaging/web_frame.h"
 #import "ios/web/public/permissions/permissions.h"
 #import "ios/web/public/session/crw_session_storage.h"
+#import "ios/web/public/session/proto/metadata.pb.h"
+#import "ios/web/public/session/proto/storage.pb.h"
+#import "ios/web/public/session/serializable_user_data_manager.h"
+#import "ios/web/public/web_client.h"
 #import "ios/web/session/session_certificate_policy_cache_impl.h"
 #import "ios/web/web_state/global_web_state_event_tracker.h"
 #import "ios/web/web_state/ui/crw_web_controller.h"
@@ -22,10 +27,6 @@
 #import "ios/web/web_state/web_state_impl_serialized_data.h"
 #import "net/base/mac/url_conversions.h"
 #import "url/gurl.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace web {
 namespace {
@@ -46,9 +47,16 @@ void CheckForOverRealization() {
   if ((now - g_last_creation_time) < kWindowSize) {
     g_last_realized_count++;
     if (g_last_realized_count >= kMaxEvents) {
-      base::debug::DumpWithoutCrashing();
       g_has_reported_once = true;
-      NOTREACHED();
+      // Don't use an assertion primitive (e.g. NOTREACHED) because
+      // sometimes this is not detected until stable release, and while
+      // this is a memory and performance regression, this does not need
+      // to be fatal for official.
+#if defined(OFFICIAL_BUILD)
+      base::debug::DumpWithoutCrashing();
+#else
+      base::ImmediateCrash();
+#endif  // defined(OFFICIAL_BUILD)
     }
   } else {
     g_last_creation_time = now;
@@ -56,43 +64,119 @@ void CheckForOverRealization() {
   }
 }
 
+// Returns the session data blob from the cache for `weak_web_state`.
+NSData* FetchSessionDataBlob(base::WeakPtr<WebState> weak_web_state) {
+  web::WebState* web_state = weak_web_state.get();
+  if (!web_state) {
+    return nil;
+  }
+
+  return GetWebClient()->FetchSessionFromCache(web_state);
+}
+
+// Serializes the `session_storage` to proto::WebStateStorage.
+web::proto::WebStateStorage SessionStorageToProto(
+    CRWSessionStorage* session_storage) {
+  web::proto::WebStateStorage storage;
+  [session_storage serializeToProto:storage];
+  return storage;
+}
+
+// Key used to store an empty base::SupportsUserData::Data to all WebStateImpl
+// instances. Used by WebStateImpl::FromWebState(...) to assert the pointer is
+// pointing to a WebStateImpl instance and not another sub-class of WebState.
+const char kWebStateIsWebStateImpl[] = "WebStateIsWebStateImpl";
+
 }  // namespace
 
 void IgnoreOverRealizationCheck() {
   g_last_realized_count = 0;
 }
 
-#pragma mark - WebState factory methods
-
-/* static */
-std::unique_ptr<WebState> WebState::Create(const CreateParams& params) {
-  return std::make_unique<WebStateImpl>(params);
-}
-
-/* static */
-std::unique_ptr<WebState> WebState::CreateWithStorageSession(
-    const CreateParams& params,
-    CRWSessionStorage* session_storage) {
-  DCHECK(session_storage);
-  return std::make_unique<WebStateImpl>(params, session_storage);
-}
-
 #pragma mark - WebStateImpl public methods
 
-WebStateImpl::WebStateImpl(const CreateParams& params)
-    : WebStateImpl(params, nil) {}
+WebStateImpl::WebStateImpl(const CreateParams& params) {
+  AddWebStateImplMarker();
+
+  const base::Time creation_time = base::Time::Now();
+  const base::Time last_active_time =
+      params.last_active_time.value_or(creation_time);
+
+  pimpl_ = std::make_unique<RealizedWebState>(
+      this, creation_time, [[NSUUID UUID] UUIDString], WebStateID::NewUnique());
+  pimpl_->Init(params.browser_state, last_active_time,
+               params.created_with_opener);
+
+  SendGlobalCreationEvent();
+}
 
 WebStateImpl::WebStateImpl(const CreateParams& params,
                            CRWSessionStorage* session_storage) {
-  if (session_storage) {
-    saved_ = std::make_unique<SerializedData>(this, params, session_storage);
-  } else {
-    pimpl_ = std::make_unique<RealizedWebState>(this);
-    pimpl_->Init(params, session_storage);
+  AddWebStateImplMarker();
+
+  // Restore the serializable user data as user code may depend on accessing
+  // on those values even for an unrealized WebState.
+  if (session_storage.userData) {
+    SerializableUserDataManager::FromWebState(this)->SetUserDataFromSession(
+        session_storage.userData);
   }
 
-  // Send creation event.
-  GlobalWebStateEventTracker::GetInstance()->OnWebStateCreated(this);
+  // Extract the metadata part from CRWSessionStorage to protobuf message.
+  // The callback convert the data to protobuf message to simulate loading
+  // from disk while using the non-optimised session storage serialization
+  // code.
+  proto::WebStateMetadataStorage metadata;
+  [session_storage serializeMetadataToProto:metadata];
+
+  saved_ = std::make_unique<SerializedData>(
+      this, params.browser_state, session_storage.stableIdentifier,
+      session_storage.uniqueIdentifier, std::move(metadata),
+      base::BindOnce(&SessionStorageToProto, session_storage),
+      base::BindOnce(&FetchSessionDataBlob, GetWeakPtr()));
+  saved_->SetSessionStorage(session_storage);
+
+  SendGlobalCreationEvent();
+}
+
+WebStateImpl::WebStateImpl(BrowserState* browser_state,
+                           WebStateID unique_identifier,
+                           proto::WebStateMetadataStorage metadata,
+                           WebStateStorageLoader storage_loader,
+                           NativeSessionFetcher session_fetcher) {
+  AddWebStateImplMarker();
+
+  saved_ = std::make_unique<SerializedData>(
+      this, browser_state, [[NSUUID UUID] UUIDString], unique_identifier,
+      std::move(metadata), std::move(storage_loader),
+      std::move(session_fetcher));
+
+  SendGlobalCreationEvent();
+}
+
+WebStateImpl::WebStateImpl(CloneFrom, const RealizedWebState& pimpl) {
+  AddWebStateImplMarker();
+
+  // Serialize `pimpl` state to protobuf message.
+  proto::WebStateStorage storage;
+  pimpl.SerializeToProto(storage);
+
+  // Extract the native session state if possible. Do not bind a callback
+  // that invokes `WebState::SessionStateData()` on a weak pointer to the
+  // cloned WebState since it will be called immediately anyway.
+  NSData* session_data = pimpl.SessionStateData();
+  NativeSessionFetcher session_fetcher = base::BindOnce(^() {
+    return session_data;
+  });
+
+  pimpl_ = std::make_unique<RealizedWebState>(this, pimpl.GetCreationTime(),
+                                              [[NSUUID UUID] UUIDString],
+                                              WebStateID::NewUnique());
+  pimpl_->InitWithProto(pimpl.GetBrowserState(), base::Time::Now(),
+                        pimpl.GetTitle(), pimpl.GetVisibleURL(),
+                        pimpl.GetFaviconStatus(), std::move(storage),
+                        std::move(session_fetcher));
+
+  SendGlobalCreationEvent();
 }
 
 WebStateImpl::~WebStateImpl() {
@@ -102,6 +186,16 @@ WebStateImpl::~WebStateImpl() {
   } else {
     saved_->TearDown();
   }
+}
+
+/* static */
+WebStateImpl* WebStateImpl::FromWebState(WebState* web_state) {
+  if (!web_state) {
+    return nullptr;
+  }
+
+  DCHECK(web_state->GetUserData(kWebStateIsWebStateImpl));
+  return static_cast<WebStateImpl*>(web_state);
 }
 
 /* static */
@@ -150,15 +244,6 @@ void WebStateImpl::OnRenderProcessGone() {
   RealizedState()->OnRenderProcessGone();
 }
 
-void WebStateImpl::OnScriptCommandReceived(const std::string& command,
-                                           const base::Value& value,
-                                           const GURL& page_url,
-                                           bool user_is_interacting,
-                                           WebFrame* sender_frame) {
-  RealizedState()->OnScriptCommandReceived(command, value, page_url,
-                                           user_is_interacting, sender_frame);
-}
-
 void WebStateImpl::SetIsLoading(bool is_loading) {
   RealizedState()->SetIsLoading(is_loading);
 }
@@ -185,8 +270,14 @@ int WebStateImpl::GetNavigationItemCount() const {
                         : saved_->GetNavigationItemCount();
 }
 
-WebFramesManagerImpl& WebStateImpl::GetWebFramesManagerImpl() {
-  return RealizedState()->GetWebFramesManager();
+WebFramesManagerImpl& WebStateImpl::GetWebFramesManagerImpl(
+    ContentWorld world) {
+  DCHECK_NE(world, ContentWorld::kAllContentWorlds);
+
+  if (!managers_[world]) {
+    managers_[world] = base::WrapUnique(new WebFramesManagerImpl());
+  }
+  return *managers_[world].get();
 }
 
 SessionCertificatePolicyCacheImpl&
@@ -213,6 +304,12 @@ bool WebStateImpl::HasWebUI() const {
   return LIKELY(pimpl_) ? pimpl_->HasWebUI() : false;
 }
 
+void WebStateImpl::HandleWebUIMessage(const GURL& source_url,
+                                      base::StringPiece message,
+                                      const base::Value::List& args) {
+  RealizedState()->HandleWebUIMessage(source_url, message, args);
+}
+
 void WebStateImpl::SetContentsMimeType(const std::string& mime_type) {
   RealizedState()->SetContentsMimeType(mime_type);
 }
@@ -223,12 +320,6 @@ void WebStateImpl::ShouldAllowRequest(
     WebStatePolicyDecider::PolicyDecisionCallback callback) {
   RealizedState()->ShouldAllowRequest(request, std::move(request_info),
                                       std::move(callback));
-}
-
-bool WebStateImpl::ShouldAllowErrorPageToBeDisplayed(NSURLResponse* response,
-                                                     bool for_main_frame) {
-  return RealizedState()->ShouldAllowErrorPageToBeDisplayed(response,
-                                                            for_main_frame);
 }
 
 void WebStateImpl::ShouldAllowResponse(
@@ -261,19 +352,34 @@ void WebStateImpl::SendChangeLoadProgress(double progress) {
 }
 
 void WebStateImpl::ShowRepostFormWarningDialog(
+    FormWarningType warning_type,
     base::OnceCallback<void(bool)> callback) {
-  RealizedState()->ShowRepostFormWarningDialog(std::move(callback));
+  RealizedState()->ShowRepostFormWarningDialog(warning_type,
+                                               std::move(callback));
 }
 
-void WebStateImpl::RunJavaScriptDialog(
+void WebStateImpl::RunJavaScriptAlertDialog(const GURL& origin_url,
+                                            NSString* message_text,
+                                            base::OnceClosure callback) {
+  RealizedState()->RunJavaScriptAlertDialog(origin_url, message_text,
+                                            std::move(callback));
+}
+
+void WebStateImpl::RunJavaScriptConfirmDialog(
     const GURL& origin_url,
-    JavaScriptDialogType javascript_dialog_type,
+    NSString* message_text,
+    base::OnceCallback<void(bool success)> callback) {
+  RealizedState()->RunJavaScriptConfirmDialog(origin_url, message_text,
+                                              std::move(callback));
+}
+
+void WebStateImpl::RunJavaScriptPromptDialog(
+    const GURL& origin_url,
     NSString* message_text,
     NSString* default_prompt_text,
-    DialogClosedCallback callback) {
-  RealizedState()->RunJavaScriptDialog(origin_url, javascript_dialog_type,
-                                       message_text, default_prompt_text,
-                                       std::move(callback));
+    base::OnceCallback<void(NSString* user_input)> callback) {
+  RealizedState()->RunJavaScriptPromptDialog(
+      origin_url, message_text, default_prompt_text, std::move(callback));
 }
 
 bool WebStateImpl::IsJavaScriptDialogRunning() {
@@ -303,23 +409,30 @@ id<CRWWebViewNavigationProxy> WebStateImpl::GetWebViewNavigationProxy() const {
 
 #pragma mark - WebFrame management
 
-void WebStateImpl::WebFrameBecameAvailable(std::unique_ptr<WebFrame> frame) {
-  RealizedState()->WebFrameBecameAvailable(std::move(frame));
-}
-
-void WebStateImpl::WebFrameBecameUnavailable(const std::string& frame_id) {
-  RealizedState()->WebFrameBecameUnavailable(frame_id);
-}
-
 void WebStateImpl::RetrieveExistingFrames() {
   RealizedState()->RetrieveExistingFrames();
 }
 
 void WebStateImpl::RemoveAllWebFrames() {
-  RealizedState()->RemoveAllWebFrames();
+  for (const auto& iterator : managers_) {
+    iterator.second->RemoveAllWebFrames();
+  }
+}
+
+void WebStateImpl::RequestPermissionsWithDecisionHandler(
+    NSArray<NSNumber*>* permissions,
+    const GURL& origin,
+    PermissionDecisionHandler handler) {
+  RealizedState()->RequestPermissionsWithDecisionHandler(permissions, origin,
+                                                         handler);
 }
 
 #pragma mark - WebState implementation
+
+void WebStateImpl::SerializeToProto(proto::WebStateStorage& storage) const {
+  DCHECK(IsRealized());
+  pimpl_->SerializeToProto(storage);
+}
 
 WebStateDelegate* WebStateImpl::GetDelegate() {
   return LIKELY(pimpl_) ? pimpl_->GetDelegate() : nullptr;
@@ -327,6 +440,13 @@ WebStateDelegate* WebStateImpl::GetDelegate() {
 
 void WebStateImpl::SetDelegate(WebStateDelegate* delegate) {
   RealizedState()->SetDelegate(delegate);
+}
+
+std::unique_ptr<WebState> WebStateImpl::Clone() const {
+  CHECK(IsRealized());
+  CHECK(!is_being_destroyed_);
+
+  return std::make_unique<WebStateImpl>(CloneFrom{}, *pimpl_);
 }
 
 bool WebStateImpl::IsRealized() const {
@@ -338,27 +458,35 @@ WebState* WebStateImpl::ForceRealized() {
 
   if (UNLIKELY(!pimpl_)) {
     DCHECK(saved_);
-    const CreateParams params = saved_->GetCreateParams();
-    CRWSessionStorage* session_storage = saved_->GetSessionStorage();
-    FaviconStatus favicon_status = saved_->GetFaviconStatus();
-    DCHECK(session_storage);
 
     // Create the RealizedWebState. At this point the WebStateImpl has
     // both `pimpl_` and `saved_` that are non-null. This is one of the
     // reason why the initialisation of the RealizedWebState needs to
     // be done after the constructor is done.
-    pimpl_ = std::make_unique<RealizedWebState>(this);
+    pimpl_ = std::make_unique<RealizedWebState>(this, saved_->GetCreationTime(),
+                                                saved_->GetStableIdentifier(),
+                                                saved_->GetUniqueIdentifier());
 
-    // Delete the SerializedData without calling TearDown() as the WebState
-    // itself is not destroyed. The TearDown() method will be called on the
-    // RealizedWebState in WebStateImpl destructor.
-    saved_.reset();
+    // Take the SerializedData out of `saved_`. This ensures that `saved_` is
+    // null while still keeping access to the object (to extract metadata and
+    // pass it to initialize the RealizedWebState).
+    std::unique_ptr<SerializedData> saved = std::move(saved_);
+
+    // Load the storage from disk.
+    proto::WebStateStorage storage = saved->TakeStorageLoader().Run();
 
     // Perform the initialisation of the RealizedWebState. No outside
     // code should be able to observe the WebStateImpl with both `saved_`
     // and `pimpl_` set.
-    pimpl_->Init(params, session_storage);
-    pimpl_->SetFaviconStatus(favicon_status);
+    pimpl_->InitWithProto(saved->GetBrowserState(), saved->GetLastActiveTime(),
+                          saved->GetTitle(), saved->GetVisibleURL(),
+                          saved->GetFaviconStatus(), std::move(storage),
+                          saved->TakeNativeSessionFetcher());
+
+    // Delete the SerializedData without calling TearDown() as the WebState
+    // itself is not destroyed. The TearDown() method will be called on the
+    // RealizedWebState in WebStateImpl destructor.
+    saved.reset();
 
     // Notify all observers that the WebState has become realized.
     for (auto& observer : observers_)
@@ -455,12 +583,12 @@ NavigationManager* WebStateImpl::GetNavigationManager() {
   return &RealizedState()->GetNavigationManager();
 }
 
-const WebFramesManager* WebStateImpl::GetWebFramesManager() const {
-  return LIKELY(pimpl_) ? &pimpl_->GetWebFramesManager() : nullptr;
+WebFramesManager* WebStateImpl::GetPageWorldWebFramesManager() {
+  return &GetWebFramesManagerImpl(ContentWorld::kPageContentWorld);
 }
 
-WebFramesManager* WebStateImpl::GetWebFramesManager() {
-  return &RealizedState()->GetWebFramesManager();
+WebFramesManager* WebStateImpl::GetWebFramesManager(ContentWorld world) {
+  return &GetWebFramesManagerImpl(world);
 }
 
 const SessionCertificatePolicyCache*
@@ -473,28 +601,39 @@ WebStateImpl::GetSessionCertificatePolicyCache() {
   return &RealizedState()->GetSessionCertificatePolicyCache();
 }
 
-CRWSessionStorage* WebStateImpl::BuildSessionStorage() {
-  return LIKELY(pimpl_) ? pimpl_->BuildSessionStorage()
-                        : saved_->GetSessionStorage();
-}
+CRWSessionStorage* WebStateImpl::BuildSessionStorage() const {
+  CRWSessionStorage* session_storage = nil;
+  if (LIKELY(pimpl_)) {
+    proto::WebStateStorage storage;
+    pimpl_->SerializeToProto(storage);
 
-CRWJSInjectionReceiver* WebStateImpl::GetJSInjectionReceiver() const {
-  return LIKELY(pimpl_) ? pimpl_->GetJSInjectionReceiver() : nullptr;
+    // Convert the proto::WebStateStorage to CRWSessionStorage as this
+    // is still the format used outside of //ios/web.
+    session_storage =
+        [[CRWSessionStorage alloc] initWithProto:storage
+                                uniqueIdentifier:GetUniqueIdentifier()
+                                stableIdentifier:GetStableIdentifier()];
+  } else {
+    session_storage = saved_->GetSessionStorage();
+  }
+
+  // If a SerializableUserDataManager is attached to the WebState, the user
+  // may have changed its content. Thus, update the serializable user data
+  // if needed. Since `BuildSessionStorage()` is marked const, the manager
+  // will not be created if it does not exist.
+  const SerializableUserDataManager* user_data_manager =
+      SerializableUserDataManager::FromWebState(this);
+  if (user_data_manager) {
+    session_storage.userData = user_data_manager->GetUserDataForSession();
+  }
+
+  return session_storage;
 }
 
 void WebStateImpl::LoadData(NSData* data,
                             NSString* mime_type,
                             const GURL& url) {
   RealizedState()->LoadData(data, mime_type, url);
-}
-
-void WebStateImpl::ExecuteJavaScript(const std::u16string& javascript) {
-  RealizedState()->ExecuteJavaScript(javascript);
-}
-
-void WebStateImpl::ExecuteJavaScript(const std::u16string& javascript,
-                                     JavaScriptResultCallback callback) {
-  RealizedState()->ExecuteJavaScript(javascript, std::move(callback));
 }
 
 void WebStateImpl::ExecuteUserJavaScript(NSString* javascript) {
@@ -504,6 +643,11 @@ void WebStateImpl::ExecuteUserJavaScript(NSString* javascript) {
 NSString* WebStateImpl::GetStableIdentifier() const {
   return LIKELY(pimpl_) ? pimpl_->GetStableIdentifier()
                         : saved_->GetStableIdentifier();
+}
+
+WebStateID WebStateImpl::GetUniqueIdentifier() const {
+  return LIKELY(pimpl_) ? pimpl_->GetUniqueIdentifier()
+                        : saved_->GetUniqueIdentifier();
 }
 
 const std::string& WebStateImpl::GetContentsMimeType() const {
@@ -543,6 +687,10 @@ bool WebStateImpl::IsBeingDestroyed() const {
   return is_being_destroyed_;
 }
 
+bool WebStateImpl::IsWebPageInFullscreenMode() const {
+  return LIKELY(pimpl_) ? pimpl_->IsWebPageInFullscreenMode() : false;
+}
+
 const FaviconStatus& WebStateImpl::GetFaviconStatus() const {
   return LIKELY(pimpl_) ? pimpl_->GetFaviconStatus()
                         : saved_->GetFaviconStatus();
@@ -565,18 +713,9 @@ const GURL& WebStateImpl::GetLastCommittedURL() const {
                         : saved_->GetLastCommittedURL();
 }
 
-GURL WebStateImpl::GetCurrentURL(URLVerificationTrustLevel* trust_level) const {
-  return LIKELY(pimpl_) ? pimpl_->GetCurrentURL(trust_level) : GURL();
-}
-
-base::CallbackListSubscription WebStateImpl::AddScriptCommandCallback(
-    const ScriptCommandCallback& callback,
-    const std::string& command_prefix) {
-  DCHECK(!command_prefix.empty());
-  DCHECK(command_prefix.find_first_of('.') == std::string::npos);
-  DCHECK(script_command_callbacks_.count(command_prefix) == 0 ||
-         script_command_callbacks_[command_prefix].empty());
-  return script_command_callbacks_[command_prefix].Add(callback);
+std::optional<GURL> WebStateImpl::GetLastCommittedURLIfTrusted() const {
+  return LIKELY(pimpl_) ? pimpl_->GetLastCommittedURLIfTrusted()
+                        : saved_->GetLastCommittedURL();
 }
 
 id<CRWWebViewProxy> WebStateImpl::GetWebViewProxy() const {
@@ -603,8 +742,7 @@ bool WebStateImpl::CanTakeSnapshot() const {
   return LIKELY(pimpl_) ? pimpl_->CanTakeSnapshot() : false;
 }
 
-void WebStateImpl::TakeSnapshot(const gfx::RectF& rect,
-                                SnapshotCallback callback) {
+void WebStateImpl::TakeSnapshot(const CGRect rect, SnapshotCallback callback) {
   RealizedState()->TakeSnapshot(rect, std::move(callback));
 }
 
@@ -670,10 +808,10 @@ void WebStateImpl::RemovePolicyDecider(WebStatePolicyDecider* decider) {
   policy_deciders_.RemoveObserver(decider);
 }
 
-void WebStateImpl::DownloadCurrentPage(NSString* destination_file,
-                                       id<CRWWebViewDownloadDelegate> delegate,
-                                       void (^handler)(id<CRWWebViewDownload>))
-    API_AVAILABLE(ios(14.5)) {
+void WebStateImpl::DownloadCurrentPage(
+    NSString* destination_file,
+    id<CRWWebViewDownloadDelegate> delegate,
+    void (^handler)(id<CRWWebViewDownload>)) {
   CRWWebController* web_controller = GetWebController();
   NSURLRequest* request =
       [NSURLRequest requestWithURL:net::NSURLWithGURL(GetLastCommittedURL())];
@@ -681,6 +819,44 @@ void WebStateImpl::DownloadCurrentPage(NSString* destination_file,
                                  destinationPath:destination_file
                                         delegate:delegate
                                          handler:handler];
+}
+
+bool WebStateImpl::IsFindInteractionSupported() {
+  return [GetWebController() findInteractionSupported];
+}
+
+bool WebStateImpl::IsFindInteractionEnabled() {
+  return [GetWebController() findInteractionEnabled];
+}
+
+void WebStateImpl::SetFindInteractionEnabled(bool enabled) {
+  [GetWebController() setFindInteractionEnabled:enabled];
+}
+
+id<CRWFindInteraction> WebStateImpl::GetFindInteraction()
+    API_AVAILABLE(ios(16)) {
+  return [GetWebController() findInteraction];
+}
+
+id WebStateImpl::GetActivityItem() API_AVAILABLE(ios(16.4)) {
+  if (UNLIKELY(!IsRealized())) {
+    return nil;
+  }
+  return [GetWebController() activityItem];
+}
+
+UIColor* WebStateImpl::GetThemeColor() {
+  if (UNLIKELY(!IsRealized())) {
+    return nil;
+  }
+  return [GetWebController() themeColor];
+}
+
+UIColor* WebStateImpl::GetUnderPageBackgroundColor() {
+  if (UNLIKELY(!IsRealized())) {
+    return nil;
+  }
+  return [GetWebController() underPageBackgroundColor];
 }
 
 #pragma mark - WebStateImpl private methods
@@ -692,6 +868,21 @@ WebStateImpl::RealizedWebState* WebStateImpl::RealizedState() {
 
   DCHECK(pimpl_);
   return pimpl_.get();
+}
+
+void WebStateImpl::AddWebStateImplMarker() {
+  // Store an empty base::SupportsUserData::Data that mark the current instance
+  // as a WebStateImpl. Need to be done before anything else, so that casting
+  // can safely be performed even before the end of the constructor.
+  SetUserData(kWebStateIsWebStateImpl,
+              std::make_unique<base::SupportsUserData::Data>());
+}
+
+void WebStateImpl::SendGlobalCreationEvent() {
+  CHECK(saved_ || pimpl_);
+
+  // Send creation event.
+  GlobalWebStateEventTracker::GetInstance()->OnWebStateCreated(this);
 }
 
 }  // namespace web

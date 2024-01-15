@@ -11,6 +11,7 @@
 #include <type_traits>
 
 #include "base/check_op.h"
+#include "base/logging.h"
 #include "sql/recover_module/btree.h"
 #include "sql/recover_module/integers.h"
 #include "sql/recover_module/pager.h"
@@ -125,7 +126,7 @@ int MaxOverflowPayloadSize(int page_size) {
 }  // namespace
 
 LeafPayloadReader::LeafPayloadReader(DatabasePageReader* db_reader)
-    : db_reader_(db_reader), page_id_(DatabasePageReader::kInvalidPageId) {}
+    : db_reader_(db_reader) {}
 
 LeafPayloadReader::~LeafPayloadReader() = default;
 
@@ -148,7 +149,7 @@ bool LeafPayloadReader::Initialize(int64_t payload_size, int payload_offset) {
     // The payload size is bigger than the maximum inline payload size, so it
     // must be bigger than the minimum payload size. This check verifies that
     // the subtractions below have non-negative results.
-    DCHECK_GT(payload_size, min_inline_payload_size);
+    CHECK_GT(payload_size, min_inline_payload_size);
 
     // Payload sizes are upper-bounded by the page size.
     static_assert(
@@ -176,15 +177,18 @@ bool LeafPayloadReader::Initialize(int64_t payload_size, int payload_offset) {
       overflow_page_count_ = efficient_overflow_page_count + 1;
     }
 
-    DCHECK_LE(inline_payload_size_, max_inline_payload_size);
-    DCHECK_EQ(overflow_page_count_, (payload_size - inline_payload_size_ +
-                                     (max_overflow_payload_size_ - 1)) /
-                                        max_overflow_payload_size_)
-        << "Incorect overflow page count calculation";
+    CHECK_LE(inline_payload_size_, max_inline_payload_size);
+    if (overflow_page_count_ != (payload_size - inline_payload_size_ +
+                                 (max_overflow_payload_size_ - 1)) /
+                                    max_overflow_payload_size_) {
+      LOG(ERROR) << "Incorrect overflow page count calculation";
+      page_id_ = DatabasePageReader::kHighestInvalidPageId;
+      return false;
+    }
   }
 
-  DCHECK_LE(inline_payload_size_, payload_size);
-  DCHECK_LE(inline_payload_size_, page_size);
+  CHECK_LE(inline_payload_size_, payload_size);
+  CHECK_LE(inline_payload_size_, page_size);
 
   const int first_overflow_page_id_size =
       (overflow_page_count_ == 0) ? 0 : kPageIdSize;
@@ -194,7 +198,7 @@ bool LeafPayloadReader::Initialize(int64_t payload_size, int payload_offset) {
       page_size) {
     // Corruption can result in overly large payload sizes. Reject the obvious
     // case where the in-page payload extends past the end of the page.
-    page_id_ = DatabasePageReader::kInvalidPageId;
+    page_id_ = DatabasePageReader::kHighestInvalidPageId;
     return false;
   }
 
@@ -203,9 +207,16 @@ bool LeafPayloadReader::Initialize(int64_t payload_size, int payload_offset) {
   return true;
 }
 
+bool LeafPayloadReader::IsInitialized() const {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  return DatabasePageReader::IsValidPageId(page_id_);
+}
+
 bool LeafPayloadReader::ReadPayload(int64_t offset,
                                     int64_t size,
                                     uint8_t* buffer) {
+  DCHECK(IsInitialized())
+      << "Initialize() not called, or last call did not succeed";
   DCHECK_GE(offset, 0);
   DCHECK_LT(offset, payload_size_);
   DCHECK_GT(size, 0);
@@ -213,7 +224,7 @@ bool LeafPayloadReader::ReadPayload(int64_t offset,
   DCHECK(buffer != nullptr);
 
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  DCHECK(page_id_ != DatabasePageReader::kInvalidPageId)
+  DCHECK(IsInitialized())
       << "Initialize() not called, or last call did not succeed";
 
   if (offset < inline_payload_size_) {
@@ -249,6 +260,11 @@ bool LeafPayloadReader::ReadPayload(int64_t offset,
 
   // The read is entirely in overflow pages.
   DCHECK_GE(offset, inline_payload_size_);
+  if (max_overflow_payload_size_ <= 0) {
+    // `max_overflow_payload_size_` should have been set in Initialize() if it's
+    // to be used here. See https://crbug.com/1417151.
+    return false;
+  }
   while (size > 0) {
     const int overflow_page_index =
         (offset - inline_payload_size_) / max_overflow_payload_size_;
@@ -286,7 +302,7 @@ bool LeafPayloadReader::ReadPayload(int64_t offset,
 
 const uint8_t* LeafPayloadReader::ReadInlinePayload() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  DCHECK(page_id_ != DatabasePageReader::kInvalidPageId)
+  DCHECK(IsInitialized())
       << "Initialize() not called, or last call did not succeed";
 
   if (db_reader_->ReadPage(page_id_) != SQLITE_OK)

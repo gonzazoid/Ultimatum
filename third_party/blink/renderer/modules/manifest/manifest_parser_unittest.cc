@@ -9,14 +9,17 @@
 #include <memory>
 
 #include "base/test/scoped_feature_list.h"
+#include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/features.h"
 #include "third_party/blink/public/common/permissions_policy/permissions_policy.h"
 #include "third_party/blink/public/mojom/manifest/manifest.mojom-blink.h"
 #include "third_party/blink/renderer/platform/testing/runtime_enabled_features_test_helpers.h"
+#include "third_party/blink/renderer/platform/testing/task_environment.h"
 #include "third_party/blink/renderer/platform/weborigin/kurl.h"
 #include "third_party/blink/renderer/platform/weborigin/security_origin.h"
+#include "third_party/blink/renderer/platform/wtf/text/wtf_uchar.h"
 
 namespace blink {
 
@@ -45,7 +48,7 @@ class ManifestParserTest : public testing::Test {
     errors_.clear();
     for (auto& error : errors)
       errors_.push_back(std::move(error->message));
-    manifest_ = parser.manifest().Clone();
+    manifest_ = parser.TakeManifest();
     return manifest_;
   }
 
@@ -62,6 +65,7 @@ class ManifestParserTest : public testing::Test {
   const KURL& DefaultManifestUrl() const { return default_manifest_url; }
 
  private:
+  test::TaskEnvironment task_environment_;
   mojom::blink::ManifestPtr manifest_;
   Vector<String> errors_;
 
@@ -78,8 +82,8 @@ TEST_F(ManifestParserTest, CrashTest) {
   bool has_comments = parser.Parse();
   EXPECT_FALSE(has_comments);
   Vector<mojom::blink::ManifestErrorPtr> errors;
-  const auto& manifest = parser.manifest();
   parser.TakeErrors(&errors);
+  auto manifest = parser.TakeManifest();
 
   // .Parse() should have been call without crashing and succeeded.
   EXPECT_EQ(0u, errors.size());
@@ -302,21 +306,21 @@ TEST_F(ManifestParserTest, IdParseRules) {
   {
     auto& manifest = ParseManifest(R"({"start_url": "/start?query=a" })");
     ASSERT_EQ(0u, GetErrorCount());
-    EXPECT_EQ("start?query=a", manifest->id);
+    EXPECT_EQ("http://foo.com/start?query=a", manifest->id);
   }
   // Invalid type.
   {
     auto& manifest =
         ParseManifest("{\"start_url\": \"/start?query=a\", \"id\": 1}");
     ASSERT_EQ(1u, GetErrorCount());
-    EXPECT_EQ("start?query=a", manifest->id);
+    EXPECT_EQ("http://foo.com/start?query=a", manifest->id);
   }
   // Empty string.
   {
     auto& manifest =
         ParseManifest(R"({ "start_url": "/start?query=a", "id": "" })");
     ASSERT_EQ(0u, GetErrorCount());
-    EXPECT_EQ("start?query=a", manifest->id);
+    EXPECT_EQ("http://foo.com/start?query=a", manifest->id);
   }
   // Full url.
   {
@@ -324,7 +328,7 @@ TEST_F(ManifestParserTest, IdParseRules) {
         "{ \"start_url\": \"/start?query=a\", \"id\": \"http://foo.com/foo\" "
         "}");
     ASSERT_EQ(0u, GetErrorCount());
-    EXPECT_EQ("foo", manifest->id);
+    EXPECT_EQ("http://foo.com/foo", manifest->id);
   }
   // Full url with different origin.
   {
@@ -332,35 +336,49 @@ TEST_F(ManifestParserTest, IdParseRules) {
         "{ \"start_url\": \"/start?query=a\", \"id\": "
         "\"http://another.com/foo\" }");
     ASSERT_EQ(1u, GetErrorCount());
-    EXPECT_EQ("start?query=a", manifest->id);
+    EXPECT_EQ("http://foo.com/start?query=a", manifest->id);
   }
   // Relative path
   {
     auto& manifest =
         ParseManifest("{ \"start_url\": \"/start?query=a\", \"id\": \".\" }");
     ASSERT_EQ(0u, GetErrorCount());
-    EXPECT_EQ("", manifest->id);
+    EXPECT_EQ("http://foo.com/", manifest->id);
   }
   // Absolute path
   {
     auto& manifest =
         ParseManifest("{ \"start_url\": \"/start?query=a\", \"id\": \"/\" }");
     ASSERT_EQ(0u, GetErrorCount());
-    EXPECT_EQ("", manifest->id);
+    EXPECT_EQ("http://foo.com/", manifest->id);
   }
   // url with fragment
   {
     auto& manifest = ParseManifest(
         "{ \"start_url\": \"/start?query=a\", \"id\": \"/#abc\" }");
     ASSERT_EQ(0u, GetErrorCount());
-    EXPECT_EQ("", manifest->id);
+    EXPECT_EQ("http://foo.com/", manifest->id);
   }
   // Smoke test.
   {
     auto& manifest =
         ParseManifest(R"({ "start_url": "/start?query=a", "id": "foo" })");
     ASSERT_EQ(0u, GetErrorCount());
-    EXPECT_EQ("foo", manifest->id);
+    EXPECT_EQ("http://foo.com/foo", manifest->id);
+  }
+  // Invalid UTF-8 character.
+  {
+    UChar invalid_utf8_chars[] = {0xD801, 0x0000};
+    String manifest_str =
+        String("{ \"start_url\": \"/start?query=a\", \"id\": \"") +
+        String(invalid_utf8_chars) + String("\" }");
+
+    ParseManifest(manifest_str);
+    ASSERT_EQ(1u, GetErrorCount());
+    EXPECT_THAT(
+        errors()[0].Utf8(),
+        testing::EndsWith("Unsupported encoding. JSON and all string literals "
+                          "must contain valid Unicode characters."));
   }
 }
 
@@ -1112,6 +1130,38 @@ TEST_F(ManifestParserTest, IconsParseRules) {
     EXPECT_EQ(icons.size(), 1u);
     EXPECT_EQ(icons[0]->src.GetString(), "http://foo.com/foo.jpg");
     EXPECT_FALSE(IsManifestEmpty(manifest));
+    EXPECT_EQ(0u, GetErrorCount());
+  }
+
+  // Smoke test.
+  {
+    auto& manifest = ParseManifest(R"(
+          {
+            "icons": [
+              {
+                "src": "foo.webp",
+                "type": "image/webp",
+                "sizes": "192x192"
+              },
+              {
+                "src": "foo.svg",
+                "type": "image/svg+xml",
+                "sizes": "144x144"
+              }
+            ]
+          }
+        )");
+    ASSERT_EQ(manifest->icons.size(), 2u);
+    EXPECT_EQ(manifest->icons[0]->src, KURL(DefaultDocumentUrl(), "foo.webp"));
+    EXPECT_EQ(manifest->icons[0]->type, "image/webp");
+    EXPECT_EQ(manifest->icons[0]->sizes.size(), 1u);
+    EXPECT_EQ(manifest->icons[0]->sizes[0].width(), 192);
+    EXPECT_EQ(manifest->icons[0]->sizes[0].height(), 192);
+    EXPECT_EQ(manifest->icons[1]->src, KURL(DefaultDocumentUrl(), "foo.svg"));
+    EXPECT_EQ(manifest->icons[1]->type, "image/svg+xml");
+    EXPECT_EQ(manifest->icons[1]->sizes.size(), 1u);
+    EXPECT_EQ(manifest->icons[1]->sizes[0].width(), 144);
+    EXPECT_EQ(manifest->icons[1]->sizes[0].height(), 144);
     EXPECT_EQ(0u, GetErrorCount());
   }
 }
@@ -3454,6 +3504,738 @@ TEST_F(ManifestParserTest, UrlHandlerParseRules) {
   }
 }
 
+TEST_F(ManifestParserTest, ScopeExtensionParseRules) {
+  base::test::ScopedFeatureList feature_list;
+  feature_list.InitAndEnableFeature(
+      blink::features::kWebAppEnableScopeExtensions);
+
+  // Manifest does not contain a 'scope_extensions' field.
+  {
+    auto& manifest = ParseManifest("{ }");
+    ASSERT_EQ(0u, GetErrorCount());
+    EXPECT_EQ(0u, manifest->scope_extensions.size());
+  }
+
+  // 'scope_extensions' is not an array.
+  {
+    auto& manifest = ParseManifest(R"({ "scope_extensions": { } })");
+    EXPECT_EQ(1u, GetErrorCount());
+    EXPECT_EQ("property 'scope_extensions' ignored, type array expected.",
+              errors()[0]);
+    EXPECT_EQ(0u, manifest->scope_extensions.size());
+  }
+
+  // Contains 'scope_extensions' field but no scope extension entries.
+  {
+    auto& manifest = ParseManifest(R"({ "scope_extensions": [ ] })");
+    ASSERT_EQ(0u, GetErrorCount());
+    EXPECT_EQ(0u, manifest->scope_extensions.size());
+  }
+
+  // Scope extension entry must be an object or a string.
+  {
+    auto& manifest = ParseManifest(R"({ "scope_extensions": [ 7 ] })");
+    auto& scope_extensions = manifest->scope_extensions;
+
+    ASSERT_EQ(1u, GetErrorCount());
+    EXPECT_EQ("scope_extensions entry ignored, type string or object expected.",
+              errors()[0]);
+    EXPECT_EQ(0u, scope_extensions.size());
+  }
+
+  // A valid scope extension.
+  {
+    auto& manifest = ParseManifest(R"({
+          "scope_extensions": [
+            {
+              "origin": "https://foo.com"
+            }
+          ]
+        })");
+    auto& scope_extensions = manifest->scope_extensions;
+
+    ASSERT_EQ(0u, GetErrorCount());
+    ASSERT_EQ(1u, scope_extensions.size());
+    ASSERT_TRUE(blink::SecurityOrigin::CreateFromString("https://foo.com")
+                    ->IsSameOriginWith(scope_extensions[0]->origin.get()));
+  }
+
+  // A valid scope extension in shorthand format.
+  {
+    auto& manifest = ParseManifest(R"({
+          "scope_extensions": [
+            "https://foo.com"
+          ]
+        })");
+    auto& scope_extensions = manifest->scope_extensions;
+
+    ASSERT_EQ(0u, GetErrorCount());
+    ASSERT_EQ(1u, scope_extensions.size());
+    ASSERT_TRUE(blink::SecurityOrigin::CreateFromString("https://foo.com")
+                    ->IsSameOriginWith(scope_extensions[0]->origin.get()));
+  }
+
+  // Origin field is missing from the scope extension entry.
+  {
+    auto& manifest = ParseManifest(R"({
+          "scope_extensions": [
+            {
+              "invalid_field": "https://foo.com"
+            }
+          ]
+        })");
+    auto& scope_extensions = manifest->scope_extensions;
+
+    ASSERT_EQ(1u, GetErrorCount());
+    EXPECT_EQ(
+        "scope_extensions entry ignored, required property 'origin' is "
+        "missing.",
+        errors()[0]);
+    EXPECT_EQ(0u, scope_extensions.size());
+  }
+
+  // Scope extension entry origin must be a string.
+  {
+    auto& manifest = ParseManifest(R"({
+          "scope_extensions": [
+            {
+              "origin": 7
+            }
+          ]
+        })");
+    auto& scope_extensions = manifest->scope_extensions;
+
+    ASSERT_EQ(1u, GetErrorCount());
+    EXPECT_EQ("property 'origin' ignored, type string expected.", errors()[0]);
+    EXPECT_EQ(0u, scope_extensions.size());
+  }
+
+  // Scheme must be https.
+  {
+    auto& manifest = ParseManifest(R"({
+          "scope_extensions": [
+            {
+              "origin": "http://foo.com"
+            }
+          ]
+        })");
+    auto& scope_extensions = manifest->scope_extensions;
+
+    ASSERT_EQ(1u, GetErrorCount());
+    EXPECT_EQ(
+        "scope_extensions entry ignored, required property 'origin' must use "
+        "the https scheme.",
+        errors()[0]);
+    ASSERT_EQ(0u, scope_extensions.size());
+  }
+
+  // Scheme must be https in shorthand format.
+  {
+    auto& manifest = ParseManifest(R"({
+          "scope_extensions": [
+            "http://foo.com"
+          ]
+        })");
+    auto& scope_extensions = manifest->scope_extensions;
+
+    ASSERT_EQ(1u, GetErrorCount());
+    EXPECT_EQ(
+        "scope_extensions entry ignored, required property 'origin' must use "
+        "the https scheme.",
+        errors()[0]);
+    ASSERT_EQ(0u, scope_extensions.size());
+  }
+
+  // Origin must be valid.
+  {
+    auto& manifest = ParseManifest(R"({
+          "scope_extensions": [
+            {
+              "origin": "https:///////"
+            }
+          ]
+        })");
+    auto& scope_extensions = manifest->scope_extensions;
+
+    ASSERT_EQ(1u, GetErrorCount());
+    EXPECT_EQ(
+        "scope_extensions entry ignored, required property 'origin' is "
+        "invalid.",
+        errors()[0]);
+    ASSERT_EQ(0u, scope_extensions.size());
+  }
+
+  // Origin must be valid in shorthand format.
+  {
+    auto& manifest = ParseManifest(R"({
+          "scope_extensions": [
+            "https:///////"
+          ]
+        })");
+    auto& scope_extensions = manifest->scope_extensions;
+
+    ASSERT_EQ(1u, GetErrorCount());
+    EXPECT_EQ(
+        "scope_extensions entry ignored, required property 'origin' is "
+        "invalid.",
+        errors()[0]);
+    ASSERT_EQ(0u, scope_extensions.size());
+  }
+
+  // Parse multiple valid scope extensions.
+  {
+    auto& manifest = ParseManifest(R"({
+          "scope_extensions": [
+            {
+              "origin": "https://foo.com"
+            },
+            {
+              "origin": "https://bar.com"
+            }
+          ]
+        })");
+    auto& scope_extensions = manifest->scope_extensions;
+
+    ASSERT_EQ(0u, GetErrorCount());
+    ASSERT_EQ(2u, scope_extensions.size());
+    ASSERT_TRUE(blink::SecurityOrigin::CreateFromString("https://foo.com")
+                    ->IsSameOriginWith(scope_extensions[0]->origin.get()));
+    ASSERT_TRUE(blink::SecurityOrigin::CreateFromString("https://bar.com")
+                    ->IsSameOriginWith(scope_extensions[1]->origin.get()));
+  }
+
+  // Parse multiple valid scope extensions in shorthand format.
+  {
+    auto& manifest = ParseManifest(R"({
+          "scope_extensions": [
+            "https://foo.com",
+            "https://bar.com"
+          ]
+        })");
+    auto& scope_extensions = manifest->scope_extensions;
+
+    ASSERT_EQ(0u, GetErrorCount());
+    ASSERT_EQ(2u, scope_extensions.size());
+    ASSERT_TRUE(blink::SecurityOrigin::CreateFromString("https://foo.com")
+                    ->IsSameOriginWith(scope_extensions[0]->origin.get()));
+    ASSERT_TRUE(blink::SecurityOrigin::CreateFromString("https://bar.com")
+                    ->IsSameOriginWith(scope_extensions[1]->origin.get()));
+  }
+
+  // Parse invalid scope extensions list with an array entry.
+  {
+    auto& manifest = ParseManifest(R"({
+          "scope_extensions": [
+            {
+              "origin": "https://foo.com"
+            },
+            []
+          ]
+        })");
+    auto& scope_extensions = manifest->scope_extensions;
+
+    ASSERT_EQ(1u, GetErrorCount());
+    EXPECT_EQ("scope_extensions entry ignored, type string or object expected.",
+              errors()[0]);
+    ASSERT_EQ(1u, scope_extensions.size());
+    ASSERT_TRUE(blink::SecurityOrigin::CreateFromString("https://foo.com")
+                    ->IsSameOriginWith(scope_extensions[0]->origin.get()));
+  }
+
+  // Parse invalid scope extensions list with an array entry in shorthand
+  // format.
+  {
+    auto& manifest = ParseManifest(R"({
+          "scope_extensions": [
+            "https://foo.com",
+            []
+          ]
+        })");
+    auto& scope_extensions = manifest->scope_extensions;
+
+    ASSERT_EQ(1u, GetErrorCount());
+    EXPECT_EQ("scope_extensions entry ignored, type string or object expected.",
+              errors()[0]);
+    ASSERT_EQ(1u, scope_extensions.size());
+    ASSERT_TRUE(blink::SecurityOrigin::CreateFromString("https://foo.com")
+                    ->IsSameOriginWith(scope_extensions[0]->origin.get()));
+  }
+
+  // Parse invalid scope extensions list with entries in mixed formats.
+  {
+    auto& manifest = ParseManifest(R"({
+          "scope_extensions": [
+            {
+              "origin": "https://foo.com"
+            },
+            "https://bar.com"
+          ]
+        })");
+    auto& scope_extensions = manifest->scope_extensions;
+
+    ASSERT_EQ(1u, GetErrorCount());
+    EXPECT_EQ("scope_extensions entry ignored, type object expected.",
+              errors()[0]);
+    ASSERT_EQ(1u, scope_extensions.size());
+    ASSERT_TRUE(blink::SecurityOrigin::CreateFromString("https://foo.com")
+                    ->IsSameOriginWith(scope_extensions[0]->origin.get()));
+  }
+
+  // Parse both valid and invalid scope extensions.
+  {
+    auto& manifest = ParseManifest(R"({
+          "scope_extensions": [
+            {
+              "origin": "https://foo.com"
+            },
+            {
+              "origin": "about:"
+            }
+          ]
+        })");
+    auto& scope_extensions = manifest->scope_extensions;
+
+    ASSERT_EQ(1u, GetErrorCount());
+    EXPECT_EQ(
+        "scope_extensions entry ignored, required property 'origin' is "
+        "invalid.",
+        errors()[0]);
+    ASSERT_EQ(1u, scope_extensions.size());
+    ASSERT_TRUE(blink::SecurityOrigin::CreateFromString("https://foo.com")
+                    ->IsSameOriginWith(scope_extensions[0]->origin.get()));
+  }
+
+  // Parse both valid and invalid scope extensions in shorthand format.
+  {
+    auto& manifest = ParseManifest(R"({
+          "scope_extensions": [
+            "https://foo.com",
+            "about:"
+          ]
+        })");
+    auto& scope_extensions = manifest->scope_extensions;
+
+    ASSERT_EQ(1u, GetErrorCount());
+    EXPECT_EQ(
+        "scope_extensions entry ignored, required property 'origin' is "
+        "invalid.",
+        errors()[0]);
+    ASSERT_EQ(1u, scope_extensions.size());
+    ASSERT_TRUE(blink::SecurityOrigin::CreateFromString("https://foo.com")
+                    ->IsSameOriginWith(scope_extensions[0]->origin.get()));
+  }
+
+  // Parse invalid scope extension where the origin is a TLD.
+  {
+    auto& manifest = ParseManifest(R"({
+          "scope_extensions": [
+            {
+              "origin": "https://co.uk"
+            }
+          ]
+        })");
+    auto& scope_extensions = manifest->scope_extensions;
+
+    ASSERT_EQ(1u, GetErrorCount());
+    EXPECT_EQ(
+        "scope_extensions entry ignored, domain of required property 'origin' "
+        "is invalid.",
+        errors()[0]);
+    ASSERT_EQ(0u, scope_extensions.size());
+  }
+
+  // Parse invalid scope extension where the origin is a TLD in shorthand
+  // format.
+  {
+    auto& manifest = ParseManifest(R"({
+          "scope_extensions": [
+            "https://co.uk"
+          ]
+        })");
+    auto& scope_extensions = manifest->scope_extensions;
+
+    ASSERT_EQ(1u, GetErrorCount());
+    EXPECT_EQ(
+        "scope_extensions entry ignored, domain of required property 'origin' "
+        "is invalid.",
+        errors()[0]);
+    ASSERT_EQ(0u, scope_extensions.size());
+  }
+
+  // Parse origin with wildcard.
+  {
+    auto& manifest = ParseManifest(R"({
+          "scope_extensions": [
+            {
+              "origin": "https://*.foo.com"
+            }
+          ]
+        })");
+    auto& scope_extensions = manifest->scope_extensions;
+
+    ASSERT_EQ(0u, GetErrorCount());
+    ASSERT_EQ(1u, scope_extensions.size());
+    ASSERT_TRUE(blink::SecurityOrigin::CreateFromString("https://foo.com")
+                    ->IsSameOriginWith(scope_extensions[0]->origin.get()));
+    ASSERT_TRUE(scope_extensions[0]->has_origin_wildcard);
+  }
+
+  // Parse origin with wildcard in shorthand format.
+  {
+    auto& manifest = ParseManifest(R"({
+          "scope_extensions": [
+            "https://*.foo.com"
+          ]
+        })");
+    auto& scope_extensions = manifest->scope_extensions;
+
+    ASSERT_EQ(0u, GetErrorCount());
+    ASSERT_EQ(1u, scope_extensions.size());
+    ASSERT_TRUE(blink::SecurityOrigin::CreateFromString("https://foo.com")
+                    ->IsSameOriginWith(scope_extensions[0]->origin.get()));
+    ASSERT_TRUE(scope_extensions[0]->has_origin_wildcard);
+  }
+
+  // Parse invalid origin wildcard format.
+  {
+    auto& manifest = ParseManifest(R"({
+          "scope_extensions": [
+            {
+              "origin": "https://*foo.com"
+            }
+          ]
+        })");
+    auto& scope_extensions = manifest->scope_extensions;
+
+    ASSERT_EQ(0u, GetErrorCount());
+    ASSERT_EQ(1u, scope_extensions.size());
+    ASSERT_TRUE(blink::SecurityOrigin::CreateFromString("https://*foo.com")
+                    ->IsSameOriginWith(scope_extensions[0]->origin.get()));
+    ASSERT_FALSE(scope_extensions[0]->has_origin_wildcard);
+  }
+
+  // Parse invalid origin wildcard format in shorthand format.
+  {
+    auto& manifest = ParseManifest(R"({
+          "scope_extensions": [
+            "https://*foo.com"
+          ]
+        })");
+    auto& scope_extensions = manifest->scope_extensions;
+
+    ASSERT_EQ(0u, GetErrorCount());
+    ASSERT_EQ(1u, scope_extensions.size());
+    ASSERT_TRUE(blink::SecurityOrigin::CreateFromString("https://*foo.com")
+                    ->IsSameOriginWith(scope_extensions[0]->origin.get()));
+    ASSERT_FALSE(scope_extensions[0]->has_origin_wildcard);
+  }
+
+  // Parse origin where the host is just the wildcard prefix.
+  {
+    auto& manifest = ParseManifest(R"({
+          "scope_extensions": [
+            {
+              "origin": "https://*."
+            }
+          ]
+        })");
+    auto& scope_extensions = manifest->scope_extensions;
+
+    ASSERT_EQ(1u, GetErrorCount());
+    ASSERT_EQ(
+        "scope_extensions entry ignored, domain of required property 'origin' "
+        "is invalid.",
+        errors()[0]);
+    ASSERT_EQ(0u, scope_extensions.size());
+  }
+
+  // Parse origin where the host is just the wildcard prefix in shorthand
+  // format.
+  {
+    auto& manifest = ParseManifest(R"({
+          "scope_extensions": [
+            "https://*."
+          ]
+        })");
+    auto& scope_extensions = manifest->scope_extensions;
+
+    ASSERT_EQ(1u, GetErrorCount());
+    ASSERT_EQ(
+        "scope_extensions entry ignored, domain of required property 'origin' "
+        "is invalid.",
+        errors()[0]);
+    ASSERT_EQ(0u, scope_extensions.size());
+  }
+
+  // Parse invalid origin where wildcard is used with a TLD.
+  {
+    auto& manifest = ParseManifest(R"({
+          "scope_extensions": [
+            {
+              "origin": "https://*.com"
+            }
+          ]
+        })");
+    auto& scope_extensions = manifest->scope_extensions;
+
+    ASSERT_EQ(1u, GetErrorCount());
+    ASSERT_EQ(
+        "scope_extensions entry ignored, domain of required property 'origin' "
+        "is invalid.",
+        errors()[0]);
+    ASSERT_EQ(0u, scope_extensions.size());
+  }
+
+  // Parse invalid origin where wildcard is used with a TLD in shorthand format.
+  {
+    auto& manifest = ParseManifest(R"({
+          "scope_extensions": [
+            "https://*.com"
+          ]
+        })");
+    auto& scope_extensions = manifest->scope_extensions;
+
+    ASSERT_EQ(1u, GetErrorCount());
+    ASSERT_EQ(
+        "scope_extensions entry ignored, domain of required property 'origin' "
+        "is invalid.",
+        errors()[0]);
+    ASSERT_EQ(0u, scope_extensions.size());
+  }
+
+  // Parse invalid origin where wildcard is used with an unknown TLD.
+  {
+    auto& manifest = ParseManifest(R"({
+          "scope_extensions": [
+            {
+              "origin": "https://*.foo"
+            }
+          ]
+        })");
+    auto& scope_extensions = manifest->scope_extensions;
+
+    ASSERT_EQ(1u, GetErrorCount());
+    ASSERT_EQ(
+        "scope_extensions entry ignored, domain of required property 'origin' "
+        "is invalid.",
+        errors()[0]);
+    ASSERT_EQ(0u, scope_extensions.size());
+  }
+
+  // Parse invalid origin where wildcard is used with an unknown TLD in
+  // shorthand format.
+  {
+    auto& manifest = ParseManifest(R"({
+          "scope_extensions": [
+            "https://*.foo"
+          ]
+        })");
+    auto& scope_extensions = manifest->scope_extensions;
+
+    ASSERT_EQ(1u, GetErrorCount());
+    ASSERT_EQ(
+        "scope_extensions entry ignored, domain of required property 'origin' "
+        "is invalid.",
+        errors()[0]);
+    ASSERT_EQ(0u, scope_extensions.size());
+  }
+
+  // Parse invalid origin where wildcard is used with a multipart TLD.
+  {
+    auto& manifest = ParseManifest(R"({
+          "scope_extensions": [
+            {
+              "origin": "https://*.co.uk"
+            }
+          ]
+        })");
+    auto& scope_extensions = manifest->scope_extensions;
+
+    ASSERT_EQ(1u, GetErrorCount());
+    ASSERT_EQ(
+        "scope_extensions entry ignored, domain of required property 'origin' "
+        "is invalid.",
+        errors()[0]);
+    ASSERT_EQ(0u, scope_extensions.size());
+  }
+
+  // Parse invalid origin where wildcard is used with a multipart TLD in
+  // shorthand format.
+  {
+    auto& manifest = ParseManifest(R"({
+          "scope_extensions": [
+            "https://*.co.uk"
+          ]
+        })");
+    auto& scope_extensions = manifest->scope_extensions;
+
+    ASSERT_EQ(1u, GetErrorCount());
+    ASSERT_EQ(
+        "scope_extensions entry ignored, domain of required property 'origin' "
+        "is invalid.",
+        errors()[0]);
+    ASSERT_EQ(0u, scope_extensions.size());
+  }
+
+  // Parse valid origin with private registry.
+  {
+    auto& manifest = ParseManifest(R"({
+          "scope_extensions": [
+            {
+              "origin": "https://*.glitch.me"
+            }
+          ]
+        })");
+    auto& scope_extensions = manifest->scope_extensions;
+
+    ASSERT_EQ(0u, GetErrorCount());
+    ASSERT_EQ(1u, scope_extensions.size());
+    ASSERT_TRUE(blink::SecurityOrigin::CreateFromString("https://glitch.me")
+                    ->IsSameOriginWith(scope_extensions[0]->origin.get()));
+    ASSERT_TRUE(scope_extensions[0]->has_origin_wildcard);
+  }
+
+  // Parse valid origin with private registry in shorthand format.
+  {
+    auto& manifest = ParseManifest(R"({
+          "scope_extensions": [
+            "https://*.glitch.me"
+          ]
+        })");
+    auto& scope_extensions = manifest->scope_extensions;
+
+    ASSERT_EQ(0u, GetErrorCount());
+    ASSERT_EQ(1u, scope_extensions.size());
+    ASSERT_TRUE(blink::SecurityOrigin::CreateFromString("https://glitch.me")
+                    ->IsSameOriginWith(scope_extensions[0]->origin.get()));
+    ASSERT_TRUE(scope_extensions[0]->has_origin_wildcard);
+  }
+
+  // Parse valid IP address as origin.
+  {
+    auto& manifest = ParseManifest(R"({
+          "scope_extensions": [
+            {
+              "origin": "https://192.168.0.1:8888"
+            }
+          ]
+        })");
+    auto& scope_extensions = manifest->scope_extensions;
+
+    ASSERT_EQ(0u, GetErrorCount());
+    ASSERT_EQ(1u, scope_extensions.size());
+    ASSERT_TRUE(
+        blink::SecurityOrigin::CreateFromString("https://192.168.0.1:8888")
+            ->IsSameOriginWith(scope_extensions[0]->origin.get()));
+    ASSERT_FALSE(scope_extensions[0]->has_origin_wildcard);
+  }
+
+  // Parse valid IP address as origin in shorthand format.
+  {
+    auto& manifest = ParseManifest(R"({
+          "scope_extensions": [
+            "https://192.168.0.1:8888"
+          ]
+        })");
+    auto& scope_extensions = manifest->scope_extensions;
+
+    ASSERT_EQ(0u, GetErrorCount());
+    ASSERT_EQ(1u, scope_extensions.size());
+    ASSERT_TRUE(
+        blink::SecurityOrigin::CreateFromString("https://192.168.0.1:8888")
+            ->IsSameOriginWith(scope_extensions[0]->origin.get()));
+    ASSERT_FALSE(scope_extensions[0]->has_origin_wildcard);
+  }
+
+  // Validate only the first 10 scope extensions are parsed. The following
+  // manifest specifies 11 scope extensions, so the last one should not be in
+  // the result.
+  {
+    auto& manifest = ParseManifest(
+        R"({
+          "scope_extensions": [
+            {
+              "origin": "https://192.168.0.1:8001"
+            },
+            {
+              "origin": "https://192.168.0.1:8002"
+            },
+            {
+              "origin": "https://192.168.0.1:8003"
+            },
+            {
+              "origin": "https://192.168.0.1:8004"
+            },
+            {
+              "origin": "https://192.168.0.1:8005"
+            },
+            {
+              "origin": "https://192.168.0.1:8006"
+            },
+            {
+              "origin": "https://192.168.0.1:8007"
+            },
+            {
+              "origin": "https://192.168.0.1:8008"
+            },
+            {
+              "origin": "https://192.168.0.1:8009"
+            },
+            {
+              "origin": "https://192.168.0.1:8010"
+            },
+            {
+              "origin": "https://192.168.0.1:8011"
+            }
+          ]
+        })");
+    auto& scope_extensions = manifest->scope_extensions;
+
+    ASSERT_EQ(1u, GetErrorCount());
+    EXPECT_EQ(
+        "property 'scope_extensions' contains more than 10 valid elements, "
+        "only the first 10 are parsed.",
+        errors()[0]);
+    ASSERT_EQ(10u, scope_extensions.size());
+    ASSERT_TRUE(
+        blink::SecurityOrigin::CreateFromString("https://192.168.0.1:8010")
+            ->IsSameOriginWith(scope_extensions[9]->origin.get()));
+  }
+
+  // Validate only the first 10 scope extensions are parsed in shorthand format.
+  // The following manifest specifies 11 scope extensions, so the last one
+  // should not be in the result.
+  {
+    auto& manifest = ParseManifest(
+        R"({
+          "scope_extensions": [
+            "https://192.168.0.1:8001",
+            "https://192.168.0.1:8002",
+            "https://192.168.0.1:8003",
+            "https://192.168.0.1:8004",
+            "https://192.168.0.1:8005",
+            "https://192.168.0.1:8006",
+            "https://192.168.0.1:8007",
+            "https://192.168.0.1:8008",
+            "https://192.168.0.1:8009",
+            "https://192.168.0.1:8010",
+            "https://192.168.0.1:8011"
+          ]
+        })");
+    auto& scope_extensions = manifest->scope_extensions;
+
+    ASSERT_EQ(1u, GetErrorCount());
+    EXPECT_EQ(
+        "property 'scope_extensions' contains more than 10 valid elements, "
+        "only the first 10 are parsed.",
+        errors()[0]);
+    ASSERT_EQ(10u, scope_extensions.size());
+    ASSERT_TRUE(
+        blink::SecurityOrigin::CreateFromString("https://192.168.0.1:8010")
+            ->IsSameOriginWith(scope_extensions[9]->origin.get()));
+  }
+}
+
 TEST_F(ManifestParserTest, LockScreenParseRules) {
   KURL manifest_url = KURL("https://foo.com/manifest.json");
   KURL document_url = KURL("https://foo.com/index.html");
@@ -5079,23 +5861,6 @@ TEST_F(ManifestParserTest, GCMSenderIDParseRules) {
   }
 }
 
-TEST_F(ManifestParserTest, StorageIsolationEnabled) {
-  auto& manifest = ParseManifest(R"({ "isolated_storage": true })");
-  EXPECT_EQ(manifest->isolated_storage, true);
-  EXPECT_EQ(0u, GetErrorCount());
-}
-
-TEST_F(ManifestParserTest, StorageIsolationBadScope) {
-  auto& manifest = ParseManifest(
-      R"({ "isolated_storage": true,
-      "scope": "/invalid",
-      "start_url": "/invalid/index.html" })");
-  EXPECT_EQ(manifest->isolated_storage, false);
-  EXPECT_EQ(1u, GetErrorCount());
-  EXPECT_EQ("Isolated storage is only supported with a scope of \"/\".",
-            errors()[0]);
-}
-
 TEST_F(ManifestParserTest, PermissionsPolicy) {
   auto& manifest = ParseManifest(
       R"({ "permissions_policy": {
@@ -5660,6 +6425,19 @@ TEST_F(ManifestParserTest, DarkColorOverrideParseRules) {
                 errors()[1]);
     }
 
+    // Override arrays don't contain objects.
+    {
+      auto& manifest = ParseManifest(R"({
+            "theme_colors": [true],
+            "background_colors":
+            [5, {"color": "#0000FF", "media": "(prefers-color-scheme: dark) "}]
+            })");
+      EXPECT_FALSE(manifest->has_dark_theme_color);
+      EXPECT_TRUE(manifest->has_dark_background_color);
+      EXPECT_EQ(manifest->dark_background_color, 0xFF0000FFu);
+      EXPECT_EQ(0u, GetErrorCount());
+    }
+
     // Valid overrides should be parsed
     {
       auto& manifest = ParseManifest(R"({
@@ -5747,8 +6525,9 @@ TEST_F(ManifestParserTest, DarkColorOverrideParseRules) {
 TEST_F(ManifestParserTest, TabStripParseRules) {
   using Visibility = mojom::blink::TabStripMemberVisibility;
   {
-    ScopedWebAppTabStripForTest feature(false);
-    // Feature not enabled, should not be parsed.
+    ScopedWebAppTabStripForTest feature1(true);
+    ScopedWebAppTabStripCustomizationsForTest feature2(false);
+    // Tab strip customizations feature not enabled, should not be parsed.
     {
       auto& manifest =
           ParseManifest(R"({ "tab_strip": {"home_tab": "auto"} })");
@@ -5757,13 +6536,14 @@ TEST_F(ManifestParserTest, TabStripParseRules) {
     }
   }
   {
-    ScopedWebAppTabStripForTest feature(true);
+    ScopedWebAppTabStripForTest feature1(true);
+    ScopedWebAppTabStripCustomizationsForTest feature2(true);
 
-    // Display mode not 'tabbed', 'tab_strip' should not be parsed.
+    // Display mode not 'tabbed', 'tab_strip' should still be parsed.
     {
       auto& manifest =
           ParseManifest(R"({ "tab_strip": {"home_tab": "auto"} })");
-      EXPECT_TRUE(manifest->tab_strip.is_null());
+      EXPECT_FALSE(manifest->tab_strip.is_null());
       EXPECT_EQ(0u, GetErrorCount());
     }
 
@@ -5776,72 +6556,62 @@ TEST_F(ManifestParserTest, TabStripParseRules) {
 
     // 'tab_strip' object is empty.
     {
-      auto& manifest = ParseManifest(
-          R"({  "display_override": [ "tabbed" ], "tab_strip": {} })");
+      auto& manifest = ParseManifest(R"({  "tab_strip": {} })");
       EXPECT_FALSE(manifest->tab_strip.is_null());
       EXPECT_EQ(manifest->tab_strip->home_tab->get_visibility(),
                 Visibility::kAuto);
-      EXPECT_EQ(manifest->tab_strip->new_tab_button->get_visibility(),
-                Visibility::kAuto);
+      EXPECT_FALSE(manifest->tab_strip->new_tab_button->url.has_value());
       EXPECT_EQ(0u, GetErrorCount());
     }
 
     // Home tab and new tab button are empty objects.
     {
       auto& manifest = ParseManifest(R"({
-          "display_override": [ "tabbed" ],
           "tab_strip": {"home_tab": {}, "new_tab_button": {}} })");
       EXPECT_FALSE(manifest->tab_strip.is_null());
       EXPECT_FALSE(manifest->tab_strip->home_tab->is_visibility());
       EXPECT_EQ(manifest->tab_strip->home_tab->get_params()->icons.size(), 0u);
-      EXPECT_FALSE(manifest->tab_strip->new_tab_button->is_visibility());
-      EXPECT_FALSE(
-          manifest->tab_strip->new_tab_button->get_params()->url.has_value());
+      EXPECT_EQ(
+          manifest->tab_strip->home_tab->get_params()->scope_patterns.size(),
+          0u);
+      EXPECT_FALSE(manifest->tab_strip->new_tab_button->url.has_value());
       EXPECT_EQ(0u, GetErrorCount());
     }
 
     // Home tab and new tab button are invalid.
     {
       auto& manifest = ParseManifest(R"({
-          "display_override": [ "tabbed" ],
           "tab_strip": {"home_tab": "something", "new_tab_button": 42} })");
       EXPECT_FALSE(manifest->tab_strip.is_null());
       EXPECT_EQ(manifest->tab_strip->home_tab->get_visibility(),
                 Visibility::kAuto);
       EXPECT_FALSE(manifest->tab_strip->home_tab->is_params());
-      EXPECT_EQ(manifest->tab_strip->new_tab_button->get_visibility(),
-                Visibility::kAuto);
-      EXPECT_FALSE(manifest->tab_strip->new_tab_button->is_params());
+      EXPECT_FALSE(manifest->tab_strip->new_tab_button->url.has_value());
       EXPECT_EQ(0u, GetErrorCount());
     }
 
     // Unknown members of 'tab_strip' are ignored.
     {
       auto& manifest = ParseManifest(R"({
-          "display_override": [ "tabbed" ],
           "tab_strip": {"unknown": {}} })");
       EXPECT_FALSE(manifest->tab_strip.is_null());
       EXPECT_EQ(manifest->tab_strip->home_tab->get_visibility(),
                 Visibility::kAuto);
       EXPECT_FALSE(manifest->tab_strip->home_tab->is_params());
-      EXPECT_EQ(manifest->tab_strip->new_tab_button->get_visibility(),
-                Visibility::kAuto);
-      EXPECT_FALSE(manifest->tab_strip->new_tab_button->is_params());
+      EXPECT_FALSE(manifest->tab_strip->new_tab_button->url.has_value());
       EXPECT_EQ(0u, GetErrorCount());
     }
 
     // Home tab with icons and new tab button with url are parsed.
     {
       auto& manifest = ParseManifest(R"({
-          "display_override": [ "tabbed" ],
           "tab_strip": {
             "home_tab": {"icons": [{"src": "foo.jpg"}]},
             "new_tab_button": {"url": "foo"}} })");
       EXPECT_FALSE(manifest->tab_strip.is_null());
       EXPECT_FALSE(manifest->tab_strip->home_tab->is_visibility());
       EXPECT_EQ(manifest->tab_strip->home_tab->get_params()->icons.size(), 1u);
-      EXPECT_FALSE(manifest->tab_strip->new_tab_button->is_visibility());
-      EXPECT_EQ(manifest->tab_strip->new_tab_button->get_params()->url,
+      EXPECT_EQ(manifest->tab_strip->new_tab_button->url,
                 KURL(DefaultDocumentUrl(), "foo"));
       EXPECT_EQ(0u, GetErrorCount());
     }
@@ -5849,12 +6619,9 @@ TEST_F(ManifestParserTest, TabStripParseRules) {
     // New tab button url out of scope.
     {
       auto& manifest = ParseManifest(R"({
-          "display_override": [ "tabbed" ],
           "tab_strip": {"new_tab_button": {"url": "https://bar.com"}} })");
       EXPECT_FALSE(manifest->tab_strip.is_null());
-      EXPECT_FALSE(manifest->tab_strip->new_tab_button->is_visibility());
-      EXPECT_FALSE(
-          manifest->tab_strip->new_tab_button->get_params()->url.has_value());
+      EXPECT_FALSE(manifest->tab_strip->new_tab_button->url.has_value());
       EXPECT_EQ(1u, GetErrorCount());
       EXPECT_EQ(
           "property 'url' ignored, should be within scope of the manifest.",
@@ -5864,48 +6631,141 @@ TEST_F(ManifestParserTest, TabStripParseRules) {
     // Home tab and new tab button set to 'auto'.
     {
       auto& manifest = ParseManifest(R"({
-          "display_override": [ "tabbed" ],
           "tab_strip": {"home_tab": "auto", "new_tab_button": "auto"} })");
       EXPECT_FALSE(manifest->tab_strip.is_null());
       EXPECT_EQ(manifest->tab_strip->home_tab->get_visibility(),
                 Visibility::kAuto);
       EXPECT_FALSE(manifest->tab_strip->home_tab->is_params());
-      EXPECT_EQ(manifest->tab_strip->new_tab_button->get_visibility(),
-                Visibility::kAuto);
-      EXPECT_FALSE(manifest->tab_strip->new_tab_button->is_params());
+      EXPECT_FALSE(manifest->tab_strip->new_tab_button->url.has_value());
       EXPECT_EQ(0u, GetErrorCount());
     }
 
-    // Home tab and new tab button set to 'absent'.
+    // Home tab set to 'absent'.
     {
       auto& manifest = ParseManifest(R"({
-          "display_override": [ "tabbed" ],
-          "tab_strip": {"home_tab": "absent", "new_tab_button": "absent"} })");
+          "tab_strip": {"home_tab": "absent"} })");
       EXPECT_FALSE(manifest->tab_strip.is_null());
       EXPECT_EQ(manifest->tab_strip->home_tab->get_visibility(),
                 Visibility::kAbsent);
       EXPECT_FALSE(manifest->tab_strip->home_tab->is_params());
-      EXPECT_EQ(manifest->tab_strip->new_tab_button->get_visibility(),
-                Visibility::kAbsent);
-      EXPECT_FALSE(manifest->tab_strip->new_tab_button->is_params());
+      EXPECT_FALSE(manifest->tab_strip->new_tab_button->url.has_value());
       EXPECT_EQ(0u, GetErrorCount());
     }
 
     // Home tab with 'auto' icons and new tab button with 'auto' url.
     {
       auto& manifest = ParseManifest(R"({
-          "display_override": [ "tabbed" ],
           "tab_strip": {
             "home_tab": {"icons": "auto"},
             "new_tab_button": {"url": "auto"}} })");
       EXPECT_FALSE(manifest->tab_strip.is_null());
       EXPECT_FALSE(manifest->tab_strip->home_tab->is_visibility());
       EXPECT_EQ(manifest->tab_strip->home_tab->get_params()->icons.size(), 0u);
-      EXPECT_FALSE(manifest->tab_strip->new_tab_button->is_visibility());
-      EXPECT_FALSE(
-          manifest->tab_strip->new_tab_button->get_params()->url.has_value());
+      EXPECT_FALSE(manifest->tab_strip->new_tab_button->url.has_value());
       EXPECT_EQ(0u, GetErrorCount());
     }
+  }
+}
+
+TEST_F(ManifestParserTest, TabStripHomeTabScopeParseRules) {
+  ScopedWebAppTabStripForTest feature(true);
+
+  // Valid scope patterns are parsed.
+  {
+    auto& manifest = ParseManifest(R"({
+        "tab_strip": {
+          "home_tab": {"scope_patterns":
+            [{"pathname": "foo"}, {"pathname": "foo/bar/"}]}} })");
+    EXPECT_FALSE(manifest->tab_strip.is_null());
+    EXPECT_FALSE(manifest->tab_strip->home_tab->is_visibility());
+    EXPECT_EQ(
+        manifest->tab_strip->home_tab->get_params()->scope_patterns.size(), 2u);
+
+    EXPECT_EQ(0u, GetErrorCount());
+  }
+
+  // Reject patterns containing custom regex.
+  {
+    auto& manifest = ParseManifest(R"({
+        "tab_strip": {
+          "home_tab": {"scope_patterns":
+            [{"pathname": "([a-z]+)/"}, {"pathname": "/foo/([a-z]+)/"}]}} })");
+    EXPECT_FALSE(manifest->tab_strip.is_null());
+    EXPECT_FALSE(manifest->tab_strip->home_tab->is_visibility());
+    EXPECT_EQ(
+        manifest->tab_strip->home_tab->get_params()->scope_patterns.size(), 0u);
+
+    EXPECT_EQ(0u, GetErrorCount());
+  }
+
+  // Allow patterns with wildcards and named groups.
+  {
+    auto& manifest = ParseManifest(R"({
+        "tab_strip": {
+          "home_tab": {"scope_patterns":
+            [{"pathname": "*"}, {"pathname": ":foo"}, {"pathname": "/foo/*"},
+            {"pathname": "/foo/*/bar"}, {"pathname": "/foo/:bar"},
+            {"pathname": "/foo/:bar/*"}]}}
+        })");
+    EXPECT_FALSE(manifest->tab_strip.is_null());
+    EXPECT_FALSE(manifest->tab_strip->home_tab->is_visibility());
+    EXPECT_EQ(
+        manifest->tab_strip->home_tab->get_params()->scope_patterns.size(), 6u);
+
+    EXPECT_EQ(0u, GetErrorCount());
+  }
+
+  // Patterns list doesn't contain objects.
+  {
+    auto& manifest = ParseManifest(R"({
+        "tab_strip": {
+          "home_tab": {"scope_patterns": ["blah", 3]}} })");
+    EXPECT_FALSE(manifest->tab_strip.is_null());
+    EXPECT_FALSE(manifest->tab_strip->home_tab->is_visibility());
+    EXPECT_EQ(
+        manifest->tab_strip->home_tab->get_params()->scope_patterns.size(), 0u);
+
+    EXPECT_EQ(0u, GetErrorCount());
+  }
+
+  // Pattern list is empty.
+  {
+    auto& manifest = ParseManifest(R"({
+        "tab_strip": {
+          "home_tab": {"scope_patterns": []}} })");
+    EXPECT_FALSE(manifest->tab_strip.is_null());
+    EXPECT_FALSE(manifest->tab_strip->home_tab->is_visibility());
+    EXPECT_EQ(
+        manifest->tab_strip->home_tab->get_params()->scope_patterns.size(), 0u);
+
+    EXPECT_EQ(0u, GetErrorCount());
+  }
+}
+
+TEST_F(ManifestParserTest, VersionParseRules) {
+  // Valid versions are parsed.
+  {
+    auto& manifest = ParseManifest(R"({ "version": "1.2.3" })");
+    EXPECT_FALSE(manifest->version.IsNull());
+    EXPECT_EQ(manifest->version, "1.2.3");
+
+    EXPECT_EQ(0u, GetErrorCount());
+  }
+
+  // Do not tamper with the version string in any way.
+  {
+    auto& manifest = ParseManifest(R"({ "version": " abc !^?$ test " })");
+    EXPECT_FALSE(manifest->version.IsNull());
+    EXPECT_EQ(manifest->version, " abc !^?$ test ");
+
+    EXPECT_EQ(0u, GetErrorCount());
+  }
+
+  // Reject versions that are not strings.
+  {
+    auto& manifest = ParseManifest(R"({ "version": 123 })");
+    EXPECT_TRUE(manifest->version.IsNull());
+    EXPECT_EQ(1u, GetErrorCount());
   }
 }
 

@@ -4,26 +4,40 @@
 
 #import "ios/chrome/browser/ui/authentication/signin/signin_constants.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
-NSString* const kUserSigninAttemptedNotification = @"UserSigninAttempted";
 NSString* const kSkipSigninAccessibilityIdentifier =
     @"SkipSigninAccessibilityIdentifier";
 NSString* const kAddAccountAccessibilityIdentifier =
     @"AddAccountAccessibilityIdentifier";
 NSString* const kConfirmationAccessibilityIdentifier =
     @"ConfirmationAccessibilityIdentifier";
+NSString* const kHistorySyncViewAccessibilityIdentifier =
+    @"HistorySyncViewAccessibilityIdentifier";
 NSString* const kMoreAccessibilityIdentifier = @"MoreAccessibilityIdentifier";
 NSString* const kWebSigninAccessibilityIdentifier =
     @"WebSigninAccessibilityIdentifier";
-NSString* const kWebSigninContinueAsButtonAccessibilityIdentifier =
-    @"WebSigninContinueAsButtonAccessibilityIdentifier";
+NSString* const kWebSigninPrimaryButtonAccessibilityIdentifier =
+    @"WebSigninPrimaryButtonAccessibilityIdentifier";
 NSString* const kWebSigninSkipButtonAccessibilityIdentifier =
     @"WebSigninSkipButtonAccessibilityIdentifier";
+NSString* const kTangibleSyncViewAccessibilityIdentifier =
+    @"TangibleSyncViewAccessibilityIdentifier";
+NSString* const kConsistencyAccountChooserAddAccountIdentifier =
+    @"ConsistencyAccountChooserAddAccountIdentifier";
 
 const char* kWebSigninConsistencyConsecutiveActiveDismissalLimitParam =
     "consecutive_active_dismissal_limit";
 
 const int kDefaultWebSignInDismissalCount = 3;
+
+NSString* const kDisplayedSSORecallForMajorVersionKey =
+    @"DisplayedSSORecallForMajorVersionKey";
+NSString* const kLastShownAccountGaiaIdVersionKey =
+    @"LastShownAccountGaiaIdVersionKey";
+NSString* const kSigninPromoViewDisplayCountKey =
+    @"SigninPromoViewDisplayCountKey";
+NSString* const kDisplayedSSORecallPromoCountKey =
+    @"DisplayedSSORecallPromoCount";
+const char* const kUMASSORecallPromoAction = "SSORecallPromo.PromoAction";
+const char* const kUMASSORecallAccountsAvailable =
+    "SSORecallPromo.AccountsAvailable";
+const char* const kUMASSORecallPromoSeenCount = "SSORecallPromo.PromoSeenCount";

@@ -6,17 +6,19 @@
 #define DEVICE_FIDO_WIN_WEBAUTHN_API_H_
 
 #include <windows.h>
+
 #include <functional>
 #include <memory>
+#include <string_view>
 
-#include "base/callback.h"
 #include "base/component_export.h"
 #include "base/containers/span.h"
-#include "base/memory/ref_counted.h"
+#include "base/functional/callback.h"
 #include "device/fido/authenticator_get_assertion_response.h"
 #include "device/fido/authenticator_make_credential_response.h"
 #include "device/fido/ctap_get_assertion_request.h"
 #include "device/fido/ctap_make_credential_request.h"
+#include "device/fido/discoverable_credential_metadata.h"
 #include "device/fido/fido_constants.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/microsoft_webauthn/webauthn.h"
@@ -31,6 +33,19 @@ namespace device {
 // methods.
 class COMPONENT_EXPORT(DEVICE_FIDO) WinWebAuthnApi {
  public:
+  // ScopedOverride, while in scope, overrides the result of `GetDefault`,
+  // below. Only one can be in scope at a time.
+  class COMPONENT_EXPORT(DEVICE_FIDO) ScopedOverride {
+   public:
+    explicit ScopedOverride(WinWebAuthnApi* api);
+    ~ScopedOverride();
+
+    ScopedOverride(const ScopedOverride&) = delete;
+    ScopedOverride(const ScopedOverride&&) = delete;
+    ScopedOverride& operator=(const ScopedOverride&) = delete;
+    ScopedOverride& operator=(const ScopedOverride&&) = delete;
+  };
+
   // Returns the default implementation of WinWebAuthnApi backed by
   // webauthn.dll. May return nullptr if webauthn.dll cannot be loaded.
   static WinWebAuthnApi* GetDefault();
@@ -48,6 +63,9 @@ class COMPONENT_EXPORT(DEVICE_FIDO) WinWebAuthnApi {
   //
   // This should be preferred to checking the API version.
   virtual bool SupportsSilentDiscovery() const = 0;
+
+  // Returns true if webauthn.dll supports hybrid.
+  bool SupportsHybrid();
 
   virtual HRESULT IsUserVerifyingPlatformAuthenticatorAvailable(
       BOOL* available) = 0;
@@ -107,6 +125,18 @@ AuthenticatorGetAssertionBlocking(WinWebAuthnApi* webauthn_api,
                                   GUID cancellation_id,
                                   CtapGetAssertionRequest request,
                                   CtapGetAssertionOptions request_options);
+
+// Returns a list of credentials known to the platform authenticator. If rp_id
+// is non-null, only credentials scoped to a matching RP ID are returned.
+//
+// Returns a boolean indicating success, which will be false if the API doesn't
+// support enumeration or if an unexpected error occurred (but will be true if
+// there are no matching credentials); and the list of matching credentials, if
+// any.
+std::pair<bool, std::vector<DiscoverableCredentialMetadata>>
+AuthenticatorEnumerateCredentialsBlocking(WinWebAuthnApi* webauthn_api,
+                                          std::u16string_view rp_id,
+                                          bool is_incognito);
 
 }  // namespace device
 

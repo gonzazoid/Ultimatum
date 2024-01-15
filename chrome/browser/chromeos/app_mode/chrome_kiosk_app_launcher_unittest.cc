@@ -12,6 +12,9 @@
 #include "base/scoped_observation.h"
 #include "base/test/scoped_command_line.h"
 #include "base/test/test_future.h"
+#include "chrome/browser/apps/app_service/app_service_proxy.h"
+#include "chrome/browser/apps/app_service/app_service_proxy_factory.h"
+#include "chrome/browser/apps/app_service/app_service_test.h"
 #include "chrome/browser/ash/app_mode/test_kiosk_extension_builder.h"
 #include "chrome/browser/extensions/extension_service.h"
 #include "chrome/browser/extensions/extension_service_test_base.h"
@@ -28,7 +31,8 @@ using extensions::Manifest;
 using ::testing::ElementsAre;
 using ::testing::Eq;
 using ::testing::IsEmpty;
-using LaunchResult = ash::ChromeKioskAppLauncher::LaunchResult;
+using LaunchResult = chromeos::ChromeKioskAppLauncher::LaunchResult;
+using chromeos::ChromeKioskAppLauncher;
 
 namespace ash {
 
@@ -59,11 +63,11 @@ class AppLaunchTracker : public extensions::TestEventRouter::EventObserver {
               extensions::api::app_runtime::OnLaunched::kEventName);
     ASSERT_EQ(1u, event.event_args.size());
 
-    const base::Value& launch_data = event.event_args[0];
-    const base::Value* is_kiosk_session =
-        launch_data.FindKeyOfType("isKioskSession", base::Value::Type::BOOLEAN);
+    const base::Value::Dict& launch_data = event.event_args[0].GetDict();
+    absl::optional<bool> is_kiosk_session =
+        launch_data.FindBool("isKioskSession");
     ASSERT_TRUE(is_kiosk_session);
-    EXPECT_TRUE(is_kiosk_session->GetBool());
+    EXPECT_TRUE(*is_kiosk_session);
 
     launched_apps_.push_back(extension_id);
   }
@@ -71,9 +75,7 @@ class AppLaunchTracker : public extensions::TestEventRouter::EventObserver {
  private:
   const std::string app_id_;
   base::ScopedObservation<extensions::TestEventRouter,
-                          extensions::TestEventRouter::EventObserver,
-                          &extensions::TestEventRouter::AddEventObserver,
-                          &extensions::TestEventRouter::RemoveEventObserver>
+                          extensions::TestEventRouter::EventObserver>
       observation_{this};
   std::vector<std::string> launched_apps_;
 };
@@ -130,6 +132,9 @@ class ChromeKioskAppLauncherTest : public extensions::ExtensionServiceTestBase,
 
     extensions::ExtensionServiceTestBase::SetUp();
     InitializeEmptyExtensionService();
+
+    apps::WaitForAppServiceProxyReady(
+        apps::AppServiceProxyFactory::GetForProfile(profile()));
 
     extensions::TestEventRouter* event_router =
         extensions::CreateAndUseTestEventRouter(browser_context());

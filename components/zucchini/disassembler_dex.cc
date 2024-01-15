@@ -8,14 +8,13 @@
 #include <stdlib.h>
 
 #include <algorithm>
-#include <cctype>
 #include <cmath>
 #include <iterator>
 #include <set>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/logging.h"
 #include "base/memory/raw_ptr.h"
 #include "base/numerics/checked_math.h"
@@ -24,6 +23,7 @@
 #include "components/zucchini/buffer_source.h"
 #include "components/zucchini/buffer_view.h"
 #include "components/zucchini/io_utils.h"
+#include "third_party/abseil-cpp/absl/strings/ascii.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace zucchini {
@@ -109,7 +109,7 @@ class CodeItemParser {
                              sizeof(dex::CodeItem))) {
       return false;
     }
-    source_ = std::move(BufferSource(image_).Skip(code_map_item.offset));
+    source_ = BufferSource(image_, code_map_item.offset);
     return true;
   }
 
@@ -170,8 +170,9 @@ class CodeItemParser {
 
     // TODO(huangs): Fail if |code_item->insns_size == 0| (Constraint A1).
     // Skip instruction bytes.
-    if (!source_.GetArray<uint16_t>(code_item->insns_size))
+    if (!source_.Skip(code_item->insns_size * sizeof(uint16_t))) {
       return kInvalidOffset;
+    }
     // Skip padding if present.
     if (code_item->tries_size > 0 && !source_.AlignOn(image_, 4U))
       return kInvalidOffset;
@@ -180,8 +181,9 @@ class CodeItemParser {
     // is nontrivial due to use of uleb128 / sleb128.
     if (code_item->tries_size > 0) {
       // Skip (try_item) tries[].
-      if (!source_.GetArray<dex::TryItem>(code_item->tries_size))
+      if (!source_.Skip(code_item->tries_size * sizeof(dex::TryItem))) {
         return kInvalidOffset;
+      }
 
       // Skip handlers_group.
       uint32_t handlers_size = 0;
@@ -220,7 +222,7 @@ class CodeItemParser {
   // |image|, returns |insns| bytes as ConstBufferView.
   static ConstBufferView GetCodeItemInsns(ConstBufferView image,
                                           offset_t code_item_offset) {
-    BufferSource source(BufferSource(image).Skip(code_item_offset));
+    BufferSource source(image, code_item_offset);
     const auto* code_item = source.GetPointer<const dex::CodeItem>();
     DCHECK(code_item);
     BufferRegion insns{0, code_item->insns_size * kInstrUnitSize};
@@ -529,7 +531,7 @@ bool ParseItemOffsets(ConstBufferView image,
   // Sanity check: |image| should at least fit |map_item.size| copies of "N".
   if (!image.covers_array(map_item.offset, map_item.size, sizeof(uint32_t)))
     return false;
-  BufferSource source = std::move(BufferSource(image).Skip(map_item.offset));
+  BufferSource source(image, map_item.offset);
   item_offsets->clear();
   for (uint32_t i = 0; i < map_item.size; ++i) {
     if (!source.AlignOn(image, 4U))
@@ -544,7 +546,9 @@ bool ParseItemOffsets(ConstBufferView image,
     for (uint32_t j = 0; j < unsafe_size; ++j) {
       item_offsets->push_back(
           base::checked_cast<offset_t>(source.begin() - image.begin()));
-      source.Skip(item_width);
+      if (!source.Skip(item_width)) {
+        return false;
+      }
     }
   }
   return true;
@@ -573,8 +577,7 @@ bool ParseAnnotationsDirectoryItems(
                           sizeof(dex::AnnotationsDirectoryItem))) {
     return false;
   }
-  BufferSource source = std::move(
-      BufferSource(image).Skip(annotations_directory_map_item.offset));
+  BufferSource source(image, annotations_directory_map_item.offset);
   annotations_directory_item_offsets->clear();
   field_annotation_offsets->clear();
   method_annotation_offsets->clear();
@@ -591,7 +594,9 @@ bool ParseAnnotationsDirectoryItems(
     for (uint32_t i = 0; i < unsafe_size; ++i) {
       item_offsets->push_back(
           base::checked_cast<offset_t>(source.begin() - image.begin()));
-      source.Skip(item_width);
+      if (!source.Skip(item_width)) {
+        return false;
+      }
     }
     return true;
   };
@@ -841,8 +846,9 @@ bool ReadDexHeader(ConstBufferView image, ReadDexHeaderResults* opt_results) {
   // Magic matches: More detailed tests can be conducted.
   int dex_version = 0;
   for (int i = 4; i < 7; ++i) {
-    if (!isdigit(header->magic[i]))
+    if (!absl::ascii_isdigit(header->magic[i])) {
       return false;
+    }
     dex_version = dex_version * 10 + (header->magic[i] - '0');
   }
 
@@ -1791,7 +1797,7 @@ bool DisassemblerDex::ParseHeader() {
   static_assert(
       offsetof(dex::MapList, list) == sizeof(decltype(dex::MapList::size)),
       "MapList size error.");
-  source = std::move(BufferSource(image_).Skip(header_->map_off));
+  source = BufferSource(image_, header_->map_off);
   decltype(dex::MapList::size) list_size = 0;
   if (!source.GetValue(&list_size) || list_size > dex::kMaxItemListSize)
     return false;

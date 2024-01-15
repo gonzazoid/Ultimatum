@@ -14,7 +14,7 @@
       "backgroundColor": "#008000"
     },
     {
-      "name": "LayoutNGBlockFlow DIV class='blended'",
+      "name": "LayoutNGBlockFlow (children-inline) DIV class='blended'",
       "position": [8, 8],
       "bounds": [160, 90],
       "contentsOpaque": true,
@@ -23,7 +23,6 @@
     {
       "name": "LayoutImage IMG class='accelerated'",
       "bounds": [160, 90],
-      "contentsOpaqueForText": true,
       "transform": 1
     },
     {

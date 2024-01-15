@@ -7,14 +7,15 @@
 #include <utility>
 
 #include "ash/components/arc/video_accelerator/arc_video_accelerator_util.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/platform_shared_memory_region.h"
 #include "base/memory/unsafe_shared_memory_region.h"
 #include "base/numerics/checked_math.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/posix/eintr_wrapper.h"
 #include "base/system/sys_info.h"
+#include "base/task/bind_post_task.h"
 #include "media/base/bitrate.h"
 #include "media/base/bitstream_buffer.h"
 #include "media/base/color_plane_layout.h"
@@ -84,10 +85,14 @@ void GpuArcVideoEncodeAccelerator::BitstreamBufferReady(
   use_bitstream_cbs_.erase(iter);
 }
 
-void GpuArcVideoEncodeAccelerator::NotifyError(Error error) {
-  DVLOGF(2) << "error=" << error;
+void GpuArcVideoEncodeAccelerator::NotifyErrorStatus(
+    const media::EncoderStatus& status) {
+  LOG(ERROR) << "NotifyErrorStatus() is called, code="
+             << static_cast<int32_t>(status.code())
+             << ", message=" << status.message();
   DCHECK(client_);
-  client_->NotifyError(error);
+  client_->NotifyError(
+      mojom::VideoEncodeAccelerator::Error::kPlatformFailureError);
 }
 
 // ::arc::mojom::VideoEncodeAccelerator implementation.
@@ -188,7 +193,7 @@ void GpuArcVideoEncodeAccelerator::Encode(
     return;
   }
 
-  absl::optional<gfx::BufferFormat> buffer_format =
+  std::optional<gfx::BufferFormat> buffer_format =
       VideoPixelFormatToGfxBufferFormat(format);
   if (!format) {
     DLOG(ERROR) << "Unexpected format: " << format;
@@ -213,7 +218,10 @@ void GpuArcVideoEncodeAccelerator::Encode(
     return;
   }
 
-  frame->AddDestructionObserver(std::move(callback));
+  // Make sure the Mojo callback is called on the same thread as where the Mojo
+  // call is received (here).
+  frame->AddDestructionObserver(
+      base::BindPostTaskToCurrentDefault(std::move(callback)));
   accelerator_->Encode(std::move(frame), force_keyframe);
 }
 
@@ -276,7 +284,8 @@ void GpuArcVideoEncodeAccelerator::RequestEncodingParametersChange(
   // Note that dynamic bitrate mode changes are not allowed. Attempting to
   // change the bitrate mode at runtime will result in the |accelerator_|
   // reporting an error through NotifyError.
-  accelerator_->RequestEncodingParametersChange(bitrate, framerate);
+  accelerator_->RequestEncodingParametersChange(bitrate, framerate,
+                                                absl::nullopt);
 }
 
 void GpuArcVideoEncodeAccelerator::RequestEncodingParametersChangeDeprecated(
@@ -288,7 +297,7 @@ void GpuArcVideoEncodeAccelerator::RequestEncodingParametersChangeDeprecated(
     return;
   }
   accelerator_->RequestEncodingParametersChange(
-      media::Bitrate::ConstantBitrate(bitrate), framerate);
+      media::Bitrate::ConstantBitrate(bitrate), framerate, absl::nullopt);
 }
 
 void GpuArcVideoEncodeAccelerator::Flush(FlushCallback callback) {

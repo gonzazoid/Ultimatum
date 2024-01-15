@@ -8,7 +8,7 @@
 #include <memory>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
 #include "build/chromeos_buildflags.h"
@@ -110,6 +110,11 @@ class EventGeneratorDelegate {
 // EventGeneratorDelegate.
 class EventGenerator {
  public:
+  // Some test suites (e.g. chromeos_integration_tests) must use ui_controls.h
+  // and cannot use EventGenerator. Calling this function causes
+  // EventGenerator::Init() to CHECK-fail with a helpful message.
+  static void BanEventGenerator();
+
   // Create an EventGenerator with EventGeneratorDelegate,
   // which uses the coordinates conversions and targeting provided by
   // |delegate|.
@@ -157,6 +162,16 @@ class EventGenerator {
     // Default. Emulates default NSWindow dispatch: calls specific event handler
     // based on event type. Most robust.
     WIDGET,
+  };
+
+  // Determines the end state of a scroll sequence.
+  enum class ScrollSequenceType {
+    // Create an "incomplete" scroll sequence, meaning that it ends with the
+    // fingers resting on the trackpad.
+    ScrollOnly,
+    // Create a "complete" scroll sequence, meaning that it ends with the
+    // fingers being lifted off of the trackpad.
+    UpToFling,
   };
 
   // Updates the |current_screen_location_| to point to the middle of the target
@@ -307,6 +322,12 @@ class EventGenerator {
   // Generates a touch release event with |touch_id|.
   void ReleaseTouchId(int touch_id);
 
+  // Generates a touch cancel event.
+  void CancelTouch();
+
+  // Generates a touch cancel event with |touch_id|.
+  void CancelTouchId(int touch_id);
+
   // Generates press, move and release event to move touch
   // to be the given |point|.
   void PressMoveAndReleaseTouchTo(const gfx::Point& point);
@@ -405,14 +426,19 @@ class EventGenerator {
                                 int move_x,
                                 int move_y);
 
-  // Generates scroll sequences of a FlingCancel, Scrolls, FlingStart, with
-  // constant deltas to |x_offset| and |y_offset| in |steps|.
-  void ScrollSequence(const gfx::Point& start,
-                      const base::TimeDelta& step_delay,
-                      float x_offset,
-                      float y_offset,
-                      int steps,
-                      int num_fingers);
+  // Generates scroll sequences starting with a FlingCancel, followed by Scrolls
+  // with constant deltas to `x_offset` and `y_offset` in `steps`. If
+  // `end_state` == `UpToFling`, the scroll sequences end with a FlingStart.
+  // Otherwise, return early to simulate the fingers still resting on the
+  // trackpad.
+  void ScrollSequence(
+      const gfx::Point& start,
+      const base::TimeDelta& step_delay,
+      float x_offset,
+      float y_offset,
+      int steps,
+      int num_fingers,
+      ScrollSequenceType end_state = ScrollSequenceType::UpToFling);
 
   // Generate a TrackPad "rest" event. That is, a user resting fingers on the
   // trackpad without moving. This may then be followed by a ScrollSequence(),
@@ -447,6 +473,9 @@ class EventGenerator {
   // Dispatch the event to the WindowEventDispatcher.
   void Dispatch(Event* event);
 
+  // Advances the event generator's clock by `delta`.
+  void AdvanceClock(const base::TimeDelta& delta);
+
   void set_current_target(EventTarget* target) {
     current_target_ = target;
   }
@@ -474,7 +503,7 @@ class EventGenerator {
 
   std::unique_ptr<EventGeneratorDelegate> delegate_;
   gfx::Point current_screen_location_;
-  raw_ptr<EventTarget, DanglingUntriaged> current_target_ = nullptr;
+  raw_ptr<EventTarget, AcrossTasksDanglingUntriaged> current_target_ = nullptr;
   int flags_ = 0;
   bool grab_ = false;
 
@@ -484,6 +513,17 @@ class EventGenerator {
 
   std::unique_ptr<TestTickClock> tick_clock_;
 };
+
+// This generates key events for moidfiers as well as the key with
+// modifiers.
+// TODO(crbug.com/1415115): Remove this once the EventGenerator is
+// modified to generate the same sequence.
+void EmulateFullKeyPressReleaseSequence(test::EventGenerator* generator,
+                                        KeyboardCode key,
+                                        bool control,
+                                        bool shift,
+                                        bool alt,
+                                        bool command);
 
 }  // namespace test
 }  // namespace ui

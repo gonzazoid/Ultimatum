@@ -5,8 +5,10 @@
 #ifndef CHROME_BROWSER_ASH_CROSAPI_FILES_APP_LAUNCHER_H_
 #define CHROME_BROWSER_ASH_CROSAPI_FILES_APP_LAUNCHER_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
+#include "base/scoped_observation.h"
 #include "chrome/browser/apps/app_service/app_service_proxy_forward.h"
 #include "components/services/app_service/public/cpp/app_registry_cache.h"
 #include "components/services/app_service/public/cpp/instance_registry.h"
@@ -43,9 +45,17 @@ class FilesAppLauncher : public apps::AppRegistryCache::Observer,
   void OnInstanceRegistryWillBeDestroyed(
       apps::InstanceRegistry* cache) override;
 
-  apps::AppServiceProxy* const proxy_;
+  const raw_ptr<apps::AppServiceProxy> proxy_;
 
   base::OnceClosure callback_;
+
+  base::ScopedObservation<apps::InstanceRegistry,
+                          apps::InstanceRegistry::Observer>
+      instance_registry_observation_{this};
+
+  base::ScopedObservation<apps::AppRegistryCache,
+                          apps::AppRegistryCache::Observer>
+      app_registry_cache_observer_{this};
 
   base::WeakPtrFactory<FilesAppLauncher> weak_factory_{this};
 };

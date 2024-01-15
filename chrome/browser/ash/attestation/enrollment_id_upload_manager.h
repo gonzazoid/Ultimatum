@@ -9,16 +9,14 @@
 #include <queue>
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/ash/attestation/enrollment_certificate_uploader.h"
 #include "chrome/browser/ash/settings/device_settings_service.h"
 #include "chromeos/ash/components/dbus/attestation/interface.pb.h"
 #include "chromeos/ash/components/dbus/constants/attestation_constants.h"
-
-namespace policy {
-class CloudPolicyClient;
-}  // namespace policy
+#include "components/policy/core/common/cloud/cloud_policy_client.h"
 
 namespace ash {
 namespace attestation {
@@ -90,16 +88,17 @@ class EnrollmentIdUploadManager : public DeviceSettingsService::Observer {
   void RescheduleGetEnrollmentId();
 
   // Called when an enrollment identifier upload operation completes.
-  // On success, |status| will be true. The string |enrollment_id| contains
+  // On success, |result| will be true. The string |enrollment_id| contains
   // the enrollment identifier that was uploaded.
-  void OnUploadComplete(const std::string& enrollment_id, bool status);
+  void OnUploadComplete(const std::string& enrollment_id,
+                        policy::CloudPolicyClient::Result result);
 
   // Run all callbacks with |status|.
   void RunCallbacks(bool status);
 
-  DeviceSettingsService* const device_settings_service_;
-  policy::CloudPolicyClient* const policy_client_;
-  EnrollmentCertificateUploader* const certificate_uploader_;
+  const raw_ptr<DeviceSettingsService> device_settings_service_;
+  const raw_ptr<policy::CloudPolicyClient, DanglingUntriaged> policy_client_;
+  const raw_ptr<EnrollmentCertificateUploader> certificate_uploader_;
   int num_retries_;
   int retry_limit_;
   int retry_delay_;

@@ -7,13 +7,14 @@
 
 #include <memory>
 #include <string>
-#include <unordered_map>
 
-#include "base/callback.h"
-#include "base/memory/ref_counted.h"
+#include "base/containers/flat_map.h"
+#include "base/functional/callback.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/synchronization/lock.h"
 #include "content/public/renderer/render_thread_observer.h"
+#include "extensions/buildflags/buildflags.h"
 #include "ipc/ipc_sync_message_filter.h"
 #include "v8/include/v8-forward.h"
 
@@ -29,8 +30,25 @@ class ScriptContext;
 //
 // Note, the function will do a round trip to the browser even if event page is
 // open. Any optimisation to prevent this must be at the JavaScript level.
-class WakeEventPage : public content::RenderThreadObserver {
+class WakeEventPage
+#if BUILDFLAG(ENABLE_EXTENSIONS_LEGACY_IPC)
+    : public content::RenderThreadObserver
+#endif
+{
  public:
+  // Returns the wake-event-page function bound to a given context. The
+  // function will be cached as a hidden value in the context's global object.
+  //
+  // To mix C++ and JavaScript, example usage might be:
+  //
+  // WakeEventPage::GetForContext(context)(function() {
+  //   ...
+  // });
+  //
+  // Thread safe.
+  static v8::Local<v8::Function> GetForContext(ScriptContext* context);
+
+#if BUILDFLAG(ENABLE_EXTENSIONS_LEGACY_IPC)
   WakeEventPage();
 
   WakeEventPage(const WakeEventPage&) = delete;
@@ -48,18 +66,6 @@ class WakeEventPage : public content::RenderThreadObserver {
   // This must be called before any bindings are installed, and must be called
   // on the render thread.
   void Init(content::RenderThread* render_thread);
-
-  // Returns the wake-event-page function bound to a given context. The
-  // function will be cached as a hidden value in the context's global object.
-  //
-  // To mix C++ and JavaScript, example usage might be:
-  //
-  // WakeEventPage::Get().GetForContext(context)(function() {
-  //   ...
-  // });
-  //
-  // Thread safe.
-  v8::Local<v8::Function> GetForContext(ScriptContext* context);
 
  private:
   class WakeEventPageNativeHandler;
@@ -106,10 +112,16 @@ class WakeEventPage : public content::RenderThreadObserver {
 
   // All in-flight requests, keyed by request ID. Used on multiple threads, so
   // must be guarded by |requests_lock_|.
-  std::unordered_map<int, std::unique_ptr<RequestData>> requests_;
+  base::flat_map<int, std::unique_ptr<RequestData>> requests_;
 
   // Lock for |requests_|.
   base::Lock requests_lock_;
+#else
+  WakeEventPage() = delete;
+
+ private:
+  class WakeEventPageNativeHandler;
+#endif
 };
 
 }  //  namespace extensions

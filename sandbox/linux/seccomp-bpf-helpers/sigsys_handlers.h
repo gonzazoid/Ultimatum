@@ -9,6 +9,7 @@
 
 #include "build/build_config.h"
 #include "sandbox/linux/bpf_dsl/bpf_dsl_forward.h"
+#include "sandbox/linux/system_headers/linux_syscalls.h"
 #include "sandbox/sandbox_export.h"
 
 // The handlers are suitable for use in Trap() error codes. They are
@@ -52,6 +53,18 @@ SANDBOX_EXPORT intptr_t SIGSYSFutexFailure(const arch_seccomp_data& args,
 // argument.
 SANDBOX_EXPORT intptr_t SIGSYSPtraceFailure(const arch_seccomp_data& args,
                                             void* aux);
+// The crashing address will be ((protocol & 0x1f) << 10) | ((type & 0xf) << 6)
+// | (domain & 0x3f). This is 5 bits for protocol (from /etc/protocols), 4 bits
+// for type (e.g. SOCK_STREAM, SOCK_RAW, SOCK_PACKET), and 6 bits for domain
+// (e.g. AF_UNIX, AF_INET).
+SANDBOX_EXPORT intptr_t
+SIGSYSSocketFailure(const struct arch_seccomp_data& args, void* aux);
+// The crashing address will be ((optname & 0xfful) << 9) | (level & 0x1ff).
+// This is 7 bits for optname (e.g. SO_REUSEADDR) and 9 bits for level (from
+// /etc/protocols).
+SANDBOX_EXPORT intptr_t
+SIGSYSSockoptFailure(const struct arch_seccomp_data& args, void* aux);
+
 // If the syscall is not being called on the current tid, crashes in the same
 // way as CrashSIGSYS_Handler.  Otherwise, returns the result of calling the
 // syscall with the pid argument set to 0 (which for these calls means the
@@ -84,8 +97,27 @@ SANDBOX_EXPORT bpf_dsl::ResultExpr CrashSIGSYSIoctl();
 SANDBOX_EXPORT bpf_dsl::ResultExpr CrashSIGSYSKill();
 SANDBOX_EXPORT bpf_dsl::ResultExpr CrashSIGSYSFutex();
 SANDBOX_EXPORT bpf_dsl::ResultExpr CrashSIGSYSPtrace();
+SANDBOX_EXPORT bpf_dsl::ResultExpr CrashSIGSYSSocket();
+SANDBOX_EXPORT bpf_dsl::ResultExpr CrashSIGSYSSockopt();
 SANDBOX_EXPORT bpf_dsl::ResultExpr RewriteSchedSIGSYS();
 SANDBOX_EXPORT bpf_dsl::ResultExpr RewriteFstatatSIGSYS(int fs_denied_errno);
+
+#if defined(__NR_socketcall)
+// True if the kernel supports direct socket-API syscalls like socket(2) and
+// bind(2). Older x86 kernels only supported socketcall(2), which can't be
+// filtered with seccomp. Newer x86 kernels (>=4.3) also support the direct
+// syscalls, but unfortunately there's no way to force the libc to use these
+// syscalls (bionic in particular does not support this), so this policy will
+// rewrite socketcall(2) to the filterable direct syscalls if supported.
+SANDBOX_EXPORT bool CanRewriteSocketcall();
+
+// This rewrites a socketcall(2) call to the appropriate direct sockets-API
+// syscall like socket(2), which are filterable with seccomp.
+SANDBOX_EXPORT intptr_t SIGSYSSocketcallHandler(const arch_seccomp_data& args,
+                                                void* aux);
+// This should only be used if CanRewriteSocketcall() is true.
+SANDBOX_EXPORT bpf_dsl::ResultExpr RewriteSocketcallSIGSYS();
+#endif  // defined(__NR_socketcall)
 
 // Allocates a crash key so that Seccomp information can be recorded.
 void AllocateCrashKeys();
@@ -99,6 +131,8 @@ SANDBOX_EXPORT const char* GetIoctlErrorMessageContentForTests();
 SANDBOX_EXPORT const char* GetKillErrorMessageContentForTests();
 SANDBOX_EXPORT const char* GetFutexErrorMessageContentForTests();
 SANDBOX_EXPORT const char* GetPtraceErrorMessageContentForTests();
+SANDBOX_EXPORT const char* GetSocketErrorMessageContentForTests();
+SANDBOX_EXPORT const char* GetSockoptErrorMessageContentForTests();
 
 }  // namespace sandbox.
 

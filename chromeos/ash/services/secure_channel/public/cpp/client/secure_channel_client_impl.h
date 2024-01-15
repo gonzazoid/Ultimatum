@@ -6,6 +6,7 @@
 #define CHROMEOS_ASH_SERVICES_SECURE_CHANNEL_PUBLIC_CPP_CLIENT_SECURE_CHANNEL_CLIENT_IMPL_H_
 
 #include "base/memory/weak_ptr.h"
+#include "base/task/single_thread_task_runner.h"
 #include "chromeos/ash/services/secure_channel/public/cpp/client/secure_channel_client.h"
 #include "chromeos/ash/services/secure_channel/public/mojom/secure_channel.mojom.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
@@ -31,7 +32,7 @@ class SecureChannelClientImpl : public SecureChannelClient {
     static std::unique_ptr<SecureChannelClient> Create(
         mojo::PendingRemote<mojom::SecureChannel> channel,
         scoped_refptr<base::TaskRunner> task_runner =
-            base::ThreadTaskRunnerHandle::Get());
+            base::SingleThreadTaskRunner::GetCurrentDefault());
     static void SetFactoryForTesting(Factory* test_factory);
 
    protected:
@@ -71,7 +72,7 @@ class SecureChannelClientImpl : public SecureChannelClient {
   void SetNearbyConnector(NearbyConnector* nearby_connector) override;
   void GetLastSeenTimestamp(
       const std::string& remote_device_id,
-      base::OnceCallback<void(absl::optional<base::Time>)> callback) override;
+      base::OnceCallback<void(std::optional<base::Time>)> callback) override;
 
   void PerformInitiateConnectionToDevice(
       multidevice::RemoteDeviceRef device_to_connect,

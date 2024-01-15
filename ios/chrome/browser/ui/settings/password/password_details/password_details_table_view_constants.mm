@@ -4,9 +4,12 @@
 
 #import "ios/chrome/browser/ui/settings/password/password_details/password_details_table_view_constants.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+NSString* const kPasswordDetailsViewControllerID =
+    @"PasswordDetailsTableViewID";
 
-NSString* const kPasswordDetailsViewControllerId =
-    @"PasswordDetailsTableViewId";
+NSString* const kMovePasswordToAccountButtonID =
+    @"kMovePasswordToAccountButtonID";
+
+NSString* const kCompromisedWarningID = @"CompromisedWarningID";
+
+NSString* const kPasswordShareButtonID = @"PasswordShareButtonID";

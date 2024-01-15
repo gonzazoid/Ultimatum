@@ -10,12 +10,7 @@
 #import "ios/web/common/crw_viewport_adjustment_container.h"
 #import "ios/web/common/crw_web_view_content_view.h"
 #import "ios/web/common/features.h"
-#import "ios/web/public/ui/crw_context_menu_item.h"
 #import "ios/web/web_state/ui/crw_web_view_proxy_impl.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 @interface CRWWebControllerContainerView () <CRWViewportAdjustmentContainer>
 
@@ -28,9 +23,8 @@
 
 @end
 
-@implementation CRWWebControllerContainerView {
-  NSMutableDictionary<NSString*, ProceduralBlock>* _currentMenuItems;
-}
+@implementation CRWWebControllerContainerView
+
 @synthesize webViewContentView = _webViewContentView;
 @synthesize delegate = _delegate;
 
@@ -58,7 +52,7 @@
 }
 
 - (void)dealloc {
-  self.contentViewProxy.contentView = nil;
+  [self.contentViewProxy clearContentViewAndAddPlaceholder:NO];
 }
 
 #pragma mark Accessors
@@ -88,6 +82,20 @@
 
 - (void)traitCollectionDidChange:(UITraitCollection*)previousTraitCollection {
   [super traitCollectionDidChange:previousTraitCollection];
+  if ((self.traitCollection.verticalSizeClass !=
+       previousTraitCollection.verticalSizeClass) ||
+      (self.traitCollection.horizontalSizeClass !=
+       previousTraitCollection.horizontalSizeClass) ||
+      self.traitCollection.preferredContentSizeCategory !=
+          previousTraitCollection.preferredContentSizeCategory) {
+    // Reset zoom scale when the window is resized (portrait to landscape,
+    // landscape to portrait or multi-window resizing), or if text size is
+    // modified as websites can adjust to the preferred content size (using
+    // font: -apple-system-body;). It avoids being in a different zoomed
+    // position from where the user initially zoomed.
+    UIScrollView* scrollView = self.contentViewProxy.contentView.scrollView;
+    scrollView.zoomScale = scrollView.minimumZoomScale;
+  }
   if (previousTraitCollection.preferredContentSizeCategory !=
       self.traitCollection.preferredContentSizeCategory) {
     // In case the preferred content size changes, the layout is dirty.
@@ -139,9 +147,9 @@
 
 #pragma mark Content Setters
 
-- (void)resetContent {
+- (void)resetContentForShutdown:(BOOL)shutdown {
   self.webViewContentView = nil;
-  self.contentViewProxy.contentView = nil;
+  [self.contentViewProxy clearContentViewAndAddPlaceholder:!shutdown];
 }
 
 - (void)displayWebViewContentView:(CRWWebViewContentView*)webViewContentView {
@@ -168,87 +176,6 @@
 - (void)drawRect:(CGRect)rect
     forViewPrintFormatter:(UIViewPrintFormatter*)formatter {
   [self.webViewContentView.webView drawRect:rect];
-}
-
-#pragma mark Custom Context Menu
-
-- (void)showMenuWithItems:(NSArray<CRWContextMenuItem*>*)items
-                     rect:(CGRect)rect {
-  [self becomeFirstResponder];
-  // Remove observer, because showMenuFromView will call it when replacing an
-  // existing menu.
-  [[NSNotificationCenter defaultCenter]
-      removeObserver:self
-                name:UIMenuControllerDidHideMenuNotification
-              object:nil];
-
-  _currentMenuItems = [[NSMutableDictionary alloc] init];
-  NSMutableArray* menuItems = [[NSMutableArray alloc] init];
-  for (CRWContextMenuItem* item in items) {
-    UIMenuItem* menuItem =
-        [[UIMenuItem alloc] initWithTitle:item.title
-                                   action:NSSelectorFromString(item.ID)];
-    [menuItems addObject:menuItem];
-
-    _currentMenuItems[item.ID] = item.action;
-  }
-
-  UIMenuController* menu = [UIMenuController sharedMenuController];
-  menu.menuItems = menuItems;
-
-  [menu showMenuFromView:self rect:rect];
-
-  [[NSNotificationCenter defaultCenter]
-      addObserver:self
-         selector:@selector(didHideMenuNotification)
-             name:UIMenuControllerDidHideMenuNotification
-           object:nil];
-}
-
-// Called when menu is dismissed for cleanup.
-- (void)didHideMenuNotification {
-  [[NSNotificationCenter defaultCenter]
-      removeObserver:self
-                name:UIMenuControllerDidHideMenuNotification
-              object:nil];
-  _currentMenuItems = nil;
-}
-
-// Checks is selector is one for an item of the custom menu and if so, tell objc
-// runtime that it exists, even if it doesn't.
-- (BOOL)canPerformAction:(SEL)action withSender:(id)sender {
-  if (_currentMenuItems[NSStringFromSelector(action)]) {
-    return YES;
-  }
-  return [super canPerformAction:action withSender:sender];
-}
-
-// Catches a menu item selector and replace with `selectedMenuItemWithID` so it
-// passes the test made to check is selector exists.
-- (NSMethodSignature*)methodSignatureForSelector:(SEL)sel {
-  if (_currentMenuItems[NSStringFromSelector(sel)]) {
-    return
-        [super methodSignatureForSelector:@selector(selectedMenuItemWithID:)];
-  }
-  return [super methodSignatureForSelector:sel];
-}
-
-// Catches invovation of a menu item selector and forward to
-// `selectedMenuItemWithID` tagging on the menu item id for recognition.
-- (void)forwardInvocation:(NSInvocation*)invocation {
-  NSString* sel = NSStringFromSelector(invocation.selector);
-  if (_currentMenuItems[sel]) {
-    [self selectedMenuItemWithID:sel];
-    return;
-  }
-  [super forwardInvocation:invocation];
-}
-
-// Triggers the action for the menu item with given `ID`.
-- (void)selectedMenuItemWithID:(NSString*)ID {
-  if (_currentMenuItems[ID]) {
-    _currentMenuItems[ID]();
-  }
 }
 
 @end

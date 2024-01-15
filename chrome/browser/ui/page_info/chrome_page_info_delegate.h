@@ -48,16 +48,17 @@ class ChromePageInfoDelegate : public PageInfoDelegate {
   void OnUserActionOnPasswordUi(safe_browsing::WarningAction action) override;
   std::u16string GetWarningDetailText() override;
 #endif
-  permissions::PermissionResult GetPermissionResult(
+  content::PermissionResult GetPermissionResult(
       blink::PermissionType permission,
-      const url::Origin& origin) override;
+      const url::Origin& origin,
+      const std::optional<url::Origin>& requesting_origin) override;
 #if !BUILDFLAG(IS_ANDROID)
-  absl::optional<std::u16string> GetFpsOwner(const GURL& site_url) override;
+  std::optional<std::u16string> GetFpsOwner(const GURL& site_url) override;
   bool IsFpsManaged() override;
   bool CreateInfoBarDelegate() override;
   std::unique_ptr<content_settings::CookieControlsController>
   CreateCookieControlsController() override;
-  std::u16string GetWebAppShortName() override;
+  bool IsIsolatedWebApp() override;
   // In Chrome's case, this may show the site settings page or an app settings
   // page, depending on context.
   void ShowSiteSettings(const GURL& site_url) override;
@@ -74,20 +75,25 @@ class ChromePageInfoDelegate : public PageInfoDelegate {
   void OnUIClosing() override;
 #endif
 
+  std::u16string GetSubjectName(const GURL& url) override;
   permissions::PermissionDecisionAutoBlocker* GetPermissionDecisionAutoblocker()
       override;
   StatefulSSLHostStateDelegate* GetStatefulSSLHostStateDelegate() override;
   HostContentSettingsMap* GetContentSettings() override;
   bool IsSubresourceFilterActivated(const GURL& site_url) override;
+  bool HasAutoPictureInPictureBeenRegistered() override;
   bool IsContentDisplayedInVrHeadset() override;
   security_state::SecurityLevel GetSecurityLevel() override;
   security_state::VisibleSecurityState GetVisibleSecurityState() override;
+  void OnCookiesPageOpened() override;
   std::unique_ptr<content_settings::PageSpecificContentSettings::Delegate>
   GetPageSpecificContentSettingsDelegate() override;
 
 #if BUILDFLAG(IS_ANDROID)
   const std::u16string GetClientApplicationName() override;
 #endif
+
+  bool IsHttpsFirstModeEnabled() override;
 
  private:
   Profile* GetProfile() const;
@@ -107,7 +113,7 @@ class ChromePageInfoDelegate : public PageInfoDelegate {
   raw_ptr<TrustSafetySentimentService> sentiment_service_;
 #endif
 
-  raw_ptr<content::WebContents, DanglingUntriaged> web_contents_;
+  raw_ptr<content::WebContents, AcrossTasksDanglingUntriaged> web_contents_;
   security_state::SecurityLevel security_level_for_tests_;
   security_state::VisibleSecurityState visible_security_state_for_tests_;
   bool security_state_for_tests_set_ = false;

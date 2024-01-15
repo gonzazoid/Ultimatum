@@ -12,6 +12,7 @@
 #include "ash/frame_throttler/frame_throttling_observer.h"
 #include "base/containers/flat_map.h"
 #include "base/containers/flat_set.h"
+#include "base/memory/raw_ptr.h"
 #include "base/observer_list.h"
 #include "base/observer_list_types.h"
 #include "components/viz/common/surfaces/frame_sink_id.h"
@@ -28,6 +29,16 @@ class HostFrameSinkManager;
 }  // namespace viz
 
 namespace ash {
+
+class ASH_EXPORT ThottleControllerWindowDelegate {
+ public:
+  virtual ~ThottleControllerWindowDelegate() = default;
+  virtual viz::FrameSinkId GetFrameSinkIdForWindow(
+      const aura::Window* window) const = 0;
+};
+
+ASH_EXPORT void SetThottleControllerWindowDelegate(
+    std::unique_ptr<ThottleControllerWindowDelegate> delegate);
 
 constexpr uint8_t kDefaultThrottleFps = 20;
 
@@ -92,7 +103,7 @@ class ASH_EXPORT FrameThrottlingController final
   // If the |requested_frame_interval| is zero, the default throttled frame rate
   // is used internally.
   void StartThrottling(
-      const std::vector<aura::Window*>& windows,
+      const std::vector<raw_ptr<aura::Window, VectorExperimental>>& windows,
       base::TimeDelta requested_frame_interval = base::TimeDelta());
 
   // Ends throttling of all windows specified via StartThrottling(). The
@@ -153,8 +164,7 @@ class ASH_EXPORT FrameThrottlingController final
 
   void ResetThrottleCandidates(ThrottleCandidates* candidates);
 
-  viz::HostFrameSinkManager* const host_frame_sink_manager_;
-  base::ObserverList<FrameThrottlingObserver> observers_;
+  const raw_ptr<viz::HostFrameSinkManager> host_frame_sink_manager_;
   base::ObserverList<FrameThrottlingObserver> arc_observers_;
 
   // Maps aura::WindowTreeHost* to a set of FrameSinkIds to be throttled.

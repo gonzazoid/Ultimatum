@@ -104,10 +104,10 @@ class BubbleSlideAnimatorTest : public test::WidgetTest {
   }
 
   void CloseWidget() {
-    if (widget_ && !widget_->IsClosed())
-      widget_->CloseNow();
-    widget_ = nullptr;
     bubble_ = nullptr;
+    if (widget_ && !widget_->IsClosed()) {
+      widget_.ExtractAsDangling()->CloseNow();
+    }
   }
 
  protected:

@@ -12,7 +12,7 @@
 // A ContextualSearchContext subclass that is modifiable via JNI. This is the
 // native implementation of the Java ContextualSearchContext; Instance lifetimes
 // are managed by the associated Java object.
-class NativeContextualSearchContext : public ContextualSearchContext {
+class NativeContextualSearchContext final : public ContextualSearchContext {
  public:
   NativeContextualSearchContext(JNIEnv* env, jobject obj);
 
@@ -20,7 +20,10 @@ class NativeContextualSearchContext : public ContextualSearchContext {
   NativeContextualSearchContext& operator=(
       const NativeContextualSearchContext&) = delete;
 
-  ~NativeContextualSearchContext();
+  ~NativeContextualSearchContext() override;
+
+  // ContextualSearchContext
+  base::WeakPtr<ContextualSearchContext> AsWeakPtr() override;
 
   // Calls the destructor.  Should be called when this native object is no
   // longer needed.
@@ -37,15 +40,6 @@ class NativeContextualSearchContext : public ContextualSearchContext {
       jobject obj,
       const base::android::JavaParamRef<jstring>& j_home_country,
       jboolean j_may_send_base_page_url);
-
-  // Sets the surrounding text to the given string and the selection to the
-  // given start/end range.
-  void SetSurroundingsAndSelection(
-      JNIEnv* env,
-      jobject obj,
-      const base::android::JavaParamRef<jstring>& j_surrounding_text,
-      jint j_selection_start,
-      jint j_selection_end);
 
   // Adjust the current selection offsets by the given signed amounts.
   void AdjustSelection(JNIEnv* env,
@@ -83,6 +77,8 @@ class NativeContextualSearchContext : public ContextualSearchContext {
  private:
   // The linked Java object.
   base::android::ScopedJavaGlobalRef<jobject> java_object_;
+
+  base::WeakPtrFactory<NativeContextualSearchContext> weak_ptr_factory_{this};
 };
 
 #endif  // CHROME_BROWSER_ANDROID_CONTEXTUALSEARCH_NATIVE_CONTEXTUAL_SEARCH_CONTEXT_H_

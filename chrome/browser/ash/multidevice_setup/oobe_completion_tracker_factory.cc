@@ -21,17 +21,26 @@ OobeCompletionTracker* OobeCompletionTrackerFactory::GetForProfile(
 
 // static
 OobeCompletionTrackerFactory* OobeCompletionTrackerFactory::GetInstance() {
-  return base::Singleton<OobeCompletionTrackerFactory>::get();
+  static base::NoDestructor<OobeCompletionTrackerFactory> instance;
+  return instance.get();
 }
 
 OobeCompletionTrackerFactory::OobeCompletionTrackerFactory()
-    : ProfileKeyedServiceFactory("OobeCompletionTrackerFactory") {}
+    : ProfileKeyedServiceFactory(
+          "OobeCompletionTrackerFactory",
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOriginalOnly)
+              .Build()) {}
 
 OobeCompletionTrackerFactory::~OobeCompletionTrackerFactory() = default;
 
-KeyedService* OobeCompletionTrackerFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+OobeCompletionTrackerFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
-  return new OobeCompletionTracker();
+  return std::make_unique<OobeCompletionTracker>();
 }
 
 }  // namespace multidevice_setup

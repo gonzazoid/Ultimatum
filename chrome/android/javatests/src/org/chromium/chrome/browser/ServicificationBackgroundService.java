@@ -8,6 +8,7 @@ import android.content.Context;
 
 import com.google.android.gms.gcm.TaskParams;
 
+import org.jni_zero.NativeMethods;
 import org.junit.Assert;
 
 import org.chromium.base.test.util.CriteriaHelper;
@@ -17,9 +18,7 @@ import org.chromium.chrome.browser.init.EmptyBrowserParts;
 import org.chromium.content_public.browser.BrowserStartupController;
 import org.chromium.content_public.browser.test.util.TestThreadUtils;
 
-/**
- * Class for launching the minimal browser mode for tests.
- */
+/** Class for launching the minimal browser mode for tests. */
 public class ServicificationBackgroundService extends ChromeBackgroundServiceImpl {
     private boolean mLaunchBrowserCalled;
     private boolean mNativeLoaded;
@@ -40,17 +39,18 @@ public class ServicificationBackgroundService extends ChromeBackgroundServiceImp
         mLaunchBrowserCalled = true;
         mNativeLoaded = false;
 
-        final BrowserParts parts = new EmptyBrowserParts() {
-            @Override
-            public void finishNativeInitialization() {
-                mNativeLoaded = true;
-            }
+        final BrowserParts parts =
+                new EmptyBrowserParts() {
+                    @Override
+                    public void finishNativeInitialization() {
+                        mNativeLoaded = true;
+                    }
 
-            @Override
-            public boolean startMinimalBrowser() {
-                return mSupportsMinimalBrowser;
-            }
-        };
+                    @Override
+                    public boolean startMinimalBrowser() {
+                        return mSupportsMinimalBrowser;
+                    }
+                };
 
         ChromeBrowserInitializer.getInstance().handlePreNativeStartupAndLoadLibraries(parts);
         ChromeBrowserInitializer.getInstance().handlePostNativeStartup(true, parts);
@@ -60,7 +60,10 @@ public class ServicificationBackgroundService extends ChromeBackgroundServiceImp
     // to onRunTask, it will be enqueued after any possible call to launchBrowser, and we
     // can reliably check whether launchBrowser was called.
     protected void assertLaunchBrowserCalled() {
-        TestThreadUtils.runOnUiThreadBlocking(() -> { Assert.assertTrue(mLaunchBrowserCalled); });
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    Assert.assertTrue(mLaunchBrowserCalled);
+                });
     }
 
     public void waitForNativeLoaded() {
@@ -77,12 +80,15 @@ public class ServicificationBackgroundService extends ChromeBackgroundServiceImp
         // the BrowserStartupControllerImpl#browserStartupComplete() is called on the UI thread when
         // the full browser starts. So we can use it to checks whether the
         // {@link mFullBrowserStartupDone} has been set to true.
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            Assert.assertTrue("Native has not been started.",
-                    BrowserStartupController.getInstance().isNativeStarted());
-            Assert.assertFalse("The full browser is started instead of a minimal browser.",
-                    BrowserStartupController.getInstance().isFullBrowserStarted());
-        });
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    Assert.assertTrue(
+                            "Native has not been started.",
+                            BrowserStartupController.getInstance().isNativeStarted());
+                    Assert.assertFalse(
+                            "The full browser is started instead of a minimal browser.",
+                            BrowserStartupController.getInstance().isFullBrowserStarted());
+                });
     }
 
     public static void assertFullBrowserStarted() {
@@ -91,19 +97,26 @@ public class ServicificationBackgroundService extends ChromeBackgroundServiceImp
         // the full browser starts. So we can use it to checks whether the
         // {@link mFullBrowserStartupDone} has been set to true.
         TestThreadUtils.runOnUiThreadBlocking(
-                ()
-                        -> Assert.assertTrue("The full browser has not been started",
+                () ->
+                        Assert.assertTrue(
+                                "The full browser has not been started",
                                 BrowserStartupController.getInstance().isFullBrowserStarted()));
     }
 
     public void assertPersistentHistogramsOnDiskSystemProfile() {
-        Assert.assertTrue(nativeTestPersistentHistogramsOnDiskSystemProfile());
+        Assert.assertTrue(
+                ServicificationBackgroundServiceJni.get()
+                        .testPersistentHistogramsOnDiskSystemProfile());
     }
 
     public void assertBackgroundSessionStart() {
-        Assert.assertTrue(nativeIsBackgroundSessionStart());
+        Assert.assertTrue(ServicificationBackgroundServiceJni.get().isBackgroundSessionStart());
     }
 
-    private static native boolean nativeTestPersistentHistogramsOnDiskSystemProfile();
-    private static native boolean nativeIsBackgroundSessionStart();
+    @NativeMethods
+    interface Natives {
+        boolean testPersistentHistogramsOnDiskSystemProfile();
+
+        boolean isBackgroundSessionStart();
+    }
 }

@@ -5,21 +5,23 @@
 #include "chrome/browser/web_applications/preinstalled_web_app_utils.h"
 
 #include "base/files/file_util.h"
-#include "base/logging.h"
+#include "base/functional/bind.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/types/expected_macros.h"
 #include "base/values.h"
 #include "chrome/browser/apps/user_type_filter.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/web_applications/file_utils_wrapper.h"
-#include "chrome/browser/web_applications/user_display_mode.h"
+#include "chrome/browser/web_applications/mojom/user_display_mode.mojom.h"
 #include "chrome/browser/web_applications/web_app_install_info.h"
 #include "chrome/common/pref_names.h"
 #include "components/prefs/scoped_user_pref_update.h"
 #include "components/webapps/common/constants.h"
 #include "third_party/blink/public/common/manifest/manifest_util.h"
+#include "ui/events/devices/device_data_manager.h"
 #include "ui/gfx/codec/png_codec.h"
 
 namespace web_app {
@@ -186,8 +188,9 @@ constexpr char kDisableIfTouchScreenWithStylusNotSupported[] =
 
 void EnsureContains(base::Value::List& list, base::StringPiece value) {
   for (const base::Value& item : list) {
-    if (item.is_string() && item.GetString() == value)
+    if (item.is_string() && item.GetString() == value) {
       return;
+    }
   }
   list.Append(value);
 }
@@ -198,12 +201,12 @@ OptionsOrError ParseConfig(FileUtilsWrapper& file_utils,
                            const base::FilePath& dir,
                            const base::FilePath& file,
                            const base::Value& app_config) {
-  ExternalInstallOptions options(GURL(), UserDisplayMode::kStandalone,
+  ExternalInstallOptions options(GURL(), mojom::UserDisplayMode::kStandalone,
                                  ExternalInstallSource::kExternalDefault);
   options.require_manifest = true;
   options.force_reinstall = false;
 
-  if (app_config.type() != base::Value::Type::DICTIONARY) {
+  if (app_config.type() != base::Value::Type::DICT) {
     return base::StrCat(
         {file.AsUTF8Unsafe(), " was not a dictionary as the top level"});
   }
@@ -227,14 +230,16 @@ OptionsOrError ParseConfig(FileUtilsWrapper& file_utils,
 
   // feature_name
   const std::string* feature_name = app_config_dict.FindString(kFeatureName);
-  if (feature_name)
+  if (feature_name) {
     options.gate_on_feature = *feature_name;
+  }
 
   // feature_name_or_installed
   const std::string* feature_name_or_installed =
       app_config_dict.FindString(kFeatureNameOrInstalled);
-  if (feature_name_or_installed)
+  if (feature_name_or_installed) {
     options.gate_on_feature_or_installed = *feature_name_or_installed;
+  }
 
   // app_url
   const std::string* string = app_config_dict.FindString(kAppUrl);
@@ -324,9 +329,9 @@ OptionsOrError ParseConfig(FileUtilsWrapper& file_utils,
   }
   std::string launch_container_str = *string;
   if (launch_container_str == kLaunchContainerTab) {
-    options.user_display_mode = UserDisplayMode::kBrowser;
+    options.user_display_mode = mojom::UserDisplayMode::kBrowser;
   } else if (launch_container_str == kLaunchContainerWindow) {
-    options.user_display_mode = UserDisplayMode::kStandalone;
+    options.user_display_mode = mojom::UserDisplayMode::kStandalone;
   } else {
     return base::StrCat({file.AsUTF8Unsafe(), " had an invalid ",
                          kLaunchContainer, ": ", launch_container_str});
@@ -583,13 +588,10 @@ WebAppInstallInfoFactoryOrError ParseOfflineManifest(
                            kOfflineManifestIconAnyPngs, " empty."});
     }
 
-    auto any_bitmaps = ParseOfflineManifestIconBitmaps(
-        file_utils, dir, file, kOfflineManifestIconAnyPngs, *icon_any_files);
-    if (!any_bitmaps.has_value()) {
-      return std::move(any_bitmaps.error());
-    }
-
-    app_info.icon_bitmaps.any = std::move(any_bitmaps.value());
+    ASSIGN_OR_RETURN(app_info.icon_bitmaps.any,
+                     ParseOfflineManifestIconBitmaps(
+                         file_utils, dir, file, kOfflineManifestIconAnyPngs,
+                         *icon_any_files));
   }
 
   if (icon_maskable_files) {
@@ -598,14 +600,11 @@ WebAppInstallInfoFactoryOrError ParseOfflineManifest(
                            kOfflineManifestIconMaskablePngs, " empty."});
     }
 
-    auto maskable_bitmaps = ParseOfflineManifestIconBitmaps(
-        file_utils, dir, file, kOfflineManifestIconMaskablePngs,
-        *icon_maskable_files);
-    if (!maskable_bitmaps.has_value()) {
-      return std::move(maskable_bitmaps.error());
-    }
-
-    app_info.icon_bitmaps.maskable = maskable_bitmaps.value();
+    ASSIGN_OR_RETURN(
+        app_info.icon_bitmaps.maskable,
+        ParseOfflineManifestIconBitmaps(file_utils, dir, file,
+                                        kOfflineManifestIconMaskablePngs,
+                                        *icon_maskable_files));
   }
 
   // theme_color_argb_hex (optional)
@@ -626,7 +625,9 @@ WebAppInstallInfoFactoryOrError ParseOfflineManifest(
   }
 
   return base::BindRepeating(
-      &std::make_unique<WebAppInstallInfo, const WebAppInstallInfo&>,
+      [](const WebAppInstallInfo& original) {
+        return std::make_unique<WebAppInstallInfo>(original.Clone());
+      },
       std::move(app_info));
 }
 
@@ -641,8 +642,9 @@ bool IsReinstallPastMilestoneNeeded(
   }
 
   int current_milestone = 0;
-  if (!base::StringToInt(current_milestone_str, &current_milestone))
+  if (!base::StringToInt(current_milestone_str, &current_milestone)) {
     return false;
+  }
 
   return last_preinstall_synchronize_milestone <
              force_reinstall_for_milestone &&
@@ -654,8 +656,9 @@ bool WasAppMigratedToWebApp(Profile* profile, const std::string& app_id) {
       profile->GetPrefs()->GetList(webapps::kWebAppsMigratedPreinstalledApps);
 
   for (const auto& val : migrated_apps) {
-    if (val.is_string() && val.GetString() == app_id)
+    if (val.is_string() && val.GetString() == app_id) {
       return true;
+    }
   }
 
   return false;
@@ -667,10 +670,11 @@ void MarkAppAsMigratedToWebApp(Profile* profile,
   ScopedListPrefUpdate update(profile->GetPrefs(),
                               webapps::kWebAppsMigratedPreinstalledApps);
   base::Value::List& update_list = update.Get();
-  if (was_migrated)
+  if (was_migrated) {
     EnsureContains(update_list, app_id);
-  else
+  } else {
     update_list.EraseValue(base::Value(app_id));
+  }
 }
 
 bool WasMigrationRun(Profile* profile, base::StringPiece feature_name) {
@@ -678,8 +682,9 @@ bool WasMigrationRun(Profile* profile, base::StringPiece feature_name) {
       profile->GetPrefs()->GetList(prefs::kWebAppsDidMigrateDefaultChromeApps);
 
   for (const auto& val : migrated_features) {
-    if (val.is_string() && val.GetString() == feature_name)
+    if (val.is_string() && val.GetString() == feature_name) {
       return true;
+    }
   }
 
   return false;
@@ -691,10 +696,11 @@ void SetMigrationRun(Profile* profile,
   ScopedListPrefUpdate update(profile->GetPrefs(),
                               prefs::kWebAppsDidMigrateDefaultChromeApps);
   base::Value::List& update_list = update.Get();
-  if (was_migrated)
+  if (was_migrated) {
     EnsureContains(update_list, feature_name);
-  else
+  } else {
     update_list.EraseValue(base::Value(feature_name));
+  }
 }
 
 bool WasPreinstalledAppUninstalled(Profile* profile,
@@ -703,8 +709,9 @@ bool WasPreinstalledAppUninstalled(Profile* profile,
       profile->GetPrefs()->GetList(prefs::kWebAppsUninstalledDefaultChromeApps);
 
   for (const auto& val : uninstalled_apps) {
-    if (val.is_string() && val.GetString() == app_id)
+    if (val.is_string() && val.GetString() == app_id) {
       return true;
+    }
   }
 
   return false;
@@ -712,10 +719,28 @@ bool WasPreinstalledAppUninstalled(Profile* profile,
 
 void MarkPreinstalledAppAsUninstalled(Profile* profile,
                                       const std::string& app_id) {
-  if (WasPreinstalledAppUninstalled(profile, app_id))
+  if (WasPreinstalledAppUninstalled(profile, app_id)) {
     return;
+  }
   ScopedListPrefUpdate update(profile->GetPrefs(),
                               prefs::kWebAppsUninstalledDefaultChromeApps);
   EnsureContains(update.Get(), app_id);
 }
+
+absl::optional<bool> DeviceHasStylusEnabledTouchscreen() {
+  if (!ui::DeviceDataManager::HasInstance() ||
+      !ui::DeviceDataManager::GetInstance()->AreDeviceListsComplete()) {
+    return absl::nullopt;
+  }
+
+  for (const ui::TouchscreenDevice& device :
+       ui::DeviceDataManager::GetInstance()->GetTouchscreenDevices()) {
+    if (device.has_stylus &&
+        device.type == ui::InputDeviceType::INPUT_DEVICE_INTERNAL) {
+      return true;
+    }
+  }
+  return false;
+}
+
 }  // namespace web_app

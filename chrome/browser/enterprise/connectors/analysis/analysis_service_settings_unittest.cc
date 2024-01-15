@@ -6,6 +6,7 @@
 
 #include "base/files/file_util.h"
 #include "base/json/json_reader.h"
+#include "base/memory/raw_ptr.h"
 #include "base/no_destructor.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
@@ -41,7 +42,7 @@ struct TestParam {
 
   const char* url;
   const char* settings_value;
-  AnalysisSettings* expected_settings;
+  raw_ptr<AnalysisSettings> expected_settings;
 };
 
 constexpr char kNormalSettings[] = R"({
@@ -57,9 +58,9 @@ constexpr char kNormalSettings[] = R"({
     {"url_list": ["scan2.com"], "tags": ["dlp", "malware"]},
   ],
   "block_until_verdict": 1,
+  "default_action": "block",
   "block_password_protected": true,
   "block_large_files": true,
-  "block_unsupported_file_types": true,
   "minimum_data_size": 123,
 })";
 
@@ -124,9 +125,9 @@ constexpr char kNoProviderSettings[] = R"({
     {"url_list": ["scan2.com"], "tags": ["dlp", "malware"]},
   ],
   "block_until_verdict": 1,
+  "default_action": "block",
   "block_password_protected": true,
   "block_large_files": true,
-  "block_unsupported_file_types": true,
   "minimum_data_size": 123,
 })";
 
@@ -140,9 +141,9 @@ constexpr char kNoEnabledPatternsSettings[] = R"({
     {"url_list": ["scan2.com"], "tags": ["dlp", "malware"]},
   ],
   "block_until_verdict": 1,
+  "default_action": "block",
   "block_password_protected": true,
   "block_large_files": true,
-  "block_unsupported_file_types": true,
 })";
 
 constexpr char kNormalSettingsWithCustomMessage[] = R"({
@@ -158,9 +159,9 @@ constexpr char kNormalSettingsWithCustomMessage[] = R"({
     {"url_list": ["scan2.com"], "tags": ["dlp", "malware"]},
   ],
   "block_until_verdict": 1,
+  "default_action": "block",
   "block_password_protected": true,
   "block_large_files": true,
-  "block_unsupported_file_types": true,
   "minimum_data_size": 123,
   "custom_messages": [
     {
@@ -189,9 +190,9 @@ constexpr char kNormalSettingsDlpRequiresBypassJustification[] = R"({
     {"url_list": ["scan2.com"], "tags": ["dlp", "malware"]},
   ],
   "block_until_verdict": 1,
+  "default_action": "block",
   "block_password_protected": true,
   "block_large_files": true,
-  "block_unsupported_file_types": true,
   "minimum_data_size": 123,
   "require_justification_tags": ["dlp"],
 })";
@@ -216,7 +217,7 @@ struct SourceDestinationTestParam {
 
   std::pair<VolumeInfo, VolumeInfo> source_destination_pair;
   const char* settings_value;
-  AnalysisSettings* expected_settings;
+  raw_ptr<AnalysisSettings> expected_settings;
 };
 
 constexpr char kNormalSourceDestinationSettings[] = R"({
@@ -281,9 +282,9 @@ constexpr char kNormalSourceDestinationSettings[] = R"({
     },
   ],
   "block_until_verdict": 1,
+  "default_action": "block",
   "block_password_protected": true,
   "block_large_files": true,
-  "block_unsupported_file_types": true,
   "minimum_data_size": 123,
 })";
 
@@ -431,9 +432,9 @@ constexpr char kNoProviderSourceDestinationSettings[] = R"({
     },
   ],
   "block_until_verdict": 1,
+  "default_action": "block",
   "block_password_protected": true,
   "block_large_files": true,
-  "block_unsupported_file_types": true,
   "minimum_data_size": 123,
 })";
 
@@ -484,9 +485,9 @@ constexpr char kNothingEnabledSourceDestinationSettings[] = R"({
     },
   ],
   "block_until_verdict": 1,
+  "default_action": "block",
   "block_password_protected": true,
   "block_large_files": true,
-  "block_unsupported_file_types": true,
 })";
 
 constexpr char kNormalSourceDestinationSettingsWithCustomMessage[] = R"({
@@ -507,9 +508,9 @@ constexpr char kNormalSourceDestinationSettingsWithCustomMessage[] = R"({
     },
   ],
   "block_until_verdict": 1,
+  "default_action": "block",
   "block_password_protected": true,
   "block_large_files": true,
-  "block_unsupported_file_types": true,
   "minimum_data_size": 123,
   "custom_messages": [
     {
@@ -544,9 +545,9 @@ constexpr char
     },
   ],
   "block_until_verdict": 1,
+  "default_action": "block",
   "block_password_protected": true,
   "block_large_files": true,
-  "block_unsupported_file_types": true,
   "minimum_data_size": 123,
   "require_justification_tags": ["dlp"],
 })";
@@ -626,9 +627,9 @@ AnalysisSettings NormalSettingsWithTags(
   AnalysisSettings settings;
   settings.tags = std::move(tags);
   settings.block_until_verdict = BlockUntilVerdict::kBlock;
+  settings.default_action = DefaultAction::kBlock;
   settings.block_password_protected_files = true;
   settings.block_large_files = true;
-  settings.block_unsupported_file_types = true;
   settings.minimum_data_size = 123;
   return settings;
 }
@@ -712,9 +713,9 @@ class AnalysisServiceSettingsTest : public testing::TestWithParam<TestParam> {
       },
     )";
 
-    return base::StringPrintf(GetParam().settings_value,
-                              is_cloud_ ? "google" : "local_user_agent",
-                              verification);
+    return base::StringPrintfNonConstexpr(
+        GetParam().settings_value, is_cloud_ ? "google" : "local_user_agent",
+        verification);
   }
   AnalysisSettings* expected_settings() const {
     // Set the GURL field dynamically to avoid static initialization issues.
@@ -769,12 +770,12 @@ TEST_P(AnalysisServiceSettingsTest, CloudTest) {
   if (analysis_settings.has_value()) {
     ASSERT_EQ(analysis_settings.value().block_until_verdict,
               expected_settings()->block_until_verdict);
+    ASSERT_EQ(analysis_settings.value().default_action,
+              expected_settings()->default_action);
     ASSERT_EQ(analysis_settings.value().block_password_protected_files,
               expected_settings()->block_password_protected_files);
     ASSERT_EQ(analysis_settings.value().block_large_files,
               expected_settings()->block_large_files);
-    ASSERT_EQ(analysis_settings.value().block_unsupported_file_types,
-              expected_settings()->block_unsupported_file_types);
     ASSERT_TRUE(
         analysis_settings.value().cloud_or_local_settings.is_cloud_analysis());
     ASSERT_EQ(analysis_settings.value().cloud_or_local_settings.analysis_url(),
@@ -817,12 +818,12 @@ TEST_P(AnalysisServiceSettingsTest, LocalTest) {
   if (analysis_settings.has_value()) {
     ASSERT_EQ(analysis_settings.value().block_until_verdict,
               expected_settings()->block_until_verdict);
+    ASSERT_EQ(analysis_settings.value().default_action,
+              expected_settings()->default_action);
     ASSERT_EQ(analysis_settings.value().block_password_protected_files,
               expected_settings()->block_password_protected_files);
     ASSERT_EQ(analysis_settings.value().block_large_files,
               expected_settings()->block_large_files);
-    ASSERT_EQ(analysis_settings.value().block_unsupported_file_types,
-              expected_settings()->block_unsupported_file_types);
     ASSERT_TRUE(
         analysis_settings.value().cloud_or_local_settings.is_local_analysis());
     ASSERT_EQ(analysis_settings.value().cloud_or_local_settings.local_path(),
@@ -950,8 +951,8 @@ class AnalysisServiceSourceDestinationSettingsTest
   }
   content::BrowserContext* fs_context() const { return profile_; }
   std::string settings_value() const {
-    return base::StringPrintf(GetParam().settings_value,
-                              is_cloud_ ? "google" : "local_user_agent");
+    return base::StringPrintfNonConstexpr(
+        GetParam().settings_value, is_cloud_ ? "google" : "local_user_agent");
   }
   AnalysisSettings* expected_settings() const {
     // Set the GURL field dynamically to avoid static initialization issues.
@@ -990,7 +991,7 @@ class AnalysisServiceSourceDestinationSettingsTest
   bool is_cloud_ = true;
   content::BrowserTaskEnvironment task_environment_;
   TestingProfileManager profile_manager_;
-  raw_ptr<TestingProfile> profile_;
+  raw_ptr<TestingProfile, DanglingUntriaged> profile_;
   std::unique_ptr<SourceDestinationTestingHelper>
       source_destination_testing_helper_;
 };
@@ -1009,12 +1010,12 @@ TEST_P(AnalysisServiceSourceDestinationSettingsTest, CloudTest) {
   if (analysis_settings.has_value()) {
     ASSERT_EQ(analysis_settings.value().block_until_verdict,
               expected_settings()->block_until_verdict);
+    ASSERT_EQ(analysis_settings.value().default_action,
+              expected_settings()->default_action);
     ASSERT_EQ(analysis_settings.value().block_password_protected_files,
               expected_settings()->block_password_protected_files);
     ASSERT_EQ(analysis_settings.value().block_large_files,
               expected_settings()->block_large_files);
-    ASSERT_EQ(analysis_settings.value().block_unsupported_file_types,
-              expected_settings()->block_unsupported_file_types);
     ASSERT_TRUE(
         analysis_settings.value().cloud_or_local_settings.is_cloud_analysis());
     ASSERT_EQ(analysis_settings.value().cloud_or_local_settings.analysis_url(),
@@ -1057,12 +1058,12 @@ TEST_P(AnalysisServiceSourceDestinationSettingsTest, LocalTest) {
   if (analysis_settings.has_value()) {
     ASSERT_EQ(analysis_settings.value().block_until_verdict,
               expected_settings()->block_until_verdict);
+    ASSERT_EQ(analysis_settings.value().default_action,
+              expected_settings()->default_action);
     ASSERT_EQ(analysis_settings.value().block_password_protected_files,
               expected_settings()->block_password_protected_files);
     ASSERT_EQ(analysis_settings.value().block_large_files,
               expected_settings()->block_large_files);
-    ASSERT_EQ(analysis_settings.value().block_unsupported_file_types,
-              expected_settings()->block_unsupported_file_types);
     ASSERT_TRUE(
         analysis_settings.value().cloud_or_local_settings.is_local_analysis());
     ASSERT_EQ(analysis_settings.value().cloud_or_local_settings.local_path(),

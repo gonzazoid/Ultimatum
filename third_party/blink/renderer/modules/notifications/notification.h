@@ -58,7 +58,7 @@ class V8NotificationPermissionCallback;
 class TimestampTrigger;
 
 class MODULES_EXPORT Notification final
-    : public EventTargetWithInlineData,
+    : public EventTarget,
       public ActiveScriptWrappable<Notification>,
       public ExecutionContextLifecycleObserver,
       public mojom::blink::NonPersistentNotificationListener {
@@ -116,8 +116,9 @@ class MODULES_EXPORT Notification final
   bool silent() const;
   bool requireInteraction() const;
   ScriptValue data(ScriptState* script_state);
-  Vector<v8::Local<v8::Value>> actions(ScriptState* script_state) const;
-  TimestampTrigger* showTrigger() const { return show_trigger_; }
+  v8::LocalVector<v8::Value> actions(ScriptState* script_state) const;
+  TimestampTrigger* showTrigger() const { return show_trigger_.Get(); }
+  String scenario() const;
 
   static String PermissionString(mojom::blink::PermissionStatus permission);
   static String permission(ExecutionContext* context);

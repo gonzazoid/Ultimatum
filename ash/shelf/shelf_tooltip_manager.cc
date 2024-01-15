@@ -10,16 +10,16 @@
 #include "ash/shelf/shelf.h"
 #include "ash/shelf/shelf_tooltip_bubble.h"
 #include "ash/shelf/shelf_tooltip_delegate.h"
-#include "ash/shelf/shelf_tooltip_preview_bubble.h"
 #include "ash/shelf/shelf_widget.h"
 #include "ash/shell.h"
-#include "base/bind.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "ash/wm/desks/desk_button/desk_button.h"
+#include "base/functional/bind.h"
 #include "base/time/time.h"
 #include "ui/aura/window.h"
 #include "ui/events/event.h"
 #include "ui/events/types/event_type.h"
 #include "ui/gfx/geometry/insets.h"
+#include "ui/views/controls/button/button.h"
 #include "ui/wm/core/window_animations.h"
 
 namespace ash {
@@ -73,13 +73,20 @@ void ShelfTooltipManager::ShowTooltip(views::View* view) {
       shelf_tooltip_delegate_->GetOpenWindowsForView(view);
 
   const ShelfAlignment alignment = shelf_->alignment();
-  if (switches::ShouldShowShelfHoverPreviews() && open_windows.size() > 0) {
-    bubble_ =
-        new ShelfTooltipPreviewBubble(view, open_windows, this, alignment);
-  } else {
-    bubble_ = new ShelfTooltipBubble(
-        view, alignment, shelf_tooltip_delegate_->GetTitleForView(view));
+
+  // In vertical shelf, the desk button tooltip bubble should still be centered
+  // above the respective view.
+  std::optional<views::BubbleBorder::Arrow> forced_arrow_position;
+  if (DeskButtonWidget* desk_button_widget = shelf_->desk_button_widget()) {
+    DeskButton* desk_button = desk_button_widget->GetDeskButton();
+    if (view == desk_button || view->parent() == desk_button) {
+      forced_arrow_position = views::BubbleBorder::Arrow::BOTTOM_CENTER;
+    }
   }
+
+  bubble_ = new ShelfTooltipBubble(
+      view, alignment, shelf_tooltip_delegate_->GetTitleForView(view),
+      forced_arrow_position);
 
   aura::Window* window = bubble_->GetWidget()->GetNativeWindow();
   ::wm::SetWindowVisibilityAnimationType(
@@ -134,8 +141,10 @@ void ShelfTooltipManager::OnMouseEvent(ui::MouseEvent* event) {
     ShowTooltip(view);
   else if (!IsVisible() && should_show)
     ShowTooltipWithDelay(view);
-  else if (IsVisible() && shelf_tooltip_delegate_->ShouldHideTooltip(point))
+  else if (IsVisible() &&
+           shelf_tooltip_delegate_->ShouldHideTooltip(point, delegate_view)) {
     Close();
+  }
 }
 
 void ShelfTooltipManager::OnTouchEvent(ui::TouchEvent* event) {
@@ -153,7 +162,7 @@ void ShelfTooltipManager::OnKeyEvent(ui::KeyEvent* event) {
   Close();
 }
 
-void ShelfTooltipManager::WillChangeVisibilityState(
+void ShelfTooltipManager::OnShelfVisibilityStateChanged(
     ShelfVisibilityState new_state) {
   if (new_state == SHELF_HIDDEN)
     Close();

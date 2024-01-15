@@ -71,7 +71,10 @@ def LuciAuthTokenGeneratorCallback():
       (p.stdout.read(), p.stderr.read()))
 
 
-def SendResults(data, data_label, url, send_as_histograms=False,
+def SendResults(data,
+                data_label,
+                url,
+                send_as_histograms=False,
                 token_generator_callback=LuciAuthTokenGeneratorCallback,
                 num_retries=4):
   """Sends results to the Chrome Performance Dashboard.
@@ -475,8 +478,10 @@ def _SendHistogramJson(url, histogramset_json, token_generator_callback):
 
     http = httplib2.Http()
 
-    response, content = http.request(
-      url + SEND_HISTOGRAMS_PATH, method='POST', body=data, headers=headers)
+    response, content = http.request(url + SEND_HISTOGRAMS_PATH,
+                                     method='POST',
+                                     body=data,
+                                     headers=headers)
 
     # A 500 is presented on an exception on the dashboard side, timeout,
     # exception, etc. The dashboard can also send back 400 and 403, we could

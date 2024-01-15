@@ -8,9 +8,10 @@
 #include "base/logging.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
-#include "base/threading/sequenced_task_runner_handle.h"
-#include "components/cast_streaming/public/config_conversions.h"
+#include "base/task/sequenced_task_runner.h"
 #include "components/cast_streaming/test/cast_message_port_sender_impl.h"
+#include "media/cast/openscreen/config_conversions.h"
+#include "third_party/openscreen/src/platform/base/span.h"
 
 namespace cast_streaming {
 
@@ -47,8 +48,8 @@ openscreen::cast::EncodedFrame DecoderBufferToEncodedFrame(
           std::chrono::milliseconds>(timestamp, rtp_timebase);
   encoded_frame.reference_time = openscreen::Clock::time_point(timestamp);
 
-  encoded_frame.data = absl::Span<uint8_t>(decoder_buffer->writable_data(),
-                                           decoder_buffer->data_size());
+  encoded_frame.data = openscreen::ByteView(decoder_buffer->writable_data(),
+                                            decoder_buffer->data_size());
 
   return encoded_frame;
 }
@@ -100,9 +101,9 @@ class CastStreamingTestSender::SenderObserver final
 };
 
 CastStreamingTestSender::CastStreamingTestSender()
-    : task_runner_(base::SequencedTaskRunnerHandle::Get()),
+    : task_runner_(base::SequencedTaskRunner::GetCurrentDefault()),
       environment_(&openscreen::Clock::now,
-                   &task_runner_,
+                   task_runner_,
                    openscreen::IPEndpoint::kAnyV4()) {}
 
 CastStreamingTestSender::~CastStreamingTestSender() = default;
@@ -131,21 +132,32 @@ void CastStreamingTestSender::Start(
           true /* use_android_rtp_hack */});
 
   if (audio_config) {
-    audio_configs_.push_back(ToAudioCaptureConfig(audio_config.value()));
+    audio_configs_.push_back(
+        media::cast::ToAudioCaptureConfig(audio_config.value()));
   }
 
   if (video_config) {
-    video_configs_.push_back(ToVideoCaptureConfig(video_config.value()));
+    video_configs_.push_back(
+        media::cast::ToVideoCaptureConfig(video_config.value()));
   }
 }
 
 void CastStreamingTestSender::Stop() {
   VLOG(1) << __func__;
 
-  sender_session_.reset();
-  message_port_.reset();
+  // Senders must be deconstructed before the session that hosts them.
   audio_sender_observer_.reset();
   video_sender_observer_.reset();
+
+  // Disconnect the message port before destructing its client.
+  if (message_port_) {
+    // TODO(crbug.com/1420075): CastMessagePortSender should be RAII and clean itself during
+    // the destruction instead of relying the client to call its ResetClient function.
+    message_port_->ResetClient();
+  }
+  sender_session_.reset();
+  message_port_.reset();
+
   audio_decoder_config_.reset();
   video_decoder_config_.reset();
   has_startup_completed_ = false;
@@ -232,13 +244,15 @@ void CastStreamingTestSender::OnNegotiated(
   if (senders.audio_sender) {
     audio_sender_observer_ =
         std::make_unique<SenderObserver>(std::move(senders.audio_sender));
-    audio_decoder_config_ = ToAudioDecoderConfig(senders.audio_config);
+    audio_decoder_config_ =
+        media::cast::ToAudioDecoderConfig(senders.audio_config);
   }
 
   if (senders.video_sender) {
     video_sender_observer_ =
         std::make_unique<SenderObserver>(std::move(senders.video_sender));
-    video_decoder_config_ = ToVideoDecoderConfig(senders.video_config);
+    video_decoder_config_ =
+        media::cast::ToVideoDecoderConfig(senders.video_config);
   }
 
   has_startup_completed_ = true;

@@ -11,15 +11,17 @@
 #include "chrome/browser/web_applications/web_app_id_constants.h"
 #include "chrome/common/extensions/extension_constants.h"
 #include "components/app_constants/constants.h"
-#include "components/services/app_service/public/cpp/app_update.h"
+#include "components/services/app_service/public/cpp/app_launch_util.h"
 #include "extensions/common/constants.h"
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
+#include "ash/constants/ash_features.h"
 #include "ash/public/cpp/app_list/internal_app_id_constants.h"
+#include "ash/user_education/welcome_tour/welcome_tour_metrics.h"
 #include "ash/webui/projector_app/public/cpp/projector_app_constants.h"
+#include "chrome/browser/ash/app_list/arc/arc_app_utils.h"
 #include "chrome/browser/ash/file_manager/app_id.h"
 #include "chrome/browser/ash/plugin_vm/plugin_vm_util.h"
-#include "chrome/browser/ui/app_list/arc/arc_app_utils.h"
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
 namespace {
@@ -146,61 +148,51 @@ void RecordDefaultAppLaunch(apps::DefaultAppName default_app_name,
       base::UmaHistogramEnumeration("Apps.DefaultAppLaunch.FromLockScreen",
                                     default_app_name);
       break;
+    case apps::LaunchSource::kFromSysTrayCalendar:
+      base::UmaHistogramEnumeration("Apps.DefaultAppLaunch.FromSysTrayCalendar",
+                                    default_app_name);
+      break;
+    case apps::LaunchSource::kFromInstaller:
+      base::UmaHistogramEnumeration("Apps.DefaultAppLaunch.FromInstaller",
+                                    default_app_name);
+      break;
     case apps::LaunchSource::kFromCommandLine:
     case apps::LaunchSource::kFromBackgroundMode:
+    case apps::LaunchSource::kFromAppHomePage:
+    case apps::LaunchSource::kFromReparenting:
+    case apps::LaunchSource::kFromProfileMenu:
       NOTREACHED();
       break;
   }
 }
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-void RecordBuiltInAppLaunch(apps::BuiltInAppName built_in_app_name,
-                            apps::LaunchSource launch_source) {
-  switch (launch_source) {
-    case apps::LaunchSource::kUnknown:
-    case apps::LaunchSource::kFromParentalControls:
+void RecordWelcomeTourInteraction(apps::DefaultAppName default_app_name,
+                                  apps::LaunchSource launch_source) {
+  // This metric is intended to capture user actions. Do not log automatically
+  // launched apps.
+  if (launch_source == apps::LaunchSource::kFromChromeInternal) {
+    return;
+  }
+
+  switch (default_app_name) {
+    case apps::DefaultAppName::kFiles:
+      ash::welcome_tour_metrics::RecordInteraction(
+          ash::welcome_tour_metrics::Interaction::kFilesApp);
       break;
-    case apps::LaunchSource::kFromAppListGrid:
-    case apps::LaunchSource::kFromAppListGridContextMenu:
-      base::UmaHistogramEnumeration("Apps.AppListInternalApp.Activate",
-                                    built_in_app_name);
+    case apps::DefaultAppName::kHelpApp:
+      ash::welcome_tour_metrics::RecordInteraction(
+          ash::welcome_tour_metrics::Interaction::kExploreApp);
       break;
-    case apps::LaunchSource::kFromAppListQuery:
-    case apps::LaunchSource::kFromAppListQueryContextMenu:
-    case apps::LaunchSource::kFromAppListRecommendation:
-      base::UmaHistogramEnumeration("Apps.AppListSearchResultInternalApp.Open",
-                                    built_in_app_name);
+    case apps::DefaultAppName::kSettings:
+      ash::welcome_tour_metrics::RecordInteraction(
+          ash::welcome_tour_metrics::Interaction::kSettingsApp);
       break;
-    case apps::LaunchSource::kFromShelf:
-    case apps::LaunchSource::kFromFileManager:
-    case apps::LaunchSource::kFromLink:
-    case apps::LaunchSource::kFromOmnibox:
-    case apps::LaunchSource::kFromChromeInternal:
-    case apps::LaunchSource::kFromKeyboard:
-    case apps::LaunchSource::kFromOtherApp:
-    case apps::LaunchSource::kFromMenu:
-    case apps::LaunchSource::kFromInstalledNotification:
-    case apps::LaunchSource::kFromTest:
-    case apps::LaunchSource::kFromArc:
-    case apps::LaunchSource::kFromSharesheet:
-    case apps::LaunchSource::kFromReleaseNotesNotification:
-    case apps::LaunchSource::kFromFullRestore:
-    case apps::LaunchSource::kFromSmartTextContextMenu:
-    case apps::LaunchSource::kFromDiscoverTabNotification:
-    case apps::LaunchSource::kFromManagementApi:
-    case apps::LaunchSource::kFromKiosk:
-    case apps::LaunchSource::kFromCommandLine:
-    case apps::LaunchSource::kFromBackgroundMode:
-    case apps::LaunchSource::kFromNewTabPage:
-    case apps::LaunchSource::kFromIntentUrl:
-    case apps::LaunchSource::kFromOsLogin:
-    case apps::LaunchSource::kFromProtocolHandler:
-    case apps::LaunchSource::kFromUrlHandler:
-    case apps::LaunchSource::kFromLockScreen:
+    default:
       break;
   }
 }
-#endif
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
 }  // namespace
 
@@ -208,23 +200,30 @@ namespace apps {
 
 void RecordAppLaunch(const std::string& app_id,
                      apps::LaunchSource launch_source) {
-  if (app_id == web_app::kCursiveAppId) {
-    RecordDefaultAppLaunch(DefaultAppName::kCursive, launch_source);
-  } else if (app_id == extension_misc::kCalculatorAppId) {
+  if (const std::optional<apps::DefaultAppName> app_name =
+          PreinstalledWebAppIdToName(app_id)) {
+    RecordDefaultAppLaunch(app_name.value(), launch_source);
+    return;
+  }
+
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+  if (const std::optional<apps::DefaultAppName> app_name =
+          SystemWebAppIdToName(app_id)) {
+    RecordDefaultAppLaunch(app_name.value(), launch_source);
+
+    if (ash::features::IsWelcomeTourEnabled()) {
+      RecordWelcomeTourInteraction(app_name.value(), launch_source);
+    }
+
+    return;
+  }
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+
+  if (app_id == extension_misc::kCalculatorAppId) {
     // Launches of the legacy calculator chrome app.
     RecordDefaultAppLaunch(DefaultAppName::kCalculatorChromeApp, launch_source);
   } else if (app_id == extension_misc::kTextEditorAppId) {
     RecordDefaultAppLaunch(DefaultAppName::kText, launch_source);
-  } else if (app_id == web_app::kCalculatorAppId) {
-    RecordDefaultAppLaunch(DefaultAppName::kCalculator, launch_source);
-  } else if (app_id == web_app::kCanvasAppId) {
-    RecordDefaultAppLaunch(DefaultAppName::kChromeCanvas, launch_source);
-  } else if (app_id == web_app::kCameraAppId) {
-    RecordDefaultAppLaunch(DefaultAppName::kCamera, launch_source);
-  } else if (app_id == web_app::kHelpAppId) {
-    RecordDefaultAppLaunch(DefaultAppName::kHelpApp, launch_source);
-  } else if (app_id == web_app::kMediaAppId) {
-    RecordDefaultAppLaunch(DefaultAppName::kMediaApp, launch_source);
   } else if (app_id == app_constants::kChromeAppId) {
     RecordDefaultAppLaunch(DefaultAppName::kChrome, launch_source);
   } else if (app_id == extension_misc::kGoogleDocsAppId) {
@@ -234,8 +233,7 @@ void RecordAppLaunch(const std::string& app_id,
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   } else if (app_id == arc::kGoogleDuoAppId) {
     RecordDefaultAppLaunch(DefaultAppName::kDuo, launch_source);
-  } else if (app_id == extension_misc::kFilesManagerAppId ||
-             app_id == file_manager::kFileManagerSwaAppId) {
+  } else if (app_id == extension_misc::kFilesManagerAppId) {
     RecordDefaultAppLaunch(DefaultAppName::kFiles, launch_source);
   } else if (app_id == extension_misc::kGmailAppId ||
              app_id == arc::kGmailAppId) {
@@ -260,8 +258,6 @@ void RecordAppLaunch(const std::string& app_id,
   } else if (app_id == arc::kPlayStoreAppId) {
     RecordDefaultAppLaunch(DefaultAppName::kPlayStore, launch_source);
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
-  } else if (app_id == web_app::kOsSettingsAppId) {
-    RecordDefaultAppLaunch(DefaultAppName::kSettings, launch_source);
   } else if (app_id == extension_misc::kGoogleSheetsAppId) {
     RecordDefaultAppLaunch(DefaultAppName::kSheets, launch_source);
   } else if (app_id == extension_misc::kGoogleSlidesAppId) {
@@ -272,94 +268,92 @@ void RecordAppLaunch(const std::string& app_id,
   } else if (app_id == extension_misc::kYoutubeAppId ||
              app_id == arc::kYoutubeAppId) {
     RecordDefaultAppLaunch(DefaultAppName::kYouTube, launch_source);
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
-  } else if (app_id == web_app::kYoutubeMusicAppId) {
-    RecordDefaultAppLaunch(DefaultAppName::kYouTubeMusic, launch_source);
-  } else if (app_id == web_app::kStadiaAppId) {
-    RecordDefaultAppLaunch(DefaultAppName::kStadia, launch_source);
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-  } else if (app_id == web_app::kScanningAppId) {
-    RecordDefaultAppLaunch(DefaultAppName::kScanningApp, launch_source);
-  } else if (app_id == web_app::kDiagnosticsAppId) {
-    RecordDefaultAppLaunch(DefaultAppName::kDiagnosticsApp, launch_source);
-  } else if (app_id == web_app::kPrintManagementAppId) {
-    RecordDefaultAppLaunch(DefaultAppName::kPrintManagementApp, launch_source);
-  } else if (app_id == web_app::kShortcutCustomizationAppId) {
-    RecordDefaultAppLaunch(DefaultAppName::kShortcutCustomizationApp,
-                           launch_source);
-  } else if (app_id == web_app::kShimlessRMAAppId) {
-    RecordDefaultAppLaunch(DefaultAppName::kShimlessRMAApp, launch_source);
-  } else if (app_id == ash::kChromeUITrustedProjectorSwaAppId) {
-    RecordDefaultAppLaunch(DefaultAppName::kProjector, launch_source);
-  } else if (app_id == web_app::kFirmwareUpdateAppId) {
-    RecordDefaultAppLaunch(DefaultAppName::kFirmwareUpdateApp, launch_source);
   } else if (app_id == arc::kGoogleTVAppId) {
     RecordDefaultAppLaunch(DefaultAppName::kGoogleTv, launch_source);
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
   }
-
-  // Above are default apps; below are built-in apps.
-
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-  if (app_id == ash::kInternalAppIdKeyboardShortcutViewer) {
-    RecordBuiltInAppLaunch(BuiltInAppName::kKeyboardShortcutViewer,
-                           launch_source);
-  } else if (app_id == ash::kInternalAppIdSettings) {
-    RecordBuiltInAppLaunch(BuiltInAppName::kSettings, launch_source);
-  } else if (app_id == ash::kInternalAppIdContinueReading) {
-    RecordBuiltInAppLaunch(BuiltInAppName::kContinueReading, launch_source);
-  } else if (app_id == plugin_vm::kPluginVmShelfAppId) {
-    RecordBuiltInAppLaunch(BuiltInAppName::kPluginVm, launch_source);
-  }
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
-  if (app_id == web_app::kMockSystemAppId) {
-    RecordDefaultAppLaunch(DefaultAppName::kMockSystemApp, launch_source);
-  } else if (app_id == web_app::kOsFeedbackAppId) {
-    RecordDefaultAppLaunch(DefaultAppName::kOsFeedbackApp, launch_source);
-  }
 }
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-void RecordBuiltInAppSearchResult(const std::string& app_id) {
-  if (app_id == ash::kInternalAppIdKeyboardShortcutViewer) {
-    base::UmaHistogramEnumeration("Apps.AppListSearchResultInternalApp.Show",
-                                  BuiltInAppName::kKeyboardShortcutViewer);
-  } else if (app_id == ash::kInternalAppIdSettings) {
-    base::UmaHistogramEnumeration("Apps.AppListSearchResultInternalApp.Show",
-                                  BuiltInAppName::kSettings);
-  } else if (app_id == ash::kInternalAppIdContinueReading) {
-    base::UmaHistogramEnumeration("Apps.AppListSearchResultInternalApp.Show",
-                                  BuiltInAppName::kContinueReading);
-  } else if (app_id == plugin_vm::kPluginVmShelfAppId) {
-    base::UmaHistogramEnumeration("Apps.AppListSearchResultInternalApp.Show",
-                                  BuiltInAppName::kPluginVm);
-  }
-}
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
-
-void RecordAppBounce(const apps::AppUpdate& app) {
-  base::Time install_time = app.InstallTime();
-  base::Time uninstall_time = base::Time::Now();
-
-  DCHECK(uninstall_time >= install_time);
-
-  base::TimeDelta amount_time_installed = uninstall_time - install_time;
-
-  const base::TimeDelta seven_days = base::Days(7);
-
-  if (amount_time_installed < seven_days) {
-    base::UmaHistogramBoolean("Apps.Bounced", true);
+const std::optional<apps::DefaultAppName> PreinstalledWebAppIdToName(
+    const std::string& app_id) {
+  if (app_id == web_app::kCalculatorAppId) {
+    return apps::DefaultAppName::kCalculator;
+  } else if (app_id == web_app::kCanvasAppId) {
+    return apps::DefaultAppName::kChromeCanvas;
+  } else if (app_id == web_app::kCursiveAppId) {
+    return apps::DefaultAppName::kCursive;
+  } else if (app_id == web_app::kGmailAppId) {
+    return apps::DefaultAppName::kGmail;
+  } else if (app_id == web_app::kGoogleMoviesAppId) {
+    return apps::DefaultAppName::kPlayMovies;
+  } else if (app_id == web_app::kGoogleCalendarAppId) {
+    return apps::DefaultAppName::kGoogleCalendar;
+  } else if (app_id == web_app::kGoogleChatAppId) {
+    return apps::DefaultAppName::kGoogleChat;
+  } else if (app_id == web_app::kGoogleDocsAppId) {
+    return apps::DefaultAppName::kDocs;
+  } else if (app_id == web_app::kGoogleDriveAppId) {
+    return apps::DefaultAppName::kDrive;
+  } else if (app_id == web_app::kGoogleMeetAppId) {
+    return apps::DefaultAppName::kGoogleMeet;
+  } else if (app_id == web_app::kGoogleSheetsAppId) {
+    return apps::DefaultAppName::kSheets;
+  } else if (app_id == web_app::kGoogleSlidesAppId) {
+    return apps::DefaultAppName::kSlides;
+  } else if (app_id == web_app::kGoogleKeepAppId) {
+    return apps::DefaultAppName::kKeep;
+  } else if (app_id == web_app::kGoogleMapsAppId) {
+    return apps::DefaultAppName::kGoogleMaps;
+  } else if (app_id == web_app::kMessagesAppId) {
+    return apps::DefaultAppName::kGoogleMessages;
+  } else if (app_id == web_app::kPlayBooksAppId) {
+    return apps::DefaultAppName::kPlayBooks;
+  } else if (app_id == web_app::kYoutubeAppId) {
+    return apps::DefaultAppName::kYouTube;
+  } else if (app_id == web_app::kYoutubeMusicAppId) {
+    return apps::DefaultAppName::kYouTubeMusic;
   } else {
-    base::UmaHistogramBoolean("Apps.Bounced", false);
+    return std::nullopt;
   }
 }
 
-void RecordAppsPerNotification(int count) {
-  if (count <= 0) {
-    return;
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+const std::optional<apps::DefaultAppName> SystemWebAppIdToName(
+    const std::string& app_id) {
+  // These apps should all have chrome:// URLs.
+  if (app_id == web_app::kCameraAppId) {
+    return apps::DefaultAppName::kCamera;
+  } else if (app_id == web_app::kDiagnosticsAppId) {
+    return apps::DefaultAppName::kDiagnosticsApp;
+  } else if (app_id == file_manager::kFileManagerSwaAppId) {
+    return apps::DefaultAppName::kFiles;
+  } else if (app_id == web_app::kFirmwareUpdateAppId) {
+    return apps::DefaultAppName::kFirmwareUpdateApp;
+  } else if (app_id == web_app::kHelpAppId) {
+    return apps::DefaultAppName::kHelpApp;
+  } else if (app_id == web_app::kMediaAppId) {
+    return apps::DefaultAppName::kMediaApp;
+    // `MockSystemApp` is for tests only.
+  } else if (app_id == web_app::kMockSystemAppId) {
+    return apps::DefaultAppName::kMockSystemApp;
+  } else if (app_id == web_app::kOsFeedbackAppId) {
+    return apps::DefaultAppName::kOsFeedbackApp;
+  } else if (app_id == web_app::kOsSettingsAppId) {
+    return apps::DefaultAppName::kSettings;
+  } else if (app_id == web_app::kPrintManagementAppId) {
+    return apps::DefaultAppName::kPrintManagementApp;
+  } else if (app_id == ash::kChromeUIUntrustedProjectorSwaAppId) {
+    return apps::DefaultAppName::kProjector;
+  } else if (app_id == web_app::kScanningAppId) {
+    return apps::DefaultAppName::kScanningApp;
+  } else if (app_id == web_app::kShimlessRMAAppId) {
+    return apps::DefaultAppName::kShimlessRMAApp;
+  } else if (app_id == web_app::kShortcutCustomizationAppId) {
+    return apps::DefaultAppName::kShortcutCustomizationApp;
+  } else {
+    return std::nullopt;
   }
-  base::UmaHistogramBoolean("ChromeOS.Apps.NumberOfAppsForNotification",
-                            (count > 1));
 }
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
 }  // namespace apps

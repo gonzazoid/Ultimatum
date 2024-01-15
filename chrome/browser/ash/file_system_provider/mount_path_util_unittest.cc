@@ -9,6 +9,7 @@
 
 #include "base/files/file.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/ash/file_system_provider/fake_extension_provider.h"
 #include "chrome/browser/ash/file_system_provider/fake_provided_file_system.h"
 #include "chrome/browser/ash/file_system_provider/icon_set.h"
@@ -31,9 +32,7 @@
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/common/storage_key/storage_key.h"
 
-namespace ash {
-namespace file_system_provider {
-namespace util {
+namespace ash::file_system_provider::util {
 
 namespace {
 
@@ -65,8 +64,8 @@ storage::FileSystemURL CreateFileSystemURL(
 
 class FileSystemProviderMountPathUtilTest : public testing::Test {
  protected:
-  FileSystemProviderMountPathUtilTest() {}
-  ~FileSystemProviderMountPathUtilTest() override {}
+  FileSystemProviderMountPathUtilTest() = default;
+  ~FileSystemProviderMountPathUtilTest() override = default;
 
   void SetUp() override {
     profile_manager_ = std::make_unique<TestingProfileManager>(
@@ -75,7 +74,7 @@ class FileSystemProviderMountPathUtilTest : public testing::Test {
     profile_ = profile_manager_->CreateTestingProfile("testing-profile");
     user_manager_ = new FakeChromeUserManager();
     user_manager_enabler_ = std::make_unique<user_manager::ScopedUserManager>(
-        base::WrapUnique(user_manager_));
+        base::WrapUnique(user_manager_.get()));
     user_manager_->AddUser(
         AccountId::FromUserEmail(profile_->GetProfileUserName()));
     file_system_provider_service_ = Service::Get(profile_);
@@ -85,10 +84,10 @@ class FileSystemProviderMountPathUtilTest : public testing::Test {
 
   content::BrowserTaskEnvironment task_environment_;
   std::unique_ptr<TestingProfileManager> profile_manager_;
-  TestingProfile* profile_;  // Owned by TestingProfileManager.
+  raw_ptr<TestingProfile> profile_;  // Owned by TestingProfileManager.
   std::unique_ptr<user_manager::ScopedUserManager> user_manager_enabler_;
-  FakeChromeUserManager* user_manager_;
-  Service* file_system_provider_service_;  // Owned by its factory.
+  raw_ptr<FakeChromeUserManager> user_manager_;
+  raw_ptr<Service> file_system_provider_service_;  // Owned by its factory.
 };
 
 TEST_F(FileSystemProviderMountPathUtilTest, GetMountPath) {
@@ -308,6 +307,4 @@ TEST_F(FileSystemProviderMountPathUtilTest, LocalPathParser_WrongPath) {
   }
 }
 
-}  // namespace util
-}  // namespace file_system_provider
-}  // namespace ash
+}  // namespace ash::file_system_provider::util

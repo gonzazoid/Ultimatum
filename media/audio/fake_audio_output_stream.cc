@@ -4,9 +4,9 @@
 
 #include "media/audio/fake_audio_output_stream.h"
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "media/audio/audio_manager_base.h"
@@ -71,7 +71,7 @@ void FakeAudioOutputStream::CallOnMoreData(base::TimeTicks ideal_time,
   // current system time; and so the same is done here.
   const auto delay =
       fixed_data_delay_ + std::max(base::TimeDelta(), ideal_time - now);
-  callback_->OnMoreData(delay, now, 0, audio_bus_.get());
+  callback_->OnMoreData(delay, now, {}, audio_bus_.get());
 }
 
 void FakeAudioOutputStream::SetMute(bool muted) {}

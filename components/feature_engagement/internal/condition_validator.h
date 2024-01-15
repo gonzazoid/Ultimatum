@@ -21,6 +21,7 @@ struct FeatureConfig;
 class AvailabilityModel;
 class DisplayLockController;
 class EventModel;
+class TimeProvider;
 
 // A ConditionValidator checks the requred conditions for a given feature,
 // and checks if all conditions are met.
@@ -75,6 +76,9 @@ class ConditionValidator {
     // other priority notifications.
     bool priority_notification_ok;
 
+    // Whether the additional group-based preconditions were met.
+    bool groups_ok;
+
     // Whether the snooze option should be shown.
     // This value is excluded from the NoErrors() check.
     bool should_show_snooze;
@@ -93,11 +97,12 @@ class ConditionValidator {
   virtual Result MeetsConditions(
       const base::Feature& feature,
       const FeatureConfig& config,
+      const std::vector<GroupConfig>& group_configs,
       const EventModel& event_model,
       const AvailabilityModel& availability_model,
       const DisplayLockController& display_lock_controller,
       const Configuration* configuration,
-      uint32_t current_day) const = 0;
+      const TimeProvider& time_provider) const = 0;
 
   // Must be called to notify that the |feature| is currently showing.
   virtual void NotifyIsShowing(

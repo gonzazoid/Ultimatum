@@ -14,16 +14,15 @@ import '../strings.m.js';
 import '../shared_style.css.js';
 import '../shared_vars.css.js';
 
-import {CrContainerShadowMixin} from 'chrome://resources/cr_elements/cr_container_shadow_mixin.js';
-import {focusWithoutInk} from 'chrome://resources/js/focus_without_ink.js';
 import {I18nMixin} from 'chrome://resources/cr_elements/i18n_mixin.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
+import {focusWithoutInk} from 'chrome://resources/js/focus_without_ink.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 import {afterNextRender, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {navigation, Page} from '../navigation_helper.js';
 
 import {getTemplate} from './activity_log.html.js';
-import {ActivityLogDelegate} from './activity_log_history.js';
+import type {ActivityLogDelegate} from './activity_log_history.js';
 
 /**
  * Subpages/views for the activity log. HISTORY shows extension activities
@@ -54,8 +53,7 @@ export interface ExtensionsActivityLogElement {
   };
 }
 
-const ExtensionsActivityLogElementBase =
-    I18nMixin(CrContainerShadowMixin(PolymerElement));
+const ExtensionsActivityLogElementBase = I18nMixin(PolymerElement);
 
 export class ExtensionsActivityLogElement extends
     ExtensionsActivityLogElementBase {
@@ -161,7 +159,7 @@ export class ExtensionsActivityLogElement extends
     }
   }
 
-  private onCloseButtonTap_() {
+  private onCloseButtonClick_() {
     if ((this.extensionInfo as ActivityLogExtensionPlaceholder).isPlaceholder) {
       navigation.navigateTo({page: Page.LIST});
     } else {

@@ -7,10 +7,9 @@
 
 #include <memory>
 
-#include "base/callback_forward.h"
 #include "base/cancelable_callback.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "base/synchronization/waitable_event_watcher.h"
 #include "base/task/cancelable_task_tracker.h"
@@ -40,6 +39,7 @@ class WaitableEvent;
 
 namespace content {
 class BrowserContext;
+class StoragePartition;
 }
 
 namespace webrtc_event_logging {
@@ -70,6 +70,7 @@ class ChromeBrowsingDataRemoverDelegate
   GetOriginTypeMatcher() override;
   bool MayRemoveDownloadHistory() override;
   std::vector<std::string> GetDomainsForDeferredCookieDeletion(
+      content::StoragePartition* storage_partition,
       uint64_t remove_mask) override;
   void RemoveEmbedderData(
       const base::Time& delete_begin,
@@ -113,7 +114,7 @@ class ChromeBrowsingDataRemoverDelegate
     kPluginData = 8,
     // kFlashLsoHelper = 9, deprecated
     kDomainReliability = 10,
-    kNetworkPredictor = 11,
+    // kNetworkPredictor = 11, deprecated
     kWebrtcLogs = 12,
     kVideoDecodeHistory = 13,
     kCookies = 14,
@@ -135,7 +136,7 @@ class ChromeBrowsingDataRemoverDelegate
     kTpmAttestationKeys = 30,
     kStrikes = 31,
     // kLeakedCredentials = 32, deprecated
-    kFieldInfo = 33,
+    // kFieldInfo = 33, deprecated
     kCompromisedCredentials = 34,
     kUserDataSnapshot = 35,
     kMediaFeeds = 36,
@@ -147,11 +148,12 @@ class ChromeBrowsingDataRemoverDelegate
     kWebAppHistory = 42,
     kWebAuthnCredentials = 43,
     kWebrtcVideoPerfHistory = 44,
+    kMediaDeviceSalts = 45,
 
     // Please update ChromeBrowsingDataRemoverTasks in enums.xml and
     // History.ClearBrowsingData.Duration.ChromeTask.{Task}
     // in histograms/metadata/history/histograms.xml when adding entries!
-    kMaxValue = kWebrtcVideoPerfHistory,
+    kMaxValue = kMediaDeviceSalts,
   };
 
   // Returns the suffix for the
@@ -240,7 +242,12 @@ class ChromeBrowsingDataRemoverDelegate
   std::unique_ptr<WebappRegistry> webapp_registry_;
 #endif
 
-  bool should_clear_password_account_storage_settings_ = false;
+#if !BUILDFLAG(IS_ANDROID)
+  // On desktop, some per-account sync settings must be cleared when cookies are
+  // deleted. This flag is used to defer the process until after sync uploads
+  // deletions of any other data.
+  bool should_clear_sync_account_settings_ = false;
+#endif
 
   std::unique_ptr<device::fido::PlatformCredentialStore> credential_store_;
 

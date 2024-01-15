@@ -6,9 +6,9 @@
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/path_service.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_tokenizer.h"
@@ -35,30 +35,32 @@ namespace {
 const char kWebstoreDomain[] = "cws.com";
 // Kiosk app crx file download path under web store site.
 const char kCrxDownloadPath[] = "/chromeos/app_mode/webstore/downloads/";
+const char kDetailsURLPrefix[] =
+    "/chromeos/app_mode/webstore/inlineinstall/detail/";
 
 const char kAppNoUpdateTemplate[] =
     "<app appid=\"$AppId\" status=\"ok\">"
-      "<updatecheck status=\"noupdate\"/>"
+    "<updatecheck status=\"noupdate\"/>"
     "</app>";
 
 const char kAppHasUpdateTemplate[] =
     "<app appid=\"$AppId\" status=\"ok\">"
-      "<updatecheck codebase=\"$CrxDownloadUrl\" fp=\"1.$FP\" "
-        "hash=\"\" hash_sha256=\"$FP\" size=\"$Size\" status=\"ok\" "
-        "version=\"$Version\"/>"
+    "<updatecheck codebase=\"$CrxDownloadUrl\" fp=\"1.$FP\" "
+    "hash=\"\" hash_sha256=\"$FP\" size=\"$Size\" status=\"ok\" "
+    "version=\"$Version\"/>"
     "</app>";
 
 const char kPrivateStoreAppHasUpdateTemplate[] =
     "<app appid=\"$AppId\">"
-      "<updatecheck codebase=\"$CrxDownloadUrl\" version=\"$Version\"/>"
+    "<updatecheck codebase=\"$CrxDownloadUrl\" version=\"$Version\"/>"
     "</app>";
 
 const char kUpdateContentTemplate[] =
     "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
     "<gupdate xmlns=\"http://www.google.com/update2/response\" "
-        "protocol=\"2.0\" server=\"prod\">"
-      "<daystart elapsed_days=\"2569\" elapsed_seconds=\"36478\"/>"
-      "$APPS"
+    "protocol=\"2.0\" server=\"prod\">"
+    "<daystart elapsed_days=\"2569\" elapsed_seconds=\"36478\"/>"
+    "$APPS"
     "</gupdate>";
 
 const char kAppNoUpdateTemplateJSON[] =
@@ -109,8 +111,9 @@ const char kAppIdHeader[] = "X-Goog-Update-AppId";
 
 bool GetAppIdsFromHeader(const HttpRequest::HeaderMap& headers,
                          std::vector<std::string>* ids) {
-  if (headers.count(kAppIdHeader) == 0)
+  if (headers.count(kAppIdHeader) == 0) {
     return false;
+  }
   base::StringTokenizer t(headers.at(kAppIdHeader), ",");
   while (t.GetNext()) {
     ids->push_back(t.token());
@@ -121,14 +124,28 @@ bool GetAppIdsFromHeader(const HttpRequest::HeaderMap& headers,
 bool GetAppIdsFromUpdateUrl(const GURL& update_url,
                             std::vector<std::string>* ids) {
   for (net::QueryIterator it(update_url); !it.IsAtEnd(); it.Advance()) {
-    if (it.GetKey() != "x")
+    if (it.GetKey() != "x") {
       continue;
+    }
     std::string id;
     net::GetValueForKeyInQuery(GURL("http://dummy?" + it.GetUnescapedValue()),
                                "id", &id);
     ids->push_back(id);
   }
   return !ids->empty();
+}
+
+// The detail request has an URL in form of
+// https://<domain>/chromeos/app_mode/webstore/inlineinstall/detail/<id>.
+// Returns std::nullopt if the `request_path` doesn't look like request for
+// extension details.
+std::optional<std::string> GetExtensionIdFromDetailRequest(
+    const std::string& request_path) {
+  size_t prefix_length = strlen(kDetailsURLPrefix);
+  if (request_path.substr(0, prefix_length) != kDetailsURLPrefix) {
+    return std::nullopt;
+  }
+  return request_path.substr(prefix_length);
 }
 
 // FakeCWS uses ScopedIgnoreContentVerifierForTest to disable extension
@@ -156,10 +173,10 @@ std::string ApplyHasUpdateTemplate(std::string app_id,
                                    std::string version,
                                    bool use_json,
                                    bool use_private_store) {
-  std::string update_check_content(
-      use_json ? kAppHasUpdateTemplateJSON
-               : use_private_store ? kPrivateStoreAppHasUpdateTemplate
-                                   : kAppHasUpdateTemplate);
+  std::string update_check_content(use_json ? kAppHasUpdateTemplateJSON
+                                   : use_private_store
+                                       ? kPrivateStoreAppHasUpdateTemplate
+                                       : kAppHasUpdateTemplate);
   base::ReplaceSubstringsAfterOffset(&update_check_content, 0, "$AppId",
                                      app_id);
   base::ReplaceSubstringsAfterOffset(&update_check_content, 0,
@@ -189,8 +206,9 @@ FakeCWS::~FakeCWS() {
   // situation, so we check that primary FakeCWS is not destroyed yet.
   DCHECK(g_is_fakecws_active);
 
-  if (scoped_ignore_content_verifier_)
+  if (scoped_ignore_content_verifier_) {
     g_is_fakecws_active = false;
+  }
 }
 
 void FakeCWS::Init(net::EmbeddedTestServer* embedded_test_server) {
@@ -244,6 +262,16 @@ void FakeCWS::SetNoUpdate(const std::string& app_id) {
       base::BindRepeating(&ApplyHasNoUpdateTemplate, app_id);
 }
 
+void FakeCWS::SetAppDetails(const std::string& app_id,
+                            std::string localized_name,
+                            std::string icon_url,
+                            std::string manifest_json) {
+  id_to_details_map_[app_id] =
+      AppDetails{.localized_name = std::move(localized_name),
+                 .icon_url = std::move(icon_url),
+                 .manifest_json = std::move(manifest_json)};
+}
+
 int FakeCWS::GetUpdateCheckCountAndReset() {
   int current_count = update_check_count_;
   update_check_count_ = 0;
@@ -286,15 +314,18 @@ bool FakeCWS::GetUpdateCheckContent(const std::vector<std::string>& ids,
   for (const std::string& id : ids) {
     std::string app_update_content;
     auto it = id_to_update_check_content_map_.find(id);
-    if (it == id_to_update_check_content_map_.end())
+    if (it == id_to_update_check_content_map_.end()) {
       return false;
-    if (need_comma)
+    }
+    if (need_comma) {
       apps_content.append(",");
+    }
     apps_content.append(it->second.Run(use_json, use_private_store_templates_));
     need_comma = use_json;
   }
-  if (apps_content.empty())
+  if (apps_content.empty()) {
     return false;
+  }
 
   *update_check_content =
       use_json ? kUpdateContentTemplateJSON : kUpdateContentTemplate;
@@ -320,11 +351,31 @@ std::unique_ptr<HttpResponse> FakeCWS::HandleRequest(
         std::unique_ptr<BasicHttpResponse> http_response(
             new BasicHttpResponse());
         http_response->set_code(net::HTTP_OK);
-        if (!use_json)
+        if (!use_json) {
           http_response->set_content_type("text/xml");
+        }
         http_response->set_content(update_check_content);
         return std::move(http_response);
       }
+    }
+  }
+
+  std::optional details_id = GetExtensionIdFromDetailRequest(request_path);
+  if (details_id) {
+    auto it = id_to_details_map_.find(*details_id);
+    if (it != id_to_details_map_.end()) {
+      std::string details =
+          base::WriteJson(base::Value::Dict()
+                              .Set("id", *details_id)
+                              .Set("icon_url", it->second.icon_url)
+                              .Set("localized_name", it->second.localized_name)
+                              .Set("manifest", it->second.manifest_json))
+              .value();
+      std::unique_ptr<BasicHttpResponse> http_response(new BasicHttpResponse());
+      http_response->set_code(net::HTTP_OK);
+      http_response->set_content_type("application/json");
+      http_response->set_content(details);
+      return std::move(http_response);
     }
   }
 

@@ -16,6 +16,27 @@
 
 namespace exclusive_access_bubble {
 
+namespace {
+
+// Helper function to categorize if the bubble type requires hold to exit.
+bool IsHoldRequiredToExit(ExclusiveAccessBubbleType type) {
+  switch (type) {
+    case EXCLUSIVE_ACCESS_BUBBLE_TYPE_KEYBOARD_LOCK_EXIT_INSTRUCTION:
+      return true;
+    case EXCLUSIVE_ACCESS_BUBBLE_TYPE_BROWSER_FULLSCREEN_EXIT_INSTRUCTION:
+    case EXCLUSIVE_ACCESS_BUBBLE_TYPE_EXTENSION_FULLSCREEN_EXIT_INSTRUCTION:
+    case EXCLUSIVE_ACCESS_BUBBLE_TYPE_FULLSCREEN_EXIT_INSTRUCTION:
+    case EXCLUSIVE_ACCESS_BUBBLE_TYPE_FULLSCREEN_MOUSELOCK_EXIT_INSTRUCTION:
+    case EXCLUSIVE_ACCESS_BUBBLE_TYPE_MOUSELOCK_EXIT_INSTRUCTION:
+    case EXCLUSIVE_ACCESS_BUBBLE_TYPE_NONE:
+      return false;
+  }
+  NOTREACHED();
+  return false;
+}
+
+}  // namespace
+
 std::u16string GetLabelTextForType(ExclusiveAccessBubbleType type,
                                    const GURL& url,
                                    extensions::ExtensionRegistry* registry) {
@@ -116,10 +137,18 @@ std::u16string GetInstructionTextForType(ExclusiveAccessBubbleType type,
                                          bool notify_download,
                                          bool notify_overridden) {
   if (notify_download) {
-    return notify_overridden
+    if (notify_overridden) {
+      return IsHoldRequiredToExit(type)
+                 ? l10n_util::GetStringFUTF16(
+                       IDS_FULLSCREEN_HOLD_TO_SEE_DOWNLOADS_AND_EXIT,
+                       accelerator)
+                 : l10n_util::GetStringFUTF16(
+                       IDS_FULLSCREEN_PRESS_TO_SEE_DOWNLOADS_AND_EXIT,
+                       accelerator);
+    }
+    return IsHoldRequiredToExit(type)
                ? l10n_util::GetStringFUTF16(
-                     IDS_FULLSCREEN_PRESS_TO_SEE_DOWNLOADS_AND_EXIT,
-                     accelerator)
+                     IDS_FULLSCREEN_HOLD_TO_SEE_DOWNLOADS, accelerator)
                : l10n_util::GetStringFUTF16(
                      IDS_FULLSCREEN_PRESS_TO_SEE_DOWNLOADS, accelerator);
   }

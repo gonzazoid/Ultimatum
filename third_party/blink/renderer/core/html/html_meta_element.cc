@@ -41,6 +41,8 @@
 #include "third_party/blink/renderer/core/loader/http_equiv.h"
 #include "third_party/blink/renderer/core/page/chrome_client.h"
 #include "third_party/blink/renderer/core/page/page.h"
+#include "third_party/blink/renderer/core/speculation_rules/document_speculation_rules.h"
+#include "third_party/blink/renderer/core/view_transition/view_transition_supplement.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/loader/fetch/client_hints_preferences.h"
 #include "third_party/blink/renderer/platform/weborigin/security_policy.h"
@@ -59,7 +61,8 @@ static bool IsInvalidSeparator(UChar c) {
   return c == ';';
 }
 
-// Though isspace() considers \t and \v to be whitespace, Win IE doesn't.
+// Though absl::ascii_isspace() considers \t and \v to be whitespace, Win IE
+// doesn't.
 static bool IsSeparator(UChar c) {
   return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '=' ||
          c == ',' || c == '\0';
@@ -402,9 +405,7 @@ void HTMLMetaElement::ProcessViewportKeyValuePair(
     }
   } else if (key_string == "shrink-to-fit") {
     // Ignore vendor-specific argument.
-  } else if (RuntimeEnabledFeatures::
-                 ViewportMetaInteractiveWidgetPropertyEnabled() &&
-             key_string == "interactive-widget") {
+  } else if (key_string == "interactive-widget") {
     absl::optional<ui::mojom::blink::VirtualKeyboardMode> resize_type =
         ParseVirtualKeyboardValueAsEnum(value_string);
 
@@ -542,6 +543,13 @@ void HTMLMetaElement::NameRemoved(const AtomicString& name_value) {
     GetDocument().ColorSchemeMetaChanged();
   } else if (EqualIgnoringASCIICase(name_value, "supports-reduced-motion")) {
     GetDocument().SupportsReducedMotionMetaChanged();
+  } else if (RuntimeEnabledFeatures::ViewTransitionOnNavigationEnabled() &&
+             EqualIgnoringASCIICase(name_value, "view-transition")) {
+    ViewTransitionSupplement::From(GetDocument())
+        ->OnMetaTagChanged(g_null_atom);
+  } else if (RuntimeEnabledFeatures::AppTitleEnabled() &&
+             EqualIgnoringASCIICase(name_value, "app-title")) {
+    GetDocument().UpdateAppTitle();
   }
 }
 
@@ -605,16 +613,56 @@ void HTMLMetaElement::ProcessHttpEquiv() {
                      InDocumentHead(this), is_sync_parser_, this);
 }
 
+// Open Graph Protocol Content Classification types used for logging.
+enum class ContentClassificationOpenGraph {
+  // These values are persisted to logs. Entries should not be renumbered and
+  // numeric values should never be reused.
+  kUnknown = 0,
+  kWebsite = 1,
+  kMusic = 2,
+  kVideo = 3,
+  kArticle = 4,
+  kBook = 5,
+  kProfile = 6,
+  kMaxValue = kProfile
+};
+
+ContentClassificationOpenGraph GetContentClassification(
+    const AtomicString& open_graph_type) {
+  const AtomicString lowercase_type(open_graph_type.LowerASCII());
+  if (lowercase_type.StartsWithIgnoringASCIICase("website")) {
+    return ContentClassificationOpenGraph::kWebsite;
+  } else if (lowercase_type.StartsWithIgnoringASCIICase("music")) {
+    return ContentClassificationOpenGraph::kMusic;
+  } else if (lowercase_type.StartsWithIgnoringASCIICase("video")) {
+    return ContentClassificationOpenGraph::kVideo;
+  } else if (lowercase_type.StartsWithIgnoringASCIICase("article")) {
+    return ContentClassificationOpenGraph::kArticle;
+  } else if (lowercase_type.StartsWithIgnoringASCIICase("book")) {
+    return ContentClassificationOpenGraph::kBook;
+  } else if (lowercase_type.StartsWithIgnoringASCIICase("profile")) {
+    return ContentClassificationOpenGraph::kProfile;
+  }
+  return ContentClassificationOpenGraph::kUnknown;
+}
+
 void HTMLMetaElement::ProcessContent() {
   if (!IsInDocumentTree())
     return;
 
+  const AtomicString& property_value =
+      FastGetAttribute(html_names::kPropertyAttr);
+  const AtomicString& content_value =
+      FastGetAttribute(html_names::kContentAttr);
+
+  if (EqualIgnoringASCIICase(property_value, "og:type")) {
+    UMA_HISTOGRAM_ENUMERATION("Content.Classification.OpenGraph",
+                              GetContentClassification(content_value));
+  }
+
   const AtomicString& name_value = FastGetAttribute(html_names::kNameAttr);
   if (name_value.empty())
     return;
-
-  const AtomicString& content_value =
-      FastGetAttribute(html_names::kContentAttr);
 
   if (EqualIgnoringASCIICase(name_value, "theme-color") &&
       GetDocument().GetFrame()) {
@@ -648,9 +696,18 @@ void HTMLMetaElement::ProcessContent() {
       UseCounter::Count(&GetDocument(),
                         WebFeature::kHTMLMetaElementReferrerPolicyOutsideHead);
     }
-
+    network::mojom::ReferrerPolicy old_referrer_policy =
+        GetExecutionContext()->GetReferrerPolicy();
     GetExecutionContext()->ParseAndSetReferrerPolicy(content_value,
                                                      kPolicySourceMetaTag);
+    network::mojom::ReferrerPolicy new_referrer_policy =
+        GetExecutionContext()->GetReferrerPolicy();
+    if (old_referrer_policy != new_referrer_policy) {
+      if (auto* document_rules =
+              DocumentSpeculationRules::FromIfExists(GetDocument())) {
+        document_rules->DocumentReferrerPolicyChanged();
+      }
+    }
   } else if (EqualIgnoringASCIICase(name_value, "handheldfriendly") &&
              EqualIgnoringASCIICase(content_value, "true")) {
     ProcessViewportContentAttribute("width=device-width",
@@ -666,6 +723,13 @@ void HTMLMetaElement::ProcessContent() {
       UseCounter::Count(&GetDocument(),
                         WebFeature::kHTMLMetaElementMonetization);
     }
+  } else if (RuntimeEnabledFeatures::ViewTransitionOnNavigationEnabled() &&
+             EqualIgnoringASCIICase(name_value, "view-transition")) {
+    ViewTransitionSupplement::From(GetDocument())
+        ->OnMetaTagChanged(content_value);
+  } else if (RuntimeEnabledFeatures::AppTitleEnabled() &&
+             EqualIgnoringASCIICase(name_value, "app-title")) {
+    GetDocument().UpdateAppTitle();
   }
 }
 
@@ -705,7 +769,8 @@ const AtomicString& HTMLMetaElement::Itemprop() const {
 void HTMLMetaElement::ProcessMetaCH(Document& document,
                                     const AtomicString& content,
                                     network::MetaCHType type,
-                                    bool is_doc_preloader_or_sync_parser) {
+                                    bool is_doc_preloader,
+                                    bool is_sync_parser) {
   switch (type) {
     case network::MetaCHType::HttpEquivAcceptCH:
       if (!RuntimeEnabledFeatures::ClientHintsMetaHTTPEquivAcceptCHEnabled())
@@ -744,7 +809,7 @@ void HTMLMetaElement::ProcessMetaCH(Document& document,
   FrameClientHintsPreferencesContext hints_context(frame);
   UpdateWindowPermissionsPolicyWithDelegationSupportForClientHints(
       frame->GetClientHintsPreferences(), document.domWindow(), content,
-      document.Url(), &hints_context, type, is_doc_preloader_or_sync_parser);
+      document.Url(), &hints_context, type, is_doc_preloader, is_sync_parser);
 }
 
 void HTMLMetaElement::FinishParsingChildren() {

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,13 +22,13 @@ class DawnAHardwareBufferImageRepresentation : public DawnImageRepresentation {
       SharedImageManager* manager,
       AndroidImageBacking* backing,
       MemoryTypeTracker* tracker,
-      WGPUDevice device,
-      WGPUTextureFormat format,
-      AHardwareBuffer* buffer,
-      scoped_refptr<base::RefCountedData<DawnProcTable>> dawn_procs);
+      wgpu::Device device,
+      wgpu::TextureFormat format,
+      std::vector<wgpu::TextureFormat> view_formats,
+      AHardwareBuffer* buffer);
   ~DawnAHardwareBufferImageRepresentation() override;
 
-  WGPUTexture BeginAccess(WGPUTextureUsage usage) override;
+  wgpu::Texture BeginAccess(wgpu::TextureUsage usage) override;
   void EndAccess() override;
 
  private:
@@ -37,10 +37,10 @@ class DawnAHardwareBufferImageRepresentation : public DawnImageRepresentation {
   }
 
   base::android::ScopedHardwareBufferHandle handle_;
-  WGPUTexture texture_ = nullptr;
-  WGPUDevice device_;
-  WGPUTextureFormat format_;
-  scoped_refptr<base::RefCountedData<DawnProcTable>> dawn_procs_;
+  wgpu::Texture texture_;
+  wgpu::Device device_;
+  wgpu::TextureFormat format_;
+  std::vector<wgpu::TextureFormat> view_formats_;
 };
 
 }  // namespace gpu

@@ -5,6 +5,8 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_MODULES_WEBGPU_GPU_DEVICE_H_
 #define THIRD_PARTY_BLINK_RENDERER_MODULES_WEBGPU_GPU_DEVICE_H_
 
+#include <bitset>
+
 #include "base/memory/scoped_refptr.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise_property.h"
@@ -18,8 +20,7 @@
 namespace blink {
 
 class ExecutionContext;
-class HTMLCanvasElement;
-class GPUAdapter;
+class ExternalTextureCache;
 class GPUAdapter;
 class GPUBuffer;
 class GPUBufferDescriptor;
@@ -55,7 +56,18 @@ class GPUTextureDescriptor;
 class ScriptPromiseResolver;
 class ScriptState;
 class V8GPUErrorFilter;
-class GPUDevice final : public EventTargetWithInlineData,
+
+// Singleton warnings are messages that can only be raised once per device. They
+// should be used for warnings of behavior that is not invalid but may have
+// performance issues or side effects that the developer may overlook since a
+// regular warning is not raised.
+enum class GPUSingletonWarning {
+  kNonPreferredFormat,
+  kDepthKey,
+  kCount,  // Must be last
+};
+
+class GPUDevice final : public EventTarget,
                         public ExecutionContextClient,
                         public DawnObject<WGPUDevice> {
   DEFINE_WRAPPERTYPEINFO();
@@ -66,7 +78,8 @@ class GPUDevice final : public EventTargetWithInlineData,
                      scoped_refptr<DawnControlClientHolder> dawn_control_client,
                      GPUAdapter* adapter,
                      WGPUDevice dawn_device,
-                     const GPUDeviceDescriptor* descriptor);
+                     const GPUDeviceDescriptor* descriptor,
+                     GPUDeviceLostInfo* lost_info = nullptr);
 
   GPUDevice(const GPUDevice&) = delete;
   GPUDevice& operator=(const GPUDevice&) = delete;
@@ -78,20 +91,20 @@ class GPUDevice final : public EventTargetWithInlineData,
   // gpu_device.idl
   GPUAdapter* adapter() const;
   GPUSupportedFeatures* features() const;
-  GPUSupportedLimits* limits() const { return limits_; }
+  GPUSupportedLimits* limits() const { return limits_.Get(); }
   ScriptPromise lost(ScriptState* script_state);
 
   GPUQueue* queue();
+  bool destroyed() const;
 
-  void destroy(ScriptState* script_state);
+  void destroy(v8::Isolate* isolate);
 
-  GPUBuffer* createBuffer(const GPUBufferDescriptor* descriptor);
+  GPUBuffer* createBuffer(const GPUBufferDescriptor* descriptor,
+                          ExceptionState& exception_state);
   GPUTexture* createTexture(const GPUTextureDescriptor* descriptor,
                             ExceptionState& exception_state);
-  GPUTexture* experimentalImportTexture(HTMLCanvasElement* canvas,
-                                        unsigned int usage_flags,
-                                        ExceptionState& exception_state);
   GPUSampler* createSampler(const GPUSamplerDescriptor* descriptor);
+
   GPUExternalTexture* importExternalTexture(
       const GPUExternalTextureDescriptor* descriptor,
       ExceptionState& exception_state);
@@ -139,10 +152,9 @@ class GPUDevice final : public EventTargetWithInlineData,
   ExecutionContext* GetExecutionContext() const override;
 
   void InjectError(WGPUErrorType type, const char* message);
+  void AddConsoleWarning(const String& message);
   void AddConsoleWarning(const char* message);
-
-  void AddActiveExternalTexture(GPUExternalTexture* external_texture);
-  void RemoveActiveExternalTexture(GPUExternalTexture* external_texture);
+  void AddSingletonWarning(GPUSingletonWarning type);
 
   void TrackTextureWithMailbox(GPUTexture* texture);
   void UntrackTextureWithMailbox(GPUTexture* texture);
@@ -164,10 +176,8 @@ class GPUDevice final : public EventTargetWithInlineData,
 
   // Used by USING_PRE_FINALIZER.
   void Dispose();
-
-  void DestroyAllExternalTextures();
   void DissociateMailboxes();
-  void UnmapAllMappableBuffers(ScriptState* script_state);
+  void UnmapAllMappableBuffers(v8::Isolate* isolate);
 
   void OnUncapturedError(WGPUErrorType errorType, const char* message);
   void OnLogging(WGPULoggingType loggingType, const char* message);
@@ -177,11 +187,13 @@ class GPUDevice final : public EventTargetWithInlineData,
                                WGPUErrorType type,
                                const char* message);
 
-  void OnCreateRenderPipelineAsyncCallback(ScriptPromiseResolver* resolver,
+  void OnCreateRenderPipelineAsyncCallback(absl::optional<String> label,
+                                           ScriptPromiseResolver* resolver,
                                            WGPUCreatePipelineAsyncStatus status,
                                            WGPURenderPipeline render_pipeline,
                                            const char* message);
   void OnCreateComputePipelineAsyncCallback(
+      absl::optional<String> label,
       ScriptPromiseResolver* resolver,
       WGPUCreatePipelineAsyncStatus status,
       WGPUComputePipeline compute_pipeline,
@@ -212,14 +224,15 @@ class GPUDevice final : public EventTargetWithInlineData,
   static constexpr int kMaxAllowedConsoleWarnings = 500;
   int allowed_console_warnings_remaining_ = kMaxAllowedConsoleWarnings;
 
-  // Keep a list of all active GPUExternalTexture. Eagerly destroy them
-  // when the device is destroyed (via .destroy) to free the memory.
-  HeapHashSet<WeakMember<GPUExternalTexture>> active_external_textures_;
-
   // Textures with mailboxes that should be dissociated before device.destroy().
   HeapHashSet<WeakMember<GPUTexture>> textures_with_mailbox_;
 
   HeapHashSet<WeakMember<GPUBuffer>> mappable_buffers_;
+
+  Member<ExternalTextureCache> external_texture_cache_;
+
+  std::bitset<static_cast<size_t>(GPUSingletonWarning::kCount)>
+      singleton_warning_fired_;
 
   // This attribute records that whether GPUDevice is destroyed (via destroy()).
   bool destroyed_ = false;

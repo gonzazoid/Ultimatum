@@ -12,8 +12,8 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/compiler_specific.h"
+#include "base/functional/bind.h"
 #include "base/values.h"
 #include "chrome/browser/safe_browsing/incident_reporting/incident.h"
 #include "chrome/browser/safe_browsing/incident_reporting/mock_incident_receiver.h"
@@ -152,17 +152,17 @@ class PreferenceValidationDelegateValues
         return Value(0.47);
       case Value::Type::STRING:
         return Value("i have a spleen");
-      case Value::Type::DICTIONARY: {
-        Value value(base::Value::Type::DICTIONARY);
-        value.SetKey("twenty-two", Value(22));
-        value.SetKey("forty-seven", Value(47));
-        return value;
+      case Value::Type::DICT: {
+        Value::Dict dict;
+        dict.Set("twenty-two", 22);
+        dict.Set("forty-seven", 47);
+        return base::Value(std::move(dict));
       }
       case Value::Type::LIST: {
-        Value value(base::Value::Type::LIST);
-        value.Append(22);
-        value.Append(47);
-        return value;
+        Value::List list;
+        list.Append(22);
+        list.Append(47);
+        return base::Value(std::move(list));
       }
       default:
         ADD_FAILURE() << "unsupported value type " << value_type;
@@ -207,7 +207,7 @@ INSTANTIATE_TEST_SUITE_P(
         std::make_tuple(base::Value::Type::STRING,
                         const_cast<char*>("i have a spleen")),
         std::make_tuple(
-            base::Value::Type::DICTIONARY,
+            base::Value::Type::DICT,
             const_cast<char*>("{\"forty-seven\":47,\"twenty-two\":22}")),
         std::make_tuple(base::Value::Type::LIST,
                         const_cast<char*>("[22,47]"))));

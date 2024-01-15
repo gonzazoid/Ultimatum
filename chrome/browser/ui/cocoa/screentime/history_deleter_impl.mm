@@ -4,13 +4,13 @@
 
 #include "chrome/browser/ui/cocoa/screentime/history_deleter_impl.h"
 
-#include "base/mac/foundation_util.h"
+#import <ScreenTime/ScreenTime.h>
+
+#include "base/apple/foundation_util.h"
 #include "base/memory/ptr_util.h"
 #include "base/notreached.h"
 #include "base/strings/sys_string_conversions.h"
 #include "net/base/mac/url_conversions.h"
-
-#import <ScreenTime/ScreenTime.h>
 
 namespace screentime {
 
@@ -33,10 +33,10 @@ void HistoryDeleterImpl::DeleteAllHistory() {
 void HistoryDeleterImpl::DeleteHistoryDuringInterval(
     const TimeInterval& interval) {
   if (@available(macOS 12.1, *)) {
-    base::scoped_nsobject<NSDateInterval> nsinterval([[NSDateInterval alloc]
-        initWithStartDate:interval.first.ToNSDate()
-                  endDate:interval.second.ToNSDate()]);
-    [platform_deleter_ deleteHistoryDuringInterval:nsinterval.get()];
+    NSDateInterval* nsinterval =
+        [[NSDateInterval alloc] initWithStartDate:interval.first.ToNSDate()
+                                          endDate:interval.second.ToNSDate()];
+    [platform_deleter_ deleteHistoryDuringInterval:nsinterval];
   } else {
     NOTIMPLEMENTED();
   }
@@ -53,9 +53,9 @@ void HistoryDeleterImpl::DeleteHistoryForURL(const GURL& url) {
 HistoryDeleterImpl::HistoryDeleterImpl() {
   if (@available(macOS 12.1, *)) {
     NSError* error = nil;
-    NSString* bundle_id = base::SysUTF8ToNSString(base::mac::BaseBundleID());
-    platform_deleter_.reset(
-        [[STWebHistory alloc] initWithBundleIdentifier:bundle_id error:&error]);
+    NSString* bundle_id = base::SysUTF8ToNSString(base::apple::BaseBundleID());
+    platform_deleter_ = [[STWebHistory alloc] initWithBundleIdentifier:bundle_id
+                                                                 error:&error];
     DCHECK(!error);
   } else {
     NOTIMPLEMENTED();

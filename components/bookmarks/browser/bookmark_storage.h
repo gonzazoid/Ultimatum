@@ -7,9 +7,9 @@
 
 #include <stdint.h>
 
-#include "base/callback_forward.h"
 #include "base/files/file_path.h"
 #include "base/files/important_file_writer.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/scoped_refptr.h"
@@ -60,6 +60,9 @@ class BookmarkStorage
   // Returns whether there is still a pending write.
   bool HasScheduledSaveForTesting() const;
 
+  // If there is a pending write, performs it immediately.
+  void SaveNowIfScheduledForTesting();
+
  private:
   // The state of the bookmark file backup. We lazily backup this file in order
   // to reduce disk writes until absolutely necessary. Will also leave the
@@ -73,10 +76,6 @@ class BookmarkStorage
     // The bookmarks file has been backed up (or at least attempted).
     BACKUP_ATTEMPTED
   };
-
-  // Serializes the data and schedules save using ImportantFileWriter.
-  // Returns true on successful serialization.
-  bool SaveNow();
 
   // The model. The model is NULL once BookmarkModelDeleted has been invoked.
   raw_ptr<BookmarkModel> model_;

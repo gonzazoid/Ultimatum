@@ -69,6 +69,9 @@ void CastMediaSessionController::Send(
     case media_session::mojom::MediaSessionAction::kHangUp:
     case media_session::mojom::MediaSessionAction::kRaise:
     case media_session::mojom::MediaSessionAction::kSetMute:
+    case media_session::mojom::MediaSessionAction::kPreviousSlide:
+    case media_session::mojom::MediaSessionAction::kNextSlide:
+    case media_session::mojom::MediaSessionAction::kEnterAutoPictureInPicture:
       NOTREACHED();
       return;
   }

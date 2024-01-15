@@ -13,7 +13,9 @@
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
+#include "base/task/sequenced_task_runner.h"
 #include "components/download/public/background_service/download_params.h"
+#include "components/optimization_guide/core/prediction_model_store.h"
 #include "components/optimization_guide/proto/models.pb.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
@@ -36,6 +38,11 @@ extern const char kPredictionModelOptimizationTargetCustomDataKey[];
 // Keep in sync with OptimizationGuidePredictionModelDownloadState in enums.xml.
 class PredictionModelDownloadManager {
  public:
+  // Callback to get the directory to download models.
+  using GetBaseModelDirForDownloadCallback =
+      base::RepeatingCallback<base::FilePath(
+          proto::OptimizationTarget optimization_target)>;
+
   // The different states a predition model download goes through.
   enum class PredictionModelDownloadState {
     kUnknown = 0,
@@ -50,7 +57,8 @@ class PredictionModelDownloadManager {
 
   PredictionModelDownloadManager(
       download::BackgroundDownloadService* download_service,
-      const base::FilePath& models_dir_path,
+      GetBaseModelDirForDownloadCallback
+          get_base_model_dir_for_download_callback,
       scoped_refptr<base::SequencedTaskRunner> background_task_runner);
   virtual ~PredictionModelDownloadManager();
   PredictionModelDownloadManager(const PredictionModelDownloadManager&) =
@@ -62,13 +70,14 @@ class PredictionModelDownloadManager {
   virtual void StartDownload(const GURL& download_url,
                              proto::OptimizationTarget optimization_target);
 
-  // Verifies the download came from a trusted source and process the downloaded
-  // contents. Returns a pair of file paths of the form (src, dst) if
-  // |file_path| is successfully verified.
+  // Verifies the |download_file_path| came from a trusted source and process
+  // the downloaded contents. After verification, creates |base_model_dir|.
+  // Returns true on success.
   //
   // Must be called on a background thread, as it performs file I/O.
-  static absl::optional<std::pair<base::FilePath, base::FilePath>>
-  VerifyDownload(const base::FilePath& file_path, bool delete_file_on_error);
+  static bool VerifyDownload(const base::FilePath& download_file_path,
+                             const base::FilePath& base_model_dir,
+                             bool delete_file_on_error);
 
   // Cancels all pending downloads.
   virtual void CancelAllPendingDownloads();
@@ -113,7 +122,7 @@ class PredictionModelDownloadManager {
   void OnDownloadSucceeded(
       absl::optional<proto::OptimizationTarget> optimization_target,
       const std::string& downloaded_guid,
-      const base::FilePath& file_path);
+      const base::FilePath& download_file_path);
 
   // Invoked when the download as specified by |failed_download_guid| failed
   // for |optimization_target|.
@@ -121,35 +130,33 @@ class PredictionModelDownloadManager {
       absl::optional<proto::OptimizationTarget> optimization_target,
       const std::string& failed_download_guid);
 
-  // Starts unzipping the contents of |unzip_paths|, if present. |unzip_paths|
-  // is a pair of the form (src, dst), if present.
-  void StartUnzipping(
-      absl::optional<proto::OptimizationTarget> optimization_target,
-      const absl::optional<std::pair<base::FilePath, base::FilePath>>&
-          unzip_paths);
+  // Starts unzipping the contents of |download_file_path|, to |base_model_dir|,
+  // when the previous step |is_verify_success| is true.
+  void StartUnzipping(proto::OptimizationTarget optimization_target,
+                      const base::FilePath& download_file_path,
+                      const base::FilePath& base_model_dir,
+                      bool is_verify_success);
 
   // Invoked when the contents of |original_file_path| have been unzipped to
-  // |unzipped_dir_path|.
-  void OnDownloadUnzipped(
-      absl::optional<proto::OptimizationTarget> optimization_target,
-      const base::FilePath& original_file_path,
-      const base::FilePath& unzipped_dir_path,
-      bool success);
+  // |base_model_dir|.
+  void OnDownloadUnzipped(proto::OptimizationTarget optimization_target,
+                          const base::FilePath& original_file_path,
+                          const base::FilePath& base_model_dir,
+                          bool success);
 
-  // Processes the contents in |unzipped_dir_path|.
+  // Processes the contents in |base_model_dir|.
   //
   // Must be called on the background thread, as it performs file I/O. This is a
   // stateless func to avoid needing weird lifetime stuff.
   static absl::optional<proto::PredictionModel> ProcessUnzippedContents(
-      const base::FilePath& model_dir_path,
-      const base::FilePath& unzipped_dir_path);
+      const base::FilePath& base_model_dir);
 
   // Notifies |observers_| that a model is ready for |optimization_target|.
   //
   // Must be invoked on the UI thread.
-  void NotifyModelReady(
-      absl::optional<proto::OptimizationTarget> optimization_target,
-      const absl::optional<proto::PredictionModel>& model);
+  void NotifyModelReady(proto::OptimizationTarget optimization_target,
+                        const base::FilePath& base_model_dir,
+                        const absl::optional<proto::PredictionModel>& model);
 
   // Notifies |observers_| that a model download failed for
   // |optimization_target|.
@@ -175,8 +182,8 @@ class PredictionModelDownloadManager {
   // Whether the download should be verified. Should only be false for testing.
   bool should_verify_download_ = true;
 
-  // The path to the dir containing models.
-  base::FilePath models_dir_path_;
+  // Callback to get the directory to download models.
+  GetBaseModelDirForDownloadCallback get_base_model_dir_for_download_callback_;
 
   // Background thread where download file processing should be performed.
   scoped_refptr<base::SequencedTaskRunner> background_task_runner_;

@@ -4,7 +4,7 @@
 
 #include "chrome/browser/extensions/forced_extensions/force_installed_tracker.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/observer_list.h"
 #include "base/values.h"
 #include "build/chromeos_buildflags.h"
@@ -149,11 +149,10 @@ void ForceInstalledTracker::OnForcedExtensionsPrefReady() {
   // Add each extension to |extensions_|.
   for (auto entry : value) {
     const ExtensionId& extension_id = entry.first;
-    const std::string* update_url = nullptr;
-    if (entry.second.is_dict()) {
-      update_url =
-          entry.second.FindStringKey(ExternalProviderImpl::kExternalUpdateUrl);
-    }
+    const std::string* update_url =
+        entry.second.is_dict() ? entry.second.GetDict().FindString(
+                                     ExternalProviderImpl::kExternalUpdateUrl)
+                               : nullptr;
     bool is_from_store =
         update_url && *update_url == extension_urls::kChromeWebstoreUpdateURL;
 

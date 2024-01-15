@@ -4,6 +4,8 @@
 
 #include "chrome/browser/ash/crosapi/environment_provider.h"
 
+#include <optional>
+
 #include "base/files/file_util.h"
 #include "base/path_service.h"
 #include "base/system/sys_info.h"
@@ -11,10 +13,10 @@
 #include "chrome/browser/ash/file_manager/path_util.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/profiles/profiles_state.h"
 #include "chrome/browser/web_applications/preinstalled_web_app_config_utils.h"
 #include "chromeos/ash/components/dbus/cros_disks/cros_disks_client.h"
 #include "chromeos/ash/components/install_attributes/install_attributes.h"
+#include "chromeos/components/mgs/managed_guest_session_utils.h"
 #include "chromeos/crosapi/mojom/crosapi.mojom.h"
 #include "chromeos/crosapi/mojom/policy_namespace.mojom.h"
 #include "components/account_id/account_id.h"
@@ -24,7 +26,6 @@
 #include "components/user_manager/user_manager.h"
 #include "components/user_manager/user_type.h"
 #include "crypto/nss_util_internal.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace crosapi {
 
@@ -39,7 +40,7 @@ mojom::SessionType EnvironmentProvider::GetSessionType() {
   if (profile->IsGuestSession()) {
     return mojom::SessionType::kGuestSession;
   }
-  if (profiles::IsPublicSession()) {
+  if (chromeos::IsManagedGuestSession()) {
     return mojom::SessionType::kPublicSession;
   }
   if (user->GetType() == user_manager::USER_TYPE_WEB_KIOSK_APP) {
@@ -67,8 +68,6 @@ mojom::DeviceMode EnvironmentProvider::GetDeviceMode() {
       return mojom::DeviceMode::kConsumer;
     case policy::DEVICE_MODE_ENTERPRISE:
       return mojom::DeviceMode::kEnterprise;
-    case policy::DEVICE_MODE_ENTERPRISE_AD:
-      return mojom::DeviceMode::kEnterpriseActiveDirectory;
     case policy::DEPRECATED_DEVICE_MODE_LEGACY_RETAIL_MODE:
       return mojom::DeviceMode::kLegacyRetailMode;
     case policy::DEVICE_MODE_CONSUMER_KIOSK_AUTOLAUNCH:
@@ -139,43 +138,29 @@ mojom::DefaultPathsPtr EnvironmentProvider::GetDefaultPaths() {
   return default_paths;
 }
 
-std::string EnvironmentProvider::GetDeviceAccountGaiaId() {
-  const user_manager::User* const user =
-      user_manager::UserManager::Get()->GetPrimaryUser();
-  if (!user)
-    return std::string();
-
-  const AccountId& account_id = user->GetAccountId();
-  if (account_id.GetAccountType() != AccountType::GOOGLE)
-    return std::string();
-
-  DCHECK(!account_id.GetGaiaId().empty());
-  return account_id.GetGaiaId();
-}
-
-absl::optional<account_manager::Account>
+std::optional<account_manager::Account>
 EnvironmentProvider::GetDeviceAccount() {
   // Lacros doesn't support Multi-Login. Get the Primary User.
   const user_manager::User* user =
       user_manager::UserManager::Get()->GetPrimaryUser();
   if (!user)
-    return absl::nullopt;
+    return std::nullopt;
 
   const AccountId& account_id = user->GetAccountId();
   switch (account_id.GetAccountType()) {
     case AccountType::ACTIVE_DIRECTORY:
-      return absl::make_optional(account_manager::Account{
+      return std::make_optional(account_manager::Account{
           account_manager::AccountKey{
               account_id.GetObjGuid(),
               account_manager::AccountType::kActiveDirectory},
           user->GetDisplayEmail()});
     case AccountType::GOOGLE:
-      return absl::make_optional(account_manager::Account{
+      return std::make_optional(account_manager::Account{
           account_manager::AccountKey{account_id.GetGaiaId(),
                                       account_manager::AccountType::kGaia},
           user->GetDisplayEmail()});
     case AccountType::UNKNOWN:
-      return absl::nullopt;
+      return std::nullopt;
   }
 }
 

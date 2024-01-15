@@ -5,6 +5,7 @@
 #ifndef UI_VIEWS_INTERACTION_INTERACTION_TEST_UTIL_VIEWS_H_
 #define UI_VIEWS_INTERACTION_INTERACTION_TEST_UTIL_VIEWS_H_
 
+#include <string>
 #include "ui/base/interaction/element_tracker.h"
 #include "ui/base/interaction/interaction_test_util.h"
 
@@ -15,6 +16,7 @@ class TrackedElement;
 namespace views {
 class Button;
 class View;
+class Widget;
 }
 
 namespace views::test {
@@ -28,14 +30,28 @@ class InteractionTestUtilSimulatorViews
   ~InteractionTestUtilSimulatorViews() override;
 
   // ui::test::InteractionTestUtil::Simulator:
-  bool PressButton(ui::TrackedElement* element, InputType input_type) override;
-  bool SelectMenuItem(ui::TrackedElement* element,
-                      InputType input_type) override;
-  bool DoDefaultAction(ui::TrackedElement* element,
-                       InputType input_type) override;
-  bool SelectTab(ui::TrackedElement* tab_collection,
-                 size_t index,
-                 InputType input_type) override;
+  ui::test::ActionResult PressButton(ui::TrackedElement* element,
+                                     InputType input_type) override;
+  ui::test::ActionResult SelectMenuItem(ui::TrackedElement* element,
+                                        InputType input_type) override;
+  ui::test::ActionResult DoDefaultAction(ui::TrackedElement* element,
+                                         InputType input_type) override;
+  ui::test::ActionResult SelectTab(ui::TrackedElement* tab_collection,
+                                   size_t index,
+                                   InputType input_type) override;
+  ui::test::ActionResult SelectDropdownItem(ui::TrackedElement* dropdown,
+                                            size_t index,
+                                            InputType input_type) override;
+  ui::test::ActionResult EnterText(ui::TrackedElement* element,
+                                   std::u16string text,
+                                   TextEntryMode mode) override;
+  ui::test::ActionResult ActivateSurface(ui::TrackedElement* element) override;
+  ui::test::ActionResult SendAccelerator(ui::TrackedElement* element,
+                                         ui::Accelerator accelerator) override;
+  ui::test::ActionResult Confirm(ui::TrackedElement* element) override;
+
+  // Common functionality for activating a widget.
+  static ui::test::ActionResult ActivateWidget(Widget* widget);
 
   // Convenience method for tests that need to simulate a button press and have
   // direct access to the button.
@@ -43,7 +59,7 @@ class InteractionTestUtilSimulatorViews
                           InputType input_type = InputType::kDontCare);
 
   // As above, but for non-button Views.
-  static void DoDefaultAction(View* view,
+  static bool DoDefaultAction(View* view,
                               InputType input_type = InputType::kDontCare);
 };
 

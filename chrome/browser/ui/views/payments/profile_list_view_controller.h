@@ -8,6 +8,7 @@
 #include <memory>
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/ui/views/payments/payment_request_item_list.h"
 #include "chrome/browser/ui/views/payments/payment_request_sheet_controller.h"
@@ -82,7 +83,8 @@ class ProfileListViewController : public PaymentRequestSheetController {
 
   // Returns the profiles cached by |request| which are appropriate for display
   // in this context.
-  virtual std::vector<autofill::AutofillProfile*> GetProfiles() = 0;
+  virtual std::vector<raw_ptr<autofill::AutofillProfile, VectorExperimental>>
+  GetProfiles() = 0;
 
   virtual DialogViewID GetDialogViewId() = 0;
 
@@ -96,11 +98,15 @@ class ProfileListViewController : public PaymentRequestSheetController {
   bool ShouldShowPrimaryButton() override;
   ButtonCallback GetSecondaryButtonCallback() override;
   void FillContentView(views::View* content_view) override;
+  base::WeakPtr<PaymentRequestSheetController> GetWeakPtr() override;
 
  private:
+  void OnCreateNewProfileButtonClicked(const ui::Event& event);
+
   std::unique_ptr<views::Button> CreateRow(autofill::AutofillProfile* profile);
   PaymentRequestItemList list_;
 
+  // Must be the last member of a leaf class.
   base::WeakPtrFactory<ProfileListViewController> weak_ptr_factory_{this};
 };
 

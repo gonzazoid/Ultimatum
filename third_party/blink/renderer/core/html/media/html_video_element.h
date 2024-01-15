@@ -92,6 +92,7 @@ class CORE_EXPORT HTMLVideoElement final
                          const cc::PaintFlags* paint_flags) const;
 
   bool HasAvailableVideoFrame() const;
+  bool HasReadableVideoFrame() const;
 
   void OnFirstFrame(base::TimeTicks frame_time,
                     size_t bytes_to_first_frame) final;
@@ -104,14 +105,17 @@ class CORE_EXPORT HTMLVideoElement final
   bool IsDefaultPosterImageURL() const;
 
   // Helper for GetSourceImageForCanvas() and other external callers who want a
-  // StaticBitmapImage of the current VideoFrame. If |allow_accelerated_images|
+  // StaticBitmapImage of the current VideoFrame. If `allow_accelerated_images`
   // is set to false a software backed CanvasResourceProvider will be used to
-  // produce the StaticBitmapImage.
+  // produce the StaticBitmapImage. If `size` is specified, the image will be
+  // scaled to it, otherwise the image will be in its natural size.
   scoped_refptr<StaticBitmapImage> CreateStaticBitmapImage(
-      bool allow_accelerated_images = true);
+      bool allow_accelerated_images = true,
+      absl::optional<gfx::Size> size = absl::nullopt);
 
   // CanvasImageSource implementation
   scoped_refptr<Image> GetSourceImageForCanvas(
+      FlushReason,
       SourceImageStatus*,
       const gfx::SizeF&,
       const AlphaDisposition alpha_disposition = kPremultiplyAlpha) override;
@@ -157,7 +161,7 @@ class CORE_EXPORT HTMLVideoElement final
 
   bool IsRichlyEditableForAccessibility() const override { return false; }
 
-  VideoWakeLock* wake_lock_for_tests() const { return wake_lock_; }
+  VideoWakeLock* wake_lock_for_tests() const { return wake_lock_.Get(); }
 
  protected:
   // EventTarget overrides.
@@ -178,8 +182,8 @@ class CORE_EXPORT HTMLVideoElement final
   // ExecutionContextLifecycleStateObserver functions.
   void ContextDestroyed() final;
 
-  bool LayoutObjectIsNeeded(const ComputedStyle&) const override;
-  LayoutObject* CreateLayoutObject(const ComputedStyle&, LegacyLayout) override;
+  bool LayoutObjectIsNeeded(const DisplayStyle&) const override;
+  LayoutObject* CreateLayoutObject(const ComputedStyle&) override;
   void AttachLayoutTree(AttachContext&) override;
   void UpdatePosterImage();
   void ParseAttribute(const AttributeModificationParams&) override;
@@ -198,7 +202,7 @@ class CORE_EXPORT HTMLVideoElement final
   // Video-specific overrides for part of the media::mojom::MediaPlayer
   // interface, fully implemented in the parent class HTMLMediaElement.
   void RequestEnterPictureInPicture() final;
-  void RequestExitPictureInPicture() final;
+  void RequestMediaRemoting() final;
 
   void DidMoveToNewDocument(Document& old_document) override;
 

@@ -9,6 +9,7 @@
 #include <utility>
 
 #include "base/run_loop.h"
+#include "base/test/values_test_util.h"
 #include "base/values.h"
 #include "content/public/test/browser_task_environment.h"
 #include "extensions/browser/api/declarative/rules_registry_service.h"
@@ -26,14 +27,12 @@ const int key = extensions::RulesRegistryService::kDefaultRulesRegistryID;
 
 namespace extensions {
 
-using api_test_utils::ParseDictionary;
-
 TEST(RulesRegistryTest, FillOptionalIdentifiers) {
   content::BrowserTaskEnvironment task_environment;
 
   std::string error;
   scoped_refptr<RulesRegistry> registry =
-      new TestRulesRegistry(content::BrowserThread::UI, "" /*event_name*/, key);
+      new TestRulesRegistry("" /*event_name*/, key);
 
   // Add rules and check that their identifiers are filled and unique.
 
@@ -155,7 +154,7 @@ TEST(RulesRegistryTest, FillOptionalPriority) {
 
   std::string error;
   scoped_refptr<RulesRegistry> registry =
-      new TestRulesRegistry(content::BrowserThread::UI, "" /*event_name*/, key);
+      new TestRulesRegistry("" /*event_name*/, key);
 
   // Add rules and check that their priorities are filled if they are empty.
 
@@ -192,7 +191,7 @@ TEST(RulesRegistryTest, TwoRulesInManifest) {
   content::BrowserTaskEnvironment task_environment;
 
   // Create extension
-  std::unique_ptr<base::DictionaryValue> manifest = ParseDictionary(
+  base::Value::Dict manifest = base::test::ParseJsonDict(
       "{"
       "  \"name\": \"Test\","
       "  \"version\": \"1\","
@@ -229,8 +228,8 @@ TEST(RulesRegistryTest, TwoRulesInManifest) {
           .SetID(kExtensionId)
           .Build();
 
-  scoped_refptr<RulesRegistry> registry = new TestRulesRegistry(
-      content::BrowserThread::UI, "declarativeContent.onPageChanged", key);
+  scoped_refptr<RulesRegistry> registry =
+      new TestRulesRegistry("declarativeContent.onPageChanged", key);
   // Simulate what RulesRegistryService would do on extension load.
   registry->OnExtensionLoaded(extension.get());
 
@@ -238,7 +237,7 @@ TEST(RulesRegistryTest, TwoRulesInManifest) {
   registry->GetAllRules(kExtensionId, &get_rules);
 
   ASSERT_EQ(2u, get_rules.size());
-  std::unique_ptr<base::DictionaryValue> expected_rule_0 = ParseDictionary(
+  base::Value::Dict expected_rule_0 = base::test::ParseJsonDict(
       "{"
       "  \"id\": \"000\","
       "  \"priority\": 200,"
@@ -251,9 +250,9 @@ TEST(RulesRegistryTest, TwoRulesInManifest) {
       "    \"instanceType\" : \"declarativeContent.PageStateMatcher\""
       "  }]"
       "}");
-  EXPECT_EQ(*expected_rule_0, get_rules[0]->ToValue());
+  EXPECT_EQ(expected_rule_0, get_rules[0]->ToValue());
 
-  std::unique_ptr<base::DictionaryValue> expected_rule_1 = ParseDictionary(
+  base::Value::Dict expected_rule_1 = base::test::ParseJsonDict(
       "{"
       "  \"id\": \"_0_\","
       "  \"priority\": 100,"
@@ -265,7 +264,7 @@ TEST(RulesRegistryTest, TwoRulesInManifest) {
       "    \"instanceType\" : \"declarativeContent.PageStateMatcher\""
       "  }]"
       "}");
-  EXPECT_EQ(*expected_rule_1, get_rules[1]->ToValue());
+  EXPECT_EQ(expected_rule_1, get_rules[1]->ToValue());
 }
 
 // Tests verifies that rules defined in the manifest cannot be deleted but
@@ -274,7 +273,7 @@ TEST(RulesRegistryTest, DeleteRuleInManifest) {
   content::BrowserTaskEnvironment task_environment;
 
   // Create extension
-  std::unique_ptr<base::DictionaryValue> manifest = ParseDictionary(
+  base::Value::Dict manifest = base::test::ParseJsonDict(
       "{"
       "  \"name\": \"Test\","
       "  \"version\": \"1\","
@@ -297,8 +296,8 @@ TEST(RulesRegistryTest, DeleteRuleInManifest) {
           .SetID(kExtensionId)
           .Build();
 
-  scoped_refptr<RulesRegistry> registry = new TestRulesRegistry(
-      content::BrowserThread::UI, "declarativeContent.onPageChanged", key);
+  scoped_refptr<RulesRegistry> registry =
+      new TestRulesRegistry("declarativeContent.onPageChanged", key);
   // Simulate what RulesRegistryService would do on extension load.
   registry->OnExtensionLoaded(extension.get());
 

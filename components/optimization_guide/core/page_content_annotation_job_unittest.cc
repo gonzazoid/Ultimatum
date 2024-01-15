@@ -4,7 +4,7 @@
 
 #include "components/optimization_guide/core/page_content_annotation_job.h"
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/test/gtest_util.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -24,7 +24,7 @@ class PageContentAnnotationJobTest : public testing::Test {
 
 TEST_F(PageContentAnnotationJobTest, IteratesInput) {
   PageContentAnnotationJob job(base::NullCallback(), {"1", "2", "3"},
-                               AnnotationType::kPageTopics);
+                               AnnotationType::kContentVisibility);
   absl::optional<std::string> input;
 
   input = job.GetNextInput();
@@ -47,14 +47,14 @@ TEST_F(PageContentAnnotationJobTest, Callback) {
   PageContentAnnotationJob job(
       base::BindOnce(&PageContentAnnotationJobTest::OnBatchAnnotationComplete,
                      base::Unretained(this), &results),
-      {"1", "2", "3"}, AnnotationType::kPageTopics);
+      {"1", "2", "3"}, AnnotationType::kContentVisibility);
 
   // Drain the inputs before running the callback.
   while (job.GetNextInput()) {
   }
 
   BatchAnnotationResult expected =
-      BatchAnnotationResult::CreatePageTopicsResult("1", absl::nullopt);
+      BatchAnnotationResult::CreateContentVisibilityResult("1", absl::nullopt);
 
   job.PostNewResult(expected, 0);
   job.OnComplete();
@@ -69,9 +69,21 @@ TEST_F(PageContentAnnotationJobTest, Callback) {
 
 TEST_F(PageContentAnnotationJobTest, DeathOnUncompleted) {
   PageContentAnnotationJob job(base::NullCallback(), {"1", "2", "3"},
-                               AnnotationType::kPageTopics);
+                               AnnotationType::kContentVisibility);
   EXPECT_TRUE(job.GetNextInput());
   EXPECT_DCHECK_DEATH(job.OnComplete());
+}
+
+TEST_F(PageContentAnnotationJobTest, FillWithNullOutputs) {
+  PageContentAnnotationJob job(base::DoNothing(), {"1", "2", "3"},
+                               AnnotationType::kContentVisibility);
+
+  EXPECT_EQ(job.CountOfRemainingNonNullInputs(), 3U);
+
+  job.FillWithNullOutputs();
+  job.OnComplete();  // Should not die with the `!inputs_.empty()` DCHECK.
+
+  EXPECT_EQ(job.CountOfRemainingNonNullInputs(), 0U);
 }
 
 }  // namespace optimization_guide

@@ -5,33 +5,27 @@
 #include "ash/clipboard/clipboard_nudge.h"
 
 #include <memory>
+#include <string>
 
-#include "ash/constants/notifier_catalogs.h"
-#include "ash/public/cpp/assistant/assistant_state.h"
-#include "ash/public/cpp/shelf_config.h"
-#include "ash/public/cpp/shell_window_ids.h"
+#include "ash/clipboard/clipboard_history_util.h"
+#include "ash/clipboard/clipboard_nudge_constants.h"
+#include "ash/clipboard/views/clipboard_history_view_constants.h"
 #include "ash/resources/vector_icons/vector_icons.h"
-#include "ash/root_window_controller.h"
-#include "ash/shelf/hotseat_widget.h"
-#include "ash/shell.h"
 #include "ash/strings/grit/ash_strings.h"
-#include "ash/style/ash_color_provider.h"
 #include "ash/system/tray/system_nudge_label.h"
+#include "base/notreached.h"
+#include "chromeos/constants/chromeos_features.h"
 #include "ui/base/l10n/l10n_util.h"
-#include "ui/chromeos/events/keyboard_layout_util.h"
-#include "ui/compositor/layer.h"
-#include "ui/compositor/scoped_layer_animation_settings.h"
-#include "ui/gfx/color_palette.h"
-#include "ui/gfx/paint_vector_icon.h"
+#include "ui/chromeos/styles/cros_tokens_color_mappings.h"
+#include "ui/gfx/vector_icon_types.h"
 #include "ui/views/border.h"
 #include "ui/views/controls/image_view.h"
-#include "ui/views/controls/label.h"
-#include "ui/views/controls/styled_label.h"
-#include "ui/wm/core/coordinate_conversion.h"
 
 namespace ash {
 
 namespace {
+
+// Constants -------------------------------------------------------------------
 
 // The size of the clipboard icon.
 constexpr int kClipboardIconSize = 20;
@@ -50,17 +44,27 @@ constexpr int kNudgePadding = 16;
 
 constexpr char kClipboardNudgeName[] = "ClipboardContextualNudge";
 
-bool IsAssistantAvailable() {
-  AssistantStateBase* state = AssistantState::Get();
-  return state->allowed_state() == assistant::AssistantAllowedState::ALLOWED &&
-         state->settings_enabled().value_or(false);
+// Helpers ---------------------------------------------------------------------
+
+int GetNudgeStringId(ClipboardNudgeType nudge_type) {
+  switch (nudge_type) {
+    case ClipboardNudgeType::kDuplicateCopyNudge:
+      return IDS_ASH_MULTIPASTE_DUPLICATE_COPY_NUDGE;
+    case ClipboardNudgeType::kOnboardingNudge:
+      return IDS_ASH_MULTIPASTE_CONTEXTUAL_NUDGE;
+    case ClipboardNudgeType::kScreenshotNotificationNudge:
+      return IDS_ASH_MULTIPASTE_SCREENSHOT_NOTIFICATION_NUDGE;
+    case ClipboardNudgeType::kZeroStateNudge:
+      return IDS_ASH_MULTIPASTE_ZERO_STATE_CONTEXTUAL_NUDGE;
+  }
 }
 
 }  // namespace
 
-ClipboardNudge::ClipboardNudge(ClipboardNudgeType nudge_type)
+ClipboardNudge::ClipboardNudge(ClipboardNudgeType nudge_type,
+                               NudgeCatalogName catalog_name)
     : SystemNudge(kClipboardNudgeName,
-                  NudgeCatalogName::kMultipaste,
+                  catalog_name,
                   kClipboardIconSize,
                   kIconLabelSpacing,
                   kNudgePadding),
@@ -69,49 +73,27 @@ ClipboardNudge::ClipboardNudge(ClipboardNudgeType nudge_type)
 ClipboardNudge::~ClipboardNudge() = default;
 
 std::unique_ptr<SystemNudgeLabel> ClipboardNudge::CreateLabelView() const {
-  bool use_launcher_key = ui::DeviceUsesKeyboardLayout2();
-  std::u16string shortcut_key = l10n_util::GetStringUTF16(
-      use_launcher_key ? IDS_ASH_SHORTCUT_MODIFIER_LAUNCHER
-                       : IDS_ASH_SHORTCUT_MODIFIER_SEARCH);
-  size_t offset;
-  std::u16string label_text = l10n_util::GetStringFUTF16(
-      nudge_type_ == kZeroStateNudge
-          ? IDS_ASH_MULTIPASTE_ZERO_STATE_CONTEXTUAL_NUDGE
-          : IDS_ASH_MULTIPASTE_CONTEXTUAL_NUDGE,
-      shortcut_key, &offset);
-  offset = offset + shortcut_key.length();
-  // Set the label's text.
-  auto label = std::make_unique<SystemNudgeLabel>(label_text, kMinLabelWidth);
+  const std::u16string shortcut_key =
+      clipboard_history_util::GetShortcutKeyName();
 
-  // Set the keyboard shortcut icon depending on whether search button
-  // or launcher button is being used.
-  auto keyboard_shortcut_icon = std::make_unique<views::ImageView>();
-  keyboard_shortcut_icon->SetImage(ui::ImageModel::FromImageGenerator(
-      base::BindRepeating(
-          [](bool use_launcher_key, const ui::ColorProvider*) {
-            SkColor icon_color = AshColorProvider::Get()->GetContentLayerColor(
-                AshColorProvider::ContentLayerType::kIconColorPrimary);
-            if (use_launcher_key) {
-              return IsAssistantAvailable()
-                         ? gfx::CreateVectorIcon(gfx::IconDescription(
-                               kClipboardLauncherOuterIcon,
-                               kKeyboardShortcutIconSize, icon_color,
-                               &kClipboardLauncherInnerIcon))
-                         : gfx::CreateVectorIcon(
-                               kClipboardLauncherNoAssistantIcon,
-                               kKeyboardShortcutIconSize, icon_color);
-            }
-            return gfx::CreateVectorIcon(kClipboardSearchIcon,
-                                         kKeyboardShortcutIconSize, icon_color);
-          },
-          use_launcher_key),
-      gfx::Size(kKeyboardShortcutIconSize, kKeyboardShortcutIconSize)));
-  keyboard_shortcut_icon->SetBorder(
-      views::CreateEmptyBorder(gfx::Insets::TLBR(2, 4, 0, -2)));
+  size_t offset;
+  auto label = std::make_unique<SystemNudgeLabel>(
+      l10n_util::GetStringFUTF16(GetNudgeStringId(nudge_type_), shortcut_key,
+                                 &offset),
+      kMinLabelWidth);
+  offset = offset + shortcut_key.length();
+
+  auto keyboard_shortcut_icon_image_view =
+      views::Builder<views::ImageView>()
+          .SetBorder(views::CreateEmptyBorder(
+              ClipboardHistoryViews::kInlineIconMargins))
+          .SetImage(ui::ImageModel::FromVectorIcon(
+              clipboard_history_util::GetShortcutKeyIcon(),
+              cros_tokens::kColorPrimary, kKeyboardShortcutIconSize))
+          .Build();
 
   // Transfer shortcut icon ownership to the label.
-  label->AddCustomView(std::move(keyboard_shortcut_icon), offset);
-
+  label->AddCustomView(std::move(keyboard_shortcut_icon_image_view), offset);
   return label;
 }
 
@@ -120,8 +102,9 @@ const gfx::VectorIcon& ClipboardNudge::GetIcon() const {
 }
 
 std::u16string ClipboardNudge::GetAccessibilityText() const {
-  // TODO(crbug.com/1256854): Calculate text for screen readers.
-  return u"";
+  return l10n_util::GetStringFUTF16(
+      GetNudgeStringId(nudge_type_),
+      clipboard_history_util::GetShortcutKeyName());
 }
 
 }  // namespace ash

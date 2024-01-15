@@ -7,6 +7,8 @@
 #include <dwrite.h>
 #include <stdint.h>
 #include <map>
+#include <string>
+#include <utility>
 
 #include "base/debug/alias.h"
 #include "base/files/file_path.h"
@@ -22,7 +24,6 @@
 #include "base/sys_byteorder.h"
 #include "base/trace_event/trace_event.h"
 #include "base/win/iat_patch_function.h"
-#include "base/win/windows_version.h"
 #include "build/build_config.h"
 #include "ppapi/buildflags/buildflags.h"
 #include "third_party/skia/include/core/SkFontMgr.h"
@@ -385,47 +386,39 @@ GdiFontPatchDataImpl::GdiFontPatchDataImpl(const base::FilePath& path) {
 // StartServiceW
 // CloseServiceHandle.
 // These are all IAT patched.
+// The patching fails occasionally for unknown reasons, but the rate seems to
+// be low enough to not cause serious problems.
 void PatchServiceManagerCalls() {
   static bool is_patched = false;
   if (is_patched)
     return;
-  const char* service_provider_dll =
-      (base::win::GetVersion() >= base::win::Version::WIN8
-           ? "api-ms-win-service-management-l1-1-0.dll"
-           : "advapi32.dll");
+  const char* service_provider_dll = "api-ms-win-service-management-l1-1-0.dll";
 
   is_patched = true;
 
   static base::NoDestructor<base::win::IATPatchFunction> patch_open_sc_manager;
-  DWORD patched = patch_open_sc_manager->Patch(
-      L"dwrite.dll", service_provider_dll, "OpenSCManagerW",
-      reinterpret_cast<void*>(OpenSCManagerWPatch));
-  DCHECK(patched == 0);
+  patch_open_sc_manager->Patch(L"dwrite.dll", service_provider_dll,
+                               "OpenSCManagerW",
+                               reinterpret_cast<void*>(OpenSCManagerWPatch));
 
   static base::NoDestructor<base::win::IATPatchFunction>
       patch_close_service_handle;
-  patched = patch_close_service_handle->Patch(
+  patch_close_service_handle->Patch(
       L"dwrite.dll", service_provider_dll, "CloseServiceHandle",
       reinterpret_cast<void*>(CloseServiceHandlePatch));
-  DCHECK(patched == 0);
 
   static base::NoDestructor<base::win::IATPatchFunction> patch_open_service;
-  patched = patch_open_service->Patch(
-      L"dwrite.dll", service_provider_dll, "OpenServiceW",
-      reinterpret_cast<void*>(OpenServiceWPatch));
-  DCHECK(patched == 0);
+  patch_open_service->Patch(L"dwrite.dll", service_provider_dll, "OpenServiceW",
+                            reinterpret_cast<void*>(OpenServiceWPatch));
 
   static base::NoDestructor<base::win::IATPatchFunction> patch_start_service;
-  patched = patch_start_service->Patch(
-      L"dwrite.dll", service_provider_dll, "StartServiceW",
-      reinterpret_cast<void*>(StartServiceWPatch));
-  DCHECK(patched == 0);
+  patch_start_service->Patch(L"dwrite.dll", service_provider_dll,
+                             "StartServiceW",
+                             reinterpret_cast<void*>(StartServiceWPatch));
 
   static base::NoDestructor<base::win::IATPatchFunction> patch_nt_connect_port;
-  patched = patch_nt_connect_port->Patch(
-      L"dwrite.dll", "ntdll.dll", "NtAlpcConnectPort",
-      reinterpret_cast<void*>(NtALpcConnectPortPatch));
-  DCHECK(patched == 0);
+  patch_nt_connect_port->Patch(L"dwrite.dll", "ntdll.dll", "NtAlpcConnectPort",
+                               reinterpret_cast<void*>(NtALpcConnectPortPatch));
 }
 
 GdiFontPatchData* PatchGdiFontEnumeration(const base::FilePath& path) {

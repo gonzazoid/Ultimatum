@@ -28,9 +28,19 @@ class FileClusteringBackend : public ClusteringBackend {
   ~FileClusteringBackend() override;
 
   // ClusteringBackend:
+  // `unused_requires_ui_and_triggerability` as this function just sends back
+  // the clusters as is from the file.
   void GetClusters(ClusteringRequestSource clustering_request_source,
                    ClustersCallback callback,
-                   std::vector<history::AnnotatedVisit> visits) override;
+                   std::vector<history::AnnotatedVisit> visits,
+                   bool unused_requires_ui_and_triggerability) override;
+  void GetClustersForUI(ClusteringRequestSource clustering_request_source,
+                        QueryClustersFilterParams filter_params,
+                        ClustersCallback callback,
+                        std::vector<history::Cluster> clusters) override;
+  void GetClusterTriggerability(
+      ClustersCallback callback,
+      std::vector<history::Cluster> clusters) override;
 
  private:
   // Private so that it does not incidentally get called if the command line is
@@ -40,6 +50,15 @@ class FileClusteringBackend : public ClusteringBackend {
   // The background task runner that processes the file passes in the command
   // line and does the heavy lifting for responding to cluster requests.
   scoped_refptr<base::SequencedTaskRunner> background_task_runner_;
+
+  // Gets the displayable variant of `clusters` that will be shown on the UI
+  // surface associated with `clustering_request_source` on background thread.
+  // This will filter persisted clusters using clusters from command line
+  // override file, as well as apply `filter_params`.
+  static std::vector<history::Cluster> GetClustersForUIOnBackgroundThread(
+      ClusteringRequestSource clustering_request_source,
+      QueryClustersFilterParams filter_params,
+      std::vector<history::Cluster> persisted_clusters);
 };
 
 }  // namespace history_clusters

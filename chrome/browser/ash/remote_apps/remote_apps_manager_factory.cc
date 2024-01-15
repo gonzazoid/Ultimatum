@@ -5,10 +5,9 @@
 #include "chrome/browser/ash/remote_apps/remote_apps_manager_factory.h"
 
 #include "chrome/browser/apps/app_service/app_service_proxy_factory.h"
+#include "chrome/browser/ash/app_list/app_list_syncable_service_factory.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/ui/app_list/app_list_syncable_service_factory.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
 #include "components/user_manager/user.h"
 #include "components/user_manager/user_type.h"
 #include "content/public/browser/browser_context.h"
@@ -27,13 +26,17 @@ RemoteAppsManager* RemoteAppsManagerFactory::GetForProfile(Profile* profile) {
 RemoteAppsManagerFactory* RemoteAppsManagerFactory::GetInstance() {
   // TODO(crbug.com/1269752): Restore use of base::NoDestructor when
   // it no longer causes unit_test failures.
-  return base::Singleton<RemoteAppsManagerFactory>::get();
+  static base::NoDestructor<RemoteAppsManagerFactory> instance;
+  return instance.get();
 }
 
 RemoteAppsManagerFactory::RemoteAppsManagerFactory()
-    : BrowserContextKeyedServiceFactory(
-          "RemoteAppsManager",
-          BrowserContextDependencyManager::GetInstance()) {
+    : ProfileKeyedServiceFactory("RemoteAppsManager",
+                                 ProfileSelections::Builder()
+                                     .WithGuest(ProfileSelection::kOriginalOnly)
+                                     .WithSystem(ProfileSelection::kNone)
+                                     .WithAshInternals(ProfileSelection::kNone)
+                                     .Build()) {
   DependsOn(app_list::AppListSyncableServiceFactory::GetInstance());
   DependsOn(apps::AppServiceProxyFactory::GetInstance());
   DependsOn(extensions::EventRouterFactory::GetInstance());
@@ -41,7 +44,8 @@ RemoteAppsManagerFactory::RemoteAppsManagerFactory()
 
 RemoteAppsManagerFactory::~RemoteAppsManagerFactory() = default;
 
-KeyedService* RemoteAppsManagerFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+RemoteAppsManagerFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
   ProfileHelper* profile_helper = ProfileHelper::Get();
   if (!profile_helper)
@@ -54,22 +58,18 @@ KeyedService* RemoteAppsManagerFactory::BuildServiceInstanceFor(
     return nullptr;
   }
 
-  return new RemoteAppsManager(profile);
-}
-
-content::BrowserContext* RemoteAppsManagerFactory::GetBrowserContextToUse(
-    content::BrowserContext* context) const {
-  Profile* profile = Profile::FromBrowserContext(context);
-  if (!profile || profile->IsSystemProfile() ||
-      !ProfileHelper::IsUserProfile(profile)) {
-    return nullptr;
-  }
-
-  return BrowserContextKeyedServiceFactory::GetBrowserContextToUse(context);
+  return std::make_unique<RemoteAppsManager>(profile);
 }
 
 bool RemoteAppsManagerFactory::ServiceIsCreatedWithBrowserContext() const {
   return true;
+}
+
+bool RemoteAppsManagerFactory::ServiceIsNULLWhileTesting() const {
+  // `RemoteAppsManager` depends on `AppListSyncableService` to be useful,
+  // meaning that it's availability for testing also depends on
+  // `AppListSyncableService`'s service availability.
+  return !app_list::AppListSyncableServiceFactory::IsUsedInTesting();
 }
 
 }  // namespace ash

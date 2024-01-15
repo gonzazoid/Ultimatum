@@ -13,10 +13,11 @@ import UIKit
   public let subtitle: String
   /// Describes the action performed; can be used for voiceover.
   public let hint: String
-  /// Name of the image in the bundle.
-  public let imageName: String
-  /// Whether the pedal is displayed from an incognito session.
-  public let incognito: Bool
+  /// The image for the Pedal.
+  public let image: UIImage
+  public let imageTintColor: UIColor?
+  public let backgroundColor: UIColor?
+  public let imageBorderColor: UIColor?
   /// Action to run when the pedal is executed.
   public let action: () -> Void
   /// Action type for metrics collection. Int-casted OmniboxPedalId
@@ -24,15 +25,22 @@ import UIKit
 
   public init(
     title: String, subtitle: String,
-    accessibilityHint: String, imageName: String, type: Int, incognito: Bool,
+    accessibilityHint: String,
+    image: UIImage,
+    imageTintColor: UIColor?,
+    backgroundColor: UIColor?,
+    imageBorderColor: UIColor?,
+    type: Int,
     action: @escaping () -> Void
   ) {
     self.title = title
     self.subtitle = subtitle
     self.hint = accessibilityHint
-    self.imageName = imageName
+    self.image = image
+    self.imageTintColor = imageTintColor
+    self.backgroundColor = backgroundColor
+    self.imageBorderColor = imageBorderColor
     self.type = type
-    self.incognito = incognito
     self.action = action
   }
 }
@@ -44,19 +52,21 @@ extension OmniboxPedalData: OmniboxIcon {
   }
 
   public var iconImage: UIImage? {
-    // Dark mode is set explicitly if incognito is enabled.
-    let userInterfaceStyle =
-      UITraitCollection(userInterfaceStyle: incognito ? .dark : .unspecified)
-    return UIImage(
-      named: self.imageName, in: nil,
-      compatibleWith: UITraitCollection(traitsFrom: [.current, userInterfaceStyle]))
+    return image
   }
 
   public var imageURL: CrURL? { return nil }
-  public var iconImageTintColor: UIColor? { return nil }
-  public var backgroundImage: UIImage? { return nil }
-  public var backgroundImageTintColor: UIColor? { return nil }
-  public var overlayImage: UIImage? { return nil }
-  public var overlayImageTintColor: UIColor? { return nil }
+
+  public var iconImageTintColor: UIColor? {
+    return imageTintColor
+  }
+
+  public var backgroundImageTintColor: UIColor? {
+    return backgroundColor
+  }
+
+  public var borderColor: UIColor? {
+    return imageBorderColor
+  }
 
 }

@@ -15,6 +15,10 @@ namespace content {
 class WebContents;
 }
 
+namespace signin {
+class IdentityManager;
+}
+
 namespace autofill {
 
 class SaveUpdateAddressProfilePromptController;
@@ -34,13 +38,15 @@ class SaveUpdateAddressProfilePromptViewAndroid
   // SaveUpdateAddressProfilePromptView:
   bool Show(SaveUpdateAddressProfilePromptController* controller,
             const AutofillProfile& profile,
-            bool is_update) override;
+            bool is_update,
+            bool is_migration_to_account) override;
 
  private:
   // Populates the content of the existing `java_object_` as a save or update
   // prompt (according to `is_update`) with the details supplied by the
   // `controller`.
   void SetContent(SaveUpdateAddressProfilePromptController* controller,
+                  signin::IdentityManager* identity_manager,
                   bool is_update);
 
   // The corresponding Java SaveUpdateAddressProfilePrompt owned by this class.

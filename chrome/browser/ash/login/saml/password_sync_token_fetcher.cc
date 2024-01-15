@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/json/json_string_value_serializer.h"
 #include "base/json/json_writer.h"
 #include "base/logging.h"
@@ -15,22 +15,19 @@
 #include "base/strings/stringprintf.h"
 #include "base/values.h"
 #include "chrome/browser/signin/identity_manager_factory.h"
-#include "components/account_id/account_id.h"
 #include "components/signin/public/identity_manager/access_token_fetcher.h"
 #include "components/signin/public/identity_manager/access_token_info.h"
 #include "components/signin/public/identity_manager/identity_manager.h"
 #include "components/signin/public/identity_manager/primary_account_access_token_fetcher.h"
 #include "components/signin/public/identity_manager/scope_set.h"
-#include "components/user_manager/known_user.h"
 #include "content/public/browser/browser_context.h"
-#include "content/public/common/url_constants.h"
+#include "google_apis/credentials_mode.h"
 #include "google_apis/gaia/gaia_auth_fetcher.h"
 #include "google_apis/gaia/gaia_constants.h"
 #include "google_apis/gaia/google_service_auth_error.h"
 #include "google_apis/google_api_keys.h"
 #include "net/base/load_flags.h"
 #include "net/http/http_status_code.h"
-#include "net/url_request/url_request_context_getter.h"
 #include "services/network/public/cpp/resource_request.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
 #include "services/network/public/cpp/simple_url_loader.h"
@@ -41,7 +38,7 @@ namespace {
 
 // These values should not be renumbered and numeric values should never
 // be reused. This must be kept in sync with SamlInSessionPasswordSyncEvent
-// in tools/metrics/histogram/enums.xml
+// in tools/metrics/histograms/enums.xml
 enum class InSessionPasswordSyncEvent {
   kStartPollingInSession = 0,
   kStartPollingOnLogin = 1,
@@ -189,8 +186,7 @@ void PasswordSyncTokenFetcher::OnAccessTokenFetchComplete(
 }
 
 void PasswordSyncTokenFetcher::FetchSyncToken(const std::string& access_token) {
-  base::Value request_data(base::Value::Type::DICTIONARY);
-  request_data.SetStringKey(kTokenTypeKey, kTokenTypeValue);
+  auto request_data = base::Value::Dict().Set(kTokenTypeKey, kTokenTypeValue);
   std::string request_string;
   if (!base::JSONWriter::Write(request_data, &request_string)) {
     LOG(ERROR) << "Not able to serialize token request body.";
@@ -211,6 +207,16 @@ void PasswordSyncTokenFetcher::FetchSyncToken(const std::string& access_token) {
           "order to sync user's password and update the token."
         data: "Access token and token_type."
         destination: GOOGLE_OWNED_SERVICE
+      }
+      policy {
+        cookies_allowed: NO
+        setting : "Only Admins can enable/disable this feature from the admin"
+                  "dashboard."
+        chrome_policy {
+          SamlInSessionPasswordChangeEnabled {
+            SamlInSessionPasswordChangeEnabled : false
+          }
+        }
       })");
   auto resource_request = std::make_unique<network::ResourceRequest>();
   switch (request_type_) {
@@ -231,7 +237,8 @@ void PasswordSyncTokenFetcher::FetchSyncToken(const std::string& access_token) {
   }
   resource_request->load_flags =
       net::LOAD_DISABLE_CACHE | net::LOAD_BYPASS_CACHE;
-  resource_request->credentials_mode = network::mojom::CredentialsMode::kOmit;
+  resource_request->credentials_mode =
+      google_apis::GetOmitCredentialsModeForGaiaRequests();
   if (request_type_ == RequestType::kCreateToken) {
     resource_request->method = net::HttpRequestHeaders::kPostMethod;
   } else {
@@ -284,17 +291,13 @@ void PasswordSyncTokenFetcher::OnSimpleLoaderComplete(
 
   if (!response_body || (response_code != net::HTTP_OK)) {
     const auto* error_json = json_value && json_value->is_dict()
-                                 ? json_value->FindKeyOfType(
-                                       kErrorKey, base::Value::Type::DICTIONARY)
+                                 ? json_value->GetDict().FindDict(kErrorKey)
                                  : nullptr;
-    const auto* error_value =
-        error_json ? error_json->FindKeyOfType(kErrorDescription,
-                                               base::Value::Type::STRING)
-                   : nullptr;
+    const std::string* error =
+        error_json ? error_json->FindString(kErrorDescription) : nullptr;
 
     LOG(WARNING) << "Server returned wrong response code: " << response_code
-                 << ": " << (error_value ? error_value->GetString() : "Unknown")
-                 << ".";
+                 << ": " << (error ? *error : "Unknown") << ".";
     RecordEvent(InSessionPasswordSyncEvent::kErrorWrongResponseCode);
     consumer_->OnApiCallFailed(ErrorType::kServerError);
     return;
@@ -314,52 +317,43 @@ void PasswordSyncTokenFetcher::OnSimpleLoaderComplete(
     return;
   }
 
-  ProcessValidTokenResponse(std::move(json_value));
+  ProcessValidTokenResponse(std::move(json_value->GetDict()));
 }
 
 void PasswordSyncTokenFetcher::ProcessValidTokenResponse(
-    std::unique_ptr<base::Value> json_response) {
+    base::Value::Dict json_response) {
   switch (request_type_) {
     case RequestType::kCreateToken: {
-      const auto* sync_token_value =
-          json_response->FindKeyOfType(kToken, base::Value::Type::STRING);
-      std::string sync_token =
-          sync_token_value ? sync_token_value->GetString() : std::string();
-      if (sync_token.empty()) {
+      const std::string* sync_token = json_response.FindString(kToken);
+      if (!sync_token || sync_token->empty()) {
         LOG(WARNING) << "Response does not contain sync token.";
         RecordEvent(InSessionPasswordSyncEvent::kErrorNoTokenInCreateResponse);
         consumer_->OnApiCallFailed(ErrorType::kCreateNoToken);
         return;
       }
-      consumer_->OnTokenCreated(sync_token);
+      consumer_->OnTokenCreated(*sync_token);
       break;
     }
     case RequestType::kGetToken: {
       std::string sync_token;
-      const auto* token_list_entry = json_response->FindKey(kTokenEntry);
-      if (!token_list_entry || !token_list_entry->is_list()) {
+      const auto* token_list_entry = json_response.FindList(kTokenEntry);
+      if (!token_list_entry) {
         LOG(WARNING) << "Response does not contain list of sync tokens.";
         RecordEvent(InSessionPasswordSyncEvent::kErrorNoTokenInGetResponse);
         consumer_->OnApiCallFailed(ErrorType::kGetNoList);
         return;
       }
-      const base::Value::List& list_of_tokens = token_list_entry->GetList();
+      const base::Value::List& list_of_tokens = *token_list_entry;
       if (list_of_tokens.size() > 0) {
-        const auto* sync_token_value =
-            list_of_tokens[0].FindKeyOfType(kToken, base::Value::Type::STRING);
-        if (!sync_token_value) {
+        const std::string* sync_token_string =
+            list_of_tokens[0].GetDict().FindString(kToken);
+        if (!sync_token_string || sync_token_string->empty()) {
           LOG(WARNING) << "Response does not contain sync token.";
           RecordEvent(InSessionPasswordSyncEvent::kErrorNoTokenInGetResponse);
           consumer_->OnApiCallFailed(ErrorType::kGetNoToken);
           return;
         }
-        sync_token = sync_token_value->GetString();
-        if (sync_token.empty()) {
-          LOG(WARNING) << "Response does not contain sync token.";
-          RecordEvent(InSessionPasswordSyncEvent::kErrorNoTokenInGetResponse);
-          consumer_->OnApiCallFailed(ErrorType::kGetNoToken);
-          return;
-        }
+        sync_token = *sync_token_string;
       }
       // list_of_tokens.size() == 0 is still a valid case here - it means we
       // have not created any token for this user yet.
@@ -367,11 +361,10 @@ void PasswordSyncTokenFetcher::ProcessValidTokenResponse(
       break;
     }
     case RequestType::kVerifyToken: {
-      const auto* sync_token_status = json_response->FindKeyOfType(
-          kTokenStatusKey, base::Value::Type::STRING);
+      const std::string* sync_token_status =
+          json_response.FindString(kTokenStatusKey);
       bool is_valid = false;
-      if (sync_token_status &&
-          sync_token_status->GetString() == kTokenStatusValid) {
+      if (sync_token_status && *sync_token_status == kTokenStatusValid) {
         is_valid = true;
       }
       RecordEvent(is_valid

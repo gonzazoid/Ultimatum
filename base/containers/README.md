@@ -29,11 +29,16 @@ Google naming. Be sure to use the base namespace.
 
 ### Usage advice
 
-*   Generally avoid `std::unordered_set` and `std::unordered_map`. In the common
-    case, query performance is unlikely to be sufficiently higher than
-    `std::map` to make a difference, insert performance is slightly worse, and
-    the memory overhead is high. This makes sense mostly for large tables where
-    you expect a lot of lookups.
+*   Do not use `base::flat_map` or `base::flat_set` if the number of items will
+    be large or unbounded and elements will be inserted/deleted outside of the
+    containers constructor/destructor - they have O(n) performance on inserts
+    and deletes of individual items.
+
+*   Do not default to using `std::unordered_set` and `std::unordered_map`. In
+    the common case, query performance is unlikely to be sufficiently higher
+    than `std::map` to make a difference, insert performance is slightly worse,
+    and the memory overhead is high. This makes sense mostly for large tables
+    where you expect a lot of lookups.
 
 *   Most maps and sets in Chrome are small and contain objects that can be moved
     efficiently. In this case, consider `base::flat_map` and `base::flat_set`.
@@ -65,12 +70,12 @@ Google naming. Be sure to use the base namespace.
 Sizes are on 64-bit platforms. Stable iterators aren't invalidated when the
 container is mutated.
 
-| Container                                  | Empty size            | Per-item overhead | Stable iterators? |
-|:------------------------------------------ |:--------------------- |:----------------- |:----------------- |
-| `std::map`, `std::set`                     | 16 bytes              | 32 bytes          | Yes               |
-| `std::unordered_map`, `std::unordered_set` | 128 bytes             | 16 - 24 bytes     | No                |
-| `base::flat_map`, `base::flat_set`         | 24 bytes              | 0 (see notes)     | No                |
-| `base::small_map`                          | 24 bytes (see notes)  | 32 bytes          | No                |
+| Container                                  | Empty size            | Per-item overhead | Stable iterators? | Insert/delete complexity     |
+|:------------------------------------------ |:--------------------- |:----------------- |:----------------- |:-----------------------------|
+| `std::map`, `std::set`                     | 16 bytes              | 32 bytes          | Yes               | O(log n)                     |
+| `std::unordered_map`, `std::unordered_set` | 128 bytes             | 16 - 24 bytes     | No                | O(1)                         |
+| `base::flat_map`, `base::flat_set`         | 24 bytes              | 0 (see notes)     | No                | O(n)                         |
+| `base::small_map`                          | 24 bytes (see notes)  | 32 bytes          | No                | depends on fallback map type |
 
 **Takeaways:** `std::unordered_map` and `std::unordered_set` have high
 overhead for small container sizes, so prefer these only for larger workloads.
@@ -135,7 +140,7 @@ one would expect it to be 3/4 full, so per-item overhead will be 0.25 *
 sizeof(T).
 
 `flat_set` and `flat_map` support a notion of transparent comparisons.
-Therefore you can, for example, lookup `base::StringPiece` in a set of
+Therefore you can, for example, lookup `std::string_view` in a set of
 `std::strings` without constructing a temporary `std::string`. This
 functionality is based on C++14 extensions to the `std::set`/`std::map`
 interface.
@@ -202,9 +207,9 @@ violated in a constexpr context.
 Example:
 
 ```cpp
-constexpr auto kSet = base::MakeFixedFlatSet<int>(1, 2, 3);
+constexpr auto kSet = base::MakeFixedFlatSet<int>({1, 2, 3});
 
-constexpr auto kMap = base::MakeFixedFlatMap<base::StringPiece, int>(
+constexpr auto kMap = base::MakeFixedFlatMap<std::string_view, int>(
     {{"foo", 1}, {"bar", 2}, {"baz", 3}});
 ```
 

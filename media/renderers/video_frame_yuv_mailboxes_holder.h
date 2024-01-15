@@ -7,9 +7,18 @@
 
 #include "media/base/media_export.h"
 #include "media/base/video_frame.h"
+#include "third_party/skia/include/core/SkRefCnt.h"
 #include "third_party/skia/include/core/SkYUVAInfo.h"
 #include "third_party/skia/include/gpu/GrYUVABackendTextures.h"
 #include "third_party/skia/include/gpu/gl/GrGLTypes.h"
+
+class SkColorSpace;
+class SkImage;
+class SkSurface;
+
+namespace gpu {
+class ClientSharedImage;
+}  // namespace gpu
 
 namespace viz {
 class RasterContextProvider;
@@ -32,7 +41,8 @@ class MEDIA_EXPORT VideoFrameYUVMailboxesHolder {
   void VideoFrameToMailboxes(
       const VideoFrame* video_frame,
       viz::RasterContextProvider* raster_context_provider,
-      gpu::Mailbox mailboxes[SkYUVAInfo::kMaxPlanes]);
+      gpu::Mailbox mailboxes[SkYUVAInfo::kMaxPlanes],
+      bool allow_multiplanar_for_upload);
 
   // Returns a YUV SkImage for the specified video frame. If
   // `reinterpret_color_space` is non-nullptr, then the SkImage will be
@@ -51,10 +61,6 @@ class MEDIA_EXPORT VideoFrameYUVMailboxesHolder {
       sk_sp<SkSurface> surfaces[SkYUVAInfo::kMaxPlanes]);
 
   const SkYUVAInfo& yuva_info() const { return yuva_info_; }
-
-  // Utility to convert a media pixel format to SkYUVAInfo.
-  static std::tuple<SkYUVAInfo::PlaneConfig, SkYUVAInfo::Subsampling>
-  VideoPixelFormatToSkiaValues(VideoPixelFormat video_format);
 
   // Utility to populate a SkYUVAInfo from a video frame.
   static SkYUVAInfo VideoFrameGetSkYUVAInfo(const VideoFrame* video_frame);
@@ -87,6 +93,7 @@ class MEDIA_EXPORT VideoFrameYUVMailboxesHolder {
 
   // Populated by VideoFrameToMailboxes.
   std::array<gpu::MailboxHolder, kMaxPlanes> holders_;
+  std::array<scoped_refptr<gpu::ClientSharedImage>, kMaxPlanes> shared_images_;
 
   // Populated by ImportTextures.
   struct YUVPlaneTextureInfo {

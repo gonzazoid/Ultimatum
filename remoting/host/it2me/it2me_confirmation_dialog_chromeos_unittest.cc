@@ -8,6 +8,7 @@
 #include <memory>
 #include <string>
 
+#include <optional>
 #include "base/i18n/message_formatter.h"
 #include "base/ranges/algorithm.h"
 #include "base/strings/utf_string_conversions.h"
@@ -16,7 +17,6 @@
 #include "remoting/base/string_resources.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/message_center/lock_screen/fake_lock_screen_controller.h"
 #include "ui/message_center/message_center.h"
@@ -44,8 +44,8 @@ class It2MeConfirmationDialogChromeOSTest
   }
 
   void TearDown() override {
+    dialog.reset();
     message_center::MessageCenter::Shutdown();
-    dialog.release();
   }
 
   message_center::MessageCenter& message_center() const {
@@ -59,8 +59,9 @@ class It2MeConfirmationDialogChromeOSTest
   const message_center::Notification* GetFirstNotification() {
     const message_center::NotificationList::Notifications& notifications =
         message_center().GetVisibleNotifications();
-    if (notifications.size() == 0)
+    if (notifications.size() == 0) {
       return nullptr;
+    }
 
     return *notifications.cbegin();
   }
@@ -69,8 +70,9 @@ class It2MeConfirmationDialogChromeOSTest
                 const std::u16string& button_title) {
     auto button_iter = base::ranges::find(array, button_title,
                                           &message_center::ButtonInfo::title);
-    if (button_iter == array.cend())
+    if (button_iter == array.cend()) {
       return -1;
+    }
 
     return std::distance(array.cbegin(), button_iter);
   }
@@ -88,7 +90,7 @@ class It2MeConfirmationDialogChromeOSTest
     ASSERT_NE(notification, nullptr);
     const int button_index = FindButtonIndex(*notification, button_title);
     ASSERT_GE(button_index, 0);
-    notification->delegate()->Click(button_index, absl::nullopt);
+    notification->delegate()->Click(button_index, std::nullopt);
   }
 
   std::u16string FormatMessage(const std::string& remote_user_email,
@@ -191,12 +193,12 @@ TEST_P(It2MeConfirmationDialogChromeOSTest,
   EXPECT_EQ(result_future.Get(), It2MeConfirmationDialog::Result::OK);
 }
 
-INSTANTIATE_TEST_CASE_P(EnterpriseDialog,
-                        It2MeConfirmationDialogChromeOSTest,
-                        testing::Values(DialogStyle::kEnterprise));
+INSTANTIATE_TEST_SUITE_P(EnterpriseDialog,
+                         It2MeConfirmationDialogChromeOSTest,
+                         testing::Values(DialogStyle::kEnterprise));
 
-INSTANTIATE_TEST_CASE_P(ConsumerDialog,
-                        It2MeConfirmationDialogChromeOSTest,
-                        testing::Values(DialogStyle::kConsumer));
+INSTANTIATE_TEST_SUITE_P(ConsumerDialog,
+                         It2MeConfirmationDialogChromeOSTest,
+                         testing::Values(DialogStyle::kConsumer));
 
 }  // namespace remoting

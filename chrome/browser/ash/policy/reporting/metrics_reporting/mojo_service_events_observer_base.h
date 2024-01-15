@@ -7,9 +7,10 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/logging.h"
 #include "base/memory/weak_ptr.h"
-#include "components/reporting/metrics/sampler.h"
+#include "components/reporting/metrics/metric_event_observer.h"
 #include "components/reporting/proto/synced/metric_data.pb.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/receiver.h"
@@ -36,7 +37,7 @@ class MojoServiceEventsObserverBase : public MetricEventObserver {
   }
 
   void SetOnEventObservedCallback(MetricRepeatingCallback cb) override {
-    DCHECK(!on_event_observed_cb_);
+    CHECK(!on_event_observed_cb_);
     on_event_observed_cb_ = std::move(cb);
   }
 
@@ -44,6 +45,10 @@ class MojoServiceEventsObserverBase : public MetricEventObserver {
   virtual void AddObserver() = 0;
 
   void OnEventObserved(MetricData metric_data) {
+    if (!on_event_observed_cb_) {
+      DVLOG(1) << "Event observed but callback is not set.";
+      return;
+    }
     on_event_observed_cb_.Run(std::move(metric_data));
   }
 

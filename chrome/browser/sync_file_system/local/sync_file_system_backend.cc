@@ -7,8 +7,8 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
 #include "base/types/pass_key.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/profiles/profile.h"
@@ -25,6 +25,7 @@
 #include "storage/browser/file_system/file_stream_writer.h"
 #include "storage/browser/file_system/file_system_context.h"
 #include "storage/browser/file_system/file_system_operation.h"
+#include "storage/browser/file_system/file_system_util.h"
 #include "storage/common/file_system/file_system_util.h"
 
 using content::BrowserThread;
@@ -89,7 +90,7 @@ void SyncFileSystemBackend::ResolveURL(const storage::FileSystemURL& url,
 
   if (skip_initialize_syncfs_service_for_testing_) {
     GetDelegate()->OpenFileSystem(
-        url.storage_key(), url.bucket(), url.type(), mode, std::move(callback),
+        url.GetBucket(), url.type(), mode, std::move(callback),
         GetSyncableFileSystemRootURI(url.origin().GetURL()));
     return;
   }
@@ -124,6 +125,7 @@ SyncFileSystemBackend::GetCopyOrMoveFileValidatorFactory(
 
 std::unique_ptr<storage::FileSystemOperation>
 SyncFileSystemBackend::CreateFileSystemOperation(
+    storage::OperationType type,
     const storage::FileSystemURL& url,
     storage::FileSystemContext* context,
     base::File::Error* error_code) const {
@@ -137,12 +139,12 @@ SyncFileSystemBackend::CreateFileSystemOperation(
     return nullptr;
 
   if (url.type() == storage::kFileSystemTypeSyncableForInternalSync) {
-    return storage::FileSystemOperation::Create(url, context,
+    return storage::FileSystemOperation::Create(type, url, context,
                                                 std::move(operation_context));
   }
 
   return std::make_unique<SyncableFileSystemOperation>(
-      url, context, std::move(operation_context),
+      type, url, context, std::move(operation_context),
       base::PassKey<SyncFileSystemBackend>());
 }
 
@@ -162,7 +164,9 @@ SyncFileSystemBackend::CreateFileStreamReader(
     int64_t offset,
     int64_t max_bytes_to_read,
     const base::Time& expected_modification_time,
-    storage::FileSystemContext* context) const {
+    storage::FileSystemContext* context,
+    file_access::ScopedFileAccessDelegate::
+        RequestFilesAccessIOCallback /*file_access*/) const {
   DCHECK(CanHandleType(url.type()));
   return GetDelegate()->CreateFileStreamReader(
       url, offset, expected_modification_time, context);

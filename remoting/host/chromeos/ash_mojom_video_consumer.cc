@@ -109,7 +109,7 @@ std::unique_ptr<SkBitmap> AshMojomVideoConsumer::Frame::CreateSkBitmap() const {
 
   bitmap->allocPixels(
       SkImageInfo::MakeN32(size.width(), size.height(), kOpaque_SkAlphaType,
-                           info_->color_space->ToSkColorSpace()));
+                           info_->color_space.ToSkColorSpace()));
   memcpy(bitmap->getPixels(), pixels_.memory(), bitmap->computeByteSize());
 
   return bitmap;
@@ -148,11 +148,6 @@ bool AshMojomVideoConsumer::Frame::IsValidFrame() const {
   if (pixels_.size() < media::VideoFrame::AllocationSize(info_->pixel_format,
                                                          info_->coded_size)) {
     LOG(ERROR) << "Shared memory size was less than expected.";
-    return false;
-  }
-
-  if (!info_->color_space) {
-    LOG(ERROR) << "Missing mandatory color space info.";
     return false;
   }
 
@@ -220,8 +215,9 @@ void AshMojomVideoConsumer::OnStopped() {
 void AshMojomVideoConsumer::OnLog(const std::string& message) {
   VLOG(3) << "AshMojomVideoConsumer::OnLog : " << message;
 }
-// Invoked every time we change target, but, crop_version is not relevant for
-// window capture.
-void AshMojomVideoConsumer::OnNewCropVersion(uint32_t crop_version) {}
+// Invoked every time we change target, but, sub_capture_target_version is not
+// relevant for window capture.
+void AshMojomVideoConsumer::OnNewSubCaptureTargetVersion(
+    uint32_t sub_capture_target_version) {}
 
 }  // namespace remoting

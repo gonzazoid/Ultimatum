@@ -4,11 +4,10 @@
 
 #include "services/network/conditional_cache_deletion_helper.h"
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/location.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "net/http/http_cache.h"
 #include "net/http/http_util.h"
 
@@ -81,7 +80,7 @@ void ConditionalCacheDeletionHelper::IterateOverEntries(
       // The iteration finished successfully or we can no longer iterate
       // (e.g. the cache was destroyed). We cannot distinguish between the two,
       // but we know that there is nothing more that we can do.
-      base::ThreadTaskRunnerHandle::Get()->PostTask(
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE,
           base::BindOnce(&ConditionalCacheDeletionHelper::NotifyCompletion,
                          weak_factory_.GetWeakPtr()));

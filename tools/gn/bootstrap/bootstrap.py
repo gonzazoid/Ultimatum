@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # Copyright 2014 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
@@ -39,6 +39,7 @@ def main(argv):
       help='Do a debug build. Defaults to release build.')
   parser.add_option(
       '-o', '--output', help='place output in PATH', metavar='PATH')
+  parser.add_option('-j', '--jobs', help='Number of jobs')
   parser.add_option('-s', '--no-rebuild', help='ignored')
   parser.add_option('--no-clean', help='ignored')
   parser.add_option('--gn-gen-args', help='Args to pass to gn gen --args')
@@ -104,10 +105,9 @@ def main(argv):
         '-Wl,-rpath="\$$ORIGIN/."', '-Wl,-rpath-link=.'
     ])
     append_to_env('CXXFLAGS', [
-        '-nostdinc++',
-        '-isystem../../../buildtools/third_party/libc++',
-        '-isystem../../../buildtools/third_party/libc++/trunk/include',
-        '-isystem../../../buildtools/third_party/libc++abi/trunk/include'
+        '-nostdinc++', '-isystem../../../buildtools/third_party/libc++',
+        '-isystem../../../third_party/libc++/src/include',
+        '-isystem../../../third_party/libc++abi/src/include'
     ])
 
   cmd = [
@@ -122,8 +122,10 @@ def main(argv):
 
   shutil.copy2(
       os.path.join(BOOTSTRAP_DIR, 'last_commit_position.h'), gn_build_dir)
-  subprocess.check_call(
-      [ninja_binary, '-C', gn_build_dir, '-w', 'dupbuild=err', 'gn'])
+  cmd = [ninja_binary, '-C', gn_build_dir, '-w', 'dupbuild=err', 'gn']
+  if options.jobs:
+    cmd += ['-j', str(options.jobs)]
+  subprocess.check_call(cmd)
   shutil.copy2(os.path.join(gn_build_dir, 'gn'), gn_path)
 
   if not options.skip_generate_buildfiles:

@@ -7,8 +7,8 @@
 
 #include <string>
 
-#include "base/callback.h"
 #include "base/component_export.h"
+#include "base/functional/callback.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
 #include "chromeos/ui/frame/caption_buttons/frame_caption_button_container_view.h"
@@ -48,7 +48,8 @@ namespace chromeos {
 class CaptionButtonModel;
 
 // Helper class for managing the window header.
-class COMPONENT_EXPORT(CHROMEOS_UI_FRAME) FrameHeader {
+class COMPONENT_EXPORT(CHROMEOS_UI_FRAME) FrameHeader
+    : public ui::LayerOwner::Observer {
  public:
   // An invisible view that drives the frame's animation. This holds the
   // animating layer as a layer beneath this view so that it's behind all other
@@ -97,7 +98,7 @@ class COMPONENT_EXPORT(CHROMEOS_UI_FRAME) FrameHeader {
   FrameHeader(const FrameHeader&) = delete;
   FrameHeader& operator=(const FrameHeader&) = delete;
 
-  virtual ~FrameHeader();
+  ~FrameHeader() override;
 
   const std::u16string& frame_text_override() const {
     return frame_text_override_;
@@ -129,12 +130,16 @@ class COMPONENT_EXPORT(CHROMEOS_UI_FRAME) FrameHeader {
 
   // True to instruct the frame header to paint the header as an active
   // state.
-  void SetPaintAsActive(bool paint_as_active);
+  virtual void SetPaintAsActive(bool paint_as_active);
 
   // Called when frame show state is changed.
   void OnShowStateChanged(ui::WindowShowState show_state);
 
   void OnFloatStateChanged();
+
+  // Set/Get the radius of top-left and top-right corners of the header.
+  int header_corner_radius() const { return corner_radius_; }
+  void SetHeaderCornerRadius(int radius);
 
   void SetLeftHeaderView(views::View* view);
   void SetBackButton(views::FrameCaptionButton* view);
@@ -143,7 +148,8 @@ class COMPONENT_EXPORT(CHROMEOS_UI_FRAME) FrameHeader {
   chromeos::FrameCenterButton* GetCenterButton() const;
   const chromeos::CaptionButtonModel* GetCaptionButtonModel() const;
 
-  // Updates the frame header painting to reflect a change in frame colors.
+  // Updates the frame header painting to reflect a change in frame colors and a
+  // change in mode.
   virtual void UpdateFrameColors() = 0;
 
   // Returns window mask for the rounded corner of the frame header.
@@ -155,11 +161,26 @@ class COMPONENT_EXPORT(CHROMEOS_UI_FRAME) FrameHeader {
 
   void UpdateFrameHeaderKey();
 
+  // Adds the layer owned by layer_owner to the kbelow LayerRegion of the frame
+  // header view, so that the layer can be always below the layer of frame
+  // header regardless of the view hierarchy.
+  // It is the caller's responsibility to call RemoveLayerBeneath(), when the
+  // layer_owner or the layer owned by layer_owner is destroyed, or when
+  // the layer is removed from its parent; so that view::ReorderChildLayers()
+  // can function properly when it adjusts the children layers order of the
+  // parent of frame header view.
+  void AddLayerBeneath(ui::LayerOwner* layer_owner);
+  // Removes the effect of AddLayerBeneath().
+  void RemoveLayerBeneath();
+
   views::View* view() { return view_; }
 
   chromeos::FrameCaptionButtonContainerView* caption_button_container() {
     return caption_button_container_;
   }
+
+  // ui::LayerOwner::Observer overrides:
+  void OnLayerRecreated(ui::Layer* old_layer) override;
 
  protected:
   FrameHeader(views::Widget* target_widget, views::View* view);
@@ -172,7 +193,7 @@ class COMPONENT_EXPORT(CHROMEOS_UI_FRAME) FrameHeader {
   // and to have the same width as |view_|.
   gfx::Rect GetPaintedBounds() const;
 
-  void UpdateCaptionButtonColors();
+  void UpdateCaptionButtonColors(std::optional<ui::ColorId> icon_color_id);
 
   void PaintTitleBar(gfx::Canvas* canvas);
 
@@ -188,6 +209,8 @@ class COMPONENT_EXPORT(CHROMEOS_UI_FRAME) FrameHeader {
 
   // Starts fade transition animation with given duration.
   void StartTransitionAnimation(base::TimeDelta duration);
+
+  ui::ColorId GetColorIdForCurrentMode() const;
 
  private:
   FRIEND_TEST_ALL_PREFIXES(ash::DefaultFrameHeaderTest, BackButtonAlignment);
@@ -222,8 +245,15 @@ class COMPONENT_EXPORT(CHROMEOS_UI_FRAME) FrameHeader {
   // Used to skip animation when the frame hasn't painted yet.
   bool painted_ = false;
 
+  // Layer owner to keep track of the layer that's put beneath the frame header
+  // view.
+  raw_ptr<ui::LayerOwner> underneath_layer_owner_ = nullptr;
+
   // Whether the header should be painted as active.
   Mode mode_ = MODE_INACTIVE;
+
+  // The radius of the top-left and top-right corners of the header.
+  int corner_radius_ = 0;
 
   std::u16string frame_text_override_;
 };

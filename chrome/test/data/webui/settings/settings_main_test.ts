@@ -3,7 +3,7 @@
 // found in the LICENSE file.
 
 // clang-format off
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 import {flush} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 import {CrSettingsPrefs, pageVisibility, Router, routes, SearchManager, SearchRequest, setSearchManagerForTesting, SettingsIdleLoadElement, SettingsMainElement, SettingsPrefsElement} from 'chrome://settings/settings.js';
 import {assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chai_assert.js';
@@ -289,5 +289,14 @@ suite('MainPageTests', function() {
         document.title,
         loadTimeData.getStringF(
             'settingsAltPageTitle', loadTimeData.getString('aboutPageTitle')));
+  });
+
+  test('uses parent title for navigable dialog routes', function() {
+    Router.getInstance().navigateTo(routes.CLEAR_BROWSER_DATA);
+    assertEquals(
+        document.title,
+        loadTimeData.getStringF(
+            'settingsAltPageTitle',
+            loadTimeData.getString('privacyPageTitle')));
   });
 });

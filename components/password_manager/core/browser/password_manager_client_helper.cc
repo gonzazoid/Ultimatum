@@ -5,6 +5,7 @@
 #include "components/password_manager/core/browser/password_manager_client_helper.h"
 
 #include "base/strings/utf_string_conversions.h"
+#include "build/build_config.h"
 #include "components/password_manager/core/browser/password_bubble_experiment.h"
 #include "components/password_manager/core/browser/password_feature_manager.h"
 #include "components/password_manager/core/browser/password_form_manager_for_ui.h"
@@ -21,8 +22,7 @@ namespace password_manager {
 
 namespace {
 
-constexpr int kMaxMoveToAccountOffersForNonOptedInUser = 5;
-
+#if !BUILDFLAG(IS_IOS) && !BUILDFLAG(IS_ANDROID)
 bool IsPrimaryAccountSignIn(const signin::IdentityManager& identity_manager,
                             const std::u16string& username,
                             const std::string& signon_realm) {
@@ -33,6 +33,7 @@ bool IsPrimaryAccountSignIn(const signin::IdentityManager& identity_manager,
          gaia::AreEmailsSame(base::UTF16ToUTF8(username),
                              primary_account.email);
 }
+#endif  // !BUILDFLAG(IS_IOS) && !BUILDFLAG(IS_ANDROID)
 
 }  // namespace
 
@@ -99,22 +100,26 @@ bool PasswordManagerClientHelper::ShouldPromptToEnableAutoSignIn() const {
   return password_bubble_experiment::
              ShouldShowAutoSignInPromptFirstRunExperience(
                  delegate_->GetPrefs()) &&
-         delegate_->IsAutoSignInEnabled() && !delegate_->IsIncognito();
+         delegate_->IsAutoSignInEnabled() && !delegate_->IsOffTheRecord();
 }
 
 bool PasswordManagerClientHelper::ShouldPromptToMovePasswordToAccount(
     const PasswordFormManagerForUI& submitted_manager) const {
+#if !BUILDFLAG(IS_IOS) && !BUILDFLAG(IS_ANDROID)
   PasswordFeatureManager* feature_manager =
       delegate_->GetPasswordFeatureManager();
   if (!feature_manager->ShouldShowAccountStorageBubbleUi())
     return false;
+  if (!feature_manager->IsOptedInForAccountStorage()) {
+    return false;
+  }
   if (feature_manager->GetDefaultPasswordStore() ==
       PasswordForm::Store::kProfileStore) {
     return false;
   }
   if (!submitted_manager.IsMovableToAccountStore())
     return false;
-  if (delegate_->IsIncognito())
+  if (delegate_->IsOffTheRecord())
     return false;
   // It's not useful to store the password for the primary account inside
   // that same account.
@@ -124,9 +129,12 @@ bool PasswordManagerClientHelper::ShouldPromptToMovePasswordToAccount(
           submitted_manager.GetPendingCredentials().signon_realm)) {
     return false;
   }
-  return feature_manager->IsOptedInForAccountStorage() ||
-         feature_manager->GetMoveOfferedToNonOptedInUserCount() <
-             kMaxMoveToAccountOffersForNonOptedInUser;
+  return true;
+#else
+  // On Android and iOS, prompting to move after using a password isn't
+  // implemented.
+  return false;
+#endif  // !BUILDFLAG(IS_IOS) && !BUILDFLAG(IS_ANDROID)
 }
 
 }  // namespace password_manager

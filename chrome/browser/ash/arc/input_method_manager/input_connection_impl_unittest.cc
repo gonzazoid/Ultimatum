@@ -4,6 +4,7 @@
 
 #include "chrome/browser/ash/arc/input_method_manager/input_connection_impl.h"
 
+#include "base/memory/raw_ptr.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/task_environment.h"
 #include "chrome/browser/ash/arc/input_method_manager/test_input_method_manager_bridge.h"
@@ -36,22 +37,18 @@ class DummyInputMethodEngineObserver
   void OnActivate(const std::string& engine_id) override {}
   void OnFocus(const std::string& engine_id,
                int context_id,
-               const ui::TextInputMethod::InputContext& context) override {}
-  void OnTouch(ui::EventPointerType pointerType) override {}
+               const ash::TextInputMethod::InputContext& context) override {}
   void OnBlur(const std::string& engine_id, int context_id) override {}
-  void OnKeyEvent(const std::string& engine_id,
-                  const ui::KeyEvent& event,
-                  ui::TextInputMethod::KeyEventDoneCallback key_data) override {
-  }
+  void OnKeyEvent(
+      const std::string& engine_id,
+      const ui::KeyEvent& event,
+      ash::TextInputMethod::KeyEventDoneCallback key_data) override {}
   void OnReset(const std::string& engine_id) override {}
   void OnDeactivated(const std::string& engine_id) override {}
-  void OnCompositionBoundsChanged(
-      const std::vector<gfx::Rect>& bounds) override {}
   void OnCaretBoundsChanged(const gfx::Rect& caret_bounds) override {}
   void OnSurroundingTextChanged(const std::string& engine_id,
                                 const std::u16string& text,
-                                int cursor_pos,
-                                int anchor_pos,
+                                const gfx::Range selection_range,
                                 int offset_pos) override {}
   void OnCandidateClicked(const std::string& component_id,
                           int candidate_id,
@@ -85,7 +82,7 @@ class TestInputMethodManager
   scoped_refptr<State> state_;
 };
 
-class TestIMEInputContextHandler : public ui::MockIMEInputContextHandler {
+class TestIMEInputContextHandler : public ash::MockIMEInputContextHandler {
  public:
   explicit TestIMEInputContextHandler(ui::InputMethod* input_method)
       : input_method_(input_method) {}
@@ -99,22 +96,22 @@ class TestIMEInputContextHandler : public ui::MockIMEInputContextHandler {
   ui::InputMethod* GetInputMethod() override { return input_method_; }
 
   void SendKeyEvent(ui::KeyEvent* event) override {
-    ui::MockIMEInputContextHandler::SendKeyEvent(event);
+    ash::MockIMEInputContextHandler::SendKeyEvent(event);
     ++send_key_event_call_count_;
   }
 
-  bool SetCompositionRange(
+  bool SetComposingRange(
       uint32_t before,
       uint32_t after,
       const std::vector<ui::ImeTextSpan>& text_spans) override {
-    ui::MockIMEInputContextHandler::SetCompositionRange(before, after,
-                                                        text_spans);
+    ash::MockIMEInputContextHandler::SetComposingRange(before, after,
+                                                       text_spans);
     composition_range_history_.push_back(std::make_tuple(before, after));
     return true;
   }
 
   void Reset() {
-    ui::MockIMEInputContextHandler::Reset();
+    ash::MockIMEInputContextHandler::Reset();
     send_key_event_call_count_ = 0;
     composition_range_history_.clear();
   }
@@ -125,7 +122,7 @@ class TestIMEInputContextHandler : public ui::MockIMEInputContextHandler {
   }
 
  private:
-  ui::InputMethod* const input_method_;
+  const raw_ptr<ui::InputMethod> input_method_;
 
   int send_key_event_call_count_ = 0;
   std::vector<std::tuple<int, int>> composition_range_history_;
@@ -188,11 +185,8 @@ class InputConnectionImplTest : public testing::Test {
 
   MockTextInputClient* client() { return &text_input_client_; }
 
-  ui::TextInputMethod::InputContext context() {
-    return ui::TextInputMethod::InputContext{
-        ui::TEXT_INPUT_TYPE_TEXT, ui::TEXT_INPUT_MODE_DEFAULT, 0 /* flags */,
-        ui::TextInputClient::FOCUS_REASON_MOUSE,
-        ui::PersonalizationMode::kEnabled};
+  ash::TextInputMethod::InputContext context() {
+    return ash::TextInputMethod::InputContext(ui::TEXT_INPUT_TYPE_TEXT);
   }
 
   void SetUp() override {
@@ -206,14 +200,14 @@ class InputConnectionImplTest : public testing::Test {
         ChromeKeyboardControllerClientTestHelper::InitializeWithFake();
 
     // Enable InputMethodEngine.
-    ui::IMEBridge::Get()->SetInputContextHandler(&context_handler_);
+    ash::IMEBridge::Get()->SetInputContextHandler(&context_handler_);
     input_method_.SetFocusedTextInputClient(&text_input_client_);
     engine()->Enable("test_component_id");
   }
 
   void TearDown() override {
     chrome_keyboard_controller_client_test_helper_.reset();
-    ui::IMEBridge::Get()->SetInputContextHandler(nullptr);
+    ash::IMEBridge::Get()->SetInputContextHandler(nullptr);
     engine_.reset();
     bridge_.reset();
     ash::input_method::InputMethodManager::Shutdown();
@@ -278,7 +272,7 @@ TEST_F(InputConnectionImplTest, FinishComposingText) {
   // If there is composing text, FinishComposingText() calls CommitText() with
   // the text.
   context_handler()->Reset();
-  connection->SetComposingText(u"composing", 0, absl::nullopt);
+  connection->SetComposingText(u"composing", 0, std::nullopt);
   client()->SetText("composing");
   client()->SetCompositionRange(gfx::Range(0, 9));
   EXPECT_EQ(0, context_handler()->commit_text_call_count());
@@ -299,7 +293,7 @@ TEST_F(InputConnectionImplTest, SetComposingText) {
   engine()->Focus(context());
 
   context_handler()->Reset();
-  connection->SetComposingText(text, 0, absl::nullopt);
+  connection->SetComposingText(text, 0, std::nullopt);
   EXPECT_EQ(1, context_handler()->update_preedit_text_call_count());
   EXPECT_EQ(
       text,
@@ -322,7 +316,7 @@ TEST_F(InputConnectionImplTest, SetComposingText) {
 
   // Selection range
   context_handler()->Reset();
-  connection->SetComposingText(text, 0, absl::make_optional<gfx::Range>(1, 3));
+  connection->SetComposingText(text, 0, std::make_optional<gfx::Range>(1, 3));
   EXPECT_EQ(1u, context_handler()
                     ->last_update_composition_arg()
                     .composition_text.selection.start());
@@ -405,7 +399,7 @@ TEST_F(InputConnectionImplTest, SetCompositionRange) {
   // a[b|cd]e
   connection->SetCompositionRange(gfx::Range(1, 4));
   EXPECT_EQ(1u, context_handler()->composition_range_history().size());
-  EXPECT_EQ(std::make_tuple(1, 2),
+  EXPECT_EQ(std::make_tuple(1, 4),
             context_handler()->composition_range_history().back());
 
   engine()->Blur();
@@ -413,12 +407,12 @@ TEST_F(InputConnectionImplTest, SetCompositionRange) {
 
 TEST_F(InputConnectionImplTest, InputContextHandlerIsNull) {
   auto connection = CreateNewConnection(1);
-  ui::IMEBridge::Get()->SetInputContextHandler(nullptr);
+  ash::IMEBridge::Get()->SetInputContextHandler(nullptr);
 
   connection->CommitText(u"text", 1);
   connection->DeleteSurroundingText(1, 1);
   connection->FinishComposingText();
-  connection->SetComposingText(u"text", 0, absl::nullopt);
+  connection->SetComposingText(u"text", 0, std::nullopt);
   connection->SetSelection(gfx::Range(2, 4));
   connection->GetTextInputState(true);
 }

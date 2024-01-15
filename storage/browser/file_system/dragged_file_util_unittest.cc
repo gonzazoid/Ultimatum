@@ -13,10 +13,12 @@
 #include <vector>
 
 #include "base/check.h"
+#include "base/containers/contains.h"
 #include "base/containers/queue.h"
 #include "base/files/file_enumerator.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/task_environment.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
@@ -113,10 +115,11 @@ class DraggedFileUtilTest : public testing::Test {
     base::FilePath partition_path = partition_dir_.GetPath();
     quota_manager_ = base::MakeRefCounted<storage::MockQuotaManager>(
         /*is_incognito=*/false, partition_path,
-        base::ThreadTaskRunnerHandle::Get(),
+        base::SingleThreadTaskRunner::GetCurrentDefault(),
         base::MakeRefCounted<storage::MockSpecialStoragePolicy>());
     quota_manager_proxy_ = base::MakeRefCounted<storage::MockQuotaManagerProxy>(
-        quota_manager_.get(), base::ThreadTaskRunnerHandle::Get());
+        quota_manager_.get(),
+        base::SingleThreadTaskRunner::GetCurrentDefault());
     // Prepare file system.
     file_system_context_ = storage::CreateFileSystemContextForTesting(
         quota_manager_proxy_.get(), partition_path);
@@ -246,7 +249,7 @@ class DraggedFileUtilTest : public testing::Test {
           continue;
         }
         base::FilePath relative = GetRelativeVirtualPath(root2, url2);
-        EXPECT_TRUE(file_set1.find(relative) != file_set1.end());
+        EXPECT_TRUE(base::Contains(file_set1, relative));
         VerifyFilesHaveSameContent(url1, url2);
       }
     }
@@ -269,7 +272,7 @@ class DraggedFileUtilTest : public testing::Test {
 
       // We create the test case files under one of the kRootPaths
       // to simulate a drop with multiple directories.
-      if (toplevel_root_map_.find(toplevel) == toplevel_root_map_.end()) {
+      if (!base::Contains(toplevel_root_map_, toplevel)) {
         base::FilePath root = root_path().Append(
             kRootPaths[(root_path_index++) % std::size(kRootPaths)]);
         toplevel_root_map_[toplevel] = root;

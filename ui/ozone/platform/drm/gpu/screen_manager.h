@@ -14,6 +14,7 @@
 #include "ui/gfx/native_widget_types.h"
 #include "ui/ozone/platform/drm/gpu/drm_display.h"
 #include "ui/ozone/platform/drm/gpu/hardware_display_controller.h"
+#include "ui/ozone/public/drm_modifiers_filter.h"
 
 typedef struct _drmModeModeInfo drmModeModeInfo;
 
@@ -40,6 +41,7 @@ class ScreenManager {
                            uint32_t connector,
                            gfx::Point origin,
                            std::unique_ptr<drmModeModeInfo> pmode,
+                           bool enable_vrr = false,
                            uint64_t base_connector_id = 0);
     ControllerConfigParams(const ControllerConfigParams& other);
     ControllerConfigParams(ControllerConfigParams&& other);
@@ -52,6 +54,7 @@ class ScreenManager {
     const uint64_t base_connector_id;
     const gfx::Point origin;
     std::unique_ptr<drmModeModeInfo> mode;
+    const bool enable_vrr;
   };
   using ControllerConfigsList = std::vector<ControllerConfigParams>;
 
@@ -104,6 +107,11 @@ class ScreenManager {
   // Adds trace records to |context|.
   void WriteIntoTrace(perfetto::TracedValue context) const;
 
+  // Sets the DRM modifiers filter that removes modifiers incompatible with use
+  // in raster and composite. This must be called during initialization before
+  // any modeset happens.
+  void SetDrmModifiersFilter(std::unique_ptr<DrmModifiersFilter> filter);
+
  private:
   using HardwareDisplayControllers =
       std::vector<std::unique_ptr<HardwareDisplayController>>;
@@ -148,7 +156,8 @@ class ScreenManager {
       uint32_t connector,
       const gfx::Point& origin,
       const drmModeModeInfo& mode,
-      const DrmOverlayPlaneList& modeset_planes);
+      const DrmOverlayPlaneList& modeset_planes,
+      bool enable_vrr);
 
   // Configures a display controller to be disabled. The display controller is
   // identified by |crtc|. Controller modeset props are added into
@@ -191,12 +200,16 @@ class ScreenManager {
                                  HardwareDisplayController* controller,
                                  const gfx::Point& origin,
                                  const drmModeModeInfo& mode,
-                                 const DrmOverlayPlaneList& modeset_planes);
+                                 const DrmOverlayPlaneList& modeset_planes,
+                                 bool enable_vrr);
   void GetEnableControllerProps(CommitRequest* commit_request,
                                 HardwareDisplayController* controller,
                                 const DrmOverlayPlaneList& modeset_planes);
 
   DrmWindow* FindWindowAt(const gfx::Rect& bounds) const;
+
+  // This must be destructed before |controllers_|.
+  std::unique_ptr<DrmModifiersFilter> drm_modifiers_filter_;
 
   // List of display controllers (active and disabled).
   HardwareDisplayControllers controllers_;

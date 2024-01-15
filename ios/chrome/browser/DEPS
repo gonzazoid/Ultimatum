@@ -2,6 +2,7 @@ include_rules = [
   "+components/autofill/core/browser",
   "+components/autofill/core/common",
   "+components/autofill/ios/browser",
+  "+components/autofill/ios/common",
   "+components/autofill/ios/form_util",
   "+components/bookmarks",
   "+components/breadcrumbs/core",
@@ -12,11 +13,11 @@ include_rules = [
   "+components/commerce/ios",
   "+components/component_updater",
   "+components/content_settings/core",
-  "+components/cookie_config",
   "+components/country_codes",
   "+components/crash/core/app",
   "+components/crash/core/browser",
   "+components/crash/core/common",
+  "+components/device_reauth",
   "+components/dom_distiller/core",
   "+components/download",
   "+components/dom_distiller/ios",
@@ -24,6 +25,7 @@ include_rules = [
   "+components/error_page/common",
   "+components/favicon/core",
   "+components/shared_highlighting/core/common",
+  "+components/power_bookmarks/core",
   "+components/previous_session_info/previous_session_info.h",
   "+components/favicon/ios",
   "+components/favicon_base",
@@ -52,13 +54,11 @@ include_rules = [
   "+components/lookalikes/core",
   "+components/metrics",
   "+components/user_prefs",
-  "+components/url_param_filter/ios",
   "+components/metrics_services_manager",
   "+components/navigation_metrics",
   "+components/net_log",
   "+components/network_session_configurator",
   "+components/network_time",
-  "+components/ntp_snippets",
   "+components/ntp_tiles",
   "+components/omnibox/browser",
   "+components/omnibox/common",
@@ -69,11 +69,14 @@ include_rules = [
   "+components/password_manager/ios",
   "+components/payments/core",
   "+components/payments/mojom",
+  "+components/plus_addresses",
   "+components/policy/core/browser",
   "+components/policy/core/common",
   "+components/policy/policy_constants.h",
   "+components/policy/proto/device_management_backend.pb.h",
   "+components/pref_registry",
+  "+components/startup_metric_utils/browser",
+  "+components/startup_metric_utils/common",
   "+components/prefs",
   "+components/profile_metrics",
   "+components/proxy_config",
@@ -91,6 +94,7 @@ include_rules = [
   "+components/security_interstitials",
   "+components/security_state",
   "+components/segmentation_platform/public",
+  "+components/segmentation_platform/embedder",
   "+components/send_tab_to_self",
   "+components/services/patch",
   "+components/services/unzip",
@@ -102,6 +106,7 @@ include_rules = [
   "+components/signin/ios/browser",
   "+components/ssl_errors",
   "+components/suggestions",
+  "+components/supervised_user",
   "+components/sync",
   "+components/sync_bookmarks",
   "+components/sync_device_info",
@@ -118,8 +123,6 @@ include_rules = [
   "+components/update_client",
   "+components/upload_list",
   "+components/url_formatter",
-  "+components/url_param_filter/core",
-  "+components/url_param_filter/ios",
   "+components/variations",
   "+components/variations/net",
   "+components/version_info",
@@ -160,6 +163,15 @@ include_rules = [
   "-components/metrics/gpu",
   "-components/sessions/content",
 
+  # Features should add explicit dependencies.
+  "-ios/chrome/browser",
+
+  # Shared dependencies.
+  "+ios/chrome/browser/shared/coordinator",
+  "+ios/chrome/browser/shared/model",
+  "+ios/chrome/browser/shared/ui",
+  "+ios/chrome/browser/shared/public",
+
   # ios/chrome/browser should not depend on ios/chrome/browser/ui except
   # on commands.
   "-ios/chrome/browser/ui",
@@ -182,5 +194,7 @@ specific_include_rules = {
     # TODO(crbug.com/1294160): browser should not depend on UI, this is a
     # blanket exception for tests.
     "+ios/chrome/browser/ui",
+    # Blanket exception for tests to be allowed to depend on everything.
+    "+ios/chrome/browser",
   ],
 }

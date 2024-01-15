@@ -9,9 +9,9 @@
 #include <set>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/strings/utf_string_conversions.h"
@@ -50,19 +50,16 @@ class MockBrowsingHistoryService : public BrowsingHistoryService {
 namespace {
 
 base::Time PretendNow() {
-  base::Time::Exploded exploded_reference_time;
-  exploded_reference_time.year = 2015;
-  exploded_reference_time.month = 1;
-  exploded_reference_time.day_of_month = 2;
-  exploded_reference_time.day_of_week = 5;
-  exploded_reference_time.hour = 11;
-  exploded_reference_time.minute = 0;
-  exploded_reference_time.second = 0;
-  exploded_reference_time.millisecond = 0;
-
+  static constexpr base::Time::Exploded kReferenceTime = {.year = 2015,
+                                                          .month = 1,
+                                                          .day_of_week = 5,
+                                                          .day_of_month = 2,
+                                                          .hour = 11,
+                                                          .minute = 0,
+                                                          .second = 0,
+                                                          .millisecond = 0};
   base::Time out_time;
-  EXPECT_TRUE(
-      base::Time::FromLocalExploded(exploded_reference_time, &out_time));
+  EXPECT_TRUE(base::Time::FromLocalExploded(kReferenceTime, &out_time));
   return out_time;
 }
 
@@ -99,7 +96,7 @@ class BrowsingHistoryHandlerWithWebUIForTesting
  private:
   base::SimpleTestClock test_clock_;
   bool postpone_query_results_ = false;
-  raw_ptr<history::MockBrowsingHistoryService> mock_service_;
+  raw_ptr<history::MockBrowsingHistoryService, DanglingUntriaged> mock_service_;
 };
 
 }  // namespace
@@ -170,8 +167,9 @@ class BrowsingHistoryHandlerTest : public ChromeRenderViewHostTestHarness {
     return service;
   }
 
-  raw_ptr<syncer::TestSyncService> sync_service_ = nullptr;
-  raw_ptr<history::FakeWebHistoryService> web_history_service_ = nullptr;
+  raw_ptr<syncer::TestSyncService, DanglingUntriaged> sync_service_ = nullptr;
+  raw_ptr<history::FakeWebHistoryService, DanglingUntriaged>
+      web_history_service_ = nullptr;
   std::unique_ptr<content::TestWebUI> web_ui_;
 };
 
@@ -383,13 +381,13 @@ TEST_F(BrowsingHistoryHandlerTest, MdTruncatesTitles) {
   ASSERT_TRUE(web_ui()->call_data().front()->arg2()->GetBool());
   const base::Value* arg3 = web_ui()->call_data().front()->arg3();
   ASSERT_TRUE(arg3->is_dict());
-  const base::Value* list = arg3->FindListKey("value");
+  const base::Value* list = arg3->GetDict().Find("value");
   ASSERT_TRUE(list->is_list());
 
   const base::Value& first_entry = list->GetList()[0];
   ASSERT_TRUE(first_entry.is_dict());
 
-  const std::string* title = first_entry.FindStringKey("title");
+  const std::string* title = first_entry.GetDict().FindString("title");
   ASSERT_TRUE(title);
 
   ASSERT_EQ(0u, title->find("http://loooo"));

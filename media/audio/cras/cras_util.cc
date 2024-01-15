@@ -9,13 +9,14 @@
 #include "base/time/time.h"
 #include "media/audio/audio_device_description.h"
 #include "media/audio/cras/audio_manager_cras_base.h"
+#include "media/base/media_switches.h"
 
 namespace media {
 
 namespace {
 
 constexpr char kInternalInputVirtualDevice[] = "Built-in mic";
-constexpr char kInternalOutputVirtualDevice[] = "Built-in speaker";
+constexpr char kInternalOutputVirtualDevice[] = "Built-in speaker/headphone";
 constexpr char kHeadphoneLineOutVirtualDevice[] = "Headphone/Line Out";
 
 // Names below are from the node_type_to_str function in CRAS server.
@@ -137,10 +138,30 @@ CrasDevice::CrasDevice(struct libcras_node_info* node, DeviceType type)
   }
 
   name = std::string(node_name);
-  if (name.empty() || name == "(default)")
+  if (name.empty() || name == "(default)") {
     name = device_name;
+  }
   dev_name = device_name;
 }
+
+CrasDevice::CrasDevice(DeviceType type,
+                       uint64_t id,
+                       uint32_t dev_idx,
+                       uint32_t max_supported_channels,
+                       bool plugged,
+                       bool active,
+                       std::string node_type,
+                       std::string name,
+                       std::string dev_name)
+    : type(type),
+      id(id),
+      dev_idx(dev_idx),
+      max_supported_channels(max_supported_channels),
+      plugged(plugged),
+      active(active),
+      node_type(node_type),
+      name(name),
+      dev_name(dev_name) {}
 
 void mergeDevices(CrasDevice& old_dev, CrasDevice& new_dev) {
   if (old_dev.node_type == kLineout || new_dev.node_type == kLineout) {
@@ -164,12 +185,51 @@ CrasUtil::CrasUtil() = default;
 
 CrasUtil::~CrasUtil() = default;
 
+bool CrasUtil::CacheEffects() {
+  libcras_client* client = CrasConnect();
+  if (!client) {
+    LOG(ERROR) << "Failed to cache effects";
+    return false;
+  }
+  if (libcras_client_get_aec_supported(client, &aec_supported_) < 0) {
+    LOG(ERROR) << "Fail to query AEC supported";
+    aec_supported_ = false;
+  }
+  if (libcras_client_get_agc_supported(client, &agc_supported_) < 0) {
+    LOG(ERROR) << "Fail to query AGC supported";
+    agc_supported_ = false;
+  }
+  if (libcras_client_get_ns_supported(client, &ns_supported_) < 0) {
+    LOG(ERROR) << "Fail to query NS supported";
+    ns_supported_ = false;
+  }
+  if (base::FeatureList::IsEnabled(media::kCrOSSystemVoiceIsolationOption)) {
+    if (libcras_client_get_voice_isolation_supported(
+            client, &voice_isolation_supported_) < 0) {
+      LOG(ERROR) << "Fail to query VoiceIsolation supported";
+      voice_isolation_supported_ = false;
+    }
+  }
+  if (libcras_client_get_aec_group_id(client, &aec_group_id_) < 0) {
+    LOG(ERROR) << "Fail to query AEC group ID";
+    aec_group_id_ = -1;  // The default group ID is -1
+  }
+  if (libcras_client_get_default_output_buffer_size(
+          client, &default_output_buffer_size_) < 0) {
+    LOG(ERROR) << "Fail to query default output buffer size";
+    default_output_buffer_size_ = 0;
+  }
+  CrasDisconnect(&client);
+  return true;
+}
+
 std::vector<CrasDevice> CrasUtil::CrasGetAudioDevices(DeviceType type) {
   std::vector<CrasDevice> devices;
 
   libcras_client* client = CrasConnect();
-  if (!client)
+  if (!client) {
     return devices;
+  }
 
   int rc;
 
@@ -192,8 +252,9 @@ std::vector<CrasDevice> CrasUtil::CrasGetAudioDevices(DeviceType type) {
 
   for (size_t i = 0; i < num_nodes; i++) {
     auto new_dev = CrasDevice(nodes[i], type);
-    if (!new_dev.plugged || !IsForSimpleUsage(new_dev.node_type))
+    if (!new_dev.plugged || !IsForSimpleUsage(new_dev.node_type)) {
       continue;
+    }
     bool added = false;
     for (auto& dev : devices) {
       if (dev.dev_idx == new_dev.dev_idx) {
@@ -202,8 +263,9 @@ std::vector<CrasDevice> CrasUtil::CrasGetAudioDevices(DeviceType type) {
         break;
       }
     }
-    if (!added)
+    if (!added) {
       devices.emplace_back(new_dev);
+    }
   }
 
   libcras_node_info_array_destroy(nodes, num_nodes);
@@ -213,39 +275,45 @@ std::vector<CrasDevice> CrasUtil::CrasGetAudioDevices(DeviceType type) {
 }
 
 int CrasUtil::CrasGetAecSupported() {
-  libcras_client* client = CrasConnect();
-  if (!client)
-    return 0;
+  if (!cras_effects_cached_) {
+    cras_effects_cached_ = CacheEffects();
+  }
+  return aec_supported_;
+}
 
-  int supported;
-  libcras_client_get_aec_supported(client, &supported);
-  CrasDisconnect(&client);
+int CrasUtil::CrasGetAgcSupported() {
+  if (!cras_effects_cached_) {
+    cras_effects_cached_ = CacheEffects();
+  }
+  return agc_supported_;
+}
 
-  return supported;
+int CrasUtil::CrasGetNsSupported() {
+  if (!cras_effects_cached_) {
+    cras_effects_cached_ = CacheEffects();
+  }
+  return ns_supported_;
+}
+
+int CrasUtil::CrasGetVoiceIsolationSupported() {
+  if (!cras_effects_cached_) {
+    cras_effects_cached_ = CacheEffects();
+  }
+  return voice_isolation_supported_;
 }
 
 int CrasUtil::CrasGetAecGroupId() {
-  libcras_client* client = CrasConnect();
-  if (!client)
-    return -1;
-
-  int id;
-  int rc = libcras_client_get_aec_group_id(client, &id);
-  CrasDisconnect(&client);
-
-  return rc < 0 ? rc : id;
+  if (!cras_effects_cached_) {
+    cras_effects_cached_ = CacheEffects();
+  }
+  return aec_group_id_;
 }
 
 int CrasUtil::CrasGetDefaultOutputBufferSize() {
-  libcras_client* client = CrasConnect();
-  if (!client)
-    return -1;
-
-  int size;
-  int rc = libcras_client_get_default_output_buffer_size(client, &size);
-  CrasDisconnect(&client);
-
-  return rc < 0 ? rc : size;
+  if (!cras_effects_cached_) {
+    cras_effects_cached_ = CacheEffects();
+  }
+  return default_output_buffer_size_;
 }
 
 }  // namespace media

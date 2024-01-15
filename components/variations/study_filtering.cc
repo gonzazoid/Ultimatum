@@ -7,6 +7,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include <cstdint>
 #include <set>
 
 #include "base/containers/contains.h"
@@ -228,6 +229,44 @@ bool CheckStudyEnterprise(const Study::Filter& filter,
          filter.is_enterprise() == client_state.IsEnterprise();
 }
 
+bool CheckStudyGoogleGroup(const Study::Filter& filter,
+                           const ClientFilterableState& client_state) {
+  if (filter.google_group_size() == 0 &&
+      filter.exclude_google_group_size() == 0) {
+    // This study doesn't have any google group configuration, so break early.
+    return true;
+  }
+
+  // Fetch the groups this client is a member of.
+  base::flat_set<uint64_t> client_groups = client_state.GoogleGroups();
+
+  if (filter.google_group_size() > 0 &&
+      filter.exclude_google_group_size() > 0) {
+    // This is an invalid configuration; reject the study.
+    return false;
+  }
+
+  if (filter.google_group_size() > 0) {
+    for (int64_t filter_group : filter.google_group()) {
+      if (base::Contains(client_groups, filter_group)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  if (filter.exclude_google_group_size() > 0) {
+    for (int64_t filter_exclude_group : filter.exclude_google_group()) {
+      if (base::Contains(client_groups, filter_exclude_group)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  return true;
+}
+
 const std::string& GetClientCountryForStudy(
     const Study& study,
     const ClientFilterableState& client_state) {
@@ -359,6 +398,12 @@ bool ShouldAddStudy(const ProcessedStudy& processed_study,
     if (!CheckStudyEnterprise(study.filter(), client_state)) {
       DVLOG(1) << "Filtered out study " << study.name()
                << " due to enterprise state.";
+      return false;
+    }
+
+    if (!CheckStudyGoogleGroup(study.filter(), client_state)) {
+      DVLOG(1) << "Filtered out study " << study.name()
+               << " due to Google groups membership checks.";
       return false;
     }
   }

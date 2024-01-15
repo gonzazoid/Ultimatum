@@ -7,15 +7,16 @@
 
 #include <memory>
 #include <string>
+#include <string_view>
 
 #include "base/component_export.h"
 #include "base/containers/flat_map.h"
 #include "base/json/json_string_value_serializer.h"
-#include "base/strings/string_piece.h"
 #include "base/test/task_environment.h"
 #include "net/traffic_annotation/network_traffic_annotation_test_helper.h"
 #include "net/url_request/url_request_test_util.h"
 #include "services/network/public/mojom/trust_tokens.mojom.h"
+#include "services/network/public/mojom/url_response_head.mojom-forward.h"
 #include "services/network/trust_tokens/trust_token_request_helper.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "url/origin.h"
@@ -38,7 +39,7 @@ class TestURLRequestMaker {
   TestURLRequestMaker& operator=(const TestURLRequestMaker&) = delete;
 
   // Constructs and returns a URLRequest with destination |spec|.
-  std::unique_ptr<net::URLRequest> MakeURLRequest(base::StringPiece spec);
+  std::unique_ptr<net::URLRequest> MakeURLRequest(std::string_view spec);
 
  protected:
   net::TestDelegate delegate_;
@@ -64,7 +65,7 @@ class TrustTokenRequestHelperTest : public ::testing::Test {
 
   TestURLRequestMaker request_maker_;
 
-  std::unique_ptr<net::URLRequest> MakeURLRequest(base::StringPiece spec) {
+  std::unique_ptr<net::URLRequest> MakeURLRequest(std::string_view spec) {
     return request_maker_.MakeURLRequest(spec);
   }
 
@@ -105,7 +106,8 @@ struct TrustTokenTestParameters final {
   // TrustTokenTestParameters (when serialized, nullopt in an optional field
   // will be omitted from the parameter's value):
   TrustTokenTestParameters(
-      mojom::TrustTokenOperationType type,
+      int version,
+      mojom::TrustTokenOperationType operation,
       absl::optional<mojom::TrustTokenRefreshPolicy> refresh_policy,
       absl::optional<std::vector<std::string>> issuer_specs);
 
@@ -114,7 +116,8 @@ struct TrustTokenTestParameters final {
   TrustTokenTestParameters(const TrustTokenTestParameters&);
   TrustTokenTestParameters& operator=(const TrustTokenTestParameters&);
 
-  mojom::TrustTokenOperationType type;
+  int version;
+  mojom::TrustTokenOperationType operation;
   absl::optional<mojom::TrustTokenRefreshPolicy> refresh_policy;
   // Because static initialization of GURLs/Origins isn't allowed in tests, use
   // the string representation of the issuer origins and convert them to Origins
@@ -125,7 +128,7 @@ struct TrustTokenTestParameters final {
 // Serializes the value of a Trust Tokens enum parameter to its JS string
 // representation. Must be kept in sync with the corresponding IDL enum
 // definition.
-std::string TrustTokenEnumToString(mojom::TrustTokenOperationType type);
+std::string TrustTokenEnumToString(mojom::TrustTokenOperationType operation);
 std::string TrustTokenEnumToString(mojom::TrustTokenRefreshPolicy policy);
 std::string TrustTokenEnumToString(
     mojom::TrustTokenSignRequestData sign_request_data);
@@ -162,20 +165,24 @@ SerializeTrustTokenParametersAndConstructExpectation(
 // parameters; see above for a more detailed description of the intended use.
 const TrustTokenTestParameters kIssuanceTrustTokenTestParameters[]{
     // For issuance, there are no additional parameters to specify.
-    TrustTokenTestParameters(mojom::TrustTokenOperationType::kIssuance,
+    TrustTokenTestParameters(1,
+                             mojom::TrustTokenOperationType::kIssuance,
                              absl::nullopt,
                              absl::nullopt)};
 
 const TrustTokenTestParameters kRedemptionTrustTokenTestParameters[]{
     // For redemption, there is one free parameter, refreshPolicy, with two
     // values (and a default).
-    TrustTokenTestParameters(mojom::TrustTokenOperationType::kRedemption,
+    TrustTokenTestParameters(1,
+                             mojom::TrustTokenOperationType::kRedemption,
                              mojom::TrustTokenRefreshPolicy::kRefresh,
                              absl::nullopt),
-    TrustTokenTestParameters(mojom::TrustTokenOperationType::kRedemption,
+    TrustTokenTestParameters(1,
+                             mojom::TrustTokenOperationType::kRedemption,
                              mojom::TrustTokenRefreshPolicy::kUseCached,
                              absl::nullopt),
-    TrustTokenTestParameters(mojom::TrustTokenOperationType::kRedemption,
+    TrustTokenTestParameters(1,
+                             mojom::TrustTokenOperationType::kRedemption,
                              absl::nullopt,
                              absl::nullopt)};
 
@@ -183,10 +190,12 @@ const TrustTokenTestParameters kSigningTrustTokenTestParameters[]{
     // Signing's inputs are issuers; "issuers" must be nonempty and must only
     // contain secure origins.
     TrustTokenTestParameters(
+        1,
         mojom::TrustTokenOperationType::kSigning,
         absl::nullopt,
         std::vector<std::string>{"https://issuer.example"}),
     TrustTokenTestParameters(
+        1,
         mojom::TrustTokenOperationType::kSigning,
         absl::nullopt,
         std::vector<std::string>{"https://issuer.example",
@@ -202,7 +211,7 @@ const TrustTokenTestParameters kSigningTrustTokenTestParameters[]{
 //      }})
 //   =  R"( { "https://issuer.com": { "batchsize": 5 } } )"
 std::string WrapKeyCommitmentsForIssuers(
-    base::flat_map<url::Origin, base::StringPiece> issuers_and_commitments);
+    base::flat_map<url::Origin, std::string_view> issuers_and_commitments);
 
 }  // namespace network
 

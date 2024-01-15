@@ -12,7 +12,7 @@
 
 #include "base/containers/flat_map.h"
 #include "base/memory/ref_counted.h"
-#include "base/threading/thread_checker.h"
+#include "base/sequence_checker.h"
 #include "components/component_updater/update_scheduler.h"
 #include "components/update_client/persisted_data.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -87,13 +87,15 @@ class CrxUpdateService : public ComponentUpdateService,
 
   const CrxUpdateItem* GetComponentState(const std::string& id) const;
 
-  std::vector<absl::optional<CrxComponent>> GetCrxComponents(
-      const std::vector<std::string>& ids);
+  void GetCrxComponents(
+      const std::vector<std::string>& ids,
+      base::OnceCallback<void(const std::vector<absl::optional<CrxComponent>>&)>
+          callback);
   void OnUpdateComplete(Callback callback,
                         const base::TimeTicks& start_time,
                         update_client::Error error);
 
-  base::ThreadChecker thread_checker_;
+  SEQUENCE_CHECKER(sequence_checker_);
 
   scoped_refptr<Configurator> config_;
   std::unique_ptr<UpdateScheduler> scheduler_;

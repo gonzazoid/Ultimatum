@@ -9,8 +9,12 @@
 
 #include "ash/ash_export.h"
 #include "ash/drag_drop/drag_drop_capture_delegate.h"
+#include "ash/drag_drop/tab_drag_drop_windows_hider.h"
 #include "ash/wm/splitview/split_view_controller.h"
-#include "ui/gfx/geometry/point.h"
+#include "ash/wm/splitview/split_view_types.h"
+#include "base/gtest_prod_util.h"
+#include "base/memory/raw_ptr.h"
+#include "ui/aura/window_observer.h"
 
 namespace aura {
 class Window;
@@ -18,18 +22,20 @@ class Window;
 
 namespace ui {
 class OSExchangeData;
+class Point;
 class PresentationTimeRecorder;
-}
+}  // namespace ui
 
 namespace ash {
 
 class SplitViewDragIndicators;
-class TabletModeBrowserWindowDragSessionWindowsHider;
+class TabDragDropWindowsHider;
 
 // Provides special handling for Chrome tab drags on behalf of
 // DragDropController. This must be created at the beginning of a tab drag and
 // destroyed at the end.
-class ASH_EXPORT TabDragDropDelegate : public DragDropCaptureDelegate {
+class ASH_EXPORT TabDragDropDelegate : public DragDropCaptureDelegate,
+                                       public aura::WindowObserver {
  public:
   // Determines whether |drag_data| indicates a tab drag from a WebUI tab strip
   // (or simply returns false if the integration is disabled).
@@ -60,6 +66,9 @@ class ASH_EXPORT TabDragDropDelegate : public DragDropCaptureDelegate {
   void DropAndDeleteSelf(const gfx::Point& location_in_screen,
                          const ui::OSExchangeData& drop_data);
 
+  // Overridden from aura::WindowObserver.
+  void OnWindowDestroying(aura::Window* window) override;
+
  private:
   FRIEND_TEST_ALL_PREFIXES(TabDragDropDelegateTest, DropWithoutNewWindow);
 
@@ -67,7 +76,7 @@ class ASH_EXPORT TabDragDropDelegate : public DragDropCaptureDelegate {
   // |candidate_snap_position| is where the dragged tab will be snapped
   // if dropped immediately.
   void UpdateSourceWindowBoundsIfNecessary(
-      SplitViewController::SnapPosition candidate_snap_position,
+      SnapPosition candidate_snap_position,
       const gfx::Point& location_in_screen);
 
   // Puts the source window back into its original position.
@@ -95,13 +104,12 @@ class ASH_EXPORT TabDragDropDelegate : public DragDropCaptureDelegate {
   // https://crbug.com/1316070
   bool ShouldPreventSnapToTheEdge(const gfx::Point& location_in_screen);
 
-  aura::Window* const root_window_;
-  aura::Window* const source_window_;
+  const raw_ptr<aura::Window> root_window_;
+  raw_ptr<aura::Window> source_window_;
   const gfx::Point start_location_in_screen_;
 
   std::unique_ptr<SplitViewDragIndicators> split_view_drag_indicators_;
-  std::unique_ptr<TabletModeBrowserWindowDragSessionWindowsHider>
-      windows_hider_;
+  std::unique_ptr<TabDragDropWindowsHider> windows_hider_;
 
   // Presentation time recorder for tab dragging in tablet mode with webui
   // tab strip enable.

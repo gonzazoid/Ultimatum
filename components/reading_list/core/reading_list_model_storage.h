@@ -5,44 +5,48 @@
 #ifndef COMPONENTS_READING_LIST_CORE_READING_LIST_MODEL_STORAGE_H_
 #define COMPONENTS_READING_LIST_CORE_READING_LIST_MODEL_STORAGE_H_
 
+#include <map>
 #include <memory>
+#include <string>
 
+#include "base/functional/callback.h"
+#include "base/memory/scoped_refptr.h"
+#include "base/types/expected.h"
 #include "components/reading_list/core/reading_list_entry.h"
-#include "components/sync/base/model_type.h"
-#include "components/sync/model/model_type_sync_bridge.h"
+#include "components/sync/model/metadata_batch.h"
 
-class ReadingListModel;
-class ReadingListStoreDelegate;
+class GURL;
 
 namespace base {
 class Clock;
-}
+}  // namespace base
 
 namespace syncer {
-class ModelTypeChangeProcessor;
-}
+class MetadataChangeList;
+}  // namespace syncer
 
 // Interface for a persistence layer for reading list.
 // All interface methods have to be called on main thread.
-class ReadingListModelStorage : public syncer::ModelTypeSyncBridge {
+class ReadingListModelStorage {
  public:
+  using ReadingListEntries = std::map<GURL, scoped_refptr<ReadingListEntry>>;
+  using LoadResult =
+      std::pair<ReadingListEntries, std::unique_ptr<syncer::MetadataBatch>>;
+  using LoadResultOrError = base::expected<LoadResult, std::string>;
+  using LoadCallback = base::OnceCallback<void(LoadResultOrError)>;
+
   class ScopedBatchUpdate;
 
-  ReadingListModelStorage(
-      std::unique_ptr<syncer::ModelTypeChangeProcessor> change_processor);
+  ReadingListModelStorage() = default;
 
   ReadingListModelStorage(const ReadingListModelStorage&) = delete;
   ReadingListModelStorage& operator=(const ReadingListModelStorage&) = delete;
 
-  ~ReadingListModelStorage() override;
+  virtual ~ReadingListModelStorage() = default;
 
-  // Sets the model the Storage is backing.
-  // This will trigger store initalization and load persistent entries.
-  // Pass the |clock| from the |model| to ensure synchroization when loading
-  // entries. Must be called no more than once.
-  virtual void SetReadingListModel(ReadingListModel* model,
-                                   ReadingListStoreDelegate* delegate,
-                                   base::Clock* clock) = 0;
+  // Triggers store initialization and loading of persistent entries. Must be
+  // called no more than once. Upon completion, |load_cb| is invoked.
+  virtual void Load(base::Clock* clock, LoadCallback load_cb) = 0;
 
   // Starts a transaction. All Save/Remove entry will be delayed until the
   // transaction is commited.
@@ -53,21 +57,29 @@ class ReadingListModelStorage : public syncer::ModelTypeSyncBridge {
   // the batch update has completed.
   virtual std::unique_ptr<ScopedBatchUpdate> EnsureBatchCreated() = 0;
 
-  // Saves or updates an entry. If the entry is not yet in the database, it is
-  // created.
-  virtual void SaveEntry(const ReadingListEntry& entry) = 0;
-
-  // Removed an entry from the storage.
-  virtual void RemoveEntry(const ReadingListEntry& entry) = 0;
+  // A robust way to bulk delete all data and sync metadata in storage. The same
+  // behavior could be theoretically achieved by deleting entries individually,
+  // but this specialized API is just more robust.
+  virtual void DeleteAllEntriesAndSyncMetadata() = 0;
 
   class ScopedBatchUpdate {
    public:
-    ScopedBatchUpdate() {}
+    ScopedBatchUpdate() = default;
 
     ScopedBatchUpdate(const ScopedBatchUpdate&) = delete;
     ScopedBatchUpdate& operator=(const ScopedBatchUpdate&) = delete;
 
-    virtual ~ScopedBatchUpdate() {}
+    virtual ~ScopedBatchUpdate() = default;
+
+    // Saves or updates an entry. If the entry is not yet in the database, it is
+    // created.
+    virtual void SaveEntry(const ReadingListEntry& entry) = 0;
+
+    // Removed an entry from the storage.
+    virtual void RemoveEntry(const GURL& entry_url) = 0;
+
+    // Allows modifications to sync metadata in storage.
+    virtual syncer::MetadataChangeList* GetSyncMetadataChangeList() = 0;
   };
 };
 

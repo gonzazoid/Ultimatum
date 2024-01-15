@@ -6,7 +6,7 @@
 
 #import <WebKit/WebKit.h>
 
-#import "base/mac/bridging.h"
+#import "base/apple/bridging.h"
 #import "base/strings/sys_string_conversions.h"
 #import "ios/web/navigation/navigation_manager_impl.h"
 #import "ios/web/public/navigation/navigation_item.h"
@@ -20,10 +20,6 @@
 #import "net/test/test_data_directory.h"
 #import "third_party/ocmock/OCMock/OCMock.h"
 #import "third_party/ocmock/gtest_support.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 // Mocks CRWSSLStatusUpdaterTestDataSource.
 @interface CRWSSLStatusUpdaterTestDataSource
@@ -56,7 +52,7 @@
 #pragma mark CRWSSLStatusUpdaterDataSource
 
 - (void)SSLStatusUpdater:(CRWSSLStatusUpdater*)SSLStatusUpdater
-    querySSLStatusForTrust:(base::ScopedCFTypeRef<SecTrustRef>)trust
+    querySSLStatusForTrust:(base::apple::ScopedCFTypeRef<SecTrustRef>)trust
                       host:(NSString*)host
          completionHandler:(StatusQueryHandler)completionHandler {
   _verificationCompletionHandler = [completionHandler copy];
@@ -92,23 +88,23 @@ class CRWSSLStatusUpdaterTest : public web::WebTest {
     OCMStub([fake_web_view_ backForwardList]).andReturn(fake_wk_list_);
     fake_nav_delegate_.SetWebViewNavigationProxy(fake_web_view_);
 
-    nav_manager_.SetBrowserState(GetBrowserState());
-    nav_manager_.SetDelegate(&fake_nav_delegate_);
+    nav_manager_ = std::make_unique<NavigationManagerImpl>(GetBrowserState(),
+                                                           &fake_nav_delegate_);
 
     ssl_status_updater_ =
         [[CRWSSLStatusUpdater alloc] initWithDataSource:data_source_
-                                      navigationManager:&nav_manager_];
+                                      navigationManager:nav_manager_.get()];
     [ssl_status_updater_ setDelegate:delegate_];
 
     // Create test cert chain.
     scoped_refptr<net::X509Certificate> cert =
         net::ImportCertFromFile(net::GetTestCertsDirectory(), kCertFileName);
     ASSERT_TRUE(cert);
-    base::ScopedCFTypeRef<CFMutableArrayRef> chain(
+    base::apple::ScopedCFTypeRef<CFMutableArrayRef> chain(
         net::x509_util::CreateSecCertificateArrayForX509Certificate(
             cert.get()));
     ASSERT_TRUE(chain);
-    trust_ = CreateServerTrustFromChain(base::mac::CFToNSPtrCast(chain.get()),
+    trust_ = CreateServerTrustFromChain(base::apple::CFToNSPtrCast(chain.get()),
                                         kHostName);
   }
 
@@ -120,21 +116,22 @@ class CRWSSLStatusUpdaterTest : public web::WebTest {
   // Adds a single committed entry to `nav_manager_`.
   void AddNavigationItem(std::string item_url_spec) {
     [fake_wk_list_ setCurrentURL:base::SysUTF8ToNSString(item_url_spec)];
-    nav_manager_.AddPendingItem(
+    nav_manager_->AddPendingItem(
         GURL(item_url_spec), Referrer(), ui::PAGE_TRANSITION_LINK,
         web::NavigationInitiationType::BROWSER_INITIATED,
-        /*is_post_navigation=*/false, web::HttpsUpgradeType::kNone);
-    nav_manager_.CommitPendingItem();
+        /*is_post_navigation=*/false, /*is_error_navigation=*/false,
+        web::HttpsUpgradeType::kNone);
+    nav_manager_->CommitPendingItem();
   }
 
   CRWSSLStatusUpdaterTestDataSource* data_source_;
   id delegate_;
   id fake_web_view_;
   CRWFakeBackForwardList* fake_wk_list_;
-  NavigationManagerImpl nav_manager_;
+  std::unique_ptr<NavigationManagerImpl> nav_manager_;
   FakeNavigationManagerDelegate fake_nav_delegate_;
   CRWSSLStatusUpdater* ssl_status_updater_;
-  base::ScopedCFTypeRef<SecTrustRef> trust_;
+  base::apple::ScopedCFTypeRef<SecTrustRef> trust_;
 };
 
 // Tests that CRWSSLStatusUpdater init returns non nil object.
@@ -145,7 +142,7 @@ TEST_F(CRWSSLStatusUpdaterTest, Initialization) {
 // Tests updating http navigation item.
 TEST_F(CRWSSLStatusUpdaterTest, HttpItem) {
   AddNavigationItem(kHttpUrl);
-  web::NavigationItem* item = nav_manager_.GetLastCommittedItem();
+  web::NavigationItem* item = nav_manager_->GetLastCommittedItem();
   // Make sure that item change callback was called.
   [[delegate_ expect] SSLStatusUpdater:ssl_status_updater_
       didChangeSSLStatusForNavigationItem:item];
@@ -169,7 +166,7 @@ TEST_F(CRWSSLStatusUpdaterTest, HttpItem) {
 // navigation item.
 TEST_F(CRWSSLStatusUpdaterTest, NoChangesToHttpItem) {
   AddNavigationItem(kHttpUrl);
-  web::NavigationItem* item = nav_manager_.GetLastCommittedItem();
+  web::NavigationItem* item = nav_manager_->GetLastCommittedItem();
   item->GetSSL().security_style = SECURITY_STYLE_UNAUTHENTICATED;
 
   [ssl_status_updater_ updateSSLStatusForNavigationItem:item
@@ -185,7 +182,7 @@ TEST_F(CRWSSLStatusUpdaterTest, NoChangesToHttpItem) {
 // Tests updating https navigation item without cert.
 TEST_F(CRWSSLStatusUpdaterTest, HttpsItemNoCert) {
   AddNavigationItem(kHttpsUrl);
-  web::NavigationItem* item = nav_manager_.GetLastCommittedItem();
+  web::NavigationItem* item = nav_manager_->GetLastCommittedItem();
   // Change default value to test that `item` is actually changed.
   item->GetSSL().security_style = SECURITY_STYLE_UNAUTHENTICATED;
 
@@ -196,7 +193,8 @@ TEST_F(CRWSSLStatusUpdaterTest, HttpsItemNoCert) {
   [ssl_status_updater_
       updateSSLStatusForNavigationItem:item
                           withCertHost:kHostName
-                                 trust:base::ScopedCFTypeRef<SecTrustRef>()
+                                 trust:base::apple::ScopedCFTypeRef<
+                                           SecTrustRef>()
                   hasOnlySecureContent:YES];
   // No certificate.
   EXPECT_FALSE(!!item->GetSSL().certificate);
@@ -209,10 +207,10 @@ TEST_F(CRWSSLStatusUpdaterTest, HttpsItemNoCert) {
 // already been calculated and the only change was appearing of mixed content.
 TEST_F(CRWSSLStatusUpdaterTest, HttpsItemNoCertReverification) {
   AddNavigationItem(kHttpsUrl);
-  web::NavigationItem* item = nav_manager_.GetLastCommittedItem();
+  web::NavigationItem* item = nav_manager_->GetLastCommittedItem();
   // Set SSL status manually in the way so cert re-verification is not run.
   item->GetSSL().cert_status_host = base::SysNSStringToUTF8(kHostName);
-  item->GetSSL().certificate = web::CreateCertFromTrust(trust_);
+  item->GetSSL().certificate = web::CreateCertFromTrust(trust_.get());
 
   // Make sure that item change callback was called.
   [[delegate_ expect] SSLStatusUpdater:ssl_status_updater_
@@ -234,7 +232,7 @@ TEST_F(CRWSSLStatusUpdaterTest, HttpsItemNoCertReverification) {
 // Tests updating https navigation item.
 TEST_F(CRWSSLStatusUpdaterTest, HttpsItem) {
   AddNavigationItem(kHttpsUrl);
-  web::NavigationItem* item = nav_manager_.GetLastCommittedItem();
+  web::NavigationItem* item = nav_manager_->GetLastCommittedItem();
 
   // Make sure that item change callback was called twice for changing
   // content_status and security style.
@@ -273,7 +271,7 @@ TEST_F(CRWSSLStatusUpdaterTest, HttpsItem) {
 // verification (e.g. because of redirect).
 TEST_F(CRWSSLStatusUpdaterTest, HttpsItemChangeUrlDuringUpdate) {
   AddNavigationItem(kHttpsUrl);
-  web::NavigationItem* item = nav_manager_.GetLastCommittedItem();
+  web::NavigationItem* item = nav_manager_->GetLastCommittedItem();
 
   // Make sure that item change callback was called once for changing
   // content_status.
@@ -310,7 +308,7 @@ TEST_F(CRWSSLStatusUpdaterTest, HttpsItemChangeUrlDuringUpdate) {
 // http.
 TEST_F(CRWSSLStatusUpdaterTest, HttpsItemDowngrade) {
   AddNavigationItem(kHttpsUrl);
-  web::NavigationItem* item = nav_manager_.GetLastCommittedItem();
+  web::NavigationItem* item = nav_manager_->GetLastCommittedItem();
 
   // Make sure that item change callback was called.
   [[delegate_ expect] SSLStatusUpdater:ssl_status_updater_
@@ -345,7 +343,7 @@ TEST_F(CRWSSLStatusUpdaterTest, HttpsItemDowngrade) {
 // Tests that SSL status is not changed if navigation item's cert is changed.
 TEST_F(CRWSSLStatusUpdaterTest, CertChanged) {
   AddNavigationItem(kHttpsUrl);
-  web::NavigationItem* item = nav_manager_.GetLastCommittedItem();
+  web::NavigationItem* item = nav_manager_->GetLastCommittedItem();
 
   // Make sure that item change callback was called.
   [[delegate_ expect] SSLStatusUpdater:ssl_status_updater_

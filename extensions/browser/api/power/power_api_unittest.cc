@@ -7,17 +7,16 @@
 #include <memory>
 #include <string>
 
-#include "base/bind.h"
 #include "base/containers/circular_deque.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
-#include "base/task/single_thread_task_runner.h"
+#include "base/memory/scoped_refptr.h"
 #include "extensions/browser/api_test_utils.h"
 #include "extensions/browser/api_unittest.h"
 #include "extensions/browser/unloaded_extension_reason.h"
 #include "extensions/common/extension.h"
 #include "extensions/common/extension_builder.h"
-#include "services/device/public/mojom/wake_lock.mojom.h"
+#include "services/device/public/mojom/wake_lock.mojom-shared.h"
 
 namespace extensions {
 
@@ -46,7 +45,7 @@ enum Request {
 class FakeWakeLockManager {
  public:
   explicit FakeWakeLockManager(content::BrowserContext* context)
-      : browser_context_(context), is_active_(false) {
+      : browser_context_(context) {
     PowerAPI::Get(browser_context_)
         ->SetWakeLockFunctionsForTesting(
             base::BindRepeating(&FakeWakeLockManager::ActivateWakeLock,
@@ -140,7 +139,7 @@ class FakeWakeLockManager {
   raw_ptr<content::BrowserContext> browser_context_;
 
   device::mojom::WakeLockType type_;
-  bool is_active_;
+  bool is_active_ = false;
 
   // Requests in chronological order.
   base::circular_deque<Request> requests_;
@@ -173,11 +172,12 @@ class PowerAPITest : public ApiUnitTest {
   bool CallFunction(FunctionType type,
                     const std::string& args,
                     const extensions::Extension* extension) {
-    scoped_refptr<ExtensionFunction> function(
-        type == REQUEST
-            ? static_cast<ExtensionFunction*>(new PowerRequestKeepAwakeFunction)
-            : static_cast<ExtensionFunction*>(
-                  new PowerReleaseKeepAwakeFunction));
+    scoped_refptr<ExtensionFunction> function;
+    if (type == REQUEST) {
+      function = base::MakeRefCounted<PowerRequestKeepAwakeFunction>();
+    } else {
+      function = base::MakeRefCounted<PowerReleaseKeepAwakeFunction>();
+    }
     function->set_extension(extension);
     return api_test_utils::RunFunction(function.get(), args, browser_context());
   }

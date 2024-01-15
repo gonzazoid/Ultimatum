@@ -45,7 +45,7 @@ class UserPolicySigninService : public UserPolicySigninServiceBase,
 
   // Overridden from UserPolicySigninServiceForProfile to cancel the pending
   // delayed registration.
-  void ShutdownUserCloudPolicyManager() override;
+  void ShutdownCloudPolicyManager() override;
 
   // signin::IdentityManager::Observer implementation:
   void OnPrimaryAccountChanged(
@@ -68,6 +68,11 @@ class UserPolicySigninService : public UserPolicySigninServiceBase,
   void UpdateLastPolicyCheckTime() override;
   signin::ConsentLevel GetConsentLevelForRegistration() override;
   bool CanApplyPolicies(bool check_for_refresh_token) override;
+  void InitializeCloudPolicyManager(
+      const AccountId& account_id,
+      std::unique_ptr<CloudPolicyClient> client) override;
+  CloudPolicyClient::DeviceDMTokenCallback
+  GetDeviceDMTokenIfAffiliatedCallback() override;
 
   // Initializes the UserPolicySigninService once its owning Profile becomes
   // ready. If the Profile has a signed-in account associated with it at startup

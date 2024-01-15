@@ -13,6 +13,7 @@ import "third_party/blink/public/mojom/service_worker/service_worker_ancestor_fr
 import "third_party/blink/public/mojom/service_worker/service_worker_database.mojom";
 import "third_party/blink/public/mojom/service_worker/service_worker_fetch_handler_type.mojom";
 import "third_party/blink/public/mojom/service_worker/service_worker_registration_options.mojom";
+import "third_party/blink/public/mojom/service_worker/service_worker_router_rule.mojom";
 import "third_party/blink/public/mojom/storage_key/storage_key.mojom";
 import "third_party/blink/public/mojom/use_counter/metrics/web_feature.mojom";
 import "url/mojom/url.mojom";
@@ -68,14 +69,22 @@ struct ServiceWorkerRegistrationData {
   // Not populated until the registration is stored into database.
   int64 resources_total_size_bytes = 0;
 
-  // TODO(crbug.com/1177199): merge COEP to policy container
-  network.mojom.CrossOriginEmbedderPolicy cross_origin_embedder_policy;
   blink.mojom.PolicyContainerPolicies? policy_container_policies;
 
   // The type of the frame that registered this service worker, which is used
   // to restrict the use of some powerful APIs in FencedFrames
   // (crbug.com/1276419).
   blink.mojom.AncestorFrameType ancestor_frame_type;
+
+  blink.mojom.ServiceWorkerRouterRules? router_rules;
+
+  // Set to true if the service worker had hid event handlers on initial script
+  // execution.
+  bool has_hid_event_handlers;
+
+  // Set to true if the service worker had usb event handlers on initial script
+  // execution.
+  bool has_usb_event_handlers;
 };
 
 // Represents a service worker script data which is stored in database.
@@ -88,4 +97,9 @@ struct ServiceWorkerResourceRecord {
   // |size_bytes| could be -1 when there was an error while loading the worker
   // script data, but when stored to the database this value is always >= 0.
   int64 size_bytes = 0;
+
+  // |sha256_checksum| is a hash string calculated from each service worker
+  // script resource data with the SHA256 algorithm. This could be empty when
+  // the stored record is old.
+  string? sha256_checksum;
 };

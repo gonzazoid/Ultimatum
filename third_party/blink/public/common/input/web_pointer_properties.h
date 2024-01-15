@@ -80,8 +80,8 @@ class WebPointerProperties {
   // Tilt of a pen stylus from surface normal as plane angles in degrees,
   // Values lie in [-90,90]. A positive tiltX is to the right and a positive
   // tiltY is towards the user.
-  int tilt_x = 0;
-  int tilt_y = 0;
+  double tilt_x = 0;
+  double tilt_y = 0;
 
   // The normalized tangential pressure (or barrel pressure), typically set by
   // an additional control of the stylus, which has a range of [-1,1], where 0
@@ -108,6 +108,9 @@ class WebPointerProperties {
   // True if this event has raw movement value from OS.
   // TODO(crbug.com/982379): Figure out how to avoid using this boolean.
   bool is_raw_movement_event = false;
+
+  // Contains unique device id for pen on supported devices.
+  int32_t device_id = -1;
 
  protected:
   // Widget coordinate, which is relative to the bound of current RenderWidget

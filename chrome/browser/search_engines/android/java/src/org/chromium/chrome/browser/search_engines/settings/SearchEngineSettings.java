@@ -8,11 +8,14 @@ import android.os.Bundle;
 import android.view.View;
 import android.widget.ListView;
 
-import androidx.annotation.VisibleForTesting;
 import androidx.fragment.app.ListFragment;
 
+import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.search_engines.R;
+import org.chromium.chrome.browser.search_engines.TemplateUrlServiceFactory;
+import org.chromium.chrome.browser.settings.ProfileDependentSetting;
 import org.chromium.components.browser_ui.settings.SettingsLauncher;
+import org.chromium.components.search_engines.TemplateUrlService;
 
 /**
  * A preference fragment for selecting a default search engine.
@@ -21,20 +24,18 @@ import org.chromium.components.browser_ui.settings.SettingsLauncher;
  *
  * TODO(crbug.com/988877): Add on scroll shadow to action bar.
  */
-public class SearchEngineSettings extends ListFragment {
+public class SearchEngineSettings extends ListFragment implements ProfileDependentSetting {
     private SearchEngineAdapter mSearchEngineAdapter;
+    private Profile mProfile;
 
-    @VisibleForTesting
     String getValueForTesting() {
         return mSearchEngineAdapter.getValueForTesting();
     }
 
-    @VisibleForTesting
     String setValueForTesting(String value) {
         return mSearchEngineAdapter.setValueForTesting(value);
     }
 
-    @VisibleForTesting
     String getKeywordFromIndexForTesting(int index) {
         return mSearchEngineAdapter.getKeywordForTesting(index);
     }
@@ -53,6 +54,15 @@ public class SearchEngineSettings extends ListFragment {
         ListView listView = getListView();
         listView.setDivider(null);
         listView.setItemsCanFocus(true);
+
+        TemplateUrlService templateUrlService = TemplateUrlServiceFactory.getForProfile(mProfile);
+        if (templateUrlService.shouldShowUpdatedSettings()
+                && templateUrlService.isEeaChoiceCountry()) {
+            View headerView =
+                    getLayoutInflater()
+                            .inflate(R.layout.search_engine_choice_header, listView, false);
+            listView.addHeaderView(headerView);
+        }
     }
 
     @Override
@@ -88,6 +98,16 @@ public class SearchEngineSettings extends ListFragment {
 
     private void createAdapterIfNecessary() {
         if (mSearchEngineAdapter != null) return;
-        mSearchEngineAdapter = new SearchEngineAdapter(getActivity());
+        assert mProfile != null;
+        mSearchEngineAdapter = new SearchEngineAdapter(getActivity(), mProfile);
+    }
+
+    @Override
+    public void setProfile(Profile profile) {
+        mProfile = profile;
+    }
+
+    public void overrideSearchEngineAdapterForTesting(SearchEngineAdapter searchEngineAdapter) {
+        mSearchEngineAdapter = searchEngineAdapter;
     }
 }

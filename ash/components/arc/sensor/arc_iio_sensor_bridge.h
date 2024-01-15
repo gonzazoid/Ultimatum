@@ -5,12 +5,14 @@
 #ifndef ASH_COMPONENTS_ARC_SENSOR_ARC_IIO_SENSOR_BRIDGE_H_
 #define ASH_COMPONENTS_ARC_SENSOR_ARC_IIO_SENSOR_BRIDGE_H_
 
+#include <optional>
+
 #include "ash/components/arc/mojom/iio_sensor.mojom.h"
 #include "ash/components/arc/session/connection_observer.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "chromeos/dbus/power/power_manager_client.h"
 #include "components/keyed_service/core/keyed_service.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace content {
 class BrowserContext;
@@ -49,6 +51,8 @@ class ArcIioSensorBridge : public KeyedService,
   void TabletModeEventReceived(chromeos::PowerManagerClient::TabletMode mode,
                                base::TimeTicks timestamp) override;
 
+  static void EnsureFactoryBuilt();
+
  private:
   // Send tablet mode changed event to ARC.
   void SendTabletMode();
@@ -58,10 +62,11 @@ class ArcIioSensorBridge : public KeyedService,
 
   // Called with PowerManagerClient::GetSwitchStates() result.
   void OnGetSwitchStates(
-      absl::optional<chromeos::PowerManagerClient::SwitchStates> states);
+      std::optional<chromeos::PowerManagerClient::SwitchStates> states);
 
-  ArcBridgeService* const arc_bridge_service_;  // Owned by ArcServiceManager.
-  absl::optional<bool> is_tablet_mode_on_;
+  const raw_ptr<ArcBridgeService>
+      arc_bridge_service_;  // Owned by ArcServiceManager.
+  std::optional<bool> is_tablet_mode_on_;
 
   base::WeakPtrFactory<ArcIioSensorBridge> weak_ptr_factory_{this};
 };

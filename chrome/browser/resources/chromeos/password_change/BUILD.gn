@@ -6,7 +6,7 @@ import("//chrome/common/features.gni")
 import("//third_party/closure_compiler/compile_js.gni")
 import("//tools/grit/grit_rule.gni")
 import("//tools/grit/preprocess_if_expr.gni")
-import("//tools/polymer/html_to_js.gni")
+import("//tools/polymer/html_to_wrapper.gni")
 import("//ui/webui/resources/tools/generate_grd.gni")
 
 src_files_manifest = "$target_gen_dir/src_files_manifest.json"
@@ -50,32 +50,31 @@ preprocess_if_expr("preprocess_src") {
   in_files = [
     "confirm_password_change.html",
     "confirm_password_change.js",
-    "lock_screen_network.html",
-    "lock_screen_network.js",
-    "lock_screen_reauth_app.html",
-    "lock_screen_reauth_app.js",
+    "password_change.js",
     "password_change_app.html",
     "password_change_app.js",
     "urgent_password_expiry_notification.html",
+    "urgent_password_expiry_notification_app.js",
   ]
 }
 
-web_component_files = [
-  "lock_screen_reauth.js",
-  "password_change.js",
-  "urgent_password_expiry_notification_app.js",
-]
-
 preprocess_if_expr("preprocess_gen") {
-  deps = [ ":web_components" ]
+  deps = [ ":html_wrapper_files" ]
   in_folder = target_gen_dir
   out_folder = preprocess_folder
   out_manifest = gen_files_manifest
-  in_files = web_component_files
+  in_files = [
+    "password_change.html.js",
+    "urgent_password_expiry_notification_app.html.js",
+  ]
 }
 
-html_to_js("web_components") {
-  js_files = web_component_files
+html_to_wrapper("html_wrapper_files") {
+  in_files = [
+    "password_change.html",
+    "urgent_password_expiry_notification_app.html",
+  ]
+  use_js = true
 }
 
 js_type_check("closure_compile") {
@@ -87,34 +86,18 @@ js_type_check("closure_compile") {
                         root_build_dir),
         "js_module_root=./gen/chrome/browser/resources/gaia_auth_host/",
       ]
-  deps = [
-    ":lock_screen_network",
-    ":password_change",
-  ]
+  deps = [ ":password_change" ]
 }
 
 js_library("password_change") {
-  sources = [ "$root_gen_dir/chrome/browser/resources/chromeos/password_change/password_change.js" ]
   deps = [
     "//ash/webui/common/resources:i18n_behavior",
+    "//ash/webui/common/resources:load_time_data.m",
     "//chrome/browser/resources/gaia_auth_host:password_change_authenticator",
     "//third_party/polymer/v3_0/components-chromium/polymer:polymer_bundled",
-    "//ui/webui/resources/js:load_time_data.m",
-  ]
-  externs_list = [ "$externs_path/webview_tag.js" ]
-
-  extra_deps = [ ":web_components" ]
-}
-
-js_library("lock_screen_network") {
-  deps = [
-    "//ash/webui/common/resources:i18n_behavior",
-    "//ash/webui/common/resources/network:network_select",
-    "//ash/webui/common/resources/network:onc_mojo",
-    "//ui/webui/resources/js:load_time_data.m",
   ]
   externs_list = [
-    "//ui/webui/resources/cr_elements/cr_button/cr_button_externs.js",
-    "//ui/webui/resources/cr_elements/cr_dialog/cr_dialog_externs.js",
+    "$externs_path/webview_tag.js",
+    "$externs_path/chrome_send.js",
   ]
 }

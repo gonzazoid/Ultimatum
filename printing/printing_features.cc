@@ -14,6 +14,13 @@
 namespace printing {
 namespace features {
 
+#if BUILDFLAG(IS_CHROMEOS)
+// Enable support for borderless printing and media type.
+BASE_FEATURE(kEnableBorderlessPrinting,
+             "EnableBorderlessPrinting",
+             base::FEATURE_ENABLED_BY_DEFAULT);
+#endif  // BUILDFLAG(IS_CHROMEOS)
+
 #if BUILDFLAG(IS_MAC)
 // Use the CUPS IPP printing backend instead of the original CUPS backend that
 // calls the deprecated PPD API.
@@ -52,14 +59,26 @@ BASE_FEATURE(kUseXpsForPrintingFromPdf,
              base::FEATURE_DISABLED_BY_DEFAULT);
 
 bool IsXpsPrintCapabilityRequired() {
-  return base::FeatureList::IsEnabled(features::kUseXpsForPrinting) ||
-         base::FeatureList::IsEnabled(features::kUseXpsForPrintingFromPdf);
+  // Require XPS printing to be used out-of-process.
+#if BUILDFLAG(ENABLE_OOP_PRINTING)
+  return features::kEnableOopPrintDriversJobPrint.Get() &&
+         (base::FeatureList::IsEnabled(features::kUseXpsForPrinting) ||
+          base::FeatureList::IsEnabled(features::kUseXpsForPrintingFromPdf));
+#else
+  return false;
+#endif
 }
 
 bool ShouldPrintUsingXps(bool source_is_pdf) {
-  return base::FeatureList::IsEnabled(source_is_pdf
+  // Require XPS to be used out-of-process.
+#if BUILDFLAG(ENABLE_OOP_PRINTING)
+  return features::kEnableOopPrintDriversJobPrint.Get() &&
+         base::FeatureList::IsEnabled(source_is_pdf
                                           ? features::kUseXpsForPrintingFromPdf
                                           : features::kUseXpsForPrinting);
+#else
+  return false;
+#endif
 }
 #endif  // BUILDFLAG(IS_WIN)
 
@@ -71,19 +90,16 @@ BASE_FEATURE(kEnableOopPrintDrivers,
              base::FEATURE_DISABLED_BY_DEFAULT);
 
 const base::FeatureParam<bool> kEnableOopPrintDriversJobPrint{
-    &kEnableOopPrintDrivers, "JobPrint", false};
+    &kEnableOopPrintDrivers, "JobPrint", true};
 
 const base::FeatureParam<bool> kEnableOopPrintDriversSandbox{
     &kEnableOopPrintDrivers, "Sandbox", false};
-#endif  // BUILDFLAG(ENABLE_OOP_PRINTING)
 
-#if BUILDFLAG(ENABLE_PRINT_CONTENT_ANALYSIS)
-// Enables scanning of to-be-printed pages and documents for sensitive data if
-// the OnPrintEnterpriseConnector policy is enabled.
-BASE_FEATURE(kEnablePrintContentAnalysis,
-             "EnablePrintContentAnalysis",
-             base::FEATURE_DISABLED_BY_DEFAULT);
-#endif  // BUILDFLAG(ENABLE_PRINT_CONTENT_ANALYSIS)
+#if BUILDFLAG(IS_WIN)
+const base::FeatureParam<bool> kEnableOopPrintDriversSingleProcess{
+    &kEnableOopPrintDrivers, "SingleProcess", true};
+#endif
+#endif  // BUILDFLAG(ENABLE_OOP_PRINTING)
 
 }  // namespace features
 }  // namespace printing

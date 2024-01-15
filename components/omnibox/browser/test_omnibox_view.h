@@ -9,23 +9,19 @@
 
 #include <string>
 
-#include "components/omnibox/browser/omnibox_edit_model.h"
 #include "components/omnibox/browser/omnibox_view.h"
 #include "ui/gfx/range/range.h"
 
 struct AutocompleteMatch;
-class OmniboxEditController;
 
 // Fake implementation of OmniboxView for use in tests.
 class TestOmniboxView : public OmniboxView {
  public:
-  explicit TestOmniboxView(OmniboxEditController* controller)
-      : OmniboxView(controller, nullptr) {}
+  explicit TestOmniboxView(std::unique_ptr<OmniboxClient> client)
+      : OmniboxView(std::move(client)) {}
 
   TestOmniboxView(const TestOmniboxView&) = delete;
   TestOmniboxView& operator=(const TestOmniboxView&) = delete;
-
-  void SetModel(std::unique_ptr<OmniboxEditModel> model);
 
   const std::u16string& inline_autocompletion() const {
     return inline_autocompletion_;
@@ -38,12 +34,6 @@ class TestOmniboxView : public OmniboxView {
 
   // OmniboxView:
   void Update() override {}
-  void OpenMatch(const AutocompleteMatch& match,
-                 WindowOpenDisposition disposition,
-                 const GURL& alternate_nav_url,
-                 const std::u16string& pasted_text,
-                 size_t selected_line,
-                 base::TimeTicks match_selection_timestamp) override {}
   std::u16string GetText() const override;
   void SetWindowTextAndCaretPos(const std::u16string& text,
                                 size_t caret_pos,

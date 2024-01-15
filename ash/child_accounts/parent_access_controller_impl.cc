@@ -10,11 +10,12 @@
 #include "ash/session/session_controller_impl.h"
 #include "ash/shell.h"
 #include "ash/strings/grit/ash_strings.h"
-#include "base/bind.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/string_util.h"
+#include "base/task/single_thread_task_runner.h"
 #include "components/session_manager/session_manager_types.h"
 #include "ui/base/l10n/l10n_util.h"
 
@@ -136,7 +137,7 @@ void RecordParentCodeValidationResult(ParentCodeValidationResult result,
   // Record the action to the aggregated histogram.
   const std::string all_results_histogram =
       ParentAccessControllerImpl::GetUMAParentCodeValidationResultHistorgam(
-          absl::nullopt);
+          std::nullopt);
   RecordParentCodeValidationResultToHistogram(result, all_results_histogram);
 }
 
@@ -151,7 +152,7 @@ constexpr char ParentAccessControllerImpl::kUMAParentAccessCodeUsage[];
 // static
 std::string
 ParentAccessControllerImpl::GetUMAParentCodeValidationResultHistorgam(
-    absl::optional<SupervisedAction> action) {
+    std::optional<SupervisedAction> action) {
   const std::string separator = ".";
   if (!action) {
     return base::JoinString({kUMAParentAccessCodeValidationResultBase,
@@ -264,7 +265,7 @@ void ParentAccessControllerImpl::OnHelp() {
   RecordParentAccessAction(ParentAccessControllerImpl::UMAAction::kGetHelp);
   // TODO(https://crbug.com/999387): Remove this when handling touch
   // cancellation is fixed for system modal windows.
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce([]() {
         Shell::Get()->login_screen_controller()->ShowParentAccessHelpApp();
       }));

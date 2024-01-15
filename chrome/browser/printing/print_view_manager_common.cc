@@ -4,6 +4,9 @@
 
 #include "chrome/browser/printing/print_view_manager_common.h"
 
+#include <utility>
+
+#include "build/chromeos_buildflags.h"
 #include "content/public/browser/render_frame_host.h"
 #include "extensions/buildflags/buildflags.h"
 #include "pdf/buildflags.h"
@@ -14,7 +17,9 @@
 #endif  // BUILDFLAG(ENABLE_EXTENSIONS)
 
 #if BUILDFLAG(ENABLE_PDF)
+#include "base/feature_list.h"
 #include "chrome/browser/pdf/pdf_frame_util.h"
+#include "pdf/pdf_features.h"
 #endif  // BUILDFLAG(ENABLE_PDF)
 
 #if BUILDFLAG(ENABLE_PRINT_PREVIEW)
@@ -27,17 +32,29 @@ namespace printing {
 
 namespace {
 
+#if BUILDFLAG(ENABLE_PRINT_PREVIEW)
+using PrintViewManagerImpl = PrintViewManager;
+#else
+using PrintViewManagerImpl = PrintViewManagerBasic;
+#endif  // BUILDFLAG(ENABLE_PRINT_PREVIEW)
+
 // Pick the right RenderFrameHost based on the WebContents.
 content::RenderFrameHost* GetRenderFrameHostToUse(
     content::WebContents* contents) {
 #if BUILDFLAG(ENABLE_PDF)
-  // Pick the plugin frame if `contents` is a PDF viewer guest.
-  content::RenderFrameHost* full_page_plugin = GetFullPagePlugin(contents);
+  // Pick the plugin frame host if `contents` is a PDF viewer guest. If using
+  // OOPIF PDF viewer, pick the PDF extension frame host.
+  content::RenderFrameHost* full_page_pdf_embedder_host =
+      base::FeatureList::IsEnabled(chrome_pdf::features::kPdfOopif)
+          ? pdf_frame_util::FindFullPagePdfExtensionHost(contents)
+          : GetFullPagePlugin(contents);
   content::RenderFrameHost* pdf_rfh = pdf_frame_util::FindPdfChildFrame(
-      full_page_plugin ? full_page_plugin : contents->GetPrimaryMainFrame());
-  if (pdf_rfh)
+      full_page_pdf_embedder_host ? full_page_pdf_embedder_host
+                                  : contents->GetPrimaryMainFrame());
+  if (pdf_rfh) {
     return pdf_rfh;
-#endif
+  }
+#endif  // BUILDFLAG(ENABLE_PDF)
   return GetFrameToPrint(contents);
 }
 
@@ -45,15 +62,11 @@ content::RenderFrameHost* GetRenderFrameHostToUse(
 
 void StartPrint(
     content::WebContents* contents,
+#if BUILDFLAG(IS_CHROMEOS_ASH)
     mojo::PendingAssociatedRemote<mojom::PrintRenderer> print_renderer,
+#endif
     bool print_preview_disabled,
     bool has_selection) {
-#if BUILDFLAG(ENABLE_PRINT_PREVIEW)
-  using PrintViewManagerImpl = PrintViewManager;
-#else
-  using PrintViewManagerImpl = PrintViewManagerBasic;
-#endif  // BUILDFLAG(ENABLE_PRINT_PREVIEW)
-
   content::RenderFrameHost* rfh_to_use = GetRenderFrameHostToUse(contents);
   if (!rfh_to_use)
     return;
@@ -65,15 +78,17 @@ void StartPrint(
 
 #if BUILDFLAG(ENABLE_PRINT_PREVIEW)
   if (!print_preview_disabled) {
+#if BUILDFLAG(IS_CHROMEOS_ASH)
     if (print_renderer) {
       print_view_manager->PrintPreviewWithPrintRenderer(
           rfh_to_use, std::move(print_renderer));
-    } else {
-      print_view_manager->PrintPreviewNow(rfh_to_use, has_selection);
+      return;
     }
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+    print_view_manager->PrintPreviewNow(rfh_to_use, has_selection);
     return;
   }
-#endif  // ENABLE_PRINT_PREVIEW
+#endif  // BUILDFLAG(ENABLE_PRINT_PREVIEW)
 
   print_view_manager->PrintNow(rfh_to_use);
 }
@@ -91,6 +106,24 @@ void StartBasicPrint(content::WebContents* contents) {
 
   print_view_manager->BasicPrint(rfh_to_use);
 #endif  // ENABLE_PRINT_PREVIEW
+}
+
+void StartPrintNodeUnderContextMenu(content::RenderFrameHost* rfh,
+                                    bool print_preview_disabled) {
+  auto* print_view_manager = PrintViewManagerImpl::FromWebContents(
+      content::WebContents::FromRenderFrameHost(rfh));
+  if (!print_view_manager) {
+    return;
+  }
+
+#if BUILDFLAG(ENABLE_PRINT_PREVIEW)
+  if (!print_preview_disabled) {
+    print_view_manager->PrintPreviewForNodeUnderContextMenu(rfh);
+    return;
+  }
+#endif
+
+  print_view_manager->PrintNodeUnderContextMenu(rfh);
 }
 
 content::RenderFrameHost* GetFrameToPrint(content::WebContents* contents) {

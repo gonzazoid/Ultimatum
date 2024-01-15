@@ -7,17 +7,16 @@
 
 #include <memory>
 
+#include <optional>
+#include "base/memory/raw_ptr.h"
 #include "components/viz/common/gpu/vulkan_context_provider.h"
 #include "gpu/vulkan/vulkan_device_queue.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/skia/include/core/SkRefCnt.h"
-#include "third_party/skia/include/core/SkSurfaceCharacterization.h"
 #include "third_party/skia/include/gpu/GrBackendSemaphore.h"
-#include "third_party/skia/src/gpu/vk/GrVkSecondaryCBDrawContext.h"
+#include "third_party/skia/include/private/chromium/GrVkSecondaryCBDrawContext.h"
 
 struct AwDrawFn_InitVkParams;
 class GrDirectContext;
-class GrVkSecondaryCBDrawContext;
 
 namespace gpu {
 class VulkanImplementation;
@@ -26,8 +25,10 @@ class VulkanDeviceQueue;
 
 namespace android_webview {
 
+// Lifetime: WebView
 class AwVulkanContextProvider final : public viz::VulkanContextProvider {
  public:
+  // Short-lived. Created and destroyed for each (Vulkan) draw.
   class ScopedSecondaryCBDraw {
    public:
     ScopedSecondaryCBDraw(AwVulkanContextProvider* provider,
@@ -42,7 +43,7 @@ class AwVulkanContextProvider final : public viz::VulkanContextProvider {
     ~ScopedSecondaryCBDraw() { provider_->SecondaryCMBDrawSubmitted(); }
 
    private:
-    AwVulkanContextProvider* const provider_;
+    raw_ptr<AwVulkanContextProvider> const provider_;
   };
 
   AwVulkanContextProvider(const AwVulkanContextProvider&) = delete;
@@ -60,7 +61,7 @@ class AwVulkanContextProvider final : public viz::VulkanContextProvider {
   void EnqueueSecondaryCBSemaphores(
       std::vector<VkSemaphore> semaphores) override;
   void EnqueueSecondaryCBPostSubmitTask(base::OnceClosure closure) override;
-  absl::optional<uint32_t> GetSyncCpuMemoryLimit() const override;
+  std::optional<uint32_t> GetSyncCpuMemoryLimit() const override;
 
   VkDevice device() { return globals_->device_queue->GetVulkanDevice(); }
   VkQueue queue() { return globals_->device_queue->GetVulkanQueue(); }
@@ -75,6 +76,11 @@ class AwVulkanContextProvider final : public viz::VulkanContextProvider {
   void SecondaryCBDrawBegin(sk_sp<GrVkSecondaryCBDrawContext> draw_context);
   void SecondaryCMBDrawSubmitted();
 
+  // Lifetime: Singleton
+  //
+  // This counts its number of active users and will spin up and tear down
+  // according to demand. As such, it may not be the same singleton throughout
+  // the process's lifetime.
   struct Globals : base::RefCountedThreadSafe<Globals> {
     static scoped_refptr<Globals> GetOrCreateInstance(
         AwDrawFn_InitVkParams* params);

@@ -8,9 +8,9 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/feature_list.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
 #include "chrome/browser/browser_process.h"
@@ -113,9 +113,6 @@ void AndroidTelemetryService::OnDownloadUpdated(download::DownloadItem* item) {
   }
 
   if (item->GetState() == download::DownloadItem::COMPLETE) {
-    base::UmaHistogramBoolean(
-        "SafeBrowsing.AndroidTelemetry.ApkDownload.IsMimeTypeApk",
-        (item->GetMimeType() == kApkMimeType));
     // Download completed. Send report.
     std::unique_ptr<ClientSafeBrowsingReportRequest> report = GetReport(item);
     MaybeSendApkDownloadReport(

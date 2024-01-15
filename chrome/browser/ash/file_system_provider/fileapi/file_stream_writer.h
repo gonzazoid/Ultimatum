@@ -14,8 +14,7 @@
 #include "storage/browser/file_system/file_stream_writer.h"
 #include "storage/browser/file_system/file_system_url.h"
 
-namespace ash {
-namespace file_system_provider {
+namespace ash::file_system_provider {
 
 // Implements a streamed file writer. It is lazily initialized by the first call
 // to Write().
@@ -33,7 +32,8 @@ class FileStreamWriter : public storage::FileStreamWriter {
             int buf_len,
             net::CompletionOnceCallback callback) override;
   int Cancel(net::CompletionOnceCallback callback) override;
-  int Flush(net::CompletionOnceCallback callback) override;
+  int Flush(storage::FlushMode flush_mode,
+            net::CompletionOnceCallback callback) override;
 
  private:
   // Helper class for executing operations on the provided file system. All
@@ -48,7 +48,8 @@ class FileStreamWriter : public storage::FileStreamWriter {
     INITIALIZED,
     EXECUTING,
     FAILED,
-    CANCELLING
+    CANCELLING,
+    FINALIZED,
   };
 
   // Called when OperationRunner::WriteOnUIThread is completed.
@@ -59,6 +60,9 @@ class FileStreamWriter : public storage::FileStreamWriter {
   // Called when Write() operation is completed with either a success or an
   // error.
   void OnWriteCompleted(int result);
+
+  void OnFlushFileCompleted(net::CompletionOnceCallback callback,
+                            base::File::Error result);
 
   // Initializes the writer by opening the file. When completed with success,
   // runs the |pending_closure|. Otherwise, calls the |error_callback|.
@@ -84,7 +88,6 @@ class FileStreamWriter : public storage::FileStreamWriter {
   base::WeakPtrFactory<FileStreamWriter> weak_ptr_factory_{this};
 };
 
-}  // namespace file_system_provider
-}  // namespace ash
+}  // namespace ash::file_system_provider
 
 #endif  // CHROME_BROWSER_ASH_FILE_SYSTEM_PROVIDER_FILEAPI_FILE_STREAM_WRITER_H_

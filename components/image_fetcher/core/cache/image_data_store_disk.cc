@@ -7,15 +7,13 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/files/file_enumerator.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/strings/utf_string_conversions.h"
-#include "base/task/task_runner_util.h"
-#include "base/threading/sequenced_task_runner_handle.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "build/build_config.h"
 
 using base::File;
@@ -58,8 +56,7 @@ void SaveImageImpl(FilePath storage_path,
                    bool needs_transcoding) {
   FilePath file_path = BuildFilePath(storage_path, key, needs_transcoding);
 
-  int len = base::WriteFile(file_path, data.c_str(), data.length());
-  if (len == -1 || (size_t)len != data.length()) {
+  if (!base::WriteFile(file_path, data)) {
     DVLOG(1) << "WriteFile failed.";
   }
 
@@ -130,9 +127,8 @@ ImageDataStoreDisk::~ImageDataStoreDisk() = default;
 
 void ImageDataStoreDisk::Initialize(base::OnceClosure callback) {
   DCHECK(initialization_status_ == InitializationStatus::UNINITIALIZED);
-  base::PostTaskAndReplyWithResult(
-      task_runner_.get(), FROM_HERE,
-      base::BindOnce(InitializeImpl, storage_path_),
+  task_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE, base::BindOnce(InitializeImpl, storage_path_),
       base::BindOnce(&ImageDataStoreDisk::OnInitializationComplete,
                      weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
 }
@@ -161,8 +157,8 @@ void ImageDataStoreDisk::LoadImage(const std::string& key,
     return;
   }
 
-  base::PostTaskAndReplyWithResult(
-      task_runner_.get(), FROM_HERE,
+  task_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE,
       base::BindOnce(LoadImageImpl, storage_path_, key, needs_transcoding),
       base::BindOnce(&ImageDataStoreDisk::OnImageLoaded,
                      weak_ptr_factory_.GetWeakPtr(), needs_transcoding,
@@ -184,9 +180,9 @@ void ImageDataStoreDisk::GetAllKeys(KeysCallback callback) {
     return;
   }
 
-  base::PostTaskAndReplyWithResult(
-      task_runner_.get(), FROM_HERE,
-      base::BindOnce(GetAllKeysImpl, storage_path_), std::move(callback));
+  task_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE, base::BindOnce(GetAllKeysImpl, storage_path_),
+      std::move(callback));
 }
 
 void ImageDataStoreDisk::OnInitializationComplete(

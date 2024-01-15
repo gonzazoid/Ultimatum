@@ -8,6 +8,7 @@
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/enterprise/connectors/common.h"
 #include "chrome/browser/enterprise/connectors/service_provider_config.h"
+#include "components/enterprise/buildflags/buildflags.h"
 #include "components/url_matcher/url_util.h"
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
@@ -27,17 +28,17 @@ AnalysisServiceSettings::AnalysisServiceSettings(
   // an existing provider.
   const std::string* service_provider_name =
       settings_dict.FindString(kKeyServiceProvider);
-  if (service_provider_name) {
-    service_provider_name_ = *service_provider_name;
-    if (service_provider_config.count(service_provider_name_)) {
-      analysis_config_ =
-          service_provider_config.at(service_provider_name_).analysis;
-    }
-    if (!analysis_config_) {
-      DLOG(ERROR) << "No analysis config for corresponding service provider";
-      return;
-    }
-  } else {
+  if (!service_provider_name) {
+    return;
+  }
+
+  service_provider_name_ = *service_provider_name;
+  if (service_provider_config.count(service_provider_name_)) {
+    analysis_config_ =
+        service_provider_config.at(service_provider_name_).analysis;
+  }
+  if (!analysis_config_) {
+    DLOG(ERROR) << "No analysis config for corresponding service provider";
     return;
   }
 
@@ -91,30 +92,37 @@ AnalysisServiceSettings::AnalysisServiceSettings(
       settings_dict.FindInt(kKeyBlockUntilVerdict).value_or(0)
           ? BlockUntilVerdict::kBlock
           : BlockUntilVerdict::kNoBlock;
+  // If fail-closed settings can't be found, the browser defaults to fail open
+  // to handle backward compatibility.
+  const std::string* default_action_ptr =
+      settings_dict.FindString(kKeyDefaultAction);
+  default_action_ = default_action_ptr && *default_action_ptr == "block"
+                        ? DefaultAction::kBlock
+                        : DefaultAction::kAllow;
+
   block_password_protected_files_ =
       settings_dict.FindBool(kKeyBlockPasswordProtected).value_or(false);
   block_large_files_ =
       settings_dict.FindBool(kKeyBlockLargeFiles).value_or(false);
-  block_unsupported_file_types_ =
-      settings_dict.FindBool(kKeyBlockUnsupportedFileTypes).value_or(false);
   minimum_data_size_ = settings_dict.FindInt(kKeyMinimumDataSize).value_or(100);
 
   const base::Value::List* custom_messages =
       settings_dict.FindList(kKeyCustomMessages);
   if (custom_messages) {
     for (const base::Value& value : *custom_messages) {
+      const base::Value::Dict& dict = value.GetDict();
+
       // As of now, this list will contain one message per tag. At some point,
       // the server may start sending one message per language/tag pair. If this
       // is the case, this code should be changed to match the language to
       // Chrome's UI language.
-      const std::string* tag = value.FindStringKey(kKeyCustomMessagesTag);
+      const std::string* tag = dict.FindString(kKeyCustomMessagesTag);
       if (!tag)
         continue;
 
       CustomMessageData data;
 
-      const std::string* message =
-          value.FindStringKey(kKeyCustomMessagesMessage);
+      const std::string* message = dict.FindString(kKeyCustomMessagesMessage);
       // This string originates as a protobuf string on the server, which are
       // utf8 and it's used in the UI where it needs to be encoded as utf16. Do
       // the conversion now, otherwise code down the line may not be able to
@@ -122,8 +130,7 @@ AnalysisServiceSettings::AnalysisServiceSettings(
       // UI.
       data.message = base::UTF8ToUTF16(message ? *message : "");
 
-      const std::string* url =
-          value.FindStringKey(kKeyCustomMessagesLearnMoreUrl);
+      const std::string* url = dict.FindString(kKeyCustomMessagesLearnMoreUrl);
       data.learn_more_url = url ? GURL(*url) : GURL();
 
       tags_[*tag].custom_message = std::move(data);
@@ -138,6 +145,7 @@ AnalysisServiceSettings::AnalysisServiceSettings(
     }
   }
 
+#if BUILDFLAG(ENTERPRISE_LOCAL_CONTENT_ANALYSIS)
 #if BUILDFLAG(IS_WIN)
   const char* verification_key = kKeyWindowsVerification;
 #elif BUILDFLAG(IS_MAC)
@@ -146,7 +154,6 @@ AnalysisServiceSettings::AnalysisServiceSettings(
   const char* verification_key = kKeyLinuxVerification;
 #endif
 
-#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX)
   const base::Value::Dict& dict = settings_value.GetDict();
   const base::Value::List* signatures =
       dict.FindListByDottedPath(verification_key);
@@ -187,20 +194,27 @@ AnalysisSettings AnalysisServiceSettings::GetAnalysisSettingsWithTags(
   AnalysisSettings settings;
 
   settings.block_until_verdict = block_until_verdict_;
+  settings.default_action = default_action_;
   settings.block_password_protected_files = block_password_protected_files_;
   settings.block_large_files = block_large_files_;
-  settings.block_unsupported_file_types = block_unsupported_file_types_;
-  if (analysis_config_->url) {
+  if (is_cloud_analysis()) {
     CloudAnalysisSettings cloud_settings;
     cloud_settings.analysis_url = GURL(analysis_config_->url);
+    // We assume all support_tags structs have the same max file size.
+    cloud_settings.max_file_size =
+        analysis_config_->supported_tags[0].max_file_size;
     DCHECK(cloud_settings.analysis_url.is_valid());
     settings.cloud_or_local_settings =
         CloudOrLocalAnalysisSettings(std::move(cloud_settings));
   } else {
-    DCHECK(analysis_config_->local_path);
+    DCHECK(is_local_analysis());
     LocalAnalysisSettings local_settings;
     local_settings.local_path = analysis_config_->local_path;
     local_settings.user_specific = analysis_config_->user_specific;
+    local_settings.subject_names = analysis_config_->subject_names;
+    // We assume all support_tags structs have the same max file size.
+    local_settings.max_file_size =
+        analysis_config_->supported_tags[0].max_file_size;
     local_settings.verification_signatures = verification_signatures_;
 
     settings.cloud_or_local_settings =
@@ -256,6 +270,13 @@ bool AnalysisServiceSettings::ShouldBlockUntilVerdict() const {
   return block_until_verdict_ == BlockUntilVerdict::kBlock;
 }
 
+bool AnalysisServiceSettings::ShouldBlockByDefault() const {
+  if (!IsValid()) {
+    return false;
+  }
+  return default_action_ == DefaultAction::kBlock;
+}
+
 absl::optional<std::u16string> AnalysisServiceSettings::GetCustomMessage(
     const std::string& tag) {
   const auto& element = tags_.find(tag);
@@ -283,6 +304,14 @@ absl::optional<GURL> AnalysisServiceSettings::GetLearnMoreUrl(
 bool AnalysisServiceSettings::GetBypassJustificationRequired(
     const std::string& tag) {
   return tags_.find(tag) != tags_.end() && tags_.at(tag).requires_justification;
+}
+
+bool AnalysisServiceSettings::is_cloud_analysis() const {
+  return analysis_config_ && analysis_config_->url != nullptr;
+}
+
+bool AnalysisServiceSettings::is_local_analysis() const {
+  return analysis_config_ && analysis_config_->local_path != nullptr;
 }
 
 void AnalysisServiceSettings::AddUrlPatternSettings(

@@ -31,6 +31,7 @@
 #include "third_party/blink/renderer/bindings/core/v8/script_value.h"
 #include "third_party/blink/renderer/core/css/css_computed_style_declaration.h"
 #include "third_party/blink/renderer/core/testing/color_scheme_helper.h"
+#include "third_party/blink/renderer/core/testing/internals_ukm_recorder.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
 #include "third_party/blink/renderer/platform/bindings/script_wrappable.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
@@ -59,12 +60,14 @@ class HTMLIFrameElement;
 class HTMLInputElement;
 class HTMLMediaElement;
 class HTMLSelectElement;
+class HTMLSelectListElement;
 class HTMLVideoElement;
 class HitTestLayerRectList;
 class HitTestLocation;
 class HitTestResult;
 class InternalRuntimeFlags;
 class InternalSettings;
+class InternalsUkmRecorder;
 class LocalDOMWindow;
 class LocalFrame;
 class Location;
@@ -77,13 +80,13 @@ class ReadableStream;
 class RecordTest;
 class ScriptPromiseResolver;
 class ScriptState;
-class ScrollState;
 class SequenceTest;
 class ShadowRoot;
 class StaticSelection;
 class Text;
 class TypeConversions;
 class UnionTypesTest;
+class HTMLImageElement;
 
 template <typename NodeType>
 class StaticNodeTypeList;
@@ -110,12 +113,16 @@ class Internals final : public ScriptWrappable {
 
   ScriptPromise getInitialResourcePriority(ScriptState*,
                                            const String& url,
-                                           Document*);
+                                           Document*,
+                                           bool new_load_only = false);
+  ScriptPromise getInitialResourcePriorityOfNewLoad(ScriptState*,
+                                                    const String& url,
+                                                    Document*);
   String getResourceHeader(const String& url, const String& header, Document*);
 
   bool doesWindowHaveUrlFragment(DOMWindow*);
 
-  CSSStyleDeclaration* computedStyleIncludingVisitedInfo(Node*) const;
+  CSSStyleDeclaration* computedStyleIncludingVisitedInfo(Element*) const;
 
   void setBrowserControlsState(float top_height,
                                float bottom_height,
@@ -185,6 +192,7 @@ class Internals final : public ScriptWrappable {
   DOMRectReadOnly* boundingBox(Element*);
 
   void setMarker(Document*, const Range*, const String&, ExceptionState&);
+  void removeMarker(Document*, const Range*, const String&, ExceptionState&);
   unsigned markerCountForNode(Text*, const String&, ExceptionState&);
   unsigned activeMarkerCountForNode(Text*);
   Range* markerRangeForNode(Text*,
@@ -241,7 +249,6 @@ class Internals final : public ScriptWrappable {
   String suggestedValue(Element*, ExceptionState&);
   void setSuggestedValue(Element*, const String&, ExceptionState&);
   void setAutofilledValue(Element*, const String&, ExceptionState&);
-  void setEditingValue(Element* input_element, const String&, ExceptionState&);
   void setAutofilled(Element*, bool enabled, ExceptionState&);
   void setSelectionRangeForNumberType(Element* input_element,
                                       uint32_t start,
@@ -279,6 +286,12 @@ class Internals final : public ScriptWrappable {
                                                int height,
                                                Document*,
                                                ExceptionState&);
+  Node* touchNodeAdjustedToBestStylusWritableNode(int x,
+                                                  int y,
+                                                  int width,
+                                                  int height,
+                                                  Document*,
+                                                  ExceptionState&);
 
   int lastSpellCheckRequestSequence(Document*, ExceptionState&);
   int lastSpellCheckProcessedSequence(Document*, ExceptionState&);
@@ -286,6 +299,8 @@ class Internals final : public ScriptWrappable {
   void cancelCurrentSpellCheckRequest(Document*, ExceptionState&);
   String idleTimeSpellCheckerState(Document*, ExceptionState&);
   void runIdleTimeSpellChecker(Document*, ExceptionState&);
+
+  bool hasLastEditCommand(Document*, ExceptionState&);
 
   Vector<AtomicString> userPreferredLanguages() const;
   void setUserPreferredLanguages(const Vector<String>&);
@@ -315,7 +330,8 @@ class Internals final : public ScriptWrappable {
 
   // This is used to test rect based hit testing like what's done on touch
   // screens.
-  StaticNodeList* nodesFromRect(Document*,
+  StaticNodeList* nodesFromRect(ScriptState* script_state,
+                                Document*,
                                 int x,
                                 int y,
                                 int width,
@@ -332,8 +348,6 @@ class Internals final : public ScriptWrappable {
   void setMockHyphenation(const AtomicString& locale);
 
   unsigned numberOfScrollableAreas(Document*);
-
-  bool isPageBoxVisible(Document*, int page_number);
 
   InternalSettings* settings() const;
   InternalRuntimeFlags* runtimeFlags() const;
@@ -377,16 +391,6 @@ class Internals final : public ScriptWrappable {
   String pageProperty(String,
                       unsigned,
                       ExceptionState& = ASSERT_NO_EXCEPTION) const;
-  String pageSizeAndMarginsInPixels(
-      unsigned,
-      int,
-      int,
-      int,
-      int,
-      int,
-      int,
-      ExceptionState& = ASSERT_NO_EXCEPTION) const;
-
   float pageScaleFactor(ExceptionState&);
   void setPageScaleFactor(float scale_factor, ExceptionState&);
   void setPageScaleFactorLimits(float min_scale_factor,
@@ -431,6 +435,7 @@ class Internals final : public ScriptWrappable {
 
   DOMRectList* draggableRegions(Document*, ExceptionState&);
   DOMRectList* nonDraggableRegions(Document*, ExceptionState&);
+  void SetSupportsAppRegion(bool supports_app_region);
 
   DOMArrayBuffer* serializeObject(v8::Isolate* isolate,
                                   const ScriptValue&,
@@ -453,6 +458,8 @@ class Internals final : public ScriptWrappable {
   bool selectPopupItemStyleIsRtl(Node*, int);
   int selectPopupItemStyleFontHeight(Node*, int);
   void resetTypeAheadSession(HTMLSelectElement*);
+
+  void resetSelectListTypeAheadSession(HTMLSelectListElement*);
 
   StaticSelection* getDragCaret();
   StaticSelection* getSelectionInFlatTree(DOMWindow*, ExceptionState&);
@@ -496,8 +503,6 @@ class Internals final : public ScriptWrappable {
   void setFocused(bool);
   void setInitialFocus(bool);
 
-  Element* interestedElement();
-
   // Check if frame associated with current internals object is
   // active or not.
   bool isActivated();
@@ -509,10 +514,7 @@ class Internals final : public ScriptWrappable {
 
   void forceLoseCanvasContext(OffscreenCanvas* offscreencanvas,
                               const String& context_type);
-
-  void setScrollChain(ScrollState*,
-                      const HeapVector<Member<Element>>& elements,
-                      ExceptionState&);
+  void disableCanvasAcceleration(HTMLCanvasElement* canvas);
 
   String selectedHTMLForClipboard();
   String selectedTextForClipboard();
@@ -621,6 +623,14 @@ class Internals final : public ScriptWrappable {
 
   void setAllowPerChunkTransferring(ReadableStream* stream);
   void setBackForwardCacheRestorationBufferSize(unsigned int maxSize);
+
+  InternalsUkmRecorder* initializeUKMRecorder();
+
+  // Returns scripts that created an image, as observed by
+  // the LCPScriptObserver Probe.
+  Vector<String> getCreatorScripts(HTMLImageElement* img);
+
+  ScriptPromise LCPPrediction(ScriptState*, Document* document);
 
  private:
   Document* ContextDocument() const;

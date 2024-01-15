@@ -8,8 +8,9 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
+#include "base/callback_list.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/metrics/field_trial.h"
@@ -19,10 +20,6 @@
 #include "components/metrics/cloned_install_detector.h"
 #include "components/metrics/entropy_state.h"
 #include "components/variations/entropy_provider.h"
-
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "components/metrics/structured/neutrino_logging.h"  // nogncheck
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
 class PrefService;
 class PrefRegistrySimple;
@@ -52,6 +49,17 @@ enum class StartupVisibility {
 enum class EntropyProviderType {
   kDefault = 0,  // Enable high entropy randomization if possible.
   kLow = 1,      // Always use low entropy randomization.
+};
+
+// Options to apply to trial randomization.
+struct EntropyParams {
+  // The type of entropy to use for default one-time randomization.
+  EntropyProviderType default_entropy_provider_type =
+      EntropyProviderType::kDefault;
+  // Force trial randomization into benchmarking mode, which disables
+  // randomization. Users may also be put in this mode if the
+  // --enable_benchmarking command line flag is passed.
+  bool force_benchmarking_mode = false;
 };
 
 // Responsible for managing MetricsService state prefs, specifically the UMA
@@ -97,8 +105,10 @@ class MetricsStateManager final {
   // not opted in to metrics reporting.
   const std::string& client_id() const { return client_id_; }
 
-  // Returns the low entropy source for this client.
+  // Returns the low entropy sources for this client.
   int GetLowEntropySource();
+  int GetOldLowEntropySource();
+  int GetPseudoLowEntropySource();
 
   // The CleanExitBeacon, used to determine whether the previous Chrome browser
   // session terminated gracefully.
@@ -121,12 +131,10 @@ class MetricsStateManager final {
     return startup_visibility_ == StartupVisibility::kForeground;
   }
 
-  // Instantiates the FieldTrialList. Uses |enable_gpu_benchmarking_switch| to
-  // set up the FieldTrialList for benchmarking runs.
+  // Instantiates the FieldTrialList.
   //
   // Side effect: Initializes |clean_exit_beacon_|.
-  void InstantiateFieldTrialList(
-      const char* enable_gpu_benchmarking_switch = nullptr);
+  void InstantiateFieldTrialList();
 
   // Signals whether the session has shutdown cleanly. Passing `false` for
   // |has_session_shutdown_cleanly| means that Chrome has launched and has not
@@ -163,6 +171,10 @@ class MetricsStateManager final {
   // Checks if the cloned install detector says that client ids should be reset.
   bool ShouldResetClientIdsOnClonedInstall();
 
+  // Wrapper around ClonedInstallDetector::AddOnClonedInstallDetectedCallback().
+  base::CallbackListSubscription AddOnClonedInstallDetectedCallback(
+      base::OnceClosure callback);
+
   // Creates entropy providers for trial randomization.
   //
   // If this StateManager supports high entropy randomization, and there is
@@ -171,6 +183,10 @@ class MetricsStateManager final {
   // partially based on the client ID or provisional client ID. Otherwise, it
   // only returns an entropy provider that is based on a low entropy source.
   std::unique_ptr<const variations::EntropyProviders> CreateEntropyProviders();
+
+  ClonedInstallDetector* cloned_install_detector_for_testing() {
+    return &cloned_install_detector_;
+  }
 
   // Creates the MetricsStateManager, enforcing that only a single instance
   // of the class exists at a time. Returns nullptr if an instance exists
@@ -190,7 +206,7 @@ class MetricsStateManager final {
       const std::wstring& backup_registry_key,
       const base::FilePath& user_data_dir,
       StartupVisibility startup_visibility = StartupVisibility::kUnknown,
-      EntropyProviderType entropy_provider_type = EntropyProviderType::kDefault,
+      EntropyParams entropy_params = {},
       StoreClientInfoCallback store_client_info = StoreClientInfoCallback(),
       LoadClientInfoCallback load_client_info = LoadClientInfoCallback(),
       base::StringPiece external_client_id = base::StringPiece());
@@ -260,7 +276,7 @@ class MetricsStateManager final {
                       EnabledStateProvider* enabled_state_provider,
                       const std::wstring& backup_registry_key,
                       const base::FilePath& user_data_dir,
-                      EntropyProviderType default_entropy_provider_type,
+                      EntropyParams entropy_params,
                       StartupVisibility startup_visibility,
                       StoreClientInfoCallback store_client_info,
                       LoadClientInfoCallback load_client_info,
@@ -283,9 +299,6 @@ class MetricsStateManager final {
   // |kMetricsProvisionalClientID| must be set before calling this.
   std::string GetHighEntropySource();
 
-  // Returns the old low entropy source for this client.
-  int GetOldLowEntropySource();
-
   // Updates |entropy_source_returned_| with |type| iff the current value is
   // ENTROPY_SOURCE_NONE and logs the new value in a histogram.
   void UpdateEntropySourceReturnedValue(EntropySourceType type);
@@ -307,12 +320,6 @@ class MetricsStateManager final {
 
   bool ShouldGenerateProvisionalClientId(bool is_first_run);
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-  // Log to structured metrics when the client id is changed.
-  void LogClientIdChanged(metrics::structured::NeutrinoDevicesLocation location,
-                          std::string previous_client_id);
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
-
   // Whether an instance of this class exists. Used to enforce that there aren't
   // multiple instances of this class at a given time.
   static bool instance_exists_;
@@ -324,7 +331,8 @@ class MetricsStateManager final {
   // has consented to reporting, and if reporting should be done.
   raw_ptr<EnabledStateProvider> enabled_state_provider_;
 
-  const EntropyProviderType default_entropy_provider_type_;
+  // Specified options for controlling trial randomization.
+  const EntropyParams entropy_params_;
 
   // A callback run during client id creation so this MetricsStateManager can
   // store a backup of the newly generated ID.

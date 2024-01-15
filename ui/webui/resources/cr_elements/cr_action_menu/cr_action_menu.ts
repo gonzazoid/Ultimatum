@@ -4,14 +4,13 @@
 
 import '../cr_shared_vars.css.js';
 
-import {FlattenedNodesObserver, PolymerElement} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
-
-import {assert} from '../../js/assert.js';
-import {isMac, isWindows} from '../../js/cr.m.js';
-import {FocusOutlineManager} from '../../js/focus_outline_manager.js';
-import {FocusRow} from '../../js/focus_row.js';
-import {focusWithoutInk} from '../../js/focus_without_ink.js';
-import {getDeepActiveElement} from '../../js/util.js';
+import {assert} from '//resources/js/assert.js';
+import {FocusOutlineManager} from '//resources/js/focus_outline_manager.js';
+import {FocusRow} from '//resources/js/focus_row.js';
+import {focusWithoutInk} from '//resources/js/focus_without_ink.js';
+import {isMac, isWindows} from '//resources/js/platform.js';
+import {getDeepActiveElement} from '//resources/js/util.js';
+import {PolymerElement} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {getTemplate} from './cr_action_menu.html.js';
 
@@ -20,8 +19,8 @@ interface ShowAtConfig {
   left?: number;
   width?: number;
   height?: number;
-  anchorAlignmentX?: number;
-  anchorAlignmentY?: number;
+  anchorAlignmentX?: AnchorAlignment;
+  anchorAlignmentY?: AnchorAlignment;
   minX?: number;
   minY?: number;
   maxX?: number;
@@ -34,8 +33,8 @@ export interface ShowAtPositionConfig {
   left: number;
   width?: number;
   height?: number;
-  anchorAlignmentX?: number;
-  anchorAlignmentY?: number;
+  anchorAlignmentX?: AnchorAlignment;
+  anchorAlignmentY?: AnchorAlignment;
   minX?: number;
   minY?: number;
   maxX?: number;
@@ -69,7 +68,7 @@ function getStartPointWithAnchor(
   let startPoint = 0;
   switch (anchorAlignment) {
     case AnchorAlignment.BEFORE_START:
-      startPoint = -menuLength;
+      startPoint = start - menuLength;
       break;
     case AnchorAlignment.AFTER_START:
       startPoint = start;
@@ -153,13 +152,12 @@ export class CrActionMenuElement extends PolymerElement {
     };
   }
 
-  accessibilityLabel: string;
+  accessibilityLabel?: string;
   autoReposition: boolean;
   open: boolean;
-  roleDescription: string;
+  roleDescription?: string;
 
   private boundClose_: (() => void)|null = null;
-  private contentObserver_: FlattenedNodesObserver|null = null;
   private resizeObserver_: ResizeObserver|null = null;
   private hasMousemoveListener_: boolean = false;
   private anchorElement_: HTMLElement|null = null;
@@ -194,10 +192,6 @@ export class CrActionMenuElement extends PolymerElement {
   private removeListeners_() {
     window.removeEventListener('resize', this.boundClose_!);
     window.removeEventListener('popstate', this.boundClose_!);
-    if (this.contentObserver_) {
-      this.contentObserver_.disconnect();
-      this.contentObserver_ = null;
-    }
 
     if (this.resizeObserver_) {
       this.resizeObserver_.disconnect();
@@ -302,7 +296,8 @@ export class CrActionMenuElement extends PolymerElement {
     this.$.dialog.close();
     this.open = false;
     if (this.anchorElement_) {
-      focusWithoutInk(assert(this.anchorElement_));
+      assert(this.anchorElement_);
+      focusWithoutInk(this.anchorElement_);
       this.anchorElement_ = null;
     }
     if (this.lastConfig_) {
@@ -456,6 +451,15 @@ export class CrActionMenuElement extends PolymerElement {
     this.$.dialog.style.top = menuTop + 'px';
   }
 
+  private onSlotchange_() {
+    for (const node of this.$.contentNode.assignedElements({flatten: true})) {
+      if (node.classList.contains(DROPDOWN_ITEM_CLASS) &&
+          !node.getAttribute('role')) {
+        node.setAttribute('role', 'menuitem');
+      }
+    }
+  }
+
   private addListeners_() {
     this.boundClose_ = this.boundClose_ || (() => {
                          if (this.$.dialog.open) {
@@ -464,17 +468,6 @@ export class CrActionMenuElement extends PolymerElement {
                        });
     window.addEventListener('resize', this.boundClose_);
     window.addEventListener('popstate', this.boundClose_);
-
-    this.contentObserver_ = new FlattenedNodesObserver(
-        this.$.contentNode, (info: {addedNodes: Element[]}) => {
-          info.addedNodes.forEach(node => {
-            if (node.classList &&
-                node.classList.contains(DROPDOWN_ITEM_CLASS) &&
-                !node.getAttribute('role')) {
-              node.setAttribute('role', 'menuitem');
-            }
-          });
-        });
 
     if (this.autoReposition) {
       this.resizeObserver_ = new ResizeObserver(() => {

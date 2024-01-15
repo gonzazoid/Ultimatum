@@ -4,28 +4,26 @@
 
 #import "ios/chrome/browser/ui/authentication/signin/advanced_settings_signin/advanced_settings_signin_coordinator.h"
 
-#import "base/mac/foundation_util.h"
+#import "base/apple/foundation_util.h"
 #import "base/metrics/user_metrics.h"
+#import "base/notreached.h"
 #import "components/signin/public/identity_manager/identity_manager.h"
-#import "ios/chrome/browser/browser_state/chrome_browser_state.h"
-#import "ios/chrome/browser/main/browser.h"
-#import "ios/chrome/browser/signin/authentication_service.h"
-#import "ios/chrome/browser/signin/authentication_service_factory.h"
-#import "ios/chrome/browser/signin/identity_manager_factory.h"
-#import "ios/chrome/browser/sync/sync_service_factory.h"
-#import "ios/chrome/browser/sync/sync_setup_service.h"
-#import "ios/chrome/browser/sync/sync_setup_service_factory.h"
-#import "ios/chrome/browser/ui/alert_coordinator/action_sheet_coordinator.h"
+#import "ios/chrome/browser/shared/coordinator/alert/action_sheet_coordinator.h"
+#import "ios/chrome/browser/shared/model/browser/browser.h"
+#import "ios/chrome/browser/shared/model/browser_state/chrome_browser_state.h"
+#import "ios/chrome/browser/signin/model/authentication_service.h"
+#import "ios/chrome/browser/signin/model/authentication_service_factory.h"
+#import "ios/chrome/browser/signin/model/identity_manager_factory.h"
+#import "ios/chrome/browser/sync/model/sync_service_factory.h"
+#import "ios/chrome/browser/sync/model/sync_setup_service.h"
+#import "ios/chrome/browser/sync/model/sync_setup_service_factory.h"
 #import "ios/chrome/browser/ui/authentication/signin/advanced_settings_signin/advanced_settings_signin_mediator.h"
 #import "ios/chrome/browser/ui/authentication/signin/advanced_settings_signin/advanced_settings_signin_navigation_controller.h"
 #import "ios/chrome/browser/ui/authentication/signin/signin_coordinator+protected.h"
+#import "ios/chrome/browser/ui/settings/google_services/manage_sync_settings_constants.h"
 #import "ios/chrome/browser/ui/settings/google_services/manage_sync_settings_coordinator.h"
 #import "ios/chrome/grit/ios_strings.h"
 #import "ui/base/l10n/l10n_util_mac.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 using base::UserMetricsAction;
 using l10n_util::GetNSString;
@@ -54,8 +52,12 @@ using l10n_util::GetNSString;
 
 - (instancetype)initWithBaseViewController:(UIViewController*)viewController
                                    browser:(Browser*)browser
-                               signinState:(IdentitySigninState)signinState {
-  self = [super initWithBaseViewController:viewController browser:browser];
+                               signinState:(IdentitySigninState)signinState
+                               accessPoint:
+                                   (signin_metrics::AccessPoint)accessPoint {
+  self = [super initWithBaseViewController:viewController
+                                   browser:browser
+                               accessPoint:accessPoint];
   if (self) {
     _signinStateForCancel = signinState;
   }
@@ -100,26 +102,26 @@ using l10n_util::GetNSString;
                  completion:nil];
 }
 
-- (void)interruptWithAction:(SigninCoordinatorInterruptAction)action
+- (void)interruptWithAction:(SigninCoordinatorInterrupt)action
                  completion:(ProceduralBlock)completion {
   DCHECK(self.advancedSettingsSigninNavigationController);
   [self.syncSettingsCoordinator stop];
   self.syncSettingsCoordinator = nil;
 
   switch (action) {
-    case SigninCoordinatorInterruptActionNoDismiss:
+    case SigninCoordinatorInterrupt::UIShutdownNoDismiss:
       [self finishedWithSigninResult:SigninCoordinatorResultInterrupted];
       if (completion) {
         completion();
       }
       break;
-    case SigninCoordinatorInterruptActionDismissWithoutAnimation:
+    case SigninCoordinatorInterrupt::DismissWithoutAnimation:
       [self dismissViewControllerAndFinishWithResult:
                 SigninCoordinatorResultInterrupted
                                             animated:NO
                                           completion:completion];
       break;
-    case SigninCoordinatorInterruptActionDismissWithAnimation:
+    case SigninCoordinatorInterrupt::DismissWithAnimation:
       [self dismissViewControllerAndFinishWithResult:
                 SigninCoordinatorResultInterrupted
                                             animated:YES
@@ -138,7 +140,9 @@ using l10n_util::GetNSString;
       [[ManageSyncSettingsCoordinator alloc]
           initWithBaseNavigationController:
               self.advancedSettingsSigninNavigationController
-                                   browser:self.browser];
+                                   browser:self.browser
+                              accountState:SyncSettingsAccountState::
+                                               kAdvancedInitialSyncSetup];
   manageSyncSettingsCoordinator.delegate = self;
   self.syncSettingsCoordinator = manageSyncSettingsCoordinator;
   [self.syncSettingsCoordinator start];
@@ -172,6 +176,10 @@ using l10n_util::GetNSString;
   [self.advancedSettingsSigninMediator
       saveUserPreferenceForSigninResult:signinResult
                     originalSigninState:self.signinStateForCancel];
+  [self.advancedSettingsSigninNavigationController cleanUpSettings];
+  self.advancedSettingsSigninNavigationController.navigationDelegate = nil;
+  self.advancedSettingsSigninNavigationController.presentationController
+      .delegate = nil;
   self.advancedSettingsSigninNavigationController = nil;
   self.advancedSettingsSigninMediator = nil;
   [self.syncSettingsCoordinator stop];
@@ -197,7 +205,8 @@ using l10n_util::GetNSString;
 
 #pragma mark - AdvancedSettingsSigninNavigationControllerNavigationDelegate
 
-- (void)navigationDoneButtonWasTapped {
+- (void)navigationDoneButtonWasTapped:
+    (AdvancedSettingsSigninNavigationController*)controller {
   [self dismissViewControllerAndFinishWithResult:SigninCoordinatorResultSuccess
                                         animated:YES
                                       completion:nil];

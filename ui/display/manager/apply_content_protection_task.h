@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "ui/display/manager/content_protection_manager.h"
 #include "ui/display/types/display_constants.h"
@@ -48,8 +49,8 @@ class DISPLAY_MANAGER_EXPORT ApplyContentProtectionTask
 
   uint32_t GetDesiredProtectionMask(int64_t display_id) const;
 
-  DisplayLayoutManager* const layout_manager_;            // Not owned.
-  NativeDisplayDelegate* const native_display_delegate_;  // Not owned.
+  const raw_ptr<DisplayLayoutManager> layout_manager_;            // Not owned.
+  const raw_ptr<NativeDisplayDelegate> native_display_delegate_;  // Not owned.
 
   const ContentProtectionManager::ContentProtections requests_;
   ResponseCallback callback_;

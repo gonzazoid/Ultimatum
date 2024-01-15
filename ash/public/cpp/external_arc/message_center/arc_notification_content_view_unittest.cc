@@ -19,11 +19,13 @@
 #include "ash/public/cpp/external_arc/message_center/mock_arc_notification_item.h"
 #include "ash/public/cpp/message_center/arc_notification_constants.h"
 #include "ash/shell.h"
-#include "ash/system/message_center/message_view_factory.h"
+#include "ash/system/notification_center/message_view_factory.h"
+#include "ash/system/notification_center/notification_center_tray.h"
 #include "ash/system/status_area_widget.h"
 #include "ash/system/status_area_widget_test_helper.h"
 #include "ash/system/unified/unified_system_tray.h"
 #include "ash/test/ash_test_base.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/bind.h"
@@ -36,7 +38,6 @@
 #include "components/exo/surface.h"
 #include "components/exo/test/exo_test_helper.h"
 #include "components/exo/wm_helper.h"
-#include "components/exo/wm_helper_chromeos.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "ui/aura/test/test_window_delegate.h"
 #include "ui/aura/window.h"
@@ -112,7 +113,7 @@ class FakeNotificationSurface : public exo::NotificationSurface {
     // null SharedMainThreadContextProvider in test under mash.
   }
 
-  exo::NotificationSurfaceManager* const manager_;  // Not owned.
+  const raw_ptr<exo::NotificationSurfaceManager> manager_;  // Not owned.
 };
 
 aura::Window* GetFocusedWindow() {
@@ -135,7 +136,7 @@ class ArcNotificationContentViewTest : public AshTestBase {
 
   void SetUp() override {
     AshTestBase::SetUp();
-    wm_helper_ = std::make_unique<exo::WMHelperChromeOS>();
+    wm_helper_ = std::make_unique<exo::WMHelper>();
     DCHECK(exo::WMHelper::HasInstance());
 
     surface_manager_ = std::make_unique<ArcNotificationSurfaceManagerImpl>();
@@ -271,7 +272,7 @@ class ArcNotificationContentViewTest : public AshTestBase {
   std::unique_ptr<exo::NotificationSurface> notification_surface_;
 
   // owned by the |wrapper_widget_|.
-  ArcNotificationView* notification_view_ = nullptr;
+  raw_ptr<ArcNotificationView, DanglingUntriaged> notification_view_ = nullptr;
   std::unique_ptr<views::Widget> wrapper_widget_;
 };
 
@@ -369,10 +370,9 @@ TEST_F(ArcNotificationContentViewTest, CloseButtonInMessageCenterView) {
           }));
 
   // Show MessageCenterView and activate its widget.
-  auto* unified_system_tray =
-      StatusAreaWidgetTestHelper::GetStatusAreaWidget()->unified_system_tray();
-  unified_system_tray->ShowBubble();
-  unified_system_tray->ActivateBubble();
+  auto* notification_tray = StatusAreaWidgetTestHelper::GetStatusAreaWidget()
+                                ->notification_center_tray();
+  notification_tray->ShowBubble();
 
   auto notification_item =
       std::make_unique<MockArcNotificationItem>(notification_key);
@@ -414,6 +414,8 @@ TEST_F(ArcNotificationContentViewTest, CloseButtonPosition) {
       std::make_unique<MockArcNotificationItem>(notification_key);
   Notification notification = CreateNotification(notification_item.get());
   PrepareSurface(notification_key);
+
+  base::i18n::SetRTLForTesting(false);
   CreateAndShowNotificationView(notification);
 
   {

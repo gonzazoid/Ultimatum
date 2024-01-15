@@ -8,11 +8,12 @@
 #include <memory>
 #include <string>
 
+#include "base/memory/raw_ptr.h"
 #include "base/observer_list_types.h"
 #include "base/scoped_observation.h"
+#include "chrome/browser/ash/app_list/arc/arc_app_list_prefs.h"
 #include "chrome/browser/ash/arc/session/arc_session_manager.h"
 #include "chrome/browser/ash/arc/session/arc_session_manager_observer.h"
-#include "chrome/browser/ui/app_list/arc/arc_app_list_prefs.h"
 
 class Profile;
 
@@ -105,11 +106,11 @@ class UserPrivateTokenArcKpmDelegate : public ArcKpmDelegate,
   void OnPackageRemoved(const std::string& package_name,
                         bool uninstalled) override;
 
-  Profile* profile_;
+  raw_ptr<Profile> profile_;
   const bool is_primary_profile_;
   // True if the delegate was shutdown.
   bool is_shutdown_ = false;
-  policy::PolicyService* policy_service_;
+  raw_ptr<policy::PolicyService> policy_service_;
   std::unique_ptr<policy::PolicyChangeRegistrar> policy_change_registrar_;
 };
 
@@ -157,7 +158,8 @@ class SystemTokenArcKpmDelegate : public ArcKpmDelegate,
   // ArcKpmDelegate::Observer
   void OnArcUsageAllowanceForCorporateKeysChanged(bool allowed) override;
 
-  UserPrivateTokenArcKpmDelegate* primary_user_arc_usage_manager_ = nullptr;
+  raw_ptr<UserPrivateTokenArcKpmDelegate> primary_user_arc_usage_manager_ =
+      nullptr;
   base::ScopedObservation<ArcKpmDelegate, ArcKpmDelegate::Observer>
       primary_user_arc_usage_manager_delegate_observation_{this};
 };

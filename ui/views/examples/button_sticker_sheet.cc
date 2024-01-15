@@ -15,8 +15,7 @@
 #include "ui/views/controls/button/md_text_button.h"
 #include "ui/views/layout/table_layout.h"
 
-namespace views {
-namespace examples {
+namespace views::examples {
 
 namespace {
 
@@ -63,7 +62,7 @@ std::vector<std::unique_ptr<MdTextButton>> MakeButtonsInState(
   const std::u16string button_text = u"Button";
   auto primary = std::make_unique<views::MdTextButton>(
       Button::PressedCallback(), button_text);
-  primary->SetProminent(true);
+  primary->SetStyle(ui::ButtonStyle::kProminent);
   primary->SetState(state);
   buttons.push_back(std::move(primary));
 
@@ -105,5 +104,4 @@ void ButtonStickerSheet::CreateExampleView(View* container) {
                 MakeButtonsInState(Button::STATE_DISABLED));
 }
 
-}  // namespace examples
-}  // namespace views
+}  // namespace views::examples

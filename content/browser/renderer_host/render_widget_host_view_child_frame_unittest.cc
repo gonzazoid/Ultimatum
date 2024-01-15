@@ -14,7 +14,6 @@
 #include "base/run_loop.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/test/task_environment.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "components/viz/common/surfaces/parent_local_surface_id_allocator.h"
 #include "components/viz/test/begin_frame_args_test.h"
@@ -34,6 +33,7 @@
 #include "content/public/test/fake_frame_widget.h"
 #include "content/public/test/mock_render_process_host.h"
 #include "content/public/test/test_browser_context.h"
+#include "content/public/test/test_web_contents_factory.h"
 #include "content/test/mock_render_widget_host_delegate.h"
 #include "content/test/mock_widget.h"
 #include "content/test/test_render_view_host.h"
@@ -53,12 +53,7 @@ namespace {
 
 const viz::LocalSurfaceId kArbitraryLocalSurfaceId(
     1,
-    base::UnguessableToken::Deserialize(2, 3));
-
-blink::mojom::ScrollResultDataPtr MakeDefaultScrollResultData() {
-  return blink::mojom::ScrollResultData::New(
-      absl::optional<::gfx::PointF>(::gfx::PointF(0, 100)));
-}
+    base::UnguessableToken::CreateForTesting(2, 3));
 
 }  // namespace
 
@@ -107,32 +102,28 @@ class MockFrameConnector : public CrossProcessFrameConnector {
   bool can_bubble_ = true;
 };
 
-class RenderWidgetHostViewChildFrameTest : public testing::Test {
+class RenderWidgetHostViewChildFrameTest
+    : public RenderViewHostImplTestHarness {
  public:
   RenderWidgetHostViewChildFrameTest() {}
 
   void SetUp() override {
-    browser_context_ = std::make_unique<TestBrowserContext>();
+    RenderViewHostImplTestHarness::SetUp();
 
-// ImageTransportFactory doesn't exist on Android.
-#if !BUILDFLAG(IS_ANDROID)
-    ImageTransportFactory::SetFactory(
-        std::make_unique<TestImageTransportFactory>());
-#endif
-
-    process_host_ =
-        std::make_unique<MockRenderProcessHost>(browser_context_.get());
-    site_instance_group_ = base::WrapRefCounted(new SiteInstanceGroup(
-        SiteInstanceImpl::NextBrowsingInstanceId(), process_host_.get()));
+    process_host_ = std::make_unique<MockRenderProcessHost>(browser_context());
+    site_instance_group_ =
+        base::WrapRefCounted(SiteInstanceGroup::CreateForTesting(
+            browser_context(), process_host_.get()));
     int32_t routing_id = process_host_->GetNextRoutingID();
     sink_ = &process_host_->sink();
 
-    web_contents_ = TestWebContents::Create(
-        browser_context_.get(),
-        SiteInstanceImpl::Create(browser_context_.get()));
-
+    // Create a RenderWidgetHostImpl which will be associated with an
+    // RenderWidgetHostViewChildFrame, to simulate what would be done for an
+    // OOPIF.
     widget_host_ = RenderWidgetHostImpl::Create(
-        /*frame_tree=*/&web_contents_->GetPrimaryFrameTree(), &delegate_,
+        /*frame_tree=*/&contents()->GetPrimaryFrameTree(), &delegate_,
+        RenderWidgetHostImpl::DefaultFrameSinkId(*site_instance_group_,
+                                                 routing_id),
         site_instance_group_->GetSafeRef(), routing_id,
         /*hidden=*/false, /*renderer_initiated_creation=*/false,
         std::make_unique<FrameTokenMessageQueue>());
@@ -155,31 +146,26 @@ class RenderWidgetHostViewChildFrameTest : public testing::Test {
     EXPECT_EQ(screen_info, view_->GetScreenInfo());
     EXPECT_EQ(screen_infos, view_->GetScreenInfos());
 
-    test_frame_connector_ = new MockFrameConnector();
+    test_frame_connector_ = std::make_unique<MockFrameConnector>();
     test_frame_connector_->SetView(view_);
-    view_->SetFrameConnector(test_frame_connector_);
+    view_->SetFrameConnector(test_frame_connector_.get());
   }
 
   void TearDown() override {
     sink_ = nullptr;
-    if (view_)
-      view_->Destroy();
+    if (view_) {
+      RenderWidgetHostViewChildFrame* local_view = view_;
+      view_ = nullptr;
+      local_view->Destroy();
+    }
     widget_host_.reset();
-    web_contents_.reset();
     site_instance_group_.reset();
     process_host_->Cleanup();
-    delete test_frame_connector_;
+    test_frame_connector_.reset();
 
     process_host_.reset();
 
-    browser_context_.reset();
-
-    base::ThreadTaskRunnerHandle::Get()->DeleteSoon(FROM_HERE,
-                                                    browser_context_.release());
-    base::RunLoop().RunUntilIdle();
-#if !BUILDFLAG(IS_ANDROID)
-    ImageTransportFactory::Terminate();
-#endif
+    RenderViewHostImplTestHarness::TearDown();
   }
 
   viz::SurfaceId GetSurfaceId() const {
@@ -191,12 +177,8 @@ class RenderWidgetHostViewChildFrameTest : public testing::Test {
   }
 
  protected:
-  BrowserTaskEnvironment task_environment_;
-
-  std::unique_ptr<BrowserContext> browser_context_;
   std::unique_ptr<MockRenderProcessHost> process_host_;
   scoped_refptr<SiteInstanceGroup> site_instance_group_;
-  std::unique_ptr<WebContentsImpl> web_contents_;
   raw_ptr<IPC::TestSink> sink_ = nullptr;
   MockRenderWidgetHostDelegate delegate_;
   MockWidget widget_;
@@ -204,8 +186,8 @@ class RenderWidgetHostViewChildFrameTest : public testing::Test {
   // Tests should set these to NULL if they've already triggered their
   // destruction.
   std::unique_ptr<RenderWidgetHostImpl> widget_host_;
-  raw_ptr<RenderWidgetHostViewChildFrame> view_;
-  raw_ptr<MockFrameConnector> test_frame_connector_;
+  raw_ptr<RenderWidgetHostViewChildFrame> view_ = nullptr;
+  std::unique_ptr<MockFrameConnector> test_frame_connector_;
 };
 
 TEST_F(RenderWidgetHostViewChildFrameTest, VisibilityTest) {
@@ -222,7 +204,7 @@ TEST_F(RenderWidgetHostViewChildFrameTest, VisibilityTest) {
   ASSERT_FALSE(view_->IsShowing());
 
   // Restore the MockFrameConnector to avoid a crash during destruction.
-  view_->SetFrameConnector(test_frame_connector_);
+  view_->SetFrameConnector(test_frame_connector_.get());
 }
 
 // Tests that the viewport intersection rect is dispatched to the RenderWidget
@@ -348,19 +330,16 @@ TEST_F(RenderWidgetHostViewChildFrameTest, UncomsumedGestureScrollBubbled) {
           blink::WebInputEvent::Type::kGestureScrollEnd,
           blink::WebGestureDevice::kTouchscreen);
 
-  view_->GestureEventAck(scroll_begin,
-                         blink::mojom::InputEventResultState::kNoConsumerExists,
-                         MakeDefaultScrollResultData());
+  view_->GestureEventAck(
+      scroll_begin, blink::mojom::InputEventResultState::kNoConsumerExists);
   EXPECT_EQ(blink::WebInputEvent::Type::kGestureScrollBegin,
             test_frame_connector_->GetAndResetLastBubbledEventType());
-  view_->GestureEventAck(scroll_update,
-                         blink::mojom::InputEventResultState::kNoConsumerExists,
-                         MakeDefaultScrollResultData());
+  view_->GestureEventAck(
+      scroll_update, blink::mojom::InputEventResultState::kNoConsumerExists);
   EXPECT_EQ(blink::WebInputEvent::Type::kGestureScrollUpdate,
             test_frame_connector_->GetAndResetLastBubbledEventType());
   view_->GestureEventAck(scroll_end,
-                         blink::mojom::InputEventResultState::kIgnored,
-                         MakeDefaultScrollResultData());
+                         blink::mojom::InputEventResultState::kIgnored);
   EXPECT_EQ(blink::WebInputEvent::Type::kGestureScrollEnd,
             test_frame_connector_->GetAndResetLastBubbledEventType());
 }
@@ -380,27 +359,23 @@ TEST_F(RenderWidgetHostViewChildFrameTest, ConsumedGestureScrollNotBubbled) {
           blink::WebGestureDevice::kTouchscreen);
 
   view_->GestureEventAck(scroll_begin,
-                         blink::mojom::InputEventResultState::kConsumed,
-                         MakeDefaultScrollResultData());
+                         blink::mojom::InputEventResultState::kConsumed);
   EXPECT_EQ(blink::WebInputEvent::Type::kUndefined,
             test_frame_connector_->GetAndResetLastBubbledEventType());
   view_->GestureEventAck(scroll_update,
-                         blink::mojom::InputEventResultState::kConsumed,
-                         MakeDefaultScrollResultData());
+                         blink::mojom::InputEventResultState::kConsumed);
   EXPECT_EQ(blink::WebInputEvent::Type::kUndefined,
             test_frame_connector_->GetAndResetLastBubbledEventType());
 
   // Scrolling in a child my reach its extent and no longer be consumed, however
   // scrolling is latched to the child so we do not bubble the update.
-  view_->GestureEventAck(scroll_update,
-                         blink::mojom::InputEventResultState::kNoConsumerExists,
-                         MakeDefaultScrollResultData());
+  view_->GestureEventAck(
+      scroll_update, blink::mojom::InputEventResultState::kNoConsumerExists);
   EXPECT_EQ(blink::WebInputEvent::Type::kUndefined,
             test_frame_connector_->GetAndResetLastBubbledEventType());
 
   view_->GestureEventAck(scroll_end,
-                         blink::mojom::InputEventResultState::kIgnored,
-                         MakeDefaultScrollResultData());
+                         blink::mojom::InputEventResultState::kIgnored);
   EXPECT_EQ(blink::WebInputEvent::Type::kUndefined,
             test_frame_connector_->GetAndResetLastBubbledEventType());
 }
@@ -422,41 +397,35 @@ TEST_F(RenderWidgetHostViewChildFrameTest,
 
   test_frame_connector_->SetCanBubble(false);
 
-  view_->GestureEventAck(scroll_begin,
-                         blink::mojom::InputEventResultState::kNoConsumerExists,
-                         MakeDefaultScrollResultData());
+  view_->GestureEventAck(
+      scroll_begin, blink::mojom::InputEventResultState::kNoConsumerExists);
   EXPECT_EQ(blink::WebInputEvent::Type::kGestureScrollBegin,
             test_frame_connector_->GetAndResetLastBubbledEventType());
 
   // The GSB was rejected, so the child view must not attempt to bubble the
   // remaining events of the scroll sequence.
-  view_->GestureEventAck(scroll_update,
-                         blink::mojom::InputEventResultState::kNoConsumerExists,
-                         MakeDefaultScrollResultData());
+  view_->GestureEventAck(
+      scroll_update, blink::mojom::InputEventResultState::kNoConsumerExists);
   EXPECT_EQ(blink::WebInputEvent::Type::kUndefined,
             test_frame_connector_->GetAndResetLastBubbledEventType());
   view_->GestureEventAck(scroll_end,
-                         blink::mojom::InputEventResultState::kIgnored,
-                         MakeDefaultScrollResultData());
+                         blink::mojom::InputEventResultState::kIgnored);
   EXPECT_EQ(blink::WebInputEvent::Type::kUndefined,
             test_frame_connector_->GetAndResetLastBubbledEventType());
 
   test_frame_connector_->SetCanBubble(true);
 
   // When we have a new scroll gesture, the view may try bubbling again.
-  view_->GestureEventAck(scroll_begin,
-                         blink::mojom::InputEventResultState::kNoConsumerExists,
-                         MakeDefaultScrollResultData());
+  view_->GestureEventAck(
+      scroll_begin, blink::mojom::InputEventResultState::kNoConsumerExists);
   EXPECT_EQ(blink::WebInputEvent::Type::kGestureScrollBegin,
             test_frame_connector_->GetAndResetLastBubbledEventType());
-  view_->GestureEventAck(scroll_update,
-                         blink::mojom::InputEventResultState::kNoConsumerExists,
-                         MakeDefaultScrollResultData());
+  view_->GestureEventAck(
+      scroll_update, blink::mojom::InputEventResultState::kNoConsumerExists);
   EXPECT_EQ(blink::WebInputEvent::Type::kGestureScrollUpdate,
             test_frame_connector_->GetAndResetLastBubbledEventType());
   view_->GestureEventAck(scroll_end,
-                         blink::mojom::InputEventResultState::kIgnored,
-                         MakeDefaultScrollResultData());
+                         blink::mojom::InputEventResultState::kIgnored);
   EXPECT_EQ(blink::WebInputEvent::Type::kGestureScrollEnd,
             test_frame_connector_->GetAndResetLastBubbledEventType());
 }

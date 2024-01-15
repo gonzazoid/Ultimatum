@@ -110,7 +110,8 @@ class TestReaction : public CustomElementReaction {
   explicit TestReaction(HeapVector<Member<Command>>&& commands)
       : CustomElementReaction(
             *MakeGarbageCollected<TestCustomElementDefinition>(
-                CustomElementDescriptor("mock-element", "mock-element"))),
+                CustomElementDescriptor(AtomicString("mock-element"),
+                                        AtomicString("mock-element")))),
         commands_(std::move(commands)) {}
   TestReaction(const TestReaction&) = delete;
   TestReaction& operator=(const TestReaction&) = delete;
@@ -131,17 +132,17 @@ class TestReaction : public CustomElementReaction {
 class ResetCustomElementReactionStackForTest final {
   STACK_ALLOCATED();
  public:
-  ResetCustomElementReactionStackForTest()
-      : stack_(MakeGarbageCollected<CustomElementReactionStack>()),
-        old_stack_(
-            CustomElementReactionStackTestSupport::SetCurrentForTest(stack_)) {}
+  explicit ResetCustomElementReactionStackForTest(Agent& agent)
+      : stack_(MakeGarbageCollected<CustomElementReactionStack>(agent)),
+        old_stack_(CustomElementReactionStack::Swap(agent, stack_)),
+        agent_(agent) {}
   ResetCustomElementReactionStackForTest(
       const ResetCustomElementReactionStackForTest&) = delete;
   ResetCustomElementReactionStackForTest& operator=(
       const ResetCustomElementReactionStackForTest&) = delete;
 
   ~ResetCustomElementReactionStackForTest() {
-    CustomElementReactionStackTestSupport::SetCurrentForTest(old_stack_);
+    CustomElementReactionStack::Swap(agent_, old_stack_);
   }
 
   CustomElementReactionStack& Stack() { return *stack_; }
@@ -149,6 +150,7 @@ class ResetCustomElementReactionStackForTest final {
  private:
   CustomElementReactionStack* stack_;
   CustomElementReactionStack* old_stack_;
+  Agent& agent_;
 };
 
 }  // namespace blink

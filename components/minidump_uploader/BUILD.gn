@@ -3,6 +3,8 @@
 # found in the LICENSE file.
 
 import("//build/config/android/rules.gni")
+import("//testing/test.gni")
+import("//third_party/jni_zero/jni_zero.gni")
 
 generate_jni("minidump_uploader_jni_headers") {
   sources = [ "android/java/src/org/chromium/components/minidump_uploader/CrashReportMimeWriter.java" ]
@@ -18,12 +20,28 @@ static_library("minidump_uploader") {
     ":minidump_uploader_jni_headers",
     "//base",
     "//components/crash/android:anr_skipped_reason",
+    "//components/crash/android:crash_android",
     "//components/version_info",
     "//components/version_info/android:channel_getter",
     "//third_party/crashpad/crashpad/client",
     "//third_party/crashpad/crashpad/handler",
     "//third_party/crashpad/crashpad/snapshot",
-    "//third_party/crashpad/crashpad/util",
+    "//third_party/crashpad/crashpad/util:net",
+  ]
+  public_deps = [ "//third_party/crashpad/crashpad/util" ]
+}
+
+test("minidump_uploader_test") {
+  sources = [ "rewrite_minidumps_as_mimes_unittest.cc" ]
+
+  deps = [
+    ":minidump_uploader",
+    "//base/test:run_all_unittests",
+    "//base/test:test_support",
+    "//base/version_info/android:version_constants_java",
+    "//components/crash/android:crash_android",
+    "//components/version_info",
+    "//testing/gtest",
     "//third_party/crashpad/crashpad/util:net",
   ]
 }
@@ -31,13 +49,16 @@ static_library("minidump_uploader") {
 android_library("minidump_uploader_java") {
   deps = [
     "//base:base_java",
-    "//base:jni_java",
     "//build/android:build_java",
     "//components/crash/android:anr_collector_java",
+    "//content/public/android:content_main_dex_java",
     "//net/android:net_java",
+    "//third_party/android_deps:com_google_code_findbugs_jsr305_java",
     "//third_party/androidx:androidx_annotation_annotation_java",
+    "//third_party/jni_zero:jni_zero_java",
   ]
 
+  srcjar_deps = [ ":minidump_uploader_jni_headers" ]
   sources = [
     "android/java/src/org/chromium/components/minidump_uploader/CrashFileManager.java",
     "android/java/src/org/chromium/components/minidump_uploader/CrashReportMimeWriter.java",
@@ -52,14 +73,12 @@ android_library("minidump_uploader_java") {
     "android/java/src/org/chromium/components/minidump_uploader/util/HttpURLConnectionFactoryImpl.java",
     "android/java/src/org/chromium/components/minidump_uploader/util/NetworkPermissionUtil.java",
   ]
-  annotation_processor_deps = [ "//base/android/jni_generator:jni_processor" ]
 }
 
 android_library("minidump_uploader_java_test_support") {
   testonly = true
   sources = [
     "android/javatests/src/org/chromium/components/minidump_uploader/CrashTestRule.java",
-    "android/javatests/src/org/chromium/components/minidump_uploader/MinidumpUploadTestUtility.java",
     "android/javatests/src/org/chromium/components/minidump_uploader/MinidumpUploaderTestConstants.java",
     "android/javatests/src/org/chromium/components/minidump_uploader/TestHttpURLConnection.java",
     "android/javatests/src/org/chromium/components/minidump_uploader/TestHttpURLConnectionFactory.java",
@@ -82,7 +101,6 @@ robolectric_library("minidump_uploader_javatests") {
     "//base:base_java",
     "//base:base_java_test_support",
     "//base:base_junit_test_support",
-    "//third_party/android_support_test_runner:runner_java",
     "//third_party/androidx:androidx_test_runner_java",
     "//third_party/junit",
   ]

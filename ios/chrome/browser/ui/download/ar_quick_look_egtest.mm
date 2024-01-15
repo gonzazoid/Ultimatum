@@ -4,10 +4,10 @@
 
 #import <memory>
 
-#import "base/bind.h"
+#import "base/functional/bind.h"
 #import "base/test/ios/wait_util.h"
-#import "ios/chrome/browser/download/download_test_util.h"
-#import "ios/chrome/browser/download/mime_type_util.h"
+#import "ios/chrome/browser/download/model/download_test_util.h"
+#import "ios/chrome/browser/download/model/mime_type_util.h"
 #import "ios/chrome/test/earl_grey/chrome_earl_grey.h"
 #import "ios/chrome/test/earl_grey/chrome_test_case.h"
 #import "ios/testing/earl_grey/earl_grey_test.h"
@@ -16,10 +16,6 @@
 #import "net/test/embedded_test_server/http_request.h"
 #import "net/test/embedded_test_server/http_response.h"
 #import "ui/base/l10n/l10n_util_mac.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 using base::test::ios::WaitUntilConditionOrTimeout;
 using base::test::ios::kWaitForDownloadTimeout;

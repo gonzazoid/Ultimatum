@@ -14,19 +14,17 @@
 #include "chrome/common/extensions/api/file_system_provider_internal.h"
 #include "components/services/filesystem/public/mojom/types.mojom.h"
 
-namespace ash {
-namespace file_system_provider {
-namespace operations {
+namespace ash::file_system_provider::operations {
 namespace {
 
 // Convert |input| into |output|. If parsing fails, then returns false.
-bool ConvertRequestValueToEntryList(std::unique_ptr<RequestValue> value,
+bool ConvertRequestValueToEntryList(const RequestValue& value,
                                     storage::AsyncFileUtil::EntryList* output) {
   using extensions::api::file_system_provider::EntryMetadata;
   using extensions::api::file_system_provider_internal::
       ReadDirectoryRequestedSuccess::Params;
 
-  const Params* params = value->read_directory_success_params();
+  const Params* params = value.read_directory_success_params();
   if (!params)
     return false;
 
@@ -51,16 +49,15 @@ bool ConvertRequestValueToEntryList(std::unique_ptr<RequestValue> value,
 }  // namespace
 
 ReadDirectory::ReadDirectory(
-    extensions::EventRouter* event_router,
+    RequestDispatcher* dispatcher,
     const ProvidedFileSystemInfo& file_system_info,
     const base::FilePath& directory_path,
     storage::AsyncFileUtil::ReadDirectoryCallback callback)
-    : Operation(event_router, file_system_info),
+    : Operation(dispatcher, file_system_info),
       directory_path_(directory_path),
       callback_(std::move(callback)) {}
 
-ReadDirectory::~ReadDirectory() {
-}
+ReadDirectory::~ReadDirectory() = default;
 
 bool ReadDirectory::Execute(int request_id) {
   using extensions::api::file_system_provider::ReadDirectoryRequestedOptions;
@@ -84,11 +81,11 @@ bool ReadDirectory::Execute(int request_id) {
 }
 
 void ReadDirectory::OnSuccess(int /* request_id */,
-                              std::unique_ptr<RequestValue> result,
+                              const RequestValue& result,
                               bool has_more) {
   storage::AsyncFileUtil::EntryList entry_list;
   const bool convert_result =
-      ConvertRequestValueToEntryList(std::move(result), &entry_list);
+      ConvertRequestValueToEntryList(result, &entry_list);
 
   if (!convert_result) {
     LOG(ERROR)
@@ -103,12 +100,10 @@ void ReadDirectory::OnSuccess(int /* request_id */,
 }
 
 void ReadDirectory::OnError(int /* request_id */,
-                            std::unique_ptr<RequestValue> /* result */,
+                            const RequestValue& /* result */,
                             base::File::Error error) {
   callback_.Run(
       error, storage::AsyncFileUtil::EntryList(), false /* has_more */);
 }
 
-}  // namespace operations
-}  // namespace file_system_provider
-}  // namespace ash
+}  // namespace ash::file_system_provider::operations

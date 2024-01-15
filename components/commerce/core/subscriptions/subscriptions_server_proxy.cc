@@ -6,16 +6,20 @@
 #include <string>
 #include <unordered_map>
 
-#include "base/callback.h"
 #include "base/check.h"
+#include "base/feature_list.h"
+#include "base/functional/callback.h"
 #include "base/json/json_reader.h"
 #include "base/json/json_writer.h"
 #include "base/json/values_util.h"
+#include "components/commerce/core/commerce_constants.h"
 #include "components/commerce/core/commerce_feature_list.h"
 #include "components/commerce/core/subscriptions/commerce_subscription.h"
 #include "components/commerce/core/subscriptions/subscriptions_server_proxy.h"
 #include "components/endpoint_fetcher/endpoint_fetcher.h"
+#include "components/signin/public/base/consent_level.h"
 #include "components/signin/public/identity_manager/identity_manager.h"
+#include "components/sync/base/features.h"
 #include "net/http/http_status_code.h"
 #include "net/traffic_annotation/network_traffic_annotation.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
@@ -23,13 +27,6 @@
 namespace {
 
 // For creating endpoint fetcher.
-const char kOAuthScope[] = "https://www.googleapis.com/auth/chromememex";
-const char kOAuthName[] = "subscriptions_svc";
-const char kGetHttpMethod[] = "GET";
-const char kPostHttpMethod[] = "POST";
-const char kContentType[] = "application/json; charset=UTF-8";
-const char kEmptyPostData[] = "";
-
 const int kDefaultTimeoutMs = 5000;
 const char kTimeoutParam[] = "subscriptions_server_request_timeout";
 constexpr base::FeatureParam<int> kTimeoutMs{&commerce::kShoppingList,
@@ -42,6 +39,7 @@ constexpr base::FeatureParam<std::string> kServiceBaseUrl{
     &commerce::kShoppingList, kBaseUrlParam, kDefaultServiceBaseUrl};
 
 const char kGetQueryParams[] = "?requestParams.subscriptionType=";
+const char kManageQueryParams[] = "?requestSnapshotParams.subscriptionType=";
 const char kPriceTrackGetParam[] = "PRICE_TRACK";
 
 // For generating server requests and deserializing the responses.
@@ -79,19 +77,26 @@ SubscriptionsServerProxy::~SubscriptionsServerProxy() = default;
 void SubscriptionsServerProxy::Create(
     std::unique_ptr<std::vector<CommerceSubscription>> subscriptions,
     ManageSubscriptionsFetcherCallback callback) {
-  if (subscriptions->size() == 0) {
-    std::move(callback).Run(SubscriptionsRequestStatus::kSuccess);
+  CHECK(subscriptions->size() > 0);
+  std::string service_url = kServiceBaseUrl.Get() + kManageQueryParams;
+  if ((*subscriptions)[0].type == SubscriptionType::kPriceTrack) {
+    service_url += kPriceTrackGetParam;
+  } else {
+    VLOG(1) << "Unsupported type for Create query";
+    std::move(callback).Run(
+        SubscriptionsRequestStatus::kInvalidArgument,
+        std::make_unique<std::vector<CommerceSubscription>>());
     return;
   }
 
-  base::Value subscriptions_list(base::Value::Type::LIST);
+  base::Value::List subscriptions_list;
   for (const auto& subscription : *subscriptions) {
     subscriptions_list.Append(Serialize(subscription));
   }
-  base::Value subscriptions_json(base::Value::Type::DICTIONARY);
-  subscriptions_json.SetKey(kSubscriptionsKey, std::move(subscriptions_list));
-  base::Value request_json(base::Value::Type::DICTIONARY);
-  request_json.SetKey(kCreateRequestParamsKey, std::move(subscriptions_json));
+  base::Value::Dict subscriptions_json;
+  subscriptions_json.Set(kSubscriptionsKey, std::move(subscriptions_list));
+  base::Value::Dict request_json;
+  request_json.Set(kCreateRequestParamsKey, std::move(subscriptions_json));
   std::string post_data;
   base::JSONWriter::Write(request_json, &post_data);
 
@@ -133,9 +138,8 @@ void SubscriptionsServerProxy::Create(
           }
         })");
 
-  auto fetcher =
-      CreateEndpointFetcher(GURL(kServiceBaseUrl.Get()), kPostHttpMethod,
-                            post_data, traffic_annotation);
+  auto fetcher = CreateEndpointFetcher(GURL(service_url), kPostHttpMethod,
+                                       post_data, traffic_annotation);
   auto* const fetcher_ptr = fetcher.get();
   fetcher_ptr->Fetch(base::BindOnce(
       &SubscriptionsServerProxy::HandleManageSubscriptionsResponses,
@@ -145,20 +149,27 @@ void SubscriptionsServerProxy::Create(
 void SubscriptionsServerProxy::Delete(
     std::unique_ptr<std::vector<CommerceSubscription>> subscriptions,
     ManageSubscriptionsFetcherCallback callback) {
-  if (subscriptions->size() == 0) {
-    std::move(callback).Run(SubscriptionsRequestStatus::kSuccess);
+  CHECK(subscriptions->size() > 0);
+  std::string service_url = kServiceBaseUrl.Get() + kManageQueryParams;
+  if ((*subscriptions)[0].type == SubscriptionType::kPriceTrack) {
+    service_url += kPriceTrackGetParam;
+  } else {
+    VLOG(1) << "Unsupported type for Delete query";
+    std::move(callback).Run(
+        SubscriptionsRequestStatus::kInvalidArgument,
+        std::make_unique<std::vector<CommerceSubscription>>());
     return;
   }
 
-  base::Value deletions_list(base::Value::Type::LIST);
+  base::Value::List deletions_list;
   for (const auto& subscription : *subscriptions) {
     if (subscription.timestamp != kUnknownSubscriptionTimestamp)
       deletions_list.Append(base::Int64ToValue(subscription.timestamp));
   }
-  base::Value deletions_json(base::Value::Type::DICTIONARY);
-  deletions_json.SetKey(kEventTimestampsKey, std::move(deletions_list));
-  base::Value request_json(base::Value::Type::DICTIONARY);
-  request_json.SetKey(kDeleteRequestParamsKey, std::move(deletions_json));
+  base::Value::Dict deletions_json;
+  deletions_json.Set(kEventTimestampsKey, std::move(deletions_list));
+  base::Value::Dict request_json;
+  request_json.Set(kDeleteRequestParamsKey, std::move(deletions_json));
   std::string post_data;
   base::JSONWriter::Write(request_json, &post_data);
 
@@ -198,9 +209,8 @@ void SubscriptionsServerProxy::Delete(
           }
         })");
 
-  auto fetcher =
-      CreateEndpointFetcher(GURL(kServiceBaseUrl.Get()), kPostHttpMethod,
-                            post_data, traffic_annotation);
+  auto fetcher = CreateEndpointFetcher(GURL(service_url), kPostHttpMethod,
+                                       post_data, traffic_annotation);
   auto* const fetcher_ptr = fetcher.get();
   fetcher_ptr->Fetch(base::BindOnce(
       &SubscriptionsServerProxy::HandleManageSubscriptionsResponses,
@@ -268,10 +278,22 @@ SubscriptionsServerProxy::CreateEndpointFetcher(
     const std::string& http_method,
     const std::string& post_data,
     const net::NetworkTrafficAnnotationTag& annotation_tag) {
+#if BUILDFLAG(IS_IOS)
+  // If ReplaceSyncPromosWithSignInPromos is enabled - ConsentLevel::kSync is no
+  // longer attainable. See crbug.com/1503156 for details.
+  signin::ConsentLevel consent_level =
+      base::FeatureList::IsEnabled(syncer::kReplaceSyncPromosWithSignInPromos)
+          ? signin::ConsentLevel::kSignin
+          : signin::ConsentLevel::kSync;
+#else
+  // TODO(crbug.com/1504089): Remove ifdefs after scope checking is disabled
+  //                          on non-iOS platforms.
+  signin::ConsentLevel consent_level = signin::ConsentLevel::kSync;
+#endif
   return std::make_unique<EndpointFetcher>(
       url_loader_factory_, kOAuthName, url, http_method, kContentType,
       std::vector<std::string>{kOAuthScope}, kTimeoutMs.Get(), post_data,
-      annotation_tag, identity_manager_);
+      annotation_tag, identity_manager_, consent_level);
 }
 
 void SubscriptionsServerProxy::HandleManageSubscriptionsResponses(
@@ -280,7 +302,9 @@ void SubscriptionsServerProxy::HandleManageSubscriptionsResponses(
     std::unique_ptr<EndpointResponse> responses) {
   if (responses->http_status_code != net::HTTP_OK || responses->error_type) {
     VLOG(1) << "Server failed to parse manage-subscriptions request";
-    std::move(callback).Run(SubscriptionsRequestStatus::kServerParseError);
+    std::move(callback).Run(
+        SubscriptionsRequestStatus::kServerParseError,
+        std::make_unique<std::vector<CommerceSubscription>>());
     return;
   }
   data_decoder::DataDecoder::ParseJsonIsolated(
@@ -293,19 +317,25 @@ void SubscriptionsServerProxy::OnManageSubscriptionsJsonParsed(
     ManageSubscriptionsFetcherCallback callback,
     data_decoder::DataDecoder::ValueOrError result) {
   if (result.has_value() && result->is_dict()) {
-    if (auto* status_value = result->FindKey(kStatusKey)) {
-      if (auto status_code = status_value->FindIntKey(kStatusCodeKey)) {
-        std::move(callback).Run(
-            *status_code == kBackendCanonicalCodeSuccess
-                ? SubscriptionsRequestStatus::kSuccess
-                : SubscriptionsRequestStatus::kServerInternalError);
+    if (auto* status_value = result->GetDict().FindDict(kStatusKey)) {
+      if (auto status_code = status_value->FindInt(kStatusCodeKey)) {
+        if (*status_code == kBackendCanonicalCodeSuccess) {
+          std::move(callback).Run(SubscriptionsRequestStatus::kSuccess,
+                                  GetSubscriptionsFromParsedJson(result));
+        } else {
+          std::move(callback).Run(
+              SubscriptionsRequestStatus::kServerInternalError,
+              std::make_unique<std::vector<CommerceSubscription>>());
+        }
         return;
       }
     }
   }
 
   VLOG(1) << "Fail to get status code from response";
-  std::move(callback).Run(SubscriptionsRequestStatus::kServerInternalError);
+  std::move(callback).Run(
+      SubscriptionsRequestStatus::kServerInternalError,
+      std::make_unique<std::vector<CommerceSubscription>>());
 }
 
 void SubscriptionsServerProxy::HandleGetSubscriptionsResponses(
@@ -328,46 +358,49 @@ void SubscriptionsServerProxy::HandleGetSubscriptionsResponses(
 void SubscriptionsServerProxy::OnGetSubscriptionsJsonParsed(
     GetSubscriptionsFetcherCallback callback,
     data_decoder::DataDecoder::ValueOrError result) {
-  auto subscriptions = std::make_unique<std::vector<CommerceSubscription>>();
-  if (result.has_value() && result->is_dict()) {
-    // TODO(crbug.com/1346107): Check whether the request succeeds. If not, we
-    // may have to fetch again.
-    if (auto* subscriptions_json = result->FindListKey(kSubscriptionsKey)) {
-      for (const auto& subscription_json : subscriptions_json->GetList()) {
-        if (auto subscription = Deserialize(subscription_json))
-          subscriptions->push_back(*subscription);
-      }
-      std::move(callback).Run(SubscriptionsRequestStatus::kSuccess,
-                              std::move(subscriptions));
-      return;
-    }
+  auto subscriptions = GetSubscriptionsFromParsedJson(result);
+  if (subscriptions->size() == 0) {
+    VLOG(1) << "User has no subscriptions";
   }
-
-  VLOG(1) << "User has no subscriptions";
   std::move(callback).Run(SubscriptionsRequestStatus::kSuccess,
                           std::move(subscriptions));
 }
 
-base::Value SubscriptionsServerProxy::Serialize(
+std::unique_ptr<std::vector<CommerceSubscription>>
+SubscriptionsServerProxy::GetSubscriptionsFromParsedJson(
+    const data_decoder::DataDecoder::ValueOrError& result) {
+  auto subscriptions = std::make_unique<std::vector<CommerceSubscription>>();
+  if (result.has_value() && result->is_dict()) {
+    if (auto* subscriptions_json =
+            result->GetDict().FindList(kSubscriptionsKey)) {
+      for (const auto& subscription_json : *subscriptions_json) {
+        if (auto subscription = Deserialize(subscription_json))
+          subscriptions->push_back(*subscription);
+      }
+    }
+  }
+  return subscriptions;
+}
+
+base::Value::Dict SubscriptionsServerProxy::Serialize(
     const CommerceSubscription& subscription) {
-  base::Value subscription_json(base::Value::Type::DICTIONARY);
-  subscription_json.SetStringKey(kSubscriptionTypeKey,
-                                 SubscriptionTypeToString(subscription.type));
-  subscription_json.SetStringKey(
-      kSubscriptionIdTypeKey, SubscriptionIdTypeToString(subscription.id_type));
-  subscription_json.SetStringKey(kSubscriptionIdKey, subscription.id);
-  subscription_json.SetStringKey(
+  base::Value::Dict subscription_json;
+  subscription_json.Set(kSubscriptionTypeKey,
+                        SubscriptionTypeToString(subscription.type));
+  subscription_json.Set(kSubscriptionIdTypeKey,
+                        SubscriptionIdTypeToString(subscription.id_type));
+  subscription_json.Set(kSubscriptionIdKey, subscription.id);
+  subscription_json.Set(
       kSubscriptionManagementTypeKey,
       SubscriptionManagementTypeToString(subscription.management_type));
   if (auto seen_offer = subscription.user_seen_offer) {
-    base::Value seen_offer_json(base::Value::Type::DICTIONARY);
-    seen_offer_json.SetStringKey(kSeenOfferIdKey, seen_offer->offer_id);
-    seen_offer_json.SetStringKey(
-        kSeenOfferPriceKey, base::NumberToString(seen_offer->user_seen_price));
-    seen_offer_json.SetStringKey(kSeenOfferCountryKey,
-                                 seen_offer->country_code);
-    subscription_json.SetKey(kSubscriptionSeenOfferKey,
-                             std::move(seen_offer_json));
+    base::Value::Dict seen_offer_json;
+    seen_offer_json.Set(kSeenOfferIdKey, seen_offer->offer_id);
+    seen_offer_json.Set(kSeenOfferPriceKey,
+                        base::NumberToString(seen_offer->user_seen_price));
+    seen_offer_json.Set(kSeenOfferCountryKey, seen_offer->country_code);
+    subscription_json.Set(kSubscriptionSeenOfferKey,
+                          std::move(seen_offer_json));
   }
   return subscription_json;
 }
@@ -375,12 +408,14 @@ base::Value SubscriptionsServerProxy::Serialize(
 absl::optional<CommerceSubscription> SubscriptionsServerProxy::Deserialize(
     const base::Value& value) {
   if (value.is_dict()) {
-    auto* type = value.FindStringKey(kSubscriptionTypeKey);
-    auto* id_type = value.FindStringKey(kSubscriptionIdTypeKey);
-    auto* id = value.FindStringKey(kSubscriptionIdKey);
-    auto* management_type = value.FindStringKey(kSubscriptionManagementTypeKey);
+    const base::Value::Dict& value_dict = value.GetDict();
+    auto* type = value_dict.FindString(kSubscriptionTypeKey);
+    auto* id_type = value_dict.FindString(kSubscriptionIdTypeKey);
+    auto* id = value_dict.FindString(kSubscriptionIdKey);
+    auto* management_type =
+        value_dict.FindString(kSubscriptionManagementTypeKey);
     auto timestamp =
-        base::ValueToInt64(value.FindKey(kSubscriptionTimestampKey));
+        base::ValueToInt64(value_dict.Find(kSubscriptionTimestampKey));
     if (type && id_type && id && management_type && timestamp) {
       return absl::make_optional<CommerceSubscription>(
           StringToSubscriptionType(*type), StringToSubscriptionIdType(*id_type),

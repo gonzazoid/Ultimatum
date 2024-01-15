@@ -8,8 +8,8 @@
 #include <utility>
 
 #include "base/run_loop.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/test/bind.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "components/services/storage/indexed_db/locks/partitioned_lock_manager.h"
 #include "components/services/storage/indexed_db/scopes/leveldb_scopes_test_utils.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -38,8 +38,7 @@ TEST_F(LevelDBScopesStartupTest, CleanupOnRecovery) {
 
   leveldb::Status s = scopes.Initialize();
   EXPECT_TRUE(s.ok());
-  scopes.StartRecoveryAndCleanupTasks(
-      LevelDBScopes::TaskRunnerMode::kNewCleanupAndRevertSequences);
+  scopes.StartRecoveryAndCleanupTasks();
 
   // Wait until cleanup task runs.
   base::RunLoop loop;
@@ -105,8 +104,7 @@ TEST_F(LevelDBScopesStartupTest, RevertWithLocksOnRecoveryWithNoCleanup) {
       {CreateSimpleExclusiveLock()}, locks_receiver.AsWeakPtr(),
       base::BindLambdaForTesting([&]() { lock_grabbed = true; }));
 
-  scopes.StartRecoveryAndCleanupTasks(
-      LevelDBScopes::TaskRunnerMode::kNewCleanupAndRevertSequences);
+  scopes.StartRecoveryAndCleanupTasks();
 
   EXPECT_FALSE(lock_grabbed);
 
@@ -125,8 +123,8 @@ TEST_F(LevelDBScopesStartupTest, RevertWithLocksOnRecoveryWithNoCleanup) {
   // Ensure the cleanup task was posted & locks were released.
   {
     base::RunLoop loop;
-    base::SequencedTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                     loop.QuitClosure());
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE, loop.QuitClosure());
     loop.Run();
   }
   EXPECT_TRUE(lock_grabbed);

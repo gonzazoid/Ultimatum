@@ -41,26 +41,26 @@ constexpr char kWifiServicePath[] = "/service/stub_wifi";
 constexpr char kWifiIPConfigV4Path[] = "/ipconfig/stub_wifi-ipv4";
 constexpr char kWifiIPConfigV6Path[] = "/ipconfig/stub_wifi-ipv6";
 
-base::Value BuildCustomArgForSuccess(const std::string& expected_mac_address,
-                                     const std::string& expected_ipv4_address,
-                                     const std::string& expected_ipv6_address) {
-  base::Value network_details(base::Value::Type::DICTIONARY);
-  network_details.SetKey("macAddress", base::Value(expected_mac_address));
-  network_details.SetKey("ipv4", base::Value(expected_ipv4_address));
-  network_details.SetKey("ipv6", base::Value(expected_ipv6_address));
+base::Value::Dict BuildCustomArgForSuccess(
+    const std::string& expected_mac_address,
+    const std::string& expected_ipv4_address,
+    const std::string& expected_ipv6_address) {
+  base::Value::Dict network_details;
+  network_details.Set("macAddress", expected_mac_address);
+  network_details.Set("ipv4", expected_ipv4_address);
+  network_details.Set("ipv6", expected_ipv6_address);
 
-  base::Value custom_arg(base::Value::Type::DICTIONARY);
-  custom_arg.SetKey("testName", base::Value("success"));
-  custom_arg.SetKey("expectedResult", std::move(network_details));
+  base::Value::Dict custom_arg;
+  custom_arg.Set("testName", "success");
+  custom_arg.Set("expectedResult", std::move(network_details));
   return custom_arg;
 }
 
-base::Value BuildCustomArgForFailure(
+base::Value::Dict BuildCustomArgForFailure(
     const std::string& expected_error_message) {
-  base::Value custom_arg(base::Value::Type::DICTIONARY);
-  custom_arg.SetKey("testName", base::Value("failure"));
-  custom_arg.SetKey("expectedErrorMessage",
-                    base::Value(expected_error_message));
+  base::Value::Dict custom_arg;
+  custom_arg.Set("testName", "failure");
+  custom_arg.Set("expectedErrorMessage", expected_error_message);
   return custom_arg;
 }
 
@@ -70,11 +70,10 @@ namespace extensions {
 
 class EnterpriseNetworkingAttributesTest
     : public ForceInstalledAffiliatedExtensionApiTest,
-      public ::testing::WithParamInterface<std::tuple<bool, bool>> {
+      public ::testing::WithParamInterface<bool> {
  public:
   EnterpriseNetworkingAttributesTest()
-      : ForceInstalledAffiliatedExtensionApiTest(std::get<0>(GetParam()),
-                                                 std::get<1>(GetParam())) {}
+      : ForceInstalledAffiliatedExtensionApiTest(GetParam()) {}
 
   void SetupDisconnectedNetwork() {
     ash::ShillDeviceClient::TestInterface* shill_device_client =
@@ -95,28 +94,25 @@ class EnterpriseNetworkingAttributesTest
         kWifiDevicePath, shill::kAddressProperty, base::Value(kMacAddress),
         /* notify_changed= */ false);
 
-    base::DictionaryValue ipconfig_v4_dictionary;
-    ipconfig_v4_dictionary.SetKey(shill::kAddressProperty,
-                                  base::Value(kIpv4Address));
-    ipconfig_v4_dictionary.SetKey(shill::kMethodProperty,
-                                  base::Value(shill::kTypeIPv4));
+    base::Value::Dict ipconfig_v4_dictionary;
+    ipconfig_v4_dictionary.Set(shill::kAddressProperty, kIpv4Address);
+    ipconfig_v4_dictionary.Set(shill::kMethodProperty, shill::kTypeIPv4);
     shill_ipconfig_client->AddIPConfig(kWifiIPConfigV4Path,
-                                       ipconfig_v4_dictionary);
+                                       std::move(ipconfig_v4_dictionary));
 
-    base::DictionaryValue ipconfig_v6_dictionary;
-    ipconfig_v6_dictionary.SetKey(shill::kAddressProperty,
-                                  base::Value(kIpv6Address));
-    ipconfig_v6_dictionary.SetKey(shill::kMethodProperty,
-                                  base::Value(shill::kTypeIPv6));
+    base::Value::Dict ipconfig_v6_dictionary;
+    ipconfig_v6_dictionary.Set(shill::kAddressProperty, kIpv6Address);
+    ipconfig_v6_dictionary.Set(shill::kMethodProperty, shill::kTypeIPv6);
     shill_ipconfig_client->AddIPConfig(kWifiIPConfigV6Path,
-                                       ipconfig_v6_dictionary);
+                                       std::move(ipconfig_v6_dictionary));
 
-    base::ListValue ip_configs;
+    base::Value::List ip_configs;
     ip_configs.Append(kWifiIPConfigV4Path);
     ip_configs.Append(kWifiIPConfigV6Path);
-    shill_device_client->SetDeviceProperty(
-        kWifiDevicePath, shill::kIPConfigsProperty, ip_configs,
-        /*notify_changed=*/false);
+    shill_device_client->SetDeviceProperty(kWifiDevicePath,
+                                           shill::kIPConfigsProperty,
+                                           base::Value(std::move(ip_configs)),
+                                           /*notify_changed=*/false);
 
     shill_service_client->AddService(kWifiServicePath, "wifi_guid",
                                      "wifi_network_name", shill::kTypeWifi,
@@ -149,7 +145,7 @@ IN_PROC_BROWSER_TEST_P(EnterpriseNetworkingAttributesTest,
 }
 
 IN_PROC_BROWSER_TEST_P(EnterpriseNetworkingAttributesTest, GetNetworkDetails) {
-  const bool is_affiliated = std::get<0>(GetParam());
+  const bool is_affiliated = GetParam();
   EXPECT_EQ(is_affiliated, user_manager::UserManager::Get()
                                ->FindUser(affiliation_mixin_.account_id())
                                ->IsAffiliated());
@@ -160,7 +156,7 @@ IN_PROC_BROWSER_TEST_P(EnterpriseNetworkingAttributesTest, GetNetworkDetails) {
   const GURL test_url = extension->GetResourceURL("test.html");
 
   // Run test without connected network.
-  base::Value custom_arg_disconnected =
+  base::Value::Dict custom_arg_disconnected =
       is_affiliated ? BuildCustomArgForFailure(kErrorNetworkNotConnected)
                     : BuildCustomArgForFailure(kErrorUserNotAffiliated);
   TestExtension(CreateBrowser(profile()), test_url,
@@ -168,7 +164,7 @@ IN_PROC_BROWSER_TEST_P(EnterpriseNetworkingAttributesTest, GetNetworkDetails) {
 
   // Run test with connected network.
   ConnectNetwork();
-  base::Value custom_arg_connected =
+  base::Value::Dict custom_arg_connected =
       is_affiliated ? BuildCustomArgForSuccess(kFormattedMacAddress,
                                                kIpv4Address, kIpv6Address)
                     : BuildCustomArgForFailure(kErrorUserNotAffiliated);
@@ -179,8 +175,7 @@ IN_PROC_BROWSER_TEST_P(EnterpriseNetworkingAttributesTest, GetNetworkDetails) {
 // Both cases of affiliated and non-affiliated users are tested.
 INSTANTIATE_TEST_SUITE_P(AffiliationCheck,
                          EnterpriseNetworkingAttributesTest,
-                         ::testing::Combine(::testing::Bool(),
-                                            ::testing::Bool()));
+                         ::testing::Bool());
 
 // Ensure that extensions that are not pre-installed by policy throw an install
 // warning if they request the enterprise.networkingAttributes permission in the

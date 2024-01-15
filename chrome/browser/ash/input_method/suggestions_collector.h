@@ -8,7 +8,8 @@
 #include <memory>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/ash/input_method/suggestions_source.h"
 #include "chromeos/ash/services/ime/public/cpp/assistive_suggestions.h"
 #include "chromeos/ash/services/ime/public/mojom/input_method_host.mojom.h"
@@ -42,7 +43,7 @@ class SuggestionsCollector {
       const std::vector<ime::AssistiveSuggestion>& system_suggestions);
 
   // Not owned by this class
-  SuggestionsSource* assistive_suggester_;
+  raw_ptr<SuggestionsSource> assistive_suggester_;
 
   // Client used to request suggestions from the system
   std::unique_ptr<AsyncSuggestionsSource> suggestions_service_client_;

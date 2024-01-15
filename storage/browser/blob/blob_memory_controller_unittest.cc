@@ -4,21 +4,20 @@
 
 #include "storage/browser/blob/blob_memory_controller.h"
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include <optional>
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/run_loop.h"
 #include "base/system/sys_info.h"
 #include "base/test/task_environment.h"
 #include "base/test/test_simple_task_runner.h"
 #include "base/threading/thread_restrictions.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "storage/browser/blob/blob_data_builder.h"
 #include "storage/browser/blob/blob_data_item.h"
 #include "storage/browser/blob/shareable_blob_data_item.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace storage {
 
@@ -28,7 +27,6 @@ using base::TestSimpleTaskRunner;
 using ItemState = ShareableBlobDataItem::State;
 using QuotaAllocationTask = BlobMemoryController::QuotaAllocationTask;
 
-const std::string kBlobStorageDirectory = "blob_storage";
 const size_t kTestBlobStorageIPCThresholdBytes = 20;
 const size_t kTestBlobStorageMaxSharedMemoryBytes = 50;
 const size_t kTestBlobStorageMaxBlobMemorySize = 500;
@@ -165,7 +163,7 @@ class BlobMemoryControllerTest : public testing::Test {
 
   base::test::TaskEnvironment task_environment_;
 
-  absl::optional<base::ScopedDisallowBlocking> disallow_blocking_;
+  std::optional<base::ScopedDisallowBlocking> disallow_blocking_;
 };
 
 TEST_F(BlobMemoryControllerTest, Strategy) {
@@ -789,7 +787,7 @@ TEST_F(BlobMemoryControllerTest, PagingStopsWhenFull) {
 
 TEST_F(BlobMemoryControllerTest, DisableDiskWithFileAndMemoryPending) {
   const std::string kFirstMemoryId = "id";
-  const uint64_t kFirstMemorySize = kTestBlobStorageMaxBlobMemorySize;
+  const size_t kFirstMemorySize = kTestBlobStorageMaxBlobMemorySize;
   const std::string kSecondMemoryId = "id2";
   const uint64_t kSecondMemorySize = 1;
   const std::string kFileId = "id2";

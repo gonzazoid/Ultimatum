@@ -5,16 +5,20 @@
 #ifndef CHROME_BROWSER_ASH_CROSAPI_BROWSER_ACTION_H_
 #define CHROME_BROWSER_ASH_CROSAPI_BROWSER_ACTION_H_
 
+#include <cstdint>
+#include <optional>
+
 #include "base/containers/queue.h"
-#include "base/strings/string_piece_forward.h"
+#include "base/strings/string_piece.h"
 #include "chrome/browser/ui/browser_navigator_params.h"
 #include "chromeos/crosapi/mojom/crosapi.mojom.h"
+#include "components/tab_groups/tab_group_info.h"
 #include "ui/base/ui_base_types.h"
 
 namespace crosapi {
 
 struct VersionedBrowserService {
-  mojom::BrowserService* service;
+  raw_ptr<mojom::BrowserService> service;
   uint32_t interface_version;
 };
 
@@ -31,13 +35,16 @@ class BrowserAction {
                               const std::string&)>;
 
   // Factory functions for creating specific browser actions. See
-  // the browser_manager.h for documentation.
+  // browser_manager.h for documentation.
   static std::unique_ptr<BrowserAction> NewWindow(
       bool incognito,
       bool should_trigger_session_restore,
-      int64_t target_display_id);
+      int64_t target_display_id,
+      std::optional<uint64_t> profile_id = std::nullopt);
   static std::unique_ptr<BrowserAction> NewTab();
-  static std::unique_ptr<BrowserAction> Launch(int64_t target_display_id);
+  static std::unique_ptr<BrowserAction> Launch(
+      int64_t target_display_id,
+      std::optional<uint64_t> profile_id = std::nullopt);
   static std::unique_ptr<BrowserAction> NewWindowForDetachingTab(
       base::StringPiece16 tab_id_str,
       base::StringPiece16 group_id_str,
@@ -55,29 +62,50 @@ class BrowserAction {
   static std::unique_ptr<BrowserAction> OpenForFullRestore(
       bool skip_crash_restore);
   static std::unique_ptr<BrowserAction> RestoreTab();
-  static std::unique_ptr<BrowserAction> HandleTabScrubbing(float x_offset);
+  static std::unique_ptr<BrowserAction> HandleTabScrubbing(
+      float x_offset,
+      bool is_fling_scroll_event);
   static std::unique_ptr<BrowserAction> CreateBrowserWithRestoredData(
       const std::vector<GURL>& urls,
       const gfx::Rect& bounds,
+      const std::vector<tab_groups::TabGroupInfo>& tab_group_infos,
       ui::WindowShowState show_state,
       int32_t active_tab_index,
+      int32_t first_non_pinned_tab_index,
       base::StringPiece app_name,
-      int32_t restore_window_id);
+      int32_t restore_window_id,
+      uint64_t lacros_profile_id);
+  static std::unique_ptr<BrowserAction> OpenProfileManager();
 
   // Returns the initial action for the automatic start of Lacros.
   // No window will be opened in the following circumstances:
-  // 1. Lacros-chrome is initialized in the web Kiosk session
+  // 1. Lacros is initialized in the web Kiosk session.
   // 2. Full restore is responsible for restoring/launching Lacros.
   static std::unique_ptr<BrowserAction> GetActionForSessionStart();
 
+  // The type of BrowserManager::OnActionPerformed.
+  using BrowserManagerCallback = base::OnceCallback<void(bool)>;
+
   // Performs the action.
-  virtual void Perform(const VersionedBrowserService& service) = 0;
+  // The provided callback should be called to signal completion or request a
+  // retry at a later point. The callback actually owns the action and
+  // signalling completion generally results in destroying the action, so care
+  // needs to be taken not to access anymore afterwards.
+  virtual void Perform(const VersionedBrowserService& service,
+                       BrowserManagerCallback on_performed) = 0;
 
   // Cancels the action.
-  virtual void Cancel(crosapi::mojom::CreationResult reason) {}
+  virtual void Cancel(crosapi::mojom::CreationResult reason);
 
   // Returns whether the action can be be postponed when Lacros isn't ready.
   bool IsQueueable() const { return is_queueable_; }
+
+ protected:
+  // Run on_performed, requesting a retry depending on the given result. This is
+  // meant to be used as mojo callback by action subclasses whose response does
+  // not need additional arguments.
+  void OnPerformed(BrowserManagerCallback on_performed,
+                   mojom::CreationResult result);
 
  private:
   const bool is_queueable_;
@@ -90,7 +118,8 @@ class BrowserActionQueue {
   ~BrowserActionQueue();
 
   // Enqueues |action| if it is queueable. Cancels it otherwise.
-  void PushOrCancel(std::unique_ptr<BrowserAction> action);
+  void PushOrCancel(std::unique_ptr<BrowserAction> action,
+                    mojom::CreationResult cancel_reason);
 
   void Push(std::unique_ptr<BrowserAction> action);
   std::unique_ptr<BrowserAction> Pop();

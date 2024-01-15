@@ -5,19 +5,18 @@
 #ifndef UI_DISPLAY_MANAGER_TEST_TEST_DISPLAY_LAYOUT_MANAGER_H_
 #define UI_DISPLAY_MANAGER_TEST_TEST_DISPLAY_LAYOUT_MANAGER_H_
 
-#include <memory>
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "ui/display/manager/display_configurator.h"
 #include "ui/display/manager/display_layout_manager.h"
 
-namespace display {
-namespace test {
+namespace display::test {
 
 class TestDisplayLayoutManager : public DisplayLayoutManager {
  public:
   TestDisplayLayoutManager(
-      std::vector<std::unique_ptr<DisplaySnapshot>> displays,
+      const std::vector<raw_ptr<DisplaySnapshot, VectorExperimental>>& displays,
       MultipleDisplayState display_state);
 
   TestDisplayLayoutManager(const TestDisplayLayoutManager&) = delete;
@@ -25,8 +24,10 @@ class TestDisplayLayoutManager : public DisplayLayoutManager {
 
   ~TestDisplayLayoutManager() override;
 
-  void set_displays(std::vector<std::unique_ptr<DisplaySnapshot>> displays) {
-    displays_ = std::move(displays);
+  void set_displays(
+      const std::vector<raw_ptr<DisplaySnapshot, VectorExperimental>>&
+          displays) {
+    displays_ = displays;
   }
 
   void set_display_state(MultipleDisplayState display_state) {
@@ -40,20 +41,21 @@ class TestDisplayLayoutManager : public DisplayLayoutManager {
   MultipleDisplayState GetDisplayState() const override;
   chromeos::DisplayPowerState GetPowerState() const override;
   bool GetDisplayLayout(
-      const std::vector<DisplaySnapshot*>& displays,
+      const std::vector<raw_ptr<DisplaySnapshot, VectorExperimental>>& displays,
       MultipleDisplayState new_display_state,
       chromeos::DisplayPowerState new_power_state,
       RefreshRateThrottleState new_throttle_state,
+      bool new_vrr_enabled_state,
       std::vector<DisplayConfigureRequest>* requests) const override;
-  std::vector<DisplaySnapshot*> GetDisplayStates() const override;
+  std::vector<raw_ptr<DisplaySnapshot, VectorExperimental>> GetDisplayStates()
+      const override;
   bool IsMirroring() const override;
 
  private:
-  std::vector<std::unique_ptr<DisplaySnapshot>> displays_;
+  std::vector<raw_ptr<DisplaySnapshot, VectorExperimental>> displays_;
   MultipleDisplayState display_state_;
 };
 
-}  // namespace test
-}  // namespace display
+}  // namespace display::test
 
 #endif  // UI_DISPLAY_MANAGER_TEST_TEST_DISPLAY_LAYOUT_MANAGER_H_

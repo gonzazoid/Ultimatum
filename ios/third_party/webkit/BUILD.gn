@@ -71,9 +71,9 @@ if (_build_ios_webkit || _build_mac_webkit) {
         "src/Source/WebKit/WebProcess/WebPage/WebPage.cpp",
         "src/Source/WebCore/Headers.cmake",
         "src/Source/WebKit/UIProcess/WebPageProxy.h",
-        "src/LayoutTests/platform/win/TestExpectations",
+        "src/LayoutTests/platform/wincairo/TestExpectations",
         "src/Source/WebCore/dom/Document.cpp",
-        "src/Source/WTF/Scripts/Preferences/WebPreferencesExperimental.yaml",
+        "src/Source/WTF/Scripts/Preferences/UnifiedWebPreferences.yaml",
         "src/Source/WebKit/UIProcess/ios/WKContentViewInteraction.mm",
         "src/Source/WebCore/testing/Internals.cpp",
         "src/LayoutTests/platform/gtk/TestExpectations",
@@ -183,14 +183,14 @@ if (_build_mac_webkit) {
       "--output_dir",
       rebase_path("$_webkit_mac_out_base_dir"),
 
-      # The arguments below allow building with Xcode 12.5 (with the macOS 11.3
-      # SDK).
-      "MACOSX_DEPLOYMENT_TARGET=11.3",
-      "TARGET_MAC_OS_X_VERSION_MAJOR=110000",
-      "MAC_OS_X_VERSION_ACTUAL=110300",
-      "MAC_OS_X_VERSION_MAJOR=110000",
-      "MAC_OS_X_VERSION_MINOR=110300",
-      "MAC_OS_X_PRODUCT_BUILD_VERSION=20E232",
+      # The arguments below allow building with Xcode 14.2 (with the macOS 13.1
+      # SDK) on macOS 13.4.
+      "MACOSX_DEPLOYMENT_TARGET=13.1",
+      "TARGET_MAC_OS_X_VERSION_MAJOR=130000",
+      "MAC_OS_X_VERSION_ACTUAL=130400",
+      "MAC_OS_X_VERSION_MAJOR=130000",
+      "MAC_OS_X_VERSION_MINOR=130400",
+      "MAC_OS_X_PRODUCT_BUILD_VERSION=22C55",
     ]
   }
 

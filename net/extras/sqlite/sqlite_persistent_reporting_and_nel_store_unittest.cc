@@ -7,19 +7,19 @@
 #include <memory>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/synchronization/waitable_event.h"
 #include "base/task/sequenced_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "base/test/bind.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/simple_test_clock.h"
 #include "base/threading/thread_restrictions.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "net/base/features.h"
 #include "net/base/network_anonymization_key.h"
@@ -237,17 +237,17 @@ class SQLitePersistentReportingAndNelStoreTest
   // Use origins distinct from those used in origin fields of keys, to avoid any
   // risk of tests passing due to comparing origins that are the same but come
   // from different sources.
-  const NetworkAnonymizationKey kNak1_ = NetworkAnonymizationKey(
-      SchemefulSite(GURL("https://top-frame-origin-nik1.test")),
-      SchemefulSite(GURL("https://frame-origin-nik1.test")));
-  const NetworkAnonymizationKey kNak2_ = NetworkAnonymizationKey(
-      SchemefulSite(GURL("https://top-frame-origin-nik2.test")),
-      SchemefulSite(GURL("https://frame-origin-nik2.test")));
+  const NetworkAnonymizationKey kNak1_ =
+      NetworkAnonymizationKey::CreateCrossSite(
+          SchemefulSite(GURL("https://top-frame-origin-nak1.test")));
+  const NetworkAnonymizationKey kNak2_ =
+      NetworkAnonymizationKey::CreateCrossSite(
+          SchemefulSite(GURL("https://top-frame-origin-nak2.test")));
 
   base::ScopedTempDir temp_dir_;
   std::unique_ptr<SQLitePersistentReportingAndNelStore> store_;
   const scoped_refptr<base::SequencedTaskRunner> client_task_runner_ =
-      base::ThreadTaskRunnerHandle::Get();
+      base::SingleThreadTaskRunner::GetCurrentDefault();
   const scoped_refptr<base::SequencedTaskRunner> background_task_runner_ =
       base::ThreadPool::CreateSequencedTaskRunner({base::MayBlock()});
 };
@@ -296,7 +296,7 @@ TEST_F(SQLitePersistentReportingAndNelStoreTest, TestInvalidMetaTableRecovery) {
     ASSERT_TRUE(
         db.Open(temp_dir_.GetPath().Append(kReportingAndNELStoreFilename)));
     sql::MetaTable meta_table;
-    meta_table.Init(&db, 1, 1);
+    ASSERT_TRUE(meta_table.Init(&db, 1, 1));
     ASSERT_TRUE(db.Execute("DELETE FROM meta"));
     db.Close();
   }
@@ -308,8 +308,8 @@ TEST_F(SQLitePersistentReportingAndNelStoreTest, TestInvalidMetaTableRecovery) {
   LoadNelPolicies(&policies);
   ASSERT_EQ(0U, policies.size());
 
-  hist_tester.ExpectUniqueSample("Net.SQLite.CorruptMetaTableRecovered", true,
-                                 1);
+  hist_tester.ExpectUniqueSample("ReportingAndNEL.CorruptMetaTableRecovered",
+                                 true, 1);
 
   // Verify that, after, recovery, the database persists properly.
   NetworkErrorLoggingService::NelPolicy policy2 = MakeNelPolicy(
@@ -771,9 +771,9 @@ TEST_F(SQLitePersistNelTest, AddAndDeleteNelPolicy) {
 TEST_F(SQLitePersistNelTest, ExpirationTimeIsPersisted) {
   const GURL kUrl("https://www.foo.test");
   const url::Origin kOrigin = url::Origin::Create(kUrl);
-  const NetworkAnonymizationKey kNik;
+  const NetworkAnonymizationKey kNak;
 
-  service_->OnHeader(kNik, kOrigin, kServerIP, kHeader);
+  service_->OnHeader(kNak, kOrigin, kServerIP, kHeader);
   RunUntilIdle();
 
   // Makes the policy we just added expired.
@@ -781,17 +781,17 @@ TEST_F(SQLitePersistNelTest, ExpirationTimeIsPersisted) {
 
   SimulateRestart();
 
-  service_->OnRequest(MakeRequestDetails(kNik, kUrl, ERR_INVALID_RESPONSE));
+  service_->OnRequest(MakeRequestDetails(kNak, kUrl, ERR_INVALID_RESPONSE));
   RunUntilIdle();
 
   EXPECT_EQ(0u, reporting_service_->reports().size());
 
   // Add the policy again so that it is not expired.
-  service_->OnHeader(kNik, kOrigin, kServerIP, kHeader);
+  service_->OnHeader(kNak, kOrigin, kServerIP, kHeader);
 
   SimulateRestart();
 
-  service_->OnRequest(MakeRequestDetails(kNik, kUrl, ERR_INVALID_RESPONSE));
+  service_->OnRequest(MakeRequestDetails(kNak, kUrl, ERR_INVALID_RESPONSE));
   RunUntilIdle();
 
   EXPECT_THAT(reporting_service_->reports(),

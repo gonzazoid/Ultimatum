@@ -9,10 +9,8 @@
 #include "chrome/browser/ui/webui/ash/login/base_screen_handler.h"
 
 namespace ash {
-class CryptohomeRecoveryScreen;
-}
 
-namespace chromeos {
+class CryptohomeRecoveryScreen;
 
 // Interface for dependency injection between CryptohomeRecoveryScreen and its
 // WebUI representation.
@@ -26,6 +24,15 @@ class CryptohomeRecoveryScreenView
 
   // Shows the contents of the screen.
   virtual void Show() = 0;
+
+  // Shows the recovery succeeded message.
+  virtual void OnRecoverySucceeded() = 0;
+
+  // Shows the recovery failed message.
+  virtual void OnRecoveryFailed() = 0;
+
+  // Shows the reauth required message when there's no reauth proof token.
+  virtual void ShowReauthNotification() = 0;
 };
 
 class CryptohomeRecoveryScreenHandler : public CryptohomeRecoveryScreenView,
@@ -45,19 +52,15 @@ class CryptohomeRecoveryScreenHandler : public CryptohomeRecoveryScreenView,
  private:
   // CryptohomeRecoveryScreenView
   void Show() override;
+  void OnRecoverySucceeded() override;
+  void OnRecoveryFailed() override;
+  void ShowReauthNotification() override;
 
   // BaseScreenHandler:
   void DeclareLocalizedValues(
       ::login::LocalizedValuesBuilder* builder) override;
 };
 
-}  // namespace chromeos
-
-// TODO(https://crbug.com/1164001): remove after the //chrome/browser/chromeos
-// source migration is finished.
-namespace ash {
-using ::chromeos::CryptohomeRecoveryScreenHandler;
-using ::chromeos::CryptohomeRecoveryScreenView;
 }  // namespace ash
 
 #endif  // CHROME_BROWSER_UI_WEBUI_ASH_LOGIN_CRYPTOHOME_RECOVERY_SCREEN_HANDLER_H_

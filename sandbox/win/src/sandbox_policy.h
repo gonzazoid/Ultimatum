@@ -8,6 +8,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "base/containers/span.h"
 #include "base/memory/scoped_refptr.h"
 #include "sandbox/win/src/sandbox_types.h"
 #include "sandbox/win/src/security_level.h"
@@ -26,29 +27,12 @@ enum class Desktop {
   kAlternateWinstation,
 };
 
-// Windows subsystems that can have specific rules.
-// Note: The process subsystem  (kProcess) does not evaluate the request
-// exactly like the CreateProcess API does. See the comment at the top of
-// process_thread_dispatcher.cc for more details.
-enum class SubSystem {
-  kFiles,           // Creation and opening of files and pipes.
-  kNamedPipes,      // Creation of named pipes.
-  kProcess,         // Creation of child processes.
-  kWin32kLockdown,  // Win32K Lockdown related policy.
-  kSignedBinary,    // Signed binary policy.
-};
-
-// Allowable semantics when a rule is matched.
-enum class Semantics {
-  kFilesAllowAny,       // Allows open or create for any kind of access that
-                        // the file system supports.
-  kFilesAllowReadonly,  // Allows open or create with read access only.
-  kFilesAllowQuery,     // Allows access to query the attributes of a file.
-  kNamedPipesAllowAny,  // Allows creation of a named pipe.
-  kFakeGdiInit,         // Fakes user32 and gdi32 initialization. This can
-                        // be used to allow the DLLs to load and initialize
-                        // even if the process cannot access that subsystem.
-  kSignedAllowLoad,     // Allows loading the module when CIG is enabled.
+// Allowable semantics when an AllowFileAccess() rule is matched.
+enum class FileSemantics {
+  kAllowAny,       // Allows open or create for any kind of access that
+                   // the file system supports.
+  kAllowReadonly,  // Allows open or create with read access only
+                   // (includes access to query the attributes of a file).
 };
 
 // Policy configuration that can be shared over multiple targets of the same tag
@@ -144,8 +128,8 @@ class [[clang::lto_visibility_public]] TargetConfig {
   virtual void SetJobMemoryLimit(size_t memory_limit) = 0;
 
   // Adds a policy rule effective for processes spawned using this policy.
-  // subsystem: One of the above enumerated windows subsystems.
-  // semantics: One of the above enumerated FileSemantics.
+  // Files matching `pattern` can be opened following FileSemantics.
+  //
   // pattern: A specific full path or a full path with wildcard patterns.
   //   The valid wildcards are:
   //   '*' : Matches zero or more character. Only one in series allowed.
@@ -154,9 +138,20 @@ class [[clang::lto_visibility_public]] TargetConfig {
   //   "c:\\documents and settings\\vince\\*.dmp"
   //   "c:\\documents and settings\\*\\crashdumps\\*.dmp"
   //   "c:\\temp\\app_log_?????_chrome.txt"
-  [[nodiscard]] virtual ResultCode AddRule(SubSystem subsystem,
-                                           Semantics semantics,
-                                           const wchar_t* pattern) = 0;
+  //
+  // Note: Do not add new uses of this function - instead proxy file handles
+  // into your process via normal Chrome IPC.
+  [[nodiscard]] virtual ResultCode AllowFileAccess(FileSemantics semantics,
+                                                   const wchar_t* pattern) = 0;
+
+  // Adds a policy rule effective for processes spawned using this policy.
+  // Modules patching `pattern` (see AllowFileAccess) can still be loaded under
+  // Code-Integrity Guard (MITIGATION_FORCE_MS_SIGNED_BINS).
+  [[nodiscard]] virtual ResultCode AllowExtraDlls(const wchar_t* pattern) = 0;
+
+  // Adds a policy rule effective for processes spawned using this policy.
+  // Fake gdi init to allow user32 and gdi32 to initialize under Win32 Lockdown.
+  [[nodiscard]] virtual ResultCode SetFakeGdiInit() = 0;
 
   // Adds a dll that will be unloaded in the target process before it gets
   // a chance to initialize itself. Typically, dlls that cause the target
@@ -221,13 +216,6 @@ class [[clang::lto_visibility_public]] TargetConfig {
   // Get the configured AppContainer.
   virtual scoped_refptr<AppContainer> GetAppContainer() = 0;
 
-  // Allows the launch of the the target process to proceed even if no job can
-  // be created.
-  virtual void SetAllowNoSandboxJob() = 0;
-
-  // Returns true if target process launch should proceed if job creation fails.
-  virtual bool GetAllowNoSandboxJob() = 0;
-
   // Adds a handle that will be closed in the target process after lockdown.
   // A nullptr value for handle_name indicates all handles of the specified
   // type. An empty string for handle_name indicates the handle is unnamed.
@@ -243,6 +231,23 @@ class [[clang::lto_visibility_public]] TargetConfig {
   // requested alternate desktop must have been created via the TargetPolicy
   // interface before any processes are spawned.
   virtual void SetDesktop(Desktop desktop) = 0;
+
+  // Sets whether or not the environment for the target will be filtered. If an
+  // environment for a target is filtered, then only a fixed list of
+  // environment variables will be copied from the broker to the target. These
+  // are:
+  //  * "Path", "SystemDrive", "SystemRoot", "TEMP", "TMP": Needed for normal
+  //    operation and tests.
+  //  * "LOCALAPPDATA": Needed for App Container processes.
+  //  * "CHROME_CRASHPAD_PIPE_NAME": Needed for crashpad.
+  virtual void SetFilterEnvironment(bool filter) = 0;
+
+  // Obtains whether or not the environment for this target should be filtered.
+  // See above for the variables that are allowed.
+  virtual bool GetEnvironmentFiltered() = 0;
+
+  // Zeroes pShimData in the child's PEB.
+  virtual void SetZeroAppShim() = 0;
 };
 
 // We need [[clang::lto_visibility_public]] because instances of this class are
@@ -267,10 +272,10 @@ class [[clang::lto_visibility_public]] TargetPolicy {
   // ownership of the handle.
   virtual void AddHandleToShare(HANDLE handle) = 0;
 
-  // Set effective token that will be used for creating the initial and
-  // lockdown tokens. The token the caller passes must remain valid for the
-  // lifetime of the policy object.
-  virtual void SetEffectiveToken(HANDLE token) = 0;
+  // Adds a blob of data that will be made available in the child early in
+  // startup via sandbox::GetDelegateData(). The contents of this data should
+  // not vary between children with the same TargetConfig().
+  virtual void AddDelegateData(base::span<const uint8_t> data) = 0;
 };
 
 }  // namespace sandbox

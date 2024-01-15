@@ -39,10 +39,6 @@ struct StructTraits<viz::mojom::TransferableResourceDataView,
     return resource.format;
   }
 
-  static uint32_t filter(const viz::TransferableResource& resource) {
-    return resource.filter;
-  }
-
   static gfx::Size size(const viz::TransferableResource& resource) {
     return resource.size;
   }
@@ -91,12 +87,7 @@ struct StructTraits<viz::mojom::TransferableResourceDataView,
     return resource.color_space;
   }
 
-  static const absl::optional<gfx::ColorSpace>& color_space_when_sampled(
-      const viz::TransferableResource& resource) {
-    return resource.color_space_when_sampled;
-  }
-
-  static const absl::optional<gfx::HDRMetadata>& hdr_metadata(
+  static const gfx::HDRMetadata& hdr_metadata(
       const viz::TransferableResource& resource) {
     return resource.hdr_metadata;
   }

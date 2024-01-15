@@ -11,55 +11,75 @@
 #include "content/public/browser/background_tracing_manager.h"
 #include "services/tracing/public/cpp/tracing_features.h"
 
+namespace android_webview {
+
 namespace {
 
-using tracing::BackgroundTracingSetupMode;
+using content::BackgroundTracingConfig;
+using content::BackgroundTracingManager;
 
 const char kBackgroundTracingFieldTrial[] = "BackgroundWebviewTracing";
 
-void SetupBackgroundTracingFieldTrial(int allowed_modes) {
-  if (tracing::GetBackgroundTracingSetupMode() ==
-      BackgroundTracingSetupMode::kDisabledInvalidCommandLine)
-    return;
+}  // namespace
 
-  if (tracing::SetupBackgroundTracingFromCommandLine(
-          kBackgroundTracingFieldTrial))
-    return;
+bool MaybeSetupSystemTracingFromFieldTrial() {
+  if (tracing::GetBackgroundTracingSetupMode() !=
+      tracing::BackgroundTracingSetupMode::kFromFieldTrial) {
+    return false;
+  }
 
-  auto& manager = content::BackgroundTracingManager::GetInstance();
-  std::unique_ptr<content::BackgroundTracingConfig> config =
+  if (tracing::IsFieldTracingEnabled()) {
+    return false;
+  }
+  auto& manager = BackgroundTracingManager::GetInstance();
+  std::unique_ptr<BackgroundTracingConfig> config =
       manager.GetBackgroundTracingConfig(kBackgroundTracingFieldTrial);
+  if (!config || config->tracing_mode() != BackgroundTracingConfig::SYSTEM) {
+    return false;
+  }
 
-  if (!config)
-    return;
+  BackgroundTracingManager::DataFiltering data_filtering =
+      BackgroundTracingManager::ANONYMIZE_DATA;
+  if (tracing::HasBackgroundTracingOutputFile()) {
+    data_filtering = BackgroundTracingManager::NO_DATA_FILTERING;
+    if (!tracing::SetBackgroundTracingOutputFile()) {
+      return false;
+    }
+  }
 
-  if ((config->tracing_mode() & allowed_modes) == 0)
-    return;
+  return manager.SetActiveScenario(std::move(config), data_filtering);
+}
+
+bool MaybeSetupWebViewOnlyTracingFromFieldTrial() {
+  if (tracing::GetBackgroundTracingSetupMode() !=
+      tracing::BackgroundTracingSetupMode::kFromFieldTrial) {
+    return false;
+  }
 
   // WebView-only tracing session has additional filtering of event names that
   // include package names as a privacy requirement (see
   // go/public-webview-trace-collection).
-  config->SetPackageNameFilteringEnabled(
-      config->tracing_mode() != content::BackgroundTracingConfig::SYSTEM);
-  manager.SetActiveScenario(std::move(config),
-                            content::BackgroundTracingManager::ANONYMIZE_DATA);
-}
+  BackgroundTracingManager::DataFiltering data_filtering =
+      BackgroundTracingManager::ANONYMIZE_DATA_AND_FILTER_PACKAGE_NAME;
+  if (tracing::HasBackgroundTracingOutputFile()) {
+    data_filtering = BackgroundTracingManager::NO_DATA_FILTERING;
+    if (!tracing::SetBackgroundTracingOutputFile()) {
+      return false;
+    }
+  }
 
-}  // namespace
-
-namespace android_webview {
-
-void MaybeSetupSystemTracing() {
-  if (!tracing::ShouldSetupSystemTracing())
-    return;
-
-  SetupBackgroundTracingFieldTrial(content::BackgroundTracingConfig::SYSTEM);
-}
-
-void MaybeSetupWebViewOnlyTracing() {
-  SetupBackgroundTracingFieldTrial(
-      content::BackgroundTracingConfig::PREEMPTIVE |
-      content::BackgroundTracingConfig::REACTIVE);
+  auto& manager = BackgroundTracingManager::GetInstance();
+  auto field_tracing_config = tracing::GetFieldTracingConfig();
+  if (field_tracing_config) {
+    return manager.InitializeScenarios(std::move(*field_tracing_config),
+                                       data_filtering);
+  }
+  std::unique_ptr<BackgroundTracingConfig> config =
+      manager.GetBackgroundTracingConfig(kBackgroundTracingFieldTrial);
+  if (config && config->tracing_mode() == BackgroundTracingConfig::SYSTEM) {
+    return false;
+  }
+  return manager.SetActiveScenario(std::move(config), data_filtering);
 }
 
 }  // namespace android_webview

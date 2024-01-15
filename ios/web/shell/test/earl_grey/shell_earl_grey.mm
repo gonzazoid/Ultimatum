@@ -9,10 +9,6 @@
 #import "ios/testing/earl_grey/earl_grey_test.h"
 #import "ios/web/shell/test/earl_grey/shell_earl_grey_app_interface.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 using base::test::ios::kWaitForPageLoadTimeout;
 using base::test::ios::kWaitForUIElementTimeout;
 using base::test::ios::WaitUntilConditionOrTimeout;
@@ -35,9 +31,6 @@ using base::test::ios::WaitUntilConditionOrTimeout;
       [condition waitWithTimeout:kWaitForPageLoadTimeout.InSecondsF()];
   EG_TEST_HELPER_ASSERT_TRUE(pageLoaded, loadingErrorDescription);
 
-  EG_TEST_HELPER_ASSERT_NO_ERROR(
-      [ShellEarlGreyAppInterface waitForWindowIDInjectedInCurrentWebState]);
-
   // Ensure any UI elements handled by EarlGrey become idle for any subsequent
   // EarlGrey steps.
   GREYWaitForAppToIdle(@"App failed to idle");
@@ -56,6 +49,28 @@ using base::test::ios::WaitUntilConditionOrTimeout;
   BOOL containsText =
       [condition waitWithTimeout:kWaitForPageLoadTimeout.InSecondsF()];
   EG_TEST_HELPER_ASSERT_TRUE(containsText, description);
+}
+
+- (void)waitForUIElementToDisappearWithMatcher:(id<GREYMatcher>)matcher {
+  [self waitForUIElementToDisappearWithMatcher:matcher
+                                       timeout:kWaitForUIElementTimeout];
+}
+
+- (void)waitForUIElementToDisappearWithMatcher:(id<GREYMatcher>)matcher
+                                       timeout:(base::TimeDelta)timeout {
+  NSString* errorDescription = [NSString
+      stringWithFormat:
+          @"Failed waiting for element with matcher %@ to disappear", matcher];
+
+  ConditionBlock condition = ^{
+    NSError* error = nil;
+    [[EarlGrey selectElementWithMatcher:matcher] assertWithMatcher:grey_nil()
+                                                             error:&error];
+    return error == nil;
+  };
+
+  bool matched = WaitUntilConditionOrTimeout(timeout, condition);
+  EG_TEST_HELPER_ASSERT_TRUE(matched, errorDescription);
 }
 
 @end

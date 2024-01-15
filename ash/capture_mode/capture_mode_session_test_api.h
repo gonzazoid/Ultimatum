@@ -5,20 +5,28 @@
 #ifndef ASH_CAPTURE_MODE_CAPTURE_MODE_SESSION_TEST_API_H_
 #define ASH_CAPTURE_MODE_CAPTURE_MODE_SESSION_TEST_API_H_
 
-#include "capture_mode_session_focus_cycler.h"
+#include "ash/capture_mode/capture_mode_session_focus_cycler.h"
+#include "base/memory/raw_ptr.h"
+
+namespace views {
+class Label;
+}  // namespace views
 
 namespace ash {
 
-class CaptureModeSession;
+class BaseCaptureModeSession;
+class CaptureLabelView;
 class CaptureModeBarView;
 class CaptureModeSettingsView;
-class UserNudgeController;
 class MagnifierGlass;
+class RecordingTypeMenuView;
+class UserNudgeController;
 
 // Wrapper for CaptureModeSession that exposes internal state to test functions.
 class CaptureModeSessionTestApi {
  public:
-  explicit CaptureModeSessionTestApi(CaptureModeSession* session);
+  CaptureModeSessionTestApi();
+  explicit CaptureModeSessionTestApi(BaseCaptureModeSession* session);
 
   CaptureModeSessionTestApi(CaptureModeSessionTestApi&) = delete;
   CaptureModeSessionTestApi& operator=(CaptureModeSessionTestApi&) = delete;
@@ -28,9 +36,17 @@ class CaptureModeSessionTestApi {
 
   CaptureModeSettingsView* GetCaptureModeSettingsView();
 
+  CaptureLabelView* GetCaptureLabelView();
+
+  views::Label* GetCaptureLabelInternalView();
+
+  RecordingTypeMenuView* GetRecordingTypeMenuView();
+
   views::Widget* GetCaptureModeSettingsWidget();
 
   views::Widget* GetCaptureLabelWidget();
+
+  views::Widget* GetRecordingTypeMenuWidget();
 
   views::Widget* GetDimensionsLabelWidget();
 
@@ -56,11 +72,13 @@ class CaptureModeSessionTestApi {
   bool IsFolderSelectionDialogShown();
 
   // Returns true if all UIs (cursors, widgets, and paintings on the layer) of
-  // the capture mode session is visible.
-  bool IsAllUisVisible();
+  // the capture mode session are visible.
+  bool AreAllUisVisible();
+
+  gfx::Rect GetSelectedWindowTargetBounds();
 
  private:
-  CaptureModeSession* const session_;
+  const raw_ptr<CaptureModeSession, DanglingUntriaged> session_;
 };
 
 }  // namespace ash

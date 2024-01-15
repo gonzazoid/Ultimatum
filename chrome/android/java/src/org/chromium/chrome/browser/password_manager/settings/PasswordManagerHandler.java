@@ -4,12 +4,12 @@
 
 package org.chromium.chrome.browser.password_manager.settings;
 
+import android.app.Activity;
 import android.content.Context;
-
-import androidx.annotation.VisibleForTesting;
 
 import org.chromium.base.Callback;
 import org.chromium.base.IntStringCallback;
+import org.chromium.components.browser_ui.bottomsheet.BottomSheetController;
 import org.chromium.components.browser_ui.settings.SettingsLauncher;
 
 /**
@@ -17,33 +17,10 @@ import org.chromium.components.browser_ui.settings.SettingsLauncher;
  * save password) from native code.
  */
 public interface PasswordManagerHandler {
-    /**
-     * An interface which a client can use to listen to changes to password and password exception
-     * lists.
-     */
-    interface PasswordListObserver {
-        /**
-         * Called when passwords list is updated.
-         * @param count Number of entries in the password list.
-         */
-        void passwordListAvailable(int count);
-
-        /**
-         * Called when password exceptions list is updated.
-         * @param count Number of entries in the password exception list.
-         */
-        void passwordExceptionListAvailable(int count);
-    }
-
-    /**
-     * Called to insert a password entry into the password store.
-     */
-    @VisibleForTesting
+    /** Called to insert a password entry into the password store. */
     public void insertPasswordEntryForTesting(String origin, String username, String password);
 
-    /**
-     * Called to start fetching password and exception lists.
-     */
+    /** Called to start fetching password and exception lists. */
     void updatePasswordLists();
 
     /**
@@ -96,6 +73,27 @@ public interface PasswordManagerHandler {
      * @param index the index of the password entry to edit
      * @param isBlockedCredential whether this credential is blocked for saving
      */
-    void showPasswordEntryEditingView(Context context, SettingsLauncher settingsLauncher, int index,
+    void showPasswordEntryEditingView(
+            Context context,
+            SettingsLauncher settingsLauncher,
+            int index,
             boolean isBlockedCredential);
+
+    /**
+     * Calls C++ to trigger the migration warning. The C++ util centralizes the showing logic such
+     * that it can ensure that all appropriate checks are done an that the timestamp for showing
+     * the warning is uniformly recorded.
+     *
+     * @param activity the activity used to show the warning and potentially the export flow.
+     * @param bottomSheetController the controller displaying the warning bottom sheet.
+     */
+    void showMigrationWarning(Activity activity, BottomSheetController bottomSheetController);
+
+    /**
+     * Calls C++ to check whether the PasswordManagerHandler is still waiting for the passwords to
+     * be fetched from the password store.
+     *
+     * @return Returns true if the request to fetch the passwords is still pending.
+     */
+    boolean isWaitingForPasswordStore();
 }

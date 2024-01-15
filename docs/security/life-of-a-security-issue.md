@@ -42,7 +42,7 @@ sequenceDiagram
 
 ## 1. Report bug
 
-A security bug begins when a reporter [responsibly
+A security bug begins when a reporter [
 discloses](https://www.chromium.org/Home/chromium-security/reporting-security-bugs/)
 a bug in the [Chromium issue
 tracker](https://code.google.com/p/chromium/issues/entry?template=Security%20Bug).
@@ -51,13 +51,16 @@ view-restricted to the reporter and select individuals on a need-to-know
 basis.
 
 Bug reports that include specific steps to reproduce, analysis, proofs of
-concept, and/or suggested patches are encouraged. Please also check the
-[FAQ](faq.md) to learn about issues that are frequently reported.
+concept, and/or suggested patches are encouraged. The [Chrome Vulnerability
+Rewards Program (VRP) policies page](https://g.co/chrome/vrp/#report-quality)
+has information about the expected characteristics of baseline and high-quality
+security bug reports. Please also check the [FAQ](faq.md) to learn
+about issues that are frequently reported.
 
 ## 2. Triage bug
 
-After the bug is filed, a [security sheriff](sheriff.md) will evaluate the
-report. The sheriff does several tasks:
+After the bug is filed, a [security shepherd](shepherd.md) will evaluate the
+report. The shepherd does several tasks:
 
 - Validate that the bug reproduces
 - Searching for any duplicate reports
@@ -68,7 +71,7 @@ report. The sheriff does several tasks:
 
 ## 3. Assign bug
 
-The primary job of the sheriff is to route valid and actionable reports of
+The primary job of the shepherd is to route valid and actionable reports of
 security bugs to the Chromium developer who is best poised to fix the issue.
 
 After the issue is assigned, there may be discussion between the developer(s)
@@ -76,7 +79,9 @@ involved, members of the security team, and the original reporter.
 
 ## 4. Author and land a CL on `main`
 
-The developer will author a fix and a regression test for the security issue.
+The developer will author a fix and a regression test for the security issue
+The CL description should mention the bug number in a
+[`Bug:` or `Fixed:` footer](../contributing.md#cl-footer-reference).
 Once the CL lands, it will not yet be widely available to users, since it is
 only in the `main` branch. Unless further steps are taken (see below), the fix
 will roll out as part of the normal [release
@@ -92,13 +97,16 @@ Once the CL has landed, the developer should set the bug's status to *Fixed*.
 When the bug moves into the *Fixed* state, the security team's automation
 systems begin processing the bug report. In particular, the tools will add
 [merge request](../process/merge_request.md) labels, based on the severity and
-impact assessed by the sheriff during triage.
+impact assessed by the shepherd during triage.
+
+VRP reports also are updated with the reward-topanel label by the automation.
+This allows the report to be included in the VRP Panel queue for
+evaluation and consideration of a potential VRP reward at a future VRP Panel
+session.
 
 ## 6. Assess for backports
 
-A member of the security team or a security technical program manager (TPM) will
-make the [final
-determination](https://www.chromium.org/Home/chromium-security/security-release-management/)
+The appropriate members of the security team will make the [final determination](https://www.chromium.org/Home/chromium-security/security-release-management/)
 as to whether backports of the fix should occur to Stable and/or pre-Stable
 Chrome release channels.
 
@@ -106,7 +114,8 @@ Chrome release channels.
 
 If approved for backporting, the developer will [cherry
 pick](../process/merge_request.md#landing-an-approved-merge) the CL to the
-release branches identified by the security TPM.
+release branches identified by the security team member who approved the
+merge.
 
 ## 8. VRP Panel
 
@@ -123,11 +132,18 @@ After the VRP panel meets, the reporter will be notified of the VRP reward
 decision through the bug report, and a label will be applied with the VRP reward
 amount.
 
+Payments are not handled by the security team. A member of the Google finance
+team working on VRP payments (p2p-vrp) will reach out to arrange payment. The
+reporter must first be enrolled in a payment system Google uses to issue
+payments. The p2p-vrp team will assist the reporter in the enrollment process.
+Once the reporter is enrolled, all potential future VRP payments will be
+processed automatically without any action required by the reporter.
+
 ## 10. Assign CVE
 
 At the time that the security fix is shipped to a Stable channel release, a
-security TPM will assign the issue a [CVE](https://www.cve.org/) number. CVE
-numbers need to point to a publicly accessible artifact, and Chrome uses the
+security team member will assign the issue a [CVE](https://www.cve.org/) number.
+CVE numbers need to point to a publicly accessible artifact, and Chrome uses the
 releases blog (see below) for this purpose.
 
 ## 11. Publish release & security notes
@@ -136,7 +152,7 @@ The Chrome Release team releases an update of Chrome containing the security
 fix. If the fix is included in a Stable channel release of Chrome, it will be
 listed and acknowledged in the security fix notes on the [Chrome Releases
 blog](https://googlechromereleases.blogspot.com/). Security issues will be
-highlighted with a short description, any reward amount, the CVE number, and
+highlighted with a short description, a reward amount, the CVE number, and
 acknowledging the reporter as requested (if they have consented to such).
 
 ## 12. Publicly disclose
@@ -144,4 +160,4 @@ acknowledging the reporter as requested (if they have consented to such).
 Except in rare circumstances where the bug report has been embargoed, 14 weeks
 after the issue is marked *Fixed*, security automation opens the bug for public
 disclosure. At that time, the reporter can consider their obligations under
-responsible disclosure to be fulfilled.
+coordinated disclosure to be fulfilled.

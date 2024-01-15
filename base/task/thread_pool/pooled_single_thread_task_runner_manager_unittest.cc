@@ -4,8 +4,8 @@
 
 #include "base/task/thread_pool/pooled_single_thread_task_runner_manager.h"
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/synchronization/atomic_flag.h"
@@ -18,6 +18,7 @@
 #include "base/task/thread_pool/test_utils.h"
 #include "base/test/bind.h"
 #include "base/test/gtest_util.h"
+#include "base/test/scoped_feature_list.h"
 #include "base/test/test_timeouts.h"
 #include "base/test/test_waitable_event.h"
 #include "base/threading/platform_thread.h"
@@ -61,6 +62,7 @@ class PooledSingleThreadTaskRunnerManagerTest : public testing::Test {
   void TearDown() override {
     if (single_thread_task_runner_manager_)
       TearDownSingleThreadTaskRunnerManager();
+    delayed_task_manager_.Shutdown();
     service_thread_.Stop();
   }
 
@@ -177,7 +179,7 @@ TEST_F(PooledSingleThreadTaskRunnerManagerTest, RunsTasksInCurrentSequence) {
 
 TEST_F(PooledSingleThreadTaskRunnerManagerTest,
        SharedWithBaseSyncPrimitivesDCHECKs) {
-  testing::GTEST_FLAG(death_test_style) = "threadsafe";
+  GTEST_FLAG_SET(death_test_style, "threadsafe");
   EXPECT_DCHECK_DEATH({
     single_thread_task_runner_manager_->CreateSingleThreadTaskRunner(
         {WithBaseSyncPrimitives()}, SingleThreadTaskRunnerThreadMode::SHARED);
@@ -224,9 +226,15 @@ namespace {
 
 class PooledSingleThreadTaskRunnerManagerCommonTest
     : public PooledSingleThreadTaskRunnerManagerTest,
-      public ::testing::WithParamInterface<SingleThreadTaskRunnerThreadMode> {
+      public ::testing::WithParamInterface<
+          std::tuple<SingleThreadTaskRunnerThreadMode,
+                     bool /* enable_utility_threads */>> {
  public:
-  PooledSingleThreadTaskRunnerManagerCommonTest() = default;
+  PooledSingleThreadTaskRunnerManagerCommonTest() {
+    if (std::get<1>(GetParam())) {
+      feature_list_.InitWithFeatures({kUseUtilityThreadGroup}, {});
+    }
+  }
   PooledSingleThreadTaskRunnerManagerCommonTest(
       const PooledSingleThreadTaskRunnerManagerCommonTest&) = delete;
   PooledSingleThreadTaskRunnerManagerCommonTest& operator=(
@@ -235,8 +243,17 @@ class PooledSingleThreadTaskRunnerManagerCommonTest
   scoped_refptr<SingleThreadTaskRunner> CreateTaskRunner(
       TaskTraits traits = {}) {
     return single_thread_task_runner_manager_->CreateSingleThreadTaskRunner(
-        traits, GetParam());
+        traits, GetSingleThreadTaskRunnerThreadMode());
   }
+
+  SingleThreadTaskRunnerThreadMode GetSingleThreadTaskRunnerThreadMode() const {
+    return std::get<0>(GetParam());
+  }
+
+ protected:
+  const bool use_utility_thread_group_ =
+      CanUseUtilityThreadTypeForWorkerThread() && std::get<1>(GetParam());
+  base::test::ScopedFeatureList feature_list_;
 };
 
 }  // namespace
@@ -248,15 +265,18 @@ TEST_P(PooledSingleThreadTaskRunnerManagerCommonTest, ThreadTypeSetCorrectly) {
   } test_cases[] = {
       {{TaskPriority::BEST_EFFORT},
        CanUseBackgroundThreadTypeForWorkerThread() ? ThreadType::kBackground
+       : use_utility_thread_group_                 ? ThreadType::kUtility
                                                    : ThreadType::kDefault},
       {{TaskPriority::BEST_EFFORT, ThreadPolicy::PREFER_BACKGROUND},
        CanUseBackgroundThreadTypeForWorkerThread() ? ThreadType::kBackground
+       : use_utility_thread_group_                 ? ThreadType::kUtility
                                                    : ThreadType::kDefault},
       {{TaskPriority::BEST_EFFORT, ThreadPolicy::MUST_USE_FOREGROUND},
        ThreadType::kDefault},
-      {{TaskPriority::USER_VISIBLE}, ThreadType::kDefault},
+      {{TaskPriority::USER_VISIBLE},
+       use_utility_thread_group_ ? ThreadType::kUtility : ThreadType::kDefault},
       {{TaskPriority::USER_VISIBLE, ThreadPolicy::PREFER_BACKGROUND},
-       ThreadType::kDefault},
+       use_utility_thread_group_ ? ThreadType::kUtility : ThreadType::kDefault},
       {{TaskPriority::USER_VISIBLE, ThreadPolicy::MUST_USE_FOREGROUND},
        ThreadType::kDefault},
       {{TaskPriority::USER_BLOCKING}, ThreadType::kDefault},
@@ -282,14 +302,20 @@ TEST_P(PooledSingleThreadTaskRunnerManagerCommonTest, ThreadTypeSetCorrectly) {
 
 TEST_P(PooledSingleThreadTaskRunnerManagerCommonTest, ThreadNamesSet) {
   const std::string maybe_shared(
-      GetParam() == SingleThreadTaskRunnerThreadMode::DEDICATED ? ""
-                                                                : "Shared");
+      GetSingleThreadTaskRunnerThreadMode() ==
+              SingleThreadTaskRunnerThreadMode::DEDICATED
+          ? ""
+          : "Shared");
   const std::string background =
       "^ThreadPoolSingleThread" + maybe_shared + "Background\\d+$";
+  const std::string utility =
+      "^ThreadPoolSingleThread" + maybe_shared + "Utility\\d+$";
   const std::string foreground =
       "^ThreadPoolSingleThread" + maybe_shared + "Foreground\\d+$";
   const std::string background_blocking =
       "^ThreadPoolSingleThread" + maybe_shared + "BackgroundBlocking\\d+$";
+  const std::string utility_blocking =
+      "^ThreadPoolSingleThread" + maybe_shared + "UtilityBlocking\\d+$";
   const std::string foreground_blocking =
       "^ThreadPoolSingleThread" + maybe_shared + "ForegroundBlocking\\d+$";
 
@@ -299,14 +325,19 @@ TEST_P(PooledSingleThreadTaskRunnerManagerCommonTest, ThreadNamesSet) {
   } test_cases[] = {
       // Non-MayBlock()
       {{TaskPriority::BEST_EFFORT},
-       CanUseBackgroundThreadTypeForWorkerThread() ? background : foreground},
+       CanUseBackgroundThreadTypeForWorkerThread() ? background
+       : use_utility_thread_group_                 ? utility
+                                                   : foreground},
       {{TaskPriority::BEST_EFFORT, ThreadPolicy::PREFER_BACKGROUND},
-       CanUseBackgroundThreadTypeForWorkerThread() ? background : foreground},
+       CanUseBackgroundThreadTypeForWorkerThread() ? background
+       : use_utility_thread_group_                 ? utility
+                                                   : foreground},
       {{TaskPriority::BEST_EFFORT, ThreadPolicy::MUST_USE_FOREGROUND},
        foreground},
-      {{TaskPriority::USER_VISIBLE}, foreground},
+      {{TaskPriority::USER_VISIBLE},
+       use_utility_thread_group_ ? utility : foreground},
       {{TaskPriority::USER_VISIBLE, ThreadPolicy::PREFER_BACKGROUND},
-       foreground},
+       use_utility_thread_group_ ? utility : foreground},
       {{TaskPriority::USER_VISIBLE, ThreadPolicy::MUST_USE_FOREGROUND},
        foreground},
       {{TaskPriority::USER_BLOCKING}, foreground},
@@ -318,17 +349,20 @@ TEST_P(PooledSingleThreadTaskRunnerManagerCommonTest, ThreadNamesSet) {
       // MayBlock()
       {{TaskPriority::BEST_EFFORT, MayBlock()},
        CanUseBackgroundThreadTypeForWorkerThread() ? background_blocking
+       : use_utility_thread_group_                 ? utility_blocking
                                                    : foreground_blocking},
       {{TaskPriority::BEST_EFFORT, ThreadPolicy::PREFER_BACKGROUND, MayBlock()},
        CanUseBackgroundThreadTypeForWorkerThread() ? background_blocking
+       : use_utility_thread_group_                 ? utility_blocking
                                                    : foreground_blocking},
       {{TaskPriority::BEST_EFFORT, ThreadPolicy::MUST_USE_FOREGROUND,
         MayBlock()},
        foreground_blocking},
-      {{TaskPriority::USER_VISIBLE, MayBlock()}, foreground_blocking},
+      {{TaskPriority::USER_VISIBLE, MayBlock()},
+       use_utility_thread_group_ ? utility_blocking : foreground_blocking},
       {{TaskPriority::USER_VISIBLE, ThreadPolicy::PREFER_BACKGROUND,
         MayBlock()},
-       foreground_blocking},
+       use_utility_thread_group_ ? utility_blocking : foreground_blocking},
       {{TaskPriority::USER_VISIBLE, ThreadPolicy::MUST_USE_FOREGROUND,
         MayBlock()},
 
@@ -426,8 +460,10 @@ TEST_P(PooledSingleThreadTaskRunnerManagerCommonTest, CanRunPolicyLoad) {
 INSTANTIATE_TEST_SUITE_P(
     SharedAndDedicated,
     PooledSingleThreadTaskRunnerManagerCommonTest,
-    ::testing::Values(SingleThreadTaskRunnerThreadMode::SHARED,
-                      SingleThreadTaskRunnerThreadMode::DEDICATED));
+    ::testing::Combine(
+        ::testing::Values(SingleThreadTaskRunnerThreadMode::SHARED,
+                          SingleThreadTaskRunnerThreadMode::DEDICATED),
+        ::testing::Values(false, true)));
 
 namespace {
 
@@ -537,7 +573,8 @@ TEST_F(PooledSingleThreadTaskRunnerManagerJoinTest,
 TEST_P(PooledSingleThreadTaskRunnerManagerCommonTest, COMSTAInitialized) {
   scoped_refptr<SingleThreadTaskRunner> com_task_runner =
       single_thread_task_runner_manager_->CreateCOMSTATaskRunner(
-          {TaskShutdownBehavior::BLOCK_SHUTDOWN}, GetParam());
+          {TaskShutdownBehavior::BLOCK_SHUTDOWN},
+          GetSingleThreadTaskRunnerThreadMode());
 
   com_task_runner->PostTask(FROM_HERE, BindOnce(&win::AssertComApartmentType,
                                                 win::ComApartmentType::STA));

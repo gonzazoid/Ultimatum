@@ -1,25 +1,113 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<issues format="6" by="lint 7.4.0-alpha05" type="baseline" client="" dependencies="true" name="" variant="all" version="7.4.0-alpha05">
+<issues format="6" by="lint 8.3.0-alpha12" type="baseline" client="" dependencies="true" name="" variant="all" version="8.3.0-alpha12">
 
     <issue
-        id="LintError"
-        message="../../components/cronet/android/lint-baseline.xml (relative to /usr/local/google/home/wnwen/z1/src/out/Cronet) does not exist"
-        errorLine1="  &lt;baseline file=&quot;../../components/cronet/android/lint-baseline.xml&quot;/>"
-        errorLine2="  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        id="WrongCommentType"
+        message="This block comment looks like it was intended to be a javadoc comment"
+        errorLine1="     * @param executor The executor on which the observations are reported."
+        errorLine2="       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
-            file="project.xml"
-            line="5"
-            column="3"/>
+            file="../../components/cronet/android/test/javatests/src/org/chromium/net/TestNetworkQualityRttListener.java"
+            line="31"
+            column="8"/>
     </issue>
 
     <issue
-        id="ObsoleteSdkInt"
-        message="Unnecessary; SDK_INT is always >= 14"
-        errorLine1="@TargetApi(Build.VERSION_CODES.ICE_CREAM_SANDWICH) // TrafficStats only available on ICS"
-        errorLine2="~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        id="WrongCommentType"
+        message="This block comment looks like it was intended to be a javadoc comment"
+        errorLine1="     * @param executor The executor on which the observations are reported."
+        errorLine2="       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
-            file="$SRC/components/cronet/android/java/src/org/chromium/net/impl/JavaUrlRequest.java"
-            line="50"
+            file="../../components/cronet/android/test/javatests/src/org/chromium/net/TestNetworkQualityThroughputListener.java"
+            line="25"
+            column="8"/>
+    </issue>
+
+    <issue
+        id="SupportAnnotationUsage"
+        message="Top level class can&apos;t have private or protected access level"
+        errorLine1="@VisibleForTesting"
+        errorLine2="~~~~~~~~~~~~~~~~~~">
+        <location
+            file="../../components/cronet/android/java/src/org/chromium/net/impl/BidirectionalStreamNetworkException.java"
+            line="14"
+            column="1"/>
+    </issue>
+
+    <issue
+        id="SupportAnnotationUsage"
+        message="Top level class can&apos;t have private or protected access level"
+        errorLine1="@VisibleForTesting"
+        errorLine2="~~~~~~~~~~~~~~~~~~">
+        <location
+            file="../../components/cronet/android/java/src/org/chromium/net/impl/CronetBidirectionalStream.java"
+            line="47"
+            column="1"/>
+    </issue>
+
+    <issue
+        id="SupportAnnotationUsage"
+        message="Top level class can&apos;t have private or protected access level"
+        errorLine1="@VisibleForTesting"
+        errorLine2="~~~~~~~~~~~~~~~~~~">
+        <location
+            file="../../components/cronet/android/java/src/org/chromium/net/impl/CronetLibraryLoader.java"
+            line="32"
+            column="1"/>
+    </issue>
+
+    <issue
+        id="SupportAnnotationUsage"
+        message="Top level class can&apos;t have private or protected access level"
+        errorLine1="@VisibleForTesting"
+        errorLine2="~~~~~~~~~~~~~~~~~~">
+        <location
+            file="../../components/cronet/android/java/src/org/chromium/net/impl/CronetManifest.java"
+            line="39"
+            column="1"/>
+    </issue>
+
+    <issue
+        id="SupportAnnotationUsage"
+        message="Top level class can&apos;t have private or protected access level"
+        errorLine1="@VisibleForTesting"
+        errorLine2="~~~~~~~~~~~~~~~~~~">
+        <location
+            file="../../components/cronet/android/java/src/org/chromium/net/impl/CronetMetrics.java"
+            line="17"
+            column="1"/>
+    </issue>
+
+    <issue
+        id="SupportAnnotationUsage"
+        message="Top level class can&apos;t have private or protected access level"
+        errorLine1="@VisibleForTesting"
+        errorLine2="~~~~~~~~~~~~~~~~~~">
+        <location
+            file="../../components/cronet/android/java/src/org/chromium/net/impl/CronetUploadDataStream.java"
+            line="40"
+            column="1"/>
+    </issue>
+
+    <issue
+        id="SupportAnnotationUsage"
+        message="Top level class can&apos;t have private or protected access level"
+        errorLine1="@VisibleForTesting"
+        errorLine2="~~~~~~~~~~~~~~~~~~">
+        <location
+            file="../../components/cronet/android/java/src/org/chromium/net/impl/CronetUrlRequest.java"
+            line="55"
+            column="1"/>
+    </issue>
+
+    <issue
+        id="SupportAnnotationUsage"
+        message="Top level class can&apos;t have private or protected access level"
+        errorLine1="@VisibleForTesting"
+        errorLine2="~~~~~~~~~~~~~~~~~~">
+        <location
+            file="../../components/cronet/android/java/src/org/chromium/net/impl/CronetUrlRequestContext.java"
+            line="58"
             column="1"/>
     </issue>
 
@@ -29,7 +117,7 @@
         errorLine1="        assert calledOnValidThread();"
         errorLine2="               ~~~~~~~~~~~~~~~~~~~~~">
         <location
-            file="$SRC/components/cronet/android/java/src/org/chromium/net/urlconnection/MessageLoop.java"
+            file="../../components/cronet/android/java/src/org/chromium/net/urlconnection/MessageLoop.java"
             line="100"
             column="16"/>
     </issue>
@@ -40,7 +128,7 @@
         errorLine1="        assert calledOnValidThread();"
         errorLine2="               ~~~~~~~~~~~~~~~~~~~~~">
         <location
-            file="$SRC/components/cronet/android/java/src/org/chromium/net/urlconnection/MessageLoop.java"
+            file="../../components/cronet/android/java/src/org/chromium/net/urlconnection/MessageLoop.java"
             line="143"
             column="16"/>
     </issue>

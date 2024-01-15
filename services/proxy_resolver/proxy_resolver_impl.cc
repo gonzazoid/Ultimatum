@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "net/base/net_errors.h"
@@ -97,8 +97,8 @@ void ProxyResolverImpl::Job::GetProxyDone(int error) {
   done_ = true;
   DVLOG(1) << "GetProxyForUrl(" << url_ << ") finished with error " << error
            << ". " << result_.proxy_list().size() << " Proxies returned:";
-  for (const auto& proxy : result_.proxy_list().GetAll()) {
-    DVLOG(1) << net::ProxyServerToProxyUri(proxy);
+  for (const auto& proxy_chain : result_.proxy_list().AllChains()) {
+    DVLOG(1) << proxy_chain.ToDebugString();
   }
   if (error == net::OK)
     client_->ReportResult(error, result_);

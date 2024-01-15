@@ -4,7 +4,7 @@
 
 #include "chrome/browser/profiles/profile_statistics_factory.h"
 
-#include "base/memory/singleton.h"
+#include "base/no_destructor.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_statistics.h"
 #include "content/public/browser/browser_thread.h"
@@ -17,11 +17,19 @@ ProfileStatistics* ProfileStatisticsFactory::GetForProfile(Profile* profile) {
 
 // static
 ProfileStatisticsFactory* ProfileStatisticsFactory::GetInstance() {
-  return base::Singleton<ProfileStatisticsFactory>::get();
+  static base::NoDestructor<ProfileStatisticsFactory> instance;
+  return instance.get();
 }
 
 ProfileStatisticsFactory::ProfileStatisticsFactory()
-    : ProfileKeyedServiceFactory("ProfileStatistics") {}
+    : ProfileKeyedServiceFactory(
+          "ProfileStatistics",
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOriginalOnly)
+              .Build()) {}
 
 KeyedService* ProfileStatisticsFactory::BuildServiceInstanceFor(
     content::BrowserContext* context) const {

@@ -6,9 +6,11 @@
 
 #include <memory>
 #include <string>
+#include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/values.h"
+#include "build/chromeos_buildflags.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/common/url_constants.h"
@@ -39,6 +41,17 @@ class LocalStateUIHandler : public content::WebUIMessageHandler {
   // Called from JS when the page has loaded. Serializes local state prefs and
   // sends them to the page.
   void HandleRequestJson(const base::Value::List& args);
+
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+  // On ChromeOS, the local state file contains some information about other
+  // user accounts which we don't want to expose to other users. In that case,
+  // this will filter out the prefs to only include variations and UMA related
+  // fields, which don't contain PII.
+  std::vector<std::string> accepted_pref_prefixes_{"variations",
+                                                   "user_experience_metrics"};
+#else
+  std::vector<std::string> accepted_pref_prefixes_;
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 };
 
 void LocalStateUIHandler::RegisterMessages() {
@@ -50,12 +63,15 @@ void LocalStateUIHandler::RegisterMessages() {
 
 void LocalStateUIHandler::HandleRequestJson(const base::Value::List& args) {
   AllowJavascript();
-  std::string json;
-  if (!GetPrefsAsJson(g_browser_process->local_state(), &json))
+
+  std::optional<std::string> json = local_state_utils::GetPrefsAsJson(
+      g_browser_process->local_state(), accepted_pref_prefixes_);
+  if (!json) {
     json = "Error loading Local State file.";
+  }
 
   const base::Value& callback_id = args[0];
-  ResolveJavascriptCallback(callback_id, base::Value(json));
+  ResolveJavascriptCallback(callback_id, base::Value(*json));
 }
 
 }  // namespace
@@ -63,10 +79,10 @@ void LocalStateUIHandler::HandleRequestJson(const base::Value::List& args) {
 LocalStateUI::LocalStateUI(content::WebUI* web_ui) : WebUIController(web_ui) {
   // Set up the chrome://local-state source.
   content::WebUIDataSource* html_source =
-      content::WebUIDataSource::Create(chrome::kChromeUILocalStateHost);
+      content::WebUIDataSource::CreateAndAdd(Profile::FromWebUI(web_ui),
+                                             chrome::kChromeUILocalStateHost);
   html_source->SetDefaultResource(IDR_LOCAL_STATE_HTML);
   html_source->AddResourcePath("local_state.js", IDR_LOCAL_STATE_JS);
-  content::WebUIDataSource::Add(Profile::FromWebUI(web_ui), html_source);
   web_ui->AddMessageHandler(std::make_unique<LocalStateUIHandler>());
 }
 

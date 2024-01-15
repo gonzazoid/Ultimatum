@@ -145,6 +145,27 @@ SingleDayEventList CalendarViewController::SelectedDateEvents() {
       ApplyTimeDifference(selected_date_.value()));
 }
 
+std::tuple<SingleDayEventList, SingleDayEventList>
+CalendarViewController::SelectedDateEventsSplitByMultiDayAndSameDay() {
+  if (!selected_date_.has_value())
+    return std::make_tuple(std::list<google_apis::calendar::CalendarEvent>(),
+                           std::list<google_apis::calendar::CalendarEvent>());
+
+  return Shell::Get()
+      ->system_tray_model()
+      ->calendar_model()
+      ->FindEventsSplitByMultiDayAndSameDay(
+          ApplyTimeDifference(selected_date_.value()));
+}
+
+SingleDayEventList CalendarViewController::UpcomingEvents() {
+  return Shell::Get()
+      ->system_tray_model()
+      ->calendar_model()
+      ->FindUpcomingEvents(
+          ApplyTimeDifference(base::Time::NowFromSystemTime()));
+}
+
 int CalendarViewController::GetEventNumber(base::Time date) {
   return Shell::Get()->system_tray_model()->calendar_model()->EventsNumberOfDay(
       ApplyTimeDifference(date),
@@ -165,10 +186,8 @@ void CalendarViewController::ShowEventListView(
   selected_date_row_index_ = row_index;
   expanded_row_index_ = row_index;
 
-  base::TimeDelta time_difference =
-      calendar_utils::GetTimeDifference(selected_date);
-  selected_date_midnight_ = (selected_date + time_difference).UTCMidnight();
-  selected_date_midnight_utc_ = selected_date_midnight_ - time_difference;
+  std::tie(selected_date_midnight_, selected_date_midnight_utc_) =
+      calendar_utils::GetMidnight(selected_date);
 
   // Notify observers.
   for (auto& observer : observers_)
@@ -181,8 +200,6 @@ void CalendarViewController::ShowEventListView(
 }
 
 void CalendarViewController::CloseEventListView() {
-  selected_date_ = absl::nullopt;
-
   for (auto& observer : observers_)
     observer.CloseEventList();
 }
@@ -193,6 +210,39 @@ void CalendarViewController::OnEventListOpened() {
 
 void CalendarViewController::OnEventListClosed() {
   is_event_list_showing_ = false;
+  selected_date_ = std::nullopt;
+}
+
+void CalendarViewController::CalendarLoaded() {
+  for (auto& observer : observers_) {
+    observer.OnCalendarLoaded();
+  }
+}
+
+void CalendarViewController::RecordEventListItemActivated(
+    const ui::Event& event) {
+  // The EventListItemView is used by both the event list view and the up next
+  // view. So if the event list view is not showing, then it's in the up next
+  // view.
+  if (is_event_list_showing_) {
+    calendar_metrics::RecordEventListItemActivated(event);
+    return;
+  }
+
+  calendar_metrics::RecordEventListItemInUpNextLaunched(event);
+}
+
+void CalendarViewController::RecordJoinMeetingButtonPressed(
+    const ui::Event& event) {
+  // The EventListItemView is used by both the event list view and the up next
+  // view. So if the event list view is not showing, then it's in the up next
+  // view.
+  if (is_event_list_showing_) {
+    calendar_metrics::RecordJoinButtonPressedFromEventListView(event);
+    return;
+  }
+
+  calendar_metrics::RecordJoinButtonPressedFromUpNextView(event);
 }
 
 void CalendarViewController::OnCalendarEventWillLaunch() {
@@ -210,6 +260,17 @@ void CalendarViewController::OnTodaysEventFetchComplete() {
   UmaHistogramMediumTimes("Ash.Calendar.TimeToSeeTodaysEventDots",
                           base::TimeTicks::Now() - calendar_open_time_);
   todays_date_cell_fetch_recorded_ = true;
+}
+
+void CalendarViewController::EventsDisplayedToUser() {
+  // Only record this once per lifetime of the `CalendarView` (and therefore the
+  // controller).
+  if (events_shown_to_user_recorded_) {
+    return;
+  }
+
+  calendar_metrics::RecordEventsDisplayedToUser();
+  events_shown_to_user_recorded_ = true;
 }
 
 bool CalendarViewController::IsSelectedDateInCurrentMonth() {

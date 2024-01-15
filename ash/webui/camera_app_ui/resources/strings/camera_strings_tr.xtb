@@ -5,15 +5,9 @@
 <translation id="1076394037877376434"><ph name="PAGE_NUMBER" />. sayfayı sil</translation>
 <translation id="1113173431709655881">Kamera modu</translation>
 <translation id="1153190633558910465">Izgara kapalı</translation>
-<translation id="1175958423215084756">Bağlantı algılandı. <ph name="HOSTNAME" /></translation>
 <translation id="1197694886744716213"><ph name="PAGE_NUMBER" />. sayfa silindi</translation>
 <translation id="1258009455399840361">Saat yönünde 90 derece döndür</translation>
-<translation id="1276998909102132017">Galeri resimleri</translation>
-<translation id="1300209025925956156">Dokümanınızı tarayın</translation>
-<translation id="1309250603447638106">Doküman taramayla ilgili güncellemeler indiriliyor</translation>
-<translation id="137991641490787891"><ph name="ASPECT_RATIO_WIDTH" />. Erişmek için Arama + Sol ok tuşlarına basın.</translation>
 <translation id="1417314334557041815">Sayfayı düzenle <ph name="INDEX" /></translation>
-<translation id="1430915738399379752">Yazdır</translation>
 <translation id="1467231725790366244"><ph name="CAMERA" />, cihaza takılı değil.</translation>
 <translation id="1473110567575736769">3 saniye zamanlayıcı</translation>
 <translation id="148783771699678004">Sağ üste doğru hareket ediyor</translation>
@@ -26,90 +20,82 @@
 <translation id="1664224225747386870">Hiçbir şey kaydedilmedi</translation>
 <translation id="1838104802459806957">Kaldır</translation>
 <translation id="1843105061469674856">Başka sayfa tara</translation>
-<translation id="1851169887664797861">Ek kamera kontrolleri bulunuyor</translation>
 <translation id="1851616744363735765">DURAKLATILDI</translation>
-<translation id="1862930711583847113"><ph name="FILE" /> dışa aktarılamıyor</translation>
 <translation id="1899697626337024495">Fotoğraf Çözünürlüğü</translation>
 <translation id="1925845977604399247">Galeri'ye git</translation>
-<translation id="2022953316617983419">QR kodu</translation>
+<translation id="199526504800285197">Kayıt durduruldu</translation>
+<translation id="1995951722691075581">Cihazdaki depolama alanı azaldığı için kaydınız durduruldu. Daha fazla video kaydetmek için cihazınızda yer açmanız gerekiyor.</translation>
 <translation id="2036868001356139588">Zamanlayıcı süresi</translation>
-<translation id="2050339315714019657">Dikey</translation>
 <translation id="2064538373111010176"><ph name="CAMERA" /> etkin</translation>
 <translation id="2134029355740465625">Video ayarları</translation>
 <translation id="2144806332417375165">Özel video parametreleri</translation>
 <translation id="2175927920773552910">QR Kodu</translation>
 <translation id="2244252133441425811">Video FPS seçiciyi etkinleştirin</translation>
 <translation id="2271433936731426666">Videonun tam boyutlu anlık görüntüsünü etkinleştir</translation>
-<translation id="229579744168541441">Diske aktar</translation>
 <translation id="2320741269052147773">Sola kaydır</translation>
 <translation id="2501278716633472235">Geri dön</translation>
 <translation id="2501853267655415902">Kayıt durduruldu</translation>
-<translation id="2501953888035679275">Kameranızla fotoğraf çekin ve video kaydedin.</translation>
 <translation id="2517472476991765520">Tara</translation>
 <translation id="2549985041256363841">Kaydı başlat</translation>
+<translation id="2577915835281444458">Kayıt yakında durdurulacak. Yer açmak için cihazın depolama alanına gidin.</translation>
 <translation id="2599796128805996109">Arka kamera</translation>
 <translation id="2759905922487820242"><ph name="CURRENT" /> / <ph name="MAXIMAL" /> sn.</translation>
 <translation id="2761536921376153655">Tarama türü</translation>
 <translation id="28682968802727151">Yansıtma önizlemesi</translation>
 <translation id="2879583609344924966"><ph name="CAMERA" />, cihaza takılı.</translation>
-<translation id="2904654629665923749">Doküman tarama kullanılabilir</translation>
-<translation id="2968794441791257519">Kamerayla çekilen fotoğraflar ve videolar, İndirilenler klasörüne taşınacaktır. Bunlara Dosyalar uygulamasından erişebilirsiniz.
-
-        Depolama iznine sahip uygulamalar fotoğraflarınıza ve videolarınıza erişebilecektir.</translation>
 <translation id="3067436040345934772">Sağa kaydır</translation>
 <translation id="3081586908890909590">Video kaydetmeye geç</translation>
 <translation id="313467653172006084">30 FPS</translation>
-<translation id="3183731565330012717">Tablo türü</translation>
+<translation id="3158534262962737808">"<ph name="WIFINAME" />" ağına katılmak istiyor musunuz?</translation>
 <translation id="3227137524299004712">Mikrofon</translation>
 <translation id="3240426699337459095">Bağlantı kopyalandı</translation>
-<translation id="3259149966178251584">Kamera çözünürlüğü</translation>
-<translation id="3305962767867348165">Düzelt</translation>
 <translation id="3354465018370944241">Fotoğraf ayarları</translation>
 <translation id="3411958449466169012">Zamanlayıcı kapalı</translation>
 <translation id="3448774564454087943">Video çok kısa olduğu için kaydedilmedi</translation>
 <translation id="346539236881580388">Tekrar çek</translation>
 <translation id="3517926952904427380">Portre fotoğrafı çekilemiyor</translation>
 <translation id="3566302376254083266">Sol üste doğru hareket ediyor</translation>
-<translation id="3569311554794739032"><ph name="FILE" /> dosyasını kaldırmak istediğinizden emin misiniz?</translation>
 <translation id="3573890771273113519">Tarama moduna geç</translation>
 <translation id="3583444040776960729">Dokümanın sol alt köşesi</translation>
+<translation id="3642192109456033823">Video işleniyor...</translation>
 <translation id="3789724198583203151">Saat yönünün tersine 90 derece döndür</translation>
 <translation id="3810838688059735925">Video</translation>
-<translation id="3838931309141338733">Barkodu tara</translation>
-<translation id="3892148308691398805">Metni kopyala</translation>
+<translation id="4060608699153044055">Cihazdaki depolama alanı azaldığı için kayıt yapamazsınız. Kaydı başlatmak için cihazınızda yer açmanız gerekiyor.</translation>
 <translation id="4061162772429051350"><ph name="MAGAPIXELS_AMOUNT" /> MP</translation>
 <translation id="4118525110028899586">Kaydı duraklat</translation>
 <translation id="4121305183798804752">Doküman algılandı</translation>
 <translation id="414641094616694804">Bu kamera, çözünürlüğü değiştiremez</translation>
-<translation id="4269820728363426813">Bağlantı adresini kopyala</translation>
-<translation id="4281620174117014503">Orta düzey çözünürlük</translation>
+<translation id="4176463684765177261">Devre dışı</translation>
 <translation id="428234092390943511">Sayfa küçük resmi</translation>
-<translation id="4329152592498422850">Kare fotoğraf çekme moduna geç</translation>
-<translation id="4340659173795395806">Artık çok sayfalı PDF oluşturabilirsiniz</translation>
+<translation id="4349714250734879769">Çerçeveleri Chrome'a göre ölçeklendir</translation>
 <translation id="4383571725254449280">Performans günlüklerini yazdır</translation>
 <translation id="4445542136948522167">Fotoğraf çekmeyi durdur</translation>
-<translation id="4497569853498380347">(<ph name="ASPECT_RATIO_WIDTH" />:<ph name="ASPECT_RATIO_HEIGHT" />) <ph name="MEGAPIXEL" /> megapiksel</translation>
 <translation id="4570032796877367747">Ön kamera</translation>
-<translation id="4620818268515773682">Mikrofonun sesini aç/kapat Ses açık</translation>
+<translation id="4598556348158889687">Depolama alanı yönetimi</translation>
+<translation id="4620818268515773682">Mikrofonun sesini aç/kapat. Ses açık</translation>
 <translation id="4628948037717959914">Fotoğraf</translation>
 <translation id="4649291346448517080">Dosya kaydedilemiyor</translation>
 <translation id="4695379108709712600">Üste doğru hareket ediyor</translation>
 <translation id="4705093842003735294">Tam çözünürlük</translation>
+<translation id="4864143361253542638">Taranmış sayfa listesi</translation>
 <translation id="4890010094662541459">3 x 3</translation>
+<translation id="4892746741161549733">Bağlantı adresini (<ph name="URL" />) kopyala</translation>
 <translation id="491895758387112773">Çoklu akış video kaydı</translation>
+<translation id="495170559598752135">İşlemler</translation>
 <translation id="4984613436295737187">Quad HD (1440p)</translation>
 <translation id="5034763830503483128">Fotoğraf en boy oranı</translation>
 <translation id="5057360777601936059">Kameranız şu anda kullanılamıyor.
         Lütfen kameranın düzgün bir şekilde bağlanıp bağlanmadığını kontrol edin.</translation>
+<translation id="5157591164390831335">URL algılandı.</translation>
 <translation id="5163387177077603948">Sağa doğru hareket ediyor</translation>
 <translation id="5235304959032763950">16'ya 9</translation>
 <translation id="5266635337630551423">Dokümanın sol üst köşesi</translation>
 <translation id="5317780077021120954">Kaydet</translation>
 <translation id="5320594929574852403">Sola doğru hareket ediyor</translation>
 <translation id="5374917190292010970">4K (2160p)</translation>
-<translation id="5444515100983837161">Dokümanın tüm kenarlarını çerçevenin içine yerleştirin. Dokümanla arka plan farklı renklere sahip olduğunda tarama daha iyi sonuç verir.</translation>
 <translation id="5662366948659129155"><ph name="COUNT" />. sayfa taranıyor</translation>
 <translation id="5671277269877808209">Kare</translation>
+<translation id="574392208103952083">Orta</translation>
 <translation id="5746169159649715125">PDF olarak kaydet</translation>
 <translation id="5753488212459587150">Uzman modunu etkinleştir</translation>
 <translation id="5759254179196327752">Belgeyi tara</translation>
@@ -127,7 +113,7 @@
 <translation id="6353688143752491039">Kamera uygulamasıyla ilgili geri bildiriminiz için teşekkürler.
 
 Geri bildiriminiz resim ya da video kalitesi ile ilgiliyse lütfen örnek bir fotoğraf veya video ekleyip sorunun ne olduğunu açıklayın. (Örneğin, fotoğraf çok karanlık veya özne net değil.)</translation>
-<translation id="6420689864531458495">(<ph name="ASPECT_RATIO_WIDTH" />:<ph name="ASPECT_RATIO_HEIGHT" /> - <ph name="WIDTH" />x<ph name="HEIGHT" />) <ph name="MEGAPIXEL" /> megapiksel</translation>
+<translation id="6519884562954018934"><ph name="WIFINAME" /> ağına katılın</translation>
 <translation id="6527303717912515753">Paylaş</translation>
 <translation id="6617916774429601017">Tüm çözünürlükleri göster</translation>
 <translation id="6631515515009660915">Yansıtma kapalı</translation>
@@ -138,8 +124,8 @@ Geri bildiriminiz resim ya da video kalitesi ile ilgiliyse lütfen örnek bir fo
 <translation id="6888362557094394345">Alta doğru hareket ediyor</translation>
 <translation id="695140971690006676">Hepsini sıfırla</translation>
 <translation id="6965382102122355670">Tamam</translation>
+<translation id="6965830616442491568">Portre</translation>
 <translation id="698156982839284926">3 saniye</translation>
-<translation id="712848772518857951"><ph name="COUNT" /> öğeyi gerçekten kaldırmak istiyor musunuz?</translation>
 <translation id="7134221860976209830">10 saniyelik zamanlayıcı</translation>
 <translation id="7191890674911603392">Kayıt türü</translation>
 <translation id="7243947652761655814">Video çözünürlüğü</translation>
@@ -147,6 +133,7 @@ Geri bildiriminiz resim ya da video kalitesi ile ilgiliyse lütfen örnek bir fo
 <translation id="7450541714075000668">Metin kopyalandı</translation>
 <translation id="7488619942230388918">GIF video kaydet</translation>
 <translation id="7557677699350329807">Sonraki kameraya geç</translation>
+<translation id="7562584071994185503">Metni (<ph name="TEXT" />) kopyala</translation>
 <translation id="7607002721634913082">Duraklatıldı</translation>
 <translation id="7608223098072244877">4'e 4</translation>
 <translation id="761421184377987513">Sol alta doğru hareket ediyor</translation>
@@ -154,25 +141,27 @@ Geri bildiriminiz resim ya da video kalitesi ile ilgiliyse lütfen örnek bir fo
 <translation id="7658239707568436148">İptal</translation>
 <translation id="7670511624014457267">60 FPS</translation>
 <translation id="7671804233658741790">Dokümanın sağ alt köşesi</translation>
+<translation id="7684446460490665873">Zaman atlamalı video kaydedin</translation>
 <translation id="7692090236657809299">Kaydırma, eğme, yakınlaştırmayı etkinleştir</translation>
 <translation id="7726641833034062494">Normal video kaydet</translation>
 <translation id="7748344063862150053">Dokümanın sağ üst köşesi</translation>
 <translation id="7933675232020478311">Sağ alta doğru hareket ediyor</translation>
 <translation id="7983668134180549431">Metin algılandı.</translation>
+<translation id="8079255378695216066">Kaydetmeye başlanamıyor</translation>
 <translation id="8120146556401698679">Yana kaydırın, eğin, zum yapın</translation>
 <translation id="8131740175452115882">Onayla</translation>
 <translation id="8145038249676204903">Fotoğraf çekme moduna geç</translation>
 <translation id="8167081290930651932">Fotoğraf olarak kaydet</translation>
 <translation id="8239780215768881278">Video anlık görüntüsü yakala</translation>
-<translation id="8261506727792406068">Sil</translation>
+<translation id="8346544573713510785">Çerçeveleri Kamera donanım soyutlama katmanına (HAL) göre ölçeklendir</translation>
 <translation id="8425673304802773841">Yatır</translation>
 <translation id="8428213095426709021">Ayarlar</translation>
+<translation id="8609951387004618906"><ph name="URL" /> bağlantısını aç</translation>
 <translation id="8629662593426079630">360p</translation>
-<translation id="8687491812650032292">HD <ph name="HEIGHT" />p (<ph name="WIDTH" />:<ph name="HEIGHT" />)</translation>
 <translation id="8711011893539266636">Mikrofonun sesini aç/kapat Ses kapalı</translation>
-<translation id="8712637175834984815">Anlaşıldı</translation>
 <translation id="8730621377337864115">Bitti</translation>
 <translation id="8732462232047530626">Meta veriyi önizle</translation>
+<translation id="874854738381978209">Kablosuz ağ algılandı.</translation>
 <translation id="8815966864175525708">Portre fotoğrafı çekme moduna geç</translation>
 <translation id="8828441885228359828">Kaydı devam ettir</translation>
 <translation id="8870695351537079478">Kayıt başlatılamıyor</translation>
@@ -181,6 +170,7 @@ Geri bildiriminiz resim ya da video kalitesi ile ilgiliyse lütfen örnek bir fo
 <translation id="9045010116236796332">Dokümanın tüm kenarlarını çerçevenin içine yerleştirin</translation>
 <translation id="9045155556724273246">10 saniye</translation>
 <translation id="906331135292332864">Resim işleniyor...</translation>
+<translation id="9161584225258678723">Zaman Atlama</translation>
 <translation id="922762992951083513">Yansıtma açık</translation>
 <translation id="945522503751344254">Geri bildirim gönder</translation>
 </translationbundle>

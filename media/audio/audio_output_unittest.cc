@@ -10,11 +10,11 @@
 #include "base/memory/aligned_memory.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/bind.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
 #include "base/test/test_timeouts.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "media/audio/audio_device_info_accessor_for_tests.h"
@@ -70,7 +70,7 @@ class AudioOutputTest : public testing::TestWithParam<bool> {
   // Runs message loop for the specified amount of time.
   void RunMessageLoop(base::TimeDelta delay) {
     base::RunLoop run_loop;
-    base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE, run_loop.QuitClosure(), delay);
     run_loop.Run();
   }
@@ -81,7 +81,7 @@ class AudioOutputTest : public testing::TestWithParam<bool> {
   std::unique_ptr<AudioManager> audio_manager_;
   std::unique_ptr<AudioDeviceInfoAccessorForTests> audio_manager_device_info_;
   AudioParameters stream_params_;
-  raw_ptr<AudioOutputStream> stream_ = nullptr;
+  raw_ptr<AudioOutputStream, DanglingUntriaged> stream_ = nullptr;
   bool should_use_aaudio_ = false;
   bool aaudio_is_supported_ = false;
 #if BUILDFLAG(IS_ANDROID)
@@ -138,7 +138,14 @@ TEST_P(AudioOutputTest, StopTwice) {
 }
 
 // This test produces actual audio for .25 seconds on the default device.
-TEST_P(AudioOutputTest, Play200HzTone) {
+#if BUILDFLAG(IS_IOS)
+// TODO(crbug.com/1489278): audio output unit startup fails with partition
+// alloc.
+#define MAYBE_Play200HzTone DISABLED_Play200HzTone
+#else
+#define MAYBE_Play200HzTone Play200HzTone
+#endif
+TEST_P(AudioOutputTest, MAYBE_Play200HzTone) {
   if (should_use_aaudio_ && !aaudio_is_supported_)
     return;
 
@@ -168,7 +175,7 @@ TEST_P(AudioOutputTest, Play200HzTone) {
           run_loop.Quit();
         }
       }));
-  base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE, run_loop.QuitClosure(), TestTimeouts::action_timeout());
 
   stream_->Start(&source);

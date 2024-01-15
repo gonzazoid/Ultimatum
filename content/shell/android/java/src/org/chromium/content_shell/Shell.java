@@ -5,6 +5,7 @@
 package org.chromium.content_shell;
 
 import android.content.Context;
+import android.content.Intent;
 import android.graphics.Rect;
 import android.graphics.drawable.ClipDrawable;
 import android.text.TextUtils;
@@ -23,12 +24,17 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.TextView.OnEditorActionListener;
 
+import androidx.annotation.Nullable;
+
+import org.jni_zero.CalledByNative;
+import org.jni_zero.JNINamespace;
+import org.jni_zero.NativeMethods;
+
 import org.chromium.base.Callback;
-import org.chromium.base.annotations.CalledByNative;
-import org.chromium.base.annotations.JNINamespace;
-import org.chromium.base.annotations.NativeMethods;
+import org.chromium.base.ResettersForTesting;
 import org.chromium.components.embedder_support.view.ContentView;
 import org.chromium.components.embedder_support.view.ContentViewRenderView;
+import org.chromium.content_public.browser.ActionModeCallback;
 import org.chromium.content_public.browser.ActionModeCallbackHelper;
 import org.chromium.content_public.browser.LoadUrlParams;
 import org.chromium.content_public.browser.NavigationController;
@@ -37,9 +43,7 @@ import org.chromium.content_public.browser.WebContents;
 import org.chromium.ui.base.ViewAndroidDelegate;
 import org.chromium.ui.base.WindowAndroid;
 
-/**
- * Container for the various UI components that make up a shell window.
- */
+/** Container for the various UI components that make up a shell window. */
 @JNINamespace("content")
 public class Shell extends LinearLayout {
 
@@ -52,12 +56,13 @@ public class Shell extends LinearLayout {
     private static final String IME_OPTION_RESTRICT_STYLUS_WRITING_AREA =
             "restrictDirectWritingArea=true";
 
-    private final Runnable mClearProgressRunnable = new Runnable() {
-        @Override
-        public void run() {
-            mProgressDrawable.setLevel(0);
-        }
-    };
+    private final Runnable mClearProgressRunnable =
+            new Runnable() {
+                @Override
+                public void run() {
+                    mProgressDrawable.setLevel(0);
+                }
+            };
 
     private WebContents mWebContents;
     private NavigationController mNavigationController;
@@ -78,16 +83,12 @@ public class Shell extends LinearLayout {
 
     private Callback<Boolean> mOverlayModeChangedCallbackForTesting;
 
-    /**
-     * Constructor for inflating via XML.
-     */
+    /** Constructor for inflating via XML. */
     public Shell(Context context, AttributeSet attrs) {
         super(context, attrs);
     }
 
-    /**
-     * Set the SurfaceView being renderered to as soon as it is available.
-     */
+    /** Set the SurfaceView being rendered to as soon as it is available. */
     public void setContentViewRenderView(ContentViewRenderView contentViewRenderView) {
         FrameLayout contentViewHolder = (FrameLayout) findViewById(R.id.contentview_holder);
         if (contentViewRenderView == null) {
@@ -95,7 +96,8 @@ public class Shell extends LinearLayout {
                 contentViewHolder.removeView(mContentViewRenderView);
             }
         } else {
-            contentViewHolder.addView(contentViewRenderView,
+            contentViewHolder.addView(
+                    contentViewRenderView,
                     new FrameLayout.LayoutParams(
                             FrameLayout.LayoutParams.MATCH_PARENT,
                             FrameLayout.LayoutParams.MATCH_PARENT));
@@ -157,42 +159,46 @@ public class Shell extends LinearLayout {
 
     private void initializeUrlField() {
         mUrlTextView = (EditText) findViewById(R.id.url);
-        mUrlTextView.setOnEditorActionListener(new OnEditorActionListener() {
-            @Override
-            public boolean onEditorAction(TextView v, int actionId, KeyEvent event) {
-                if ((actionId != EditorInfo.IME_ACTION_GO) && (event == null
-                        || event.getKeyCode() != KeyEvent.KEYCODE_ENTER
-                        || event.getAction() != KeyEvent.ACTION_DOWN)) {
-                    return false;
-                }
-                loadUrl(mUrlTextView.getText().toString());
-                setKeyboardVisibilityForUrl(false);
-                getContentView().requestFocus();
-                return true;
-            }
-        });
-        mUrlTextView.setOnFocusChangeListener(new OnFocusChangeListener() {
-            @Override
-            public void onFocusChange(View v, boolean hasFocus) {
-                setKeyboardVisibilityForUrl(hasFocus);
-                mNextButton.setVisibility(hasFocus ? GONE : VISIBLE);
-                mPrevButton.setVisibility(hasFocus ? GONE : VISIBLE);
-                mStopReloadButton.setVisibility(hasFocus ? GONE : VISIBLE);
-                if (!hasFocus) {
-                    mUrlTextView.setText(mWebContents.getVisibleUrl().getSpec());
-                }
-            }
-        });
-        mUrlTextView.setOnKeyListener(new OnKeyListener() {
-            @Override
-            public boolean onKey(View v, int keyCode, KeyEvent event) {
-                if (keyCode == KeyEvent.KEYCODE_BACK) {
-                    getContentView().requestFocus();
-                    return true;
-                }
-                return false;
-            }
-        });
+        mUrlTextView.setOnEditorActionListener(
+                new OnEditorActionListener() {
+                    @Override
+                    public boolean onEditorAction(TextView v, int actionId, KeyEvent event) {
+                        if ((actionId != EditorInfo.IME_ACTION_GO)
+                                && (event == null
+                                        || event.getKeyCode() != KeyEvent.KEYCODE_ENTER
+                                        || event.getAction() != KeyEvent.ACTION_DOWN)) {
+                            return false;
+                        }
+                        loadUrl(mUrlTextView.getText().toString());
+                        setKeyboardVisibilityForUrl(false);
+                        getContentView().requestFocus();
+                        return true;
+                    }
+                });
+        mUrlTextView.setOnFocusChangeListener(
+                new OnFocusChangeListener() {
+                    @Override
+                    public void onFocusChange(View v, boolean hasFocus) {
+                        setKeyboardVisibilityForUrl(hasFocus);
+                        mNextButton.setVisibility(hasFocus ? GONE : VISIBLE);
+                        mPrevButton.setVisibility(hasFocus ? GONE : VISIBLE);
+                        mStopReloadButton.setVisibility(hasFocus ? GONE : VISIBLE);
+                        if (!hasFocus) {
+                            mUrlTextView.setText(mWebContents.getVisibleUrl().getSpec());
+                        }
+                    }
+                });
+        mUrlTextView.setOnKeyListener(
+                new OnKeyListener() {
+                    @Override
+                    public boolean onKey(View v, int keyCode, KeyEvent event) {
+                        if (keyCode == KeyEvent.KEYCODE_BACK) {
+                            getContentView().requestFocus();
+                            return true;
+                        }
+                        return false;
+                    }
+                });
         mUrlTextView.setPrivateImeOptions(IME_OPTION_RESTRICT_STYLUS_WRITING_AREA);
     }
 
@@ -229,28 +235,31 @@ public class Shell extends LinearLayout {
 
     private void initializeNavigationButtons() {
         mPrevButton = (ImageButton) findViewById(R.id.prev);
-        mPrevButton.setOnClickListener(new OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                if (mNavigationController.canGoBack()) mNavigationController.goBack();
-            }
-        });
+        mPrevButton.setOnClickListener(
+                new OnClickListener() {
+                    @Override
+                    public void onClick(View v) {
+                        if (mNavigationController.canGoBack()) mNavigationController.goBack();
+                    }
+                });
 
         mNextButton = (ImageButton) findViewById(R.id.next);
-        mNextButton.setOnClickListener(new OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                if (mNavigationController.canGoForward()) mNavigationController.goForward();
-            }
-        });
+        mNextButton.setOnClickListener(
+                new OnClickListener() {
+                    @Override
+                    public void onClick(View v) {
+                        if (mNavigationController.canGoForward()) mNavigationController.goForward();
+                    }
+                });
         mStopReloadButton = (ImageButton) findViewById(R.id.stop_reload_button);
-        mStopReloadButton.setOnClickListener(new OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                if (mLoading) mWebContents.stop();
-                else mNavigationController.reload(true);
-            }
-        });
+        mStopReloadButton.setOnClickListener(
+                new OnClickListener() {
+                    @Override
+                    public void onClick(View v) {
+                        if (mLoading) mWebContents.stop();
+                        else mNavigationController.reload(true);
+                    }
+                });
     }
 
     @SuppressWarnings("unused")
@@ -284,8 +293,7 @@ public class Shell extends LinearLayout {
     private void setIsLoading(boolean loading) {
         mLoading = loading;
         if (mLoading) {
-            mStopReloadButton
-                    .setImageResource(android.R.drawable.ic_menu_close_clear_cancel);
+            mStopReloadButton.setImageResource(android.R.drawable.ic_menu_close_clear_cancel);
         } else {
             mStopReloadButton.setImageResource(R.drawable.ic_refresh);
         }
@@ -304,7 +312,7 @@ public class Shell extends LinearLayout {
     private void initFromNativeTabContents(WebContents webContents) {
         Context context = getContext();
         ContentView cv =
-                ContentView.createContentView(context, null /* eventOffsetHandler */, webContents);
+                ContentView.createContentView(context, /* eventOffsetHandler= */ null, webContents);
         mViewAndroidDelegate = new ShellViewAndroidDelegate(cv);
         assert (mWebContents != webContents);
         if (mWebContents != null) mWebContents.clearNativeReference();
@@ -316,24 +324,26 @@ public class Shell extends LinearLayout {
         mNavigationController = mWebContents.getNavigationController();
         if (getParent() != null) mWebContents.onShow();
         mUrlTextView.setText(mWebContents.getVisibleUrl().getSpec());
-        ((FrameLayout) findViewById(R.id.contentview_holder)).addView(cv,
-                new FrameLayout.LayoutParams(
-                        FrameLayout.LayoutParams.MATCH_PARENT,
-                        FrameLayout.LayoutParams.MATCH_PARENT));
+        ((FrameLayout) findViewById(R.id.contentview_holder))
+                .addView(
+                        cv,
+                        new FrameLayout.LayoutParams(
+                                FrameLayout.LayoutParams.MATCH_PARENT,
+                                FrameLayout.LayoutParams.MATCH_PARENT));
         cv.requestFocus();
         mContentViewRenderView.setCurrentWebContents(mWebContents);
     }
 
     /**
-     * {link @ActionMode.Callback} that uses the default implementation in
+     * {@link ActionModeCallback} that uses the default implementation in
      * {@link SelectionPopupController}.
      */
-    private ActionMode.Callback2 defaultActionCallback() {
+    private ActionModeCallback defaultActionCallback() {
         final ActionModeCallbackHelper helper =
                 SelectionPopupController.fromWebContents(mWebContents)
                         .getActionModeCallbackHelper();
 
-        return new ActionMode.Callback2() {
+        return new ActionModeCallback() {
             @Override
             public boolean onCreateActionMode(ActionMode mode, Menu menu) {
                 helper.onCreateActionMode(mode, menu);
@@ -348,6 +358,15 @@ public class Shell extends LinearLayout {
             @Override
             public boolean onActionItemClicked(ActionMode mode, MenuItem item) {
                 return helper.onActionItemClicked(mode, item);
+            }
+
+            @Override
+            public boolean onDropdownItemClicked(
+                    int groupId,
+                    int id,
+                    @Nullable Intent intent,
+                    @Nullable OnClickListener clickListener) {
+                return helper.onDropdownItemClicked(groupId, id, intent, clickListener);
             }
 
             @Override
@@ -372,6 +391,7 @@ public class Shell extends LinearLayout {
 
     public void setOverayModeChangedCallbackForTesting(Callback<Boolean> callback) {
         mOverlayModeChangedCallbackForTesting = callback;
+        ResettersForTesting.register(() -> mOverlayModeChangedCallbackForTesting = null);
     }
 
     /**
@@ -397,7 +417,7 @@ public class Shell extends LinearLayout {
         return viewDelegate != null ? viewDelegate.getContainerView() : null;
     }
 
-     /**
+    /**
      * @return The {@link WebContents} currently managing the content shown by this Shell.
      */
     public WebContents getWebContents() {
@@ -405,8 +425,8 @@ public class Shell extends LinearLayout {
     }
 
     private void setKeyboardVisibilityForUrl(boolean visible) {
-        InputMethodManager imm = (InputMethodManager) getContext().getSystemService(
-                Context.INPUT_METHOD_SERVICE);
+        InputMethodManager imm =
+                (InputMethodManager) getContext().getSystemService(Context.INPUT_METHOD_SERVICE);
         if (visible) {
             imm.showSoftInput(mUrlTextView, InputMethodManager.SHOW_IMPLICIT);
         } else {

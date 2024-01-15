@@ -13,10 +13,9 @@
 #include <type_traits>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
-#include "base/task/task_runner_util.h"
 #include "base/threading/thread_checker.h"
 #include "base/win/winrt_foundation_helpers.h"
 
@@ -64,7 +63,7 @@ namespace win {
 //
 // // Offloading a heavy computation:
 // auto my_op = WRL::Make<base::win::AsyncOperation<FooBar*>>();
-// base::PostTaskAndReplyWithResult(
+// base::ThreadPool::PostTaskAndReplyWithResult(
 //     base::BindOnce(MakeFooBar), my_op->callback());
 
 namespace internal {

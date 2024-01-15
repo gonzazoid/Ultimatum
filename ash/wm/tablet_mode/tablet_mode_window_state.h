@@ -8,8 +8,13 @@
 #include <memory>
 
 #include "ash/wm/splitview/split_view_controller.h"
+#include "ash/wm/splitview/split_view_types.h"
 #include "ash/wm/window_state.h"
-#include "ui/gfx/geometry/rect.h"
+#include "base/memory/raw_ptr.h"
+
+namespace gfx {
+class Rect;
+}  // namespace gfx
 
 namespace ash {
 class TabletModeWindowManager;
@@ -40,11 +45,17 @@ class TabletModeWindowState : public WindowState::State {
 
   ~TabletModeWindowState() override;
 
-  // Called when the window position might need to be updated.
+  // Called when the window position might need to be updated. Note that this
+  // method is not supposed to be called for client-controlled windows (e.g.
+  // ARC++) as the bounds change with `SetBoundsDirect` is not ack'ed by the
+  // client. (b/264962634)
   // TODO(sammiequon): Consolidate with `UpdateBounds`.
   static void UpdateWindowPosition(
       WindowState* window_state,
       WindowState::BoundsChangeAnimationType animation_type);
+
+  // Returns the maximized/full screen and/or centered bounds of a window.
+  static gfx::Rect GetBoundsInTabletMode(WindowState* state_object);
 
   // Leaves the tablet mode by reverting to previous state object.
   void LeaveTabletMode(WindowState* window_state, bool was_in_overview);
@@ -63,34 +74,39 @@ class TabletModeWindowState : public WindowState::State {
   void set_ignore_wm_events(bool ignore) { ignore_wm_events_ = ignore; }
 
  private:
-  // Updates the window to |new_state_type| and resulting bounds:
+  // Updates the window to `new_state_type` and resulting bounds:
   // Either full screen, maximized centered or minimized. If the state does not
-  // change, only the bounds will be changed. If |animate| is set, the bound
+  // change, only the bounds will be changed. If `animate` is set, the bound
   // change get animated.
   void UpdateWindow(WindowState* window_state,
                     chromeos::WindowStateType new_state_type,
                     bool animate);
 
-  // If |target_state| is PRIMARY/SECONDARY_SNAPPED and the window can be
-  // snapped, returns |target_state|. Otherwise depending on the capabilities
-  // of the window either returns |WindowStateType::kMaximized| or
-  // |WindowStateType::kNormal|.
-  chromeos::WindowStateType GetSnappedWindowStateType(
+  // If `target_state` is PRIMARY/SECONDARY_SNAPPED or TRUSTED_PINNED/PINNED,
+  // returns `target_state`. Otherwise depending on the capabilities of the
+  // window either returns `WindowStateType::kMaximized` or
+  // `WindowStateType::kNormal`.
+  chromeos::WindowStateType AdjustStateForTabletMode(
       WindowState* window_state,
       chromeos::WindowStateType target_state);
 
   // Updates the bounds to the maximum possible bounds according to the current
-  // window state. If |animated| is set we animate the change.
-  void UpdateBounds(WindowState* window_state, bool animated);
+  // window state. If `animate` is set we animate the change.
+  void UpdateBounds(WindowState* window_state,
+                    chromeos::WindowStateType previous_state,
+                    bool animate);
 
-  // Handles Alt+[ if |snap_position| is
-  // |SplitViewController::SnapPosition::kPrimary|; handles // Alt+] if
-  // |snap_position| is |SplitViewController::SnapPosition::kSecondary|.
-  void CycleTabletSnap(WindowState* window_state,
-                       SplitViewController::SnapPosition snap_position);
+  // Handles Alt+[ if `snap_position` is
+  // `SnapPosition::kPrimary`; handles // Alt+] if
+  // `snap_position` is `SnapPosition::kSecondary`.
+  void CycleTabletSnap(WindowState* window_state, SnapPosition snap_position);
 
-  // Snap the window in tablet split view if it can be snapped.
-  void DoTabletSnap(WindowState* window_state, WMEventType snap_event_type);
+  // Tries to snap the window in tablet split view if possible. Shows a toast if
+  // it cannot be snapped.
+  void DoTabletSnap(WindowState* window_state,
+                    WMEventType snap_event_type,
+                    float snap_ratio,
+                    WindowSnapActionSource snap_action_source);
 
   // Called by `WM_EVENT_RESTORE`, or a `WM_EVENT_NORMAL` that is restoring.
   // Restores to the state in `window_states`'s restore history.
@@ -101,10 +117,10 @@ class TabletModeWindowState : public WindowState::State {
   std::unique_ptr<WindowState::State> old_state_;
 
   // The window whose WindowState owns this instance.
-  aura::Window* window_;
+  raw_ptr<aura::Window> window_;
 
   // The creator which needs to be informed when this state goes away.
-  TabletModeWindowManager* creator_;
+  raw_ptr<TabletModeWindowManager> creator_;
 
   // The state type to be established in AttachState(), unless
   // previous_state->GetType() is MAXIMIZED, MINIMIZED, FULLSCREEN, PINNED, or

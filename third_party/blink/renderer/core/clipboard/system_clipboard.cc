@@ -11,6 +11,7 @@
 #include "mojo/public/cpp/base/big_buffer.h"
 #include "mojo/public/cpp/system/platform_handle.h"
 #include "skia/ext/skia_utils_base.h"
+#include "third_party/abseil-cpp/absl/types/variant.h"
 #include "third_party/blink/public/common/browser_interface_broker_proxy.h"
 #include "third_party/blink/public/common/thread_safe_browser_interface_broker_proxy.h"
 #include "third_party/blink/public/platform/platform.h"
@@ -41,20 +42,22 @@ String NonNullString(const String& string) {
   return string.IsNull() ? g_empty_string16_bit : string;
 }
 
-// This enum is used in UMA. Do not delete or re-order entries. New entries
-// should only be added at the end. Please keep in sync with
-// "ClipboardPastedImageUrls" in //tools/metrics/histograms/enums.xml.
-enum class ClipboardPastedImageUrls {
-  kUnknown = 0,
-  kLocalFileUrls = 1,
-  kHttpUrls = 2,
-  kCidUrls = 3,
-  kOtherUrls = 4,
-  kBase64EncodedImage = 5,
-  kLocalFileUrlWithRtf = 6,
-  kImageLoadError = 7,
-  kMaxValue = kImageLoadError,
-};
+// This function is needed to clone a PendingRemote because normally they are
+// not clonable.  The input PendingRemote is "cloned" twice, so one of those
+// copies is intended to replace the original PendingRemote passed in by the
+// caller.
+std::pair<mojo::PendingRemote<mojom::blink::FileSystemAccessDataTransferToken>,
+          mojo::PendingRemote<mojom::blink::FileSystemAccessDataTransferToken>>
+CloneFsaToken(
+    mojo::PendingRemote<mojom::blink::FileSystemAccessDataTransferToken> in) {
+  if (!in.is_valid()) {
+    return {mojo::NullRemote(), mojo::NullRemote()};
+  }
+  mojo::Remote remote(std::move(in));
+  mojo::PendingRemote<mojom::blink::FileSystemAccessDataTransferToken> copy;
+  remote->Clone(copy.InitWithNewPipeAndPassReceiver());
+  return {remote.Unbind(), std::move(copy)};
+}
 
 }  // namespace
 
@@ -63,19 +66,19 @@ SystemClipboard::SystemClipboard(LocalFrame* frame)
   frame->GetBrowserInterfaceBroker().GetInterface(
       clipboard_.BindNewPipeAndPassReceiver(
           frame->GetTaskRunner(TaskType::kUserInteraction)));
-#if defined(USE_OZONE)
+#if BUILDFLAG(IS_OZONE)
   is_selection_buffer_available_ =
       frame->GetSettings()->GetSelectionClipboardBufferAvailable();
-#endif  // defined(USE_OZONE)
+#endif  // BUILDFLAG(IS_OZONE)
 }
 
 bool SystemClipboard::IsSelectionMode() const {
-  return buffer_ == mojom::ClipboardBuffer::kSelection;
+  return buffer_ == mojom::blink::ClipboardBuffer::kSelection;
 }
 
 void SystemClipboard::SetSelectionMode(bool selection_mode) {
-  buffer_ = selection_mode ? mojom::ClipboardBuffer::kSelection
-                           : mojom::ClipboardBuffer::kStandard;
+  buffer_ = selection_mode ? mojom::blink::ClipboardBuffer::kSelection
+                           : mojom::blink::ClipboardBuffer::kStandard;
 }
 
 bool SystemClipboard::IsFormatAvailable(blink::mojom::ClipboardFormat format) {
@@ -109,8 +112,17 @@ String SystemClipboard::ReadPlainText() {
 String SystemClipboard::ReadPlainText(mojom::blink::ClipboardBuffer buffer) {
   if (!IsValidBufferType(buffer) || !clipboard_.is_bound())
     return String();
+
+  if (snapshot_ && snapshot_->HasPlainText(buffer)) {
+    return snapshot_->PlainText(buffer);
+  }
+
   String text;
   clipboard_->ReadText(buffer, &text);
+  if (snapshot_) {
+    snapshot_->SetPlainText(buffer, text);
+  }
+
   return text;
 }
 
@@ -121,11 +133,13 @@ void SystemClipboard::ReadPlainText(
     std::move(callback).Run(String());
     return;
   }
-  clipboard_->ReadText(buffer_, std::move(callback));
+  clipboard_->ReadText(buffer, std::move(callback));
 }
 
 void SystemClipboard::WritePlainText(const String& plain_text,
                                      SmartReplaceOption) {
+  DCHECK(!snapshot_);
+
   if (!clipboard_.is_bound())
     return;
   // TODO(https://crbug.com/106449): add support for smart replace, which is
@@ -140,17 +154,40 @@ void SystemClipboard::WritePlainText(const String& plain_text,
 String SystemClipboard::ReadHTML(KURL& url,
                                  unsigned& fragment_start,
                                  unsigned& fragment_end) {
-  String html;
-  if (IsValidBufferType(buffer_) && clipboard_.is_bound()) {
-    clipboard_->ReadHtml(buffer_, &html, &url,
-                         static_cast<uint32_t*>(&fragment_start),
-                         static_cast<uint32_t*>(&fragment_end));
-  }
-  if (html.empty()) {
+  if (!IsValidBufferType(buffer_) || !clipboard_.is_bound()) {
     url = KURL();
     fragment_start = 0;
     fragment_end = 0;
+    return String();
   }
+
+  if (snapshot_ && snapshot_->HasHtml(buffer_)) {
+    url = snapshot_->Url(buffer_);
+    fragment_start = snapshot_->FragmentStart(buffer_);
+    fragment_end = snapshot_->FragmentEnd(buffer_);
+    return snapshot_->Html(buffer_);
+  }
+
+  // NOTE: `fragment_start` and `fragment_end` can be the same reference, so
+  // use local variables here to make sure the snapshot is set correctly.
+  String html;
+  uint32_t local_fragment_start;
+  uint32_t local_fragment_end;
+  clipboard_->ReadHtml(buffer_, &html, &url, &local_fragment_start,
+                       &local_fragment_end);
+  if (html.empty()) {
+    url = KURL();
+    local_fragment_start = 0;
+    local_fragment_end = 0;
+  }
+
+  if (snapshot_) {
+    snapshot_->SetHtml(buffer_, html, url, local_fragment_start,
+                       local_fragment_end);
+  }
+
+  fragment_start = local_fragment_start;
+  fragment_end = local_fragment_end;
   return html;
 }
 
@@ -166,6 +203,8 @@ void SystemClipboard::ReadHTML(
 void SystemClipboard::WriteHTML(const String& markup,
                                 const KURL& document_url,
                                 SmartReplaceOption smart_replace_option) {
+  DCHECK(!snapshot_);
+
   if (!clipboard_.is_bound())
     return;
   clipboard_->WriteHtml(NonNullString(markup), document_url);
@@ -183,6 +222,8 @@ void SystemClipboard::ReadSvg(
 }
 
 void SystemClipboard::WriteSvg(const String& markup) {
+  DCHECK(!snapshot_);
+
   if (!clipboard_.is_bound())
     return;
   clipboard_->WriteSvg(NonNullString(markup));
@@ -191,8 +232,17 @@ void SystemClipboard::WriteSvg(const String& markup) {
 String SystemClipboard::ReadRTF() {
   if (!IsValidBufferType(buffer_) || !clipboard_.is_bound())
     return String();
+
+  if (snapshot_ && snapshot_->HasRtf(buffer_)) {
+    return snapshot_->Rtf(buffer_);
+  }
+
   String rtf;
   clipboard_->ReadRtf(buffer_, &rtf);
+  if (snapshot_) {
+    snapshot_->SetRtf(buffer_, rtf);
+  }
+
   return rtf;
 }
 
@@ -200,8 +250,17 @@ mojo_base::BigBuffer SystemClipboard::ReadPng(
     mojom::blink::ClipboardBuffer buffer) {
   if (!IsValidBufferType(buffer) || !clipboard_.is_bound())
     return mojo_base::BigBuffer();
+
+  if (snapshot_ && snapshot_->HasPng(buffer)) {
+    return snapshot_->Png(buffer);
+  }
+
   mojo_base::BigBuffer png;
   clipboard_->ReadPng(buffer, &png);
+  if (snapshot_) {
+    snapshot_->SetPng(buffer, png);
+  }
+
   return png;
 }
 
@@ -214,6 +273,7 @@ String SystemClipboard::ReadImageAsImageMarkup(
 void SystemClipboard::WriteImageWithTag(Image* image,
                                         const KURL& url,
                                         const String& title) {
+  DCHECK(!snapshot_);
   DCHECK(image);
 
   if (!clipboard_.is_bound())
@@ -258,6 +318,8 @@ void SystemClipboard::WriteImageWithTag(Image* image,
 }
 
 void SystemClipboard::WriteImage(const SkBitmap& bitmap) {
+  DCHECK(!snapshot_);
+
   if (!clipboard_.is_bound())
     return;
   clipboard_->WriteImage(bitmap);
@@ -267,19 +329,38 @@ mojom::blink::ClipboardFilesPtr SystemClipboard::ReadFiles() {
   mojom::blink::ClipboardFilesPtr files;
   if (!IsValidBufferType(buffer_) || !clipboard_.is_bound())
     return files;
+
+  if (snapshot_ && snapshot_->HasFiles(buffer_)) {
+    return snapshot_->Files(buffer_);
+  }
+
   clipboard_->ReadFiles(buffer_, &files);
+  if (snapshot_) {
+    snapshot_->SetFiles(buffer_, files);
+  }
+
   return files;
 }
 
 String SystemClipboard::ReadCustomData(const String& type) {
   if (!IsValidBufferType(buffer_) || !clipboard_.is_bound())
     return String();
+
+  if (snapshot_ && snapshot_->HasCustomData(buffer_, type)) {
+    return snapshot_->CustomData(buffer_, type);
+  }
+
   String data;
   clipboard_->ReadCustomData(buffer_, NonNullString(type), &data);
+  if (snapshot_) {
+    snapshot_->SetCustomData(buffer_, type, data);
+  }
+
   return data;
 }
 
 void SystemClipboard::WriteDataObject(DataObject* data_object) {
+  DCHECK(!snapshot_);
   DCHECK(data_object);
   if (!clipboard_.is_bound())
     return;
@@ -296,13 +377,14 @@ void SystemClipboard::WriteDataObject(DataObject* data_object) {
   HashMap<String, String> custom_data;
   WebDragData data = data_object->ToWebDragData();
   for (const WebDragData::Item& item : data.Items()) {
-    if (item.storage_type == WebDragData::Item::kStorageTypeString) {
-      if (item.string_type == kMimeTypeTextPlain) {
-        clipboard_->WriteText(NonNullString(item.string_data));
-      } else if (item.string_type == kMimeTypeTextHTML) {
-        clipboard_->WriteHtml(NonNullString(item.string_data), KURL());
-      } else if (item.string_type != kMimeTypeDownloadURL) {
-        custom_data.insert(item.string_type, NonNullString(item.string_data));
+    if (const auto* string_item =
+            absl::get_if<WebDragData::StringItem>(&item)) {
+      if (string_item->type == kMimeTypeTextPlain) {
+        clipboard_->WriteText(NonNullString(string_item->data));
+      } else if (string_item->type == kMimeTypeTextHTML) {
+        clipboard_->WriteHtml(NonNullString(string_item->data), KURL());
+      } else if (string_item->type != kMimeTypeDownloadURL) {
+        custom_data.insert(string_item->type, NonNullString(string_item->data));
       }
     }
   }
@@ -312,6 +394,7 @@ void SystemClipboard::WriteDataObject(DataObject* data_object) {
 }
 
 void SystemClipboard::CommitWrite() {
+  DCHECK(!snapshot_);
   if (!clipboard_.is_bound())
     return;
   clipboard_->CommitWrite();
@@ -348,6 +431,8 @@ void SystemClipboard::ReadUnsanitizedCustomFormat(
 
 void SystemClipboard::WriteUnsanitizedCustomFormat(const String& type,
                                                    mojo_base::BigBuffer data) {
+  DCHECK(!snapshot_);
+
   if (!clipboard_.is_bound() ||
       data.size() >= mojom::blink::ClipboardHost::kMaxDataSize) {
     return;
@@ -361,14 +446,210 @@ void SystemClipboard::Trace(Visitor* visitor) const {
   visitor->Trace(clipboard_);
 }
 
-bool SystemClipboard::IsValidBufferType(mojom::ClipboardBuffer buffer) {
+bool SystemClipboard::IsValidBufferType(mojom::blink::ClipboardBuffer buffer) {
   switch (buffer) {
-    case mojom::ClipboardBuffer::kStandard:
+    case mojom::blink::ClipboardBuffer::kStandard:
       return true;
-    case mojom::ClipboardBuffer::kSelection:
+    case mojom::blink::ClipboardBuffer::kSelection:
       return is_selection_buffer_available_;
   }
   return true;
+}
+
+void SystemClipboard::TakeSnapshot() {
+  ++snapshot_count_;
+  if (snapshot_count_ == 1) {
+    DCHECK(!snapshot_);
+    snapshot_ = std::make_unique<Snapshot>();
+  }
+}
+
+void SystemClipboard::DropSnapshot() {
+  DCHECK_GT(snapshot_count_, 0u);
+  --snapshot_count_;
+  if (snapshot_count_ == 0) {
+    snapshot_.reset();
+  }
+}
+
+SystemClipboard::Snapshot::Snapshot() = default;
+
+SystemClipboard::Snapshot::~Snapshot() = default;
+
+bool SystemClipboard::Snapshot::HasPlainText(
+    mojom::blink::ClipboardBuffer buffer) const {
+  return buffer_.has_value() && plain_text_.has_value();
+}
+
+const String& SystemClipboard::Snapshot::PlainText(
+    mojom::blink::ClipboardBuffer buffer) const {
+  DCHECK(HasPlainText(buffer));
+  return plain_text_.value();
+}
+
+void SystemClipboard::Snapshot::SetPlainText(
+    mojom::blink::ClipboardBuffer buffer,
+    const String& text) {
+  BindToBuffer(buffer);
+  plain_text_ = text;
+}
+
+bool SystemClipboard::Snapshot::HasHtml(
+    mojom::blink::ClipboardBuffer buffer) const {
+  return buffer_.has_value() && html_.has_value();
+}
+
+const KURL& SystemClipboard::Snapshot::Url(
+    mojom::blink::ClipboardBuffer buffer) const {
+  DCHECK(HasHtml(buffer));
+  return url_;
+}
+
+unsigned SystemClipboard::Snapshot::FragmentStart(
+    mojom::blink::ClipboardBuffer buffer) const {
+  DCHECK(HasHtml(buffer));
+  return fragment_start_;
+}
+
+unsigned SystemClipboard::Snapshot::FragmentEnd(
+    mojom::blink::ClipboardBuffer buffer) const {
+  DCHECK(HasHtml(buffer));
+  return fragment_end_;
+}
+
+const String& SystemClipboard::Snapshot::Html(
+    mojom::blink::ClipboardBuffer buffer) const {
+  DCHECK(HasHtml(buffer));
+  return html_.value();
+}
+
+void SystemClipboard::Snapshot::SetHtml(mojom::blink::ClipboardBuffer buffer,
+                                        const String& html,
+                                        const KURL& url,
+                                        unsigned fragment_start,
+                                        unsigned fragment_end) {
+  BindToBuffer(buffer);
+  html_ = html;
+  url_ = url;
+  fragment_start_ = fragment_start;
+  fragment_end_ = fragment_end;
+}
+
+bool SystemClipboard::Snapshot::HasRtf(
+    mojom::blink::ClipboardBuffer buffer) const {
+  return buffer_.has_value() && rtf_.has_value();
+}
+
+const String& SystemClipboard::Snapshot::Rtf(
+    mojom::blink::ClipboardBuffer buffer) const {
+  DCHECK(HasRtf(buffer));
+  return rtf_.value();
+}
+
+void SystemClipboard::Snapshot::SetRtf(mojom::blink::ClipboardBuffer buffer,
+                                       const String& rtf) {
+  BindToBuffer(buffer);
+  rtf_ = rtf;
+}
+
+bool SystemClipboard::Snapshot::HasPng(
+    mojom::blink::ClipboardBuffer buffer) const {
+  return buffer_.has_value() && png_.has_value();
+}
+
+mojo_base::BigBuffer SystemClipboard::Snapshot::Png(
+    mojom::blink::ClipboardBuffer buffer) const {
+  DCHECK(HasPng(buffer));
+  // Make an owning copy of the png to return to user.
+  base::span<const uint8_t> span =
+      base::make_span(png_.value().data(), png_.value().size());
+  return mojo_base::BigBuffer(span);
+}
+
+// TODO(https://crbug.com/1412180): Reduce data copies.
+void SystemClipboard::Snapshot::SetPng(mojom::blink::ClipboardBuffer buffer,
+                                       const mojo_base::BigBuffer& png) {
+  BindToBuffer(buffer);
+  // Make an owning copy of the png to save locally.
+  base::span<const uint8_t> span = base::make_span(png.data(), png.size());
+  png_ = mojo_base::BigBuffer(span);
+}
+
+bool SystemClipboard::Snapshot::HasFiles(
+    mojom::blink::ClipboardBuffer buffer) const {
+  return buffer_.has_value() && files_.has_value();
+}
+
+mojom::blink::ClipboardFilesPtr SystemClipboard::Snapshot::Files(
+    mojom::blink::ClipboardBuffer buffer) const {
+  DCHECK(HasFiles(buffer));
+  return CloneFiles(files_.value());
+}
+
+void SystemClipboard::Snapshot::SetFiles(
+    mojom::blink::ClipboardBuffer buffer,
+    mojom::blink::ClipboardFilesPtr& files) {
+  BindToBuffer(buffer);
+  files_ = CloneFiles(files);
+}
+
+bool SystemClipboard::Snapshot::HasCustomData(
+    mojom::blink::ClipboardBuffer buffer,
+    const String& type) const {
+  return buffer_.has_value() && custom_data_.Contains(type);
+}
+
+String SystemClipboard::Snapshot::CustomData(
+    mojom::blink::ClipboardBuffer buffer,
+    const String& type) const {
+  DCHECK(HasCustomData(buffer, type));
+  return custom_data_.at(type);
+}
+
+void SystemClipboard::Snapshot::SetCustomData(
+    mojom::blink::ClipboardBuffer buffer,
+    const String& type,
+    const String& data) {
+  BindToBuffer(buffer);
+  custom_data_.Set(type, data);
+}
+
+// static
+mojom::blink::ClipboardFilesPtr SystemClipboard::Snapshot::CloneFiles(
+    mojom::blink::ClipboardFilesPtr& files) {
+  if (!files) {
+    return {};
+  }
+
+  WTF::Vector<mojom::blink::DataTransferFilePtr> vec;
+  for (auto& dtf : files->files) {
+    auto clones = CloneFsaToken(std::move(dtf->file_system_access_token));
+    dtf->file_system_access_token = std::move(clones.first);
+    vec.emplace_back(mojom::blink::DataTransferFile::New(
+        dtf->path, dtf->display_name, std::move(clones.second)));
+  }
+
+  return mojom::blink::ClipboardFiles::New(std::move(vec),
+                                           files->file_system_id);
+}
+
+void SystemClipboard::Snapshot::BindToBuffer(
+    mojom::blink::ClipboardBuffer buffer) {
+  if (!buffer_) {
+    buffer_ = buffer;
+  } else {
+    DCHECK_EQ(*buffer_, buffer);
+  }
+}
+
+ScopedSystemClipboardSnapshot::ScopedSystemClipboardSnapshot(
+    SystemClipboard& clipboard)
+    : clipboard_(clipboard) {
+  clipboard.TakeSnapshot();
+}
+
+ScopedSystemClipboardSnapshot::~ScopedSystemClipboardSnapshot() {
+  clipboard_.DropSnapshot();
 }
 
 }  // namespace blink

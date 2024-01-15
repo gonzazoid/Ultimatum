@@ -44,6 +44,7 @@ class ConsistencyCookieManagerTest;
 }  // namespace signin
 
 class SigninClient;
+struct CoreAccountId;
 
 class AccountReconcilor
     : public KeyedService,
@@ -93,12 +94,12 @@ class AccountReconcilor
     // The typical order of events is:
     // - When reconcile is blocked:
     //   1. current reconcile is aborted with AbortReconcile(),
-    //   2. OnStateChanged() is called with SCHEDULED.
+    //   2. OnStateChanged() is called with kScheduled.
     //   3. OnBlockReconcile() is called.
     // - When reconcile is unblocked:
     //   1. OnUnblockReconcile() is called,
     //   2. reconcile is restarted if needed with StartReconcile(), which
-    //     triggers a call to OnStateChanged() with RUNNING.
+    //     triggers a call to OnStateChanged() with kRunning.
 
     // Called whe reconcile starts.
     virtual void OnStateChanged(signin_metrics::AccountReconcilorState state) {}
@@ -158,6 +159,12 @@ class AccountReconcilor
   // Returns true if reconcilor is blocked.
   bool IsReconcileBlocked() const;
 
+  // Returns the 'most severe' error encountered during the last attempt to
+  // reconcile (after the state is already set to kOk or kError).
+  // If the last reconciliation attempt was successful, this will be
+  // `GoogleServiceAuthError::State::NONE`.
+  GoogleServiceAuthError GetReconcileError() const;
+
 #if BUILDFLAG(IS_CHROMEOS_LACROS)
   // Gets the ConsistencyCookieManager, which updates the
   // "CHROME_ID_CONSISTENCY_STATE" cookie.
@@ -165,7 +172,9 @@ class AccountReconcilor
 #endif
 
  protected:
-  void OnSetAccountsInCookieCompleted(signin::SetAccountsInCookieResult result);
+  void OnSetAccountsInCookieCompleted(
+      const std::vector<CoreAccountId>& accounts_to_send,
+      signin::SetAccountsInCookieResult result);
   void OnLogOutFromCookieCompleted(const GoogleServiceAuthError& error);
 
  private:
@@ -211,6 +220,8 @@ class AccountReconcilor
   FRIEND_TEST_ALL_PREFIXES(AccountReconcilorMiceTest,
                            AccountReconcilorStateScheduled);
   FRIEND_TEST_ALL_PREFIXES(AccountReconcilorDiceTest,
+                           ClearPrimaryAccountNotAllowed);
+  FRIEND_TEST_ALL_PREFIXES(AccountReconcilorDiceTest,
                            DiceTokenServiceRegistration);
   FRIEND_TEST_ALL_PREFIXES(AccountReconcilorDiceTest,
                            DiceReconcileWithoutSignin);
@@ -224,6 +235,14 @@ class AccountReconcilor
   FRIEND_TEST_ALL_PREFIXES(AccountReconcilorDiceTest,
                            DiceReconcileReuseGaiaFirstAccount);
   FRIEND_TEST_ALL_PREFIXES(AccountReconcilorDiceTest, DeleteCookie);
+  FRIEND_TEST_ALL_PREFIXES(AccountReconcilorDiceTestForSupervisedUsers,
+                           DeleteCookieForNonSyncingSupervisedUsers);
+  FRIEND_TEST_ALL_PREFIXES(AccountReconcilorDiceTestForSupervisedUsers,
+                           DeleteCookieForSyncingSupervisedUsers);
+  FRIEND_TEST_ALL_PREFIXES(AccountReconcilorDiceTestWithUnoDesktop,
+                           DeleteCookieForSignedInUser);
+  FRIEND_TEST_ALL_PREFIXES(AccountReconcilorDiceTestWithUnoDesktop,
+                           DeleteCookieForSyncingUser);
   FRIEND_TEST_ALL_PREFIXES(AccountReconcilorMirrorTest, TokensNotLoaded);
   FRIEND_TEST_ALL_PREFIXES(AccountReconcilorMirrorTest,
                            StartReconcileCookiesDisabled);
@@ -271,6 +290,9 @@ class AccountReconcilor
   FRIEND_TEST_ALL_PREFIXES(AccountReconcilorMirrorTest, NoLoopWithBadPrimary);
   FRIEND_TEST_ALL_PREFIXES(AccountReconcilorMirrorTest,
                            WontMergeAccountsWithError);
+  FRIEND_TEST_ALL_PREFIXES(
+      AccountReconcilorMirrorTest,
+      WontMergeAccountsWithErrorDiscoveredByAccountReconcilorItself);
   FRIEND_TEST_ALL_PREFIXES(AccountReconcilorTest, DelegateTimeoutIsCalled);
   FRIEND_TEST_ALL_PREFIXES(AccountReconcilorMirrorTest,
                            DelegateTimeoutIsNotCalled);
@@ -283,8 +305,6 @@ class AccountReconcilor
   FRIEND_TEST_ALL_PREFIXES(AccountReconcilorTest, MultiloginLogout);
   FRIEND_TEST_ALL_PREFIXES(AccountReconcilorTestForceDiceMigration,
                            TableRowTest);
-  FRIEND_TEST_ALL_PREFIXES(AccountReconcilorTestActiveDirectory,
-                           TableRowTestMergeSession);
   FRIEND_TEST_ALL_PREFIXES(AccountReconcilorTestActiveDirectory,
                            TableRowTestMultilogin);
   FRIEND_TEST_ALL_PREFIXES(AccountReconcilorTest, ReconcileAfterShutdown);
@@ -516,10 +536,10 @@ class AccountReconcilor
   int synced_data_deletion_in_progress_count_ = 0;
 
   // Note: when the reconcilor is blocked with `BlockReconcile()` the state is
-  // set to ACCOUNT_RECONCILOR_SCHEDULED rather than ACCOUNT_RECONCILOR_INACTIVE
-  // as this is only used to temporarily suspend the reconcilor.
+  // set to kScheduled rather than kInactive as this is only used to temporarily
+  // suspend the reconcilor.
   signin_metrics::AccountReconcilorState state_ =
-      signin_metrics::ACCOUNT_RECONCILOR_INACTIVE;
+      signin_metrics::AccountReconcilorState::kInactive;
 
   // Set to true when Shutdown() is called.
   bool was_shut_down_ = false;

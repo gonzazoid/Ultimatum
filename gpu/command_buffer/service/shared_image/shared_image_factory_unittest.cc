@@ -9,7 +9,6 @@
 #include "gpu/command_buffer/common/shared_image_usage.h"
 #include "gpu/command_buffer/service/service_utils.h"
 #include "gpu/command_buffer/service/texture_manager.h"
-#include "gpu/command_buffer/tests/texture_image_factory.h"
 #include "gpu/config/gpu_driver_bug_workarounds.h"
 #include "gpu/config/gpu_feature_info.h"
 #include "gpu/config/gpu_preferences.h"
@@ -41,7 +40,7 @@ class SharedImageFactoryTest : public testing::Test {
     GpuDriverBugWorkarounds workarounds;
     factory_ = std::make_unique<SharedImageFactory>(
         preferences, workarounds, GpuFeatureInfo(), nullptr,
-        &shared_image_manager_, &image_factory_, nullptr,
+        &shared_image_manager_, nullptr,
         /*is_for_display_compositor=*/false);
   }
 
@@ -53,49 +52,46 @@ class SharedImageFactoryTest : public testing::Test {
  protected:
   scoped_refptr<gl::GLSurface> surface_;
   scoped_refptr<gl::GLContext> context_;
-  TextureImageFactory image_factory_;
   std::unique_ptr<SharedImageFactory> factory_;
   SharedImageManager shared_image_manager_;
 };
 
 TEST_F(SharedImageFactoryTest, Basic) {
   auto mailbox = Mailbox::GenerateForSharedImage();
-  auto format =
-      viz::SharedImageFormat::SinglePlane(viz::ResourceFormat::RGBA_8888);
+  auto format = viz::SinglePlaneFormat::kRGBA_8888;
   gfx::Size size(256, 256);
   auto color_space = gfx::ColorSpace::CreateSRGB();
   gpu::SurfaceHandle surface_handle = gpu::kNullSurfaceHandle;
-  uint32_t usage = SHARED_IMAGE_USAGE_GLES2;
+  uint32_t usage = SHARED_IMAGE_USAGE_GLES2_READ;
   EXPECT_TRUE(factory_->CreateSharedImage(
       mailbox, format, size, color_space, kTopLeft_GrSurfaceOrigin,
-      kPremul_SkAlphaType, surface_handle, usage));
+      kPremul_SkAlphaType, surface_handle, usage, "TestLabel"));
   EXPECT_TRUE(factory_->DestroySharedImage(mailbox));
 }
 
 TEST_F(SharedImageFactoryTest, DuplicateMailbox) {
   auto mailbox = Mailbox::GenerateForSharedImage();
-  auto format =
-      viz::SharedImageFormat::SinglePlane(viz::ResourceFormat::RGBA_8888);
+  auto format = viz::SinglePlaneFormat::kRGBA_8888;
   gfx::Size size(256, 256);
   auto color_space = gfx::ColorSpace::CreateSRGB();
   gpu::SurfaceHandle surface_handle = gpu::kNullSurfaceHandle;
-  uint32_t usage = SHARED_IMAGE_USAGE_GLES2;
+  uint32_t usage = SHARED_IMAGE_USAGE_GLES2_READ;
   EXPECT_TRUE(factory_->CreateSharedImage(
       mailbox, format, size, color_space, kTopLeft_GrSurfaceOrigin,
-      kPremul_SkAlphaType, surface_handle, usage));
+      kPremul_SkAlphaType, surface_handle, usage, "TestLabel"));
   EXPECT_FALSE(factory_->CreateSharedImage(
       mailbox, format, size, color_space, kTopLeft_GrSurfaceOrigin,
-      kPremul_SkAlphaType, surface_handle, usage));
+      kPremul_SkAlphaType, surface_handle, usage, "TestLabel"));
 
   GpuPreferences preferences;
   GpuDriverBugWorkarounds workarounds;
   auto other_factory = std::make_unique<SharedImageFactory>(
       preferences, workarounds, GpuFeatureInfo(), nullptr,
-      &shared_image_manager_, &image_factory_, nullptr,
+      &shared_image_manager_, nullptr,
       /*is_for_display_compositor=*/false);
   EXPECT_FALSE(other_factory->CreateSharedImage(
       mailbox, format, size, color_space, kTopLeft_GrSurfaceOrigin,
-      kPremul_SkAlphaType, surface_handle, usage));
+      kPremul_SkAlphaType, surface_handle, usage, "TestLabel"));
 }
 
 TEST_F(SharedImageFactoryTest, DestroyInexistentMailbox) {

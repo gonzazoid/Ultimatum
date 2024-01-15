@@ -9,6 +9,8 @@
 
 #include "base/strings/string_piece.h"
 #include "base/strings/utf_string_conversions.h"
+#include "components/password_manager/core/browser/password_form.h"
+#include "components/password_manager/core/browser/password_manager_util.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "url/gurl.h"
@@ -19,10 +21,9 @@ namespace {
 
 using base::ASCIIToUTF16;
 using testing::ElementsAre;
+using testing::Property;
 
 using BlocklistedStatus = OriginCredentialStore::BlocklistedStatus;
-using IsPublicSuffixMatch = UiCredential::IsPublicSuffixMatch;
-using IsAffiliationBasedMatch = UiCredential::IsAffiliationBasedMatch;
 
 constexpr char kExampleSite[] = "https://example.com/";
 
@@ -30,12 +31,20 @@ UiCredential MakeUiCredential(
     base::StringPiece username,
     base::StringPiece password,
     base::StringPiece origin = kExampleSite,
-    IsPublicSuffixMatch is_public_suffix_match = IsPublicSuffixMatch(false),
-    IsAffiliationBasedMatch is_affiliation_based_match =
-        IsAffiliationBasedMatch(false)) {
+    password_manager_util::GetLoginMatchType match_type =
+        password_manager_util::GetLoginMatchType::kExact) {
   return UiCredential(base::UTF8ToUTF16(username), base::UTF8ToUTF16(password),
-                      url::Origin::Create(GURL(origin)), is_public_suffix_match,
-                      is_affiliation_based_match, base::Time());
+                      url::Origin::Create(GURL(origin)), match_type,
+                      base::Time());
+}
+
+password_manager::PasswordForm CreateTestPasswordForm(int index = 0) {
+  password_manager::PasswordForm form;
+  form.url = GURL("https://test" + base::NumberToString(index) + ".com");
+  form.signon_realm = form.url.spec();
+  form.username_value = u"username" + base::NumberToString16(index);
+  form.password_value = u"password" + base::NumberToString16(index);
+  return form;
 }
 
 }  // namespace
@@ -60,13 +69,22 @@ TEST_F(OriginCredentialStoreTest, StoresCredentials) {
                           MakeUiCredential("Carl", "P1238C")));
 }
 
+TEST_F(OriginCredentialStoreTest, StoresUnnotifiedSharedCredentials) {
+  store()->SaveUnnotifiedSharedCredentials(
+      {CreateTestPasswordForm(1), CreateTestPasswordForm(2)});
+
+  EXPECT_THAT(
+      store()->GetUnnotifiedSharedCredentials(),
+      ElementsAre(CreateTestPasswordForm(1), CreateTestPasswordForm(2)));
+}
+
 TEST_F(OriginCredentialStoreTest, StoresOnlyNormalizedOrigins) {
   store()->SaveCredentials(
       {MakeUiCredential("Berta", "30948", kExampleSite),
        MakeUiCredential("Adam", "Pas83B", std::string(kExampleSite) + "path"),
-       MakeUiCredential("Dora", "PakudC", kExampleSite,
-                        IsPublicSuffixMatch(false),
-                        IsAffiliationBasedMatch(true))});
+       MakeUiCredential(
+           "Dora", "PakudC", kExampleSite,
+           password_manager_util::GetLoginMatchType::kAffiliated)});
 
   EXPECT_THAT(store()->GetCredentials(),
               ElementsAre(
@@ -78,9 +96,9 @@ TEST_F(OriginCredentialStoreTest, StoresOnlyNormalizedOrigins) {
                   MakeUiCredential("Adam", "Pas83B", kExampleSite),
 
                   // The android credential stays untouched.
-                  MakeUiCredential("Dora", "PakudC", kExampleSite,
-                                   IsPublicSuffixMatch(false),
-                                   IsAffiliationBasedMatch(true))));
+                  MakeUiCredential(
+                      "Dora", "PakudC", kExampleSite,
+                      password_manager_util::GetLoginMatchType::kAffiliated)));
 }
 
 TEST_F(OriginCredentialStoreTest, ReplacesCredentials) {
@@ -141,6 +159,23 @@ TEST_F(OriginCredentialStoreTest, NeverBlocklistedStaysTheSame) {
   store()->SetBlocklistedStatus(false);
   EXPECT_EQ(BlocklistedStatus::kNeverBlocklisted,
             store()->GetBlocklistedStatus());
+}
+
+TEST_F(OriginCredentialStoreTest, SaveSharedPasswords) {
+  password_manager::PasswordForm shared_password;
+  shared_password.username_value = u"username";
+  shared_password.password_value = u"password";
+  shared_password.signon_realm = kExampleSite;
+  shared_password.match_type =
+      password_manager::PasswordForm::MatchType::kExact;
+  shared_password.type =
+      password_manager::PasswordForm::Type::kReceivedViaSharing;
+
+  store()->SaveCredentials(
+      {UiCredential(shared_password, url::Origin::Create(GURL(kExampleSite)))});
+
+  EXPECT_THAT(store()->GetCredentials(),
+              ElementsAre(Property(&UiCredential::is_shared, true)));
 }
 
 }  // namespace password_manager

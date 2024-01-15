@@ -9,14 +9,16 @@
 #include <type_traits>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/containers/enum_set.h"
+#include "base/functional/bind.h"
+#include "base/unguessable_token.h"
 #include "chromeos/ash/components/drivefs/mojom/drivefs.mojom.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/bindings/receiver_set.h"
 #include "mojo/public/cpp/bindings/remote.h"
+#include "services/network/public/cpp/record_ontransfersizeupdate_utils.h"
 #include "services/network/public/cpp/resource_request.h"
 #include "services/network/public/mojom/data_pipe_getter.mojom.h"
 #include "services/network/public/mojom/url_loader.mojom.h"
@@ -104,7 +106,7 @@ class DriveFsURLLoaderClient : public network::mojom::URLLoaderClient,
   void OnReceiveResponse(
       network::mojom::URLResponseHeadPtr response_head,
       mojo::ScopedDataPipeConsumerHandle body,
-      absl::optional<mojo_base::BigBuffer> cached_metadata) override {
+      std::optional<mojo_base::BigBuffer> cached_metadata) override {
     DCHECK(IsFirstCall(CallbackState::kResponseReceived));
     std::vector<mojom::HttpHeaderPtr> headers;
     size_t iter = 0;
@@ -133,7 +135,10 @@ class DriveFsURLLoaderClient : public network::mojom::URLLoaderClient,
     std::move(ack_callback).Run();
   }
 
-  void OnTransferSizeUpdated(int32_t transfer_size_diff) override {}
+  void OnTransferSizeUpdated(int32_t transfer_size_diff) override {
+    network::RecordOnTransferSizeUpdatedUMA(
+        network::OnTransferSizeUpdatedFrom::kDriveFsURLLoaderClient);
+  }
 
   void OnComplete(const network::URLLoaderCompletionStatus& status) override {
     DCHECK(IsFirstCall(CallbackState::kRequestComplete));
@@ -169,7 +174,8 @@ class DriveFsURLLoaderClient : public network::mojom::URLLoaderClient,
 
 DriveFsHttpClient::DriveFsHttpClient(
     scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory)
-    : url_loader_factory_(std::move(url_loader_factory)) {}
+    : throttling_profile_id_(base::UnguessableToken::Create()),
+      url_loader_factory_(std::move(url_loader_factory)) {}
 
 DriveFsHttpClient::~DriveFsHttpClient() = default;
 
@@ -196,10 +202,15 @@ void DriveFsHttpClient::ExecuteHttpRequest(
   for (const auto& header : request->headers) {
     resource_request.headers.SetHeader(header->key, header->value);
   }
+  // TODO(b/284789869): The Chrome network service currently automatically
+  // appends a `If-None-Match` header to requests, this causes a 503 error on
+  // the Drive API. For now, don't cache anything until that 503 has been fixed.
+  resource_request.headers.SetHeader("Cache-Control", "no-cache");
   if (request->request_body_bytes > 0) {
     resource_request.request_body = new network::ResourceRequestBody();
     resource_request.request_body->AppendDataPipe(std::move(data_pipe_getter));
   }
+  resource_request.throttling_profile_id = throttling_profile_id_;
   // Start execution, the `DriveFsURLLoaderClient` will remove itself from the
   // `clients_` map on completion.
   url_loader_factory_->CreateLoaderAndStart(

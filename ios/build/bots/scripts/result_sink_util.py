@@ -11,6 +11,8 @@ import os
 import requests
 import sys
 
+import constants
+
 LOGGER = logging.getLogger(__name__)
 # VALID_STATUSES is a list of valid status values for test_result['status'].
 # The full list can be obtained at
@@ -23,6 +25,7 @@ def _compose_test_result(test_id,
                          expected,
                          duration=None,
                          test_log=None,
+                         test_loc=None,
                          tags=None,
                          file_artifacts=None):
   """Composes the test_result dict item to be posted to result sink.
@@ -35,6 +38,8 @@ def _compose_test_result(test_id,
     test_log: (str) Log of the test. Optional.
     tags: (list) List of tags. Each item in list should be a length 2 tuple of
         string as ("key", "value"). Optional.
+    test_loc: (dict): Test location metadata as described in
+        https://source.chromium.org/chromium/infra/infra/+/main:go/src/go.chromium.org/luci/resultdb/proto/v1/test_metadata.proto;l=32;drc=37488404d1c8aa8fccca8caae4809ece08828bae
     file_artifacts: (dict) IDs to abs paths mapping of existing files to
         report as artifact.
 
@@ -65,6 +70,7 @@ def _compose_test_result(test_id,
       } for (key, value) in tags],
       'testMetadata': {
           'name': test_id,
+          'location': test_loc,
       }
   }
 
@@ -82,6 +88,10 @@ def _compose_test_result(test_id,
       # serializable in order for the eventual json.dumps to succeed
       message = base64.b64encode(test_log.encode('utf-8')).decode('utf-8')
     test_result['summaryHtml'] = '<text-artifact artifact-id="Test Log" />'
+    if constants.CRASH_MESSAGE in test_log:
+      test_result['failureReason'] = {
+          'primaryErrorMessage': constants.CRASH_MESSAGE
+      }
     test_result['artifacts'].update({
         'Test Log': {
             'contents': message
@@ -127,7 +137,7 @@ class ResultSinkClient(object):
       # Ensure session is closed at exit.
       atexit.register(self.close)
 
-    logging.getLogger("requests").setLevel(logging.WARNING)
+    logging.getLogger("urllib3.connectionpool").setLevel(logging.WARNING)
 
   def close(self):
     """Closes the connection to result sink server."""
@@ -135,7 +145,7 @@ class ResultSinkClient(object):
       return
     LOGGER.info('Closing connection with result sink server.')
     # Reset to default logging level of test runner scripts.
-    logging.getLogger("requests").setLevel(logging.DEBUG)
+    logging.getLogger("urllib3.connectionpool").setLevel(logging.DEBUG)
     self._session.close()
 
   def post(self, test_id, status, expected, **kwargs):

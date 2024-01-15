@@ -12,11 +12,12 @@
 #include "base/time/time.h"
 #include "components/history/core/browser/history_types.h"
 #include "components/history_clusters/core/clustering_backend.h"
+#include "components/history_clusters/core/history_clusters_service_task.h"
 #include "components/history_clusters/core/history_clusters_types.h"
 
 namespace history {
 class HistoryService;
-}
+}  // namespace history
 
 namespace history_clusters {
 
@@ -29,17 +30,9 @@ class HistoryClustersService;
 // It is an extension of `HistoryClustersService`; rather than pollute the
 // latter's namespace with a bunch of callbacks, this class groups those
 // callbacks.
-class HistoryClustersServiceTaskGetMostRecentClusters {
+class HistoryClustersServiceTaskGetMostRecentClusters
+    : public HistoryClustersServiceTask {
  public:
-  // These values are persisted to logs. Entries should not be renumbered and
-  // numeric values should never be reused.
-  enum class Source {
-    kAllKeywordCacheRefresh = 0,
-    kShortKeywordCacheRefresh = 1,
-    kWebUi = 2,
-    kMaxValue = kWebUi,
-  };
-
   HistoryClustersServiceTaskGetMostRecentClusters(
       base::WeakPtr<HistoryClustersService> weak_history_clusters_service,
       const IncompleteVisitMap incomplete_visit_context_annotations,
@@ -49,11 +42,8 @@ class HistoryClustersServiceTaskGetMostRecentClusters {
       base::Time begin_time,
       QueryClustersContinuationParams continuation_params,
       bool recluster,
-      QueryClustersCallback callback,
-      Source source);
-  ~HistoryClustersServiceTaskGetMostRecentClusters();
-
-  bool Done() { return done_; }
+      QueryClustersCallback callback);
+  ~HistoryClustersServiceTaskGetMostRecentClusters() override;
 
  private:
   // When there remain unclustered visits, cluster them (possibly in combination
@@ -117,8 +107,6 @@ class HistoryClustersServiceTaskGetMostRecentClusters {
   // `OnGotMostRecentPersistedClusters()`.
   QueryClustersCallback callback_;
 
-  // Used for logging slices.
-  Source source_ = Source::kWebUi;
   // When `Start()` kicked off the request to fetch visits to cluster.
   base::TimeTicks get_annotated_visits_to_cluster_start_time_;
   // When `OnGotAnnotatedVisitsToCluster()` kicked off the request to cluster
@@ -127,10 +115,6 @@ class HistoryClustersServiceTaskGetMostRecentClusters {
   // When `ReturnMostRecentPersistedClusters()` kicked off the request to get
   // persisted clusters.
   base::TimeTicks get_most_recent_persisted_clusters_start_time_;
-
-  // Set to true when `callback_` is invoked, either with clusters or no
-  // clusters.
-  bool done_ = false;
 
   // Used for async callbacks.
   base::WeakPtrFactory<HistoryClustersServiceTaskGetMostRecentClusters>

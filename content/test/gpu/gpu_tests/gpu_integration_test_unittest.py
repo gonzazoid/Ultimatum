@@ -14,6 +14,8 @@ from typing import Dict, List, Optional, Set, Tuple, Type
 import unittest
 import unittest.mock as mock
 
+import dataclasses  # Built-in, but pylint gives an ordering false positive.
+
 import gpu_project_config
 import run_gpu_integration_test
 
@@ -23,7 +25,8 @@ from gpu_tests import common_typing as ct
 from gpu_tests import context_lost_integration_test
 from gpu_tests import gpu_helper
 from gpu_tests import gpu_integration_test
-from gpu_tests import webgl_conformance_integration_test as webgl_cit
+from gpu_tests import webgl1_conformance_integration_test as webgl1_cit
+from gpu_tests import webgl2_conformance_integration_test as webgl2_cit
 
 import gpu_path_util
 
@@ -57,6 +60,7 @@ def _GetSystemInfo(  # pylint: disable=too-many-arguments
     passthrough: bool = False,
     gl_renderer: str = '',
     is_asan: bool = False,
+    is_clang_coverage: bool = False,
     target_cpu_bits: int = 64) -> system_info.SystemInfo:
   sys_info = {
       'model_name': '',
@@ -72,6 +76,7 @@ def _GetSystemInfo(  # pylint: disable=too-many-arguments
           'aux_attributes': {
               'passthrough_cmd_decoder': passthrough,
               'is_asan': is_asan,
+              'is_clang_coverage': is_clang_coverage,
               'target_cpu_bits': target_cpu_bits
           },
           'feature_status': {
@@ -100,12 +105,13 @@ def _GenerateNvidiaExampleTagsForTestClassAndArgs(
     test_class: GpuTestClassType,
     args: mock.MagicMock,
     is_asan: bool = False,
+    is_clang_coverage: bool = False,
     target_cpu_bits: int = 64,
 ) -> Set[str]:
   tags = None
   with mock.patch.object(
       test_class, 'ExpectationsFiles', return_value=['exp.txt']):
-    _ = list(test_class.GenerateGpuTests(args))
+    _ = list(test_class.GenerateTestCases__RunGpuTest(args))
     platform = fakes.FakePlatform('win', 'win10')
     browser = fakes.FakeBrowser(platform, 'release')
     browser._returned_system_info = _GetSystemInfo(
@@ -113,20 +119,20 @@ def _GenerateNvidiaExampleTagsForTestClassAndArgs(
         device=0x1cb3,
         gl_renderer='ANGLE Direct3D9',
         is_asan=is_asan,
+        is_clang_coverage=is_clang_coverage,
         target_cpu_bits=target_cpu_bits)
     tags = _GetTagsToTest(browser, test_class)
   return tags
 
 
+@dataclasses.dataclass
 class _IntegrationTestArgs():
   """Struct-like object for defining an integration test."""
-
-  def __init__(self, test_name: str):
-    self.test_name = test_name
-    self.failures = []
-    self.successes = []
-    self.skips = []
-    self.additional_args = []
+  test_name: str
+  failures: List[str] = ct.EmptyList()
+  successes: List[str] = ct.EmptyList()
+  skips: List[str] = ct.EmptyList()
+  additional_args: List[str] = ct.EmptyList()
 
 
 class GpuIntegrationTestUnittest(unittest.TestCase):
@@ -189,19 +195,22 @@ class GpuIntegrationTestUnittest(unittest.TestCase):
     self._RunGpuIntegrationTests('simple_integration_unittest')
     self.assertIn('expected_failure', self._test_result['tests'])
 
+  # pylint: disable=too-many-arguments
   def _TestTagGenerationForMockPlatform(self,
                                         test_class: GpuTestClassType,
                                         args: mock.MagicMock,
                                         is_asan: bool = False,
+                                        is_clang_coverage: bool = False,
                                         target_cpu_bits: int = 64) -> Set[str]:
     tag_set = _GenerateNvidiaExampleTagsForTestClassAndArgs(
-        test_class, args, is_asan, target_cpu_bits)
+        test_class, args, is_asan, is_clang_coverage, target_cpu_bits)
     self.assertTrue(
         set([
             'win', 'win10', 'angle-d3d9', 'release', 'nvidia', 'nvidia-0x1cb3',
             'no-passthrough'
         ]).issubset(tag_set))
     return tag_set
+  # pylint: enable=too-many-arguments
 
   def testGenerateContextLostExampleTagsForAsan(self) -> None:
     args = gpu_helper.GetMockArgs()
@@ -220,6 +229,24 @@ class GpuIntegrationTestUnittest(unittest.TestCase):
         is_asan=False)
     self.assertIn('no-asan', tag_set)
     self.assertNotIn('asan', tag_set)
+
+  def testGenerateContextLostExampleTagsForClangCoverage(self) -> None:
+    args = gpu_helper.GetMockArgs()
+    tag_set = self._TestTagGenerationForMockPlatform(
+        context_lost_integration_test.ContextLostIntegrationTest,
+        args,
+        is_clang_coverage=True)
+    self.assertIn('clang-coverage', tag_set)
+    self.assertNotIn('no-clang-coverage', tag_set)
+
+  def testGenerateContextLostExampleTagsForNoClangCoverage(self) -> None:
+    args = gpu_helper.GetMockArgs()
+    tag_set = self._TestTagGenerationForMockPlatform(
+        context_lost_integration_test.ContextLostIntegrationTest,
+        args,
+        is_clang_coverage=False)
+    self.assertIn('no-clang-coverage', tag_set)
+    self.assertNotIn('clang-coverage', tag_set)
 
   def testGenerateContextLostExampleTagsForTargetCpu(self) -> None:
     args = gpu_helper.GetMockArgs()
@@ -242,29 +269,29 @@ class GpuIntegrationTestUnittest(unittest.TestCase):
             args,
             target_cpu_bits=31))
 
-  def testGenerateWebglConformanceExampleTagsForWebglVersion1andAsan(self
-                                                                     ) -> None:
+  def testGenerateWebglConformanceExampleTagsForAsan(self) -> None:
     args = gpu_helper.GetMockArgs(webgl_version='1.0.0')
     tag_set = self._TestTagGenerationForMockPlatform(
-        webgl_cit.WebGLConformanceIntegrationTest, args, is_asan=True)
-    self.assertTrue(set(['asan', 'webgl-version-1']).issubset(tag_set))
-    self.assertFalse(set(['no-asan', 'webgl-version-2']) & tag_set)
+        webgl1_cit.WebGL1ConformanceIntegrationTest, args, is_asan=True)
+    self.assertTrue(set(['asan']).issubset(tag_set))
+    self.assertFalse(set(['no-asan']) & tag_set)
 
-  def testGenerateWebglConformanceExampleTagsForWebglVersion2andNoAsan(
-      self) -> None:
+  def testGenerateWebglConformanceExampleTagsForNoAsan(self) -> None:
     args = gpu_helper.GetMockArgs(webgl_version='2.0.0')
     tag_set = self._TestTagGenerationForMockPlatform(
-        webgl_cit.WebGLConformanceIntegrationTest, args)
-    self.assertTrue(set(['no-asan', 'webgl-version-2']).issubset(tag_set))
-    self.assertFalse(set(['asan', 'webgl-version-1']) & tag_set)
+        webgl2_cit.WebGL2ConformanceIntegrationTest, args)
+    self.assertTrue(set(['no-asan']).issubset(tag_set))
+    self.assertFalse(set(['asan']) & tag_set)
 
   def testWebGlConformanceTimeoutNoAsan(self) -> None:
-    instance = webgl_cit.WebGLConformanceIntegrationTest('_RunConformanceTest')
+    instance = webgl1_cit.WebGL1ConformanceIntegrationTest(
+        '_RunConformanceTest')
     instance.is_asan = False
     self.assertEqual(instance._GetTestTimeout(), 300)
 
   def testWebGlConformanceTimeoutAsan(self) -> None:
-    instance = webgl_cit.WebGLConformanceIntegrationTest('_RunConformanceTest')
+    instance = webgl1_cit.WebGL1ConformanceIntegrationTest(
+        '_RunConformanceTest')
     instance.is_asan = True
     self.assertEqual(instance._GetTestTimeout(), 600)
 
@@ -277,9 +304,19 @@ class GpuIntegrationTestUnittest(unittest.TestCase):
     self.assertEqual(
         _GetTagsToTest(browser),
         set([
-            'win', 'win10', 'release', 'nvidia', 'nvidia-0x1cb3', 'angle-d3d9',
-            'no-passthrough', 'renderer-skia-gl', 'no-oop-c', 'no-asan',
-            'target-cpu-64'
+            'win',
+            'win10',
+            'release',
+            'nvidia',
+            'nvidia-0x1cb3',
+            'angle-d3d9',
+            'no-passthrough',
+            'renderer-skia-gl',
+            'no-oop-c',
+            'no-asan',
+            'target-cpu-64',
+            'no-clang-coverage',
+            'graphite-disabled',
         ]))
 
   @mock.patch('sys.platform', 'darwin')
@@ -294,9 +331,19 @@ class GpuIntegrationTestUnittest(unittest.TestCase):
     self.assertEqual(
         _GetTagsToTest(browser),
         set([
-            'mac', 'mojave', 'release', 'imagination', 'no-asan',
-            'target-cpu-64', 'imagination-PowerVR-SGX-554', 'angle-opengles',
-            'passthrough', 'renderer-skia-gl', 'no-oop-c'
+            'mac',
+            'mojave',
+            'release',
+            'imagination',
+            'no-asan',
+            'target-cpu-64',
+            'imagination-PowerVR-SGX-554',
+            'angle-opengles',
+            'passthrough',
+            'renderer-skia-gl',
+            'no-oop-c',
+            'no-clang-coverage',
+            'graphite-disabled',
         ]))
 
   @mock.patch('sys.platform', 'darwin')
@@ -309,9 +356,19 @@ class GpuIntegrationTestUnittest(unittest.TestCase):
     self.assertEqual(
         _GetTagsToTest(browser),
         set([
-            'mac', 'mojave', 'release', 'imagination', 'no-asan',
-            'target-cpu-64', 'imagination-Triangle-Monster-3000',
-            'angle-disabled', 'no-passthrough', 'renderer-skia-gl', 'no-oop-c'
+            'mac',
+            'mojave',
+            'release',
+            'imagination',
+            'no-asan',
+            'target-cpu-64',
+            'imagination-Triangle-Monster-3000',
+            'angle-disabled',
+            'no-passthrough',
+            'renderer-skia-gl',
+            'no-oop-c',
+            'no-clang-coverage',
+            'graphite-disabled',
         ]))
 
   @mock.patch.dict(os.environ, clear=True)

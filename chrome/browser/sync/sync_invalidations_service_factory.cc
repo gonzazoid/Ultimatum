@@ -10,7 +10,6 @@
 #include "chrome/browser/profiles/profile.h"
 #include "components/gcm_driver/gcm_profile_service.h"
 #include "components/gcm_driver/instance_id/instance_id_profile_service.h"
-#include "components/sync/base/features.h"
 #include "components/sync/invalidations/sync_invalidations_service_impl.h"
 
 syncer::SyncInvalidationsService*
@@ -26,7 +25,14 @@ SyncInvalidationsServiceFactory::GetInstance() {
 }
 
 SyncInvalidationsServiceFactory::SyncInvalidationsServiceFactory()
-    : ProfileKeyedServiceFactory("SyncInvalidationsService") {
+    : ProfileKeyedServiceFactory(
+          "SyncInvalidationsService",
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOriginalOnly)
+              .Build()) {
   DependsOn(gcm::GCMProfileServiceFactory::GetInstance());
   DependsOn(instance_id::InstanceIDProfileServiceFactory::GetInstance());
 }
@@ -35,10 +41,6 @@ SyncInvalidationsServiceFactory::~SyncInvalidationsServiceFactory() = default;
 
 KeyedService* SyncInvalidationsServiceFactory::BuildServiceInstanceFor(
     content::BrowserContext* context) const {
-  if (!base::FeatureList::IsEnabled(syncer::kSyncSendInterestedDataTypes)) {
-    return nullptr;
-  }
-
   Profile* profile = Profile::FromBrowserContext(context);
 
   gcm::GCMDriver* gcm_driver =

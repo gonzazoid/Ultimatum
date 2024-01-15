@@ -5,6 +5,7 @@
 #include "content/common/content_switches_internal.h"
 
 #include <string>
+#include <string_view>
 
 #include "base/command_line.h"
 #include "base/metrics/field_trial.h"
@@ -46,7 +47,7 @@ std::wstring ToNativeString(base::StringPiece string) {
   return base::ASCIIToWide(string);
 }
 
-std::string FromNativeString(base::WStringPiece string) {
+std::string FromNativeString(std::wstring_view string) {
   return base::WideToASCII(string);
 }
 
@@ -63,11 +64,6 @@ std::string FromNativeString(const std::string& string) {
 #endif  // BUILDFLAG(IS_WIN)
 
 }  // namespace
-
-// This switch is passed from the browser to the first renderer process it
-// creates. Useful for performing some actions only once, from one renderer
-// process.
-const char kFirstRendererProcess[] = "first-renderer-process";
 
 bool IsPinchToZoomEnabled() {
   const base::CommandLine& command_line =
@@ -147,13 +143,15 @@ std::vector<std::string> FeaturesFromSwitch(
   for (NativeStringPiece arg : command_line.argv()) {
     // Switch names are case insensitive on Windows, but base::CommandLine has
     // already made them lowercase when building argv().
-    if (!StartsWith(arg, prefix, base::CompareCase::SENSITIVE))
+    if (!base::StartsWith(arg, prefix, base::CompareCase::SENSITIVE)) {
       continue;
+    }
     arg.remove_prefix(prefix.size());
-    if (!IsStringASCII(arg))
+    if (!base::IsStringASCII(arg)) {
       continue;
-    auto vals = SplitString(FromNativeString(NativeString(arg)), ",",
-                            base::TRIM_WHITESPACE, base::SPLIT_WANT_ALL);
+    }
+    auto vals = base::SplitString(FromNativeString(NativeString(arg)), ",",
+                                  base::TRIM_WHITESPACE, base::SPLIT_WANT_ALL);
     features.insert(features.end(), vals.begin(), vals.end());
   }
   return features;

@@ -11,13 +11,15 @@
 #include <vector>
 
 #include "ash/components/arc/arc_util.h"
+#include "ash/constants/ash_pref_names.h"
 #include "ash/constants/ash_switches.h"
 #include "base/command_line.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/gmock_move_support.h"
 #include "chrome/browser/ash/arc/arc_util.h"
-#include "chrome/browser/ash/bruschetta/fake_bruschetta_features.h"
+#include "chrome/browser/ash/bruschetta/bruschetta_util.h"
 #include "chrome/browser/ash/crostini/crostini_manager.h"
 #include "chrome/browser/ash/crostini/crostini_pref_names.h"
 #include "chrome/browser/ash/crostini/crostini_test_helper.h"
@@ -264,12 +266,6 @@ class CrosUsbDetectorTest : public BrowserWithTestWindowTest {
     return cros_usb_detector_->usb_devices_.begin()->second.guest_port;
   }
 
-  uint32_t GetSingleAllowedInterfacesMask() const {
-    EXPECT_EQ(1U, cros_usb_detector_->usb_devices_.size());
-    return cros_usb_detector_->usb_devices_.begin()
-        ->second.allowed_interfaces_mask;
-  }
-
   void AddDisk(const std::string& name,
                int bus_number,
                int device_number,
@@ -282,8 +278,9 @@ class CrosUsbDetectorTest : public BrowserWithTestWindowTest {
             .SetMountPath("/mount/" + name)
             .SetIsMounted(mounted)
             .Build());
-    if (mounted)
+    if (mounted) {
       NotifyMountEvent(name, disks::DiskMountManager::MOUNTING);
+    }
   }
 
   void NotifyMountEvent(const std::string& name,
@@ -306,12 +303,14 @@ class CrosUsbDetectorTest : public BrowserWithTestWindowTest {
 
   device::FakeUsbDeviceManager device_manager_;
   std::unique_ptr<NotificationDisplayServiceTester> display_service_;
-  disks::MockDiskMountManager* mock_disk_mount_manager_;
+  raw_ptr<disks::MockDiskMountManager, DanglingUntriaged>
+      mock_disk_mount_manager_;
   disks::DiskMountManager::Disks disks_;
 
-  ash::FakeCiceroneClient* fake_cicerone_client_;
-  FakeConciergeClient* fake_concierge_client_;
-  FakeVmPluginDispatcherClient* fake_vm_plugin_dispatcher_client_;
+  raw_ptr<ash::FakeCiceroneClient, DanglingUntriaged> fake_cicerone_client_;
+  raw_ptr<FakeConciergeClient, DanglingUntriaged> fake_concierge_client_;
+  raw_ptr<FakeVmPluginDispatcherClient, DanglingUntriaged>
+      fake_vm_plugin_dispatcher_client_;
 
   TestCrosUsbDeviceObserver usb_device_observer_;
   std::unique_ptr<CrosUsbDetector> cros_usb_detector_;
@@ -414,13 +413,56 @@ TEST_F(CrosUsbDetectorTest, NotificationShown) {
   base::RunLoop().RunUntilIdle();
 
   // Now should have 4 buttons when Bruschetta is enabled.
-  bruschetta::FakeBruschettaFeatures bruschetta_features;
-  bruschetta_features.set_enabled(true);
+  AddContainerToPrefs(profile(), bruschetta::GetBruschettaAlphaId(), {});
   device_manager_.AddDevice(device);
   base::RunLoop().RunUntilIdle();
   notification = display_service_->GetNotification(notification_id);
   ASSERT_TRUE(notification);
   EXPECT_EQ(notification->buttons().size(), 4u);
+  device_manager_.RemoveDevice(device);
+  base::RunLoop().RunUntilIdle();
+}
+
+TEST_F(CrosUsbDetectorTest, NotificationControlledByPolicy) {
+  ConnectToDeviceManager();
+  base::RunLoop().RunUntilIdle();
+
+  auto device = base::MakeRefCounted<device::FakeUsbDeviceInfo>(
+      0, 1, kManufacturerName, kProductName_1, "002");
+  std::string notification_id =
+      CrosUsbDetector::MakeNotificationId(device->guid());
+
+  // Notifications should be shown if UsbDetectorNotificationEnabled policy is
+  // unset.
+  crostini::FakeCrostiniFeatures crostini_features;
+  crostini_features.set_enabled(true);
+  device_manager_.AddDevice(device);
+  base::RunLoop().RunUntilIdle();
+  absl::optional<message_center::Notification> notification =
+      display_service_->GetNotification(notification_id);
+  EXPECT_TRUE(notification);
+  device_manager_.RemoveDevice(device);
+  base::RunLoop().RunUntilIdle();
+
+  // Notifications should not be shown if UsbDetectorNotificationEnabled policy
+  // is false.
+  profile()->GetPrefs()->SetBoolean(prefs::kUsbDetectorNotificationEnabled,
+                                    false);
+  device_manager_.AddDevice(device);
+  base::RunLoop().RunUntilIdle();
+  notification = display_service_->GetNotification(notification_id);
+  EXPECT_FALSE(notification);
+  device_manager_.RemoveDevice(device);
+  base::RunLoop().RunUntilIdle();
+
+  // Notifications should be shown if UsbDetectorNotificationEnabled policy is
+  // true.
+  profile()->GetPrefs()->SetBoolean(prefs::kUsbDetectorNotificationEnabled,
+                                    true);
+  device_manager_.AddDevice(device);
+  base::RunLoop().RunUntilIdle();
+  notification = display_service_->GetNotification(notification_id);
+  EXPECT_TRUE(notification);
   device_manager_.RemoveDevice(device);
   base::RunLoop().RunUntilIdle();
 }
@@ -447,22 +489,6 @@ TEST_F(CrosUsbDetectorTest, UsbNotificationClicked) {
   EXPECT_GE(fake_concierge_client_->attach_usb_device_call_count(), 1);
   // Notification should close.
   EXPECT_FALSE(display_service_->GetNotification(notification_id));
-}
-
-TEST_F(CrosUsbDetectorTest, UsbDeviceClassBlockedAdded) {
-  ConnectToDeviceManager();
-  base::RunLoop().RunUntilIdle();
-
-  scoped_refptr<device::FakeUsbDeviceInfo> device =
-      CreateTestDeviceOfClass(/* USB_CLASS_HUB */ 0x09);
-
-  device_manager_.AddDevice(device);
-  base::RunLoop().RunUntilIdle();
-
-  std::string notification_id =
-      CrosUsbDetector::MakeNotificationId(device->guid());
-  ASSERT_FALSE(display_service_->GetNotification(notification_id));
-  EXPECT_EQ(0U, cros_usb_detector_->GetShareableDevices().size());
 }
 
 TEST_F(CrosUsbDetectorTest, UsbDeviceClassAdbAdded) {
@@ -965,32 +991,6 @@ TEST_F(CrosUsbDetectorTest, SharedDevicesGetAttachedOnStartup) {
   EXPECT_TRUE(device_info.shared_guest_id.has_value());
   EXPECT_EQ(crostini::kCrostiniDefaultVmName,
             device_info.shared_guest_id->vm_name);
-}
-
-TEST_F(CrosUsbDetectorTest, DeviceAllowedInterfacesMaskSetCorrectly) {
-  ConnectToDeviceManager();
-  base::RunLoop().RunUntilIdle();
-
-  const int kAdbClass = 0xff;
-  const int kAdbSubclass = 0x42;
-  const int kAdbProtocol = 0x1;
-
-  // Adb interface as well as a forbidden interface and allowed interface.
-  scoped_refptr<device::FakeUsbDeviceInfo> device = CreateTestDeviceFromCodes(
-      /* USB_CLASS_HUB */ 0x09,
-      {InterfaceCodes(0x03, 0xff, 0xff),
-       InterfaceCodes(kAdbClass, kAdbSubclass, kAdbProtocol),
-       InterfaceCodes(/*USB_CLASS_AUDIO*/ 0x01, 0xff, 0xff)});
-
-  device_manager_.AddDevice(device);
-  base::RunLoop().RunUntilIdle();
-
-  // The device should notify because it has an allowed, notifiable interface.
-  std::string notification_id =
-      CrosUsbDetector::MakeNotificationId(device->guid());
-  EXPECT_TRUE(display_service_->GetNotification(notification_id));
-
-  EXPECT_EQ(0x00000007U, GetSingleAllowedInterfacesMask());
 }
 
 TEST_F(CrosUsbDetectorTest, SwitchDeviceWithAttachSuccess) {

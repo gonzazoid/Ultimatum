@@ -24,7 +24,6 @@
 #include "third_party/blink/renderer/core/html/html_details_element.h"
 #include "third_party/blink/renderer/core/html_names.h"
 #include "third_party/blink/renderer/core/layout/layout_block_flow.h"
-#include "third_party/blink/renderer/core/layout/layout_object_factory.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 
@@ -34,9 +33,13 @@ HTMLSummaryElement::HTMLSummaryElement(Document& document)
     : HTMLElement(html_names::kSummaryTag, document) {
 }
 
-LayoutObject* HTMLSummaryElement::CreateLayoutObject(const ComputedStyle& style,
-                                                     LegacyLayout legacy) {
-  // See: crbug.com/603928 - We manually check for other dislay types, then
+LayoutObject* HTMLSummaryElement::CreateLayoutObject(
+    const ComputedStyle& style) {
+  if (RuntimeEnabledFeatures::DetailsStylingEnabled()) {
+    return HTMLElement::CreateLayoutObject(style);
+  }
+
+  // See: crbug.com/603928 - We manually check for other display types, then
   // fallback to a regular LayoutBlockFlow as "display: inline;" should behave
   // as an "inline-block".
   EDisplay display = style.Display();
@@ -44,8 +47,8 @@ LayoutObject* HTMLSummaryElement::CreateLayoutObject(const ComputedStyle& style,
       display == EDisplay::kGrid || display == EDisplay::kInlineGrid ||
       display == EDisplay::kLayoutCustom ||
       display == EDisplay::kInlineLayoutCustom)
-    return LayoutObject::CreateObject(this, style, legacy);
-  return LayoutObjectFactory::CreateBlockFlow(*this, style, legacy);
+    return LayoutObject::CreateObject(this, style);
+  return LayoutObject::CreateBlockFlowOrListItem(this, style);
 }
 
 HTMLDetailsElement* HTMLSummaryElement::DetailsElement() const {
@@ -63,8 +66,8 @@ bool HTMLSummaryElement::IsMainSummary() const {
   return false;
 }
 
-bool HTMLSummaryElement::SupportsFocus() const {
-  return IsMainSummary() || HTMLElement::SupportsFocus();
+bool HTMLSummaryElement::SupportsFocus(UpdateBehavior update_behavior) const {
+  return IsMainSummary() || HTMLElement::SupportsFocus(update_behavior);
 }
 
 int HTMLSummaryElement::DefaultTabIndex() const {
@@ -81,33 +84,8 @@ void HTMLSummaryElement::DefaultEventHandler(Event& event) {
       return;
     }
 
-    auto* keyboard_event = DynamicTo<KeyboardEvent>(event);
-    if (keyboard_event) {
-      if (event.type() == event_type_names::kKeydown &&
-          keyboard_event->key() == " ") {
-        SetActive(true);
-        // No setDefaultHandled() - IE dispatches a keypress in this case.
-        return;
-      }
-      if (event.type() == event_type_names::kKeypress) {
-        switch (keyboard_event->charCode()) {
-          case '\r':
-            DispatchSimulatedClick(&event);
-            event.SetDefaultHandled();
-            return;
-          case ' ':
-            // Prevent scrolling down the page.
-            event.SetDefaultHandled();
-            return;
-        }
-      }
-      if (event.type() == event_type_names::kKeyup &&
-          keyboard_event->key() == " ") {
-        if (IsActive())
-          DispatchSimulatedClick(&event);
-        event.SetDefaultHandled();
-        return;
-      }
+    if (HandleKeyboardActivation(event)) {
+      return;
     }
   }
 

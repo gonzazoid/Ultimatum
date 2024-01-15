@@ -3,22 +3,25 @@
 # found in the LICENSE file.
 
 import("//build/config/android/rules.gni")
+import("//third_party/jni_zero/jni_zero.gni")
 
 android_library("java") {
   sources = [ "java/src/org/chromium/components/favicon/LargeIconBridge.java" ]
 
   deps = [
-    "//base:jni_java",
     "//build/android:build_java",
     "//components/browser_ui/util/android:java",
     "//content/public/android:content_full_java",
+    "//net/android:net_java",
     "//third_party/androidx:androidx_annotation_annotation_java",
+    "//third_party/jni_zero:jni_zero_java",
     "//url:gurl_java",
   ]
 
-  srcjar_deps = [ "//components/favicon_base:favicon_base_enums_java" ]
-
-  annotation_processor_deps = [ "//base/android/jni_generator:jni_processor" ]
+  srcjar_deps = [
+    ":jni_headers",
+    "//components/favicon_base:favicon_base_enums_java",
+  ]
 }
 
 generate_jni("jni_headers") {
@@ -41,6 +44,5 @@ source_set("android") {
     "//skia",
     "//ui/gfx",
     "//url",
-    "//url:gurl_android",
   ]
 }

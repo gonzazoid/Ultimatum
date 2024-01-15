@@ -24,14 +24,14 @@ enum class Sound {
   kSpokenFeedbackToggleCountdownHigh,
   kSpokenFeedbackToggleCountdownLow,
   kTouchType,
+  // Sound keys for the moment when the device is plugged in a charger cable.
+  kChargeHighBattery,
+  kChargeMediumBattery,
+  kChargeLowBattery,
+  // Sound key for low battery when the device isn't charging.
+  kNoChargeLowBattery,
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove after the Chrome OS source code
-// directory migration is finished.
-namespace chromeos {
-using ::ash::Sound;
-}
 
 #endif  // CHROMEOS_ASH_COMPONENTS_AUDIO_SOUNDS_H_

@@ -8,7 +8,8 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/strings/string_piece.h"
 #include "chromeos/ash/components/settings/cros_settings_provider.h"
 #include "components/prefs/pref_value_map.h"
 
@@ -26,9 +27,9 @@ class StubCrosSettingsProvider : public CrosSettingsProvider {
   ~StubCrosSettingsProvider() override;
 
   // CrosSettingsProvider implementation.
-  const base::Value* Get(const std::string& path) const override;
+  const base::Value* Get(base::StringPiece path) const override;
   TrustedStatus PrepareTrustedValues(base::OnceClosure* callback) override;
-  bool HandlesSetting(const std::string& path) const override;
+  bool HandlesSetting(base::StringPiece path) const override;
 
   void SetTrustedStatus(TrustedStatus status);
   void SetCurrentUserIsOwner(bool owner);
@@ -65,11 +66,5 @@ class StubCrosSettingsProvider : public CrosSettingsProvider {
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when Chrome OS code migration is
-// done.
-namespace chromeos {
-using ::ash::StubCrosSettingsProvider;
-}  // namespace chromeos
 
 #endif  // CHROME_BROWSER_ASH_SETTINGS_STUB_CROS_SETTINGS_PROVIDER_H_

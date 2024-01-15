@@ -32,12 +32,8 @@ void BrowserReportGenerator::Generate(ReportType report_type,
 
   if (report_type != ReportType::kProfileReport) {
     GenerateProfileInfo(report.get());
-    // std::move is required here because the function completes the report
-    // asynchronously.
-    delegate_->GeneratePluginsIfNeeded(std::move(callback), std::move(report));
-  } else {
-    std::move(callback).Run(std::move(report));
   }
+  std::move(callback).Run(std::move(report));
 }
 
 void BrowserReportGenerator::GenerateProfileInfo(em::BrowserReport* report) {
@@ -61,7 +57,7 @@ void BrowserReportGenerator::GenerateBasicInfo(em::BrowserReport* report,
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
   if (contains_version_and_channel) {
-    report->set_browser_version(version_info::GetVersionNumber());
+    report->set_browser_version(std::string(version_info::GetVersionNumber()));
     report->set_channel(policy::ConvertToProtoChannel(delegate_->GetChannel()));
     if (delegate_->IsExtendedStableChannel())
       report->set_is_extended_stable_channel(true);

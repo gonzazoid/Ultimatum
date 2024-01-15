@@ -26,6 +26,7 @@
 #include "third_party/blink/renderer/platform/text/locale_mac.h"
 
 #include <memory>
+
 #include "base/mac/mac_util.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/platform/platform.h"
@@ -396,17 +397,17 @@ void TestNumbers(const AtomicString& locale_string,
 
 TEST_F(LocaleMacTest, localizedNumberRoundTrip) {
   // Test some of major locales.
-  TestNumbers("en_US", ".");
-  TestNumbers("fr_FR", ",");
-  TestNumbers("ar");
-  TestNumbers("de_DE");
-  TestNumbers("es_ES");
-  TestNumbers("fa");
-  TestNumbers("ja_JP");
-  TestNumbers("ko_KR");
-  TestNumbers("zh_CN");
-  TestNumbers("zh_HK");
-  TestNumbers("zh_TW");
+  TestNumbers(AtomicString("en_US"), ".");
+  TestNumbers(AtomicString("fr_FR"), ",");
+  TestNumbers(AtomicString("ar"));
+  TestNumbers(AtomicString("de_DE"));
+  TestNumbers(AtomicString("es_ES"));
+  TestNumbers(AtomicString("fa"));
+  TestNumbers(AtomicString("ja_JP"));
+  TestNumbers(AtomicString("ko_KR"));
+  TestNumbers(AtomicString("zh_CN"));
+  TestNumbers(AtomicString("zh_HK"));
+  TestNumbers(AtomicString("zh_TW"));
 }
 
 }  // namespace blink

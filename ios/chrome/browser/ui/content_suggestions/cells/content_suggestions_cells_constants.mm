@@ -4,18 +4,8 @@
 
 #import "ios/chrome/browser/ui/content_suggestions/cells/content_suggestions_cells_constants.h"
 
-#import "ios/chrome/browser/ui/content_suggestions/content_suggestions_feature.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 CGFloat ReturnToRecentTabHeight() {
-  if (ShouldMinimizeSpacingForModuleRefresh()) {
-    return 64;
-  } else {
-    return kReturnToRecentTabSize.height;
-  }
+  return kReturnToRecentTabSize.height;
 }
 
 const CGSize kReturnToRecentTabSize = {/*width=*/343, /*height=*/72};
@@ -25,3 +15,5 @@ NSString* const kContentSuggestionsWhatsNewIdentifier =
 
 NSString* const kQuerySuggestionViewA11yIdentifierPrefix =
     @"QuerySuggestionViewA11yIdentifierPrefix";
+
+const CGFloat kMagicStackImageContainerWidth = 50;

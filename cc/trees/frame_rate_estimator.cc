@@ -4,6 +4,8 @@
 
 #include "cc/trees/frame_rate_estimator.h"
 
+#include "base/task/sequenced_task_runner.h"
+#include "cc/base/features.h"
 #include "components/viz/common/frame_sinks/begin_frame_args.h"
 
 namespace cc {
@@ -22,18 +24,22 @@ FrameRateEstimator::FrameRateEstimator(base::SequencedTaskRunner* task_runner)
 
 FrameRateEstimator::~FrameRateEstimator() = default;
 
-void FrameRateEstimator::SetFrameEstimationEnabled(bool enabled) {
-  if (enabled == frame_rate_estimation_enabled_)
+void FrameRateEstimator::SetVideoConferenceMode(bool enabled) {
+  static const bool feature_allowed =
+      base::FeatureList::IsEnabled(features::kReducedFrameRateEstimation);
+  if (!feature_allowed || enabled == assumes_video_conference_mode_) {
     return;
+  }
 
-  frame_rate_estimation_enabled_ = enabled;
+  assumes_video_conference_mode_ = enabled;
   last_draw_time_ = base::TimeTicks();
   num_of_consecutive_frames_with_min_delta_ = 0u;
 }
 
 void FrameRateEstimator::WillDraw(base::TimeTicks now) {
-  if (!frame_rate_estimation_enabled_ || input_priority_mode_)
+  if (!assumes_video_conference_mode_ || input_priority_mode_) {
     return;
+  }
 
   if (last_draw_time_ == base::TimeTicks()) {
     last_draw_time_ = now;
@@ -57,8 +63,9 @@ void FrameRateEstimator::WillDraw(base::TimeTicks now) {
 }
 
 base::TimeDelta FrameRateEstimator::GetPreferredInterval() const {
-  if (!frame_rate_estimation_enabled_ || input_priority_mode_)
+  if (!assumes_video_conference_mode_ || input_priority_mode_) {
     return viz::BeginFrameArgs::MinInterval();
+  }
 
   constexpr size_t kMinNumOfFramesWithMinDelta = 4u;
   if (num_of_consecutive_frames_with_min_delta_ >= kMinNumOfFramesWithMinDelta)
@@ -68,9 +75,6 @@ base::TimeDelta FrameRateEstimator::GetPreferredInterval() const {
 }
 
 void FrameRateEstimator::NotifyInputEvent() {
-  if (!frame_rate_estimation_enabled_)
-    return;
-
   input_priority_mode_ = true;
   notifier_.Schedule();
 }

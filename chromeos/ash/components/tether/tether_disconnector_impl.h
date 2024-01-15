@@ -8,7 +8,8 @@
 #include <memory>
 #include <string>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "chromeos/ash/components/tether/tether_disconnector.h"
 #include "chromeos/ash/components/tether/tether_session_completion_logger.h"
@@ -53,12 +54,13 @@ class TetherDisconnectorImpl : public TetherDisconnector {
                                       base::OnceClosure success_callback,
                                       StringErrorCallback error_callback);
 
-  ActiveHost* active_host_;
-  WifiHotspotDisconnector* wifi_hotspot_disconnector_;
-  DisconnectTetheringRequestSender* disconnect_tethering_request_sender_;
-  TetherConnector* tether_connector_;
-  DeviceIdTetherNetworkGuidMap* device_id_tether_network_guid_map_;
-  TetherSessionCompletionLogger* tether_session_completion_logger_;
+  raw_ptr<ActiveHost> active_host_;
+  raw_ptr<WifiHotspotDisconnector> wifi_hotspot_disconnector_;
+  raw_ptr<DisconnectTetheringRequestSender>
+      disconnect_tethering_request_sender_;
+  raw_ptr<TetherConnector> tether_connector_;
+  raw_ptr<DeviceIdTetherNetworkGuidMap> device_id_tether_network_guid_map_;
+  raw_ptr<TetherSessionCompletionLogger> tether_session_completion_logger_;
 
   base::WeakPtrFactory<TetherDisconnectorImpl> weak_ptr_factory_{this};
 };

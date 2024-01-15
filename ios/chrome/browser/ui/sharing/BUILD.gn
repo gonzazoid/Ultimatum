@@ -3,42 +3,57 @@
 # found in the LICENSE file.
 
 source_set("sharing") {
-  configs += [ "//build/config/compiler:enable_arc" ]
+  sources = [
+    "sharing_coordinator.h",
+    "sharing_params.h",
+    "sharing_params.mm",
+    "sharing_positioner.h",
+    "sharing_scenario.h",
+  ]
+  deps = [
+    "//ios/chrome/browser/shared/coordinator/chrome_coordinator",
+    "//ios/chrome/browser/shared/ui/util:url_with_title",
+    "//url",
+  ]
+}
+
+source_set("sharing_internal") {
   sources = [
     "share_download_overlay_coordinator.h",
     "share_download_overlay_coordinator.mm",
     "share_download_overlay_view_controller.h",
     "share_download_overlay_view_controller.mm",
-    "sharing_coordinator.h",
     "sharing_coordinator.mm",
   ]
   deps = [
+    ":sharing",
+    ":sharing_metrics",
     "//base",
-    "//components/bookmarks/browser",
     "//ios/chrome/app/strings",
-    "//ios/chrome/browser/bookmarks",
-    "//ios/chrome/browser/main:public",
-    "//ios/chrome/browser/open_in",
-    "//ios/chrome/browser/ui/activity_services",
-    "//ios/chrome/browser/ui/activity_services/requirements",
-    "//ios/chrome/browser/ui/bookmarks:core",
-    "//ios/chrome/browser/ui/commands",
-    "//ios/chrome/browser/ui/coordinators:chrome_coordinators",
-    "//ios/chrome/browser/ui/open_in:features",
-    "//ios/chrome/browser/ui/open_in:open_in_histograms",
-    "//ios/chrome/browser/ui/qr_generator",
-    "//ios/chrome/browser/ui/util",
-    "//ios/chrome/browser/web_state_list",
+    "//ios/chrome/browser/bookmarks/model",
+    "//ios/chrome/browser/shared/coordinator/chrome_coordinator",
+    "//ios/chrome/browser/shared/model/browser",
+    "//ios/chrome/browser/shared/model/web_state_list",
+    "//ios/chrome/browser/shared/public/commands",
+    "//ios/chrome/browser/shared/ui/util",
+    "//ios/chrome/browser/sharing/model",
+    "//ios/chrome/browser/ui/sharing/activity_services",
+    "//ios/chrome/browser/ui/sharing/qr_generator",
     "//ios/third_party/material_components_ios",
     "//ios/web/public",
     "//ios/web/public/download",
     "//ui/base",
-    "//url",
+  ]
+}
+
+source_set("sharing_metrics") {
+  sources = [
+    "share_file_download_metrics.h",
+    "share_file_download_metrics.mm",
   ]
 }
 
 source_set("unit_tests") {
-  configs += [ "//build/config/compiler:enable_arc" ]
   testonly = true
   sources = [ "sharing_coordinator_unittest.mm" ]
   deps = [
@@ -47,17 +62,15 @@ source_set("unit_tests") {
     "//base/test:test_support",
     "//components/bookmarks/browser",
     "//components/bookmarks/test",
-    "//ios/chrome/browser/bookmarks",
-    "//ios/chrome/browser/browser_state",
-    "//ios/chrome/browser/main:test_support",
-    "//ios/chrome/browser/ui/activity_services",
-    "//ios/chrome/browser/ui/activity_services/requirements",
-    "//ios/chrome/browser/ui/bookmarks:bookmarks_ui",
-    "//ios/chrome/browser/ui/bookmarks:test_support",
-    "//ios/chrome/browser/ui/commands",
-    "//ios/chrome/browser/ui/main:scene_state_header",
-    "//ios/chrome/browser/ui/table_view",
-    "//ios/chrome/browser/web_state_list",
+    "//ios/chrome/browser/bookmarks/model",
+    "//ios/chrome/browser/bookmarks/model:test_support",
+    "//ios/chrome/browser/shared/coordinator/scene:scene_state_header",
+    "//ios/chrome/browser/shared/model/browser/test:test_support",
+    "//ios/chrome/browser/shared/model/browser_state",
+    "//ios/chrome/browser/shared/model/web_state_list",
+    "//ios/chrome/browser/shared/public/commands",
+    "//ios/chrome/browser/shared/ui/table_view",
+    "//ios/chrome/browser/ui/sharing/activity_services",
     "//ios/chrome/test:test_support",
     "//ios/third_party/material_components_ios",
     "//ios/web/public",
@@ -68,4 +81,17 @@ source_set("unit_tests") {
     "//third_party/ocmock",
     "//url",
   ]
+}
+
+source_set("eg2_tests") {
+  configs += [ "//build/config/ios:xctest_config" ]
+  testonly = true
+  sources = [ "share_file_download_egtest.mm" ]
+  deps = [
+    "//base/test:test_support",
+    "//ios/chrome/test/earl_grey:eg_test_support+eg2",
+    "//ios/testing/earl_grey:eg_test_support+eg2",
+    "//net:test_support",
+  ]
+  frameworks = [ "UIKit.framework" ]
 }

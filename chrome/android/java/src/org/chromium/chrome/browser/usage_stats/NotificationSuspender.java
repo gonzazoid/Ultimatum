@@ -18,10 +18,11 @@ import android.webkit.URLUtil;
 
 import androidx.annotation.RequiresApi;
 
+import org.jni_zero.JNINamespace;
+import org.jni_zero.NativeMethods;
+
 import org.chromium.base.ContextUtils;
 import org.chromium.base.Promise;
-import org.chromium.base.annotations.JNINamespace;
-import org.chromium.base.annotations.NativeMethods;
 import org.chromium.chrome.browser.notifications.NotificationPlatformBridge;
 import org.chromium.chrome.browser.notifications.NotificationUmaTracker;
 import org.chromium.chrome.browser.profiles.Profile;
@@ -58,13 +59,17 @@ public class NotificationSuspender {
         if (!isEnabled()) return Promise.fulfilled(false);
         return waitForChromeStartup()
                 .then((Void v) -> UsageStatsService.getInstance().getAllSuspendedWebsitesAsync())
-                .then((List<String> fqdns) -> {
-                    if (!fqdns.contains(getValidFqdnOrEmptyString(notification))) return false;
-                    UsageStatsService.getInstance()
-                            .getNotificationSuspender()
-                            .storeNotificationResources(Collections.singletonList(notification));
-                    return true;
-                });
+                .then(
+                        (List<String> fqdns) -> {
+                            if (!fqdns.contains(getValidFqdnOrEmptyString(notification))) {
+                                return false;
+                            }
+                            UsageStatsService.getInstance()
+                                    .getNotificationSuspender()
+                                    .storeNotificationResources(
+                                            Collections.singletonList(notification));
+                            return true;
+                        });
     }
 
     public NotificationSuspender(Profile profile) {
@@ -101,8 +106,8 @@ public class NotificationSuspender {
             mNotificationManager.cancel(tag, NotificationPlatformBridge.PLATFORM_ID);
         }
 
-        NotificationSuspenderJni.get().storeNotificationResources(
-                mProfile, ids, origins, resources);
+        NotificationSuspenderJni.get()
+                .storeNotificationResources(mProfile, ids, origins, resources);
     }
 
     private void unsuspendWebsites(List<String> fqdns) {
@@ -116,7 +121,6 @@ public class NotificationSuspender {
         NotificationSuspenderJni.get().reDisplayNotifications(mProfile, origins);
     }
 
-    @RequiresApi(Build.VERSION_CODES.M)
     private List<NotificationWrapper> getActiveNotificationsForFqdns(List<String> fqdns) {
         List<NotificationWrapper> notifications = new ArrayList<>();
 
@@ -127,8 +131,10 @@ public class NotificationSuspender {
             if (!URLUtil.isHttpUrl(origin) && !URLUtil.isHttpsUrl(origin)) continue;
             if (!fqdns.contains(Uri.parse(origin).getHost())) continue;
             NotificationMetadata metadata =
-                    new NotificationMetadata(NotificationUmaTracker.SystemNotificationType.SITES,
-                            tag, NotificationPlatformBridge.PLATFORM_ID);
+                    new NotificationMetadata(
+                            NotificationUmaTracker.SystemNotificationType.SITES,
+                            tag,
+                            NotificationPlatformBridge.PLATFORM_ID);
             notifications.add(new NotificationWrapper(notification.getNotification(), metadata));
         }
 
@@ -141,12 +147,10 @@ public class NotificationSuspender {
         return ((BitmapDrawable) icon.loadDrawable(mContext)).getBitmap();
     }
 
-    @RequiresApi(Build.VERSION_CODES.M)
     private Bitmap getNotificationIcon(Notification notification) {
         return getBitmapFromIcon(notification.getLargeIcon());
     }
 
-    @RequiresApi(Build.VERSION_CODES.M)
     private Bitmap getNotificationBadge(Notification notification) {
         return getBitmapFromIcon(notification.getSmallIcon());
     }
@@ -167,16 +171,18 @@ public class NotificationSuspender {
         BrowserStartupController browserStartup = BrowserStartupController.getInstance();
         if (browserStartup.isFullBrowserStarted()) return Promise.fulfilled(null);
         Promise<Void> promise = new Promise<>();
-        browserStartup.addStartupCompletedObserver(new StartupCallback() {
-            @Override
-            public void onSuccess() {
-                promise.fulfill(null);
-            }
-            @Override
-            public void onFailure() {
-                promise.reject(null);
-            }
-        });
+        browserStartup.addStartupCompletedObserver(
+                new StartupCallback() {
+                    @Override
+                    public void onSuccess() {
+                        promise.fulfill(null);
+                    }
+
+                    @Override
+                    public void onFailure() {
+                        promise.reject(null);
+                    }
+                });
         return promise;
     }
 

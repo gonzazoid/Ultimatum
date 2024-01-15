@@ -7,30 +7,76 @@
 
 #import <UIKit/UIKit.h>
 #import "ios/chrome/browser/ui/authentication/cells/signin_promo_view_consumer.h"
+#import "ios/chrome/browser/ui/ntp/feed_top_section/feed_top_section_mutator.h"
 #import "ios/chrome/browser/ui/ntp/feed_top_section/feed_top_section_view_controller_delegate.h"
+#import "ios/chrome/browser/ui/ntp/feed_top_section/notifications_promo_view_constants.h"
 
-class ChromeBrowserState;
+class AuthenticationService;
+@protocol NotificationsAlertPresenter;
 @protocol FeedTopSectionConsumer;
 @protocol NewTabPageDelegate;
+class PrefService;
 @class SigninPromoViewMediator;
+
+namespace signin {
+class IdentityManager;
+}  // namespace signin
+
+// Enum actions for content notification promo UMA metrics. Entries should not
+// be renumbered and numeric values should never be reused. This should align
+// with the ContentNotificationTopOfFeedPromoAction enum in enums.xml.
+//
+// LINT.IfChange
+enum class ContentNotificationTopOfFeedPromoAction {
+  kAccept = 0,
+  kDecline = 1,
+  kMainButtonTapped = 2,
+  kDismissedFromCloseButton = 3,
+  kDismissedFromSecondaryButton = 4,
+  kMaxValue = kDismissedFromSecondaryButton,
+};
+// LINT.ThenChange(/tools/metrics/histograms/metadata/content/enums.xml)
+
+// Enum events for content notification promo UMA metrics. Entries should not
+// be renumbered and numeric values should never be reused. This should align
+// with the ContentNotificationTopOfFeedPromoEvent enum in enums.xml.
+//
+// LINT.IfChange
+enum class ContentNotificationTopOfFeedPromoEvent {
+  kPromptShown = 0,
+  kNotifActive = 1,
+  kError = 2,
+  kMaxValue = kError,
+};
+// LINT.ThenChange(/tools/metrics/histograms/metadata/content/enums.xml)
 
 // Mediator for the NTP Feed top section, handling the interactions.
 @interface FeedTopSectionMediator
-    : NSObject <FeedTopSectionViewControllerDelegate, SigninPromoViewConsumer>
+    : NSObject <FeedTopSectionMutator,
+                FeedTopSectionViewControllerDelegate,
+                SigninPromoViewConsumer>
 
-// TODO(crbug.com/1331010): Mediators shouldn't know about browser state. We
-// should have the coordinator provide any necessary information.
 - (instancetype)initWithConsumer:(id<FeedTopSectionConsumer>)consumer
-                    browserState:(ChromeBrowserState*)browserState
+                 identityManager:(signin::IdentityManager*)identityManager
+                     authService:(AuthenticationService*)authService
+                     isIncognito:(BOOL)isIncognito
+                     prefService:(PrefService*)prefService
     NS_DESIGNATED_INITIALIZER;
 
 - (instancetype)init NS_UNAVAILABLE;
 
 // The mediator handling the interactions of the signin promo.
-@property(nonatomic, strong) SigninPromoViewMediator* signinPromoMediator;
+@property(nonatomic, weak) SigninPromoViewMediator* signinPromoMediator;
 
 // Delegate for NTP related actions.
-@property(nonatomic, weak) id<NewTabPageDelegate> ntpDelegate;
+@property(nonatomic, weak) id<NewTabPageDelegate> NTPDelegate;
+
+// Returns `YES` if the signin promo exists on the current NTP.
+@property(nonatomic, assign) BOOL isSignInPromoEnabled;
+
+// Handler for displaying notification related alerts.
+@property(nonatomic, weak) id<NotificationsAlertPresenter>
+    notificationsPresenter;
 
 // Initializes the mediator.
 - (void)setUp;

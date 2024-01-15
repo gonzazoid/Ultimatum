@@ -10,12 +10,17 @@
 #include "ash/components/arc/mojom/policy.mojom.h"
 #include "ash/components/arc/session/arc_bridge_service.h"
 #include "ash/components/arc/session/arc_service_manager.h"
+#include "ash/components/arc/session/arc_session_runner.h"
+#include "ash/components/arc/test/fake_arc_session.h"
 #include "ash/components/arc/test/fake_policy_instance.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/strings/stringprintf.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
 #include "chrome/browser/ash/arc/policy/arc_policy_bridge.h"
+#include "chrome/browser/ash/arc/session/arc_session_manager.h"
+#include "chrome/browser/ash/arc/test/test_arc_session_manager.h"
 #include "chrome/test/base/testing_profile.h"
 #include "components/policy/core/common/remote_commands/remote_commands_queue.h"
 #include "content/public/test/browser_task_environment.h"
@@ -79,10 +84,10 @@ void AddCert(const std::string& cn, std::vector<CertDescription>* certs) {
       key->key(), net::x509_util::DIGEST_SHA256, cn, 1, base::Time::UnixEpoch(),
       base::Time::UnixEpoch(), {}, &der_cert));
   cert = net::x509_util::CreateCERTCertificateFromBytes(
-      reinterpret_cast<const uint8_t*>(der_cert.data()), der_cert.size());
+      base::as_byte_span(der_cert));
   ASSERT_TRUE(cert);
   certs->emplace_back(key.release(), cert.release(),
-                      keymaster::mojom::ChapsSlot::kUser, kLabel, kId);
+                      keymanagement::mojom::ChapsSlot::kUser, kLabel, kId);
 }
 
 }  // namespace
@@ -91,10 +96,14 @@ class ArcCertInstallerTest : public testing::Test {
  public:
   ArcCertInstallerTest()
       : arc_service_manager_(std::make_unique<arc::ArcServiceManager>()),
-        profile_(std::make_unique<TestingProfile>()),
-        arc_policy_bridge_(arc::ArcPolicyBridge::GetForBrowserContextForTesting(
-            profile_.get())),
-        policy_instance_(std::make_unique<arc::MockPolicyInstance>()) {
+        profile_(std::make_unique<TestingProfile>()) {
+    ash::ConciergeClient::InitializeFake(nullptr);
+    arc_session_manager_ =
+        CreateTestArcSessionManager(std::make_unique<arc::ArcSessionRunner>(
+            base::BindRepeating(arc::FakeArcSession::Create)));
+    arc_policy_bridge_ =
+        arc::ArcPolicyBridge::GetForBrowserContextForTesting(profile_.get());
+    policy_instance_ = std::make_unique<arc::MockPolicyInstance>();
     arc_service_manager_->arc_bridge_service()->policy()->SetInstance(
         policy_instance_.get());
   }
@@ -127,7 +136,7 @@ class ArcCertInstallerTest : public testing::Test {
                 OnCommandReceived(IsCommandPayloadForName(name), _))
         .WillOnce(WithArg<1>(Invoke(
             [status](FakePolicyInstance::OnCommandReceivedCallback callback) {
-              base::SequencedTaskRunnerHandle::Get()->PostTask(
+              base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
                   FROM_HERE, base::BindOnce(std::move(callback), status));
             })));
   }
@@ -144,11 +153,12 @@ class ArcCertInstallerTest : public testing::Test {
   // (because BrowserContextKeyedServices are destroyed together with Profile,
   // and ArcPolicyBridge is such a service).
   const std::unique_ptr<arc::ArcServiceManager> arc_service_manager_;
+  std::unique_ptr<arc::ArcSessionManager> arc_session_manager_;
   const std::unique_ptr<TestingProfile> profile_;
-  arc::ArcPolicyBridge* const arc_policy_bridge_;
-  const std::unique_ptr<arc::MockPolicyInstance> policy_instance_;
+  raw_ptr<arc::ArcPolicyBridge> arc_policy_bridge_;
+  std::unique_ptr<arc::MockPolicyInstance> policy_instance_;
 
-  policy::RemoteCommandsQueue* queue_;
+  raw_ptr<policy::RemoteCommandsQueue, DanglingUntriaged> queue_;
   std::unique_ptr<ArcCertInstaller> installer_;
   MockRemoteCommandsQueueObserver observer_;
 };

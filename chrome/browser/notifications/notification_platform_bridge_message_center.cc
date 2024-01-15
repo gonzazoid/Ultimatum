@@ -4,8 +4,8 @@
 
 #include "chrome/browser/notifications/notification_platform_bridge_message_center.h"
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/no_destructor.h"
@@ -142,6 +142,24 @@ void NotificationPlatformBridgeMessageCenter::GetDisplayed(
   if (ui_manager) {
     displayed_notifications = ui_manager->GetAllIdsByProfile(
         ProfileNotification::GetProfileID(profile));
+  }
+
+  content::GetUIThreadTaskRunner({})->PostTask(
+      FROM_HERE,
+      base::BindOnce(std::move(callback), std::move(displayed_notifications),
+                     true /* supports_synchronization */));
+}
+
+void NotificationPlatformBridgeMessageCenter::GetDisplayedForOrigin(
+    Profile* profile,
+    const GURL& origin,
+    GetDisplayedNotificationsCallback callback) const {
+  std::set<std::string> displayed_notifications;
+  NotificationUIManager* ui_manager =
+      g_browser_process->notification_ui_manager();
+  if (ui_manager) {
+    displayed_notifications = ui_manager->GetAllIdsByProfileAndOrigin(
+        ProfileNotification::GetProfileID(profile), origin);
   }
 
   content::GetUIThreadTaskRunner({})->PostTask(

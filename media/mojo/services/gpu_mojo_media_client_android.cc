@@ -4,7 +4,7 @@
 
 #include "media/mojo/services/gpu_mojo_media_client.h"
 
-#include "base/memory/ptr_util.h"
+#include "base/task/sequenced_task_runner.h"
 #include "gpu/command_buffer/service/ref_counted_lock.h"
 #include "gpu/config/gpu_finch_features.h"
 #include "media/base/android/android_cdm_factory.h"
@@ -18,11 +18,12 @@
 #include "media/gpu/android/media_codec_video_decoder.h"
 #include "media/gpu/android/pooled_shared_image_video_provider.h"
 #include "media/gpu/android/video_frame_factory_impl.h"
-#include "media/mojo/mojom/media_drm_storage.mojom.h"
-#include "media/mojo/mojom/provision_fetcher.mojom.h"
+#include "media/media_buildflags.h"
 #include "media/mojo/services/android_mojo_util.h"
-#include "media/mojo/services/mojo_media_drm_storage.h"
-#include "media/mojo/services/mojo_provision_fetcher.h"
+
+#if BUILDFLAG(USE_PROPRIETARY_CODECS)
+#include "media/gpu/android/ndk_audio_encoder.h"
+#endif
 
 using media::android_mojo_util::CreateMediaDrmStorage;
 using media::android_mojo_util::CreateProvisionFetcher;
@@ -38,8 +39,8 @@ std::unique_ptr<VideoDecoder> CreatePlatformVideoDecoder(
   // threads. To implement thread safetyness, we are using a global ref
   // counted lock here. CodecImage, CodecOutputBufferRenderer,
   // CodecBufferWaitCoordinator expects this ref counted lock to be held by the
-  // classes which are accessing them (SharedImageVideo, MRE, FrameInfoHelper
-  // etc.)
+  // classes which are accessing them (AndroidVideoImageBacking, MRE,
+  // FrameInfoHelper etc.)
   if (features::NeedThreadSafeAndroidMedia()) {
     ref_counted_lock = base::MakeRefCounted<gpu::RefCountedLock>();
   }
@@ -82,6 +83,7 @@ std::unique_ptr<VideoDecoder> CreatePlatformVideoDecoder(
 
 absl::optional<SupportedVideoDecoderConfigs>
 GetPlatformSupportedVideoDecoderConfigs(
+    base::WeakPtr<MediaGpuChannelManager> manager,
     gpu::GpuDriverBugWorkarounds gpu_workarounds,
     gpu::GpuPreferences gpu_preferences,
     const gpu::GPUInfo& gpu_info,
@@ -90,13 +92,22 @@ GetPlatformSupportedVideoDecoderConfigs(
 }
 
 std::unique_ptr<AudioDecoder> CreatePlatformAudioDecoder(
-    scoped_refptr<base::SingleThreadTaskRunner> task_runner) {
+    scoped_refptr<base::SequencedTaskRunner> task_runner,
+    std::unique_ptr<MediaLog> media_log) {
   return std::make_unique<MediaCodecAudioDecoder>(std::move(task_runner));
 }
 
 std::unique_ptr<AudioEncoder> CreatePlatformAudioEncoder(
     scoped_refptr<base::SequencedTaskRunner> task_runner) {
+#if BUILDFLAG(USE_PROPRIETARY_CODECS)
+  if (!NdkAudioEncoder::IsSupported()) {
+    return nullptr;
+  }
+
+  return std::make_unique<NdkAudioEncoder>(std::move(task_runner));
+#else
   return nullptr;
+#endif
 }
 
 std::unique_ptr<CdmFactory> CreatePlatformCdmFactory(

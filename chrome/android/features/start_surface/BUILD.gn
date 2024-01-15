@@ -8,14 +8,23 @@ import("//build/config/locales.gni")
 import("//chrome/browser/buildflags.gni")
 import("//chrome/common/features.gni")
 import("//components/feed/features.gni")
+import("//third_party/jni_zero/jni_zero.gni")
 
 android_resources("java_resources") {
   sources = [
+    "java/res/drawable/favicon_background.xml",
+    "java/res/drawable/home_surface_ui_background.xml",
     "java/res/drawable/single_tab_background.xml",
+    "java/res/drawable/single_tab_card_ripple.xml",
+    "java/res/drawable/single_tab_thumbnail_background.xml",
     "java/res/layout/query_tiles_layout.xml",
+    "java/res/layout/single_tab_module_layout.xml",
     "java/res/layout/single_tab_view_layout.xml",
     "java/res/layout/tasks_surface_search_box_layout.xml",
     "java/res/layout/tasks_view_layout.xml",
+    "java/res/layout/tasks_view_layout_polish.xml",
+    "java/res/values-night/dimens.xml",
+    "java/res/values-sw600dp/dimens.xml",
     "java/res/values/dimens.xml",
     "java/res/values/ids.xml",
   ]
@@ -26,20 +35,17 @@ android_resources("java_resources") {
 }
 
 android_library("public_java") {
+  srcjar_deps = [ ":jni_headers" ]
   sources = [
     "java/src/org/chromium/chrome/features/start_surface/ReturnToStartSurfaceUtil.java",
     "java/src/org/chromium/chrome/features/start_surface/StartSurfaceConfiguration.java",
     "java/src/org/chromium/chrome/features/start_surface/StartSurfaceState.java",
     "java/src/org/chromium/chrome/features/start_surface/StartSurfaceUserData.java",
-    "java/src/org/chromium/chrome/features/tasks/SingleTabView.java",
-    "java/src/org/chromium/chrome/features/tasks/SingleTabViewBinder.java",
-    "java/src/org/chromium/chrome/features/tasks/SingleTabViewProperties.java",
   ]
 
   deps = [
     ":java_resources",
     "//base:base_java",
-    "//base:jni_java",
     "//build/android:build_java",
     "//chrome/android:chrome_app_java_resources",
     "//chrome/browser/android/lifecycle:java",
@@ -59,10 +65,11 @@ android_library("public_java") {
     "//components/prefs/android:java",
     "//components/user_prefs/android:java",
     "//third_party/androidx:androidx_annotation_annotation_java",
+    "//third_party/jni_zero:jni_zero_java",
     "//ui/android:ui_no_recycler_view_java",
     "//url:gurl_java",
   ]
-  annotation_processor_deps = [ "//base/android/jni_generator:jni_processor" ]
+
   resources_package = "org.chromium.chrome.start_surface"
 }
 
@@ -71,8 +78,12 @@ generate_jni("jni_headers") {
 }
 
 android_library("test_support_java") {
+  resources_package = "org.chromium.chrome.start_surface"
   sources = [
     "javatests/src/org/chromium/chrome/features/start_surface/ViewIds.java",
   ]
-  deps = [ "//chrome/android:chrome_java" ]
+  deps = [
+    ":java_resources",
+    "//chrome/android:chrome_java",
+  ]
 }

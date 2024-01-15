@@ -4,12 +4,12 @@
 
 #include "chrome/common/net/x509_certificate_model.h"
 
-#include "net/cert/pki/parse_certificate.h"
 #include "net/cert/x509_util.h"
 #include "net/test/cert_builder.h"
 #include "net/test/cert_test_util.h"
 #include "net/test/test_data_directory.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "third_party/boringssl/src/pki/parse_certificate.h"
 
 class X509CertificateModel : public testing::TestWithParam<std::string> {};
 
@@ -39,15 +39,11 @@ TEST_P(X509CertificateModel, InvalidCert) {
           base::span<const uint8_t>({'b', 'a', 'd', '\n'})),
       GetParam());
 
-  EXPECT_EQ(
-      "1D 7A 36 3C E1 24 30 88 1E C5 6C 9C F1 40 9C 49\nC4 91 04 36 18 E5 98 "
-      "C3 56 E2 95 90 40 87 2F 5A",
-      model.HashCertSHA256WithSeparators());
-  EXPECT_EQ("E9 B3 96 D2 DD DF FD B3 73 BF 2C 6A D0 73 69 6A\nA2 5B 4F 68",
-            model.HashCertSHA1WithSeparators());
+  EXPECT_EQ("1d7a363ce12430881ec56c9cf1409c49c491043618e598c356e2959040872f5a",
+            model.HashCertSHA256());
   if (GetParam().empty()) {
     EXPECT_EQ(
-        "1D7A363CE12430881EC56C9CF1409C49C491043618E598C356E2959040872F5A",
+        "1d7a363ce12430881ec56c9cf1409c49c491043618e598c356e2959040872f5a",
         model.GetTitle());
   } else {
     EXPECT_EQ(GetParam(), model.GetTitle());
@@ -61,14 +57,12 @@ TEST_P(X509CertificateModel, GetGoogleCertFields) {
   ASSERT_TRUE(cert);
   x509_certificate_model::X509CertificateModel model(
       bssl::UpRef(cert->cert_buffer()), GetParam());
-  EXPECT_EQ(
-      "F6 41 C3 6C FE F4 9B C0 71 35 9E CF 88 EE D9 31\n7B 73 8B 59 89 41 6A "
-      "D4 01 72 0C 0A 4E 2E 63 52",
-      model.HashCertSHA256WithSeparators());
-  EXPECT_EQ("40 50 62 E5 BE FD E4 AF 97 E9 38 2A F1 6C C8 7C\n8F B7 C4 E2",
-            model.HashCertSHA1WithSeparators());
+  EXPECT_EQ("f641c36cfef49bc071359ecf88eed9317b738b5989416ad401720c0a4e2e6352",
+            model.HashCertSHA256());
   ASSERT_TRUE(model.is_valid());
 
+  EXPECT_EQ("23a55ce68ea1b20623de09e93fdf3bb03287ac737b27335b4307fe9ec4855c34",
+            model.HashSpkiSHA256());
   EXPECT_EQ("3", model.GetVersion());
   EXPECT_EQ("2F:DF:BC:F6:AE:91:52:6D:0F:9A:A3:DF:40:34:3E:9A",
             model.GetSerialNumberHexified());
@@ -103,10 +97,10 @@ TEST_P(X509CertificateModel, GetGoogleCertFields) {
   // Constants copied from x509_certificate_unittest.cc.
   // Dec 18 00:00:00 2009 GMT
   const double kGoogleParseValidFrom = 1261094400;
-  EXPECT_EQ(kGoogleParseValidFrom, not_before.ToDoubleT());
+  EXPECT_EQ(kGoogleParseValidFrom, not_before.InSecondsFSinceUnixEpoch());
   // Dec 18 23:59:59 2011 GMT
   const double kGoogleParseValidTo = 1324252799;
-  EXPECT_EQ(kGoogleParseValidTo, not_after.ToDoubleT());
+  EXPECT_EQ(kGoogleParseValidTo, not_after.InSecondsFSinceUnixEpoch());
 
   EXPECT_EQ("PKCS #1 SHA-1 With RSA Encryption",
             model.ProcessSecAlgorithmSignature());
@@ -158,6 +152,43 @@ TEST_P(X509CertificateModel, GetGoogleCertFields) {
       "notcrit\nOCSP Responder: URI: http://ocsp.thawte.com\nCA Issuers: URI: "
       "http://www.thawte.com/repository/Thawte_SGC_CA.crt\n",
       extensions[3].value);
+}
+
+TEST_P(X509CertificateModel, GetSCTField) {
+  auto cert = net::ImportCertFromFile(net::GetTestCertsDirectory(),
+                                      "lets-encrypt-dst-x3-root.pem");
+  ASSERT_TRUE(cert);
+  x509_certificate_model::X509CertificateModel model(
+      bssl::UpRef(cert->cert_buffer()), GetParam());
+  ASSERT_TRUE(model.is_valid());
+
+  EXPECT_EQ("3", model.GetVersion());
+  EXPECT_EQ("04:7B:F4:FD:2C:FB:01:92:D5:30:C1:0F:C9:19:83:2A:49:EF",
+            model.GetSerialNumberHexified());
+
+  auto extensions = model.GetExtensions("critical", "notcrit");
+  auto extension_value =
+      FindExtension(extensions, "Signed Certificate Timestamp List");
+  ASSERT_TRUE(extension_value);
+  EXPECT_EQ(
+      "notcrit\n"
+      "04 81 F1 00 EF 00 76 00 41 C8 CA B1 DF 22 46 4A\n"
+      "10 C6 A1 3A 09 42 87 5E 4E 31 8B 1B 03 EB EB 4B\n"
+      "C7 68 F0 90 62 96 06 F6 00 00 01 7E 17 63 85 3D\n"
+      "00 00 04 03 00 47 30 45 02 20 05 FB 47 45 BD 63\n"
+      "AD FD E7 AF 9E 7E D6 51 5A 1E AB 62 FE 2A 27 4B\n"
+      "A0 ED 8A 4A 8F B3 C8 36 8C BD 02 21 00 8B 07 10\n"
+      "4C BF 07 1C ED 54 DF 28 2C E3 B2 32 6B 43 48 E4\n"
+      "04 80 28 17 91 50 8D 28 FC 58 08 BF 7C 00 75 00\n"
+      "46 A5 55 EB 75 FA 91 20 30 B5 A2 89 69 F4 F3 7D\n"
+      "11 2C 41 74 BE FD 49 B8 85 AB F2 FC 70 FE 6D 47\n"
+      "00 00 01 7E 17 63 85 53 00 00 04 03 00 46 30 44\n"
+      "02 20 73 8C D6 ED CC 59 2D 3D 5E 1A 37 E9 42 A2\n"
+      "74 6D 95 1B 20 0E 19 91 40 0E AD A3 80 66 48 FB\n"
+      "17 32 02 20 02 3A 61 DA 61 EF CB 37 BB 97 5E AC\n"
+      "79 08 2B 5E 71 EA 9B 7B FC B4 F5 50 04 2E E0 40\n"
+      "42 44 2C 79",
+      extension_value);
 }
 
 TEST_P(X509CertificateModel, GetNDNCertFields) {
@@ -303,7 +334,7 @@ TEST_P(X509CertificateModel, CertificatePoliciesInvalidUtf8UserNotice) {
       0x30, 0x11, 0x0c, 0x0f, 0x45, 0x78, 0x70, 0x6c, 0x69, 0x63, 0x69,
       0x74, 0x20, 0xa1, 0x20, 0x54, 0x65, 0x78, 0x74};
   builder->SetExtension(
-      net::der::Input(net::kCertificatePoliciesOid),
+      bssl::der::Input(bssl::kCertificatePoliciesOid),
       std::string(kExtension, kExtension + sizeof(kExtension)));
 
   x509_certificate_model::X509CertificateModel model(
@@ -487,7 +518,7 @@ TEST_P(X509CertificateModel, CrlDpCrlIssuerAndRelativeName) {
       0x63, 0x74, 0x43, 0x52, 0x4c, 0x20, 0x43, 0x41, 0x33, 0x20, 0x63, 0x52,
       0x4c, 0x49, 0x73, 0x73, 0x75, 0x65, 0x72};
 
-  builder->SetExtension(net::der::Input(net::kCrlDistributionPointsOid),
+  builder->SetExtension(bssl::der::Input(bssl::kCrlDistributionPointsOid),
                         std::string(kCrldp, kCrldp + sizeof(kCrldp)));
 
   x509_certificate_model::X509CertificateModel model(
@@ -556,7 +587,7 @@ TEST_P(X509CertificateModel, CrlDpReasons) {
       0x0b, 0x06, 0x03, 0x55, 0x04, 0x03, 0x13, 0x04, 0x43, 0x52, 0x4c,
       0x32, 0x81, 0x03, 0x07, 0x9f, 0x80};
 
-  builder->SetExtension(net::der::Input(net::kCrlDistributionPointsOid),
+  builder->SetExtension(bssl::der::Input(bssl::kCrlDistributionPointsOid),
                         std::string(kCrldp, kCrldp + sizeof(kCrldp)));
 
   x509_certificate_model::X509CertificateModel model(
@@ -590,7 +621,7 @@ TEST_P(X509CertificateModel, AuthorityInfoAccessNonstandardOidAndLocationType) {
   const uint8_t kAIA[] = {0x30, 0x18, 0x30, 0x16, 0x06, 0x03, 0x2c, 0x09, 0x14,
                           0x81, 0x0f, 0x66, 0x6f, 0x6f, 0x40, 0x65, 0x78, 0x61,
                           0x6d, 0x70, 0x6c, 0x65, 0x2e, 0x63, 0x6f, 0x6d};
-  builder->SetExtension(net::der::Input(net::kAuthorityInfoAccessOid),
+  builder->SetExtension(bssl::der::Input(bssl::kAuthorityInfoAccessOid),
                         std::string(kAIA, kAIA + sizeof(kAIA)));
 
   x509_certificate_model::X509CertificateModel model(

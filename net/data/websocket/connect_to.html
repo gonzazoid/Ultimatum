@@ -36,9 +36,8 @@ ws.onmessage = function(evt)
 
 ws.onerror = function(evt)
 {
-  console.error(`WebSocket error: '${evt.message}'`);
+  console.error(`WebSocket error: '${JSON.stringify(evt, ["message", "arguments", "type", "name"])}'`);
 }
-
 
 </script>
 </head>

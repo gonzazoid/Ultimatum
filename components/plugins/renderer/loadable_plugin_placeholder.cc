@@ -6,13 +6,12 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/json/string_escape.h"
 #include "base/metrics/user_metrics_action.h"
 #include "base/strings/string_piece.h"
 #include "base/strings/utf_string_conversions.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/values.h"
 #include "content/public/renderer/render_frame.h"
 #include "content/public/renderer/render_thread.h"
@@ -40,12 +39,8 @@ void LoadablePluginPlaceholder::MaybeLoadBlockedPlugin(
 
 LoadablePluginPlaceholder::LoadablePluginPlaceholder(
     RenderFrame* render_frame,
-    const blink::WebPluginParams& params,
-    const std::string& html_data)
-    : PluginPlaceholderBase(render_frame, params, html_data),
-      is_blocked_for_prerendering_(false),
-      allow_loading_(false),
-      finished_loading_(false) {}
+    const blink::WebPluginParams& params)
+    : PluginPlaceholderBase(render_frame, params) {}
 
 LoadablePluginPlaceholder::~LoadablePluginPlaceholder() {
 }
@@ -86,12 +81,6 @@ void LoadablePluginPlaceholder::ReplacePlugin(blink::WebPlugin* new_plugin) {
   container->GetElement().SetAttribute("title", plugin()->old_title());
   plugin()->ReplayReceivedData(new_plugin);
   plugin()->Destroy();
-}
-
-void LoadablePluginPlaceholder::SetMessage(const std::u16string& message) {
-  message_ = message;
-  if (finished_loading_)
-    UpdateMessage();
 }
 
 void LoadablePluginPlaceholder::UpdateMessage() {
@@ -164,10 +153,6 @@ const content::WebPluginInfo& LoadablePluginPlaceholder::GetPluginInfo() const {
 
 void LoadablePluginPlaceholder::SetIdentifier(const std::string& identifier) {
   identifier_ = identifier;
-}
-
-const std::string& LoadablePluginPlaceholder::GetIdentifier() const {
-  return identifier_;
 }
 
 bool LoadablePluginPlaceholder::LoadingBlocked() const {

@@ -3,9 +3,14 @@
 // generate, but are not CSS properties.
 
   parameters: {
-    // If true, we do not include this field in ComputedStyleBase::InheritFrom
-    // and ComputedStyleBase::CopyNonInheritedFromCached.
-    custom_copy: {
+    // If true, this field will be reset whenever we create a new ComputedStyle;
+    // it will not be (automatically) kept from any previous styles, but will be
+    // set to the initial value.
+    //
+    // NOTE: If such a field is in a subgroup (e.g. due to being rare),
+    // we will be doing more memory allocation (due to copy-on-write) than expected,
+    // so use this with care.
+    reset_on_new_style: {
       default: false,
     },
 
@@ -31,7 +36,7 @@
       name: "IsLink",
       field_template: "monotonic_flag",
       default_value: "false",
-      custom_copy: true,
+      reset_on_new_style: true,
       custom_compare: true,
     },
     {
@@ -44,7 +49,10 @@
         "table-row", "table-column-group", "table-column", "table-cell",
         "table-caption", "-webkit-box", "-webkit-inline-box", "flex",
         "inline-flex", "grid", "inline-grid", "contents", "flow-root", "none",
-        "layout-custom", "inline-layout-custom", "math", "block math"
+        "layout-custom", "inline-layout-custom", "math", "block math",
+        "inline list-item", "flow-root list-item", "inline flow-root list-item",
+        // Available only if CssDisplayRuby is enabled:
+        "ruby", "block ruby", "ruby-text"
       ],
       default_value: "inline",
     },
@@ -65,18 +73,10 @@
       default_value: "g_null_atom",
     },
     {
-      name: "OriginalDisplay",
-      field_template: "keyword",
-      type_name: "EDisplay",
-      keywords: [
-        "inline", "block", "list-item", "inline-block", "table", "inline-table",
-        "table-row-group", "table-header-group", "table-footer-group",
-        "table-row", "table-column-group", "table-column", "table-cell",
-        "table-caption", "-webkit-box", "-webkit-inline-box", "flex",
-        "inline-flex", "grid", "inline-grid", "contents", "flow-root", "none",
-        "layout-custom", "inline-layout-custom", "math", "block math"
-      ],
-      default_value: "inline",
+      name: "IsOriginalDisplayInlineType",
+      field_template: "primitive",
+      type_name: "bool",
+      default_value: "true",
     },
     {
       name: "InsideLink",
@@ -93,23 +93,12 @@
       type_name: "bool",
       inherited: true,
     },
-    // Whether we're inside (or at) a block fragmentation context that may
-    // switch between legacy and NG layout, depending on the contents.
-    // This can be removed when we have got rid of the legacy engine.
-    // See crbug.com/1229581
-    {
-      name: "InsideFragmentationContextWithNondeterministicEngine",
-      field_template: "primitive",
-      default_value: "false",
-      type_name: "bool",
-      inherited: true,
-    },
     // Style has content property with attr() values.
     {
       name: "HasAttrContent",
       field_template: "monotonic_flag",
       default_value: "false",
-      custom_copy: true,
+      reset_on_new_style: true,
       custom_compare: true,
     },
     // Whether this style is affected by these pseudo-classes.
@@ -117,28 +106,28 @@
       name: "AffectedByFocusWithin",
       field_template: "monotonic_flag",
       default_value: "false",
-      custom_copy: true,
+      reset_on_new_style: true,
       custom_compare: true,
     },
     {
       name: "AffectedByHover",
       field_template: "monotonic_flag",
       default_value: "false",
-      custom_copy: true,
+      reset_on_new_style: true,
       custom_compare: true,
     },
     {
       name: "AffectedByActive",
       field_template: "monotonic_flag",
       default_value: "false",
-      custom_copy: true,
+      reset_on_new_style: true,
       custom_compare: true,
     },
     {
       name: "AffectedByDrag",
       field_template: "monotonic_flag",
       default_value: "false",
-      custom_copy: true,
+      reset_on_new_style: true,
       custom_compare: true,
     },
     // A non-inherited property references a variable or @apply is used
@@ -146,7 +135,7 @@
       name: "HasVariableReferenceFromNonInheritedProperty",
       field_template: "monotonic_flag",
       default_value: "false",
-      custom_copy: true,
+      reset_on_new_style: true,
       custom_compare: true,
     },
     // A property references a variable that needs to be resolved
@@ -169,7 +158,7 @@
       name: "ChildHasExplicitInheritance",
       field_template: "monotonic_flag",
       default_value: "false",
-      custom_copy: true,
+      reset_on_new_style: true,
       custom_compare: true,
       mutable: true,
     },
@@ -188,7 +177,7 @@
       type_name: "unsigned",
     },
     {
-      name: "HasRemUnits",
+      name: "HasRootFontRelativeUnits",
       field_template: "monotonic_flag",
       default_value: "false",
       custom_compare: true,
@@ -220,6 +209,12 @@
       default_value: "false",
       custom_compare: true,
     },
+    {
+      name: "HasLogicalDirectionRelativeUnits",
+      field_template: "monotonic_flag",
+      default_value: "false",
+      custom_compare: true,
+    },
     // True if this ComputedStyle is the result of CustomStyleForLayoutObject()
     // that uses font metrics in its calculation.
     {
@@ -234,20 +229,19 @@
       field_template: "primitive",
       field_size: 6,
       default_value: "PseudoId::kPseudoIdNone",
-      type_name: "unsigned",
-      custom_copy: true,
+      type_name: "PseudoId",
+      reset_on_new_style: true,
       custom_compare: true,
-      computed_style_custom_functions: ["getter", "setter"],
     },
     {
-      name: "PseudoBits",
+      name: "PseudoElementStyles",
       field_template: "primitive",
       field_size: 12,
       default_value: "kPseudoIdNone",
       type_name: "unsigned",
-      custom_copy: true,
+      reset_on_new_style: true,
       custom_compare: true,
-      computed_style_custom_functions: ["getter", "setter"],
+      computed_style_custom_functions: ["getter"],
     },
     // Whether any non-universal highlight selectors were found when collecting
     // rules for the originating element. Stored in the *originating* style, and
@@ -258,7 +252,7 @@
       field_group: "*",
       default_value: "false",
       type_name: "bool",
-      custom_copy: true,
+      reset_on_new_style: true,
       custom_compare: true,
     },
     // Whether any highlight pseudo selectors were found when collecting non-UA
@@ -270,7 +264,18 @@
       field_group: "*",
       default_value: "false",
       type_name: "bool",
-      custom_copy: true,
+      reset_on_new_style: true,
+      custom_compare: true,
+    },
+    // Whether any highlight pseudo selectors were found within container
+    // query blocks.
+    {
+      name: "HighlightsDependOnSizeContainerQueries",
+      field_template: "primitive",
+      field_group: "*",
+      default_value: "false",
+      type_name: "bool",
+      reset_on_new_style: true,
       custom_compare: true,
     },
     // Used by ::highlight
@@ -292,16 +297,7 @@
       wrapper_pointer_name: "std::unique_ptr",
       default_value: "nullptr",
       computed_style_custom_functions: ["setter", "getter"],
-      custom_copy: true,
-    },
-    // True if 'underline solid' is the only text decoration on this element.
-    {
-      name: "HasSimpleUnderline",
-      field_template: "primitive",
-      default_value: "false",
-      type_name: "bool",
-      inherited: true,
-      computed_style_custom_functions: ["getter", "setter"],
+      reset_on_new_style: true,
     },
     // FIXME: vertical align is actually a CSS property, but since we don't support union fields
     // which can be either a keyword or Length, this is specified in this file for now. Remove this
@@ -339,7 +335,7 @@
       type_name: "FillLayer",
       default_value: "FillLayer(EFillLayerType::kBackground, true)",
       field_group: "background",
-      computed_style_custom_functions: ["getter", "setter"],
+      computed_style_custom_functions: ["initial", "getter", "setter"],
     },
     {
       name: "HasClipPath",
@@ -369,10 +365,9 @@
       field_template: "external",
       include_paths: ["third_party/blink/renderer/platform/fonts/font.h"],
       type_name: "Font",
-      field_group: "inherited->font",
+      field_group: "font",
       inherited: true,
       default_value: "Font()",
-      computed_style_custom_functions: ["getter", "setter"],
     },
     {
       name: "TextAutosizingMultiplier",
@@ -390,7 +385,7 @@
       type_name: "CursorList",
       include_paths: ["third_party/blink/renderer/core/style/cursor_list.h"],
       default_value: "nullptr",
-      wrapper_pointer_name: "Persistent",
+      wrapper_pointer_name: "Member",
       field_group: "*",
       computed_style_custom_functions: ["getter", "setter"],
     },
@@ -420,13 +415,10 @@
       default_value: "none",
       keywords: ["none", "auto", "dot", "circle", "double-circle", "triangle", "sesame", "custom"],
       field_group: "*",
-      computed_style_custom_functions: ["getter", "setter"],
+      computed_style_custom_functions: ["getter"],
     },
-    // Though will-change is not itself an inherited property, the intent
-    // expressed by 'will-change: contents' includes descendants.
     {
       name: "SubtreeWillChangeContents",
-      inherited: true,
       field_template: "primitive",
       type_name: "bool",
       default_value: "false",
@@ -470,15 +462,14 @@
       field_group: "*",
     },
     {
-      name: "AppliedTextDecorations",
-      inherited: true,
+      name: "BaseTextDecorationData",
       field_template: "external",
-      type_name: "AppliedTextDecorationList",
-      include_paths: ["third_party/blink/renderer/core/style/applied_text_decoration_list.h"],
+      type_name: "base::RefCountedData<Vector<AppliedTextDecoration, 1>>",
+      include_paths: ["third_party/blink/renderer/core/style/applied_text_decoration.h"],
       default_value: "nullptr",
       wrapper_pointer_name: "scoped_refptr",
-      field_group: "*",
-      computed_style_custom_functions: ["getter", "setter"],
+      field_group: "visual",
+      computed_style_custom_functions: ["getter"],
     },
     {
       name: "InheritedVariables",
@@ -498,9 +489,8 @@
       field_template: "external",
       type_name: "StyleHighlightData",
       include_paths: ["third_party/blink/renderer/core/style/style_highlight_data.h"],
-      default_value: "nullptr",
-      wrapper_pointer_name: "scoped_refptr",
-      field_group: "*",
+      default_value: "StyleHighlightData()",
+      field_group: "*->highlight-data",
       computed_style_custom_functions: [],
     },
     {
@@ -520,7 +510,7 @@
       type_name: "FillLayer",
       field_group: "*",
       default_value: "FillLayer(EFillLayerType::kMask, true)",
-      computed_style_custom_functions: ["getter", "setter"],
+      computed_style_custom_functions: ["initial", "getter", "setter"],
     },
     {
       name: "CounterDirectives",
@@ -584,6 +574,19 @@
       default_value: "Vector<String>()",
       include_paths: ["third_party/blink/renderer/platform/wtf/vector.h",
                       "third_party/blink/renderer/platform/wtf/text/wtf_string.h"],
+      computed_style_custom_functions: ["setter"],
+    },
+    {
+      name: "DocumentRulesSelectors",
+      field_template: "external",
+      type_name: "HeapHashSet<WeakMember<StyleRule>>",
+      wrapper_pointer_name: "Member",
+      field_group: "*",
+      default_value: "nullptr",
+      include_paths: ["third_party/blink/renderer/platform/heap/collection_support/heap_hash_set.h",
+                      "third_party/blink/renderer/platform/heap/member.h",
+                      "third_party/blink/renderer/platform/heap/persistent.h",
+                      "third_party/blink/renderer/core/css/style_rule.h"],
       computed_style_custom_functions: ["setter"],
     },
     {
@@ -764,6 +767,18 @@
     // containment, since it depends on the type of layout object created.
     {
       name: "IsStackingContextWithoutContainment",
+      field_template: "derived_flag",
+      derived_from: "CalculateIsStackingContextWithoutContainment",
+      mutable: true,
+      reset_on_new_style: true,
+    },
+    // A stacking context is forced a few situations, e.g.:
+    //
+    // - The element is the document element.
+    // - The element is in the top layer.
+    // - The element is a <foreignObject>.
+    {
+      name: "ForcesStackingContext",
       field_template: "primitive",
       type_name: "bool",
       field_group: "*",
@@ -812,7 +827,7 @@
       type_name: "bool",
       default_value: "true",
       inherited: true,
-      computed_style_custom_functions: ["getter"],
+      computed_style_protected_functions: ["getter"],
     },
     {
       name: "InternalVisitedColorIsCurrentColor",
@@ -821,7 +836,7 @@
       type_name: "bool",
       default_value: "true",
       inherited: true,
-      computed_style_custom_functions: ["getter"],
+      computed_style_protected_functions: ["getter"],
     },
     {
       name: "WillChangeProperties",
@@ -862,44 +877,6 @@
       default_value: "true",
       computed_style_custom_functions: ["setter"],
     },
-    {
-      name: "ImplicitNamedGridColumnLines",
-      field_template: "external",
-      type_name: "NamedGridLinesMap",
-      field_group: "*->grid",
-      default_value: "NamedGridLinesMap()",
-      include_paths: ["third_party/blink/renderer/core/style/named_grid_lines_map.h"],
-    },
-    {
-      name: "ImplicitNamedGridRowLines",
-      field_template: "external",
-      type_name: "NamedGridLinesMap",
-      field_group: "*->grid",
-      default_value: "NamedGridLinesMap()",
-      include_paths: ["third_party/blink/renderer/core/style/named_grid_lines_map.h"],
-    },
-    {
-      name: "NamedGridArea",
-      field_template: "external",
-      type_name: "NamedGridAreaMap",
-      field_group: "*->grid",
-      default_value: "NamedGridAreaMap()",
-      include_paths: ["third_party/blink/renderer/core/style/grid_area.h"]
-    },
-    {
-      name: "NamedGridAreaRowCount",
-      field_template: "primitive",
-      type_name: "wtf_size_t",
-      field_group: "*->grid",
-      default_value: "0",
-    },
-    {
-      name: "NamedGridAreaColumnCount",
-      field_template: "primitive",
-      type_name: "wtf_size_t",
-      field_group: "*->grid",
-      default_value: "0",
-    },
     // We only create and store ComputedStyle objects for elements in
     // display:none subtrees if we need it for e.g. getComputedStyle. This flag
     // is true for such ComputedStyle objects.
@@ -932,6 +909,14 @@
       inherited: true,
     },
     {
+      name: "ColorSchemeFlagsIsNormal",
+      field_template: "primitive",
+      type_name: "bool",
+      default_value: "false",
+      custom_compare: true,
+      inherited: true,
+    },
+    {
       name: "ColorSchemeForced",
       field_template: "primitive",
       type_name: "bool",
@@ -946,13 +931,13 @@
       custom_compare: true,
     },
     {
-      name: "IsFlexOrGridOrCustomItem",
+      name: "IsInInlinifyingDisplay",
       field_template: "monotonic_flag",
       default_value: "false",
       custom_compare: true,
     },
     {
-      name: "IsFlexOrGridItem",
+      name: "IsFlexOrGridOrCustomItem",
       field_template: "monotonic_flag",
       default_value: "false",
       custom_compare: true,
@@ -963,6 +948,12 @@
       default_value: "false",
       custom_compare: true,
       inherited: true,
+    },
+    {
+      name: "IsInsideDisplayIgnoringFloatingChildren",
+      field_template: "monotonic_flag",
+      default_value: "false",
+      custom_compare: true,
     },
     {
       name: "IsInsideListElement",
@@ -1099,6 +1090,13 @@
       default_value: "false",
     },
     {
+      name: "DependsOnStateContainerQueries",
+      field_template: "primitive",
+      type_name: "bool",
+      field_group: "*",
+      default_value: "false",
+    },
+    {
       // Set to true if this ComputedStyle is for an element whose ::first-line
       // style depends on size container queries.
       name: "FirstLineDependsOnSizeContainerQueries",
@@ -1110,18 +1108,19 @@
     {
       name: "BaseData",
       inherited: false,
-      field_template: "external",
+      field_template: "pointer",
       type_name: "StyleBaseData",
       include_paths: ["third_party/blink/renderer/core/style/style_base_data.h"],
       default_value: "nullptr",
-      wrapper_pointer_name: "scoped_refptr",
+      wrapper_pointer_name: "Member",
       custom_compare: true,
-      custom_copy: true,
+      reset_on_new_style: true,
     },
     {
       // https://drafts.csswg.org/css-contain-2/#skips-its-contents
       name: "SkipsContents",
-      field_template: "monotonic_flag",
+      field_template: "primitive",
+      type_name: "bool",
       default_value: "false",
     },
     {
@@ -1166,6 +1165,47 @@
       type_name: "bool",
       field_group: "*",
       default_value: "false",
-    }
+    },
+    {
+      name: "IsStartingStyle",
+      field_template: "monotonic_flag",
+      type_name: "bool",
+      field_group: "*",
+      default_value: "false",
+    },
+    {
+      // Need to persist this flag from MatchResult and set it back on
+      // StyleResolverState when we hit the MatchedPropertiesCache. Otherwise
+      // ShouldStoreOldStyle() in StyleResolver will not return the correct
+      // result.
+      name: "CanAffectAnimations",
+      field_template: "monotonic_flag",
+      type_name: "bool",
+      field_group: "*",
+      default_value: "false",
+    },
+    {
+      // https://drafts.csswg.org/css-view-transitions-1/
+      name: "ElementIsViewTransitionParticipant",
+      field_template: "monotonic_flag",
+      field_group: "*",
+      default_value: "false",
+    },
+    {
+      // https://drafts.csswg.org/css-anchor-position-1/#fallback-automatic
+      name: "HasAutoAnchorPositioningInXAxisFromTryBlock",
+      field_template: "monotonic_flag",
+      field_group: "*",
+      default_value: "false",
+      custom_compare: true,
+    },
+    {
+      // https://drafts.csswg.org/css-anchor-position-1/#fallback-automatic
+      name: "HasAutoAnchorPositioningInYAxisFromTryBlock",
+      field_template: "monotonic_flag",
+      field_group: "*",
+      default_value: "false",
+      custom_compare: true,
+    },
   ],
 }

@@ -7,18 +7,13 @@
 #import <ostream>
 
 #import "base/check_op.h"
-#import "ios/chrome/browser/main/browser.h"
-#import "ios/chrome/browser/ui/commands/command_dispatcher.h"
-#import "ios/chrome/browser/ui/commands/omnibox_commands.h"
-#import "ios/chrome/browser/ui/commands/qr_scanner_commands.h"
-#import "ios/chrome/browser/ui/main/scene_state.h"
-#import "ios/chrome/browser/ui/main/scene_state_browser_agent.h"
+#import "ios/chrome/browser/shared/coordinator/scene/scene_state.h"
+#import "ios/chrome/browser/shared/model/browser/browser.h"
+#import "ios/chrome/browser/shared/public/commands/command_dispatcher.h"
+#import "ios/chrome/browser/shared/public/commands/omnibox_commands.h"
+#import "ios/chrome/browser/shared/public/commands/qr_scanner_commands.h"
 #import "ios/chrome/browser/ui/qr_scanner/qr_scanner_view_controller.h"
 #import "ios/chrome/browser/ui/scanner/scanner_presenting.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 @interface QRScannerLegacyCoordinator () <ScannerPresenting>
 
@@ -67,8 +62,7 @@
                                        self.browser->GetCommandDispatcher())];
   self.viewController.modalPresentationStyle = UIModalPresentationFullScreen;
 
-  SceneState* sceneState =
-      SceneStateBrowserAgent::FromBrowser(self.browser)->GetSceneState();
+  SceneState* sceneState = self.browser->GetSceneState();
   DCHECK(sceneState);
 
   [self.baseViewController
@@ -85,8 +79,7 @@
                           completion:(void (^)(void))completion {
   DCHECK_EQ(self.viewController,
             self.baseViewController.presentedViewController);
-  SceneState* sceneState =
-      SceneStateBrowserAgent::FromBrowser(self.browser)->GetSceneState();
+  SceneState* sceneState = self.browser->GetSceneState();
   DCHECK(sceneState);
   [self.baseViewController dismissViewControllerAnimated:YES
                                               completion:^{

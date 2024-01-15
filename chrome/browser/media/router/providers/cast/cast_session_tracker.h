@@ -10,6 +10,7 @@
 #include "base/memory/raw_ptr.h"
 #include "base/observer_list.h"
 #include "base/sequence_checker.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/values.h"
 #include "chrome/browser/media/router/providers/cast/cast_internal_message_util.h"
 #include "components/media_router/common/discovery/media_sink_internal.h"
@@ -86,6 +87,7 @@ class CastSessionTracker : public MediaSinkServiceBase::Observer,
   void OnSinkRemoved(const MediaSinkInternal& sink) override;
 
   // cast_channel::CastMessageHandler::Observer implementation
+  void OnAppMessage(int channel_id, const CastMessage& message) override;
   void OnInternalMessage(int channel_id,
                          const cast_channel::InternalMessage& message) override;
 

@@ -46,7 +46,7 @@ class MockCanvas : public SkCanvas {
 // (CLOSE) uses the correct starting point. See crbug.com/697497
 TEST(VectorIconTest, RelativeMoveToAfterClose) {
   cc::PaintRecorder recorder;
-  Canvas canvas(recorder.beginRecording(100, 100), 1.0f);
+  Canvas canvas(recorder.beginRecording(), 1.0f);
 
   const PathElement elements[] = {
       MOVE_TO, 4, 5, LINE_TO, 10, 11, CLOSE,
@@ -56,10 +56,10 @@ TEST(VectorIconTest, RelativeMoveToAfterClose) {
   const VectorIcon icon(rep_list, 1u, nullptr);
 
   PaintVectorIcon(&canvas, icon, 100, SK_ColorMAGENTA);
-  sk_sp<cc::PaintRecord> record = recorder.finishRecordingAsPicture();
+  cc::PaintRecord record = recorder.finishRecordingAsPicture();
 
   MockCanvas mock(100, 100);
-  record->Playback(&mock);
+  record.Playback(&mock);
 
   ASSERT_EQ(1U, mock.paths().size());
   SkPoint last_point;
@@ -69,8 +69,8 @@ TEST(VectorIconTest, RelativeMoveToAfterClose) {
 }
 
 TEST(VectorIconTest, FlipsInRtl) {
-  // Set the locale to a rtl language otherwise FLIPS_IN_RTL will do nothing.
-  base::i18n::SetICUDefaultLocale("he");
+  // We need to set RTL, otherwise FLIPS_IN_RTL does nothing.
+  base::i18n::SetRTLForTesting(true);
   ASSERT_TRUE(base::i18n::IsRTL());
 
   const int canvas_size = 20;
@@ -111,6 +111,8 @@ TEST(VectorIconTest, FlipsInRtl) {
   // quarter of the original icon, since each side should be scaled down by a
   // factor of two.
   EXPECT_EQ(100, colored_pixel_count);
+
+  base::i18n::SetRTLForTesting(false);
 }
 
 TEST(VectorIconTest, CorrectSizePainted) {

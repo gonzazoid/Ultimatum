@@ -140,7 +140,7 @@ TEST_F(FontCacheTest, firstAvailableOrFirst) {
 }
 
 // https://crbug.com/969402
-TEST_F(FontCacheTest, getLargerThanMaxUnsignedFont) {
+TEST_F(FontCacheTest, GetLargerThanMaxUnsignedFont) {
   FontCache& font_cache = FontCache::Get();
 
   FontDescription font_description;
@@ -169,14 +169,16 @@ TEST_F(FontCacheTest, systemFont) {
 TEST_F(FontCacheTest, Locale) {
   FontCacheKey key1(FontFaceCreationParams(), /* font_size */ 16,
                     /* options */ 0, /* device_scale_factor */ 1.0f,
+                    /* size_adjust */ FontSizeAdjust(),
                     /* variation_settings */ nullptr,
                     /* palette */ nullptr,
+                    /* variant_alternates */ nullptr,
                     /* is_unique_match */ false);
   FontCacheKey key2 = key1;
   EXPECT_EQ(key1.GetHash(), key2.GetHash());
   EXPECT_EQ(key1, key2);
 
-  key2.SetLocale("ja");
+  key2.SetLocale(AtomicString("ja"));
   EXPECT_NE(key1.GetHash(), key2.GetHash());
   EXPECT_NE(key1, key2);
 }

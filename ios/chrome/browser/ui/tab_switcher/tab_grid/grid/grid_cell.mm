@@ -8,29 +8,22 @@
 #import <ostream>
 
 #import "base/check.h"
-#import "base/feature_list.h"
+#import "base/check_op.h"
+#import "base/debug/dump_without_crashing.h"
 #import "base/notreached.h"
-#import "ios/chrome/browser/ui/elements/top_aligned_image_view.h"
-#import "ios/chrome/browser/ui/icons/symbols.h"
-#import "ios/chrome/browser/ui/tab_switcher/tab_grid/grid/grid_constants.h"
-#import "ios/chrome/browser/ui/util/uikit_ui_util.h"
+#import "ios/chrome/browser/shared/ui/elements/top_aligned_image_view.h"
+#import "ios/chrome/browser/shared/ui/symbols/symbols.h"
+#import "ios/chrome/browser/shared/ui/util/uikit_ui_util.h"
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
 #import "ios/chrome/common/ui/util/constraints_ui_util.h"
 #import "ios/chrome/grit/ios_strings.h"
 #import "ui/base/l10n/l10n_util.h"
 #import "ui/gfx/ios/uikit_util.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 namespace {
 
 // The size of symbol icons.
 NSInteger kIconSymbolPointSize = 13;
-
-// Specific symbol image used as a badge for unslected tabs.
-NSString* kCircleSymbol = @"circle";
 
 // Size of activity indicator replacing fav icon when active.
 const CGFloat kIndicatorSize = 16.0;
@@ -56,11 +49,6 @@ void PositionView(UIView* view, CGPoint point) {
   frame.origin = point;
   view.frame = frame;
 }
-
-// Kill switch guarding a workaround for crash, see crbug.com/1350976
-BASE_FEATURE(kPreviousTabViewWidthCrash,
-             "PreviousTabViewWidthCrash",
-             base::FEATURE_ENABLED_BY_DEFAULT);
 
 }  // namespace
 
@@ -95,6 +83,15 @@ BASE_FEATURE(kPreviousTabViewWidthCrash,
 @end
 
 @implementation GridCell
+
++ (instancetype)transitionSelectionCellFromCell:(GridCell*)cell {
+  GridCell* transitionSelectionCell = [[self alloc] initWithFrame:cell.bounds];
+  transitionSelectionCell.selected = YES;
+  transitionSelectionCell.theme = cell.theme;
+  transitionSelectionCell.contentView.hidden = YES;
+  transitionSelectionCell.opacity = cell.opacity;
+  return transitionSelectionCell;
+}
 
 // `-dequeueReusableCellWithReuseIdentifier:forIndexPath:` calls this method to
 // initialize a cell.
@@ -207,7 +204,6 @@ BASE_FEATURE(kPreviousTabViewWidthCrash,
 
 - (void)prepareForReuse {
   [super prepareForReuse];
-  self.itemIdentifier = nil;
   self.title = nil;
   self.titleHidden = NO;
   self.icon = nil;
@@ -250,8 +246,6 @@ BASE_FEATURE(kPreviousTabViewWidthCrash,
   if (_theme == theme)
     return;
 
-  self.iconView.backgroundColor = UIColor.clearColor;
-
   self.overrideUserInterfaceStyle = (theme == GridThemeDark)
                                         ? UIUserInterfaceStyleDark
                                         : UIUserInterfaceStyleUnspecified;
@@ -262,11 +256,10 @@ BASE_FEATURE(kPreviousTabViewWidthCrash,
   switch (theme) {
     case GridThemeLight:
       self.border.layer.borderColor =
-          [UIColor colorNamed:@"grid_theme_selection_tint_color"].CGColor;
+          [UIColor colorNamed:kStaticBlue400Color].CGColor;
       break;
     case GridThemeDark:
-      self.border.layer.borderColor =
-          [UIColor colorNamed:@"grid_theme_dark_selection_tint_color"].CGColor;
+      self.border.layer.borderColor = UIColor.whiteColor.CGColor;
       break;
   }
 
@@ -313,10 +306,6 @@ BASE_FEATURE(kPreviousTabViewWidthCrash,
     self.snapshotView.image = snapshot;
   }
   _snapshot = snapshot;
-}
-
-- (BOOL)hasIdentifier:(NSString*)identifier {
-  return [self.itemIdentifier isEqualToString:identifier];
 }
 
 - (void)setPriceDrop:(NSString*)price previousPrice:(NSString*)previousPrice {
@@ -374,6 +363,8 @@ BASE_FEATURE(kPreviousTabViewWidthCrash,
   iconView.contentMode = UIViewContentModeScaleAspectFill;
   iconView.layer.cornerRadius = kGridCellIconCornerRadius;
   iconView.layer.masksToBounds = YES;
+  iconView.backgroundColor = UIColor.clearColor;
+  iconView.tintColor = [UIColor colorNamed:kGrey400Color];
 
   CGRect indicatorFrame = CGRectMake(0, 0, kIndicatorSize, kIndicatorSize);
   MDCActivityIndicator* activityIndicator =
@@ -392,11 +383,7 @@ BASE_FEATURE(kPreviousTabViewWidthCrash,
   closeIconView.contentMode = UIViewContentModeCenter;
   closeIconView.hidden = self.isInSelectionMode;
   closeIconView.image =
-      UseSymbols()
-          ? DefaultSymbolTemplateWithPointSize(kXMarkSymbol,
-                                               kIconSymbolPointSize)
-          : [[UIImage imageNamed:@"grid_cell_close_button"]
-                imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
+      DefaultSymbolTemplateWithPointSize(kXMarkSymbol, kIconSymbolPointSize);
 
   UIImageView* selectIconView = [[UIImageView alloc] init];
   selectIconView.translatesAutoresizingMaskIntoConstraints = NO;
@@ -445,8 +432,8 @@ BASE_FEATURE(kPreviousTabViewWidthCrash,
     [titleLabel.trailingAnchor
         constraintEqualToAnchor:closeIconView.leadingAnchor
                        constant:-kGridCellTitleLabelContentInset],
-    [titleLabel.centerYAnchor
-        constraintEqualToAnchor:closeIconView.centerYAnchor],
+    [topBar.topAnchor constraintEqualToAnchor:closeIconView.centerYAnchor
+                                     constant:-kGridCellCloseButtonTopSpacing],
     [closeIconView.trailingAnchor
         constraintEqualToAnchor:topBar.trailingAnchor
                        constant:-kGridCellCloseButtonContentInset],
@@ -461,8 +448,8 @@ BASE_FEATURE(kPreviousTabViewWidthCrash,
       [titleLabel.trailingAnchor
           constraintEqualToAnchor:_selectIconView.leadingAnchor
                          constant:-kGridCellTitleLabelContentInset],
-      [titleLabel.centerYAnchor
-          constraintEqualToAnchor:_selectIconView.centerYAnchor],
+      [topBar.topAnchor constraintEqualToAnchor:_selectIconView.topAnchor
+                                       constant:-kGridCellSelectIconTopSpacing],
       [_selectIconView.trailingAnchor
           constraintEqualToAnchor:topBar.trailingAnchor
                          constant:-kGridCellSelectIconContentInset],
@@ -623,19 +610,6 @@ BASE_FEATURE(kPreviousTabViewWidthCrash,
 
 @end
 
-@implementation GridTransitionSelectionCell
-
-+ (instancetype)transitionCellFromCell:(GridCell*)cell {
-  GridTransitionSelectionCell* proxy = [[self alloc] initWithFrame:cell.bounds];
-  proxy.selected = YES;
-  proxy.theme = cell.theme;
-  proxy.contentView.hidden = YES;
-  proxy.opacity = cell.opacity;
-  return proxy;
-}
-
-@end
-
 @implementation GridTransitionCell {
   // Previous tab view width, used to scale the tab views.
   CGFloat _previousTabViewWidth;
@@ -690,12 +664,6 @@ BASE_FEATURE(kPreviousTabViewWidthCrash,
   if (!mainTabView.superview)
     [self.contentView addSubview:mainTabView];
   _previousTabViewWidth = mainTabView.frame.size.width;
-  static bool previous_tab_view_width_crash_workaround =
-      base::FeatureList::IsEnabled(kPreviousTabViewWidthCrash);
-  if (previous_tab_view_width_crash_workaround && !_previousTabViewWidth) {
-    UIWindow* window = UIApplication.sharedApplication.windows.firstObject;
-    _previousTabViewWidth = window.bounds.size.width;
-  }
   _mainTabView = mainTabView;
 }
 
@@ -715,6 +683,12 @@ BASE_FEATURE(kPreviousTabViewWidthCrash,
 }
 
 #pragma mark - GridToTabTransitionView methods
+
+- (void)prepareForTransitionWithAnimationDirection:
+    (GridAnimationDirection)animationDirection {
+  // Use the same animation set up for both directions.
+  [self prepareForAnimation];
+}
 
 - (void)positionTabViews {
   [self scaleTabViews];
@@ -760,6 +734,12 @@ BASE_FEATURE(kPreviousTabViewWidthCrash,
 
 #pragma mark - Private helper methods
 
+// Common logic for the cell animation preparation.
+- (void)prepareForAnimation {
+  // Remove dark corners from the transition animtation cell.
+  self.backgroundColor = [UIColor clearColor];
+}
+
 // Scales the tab views relative to the current width of the cell.
 - (void)scaleTabViews {
   CGFloat scale = self.bounds.size.width / _previousTabViewWidth;
@@ -767,12 +747,6 @@ BASE_FEATURE(kPreviousTabViewWidthCrash,
   ScaleView(self.mainTabView, scale);
   ScaleView(self.bottomTabView, scale);
   _previousTabViewWidth = self.mainTabView.frame.size.width;
-  static bool previous_tab_view_width_crash_workaround =
-      base::FeatureList::IsEnabled(kPreviousTabViewWidthCrash);
-  if (previous_tab_view_width_crash_workaround && !_previousTabViewWidth) {
-    UIWindow* window = UIApplication.sharedApplication.windows.firstObject;
-    _previousTabViewWidth = window.bounds.size.width;
-  }
 }
 
 @end

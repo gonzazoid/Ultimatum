@@ -11,13 +11,13 @@
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
 #include "base/synchronization/lock.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/thread_annotations.h"
 #include "base/timer/timer.h"
 #include "base/unguessable_token.h"
 #include "third_party/abseil-cpp/absl/time/time.h"
 #include "third_party/nearby/src/internal/platform/implementation/scheduled_executor.h"
 
-namespace location {
 namespace nearby {
 namespace chrome {
 
@@ -85,6 +85,5 @@ class ScheduledExecutor : public api::ScheduledExecutor {
 
 }  // namespace chrome
 }  // namespace nearby
-}  // namespace location
 
 #endif  // CHROME_SERVICES_SHARING_NEARBY_PLATFORM_SCHEDULED_EXECUTOR_H_

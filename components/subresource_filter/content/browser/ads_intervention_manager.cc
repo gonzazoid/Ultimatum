@@ -28,9 +28,6 @@ const char kLastAdsViolationKey[] = "LastAdsViolation";
 const char kAdsInterventionRecordedHistogramName[] =
     "SubresourceFilter.PageLoad.AdsInterventionTriggered";
 
-const char kTimeSinceAdsInterventionTriggeredHistogramName[] =
-    "SubresourceFilter.PageLoad.TimeSinceLastActiveAdsIntervention";
-
 AdsInterventionStatus GetAdsInterventionStatus(bool activation_status,
                                                bool intervention_active) {
   if (!intervention_active)
@@ -65,7 +62,7 @@ void AdsInterventionManager::TriggerAdsInterventionForUrlOnSubsequentLoads(
     mojom::AdsViolation ads_violation) {
   base::Value::Dict additional_metadata;
 
-  double now = clock_->Now().ToDoubleT();
+  double now = clock_->Now().InSecondsFSinceUnixEpoch();
   additional_metadata.Set(kLastAdsViolationTimeKey, now);
   additional_metadata.Set(kLastAdsViolationKey,
                           static_cast<int>(ads_violation));
@@ -98,7 +95,8 @@ AdsInterventionManager::GetLastAdsIntervention(const GURL& url) const {
 
   if (ads_violation && last_violation_time) {
     base::TimeDelta diff =
-        clock_->Now() - base::Time::FromDoubleT(*last_violation_time);
+        clock_->Now() -
+        base::Time::FromSecondsSinceUnixEpoch(*last_violation_time);
 
     return LastAdsIntervention(
         {diff, static_cast<mojom::AdsViolation>(*ads_violation)});
@@ -131,9 +129,6 @@ bool AdsInterventionManager::ShouldActivate(
         last_intervention->duration_since <
         AdsInterventionManager::GetInterventionDuration(
             last_intervention->ads_violation);
-    UMA_HISTOGRAM_COUNTS_1000(kTimeSinceAdsInterventionTriggeredHistogramName,
-                              last_intervention->duration_since.InHours());
-
     auto* ukm_recorder = ukm::UkmRecorder::Get();
     ukm::builders::AdsIntervention_LastIntervention builder(
         ukm::ConvertToSourceId(navigation_handle->GetNavigationId(),

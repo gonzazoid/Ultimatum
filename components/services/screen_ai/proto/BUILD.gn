@@ -9,6 +9,7 @@ proto_library("proto") {
     "chrome_screen_ai.proto",
     "view_hierarchy.proto",
   ]
+  cc_generator_options = "lite"
 }
 
 proto_library("view_hierarchy_proto_descriptor") {
@@ -20,14 +21,19 @@ proto_library("view_hierarchy_proto_descriptor") {
 
 source_set("proto_convertors") {
   sources = [
-    "proto_convertor.cc",
-    "proto_convertor.h",
+    "main_content_extractor_proto_convertor.cc",
+    "main_content_extractor_proto_convertor.h",
+    "visual_annotator_proto_convertor.cc",
+    "visual_annotator_proto_convertor.h",
   ]
 
   deps = [
     ":proto",
     "//base",
     "//components/services/screen_ai/public/mojom",
+    "//components/strings:components_strings_grit",
     "//ui/accessibility",
   ]
+
+  configs += [ "//build/config/compiler:wexit_time_destructors" ]
 }

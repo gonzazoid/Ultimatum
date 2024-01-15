@@ -6,6 +6,10 @@ module media.mojom;
 
 import "media/mojo/mojom/audio_data.mojom";
 import "mojo/public/mojom/base/time.mojom";
+import "mojo/public/mojom/base/unguessable_token.mojom";
+import "ui/gfx/geometry/mojom/geometry.mojom";
+
+// Next MinVersion: 4
 
 // Corresponds to the LangIdEvent.ConfidenceInterval defined in
 // http://google3/speech/soda/public/soda_event.proto.
@@ -17,9 +21,19 @@ enum ConfidenceLevel {
   kHighlyConfident,
 };
 
+// Corresponds to the LangIdEvent.AsrSwitchResult defined in
+// http://google3/speech/soda/public/soda_event.proto.
+[Stable, Extensible]
+enum AsrSwitchResult {
+  [Default] kDefaultNoSwitch,
+  kSwitchSucceeded,
+  kSwitchFailed,
+  kSwitchSkipedNoLp,
+};
+
 // The main interface a renderer client uses to interact with a speech
-// recognition service process. In Live Caption, every renderer can own one or
-// more Remote<SpeechRecognitionContext>, with the receiver bound through the
+// recognition service process. In web Live Caption, every renderer can own one
+// or more Remote<SpeechRecognitionContext>, with the receiver bound through the
 // BrowserInterfaceBroker. This is a stable interface that is used across the
 // LaCrOS/Ash boundary.
 [Stable]
@@ -34,8 +48,10 @@ interface SpeechRecognitionContext {
 };
 
 // The interface used to pass raw audio from the renderer to the speech
-// recognition service. The remote lives in the renderer process and the
-// receiver lives in the speech recognition process.
+// recognition service. The remote lives either in the renderer process (for web
+// Live Caption) or the browser process (for CrOS features like system Live
+// Caption and dictation) and the receiver lives in the speech recognition
+// process.
 [Stable]
 interface SpeechRecognitionRecognizer {
   // Initialize the speech recognition instance. The speech recognition client
@@ -52,6 +68,10 @@ interface SpeechRecognitionRecognizer {
   // Notify the speech recognition recognizer that the language changed. Takes
   // in the locale string (e.g. "en-US").
   OnLanguageChanged@2(string language);
+
+  // Notify the speech recognition recognizer that the mask offensive words
+  // setting has changed.
+  [MinVersion=2] OnMaskOffensiveWordsChanged@3(bool mask_offensive_words);
 };
 
 // The interface used to return speech recognition events from the speech
@@ -61,10 +81,11 @@ interface SpeechRecognitionRecognizer {
 [Stable]
 interface SpeechRecognitionRecognizerClient {
   // Triggered by speech recognition process on a speech recognition event.
-  // Returns whether the result was received successfully. Speech recognition
-  // will halt if this returns false.
+  //
+  // Returns false if the client wants to halt speech recognition e.g. in
+  // response to user input or in the case of an error.
   OnSpeechRecognitionRecognitionEvent@0(SpeechRecognitionResult result)
-      => (bool success);
+      => (bool continue_recognition);
 
   // Called when speech recognition stops.
   OnSpeechRecognitionStopped@1();
@@ -137,11 +158,16 @@ struct LanguageIdentificationEvent {
 
   // The confidence interval.
   ConfidenceLevel confidence_level;
+
+  // If multilang is enabled, describes the actions Automatic Speech Recognition
+  // took as a result of this event.
+  [MinVersion=1] AsrSwitchResult? asr_switch_result;
 };
 
 // The interface used to notify the speech recognition client of events
 // triggered by the browser. The remote lives in the browser process and the
-// receiver lives in the renderer process.
+// receiver lives either in the renderer process (for web Live Caption) or
+// the browser process (for CrOS system Live Caption).
 [Stable]
 interface SpeechRecognitionBrowserObserver {
   // Notify the speech recognition client when speech recognition availability
@@ -151,16 +177,70 @@ interface SpeechRecognitionBrowserObserver {
   // Notify the speech recognition client when the speech recognition language
   // changes.
   SpeechRecognitionLanguageChanged@1(string language);
+
+  // Notify the speech recognition client when the mask offensive words pref
+  // changes.
+  [MinVersion=2] SpeechRecognitionMaskOffensiveWordsChanged@2(
+      bool mask_offensive_words);
+};
+
+// The user-facing source of recognized speech; typically a tab. The remote
+// lives in the Ash browser process and is used to trigger behavior in lacros
+// (like focusing the tab). The receiver lives in the lacros browser process.
+[Stable]
+interface SpeechRecognitionSurface {
+  // "Activate" the surface - i.e. bring it to the front and focus it.
+  Activate@0();
+
+  // Fetch the bounds of the surface in screen coordinates. A nullopt is
+  // returned if no bounds could be fetched.
+  GetBounds@1() => (gfx.mojom.Rect? bounds);
+};
+
+// The OS-side observer of a lacros-side speech surface. Used to close or
+// re-render a live caption bubble based on user interaction with the
+// lacros-side surface. The remote lives in the lacros browser process, and the
+// receiver lives in the Ash browser process.
+[Stable]
+interface SpeechRecognitionSurfaceClient {
+  // Called when the user navigates away or refreshes the current tab. This
+  // comprises the end of a live caption "session", after which the caption
+  // bubble can be shown even if it was explicitly dismissed by the user.
+  OnSessionEnded@0();
+
+  // Called when the user fullscreens or un-fullscreens the speech surface.
+  OnFullscreenToggled@1();
+};
+
+// Static metadata about a remote speech surface. Used by the speech service
+// client in Ash.
+[Stable]
+struct SpeechRecognitionSurfaceMetadata {
+  // A unique identifier for the "session" (i.e. tab) of the surface. Is used to
+  // hide the caption bubble for all streams in a tab if the bubble is closed
+  // once.
+  mojo_base.mojom.UnguessableToken session_id;
 };
 
 // This interface between the speech recognition client and the browser.
 // The remote lives in the renderer process and the receiver lives in the
-// browser process.
+// browser process. Not necessary for browser-side features (e.g. CrOS system
+// Live Caption), which can access browser functionality directly.
 [Stable]
 interface SpeechRecognitionClientBrowserInterface {
   // Bind the speech recognition availability observer.
   BindSpeechRecognitionBrowserObserver@0(
     pending_remote<SpeechRecognitionBrowserObserver> observer);
+
+  // Requests that a remote speech recognition client be instantiated and bound
+  // in the Ash browser process. The instantiated client should use the surface
+  // and surface client bindings to perform tasks (such as refocusing) that
+  // require coordination with the current lacros tab.
+  [MinVersion=1] BindRecognizerToRemoteClient@1(
+    pending_receiver<SpeechRecognitionRecognizerClient> client,
+    pending_receiver<SpeechRecognitionSurfaceClient> surface_client,
+    pending_remote<SpeechRecognitionSurface> surface,
+    SpeechRecognitionSurfaceMetadata metadata);
 };
 
 // Corresponds to ExtendedSodaConfigMsg.RecognitionMode in
@@ -192,7 +272,6 @@ enum RecognizerClientType {
 };
 
 // Options for speech recognition.
-// Next version: 2
 [Stable]
 struct SpeechRecognitionOptions {
   // What kind of recognition to use.
@@ -215,4 +294,12 @@ struct SpeechRecognitionOptions {
 
   // Which client is requesting the speech recognition session.
   [MinVersion=1] RecognizerClientType recognizer_client_type;
+
+  // When true, if the incoming audio buffer is zero for an extended period
+  // (e.g. 10 seconds), audio won't be fed to the captioning model until nonzero
+  // audio is received.
+  // When false, even empty audio is captioned indefinitely.
+  // Set to false if accurate TimingInfo relative to the start of captioning is
+  // needed.
+  [MinVersion=4] bool skip_continuously_empty_audio = false;
 };

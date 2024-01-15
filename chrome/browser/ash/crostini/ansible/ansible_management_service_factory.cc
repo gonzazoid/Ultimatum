@@ -25,15 +25,23 @@ AnsibleManagementServiceFactory::GetInstance() {
 }
 
 AnsibleManagementServiceFactory::AnsibleManagementServiceFactory()
-    : ProfileKeyedServiceFactory("AnsibleManagementService") {}
+    : ProfileKeyedServiceFactory(
+          "AnsibleManagementService",
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOriginalOnly)
+              .Build()) {}
 
 AnsibleManagementServiceFactory::~AnsibleManagementServiceFactory() = default;
 
 // BrowserContextKeyedServiceFactory:
-KeyedService* AnsibleManagementServiceFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+AnsibleManagementServiceFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
   Profile* profile = Profile::FromBrowserContext(context);
-  return new AnsibleManagementService(profile);
+  return std::make_unique<AnsibleManagementService>(profile);
 }
 
 KeyedService* AnsibleManagementServiceFactory::SetTestingFactoryAndUse(

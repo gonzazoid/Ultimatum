@@ -4,14 +4,15 @@
 
 #include <fuchsia/web/cpp/fidl.h>
 
+#include "base/task/single_thread_task_runner.h"
 #include "content/public/test/browser_test.h"
+#include "fuchsia_web/common/test/frame_for_test.h"
 #include "fuchsia_web/common/test/frame_test_util.h"
 #include "fuchsia_web/common/test/test_navigation_listener.h"
 #include "fuchsia_web/webengine/browser/context_impl.h"
 #include "fuchsia_web/webengine/browser/fake_navigation_policy_provider.h"
 #include "fuchsia_web/webengine/browser/frame_impl.h"
 #include "fuchsia_web/webengine/browser/navigation_policy_handler.h"
-#include "fuchsia_web/webengine/test/frame_for_test.h"
 #include "fuchsia_web/webengine/test/test_data.h"
 #include "fuchsia_web/webengine/test/web_engine_browser_test.h"
 #include "net/test/embedded_test_server/embedded_test_server.h"
@@ -56,6 +57,11 @@ class NavigationPolicyTest : public WebEngineBrowserTest {
         frame_impl_->navigation_policy_handler()->is_provider_connected());
   }
 
+  void TearDownOnMainThread() override {
+    frame_ = {};
+    WebEngineBrowserTest::TearDownOnMainThread();
+  }
+
  protected:
   FrameForTest frame_;
   FrameImpl* frame_impl_ = nullptr;
@@ -87,7 +93,7 @@ IN_PROC_BROWSER_TEST_F(NavigationPolicyTest, Deferred) {
                                        fuchsia::web::LoadUrlParams(),
                                        page_url.spec()));
   base::RunLoop run_loop;
-  base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE, run_loop.QuitClosure(), base::Milliseconds(200));
   run_loop.Run();
 

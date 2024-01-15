@@ -32,9 +32,13 @@ from core.tbmv3 import trace_processor
 # while appending a proper sys.path does not help.
 from core import path_util
 
-path_util.AddDeviceInteractionToPath()
+path_util.AddAndroidDeviceInteractionToPath()
 from devil.android import device_utils  # pylint: disable=import-error
 from devil.android.sdk import adb_wrapper  # pylint: disable=import-error
+
+path_util.AddTelemetryToPath()
+from telemetry.core import cros_interface
+from telemetry.internal.platform import device_finder
 
 from tracing.trace_data import trace_data
 from tracing.value.diagnostics import all_diagnostics
@@ -123,7 +127,7 @@ def ProcessResults(options, is_unittest=False):
     print('View results at file://', output_file, sep='')
 
   if options.fetch_device_data:
-    PullDeviceArtifacts(options.device_data_path, options.local_data_path)
+    PullDeviceArtifacts(options)
 
   return GenerateExitCode(test_results)
 
@@ -466,26 +470,90 @@ def ExtractMeasurements(test_result):
     del artifacts[MEASUREMENTS_NAME]
 
 
-def PullDeviceArtifacts(device_path, local_path):
+def PullDeviceArtifacts(options):
   """Pull files from on-device path using `adb`
 
   Args:
     device_path: (string) absolute path to the file/folder on-device to pull.
     local_path: (string) absolute path to local destination.
+    platform: (string) platform associated with device.
+              one of 'android' or 'chromeos'.
 
   Raises:
     device_errors.AdbCommandFailedError
   """
+  device_path = options.device_data_path
+  local_path = options.local_data_path
+  platform = options.fetch_data_platform
+
   if not device_path:
     logging.warning('No path to data specified to pull from device. '
                     'Skipping.')
     return
 
-  devices = adb_wrapper.AdbWrapper.Devices()
-  # Each docker host in chrome-swarming has one device attached, so we'll use
-  # the first AdbWrapper instance as the assumed attached device in question
-  utils = device_utils.DeviceUtils(devices[0])
-  utils.PullFile(device_path, local_path)
+  if platform == 'android':
+    devices = adb_wrapper.AdbWrapper.Devices()
+    # Each docker host in chrome-swarming has one device attached, so we'll use
+    # the first AdbWrapper instance as the assumed attached device in question
+    utils = device_utils.DeviceUtils(devices[0])
+    utils.PullFile(device_path, local_path)
+  elif platform == 'chromeos':
+    logging.warning('Searching for devices')
+    # Each docker host in chrome-swarming should only have one local device.
+    devices = device_finder.GetDevicesMatchingOptions(options)
+
+    device = None
+    if options.remote:
+      target_identifier = 'cros:' + options.remote
+      logging.info('Target identifier: %s' % target_identifier)
+      for d in devices:
+        if d.guid == target_identifier:
+          # remote should be "variable_chromeos_device_hostname" so use the
+          # device that matches this.
+          # guid is cros:variable_chromeos_device_hostname.
+          # desktop guid should just be desktop.
+          # searching for devices usually returns 2:
+          # 1. variable_chromeos_device_hostname
+          # 2. desktop
+          # variable_chromeos_device_hostname is usually the first device, in
+          # the list of devices, but to be sure we verify before selecting it.
+          device = d
+          logging.info('Selecting %s' % device.name)
+          break
+    else:
+      # default behavior is to select the first one, since no identifier
+      # is provided.
+      device = devices[0]
+      logging.info('Defaulting to first selected device: %s' % device.name)
+
+    if not device:
+      logging.warning('No device found with name %s' % str(options.remote))
+      return
+
+    interface = cros_interface.CrOSInterface(device.host_name, device.ssh_port,
+                                             device.ssh_identity)
+    # Search for all profraw files
+    logging.info('Searching for .profraw files at %s' % device_path)
+    stdout, _ = interface.RunCmdOnDevice(
+        ['find', device_path, '-regex', '.*.profraw'])
+    files = stdout.splitlines()
+    if not files:
+      logging.warning('No profraw files found at %s' % device_path)
+      return
+    logging.info('Found %d profiles: %s' % (len(files), str(files)))
+
+    # profraw files are written to ${ISOLATED_DIR}/profraw/
+    write_path = os.path.join(local_path, 'profraw')
+    if not os.path.exists(write_path):
+      logging.warning('%s does not exist. creating it' % write_path)
+      os.mkdir(write_path)
+
+    for f in files:
+      logging.info('Copying file %s' % f)
+      interface.GetFile(f, os.path.join(write_path, os.path.basename(f)))
+  else:
+    logging.warning('No supported platform specified. Doing nothing.')
+    return
 
 
 def main(args=None):

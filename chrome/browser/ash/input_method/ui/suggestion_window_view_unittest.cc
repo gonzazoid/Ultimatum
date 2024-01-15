@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/input_method/ui/suggestion_window_view.h"
+#include "base/memory/raw_ptr.h"
 
 #include <string>
 
@@ -12,27 +13,21 @@
 #include "chrome/browser/ash/input_method/ui/assistive_delegate.h"
 #include "chrome/browser/ash/input_method/ui/completion_suggestion_label_view.h"
 #include "chrome/browser/ash/input_method/ui/completion_suggestion_view.h"
+#include "chrome/browser/ash/input_method/ui/mock_assistive_delegate.h"
 #include "chrome/browser/ash/input_method/ui/suggestion_details.h"
 #include "chrome/test/views/chrome_views_test_base.h"
 #include "chromeos/ash/services/ime/public/cpp/assistive_suggestions.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
+#include "ui/events/base_event_utils.h"
 #include "ui/gfx/text_utils.h"
 #include "ui/views/controls/button/image_button.h"
 #include "ui/views/controls/link.h"
 #include "ui/views/layout/box_layout.h"
+#include "ui/views/test/button_test_api.h"
 
 namespace ui {
 namespace ime {
-
-class MockAssistiveDelegate : public AssistiveDelegate {
- public:
-  ~MockAssistiveDelegate() override = default;
-  void AssistiveWindowButtonClicked(
-      const ui::ime::AssistiveWindowButton& button) const override {}
-  void AssistiveWindowChanged(
-      const ash::ime::AssistiveWindow& window) const override {}
-};
 
 class SuggestionWindowViewTest
     : public ChromeViewsTestBase,
@@ -50,6 +45,7 @@ class SuggestionWindowViewTest
     ChromeViewsTestBase::SetUp();
     InitCandidates();
     window_.candidates = candidates_;
+    window_.show_setting_link = true;
 
     suggestion_window_view_ =
         SuggestionWindowView::Create(GetContext(), delegate_.get(), GetParam());
@@ -89,7 +85,7 @@ class SuggestionWindowViewTest
                : absl::make_optional(std::distance(children.cbegin(), it));
   }
 
-  SuggestionWindowView* suggestion_window_view_;
+  raw_ptr<SuggestionWindowView, DanglingUntriaged> suggestion_window_view_;
   std::unique_ptr<MockAssistiveDelegate> delegate_ =
       std::make_unique<MockAssistiveDelegate>();
   std::vector<std::u16string> candidates_;
@@ -399,6 +395,21 @@ TEST_P(SuggestionWindowViewTest,
       CompletionSuggestionLabelView::kFontSize, gfx::Font::Weight::NORMAL);
   EXPECT_EQ(suggestion_window_view_->GetBoundsInScreen().x(),
             100 - kPadding - gfx::GetStringWidth(u"how a", font_list));
+}
+
+TEST_P(SuggestionWindowViewTest,
+       SendsCorrectWindowTypeForLearnMoreButtonClick) {
+  window_.type = ash::ime::AssistiveWindowType::kLongpressDiacriticsSuggestion;
+  suggestion_window_view_->ShowMultipleCandidates(window_, GetParam());
+  ui::MouseEvent mouse_event(ui::ET_MOUSE_PRESSED, gfx::Point(), gfx::Point(),
+                             ui::EventTimeForNow(), ui::EF_NONE, ui::EF_NONE);
+
+  views::test::ButtonTestApi(
+      suggestion_window_view_->learn_more_button_for_testing())
+      .NotifyClick(mouse_event);
+
+  EXPECT_EQ(MockAssistiveDelegate::last_window_type_,
+            ash::ime::AssistiveWindowType::kLongpressDiacriticsSuggestion);
 }
 
 }  // namespace ime

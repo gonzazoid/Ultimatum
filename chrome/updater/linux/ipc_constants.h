@@ -5,15 +5,21 @@
 #ifndef CHROME_UPDATER_LINUX_IPC_CONSTANTS_H_
 #define CHROME_UPDATER_LINUX_IPC_CONSTANTS_H_
 
+#include "chrome/updater/updater_scope.h"
+
+namespace base {
+class FilePath;
+}  // namespace base
+
 namespace updater {
 
-// The name of the platform channel used to broker a Mojo connection between the
-// client and server.
-extern const char kUpdateServerChannelName[];
+base::FilePath GetActiveDutySocketPath(UpdaterScope scope);
 
-// The name of the the pipe attached to the Mojo invitation for transmitting an
-// UpdateService or UpdateServiceInternal PendingReceiver.
-extern const char kUpdateServerChannelPipeName[];
+base::FilePath GetActiveDutyInternalSocketPath(UpdaterScope scope);
+
+// The activation socket can be used by clients to request systemd to start the
+// update server.
+base::FilePath GetActivationSocketPath(UpdaterScope scope);
 
 }  // namespace updater
 

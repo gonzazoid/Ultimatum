@@ -10,12 +10,13 @@
 #include <tuple>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/message_loop/message_pump_type.h"
 #include "base/run_loop.h"
+#include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
 #include "chrome/common/chrome_switches.h"
 #include "content/common/child_process.mojom-test-utils.h"
@@ -108,7 +109,7 @@ bool ReplayProcess::Initialize(int argc, const char** argv) {
   }
 
   // Log to both stderr and file destinations.
-  logging::SetMinLogLevel(logging::LOG_ERROR);
+  logging::SetMinLogLevel(logging::LOGGING_ERROR);
   logging::LoggingSettings settings;
   settings.logging_dest = logging::LOG_TO_ALL;
   settings.log_file_path = FILE_PATH_LITERAL("ipc_replay.log");
@@ -150,8 +151,9 @@ void ReplayProcess::OpenChannel() {
   channel_ = IPC::ChannelProxy::Create(
       IPC::ChannelMojo::CreateClientFactory(
           std::move(legacy_ipc_bootstrap_pipe), io_thread_.task_runner(),
-          base::ThreadTaskRunnerHandle::Get()),
-      this, io_thread_.task_runner(), base::ThreadTaskRunnerHandle::Get());
+          base::SingleThreadTaskRunner::GetCurrentDefault()),
+      this, io_thread_.task_runner(),
+      base::SingleThreadTaskRunner::GetCurrentDefault());
 }
 
 bool ReplayProcess::OpenTestcase() {
@@ -163,7 +165,7 @@ bool ReplayProcess::OpenTestcase() {
 
 void ReplayProcess::SendNextMessage() {
   if (message_index_ >= messages_.size()) {
-    base::RunLoop::QuitCurrentWhenIdleDeprecated();
+    loop_.QuitWhenIdle();
     return;
   }
 
@@ -173,7 +175,7 @@ void ReplayProcess::SendNextMessage() {
   if (!channel_->Send(message.release())) {
     LOG(ERROR) << "ChannelProxy::Send() failed after "
                << message_index_ << " messages";
-    base::RunLoop::QuitCurrentWhenIdleDeprecated();
+    loop_.QuitWhenIdle();
   }
 }
 
@@ -182,7 +184,7 @@ void ReplayProcess::Run() {
   timer.Start(FROM_HERE, base::Milliseconds(1),
               base::BindRepeating(&ReplayProcess::SendNextMessage,
                                   base::Unretained(this)));
-  base::RunLoop().Run();
+  loop_.Run();
 }
 
 bool ReplayProcess::OnMessageReceived(const IPC::Message& msg) {
@@ -192,7 +194,7 @@ bool ReplayProcess::OnMessageReceived(const IPC::Message& msg) {
 void ReplayProcess::OnChannelError() {
   LOG(ERROR) << "Channel error, quitting after "
              << message_index_ << " messages";
-  base::RunLoop::QuitCurrentWhenIdleDeprecated();
+  loop_.QuitWhenIdle();
 }
 
 }  // namespace ipc_fuzzer

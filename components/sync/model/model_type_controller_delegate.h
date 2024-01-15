@@ -7,8 +7,7 @@
 
 #include <memory>
 
-#include "base/callback.h"
-#include "base/memory/weak_ptr.h"
+#include "base/functional/callback.h"
 #include "base/values.h"
 #include "components/sync/base/model_type.h"
 #include "components/sync/base/sync_stop_metadata_fate.h"
@@ -55,6 +54,12 @@ class ModelTypeControllerDelegate {
   // Records entities count and estimated memory usage of the type into
   // histograms.
   virtual void RecordMemoryUsageAndCountsHistograms() = 0;
+
+  // Clear metadata if the model is stopped.
+  virtual void ClearMetadataIfStopped() = 0;
+
+  // Simulates model error from the bridge.
+  virtual void ReportBridgeErrorForTest() = 0;
 };
 
 }  // namespace syncer

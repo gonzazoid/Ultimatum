@@ -8,13 +8,14 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/values.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/webui/reset_password/reset_password.mojom.h"
+#include "chrome/browser/ui/webui/webui_util.h"
 #include "chrome/common/url_constants.h"
 #include "chrome/grit/browser_resources.h"
 #include "components/safe_browsing/content/browser/password_protection/password_protection_service.h"
@@ -116,17 +117,16 @@ std::u16string GetFormattedHostName(const std::string host_name) {
 ResetPasswordUI::ResetPasswordUI(content::WebUI* web_ui)
     : ui::MojoWebUIController(web_ui),
       password_type_(GetPasswordType(web_ui->GetWebContents())) {
-  std::unique_ptr<content::WebUIDataSource> html_source(
-      content::WebUIDataSource::Create(chrome::kChromeUIResetPasswordHost));
-  html_source->DisableTrustedTypesCSP();
+  content::WebUIDataSource* html_source =
+      content::WebUIDataSource::CreateAndAdd(
+          web_ui->GetWebContents()->GetBrowserContext(),
+          chrome::kChromeUIResetPasswordHost);
+  webui::EnableTrustedTypesCSP(html_source);
   html_source->AddResourcePath("reset_password.js", IDR_RESET_PASSWORD_JS);
   html_source->AddResourcePath("reset_password.mojom-webui.js",
                                IDR_RESET_PASSWORD_MOJOM_WEBUI_JS);
   html_source->SetDefaultResource(IDR_RESET_PASSWORD_HTML);
   html_source->AddLocalizedStrings(PopulateStrings());
-
-  content::WebUIDataSource::Add(web_ui->GetWebContents()->GetBrowserContext(),
-                                html_source.release());
 }
 
 WEB_UI_CONTROLLER_TYPE_IMPL(ResetPasswordUI)

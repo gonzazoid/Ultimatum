@@ -25,7 +25,7 @@ const StyleImage* GetStyleImage(const CSSProperty& property,
     case CSSPropertyID::kBorderImageSource:
       return style.BorderImageSource();
     case CSSPropertyID::kListStyleImage:
-      return style.ListStyleImage();
+      return style.ListStyleImage().Get();
     case CSSPropertyID::kWebkitMaskBoxImageSource:
       return style.MaskBoxImageSource();
     default:
@@ -59,10 +59,13 @@ class CSSImageNonInterpolableValue final : public NonInterpolableValue {
       return start_;
     if (progress >= 1)
       return end_;
+    // https://drafts.csswg.org/css-images-4/#interpolating-images
+    auto* progress_value = CSSNumericLiteralValue::Create(
+        100.0 - progress * 100.0, CSSPrimitiveValue::UnitType::kPercentage);
     return MakeGarbageCollected<cssvalue::CSSCrossfadeValue>(
-        start_, end_,
-        CSSNumericLiteralValue::Create(progress,
-                                       CSSPrimitiveValue::UnitType::kNumber));
+        /*is_prefixed_variant=*/false,
+        HeapVector<std::pair<Member<CSSValue>, Member<CSSPrimitiveValue>>>{
+            {start_, progress_value}, {end_, nullptr}});
   }
 
   DECLARE_NON_INTERPOLABLE_VALUE_TYPE();
@@ -111,7 +114,7 @@ InterpolationValue CSSImageInterpolationType::MaybeConvertCSSValue(
     bool accept_gradients) {
   if (value.IsImageValue() || (value.IsGradientValue() && accept_gradients)) {
     CSSValue* refable_css_value = const_cast<CSSValue*>(&value);
-    return InterpolationValue(std::make_unique<InterpolableNumber>(1),
+    return InterpolationValue(MakeGarbageCollected<InterpolableNumber>(1),
                               CSSImageNonInterpolableValue::Create(
                                   refable_css_value, refable_css_value));
   }
@@ -129,8 +132,8 @@ CSSImageInterpolationType::StaticMergeSingleConversions(
     return nullptr;
   }
   return PairwiseInterpolationValue(
-      std::make_unique<InterpolableNumber>(0),
-      std::make_unique<InterpolableNumber>(1),
+      MakeGarbageCollected<InterpolableNumber>(0),
+      MakeGarbageCollected<InterpolableNumber>(1),
       CSSImageNonInterpolableValue::Merge(start.non_interpolable_value,
                                           end.non_interpolable_value));
 }
@@ -170,24 +173,26 @@ class UnderlyingImageChecker final
     : public CSSInterpolationType::CSSConversionChecker {
  public:
   UnderlyingImageChecker(const InterpolationValue& underlying)
-      : underlying_(underlying.Clone()) {}
+      : underlying_(MakeGarbageCollected<InterpolationValueGCed>(underlying)) {}
   ~UnderlyingImageChecker() final = default;
 
  private:
   bool IsValid(const StyleResolverState&,
                const InterpolationValue& underlying) const final {
-    if (!underlying && !underlying_)
+    if (!underlying && !underlying_) {
       return true;
-    if (!underlying || !underlying_)
+    }
+    if (!underlying || !underlying_) {
       return false;
-    return underlying_.interpolable_value->Equals(
+    }
+    return underlying_->underlying().interpolable_value->Equals(
                *underlying.interpolable_value) &&
            CSSImageInterpolationType::EqualNonInterpolableValues(
-               underlying_.non_interpolable_value.get(),
+               underlying_->underlying().non_interpolable_value.get(),
                underlying.non_interpolable_value.get());
   }
 
-  const InterpolationValue underlying_;
+  const Persistent<InterpolationValueGCed> underlying_;
 };
 
 InterpolationValue CSSImageInterpolationType::MaybeConvertNeutral(
@@ -271,13 +276,13 @@ void CSSImageInterpolationType::ApplyStandardPropertyValue(
                                         non_interpolable_value, state);
   switch (CssProperty().PropertyID()) {
     case CSSPropertyID::kBorderImageSource:
-      state.Style()->SetBorderImageSource(image);
+      state.StyleBuilder().SetBorderImageSource(image);
       break;
     case CSSPropertyID::kListStyleImage:
-      state.Style()->SetListStyleImage(image);
+      state.StyleBuilder().SetListStyleImage(image);
       break;
     case CSSPropertyID::kWebkitMaskBoxImageSource:
-      state.Style()->SetMaskBoxImageSource(image);
+      state.StyleBuilder().SetMaskBoxImageSource(image);
       break;
     default:
       NOTREACHED();

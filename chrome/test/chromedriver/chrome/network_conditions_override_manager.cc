@@ -4,7 +4,6 @@
 
 #include "chrome/test/chromedriver/chrome/network_conditions_override_manager.h"
 
-#include "base/values.h"
 #include "chrome/test/chromedriver/chrome/devtools_client.h"
 #include "chrome/test/chromedriver/chrome/network_conditions.h"
 #include "chrome/test/chromedriver/chrome/status.h"
@@ -33,9 +32,9 @@ Status NetworkConditionsOverrideManager::OnConnected(DevToolsClient* client) {
 Status NetworkConditionsOverrideManager::OnEvent(
     DevToolsClient* client,
     const std::string& method,
-    const base::DictionaryValue& params) {
+    const base::Value::Dict& params) {
   if (method == "Page.frameNavigated") {
-    if (!params.FindPath("frame.parentId"))
+    if (!params.FindByDottedPath("frame.parentId"))
       return ApplyOverrideIfNeeded();
   }
   return Status(kOk);
@@ -59,10 +58,10 @@ Status NetworkConditionsOverrideManager::ApplyOverride(
   if (status.IsError())
     return status;
 
-  base::Value result{base::Value::Type::DICT};
+  base::Value::Dict result;
   status = client_->SendCommandAndGetResult(
       "Network.canEmulateNetworkConditions", empty_params, &result);
-  absl::optional<bool> can = result.GetDict().FindBool("result");
+  absl::optional<bool> can = result.FindBool("result");
   if (status.IsError() || !can)
     return Status(kUnknownError,
         "unable to detect if chrome can emulate network conditions", status);

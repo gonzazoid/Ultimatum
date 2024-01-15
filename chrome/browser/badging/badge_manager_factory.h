@@ -9,7 +9,7 @@
 
 namespace base {
 template <typename T>
-struct DefaultSingletonTraits;
+class NoDestructor;
 }
 
 class Profile;
@@ -32,13 +32,13 @@ class BadgeManagerFactory : public ProfileKeyedServiceFactory {
   BadgeManagerFactory& operator=(const BadgeManagerFactory&) = delete;
 
  private:
-  friend struct base::DefaultSingletonTraits<BadgeManagerFactory>;
+  friend base::NoDestructor<BadgeManagerFactory>;
 
   BadgeManagerFactory();
   ~BadgeManagerFactory() override;
 
   // BrowserContextKeyedServiceFactory
-  KeyedService* BuildServiceInstanceFor(
+  std::unique_ptr<KeyedService> BuildServiceInstanceForBrowserContext(
       content::BrowserContext* profile) const override;
 };
 

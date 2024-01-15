@@ -11,7 +11,8 @@
 #include <string>
 #include <vector>
 
-#include "base/memory/ref_counted.h"
+#include "base/containers/span.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/strings/string_piece.h"
 #include "net/base/net_export.h"
 #include "net/dns/dns_response_result_extractor.h"
@@ -136,7 +137,8 @@ class NET_EXPORT_PRIVATE DnsResponse {
               const std::vector<DnsResourceRecord>& additional_records,
               const absl::optional<DnsQuery>& query,
               uint8_t rcode = dns_protocol::kRcodeNOERROR,
-              bool validate_records = true);
+              bool validate_records = true,
+              bool validate_names_as_internet_hostnames = true);
 
   // Constructs a response buffer of given length. Used for TCP transactions.
   explicit DnsResponse(size_t length);
@@ -149,7 +151,7 @@ class NET_EXPORT_PRIVATE DnsResponse {
 
   static DnsResponse CreateEmptyNoDataResponse(uint16_t id,
                                                bool is_authoritative,
-                                               base::StringPiece qname,
+                                               base::span<const uint8_t> qname,
                                                uint16_t qtype);
 
   // Move-only.
@@ -225,11 +227,13 @@ class NET_EXPORT_PRIVATE DnsResponse {
   bool WriteQuestion(base::BigEndianWriter* writer, const DnsQuery& query);
   bool WriteRecord(base::BigEndianWriter* writer,
                    const DnsResourceRecord& record,
-                   bool validate_record);
+                   bool validate_record,
+                   bool validate_name_as_internet_hostname);
   bool WriteAnswer(base::BigEndianWriter* writer,
                    const DnsResourceRecord& answer,
                    const absl::optional<DnsQuery>& query,
-                   bool validate_record);
+                   bool validate_record,
+                   bool validate_name_as_internet_hostname);
 
   // Convenience for header access.
   const dns_protocol::Header* header() const;

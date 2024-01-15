@@ -7,8 +7,8 @@
 #include <stddef.h>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "third_party/blink/public/platform/interface_registry.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
@@ -37,11 +37,11 @@ MediaStreamDeviceObserver::MediaStreamDeviceObserver(LocalFrame* frame) {
   if (frame) {
     frame->GetInterfaceRegistry()->AddInterface(WTF::BindRepeating(
         &MediaStreamDeviceObserver::BindMediaStreamDeviceObserverReceiver,
-        WTF::Unretained(this)));
+        weak_factory_.GetWeakPtr()));
   }
 }
 
-MediaStreamDeviceObserver::~MediaStreamDeviceObserver() {}
+MediaStreamDeviceObserver::~MediaStreamDeviceObserver() = default;
 
 MediaStreamDevices MediaStreamDeviceObserver::GetNonScreenCaptureDevices() {
   MediaStreamDevices video_devices;
@@ -70,13 +70,21 @@ void MediaStreamDeviceObserver::OnDeviceStopped(
   }
 
   for (Stream& stream : it->value) {
-    if (IsAudioInputMediaType(device.type))
+    if (IsAudioInputMediaType(device.type)) {
       RemoveStreamDeviceFromArray(device, &stream.audio_devices);
-    else
+    } else {
       RemoveStreamDeviceFromArray(device, &stream.video_devices);
-
-    if (stream.on_device_stopped_cb)
+    }
+    if (stream.on_device_stopped_cb) {
+      // Running `stream.on_device_stopped_cb` can destroy `this`. Use a weak
+      // pointer to detect that condition, and stop processing if it happens.
+      base::WeakPtr<MediaStreamDeviceObserver> weak_this =
+          weak_factory_.GetWeakPtr();
       stream.on_device_stopped_cb.Run(device);
+      if (!weak_this) {
+        return;
+      }
+    }
   }
 
   // |it| could have already been invalidated in the function call above. So we
@@ -85,8 +93,9 @@ void MediaStreamDeviceObserver::OnDeviceStopped(
   // iterator from |label_stream_map_| (https://crbug.com/616884). Future work
   // needs to be done to resolve this re-entrancy issue.
   it = label_stream_map_.find(label);
-  if (it == label_stream_map_.end())
+  if (it == label_stream_map_.end()) {
     return;
+  }
 
   Vector<Stream>& streams = it->value;
   auto* stream_it = streams.begin();
@@ -117,13 +126,21 @@ void MediaStreamDeviceObserver::OnDeviceChanged(
     // time as the underlying media device is unplugged from the system.
     return;
   }
-  // OnDeviceChanged cannot only happen in combination with getDisplayMediaSet,
+  // OnDeviceChanged cannot only happen in combination with getAllScreensMedia,
   // which is the only API that handles multiple streams at once.
   DCHECK_EQ(1u, it->value.size());
 
   Stream* stream = &it->value[0];
-  if (stream->on_device_changed_cb)
+  if (stream->on_device_changed_cb) {
+    // Running `stream->on_device_changed_cb` can destroy `this`. Use a weak
+    // pointer to detect that condition, and stop processing if it happens.
+    base::WeakPtr<MediaStreamDeviceObserver> weak_this =
+        weak_factory_.GetWeakPtr();
     stream->on_device_changed_cb.Run(old_device, new_device);
+    if (!weak_this) {
+      return;
+    }
+  }
 
   // Update device list only for device changing. Removing device will be
   // handled in its own callback.
@@ -162,6 +179,28 @@ void MediaStreamDeviceObserver::OnDeviceRequestStateChange(
   }
 }
 
+void MediaStreamDeviceObserver::OnDeviceCaptureConfigurationChange(
+    const String& label,
+    const MediaStreamDevice& device) {
+  DVLOG(1) << __func__ << " label=" << label << " device_id=" << device.id;
+  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
+
+  auto it = label_stream_map_.find(label);
+  if (it == label_stream_map_.end()) {
+    // This can happen if a user stops a device from JS at the same
+    // time as the underlying media device is unplugged from the system.
+    return;
+  }
+
+  for (Stream& stream : it->value) {
+    if (stream.ContainsDevice(device) &&
+        stream.on_device_capture_configuration_change_cb) {
+      stream.on_device_capture_configuration_change_cb.Run(device);
+      break;
+    }
+  }
+}
+
 void MediaStreamDeviceObserver::OnDeviceCaptureHandleChange(
     const String& label,
     const MediaStreamDevice& device) {
@@ -175,7 +214,7 @@ void MediaStreamDeviceObserver::OnDeviceCaptureHandleChange(
     return;
   }
   // OnDeviceCaptureHandleChange cannot only happen in combination with
-  // getDisplayMediaSet, which is the only API that handles multiple streams
+  // getAllScreensMedia, which is the only API that handles multiple streams
   // at once.
   DCHECK_EQ(1u, it->value.size());
 
@@ -198,6 +237,8 @@ void MediaStreamDeviceObserver::AddStreams(
     WebMediaStreamDeviceObserver::OnDeviceChangedCb on_device_changed_cb,
     WebMediaStreamDeviceObserver::OnDeviceRequestStateChangeCb
         on_device_request_state_change_cb,
+    WebMediaStreamDeviceObserver::OnDeviceCaptureConfigurationChangeCb
+        on_device_capture_configuration_change_cb,
     WebMediaStreamDeviceObserver::OnDeviceCaptureHandleChangeCb
         on_device_capture_handle_change_cb) {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
@@ -211,6 +252,8 @@ void MediaStreamDeviceObserver::AddStreams(
     stream.on_device_changed_cb = on_device_changed_cb;
     stream.on_device_request_state_change_cb =
         on_device_request_state_change_cb;
+    stream.on_device_capture_configuration_change_cb =
+        on_device_capture_configuration_change_cb;
     stream.on_device_capture_handle_change_cb =
         on_device_capture_handle_change_cb;
     if (stream_devices.audio_device.has_value()) {
@@ -278,9 +321,9 @@ void MediaStreamDeviceObserver::RemoveStreamDevice(
       streams_to_remove.push_back(entry.key);
     }
   }
-  DCHECK(device_found);
-  for (const String& label : streams_to_remove)
+  for (const String& label : streams_to_remove) {
     label_stream_map_.erase(label);
+  }
 }
 
 base::UnguessableToken MediaStreamDeviceObserver::GetAudioSessionId(

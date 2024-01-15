@@ -2,15 +2,19 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {TestRunner} from 'test_runner';
+
+import * as UI from 'devtools/ui/legacy/legacy.js';
+
 (async function() {
   TestRunner.addResult(`Tests extensible tabbed pane closeable tabs persistence logic.\n`);
 
 
-  var tabbedLocation = UI.viewManager.createTabbedLocation();
+  var tabbedLocation = UI.ViewManager.ViewManager.instance().createTabbedLocation();
   logPersistenceSetting();
 
   // Show a closeable tab.
-  var sensors = new UI.SimpleView('sensors');
+  var sensors = new UI.View.SimpleView('sensors');
   sensors.isCloseable = function() {
     return true;
   };
@@ -22,12 +26,12 @@
   logPersistenceSetting();
 
   // Show a permanent tab.
-  var console = new UI.SimpleView('console');
+  var console = new UI.View.SimpleView('console');
   tabbedLocation.showView(console);
   logPersistenceSetting();
 
   // Show transient tab.
-  var history = new UI.SimpleView('history');
+  var history = new UI.View.SimpleView('history');
   history.isTransient = function() {
     return true;
   };

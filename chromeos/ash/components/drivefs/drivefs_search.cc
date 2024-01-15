@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "chromeos/ash/components/drivefs/mojom/drivefs.mojom.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "services/network/public/cpp/network_connection_tracker.h"
@@ -72,7 +72,7 @@ void DriveFsSearch::OnSearchDriveFs(
     drivefs::mojom::QueryParametersPtr query,
     mojom::SearchQuery::GetNextPageCallback callback,
     drive::FileError error,
-    absl::optional<std::vector<drivefs::mojom::QueryItemPtr>> items) {
+    std::optional<std::vector<drivefs::mojom::QueryItemPtr>> items) {
   if (error == drive::FILE_ERROR_NO_CONNECTION &&
       query->query_source !=
           drivefs::mojom::QueryParameters::QuerySource::kLocalOnly) {

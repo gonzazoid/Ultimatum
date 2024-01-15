@@ -5,6 +5,7 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_PLATFORM_P2P_FILTERING_NETWORK_MANAGER_H_
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_P2P_FILTERING_NETWORK_MANAGER_H_
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/threading/thread_checker.h"
 #include "base/time/time.h"
@@ -78,12 +79,6 @@ class FilteringNetworkManager : public rtc::NetworkManagerBase,
   // network list is changed.
   void OnNetworksChanged();
 
-  // Reporting the IPPermissionStatus and how long it takes to send
-  // SignalNetworksChanged. |report_start_latency| is false when called by the
-  // destructor to report no networks changed signal is ever fired and could
-  // potentially be a bug.
-  void ReportMetrics(bool report_start_latency);
-
   // A tri-state permission checking status. It starts with UNKNOWN and will
   // change to GRANTED if one of permissions is granted. Otherwise, DENIED will
   // be returned.
@@ -103,7 +98,7 @@ class FilteringNetworkManager : public rtc::NetworkManagerBase,
   // The class is created by the main thread but used by the worker thread.
   THREAD_CHECKER(thread_checker_);
 
-  media::MediaPermission* media_permission_;
+  raw_ptr<media::MediaPermission, DanglingUntriaged> media_permission_;
 
   int pending_permission_checks_ = 0;
 
@@ -121,10 +116,8 @@ class FilteringNetworkManager : public rtc::NetworkManagerBase,
   // Track whether CheckPermission has been called before StartUpdating.
   bool started_permission_check_ = false;
 
-  // Track how long it takes for client to receive SignalNetworksChanged. This
-  // helps to identify if the signal is delayed by permission check and increase
-  // the setup time.
-  base::TimeTicks start_updating_time_;
+  // Track whether StartUpdating has been called.
+  bool start_updating_called_ = false;
 
   // When the mDNS obfuscation is allowed, access to the mDNS responder provided
   // by the base network manager is provided to conceal IPs with mDNS hostnames.

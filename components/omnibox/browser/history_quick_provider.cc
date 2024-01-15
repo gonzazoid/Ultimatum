@@ -27,15 +27,18 @@
 #include "components/omnibox/browser/autocomplete_match_type.h"
 #include "components/omnibox/browser/autocomplete_provider_client.h"
 #include "components/omnibox/browser/autocomplete_result.h"
+#include "components/omnibox/browser/autocomplete_scoring_signals_annotator.h"
 #include "components/omnibox/browser/history_url_provider.h"
 #include "components/omnibox/browser/in_memory_url_index.h"
 #include "components/omnibox/browser/keyword_provider.h"
 #include "components/omnibox/browser/omnibox_field_trial.h"
+#include "components/omnibox/browser/omnibox_triggered_feature_service.h"
 #include "components/omnibox/browser/url_prefix.h"
 #include "components/omnibox/common/omnibox_features.h"
 #include "components/prefs/pref_service.h"
 #include "components/url_formatter/url_formatter.h"
 #include "net/base/registry_controlled_domains/registry_controlled_domain.h"
+#include "third_party/metrics_proto/omnibox_event.pb.h"
 #include "third_party/metrics_proto/omnibox_focus_type.pb.h"
 #include "third_party/metrics_proto/omnibox_input_type.pb.h"
 #include "ui/base/page_transition_types.h"
@@ -52,13 +55,10 @@ void HistoryQuickProvider::Start(const AutocompleteInput& input,
                                  bool minimal_changes) {
   TRACE_EVENT0("omnibox", "HistoryQuickProvider::Start");
   matches_.clear();
-  if (disabled_ ||
-      input.focus_type() != metrics::OmniboxFocusType::INTERACTION_DEFAULT)
+  if (disabled_ || input.IsZeroSuggest() ||
+      input.type() == metrics::OmniboxInputType::EMPTY) {
     return;
-
-  // Don't bother with INVALID.
-  if ((input.type() == metrics::OmniboxInputType::EMPTY))
-    return;
+  }
 
   // Remove the keyword from input if we're in keyword mode for a starter pack
   // engine.
@@ -95,7 +95,7 @@ void HistoryQuickProvider::DoAutocomplete() {
   // Get the matching URLs from the DB.
   ScoredHistoryMatches matches = in_memory_url_index_->HistoryItemsForTerms(
       autocomplete_input_.text(), autocomplete_input_.cursor_position(), "",
-      max_matches);
+      max_matches, client()->GetOmniboxTriggeredFeatureService());
   if (matches.empty())
     return;
 
@@ -119,6 +119,13 @@ void HistoryQuickProvider::DoAutocomplete() {
 
   add_matches(matches);
 
+  // If ML scoring is enabled, mark all "extra" matches as `culled_by_provider`.
+  // If ML scoring is disabled, this is effectively a no-op as the matches will
+  // already be resized in the above call to `HistoryItemsForTerms()`.
+  ResizeMatches(
+      max_matches,
+      OmniboxFieldTrial::IsMlUrlScoringUnlimitedNumCandidatesEnabled());
+
   // Add suggestions from the user's highly visited domains bypassing
   // `provider_max_matches_`.
 
@@ -128,8 +135,12 @@ void HistoryQuickProvider::DoAutocomplete() {
 
   static const size_t domain_suggestions_min_char =
       OmniboxFieldTrial::kDomainSuggestionsMinInputLength.Get();
-  if (autocomplete_input_.text().length() < domain_suggestions_min_char)
+  static const int max_host_matches =
+      OmniboxFieldTrial::kDomainSuggestionsMaxMatchesPerDomain.Get();
+  if (autocomplete_input_.text().length() < domain_suggestions_min_char ||
+      max_host_matches == 0) {
     return;
+  }
 
   // Append suggestions for each of the user's highly visited domains. To
   // determine these domains, the user's visits are aggregated by URL host and
@@ -146,17 +157,21 @@ void HistoryQuickProvider::DoAutocomplete() {
     //  those are not as big of a concern. If performance metrics regress, we
     //  should extract matching and scoring history items from
     //  `HistoryItemsForTerms()` so it can be done just once.
-    static const int max_host_matches =
-        OmniboxFieldTrial::kDomainSuggestionsMaxMatchesPerDomain.Get();
     ScoredHistoryMatches host_matches =
         in_memory_url_index_->HistoryItemsForTerms(
             autocomplete_input_.text(), autocomplete_input_.cursor_position(),
-            host, max_host_matches);
+            host, max_host_matches,
+            client()->GetOmniboxTriggeredFeatureService());
     // TODO(manukh): Consider using a new `AutocompleteMatchType` for domain
-    //  suggestions to distinguish them in metrics. Would also help with CF
-    //  logging.
-    if (!host_matches.empty())
-      add_matches(host_matches);
+    //  suggestions to distinguish them in metrics.
+    if (!host_matches.empty()) {
+      client()->GetOmniboxTriggeredFeatureService()->FeatureTriggered(
+          metrics::OmniboxEventProto_Feature_DOMAIN_SUGGESTIONS);
+      static const bool counterfactual =
+          OmniboxFieldTrial::kDomainSuggestionsCounterfactual.Get();
+      if (!counterfactual)
+        add_matches(host_matches);
+    }
   }
 }
 
@@ -175,7 +190,7 @@ absl::optional<int> HistoryQuickProvider::MaxMatchScore() {
   // for these inputs.
   const bool can_have_url_what_you_typed_match_first =
       (autocomplete_input_.type() != metrics::OmniboxInputType::QUERY) &&
-      (!autocomplete_input_.parts().username.is_nonempty() ||
+      (autocomplete_input_.parts().username.is_empty() ||
        autocomplete_input_.parts().password.is_nonempty() ||
        autocomplete_input_.parts().path.is_nonempty());
   if (can_have_url_what_you_typed_match_first) {
@@ -220,13 +235,13 @@ absl::optional<int> HistoryQuickProvider::MaxMatchScore() {
           url_what_you_typed_match_score =
               HistoryURLProvider::kScoreForBestInlineableResult;
         } else if (url_db->IsTypedHost(host, /*scheme=*/nullptr) &&
-                   (!autocomplete_input_.parts().path.is_nonempty() ||
+                   (autocomplete_input_.parts().path.is_empty() ||
                     ((autocomplete_input_.parts().path.len == 1) &&
                      (autocomplete_input_
                           .text()[autocomplete_input_.parts().path.begin] ==
                       '/'))) &&
-                   !autocomplete_input_.parts().query.is_nonempty() &&
-                   !autocomplete_input_.parts().ref.is_nonempty()) {
+                   autocomplete_input_.parts().query.is_empty() &&
+                   autocomplete_input_.parts().ref.is_empty()) {
           // Not visited, but we've seen the host before.
           will_have_url_what_you_typed_match_first = true;
           if (net::registry_controlled_domains::HostHasRegistryControlledDomain(
@@ -310,7 +325,7 @@ AutocompleteMatch HistoryQuickProvider::QuickMatchToACMatch(
     match.contents = url_formatter::FormatUrl(
         info.url(),
         AutocompleteMatch::GetFormatTypes(
-            autocomplete_input_.parts().scheme.len > 0 ||
+            autocomplete_input_.parts().scheme.is_nonempty() ||
                 history_match.match_in_scheme,
             history_match.match_in_subdomain),
         base::UnescapeRule::SPACES, nullptr, nullptr, nullptr);
@@ -322,7 +337,7 @@ AutocompleteMatch HistoryQuickProvider::QuickMatchToACMatch(
         ACMatchClassification::URL);
   }
 
-  match.description = info.title();
+  match.description = AutocompleteMatch::SanitizeString(info.title());
   auto description_terms =
       FindTermMatches(autocomplete_input_.text(), match.description);
   match.description_class = ClassifyTermMatches(
@@ -350,9 +365,24 @@ AutocompleteMatch HistoryQuickProvider::QuickMatchToACMatch(
     match.from_keyword = true;
   }
 
+  if (OmniboxFieldTrial::IsPopulatingUrlScoringSignalsEnabled() &&
+      AutocompleteScoringSignalsAnnotator::IsEligibleMatch(match)) {
+    // Propagate scoring signals to AC Match for ML Model training data.
+    // `allowed_to_be_default_match` is set in this function, after the ACMatch
+    // is constructed, rather than in ScoredHistoryMatch. We have to propagate
+    // that signal to `scoring_signals` in addition to all signals calculated in
+    // the ScoredHistoryMatch.
+    DCHECK(history_match.scoring_signals.has_value());
+    match.scoring_signals = history_match.scoring_signals;
+    match.scoring_signals->set_allowed_to_be_default_match(
+        match.allowed_to_be_default_match);
+  }
   match.RecordAdditionalInfo("typed count", info.typed_count());
   match.RecordAdditionalInfo("visit count", info.visit_count());
   match.RecordAdditionalInfo("last visit", info.last_visit());
-
+  match.RecordAdditionalInfo("raw score before domain boosting",
+                             history_match.raw_score_before_domain_boosting);
+  match.RecordAdditionalInfo("raw score after domain boosting",
+                             history_match.raw_score_after_domain_boosting);
   return match;
 }

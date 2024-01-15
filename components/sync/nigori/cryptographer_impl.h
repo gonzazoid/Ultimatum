@@ -5,12 +5,16 @@
 #ifndef COMPONENTS_SYNC_NIGORI_CRYPTOGRAPHER_IMPL_H_
 #define COMPONENTS_SYNC_NIGORI_CRYPTOGRAPHER_IMPL_H_
 
+#include <cstdint>
 #include <memory>
 #include <string>
+#include <vector>
 
+#include "components/sync/engine/nigori/cross_user_sharing_public_private_key_pair.h"
 #include "components/sync/engine/nigori/cryptographer.h"
 #include "components/sync/engine/nigori/key_derivation_params.h"
 #include "components/sync/engine/nigori/nigori.h"
+#include "components/sync/nigori/cross_user_sharing_keys.h"
 #include "components/sync/nigori/nigori_key_bag.h"
 #include "components/sync/protocol/nigori_local_data.pb.h"
 
@@ -59,13 +63,20 @@ class CryptographerImpl : public Cryptographer {
   // Does NOT set or change the default encryption key.
   void EmplaceKeysFrom(const NigoriKeyBag& key_bag);
 
+  // Drops any pre-existing key pairs and adds all keys from |keys|.
+  void ReplaceCrossUserSharingKeys(CrossUserSharingKeys keys);
+
+  // Adds the given Public-private key-pair associated with |version|. Replaces
+  // any pre-existing key pair for the given version if exists.
+  void SetKeyPair(CrossUserSharingPublicPrivateKeyPair key_pair,
+                  uint32_t version);
+
   // Sets or changes the default encryption key, which causes CanEncrypt() to
   // return true. |key_name| must not be empty and must represent a known key.
   void SelectDefaultEncryptionKey(const std::string& key_name);
 
-  // Adds all keys in |other| that weren't previously known, and selects the
-  // same default key. |other| must have selected a default key.
-  void EmplaceKeysAndSelectDefaultKeyFrom(const CryptographerImpl& other);
+  // Adds all Nigori keys in |other| that weren't previously known.
+  void EmplaceAllNigoriKeysFrom(const CryptographerImpl& other);
 
   // Clears the default encryption key, which causes CanEncrypt() to return
   // false.
@@ -81,6 +92,18 @@ class CryptographerImpl : public Cryptographer {
 
   // Determines whether |key_name| represents a known key.
   bool HasKey(const std::string& key_name) const;
+
+  // Determines whether |key_pair_version| represents a known Public-private
+  // key-pair.
+  bool HasKeyPair(uint32_t key_pair_version) const;
+
+  // Returns a key pair for a given `version`. The key pair with the given
+  // `version` must exist.
+  const CrossUserSharingPublicPrivateKeyPair& GetCrossUserSharingKeyPair(
+      uint32_t version) const;
+
+  // Sets or changes the version of the default cross user sharing key.
+  void SelectDefaultCrossUserSharingKey(const uint32_t version);
 
   // Returns a proto representation of the default encryption key. |*this| must
   // have a default encryption key set, as reflected by CanEncrypt().
@@ -98,10 +121,18 @@ class CryptographerImpl : public Cryptographer {
                      sync_pb::EncryptedData* encrypted) const override;
   bool DecryptToString(const sync_pb::EncryptedData& encrypted,
                        std::string* decrypted) const override;
+  absl::optional<std::vector<uint8_t>> AuthEncryptForCrossUserSharing(
+      base::span<const uint8_t> plaintext,
+      base::span<const uint8_t> recipient_public_key) const override;
+  absl::optional<std::vector<uint8_t>> AuthDecryptForCrossUserSharing(
+      base::span<const uint8_t> encrypted_data,
+      base::span<const uint8_t> sender_public_key,
+      const uint32_t recipient_key_version) const override;
 
  private:
   CryptographerImpl(NigoriKeyBag key_bag,
-                    std::string default_encryption_key_name);
+                    std::string default_encryption_key_name,
+                    CrossUserSharingKeys cross_user_sharing_keys);
 
   // The actual keys we know about.
   NigoriKeyBag key_bag_;
@@ -110,6 +141,13 @@ class CryptographerImpl : public Cryptographer {
   // must correspond to a key within |key_bag_|. May be empty even if |key_bag_|
   // is not.
   std::string default_encryption_key_name_;
+
+  // The version of the default cross user sharing key to be used for
+  // encryption.
+  absl::optional<uint32_t> default_cross_user_sharing_key_version_;
+
+  // Cross user sharing keys we know about.
+  CrossUserSharingKeys cross_user_sharing_keys_;
 };
 
 }  // namespace syncer

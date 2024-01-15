@@ -4,6 +4,8 @@
 
 #include "components/sync/test/fake_cryptographer.h"
 
+#include <iterator>
+
 #include "base/containers/contains.h"
 #include "base/ranges/algorithm.h"
 #include "base/strings/strcat.h"
@@ -86,6 +88,53 @@ bool FakeCryptographer::DecryptToString(const sync_pb::EncryptedData& encrypted,
       std::string(encrypted.blob().begin() + key_name_and_separator.size(),
                   encrypted.blob().end());
   return true;
+}
+
+const CrossUserSharingPublicPrivateKeyPair&
+FakeCryptographer::GetCrossUserSharingKeyPair(uint32_t version) const {
+  return cross_user_sharing_key_pair_;
+}
+
+absl::optional<std::vector<uint8_t>>
+FakeCryptographer::AuthEncryptForCrossUserSharing(
+    base::span<const uint8_t> plaintext,
+    base::span<const uint8_t> recipient_public_key) const {
+  // Just join two parts of the data. Note that sender's private key is omitted
+  // here for simplicity.
+  std::vector<uint8_t> result;
+  result.reserve(plaintext.size() + recipient_public_key.size());
+  base::ranges::copy(recipient_public_key, std::back_inserter(result));
+  base::ranges::copy(plaintext, std::back_inserter(result));
+  return result;
+}
+
+absl::optional<std::vector<uint8_t>>
+FakeCryptographer::AuthDecryptForCrossUserSharing(
+    base::span<const uint8_t> encrypted_data,
+    base::span<const uint8_t> sender_public_key,
+    const uint32_t recipient_key_version) const {
+  // `encrypted_data` is expected to contain receiver's public key as a prefix,
+  // and the actual data. `sender_public_key` is not used for simplicity. In
+  // real case, sender's private key is used during encryption and sender's
+  // public key during decryption.
+  if (encrypted_data.size() <
+      cross_user_sharing_key_pair_.GetRawPublicKey().size()) {
+    return absl::nullopt;
+  }
+
+  // Verify that the prefix contains an expected public key.
+  if (base::ranges::equal(
+          cross_user_sharing_key_pair_.GetRawPublicKey().begin(),
+          cross_user_sharing_key_pair_.GetRawPublicKey().end(),
+          encrypted_data.begin(),
+          encrypted_data.begin() +
+              cross_user_sharing_key_pair_.GetRawPublicKey().size())) {
+    return absl::nullopt;
+  }
+  return std::vector<uint8_t>(
+      encrypted_data.begin() +
+          cross_user_sharing_key_pair_.GetRawPublicKey().size(),
+      encrypted_data.end());
 }
 
 }  // namespace syncer

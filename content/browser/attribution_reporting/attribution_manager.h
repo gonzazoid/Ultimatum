@@ -5,40 +5,46 @@
 #ifndef CONTENT_BROWSER_ATTRIBUTION_REPORTING_ATTRIBUTION_MANAGER_H_
 #define CONTENT_BROWSER_ATTRIBUTION_REPORTING_ATTRIBUTION_MANAGER_H_
 
-#include <string>
+#include <optional>
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "content/browser/attribution_reporting/attribution_report.h"
-#include "content/browser/attribution_reporting/attribution_reporting.mojom-forward.h"
+#include "content/common/content_export.h"
+#include "content/public/browser/attribution_data_model.h"
 #include "content/public/browser/storage_partition.h"
+#include "services/network/public/mojom/attribution.mojom-forward.h"
 
 namespace base {
 class Time;
 }  // namespace base
-
-namespace url {
-class Origin;
-}  // namespace url
 
 namespace content {
 
 class AttributionDataHostManager;
 class AttributionObserver;
 class AttributionTrigger;
+class BrowserContext;
 class BrowsingDataFilterBuilder;
-class OsLevelAttributionManager;
 class StorableSource;
 class StoredSource;
 class WebContents;
 
+struct GlobalRenderFrameHostId;
+struct OsRegistration;
+
 // Interface that mediates data flow between the network, storage layer, and
 // blink.
-class AttributionManager {
+class CONTENT_EXPORT AttributionManager : public AttributionDataModel {
  public:
   static AttributionManager* FromWebContents(WebContents* web_contents);
 
-  virtual ~AttributionManager() = default;
+  static AttributionManager* FromBrowserContext(BrowserContext*);
+
+  static network::mojom::AttributionSupport GetAttributionSupport(
+      WebContents* web_contents);
+
+  ~AttributionManager() override = default;
 
   virtual void AddObserver(AttributionObserver* observer) = 0;
 
@@ -47,17 +53,17 @@ class AttributionManager {
   // Gets manager responsible for tracking pending data hosts targeting `this`.
   virtual AttributionDataHostManager* GetDataHostManager() = 0;
 
-  // Gets the os-level manager responsible for handling OS sources and
-  // triggers targeting `this`. May return `nullptr`.
-  virtual OsLevelAttributionManager* GetOsLevelManager() = 0;
-
   // Persists the given |source| to storage. Called when a navigation
   // originating from a source tag finishes.
-  virtual void HandleSource(StorableSource source) = 0;
+  virtual void HandleSource(StorableSource source,
+                            GlobalRenderFrameHostId render_frame_id) = 0;
 
   // Process a newly registered trigger. Will create and log any new
   // reports to storage.
-  virtual void HandleTrigger(AttributionTrigger trigger) = 0;
+  virtual void HandleTrigger(AttributionTrigger trigger,
+                             GlobalRenderFrameHostId render_frame_id) = 0;
+
+  virtual void HandleOsRegistration(OsRegistration) = 0;
 
   // Get all sources that are currently stored in this partition. Used for
   // populating WebUI.
@@ -67,7 +73,6 @@ class AttributionManager {
   // Get all pending reports that are currently stored in this partition. Used
   // for populating WebUI and simulator.
   virtual void GetPendingReportsForInternalUse(
-      AttributionReport::Types report_types,
       int limit,
       base::OnceCallback<void(std::vector<AttributionReport>)> callback) = 0;
 
@@ -76,13 +81,6 @@ class AttributionManager {
   virtual void SendReportsForWebUI(
       const std::vector<AttributionReport::Id>& ids,
       base::OnceClosure done) = 0;
-
-  // Notifies observers of a failed browser-side source-registration.
-  // Called by `AttributionDataHostManagerImpl`.
-  virtual void NotifyFailedSourceRegistration(
-      const std::string& header_value,
-      const url::Origin& reporting_origin,
-      attribution_reporting::mojom::SourceRegistrationError) = 0;
 
   // Deletes all data in storage for storage keys matching `filter`, between
   // `delete_begin` and `delete_end` time.
@@ -102,6 +100,12 @@ class AttributionManager {
                          BrowsingDataFilterBuilder* filter_builder,
                          bool delete_rate_limit_data,
                          base::OnceClosure done) = 0;
+
+  // If debug mode is enabled, noise and delays are disabled to facilitate
+  // testing, whether automated or manual. If `enabled` is `std::nullopt`,
+  // falls back to `switches::kAttributionReportingDebugMode`.
+  virtual void SetDebugMode(std::optional<bool> enabled,
+                            base::OnceClosure done) = 0;
 };
 
 }  // namespace content

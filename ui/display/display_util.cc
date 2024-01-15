@@ -18,7 +18,7 @@ void DisplayUtil::DisplayToScreenInfo(ScreenInfo* screen_info,
   // TODO(husky): Remove any Android system controls from availableRect.
   screen_info->available_rect = display.work_area();
   screen_info->device_scale_factor = display.device_scale_factor();
-  screen_info->display_color_spaces = display.color_spaces();
+  screen_info->display_color_spaces = display.GetColorSpaces();
   screen_info->depth = display.color_depth();
   screen_info->depth_per_component = display.depth_per_component();
   screen_info->is_monochrome = display.is_monochrome();
@@ -41,7 +41,7 @@ void DisplayUtil::DisplayToScreenInfo(ScreenInfo* screen_info,
     screen_info->orientation_angle = 90;
 #endif
 
-#if BUILDFLAG(IS_ANDROID)
+#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_IOS)
   screen_info->orientation_type = GetOrientationTypeForMobile(display);
 #else
   screen_info->orientation_type = GetOrientationTypeForDesktop(display);
@@ -61,7 +61,7 @@ void DisplayUtil::DisplayToScreenInfo(ScreenInfo* screen_info,
 
 // static
 void DisplayUtil::GetDefaultScreenInfo(ScreenInfo* screen_info) {
-  return GetNativeViewScreenInfo(screen_info, nullptr);
+  return GetNativeViewScreenInfo(screen_info, gfx::NativeView());
 }
 
 // static
@@ -135,6 +135,20 @@ mojom::ScreenOrientation DisplayUtil::GetOrientationTypeForDesktop(
   return primary_landscape_angle == angle
              ? mojom::ScreenOrientation::kLandscapePrimary
              : mojom::ScreenOrientation::kLandscapeSecondary;
+}
+
+// static
+uint32_t DisplayUtil::GetAudioFormats() {
+  // Audio passthrough is only supported with a single display. If multiple
+  // displays are attached, audio passthrough will not be enabled.
+  Screen* screen = Screen::GetScreen();
+  if (screen) {
+    auto display = screen->GetAllDisplays();
+    if (display.size() == 1) {
+      return display.front().audio_formats();
+    }
+  }
+  return 0;
 }
 
 }  // namespace display

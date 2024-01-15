@@ -25,6 +25,10 @@ struct BLINK_COMMON_EXPORT StructTraits<blink::mojom::VisualPropertiesDataView,
     return r.auto_resize_enabled;
   }
 
+  static bool resizable(const blink::VisualProperties& r) {
+    return r.resizable;
+  }
+
   static const gfx::Size& min_size_for_auto_resize(
       const blink::VisualProperties& r) {
     return r.min_size_for_auto_resize;
@@ -72,12 +76,22 @@ struct BLINK_COMMON_EXPORT StructTraits<blink::mojom::VisualPropertiesDataView,
     return r.display_mode;
   }
 
+  static const ui::WindowShowState& window_show_state(
+      const blink::VisualProperties& r) {
+    return r.window_show_state;
+  }
+
   static uint32_t capture_sequence_number(const blink::VisualProperties& r) {
     return r.capture_sequence_number;
   }
 
   static double zoom_level(const blink::VisualProperties& r) {
     return r.zoom_level;
+  }
+
+  static int virtual_keyboard_resize_height_physical_px(
+      const blink::VisualProperties& r) {
+    return r.virtual_keyboard_resize_height_physical_px;
   }
 
   static double page_scale_factor(const blink::VisualProperties& r) {
@@ -88,6 +102,12 @@ struct BLINK_COMMON_EXPORT StructTraits<blink::mojom::VisualPropertiesDataView,
   static double compositing_scale_factor(const blink::VisualProperties& r) {
     DCHECK_GT(r.compositing_scale_factor, 0);
     return r.compositing_scale_factor;
+  }
+
+  static float cursor_accessibility_scale_factor(
+      const blink::VisualProperties& r) {
+    DCHECK_GE(r.cursor_accessibility_scale_factor, 1.f);
+    return r.cursor_accessibility_scale_factor;
   }
 
   static const std::vector<gfx::Rect>& root_widget_window_segments(

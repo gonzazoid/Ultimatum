@@ -4,12 +4,18 @@
 
 #include "extensions/renderer/api_activity_logger.h"
 
+#include <string>
+
 #include "base/run_loop.h"
+#include "base/values.h"
 #include "extensions/common/extension_builder.h"
 #include "extensions/common/extension_messages.h"
 #include "extensions/common/features/feature.h"
+#include "extensions/common/mojom/context_type.mojom.h"
+#include "extensions/common/utils/extension_utils.h"
 #include "extensions/renderer/bindings/api_binding_test.h"
 #include "extensions/renderer/bindings/api_binding_test_util.h"
+#include "extensions/renderer/ipc_message_sender.h"
 #include "extensions/renderer/native_extension_bindings_system_test_base.h"
 #include "extensions/renderer/script_context.h"
 #include "extensions/renderer/script_context_set.h"
@@ -52,29 +58,33 @@ TEST_F(ActivityLoggerTest, DontCrashOnUnconvertedValues) {
 
   scoped_refptr<const Extension> extension = ExtensionBuilder("Test").Build();
   extension_ids.insert(extension->id());
-  const Feature::Context kContextType = Feature::BLESSED_EXTENSION_CONTEXT;
+  const mojom::ContextType kContextType =
+      mojom::ContextType::kPrivilegedExtension;
   script_context_set.AddForTesting(std::make_unique<ScriptContext>(
-      context, nullptr, extension.get(), kContextType, extension.get(),
-      kContextType));
+      context, nullptr, GenerateHostIdFromExtensionId(extension->id()),
+      extension.get(), kContextType, extension.get(), kContextType));
+  ScriptContext* script_context = script_context_set.GetByV8Context(context);
 
-  std::vector<v8::Local<v8::Value>> args = {v8::Undefined(isolate())};
+  v8::LocalVector<v8::Value> args(isolate(), {v8::Undefined(isolate())});
 
   std::unique_ptr<TestIPCMessageSender> ipc_sender =
       std::make_unique<testing::StrictMock<TestIPCMessageSender>>();
   EXPECT_CALL(*ipc_sender,
-              SendActivityLogIPC(extension->id(), ActivityLogCallType::APICALL,
-                                 testing::_))
-      .WillOnce([&](const ExtensionId& extension_id, const ActivityLogCallType,
-                    const ExtensionHostMsg_APIActionOrEvent_Params& params) {
-        EXPECT_EQ("someApiMethod", params.api_call);
-        ASSERT_EQ(1u, params.arguments.size());
-        EXPECT_EQ(base::Value::Type::NONE, params.arguments[0].type());
+              SendActivityLogIPC(script_context, extension->id(),
+                                 ActivityLogCallType::APICALL, testing::_,
+                                 testing::_, testing::_))
+      .WillOnce([&](ScriptContext* script_context,
+                    const ExtensionId& extension_id,
+                    ActivityLogCallType call_type, const std::string& call_name,
+                    base::Value::List args, const std::string& extra) {
+        EXPECT_EQ("someApiMethod", call_name);
+        ASSERT_EQ(1u, args.size());
+        EXPECT_EQ(base::Value::Type::NONE, args[0].type());
       });
 
   APIActivityLogger::LogAPICall(ipc_sender.get(), context, "someApiMethod",
                                 args);
 
-  ScriptContext* script_context = script_context_set.GetByV8Context(context);
   script_context_set.Remove(script_context);
   base::RunLoop().RunUntilIdle();  // Let script context destruction complete.
   ::testing::Mock::VerifyAndClearExpectations(ipc_sender.get());

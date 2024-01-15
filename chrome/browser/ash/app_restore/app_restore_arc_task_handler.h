@@ -8,14 +8,15 @@
 #include <utility>
 
 #include "base/scoped_observation.h"
+#include "chrome/browser/ash/app_list/arc/arc_app_list_prefs.h"
 #include "chrome/browser/ash/arc/session/arc_session_manager_observer.h"
-#include "chrome/browser/ui/app_list/arc/arc_app_list_prefs.h"
 #include "chrome/common/buildflags.h"
 #include "components/keyed_service/core/keyed_service.h"
 
 class Profile;
 
 namespace ash {
+
 namespace full_restore {
 class ArcGhostWindowHandler;
 class FullRestoreAppLaunchHandlerArcAppBrowserTest;
@@ -107,7 +108,7 @@ class AppRestoreArcTaskHandler : public KeyedService,
   void Shutdown() override;
 
  private:
-  friend class ash::full_restore::FullRestoreAppLaunchHandlerArcAppBrowserTest;
+  friend class full_restore::FullRestoreAppLaunchHandlerArcAppBrowserTest;
 
   ArcAppQueueRestoreHandler* CreateOrGetArcAppQueueRestoreHandler(
       LauncherTag launcher_tag,

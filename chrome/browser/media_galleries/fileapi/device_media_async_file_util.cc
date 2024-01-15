@@ -8,13 +8,13 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ptr_util.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/task/task_runner_util.h"
 #include "chrome/browser/media_galleries/fileapi/media_path_filter.h"
 #include "chrome/browser/media_galleries/fileapi/mtp_device_async_delegate.h"
 #include "chrome/browser/media_galleries/fileapi/mtp_device_map_service.h"
@@ -171,8 +171,8 @@ void OnDidCreateSnapshotFile(AsyncFileUtil::CreateSnapshotFileCallback callback,
           media_task_runner);
 
   if (validate_media_files) {
-    base::PostTaskAndReplyWithResult(
-        media_task_runner, FROM_HERE,
+    media_task_runner->PostTaskAndReplyWithResult(
+        FROM_HERE,
         base::BindOnce(&NativeMediaFileUtil::IsMediaFile, platform_path),
         base::BindOnce(&OnDidCheckMediaForCreateSnapshotFile,
                        std::move(callback), file_info, file));
@@ -312,9 +312,9 @@ void DeviceMediaAsyncFileUtil::CreateOrOpen(
     CreateOrOpenCallback callback) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::IO);
   // Returns an error if any unsupported flag is found.
-  if (file_flags & ~(base::File::FLAG_OPEN |
-                     base::File::FLAG_READ |
-                     base::File::FLAG_WRITE_ATTRIBUTES)) {
+  if (file_flags &
+      ~(base::File::FLAG_OPEN | base::File::FLAG_READ |
+        base::File::FLAG_WRITE_ATTRIBUTES | base::File::FLAG_WIN_NO_EXECUTE)) {
     std::move(callback).Run(base::File(base::File::FILE_ERROR_SECURITY),
                             base::OnceClosure());
     return;
@@ -357,20 +357,18 @@ void DeviceMediaAsyncFileUtil::CreateDirectory(
   }
 
   // Only one of the success or error callbacks will be called here.
-  auto split_callback = base::SplitOnceCallback(std::move(callback));
+  auto [on_success, on_error] = base::SplitOnceCallback(std::move(callback));
   delegate->CreateDirectory(
       url.path(), exclusive, recursive,
-      base::BindRepeating(&DeviceMediaAsyncFileUtil::OnDidCreateDirectory,
-                          weak_ptr_factory_.GetWeakPtr(),
-                          base::Passed(&split_callback.first)),
-      base::BindOnce(&OnCreateDirectoryError,
-                     std::move(split_callback.second)));
+      base::BindOnce(&DeviceMediaAsyncFileUtil::OnDidCreateDirectory,
+                     weak_ptr_factory_.GetWeakPtr(), std::move(on_success)),
+      base::BindOnce(&OnCreateDirectoryError, std::move(on_error)));
 }
 
 void DeviceMediaAsyncFileUtil::GetFileInfo(
     std::unique_ptr<FileSystemOperationContext> context,
     const FileSystemURL& url,
-    int /* flags */,
+    GetMetadataFieldSet fields,
     GetFileInfoCallback callback) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::IO);
   MTPDeviceAsyncDelegate* delegate =
@@ -604,8 +602,8 @@ void DeviceMediaAsyncFileUtil::CreateSnapshotFile(
   }
 
   scoped_refptr<base::SequencedTaskRunner> task_runner(context->task_runner());
-  base::PostTaskAndReplyWithResult(
-      task_runner.get(), FROM_HERE,
+  task_runner->PostTaskAndReplyWithResult(
+      FROM_HERE,
       base::BindOnce(&CreateSnapshotFileOnBlockingPool, profile_path_),
       base::BindOnce(&OnSnapshotFileCreatedRunTask, std::move(context),
                      std::move(callback), url, validate_media_files()));
@@ -687,8 +685,8 @@ void DeviceMediaAsyncFileUtil::OnDidGetFileInfo(
     return;
   }
 
-  base::PostTaskAndReplyWithResult(
-      task_runner, FROM_HERE,
+  task_runner->PostTaskAndReplyWithResult(
+      FROM_HERE,
       base::BindOnce(&MediaPathFilterWrapper::CheckFilePath,
                      media_path_filter_wrapper_, path),
       base::BindOnce(&OnDidCheckMediaForGetFileInfo, std::move(callback),
@@ -706,8 +704,8 @@ void DeviceMediaAsyncFileUtil::OnDidReadDirectory(
     return;
   }
 
-  base::PostTaskAndReplyWithResult(
-      task_runner, FROM_HERE,
+  task_runner->PostTaskAndReplyWithResult(
+      FROM_HERE,
       base::BindOnce(&MediaPathFilterWrapper::FilterMediaEntries,
                      media_path_filter_wrapper_, std::move(file_list)),
       base::BindOnce(&OnDidCheckMediaForReadDirectory, callback, has_more));

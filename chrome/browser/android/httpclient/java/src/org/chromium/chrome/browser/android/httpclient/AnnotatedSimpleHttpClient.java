@@ -4,7 +4,10 @@
 
 package org.chromium.chrome.browser.android.httpclient;
 
+import org.chromium.base.task.PostTask;
+import org.chromium.base.task.TaskTraits;
 import org.chromium.chrome.browser.android.httpclient.SimpleHttpClient.HttpResponse;
+import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.net.NetError;
 import org.chromium.net.NetworkTrafficAnnotationTag;
 import org.chromium.url.GURL;
@@ -19,22 +22,41 @@ import java.util.Map;
  *
  */
 public class AnnotatedSimpleHttpClient implements ChromeHttpClient {
-    private NetworkTrafficAnnotationTag mAnnotation;
+    private final Profile mProfile;
+    private final NetworkTrafficAnnotationTag mAnnotation;
 
-    public AnnotatedSimpleHttpClient(NetworkTrafficAnnotationTag annotation) {
+    public AnnotatedSimpleHttpClient(Profile profile, NetworkTrafficAnnotationTag annotation) {
+        mProfile = profile;
         mAnnotation = annotation;
     }
 
     @Override
-    public void send(String url, String requestType, byte[] body, Map<String, String> headers,
+    public void send(
+            String url,
+            String requestType,
+            byte[] body,
+            Map<String, String> headers,
             HttpResponseCallback callback) {
         GURL gurl = new GURL(url);
         // Also mask network stack error codes as HTTP status code (better than
         // swallowing it and third_party code does not know about chrome's
         // network stack errors enum).
-        SimpleHttpClient.get().send(
-                gurl, requestType, body, headers, mAnnotation, (HttpResponse response) -> {
-                    callback.accept(getStatusCode(response), response.mBody, response.mHeaders);
+        PostTask.runOrPostTask(
+                TaskTraits.UI_DEFAULT,
+                () -> {
+                    SimpleHttpClient.getForProfile(mProfile)
+                            .send(
+                                    gurl,
+                                    requestType,
+                                    body,
+                                    headers,
+                                    mAnnotation,
+                                    (HttpResponse response) -> {
+                                        callback.accept(
+                                                getStatusCode(response),
+                                                response.mBody,
+                                                response.mHeaders);
+                                    });
                 });
     }
 
@@ -44,10 +66,11 @@ public class AnnotatedSimpleHttpClient implements ChromeHttpClient {
         // conflict with http status codes thus allow us to exfiltrate the cause
         // of the failure without the client library needing to understand our
         // error codes, or handling an extra error code.
-        int responseCode = response.mNetErrorCode != 0
-                        && response.mNetErrorCode != NetError.ERR_HTTP_RESPONSE_CODE_FAILURE
-                ? response.mNetErrorCode
-                : response.mResponseCode;
+        int responseCode =
+                response.mNetErrorCode != 0
+                                && response.mNetErrorCode != NetError.ERR_HTTP_RESPONSE_CODE_FAILURE
+                        ? response.mNetErrorCode
+                        : response.mResponseCode;
         return responseCode;
     }
 }

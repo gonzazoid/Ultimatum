@@ -4,7 +4,8 @@
 
 #include "extensions/browser/guest_view/mime_handler_view/test_mime_handler_view_guest.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/test_timeouts.h"
 #include "base/time/time.h"
 #include "components/guest_view/browser/test_guest_view_manager.h"
@@ -17,8 +18,8 @@ using guest_view::GuestViewBase;
 namespace extensions {
 
 TestMimeHandlerViewGuest::TestMimeHandlerViewGuest(
-    content::WebContents* owner_web_contents)
-    : MimeHandlerViewGuest(owner_web_contents) {}
+    content::RenderFrameHost* owner_rfh)
+    : MimeHandlerViewGuest(owner_rfh) {}
 
 TestMimeHandlerViewGuest::~TestMimeHandlerViewGuest() = default;
 
@@ -33,8 +34,8 @@ void TestMimeHandlerViewGuest::RegisterTestGuestViewType(
 
 // static
 std::unique_ptr<GuestViewBase> TestMimeHandlerViewGuest::Create(
-    content::WebContents* owner_web_contents) {
-  return base::WrapUnique(new TestMimeHandlerViewGuest(owner_web_contents));
+    content::RenderFrameHost* owner_rfh) {
+  return base::WrapUnique(new TestMimeHandlerViewGuest(owner_rfh));
 }
 
 // static
@@ -85,7 +86,7 @@ void TestMimeHandlerViewGuest::WaitForGuestLoadStartThenStop(
   while (!guest_contents->IsLoading() &&
          !guest_view->GetController().GetLastCommittedEntry()) {
     base::RunLoop run_loop;
-    base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE, run_loop.QuitClosure(), TestTimeouts::tiny_timeout());
     run_loop.Run();
   }

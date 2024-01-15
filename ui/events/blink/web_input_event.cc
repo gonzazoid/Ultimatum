@@ -6,7 +6,6 @@
 
 #include "build/build_config.h"
 #include "ui/base/ui_base_features.h"
-#include "ui/events/base_event_utils.h"
 #include "ui/events/blink/blink_event_util.h"
 #include "ui/events/blink/blink_features.h"
 #include "ui/events/event.h"
@@ -425,14 +424,15 @@ blink::WebMouseEvent MakeWebMouseEventFromUiEvent(const MouseEvent& event) {
     webkit_event.button = blink::WebMouseEvent::Button::kRight;
 
   webkit_event.click_count = click_count;
-  webkit_event.tilt_x = roundf(event.pointer_details().tilt_x);
-  webkit_event.tilt_y = roundf(event.pointer_details().tilt_y);
+  webkit_event.tilt_x = event.pointer_details().tilt_x;
+  webkit_event.tilt_y = event.pointer_details().tilt_y;
   webkit_event.force = event.pointer_details().force;
   webkit_event.tangential_pressure =
       event.pointer_details().tangential_pressure;
   webkit_event.twist = event.pointer_details().twist;
   webkit_event.id = event.pointer_details().id;
   webkit_event.pointer_type = event.pointer_details().pointer_type;
+  webkit_event.device_id = event.source_device_id();
 
   return webkit_event;
 }
@@ -483,8 +483,8 @@ blink::WebMouseWheelEvent MakeWebMouseWheelEventFromUiEvent(
         (kScrollPercentPerLineOrChar / MouseWheelEvent::kWheelDelta);
   }
 
-  webkit_event.tilt_x = roundf(event.pointer_details().tilt_x);
-  webkit_event.tilt_y = roundf(event.pointer_details().tilt_y);
+  webkit_event.tilt_x = event.pointer_details().tilt_x;
+  webkit_event.tilt_y = event.pointer_details().tilt_y;
   webkit_event.force = event.pointer_details().force;
   webkit_event.pointer_type = event.pointer_details().pointer_type;
 

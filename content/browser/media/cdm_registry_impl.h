@@ -72,40 +72,70 @@ class CONTENT_EXPORT CdmRegistryImpl : public CdmRegistry,
   CdmRegistryImpl();
   ~CdmRegistryImpl() override;
 
+  // Get the capability for `key_system` with robustness `robustness`
+  // synchronously. If lazy initialization is needed, return
+  // Status::kUninitialized.
+  std::pair<std::optional<media::CdmCapability>, CdmInfo::Status> GetCapability(
+      const std::string& key_system,
+      CdmInfo::Robustness robustness);
+
+  // Get the capability for `key_system` with robustness `robustness`
+  // synchronously. All initialization should have been completed.
+  std::pair<std::optional<media::CdmCapability>, CdmInfo::Status>
+  GetFinalCapability(const std::string& key_system,
+                     CdmInfo::Robustness robustness);
+
   // Finalizes KeySystemCapabilities. May lazy initialize CDM capabilities
   // asynchronously if needed.
   void FinalizeKeySystemCapabilities();
 
-  using CdmCapabilityCB =
-      base::OnceCallback<void(absl::optional<media::CdmCapability>)>;
-  void LazyInitializeHardwareSecureCapability(
-      const std::string& key_system,
-      CdmCapabilityCB cdm_capability_cb);
+  // Attempt to finalize KeySystemCapability for `key_system` with robustness
+  // `robustness`. May lazy initialize it asynchronously if needed.
+  void AttemptToFinalizeKeySystemCapability(const std::string& key_system,
+                                            CdmInfo::Robustness robustness);
 
-  void OnHardwareSecureCapabilityInitialized(
+  // Lazily initialize `key_system` with robustness `robustness`, calling
+  // `cdm_capability_cb`. Callback may be called synchronously
+  // or asynchronously.
+  void LazyInitializeCapability(const std::string& key_system,
+                                CdmInfo::Robustness robustness,
+                                media::CdmCapabilityCB cdm_capability_cb);
+
+  // Called when initialization of `key_system` with robustness `robustness`
+  // is complete. `cdm_capability` will be std::nullopt if the key system
+  // with specified robustness isn't supported.
+  void OnCapabilityInitialized(
       const std::string& key_system,
-      absl::optional<media::CdmCapability> cdm_capability);
+      const CdmInfo::Robustness robustness,
+      std::optional<media::CdmCapability> cdm_capability);
 
   // Finalizes the CdmInfo corresponding to `key_system` and `robustness` if its
   // CdmCapability is null (lazy initialization). No-op if the CdmInfo does not
   // exist, or if the CdmInfo's CdmCapability is not null. The CdmInfo will be
   // removed if `cdm_capability` is null, since the CDM does not support any
   // capability.
-  void FinalizeHardwareSecureCapability(
-      const std::string& key_system,
-      absl::optional<media::CdmCapability> cdm_capability,
-      CdmInfo::Status status);
+  void FinalizeCapability(const std::string& key_system,
+                          const CdmInfo::Robustness robustness,
+                          std::optional<media::CdmCapability> cdm_capability,
+                          CdmInfo::Status status);
 
+  // When capabilities for all registered key systems have been determined,
+  // notify all observers with the updated values. No notification is done
+  // if the capabilities have not changed.
   void UpdateAndNotifyKeySystemCapabilities();
 
+  // Returns the set of all registered key systems.
   std::set<std::string> GetSupportedKeySystems() const;
 
+  // Returns the capabailities for all registered key systems.
   KeySystemCapabilities GetKeySystemCapabilities();
 
-  // Sets a callback to query for hardware secure capability for testing.
-  using HardwareSecureCapabilityCB =
-      base::RepeatingCallback<void(const std::string&, CdmCapabilityCB)>;
-  void SetHardwareSecureCapabilityCBForTesting(HardwareSecureCapabilityCB cb);
+  // Sets callbacks to query for secure capability for testing.
+  using CapabilityCB =
+      base::RepeatingCallback<void(const std::string&,
+                                   const CdmInfo::Robustness robustness,
+                                   media::CdmCapabilityCB)>;
+  void SetCapabilityCBForTesting(CapabilityCB cb);
 
   std::vector<CdmInfo> cdms_ GUARDED_BY_CONTEXT(sequence_checker_);
 
@@ -114,13 +144,14 @@ class CONTENT_EXPORT CdmRegistryImpl : public CdmRegistry,
       key_system_capabilities_update_callbacks_;
 
   // Cached current KeySystemCapabilities value.
-  absl::optional<KeySystemCapabilities> key_system_capabilities_;
+  std::optional<KeySystemCapabilities> key_system_capabilities_;
 
-  // Key systems pending CdmCapability lazy initialization.
-  std::set<std::string> pending_lazy_initialize_key_systems_;
+  // Key system and robustness pairs pending CdmCapability lazy initialization.
+  std::set<std::pair<std::string, CdmInfo::Robustness>>
+      pending_lazy_initializations_;
 
-  // A callback for testing to avoid hardware dependency.
-  HardwareSecureCapabilityCB hw_secure_capability_cb_for_testing_;
+  // Callback for testing to avoid device dependency.
+  CapabilityCB capability_cb_for_testing_;
 
   SEQUENCE_CHECKER(sequence_checker_);
 

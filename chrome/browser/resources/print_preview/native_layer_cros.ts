@@ -2,11 +2,11 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {sendWithPromise} from 'chrome://resources/js/cr.m.js';
+import {sendWithPromise} from 'chrome://resources/js/cr.js';
 
 import {Cdd} from './data/cdd.js';
-import {ExtensionDestinationInfo} from './data/local_parsers.js';
-import {PrinterStatus} from './data/printer_status_cros.js';
+import {ExtensionDestinationInfo, LocalDestinationInfo} from './data/local_parsers.js';
+import {PrintAttemptOutcome, PrinterStatus} from './data/printer_status_cros.js';
 
 export interface PrinterSetupResponse {
   printerId: string;
@@ -71,6 +71,24 @@ export interface NativeLayerCros {
    * fetching mode.
    */
   getPrintServersConfig(): Promise<PrintServersConfig>;
+
+  /**
+   * Records the `PrintPreview.PrintAttemptOutcome` histogram for capturing
+   * the result from opening Print Preview.
+   */
+  recordPrintAttemptOutcome(printAttemptOutcome: PrintAttemptOutcome): void;
+
+  /**
+   * Returns whether or not the manage printers button should be displayed for
+   * the given print preview initiator.
+   */
+  getShowManagePrinters(): Promise<boolean>;
+
+  /**
+   * Observes the LocalPrinterObserver then returns the current list of local
+   * printers.
+   */
+  observeLocalPrinters(): Promise<LocalDestinationInfo[]>;
 }
 
 export class NativeLayerCrosImpl implements NativeLayerCros {
@@ -103,6 +121,18 @@ export class NativeLayerCrosImpl implements NativeLayerCros {
 
   getPrintServersConfig() {
     return sendWithPromise('getPrintServersConfig');
+  }
+
+  recordPrintAttemptOutcome(printAttemptOutcome: PrintAttemptOutcome) {
+    chrome.send('recordPrintAttemptOutcome', [printAttemptOutcome]);
+  }
+
+  getShowManagePrinters() {
+    return sendWithPromise('getShowManagePrinters');
+  }
+
+  observeLocalPrinters() {
+    return sendWithPromise('observeLocalPrinters');
   }
 
   static getInstance(): NativeLayerCros {

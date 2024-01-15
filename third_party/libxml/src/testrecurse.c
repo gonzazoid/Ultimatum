@@ -10,22 +10,17 @@
  * daniel@veillard.com
  */
 
-#include "libxml.h"
+#include "config.h"
 #include <stdio.h>
 
-#if !defined(_WIN32)
-#include <unistd.h>
-#endif
+#include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
-#include <fcntl.h>
 
 #include <libxml/parser.h>
+#include <libxml/parserInternals.h>
 #include <libxml/tree.h>
 #include <libxml/uri.h>
-#ifdef LIBXML_READER_ENABLED
-#include <libxml/xmlreader.h>
-#endif
 
 /*
  * O_BINARY is just for Windows compatibility - if it isn't defined
@@ -36,6 +31,9 @@
 #else
 #define	RD_FLAGS	O_RDONLY
 #endif
+
+#define OPT_SAX         (1<<0)
+#define OPT_NO_SUBST    (1<<1)
 
 typedef int (*functest) (const char *filename, const char *result,
                          const char *error, int options);
@@ -58,7 +56,6 @@ static int checkTestFile(const char *filename);
 #if defined(_WIN32)
 
 #include <windows.h>
-#include <io.h>
 
 typedef struct
 {
@@ -157,17 +154,62 @@ static void globfree(glob_t *pglob) {
 
 #include <libxml/xmlIO.h>
 
+typedef struct {
+    const char *URL;
+    const char *start;
+    const char *segment;
+    const char *finish;
+} xmlHugeDocParts;
 
-static const char *start = "<!DOCTYPE foo [\
-<!ENTITY f 'some internal data'> \
-<!ENTITY e '&f;&f;'> \
-<!ENTITY d '&e;&e;'> \
-]> \
-<foo>";
+static const xmlHugeDocParts hugeDocTable[] = {
+    {
+        "test/recurse/huge.xml",
 
-static const char *segment = "  <bar>&e; &f; &d;</bar>\n";
-static const char *finish = "</foo>";
+        "<!DOCTYPE foo ["
+        "<!ELEMENT foo (bar*)> "
+        "<!ELEMENT bar (#PCDATA)> "
+        "<!ATTLIST bar attr CDATA #IMPLIED> "
+        "<!ENTITY a SYSTEM 'ga.ent'> "
+        "<!ENTITY b SYSTEM 'gb.ent'> "
+        "<!ENTITY c SYSTEM 'gc.ent'> "
+        "<!ENTITY f 'some internal data'> "
+        "<!ENTITY e '&f;&f;'> "
+        "<!ENTITY d '&e;&e;'> "
+        "]> "
+        "<foo>",
 
+        "  <bar attr='&e; &f; &d;'>&a; &b; &c; &e; &f; &d;</bar>\n"
+        "  <bar>_123456789_123456789_123456789_123456789</bar>\n"
+        "  <bar>_123456789_123456789_123456789_123456789</bar>\n"
+        "  <bar>_123456789_123456789_123456789_123456789</bar>\n"
+        "  <bar>_123456789_123456789_123456789_123456789</bar>\n",
+
+        "</foo>"
+    },
+    {
+        "test/recurse/huge_dtd.dtd",
+
+        "<!ELEMENT foo (#PCDATA)>\n"
+        "<!ENTITY ent 'success'>\n"
+        "<!ENTITY % a SYSTEM 'pa.ent'>\n"
+        "<!ENTITY % b SYSTEM 'pb.ent'>\n"
+        "<!ENTITY % c SYSTEM 'pc.ent'>\n"
+        "<!ENTITY % d '<!-- comment -->'>\n"
+        "<!ENTITY % e '%d;%d;'>\n"
+        "<!ENTITY % f '%e;%e;'>\n",
+
+        "<!ENTITY ent '%a; %b; %c; %d; %e; %f;'>\n"
+        "%a; %b; %c; %d; %e; %f;\n"
+        "<!-- _123456789_123456789_123456789_123456789 -->\n"
+        "<!-- _123456789_123456789_123456789_123456789 -->\n"
+        "<!-- _123456789_123456789_123456789_123456789 -->\n",
+
+        ""
+    },
+    { NULL, NULL, NULL, NULL }
+};
+
+static const xmlHugeDocParts *hugeDocParts;
 static int curseg = 0;
 static const char *current;
 static int rlen;
@@ -176,14 +218,22 @@ static int rlen;
  * hugeMatch:
  * @URI: an URI to test
  *
- * Check for an huge: query
+ * Check for a huge query
  *
  * Returns 1 if yes and 0 if another Input module should be used
  */
 static int
 hugeMatch(const char * URI) {
-    if ((URI != NULL) && (!strncmp(URI, "huge:", 4)))
-        return(1);
+    int i;
+
+    if (URI == NULL)
+        return(0);
+
+    for (i = 0; hugeDocTable[i].URL; i++) {
+        if (strcmp(URI, hugeDocTable[i].URL) == 0)
+            return(1);
+    }
+
     return(0);
 }
 
@@ -191,25 +241,36 @@ hugeMatch(const char * URI) {
  * hugeOpen:
  * @URI: an URI to test
  *
- * Return a pointer to the huge: query handler, in this example simply
+ * Return a pointer to the huge query handler, in this example simply
  * the current pointer...
  *
  * Returns an Input context or NULL in case or error
  */
 static void *
 hugeOpen(const char * URI) {
-    if ((URI == NULL) || (strncmp(URI, "huge:", 4)))
+    int i;
+
+    if (URI == NULL)
         return(NULL);
-    rlen = strlen(start);
-    current = start;
-    return((void *) current);
+
+    for (i = 0; hugeDocTable[i].URL; i++) {
+        if (strcmp(URI, hugeDocTable[i].URL) == 0) {
+            hugeDocParts = hugeDocTable + i;
+            curseg = 0;
+            current = hugeDocParts->start;
+            rlen = strlen(current);
+            return((void *) current);
+        }
+    }
+
+    return(NULL);
 }
 
 /**
  * hugeClose:
  * @context: the read context
  *
- * Close the huge: query handler
+ * Close the huge query handler
  *
  * Returns 0 or -1 in case of error
  */
@@ -219,7 +280,7 @@ hugeClose(void * context) {
     return(0);
 }
 
-#define MAX_NODES 1000000
+#define MAX_NODES 1000
 
 /**
  * hugeRead:
@@ -227,7 +288,7 @@ hugeClose(void * context) {
  * @buffer: where to store data
  * @len: number of bytes to read
  *
- * Implement an huge: query read.
+ * Implement an huge query read.
  *
  * Returns the number of bytes read or -1 in case of error
  */
@@ -247,15 +308,11 @@ hugeRead(void *context, char *buffer, int len)
 	memcpy(buffer, current, len);
         curseg ++;
         if (curseg == MAX_NODES) {
-	    fprintf(stderr, "\n");
-            rlen = strlen(finish);
-            current = finish;
+            current = hugeDocParts->finish;
 	} else {
-	    if (curseg % (MAX_NODES / 10) == 0)
-	        fprintf(stderr, ".");
-            rlen = strlen(segment);
-            current = segment;
+            current = hugeDocParts->segment;
 	}
+        rlen = strlen(current);
     } else {
 	memcpy(buffer, current, len);
 	rlen -= len;
@@ -309,7 +366,7 @@ testExternalEntityLoader(const char *URL, const char *ID,
 static char testErrors[32769];
 static int testErrorsSize = 0;
 
-static void XMLCDECL
+static void
 channel(void *ctx  ATTRIBUTE_UNUSED, const char *msg, ...) {
     va_list args;
     int res;
@@ -388,7 +445,7 @@ xmlParserPrintFileContextInternal(xmlParserInputPtr input ,
 }
 
 static void
-testStructuredErrorHandler(void *ctx  ATTRIBUTE_UNUSED, xmlErrorPtr err) {
+testStructuredErrorHandler(void *ctx ATTRIBUTE_UNUSED, const xmlError *err) {
     char *file = NULL;
     int line = 0;
     int code = -1;
@@ -571,9 +628,6 @@ testStructuredErrorHandler(void *ctx  ATTRIBUTE_UNUSED, xmlErrorPtr err) {
 
 static void
 initializeLibxml2(void) {
-    xmlGetWarningsDefaultValue = 0;
-    xmlPedanticParserDefault(0);
-
     xmlMemSetup(xmlMemFree, xmlMemMalloc, xmlMemRealloc, xmlMemoryStrdup);
     xmlInitParser();
     xmlSetExternalEntityLoader(testExternalEntityLoader);
@@ -586,6 +640,19 @@ initializeLibxml2(void) {
         fprintf(stderr, "failed to register Huge handler\n");
 	exit(1);
     }
+}
+
+static void
+initSAX(xmlParserCtxtPtr ctxt) {
+    ctxt->sax->startElementNs = NULL;
+    ctxt->sax->endElementNs = NULL;
+    ctxt->sax->startElement = NULL;
+    ctxt->sax->endElement = NULL;
+    ctxt->sax->characters = NULL;
+    ctxt->sax->cdataBlock = NULL;
+    ctxt->sax->ignorableWhitespace = NULL;
+    ctxt->sax->processingInstruction = NULL;
+    ctxt->sax->comment = NULL;
 }
 
 /************************************************************************
@@ -626,10 +693,6 @@ static char *resultFilename(const char *filename, const char *out,
         out = "";
 
     strncpy(suffixbuff,suffix,499);
-#ifdef VMS
-    if(strstr(base,".") && suffixbuff[0]=='.')
-      suffixbuff[0]='_';
-#endif
 
     if (snprintf(res, 499, "%s%s%s", out, base, suffixbuff) >= 499)
         res[499] = 0;
@@ -675,19 +738,28 @@ static int
 recursiveDetectTest(const char *filename,
              const char *result ATTRIBUTE_UNUSED,
              const char *err ATTRIBUTE_UNUSED,
-	     int options ATTRIBUTE_UNUSED) {
+	     int options) {
     xmlDocPtr doc;
     xmlParserCtxtPtr ctxt;
     int res = 0;
+    /*
+     * XML_PARSE_DTDVALID is the only way to load external entities
+     * without XML_PARSE_NOENT. The validation result doesn't matter
+     * anyway.
+     */
+    int parserOptions = XML_PARSE_DTDVALID;
 
     nb_tests++;
 
     ctxt = xmlNewParserCtxt();
+    if (options & OPT_SAX)
+        initSAX(ctxt);
+    if ((options & OPT_NO_SUBST) == 0)
+        parserOptions |= XML_PARSE_NOENT;
     /*
      * base of the test, parse with the old API
      */
-    doc = xmlCtxtReadFile(ctxt, filename, NULL,
-                          XML_PARSE_NOENT | XML_PARSE_DTDLOAD);
+    doc = xmlCtxtReadFile(ctxt, filename, NULL, parserOptions);
     if ((doc != NULL) || (ctxt->lastError.code != XML_ERR_ENTITY_LOOP)) {
         fprintf(stderr, "Failed to detect recursion in %s\n", filename);
 	xmlFreeParserCtxt(ctxt);
@@ -714,19 +786,23 @@ static int
 notRecursiveDetectTest(const char *filename,
              const char *result ATTRIBUTE_UNUSED,
              const char *err ATTRIBUTE_UNUSED,
-	     int options ATTRIBUTE_UNUSED) {
+	     int options) {
     xmlDocPtr doc;
     xmlParserCtxtPtr ctxt;
     int res = 0;
+    int parserOptions = XML_PARSE_DTDLOAD;
 
     nb_tests++;
 
     ctxt = xmlNewParserCtxt();
+    if (options & OPT_SAX)
+        initSAX(ctxt);
+    if ((options & OPT_NO_SUBST) == 0)
+        parserOptions |= XML_PARSE_NOENT;
     /*
      * base of the test, parse with the old API
      */
-    doc = xmlCtxtReadFile(ctxt, filename, NULL,
-                          XML_PARSE_NOENT | XML_PARSE_DTDLOAD);
+    doc = xmlCtxtReadFile(ctxt, filename, NULL, parserOptions);
     if (doc == NULL) {
         fprintf(stderr, "Failed to parse correct file %s\n", filename);
 	xmlFreeParserCtxt(ctxt);
@@ -738,7 +814,6 @@ notRecursiveDetectTest(const char *filename,
     return(res);
 }
 
-#ifdef LIBXML_READER_ENABLED
 /**
  * notRecursiveHugeTest:
  * @filename: the file to parse
@@ -754,32 +829,186 @@ static int
 notRecursiveHugeTest(const char *filename ATTRIBUTE_UNUSED,
              const char *result ATTRIBUTE_UNUSED,
              const char *err ATTRIBUTE_UNUSED,
-	     int options ATTRIBUTE_UNUSED) {
-    xmlTextReaderPtr reader;
+	     int options) {
+    xmlParserCtxtPtr ctxt;
+    xmlDocPtr doc;
     int res = 0;
-    int ret;
+    int parserOptions = XML_PARSE_DTDVALID;
 
     nb_tests++;
 
-    reader = xmlReaderForFile("huge:test" , NULL,
-                              XML_PARSE_NOENT | XML_PARSE_DTDLOAD);
-    if (reader == NULL) {
-        fprintf(stderr, "Failed to open huge:test\n");
-	return(1);
-    }
-    ret = xmlTextReaderRead(reader);
-    while (ret == 1) {
-        ret = xmlTextReaderRead(reader);
-    }
-    if (ret != 0) {
-        fprintf(stderr, "Failed to parser huge:test with entities\n");
+    ctxt = xmlNewParserCtxt();
+    if (options & OPT_SAX)
+        initSAX(ctxt);
+    if ((options & OPT_NO_SUBST) == 0)
+        parserOptions |= XML_PARSE_NOENT;
+    doc = xmlCtxtReadFile(ctxt, "test/recurse/huge.xml", NULL, parserOptions);
+    if (doc == NULL) {
+        fprintf(stderr, "Failed to parse huge.xml\n");
 	res = 1;
+    } else {
+        xmlEntityPtr ent;
+        unsigned long fixed_cost = 20;
+        unsigned long allowed_expansion = 1000000;
+        unsigned long f_size = xmlStrlen(BAD_CAST "some internal data");
+        unsigned long e_size;
+        unsigned long d_size;
+        unsigned long total_size;
+
+        ent = xmlGetDocEntity(doc, BAD_CAST "e");
+        e_size = f_size * 2 +
+                 xmlStrlen(BAD_CAST "&f;") * 2 +
+                 fixed_cost * 2;
+        if (ent->expandedSize != e_size) {
+            fprintf(stderr, "Wrong size for entity e: %lu (expected %lu)\n",
+                    ent->expandedSize, e_size);
+            res = 1;
+        }
+
+        ent = xmlGetDocEntity(doc, BAD_CAST "b");
+        if (ent->expandedSize != e_size) {
+            fprintf(stderr, "Wrong size for entity b: %lu (expected %lu)\n",
+                    ent->expandedSize, e_size);
+            res = 1;
+        }
+
+        ent = xmlGetDocEntity(doc, BAD_CAST "d");
+        d_size = e_size * 2 +
+                 xmlStrlen(BAD_CAST "&e;") * 2 +
+                 fixed_cost * 2;
+        if (ent->expandedSize != d_size) {
+            fprintf(stderr, "Wrong size for entity d: %lu (expected %lu)\n",
+                    ent->expandedSize, d_size);
+            res = 1;
+        }
+
+        ent = xmlGetDocEntity(doc, BAD_CAST "c");
+        if (ent->expandedSize != d_size) {
+            fprintf(stderr, "Wrong size for entity c: %lu (expected %lu)\n",
+                    ent->expandedSize, d_size);
+            res = 1;
+        }
+
+        if (ctxt->sizeentcopy < allowed_expansion) {
+            fprintf(stderr, "Total entity size too small: %lu\n",
+                    ctxt->sizeentcopy);
+            res = 1;
+        }
+
+        total_size = (f_size + e_size + d_size + 3 * fixed_cost) *
+                     (MAX_NODES - 1) * 3;
+        if (ctxt->sizeentcopy != total_size) {
+            fprintf(stderr, "Wrong total entity size: %lu (expected %lu)\n",
+                    ctxt->sizeentcopy, total_size);
+            res = 1;
+        }
+
+        if (ctxt->sizeentities != 30) {
+            fprintf(stderr, "Wrong parsed entity size: %lu (expected %lu)\n",
+                    ctxt->sizeentities, 30lu);
+            res = 1;
+        }
     }
-    xmlFreeTextReader(reader);
+
+    xmlFreeDoc(doc);
+    xmlFreeParserCtxt(ctxt);
 
     return(res);
 }
-#endif
+
+/**
+ * notRecursiveHugeTest:
+ * @filename: the file to parse
+ * @result: the file with expected result
+ * @err: the file with error messages: unused
+ *
+ * Parse a memory generated file
+ * good cases
+ *
+ * Returns 0 in case of success, an error code otherwise
+ */
+static int
+hugeDtdTest(const char *filename ATTRIBUTE_UNUSED,
+            const char *result ATTRIBUTE_UNUSED,
+            const char *err ATTRIBUTE_UNUSED,
+            int options) {
+    xmlParserCtxtPtr ctxt;
+    xmlDocPtr doc;
+    int res = 0;
+    int parserOptions = XML_PARSE_DTDVALID;
+
+    nb_tests++;
+
+    ctxt = xmlNewParserCtxt();
+    if (options & OPT_SAX)
+        initSAX(ctxt);
+    if ((options & OPT_NO_SUBST) == 0)
+        parserOptions |= XML_PARSE_NOENT;
+    doc = xmlCtxtReadFile(ctxt, "test/recurse/huge_dtd.xml", NULL,
+                          parserOptions);
+    if (doc == NULL) {
+        fprintf(stderr, "Failed to parse huge_dtd.xml\n");
+	res = 1;
+    } else {
+        unsigned long fixed_cost = 20;
+        unsigned long allowed_expansion = 1000000;
+        unsigned long a_size = xmlStrlen(BAD_CAST "<!-- comment -->");
+        unsigned long b_size;
+        unsigned long c_size;
+        unsigned long e_size;
+        unsigned long f_size;
+        unsigned long total_size;
+
+        if (ctxt->sizeentcopy < allowed_expansion) {
+            fprintf(stderr, "Total entity size too small: %lu\n",
+                    ctxt->sizeentcopy);
+            res = 1;
+        }
+
+        b_size = (a_size + strlen("&a;") + fixed_cost) * 2;
+        c_size = (b_size + strlen("&b;") + fixed_cost) * 2;
+        /*
+         * Internal parameter entites are substitued eagerly and
+         * need different accounting.
+         */
+        e_size = a_size * 2;
+        f_size = e_size * 2;
+        total_size = /* internal */
+                     e_size + f_size + fixed_cost * 4 +
+                     (a_size + e_size + f_size + fixed_cost * 3) *
+                     (MAX_NODES - 1) * 2 +
+                     /* external */
+                     (a_size + b_size + c_size + fixed_cost * 3) *
+                     (MAX_NODES - 1) * 2 +
+                     /* final reference in main doc */
+                     strlen("success") + fixed_cost;
+        if (ctxt->sizeentcopy != total_size) {
+            fprintf(stderr, "Wrong total entity size: %lu (expected %lu)\n",
+                    ctxt->sizeentcopy, total_size);
+            res = 1;
+        }
+
+        total_size = strlen(hugeDocParts->start) +
+                     strlen(hugeDocParts->segment) * (MAX_NODES - 1) +
+                     strlen(hugeDocParts->finish) +
+                     /*
+                      * Other external entities pa.ent, pb.ent, pc.ent.
+                      * These are currently counted twice because they're
+                      * used both in DTD and EntityValue.
+                      */
+                     (16 + 6 + 6) * 2;
+        if (ctxt->sizeentities != total_size) {
+            fprintf(stderr, "Wrong parsed entity size: %lu (expected %lu)\n",
+                    ctxt->sizeentities, total_size);
+            res = 1;
+        }
+    }
+
+    xmlFreeDoc(doc);
+    xmlFreeParserCtxt(ctxt);
+
+    return(res);
+}
 
 /************************************************************************
  *									*
@@ -792,14 +1021,36 @@ testDesc testDescriptions[] = {
     { "Parsing recursive test cases" ,
       recursiveDetectTest, "./test/recurse/lol*.xml", NULL, NULL, NULL,
       0 },
+    { "Parsing recursive test cases (no substitution)" ,
+      recursiveDetectTest, "./test/recurse/lol*.xml", NULL, NULL, NULL,
+      OPT_NO_SUBST },
+    { "Parsing recursive test cases (SAX)" ,
+      recursiveDetectTest, "./test/recurse/lol*.xml", NULL, NULL, NULL,
+      OPT_SAX },
+    { "Parsing recursive test cases (SAX, no substitution)" ,
+      recursiveDetectTest, "./test/recurse/lol*.xml", NULL, NULL, NULL,
+      OPT_SAX | OPT_NO_SUBST },
     { "Parsing non-recursive test cases" ,
       notRecursiveDetectTest, "./test/recurse/good*.xml", NULL, NULL, NULL,
       0 },
-#ifdef LIBXML_READER_ENABLED
+    { "Parsing non-recursive test cases (SAX)" ,
+      notRecursiveDetectTest, "./test/recurse/good*.xml", NULL, NULL, NULL,
+      OPT_SAX },
     { "Parsing non-recursive huge case" ,
       notRecursiveHugeTest, NULL, NULL, NULL, NULL,
       0 },
-#endif
+    { "Parsing non-recursive huge case (no substitution)" ,
+      notRecursiveHugeTest, NULL, NULL, NULL, NULL,
+      OPT_NO_SUBST },
+    { "Parsing non-recursive huge case (SAX)" ,
+      notRecursiveHugeTest, NULL, NULL, NULL, NULL,
+      OPT_SAX },
+    { "Parsing non-recursive huge case (SAX, no substitution)" ,
+      notRecursiveHugeTest, NULL, NULL, NULL, NULL,
+      OPT_SAX | OPT_NO_SUBST },
+    { "Parsing non-recursive huge DTD case" ,
+      hugeDtdTest, NULL, NULL, NULL, NULL,
+      0 },
     {NULL, NULL, NULL, NULL, NULL, NULL, 0}
 };
 
@@ -958,7 +1209,6 @@ main(int argc ATTRIBUTE_UNUSED, char **argv ATTRIBUTE_UNUSED) {
 	       nb_tests, nb_errors, nb_leaks);
     }
     xmlCleanupParser();
-    xmlMemoryDump();
 
     return(ret);
 }

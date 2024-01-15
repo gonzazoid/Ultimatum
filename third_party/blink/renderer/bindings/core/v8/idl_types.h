@@ -19,6 +19,7 @@
 
 namespace blink {
 
+class BigInt;
 class EventListener;
 class ScriptPromise;
 class ScriptValue;
@@ -31,6 +32,9 @@ struct IDLAny final : public IDLBaseHelper<ScriptValue> {};
 
 // boolean
 struct IDLBoolean final : public IDLBaseHelper<bool> {};
+
+// bigint
+struct IDLBigint final : public IDLBaseHelper<BigInt> {};
 
 // Integer types
 
@@ -130,7 +134,7 @@ namespace bindings {
 enum class IDLStringConvMode {
   kDefault,
   kNullable,
-  kTreatNullAsEmptyString,
+  kLegacyNullToEmptyString,
 };
 
 }  // namespace bindings
@@ -147,8 +151,8 @@ using IDLByteString = IDLByteStringBase<bindings::IDLStringConvMode::kDefault>;
 template <bindings::IDLStringConvMode mode>
 struct IDLStringBase final : public IDLStringTypeBase {};
 using IDLString = IDLStringBase<bindings::IDLStringConvMode::kDefault>;
-using IDLStringTreatNullAsEmptyString =
-    IDLStringBase<bindings::IDLStringConvMode::kTreatNullAsEmptyString>;
+using IDLStringLegacyNullToEmptyString =
+    IDLStringBase<bindings::IDLStringConvMode::kLegacyNullToEmptyString>;
 
 // USVString
 template <bindings::IDLStringConvMode mode>
@@ -161,9 +165,9 @@ struct IDLStringStringContextTrustedHTMLBase final : public IDLStringTypeBase {
 };
 using IDLStringStringContextTrustedHTML = IDLStringStringContextTrustedHTMLBase<
     bindings::IDLStringConvMode::kDefault>;
-using IDLStringStringContextTrustedHTMLTreatNullAsEmptyString =
+using IDLStringLegacyNullToEmptyStringStringContextTrustedHTML =
     IDLStringStringContextTrustedHTMLBase<
-        bindings::IDLStringConvMode::kTreatNullAsEmptyString>;
+        bindings::IDLStringConvMode::kLegacyNullToEmptyString>;
 
 // [StringContext=TrustedScript] DOMString
 template <bindings::IDLStringConvMode mode>
@@ -172,9 +176,9 @@ struct IDLStringStringContextTrustedScriptBase final
 using IDLStringStringContextTrustedScript =
     IDLStringStringContextTrustedScriptBase<
         bindings::IDLStringConvMode::kDefault>;
-using IDLStringStringContextTrustedScriptTreatNullAsEmptyString =
+using IDLStringLegacyNullToEmptyStringStringContextTrustedScript =
     IDLStringStringContextTrustedScriptBase<
-        bindings::IDLStringConvMode::kTreatNullAsEmptyString>;
+        bindings::IDLStringConvMode::kLegacyNullToEmptyString>;
 
 // [StringContext=TrustedScriptURL] USVString
 template <bindings::IDLStringConvMode mode>
@@ -200,6 +204,15 @@ struct IDLSequence final : public IDLBase {
 // Frozen array types
 template <typename T>
 struct IDLArray final : public IDLBase {
+  // IDL FrozenArray is implemented as FrozenArray<IDLType>, but it's convenient
+  // for NativeValueTraits<IDLArray<T>> to use (Heap)Vector<T>. Generally, for
+  // inputs (attribute setters, operation arguments), (Heap)Vector is convenient
+  // while FrozenArray<IDLType> should be used for outputs (attribute getters,
+  // operation return values).
+  //
+  // Since IDLType is tightly bound to NativeValueTraits rather than ToV8Traits,
+  // IDLArray<T>::ImplType is defined as (Heap)Vector<T> rather than
+  // FrozenArray<T>.
   using ImplType =
       VectorOf<std::remove_pointer_t<typename NativeValueTraits<T>::ImplType>>;
 };
@@ -239,6 +252,10 @@ struct IDLOnErrorEventHandler final : public IDLBaseHelper<EventListener*> {};
 // [BufferSourceTypeNoSizeLimit]
 template <typename T>
 struct IDLBufferSourceTypeNoSizeLimit {};
+
+// [AllowResizable]
+template <typename T>
+struct IDLAllowResizable {};
 
 // IDL optional types
 //

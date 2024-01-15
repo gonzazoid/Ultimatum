@@ -4,9 +4,10 @@
 
 #include "chrome/browser/ui/views/fullscreen_control/fullscreen_control_host.h"
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/metrics/user_metrics.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "chrome/browser/app_mode/app_mode_utils.h"
@@ -17,6 +18,8 @@
 #include "chrome/common/chrome_switches.h"
 #include "components/fullscreen_control/fullscreen_control_view.h"
 #include "components/version_info/channel.h"
+#include "content/public/browser/render_widget_host_view.h"
+#include "content/public/browser/web_contents.h"
 #include "content/public/common/content_features.h"
 #include "ui/events/event.h"
 #include "ui/events/keycodes/keyboard_codes.h"
@@ -167,6 +170,16 @@ void FullscreenControlHost::OnMouseEvent(const ui::MouseEvent& event) {
     return;
   }
 
+  // TODO(crbug.com/957455) Do not show fullscreen exit button while in pointer
+  // lock mode. This is only necessary because the current implementation of
+  // pointer lock doesn't constrain the mouse cursor position, so the exit
+  // button may still appear even though the mouse cursor is invisible and its
+  // position is technically undefined. This mitigation will become unnecessary
+  // when pointer lock is re-implemented using relative motion events.
+  if (IsMouseLocked()) {
+    return;
+  }
+
   if (IsExitUiNeeded()) {
     if (IsVisible()) {
       if (event.y() >= CalculateCursorBufferHeight())
@@ -227,8 +240,9 @@ FullscreenControlPopup* FullscreenControlHost::GetPopup() {
   if (!IsPopupCreated()) {
     fullscreen_control_popup_ = std::make_unique<FullscreenControlPopup>(
         browser_view_->GetBubbleParentView(),
-        base::BindRepeating(&BrowserView::ExitFullscreen,
-                            base::Unretained(browser_view_)),
+        base::BindRepeating(
+            &FullscreenControlHost::OnExitFullscreenPopupClicked,
+            base::Unretained(this)),
         base::BindRepeating(&FullscreenControlHost::OnVisibilityChanged,
                             base::Unretained(this)));
   }
@@ -294,7 +308,31 @@ bool FullscreenControlHost::IsExitUiNeeded() {
          browser_view_->ShouldHideUIForFullscreen();
 }
 
+bool FullscreenControlHost::IsMouseLocked() {
+  if (!browser_view_) {
+    return false;
+  }
+
+  auto* web_contents = browser_view_->GetActiveWebContents();
+  if (!web_contents) {
+    return false;
+  }
+
+  auto* rwhv = web_contents->GetRenderWidgetHostView();
+  if (!rwhv) {
+    return false;
+  }
+
+  return rwhv->IsMouseLocked();
+}
+
 float FullscreenControlHost::CalculateCursorBufferHeight() const {
   float control_bottom = FullscreenControlPopup::GetButtonBottomOffset();
   return control_bottom * kExitHeightScaleFactor;
+}
+
+void FullscreenControlHost::OnExitFullscreenPopupClicked() {
+  base::RecordAction(
+      base::UserMetricsAction("ExitFullscreen_PopupCloseButton"));
+  browser_view_->ExitFullscreen();
 }

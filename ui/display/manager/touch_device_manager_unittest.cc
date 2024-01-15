@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/time/time.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -20,7 +21,9 @@
 #include "ui/events/devices/touchscreen_device.h"
 
 namespace display {
+
 namespace {
+
 ui::TouchscreenDevice CreateTouchscreenDevice(int id,
                                               ui::InputDeviceType type,
                                               const gfx::Size& size) {
@@ -123,7 +126,7 @@ class TouchAssociationTest : public testing::Test {
  protected:
   DisplayInfoList displays_;
   std::unique_ptr<DisplayManager> display_manager_;
-  TouchDeviceManager* touch_device_manager_;
+  raw_ptr<TouchDeviceManager> touch_device_manager_;
 };
 
 TEST_F(TouchAssociationTest, NoTouchscreens) {
@@ -398,7 +401,7 @@ class TouchAssociationFromPrefTest : public TouchAssociationTest {
     touch_associations[TouchDeviceIdentifier::FromDevice(devices_[1])]
                       [displays_[1].id()] = CreateTouchAssociationInfo(2);
 
-    // Craete priority list for Device Id = 3
+    // Create priority list for Device Id = 3
     //   - Display Index 2
     //   - Display Index 3
     //   - Display Index 0
@@ -616,7 +619,7 @@ class TouchAssociationWithDuplicateDeviceTest : public TouchAssociationTest {
         2, ui::InputDeviceType::INPUT_DEVICE_USB, gfx::Size(1920, 1080)));
 
     // Create another device with the same name but different port. Ensure that
-    // the touch device idnetifier is the same by setting the same vendor id,
+    // the touch device identifier is the same by setting the same vendor id,
     // product id and name.
     devices_.back().name = device_name_1;
     devices_.back().phys = ports[1];
@@ -668,7 +671,7 @@ class TouchAssociationWithDuplicateDeviceTest : public TouchAssociationTest {
     touch_associations[TouchDeviceIdentifier::FromDevice(devices_[1])]
                       [displays_[1].id()] = CreateTouchAssociationInfo(2);
 
-    // Craete priority list for Device Id = 3
+    // Create priority list for Device Id = 3
     //   - Display Index 2
     //   - Display Index 3
     //   - Display Index 0
@@ -681,7 +684,7 @@ class TouchAssociationWithDuplicateDeviceTest : public TouchAssociationTest {
     touch_associations[TouchDeviceIdentifier::FromDevice(devices_[2])]
                       [displays_[0].id()] = CreateTouchAssociationInfo(3);
 
-    // Craete priority list for Device Id = 5
+    // Create priority list for Device Id = 5
     //   - Display Index 3
     //   - Display Index 2
     touch_associations[TouchDeviceIdentifier::FromDevice(devices_[4])] =

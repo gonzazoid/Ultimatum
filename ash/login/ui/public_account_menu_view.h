@@ -6,13 +6,17 @@
 #define ASH_LOGIN_UI_PUBLIC_ACCOUNT_MENU_VIEW_H_
 
 #include "ash/ash_export.h"
+#include "base/memory/raw_ref.h"
 #include "base/memory/weak_ptr.h"
+#include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/views/controls/combobox/combobox.h"
 
 namespace ash {
 
 // Implements a menu view for the login screen's expanded public account view.
 class ASH_EXPORT PublicAccountMenuView : public views::Combobox {
+  METADATA_HEADER(PublicAccountMenuView, views::Combobox)
+
  public:
   struct Item {
     Item();
@@ -35,7 +39,7 @@ class ASH_EXPORT PublicAccountMenuView : public views::Combobox {
   void OnSelectedIndexChanged();
 
  private:
-  const std::vector<Item>& items_;
+  const raw_ref<const std::vector<Item>> items_;
   const OnSelect on_select_;
 
   base::CallbackListSubscription property_changed_subscription_;

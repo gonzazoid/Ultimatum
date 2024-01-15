@@ -4,6 +4,7 @@
 
 #include "third_party/blink/renderer/modules/locks/lock.h"
 
+#include "base/task/single_thread_task_runner.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_function.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
@@ -42,12 +43,15 @@ class Lock::ThenFunction final : public ScriptFunction::Callable {
     DCHECK(lock_);
     DCHECK(resolve_type_ == kFulfilled || resolve_type_ == kRejected);
     lock_->ReleaseIfHeld();
-    if (resolve_type_ == kFulfilled)
+    if (resolve_type_ == kFulfilled) {
       lock_->resolver_->Resolve(value);
-    else
+      lock_ = nullptr;
+      return value;
+    } else {
       lock_->resolver_->Reject(value);
-    lock_ = nullptr;
-    return value;
+      lock_ = nullptr;
+      return ScriptValue();
+    }
   }
 
  private:

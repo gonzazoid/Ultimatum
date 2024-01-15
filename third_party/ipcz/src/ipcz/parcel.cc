@@ -23,59 +23,31 @@ Parcel::Parcel() = default;
 Parcel::Parcel(SequenceNumber sequence_number)
     : sequence_number_(sequence_number) {}
 
-// Note: We do not use default move construction or assignment because we want
-// to explicitly clear the data and object views of the moved-from Parcel.
-Parcel::Parcel(Parcel&& other)
-    : sequence_number_(other.sequence_number_),
-      remote_source_(std::move(other.remote_source_)),
-      inlined_data_(std::move(other.inlined_data_)),
-      data_fragment_(std::exchange(other.data_fragment_, {})),
-      data_fragment_memory_(
-          std::exchange(other.data_fragment_memory_, nullptr)),
-      objects_(std::move(other.objects_)),
-      data_view_(std::exchange(other.data_view_, {})),
-      objects_view_(std::exchange(other.objects_view_, {})) {}
-
-Parcel& Parcel::operator=(Parcel&& other) {
-  sequence_number_ = other.sequence_number_;
-  remote_source_ = std::move(other.remote_source_);
-  inlined_data_ = std::move(other.inlined_data_);
-  data_fragment_ = std::exchange(other.data_fragment_, {});
-  data_fragment_memory_ = std::move(other.data_fragment_memory_);
-  objects_ = std::move(other.objects_);
-  data_view_ = std::exchange(other.data_view_, {});
-  objects_view_ = std::exchange(other.objects_view_, {});
-  return *this;
-}
-
 Parcel::~Parcel() {
-  for (Ref<APIObject>& object : objects_) {
-    if (object) {
-      object->Close();
+  if (objects_) {
+    for (Ref<APIObject>& object : objects_->storage) {
+      if (object) {
+        object->Close();
+      }
     }
   }
-
-  if (!data_fragment_.is_null()) {
-    ABSL_ASSERT(data_fragment_memory_);
-    data_fragment_memory_->FreeFragment(data_fragment_);
-  }
 }
 
-void Parcel::SetInlinedData(std::vector<uint8_t> data) {
-  inlined_data_ = std::move(data);
-  data_view_ = absl::MakeSpan(inlined_data_);
+void Parcel::SetDataFromMessage(Message::ReceivedDataBuffer buffer,
+                                absl::Span<uint8_t> data_view) {
+  ABSL_ASSERT(data_view.empty() || data_view.begin() >= buffer.bytes().begin());
+  ABSL_ASSERT(data_view.empty() || data_view.end() <= buffer.bytes().end());
+  data_.storage = std::move(buffer);
+  data_.view = data_view;
 }
 
 void Parcel::AllocateData(size_t num_bytes,
                           bool allow_partial,
                           NodeLinkMemory* memory) {
-  // This should never be called on a Parcel that already has data.
-  ABSL_ASSERT(inlined_data_.empty());
-  ABSL_ASSERT(data_fragment_.is_null());
-  ABSL_ASSERT(data_view_.empty());
+  ABSL_ASSERT(absl::holds_alternative<absl::monostate>(data_.storage));
 
   Fragment fragment;
-  if (memory && num_bytes > 0) {
+  if (num_bytes > 0 && memory) {
     const size_t requested_fragment_size = num_bytes + sizeof(FragmentHeader);
     if (allow_partial) {
       fragment = memory->AllocateFragmentBestEffort(requested_fragment_size);
@@ -85,8 +57,9 @@ void Parcel::AllocateData(size_t num_bytes,
   }
 
   if (fragment.is_null()) {
-    inlined_data_.resize(num_bytes);
-    data_view_ = absl::MakeSpan(inlined_data_);
+    std::vector<uint8_t> bytes(num_bytes);
+    data_.view = absl::MakeSpan(bytes);
+    data_.storage = std::move(bytes);
     return;
   }
 
@@ -98,20 +71,15 @@ void Parcel::AllocateData(size_t num_bytes,
   // is not written until CommitData().
   const size_t data_size =
       std::min(num_bytes, fragment.size() - sizeof(FragmentHeader));
-  data_fragment_ = fragment;
-  data_fragment_memory_ = WrapRefCounted(memory);
-  data_view_ =
+  data_.storage.emplace<DataFragment>(WrapRefCounted(memory), fragment);
+  data_.view =
       fragment.mutable_bytes().subspan(sizeof(FragmentHeader), data_size);
 }
 
 bool Parcel::AdoptDataFragment(Ref<NodeLinkMemory> memory,
                                const Fragment& fragment) {
-  // This should never be called on a Parcel that already has data.
-  ABSL_ASSERT(inlined_data_.empty());
-  ABSL_ASSERT(data_fragment_.is_null());
-  ABSL_ASSERT(data_view_.empty());
-
-  if (!fragment.is_addressable() || fragment.size() <= sizeof(FragmentHeader)) {
+  if (!fragment.is_addressable() || fragment.size() <= sizeof(FragmentHeader) ||
+      fragment.offset() % 8 != 0) {
     return false;
   }
 
@@ -125,29 +93,31 @@ bool Parcel::AdoptDataFragment(Ref<NodeLinkMemory> memory,
     return false;
   }
 
-  data_fragment_ = fragment;
-  data_fragment_memory_ = std::move(memory);
-  data_view_ =
+  data_.storage.emplace<DataFragment>(std::move(memory), fragment);
+  data_.view =
       fragment.mutable_bytes().subspan(sizeof(FragmentHeader), data_size);
   return true;
 }
 
 void Parcel::SetObjects(std::vector<Ref<APIObject>> objects) {
-  objects_ = std::move(objects);
-  objects_view_ = absl::MakeSpan(objects_);
+  ABSL_ASSERT(!objects_);
+  objects_ = std::make_unique<ObjectStorageWithView>();
+  objects_->storage = std::move(objects);
+  objects_->view = absl::MakeSpan(objects_->storage);
 }
 
 void Parcel::CommitData(size_t num_bytes) {
-  data_view_ = data_view_.first(num_bytes);
-  if (data_fragment_.is_null()) {
+  data_.view = data_.view.first(num_bytes);
+  if (!has_data_fragment()) {
     return;
   }
 
-  ABSL_ASSERT(data_fragment_.is_addressable());
-  ABSL_ASSERT(num_bytes <= data_fragment_.size() + sizeof(FragmentHeader));
-  auto& header =
-      *reinterpret_cast<FragmentHeader*>(data_fragment_.mutable_bytes().data());
-  header.reserved = 0;
+  DataFragment& storage = absl::get<DataFragment>(data_.storage);
+  ABSL_ASSERT(storage.is_valid());
+  ABSL_ASSERT(num_bytes <= storage.fragment().size() + sizeof(FragmentHeader));
+  auto& header = *reinterpret_cast<FragmentHeader*>(
+      storage.fragment().mutable_bytes().data());
+  header.reserved.store(0, std::memory_order_relaxed);
 
   // This store-release is balanced by the load-acquire in AdoptDataFragment()
   // by the eventual consumer of this data.
@@ -158,23 +128,26 @@ void Parcel::CommitData(size_t num_bytes) {
 }
 
 void Parcel::ReleaseDataFragment() {
-  ABSL_ASSERT(!data_fragment_.is_null());
-  data_fragment_ = {};
-  data_fragment_memory_.reset();
-  data_view_ = {};
+  ABSL_ASSERT(has_data_fragment());
+  std::ignore = absl::get<DataFragment>(data_.storage).release();
+  data_.storage.emplace<absl::monostate>();
+  data_.view = {};
 }
 
-void Parcel::Consume(size_t num_bytes, absl::Span<IpczHandle> out_handles) {
-  auto data = data_view();
-  auto objects = objects_view();
-  ABSL_ASSERT(num_bytes <= data.size());
+void Parcel::ConsumeHandles(absl::Span<IpczHandle> out_handles) {
+  absl::Span<Ref<APIObject>> objects;
+  if (objects_) {
+    objects = objects_->view;
+  }
   ABSL_ASSERT(out_handles.size() <= objects.size());
+
   for (size_t i = 0; i < out_handles.size(); ++i) {
     out_handles[i] = APIObject::ReleaseAsHandle(std::move(objects[i]));
   }
 
-  data_view_.remove_prefix(num_bytes);
-  objects_view_.remove_prefix(out_handles.size());
+  if (objects_) {
+    objects_->view.remove_prefix(out_handles.size());
+  }
 }
 
 std::string Parcel::Describe() const {
@@ -200,6 +173,25 @@ std::string Parcel::Describe() const {
   }
   ss << ")";
   return ss.str();
+}
+
+Parcel::DataFragment::~DataFragment() {
+  reset();
+}
+
+Fragment Parcel::DataFragment::release() {
+  memory_.reset();
+  return std::exchange(fragment_, {});
+}
+
+void Parcel::DataFragment::reset() {
+  if (!is_valid()) {
+    return;
+  }
+
+  memory_->FreeFragment(fragment_);
+  memory_.reset();
+  fragment_ = {};
 }
 
 }  // namespace ipcz

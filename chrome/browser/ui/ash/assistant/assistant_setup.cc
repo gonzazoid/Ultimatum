@@ -8,14 +8,14 @@
 #include <utility>
 
 #include "ash/public/cpp/notification_utils.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
+#include "base/task/sequenced_task_runner.h"
 #include "chrome/browser/ash/assistant/assistant_util.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/ui/settings_window_manager_chromeos.h"
-#include "chrome/browser/ui/webui/chromeos/assistant_optin/assistant_optin_ui.h"
+#include "chrome/browser/ui/webui/ash/assistant_optin/assistant_optin_ui.h"
 #include "chrome/common/webui_url_constants.h"
 #include "chromeos/ash/components/assistant/buildflags.h"
 #include "chromeos/ash/services/assistant/public/cpp/assistant_prefs.h"
@@ -54,18 +54,18 @@ AssistantSetup::~AssistantSetup() {
 void AssistantSetup::StartAssistantOptInFlow(
     ash::FlowType type,
     StartAssistantOptInFlowCallback callback) {
-  chromeos::AssistantOptInDialog::Show(type, std::move(callback));
+  ash::AssistantOptInDialog::Show(type, std::move(callback));
 }
 
 bool AssistantSetup::BounceOptInWindowIfActive() {
-  return chromeos::AssistantOptInDialog::BounceIfActive();
+  return ash::AssistantOptInDialog::BounceIfActive();
 }
 
 void AssistantSetup::MaybeStartAssistantOptInFlow() {
   DCHECK(Prefs());
   if (!Prefs()->GetUserPrefValue(
           ash::assistant::prefs::kAssistantConsentStatus)) {
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(&AssistantSetup::StartAssistantOptInFlow,
                        weak_factory_.GetWeakPtr(), ash::FlowType::kConsentFlow,

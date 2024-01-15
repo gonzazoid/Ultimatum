@@ -32,12 +32,16 @@
 // Action to turn the switch of a TableViewSwitchCell to the given `on` state.
 + (id<GREYAction>)turnTableViewSwitchOn:(BOOL)on;
 
-// Action to turn the switch of a SyncSwitchCell to the given `on` state.
-+ (id<GREYAction>)turnSyncSwitchOn:(BOOL)on;
+// Action to tap a web element described by the given `selector` on the current
+// web state.
+// Checks the effect of the tap using JavaScript.
++ (id<GREYAction>)tapWebElement:(ElementSelector*)selector;
 
 // Action to tap a web element described by the given `selector` on the current
 // web state.
-+ (id<GREYAction>)tapWebElement:(ElementSelector*)selector;
+// Does not check the effect of the tap. This function is expected to be use
+// when the effect of the tap is on the browser side (e.g. showing a popup).
++ (id<GREYAction>)tapWebElementUnverified:(ElementSelector*)selector;
 
 // Action to scroll to top of a collection.
 // On iOS 13 the settings menu appears as a card that can be dismissed with a
@@ -50,6 +54,16 @@
 // height. Percentages are between 0 and 1, where 1 is 100%.
 + (id<GREYAction>)tapAtPointAtxOriginStartPercentage:(CGFloat)x
                               yOriginStartPercentage:(CGFloat)y;
+
+// Action to swipe a TableViewCell enough to display the "Delete" button and
+// not too much to have the cell being deleted right away.
++ (id<GREYAction>)swipeToShowDeleteButton;
+
+// Action to simulate the behaviour of swiping right using the 3-finger gesture
+// with VoiceOver. To simulate it, it is changing the content offset and
+// triggering scroll view delegate methods as there is no way to actually
+// trigger the gesture.
++ (id<GREYAction>)accessibilitySwipeRight;
 
 @end
 

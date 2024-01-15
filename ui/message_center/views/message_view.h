@@ -14,10 +14,12 @@
 #include "build/chromeos_buildflags.h"
 #include "third_party/skia/include/core/SkBitmap.h"
 #include "third_party/skia/include/core/SkColor.h"
+#include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/gfx/geometry/insets.h"
 #include "ui/gfx/image/image.h"
 #include "ui/gfx/image/image_skia.h"
 #include "ui/message_center/message_center_export.h"
+#include "ui/message_center/notification_list.h"
 #include "ui/message_center/public/cpp/notification.h"
 #include "ui/message_center/public/cpp/notification_delegate.h"
 #include "ui/message_center/public/cpp/notifier_id.h"
@@ -52,8 +54,7 @@ class MESSAGE_CENTER_EXPORT MessageView
       public views::SlideOutControllerDelegate,
       public views::FocusChangeListener {
  public:
-  static const char kViewClassName[];
-
+  METADATA_HEADER(MessageView);
   class Observer : public base::CheckedObserver {
    public:
     virtual void OnSlideStarted(const std::string& notification_id) {}
@@ -91,6 +92,14 @@ class MESSAGE_CENTER_EXPORT MessageView
 
   ~MessageView() override;
 
+  // Animates the grouped child notification when switching between expand and
+  // collapse state.
+  virtual void AnimateGroupedChildExpandedCollapse(bool expanded) {}
+
+  // Animations when converting from single to group notification.
+  virtual void AnimateSingleToGroup(const std::string& notification_id,
+                                    std::string parent_id) {}
+
   // Updates this view with an additional grouped notification. If the view
   // wasn't previously grouped it also takes care of converting the view to
   // the grouped notification state.
@@ -107,7 +116,12 @@ class MESSAGE_CENTER_EXPORT MessageView
   virtual void PopulateGroupNotifications(
       const std::vector<const Notification*>& notifications) {}
 
+  // Removes the grouped notification view associated with the provided
+  // `notification_id`.
   virtual void RemoveGroupNotification(const std::string& notification_id) {}
+
+  // Updates the expanded state for grouped child notification.
+  virtual void SetGroupedChildExpanded(bool expanded) {}
 
   // Creates text for spoken feedback from the data contained in the
   // notification.
@@ -125,7 +139,7 @@ class MESSAGE_CENTER_EXPORT MessageView
   virtual bool IsExpanded() const;
   virtual bool IsAutoExpandingAllowed() const;
   virtual bool IsManuallyExpandedOrCollapsed() const;
-  virtual void SetManuallyExpandedOrCollapsed(bool value);
+  virtual void SetManuallyExpandedOrCollapsed(ExpandState state);
   virtual void CloseSwipeControl();
   virtual void SlideOutAndClose(int direction);
 
@@ -164,7 +178,6 @@ class MESSAGE_CENTER_EXPORT MessageView
   void OnGestureEvent(ui::GestureEvent* event) override;
   void RemovedFromWidget() override;
   void AddedToWidget() override;
-  const char* GetClassName() const override;
   void OnThemeChanged() override;
 
   // views::SlideOutControllerDelegate:
@@ -249,6 +262,7 @@ class MESSAGE_CENTER_EXPORT MessageView
   bool is_nested() const { return is_nested_; }
 
   int bottom_radius() const { return bottom_radius_; }
+  int top_radius() const { return top_radius_; }
 
   views::SlideOutController* slide_out_controller_for_test() {
     return &slide_out_controller_;
@@ -276,7 +290,6 @@ class MESSAGE_CENTER_EXPORT MessageView
   void UpdateNestedBorder();
 
   std::string notification_id_;
-  std::u16string accessible_name_;
   const NotifierId notifier_id_;
   base::Time timestamp_;
 
@@ -312,6 +325,9 @@ class MESSAGE_CENTER_EXPORT MessageView
   // shape of the notification.
   int top_radius_ = 0;
   int bottom_radius_ = 0;
+
+ public:
+  base::WeakPtrFactory<MessageView> weak_factory_{this};
 };
 
 }  // namespace message_center

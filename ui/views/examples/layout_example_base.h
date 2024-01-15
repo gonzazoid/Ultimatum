@@ -6,6 +6,7 @@
 #define UI_VIEWS_EXAMPLES_LAYOUT_EXAMPLE_BASE_H_
 
 #include "base/memory/raw_ptr.h"
+#include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/gfx/geometry/insets.h"
 #include "ui/gfx/geometry/size.h"
 #include "ui/views/controls/button/checkbox.h"
@@ -27,10 +28,10 @@ class VIEWS_EXAMPLES_EXPORT LayoutExampleBase : public ExampleBase,
  public:
   // Grouping of multiple textfields that provide insets.
   struct InsetTextfields {
-    Textfield* left = nullptr;
-    Textfield* top = nullptr;
-    Textfield* right = nullptr;
-    Textfield* bottom = nullptr;
+    raw_ptr<Textfield> left = nullptr;
+    raw_ptr<Textfield> top = nullptr;
+    raw_ptr<Textfield> right = nullptr;
+    raw_ptr<Textfield> bottom = nullptr;
   };
 
   // This view is created and added to the left-side view in the FullPanel each
@@ -38,6 +39,8 @@ class VIEWS_EXAMPLES_EXPORT LayoutExampleBase : public ExampleBase,
   // when the mouse is pressed over the view. These Textfields allow the user to
   // interactively set each margin and the "flex" for the given view.
   class ChildPanel : public View, public TextfieldController {
+    METADATA_HEADER(ChildPanel, View)
+
    public:
     explicit ChildPanel(LayoutExampleBase* example);
     ChildPanel(const ChildPanel&) = delete;

@@ -17,28 +17,7 @@ BlinkStorageKey::BlinkStorageKey()
     : BlinkStorageKey(SecurityOrigin::CreateUniqueOpaque(),
                       BlinkSchemefulSite(),
                       nullptr,
-                      mojom::blink::AncestorChainBit::kSameSite) {}
-
-BlinkStorageKey::BlinkStorageKey(scoped_refptr<const SecurityOrigin> origin)
-    : BlinkStorageKey(std::move(origin), nullptr) {}
-
-// TODO(https://crbug.com/1287130): Correctly infer the actual ancestor chain
-// bit value, add a parameter, or use this only in testing environments.
-BlinkStorageKey::BlinkStorageKey(scoped_refptr<const SecurityOrigin> origin,
-                                 const BlinkSchemefulSite& top_level_site)
-    : BlinkStorageKey(std::move(origin),
-                      top_level_site,
-                      nullptr,
-                      mojom::blink::AncestorChainBit::kSameSite) {}
-
-// The AncestorChainBit is not applicable to StorageKeys with a non-empty
-// nonce, so they are initialized to be kSameSite.
-BlinkStorageKey::BlinkStorageKey(scoped_refptr<const SecurityOrigin> origin,
-                                 const base::UnguessableToken* nonce)
-    : BlinkStorageKey(origin,
-                      BlinkSchemefulSite(origin),
-                      nonce,
-                      mojom::blink::AncestorChainBit::kSameSite) {}
+                      mojom::blink::AncestorChainBit::kCrossSite) {}
 
 BlinkStorageKey::BlinkStorageKey(
     scoped_refptr<const SecurityOrigin> origin,
@@ -50,55 +29,158 @@ BlinkStorageKey::BlinkStorageKey(
                           ? top_level_site
                           : BlinkSchemefulSite(origin)),
       top_level_site_if_third_party_enabled_(top_level_site),
-      nonce_(nonce ? absl::make_optional(*nonce) : absl::nullopt),
+      nonce_(base::OptionalFromPtr(nonce)),
       ancestor_chain_bit_(StorageKey::IsThirdPartyStoragePartitioningEnabled()
                               ? ancestor_chain_bit
+                          : (nonce || origin->IsOpaque())
+                              ? mojom::blink::AncestorChainBit::kCrossSite
                               : mojom::blink::AncestorChainBit::kSameSite),
       ancestor_chain_bit_if_third_party_enabled_(ancestor_chain_bit) {
-  DCHECK(origin_);
+  DCHECK(IsValid());
+}
+
+// static
+BlinkStorageKey BlinkStorageKey::CreateFirstParty(
+    scoped_refptr<const SecurityOrigin> origin) {
+  return BlinkStorageKey(origin, BlinkSchemefulSite(origin), nullptr,
+                         origin->IsOpaque()
+                             ? mojom::blink::AncestorChainBit::kCrossSite
+                             : mojom::blink::AncestorChainBit::kSameSite);
 }
 
 // static
 // The AncestorChainBit is not applicable to StorageKeys with a non-empty
-// nonce, so they are initialized to be kSameSite.
+// nonce, so they are initialized to be kCrossSite.
 BlinkStorageKey BlinkStorageKey::CreateWithNonce(
     scoped_refptr<const SecurityOrigin> origin,
     const base::UnguessableToken& nonce) {
-  DCHECK(!nonce.is_empty());
-  return BlinkStorageKey(std::move(origin), &nonce);
+  return BlinkStorageKey(origin, BlinkSchemefulSite(origin), &nonce,
+                         mojom::blink::AncestorChainBit::kCrossSite);
+}
+
+// static
+BlinkStorageKey BlinkStorageKey::Create(
+    scoped_refptr<const SecurityOrigin> origin,
+    const BlinkSchemefulSite& top_level_site,
+    mojom::blink::AncestorChainBit ancestor_chain_bit) {
+  return BlinkStorageKey(origin, top_level_site, nullptr, ancestor_chain_bit);
 }
 
 // static
 BlinkStorageKey BlinkStorageKey::CreateFromStringForTesting(
     const WTF::String& origin) {
-  return BlinkStorageKey(SecurityOrigin::CreateFromString(origin));
+  return BlinkStorageKey::CreateFirstParty(
+      SecurityOrigin::CreateFromString(origin));
 }
 
 BlinkStorageKey::BlinkStorageKey(const StorageKey& storage_key)
-    : BlinkStorageKey(
-          SecurityOrigin::CreateFromUrlOrigin(storage_key.origin()),
-          BlinkSchemefulSite(
-              storage_key.CopyWithForceEnabledThirdPartyStoragePartitioning()
-                  .top_level_site()),
-          storage_key.nonce() ? &storage_key.nonce().value() : nullptr,
-          storage_key.nonce()
-              ? mojom::blink::AncestorChainBit::kSameSite
-              : storage_key.CopyWithForceEnabledThirdPartyStoragePartitioning()
-                    .ancestor_chain_bit()) {
-  // We use `CopyWithForceEnabledThirdPartyStoragePartitioning` to preserve the
-  // partitioned values. The constructor on the other side restores the default
-  // values if `kThirdPartyStoragePartitioning` is disabled.
+    : origin_(SecurityOrigin::CreateFromUrlOrigin(storage_key.origin())),
+      top_level_site_(BlinkSchemefulSite(storage_key.top_level_site())),
+      top_level_site_if_third_party_enabled_(BlinkSchemefulSite(
+          storage_key.CopyWithForceEnabledThirdPartyStoragePartitioning()
+              .top_level_site())),
+      nonce_(storage_key.nonce()),
+      ancestor_chain_bit_(storage_key.ancestor_chain_bit()),
+      ancestor_chain_bit_if_third_party_enabled_(
+          storage_key.CopyWithForceEnabledThirdPartyStoragePartitioning()
+              .ancestor_chain_bit()) {
+  // Because we're converting from a StorageKey, we'll assume `storage_key` was
+  // constructed correctly and take its members directly. We do this since the
+  // incoming StorageKey's state could depend on RuntimeFeatureState's state and
+  // we'd be unable to properly recreate it by just looking at the feature flag.
+  DCHECK(IsValid());
 }
 
 BlinkStorageKey::operator StorageKey() const {
-  // We use `top_level_site_if_third_party_enabled_` and
-  // `ancestor_chain_bit_if_third_party_enabled_` to preserve the partitioned
-  // values. The constructor on the other side restores the default values if
-  // `kThirdPartyStoragePartitioning` is disabled.
-  return StorageKey::CreateWithOptionalNonce(
-      origin_->ToUrlOrigin(),
+  StorageKey out;
+
+  // We're using FromWire because it lets us set each field individually (which
+  // the constructors do not), this is necessary because we want the keys to
+  // have the same state.
+  bool status = StorageKey::FromWire(
+      origin_->ToUrlOrigin(), static_cast<net::SchemefulSite>(top_level_site_),
       static_cast<net::SchemefulSite>(top_level_site_if_third_party_enabled_),
-      base::OptionalToPtr(nonce_), ancestor_chain_bit_if_third_party_enabled_);
+      nonce_, ancestor_chain_bit_, ancestor_chain_bit_if_third_party_enabled_,
+      out);
+  DCHECK(status);
+  return out;
+}
+
+// static
+// Keep consistent with StorageKey::FromWire().
+bool BlinkStorageKey::FromWire(
+    scoped_refptr<const SecurityOrigin> origin,
+    const BlinkSchemefulSite& top_level_site,
+    const BlinkSchemefulSite& top_level_site_if_third_party_enabled,
+    const absl::optional<base::UnguessableToken>& nonce,
+    mojom::blink::AncestorChainBit ancestor_chain_bit,
+    mojom::blink::AncestorChainBit ancestor_chain_bit_if_third_party_enabled,
+    BlinkStorageKey& out) {
+  // We need to build a different key to prevent overriding `out` if the result
+  // isn't valid.
+  BlinkStorageKey maybe_out;
+  maybe_out.origin_ = origin;
+  maybe_out.top_level_site_ = top_level_site;
+  maybe_out.top_level_site_if_third_party_enabled_ =
+      top_level_site_if_third_party_enabled;
+  maybe_out.nonce_ = nonce;
+  maybe_out.ancestor_chain_bit_ = ancestor_chain_bit;
+  maybe_out.ancestor_chain_bit_if_third_party_enabled_ =
+      ancestor_chain_bit_if_third_party_enabled;
+  if (maybe_out.IsValid()) {
+    out = maybe_out;
+    return true;
+  }
+  return false;
+}
+
+BlinkStorageKey BlinkStorageKey::WithOrigin(
+    scoped_refptr<const SecurityOrigin> origin) const {
+  BlinkSchemefulSite top_level_site = top_level_site_;
+  BlinkSchemefulSite top_level_site_if_third_party_enabled =
+      top_level_site_if_third_party_enabled_;
+  mojom::blink::AncestorChainBit ancestor_chain_bit = ancestor_chain_bit_;
+  mojom::blink::AncestorChainBit ancestor_chain_bit_if_third_party_enabled =
+      ancestor_chain_bit_if_third_party_enabled_;
+
+  if (nonce_) {
+    // If the nonce is set we have to update the top level site to match origin
+    // as that's an invariant.
+    top_level_site = BlinkSchemefulSite(origin);
+    top_level_site_if_third_party_enabled = top_level_site;
+  } else if (!top_level_site_.IsOpaque()) {
+    // If `top_level_site_` is opaque then so is
+    // `top_level_site_if_third_party_enabled` and we don't need to explicitly
+    // check it.
+
+    // Only adjust the ancestor chain bit if it's currently kSameSite but the
+    // new origin and top level site don't match. Note that the ACB might not
+    // necessarily be kSameSite if the TLS and origin do match, so we won't
+    // adjust the other way.
+
+    if (ancestor_chain_bit == mojom::blink::AncestorChainBit::kSameSite &&
+        BlinkSchemefulSite(origin) != top_level_site_) {
+      ancestor_chain_bit = mojom::blink::AncestorChainBit::kCrossSite;
+    }
+
+    if (ancestor_chain_bit_if_third_party_enabled ==
+            mojom::blink::AncestorChainBit::kSameSite &&
+        BlinkSchemefulSite(origin) != top_level_site_if_third_party_enabled) {
+      ancestor_chain_bit_if_third_party_enabled =
+          mojom::blink::AncestorChainBit::kCrossSite;
+    }
+  }
+
+  BlinkStorageKey out = *this;
+  out.origin_ = origin;
+  out.top_level_site_ = top_level_site;
+  out.top_level_site_if_third_party_enabled_ =
+      top_level_site_if_third_party_enabled;
+  out.ancestor_chain_bit_ = ancestor_chain_bit;
+  out.ancestor_chain_bit_if_third_party_enabled_ =
+      ancestor_chain_bit_if_third_party_enabled;
+  DCHECK(out.IsValid());
+  return out;
 }
 
 String BlinkStorageKey::ToDebugString() const {
@@ -113,15 +195,22 @@ String BlinkStorageKey::ToDebugString() const {
          " }";
 }
 
-bool operator==(const BlinkStorageKey& lhs, const BlinkStorageKey& rhs) {
-  DCHECK(lhs.GetSecurityOrigin());
-  DCHECK(rhs.GetSecurityOrigin());
+bool BlinkStorageKey::ExactMatchForTesting(const BlinkStorageKey& other) const {
+  return *this == other &&
+         this->ancestor_chain_bit_if_third_party_enabled_ ==
+             other.ancestor_chain_bit_if_third_party_enabled_ &&
+         this->top_level_site_if_third_party_enabled_ ==
+             other.top_level_site_if_third_party_enabled_;
+}
 
-  return lhs.GetSecurityOrigin()->IsSameOriginWith(
-             rhs.GetSecurityOrigin().get()) &&
-         lhs.GetNonce() == rhs.GetNonce() &&
-         lhs.GetTopLevelSite() == rhs.GetTopLevelSite() &&
-         lhs.GetAncestorChainBit() == rhs.GetAncestorChainBit();
+bool operator==(const BlinkStorageKey& lhs, const BlinkStorageKey& rhs) {
+  DCHECK(lhs.origin_);
+  DCHECK(rhs.origin_);
+
+  return lhs.origin_->IsSameOriginWith(rhs.origin_.get()) &&
+         lhs.nonce_ == rhs.nonce_ &&
+         lhs.top_level_site_ == rhs.top_level_site_ &&
+         lhs.ancestor_chain_bit_ == rhs.ancestor_chain_bit_;
 }
 
 bool operator!=(const BlinkStorageKey& lhs, const BlinkStorageKey& rhs) {
@@ -130,6 +219,80 @@ bool operator!=(const BlinkStorageKey& lhs, const BlinkStorageKey& rhs) {
 
 std::ostream& operator<<(std::ostream& ostream, const BlinkStorageKey& key) {
   return ostream << key.ToDebugString();
+}
+
+bool BlinkStorageKey::IsValid() const {
+  // If the key's origin is opaque ancestor_chain_bit* is always kCrossSite
+  // no matter the value of the other members.
+  if (origin_->IsOpaque()) {
+    if (ancestor_chain_bit_ != mojom::blink::AncestorChainBit::kCrossSite) {
+      return false;
+    }
+    if (ancestor_chain_bit_if_third_party_enabled_ !=
+        mojom::blink::AncestorChainBit::kCrossSite) {
+      return false;
+    }
+  }
+
+  // The origin must have been initialized.
+  if (!origin_) {
+    return false;
+  }
+
+  // If this key's "normal" members indicate a 3p key, then the
+  // *_if_third_party_enabled counterparts must match them.
+  if (!origin_->IsOpaque() &&
+      (top_level_site_ != BlinkSchemefulSite(origin_) ||
+       ancestor_chain_bit_ != mojom::blink::AncestorChainBit::kSameSite)) {
+    if (top_level_site_ != top_level_site_if_third_party_enabled_) {
+      return false;
+    }
+    if (ancestor_chain_bit_ != ancestor_chain_bit_if_third_party_enabled_) {
+      return false;
+    }
+  }
+
+  // If top_level_site* is cross-site to origin, then ancestor_chain_bit* must
+  // indicate that. An opaque top_level_site* must have a cross-site
+  // ancestor_chain_bit*.
+  if (top_level_site_ != BlinkSchemefulSite(origin_)) {
+    if (ancestor_chain_bit_ != mojom::blink::AncestorChainBit::kCrossSite) {
+      return false;
+    }
+  }
+
+  if (top_level_site_if_third_party_enabled_ != BlinkSchemefulSite(origin_)) {
+    if (ancestor_chain_bit_if_third_party_enabled_ !=
+        mojom::blink::AncestorChainBit::kCrossSite) {
+      return false;
+    }
+  }
+
+  // If there is a nonce, all other values must indicate same-site to origin.
+  if (nonce_) {
+    if (nonce_->is_empty()) {
+      return false;
+    }
+    if (top_level_site_ != BlinkSchemefulSite(origin_)) {
+      return false;
+    }
+
+    if (top_level_site_if_third_party_enabled_ != BlinkSchemefulSite(origin_)) {
+      return false;
+    }
+
+    if (ancestor_chain_bit_ != mojom::blink::AncestorChainBit::kCrossSite) {
+      return false;
+    }
+
+    if (ancestor_chain_bit_if_third_party_enabled_ !=
+        mojom::blink::AncestorChainBit::kCrossSite) {
+      return false;
+    }
+  }
+
+  // If the state is not invalid, it must be valid!
+  return true;
 }
 
 }  // namespace blink

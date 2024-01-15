@@ -11,10 +11,9 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/check_op.h"
-#include "base/cxx17_backports.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/numerics/math_constants.h"
 #include "base/numerics/safe_math.h"
@@ -31,6 +30,8 @@
 #include "third_party/pdfium/public/cpp/fpdf_scopers.h"
 #include "third_party/pdfium/public/fpdf_annot.h"
 #include "third_party/pdfium/public/fpdf_catalog.h"
+#include "third_party/pdfium/public/fpdf_edit.h"
+#include "third_party/pdfium/public/fpdfview.h"
 #include "third_party/skia/include/core/SkImageInfo.h"
 #include "third_party/skia/include/core/SkPixmap.h"
 #include "ui/accessibility/accessibility_features.h"
@@ -42,6 +43,7 @@
 #include "ui/gfx/geometry/vector2d.h"
 #include "ui/gfx/geometry/vector2d_f.h"
 #include "ui/gfx/range/range.h"
+#include "ui/gfx/skbitmap_operations.h"
 
 using printing::ConvertUnitFloat;
 using printing::kPixelsPerInch;
@@ -56,6 +58,17 @@ constexpr float k90DegreesInRadians = base::kPiFloat / 2;
 constexpr float k180DegreesInRadians = base::kPiFloat;
 constexpr float k270DegreesInRadians = 3 * base::kPiFloat / 2;
 constexpr float k360DegreesInRadians = 2 * base::kPiFloat;
+
+constexpr float kPointsToPixels = static_cast<float>(printing::kPixelsPerInch) /
+                                  static_cast<float>(printing::kPointsPerInch);
+
+// Page rotations in clockwise degrees.
+enum class Rotation {
+  kRotate0 = 0,
+  kRotate90 = 1,
+  kRotate180 = 2,
+  kRotate270 = 3,
+};
 
 gfx::RectF FloatPageRectToPixelRect(FPDF_PAGE page, const gfx::RectF& input) {
   int output_width = FPDF_GetPageWidthF(page);
@@ -279,6 +292,80 @@ bool AreTextStyleEqual(FPDF_TEXTPAGE text_page,
          char_style.is_bold == style.is_bold;
 }
 
+// Returns the bounds with the smallest left, smallest bottom, largest right,
+// and largest top.
+FS_RECTF GetLargestBounds(const FS_RECTF& largest_bounds,
+                          const FS_RECTF& bounds) {
+  return {std::min(largest_bounds.left, bounds.left),
+          std::max(largest_bounds.top, bounds.top),
+          std::max(largest_bounds.right, bounds.right),
+          std::min(largest_bounds.bottom, bounds.bottom)};
+}
+
+gfx::RectF GetRotatedRectF(Rotation rotation,
+                           gfx::SizeF page_size,
+                           const FS_RECTF& original_bounds) {
+  FS_RECTF bounds;
+
+  // When the page is rotated 90 degrees or 270 degrees, the page width and
+  // height are swapped. Swap it back for calculations.
+  if (rotation == Rotation::kRotate90 || rotation == Rotation::kRotate270) {
+    page_size.Transpose();
+  }
+
+  switch (rotation) {
+    case Rotation::kRotate0: {
+      bounds = original_bounds;
+      break;
+    }
+    case Rotation::kRotate90: {
+      bounds.left = original_bounds.bottom;
+      bounds.top = page_size.width() - original_bounds.left;
+      bounds.right = original_bounds.top;
+      bounds.bottom = page_size.width() - original_bounds.right;
+      break;
+    }
+    case Rotation::kRotate180: {
+      bounds.left = page_size.width() - original_bounds.right;
+      bounds.top = page_size.height() - original_bounds.bottom;
+      bounds.right = page_size.width() - original_bounds.left;
+      bounds.bottom = page_size.height() - original_bounds.top;
+      break;
+    }
+    case Rotation::kRotate270: {
+      bounds.left = page_size.height() - original_bounds.top;
+      bounds.top = original_bounds.right;
+      bounds.right = page_size.height() - original_bounds.bottom;
+      bounds.bottom = original_bounds.left;
+      break;
+    }
+  }
+
+  return gfx::RectF(bounds.left, bounds.bottom, bounds.right - bounds.left,
+                    bounds.top - bounds.bottom);
+}
+
+// Get the effective crop box. If empty or failed to calculate the effective
+// crop box, default to a `gfx::RectF` with dimensions page width by page
+// height.
+gfx::RectF GetEffectiveCropBox(FPDF_PAGE page,
+                               Rotation rotation,
+                               const gfx::SizeF& page_size) {
+  gfx::RectF effective_crop_box;
+  FS_RECTF effective_crop_bounds;
+  if (FPDF_GetPageBoundingBox(page, &effective_crop_bounds)) {
+    effective_crop_box =
+        GetRotatedRectF(rotation, page_size, effective_crop_bounds);
+  }
+
+  if (effective_crop_box.IsEmpty()) {
+    effective_crop_box =
+        gfx::RectF(0, 0, page_size.width(), page_size.height());
+  }
+
+  return effective_crop_box;
+}
+
 }  // namespace
 
 PDFiumPage::LinkTarget::LinkTarget() : page(-1) {}
@@ -297,7 +384,8 @@ PDFiumPage::~PDFiumPage() {
 }
 
 void PDFiumPage::Unload() {
-  // Do not unload while in the middle of a load.
+  // Do not unload while in the middle of a load, or if some external source
+  // expects `this` to stay loaded.
   if (preventing_unload_count_)
     return;
 
@@ -371,14 +459,14 @@ void PDFiumPage::CalculatePageObjectTextRunBreaks() {
   }
 }
 
-absl::optional<AccessibilityTextRunInfo> PDFiumPage::GetTextRunInfo(
+std::optional<AccessibilityTextRunInfo> PDFiumPage::GetTextRunInfo(
     int start_char_index) {
   FPDF_PAGE page = GetPage();
   FPDF_TEXTPAGE text_page = GetTextPage();
   int chars_count = FPDFText_CountChars(text_page);
   // Check to make sure `start_char_index` is within bounds.
   if (start_char_index < 0 || start_char_index >= chars_count)
-    return absl::nullopt;
+    return std::nullopt;
 
   int actual_start_char_index = GetFirstNonUnicodeWhiteSpaceCharIndex(
       text_page, start_char_index, chars_count);
@@ -400,9 +488,6 @@ absl::optional<AccessibilityTextRunInfo> PDFiumPage::GetTextRunInfo(
       actual_start_char_index > start_char_index
           ? GetFloatCharRectInPixels(page, text_page, start_char_index)
           : gfx::RectF();
-
-  // Pdfium trims more than 1 consecutive spaces to 1 space.
-  DCHECK_LE(actual_start_char_index - start_char_index, 1);
 
   int char_index = actual_start_char_index;
 
@@ -562,6 +647,69 @@ gfx::RectF PDFiumPage::GetCroppedRect() {
   return FloatPageRectToPixelRect(page, rect);
 }
 
+gfx::RectF PDFiumPage::GetBoundingBox() {
+  FPDF_PAGE page = GetPage();
+  if (!page) {
+    return gfx::RectF();
+  }
+
+  // Page width and height are already swapped based on page rotation.
+  gfx::SizeF page_size(FPDF_GetPageWidthF(page), FPDF_GetPageHeightF(page));
+  Rotation rotation = static_cast<Rotation>(FPDFPage_GetRotation(page));
+
+  // Start with bounds with the left and bottom values at the max possible
+  // bounds and the right and top values at the min possible bounds. Bounds are
+  // relative to the media box.
+  FS_RECTF largest_bounds = {page_size.width(), 0, 0, page_size.height()};
+  for (int i = 0; i < FPDFPage_CountObjects(page); ++i) {
+    FPDF_PAGEOBJECT page_object = FPDFPage_GetObject(page, i);
+    if (!page_object) {
+      continue;
+    }
+
+    FS_RECTF bounds;
+    if (FPDFPageObj_GetBounds(page_object, &bounds.left, &bounds.bottom,
+                              &bounds.right, &bounds.top)) {
+      largest_bounds = GetLargestBounds(largest_bounds, bounds);
+    }
+  }
+  for (int i = 0; i < FPDFPage_GetAnnotCount(page); ++i) {
+    ScopedFPDFAnnotation annotation(FPDFPage_GetAnnot(page, i));
+    if (!annotation) {
+      continue;
+    }
+
+    FS_RECTF bounds;
+    if (FPDFAnnot_GetRect(annotation.get(), &bounds)) {
+      largest_bounds = GetLargestBounds(largest_bounds, bounds);
+    }
+  }
+
+  gfx::RectF bounding_box =
+      GetRotatedRectF(rotation, page_size, largest_bounds);
+
+  gfx::RectF effective_crop_box =
+      GetEffectiveCropBox(page, rotation, page_size);
+
+  // If the bounding box is empty, default to the effective crop box.
+  if (bounding_box.IsEmpty()) {
+    bounding_box = effective_crop_box;
+  } else {
+    // Some bounding boxes may be out-of-bounds of `effective_crop_box`. Clip to
+    // be within `effective_crop_box`.
+    bounding_box.Intersect(effective_crop_box);
+  }
+
+  // Set the bounding box to be relative to the effective crop box.
+  bounding_box.set_x(bounding_box.x() - effective_crop_box.x());
+  bounding_box.set_y(bounding_box.y() - effective_crop_box.y());
+
+  // Scale to page pixels.
+  bounding_box.Scale(kPointsToPixels);
+
+  return bounding_box;
+}
+
 bool PDFiumPage::IsCharInPageBounds(int char_index,
                                     const gfx::RectF& page_bounds) {
   gfx::RectF char_bounds = GetCharBounds(char_index);
@@ -623,10 +771,82 @@ std::vector<AccessibilityImageInfo> PDFiumPage::GetImageInfo(
     cur_info.bounds =
         gfx::RectF(image.bounding_rect.x(), image.bounding_rect.y(),
                    image.bounding_rect.width(), image.bounding_rect.height());
-    cur_info.image_data = image.image_data;
+    cur_info.page_object_index = image.page_object_index;
     image_info.push_back(std::move(cur_info));
   }
   return image_info;
+}
+
+SkBitmap PDFiumPage::GetImageForOcr(int page_object_index) {
+  SkBitmap bitmap;
+
+  FPDF_PAGE page = GetPage();
+  FPDF_PAGEOBJECT page_object = FPDFPage_GetObject(page, page_object_index);
+
+  if (FPDFPageObj_GetType(page_object) != FPDF_PAGEOBJ_IMAGE) {
+    return bitmap;
+  }
+
+  // OCR needs the image with the highest available quality. To get it, the
+  // image transform matrix is reset to no-scale, the bitmap is extracted,
+  // and then the original matrix is restored.
+  FS_MATRIX original_matrix;
+  if (!FPDFPageObj_GetMatrix(page_object, &original_matrix)) {
+    return bitmap;
+  }
+
+  // Get the actual image size.
+  unsigned int width;
+  unsigned int height;
+  if (!FPDFImageObj_GetImagePixelSize(page_object, &width, &height)) {
+    return bitmap;
+  }
+
+  // Resize the matrix to actual size.
+  FS_MATRIX new_matrix = {static_cast<float>(width),  0, 0,
+                          static_cast<float>(height), 0, 0};
+  if (!FPDFPageObj_SetMatrix(page_object, &new_matrix)) {
+    return bitmap;
+  }
+
+  ScopedFPDFBitmap raw_bitmap(
+      FPDFImageObj_GetRenderedBitmap(engine_->doc(), page, page_object));
+
+  // Restore the original matrix.
+  CHECK(FPDFPageObj_SetMatrix(page_object, &original_matrix));
+
+  if (!raw_bitmap) {
+    return SkBitmap();
+  }
+
+  CHECK_EQ(FPDFBitmap_GetFormat(raw_bitmap.get()), FPDFBitmap_BGRA);
+  SkImageInfo info =
+      SkImageInfo::Make(FPDFBitmap_GetWidth(raw_bitmap.get()),
+                        FPDFBitmap_GetHeight(raw_bitmap.get()),
+                        kBGRA_8888_SkColorType, kOpaque_SkAlphaType);
+  const size_t row_bytes = FPDFBitmap_GetStride(raw_bitmap.get());
+  SkPixmap pixels(info, FPDFBitmap_GetBuffer(raw_bitmap.get()), row_bytes);
+  if (!bitmap.tryAllocPixels(info, row_bytes)) {
+    return bitmap;
+  }
+  bitmap.writePixels(pixels);
+
+  SkBitmapOperations::RotationAmount rotation;
+  switch (FPDFPage_GetRotation(page)) {
+    case 0:
+      return bitmap;
+    case 1:
+      rotation = SkBitmapOperations::RotationAmount::ROTATION_90_CW;
+      break;
+    case 2:
+      rotation = SkBitmapOperations::RotationAmount::ROTATION_180_CW;
+      break;
+    case 3:
+      rotation = SkBitmapOperations::RotationAmount::ROTATION_270_CW;
+      break;
+  }
+
+  return SkBitmapOperations::Rotate(bitmap, rotation);
 }
 
 std::vector<AccessibilityHighlightInfo> PDFiumPage::GetHighlightInfo(
@@ -833,8 +1053,8 @@ PDFiumPage::Area PDFiumPage::GetDestinationTarget(FPDF_DEST destination,
 
   target->page = page_index;
 
-  absl::optional<float> x;
-  absl::optional<float> y;
+  std::optional<float> x;
+  std::optional<float> y;
   GetPageDestinationTarget(destination, &x, &y, &target->zoom);
 
   // The page where a destination exists can be different from the page that it
@@ -857,12 +1077,12 @@ PDFiumPage::Area PDFiumPage::GetDestinationTarget(FPDF_DEST destination,
 }
 
 void PDFiumPage::GetPageDestinationTarget(FPDF_DEST destination,
-                                          absl::optional<float>* dest_x,
-                                          absl::optional<float>* dest_y,
-                                          absl::optional<float>* zoom_value) {
-  *dest_x = absl::nullopt;
-  *dest_y = absl::nullopt;
-  *zoom_value = absl::nullopt;
+                                          std::optional<float>* dest_x,
+                                          std::optional<float>* dest_y,
+                                          std::optional<float>* zoom_value) {
+  *dest_x = std::nullopt;
+  *dest_y = std::nullopt;
+  *zoom_value = std::nullopt;
   if (!available_)
     return;
 
@@ -890,7 +1110,7 @@ float PDFiumPage::PreProcessAndTransformInPageCoordX(float x) {
   // If `x` < 0, scroll to the left side of the page.
   // If `x` > page width, scroll to the right side of the page.
   return TransformPageToScreenX(
-      base::clamp(x, 0.0f, FPDF_GetPageWidthF(GetPage())));
+      std::clamp(x, 0.0f, FPDF_GetPageWidthF(GetPage())));
 }
 
 float PDFiumPage::PreProcessAndTransformInPageCoordY(float y) {
@@ -922,7 +1142,7 @@ PDFiumPage::Area PDFiumPage::GetURITarget(FPDF_ACTION uri_action,
     std::string url = CallPDFiumStringBufferApi(
         base::BindRepeating(&FPDFAction_GetURIPath, engine_->doc(), uri_action),
         /*check_expected_size=*/true);
-    if (!url.empty())
+    if (!url.empty() && base::IsStringUTF8AllowingNoncharacters(url))
       target->url = url;
   }
   return WEBLINK_AREA;
@@ -1124,33 +1344,6 @@ void PDFiumPage::CalculateImages() {
 
   if (!marked_content_id_image_map.empty())
     PopulateImageAltText(marked_content_id_image_map);
-
-  if (!features::IsPdfOcrEnabled())
-    return;
-
-  // If requested by the user, we store the raw image data so that the OCR
-  // service can try and retrieve textual and layout information from the image.
-  // This is because alt text might be empty, or the PDF might simply be
-  // untagged for accessibility.
-  for (Image& image : images_) {
-    if (!image.alt_text.empty())
-      continue;
-
-    FPDF_PAGEOBJECT page_object =
-        FPDFPage_GetObject(page, image.page_object_index);
-    ScopedFPDFBitmap bitmap(
-        FPDFImageObj_GetRenderedBitmap(engine_->doc(), page, page_object));
-    if (!bitmap)
-      continue;
-
-    SkImageInfo info = SkImageInfo::Make(
-        FPDFBitmap_GetWidth(bitmap.get()), FPDFBitmap_GetHeight(bitmap.get()),
-        kBGRA_8888_SkColorType, kOpaque_SkAlphaType);
-    const size_t row_bytes = FPDFBitmap_GetStride(bitmap.get());
-    SkPixmap pixels(info, FPDFBitmap_GetBuffer(bitmap.get()), row_bytes);
-    if (image.image_data.tryAllocPixels(info, row_bytes))
-      image.image_data.writePixels(pixels);
-  }
 }
 
 void PDFiumPage::PopulateImageAltText(
@@ -1566,6 +1759,20 @@ void PDFiumPage::MarkAvailable() {
 PDFiumPage::ScopedUnloadPreventer::ScopedUnloadPreventer(PDFiumPage* page)
     : page_(page) {
   page_->preventing_unload_count_++;
+}
+
+PDFiumPage::ScopedUnloadPreventer::ScopedUnloadPreventer(
+    const ScopedUnloadPreventer& that)
+    : ScopedUnloadPreventer(that.page_) {}
+
+PDFiumPage::ScopedUnloadPreventer& PDFiumPage::ScopedUnloadPreventer::operator=(
+    const ScopedUnloadPreventer& that) {
+  if (page_ != that.page_) {
+    page_->preventing_unload_count_--;
+    page_ = that.page_;
+    page_->preventing_unload_count_++;
+  }
+  return *this;
 }
 
 PDFiumPage::ScopedUnloadPreventer::~ScopedUnloadPreventer() {

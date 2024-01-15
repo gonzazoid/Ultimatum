@@ -16,6 +16,7 @@
 #include "net/base/network_change_notifier.h"
 #include "services/device/geolocation/position_cache.h"
 #include "services/device/public/mojom/geoposition.mojom.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace base {
 class TickClock;
@@ -42,16 +43,19 @@ class PositionCacheImpl
 
   ~PositionCacheImpl() override;
 
+  // PositionCache
   void CachePosition(const WifiData& wifi_data,
                      const mojom::Geoposition& position) override;
 
-  const mojom::Geoposition* FindPosition(
-      const WifiData& wifi_data) const override;
+  const mojom::Geoposition* FindPosition(const WifiData& wifi_data) override;
 
   size_t GetPositionCacheSize() const override;
 
-  const mojom::Geoposition& GetLastUsedNetworkPosition() const override;
-  void SetLastUsedNetworkPosition(const mojom::Geoposition& position) override;
+  const mojom::GeopositionResult* GetLastUsedNetworkPosition() const override;
+  void SetLastUsedNetworkPosition(
+      const mojom::GeopositionResult& result) override;
+
+  void FillDiagnostics(mojom::PositionCacheDiagnostics& diagnostics) override;
 
   // net::NetworkChangeNotifier::NetworkChangeObserver
   void OnNetworkChanged(
@@ -60,27 +64,26 @@ class PositionCacheImpl
  private:
   // In order to avoid O(N) comparisons while searching for the right WifiData,
   // we hash the contents of those objects and use the hashes as cache keys.
-  using Hash = std::u16string;
+  using Hash = std::string;
 
   class CacheEntry {
    public:
     CacheEntry(const Hash& hash,
-               const mojom::Geoposition& position,
+               mojom::GeopositionPtr position,
                std::unique_ptr<base::OneShotTimer> eviction_timer);
 
     CacheEntry(const CacheEntry&) = delete;
     CacheEntry& operator=(const CacheEntry&) = delete;
-
-    ~CacheEntry();
     CacheEntry(CacheEntry&&);
     CacheEntry& operator=(CacheEntry&&);
+    ~CacheEntry();
 
     inline bool operator==(const Hash& hash) const { return hash_ == hash; }
-    const mojom::Geoposition* position() const { return &position_; }
+    const mojom::Geoposition* position() const { return position_.get(); }
 
    private:
     Hash hash_;
-    mojom::Geoposition position_;
+    mojom::GeopositionPtr position_;
     std::unique_ptr<base::OneShotTimer> eviction_timer_;
   };
 
@@ -89,7 +92,11 @@ class PositionCacheImpl
 
   raw_ptr<const base::TickClock> clock_;
   std::vector<CacheEntry> data_;
-  mojom::Geoposition last_used_position_;
+  mojom::GeopositionResultPtr last_used_result_;
+  absl::optional<base::Time> last_hit_;
+  absl::optional<base::Time> last_miss_;
+  int hit_count_ = 0;
+  int miss_count_ = 0;
 };
 
 }  // namespace device

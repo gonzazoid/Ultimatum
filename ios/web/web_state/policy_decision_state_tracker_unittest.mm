@@ -4,14 +4,11 @@
 
 #import "ios/web/web_state/policy_decision_state_tracker.h"
 
-#import "base/callback.h"
+#import <optional>
+
+#import "base/functional/callback.h"
 #import "testing/gtest/include/gtest/gtest.h"
 #import "testing/platform_test.h"
-#import "third_party/abseil-cpp/absl/types/optional.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace web {
 
@@ -28,7 +25,7 @@ class PolicyDecisionStateTrackerTest : public PlatformTest {
   }
 
   PolicyDecisionStateTracker policy_decision_state_tracker_;
-  absl::optional<WebStatePolicyDecider::PolicyDecision> policy_decision_;
+  std::optional<WebStatePolicyDecider::PolicyDecision> policy_decision_;
 };
 
 // Tests the case where every decision received is to allow the navigation, and
@@ -302,7 +299,7 @@ class PolicyDecisionStateTrackerDestructionTest : public PlatformTest {
   }
 
   std::unique_ptr<PolicyDecisionStateTracker> policy_decision_state_tracker_;
-  absl::optional<WebStatePolicyDecider::PolicyDecision> policy_decision_;
+  std::optional<WebStatePolicyDecider::PolicyDecision> policy_decision_;
 };
 
 // Tests the case where no decisions have been received by the time the

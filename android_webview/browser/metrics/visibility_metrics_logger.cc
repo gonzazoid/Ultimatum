@@ -4,11 +4,12 @@
 
 #include "android_webview/browser/metrics/visibility_metrics_logger.h"
 
-#include "android_webview/common/aw_features.h"
-#include "base/feature_list.h"
+#include "base/containers/contains.h"
 #include "base/metrics/histogram.h"
 #include "base/metrics/histogram_base.h"
 #include "base/time/time.h"
+#include "base/trace_event/trace_event.h"
+#include "base/trace_event/typed_macros.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/common/url_constants.h"
 
@@ -162,31 +163,33 @@ VisibilityMetricsLogger::~VisibilityMetricsLogger() = default;
 
 void VisibilityMetricsLogger::AddClient(Client* client) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
-  DCHECK(client_visibility_.find(client) == client_visibility_.end());
+  DCHECK(!base::Contains(client_visibility_, client));
 
   UpdateDurations();
 
   client_visibility_[client] = VisibilityInfo();
-  ProcessClientUpdate(client, client->GetVisibilityInfo());
+  ProcessClientUpdate(client, client->GetVisibilityInfo(),
+                      ClientAction::kAdded);
 }
 
 void VisibilityMetricsLogger::RemoveClient(Client* client) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
-  DCHECK(client_visibility_.find(client) != client_visibility_.end());
+  DCHECK(base::Contains(client_visibility_, client));
 
   UpdateDurations();
 
-  ProcessClientUpdate(client, VisibilityInfo());
+  ProcessClientUpdate(client, VisibilityInfo(), ClientAction::kRemoved);
   client_visibility_.erase(client);
 }
 
 void VisibilityMetricsLogger::ClientVisibilityChanged(Client* client) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
-  DCHECK(client_visibility_.find(client) != client_visibility_.end());
+  DCHECK(base::Contains(client_visibility_, client));
 
   UpdateDurations();
 
-  ProcessClientUpdate(client, client->GetVisibilityInfo());
+  ProcessClientUpdate(client, client->GetVisibilityInfo(),
+                      ClientAction::kVisibilityChanged);
 }
 
 void VisibilityMetricsLogger::UpdateScreenCoverage(
@@ -249,7 +252,8 @@ bool VisibilityMetricsLogger::VisibilityInfo::IsVisible() const {
 }
 
 void VisibilityMetricsLogger::ProcessClientUpdate(Client* client,
-                                                  const VisibilityInfo& info) {
+                                                  const VisibilityInfo& info,
+                                                  ClientAction action) {
   VisibilityInfo curr_info = client_visibility_[client];
   bool was_visible = curr_info.IsVisible();
   bool is_visible = info.IsVisible();
@@ -260,9 +264,39 @@ void VisibilityMetricsLogger::ProcessClientUpdate(Client* client,
 
   bool any_client_was_visible = all_clients_visible_count_ > 0;
 
+  if (action == ClientAction::kAdded) {
+    // Only emit the event if the WebView is visible so that the track gets the
+    // appropriate name.
+    // TODO(b/280334022): set the track name explicitly after the Perfetto SDK
+    // migration is finished (crbug/1006541).
+    if (is_visible) {
+      TRACE_EVENT_BEGIN("android_webview.timeline", "WebViewVisible",
+                        perfetto::Track::FromPointer(client));
+    }
+  }
+
+  // If visibility changes or the client is removed, close the event
+  // corresponding to the previous visibility state.
+  if (action == ClientAction::kRemoved || was_visible != is_visible) {
+    TRACE_EVENT_END("android_webview.timeline",
+                    perfetto::Track::FromPointer(client));
+  }
+
   if (!was_visible && is_visible) {
+    if (action != ClientAction::kRemoved) {
+      TRACE_EVENT_BEGIN("android_webview.timeline", "WebViewVisible",
+                        perfetto::Track::FromPointer(client));
+      // TODO(crbug.com/1021571): Remove this once fixed.
+      PERFETTO_INTERNAL_ADD_EMPTY_EVENT();
+    }
     ++all_clients_visible_count_;
   } else if (was_visible && !is_visible) {
+    if (action != ClientAction::kRemoved) {
+      TRACE_EVENT_BEGIN("android_webview.timeline", "WebViewInvisible",
+                        perfetto::Track::FromPointer(client));
+      // TODO(crbug.com/1021571): Remove this once fixed.
+      PERFETTO_INTERNAL_ADD_EMPTY_EVENT();
+    }
     --all_clients_visible_count_;
   }
 
@@ -358,8 +392,6 @@ void VisibilityMetricsLogger::RecordVisibleSchemeMetrics() {
 }
 
 void VisibilityMetricsLogger::RecordScreenCoverageMetrics() {
-  if (!base::FeatureList::IsEnabled(features::kWebViewMeasureScreenCoverage))
-    return;
   for (size_t i = 0; i < std::size(global_coverage_percentage_durations_);
        i++) {
     int32_t seconds = global_coverage_percentage_durations_[i].InSeconds();

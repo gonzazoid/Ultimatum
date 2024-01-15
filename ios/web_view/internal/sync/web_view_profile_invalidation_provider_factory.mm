@@ -7,8 +7,8 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/no_destructor.h"
 #include "components/gcm_driver/gcm_profile_service.h"
 #include "components/gcm_driver/instance_id/instance_id_profile_service.h"
@@ -26,10 +26,6 @@
 #include "ios/web_view/internal/sync/web_view_instance_id_profile_service_factory.h"
 #include "ios/web_view/internal/web_view_browser_state.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 using invalidation::ProfileInvalidationProvider;
 
@@ -73,26 +69,8 @@ WebViewProfileInvalidationProviderFactory::BuildServiceInstanceFor(
       std::make_unique<invalidation::ProfileIdentityProvider>(
           WebViewIdentityManagerFactory::GetForBrowserState(browser_state));
 
-  auto service = std::make_unique<invalidation::FCMInvalidationService>(
-      identity_provider.get(),
-      base::BindRepeating(
-          &invalidation::FCMNetworkHandler::Create,
-          WebViewGCMProfileServiceFactory::GetForBrowserState(browser_state)
-              ->driver(),
-          WebViewInstanceIDProfileServiceFactory::GetForBrowserState(
-              browser_state)
-              ->driver()),
-      base::BindRepeating(
-          &invalidation::PerUserTopicSubscriptionManager::Create,
-          identity_provider.get(), browser_state->GetPrefs(),
-          browser_state->GetURLLoaderFactory()),
-      WebViewInstanceIDProfileServiceFactory::GetForBrowserState(browser_state)
-          ->driver(),
-      browser_state->GetPrefs());
-  service->Init();
-
   return std::make_unique<ProfileInvalidationProvider>(
-      std::move(service), std::move(identity_provider));
+      std::move(identity_provider));
 }
 
 void WebViewProfileInvalidationProviderFactory::RegisterBrowserStatePrefs(

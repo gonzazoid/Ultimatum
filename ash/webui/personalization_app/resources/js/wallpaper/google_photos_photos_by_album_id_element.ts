@@ -7,26 +7,27 @@
  * for the currently selected album id.
  */
 
+import 'chrome://resources/ash/common/personalization/common.css.js';
+import 'chrome://resources/ash/common/personalization/wallpaper.css.js';
 import 'chrome://resources/polymer/v3_0/iron-list/iron-list.js';
 import 'chrome://resources/polymer/v3_0/iron-scroll-threshold/iron-scroll-threshold.js';
-import '../../css/wallpaper.css.js';
-import '../../css/common.css.js';
 
-import {assert} from 'chrome://resources/js/assert_ts.js';
+import {WallpaperGridItemSelectedEvent} from 'chrome://resources/ash/common/personalization/wallpaper_grid_item_element.js';
+import {assert} from 'chrome://resources/js/assert.js';
 import {IronListElement} from 'chrome://resources/polymer/v3_0/iron-list/iron-list.js';
 import {IronScrollThresholdElement} from 'chrome://resources/polymer/v3_0/iron-scroll-threshold/iron-scroll-threshold.js';
 import {afterNextRender} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
+import {CurrentWallpaper, GooglePhotosAlbum, GooglePhotosPhoto, WallpaperProviderInterface, WallpaperType} from '../../personalization_app.mojom-webui.js';
+import {isGooglePhotosSharedAlbumsEnabled} from '../load_time_booleans.js';
 import {dismissErrorAction, setErrorAction} from '../personalization_actions.js';
-import {CurrentWallpaper, GooglePhotosAlbum, GooglePhotosPhoto, WallpaperProviderInterface, WallpaperType} from '../personalization_app.mojom-webui.js';
 import {PersonalizationStateError} from '../personalization_state.js';
 import {WithPersonalizationStore} from '../personalization_store.js';
-import {isSelectionEvent} from '../utils.js';
 
 import {DisplayableImage} from './constants.js';
 import {recordWallpaperGooglePhotosSourceUMA, WallpaperGooglePhotosSource} from './google_photos_metrics_logger.js';
 import {getTemplate} from './google_photos_photos_by_album_id_element.html.js';
-import {getLoadingPlaceholders, isGooglePhotosPhoto, isImageAMatchForKey, isImageEqualToSelected} from './utils.js';
+import {findAlbumById, getLoadingPlaceholders, isGooglePhotosPhoto, isImageAMatchForKey, isImageEqualToSelected} from './utils.js';
 import {fetchGooglePhotosAlbum, selectWallpaper} from './wallpaper_controller.js';
 import {getWallpaperProvider} from './wallpaper_interface_provider.js';
 
@@ -36,17 +37,21 @@ const PLACEHOLDER_ID = 'placeholder';
 /** Returns placeholders to show while Google Photos photos are loading. */
 function getPlaceholders(): GooglePhotosPhoto[] {
   return getLoadingPlaceholders(() => {
-    const photo = new GooglePhotosPhoto();
-    photo.id = PLACEHOLDER_ID;
-    return photo;
+    return {
+      id: PLACEHOLDER_ID,
+      name: '',
+      date: {data: []},
+      url: {url: ''},
+    };
   });
 }
 
-export interface GooglePhotosPhotosByAlbumId {
+export interface GooglePhotosPhotosByAlbumIdElement {
   $: {grid: IronListElement, gridScrollThreshold: IronScrollThresholdElement};
 }
 
-export class GooglePhotosPhotosByAlbumId extends WithPersonalizationStore {
+export class GooglePhotosPhotosByAlbumIdElement extends
+    WithPersonalizationStore {
   static get is() {
     return 'google-photos-photos-by-album-id';
   }
@@ -71,12 +76,20 @@ export class GooglePhotosPhotosByAlbumId extends WithPersonalizationStore {
         value: getPlaceholders,
       },
 
-      albums: Array,
+      albums_: Array,
+      albumsShared_: Array,
       currentSelected_: Object,
       pendingSelected_: Object,
       photosByAlbumId_: Object,
       photosByAlbumIdLoading_: Object,
       photosByAlbumIdResumeTokens_: Object,
+
+      isSharedAlbumsEnabled_: {
+        type: Boolean,
+        value() {
+          return isGooglePhotosSharedAlbumsEnabled();
+        },
+      },
 
       error_: {
         type: Object,
@@ -87,7 +100,7 @@ export class GooglePhotosPhotosByAlbumId extends WithPersonalizationStore {
 
   static get observers() {
     return [
-      'onAlbumIdOrAlbumsOrPhotosByAlbumIdChanged_(albumId, albums_, photosByAlbumId_)',
+      'onAlbumIdOrAlbumsOrPhotosByAlbumIdChanged_(albumId, albums_, albumsShared_, photosByAlbumId_)',
       'onAlbumIdOrPhotosByAlbumIdResumeTokensChanged_(albumId, photosByAlbumIdResumeTokens_)',
     ];
   }
@@ -101,8 +114,11 @@ export class GooglePhotosPhotosByAlbumId extends WithPersonalizationStore {
   /** The list of photos for the currently selected album id. */
   private album_: GooglePhotosPhoto[];
 
-  /** The list of albums. */
+  /** The list of Google Photos albums. */
   private albums_: GooglePhotosAlbum[]|null|undefined;
+
+  /** The list of shared Google Photos albums. */
+  private albumsShared_: GooglePhotosAlbum[]|null|undefined;
 
   /** The currently selected wallpaper. */
   private currentSelected_: CurrentWallpaper|null;
@@ -120,6 +136,9 @@ export class GooglePhotosPhotosByAlbumId extends WithPersonalizationStore {
   /** The resume tokens needed to fetch the next page of photos by album id. */
   private photosByAlbumIdResumeTokens_: Record<string, string|null>|undefined;
 
+  /** Whether feature flag |kGooglePhotosSharedAlbums| is enabled. */
+  private isSharedAlbumsEnabled_: boolean;
+
   /** The current personalization error state. */
   private error_: PersonalizationStateError|null;
 
@@ -130,22 +149,25 @@ export class GooglePhotosPhotosByAlbumId extends WithPersonalizationStore {
   override connectedCallback() {
     super.connectedCallback();
 
-    this.watch<GooglePhotosPhotosByAlbumId['albums_']>(
+    this.watch<GooglePhotosPhotosByAlbumIdElement['albums_']>(
         'albums_', state => state.wallpaper.googlePhotos.albums);
-    this.watch<GooglePhotosPhotosByAlbumId['currentSelected_']>(
+    this.watch<GooglePhotosPhotosByAlbumIdElement['albumsShared_']>(
+        'albumsShared_', state => state.wallpaper.googlePhotos.albumsShared);
+    this.watch<GooglePhotosPhotosByAlbumIdElement['currentSelected_']>(
         'currentSelected_', state => state.wallpaper.currentSelected);
-    this.watch<GooglePhotosPhotosByAlbumId['pendingSelected_']>(
+    this.watch<GooglePhotosPhotosByAlbumIdElement['pendingSelected_']>(
         'pendingSelected_', state => state.wallpaper.pendingSelected);
-    this.watch<GooglePhotosPhotosByAlbumId['photosByAlbumId_']>(
+    this.watch<GooglePhotosPhotosByAlbumIdElement['photosByAlbumId_']>(
         'photosByAlbumId_',
         state => state.wallpaper.googlePhotos.photosByAlbumId);
-    this.watch<GooglePhotosPhotosByAlbumId['photosByAlbumIdLoading_']>(
+    this.watch<GooglePhotosPhotosByAlbumIdElement['photosByAlbumIdLoading_']>(
         'photosByAlbumIdLoading_',
         state => state.wallpaper.loading.googlePhotos.photosByAlbumId);
-    this.watch<GooglePhotosPhotosByAlbumId['photosByAlbumIdResumeTokens_']>(
+    this.watch<
+        GooglePhotosPhotosByAlbumIdElement['photosByAlbumIdResumeTokens_']>(
         'photosByAlbumIdResumeTokens_',
         state => state.wallpaper.googlePhotos.resumeTokens.photosByAlbumId);
-    this.watch<GooglePhotosPhotosByAlbumId['error_']>(
+    this.watch<GooglePhotosPhotosByAlbumIdElement['error_']>(
         'error_', state => state.error);
 
     this.updateFromStore();
@@ -179,7 +201,8 @@ export class GooglePhotosPhotosByAlbumId extends WithPersonalizationStore {
   }
 
   /** Invoked on changes to this element's |hidden| state. */
-  private onHiddenChanged_(hidden: GooglePhotosPhotosByAlbumId['hidden']) {
+  private onHiddenChanged_(hidden:
+                               GooglePhotosPhotosByAlbumIdElement['hidden']) {
     if (hidden && this.error_ && this.error_.id === ERROR_ID) {
       // If |hidden|, the error associated with this element will have lost
       // user-facing context so it should be dismissed.
@@ -206,9 +229,10 @@ export class GooglePhotosPhotosByAlbumId extends WithPersonalizationStore {
 
   /** Invoked on changes to |albumId|, |albums_|, or |photosByAlbumId_|. */
   private onAlbumIdOrAlbumsOrPhotosByAlbumIdChanged_(
-      albumId: GooglePhotosPhotosByAlbumId['albumId'],
-      albums: GooglePhotosPhotosByAlbumId['albums_'],
-      photosByAlbumId: GooglePhotosPhotosByAlbumId['photosByAlbumId_']) {
+      albumId: GooglePhotosPhotosByAlbumIdElement['albumId'],
+      albums: GooglePhotosPhotosByAlbumIdElement['albums_'],
+      albumsShared: GooglePhotosPhotosByAlbumIdElement['albumsShared_'],
+      photosByAlbumId: GooglePhotosPhotosByAlbumIdElement['photosByAlbumId_']) {
     // If no album is currently selected there is nothing to display.
     if (!albumId) {
       this.album_ = [];
@@ -219,8 +243,9 @@ export class GooglePhotosPhotosByAlbumId extends WithPersonalizationStore {
     // been set, there is nothing to display except placeholders. This occurs
     // if the user refreshes the wallpaper app while its navigated to a Google
     // Photos album.
-    if (!Array.isArray(albums) || !albums.some(album => album.id === albumId) ||
-        !photosByAlbumId) {
+    const matchingAlbum =
+        findAlbumById(albumId, albums) ?? findAlbumById(albumId, albumsShared);
+    if (!matchingAlbum || !photosByAlbumId) {
       this.album_ = getPlaceholders();
       return;
     }
@@ -269,31 +294,54 @@ export class GooglePhotosPhotosByAlbumId extends WithPersonalizationStore {
 
   /** Invoked on changes to |albumId| or |photosByAlbumIdResumeTokens_|. */
   private onAlbumIdOrPhotosByAlbumIdResumeTokensChanged_(
-      albumId: GooglePhotosPhotosByAlbumId['albumId'],
+      albumId: GooglePhotosPhotosByAlbumIdElement['albumId'],
       photosByAlbumIdResumeTokens:
-          GooglePhotosPhotosByAlbumId['photosByAlbumIdResumeTokens_']) {
+          GooglePhotosPhotosByAlbumIdElement['photosByAlbumIdResumeTokens_']) {
     if (albumId && photosByAlbumIdResumeTokens &&
         photosByAlbumIdResumeTokens[albumId]) {
       this.$.gridScrollThreshold.clearTriggers();
     }
   }
 
-  /** Invoked on selection of a photo. */
-  private onPhotoSelected_(e: Event&{model: {photo: GooglePhotosPhoto}}) {
-    assert(e.model.photo);
-    if (!this.isPhotoPlaceholder_(e.model.photo) && isSelectionEvent(e)) {
+  /** Invoked on selection of a photo. `e.model.photo` is added by iron-list. */
+  private onPhotoSelected_(e: WallpaperGridItemSelectedEvent&
+                           {model: {photo: GooglePhotosPhoto}}) {
+    assert(e.model.photo, 'google photos album photo selected event has photo');
+    if (!this.isPhotoPlaceholder_(e.model.photo)) {
       selectWallpaper(e.model.photo, this.wallpaperProvider_, this.getStore());
-      recordWallpaperGooglePhotosSourceUMA(WallpaperGooglePhotosSource.ALBUMS);
+      // Depends on whether shared albums feature is enabled, records Google
+      // Photos source metric for all albums, owned albums or shared albums
+      // accordingly.
+      if (!this.isSharedAlbumsEnabled_) {
+        recordWallpaperGooglePhotosSourceUMA(
+            WallpaperGooglePhotosSource.ALBUMS);
+      } else {
+        const isAlbumShared =
+            this.isAlbumShared_(this.albumId, this.albums_, this.albumsShared_);
+        if (isAlbumShared !== null) {
+          recordWallpaperGooglePhotosSourceUMA(
+              isAlbumShared ? WallpaperGooglePhotosSource.SHARED_ALBUMS :
+                              WallpaperGooglePhotosSource.OWNED_ALBUMS);
+        }
+      }
     }
   }
 
-  /**
-   * Returns 'true' or 'false' depending on whether the specified |photo| is
-   * a placeholder.
-   */
-  private getPhotoAriaDisabled_(photo: GooglePhotosPhoto|null): string {
-    return this.isPhotoPlaceholder_(photo).toString();
+  /** Checks whether an album with albumId id is a shared or owned album. */
+  private isAlbumShared_(
+      albumId: GooglePhotosPhotosByAlbumIdElement['albumId'],
+      albums: GooglePhotosPhotosByAlbumIdElement['albums_'],
+      albumsShared: GooglePhotosPhotosByAlbumIdElement['albumsShared_']):
+      boolean|null {
+    if (findAlbumById(albumId, albums)) {
+      return false;
+    } else if (findAlbumById(albumId, albumsShared)) {
+      return true;
+    }
+    console.warn('No matching album id found. ', albumId);
+    return null;
   }
+
 
   /** Returns the aria label for the specified |photo|. */
   private getPhotoAriaLabel_(photo: GooglePhotosPhoto|null): string|undefined {
@@ -317,8 +365,8 @@ export class GooglePhotosPhotosByAlbumId extends WithPersonalizationStore {
   /** Returns whether the specified |photo| is currently selected. */
   private isPhotoSelected_(
       photo: GooglePhotosPhoto|null,
-      currentSelected: GooglePhotosPhotosByAlbumId['currentSelected_'],
-      pendingSelected: GooglePhotosPhotosByAlbumId['pendingSelected_']):
+      currentSelected: GooglePhotosPhotosByAlbumIdElement['currentSelected_'],
+      pendingSelected: GooglePhotosPhotosByAlbumIdElement['pendingSelected_']):
       boolean {
     if (!photo || (!currentSelected && !pendingSelected)) {
       return false;
@@ -342,4 +390,4 @@ export class GooglePhotosPhotosByAlbumId extends WithPersonalizationStore {
 }
 
 customElements.define(
-    GooglePhotosPhotosByAlbumId.is, GooglePhotosPhotosByAlbumId);
+    GooglePhotosPhotosByAlbumIdElement.is, GooglePhotosPhotosByAlbumIdElement);

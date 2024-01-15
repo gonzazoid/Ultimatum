@@ -5,8 +5,8 @@
 #ifndef COMPONENTS_SEGMENTATION_PLATFORM_PUBLIC_INPUT_DELEGATE_H_
 #define COMPONENTS_SEGMENTATION_PLATFORM_PUBLIC_INPUT_DELEGATE_H_
 
-#include "base/callback.h"
 #include "base/containers/flat_map.h"
+#include "base/functional/callback.h"
 #include "components/segmentation_platform/public/proto/model_metadata.pb.h"
 #include "components/segmentation_platform/public/types/processed_value.h"
 
@@ -21,15 +21,15 @@ class InputDelegate {
   InputDelegate();
   virtual ~InputDelegate();
 
-  InputDelegate(InputDelegate&) = delete;
-  InputDelegate& operator=(InputDelegate&) = delete;
+  InputDelegate(const InputDelegate&) = delete;
+  InputDelegate& operator=(const InputDelegate&) = delete;
 
   // Processes the given `input`, and returns the result via `callback`. Should
   // return an error if the processing failed. On success, the number of outputs
   // in the Tensor should be equal to `input.tensor_length()`.
   using ProcessedCallback = base::OnceCallback<void(/*error=*/bool, Tensor)>;
   virtual void Process(const proto::CustomInput& input,
-                       const FeatureProcessorState& feature_processor_state,
+                       FeatureProcessorState& feature_processor_state,
                        ProcessedCallback callback) = 0;
 };
 
@@ -39,8 +39,8 @@ class InputDelegateHolder {
   InputDelegateHolder();
   ~InputDelegateHolder();
 
-  InputDelegateHolder(InputDelegateHolder&) = delete;
-  InputDelegateHolder& operator=(InputDelegateHolder&) = delete;
+  InputDelegateHolder(const InputDelegateHolder&) = delete;
+  InputDelegateHolder& operator=(const InputDelegateHolder&) = delete;
 
   // Returns a delegate for the `policy` if available or nullptr otherwise.
   InputDelegate* GetDelegate(proto::CustomInput::FillPolicy policy);

@@ -8,6 +8,7 @@
 #include <memory>
 
 #include "base/memory/raw_ptr.h"
+#include "components/autofill/core/browser/country_type.h"
 #include "components/autofill/core/browser/form_parsing/form_field.h"
 #include "components/autofill/core/common/language_code.h"
 
@@ -15,20 +16,17 @@ namespace autofill {
 
 class AutofillField;
 class AutofillScanner;
-class LogManager;
 
 // A form field that accepts International Bank Account Number (IBAN).
-class IBANField : public FormField {
+class IbanField : public FormField {
  public:
-  static std::unique_ptr<FormField> Parse(AutofillScanner* scanner,
-                                          const LanguageCode& page_language,
-                                          PatternSource pattern_source,
-                                          LogManager* log_manager);
+  static std::unique_ptr<FormField> Parse(ParsingContext& context,
+                                          AutofillScanner* scanner);
 
-  explicit IBANField(const AutofillField* field);
+  explicit IbanField(const AutofillField* field);
 
-  IBANField(const IBANField&) = delete;
-  IBANField& operator=(const IBANField&) = delete;
+  IbanField(const IbanField&) = delete;
+  IbanField& operator=(const IbanField&) = delete;
 
  protected:
   void AddClassifications(FieldCandidatesMap& field_candidates) const override;

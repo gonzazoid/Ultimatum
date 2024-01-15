@@ -13,11 +13,11 @@
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "chrome/updater/updater_branding.h"
-#include "chrome/updater/util.h"
+#include "chrome/updater/util/util.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 #if BUILDFLAG(IS_MAC)
-#include "chrome/updater/mac/mac_util.h"
+#include "chrome/updater/util/mac_util.h"
 #endif  // BUILDFLAG(IS_MAC)
 
 #if BUILDFLAG(IS_WIN)
@@ -74,8 +74,9 @@ TEST(UpdaterTest, UpdaterTestVersionResource) {
 // Checks that the unit test has the SE_DEBUG_NAME privilege when the process is
 // running as Administrator.
 TEST(UpdaterTest, UpdaterTestDebugPrivilege) {
-  if (!::IsUserAnAdmin())
+  if (!::IsUserAnAdmin()) {
     return;
+  }
 
   LUID luid = {0};
   ASSERT_TRUE(::LookupPrivilegeValue(nullptr, SE_DEBUG_NAME, &luid));

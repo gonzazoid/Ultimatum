@@ -7,6 +7,7 @@
 #include "base/check.h"
 #include "base/files/file_path.h"
 #include "base/path_service.h"
+#include "chrome/common/chrome_features.h"
 #include "chrome/test/base/ui_test_utils.h"
 #include "content/public/test/browser_test_utils.h"
 #include "content/public/test/test_utils.h"
@@ -14,7 +15,13 @@
 #include "net/test/embedded_test_server/embedded_test_server.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-ChromeSitePerProcessTest::ChromeSitePerProcessTest() {}
+ChromeSitePerProcessTest::ChromeSitePerProcessTest() {
+  feature_list_.InitWithFeatures(
+      /*enabled_features=*/{},
+      // TODO(crbug.com/1394910): Use HTTPS URLs in tests to avoid having to
+      // disable this feature.
+      /*disabled_features=*/{features::kHttpsUpgrades});
+}
 
 ChromeSitePerProcessTest::~ChromeSitePerProcessTest() {}
 
@@ -31,7 +38,7 @@ void ChromeSitePerProcessTest::SetUpOnMainThread() {
   // Serve from the root so that flash_object.html can load the swf file.
   // Needed for the PluginWithRemoteTopFrame test.
   base::FilePath test_data_dir;
-  CHECK(base::PathService::Get(base::DIR_SOURCE_ROOT, &test_data_dir));
+  CHECK(base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &test_data_dir));
   embedded_test_server()->ServeFilesFromDirectory(test_data_dir);
 
   // Add content/test/data for cross_site_iframe_factory.html

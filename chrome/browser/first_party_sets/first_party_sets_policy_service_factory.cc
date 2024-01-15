@@ -4,11 +4,12 @@
 
 #include "chrome/browser/first_party_sets/first_party_sets_policy_service_factory.h"
 
-#include "base/memory/singleton.h"
+#include "base/no_destructor.h"
 #include "chrome/browser/first_party_sets/first_party_sets_policy_service.h"
 #include "chrome/browser/first_party_sets/first_party_sets_pref_names.h"
-#include "chrome/browser/profiles/incognito_helpers.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
+#include "chrome/browser/privacy_sandbox/tracking_protection_settings_factory.h"
+#include "chrome/browser/profiles/profile_keyed_service_factory.h"
+#include "chrome/browser/profiles/profile_selections.h"
 #include "components/keyed_service/content/browser_context_keyed_service_factory.h"
 #include "components/pref_registry/pref_registry_syncable.h"
 #include "components/prefs/pref_service.h"
@@ -38,7 +39,8 @@ FirstPartySetsPolicyServiceFactory::GetForBrowserContext(
 // static
 FirstPartySetsPolicyServiceFactory*
 FirstPartySetsPolicyServiceFactory::GetInstance() {
-  return base::Singleton<FirstPartySetsPolicyServiceFactory>::get();
+  static base::NoDestructor<FirstPartySetsPolicyServiceFactory> instance;
+  return instance.get();
 }
 
 void FirstPartySetsPolicyServiceFactory::SetTestingFactoryForTesting(
@@ -47,25 +49,29 @@ void FirstPartySetsPolicyServiceFactory::SetTestingFactoryForTesting(
 }
 
 FirstPartySetsPolicyServiceFactory::FirstPartySetsPolicyServiceFactory()
-    : BrowserContextKeyedServiceFactory(
+    : ProfileKeyedServiceFactory(
           "FirstPartySetsPolicyService",
-          BrowserContextDependencyManager::GetInstance()) {}
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOwnInstance)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kRedirectedToOriginal)
+              .Build()) {
+  // TODO(https://crbug.com/1464637): explicitly declare a dependency on
+  // HostContentSettingsMapFactory.
+  DependsOn(TrackingProtectionSettingsFactory::GetInstance());
+}
 
 FirstPartySetsPolicyServiceFactory::~FirstPartySetsPolicyServiceFactory() =
     default;
 
-content::BrowserContext*
-FirstPartySetsPolicyServiceFactory::GetBrowserContextToUse(
-    content::BrowserContext* context) const {
-  return chrome::GetBrowserContextRedirectedInIncognito(context);
-}
-
-KeyedService* FirstPartySetsPolicyServiceFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+FirstPartySetsPolicyServiceFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
   if (!GetTestingFactory()->is_null()) {
-    return GetTestingFactory()->Run(context).release();
+    return GetTestingFactory()->Run(context);
   }
-  return new FirstPartySetsPolicyService(context);
+  return std::make_unique<FirstPartySetsPolicyService>(context);
 }
 
 bool FirstPartySetsPolicyServiceFactory::ServiceIsCreatedWithBrowserContext()
@@ -75,8 +81,7 @@ bool FirstPartySetsPolicyServiceFactory::ServiceIsCreatedWithBrowserContext()
 
 void FirstPartySetsPolicyServiceFactory::RegisterProfilePrefs(
     user_prefs::PrefRegistrySyncable* registry) {
-  registry->RegisterDictionaryPref(kFirstPartySetsOverrides,
-                                   base::Value::Dict());
+  registry->RegisterDictionaryPref(kRelatedWebsiteSetsOverrides);
 }
 
 }  // namespace first_party_sets

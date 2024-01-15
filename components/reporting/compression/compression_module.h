@@ -11,7 +11,7 @@
 #include "base/memory/ref_counted.h"
 #include "base/strings/string_piece.h"
 #include "components/reporting/proto/synced/record.pb.h"
-#include "components/reporting/resources/resource_interface.h"
+#include "components/reporting/resources/resource_manager.h"
 #include "components/reporting/util/statusor.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
@@ -36,11 +36,11 @@ class CompressionModule : public base::RefCountedThreadSafe<CompressionModule> {
   // with the callback. On success the returned std::string sink will
   // contain a compressed WrappedRecord string. The sink string then can be
   // further updated by the caller. std::string is used instead of
-  // base::StringPiece because ownership is taken of |record| through
+  // std::string_view because ownership is taken of |record| through
   // std::move(record).
   void CompressRecord(
       std::string record,
-      scoped_refptr<ResourceInterface> memory_resource,
+      scoped_refptr<ResourceManager> memory_resource,
       base::OnceCallback<
           void(std::string, absl::optional<CompressionInformation>)> cb) const;
 

@@ -10,6 +10,7 @@
 #include "chrome/browser/ui/views/location_bar/zoom_bubble_view.h"
 #include "chrome/grit/generated_resources.h"
 #include "components/omnibox/browser/location_bar_model.h"
+#include "components/omnibox/browser/omnibox_field_trial.h"
 #include "components/zoom/zoom_controller.h"
 #include "ui/accessibility/ax_node_data.h"
 #include "ui/base/l10n/l10n_util.h"
@@ -26,6 +27,10 @@ ZoomView::ZoomView(IconLabelBubbleView::Delegate* icon_label_bubble_delegate,
                          "Zoom"),
       icon_(&kZoomMinusIcon) {
   SetVisible(false);
+  SetAccessibilityProperties(
+      /*role*/ std::nullopt,
+      l10n_util::GetStringFUTF16(IDS_TOOLTIP_ZOOM,
+                                 base::FormatPercent(current_zoom_percent_)));
 }
 
 ZoomView::~ZoomView() {}
@@ -72,11 +77,24 @@ void ZoomView::ZoomChangedForActiveTab(bool can_show_bubble) {
         zoom::ZoomController::FromWebContents(web_contents);
     current_zoom_percent_ = zoom_controller->GetZoomPercent();
 
+    SetAccessibleName(l10n_util::GetStringFUTF16(
+        IDS_TOOLTIP_ZOOM, base::FormatPercent(current_zoom_percent_)));
+
     // The icon is hidden when the zoom level is default.
-    icon_ = zoom_controller && zoom_controller->GetZoomRelativeToDefault() ==
-                                   zoom::ZoomController::ZOOM_BELOW_DEFAULT_ZOOM
-                ? &kZoomMinusIcon
-                : &kZoomPlusIcon;
+
+    if (OmniboxFieldTrial::IsChromeRefreshIconsEnabled()) {
+      icon_ =
+          zoom_controller && zoom_controller->GetZoomRelativeToDefault() ==
+                                 zoom::ZoomController::ZOOM_BELOW_DEFAULT_ZOOM
+              ? &kZoomMinusChromeRefreshIcon
+              : &kZoomPlusChromeRefreshIcon;
+    } else {
+      icon_ =
+          zoom_controller && zoom_controller->GetZoomRelativeToDefault() ==
+                                 zoom::ZoomController::ZOOM_BELOW_DEFAULT_ZOOM
+              ? &kZoomMinusIcon
+              : &kZoomPlusIcon;
+    }
     UpdateIconImage();
 
     // Visibility must be enabled before the bubble is shown to ensure the
@@ -109,10 +127,5 @@ const gfx::VectorIcon& ZoomView::GetVectorIcon() const {
   return *icon_;
 }
 
-std::u16string ZoomView::GetTextForTooltipAndAccessibleName() const {
-  return l10n_util::GetStringFUTF16(IDS_TOOLTIP_ZOOM,
-                                    base::FormatPercent(current_zoom_percent_));
-}
-
-BEGIN_METADATA(ZoomView, PageActionIconView)
+BEGIN_METADATA(ZoomView)
 END_METADATA

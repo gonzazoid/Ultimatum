@@ -4,10 +4,10 @@
 
 #include <map>
 
-#include "base/callback_helpers.h"
 #include "base/check.h"
 #include "base/containers/contains.h"
 #include "base/feature_list.h"
+#include "base/functional/callback_helpers.h"
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
 #include "base/test/scoped_feature_list.h"
@@ -62,8 +62,9 @@ void DescribeNodesWithAnnotations(const ui::AXNode& node,
     else
       descriptions->push_back(role_str + " " + annotation);
   }
-  for (const auto* child : node.children())
+  for (const ui::AXNode* child : node.children()) {
     DescribeNodesWithAnnotations(*child, descriptions);
+  }
 }
 
 std::vector<std::string> DescribeNodesWithAnnotations(
@@ -172,7 +173,7 @@ class FakeAnnotator : public image_annotation::mojom::Annotator {
   static bool return_ocr_results_;
   static bool return_label_results_;
   static std::map<std::string, std::string> custom_label_result_mapping_;
-  static absl::optional<image_annotation::mojom::AnnotateImageError>
+  static std::optional<image_annotation::mojom::AnnotateImageError>
       return_error_code_;
 };
 
@@ -183,7 +184,7 @@ bool FakeAnnotator::return_label_results_ = false;
 // static
 std::map<std::string, std::string> FakeAnnotator::custom_label_result_mapping_;
 // static
-absl::optional<image_annotation::mojom::AnnotateImageError>
+std::optional<image_annotation::mojom::AnnotateImageError>
     FakeAnnotator::return_error_code_;
 
 // The fake ImageAnnotationService, which handles mojo calls from the renderer
@@ -538,8 +539,14 @@ IN_PROC_BROWSER_TEST_F(ImageAnnotationBrowserTest,
       "Appears to say: red.png Annotation. Appears to be: red.png 'fr' Label");
 }
 
+// TODO(crbug.com/1476383): Fix flakiness on ChromeOS
+#if BUILDFLAG(IS_CHROMEOS)
+#define MAYBE_DoesntAnnotateInternalPages DISABLED_DoesntAnnotateInternalPages
+#else
+#define MAYBE_DoesntAnnotateInternalPages DoesntAnnotateInternalPages
+#endif
 IN_PROC_BROWSER_TEST_F(ImageAnnotationBrowserTest,
-                       DoesntAnnotateInternalPages) {
+                       MAYBE_DoesntAnnotateInternalPages) {
   FakeAnnotator::SetReturnLabelResults(true);
   ASSERT_TRUE(
       ui_test_utils::NavigateToURL(browser(), GURL("chrome://version")));
@@ -559,7 +566,7 @@ IN_PROC_BROWSER_TEST_F(ImageAnnotationBrowserTest,
       "\";"
       "var outer = document.getElementById('outer');"
       "outer.insertBefore(image, outer.childNodes[0]);";
-  EXPECT_TRUE(content::ExecuteScript(web_contents, javascript));
+  EXPECT_TRUE(content::ExecJs(web_contents, javascript));
 
   ui::AXTreeUpdate snapshot =
       content::GetAccessibilityTreeSnapshot(web_contents);

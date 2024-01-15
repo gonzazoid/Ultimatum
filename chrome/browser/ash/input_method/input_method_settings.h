@@ -15,6 +15,24 @@ ime::mojom::InputMethodSettingsPtr CreateSettingsFromPrefs(
     const PrefService& prefs,
     const std::string& engine_id);
 
+bool IsJapaneseSettingsMigrationComplete(const PrefService& prefs);
+
+void SetJapaneseSettingsMigrationComplete(PrefService& prefs, bool value);
+
+void MigrateJapaneseSettingsToPrefs(PrefService& prefs,
+                                    ime::mojom::JapaneseConfig config);
+
+// Returns true if Autocorrect is supported for a given engine id.
+bool IsAutocorrectSupported(const std::string& engine_id);
+
+// Is the physical keyboard autocorrect feature allowed for this device (if the
+// device is managed).
+bool IsPhysicalKeyboardAutocorrectAllowed(const PrefService& prefs);
+
+// Is the physical keyboard predictive writing feature allowed for this device
+// (if the device is managed).
+bool IsPhysicalKeyboardPredictiveWritingAllowed(const PrefService& prefs);
+
 }  // namespace input_method
 }  // namespace ash
 

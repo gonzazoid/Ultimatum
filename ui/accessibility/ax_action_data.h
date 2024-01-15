@@ -6,10 +6,12 @@
 #define UI_ACCESSIBILITY_AX_ACTION_DATA_H_
 
 #include <string>
+#include <utility>
 
 #include "ui/accessibility/ax_base_export.h"
 #include "ui/accessibility/ax_enums.mojom-forward.h"
 #include "ui/accessibility/ax_node_data.h"
+#include "ui/accessibility/ax_node_id_forward.h"
 #include "ui/accessibility/ax_tree_id.h"
 #include "ui/gfx/geometry/rect.h"
 
@@ -32,13 +34,13 @@ struct AX_BASE_EXPORT AXActionData {
   ax::mojom::Action action;
 
   // The ID of the tree that this action should be performed on.
-  ui::AXTreeID target_tree_id = ui::AXTreeIDUnknown();
+  AXTreeID target_tree_id = AXTreeIDUnknown();
 
   // The source extension id (if any) of this action.
   std::string source_extension_id;
 
   // The ID of the node that this action should be performed on.
-  int target_node_id = -1;
+  AXNodeID target_node_id = -1;
 
   // The request id of this action tracked by the client.
   int request_id = -1;
@@ -72,6 +74,12 @@ struct AX_BASE_EXPORT AXActionData {
   // The new value for a node, for the SET_VALUE action. UTF-8 encoded.
   std::string value;
 
+  // The row and column to move to. Used with the
+  // ax::mojom::Action::kScrollToPositionAtRowColumn action.
+  //
+  // Supported by Android.
+  std::pair<int, int> row_column;
+
   // The event to fire in response to a HIT_TEST action.
   ax::mojom::Event hit_test_event_to_fire;
 
@@ -83,6 +91,10 @@ struct AX_BASE_EXPORT AXActionData {
   // The behavior to use for a SCROLL_TO_MAKE_VISIBLE. This controls whether or
   // not the viewport is scrolled when the node is already visible.
   ax::mojom::ScrollBehavior scroll_behavior;
+
+  // The child tree that needs to be stitched at `target_node_id`. Only used by
+  // `ax::mojom::Action::kStitchChildTree`.
+  AXTreeID child_tree_id = AXTreeIDUnknown();
 };
 
 }  // namespace ui

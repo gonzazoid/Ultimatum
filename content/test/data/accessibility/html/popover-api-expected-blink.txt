@@ -1,0 +1,110 @@
+rootWebArea
+++genericContainer ignored
+++++genericContainer ignored
+++++++genericContainer ignored invisible
+++++++++staticText ignored invisible name='Div popover'
+++++++listBox ignored invisible
+++++++++genericContainer ignored invisible
+++++++++++staticText ignored invisible name='Listbox role on ul'
+++++++listBox ignored invisible
+++++++++genericContainer ignored invisible
+++++++++++staticText ignored invisible name='Listbox role on ul'
+++++++details ignored invisible
+++++++++genericContainer ignored invisible
+++++++++++disclosureTriangle ignored invisible
+++++++++++++staticText ignored invisible name='summary/details popover'
+++++++button collapsed name='Button pointing to hidden popover'
+++++++++staticText name='Button pointing to hidden popover'
+++++++++++inlineTextBox name='Button pointing to hidden popover'
+++++++textField
+++++++++genericContainer
+++++++staticText name='Text input pointing to hidden popover '
+++++++++inlineTextBox name='Text input pointing to hidden popover '
+++++++genericContainer ignored invisible
+++++++++staticText ignored invisible name='Popover'
+++++++button name='Hide button pointing to hidden manual'
+++++++++staticText name='Hide button pointing to hidden manual'
+++++++++++inlineTextBox name='Hide button pointing to hidden manual'
+++++++textField
+++++++++genericContainer
+++++++staticText name='Email input pointing to hidden manual '
+++++++++inlineTextBox name='Email input pointing to hidden manual '
+++++++genericContainer ignored invisible
+++++++++staticText ignored invisible name='Manual'
+++++++button name='Button pointing to hint popover'
+++++++++staticText name='Button pointing to hint popover'
+++++++++++inlineTextBox name='Button pointing to hint popover'
+++++++genericContainer ignored invisible
+++++++++staticText ignored invisible name='Popover=hint'
+++++++button name='Button pointing to "rich" hint popover'
+++++++++staticText name='Button pointing to "rich" hint popover'
+++++++++++inlineTextBox name='Button pointing to "rich" hint popover'
+++++++genericContainer ignored invisible
+++++++++staticText ignored invisible name='Popover=hint '
+++++++++link ignored invisible
+++++++++++staticText ignored invisible name='Link'
+++++++button name='Button pointing to non-popover'
+++++++++staticText name='Button pointing to non-popover'
+++++++++++inlineTextBox name='Button pointing to non-popover'
+++++++textField
+++++++++genericContainer
+++++++staticText name='Text input pointing to non-popover'
+++++++++inlineTextBox name='Text input pointing to non-popover'
+++++++genericContainer
+++++++++staticText name='No popover attribute'
+++++++++++inlineTextBox name='No popover attribute'
+++++++button name='Button pointing to invalid popover value'
+++++++++staticText name='Button pointing to invalid popover value'
+++++++++++inlineTextBox name='Button pointing to invalid popover value'
+++++++textField
+++++++++genericContainer
+++++++staticText name='Text input pointing to invalid popover value'
+++++++++inlineTextBox name='Text input pointing to invalid popover value'
+++++++genericContainer ignored invisible
+++++++++staticText ignored invisible name='Invalid popover attribute value'
+++++++paragraph
+++++++++staticText name='Showing/visible popovers below'
+++++++++++inlineTextBox name='Showing/visible popovers below'
+++++++button expanded name='Button pointing to showing popover' detailsIds=group
+++++++++staticText name='Button pointing to showing popover'
+++++++++++inlineTextBox name='Button pointing to showing popover'
+++++++button expanded name='w/o details'
+++++++++staticText name='w/o details'
+++++++++++inlineTextBox name='w/o details'
+++++++textField
+++++++++genericContainer
+++++++staticText name='Tel input pointing to showing popover '
+++++++++inlineTextBox name='Tel input pointing to showing popover '
+++++++button expanded name='Show button pointing to nested popover' detailsIds=group
+++++++++staticText name='Show button pointing to nested popover'
+++++++++++inlineTextBox name='Show button pointing to nested popover'
+++++++textField
+++++++++genericContainer
+++++++staticText name='Url input pointing to nested popover '
+++++++++inlineTextBox name='Url input pointing to nested popover '
+++++++group ispopup=auto
+++++++++staticText name='Popover (showing)'
+++++++++++inlineTextBox name='Popover (showing)'
+++++++++group ispopup=auto
+++++++++++staticText name='Nested popover (showing)'
+++++++++++++inlineTextBox name='Nested popover (showing)'
+++++++button name='Hide button pointing to showing manual (should add aria-details)' detailsIds=group
+++++++++staticText name='Hide button pointing to showing manual (should add aria-details)'
+++++++++++inlineTextBox name='Hide button pointing to showing manual (should add aria-details)'
+++++++textField
+++++++++genericContainer
+++++++staticText name='Url input pointing to showing manual '
+++++++++inlineTextBox name='Url input pointing to showing '
+++++++++inlineTextBox name='manual '
+++++++button name='Hide button pointing to showing manual (should NOT add aria-details)'
+++++++++staticText name='Hide button pointing to showing manual (should NOT add aria-details)'
+++++++++++inlineTextBox name='Hide button pointing to showing manual (should NOT add aria-details)'
+++++++group ispopup=manual
+++++++++staticText name='Manual (showing)'
+++++++++++inlineTextBox name='Manual (showing)'
+++++++group ispopup=manual
+++++++++staticText name='Popover=hint (showing) '
+++++++++++inlineTextBox name='Popover=hint (showing) '
+++++++++link name='Link'
+++++++++++staticText name='Link'
+++++++++++++inlineTextBox name='Link'

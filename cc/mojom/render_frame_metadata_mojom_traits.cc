@@ -5,7 +5,6 @@
 #include "cc/mojom/render_frame_metadata_mojom_traits.h"
 
 #include "build/build_config.h"
-#include "mojo/public/cpp/base/time_mojom_traits.h"
 #include "services/viz/public/cpp/compositing/selection_mojom_traits.h"
 #include "services/viz/public/cpp/compositing/vertical_scroll_direction_mojom_traits.h"
 #include "third_party/skia/include/core/SkColor.h"
@@ -35,7 +34,7 @@ bool StructTraits<
   out->external_page_scale_factor = data.external_page_scale_factor();
   out->top_controls_height = data.top_controls_height();
   out->top_controls_shown_ratio = data.top_controls_shown_ratio();
-#if BUILDFLAG(IS_ANDROID)
+#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_IOS)
   out->bottom_controls_height = data.bottom_controls_height();
   out->bottom_controls_shown_ratio = data.bottom_controls_shown_ratio();
   out->top_controls_min_height_offset = data.top_controls_min_height_offset();
@@ -49,7 +48,7 @@ bool StructTraits<
   return data.ReadRootScrollOffset(&out->root_scroll_offset) &&
          data.ReadSelection(&out->selection) &&
          data.ReadDelegatedInkMetadata(&out->delegated_ink_metadata) &&
-#if BUILDFLAG(IS_ANDROID)
+#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_IOS)
          data.ReadScrollableViewportSize(&out->scrollable_viewport_size) &&
          data.ReadRootLayerSize(&out->root_layer_size) &&
 #endif
@@ -57,10 +56,6 @@ bool StructTraits<
          data.ReadLocalSurfaceId(&out->local_surface_id) &&
          data.ReadNewVerticalScrollDirection(
              &out->new_vertical_scroll_direction) &&
-         data.ReadPreviousSurfacesVisualUpdateDuration(
-             &out->previous_surfaces_visual_update_duration) &&
-         data.ReadCurrentSurfaceVisualUpdateDuration(
-             &out->current_surface_visual_update_duration) &&
          data.ReadRootBackgroundColor(&out->root_background_color);
 }
 

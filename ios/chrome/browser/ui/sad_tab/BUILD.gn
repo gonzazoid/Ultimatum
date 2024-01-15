@@ -2,16 +2,7 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-# TODO(crbug.com/1344830): Migrate away from deprecated MDC APIs.
-config("disable_deprecated_declarations") {
-  cflags = [ "-Wno-deprecated-declarations" ]
-}
-
 source_set("sad_tab") {
-  configs += [
-    ":disable_deprecated_declarations",
-    "//build/config/compiler:enable_arc",
-  ]
   sources = [
     "sad_tab_view.h",
     "sad_tab_view.mm",
@@ -23,15 +14,14 @@ source_set("sad_tab") {
     "//components/resources",
     "//components/strings",
     "//components/ui_metrics",
-    "//ios/chrome/browser/ui:feature_flags",
-    "//ios/chrome/browser/ui/commands",
+    "//ios/chrome/browser/shared/model/url:constants",
+    "//ios/chrome/browser/shared/public/commands",
+    "//ios/chrome/browser/shared/public/features",
+    "//ios/chrome/browser/shared/ui/util",
     "//ios/chrome/browser/ui/overscroll_actions",
-    "//ios/chrome/browser/ui/util",
-    "//ios/chrome/browser/url:constants",
-    "//ios/chrome/browser/web",
+    "//ios/chrome/browser/web/model",
     "//ios/chrome/common/ui/colors",
     "//ios/chrome/common/ui/util",
-    "//ios/third_party/material_components_ios",
     "//ios/web",
     "//net",
     "//ui/base",
@@ -41,7 +31,6 @@ source_set("sad_tab") {
 }
 
 source_set("coordinator") {
-  configs += [ "//build/config/compiler:enable_arc" ]
   sources = [
     "sad_tab_coordinator.h",
     "sad_tab_coordinator.mm",
@@ -49,26 +38,23 @@ source_set("coordinator") {
   deps = [
     ":sad_tab",
     "//components/ui_metrics",
-    "//ios/chrome/browser/browser_state",
-    "//ios/chrome/browser/main:public",
-    "//ios/chrome/browser/ui/commands",
-    "//ios/chrome/browser/ui/coordinators:chrome_coordinators",
+    "//ios/chrome/browser/shared/coordinator/chrome_coordinator",
+    "//ios/chrome/browser/shared/model/browser",
+    "//ios/chrome/browser/shared/model/browser_state",
+    "//ios/chrome/browser/shared/model/web_state_list",
+    "//ios/chrome/browser/shared/public/commands",
+    "//ios/chrome/browser/shared/ui/util",
     "//ios/chrome/browser/ui/fullscreen:coordinators",
     "//ios/chrome/browser/ui/overscroll_actions",
-    "//ios/chrome/browser/ui/util",
-    "//ios/chrome/browser/web",
-    "//ios/chrome/browser/web:tab_helper_delegates",
-    "//ios/chrome/browser/web_state_list",
+    "//ios/chrome/browser/web/model",
+    "//ios/chrome/browser/web/model:tab_helper_delegates",
+    "//ios/chrome/browser/web_state_list/model",
     "//ios/chrome/common/ui/util",
     "//ios/web",
   ]
 }
 
 source_set("unit_tests") {
-  configs += [
-    ":disable_deprecated_declarations",
-    "//build/config/compiler:enable_arc",
-  ]
   testonly = true
   sources = [
     "sad_tab_coordinator_unittest.mm",
@@ -76,13 +62,14 @@ source_set("unit_tests") {
   ]
   deps = [
     "//components/strings",
-    "//ios/chrome/browser/browser_state:test_support",
-    "//ios/chrome/browser/main:test_support",
-    "//ios/chrome/browser/ui/commands",
+    "//ios/chrome/browser/lens/model",
+    "//ios/chrome/browser/shared/model/browser/test:test_support",
+    "//ios/chrome/browser/shared/model/browser_state:test_support",
+    "//ios/chrome/browser/shared/public/commands",
+    "//ios/chrome/browser/shared/ui/util",
     "//ios/chrome/browser/ui/sad_tab",
     "//ios/chrome/browser/ui/sad_tab:coordinator",
-    "//ios/chrome/browser/ui/util",
-    "//ios/chrome/browser/web",
+    "//ios/chrome/browser/web/model",
     "//ios/chrome/common/ui/util",
     "//ios/web/public/test",
     "//ios/web/public/test/fakes",
@@ -93,10 +80,7 @@ source_set("unit_tests") {
 }
 
 source_set("eg2_tests") {
-  configs += [
-    "//build/config/compiler:enable_arc",
-    "//build/config/ios:xctest_config",
-  ]
+  configs += [ "//build/config/ios:xctest_config" ]
   testonly = true
   sources = [ "sad_tab_view_egtest.mm" ]
 
@@ -107,7 +91,6 @@ source_set("eg2_tests") {
     "//ios/chrome/test/earl_grey:eg_test_support+eg2",
     "//ios/testing:embedded_test_server_support",
     "//ios/testing/earl_grey:eg_test_support+eg2",
-    "//ios/third_party/earl_grey2:test_lib",
     "//net:test_support",
     "//ui/base",
   ]

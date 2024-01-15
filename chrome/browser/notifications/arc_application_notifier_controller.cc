@@ -7,8 +7,8 @@
 #include <set>
 
 #include "ash/public/cpp/notifier_metadata.h"
-#include "base/bind.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/functional/bind.h"
+#include "base/task/single_thread_task_runner.h"
 #include "chrome/browser/apps/app_service/app_service_proxy.h"
 #include "chrome/browser/apps/app_service/app_service_proxy_factory.h"
 #include "chrome/browser/notifications/notifier_dataset.h"
@@ -16,7 +16,6 @@
 #include "components/services/app_service/public/cpp/app_types.h"
 #include "components/services/app_service/public/cpp/app_update.h"
 #include "components/services/app_service/public/cpp/permission.h"
-#include "components/services/app_service/public/mojom/types.mojom.h"
 #include "third_party/abseil-cpp/absl/types/variant.h"
 #include "ui/message_center/public/cpp/message_center_constants.h"
 #include "ui/message_center/public/cpp/notifier_id.h"
@@ -39,15 +38,17 @@ ArcApplicationNotifierController::GetNotifierList(Profile* profile) {
     return std::vector<ash::NotifierMetadata>();
 
   last_used_profile_ = profile;
-  apps::AppServiceProxy* service =
-      apps::AppServiceProxyFactory::GetForProfile(profile);
-  Observe(&(service->AppRegistryCache()));
+  auto* cache =
+      &apps::AppServiceProxyFactory::GetForProfile(profile)->AppRegistryCache();
+  if (!app_registry_cache_observer_.IsObservingSource(cache)) {
+    app_registry_cache_observer_.Reset();
+    app_registry_cache_observer_.Observe(cache);
+  }
 
   package_to_app_ids_.clear();
   std::vector<NotifierDataset> notifier_dataset;
 
-  service->AppRegistryCache().ForEachApp([&notifier_dataset](
-                                             const apps::AppUpdate& update) {
+  cache->ForEachApp([&notifier_dataset](const apps::AppUpdate& update) {
     if (update.AppType() != apps::AppType::kArc)
       return;
 
@@ -55,15 +56,14 @@ ArcApplicationNotifierController::GetNotifierList(Profile* profile) {
       if (permission->permission_type != apps::PermissionType::kNotifications) {
         continue;
       }
-      DCHECK(absl::holds_alternative<bool>(permission->value->value));
       // Do not include notifier metadata for system apps.
       if (update.InstallReason() == apps::InstallReason::kSystem) {
         return;
       }
-      notifier_dataset.push_back(NotifierDataset{
-          update.AppId() /*app_id*/, update.ShortName() /*app_name*/,
+      notifier_dataset.emplace_back(
+          update.AppId() /*app_id*/, update.Name() /*app_name*/,
           update.PublisherId() /*publisher_id*/,
-          absl::get<bool>(permission->value->value) /*enabled*/});
+          permission->IsPermissionEnabled() /*enabled*/);
     }
   });
 
@@ -82,7 +82,7 @@ ArcApplicationNotifierController::GetNotifierList(Profile* profile) {
         std::make_pair(app_data.publisher_id, app_data.app_id));
   }
   if (!package_to_app_ids_.empty()) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(&ArcApplicationNotifierController::CallLoadIcons,
                        weak_ptr_factory_.GetWeakPtr()));
@@ -99,8 +99,7 @@ void ArcApplicationNotifierController::SetNotifierEnabled(
 
   last_used_profile_ = profile;
   auto permission = std::make_unique<apps::Permission>(
-      apps::PermissionType::kNotifications,
-      std::make_unique<apps::PermissionValue>(enabled),
+      apps::PermissionType::kNotifications, enabled,
       /*is_managed=*/false);
   apps::AppServiceProxy* service =
       apps::AppServiceProxyFactory::GetForProfile(profile);
@@ -120,7 +119,7 @@ void ArcApplicationNotifierController::CallLoadIcon(
       last_used_profile_));
 
   apps::AppServiceProxyFactory::GetForProfile(last_used_profile_)
-      ->LoadIcon(apps::AppType::kArc, app_id, apps::IconType::kStandard,
+      ->LoadIcon(app_id, apps::IconType::kStandard,
                  message_center::kQuickSettingIconSizeInDp,
                  allow_placeholder_icon,
                  base::BindOnce(&ArcApplicationNotifierController::OnLoadIcon,
@@ -168,7 +167,7 @@ void ArcApplicationNotifierController::OnAppUpdate(
 
 void ArcApplicationNotifierController::OnAppRegistryCacheWillBeDestroyed(
     apps::AppRegistryCache* cache) {
-  Observe(nullptr);
+  app_registry_cache_observer_.Reset();
 }
 
 }  // namespace arc

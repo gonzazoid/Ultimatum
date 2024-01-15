@@ -6,11 +6,11 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/run_loop.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/task_environment.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "net/cookies/site_for_cookies.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -30,9 +30,10 @@ class MediaUrlDemuxerTest : public testing::Test {
                       const GURL& first_party,
                       bool allow_credentials) {
     demuxer_ = std::make_unique<MediaUrlDemuxer>(
-        base::ThreadTaskRunnerHandle::Get(), media_url,
+        base::SingleThreadTaskRunner::GetCurrentDefault(), media_url,
         net::SiteForCookies::FromUrl(first_party),
-        url::Origin::Create(first_party), allow_credentials, false);
+        url::Origin::Create(first_party), /*has_storage_access=*/false,
+        allow_credentials, false);
   }
 
   void InitializeTest() {
@@ -47,14 +48,14 @@ class MediaUrlDemuxerTest : public testing::Test {
   const GURL default_first_party_url_;
   std::unique_ptr<Demuxer> demuxer_;
 
-  // Necessary, or else base::ThreadTaskRunnerHandle::Get() fails.
+  // Necessary, or else base::SingleThreadTaskRunner::GetCurrentDefault() fails.
   base::test::SingleThreadTaskEnvironment task_environment_;
 };
 
 TEST_F(MediaUrlDemuxerTest, BaseCase) {
   InitializeTest();
 
-  EXPECT_EQ(MediaResource::Type::URL, demuxer_->GetType());
+  EXPECT_EQ(MediaResource::Type::KUrl, demuxer_->GetType());
 
   const MediaUrlParams& params = demuxer_->GetMediaUrlParams();
   EXPECT_EQ(default_media_url_, params.media_url);

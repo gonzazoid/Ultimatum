@@ -4,11 +4,11 @@
 
 #include <string>
 
-#include "base/guid.h"
 #include "base/strings/stringprintf.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/test_timeouts.h"
 #include "base/threading/thread_restrictions.h"
+#include "base/uuid.h"
 #include "build/build_config.h"
 #include "chrome/browser/browser_features.h"
 #include "chrome/browser/sessions/session_service.h"
@@ -57,11 +57,11 @@ class TwoClientSessionsSyncTest : public SyncTest {
   }
 };
 
-static const char* kURL1 = "data:text/html,<html><title>Test</title></html>";
-static const char* kURL2 = "data:text/html,<html><title>Test2</title></html>";
-static const char* kURL3 = "data:text/html,<html><title>Test3</title></html>";
-static const char* kURL4 = "data:text/html,<html><title>Test4</title></html>";
-static const char* kURLTemplate =
+constexpr char kURL1[] = "data:text/html,<html><title>Test</title></html>";
+constexpr char kURL2[] = "data:text/html,<html><title>Test2</title></html>";
+constexpr char kURL3[] = "data:text/html,<html><title>Test3</title></html>";
+constexpr char kURL4[] = "data:text/html,<html><title>Test4</title></html>";
+constexpr char kURLTemplate[] =
     "data:text/html,<html><title>Test%s</title></html>";
 
 // TODO(zea): Test each individual session command we care about separately.
@@ -75,8 +75,8 @@ IN_PROC_BROWSER_TEST_F(TwoClientSessionsSyncTest,
 
   // Open tab and access a url on client 0
   ScopedWindowMap client0_windows;
-  std::string url =
-      base::StringPrintf(kURLTemplate, base::GenerateGUID().c_str());
+  std::string url = base::StringPrintf(
+      kURLTemplate, base::Uuid::GenerateRandomV4().AsLowercaseString().c_str());
 
   ASSERT_TRUE(OpenTab(0, GURL(url)));
   EXPECT_TRUE(WaitForForeignSessionsToSync(0, 1));
@@ -109,8 +109,9 @@ IN_PROC_BROWSER_TEST_F(TwoClientSessionsSyncTest, E2E_ENABLED(AllChanged)) {
   // Open tabs on all clients and retain window information.
   for (int i = 0; i < num_clients(); ++i) {
     ScopedWindowMap windows;
-    std::string url =
-        base::StringPrintf(kURLTemplate, base::GenerateGUID().c_str());
+    std::string url = base::StringPrintf(
+        kURLTemplate,
+        base::Uuid::GenerateRandomV4().AsLowercaseString().c_str());
     ASSERT_TRUE(OpenTab(i, GURL(url)));
   }
 
@@ -158,18 +159,12 @@ IN_PROC_BROWSER_TEST_F(TwoClientSessionsSyncTest, DeleteIdleSession) {
   ASSERT_TRUE(GetSessionData(1, &sessions1));
 
   // Client 1 now deletes client 0's tabs. This frees the memory of sessions1.
-  DeleteForeignSession(1, sessions1[0]->session_tag);
+  DeleteForeignSession(1, sessions1[0]->GetSessionTag());
   ASSERT_TRUE(GetClient(1)->AwaitMutualSyncCycleCompletion(GetClient(0)));
   EXPECT_FALSE(GetSessionData(1, &sessions1));
 }
 
-// TODO(crbug.com/1340790): Flaky on MSAN, deflake and re-enable the test.
-#if defined(MEMORY_SANITIZER)
-#define MAYBE_DeleteActiveSession DISABLED_DeleteActiveSession
-#else
-#define MAYBE_DeleteActiveSession DeleteActiveSession
-#endif
-IN_PROC_BROWSER_TEST_F(TwoClientSessionsSyncTest, MAYBE_DeleteActiveSession) {
+IN_PROC_BROWSER_TEST_F(TwoClientSessionsSyncTest, DeleteActiveSession) {
   ASSERT_TRUE(SetupSync()) << "SetupSync() failed.";
 
   ASSERT_TRUE(CheckInitialState(0));
@@ -184,7 +179,7 @@ IN_PROC_BROWSER_TEST_F(TwoClientSessionsSyncTest, MAYBE_DeleteActiveSession) {
   ASSERT_EQ(1U, sessions1.size());
 
   // Client 1 now deletes client 0's tabs. This frees the memory of sessions1.
-  DeleteForeignSession(1, sessions1[0]->session_tag);
+  DeleteForeignSession(1, sessions1[0]->GetSessionTag());
   ASSERT_TRUE(GetClient(1)->AwaitMutualSyncCycleCompletion(GetClient(0)));
   ASSERT_FALSE(GetSessionData(1, &sessions1));
 

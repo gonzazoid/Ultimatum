@@ -9,9 +9,9 @@
 
 #include "base/check_op.h"
 #include "base/no_destructor.h"
+#include "chrome/browser/ash/app_list/arc/arc_app_utils.h"
 #include "chrome/browser/ash/login/demo_mode/demo_session.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/ui/app_list/arc/arc_app_utils.h"
 #include "chrome/common/apps/platform_apps/api/arc_apps_private.h"
 #include "ui/events/event_constants.h"
 
@@ -102,9 +102,9 @@ ArcAppsPrivateLaunchAppFunction::ArcAppsPrivateLaunchAppFunction() = default;
 ArcAppsPrivateLaunchAppFunction::~ArcAppsPrivateLaunchAppFunction() = default;
 
 ExtensionFunction::ResponseAction ArcAppsPrivateLaunchAppFunction::Run() {
-  std::unique_ptr<api::arc_apps_private::LaunchApp::Params> params(
+  std::optional<api::arc_apps_private::LaunchApp::Params> params(
       api::arc_apps_private::LaunchApp::Params::Create(args()));
-  EXTENSION_FUNCTION_VALIDATE(params.get());
+  EXTENSION_FUNCTION_VALIDATE(params.has_value());
   ArcAppListPrefs* prefs =
       ArcAppListPrefs::Get(Profile::FromBrowserContext(browser_context()));
   if (!prefs)

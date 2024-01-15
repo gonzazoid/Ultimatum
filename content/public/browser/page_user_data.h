@@ -6,6 +6,7 @@
 #define CONTENT_PUBLIC_BROWSER_PAGE_USER_DATA_H_
 
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ref.h"
 #include "base/supports_user_data.h"
 #include "content/public/browser/page.h"
 
@@ -40,8 +41,13 @@ namespace content {
 // };
 //
 // --- in foo_page_helper.cc ---
-// PAGE_USER_DATA_KEY_IMPL(FooPageHelper)
-
+// PAGE_USER_DATA_KEY_IMPL(FooPageHelper);
+//
+// FooPageHelper::FooPageHelper(content::Page& page)
+//     : PageUserData(page) {}
+//
+// FooPageHelper::~FooPageHelper() {}
+//
 template <typename T>
 class PageUserData : public base::SupportsUserData::Data {
  public:
@@ -73,7 +79,7 @@ class PageUserData : public base::SupportsUserData::Data {
     page.RemoveUserData(UserDataKey());
   }
 
-  Page& page() const { return page_; }
+  Page& page() const { return *page_; }
 
   static const void* UserDataKey() { return &T::kUserDataKey; }
 
@@ -82,7 +88,7 @@ class PageUserData : public base::SupportsUserData::Data {
 
  private:
   // Page associated with subclass which inherits this PageUserData.
-  Page& page_;
+  const raw_ref<Page> page_;
 };
 
 // Users won't be able to instantiate the template if they miss declaring the

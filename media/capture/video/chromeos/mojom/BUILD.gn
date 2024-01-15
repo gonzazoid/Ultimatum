@@ -9,6 +9,7 @@ mojom("cros_camera_common") {
     "camera3.mojom",
     "camera_app.mojom",
     "camera_common.mojom",
+    "camera_features.mojom",
     "camera_metadata.mojom",
     "camera_metadata_tags.mojom",
   ]
@@ -19,6 +20,9 @@ mojom("cros_camera_common") {
     "//ui/gfx/range/mojom",
   ]
   webui_module_path = "/media/capture/video/chromeos/mojom"
+
+  # ChromeOS is still heavily reliant on legacy bindings.
+  generate_legacy_js_bindings = true
 }
 
 mojom("cros_camera") {
@@ -29,9 +33,18 @@ mojom("cros_camera") {
   ]
 
   deps = [
-    "//chromeos/components/sensors/mojom",
     "//components/chromeos_camera/common",
     "//media/capture/mojom:image_capture",
   ]
-  public_deps = [ ":cros_camera_common" ]
+
+  public_deps = [
+    ":cros_camera_common",
+    "//mojo/public/mojom/base",
+  ]
+}
+
+mojom("jpeg_accelerator") {
+  sources = [ "jpeg_accelerator.mojom" ]
+
+  deps = [ "//components/chromeos_camera/common" ]
 }

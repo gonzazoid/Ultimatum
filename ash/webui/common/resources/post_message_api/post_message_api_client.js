@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,11 +26,11 @@ class NativeResolver {
 }
 
 /**
- * Class that provides the functionality for talking to a PostMessageAPIServer
+ * Class that provides the functionality for talking to a PostMessageApiServer
  * over the postMessage API.  This should be subclassed and the subclass should
  * expose methods that are implemented by the server. The following is an
  * example.
- * class FooClient extends PostMessageAPIClient {
+ * class FooClient extends PostMessageApiClient {
  *  ...
  *   doFoo(args) {
  *    return this.callApiFn('foo', args);
@@ -38,11 +38,11 @@ class NativeResolver {
  * }
  *
  */
-export class PostMessageAPIClient {
+export class PostMessageApiClient {
   /**
    * @param {!string} serverOriginURLFilter  Only messages from this origin
    *     will be accepted.
-   * @param {Window} targetWindow, If the connection is already established,
+   * @param {?Window} targetWindow, If the connection is already established,
    *     then provide the target window.
    */
   constructor(serverOriginURLFilter, targetWindow) {
@@ -65,7 +65,7 @@ export class PostMessageAPIClient {
 
     /**
      * The parent window.
-     * @private {Window}
+     * @private {?Window}
      */
     this.targetWindow_ = targetWindow;
 

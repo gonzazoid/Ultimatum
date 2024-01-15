@@ -5,6 +5,10 @@
 #ifndef SQL_INTERNAL_API_TOKEN_H_
 #define SQL_INTERNAL_API_TOKEN_H_
 
+namespace base {
+class FilePath;
+}  // namespace base
+
 namespace sql {
 
 namespace test {
@@ -21,6 +25,7 @@ class InternalApiToken {
   InternalApiToken() {}
   InternalApiToken(const InternalApiToken&) = default;
 
+  friend class BuiltInRecovery;
   friend class DatabaseTestPeer;
   friend class Recovery;
   friend struct test::ColumnInfo;

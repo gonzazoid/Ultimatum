@@ -7,10 +7,10 @@ module page_load_metrics.mojom;
 import "ui/gfx/geometry/mojom/geometry.mojom";
 import "mojo/public/mojom/base/shared_memory.mojom";
 import "mojo/public/mojom/base/time.mojom";
+import
+  "third_party/blink/public/mojom/loader/javascript_framework_detection.mojom";
 import "services/network/public/mojom/request_priority.mojom";
 import "third_party/blink/public/mojom/use_counter/metrics/web_feature.mojom";
-import
-  "third_party/blink/public/mojom/mobile_metrics/mobile_friendliness.mojom";
 import "third_party/blink/public/mojom/use_counter/use_counter_feature.mojom";
 
 // TimeDeltas below relative to navigation start.
@@ -25,6 +25,15 @@ struct DocumentTiming {
 struct LargestContentfulPaintTiming {
   // Time when the page's largest image is painted.
   mojo_base.mojom.TimeDelta? largest_image_paint;
+
+  // Time when the page's largest image is requested.
+  mojo_base.mojom.TimeDelta? largest_image_discovery_time;
+
+  // Time when the page's largest image starts loading.
+  mojo_base.mojom.TimeDelta? largest_image_load_start;
+
+  // Time when the page's largest image finishes loading.
+  mojo_base.mojom.TimeDelta? largest_image_load_end;
 
   // Size of the largest image of the largest image paint, by
   // Size = Height * Width. Removed images are excluded.
@@ -52,6 +61,10 @@ struct LargestContentfulPaintTiming {
   // TODO(crbug.com/657632): Use an optional enum.
   bool image_request_priority_valid = false;
   network.mojom.RequestPriority image_request_priority_value;
+
+  bool is_loaded_from_memory_cache = false;
+
+  bool is_preloaded_with_early_hints = false;
 };
 
 // TimeDeltas below relative to navigation start.
@@ -133,23 +146,12 @@ struct InteractiveTiming {
   // The timestamp of the event whose delay is reported by GetFirstInputDelay().
   mojo_base.mojom.TimeDelta? first_input_timestamp;
 
-  // Queueing Time of the meaningful input event with longest delay. Meaningful
-  // input events are click, tap, key press, cancellable touchstart, or pointer
-  // down followed by a pointer up.
-  mojo_base.mojom.TimeDelta? longest_input_delay;
-
-  // The timestamp of the event whose delay is reported as longest_input_delay.
-  mojo_base.mojom.TimeDelta? longest_input_timestamp;
-
   // The latency between user input and display update for the first scroll after
   // a navigation.
   mojo_base.mojom.TimeDelta? first_scroll_delay;
 
   // The timestamp of the user's first scroll after a navigation.
   mojo_base.mojom.TimeDelta? first_scroll_timestamp;
-
-  // The duration of event handlers processing the first input event.
-  mojo_base.mojom.TimeDelta? first_input_processing_time;
 };
 
 // PageLoadTiming contains timing metrics associated with a page load. Many of
@@ -214,6 +216,196 @@ struct FrameMetadata {
   // computed, and for any subsequent changes, and is null otherwise (i.e.
   // hasn't changed).
   gfx.mojom.Rect? main_frame_viewport_rect;
+
+  // The image ad rectangles within the main frame. Empty rectangles are used to
+  // signal the removal of the rectangle. The map keys are the element ids. This
+  // is only populated for the main frame, for the first time
+  // each rectangle is initially computed and for any subsequent changes.
+  map<int32, gfx.mojom.Rect> main_frame_image_ad_rects;
+
+  // Detected versions of JavaScript frameworks in the page.
+  blink.mojom.JavaScriptFrameworkDetectionResult framework_detection_result;
+};
+
+struct SubresourceLoadMetrics {
+  // Number of subresources loads for the frame.
+  // Note that this include subresources where a service worker responded.
+  uint32 number_of_subresources_loaded;
+
+  // Number of subresources loads that is responded by the service worker.
+  // i.e. `respondWith` was called.
+  uint32 number_of_subresource_loads_handled_by_service_worker;
+
+  // Metrics for service workers.
+  ServiceWorkerSubresourceLoadMetrics? service_worker_subresource_load_metrics;
+};
+
+struct ServiceWorkerSubresourceLoadMetrics {
+  // True even if one image sub resource is handled by a service worker.
+  // i.e. the service worker called `respondWith` to return the resource.
+  // e.g. if there are two resources, and one is handed by the service worker,
+  // and one did not, this flag will be true because one was handled.
+  bool image_handled;
+  // True even if one image sub resource caused a network fallback.
+  // i.e. the service worker did not call `respondWith`, and network fallback.
+  // e.g. if there are two resources, and one is handed by the service worker,
+  // and one did not, this flag will be true because one was network fallback.
+  bool image_fallback;
+
+  // True even if one CSS sub resource is handled by a service worker.
+  // i.e. the service worker called `respondWith` to return the resource.
+  // e.g. if there are two resources, and one is handed by the service worker,
+  // and one did not, this flag will be true because one was handled.
+  bool css_handled;
+  // True even if one CSS sub resource caused a network fallback.
+  // i.e. the service worker did not call `respondWith`, and network fallback.
+  // e.g. if there are two resources, and one is handed by the service worker,
+  // and one did not, this flag will be true because one was network fallback.
+  bool css_fallback;
+
+  // True even if one script sub resource is handled by a service worker.
+  // i.e. the service worker called `respondWith` to return the resource.
+  // e.g. if there are two resources, and one is handed by the service worker,
+  // and one did not, this flag will be true because one was handled.
+  bool script_handled;
+  // True even if one script sub resource caused a network fallback.
+  // i.e. the service worker did not call `respondWith`, and network fallback.
+  // e.g. if there are two resources, and one is handed by the service worker,
+  // and one did not, this flag will be true because one was network fallback.
+  bool script_fallback;
+
+  // True even if one font sub resource is handled by a service worker.
+  // i.e. the service worker called `respondWith` to return the resource.
+  // e.g. if there are two resources, and one is handed by the service worker,
+  // and one did not, this flag will be true because one was handled.
+  bool font_handled;
+  // True even if one font sub resource caused a network fallback.
+  // i.e. the service worker did not call `respondWith`, and network fallback.
+  // e.g. if there are two resources, and one is handed by the service worker,
+  // and one did not, this flag will be true because one was network fallback.
+  bool font_fallback;
+
+  // True even if one raw sub resource is handled by a service worker.
+  // i.e. the service worker called `respondWith` to return the resource.
+  // e.g. if there are two resources, and one is handed by the service worker,
+  // and one did not, this flag will be true because one was handled.
+  bool raw_handled;
+  // True even if one raw sub resource caused a network fallback.
+  // i.e. the service worker did not call `respondWith`, and network fallback.
+  // e.g. if there are two resources, and one is handed by the service worker,
+  // and one did not, this flag will be true because one was network fallback.
+  bool raw_fallback;
+
+  // True even if one SVG sub resource is handled by a service worker.
+  // i.e. the service worker called `respondWith` to return the resource.
+  // e.g. if there are two resources, and one is handed by the service worker,
+  // and one did not, this flag will be true because one was handled.
+  bool svg_handled;
+  // True even if one SVG sub resource caused a network fallback.
+  // i.e. the service worker did not call `respondWith`, and network fallback.
+  // e.g. if there are two resources, and one is handed by the service worker,
+  // and one did not, this flag will be true because one was network fallback.
+  bool svg_fallback;
+
+  // True even if one XSL sub resource is handled by a service worker.
+  // i.e. the service worker called `respondWith` to return the resource.
+  // e.g. if there are two resources, and one is handed by the service worker,
+  // and one did not, this flag will be true because one was handled.
+  bool xsl_handled;
+  // True even if one XSL sub resource caused a network fallback.
+  // i.e. the service worker did not call `respondWith`, and network fallback.
+  // e.g. if there are two resources, and one is handed by the service worker,
+  // and one did not, this flag will be true because one was network fallback.
+  bool xsl_fallback;
+
+  // True even if one Link Prefetch sub resource is handled by a service worker.
+  // i.e. the service worker called `respondWith` to return the resource.
+  // e.g. if there are two resources, and one is handed by the service worker,
+  // and one did not, this flag will be true because one was handled.
+  bool link_prefetch_handled;
+  // True even if one Link Prefetch sub resource caused a network fallback.
+  // i.e. the service worker did not call `respondWith`, and network fallback.
+  // e.g. if there are two resources, and one is handed by the service worker,
+  // and one did not, this flag will be true because one was network fallback.
+  bool link_prefetch_fallback;
+
+  // True even if one Text Track sub resource is handled by a service worker.
+  // i.e. the service worker called `respondWith` to return the resource.
+  // e.g. if there are two resources, and one is handed by the service worker,
+  // and one did not, this flag will be true because one was handled.
+  bool text_track_handled;
+  // True even if one Text Track sub resource caused a network fallback.
+  // i.e. the service worker did not call `respondWith`, and network fallback.
+  // e.g. if there are two resources, and one is handed by the service worker,
+  // and one did not, this flag will be true because one was network fallback.
+  bool text_track_fallback;
+
+  // True even if one audio sub resource is handled by a service worker.
+  // i.e. the service worker called `respondWith` to return the resource.
+  // e.g. if there are two resources, and one is handed by the service worker,
+  // and one did not, this flag will be true because one was handled.
+  bool audio_handled;
+  // True even if one audio sub resource caused a network fallback.
+  // i.e. the service worker did not call `respondWith`, and network fallback.
+  // e.g. if there are two resources, and one is handed by the service worker,
+  // and one did not, this flag will be true because one was network fallback.
+  bool audio_fallback;
+
+  // True even if one video sub resource is handled by a service worker.
+  // i.e. the service worker called `respondWith` to return the resource.
+  // e.g. if there are two resources, and one is handed by the service worker,
+  // and one did not, this flag will be true because one was handled.
+  bool video_handled;
+  // True even if one video sub resource caused a network fallback.
+  // i.e. the service worker did not call `respondWith`, and network fallback.
+  // e.g. if there are two resources, and one is handed by the service worker,
+  // and one did not, this flag will be true because one was network fallback.
+  bool video_fallback;
+
+  // True even if one manifest sub resource is handled by a service worker.
+  // i.e. the service worker called `respondWith` to return the resource.
+  // e.g. if there are two resources, and one is handed by the service worker,
+  // and one did not, this flag will be true because one was handled.
+  bool manifest_handled;
+  // True even if one manifest sub resource caused a network fallback.
+  // i.e. the service worker did not call `respondWith`, and network fallback.
+  // e.g. if there are two resources, and one is handed by the service worker,
+  // and one did not, this flag will be true because one was network fallback.
+  bool manifest_fallback;
+
+  // True even if one speculation rules sub resource is handled by a service
+  // worker.
+  // i.e. the service worker called `respondWith` to return the resource.
+  // e.g. if there are two resources, and one is handed by the service worker,
+  // and one did not, this flag will be true because one was handled.
+  bool speculation_rules_handled;
+  // True even if one speculation rules sub resource caused a network fallback.
+  // i.e. the service worker did not call `respondWith`, and network fallback.
+  // e.g. if there are two resources, and one is handed by the service worker,
+  // and one did not, this flag will be true because one was network fallback.
+  bool speculation_rules_fallback;
+
+  // True even if one mock sub resource is handled by a service worker.
+  // i.e. the service worker called `respondWith` to return the resource.
+  // e.g. if there are two resources, and one is handed by the service worker,
+  // and one did not, this flag will be true because one was handled.
+  bool mock_handled;
+  // True even if one mock sub resource caused a network fallback.
+  // i.e. the service worker did not call `respondWith`, and network fallback.
+  // e.g. if there are two resources, and one is handed by the service worker,
+  // and one did not, this flag will be true because one was network fallback.
+  bool mock_fallback;
+
+  // True even if one dictionary sub resource is handled by a service worker.
+  // i.e. the service worker called `respondWith` to return the resource.
+  // e.g. if there are two resources, and one is handed by the service worker,
+  // and one did not, this flag will be true because one was handled.
+  bool dictionary_handled;
+  // True even if one dictionary sub resource caused a network fallback.
+  // i.e. the service worker did not call `respondWith`, and network fallback.
+  // e.g. if there are two resources, and one is handed by the service worker,
+  // and one did not, this flag will be true because one was network fallback.
+  bool dictionary_fallback;
 };
 
 // Enumeration of distinct cache types.
@@ -269,13 +461,6 @@ struct ResourceDataUpdate {
 
   // Whether this resource was fetched via proxy.
   bool proxy_used;
-
-  // Whether this resource completed loading, either by network or cache, before
-  // FCP in the frame it belongs to. This flag can be set to true at any point
-  // during a resource load. A more recent ResourceDataUpdate can have a
-  // different flag than the previous update. Once this is set to true, it will
-  // be true for all future updates.
-  bool completed_before_fcp;
 };
 
 // Timestamp and layout shift score of a layout shift.
@@ -294,18 +479,6 @@ struct FrameRenderDataUpdate {
   // before a user input or document scroll, since the last timing update.
   float layout_shift_delta_before_input_or_scroll;
 
-  // How many LayoutBlock instances were created.
-  uint32 all_layout_block_count_delta;
-
-  // How many LayoutNG-based LayoutBlock instances were created.
-  uint32 ng_layout_block_count_delta;
-
-  // How many times LayoutObject::UpdateLayout() is called.
-  uint32 all_layout_call_count_delta;
-
-  // How many times LayoutNG-based LayoutObject::UpdateLayout() is called.
-  uint32 ng_layout_call_count_delta;
-
   // New layout shifts with timestamps.
   array<LayoutShift> new_layout_shifts;
 };
@@ -318,17 +491,6 @@ struct CpuTiming {
 
 // Metrics about general input delay.
 struct InputTiming {
-  // The sum of all input delay.
-  mojo_base.mojom.TimeDelta total_input_delay;
-
-  // The sum of all adjusted input delay. We adjust each input delay by
-  // subtracting a small number, currently 50ms but subject to change in the
-  // future. And if the subtraction result is negative, we will use 0ms.
-  mojo_base.mojom.TimeDelta total_adjusted_input_delay;
-
-  // The number of input events, including click, tap, key press,
-  // cancellable touchstart, or pointer down followed by a pointer up.
-  uint64 num_input_events = 0;
 
   // The number of user interactions, including click, tap and key press.
   uint64 num_interactions = 0;
@@ -354,6 +516,11 @@ union UserInteractionLatencies {
 struct UserInteractionLatency {
   mojo_base.mojom.TimeDelta interaction_latency;
   UserInteractionType interaction_type;
+  // The one-based offset of the interaction in time-based order; 1 for the
+  // first interaction, 2 for the second, etc.
+  uint64 interaction_offset;
+  // The time the interaction occurred, relative to navigation start.
+  mojo_base.mojom.TimeTicks interaction_time;
 };
 
 // The type of a user interaction, including keyboard, click or tap and drag.
@@ -370,6 +537,8 @@ interface PageLoadMetrics {
   // UpdateTiming calls are buffered, and contain all updates that have been
   // received in the last buffer window. Some of the update data may be empty.
   // Only called when at least one change has been observed within the frame.
+  // Note that counts in `subresource_load_metrics` are cumulative and not a
+  // delta.
   UpdateTiming(PageLoadTiming page_load_timing,
                FrameMetadata frame_metadata,
                // `new_features` will not contain any previously seen values.
@@ -378,8 +547,8 @@ interface PageLoadMetrics {
                FrameRenderDataUpdate render_data,
                CpuTiming cpu_load_timing,
                InputTiming input_timing_delta,
-               blink.mojom.MobileFriendliness? mobile_friendliness,
-               uint32 soft_navigation_count);
+               SubresourceLoadMetrics? subresource_load_metrics,
+               SoftNavigationMetrics soft_navigation_metrics);
 
   // Set up a shared memory used to transfer smoothness data from the renderer
   // to the browser. The structure is defined in
@@ -403,4 +572,26 @@ struct BackForwardCacheTiming {
   // or pointer down followed by a pointer up after the time when the page is
   // restored from the back-forward cache.
   mojo_base.mojom.TimeDelta? first_input_delay_after_back_forward_cache_restore;
+};
+
+// Metrics about soft navigation. See soft navigation at https://github.com/WICG/soft-navigations.
+// The metrics are to be added in a SoftNavigation Event which is parallel to
+// a PageLoad event.
+struct SoftNavigationMetrics {
+  // The number of soft navigations that occur during a page load.
+  uint64 count;
+
+  // The start time of a soft navigation. It is the time the user initializes
+  // the soft navigation. It is relative to navigation start.
+  mojo_base.mojom.TimeDelta start_time;
+
+  // The renderer side navigation id that increments when a soft navigation
+  // happens.
+  string navigation_id;
+
+  // The LargestContentfulPaint of a soft navigation, that is, the largest
+  // contentful paint that happened after a soft navigation is detected and
+  // before the next soft navigation is detected or page end.
+  // The timings are relative to the soft navigation start.
+  LargestContentfulPaintTiming largest_contentful_paint;
 };

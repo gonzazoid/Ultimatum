@@ -5,9 +5,9 @@
 #ifndef COMPONENTS_OPTIMIZATION_GUIDE_CORE_BATCH_ENTITY_METADATA_TASK_H_
 #define COMPONENTS_OPTIMIZATION_GUIDE_CORE_BATCH_ENTITY_METADATA_TASK_H_
 
-#include "base/callback.h"
 #include "base/containers/flat_map.h"
 #include "base/containers/flat_set.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
@@ -47,6 +47,11 @@ class BatchEntityMetadataTask {
   void OnEntityMetadataRetrieved(
       const std::string& entity_id,
       const absl::optional<EntityMetadata>& entity_metadata);
+
+  // Callback invoked when metadata for all entries in |entity_ids_| have been
+  // retrieved.
+  void OnBatchEntityMetadataRetrieved(
+      const base::flat_map<std::string, EntityMetadata>& entity_metadata_map);
 
   // The provider used to retrieve entity metadata from.
   raw_ptr<optimization_guide::EntityMetadataProvider> entity_metadata_provider_;

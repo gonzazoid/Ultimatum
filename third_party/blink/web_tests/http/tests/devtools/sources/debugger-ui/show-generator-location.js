@@ -2,9 +2,14 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {TestRunner} from 'test_runner';
+import {ConsoleTestRunner} from 'console_test_runner';
+
+import * as Common from 'devtools/core/common/common.js';
+import * as Sources from 'devtools/panels/sources/sources.js';
+
 (async function() {
   TestRunner.addResult(`Tests that "Show Generator Location" jumps to the correct location.\n`);
-  await TestRunner.loadLegacyModule('console'); await TestRunner.loadTestModule('console_test_runner');
   await TestRunner.showPanel('sources');
   await TestRunner.evaluateInPagePromise(`
       function forward(iter, step)
@@ -28,7 +33,7 @@
       var iterClosed = forward(gen(), 4);
   `);
 
-  var panel = UI.panels.sources;
+  var panel = Sources.SourcesPanel.SourcesPanel.instance();
 
   async function performStandardTestCase(pageExpression, next) {
     TestRunner.addSniffer(panel, 'showUISourceCode', showUISourceCodeHook);
@@ -48,7 +53,7 @@
           remote.debuggerModel().createRawLocationByScriptId(loc.scriptId, loc.lineNumber, loc.columnNumber));
     }
 
-    function showUISourceCodeHook(uiSourceCode, lineNumber, columnNumber, forceShowInPanel) {
+    function showUISourceCodeHook(uiSourceCode, {lineNumber, columnNumber}, forceShowInPanel) {
       // lineNumber and columnNumber are 0-based
       ++lineNumber;
       ++columnNumber;

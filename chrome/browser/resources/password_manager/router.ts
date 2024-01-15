@@ -2,8 +2,9 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {assert, assertNotReached} from 'chrome://resources/js/assert_ts.js';
-import {dedupingMixin, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {assert, assertNotReached} from 'chrome://resources/js/assert.js';
+import type {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {dedupingMixin} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 /**
  * The different pages that can be shown at a time.
@@ -12,15 +13,68 @@ export enum Page {
   PASSWORDS = 'passwords',
   CHECKUP = 'checkup',
   SETTINGS = 'settings',
+  // Sub-pages
+  CHECKUP_DETAILS = 'checkup-details',
+  PASSWORD_DETAILS = 'password-details'
+}
+
+/**
+ * The different checkup sub-pages that can be shown at a time.
+ */
+export enum CheckupSubpage {
+  COMPROMISED = 'compromised',
+  REUSED = 'reused',
+  WEAK = 'weak',
 }
 
 export enum UrlParam {
+  // Parameter which indicates search term.
   SEARCH_TERM = 'q',
+  // If this parameter is true, password check will start automatically when
+  // navigating to Checkup section.
+  START_CHECK = 'start',
+  // Triggers import on the Settings page.
+  START_IMPORT = 'import',
 }
 
 export class Route {
+  constructor(page: Page, queryParameters?: URLSearchParams, details?: any) {
+    this.page = page;
+    this.queryParameters = queryParameters || new URLSearchParams();
+    this.details = details;
+  }
+
   page: Page;
   queryParameters: URLSearchParams;
+  details?: any;
+
+  path(): string {
+    let path: string;
+    switch (this.page) {
+      case Page.PASSWORDS:
+      case Page.CHECKUP:
+      case Page.SETTINGS:
+        path = '/' + this.page;
+        break;
+      case Page.PASSWORD_DETAILS:
+        const group = this.details as chrome.passwordsPrivate.CredentialGroup;
+        // When navigating from the passwords list details will be
+        // |CredentialGroup|. In case of direct navigation details is string.
+        const origin = group.name ? group.name : (this.details as string);
+        assert(origin);
+        path = '/' + Page.PASSWORDS + '/' + origin;
+        break;
+      case Page.CHECKUP_DETAILS:
+        assert(this.details);
+        path = '/' + Page.CHECKUP + '/' + this.details;
+        break;
+    }
+    const queryString = this.queryParameters.toString();
+    if (queryString) {
+      path += '?' + queryString;
+    }
+    return path;
+  }
 }
 
 /**
@@ -33,8 +87,8 @@ export class Router {
     return routerInstance || (routerInstance = new Router());
   }
 
-  private currentRoute_:
-      Route = {page: Page.PASSWORDS, queryParameters: new URLSearchParams()};
+  private currentRoute_: Route = new Route(Page.PASSWORDS);
+  private previousRoute_: Route|null = null;
   private routeObservers_: Set<RouteObserverMixinInterface> = new Set();
 
   constructor() {
@@ -58,20 +112,24 @@ export class Router {
     return this.currentRoute_;
   }
 
+  get previousRoute(): Route|null {
+    return this.previousRoute_;
+  }
+
   /**
    * Navigates to a page and pushes a new history entry.
    */
-  navigateTo(page: Page) {
-    if (page === this.currentRoute_.page) {
+  navigateTo(
+      page: Page, details?: any,
+      params: URLSearchParams = new URLSearchParams()) {
+    const newRoute = new Route(page, params, details);
+    if (this.currentRoute_.path() === newRoute.path()) {
       return;
     }
 
     const oldRoute = this.currentRoute_;
-    this.currentRoute_ = {
-      page: page,
-      queryParameters: new URLSearchParams(),
-    };
-    const path = '/' + page;
+    this.currentRoute_ = newRoute;
+    const path = this.currentRoute_.path();
     const state = {url: path};
     history.pushState(state, '', path);
     this.notifyObservers_(oldRoute);
@@ -84,23 +142,17 @@ export class Router {
    * Notifies routeObservers_.
    */
   updateRouterParams(params: URLSearchParams) {
-    let url: string = this.currentRoute_.page;
-    const queryString = params.toString();
-    if (queryString) {
-      url += '?' + queryString;
-    }
-    window.history.replaceState(window.history.state, '', url);
-
     const oldRoute = this.currentRoute_;
-    this.currentRoute_ = {
-      page: oldRoute.page,
-      queryParameters: params,
-    };
+    this.currentRoute_ = new Route(oldRoute.page, params, oldRoute.details);
+
+    window.history.replaceState(
+        window.history.state, '', this.currentRoute_.path());
     this.notifyObservers_(oldRoute);
   }
 
   private notifyObservers_(oldRoute: Route) {
     assert(oldRoute !== this.currentRoute_);
+    this.previousRoute_ = oldRoute;
 
     for (const observer of this.routeObservers_) {
       observer.currentRouteChanged(this.currentRoute_, oldRoute);
@@ -112,18 +164,26 @@ export class Router {
    */
   private processRoute_() {
     const oldRoute = this.currentRoute_;
-    this.currentRoute_ = {
-      page: oldRoute.page,
-      queryParameters: new URLSearchParams(location.search),
-    };
+    this.currentRoute_ =
+        new Route(oldRoute.page, new URLSearchParams(location.search));
     const section = location.pathname.substring(1).split('/')[0] || '';
-
+    const details = location.pathname.substring(2 + section.length);
     switch (section) {
       case Page.PASSWORDS:
-        this.currentRoute_.page = Page.PASSWORDS;
+        if (details) {
+          this.currentRoute_.page = Page.PASSWORD_DETAILS;
+          this.currentRoute_.details = details;
+        } else {
+          this.currentRoute_.page = Page.PASSWORDS;
+        }
         break;
       case Page.CHECKUP:
-        this.currentRoute_.page = Page.CHECKUP;
+        if (details && (details as unknown as CheckupSubpage)) {
+          this.currentRoute_.page = Page.CHECKUP_DETAILS;
+          this.currentRoute_.details = details;
+        } else {
+          this.currentRoute_.page = Page.CHECKUP;
+        }
         break;
       case Page.SETTINGS:
         this.currentRoute_.page = Page.SETTINGS;
@@ -159,7 +219,7 @@ export const RouteObserverMixin = dedupingMixin(
           Router.getInstance().removeObserver(this);
         }
 
-        currentRouteChanged(_newRoute: Route, _oldRoute: Route): void {
+        currentRouteChanged(_newRoute: Route, _oldRoute?: Route): void {
           assertNotReached();
         }
       }
@@ -168,5 +228,5 @@ export const RouteObserverMixin = dedupingMixin(
     });
 
 export interface RouteObserverMixinInterface {
-  currentRouteChanged(newRoute: Route, oldRoute: Route): void;
+  currentRouteChanged(newRoute: Route, oldRoute?: Route): void;
 }

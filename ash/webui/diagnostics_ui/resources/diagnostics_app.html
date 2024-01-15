@@ -5,6 +5,18 @@
     height: 100%;
   }
 
+  :host-context(body.jelly-enabled) navigation-view-panel {
+    --navigation-view-panel-bg-color: var(--cros-sys-app_base_shaded);
+  }
+  
+  #diagnosticsAppContainer {
+    height: 100%;
+  }
+
+  #navigationPanel::part(top-nav) {
+    height: 56px;
+  }
+
   page-toolbar {
     min-height: 56px;
     position: sticky;
@@ -36,33 +48,36 @@
    bottom: 0;
    left: 0;
   }
+
+  cr-toast iron-icon {
+    --iron-icon-fill-color: var(--cros-color-prominent-inverted);
+    margin-inline-end: 12px;
+  }
 </style>
 <div id="diagnosticsAppContainer">
-  <div hidden$="[[!showNavPanel_]]">
-    <navigation-view-panel id="navigationPanel" show-tool-bar
-        title="[[i18n('diagnosticsTitle')]]"
-        show-banner=[[bannerMessage_.length]]>
-      <diagnostics-sticky-banner slot="banner"
-          banner-message="{{bannerMessage_}}">
-      </diagnostics-sticky-banner>
-      <div slot="bottom-nav-content-panel" class="session-log-container">
-        <cr-button on-click="onSessionLogClick_" class="session-log-button"
-            disabled="[[!saveSessionLogEnabled_]]" hidden="[[!isLoggedIn_]]">
-          <iron-icon icon="diagnostics:download" id="download-icon"></iron-icon>
-          <span>[[i18n('sessionLog')]]</span>
-        </cr-button>
-      </div>
-      <div slot="bottom-nav-content-drawer" class="session-log-container">
-        <cr-button on-click="onSessionLogClick_" class="session-log-button"
-            disabled="[[!saveSessionLogEnabled_]]" hidden="[[!isLoggedIn_]]">
-          <iron-icon icon="diagnostics:download" id="download-icon"></iron-icon>
-          <span>[[i18n('sessionLog')]]</span>
-        </cr-button>
-      </div>
-    </navigation-view-panel>
-  </div>
-  <system-page hidden$="[[showNavPanel_]]"></system-page>
+  <navigation-view-panel id="navigationPanel" show-tool-bar
+      title="[[i18n('diagnosticsTitle')]]"
+      show-banner=[[bannerMessage.length]]>
+    <diagnostics-sticky-banner slot="banner"
+        banner-message="{{bannerMessage}}">
+    </diagnostics-sticky-banner>
+    <div slot="bottom-nav-content-panel" class="session-log-container">
+      <cr-button on-click="onSessionLogClick" class="session-log-button"
+          disabled="[[!saveSessionLogEnabled]]" hidden="[[!isLoggedIn]]">
+        <iron-icon icon="diagnostics:download" id="download-icon"></iron-icon>
+        <span>[[i18n('sessionLog')]]</span>
+      </cr-button>
+    </div>
+    <div slot="bottom-nav-content-drawer" class="session-log-container">
+      <cr-button on-click="onSessionLogClick" class="session-log-button"
+          disabled="[[!saveSessionLogEnabled]]" hidden="[[!isLoggedIn]]">
+        <iron-icon icon="diagnostics:download" id="download-icon"></iron-icon>
+        <span>[[i18n('sessionLog')]]</span>
+      </cr-button>
+    </div>
+  </navigation-view-panel>
   <cr-toast id="toast" duration="2500">
-    <span>[[toastText_]]</span>
+    <iron-icon icon="diagnostics:info"></iron-icon>
+    <span>[[toastText]]</span>
   </cr-toast>
 </div>

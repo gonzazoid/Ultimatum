@@ -4,13 +4,13 @@
 
 #include "components/services/storage/test_api/test_api.h"
 
-#include "base/bind.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
 #include "base/immediate_crash.h"
 #include "base/no_destructor.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "components/services/storage/filesystem_proxy_factory.h"
 #include "components/services/storage/public/mojom/test_api.test-mojom.h"
 #include "components/services/storage/test_api_stubs.h"
@@ -60,20 +60,21 @@ class TestApiImpl : public mojom::TestApi {
   }
 
   // mojom::TestApi implementation:
-  void CrashNow() override { IMMEDIATE_CRASH(); }
+  void CrashNow() override { base::ImmediateCrash(); }
 
   void ForceLeveldbDatabaseCompaction(
       const std::string& name,
       ForceLeveldbDatabaseCompactionCallback callback) override {
     // Note that we post to a SequencedTaskRunner because the task will use Mojo
     // bindings, and by default Mojo bindings assume there is a current
-    // SequencedTaskRunnerHandle they can use for scheduling.
+    // SequencedTaskRunner::CurrentDefaultHandle they can use for scheduling.
     base::ThreadPool::CreateSequencedTaskRunner(
         {base::MayBlock(), base::WithBaseSyncPrimitives()})
-        ->PostTask(FROM_HERE,
-                   base::BindOnce(&CreateAndCompactDatabase, name,
-                                  base::SequencedTaskRunnerHandle::Get(),
-                                  std::move(callback)));
+        ->PostTask(
+            FROM_HERE,
+            base::BindOnce(&CreateAndCompactDatabase, name,
+                           base::SequencedTaskRunner::GetCurrentDefault(),
+                           std::move(callback)));
   }
 
  private:

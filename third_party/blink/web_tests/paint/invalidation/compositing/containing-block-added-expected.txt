@@ -7,12 +7,11 @@
       "backgroundColor": "#FFFFFF"
     },
     {
-      "name": "LayoutNGBlockFlow (positioned) DIV id='container'",
+      "name": "LayoutNGBlockFlow (positioned, children-inline) DIV id='container'",
       "bounds": [125, 125],
-      "contentsOpaqueForText": true,
       "backgroundColor": "#0000FF",
       "invalidations": [
-        [50, 50, 75, 75]
+        [0, 0, 125, 125]
       ],
       "transform": 1
     }

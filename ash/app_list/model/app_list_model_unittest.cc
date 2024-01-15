@@ -16,7 +16,6 @@
 #include "ash/constants/ash_features.h"
 #include "ash/public/cpp/app_list/app_list_config.h"
 #include "ash/public/cpp/app_list/app_list_config_provider.h"
-#include "ash/public/cpp/app_list/app_list_switches.h"
 #include "base/command_line.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/scoped_feature_list.h"
@@ -270,13 +269,8 @@ TEST_F(AppListModelFolderTest, MergeItemIntoFolder) {
   model_->MergeItems(item0->id(), folder->id());
 }
 
-// Same test as above, but for ProductivityLauncher config types.
-TEST_F(AppListModelFolderTest,
-       NonSharedConfigIconGenerationProductivityLauncher) {
-  // The configs tested here are only used by ProductivityLauncher.
-  base::test::ScopedFeatureList features;
-  features.InitAndEnableFeature(features::kProductivityLauncher);
-
+// Tests Icon generation configuration for folders on different grid types.
+TEST_F(AppListModelFolderTest, NonSharedConfigIconGeneration) {
   // Ensure any configs set by previous tests are cleared.
   AppListConfigProvider::Get().ResetForTesting();
 
@@ -294,7 +288,7 @@ TEST_F(AppListModelFolderTest,
   FolderImage* regular_config_image =
       folder->GetFolderImageForTesting(AppListConfigType::kRegular);
   ASSERT_TRUE(regular_config_image);
-  EXPECT_EQ(regular_config->folder_unclipped_icon_size(),
+  EXPECT_EQ(regular_config->folder_icon_size(),
             regular_config_image->icon().size());
 
   // Verify that the folder is observing the app list item.
@@ -316,7 +310,7 @@ TEST_F(AppListModelFolderTest,
   FolderImage* dense_config_image =
       folder->GetFolderImageForTesting(AppListConfigType::kDense);
   ASSERT_TRUE(dense_config_image);
-  EXPECT_EQ(dense_config->folder_unclipped_icon_size(),
+  EXPECT_EQ(dense_config->folder_icon_size(),
             dense_config_image->icon().size());
 
   // Verify that the folder is observing the app list item.

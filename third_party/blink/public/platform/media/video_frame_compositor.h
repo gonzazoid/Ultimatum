@@ -7,9 +7,9 @@
 
 #include <utility>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/synchronization/lock.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/thread_annotations.h"
@@ -68,7 +68,8 @@ class BLINK_PLATFORM_EXPORT VideoFrameCompositor
       public cc::VideoFrameProvider {
  public:
   // Used to report back the time when the new frame has been processed.
-  using OnNewProcessedFrameCB = base::OnceCallback<void(base::TimeTicks)>;
+  using OnNewProcessedFrameCB =
+      base::OnceCallback<void(base::TimeTicks, bool is_frame_readable)>;
 
   using OnNewFramePresentedCB = base::OnceClosure;
 

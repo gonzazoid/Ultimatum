@@ -7,7 +7,8 @@
 #include "base/android/jni_android.h"
 #include "base/android/jni_array.h"
 #include "base/android/jni_string.h"
-#include "cc/layers/solid_color_layer.h"
+#include "cc/slim/layer.h"
+#include "cc/slim/solid_color_layer.h"
 #include "chrome/android/chrome_jni_headers/ContextualSearchSceneLayer_jni.h"
 #include "chrome/browser/android/compositor/layer/contextual_search_layer.h"
 #include "chrome/browser/profiles/profile.h"
@@ -34,8 +35,8 @@ ContextualSearchSceneLayer::ContextualSearchSceneLayer(
     : SceneLayer(env, jobj),
       env_(env),
       object_(jobj),
-      color_overlay_(cc::SolidColorLayer::Create()),
-      content_container_(cc::Layer::Create()) {
+      color_overlay_(cc::slim::SolidColorLayer::Create()),
+      content_container_(cc::slim::Layer::Create()) {
   // Responsible for moving the base page without modifying the layer itself.
   content_container_->SetIsDrawable(true);
   content_container_->SetPosition(gfx::PointF(0.0f, 0.0f));
@@ -94,9 +95,6 @@ void ContextualSearchSceneLayer::UpdateContextualSearchLayer(
     jfloat search_promo_opacity,
     jint search_promo_background_color,
     // Related Searches
-    jint related_searches_in_content_resource_id,
-    jboolean related_searches_in_content_visible,
-    jfloat related_searches_in_content_height,
     jint related_searches_in_bar_resource_id,
     jboolean related_searches_in_bar_visible,
     jfloat related_searches_in_bar_height,
@@ -149,7 +147,7 @@ void ContextualSearchSceneLayer::UpdateContextualSearchLayer(
   content::WebContents* web_contents =
       content::WebContents::FromJavaWebContents(jweb_contents);
 
-  scoped_refptr<cc::Layer> content_layer =
+  scoped_refptr<cc::slim::Layer> content_layer =
       web_contents ? web_contents->GetNativeView()->GetLayer() : nullptr;
 
   // Fade the base page out.
@@ -171,8 +169,6 @@ void ContextualSearchSceneLayer::UpdateContextualSearchLayer(
       search_promo_resource_id, dp_to_px, content_layer, search_promo_visible,
       search_promo_height, search_promo_opacity, search_promo_background_color,
       // Related Searches
-      related_searches_in_content_resource_id,
-      related_searches_in_content_visible, related_searches_in_content_height,
       related_searches_in_bar_resource_id, related_searches_in_bar_visible,
       related_searches_in_bar_height, related_searches_in_bar_redundant_padding,
       // Panel position etc

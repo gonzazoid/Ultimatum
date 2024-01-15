@@ -12,15 +12,12 @@ import androidx.annotation.Nullable;
 import androidx.annotation.StringRes;
 
 import org.chromium.base.TraceEvent;
-import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.components.browser_ui.widget.highlight.ViewHighlighter.HighlightParams;
 import org.chromium.components.browser_ui.widget.textbubble.TextBubble;
 import org.chromium.ui.widget.AnchoredPopupWindow;
 import org.chromium.ui.widget.ViewRectProvider;
 
-/**
- * Builder for (@see IPHCommand.java). Use this instead of constructing an IPHCommand directly.
- */
+/** Builder for (@see IPHCommand.java). Use this instead of constructing an IPHCommand directly. */
 public class IPHCommandBuilder {
     private static final Runnable NO_OP_RUNNABLE = () -> {};
 
@@ -29,10 +26,10 @@ public class IPHCommandBuilder {
     private String mContentString;
     private String mAccessibilityText;
     private boolean mDismissOnTouch = true;
-    @StringRes
-    private int mStringId;
-    @StringRes
-    private int mAccessibilityStringId;
+    @StringRes private int mStringId;
+    private Object[] mStringArgs;
+    @StringRes private int mAccessibilityStringId;
+    private Object[] mAccessibilityStringArgs;
     private View mAnchorView;
     private Runnable mOnShowCallback;
     private Runnable mOnBlockedCallback;
@@ -40,10 +37,10 @@ public class IPHCommandBuilder {
     private Rect mInsetRect;
     private long mAutoDismissTimeout = TextBubble.NO_TIMEOUT;
     private ViewRectProvider mViewRectProvider;
-    @Nullable
-    private HighlightParams mHighlightParams;
+    @Nullable private HighlightParams mHighlightParams;
     private Rect mAnchorRect;
     private boolean mRemoveArrow;
+
     @AnchoredPopupWindow.VerticalOrientation
     private int mPreferredVerticalOrientation =
             AnchoredPopupWindow.VerticalOrientation.MAX_AVAILABLE_SPACE;
@@ -52,15 +49,45 @@ public class IPHCommandBuilder {
      * Constructor for IPHCommandBuilder when you would like your strings to be resolved for you.
      * @param resources Resources object used to resolve strings and dimensions.
      * @param featureName String identifier for the feature from FeatureConstants.
-     * @param stringId Resource id of the string displayed to the use.
-     * @param accessibilityStringId resource id of the string to use for accessibility.
+     * @param stringId Resource id of the string displayed to the user.
+     * @param accessibilityStringId Resource id of the string to use for accessibility.
      */
-    public IPHCommandBuilder(Resources resources, String featureName, @StringRes int stringId,
+    public IPHCommandBuilder(
+            Resources resources,
+            String featureName,
+            @StringRes int stringId,
             @StringRes int accessibilityStringId) {
         mResources = resources;
         mFeatureName = featureName;
         mStringId = stringId;
         mAccessibilityStringId = accessibilityStringId;
+    }
+
+    /**
+     * Constructor for IPHCommandBuilder when you would like your parameterized strings to be
+     * resolved for you.
+     * @param resources Resources object used to resolve strings and dimensions.
+     * @param featureName String identifier for the feature from FeatureConstants.
+     * @param stringId Resource id of the string displayed to the user.
+     * @param stringArgs Ordered arguments to use during parameterized string resolution of
+     *         stringId.
+     * @param accessibilityStringId Resource id of the string to use for accessibility.
+     * @param accessibilityStringArgs Ordered arguments to use during parameterized string
+     *         resolution of accessibilityStringId.
+     */
+    public IPHCommandBuilder(
+            Resources resources,
+            String featureName,
+            @StringRes int stringId,
+            Object[] stringArgs,
+            @StringRes int accessibilityStringId,
+            Object[] accessibilityStringArgs) {
+        mResources = resources;
+        mFeatureName = featureName;
+        mStringId = stringId;
+        mStringArgs = stringArgs;
+        mAccessibilityStringId = accessibilityStringId;
+        mAccessibilityStringArgs = accessibilityStringArgs;
     }
 
     /**
@@ -70,7 +97,10 @@ public class IPHCommandBuilder {
      * @param contentString String displayed to the user.
      * @param accessibilityText String to use for accessibility.
      */
-    public IPHCommandBuilder(Resources resources, String featureName, String contentString,
+    public IPHCommandBuilder(
+            Resources resources,
+            String featureName,
+            String contentString,
             String accessibilityText) {
         mResources = resources;
         mFeatureName = featureName;
@@ -208,14 +238,6 @@ public class IPHCommandBuilder {
      * @return an (@see IPHCommand) containing the accumulated state of this builder.
      */
     public IPHCommand build() {
-        if (!ChromeFeatureList.isEnabled(ChromeFeatureList.ENABLE_IPH)) {
-            return null;
-        }
-
-        if (ChromeFeatureList.isEnabled(ChromeFeatureList.ANDROID_SCROLL_OPTIMIZATIONS)) {
-            return buildLazy();
-        }
-
         try (TraceEvent te = TraceEvent.scoped("IPHCommandBuilder::build")) {
             if (mOnDismissCallback == null) {
                 mOnDismissCallback = NO_OP_RUNNABLE;
@@ -228,46 +250,25 @@ public class IPHCommandBuilder {
                 mOnBlockedCallback = NO_OP_RUNNABLE;
             }
 
-            if (mContentString == null) {
-                assert mResources != null;
-                mContentString = mResources.getString(mStringId);
-            }
-
-            if (mAccessibilityText == null) {
-                assert mResources != null;
-                mAccessibilityText = mResources.getString(mAccessibilityStringId);
-            }
-
-            if (mInsetRect == null && mAnchorRect == null) {
-                int yInsetPx = mResources.getDimensionPixelOffset(
-                        R.dimen.iph_text_bubble_menu_anchor_y_inset);
-                mInsetRect = new Rect(0, 0, 0, yInsetPx);
-            }
-
-            return new IPHCommand(mFeatureName, mContentString, mAccessibilityText, mDismissOnTouch,
-                    mAnchorView, mOnDismissCallback, mOnShowCallback, mOnBlockedCallback,
-                    mInsetRect, mAutoDismissTimeout, mViewRectProvider, mHighlightParams,
-                    mAnchorRect, mRemoveArrow, mPreferredVerticalOrientation);
-        }
-    }
-
-    public IPHCommand buildLazy() {
-        try (TraceEvent te = TraceEvent.scoped("IPHCommandBuilder::buildLazy")) {
-            if (mOnDismissCallback == null) {
-                mOnDismissCallback = NO_OP_RUNNABLE;
-            }
-            if (mOnShowCallback == null) {
-                mOnShowCallback = NO_OP_RUNNABLE;
-            }
-
-            if (mOnBlockedCallback == null) {
-                mOnBlockedCallback = NO_OP_RUNNABLE;
-            }
-
-            return new IPHCommand(mResources, mFeatureName, mStringId, mAccessibilityStringId,
-                    mDismissOnTouch, mAnchorView, mOnDismissCallback, mOnShowCallback,
-                    mOnBlockedCallback, mAutoDismissTimeout, mViewRectProvider, mHighlightParams,
-                    mAnchorRect, mRemoveArrow, mPreferredVerticalOrientation);
+            return new IPHCommand(
+                    mResources,
+                    mFeatureName,
+                    mStringId,
+                    mStringArgs,
+                    mAccessibilityStringId,
+                    mAccessibilityStringArgs,
+                    mDismissOnTouch,
+                    mAnchorView,
+                    mOnDismissCallback,
+                    mOnShowCallback,
+                    mOnBlockedCallback,
+                    mAutoDismissTimeout,
+                    mViewRectProvider,
+                    mHighlightParams,
+                    mAnchorRect,
+                    mRemoveArrow,
+                    mPreferredVerticalOrientation,
+                    mInsetRect);
         }
     }
 }

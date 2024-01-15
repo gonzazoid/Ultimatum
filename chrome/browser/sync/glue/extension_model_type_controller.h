@@ -5,9 +5,9 @@
 #ifndef CHROME_BROWSER_SYNC_GLUE_EXTENSION_MODEL_TYPE_CONTROLLER_H_
 #define CHROME_BROWSER_SYNC_GLUE_EXTENSION_MODEL_TYPE_CONTROLLER_H_
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
-#include "components/sync/driver/syncable_service_based_model_type_controller.h"
+#include "components/sync/service/syncable_service_based_model_type_controller.h"
 
 class Profile;
 
@@ -23,6 +23,7 @@ class ExtensionModelTypeController
       syncer::OnceModelTypeStoreFactory store_factory,
       base::WeakPtr<syncer::SyncableService> syncable_service,
       const base::RepeatingClosure& dump_stack,
+      DelegateMode delegate_mode,
       Profile* profile);
 
   ExtensionModelTypeController(const ExtensionModelTypeController&) = delete;

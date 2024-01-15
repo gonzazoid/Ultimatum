@@ -17,13 +17,15 @@
 #include "ash/tray_action/test_tray_action_client.h"
 #include "ash/tray_action/tray_action.h"
 #include "ash/wm/tablet_mode/tablet_mode_controller.h"
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/test/simple_test_tick_clock.h"
 #include "chromeos/dbus/power/fake_power_manager_client.h"
 #include "chromeos/dbus/power_manager/backlight.pb.h"
+#include "ui/display/tablet_state.h"
 #include "ui/events/devices/device_data_manager_test_api.h"
 #include "ui/events/devices/stylus_state.h"
 
@@ -37,7 +39,7 @@ class TestPowerManagerObserver : public chromeos::PowerManagerClient::Observer {
  public:
   TestPowerManagerObserver()
       : power_manager_(chromeos::FakePowerManagerClient::Get()) {
-    scoped_observation_.Observe(power_manager_);
+    scoped_observation_.Observe(power_manager_.get());
     power_manager_->set_user_activity_callback(base::BindRepeating(
         &TestPowerManagerObserver::OnUserActivity, base::Unretained(this)));
   }
@@ -69,7 +71,7 @@ class TestPowerManagerObserver : public chromeos::PowerManagerClient::Observer {
   }
 
  private:
-  chromeos::FakePowerManagerClient* power_manager_;
+  raw_ptr<chromeos::FakePowerManagerClient> power_manager_;
   std::vector<double> brightness_changes_;
 
   base::ScopedObservation<chromeos::PowerManagerClient,
@@ -194,7 +196,7 @@ class LockScreenNoteDisplayStateHandlerTest : public AshTestBase {
         chromeos::PowerManagerClient::SwitchStates{
             chromeos::PowerManagerClient::LidState::OPEN,
             chromeos::PowerManagerClient::TabletMode::ON});
-    Shell::Get()->power_button_controller()->OnTabletModeStarted();
+    Shell::Get()->tablet_mode_controller()->SetEnabledForTest(true);
   }
 
   base::SimpleTestTickClock tick_clock_;

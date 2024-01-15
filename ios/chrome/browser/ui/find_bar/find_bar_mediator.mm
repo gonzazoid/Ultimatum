@@ -4,17 +4,13 @@
 
 #import "ios/chrome/browser/ui/find_bar/find_bar_mediator.h"
 
-#import "ios/chrome/browser/main/browser.h"
-#import "ios/chrome/browser/ui/commands/command_dispatcher.h"
-#import "ios/chrome/browser/ui/commands/find_in_page_commands.h"
+#import "ios/chrome/browser/shared/model/browser/browser.h"
+#import "ios/chrome/browser/shared/model/web_state_list/active_web_state_observation_forwarder.h"
+#import "ios/chrome/browser/shared/public/commands/command_dispatcher.h"
+#import "ios/chrome/browser/shared/public/commands/find_in_page_commands.h"
 #import "ios/chrome/browser/ui/find_bar/find_bar_consumer.h"
-#import "ios/chrome/browser/web_state_list/active_web_state_observation_forwarder.h"
 #import "ios/web/public/web_state.h"
 #import "ios/web/public/web_state_observer_bridge.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 @interface FindBarMediator () <CRWWebStateObserver> {
   std::unique_ptr<web::WebStateObserverBridge> _observer;
@@ -45,7 +41,7 @@
 }
 
 - (void)dealloc {
-  [self disconnect];
+  DCHECK(!_webState);
 }
 
 - (void)disconnect {

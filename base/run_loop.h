@@ -10,12 +10,13 @@
 #include <vector>
 
 #include "base/base_export.h"
-#include "base/callback.h"
 #include "base/containers/stack.h"
 #include "base/dcheck_is_on.h"
+#include "base/functional/callback.h"
 #include "base/gtest_prod_util.h"
 #include "base/location.h"
 #include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/sequence_checker.h"
@@ -144,8 +145,8 @@ class BASE_EXPORT RunLoop {
   // Note that Quit() itself is thread-safe and may be invoked directly if you
   // have access to the RunLoop reference from another thread (e.g. from a
   // capturing lambda or test observer).
-  RepeatingClosure QuitClosure();
-  RepeatingClosure QuitWhenIdleClosure();
+  [[nodiscard]] RepeatingClosure QuitClosure();
+  [[nodiscard]] RepeatingClosure QuitWhenIdleClosure();
 
   // Returns true if Quit() or QuitWhenIdle() was called.
   bool AnyQuitCalled();
@@ -228,7 +229,9 @@ class BASE_EXPORT RunLoop {
     // A vector-based stack is more memory efficient than the default
     // deque-based stack as the active RunLoop stack isn't expected to ever
     // have more than a few entries.
-    using RunLoopStack = stack<RunLoop*, std::vector<RunLoop*>>;
+    using RunLoopStack =
+        stack<raw_ptr<RunLoop, VectorExperimental>,
+              std::vector<raw_ptr<RunLoop, VectorExperimental>>>;
 
     RunLoopStack active_run_loops_;
     ObserverList<RunLoop::NestingObserver>::Unchecked nesting_observers_;
@@ -248,7 +251,7 @@ class BASE_EXPORT RunLoop {
   // Registers |delegate| on the current thread. Must be called once and only
   // once per thread before using RunLoop methods on it. |delegate| is from then
   // on forever bound to that thread (including its destruction).
-  static void RegisterDelegateForCurrentThread(Delegate* delegate);
+  static void RegisterDelegateForCurrentThread(Delegate* new_delegate);
 
   // Quits the active RunLoop (when idle) -- there must be one. These were
   // introduced as prefered temporary replacements to the long deprecated
@@ -258,7 +261,7 @@ class BASE_EXPORT RunLoop {
   // instance and increase readability.
   static void QuitCurrentDeprecated();
   static void QuitCurrentWhenIdleDeprecated();
-  static RepeatingClosure QuitCurrentWhenIdleClosureDeprecated();
+  [[nodiscard]] static RepeatingClosure QuitCurrentWhenIdleClosureDeprecated();
 
   // Support for //base/test/scoped_run_loop_timeout.h.
   // This must be public for access by the implementation code in run_loop.cc.
@@ -299,7 +302,9 @@ class BASE_EXPORT RunLoop {
   // A cached reference of RunLoop::Delegate for the thread driven by this
   // RunLoop for quick access without using TLS (also allows access to state
   // from another sequence during Run(), ref. |sequence_checker_| below).
-  Delegate* const delegate_;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter for:
+  // #union, #global-scope
+  RAW_PTR_EXCLUSION Delegate* const delegate_;
 
   const Type type_;
 
@@ -326,8 +331,8 @@ class BASE_EXPORT RunLoop {
   // not be accessed from any other sequence than the thread it was constructed
   // on. Exception: RunLoop can be safely accessed from one other sequence (or
   // single parallel task) during Run() -- e.g. to Quit() without having to
-  // plumb ThreatTaskRunnerHandle::Get() throughout a test to repost QuitClosure
-  // to origin thread.
+  // plumb SingleThreadTaskRunner::GetCurrentDefault() throughout a test to
+  // repost QuitClosure to origin thread.
   SEQUENCE_CHECKER(sequence_checker_);
 
   const scoped_refptr<SingleThreadTaskRunner> origin_task_runner_;
@@ -344,7 +349,7 @@ class BASE_EXPORT RunLoop {
 // single RunLoop::Delegate per thread and RunLoop::Run() should only be invoked
 // from it (or it would result in incorrectly driving TaskRunner A while in
 // TaskRunner B's context).
-class BASE_EXPORT ScopedDisallowRunningRunLoop {
+class BASE_EXPORT [[maybe_unused, nodiscard]] ScopedDisallowRunningRunLoop {
  public:
   ScopedDisallowRunningRunLoop();
   ScopedDisallowRunningRunLoop(const ScopedDisallowRunningRunLoop&) = delete;

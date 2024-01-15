@@ -4,6 +4,8 @@
 
 #include "chrome/browser/ui/tab_contents/chrome_web_contents_view_handle_drop.h"
 
+#include <optional>
+
 #include "base/containers/contains.h"
 #include "base/files/file_enumerator.h"
 #include "base/files/file_util.h"
@@ -18,7 +20,6 @@
 #include "content/public/browser/web_contents_observer.h"
 #include "content/public/browser/web_contents_view_delegate.h"
 #include "content/public/common/drop_data.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/base/clipboard/file_info.h"
 
 namespace {
@@ -28,7 +29,7 @@ void CompletionCallback(
     std::unique_ptr<enterprise_connectors::FilesScanData> files_scan_data,
     content::WebContentsViewDelegate::DropCompletionCallback callback,
     const enterprise_connectors::ContentAnalysisDelegate::Data& data,
-    const enterprise_connectors::ContentAnalysisDelegate::Result& result) {
+    enterprise_connectors::ContentAnalysisDelegate::Result& result) {
   // If there are no negative results, proceed with just `drop_data`.
   bool all_text_results_allowed = !base::Contains(result.text_results, false);
   bool all_file_results_allowed = !base::Contains(result.paths_results, false);
@@ -39,7 +40,7 @@ void CompletionCallback(
 
   // For text drag-drops, block the drop if any result is negative.
   if (!all_text_results_allowed) {
-    std::move(callback).Run(absl::nullopt);
+    std::move(callback).Run(std::nullopt);
     return;
   }
 
@@ -50,10 +51,26 @@ void CompletionCallback(
       files_scan_data->IndexesToBlock(result.paths_results);
 
   // If every file path should be blocked, the drop is aborted, otherwise it
-  // continues by blocking sub-elements of the list.
+  // continues by blocking sub-elements of the list. When everything is blocked,
+  // it implies that no `result.paths_results` is allowed.
   if (file_indexes_to_block.size() == drop_data.filenames.size()) {
-    std::move(callback).Run(absl::nullopt);
+    for (size_t i = 0; i < data.paths.size(); ++i)
+      result.paths_results[i] = false;
+
+    std::move(callback).Run(std::nullopt);
     return;
+  }
+
+  // A specific index could be blocked due to its parent folder being
+  // blocked and not because it got a bad verdict itself, so `result` needs
+  // to be updated to reflect that.
+  DCHECK_EQ(data.paths.size(),
+            files_scan_data->expanded_paths_indexes().size());
+  for (size_t i = 0; i < data.paths.size(); ++i) {
+    int parent_index =
+        files_scan_data->expanded_paths_indexes().at(data.paths[i]);
+    if (file_indexes_to_block.count(parent_index))
+      result.paths_results[i] = false;
   }
 
   std::vector<ui::FileInfo> final_filenames;
@@ -116,7 +133,7 @@ class HandleDropScanData : public content::WebContentsObserver {
 
 }  // namespace
 
-void HandleOnPerformDrop(
+void HandleOnPerformingDrop(
     content::WebContents* web_contents,
     content::DropData drop_data,
     content::WebContentsViewDelegate::DropCompletionCallback callback) {
@@ -129,9 +146,20 @@ void HandleOnPerformDrop(
           : enterprise_connectors::AnalysisConnector::FILE_ATTACHED;
   if (!enterprise_connectors::ContentAnalysisDelegate::IsEnabled(
           profile, web_contents->GetLastCommittedURL(), &data, connector)) {
+    // If the enterprise policy is not enabled, make sure that the renderer
+    // never forces a default action.
+    drop_data.document_is_handling_drag = true;
     std::move(callback).Run(std::move(drop_data));
     return;
   }
+
+  // If the page will not handle the drop, no need to perform content analysis.
+  if (!drop_data.document_is_handling_drag) {
+    std::move(callback).Run(std::move(drop_data));
+    return;
+  }
+
+  data.reason = enterprise_connectors::ContentAnalysisRequest::DRAG_AND_DROP;
 
   // Collect the data that needs to be scanned.
   if (!drop_data.url_title.empty())

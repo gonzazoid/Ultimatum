@@ -17,13 +17,13 @@
 namespace password_manager {
 namespace {
 
-// Returns |absl::nullopt| for |signed_in_user|, as in this case authentication
+// Returns |std::nullopt| for |signed_in_user|, as in this case authentication
 // happens via access token. Otherwise returns API key for an appropriate
 // |channel|.
-absl::optional<std::string> GetAPIKey(bool signed_in_user,
-                                      version_info::Channel channel) {
+std::optional<std::string> GetAPIKey(bool signed_in_user,
+                                     version_info::Channel channel) {
   if (signed_in_user) {
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   if (channel == version_info::Channel::STABLE) {
@@ -44,17 +44,12 @@ LeakDetectionCheckFactoryImpl::TryCreateLeakCheck(
     signin::IdentityManager* identity_manager,
     scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
     version_info::Channel channel) const {
-  bool has_account_for_request =
-      LeakDetectionCheckImpl::HasAccountForRequest(identity_manager);
-  if (!has_account_for_request &&
-      !base::FeatureList::IsEnabled(features::kLeakDetectionUnauthenticated)) {
-    delegate->OnError(LeakDetectionError::kNotSignIn);
-    return nullptr;
-  }
+  CHECK(identity_manager);
 
   return std::make_unique<LeakDetectionCheckImpl>(
       delegate, identity_manager, std::move(url_loader_factory),
-      GetAPIKey(has_account_for_request, channel));
+      GetAPIKey(LeakDetectionCheckImpl::HasAccountForRequest(identity_manager),
+                channel));
 }
 
 std::unique_ptr<BulkLeakCheck>

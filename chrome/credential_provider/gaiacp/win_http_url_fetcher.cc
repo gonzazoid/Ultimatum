@@ -18,8 +18,7 @@
 #include "base/json/json_reader.h"
 #include "base/json/json_writer.h"
 #include "base/memory/ptr_util.h"
-#include "base/strings/strcat.h"
-#include "base/strings/stringprintf.h"
+#include "base/strings/strcat_win.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/synchronization/lock.h"
 #include "base/time/time.h"
@@ -112,8 +111,11 @@ class HttpServiceRequest {
         base::StringPiece(response_.data(), response_.size()),
         base::JSON_PARSE_CHROMIUM_EXTENSIONS |
             base::JSON_ALLOW_TRAILING_COMMAS);
-    if (!result || !result->is_dict()) {
-      LOGFN(ERROR) << "Failed to read json result from server response";
+    if (!result) {
+      LOGFN(ERROR) << "base::JSONReader::Read returned 0";
+      result.reset();
+    } else if (!result->is_dict()) {
+      LOGFN(ERROR) << "json result is not a dictionary";
       result.reset();
     }
 
@@ -348,7 +350,7 @@ HRESULT WinHttpUrlFetcher::Fetch(std::vector<char>* response) {
   for (const auto& kv : request_headers_) {
     const wchar_t* key = A2CW(kv.first.c_str());
     const wchar_t* value = A2CW(kv.second.c_str());
-    std::wstring header = base::StringPrintf(L"%ls: %ls", key, value);
+    std::wstring header = base::StrCat({key, L": ", value});
     if (!::WinHttpAddRequestHeaders(
             request_.Get(), header.c_str(), header.length(),
             WINHTTP_ADDREQ_FLAG_ADD | WINHTTP_ADDREQ_FLAG_REPLACE)) {
@@ -421,25 +423,33 @@ HRESULT WinHttpUrlFetcher::BuildRequestAndFetchResultFromHttpService(
     const GURL& request_url,
     std::string access_token,
     const std::vector<std::pair<std::string, std::string>>& headers,
-    const base::Value& request_dict,
+    const base::Value::Dict& request_dict,
     const base::TimeDelta& request_timeout,
     unsigned int request_retries,
     absl::optional<base::Value>* request_result) {
   DCHECK(request_result);
 
   std::string request_body;
-  if (request_dict.is_dict()) {
-    if (!base::JSONWriter::Write(request_dict, &request_body)) {
-      LOGFN(ERROR) << "base::JSONWriter::Write failed";
-      return E_FAIL;
-    }
+  if (!request_dict.empty() &&
+      !base::JSONWriter::Write(request_dict, &request_body)) {
+    LOGFN(ERROR) << "base::JSONWriter::Write failed";
+    return E_FAIL;
+  }
+  if ((request_dict.empty() && !request_body.empty()) ||
+      (!request_dict.empty() && request_body.empty())) {
+    LOGFN(ERROR) << "Mismatch between request dict and body";
+    return E_FAIL;
   }
 
   for (unsigned int try_count = 0; try_count <= request_retries; ++try_count) {
     HttpServiceRequest* request = HttpServiceRequest::Create(
         request_url, access_token, headers, request_body, request_timeout);
-    if (!request)
+    if (!request) {
+      LOGFN(ERROR)
+          << "Could not create an HttpServiceRequest object. request url: "
+          << request_url.spec() << " request body: " << request_body;
       return E_FAIL;
+    }
 
     auto extracted_param =
         request->WaitForResponseFromHttpService(request_timeout);
@@ -447,8 +457,9 @@ HRESULT WinHttpUrlFetcher::BuildRequestAndFetchResultFromHttpService(
       continue;
 
     *request_result = std::move(extracted_param);
-    const base::Value* error_detail =
-        (*request_result)->FindDictKey(kErrorKeyInRequestResult);
+
+    const base::Value::Dict* error_detail =
+        (*request_result)->GetDict().FindDict(kErrorKeyInRequestResult);
     if (!error_detail)
       return S_OK;
 
@@ -456,13 +467,14 @@ HRESULT WinHttpUrlFetcher::BuildRequestAndFetchResultFromHttpService(
 
     // If error code is known, retry only on retryable server errors.
     absl::optional<int> error_code =
-        error_detail->FindIntKey(kHttpErrorCodeKeyNameInResponse);
+        error_detail->FindInt(kHttpErrorCodeKeyNameInResponse);
     if (error_code.has_value() &&
         !base::Contains(kRetryableHttpErrorCodes, error_code.value())) {
       return E_FAIL;
     }
   }
 
+  LOGFN(ERROR) << "Unable to serve http service request";
   return E_FAIL;
 }
 

@@ -22,8 +22,8 @@ std::unique_ptr<ui::AXEventRecorder> AXInspectFactory::CreatePlatformRecorder(
     BrowserAccessibilityManager*,
     base::ProcessId pid,
     const ui::AXTreeSelector& selector) {
-  return AXInspectFactory::CreateRecorder(ui::AXApiType::kMac, nullptr, pid,
-                                          selector);
+  return AXInspectFactory::CreateRecorder(ui::AXApiType::kMac,
+                                          /*manager=*/nullptr, pid, selector);
 }
 
 // static

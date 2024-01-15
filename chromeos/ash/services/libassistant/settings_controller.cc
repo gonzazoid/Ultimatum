@@ -7,9 +7,9 @@
 #include <algorithm>
 #include <memory>
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
+#include "base/memory/raw_ref.h"
 #include "base/sequence_checker.h"
-#include "chromeos/ash/services/assistant/public/cpp/features.h"
 #include "chromeos/ash/services/assistant/public/proto/assistant_device_settings_ui.pb.h"
 #include "chromeos/ash/services/assistant/public/proto/settings_ui.pb.h"
 #include "chromeos/ash/services/libassistant/callback_utils.h"
@@ -65,7 +65,7 @@ class SettingsController::DeviceSettingsUpdater
   ~DeviceSettingsUpdater() override = default;
 
   void UpdateSettings(const std::string& locale, bool hotword_enabled) {
-    const std::string device_id = assistant_client_.GetDeviceId();
+    const std::string device_id = assistant_client_->GetDeviceId();
     if (device_id.empty())
       return;
 
@@ -92,11 +92,11 @@ class SettingsController::DeviceSettingsUpdater
 
     // Device settings update result is not handled because it is not included
     // in the SettingsUiUpdateResult.
-    parent_.UpdateSettings(update.SerializeAsString(), base::DoNothing());
+    parent_->UpdateSettings(update.SerializeAsString(), base::DoNothing());
   }
 
-  SettingsController& parent_;
-  AssistantClient& assistant_client_;
+  const raw_ref<SettingsController> parent_;
+  const raw_ref<AssistantClient> assistant_client_;
 };
 
 // Sends a 'get settings' requests to Libassistant,
@@ -249,13 +249,7 @@ void SettingsController::SetSpokenFeedbackEnabled(bool value) {
 
 void SettingsController::SetDarkModeEnabled(bool value) {
   dark_mode_enabled_ = value;
-
-  if (chromeos::assistant::features::IsLibAssistantV2Enabled()) {
-    UpdateDarkModeEnabledV2(dark_mode_enabled_);
-    return;
-  }
-
-  UpdateInternalOptions(locale_, spoken_feedback_enabled_, dark_mode_enabled_);
+  UpdateDarkModeEnabledV2(dark_mode_enabled_);
 }
 
 void SettingsController::SetHotwordEnabled(bool value) {
@@ -280,7 +274,7 @@ void SettingsController::UpdateSettings(const std::string& settings,
 }
 
 void SettingsController::UpdateListeningEnabled(
-    absl::optional<bool> listening_enabled) {
+    std::optional<bool> listening_enabled) {
   if (!assistant_client_)
     return;
   if (!listening_enabled.has_value())
@@ -290,7 +284,7 @@ void SettingsController::UpdateListeningEnabled(
 }
 
 void SettingsController::UpdateAuthenticationTokens(
-    const absl::optional<std::vector<mojom::AuthenticationTokenPtr>>& tokens) {
+    const std::optional<std::vector<mojom::AuthenticationTokenPtr>>& tokens) {
   if (!assistant_client_)
     return;
   if (!tokens.has_value())
@@ -300,30 +294,20 @@ void SettingsController::UpdateAuthenticationTokens(
 }
 
 void SettingsController::UpdateInternalOptions(
-    const absl::optional<std::string>& locale,
-    absl::optional<bool> spoken_feedback_enabled,
-    absl::optional<bool> dark_mode_enabled) {
+    const std::optional<std::string>& locale,
+    std::optional<bool> spoken_feedback_enabled,
+    std::optional<bool> dark_mode_enabled) {
   if (!assistant_client_)
     return;
 
-  if (chromeos::assistant::features::IsLibAssistantV2Enabled()) {
-    if (locale.has_value() && spoken_feedback_enabled.has_value()) {
-      assistant_client_->SetInternalOptions(locale.value(),
-                                            spoken_feedback_enabled.value());
-    }
-    return;
-  }
-
-  if (locale.has_value() && spoken_feedback_enabled.has_value() &&
-      dark_mode_enabled.has_value()) {
-    assistant_client_->SetDeviceAttributes(dark_mode_enabled.value());
+  if (locale.has_value() && spoken_feedback_enabled.has_value()) {
     assistant_client_->SetInternalOptions(locale.value(),
                                           spoken_feedback_enabled.value());
   }
 }
 
 void SettingsController::UpdateLocaleOverride(
-    const absl::optional<std::string>& locale) {
+    const std::optional<std::string>& locale) {
   if (!assistant_client_)
     return;
 
@@ -334,8 +318,8 @@ void SettingsController::UpdateLocaleOverride(
 }
 
 void SettingsController::UpdateDeviceSettings(
-    const absl::optional<std::string>& locale,
-    absl::optional<bool> hotword_enabled) {
+    const std::optional<std::string>& locale,
+    std::optional<bool> hotword_enabled) {
   if (!device_settings_updater_)
     return;
 
@@ -346,7 +330,7 @@ void SettingsController::UpdateDeviceSettings(
 }
 
 void SettingsController::UpdateDarkModeEnabledV2(
-    absl::optional<bool> dark_mode_enabled) {
+    std::optional<bool> dark_mode_enabled) {
   if (!assistant_client_)
     return;
 
@@ -373,10 +357,6 @@ void SettingsController::OnAssistantClientCreated(
   // Libassistant to be fully ready.
   UpdateAuthenticationTokens(authentication_tokens_);
   UpdateInternalOptions(locale_, spoken_feedback_enabled_, dark_mode_enabled_);
-  if (!chromeos::assistant::features::IsLibAssistantV2Enabled()) {
-    UpdateLocaleOverride(locale_);
-    UpdateListeningEnabled(listening_enabled_);
-  }
 }
 
 void SettingsController::OnAssistantClientRunning(
@@ -385,11 +365,9 @@ void SettingsController::OnAssistantClientRunning(
       std::make_unique<DeviceSettingsUpdater>(this, assistant_client);
 
   UpdateDeviceSettings(locale_, hotword_enabled_);
-  if (chromeos::assistant::features::IsLibAssistantV2Enabled()) {
-    UpdateLocaleOverride(locale_);
-    UpdateListeningEnabled(listening_enabled_);
-    UpdateDarkModeEnabledV2(dark_mode_enabled_);
-  }
+  UpdateLocaleOverride(locale_);
+  UpdateListeningEnabled(listening_enabled_);
+  UpdateDarkModeEnabledV2(dark_mode_enabled_);
 }
 
 void SettingsController::OnDestroyingAssistantClient(

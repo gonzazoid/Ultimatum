@@ -3,16 +3,21 @@
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/webui/ash/login/fake_app_launch_splash_screen_handler.h"
+#include "chrome/browser/ash/app_mode/kiosk_app_manager_base.h"
 
-namespace chromeos {
+namespace ash {
+
+void FakeAppLaunchSplashScreenHandler::SetDelegate(Delegate* delegate) {
+  delegate_ = delegate;
+}
+
+void FakeAppLaunchSplashScreenHandler::Show(Data data) {
+  last_data_ = std::move(data);
+}
 
 void FakeAppLaunchSplashScreenHandler::ShowErrorMessage(
     KioskAppLaunchError::Error error) {
   error_message_type_ = error;
-}
-
-bool FakeAppLaunchSplashScreenHandler::IsNetworkReady() {
-  return network_ready_;
 }
 
 KioskAppLaunchError::Error
@@ -20,8 +25,10 @@ FakeAppLaunchSplashScreenHandler::GetErrorMessageType() const {
   return error_message_type_;
 }
 
-void FakeAppLaunchSplashScreenHandler::SetNetworkReady(bool ready) {
-  network_ready_ = ready;
+void FakeAppLaunchSplashScreenHandler::FinishNetworkConfig() {
+  if (delegate_) {
+    delegate_->OnNetworkConfigFinished();
+  }
 }
 
 void FakeAppLaunchSplashScreenHandler::UpdateAppLaunchState(
@@ -30,8 +37,8 @@ void FakeAppLaunchSplashScreenHandler::UpdateAppLaunchState(
 }
 
 AppLaunchSplashScreenHandler::AppLaunchState
-FakeAppLaunchSplashScreenHandler::GetAppLaunchState() {
+FakeAppLaunchSplashScreenHandler::GetAppLaunchState() const {
   return state_;
 }
 
-}  // namespace chromeos
+}  // namespace ash

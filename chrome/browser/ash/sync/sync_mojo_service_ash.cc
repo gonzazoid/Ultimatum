@@ -7,6 +7,7 @@
 #include "base/feature_list.h"
 #include "chrome/browser/ash/sync/sync_explicit_passphrase_client_ash.h"
 #include "chrome/browser/ash/sync/sync_user_settings_client_ash.h"
+#include "chrome/browser/ash/sync/synced_session_client_ash.h"
 #include "components/sync/base/features.h"
 
 namespace ash {
@@ -21,6 +22,9 @@ SyncMojoServiceAsh::SyncMojoServiceAsh(syncer::SyncService* sync_service) {
     user_settings_client_ =
         std::make_unique<SyncUserSettingsClientAsh>(sync_service);
   }
+  if (base::FeatureList::IsEnabled(syncer::kChromeOSSyncedSessionSharing)) {
+    synced_session_client_ = std::make_unique<SyncedSessionClientAsh>();
+  }
 }
 
 SyncMojoServiceAsh::~SyncMojoServiceAsh() = default;
@@ -34,6 +38,7 @@ void SyncMojoServiceAsh::Shutdown() {
   receivers_.Clear();
   user_settings_client_ = nullptr;
   explicit_passphrase_client_ = nullptr;
+  synced_session_client_ = nullptr;
 }
 
 void SyncMojoServiceAsh::BindExplicitPassphraseClient(
@@ -51,6 +56,21 @@ void SyncMojoServiceAsh::BindUserSettingsClient(
   if (user_settings_client_) {
     user_settings_client_->BindReceiver(std::move(receiver));
   }
+}
+
+void SyncMojoServiceAsh::DEPRECATED_BindSyncedSessionClient(
+    mojo::PendingReceiver<crosapi::mojom::SyncedSessionClient> receiver) {
+  NOTIMPLEMENTED();
+}
+
+void SyncMojoServiceAsh::CreateSyncedSessionClient(
+    CreateSyncedSessionClientCallback callback) {
+  if (!base::FeatureList::IsEnabled(syncer::kChromeOSSyncedSessionSharing)) {
+    std::move(callback).Run(mojo::NullRemote());
+    return;
+  }
+
+  std::move(callback).Run(synced_session_client_->CreateRemote());
 }
 
 }  // namespace ash

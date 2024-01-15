@@ -14,8 +14,6 @@
 #include "base/memory/raw_ptr.h"
 #include "base/threading/thread_checker.h"
 #include "chrome/browser/media/router/discovery/mdns/dns_sd_registry.h"
-#include "chrome/common/extensions/api/mdns.h"
-#include "extensions/browser/api/async_api_function.h"
 #include "extensions/browser/browser_context_keyed_api_factory.h"
 #include "extensions/browser/event_router.h"
 #include "extensions/browser/extension_function.h"
@@ -78,9 +76,7 @@ class MDnsAPI : public BrowserContextKeyedAPI,
       const media_router::DnsSdRegistry::DnsSdServiceList& services) override;
 
   // BrowserContextKeyedAPI implementation.
-  static const char* service_name() {
-    return "MDnsAPI";
-  }
+  static const char* service_name() { return "MDnsAPI"; }
 
   static const bool kServiceIsCreatedWithBrowserContext = true;
   static const bool kServiceIsNULLWhileTesting = true;
@@ -95,9 +91,8 @@ class MDnsAPI : public BrowserContextKeyedAPI,
                       const std::string& message);
 
   // Returns true if an extension or platform app |extension_id| is allowed to
-  // listen to mDNS events for |service_type|.
-  virtual bool IsMDnsAllowed(const std::string& extension_id,
-                             const std::string& service_type) const;
+  // listen to mDNS events.
+  virtual bool IsMDnsAllowed(const std::string& extension_id) const;
 
   // Finds all all the valid listeners of the mdns.onServiceList event and
   // filters them by service type if |service_type_filter| is non-empty.
@@ -122,13 +117,14 @@ class MDnsAPI : public BrowserContextKeyedAPI,
 
 class MdnsForceDiscoveryFunction : public ExtensionFunction {
  public:
-  MdnsForceDiscoveryFunction();
+  MdnsForceDiscoveryFunction() = default;
+
   MdnsForceDiscoveryFunction(const MdnsForceDiscoveryFunction&) = delete;
   MdnsForceDiscoveryFunction& operator=(const MdnsForceDiscoveryFunction&) =
       delete;
 
  protected:
-  ~MdnsForceDiscoveryFunction() override;
+  ~MdnsForceDiscoveryFunction() override = default;
 
  private:
   // ExtensionFunction override.

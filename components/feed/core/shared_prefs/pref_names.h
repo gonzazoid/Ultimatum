@@ -20,8 +20,9 @@ extern const char kEnableSnippets[];
 // the user toggles the list off.
 extern const char kArticlesListVisible[];
 
-// Choose how video previews will automatically play.
-extern const char kVideoPreviewsType[];
+// This is set to false if swapping out NTP is enabled and default search engine
+// isn't Google.
+extern const char kEnableSnippetsByDse[];
 
 void RegisterFeedSharedProfilePrefs(PrefRegistrySimple* registry);
 }  // namespace prefs

@@ -7,12 +7,13 @@
 
 #include <iostream>
 #include <string>
+#include <string_view>
 
 #include "base/at_exit.h"
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/mac/mac_util.h"
 #include "base/path_service.h"
@@ -142,14 +143,6 @@ HostService::HostService() {
 HostService::~HostService() = default;
 
 int HostService::RunHost() {
-  // Mojave users updating from an older host likely have already granted a11y
-  // permission to the old script. In this case we always delegate RunHost to
-  // the old script so that they don't need to grant permission to a new app.
-  if (base::mac::IsOS10_14() && base::PathExists(old_host_helper_file_)) {
-    HOST_LOG << "RunHost will be delegated to the old host script.";
-    return RunHostFromOldScript();
-  }
-
   if (geteuid() != 0 && HostIsEnabled()) {
     // Only check for non-root users, as the permission wizard is not actionable
     // at the login screen. Also, permission is only needed when host is
@@ -274,7 +267,7 @@ bool HostService::Enable() {
     HOST_LOG << "Message from chmod: " << output;
   }
 
-  if (base::WriteFile(enabled_file_, nullptr, 0) < 0) {
+  if (!base::WriteFile(enabled_file_, std::string_view())) {
     LOG(ERROR) << "Failed to write enabled file";
     return false;
   }
@@ -286,8 +279,7 @@ bool HostService::WriteStdinToConfig() {
   std::istreambuf_iterator<char> begin(std::cin);
   std::istreambuf_iterator<char> end;
   std::string config(begin, end);
-  if (base::WriteFile(config_file_, config.data(), config.size()) !=
-      static_cast<int>(config.size())) {
+  if (!base::WriteFile(config_file_, config)) {
     LOG(ERROR) << "Failed to write config file";
     return false;
   }

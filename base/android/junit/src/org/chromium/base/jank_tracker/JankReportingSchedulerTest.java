@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors
+// Copyright 2023 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,16 +20,13 @@ import org.robolectric.shadows.ShadowLooper;
 
 import org.chromium.base.test.BaseRobolectricTestRunner;
 
-/**
- *  Tests for JankReportingScheduler.
- */
+/** Tests for JankReportingScheduler. */
 @RunWith(BaseRobolectricTestRunner.class)
 @LooperMode(LooperMode.Mode.LEGACY)
 public class JankReportingSchedulerTest {
     ShadowLooper mShadowLooper;
 
-    @Mock
-    private FrameMetricsStore mFrameMetricsStore;
+    @Mock private FrameMetricsStore mFrameMetricsStore;
 
     JankReportingScheduler createJankReportingScheduler() {
         JankReportingScheduler scheduler = new JankReportingScheduler(mFrameMetricsStore);
@@ -49,9 +46,12 @@ public class JankReportingSchedulerTest {
 
         jankReportingScheduler.startTrackingScenario(JankScenario.NEW_TAB_PAGE);
 
+        // When first getting the handler we need to run the initialize on the handler.
+        mShadowLooper.runOneTask();
         // Starting tracking posts a task to begin recording metrics in FrameMetricsStore.
         mShadowLooper.runOneTask();
 
+        verify(mFrameMetricsStore).initialize();
         verify(mFrameMetricsStore).startTrackingScenario(JankScenario.NEW_TAB_PAGE);
     }
 
@@ -62,6 +62,8 @@ public class JankReportingSchedulerTest {
         jankReportingScheduler.startTrackingScenario(JankScenario.NEW_TAB_PAGE);
         jankReportingScheduler.finishTrackingScenario(JankScenario.NEW_TAB_PAGE);
 
+        // When first getting the handler we need to run the initialize on the handler.
+        mShadowLooper.runOneTask();
         // Starting tracking posts a task to begin recording metrics in FrameMetricsStore.
         mShadowLooper.runOneTask();
         // Stopping tracking posts a task to finish tracking and upload the calculated metrics.
@@ -71,6 +73,7 @@ public class JankReportingSchedulerTest {
 
         // After both tasks we should have started and stopped tracking the periodic reporting
         // scenario.
+        orderVerifier.verify(mFrameMetricsStore).initialize();
         orderVerifier.verify(mFrameMetricsStore).startTrackingScenario(JankScenario.NEW_TAB_PAGE);
         orderVerifier.verify(mFrameMetricsStore).stopTrackingScenario(JankScenario.NEW_TAB_PAGE);
 
@@ -83,6 +86,8 @@ public class JankReportingSchedulerTest {
 
         jankReportingScheduler.startReportingPeriodicMetrics();
 
+        // When first getting the handler we need to run the initialize on the handler.
+        mShadowLooper.runOneTask();
         // When periodic reporting is enabled a task is immediately posted to begin tracking.
         mShadowLooper.runOneTask();
         // Then a delayed task is posted for the reporting loop.
@@ -94,9 +99,12 @@ public class JankReportingSchedulerTest {
 
         // After both tasks we should have started and stopped tracking the periodic reporting
         // scenario.
-        orderVerifier.verify(mFrameMetricsStore)
+        orderVerifier.verify(mFrameMetricsStore).initialize();
+        orderVerifier
+                .verify(mFrameMetricsStore)
                 .startTrackingScenario(JankScenario.PERIODIC_REPORTING);
-        orderVerifier.verify(mFrameMetricsStore)
+        orderVerifier
+                .verify(mFrameMetricsStore)
                 .stopTrackingScenario(JankScenario.PERIODIC_REPORTING);
 
         // There should be another task posted to continue the loop.
@@ -109,6 +117,8 @@ public class JankReportingSchedulerTest {
 
         jankReportingScheduler.startReportingPeriodicMetrics();
 
+        // When first getting the handler we need to run the initialize on the handler.
+        mShadowLooper.runOneTask();
         // Run tracking initialization task.
         mShadowLooper.runOneTask();
         // Run the first reporting loop (delayed 30s).
@@ -129,15 +139,20 @@ public class JankReportingSchedulerTest {
         InOrder orderVerifier = Mockito.inOrder(mFrameMetricsStore);
 
         // This start/stop pair corresponds to the first reporting period.
-        orderVerifier.verify(mFrameMetricsStore)
+        orderVerifier.verify(mFrameMetricsStore).initialize();
+        orderVerifier
+                .verify(mFrameMetricsStore)
                 .startTrackingScenario(JankScenario.PERIODIC_REPORTING);
-        orderVerifier.verify(mFrameMetricsStore)
+        orderVerifier
+                .verify(mFrameMetricsStore)
                 .stopTrackingScenario(JankScenario.PERIODIC_REPORTING);
 
         // Stopping reporting forces an immediate report of recorded frames, if any.
-        orderVerifier.verify(mFrameMetricsStore)
+        orderVerifier
+                .verify(mFrameMetricsStore)
                 .startTrackingScenario(JankScenario.PERIODIC_REPORTING);
-        orderVerifier.verify(mFrameMetricsStore)
+        orderVerifier
+                .verify(mFrameMetricsStore)
                 .stopTrackingScenario(JankScenario.PERIODIC_REPORTING);
 
         // There should not be another task posted to continue the loop.

@@ -45,9 +45,7 @@ namespace {
 
 using ::testing::UnorderedElementsAreArray;
 
-class FakePrefetchManagerDelegate
-    : public PrefetchManager::Delegate,
-      public base::SupportsWeakPtr<FakePrefetchManagerDelegate> {
+class FakePrefetchManagerDelegate : public PrefetchManager::Delegate {
  public:
   void PrefetchInitiated(const GURL& url, const GURL& prefetch_url) override {
     prefetched_urls_for_main_frame_url_[url].insert(prefetch_url);
@@ -81,24 +79,34 @@ class FakePrefetchManagerDelegate
 
   void ClearPrefetchedURLs() { prefetched_urls_for_main_frame_url_ = {}; }
 
+  base::WeakPtr<FakePrefetchManagerDelegate> AsWeakPtr() {
+    return weak_ptr_factory_.GetWeakPtr();
+  }
+
  private:
   base::flat_map<GURL, base::flat_set<GURL>>
       prefetched_urls_for_main_frame_url_;
   base::flat_set<GURL> finished_urls_;
   base::flat_map<GURL, base::OnceClosure> done_callbacks_;
+  base::WeakPtrFactory<FakePrefetchManagerDelegate> weak_ptr_factory_{this};
 };
 
 // Creates a NetworkAnonymizationKey for a main frame navigation to URL.
 net::NetworkAnonymizationKey CreateNetworkIsolationKey(
     const GURL& main_frame_url) {
   net::SchemefulSite site = net::SchemefulSite(main_frame_url);
-  return net::NetworkAnonymizationKey(site, site);
+  return net::NetworkAnonymizationKey::CreateSameSite(site);
 }
 
 PrefetchRequest CreateScriptRequest(const GURL& url,
                                     const GURL& main_frame_url) {
   return PrefetchRequest(url, CreateNetworkIsolationKey(main_frame_url),
                          network::mojom::RequestDestination::kScript);
+}
+
+PrefetchRequest CreateFontRequest(const GURL& url, const GURL& main_frame_url) {
+  return PrefetchRequest(url, CreateNetworkIsolationKey(main_frame_url),
+                         network::mojom::RequestDestination::kFont);
 }
 
 }  // namespace
@@ -592,7 +600,8 @@ class ThrottlingContentBrowserClient : public content::ContentBrowserClient {
       content::BrowserContext* browser_context,
       const base::RepeatingCallback<content::WebContents*()>& wc_getter,
       content::NavigationUIData* navigation_ui_data,
-      int frame_tree_node_id) override {
+      int frame_tree_node_id,
+      absl::optional<int64_t> navigation_id) override {
     std::vector<std::unique_ptr<blink::URLLoaderThrottle>> throttles;
     throttles.emplace_back(std::make_unique<HeaderInjectingThrottle>());
     return throttles;
@@ -627,6 +636,44 @@ TEST_F(PrefetchManagerTest, Throttles) {
   EXPECT_EQ(iter->second, "injected value");
 
   content::SetBrowserClientForTesting(old_content_browser_client);
+}
+
+// Tests prefetching a font URL.
+TEST_F(PrefetchManagerTest, Font) {
+  GURL main_frame_url("https://abc.invalid");
+  GURL subresource_url("https://xyz.invalid/font.woff");
+  PrefetchRequest request = CreateFontRequest(subresource_url, main_frame_url);
+
+  base::RunLoop loop;
+  content::URLLoaderInterceptor interceptor(base::BindLambdaForTesting(
+      [&](content::URLLoaderInterceptor::RequestParams* params) -> bool {
+        network::ResourceRequest& request = params->url_request;
+        EXPECT_EQ(request.url, subresource_url);
+        EXPECT_TRUE(request.load_flags & net::LOAD_PREFETCH);
+
+        EXPECT_EQ(request.referrer_policy, net::ReferrerPolicy::NO_REFERRER);
+        EXPECT_EQ(request.destination,
+                  network::mojom::RequestDestination::kFont);
+        EXPECT_EQ(
+            static_cast<blink::mojom::ResourceType>(request.resource_type),
+            blink::mojom::ResourceType::kFontResource);
+
+        EXPECT_EQ(request.mode, network::mojom::RequestMode::kNoCors);
+
+        std::string purpose;
+        EXPECT_TRUE(request.headers.GetHeader("Purpose", &purpose));
+        EXPECT_EQ(purpose, "prefetch");
+
+        loop.Quit();
+        return false;
+      }));
+  prefetch_manager_->Start(main_frame_url, {request});
+  loop.Run();
+
+  EXPECT_THAT(fake_delegate_->GetPrefetchedURLsForURL(main_frame_url),
+              UnorderedElementsAreArray({subresource_url}));
+
+  fake_delegate_->WaitForPrefetchFinished(main_frame_url);
 }
 
 }  // namespace predictors

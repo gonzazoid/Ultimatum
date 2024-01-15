@@ -62,9 +62,9 @@
 #include <tuple>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
@@ -74,7 +74,6 @@
 #include "base/synchronization/waitable_event.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
@@ -379,7 +378,8 @@ class Job {
   void Cancel();
 
  private:
-  void OnReceivedRedirect(const net::RedirectInfo& redirect_info,
+  void OnReceivedRedirect(const GURL& url_before_redirect,
+                          const net::RedirectInfo& redirect_info,
                           const network::mojom::URLResponseHead& response_head,
                           std::vector<std::string>* removed_headers);
   void OnResponseStarted(const GURL& final_url,
@@ -527,6 +527,10 @@ void Job::StartURLLoader(network::mojom::URLLoaderFactory* factory) {
   request->trusted_params = network::ResourceRequest::TrustedParams();
   request->trusted_params->disable_secure_dns = true;
   request->credentials_mode = network::mojom::CredentialsMode::kOmit;
+  // Ensure that we bypass HSTS for all requests sent through
+  // CertNetFetcherURLLoader, since AIA/CRL/OCSP requests must be in HTTP to
+  // avoid circular dependencies.
+  request->load_flags |= net::LOAD_SHOULD_BYPASS_HSTS;
   url_loader_ =
       network::SimpleURLLoader::Create(std::move(request), traffic_annotation);
   // base::Unretained(this) is safe because |this| owns |url_loader_|, which
@@ -550,6 +554,7 @@ void Job::Cancel() {
 }
 
 void Job::OnReceivedRedirect(
+    const GURL& url_before_redirect,
     const net::RedirectInfo& redirect_info,
     const network::mojom::URLResponseHead& response_head,
     std::vector<std::string>* removed_headers) {
@@ -747,7 +752,7 @@ class CertNetFetcherRequestImpl : public net::CertNetFetcher::Request {
 }  // namespace
 
 CertNetFetcherURLLoader::CertNetFetcherURLLoader()
-    : task_runner_(base::SequencedTaskRunnerHandle::Get()) {}
+    : task_runner_(base::SequencedTaskRunner::GetCurrentDefault()) {}
 
 CertNetFetcherURLLoader::~CertNetFetcherURLLoader() = default;
 

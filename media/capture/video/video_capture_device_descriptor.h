@@ -10,25 +10,29 @@
 
 #include "media/base/video_facing.h"
 #include "media/capture/capture_export.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace media {
 
 // A Java counterpart will be generated for this enum.
 // GENERATED_JAVA_ENUM_PACKAGE: org.chromium.media
+// These values are persisted to logs. Entries should not be renumbered and
+// numeric values should never be reused.
 enum class VideoCaptureApi {
-  LINUX_V4L2_SINGLE_PLANE,
-  WIN_MEDIA_FOUNDATION,
-  WIN_MEDIA_FOUNDATION_SENSOR,
-  WIN_DIRECT_SHOW,
-  MACOSX_AVFOUNDATION,
-  MACOSX_DECKLINK,
-  ANDROID_API1,
-  ANDROID_API2_LEGACY,
-  ANDROID_API2_FULL,
-  ANDROID_API2_LIMITED,
-  FUCHSIA_CAMERA3,
-  VIRTUAL_DEVICE,
-  UNKNOWN
+  UNKNOWN = 0,
+  LINUX_V4L2_SINGLE_PLANE = 1,
+  WIN_MEDIA_FOUNDATION = 2,
+  WIN_MEDIA_FOUNDATION_SENSOR = 3,
+  WIN_DIRECT_SHOW = 4,
+  MACOSX_AVFOUNDATION = 5,
+  MACOSX_DECKLINK = 6,
+  ANDROID_API1 = 7,
+  ANDROID_API2_LEGACY = 8,
+  ANDROID_API2_FULL = 9,
+  ANDROID_API2_LIMITED = 10,
+  FUCHSIA_CAMERA3 = 11,
+  VIRTUAL_DEVICE = 12,
+  kMaxValue = VIRTUAL_DEVICE,
 };
 
 // Represents capture device's support for different controls.
@@ -40,9 +44,16 @@ struct VideoCaptureControlSupport {
 
 enum class VideoCaptureTransportType {
   // For AVFoundation Api, identify devices that are built-in or USB.
-  MACOSX_USB_OR_BUILT_IN,
+  APPLE_USB_OR_BUILT_IN,
   OTHER_TRANSPORT
 };
+
+// LINT.IfChange
+enum class CameraAvailability {
+  kAvailable,
+  kUnavailableExclusivelyUsedByOtherApplication,
+};
+// LINT.ThenChange(//media/capture/mojom/video_capture_types.mojom)
 
 // Represents information about a capture device as returned by
 // VideoCaptureDeviceFactory::GetDeviceDescriptors().
@@ -73,7 +84,8 @@ struct CAPTURE_EXPORT VideoCaptureDeviceDescriptor {
       const VideoCaptureControlSupport& control_support,
       VideoCaptureTransportType transport_type =
           VideoCaptureTransportType::OTHER_TRANSPORT,
-      VideoFacingMode facing = VideoFacingMode::MEDIA_VIDEO_FACING_NONE);
+      VideoFacingMode facing = VideoFacingMode::MEDIA_VIDEO_FACING_NONE,
+      absl::optional<CameraAvailability> availability = absl::nullopt);
   VideoCaptureDeviceDescriptor(const VideoCaptureDeviceDescriptor& other);
   ~VideoCaptureDeviceDescriptor();
 
@@ -107,6 +119,7 @@ struct CAPTURE_EXPORT VideoCaptureDeviceDescriptor {
   std::string model_id;
 
   VideoFacingMode facing;
+  absl::optional<CameraAvailability> availability;
 
   VideoCaptureApi capture_api;
   VideoCaptureTransportType transport_type;

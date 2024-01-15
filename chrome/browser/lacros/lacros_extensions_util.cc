@@ -15,6 +15,7 @@
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/common/chrome_features.h"
+#include "content/public/browser/web_contents.h"
 #include "extensions/browser/extension_registry.h"
 #include "extensions/common/extension.h"
 
@@ -35,48 +36,29 @@ const extensions::Extension* MaybeGetExtension(
   return registry->GetInstalledExtension(extension_id);
 }
 
-std::string MuxId(const Profile* profile,
-                  const extensions::Extension* extension) {
-  return apps::MuxId(profile, extension->id());
-}
-
-bool DemuxId(const std::string& muxed_id,
-             Profile** output_profile,
-             const extensions::Extension** output_extension) {
-  std::vector<std::string> splits = apps::DemuxId(muxed_id);
-  if (splits.size() != 2)
-    return false;
-  std::string profile_basename = std::move(splits[0]);
-  std::string extension_id = std::move(splits[1]);
-  auto profiles = g_browser_process->profile_manager()->GetLoadedProfiles();
-  Profile* matching_profile = nullptr;
-  for (auto* profile : profiles) {
-    bool is_sentinel_and_main_profile =
-        profile_basename == "" && profile->IsMainProfile();
-    if (is_sentinel_and_main_profile ||
-        (profile->GetBaseName().value() == profile_basename)) {
-      matching_profile = profile;
-      break;
-    }
+const extensions::Extension* MaybeGetExtension(
+    content::WebContents* web_contents) {
+  if (!web_contents) {
+    return nullptr;
   }
-  if (!matching_profile)
-    return false;
-  const extensions::Extension* extension =
-      MaybeGetExtension(matching_profile, extension_id);
-  if (!extension)
-    return false;
-  *output_profile = matching_profile;
-  *output_extension = extension;
-  return true;
+
+  extensions::ExtensionRegistry* registry = extensions::ExtensionRegistry::Get(
+      Profile::FromBrowserContext(web_contents->GetBrowserContext()));
+  DCHECK(registry);
+  const extensions::ExtensionSet& extensions = registry->enabled_extensions();
+  return extensions.GetAppByURL(web_contents->GetVisibleURL());
 }
 
-bool DemuxPlatformAppId(const std::string& muxed_id,
-                        Profile** output_profile,
-                        const extensions::Extension** output_extension) {
-  Profile* profile = nullptr;
-  const extensions::Extension* extension = nullptr;
-  if (!DemuxId(muxed_id, &profile, &extension) || !extension->is_platform_app())
+bool GetProfileAndExtension(const std::string& extension_id,
+                            Profile** output_profile,
+                            const extensions::Extension** output_extension) {
+  Profile* profile = ProfileManager::GetPrimaryUserProfile();
+  DCHECK(profile);
+  const extensions::Extension* extension =
+      lacros_extensions_util::MaybeGetExtension(profile, extension_id);
+  if (!extension) {
     return false;
+  }
   *output_profile = profile;
   *output_extension = extension;
   return true;

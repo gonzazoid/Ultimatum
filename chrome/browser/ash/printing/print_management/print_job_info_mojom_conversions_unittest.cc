@@ -6,13 +6,13 @@
 
 #include <memory>
 
-#include "ash/webui/print_management/mojom/printing_manager.mojom.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/time/time.h"
 #include "chrome/browser/ash/printing/cups_print_job.h"
 #include "chrome/browser/ash/printing/history/print_job_info.pb.h"
 #include "chrome/browser/chromeos/printing/printer_error_codes.h"
 #include "chrome/browser/printing/print_job.h"
+#include "chromeos/components/print_management/mojom/printing_manager.mojom.h"
 #include "chromeos/printing/printer_configuration.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -20,7 +20,7 @@ namespace ash {
 namespace {
 
 namespace proto = printing::proto;
-namespace mojom = printing::printing_manager::mojom;
+namespace mojom = ::chromeos::printing::printing_manager::mojom;
 
 constexpr char kName[] = "name";
 constexpr char16_t kName16[] = u"name";
@@ -48,8 +48,8 @@ proto::PrintJobInfo CreatePrintJobInfoProto() {
   print_job_info.set_status(proto::PrintJobInfo_PrintJobStatus_PRINTED);
   print_job_info.set_printer_error_code(
       proto::PrintJobInfo_PrinterErrorCode_NO_ERROR);
-  print_job_info.set_creation_time(
-      static_cast<int64_t>(base::Time::UnixEpoch().ToJsTime()));
+  print_job_info.set_creation_time(static_cast<int64_t>(
+      base::Time::UnixEpoch().InMillisecondsFSinceUnixEpoch()));
   print_job_info.set_number_of_pages(kPagesNumber);
   *print_job_info.mutable_printer() = printer;
 
@@ -64,7 +64,7 @@ std::unique_ptr<CupsPrintJob> CreateCupsPrintJob() {
 
   auto cups_print_job = std::make_unique<CupsPrintJob>(
       printer, /*job_id=*/0, kTitle, kPagesNumber,
-      ::printing::PrintJob::Source::PRINT_PREVIEW, kId, proto::PrintSettings());
+      ::printing::PrintJob::Source::kPrintPreview, kId, proto::PrintSettings());
   cups_print_job->set_printed_page_number(kPrintedPageNumber);
   cups_print_job->set_state(CupsPrintJob::State::STATE_STARTED);
   return cups_print_job;
@@ -79,7 +79,7 @@ TEST(PrintJobInfoMojomConversionsTest, PrintJobProtoToMojom) {
 
   EXPECT_EQ(kId, print_job_mojo->id);
   EXPECT_EQ(kTitle16, print_job_mojo->title);
-  EXPECT_EQ(base::Time::FromJsTime(kJobCreationTime),
+  EXPECT_EQ(base::Time::FromMillisecondsSinceUnixEpoch(kJobCreationTime),
             print_job_mojo->creation_time);
   EXPECT_EQ(kPrinterId, print_job_mojo->printer_id);
   EXPECT_EQ(kName16, print_job_mojo->printer_name);

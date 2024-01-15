@@ -7,22 +7,23 @@
 #include <memory>
 #include <utility>
 
+#include <optional>
 #include "android_webview/browser/gfx/compositor_frame_producer.h"
 #include "android_webview/browser/gfx/gpu_service_webview.h"
-#include "android_webview/browser/gfx/hardware_renderer_viz.h"
+#include "android_webview/browser/gfx/hardware_renderer.h"
 #include "android_webview/browser/gfx/scoped_app_gl_state_restore.h"
 #include "android_webview/browser/gfx/task_queue_webview.h"
 #include "android_webview/common/aw_features.h"
 #include "android_webview/public/browser/draw_gl.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/memory/ptr_util.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "base/trace_event/trace_event.h"
 #include "base/trace_event/traced_value.h"
 #include "components/viz/common/features.h"
 #include "components/viz/common/quads/compositor_frame.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace android_webview {
 
@@ -116,10 +117,7 @@ void RenderThreadManager::PostParentDrawDataToChildCompositorOnRT(
   {
     base::AutoLock lock(lock_);
     parent_draw_constraints_ = parent_draw_constraints;
-    // FrameTimingDetails are a sequence and it's ok to drop something in
-    // the middle of the sequence. This also means its ok to drop the details
-    // from early returned frames from WaitAndPruneFrameQueue as well.
-    timing_details_ = std::move(timing_details);
+    timing_details_.insert(timing_details.begin(), timing_details.end());
     presented_frame_token_ = frame_token;
     frame_sink_id_for_presentation_feedbacks_ = frame_sink_id;
   }
@@ -196,7 +194,7 @@ void RenderThreadManager::DrawOnRT(bool save_restore,
   // Force GL binding init if it's not yet initialized.
   GpuServiceWebView::GetInstance();
 
-  absl::optional<ScopedAppGLStateRestore> state_restore;
+  std::optional<ScopedAppGLStateRestore> state_restore;
   if (!vulkan_context_provider_) {
     state_restore.emplace(ScopedAppGLStateRestore::MODE_DRAW, save_restore);
     if (state_restore->skip_draw()) {
@@ -212,7 +210,7 @@ void RenderThreadManager::DrawOnRT(bool save_restore,
       getter = root_frame_sink_getter_;
     }
     DCHECK(getter);
-    hardware_renderer_ = std::make_unique<HardwareRendererViz>(
+    hardware_renderer_ = std::make_unique<HardwareRenderer>(
         this, std::move(getter), vulkan_context_provider_);
     hardware_renderer_->CommitFrame();
   }
@@ -231,7 +229,7 @@ void RenderThreadManager::DestroyHardwareRendererOnRT(bool save_restore,
                                                       bool abandon_context) {
   GpuServiceWebView::GetInstance();
 
-  absl::optional<ScopedAppGLStateRestore> state_restore;
+  std::optional<ScopedAppGLStateRestore> state_restore;
   if (!vulkan_context_provider_ && !abandon_context) {
     state_restore.emplace(ScopedAppGLStateRestore::MODE_RESOURCE_MANAGEMENT,
                           save_restore);

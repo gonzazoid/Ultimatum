@@ -7,9 +7,9 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check_op.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/hash/hash.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/stringprintf.h"
@@ -106,15 +106,6 @@ content::RenderProcessHost* WebrtcLoggingPrivateFunction::RphFromRequest(
   if (request.target_webview && *request.target_webview) {
     content::RenderProcessHost* target_host = nullptr;
     int guests_found = 0;
-    auto get_guest = [](int* guests_found,
-                        content::RenderProcessHost** target_host,
-                        content::WebContents* guest_contents) {
-      *guests_found = *guests_found + 1;
-      *target_host = guest_contents->GetPrimaryMainFrame()->GetProcess();
-      // Don't short-circuit, so we can count how many other guest contents
-      // there are.
-      return false;
-    };
     auto* guest_view_manager =
         guest_view::GuestViewManager::FromBrowserContext(browser_context());
     if (!guest_view_manager) {
@@ -124,8 +115,13 @@ content::RenderProcessHost* WebrtcLoggingPrivateFunction::RphFromRequest(
       return nullptr;
     }
     guest_view_manager->ForEachGuest(
-        GetSenderWebContents(),
-        base::BindRepeating(get_guest, &guests_found, &target_host));
+        GetSenderWebContents(), [&](content::WebContents* guest_contents) {
+          ++guests_found;
+          target_host = guest_contents->GetPrimaryMainFrame()->GetProcess();
+          // Don't short-circuit, so we can count how many other guest contents
+          // there are.
+          return false;
+        });
     if (!target_host) {
       *error = "No webview render process found";
       return nullptr;
@@ -229,7 +225,7 @@ void WebrtcLoggingPrivateFunctionWithUploadCallback::FireCallback(
   if (success) {
     api::webrtc_logging_private::UploadResult result;
     result.report_id = report_id;
-    Respond(OneArgument(base::Value(result.ToValue())));
+    Respond(WithArguments(result.ToValue()));
   } else {
     Respond(Error(error_message));
   }
@@ -250,14 +246,14 @@ void WebrtcLoggingPrivateFunctionWithRecordingDoneCallback::FireCallback(
   result.prefix_path = prefix_path;
   result.did_stop = did_stop;
   result.did_manual_stop = did_manual_stop;
-  Respond(OneArgument(base::Value(result.ToValue())));
+  Respond(WithArguments(result.ToValue()));
 }
 
 ExtensionFunction::ResponseAction
 WebrtcLoggingPrivateSetMetaDataFunction::Run() {
-  std::unique_ptr<SetMetaData::Params> params(
-      SetMetaData::Params::Create(args()));
-  EXTENSION_FUNCTION_VALIDATE(params.get());
+  absl::optional<SetMetaData::Params> params =
+      SetMetaData::Params::Create(args());
+  EXTENSION_FUNCTION_VALIDATE(params);
 
   WebRtcLoggingController::GenericDoneCallback callback;
   std::string error;
@@ -276,8 +272,8 @@ WebrtcLoggingPrivateSetMetaDataFunction::Run() {
 }
 
 ExtensionFunction::ResponseAction WebrtcLoggingPrivateStartFunction::Run() {
-  std::unique_ptr<Start::Params> params(Start::Params::Create(args()));
-  EXTENSION_FUNCTION_VALIDATE(params.get());
+  absl::optional<Start::Params> params = Start::Params::Create(args());
+  EXTENSION_FUNCTION_VALIDATE(params);
 
   WebRtcLoggingController::GenericDoneCallback callback;
   std::string error;
@@ -292,9 +288,9 @@ ExtensionFunction::ResponseAction WebrtcLoggingPrivateStartFunction::Run() {
 
 ExtensionFunction::ResponseAction
 WebrtcLoggingPrivateSetUploadOnRenderCloseFunction::Run() {
-  std::unique_ptr<SetUploadOnRenderClose::Params> params(
-      SetUploadOnRenderClose::Params::Create(args()));
-  EXTENSION_FUNCTION_VALIDATE(params.get());
+  absl::optional<SetUploadOnRenderClose::Params> params =
+      SetUploadOnRenderClose::Params::Create(args());
+  EXTENSION_FUNCTION_VALIDATE(params);
 
   std::string error;
   WebRtcLoggingController* webrtc_logging_controller(
@@ -310,8 +306,8 @@ WebrtcLoggingPrivateSetUploadOnRenderCloseFunction::Run() {
 }
 
 ExtensionFunction::ResponseAction WebrtcLoggingPrivateStopFunction::Run() {
-  std::unique_ptr<Stop::Params> params(Stop::Params::Create(args()));
-  EXTENSION_FUNCTION_VALIDATE(params.get());
+  absl::optional<Stop::Params> params = Stop::Params::Create(args());
+  EXTENSION_FUNCTION_VALIDATE(params);
 
   WebRtcLoggingController::GenericDoneCallback callback;
   std::string error;
@@ -325,8 +321,8 @@ ExtensionFunction::ResponseAction WebrtcLoggingPrivateStopFunction::Run() {
 }
 
 ExtensionFunction::ResponseAction WebrtcLoggingPrivateStoreFunction::Run() {
-  std::unique_ptr<Store::Params> params(Store::Params::Create(args()));
-  EXTENSION_FUNCTION_VALIDATE(params.get());
+  absl::optional<Store::Params> params = Store::Params::Create(args());
+  EXTENSION_FUNCTION_VALIDATE(params);
 
   WebRtcLoggingController::GenericDoneCallback callback;
   std::string error;
@@ -344,9 +340,9 @@ ExtensionFunction::ResponseAction WebrtcLoggingPrivateStoreFunction::Run() {
 
 ExtensionFunction::ResponseAction
 WebrtcLoggingPrivateUploadStoredFunction::Run() {
-  std::unique_ptr<UploadStored::Params> params(
-      UploadStored::Params::Create(args()));
-  EXTENSION_FUNCTION_VALIDATE(params.get());
+  absl::optional<UploadStored::Params> params =
+      UploadStored::Params::Create(args());
+  EXTENSION_FUNCTION_VALIDATE(params);
 
   std::string error;
   WebRtcLoggingController* logging_controller = LoggingControllerFromRequest(
@@ -365,8 +361,8 @@ WebrtcLoggingPrivateUploadStoredFunction::Run() {
 }
 
 ExtensionFunction::ResponseAction WebrtcLoggingPrivateUploadFunction::Run() {
-  std::unique_ptr<Upload::Params> params(Upload::Params::Create(args()));
-  EXTENSION_FUNCTION_VALIDATE(params.get());
+  absl::optional<Upload::Params> params = Upload::Params::Create(args());
+  EXTENSION_FUNCTION_VALIDATE(params);
 
   std::string error;
   WebRtcLoggingController* logging_controller = LoggingControllerFromRequest(
@@ -382,8 +378,8 @@ ExtensionFunction::ResponseAction WebrtcLoggingPrivateUploadFunction::Run() {
 }
 
 ExtensionFunction::ResponseAction WebrtcLoggingPrivateDiscardFunction::Run() {
-  std::unique_ptr<Discard::Params> params(Discard::Params::Create(args()));
-  EXTENSION_FUNCTION_VALIDATE(params.get());
+  absl::optional<Discard::Params> params = Discard::Params::Create(args());
+  EXTENSION_FUNCTION_VALIDATE(params);
 
   WebRtcLoggingController::GenericDoneCallback callback;
   std::string error;
@@ -398,9 +394,9 @@ ExtensionFunction::ResponseAction WebrtcLoggingPrivateDiscardFunction::Run() {
 
 ExtensionFunction::ResponseAction
 WebrtcLoggingPrivateStartRtpDumpFunction::Run() {
-  std::unique_ptr<StartRtpDump::Params> params(
-      StartRtpDump::Params::Create(args()));
-  EXTENSION_FUNCTION_VALIDATE(params.get());
+  absl::optional<StartRtpDump::Params> params =
+      StartRtpDump::Params::Create(args());
+  EXTENSION_FUNCTION_VALIDATE(params);
 
   if (!params->incoming && !params->outgoing) {
     FireCallback(false, "Either incoming or outgoing must be true.");
@@ -431,9 +427,9 @@ WebrtcLoggingPrivateStartRtpDumpFunction::Run() {
 
 ExtensionFunction::ResponseAction
 WebrtcLoggingPrivateStopRtpDumpFunction::Run() {
-  std::unique_ptr<StopRtpDump::Params> params(
-      StopRtpDump::Params::Create(args()));
-  EXTENSION_FUNCTION_VALIDATE(params.get());
+  absl::optional<StopRtpDump::Params> params =
+      StopRtpDump::Params::Create(args());
+  EXTENSION_FUNCTION_VALIDATE(params);
 
   if (!params->incoming && !params->outgoing) {
     FireCallback(false, "Either incoming or outgoing must be true.");
@@ -468,9 +464,9 @@ WebrtcLoggingPrivateStartAudioDebugRecordingsFunction::Run() {
     return RespondNow(Error(""));
   }
 
-  std::unique_ptr<StartAudioDebugRecordings::Params> params(
-      StartAudioDebugRecordings::Params::Create(args()));
-  EXTENSION_FUNCTION_VALIDATE(params.get());
+  absl::optional<StartAudioDebugRecordings::Params> params =
+      StartAudioDebugRecordings::Params::Create(args());
+  EXTENSION_FUNCTION_VALIDATE(params);
 
   if (params->seconds < 0) {
     FireErrorCallback("seconds must be greater than or equal to 0");
@@ -505,9 +501,9 @@ WebrtcLoggingPrivateStopAudioDebugRecordingsFunction::Run() {
     return RespondNow(Error(""));
   }
 
-  std::unique_ptr<StopAudioDebugRecordings::Params> params(
-      StopAudioDebugRecordings::Params::Create(args()));
-  EXTENSION_FUNCTION_VALIDATE(params.get());
+  absl::optional<StopAudioDebugRecordings::Params> params =
+      StopAudioDebugRecordings::Params::Create(args());
+  EXTENSION_FUNCTION_VALIDATE(params);
 
   std::string error;
   content::RenderProcessHost* host =
@@ -533,9 +529,9 @@ WebrtcLoggingPrivateStopAudioDebugRecordingsFunction::Run() {
 
 ExtensionFunction::ResponseAction
 WebrtcLoggingPrivateStartEventLoggingFunction::Run() {
-  std::unique_ptr<StartEventLogging::Params> params(
-      StartEventLogging::Params::Create(args()));
-  EXTENSION_FUNCTION_VALIDATE(params.get());
+  absl::optional<StartEventLogging::Params> params =
+      StartEventLogging::Params::Create(args());
+  EXTENSION_FUNCTION_VALIDATE(params);
 
   std::string error;
   content::RenderProcessHost* host =
@@ -570,7 +566,7 @@ void WebrtcLoggingPrivateStartEventLoggingFunction::FireCallback(
     DCHECK(error_message.empty());
     api::webrtc_logging_private::StartEventLoggingResult result;
     result.log_id = log_id;
-    Respond(OneArgument(base::Value(result.ToValue())));
+    Respond(WithArguments(result.ToValue()));
   } else {
     DCHECK(log_id.empty());
     DCHECK(!error_message.empty());
@@ -612,10 +608,10 @@ void WebrtcLoggingPrivateGetLogsDirectoryFunction::FireCallback(
     const std::string& filesystem_id,
     const std::string& base_name) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
-  std::unique_ptr<base::DictionaryValue> dict(new base::DictionaryValue());
-  dict->SetStringKey("fileSystemId", filesystem_id);
-  dict->SetStringKey("baseName", base_name);
-  Respond(OneArgument(base::Value::FromUniquePtrValue(std::move(dict))));
+  base::Value::Dict dict;
+  dict.Set("fileSystemId", filesystem_id);
+  dict.Set("baseName", base_name);
+  Respond(WithArguments(std::move(dict)));
 }
 
 void WebrtcLoggingPrivateGetLogsDirectoryFunction::FireErrorCallback(

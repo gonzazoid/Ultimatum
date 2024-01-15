@@ -24,7 +24,7 @@
     DEALINGS IN THE SOFTWARE.
   </copyright>
 
-  <interface name="zcr_text_input_extension_v1" version="6">
+  <interface name="zcr_text_input_extension_v1" version="13">
     <description summary="extends text_input to support richer operations">
       Allows a text_input to sends more variation of operations to support
       richer features, such as set_preedit_region.
@@ -57,7 +57,7 @@
 
   </interface>
 
-  <interface name="zcr_extended_text_input_v1" version="6">
+  <interface name="zcr_extended_text_input_v1" version="13">
     <description summary="extension of text_input protocol">
       The zcr_extended_text_input_v1 interface extends the text_input interface
       to support more rich operations on text_input.
@@ -147,6 +147,7 @@
       <entry name="autocapitalize_words" value="1 &lt;&lt; 8" />
       <entry name="autocapitalize_sentences" value="1 &lt;&lt; 9" />
       <entry name="has_been_password" value="1 &lt;&lt; 10" />
+      <entry name="vertical" value="1 &lt;&lt; 11" />
     </enum>
 
     <enum name="learning_mode" since="2">
@@ -155,13 +156,9 @@
       <entry name="enabled" value="1" />
     </enum>
 
-    <request name="set_input_type" since="2">
+    <request name="deprecated_set_input_type" since="2">
       <description summary="Sets input type, mode and flags together">
-        In wayland, there's a concept that can be mapped to Chrome's
-        TextInputType, Mode and Flags. It can be set via
-        zwp_text_input::set_content_type. However, the variation is not rich
-        enough to represent Chrome's detailed behavior change. This API can be
-        used as a replacement of set_content_type.
+        Deprecated. Use the new set_input_type.
       </description>
       <arg name="input_type" type="uint" enum="input_type" />
       <arg name="input_mode" type="uint" enum="input_mode" />
@@ -299,6 +296,147 @@
           - zwp_text_input_v1.hide_input_panel
       </description>
     </request>
+
+    <!-- Version 7 -->
+
+    <enum name="focus_reason_type" since="7">
+      <description summary="Chrome's TextInputClient::FocusReason">
+        This represents the reasons why the text input gets focused.
+      </description>
+      <entry name="none" value="0" />
+      <entry name="mouse" value="1" />
+      <entry name="touch" value="2" />
+      <entry name="pen" value="3" />
+      <entry name="other" value="4" />
+    </enum>
+
+    <request name="set_focus_reason" since="7">
+      <description summary="Specifies the reason of the following focus event">
+        Updates the reason why the following focus event is triggered.
+        This should be called just before text_input::activate,
+        and is in effect when it is called together (i.e. it is not in effect
+        until text_input::activate is called).
+
+        `reason` is an extended parameter providing the mode for the next
+        `text_input::active request`.
+      </description>
+      <arg name="reason" type="uint" enum="focus_reason_type" />
+    </request>
+
+    <!-- Version 8 -->
+
+    <enum name="inline_composition_support" since="8">
+      <description summary="Whether inline composition is supported">
+        Inline composition is an IME feature for certain languages (e.g. CJK)
+        which displays the uncommitted composition inside the input field as it
+        is being typed.
+      </description>
+      <entry name="unsupported" value="0" />
+      <entry name="supported" value="1" />
+    </enum>
+
+    <request name="set_input_type" since="8">
+      <description summary="Sets input type, mode and flags together">
+        Used in place of zwp_text_input::set_content_type.
+
+        Instead of hint and purpose, this API uses concepts that more closely
+        align with those used by Chrome.
+      </description>
+      <arg name="input_type" type="uint" enum="input_type" />
+      <arg name="input_mode" type="uint" enum="input_mode" />
+      <arg name="input_flags" type="uint" />
+      <arg name="learning_mode" type="uint" enum="learning_mode" />
+      <arg name="inline_composition_support" type="uint" enum="inline_composition_support" />
+    </request>
+
+    <!-- Version 9 -->
+
+    <enum name="surrounding_text_support" since="9">
+      <description summary="Whether surrounding text is supported" />
+      <entry name="unsupported" value="0" />
+      <entry name="supported" value="1" />
+    </enum>
+
+    <request name="set_surrounding_text_support" since="9">
+      <description summary="Sets whether surrounding text is supported">
+        Some clients are not able to provide surrounding text or selection.
+        When the server receives this request with the unsupproted enum, it
+        will disable functionality relying on surrounding text and avoid
+        sending events that depend on it like delete_surrounding_text,
+        set_preedit_region and cursor_position.
+
+        This request will take effect on the next 'set_content_type' or
+        'set_input_type' request.
+
+        By default, the server will assume surrounding text is supported.
+      </description>
+      <arg name="support" type="uint" enum="surrounding_text_support" />
+    </request>
+
+    <!-- Version 10 -->
+
+    <request name="set_surrounding_text_offset_utf16" since="10">
+      <description summary="Sets surrounding text's offset">
+        This updates UTF-16 offset of the immediately following
+        text_input::set_surrounding_text.
+
+        The value will be invalidated when the next set_surrounding_text
+        comes (i.e., if two consecutive set_surrounding_text is called,
+        the second set_surrounding_text's offset should be reset to 0).
+
+        Note: unlike other APIs, this is in "UTF-16" unit for Chrome's purpose,
+        because there's no way to convert UTF-8 offset to UTF-16 without
+        the original text, while sending whole text would cause performance
+        concerns.
+      </description>
+      <arg name="offset_utf16" type="uint"/>
+    </request>
+
+    <!-- Version 11 -->
+
+    <enum name="confirm_preedit_selection_behavior" since="11">
+      <description summary="How the selection range is affected by confirm_preedit"></description>
+      <entry name="after_preedit" value="0" summary="The cursor is moved to the end of the committed preedit text, if any."/>
+      <entry name="unchanged" value="1" summary="The selection range is not affected at all."/>
+    </enum>
+
+    <event name="confirm_preedit" since="11">
+      <description summary="Commits the current preedit">
+        Commits the current preedit and modify the selection range according to selection_behavior.
+        Has no effect if there's no preedit text.
+      </description>
+      <arg name="selection_behavior" type="uint" enum="confirm_preedit_selection_behavior" />
+    </event>
+
+    <!-- Version 12 -->
+
+    <request name="set_large_surrounding_text" since="12">
+      <description summary="sets the large surrounding text">
+        Almost as same as text_input::set_surrounding_text. However, this takes handle
+        instead of string in order to avoid the limit of the size.
+
+        |size| is the size of surrounding text in Utf-8, i.e. bytes to be read from fd.
+      </description>
+      <arg name="text" type="fd"/>
+      <arg name="size" type="uint"/>
+      <arg name="cursor" type="uint"/>
+      <arg name="anchor" type="uint"/>
+    </request>
+
+    <!-- Version 13 -->
+
+    <event name="insert_image" since="13">
+      <description summary="Inserts image">
+        This inserts a given image into current editing field. The value of src
+        should be a valid http(s) URL pointing to some image.
+
+        Note: this only works for richly-editable editing field in web apps.
+        Internally it sends a PasteFromImage editing command to blink engine.
+        If the current editing field is not richly-editable, this event will be
+        ignored.
+      </description>
+      <arg name="src" type="string" />
+    </event>
 
   </interface>
 </protocol>

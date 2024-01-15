@@ -5,22 +5,22 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_MODULES_DOCUMENT_PICTURE_IN_PICTURE_PICTURE_IN_PICTURE_CONTROLLER_IMPL_H_
 #define THIRD_PARTY_BLINK_RENDERER_MODULES_DOCUMENT_PICTURE_IN_PICTURE_PICTURE_IN_PICTURE_CONTROLLER_IMPL_H_
 
+#include "build/build_config.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "third_party/blink/public/mojom/picture_in_picture/picture_in_picture.mojom-blink.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context_lifecycle_observer.h"
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
 #include "third_party/blink/renderer/core/frame/picture_in_picture_controller.h"
-#include "third_party/blink/renderer/core/page/page_visibility_observer.h"
 #include "third_party/blink/renderer/modules/modules_export.h"
 #include "third_party/blink/renderer/modules/picture_in_picture/picture_in_picture_window.h"
-#include "third_party/blink/renderer/platform/heap/collection_support/heap_deque.h"
 #include "third_party/blink/renderer/platform/mojo/heap_mojo_receiver.h"
 #include "third_party/blink/renderer/platform/mojo/heap_mojo_remote.h"
 
 namespace blink {
 
+#if !BUILDFLAG(IS_ANDROID)
 class DocumentPictureInPictureOptions;
-class DocumentPictureInPictureSession;
+#endif  // !BUILDFLAG(IS_ANDROID)
 class ExceptionState;
 class HTMLVideoElement;
 class PictureInPictureWindow;
@@ -37,7 +37,6 @@ class TreeScope;
 // whether they want to instantiate an object when they make a call.
 class MODULES_EXPORT PictureInPictureControllerImpl
     : public PictureInPictureController,
-      public PageVisibilityObserver,
       public ExecutionContextClient,
       public blink::mojom::blink::PictureInPictureSessionObserver {
  public:
@@ -58,21 +57,13 @@ class MODULES_EXPORT PictureInPictureControllerImpl
   // request Picture-in-Picture.
   Status IsDocumentAllowed(bool report_failure) const;
 
-  // Returns the Picture-in-Picture window if there is any.
+  // Returns the Picture-in-Picture window if there is any. This is for
+  // video-only PiP.
   PictureInPictureWindow* pictureInPictureWindow() const;
 
-  // Returns the Document Picture-in-Picture session if there is any.
-  DocumentPictureInPictureSession* documentPictureInPictureSession() const;
-
-  // Returns video element whose autoPictureInPicture attribute was set most
-  // recently.
-  HTMLVideoElement* AutoPictureInPictureElement() const;
-
-  // Returns whether entering Auto Picture-in-Picture is allowed.
-  bool IsEnterAutoPictureInPictureAllowed() const;
-
-  // Returns whether exiting Auto Picture-in-Picture is allowed.
-  bool IsExitAutoPictureInPictureAllowed() const;
+#if !BUILDFLAG(IS_ANDROID)
+  // Returns the Document Picture-in-Picture window if there is any.
+  LocalDOMWindow* documentPictureInPictureWindow() const;
 
   // Creates a picture-in-picture window that can contain arbitrary HTML.
   void CreateDocumentPictureInPictureWindow(ScriptState*,
@@ -80,13 +71,12 @@ class MODULES_EXPORT PictureInPictureControllerImpl
                                             DocumentPictureInPictureOptions*,
                                             ScriptPromiseResolver*,
                                             ExceptionState&);
+#endif  // !BUILDFLAG(IS_ANDROID)
 
   // Implementation of PictureInPictureController.
   void EnterPictureInPicture(HTMLVideoElement*,
                              ScriptPromiseResolver*) override;
   void ExitPictureInPicture(HTMLVideoElement*, ScriptPromiseResolver*) override;
-  void AddToAutoPictureInPictureElementsList(HTMLVideoElement*) override;
-  void RemoveFromAutoPictureInPictureElementsList(HTMLVideoElement*) override;
   bool IsPictureInPictureElement(const Element*) const override;
   void OnPictureInPictureStateChange() override;
   Element* PictureInPictureElement() const override;
@@ -94,13 +84,13 @@ class MODULES_EXPORT PictureInPictureControllerImpl
   bool PictureInPictureEnabled() const override;
   Status IsElementAllowed(const HTMLVideoElement&,
                           bool report_failure) const override;
+#if !BUILDFLAG(IS_ANDROID)
+  bool HasDocumentPictureInPictureWindow() const override;
+#endif  // !BUILDFLAG(IS_ANDROID)
 
   // Implementation of PictureInPictureSessionObserver.
   void OnWindowSizeChanged(const gfx::Size&) override;
   void OnStopped() override;
-
-  // Implementation of PageVisibilityObserver.
-  void PageVisibilityChanged() override;
 
   void Trace(Visitor*) const override;
 
@@ -143,6 +133,7 @@ class MODULES_EXPORT PictureInPictureControllerImpl
   // initialized successfully.
   bool EnsureService();
 
+#if !BUILDFLAG(IS_ANDROID)
   // Resolves a call to |CreateDocumentPictureInPictureWindow()|.
   void ResolveOpenDocumentPictureInPicture();
 
@@ -170,23 +161,27 @@ class MODULES_EXPORT PictureInPictureControllerImpl
   // Called by DocumentPictureInPictureObserver.
   void OnDocumentPictureInPictureContextDestroyed();
 
+  // The Document Picture-in-Picture window, if any. It shouldn't be confused
+  // with `picture_in_picture_session_`, which is for video-only PiP.
+  Member<LocalDOMWindow> document_picture_in_picture_window_;
+
   // Nullable observer for Document Picture in Picture.
   Member<DocumentPictureInPictureObserver> document_pip_context_observer_;
+
+  // Used to force |CreateDocumentPictureInPictureWindow()| to be asynchronous.
+  TaskHandle open_document_pip_task_;
+
+  // The |ScriptPromiseResolver| associated with the most recent call to
+  // |CreateDocumentPictureInPictureWindow()| if it has not yet been resolved.
+  Member<ScriptPromiseResolver> open_document_pip_resolver_;
+#endif  // !BUILDFLAG(IS_ANDROID)
 
   // The Picture-in-Picture element for the associated document.
   Member<HTMLVideoElement> picture_in_picture_element_;
 
-  // The list of video elements for the associated document that are eligible
-  // to Auto Picture-in-Picture.
-  HeapDeque<Member<HTMLVideoElement>> auto_picture_in_picture_elements_;
-
-  // The Picture-in-Picture window for the associated document.
+  // The Picture-in-Picture window for the associated document. This is for
+  // video-only PiP.
   Member<PictureInPictureWindow> picture_in_picture_window_;
-
-  // The Document Picture-in-Picture session, if any.  This is the holder object
-  // for the Document pip window / document / etc.  It shouldn't be confused
-  // with `video_picture_in_picture_session_`, which is for video-only PiP.
-  Member<DocumentPictureInPictureSession> document_picture_in_picture_session_;
 
   // Mojo bindings for the session observer interface implemented by |this|.
   HeapMojoReceiver<mojom::blink::PictureInPictureSessionObserver,
@@ -197,18 +192,10 @@ class MODULES_EXPORT PictureInPictureControllerImpl
   HeapMojoRemote<mojom::blink::PictureInPictureService>
       picture_in_picture_service_;
 
-  // Instance of the Picture-in-Picture session sent back by the service.  This
-  // is for video-only PiP.  For Document PiP, refer to
-  // `document_picture_in_picture_session_` instead.
+  // Instance of the Picture-in-Picture session sent back by the service. This
+  // is for video-only PiP.
   HeapMojoRemote<mojom::blink::PictureInPictureSession>
-      video_picture_in_picture_session_;
-
-  // Used to force |CreateDocumentPictureInPictureWindow()| to be asynchronous.
-  TaskHandle open_document_pip_task_;
-
-  // The |ScriptPromiseResolver| associated with the most recent call to
-  // |CreateDocumentPictureInPictureWindow()| if it has not yet been resolved.
-  Member<ScriptPromiseResolver> open_document_pip_resolver_;
+      picture_in_picture_session_;
 };
 
 }  // namespace blink

@@ -10,21 +10,22 @@
 #include <string>
 
 #include "base/auto_reset.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "gin/converter.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "skia/ext/platform_canvas.h"
 #include "third_party/blink/public/common/input/web_coalesced_input_event.h"
+#include "third_party/blink/public/common/page/browsing_context_group_info.h"
 #include "third_party/blink/public/common/page/page_zoom.h"
 #include "third_party/blink/public/common/tokens/tokens.h"
 #include "third_party/blink/public/common/web_preferences/web_preferences.h"
 #include "third_party/blink/public/mojom/input/focus_type.mojom.h"
+#include "third_party/blink/public/platform/scheduler/web_agent_group_scheduler.h"
 #include "third_party/blink/public/platform/scheduler/web_thread_scheduler.h"
 #include "third_party/blink/public/platform/web_policy_container.h"
 #include "third_party/blink/public/platform/web_url.h"
@@ -135,7 +136,8 @@ void WebViewPlugin::Destroy() {
   }
   container_ = nullptr;
   blink::WebViewObserver::Observe(nullptr);
-  base::ThreadTaskRunnerHandle::Get()->DeleteSoon(FROM_HERE, this);
+  base::SingleThreadTaskRunner::GetCurrentDefault()->DeleteSoon(FROM_HERE,
+                                                                this);
 }
 
 v8::Local<v8::Object> WebViewPlugin::V8ScriptableObject(v8::Isolate* isolate) {
@@ -264,7 +266,7 @@ WebViewPlugin::WebViewHelper::WebViewHelper(
     : plugin_(plugin),
       agent_group_scheduler_(
           blink::scheduler::WebThreadScheduler::MainThreadScheduler()
-              ->CreateWebAgentGroupScheduler()) {
+              .CreateWebAgentGroupScheduler()) {
   web_view_ = WebView::Create(
       /*client=*/this,
       /*is_hidden=*/false,
@@ -276,7 +278,8 @@ WebViewPlugin::WebViewHelper::WebViewHelper(
       /*opener=*/nullptr, mojo::NullAssociatedReceiver(),
       *agent_group_scheduler_,
       /*session_storage_namespace_id=*/base::EmptyString(),
-      /*page_base_background_color=*/absl::nullopt);
+      /*page_base_background_color=*/absl::nullopt,
+      blink::BrowsingContextGroupInfo::CreateUnique());
   // ApplyWebPreferences before making a WebLocalFrame so that the frame sees a
   // consistent view of our preferences.
   blink::WebView::ApplyWebPreferences(parent_web_preferences, web_view_);
@@ -364,13 +367,13 @@ void WebViewPlugin::WebViewHelper::ScheduleNonCompositedAnimation() {
   }
 }
 
-std::unique_ptr<blink::WebURLLoaderFactory>
-WebViewPlugin::WebViewHelper::CreateURLLoaderFactory() {
+scoped_refptr<network::SharedURLLoaderFactory>
+WebViewPlugin::WebViewHelper::GetURLLoaderFactory() {
   return plugin_->Container()
       ->GetDocument()
       .GetFrame()
       ->Client()
-      ->CreateURLLoaderFactory();
+      ->GetURLLoaderFactory();
 }
 
 void WebViewPlugin::WebViewHelper::BindToFrame(
@@ -382,7 +385,7 @@ void WebViewPlugin::WebViewHelper::DidClearWindowObject() {
   if (!plugin_->delegate_)
     return;
 
-  v8::Isolate* isolate = blink::MainThreadIsolate();
+  v8::Isolate* isolate = frame_->GetAgentGroupScheduler()->Isolate();
   v8::HandleScope handle_scope(isolate);
   v8::Local<v8::Context> context = frame_->MainWorldScriptContext();
   DCHECK(!context.IsEmpty());

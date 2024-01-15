@@ -4,22 +4,24 @@
 
 #include "chrome/browser/ash/app_restore/arc_app_queue_restore_handler.h"
 
+#include <list>
 #include <utility>
 #include <vector>
 
 #include "ash/components/arc/arc_util.h"
 #include "ash/components/arc/metrics/arc_metrics_constants.h"
 #include "ash/shell.h"
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/system/sys_info.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "chrome/browser/apps/app_service/app_service_proxy.h"
 #include "chrome/browser/apps/app_service/app_service_proxy_factory.h"
 #include "chrome/browser/apps/app_service/launch_utils.h"
 #include "chrome/browser/apps/app_service/metrics/app_platform_metrics.h"
+#include "chrome/browser/ash/app_list/arc/arc_app_list_prefs.h"
 #include "chrome/browser/ash/app_restore/app_restore_arc_task_handler.h"
 #include "chrome/browser/ash/app_restore/arc_ghost_window_handler.h"
 #include "chrome/browser/ash/app_restore/arc_window_utils.h"
@@ -31,13 +33,12 @@
 #include "chrome/browser/browser_process_platform_part.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/sessions/exit_type_service.h"
-#include "chrome/browser/ui/app_list/arc/arc_app_list_prefs.h"
 #include "chrome/browser/ui/ash/shelf/arc_shelf_spinner_item_controller.h"
 #include "chrome/browser/ui/ash/shelf/chrome_shelf_controller.h"
 #include "chrome/browser/ui/ash/shelf/shelf_spinner_controller.h"
+#include "chromeos/ash/components/system/scheduler_configuration_manager_base.h"
 #include "chromeos/ash/services/cros_healthd/public/cpp/service_connection.h"
 #include "chromeos/ash/services/cros_healthd/public/mojom/cros_healthd_probe.mojom.h"
-#include "chromeos/system/scheduler_configuration_manager_base.h"
 #include "components/app_restore/app_launch_info.h"
 #include "components/app_restore/app_restore_utils.h"
 #include "components/app_restore/features.h"
@@ -47,12 +48,12 @@
 #include "components/exo/wm_helper.h"
 #include "components/services/app_service/public/cpp/app_launch_util.h"
 #include "components/services/app_service/public/cpp/app_types.h"
-#include "components/services/app_service/public/cpp/features.h"
 #include "components/services/app_service/public/cpp/intent.h"
 #include "components/services/app_service/public/cpp/types_util.h"
-#include "components/services/app_service/public/mojom/types.mojom.h"
 #include "ui/display/display.h"
 #include "ui/wm/public/activation_client.h"
+
+namespace ash::app_restore {
 
 namespace {
 
@@ -89,27 +90,22 @@ constexpr char kRestoreArcAppStatesHistogram[] = "Apps.RestoreArcAppStates";
 
 constexpr char kGhostWindowPopToArcHistogram[] = "Arc.LaunchedWithGhostWindow";
 
-constexpr char kNoGhostWindowReasonHistogram[] =
-    "Apps.RestoreNoGhostWindowReason";
-
 }  // namespace
-
-namespace ash::app_restore {
 
 ArcAppQueueRestoreHandler::ArcAppQueueRestoreHandler() {
   if (aura::Env::HasInstance())
     env_observer_.Observe(aura::Env::GetInstance());
 
-  if (ash::Shell::HasInstance() && ash::Shell::Get()->GetPrimaryRootWindow()) {
+  if (Shell::HasInstance() && Shell::Get()->GetPrimaryRootWindow()) {
     auto* activation_client =
-        wm::GetActivationClient(ash::Shell::Get()->GetPrimaryRootWindow());
+        wm::GetActivationClient(Shell::Get()->GetPrimaryRootWindow());
     if (activation_client)
       activation_client->AddObserver(this);
   }
 
   auto* manager = GetSchedulerConfigurationManager();
   if (manager) {
-    absl::optional<std::pair<bool, size_t>> scheduler_configuration =
+    std::optional<std::pair<bool, size_t>> scheduler_configuration =
         manager->GetLastReply();
     if (scheduler_configuration) {
       // Logical CPU core number should consider system HyperThread status.
@@ -125,9 +121,9 @@ ArcAppQueueRestoreHandler::ArcAppQueueRestoreHandler() {
 }
 
 ArcAppQueueRestoreHandler::~ArcAppQueueRestoreHandler() {
-  if (ash::Shell::HasInstance() && ash::Shell::Get()->GetPrimaryRootWindow()) {
+  if (Shell::HasInstance() && Shell::Get()->GetPrimaryRootWindow()) {
     auto* activation_client =
-        wm::GetActivationClient(ash::Shell::Get()->GetPrimaryRootWindow());
+        wm::GetActivationClient(Shell::Get()->GetPrimaryRootWindow());
     if (activation_client)
       activation_client->RemoveObserver(this);
   }
@@ -182,13 +178,12 @@ void ArcAppQueueRestoreHandler::OnAppConnectionReady() {
                               windows_.size() + no_stack_windows_.size());
 
   // Receive the memory pressure level.
-  if (ResourcedClient::Get() && !resourced_client_observer_.IsObserving()) {
+  if (ResourcedClient::Get() && !resourced_client_observer_.IsObserving())
     resourced_client_observer_.Observe(ResourcedClient::Get());
-  }
 
   // Receive the system CPU usage rate.
   if (!probe_service_ || !probe_service_.is_connected()) {
-    cros_healthd::ServiceConnection::GetInstance()->GetProbeService(
+    cros_healthd::ServiceConnection::GetInstance()->BindProbeService(
         probe_service_.BindNewPipeAndPassReceiver());
     probe_service_.set_disconnect_handler(
         base::BindOnce(&ArcAppQueueRestoreHandler::OnProbeServiceDisconnect,
@@ -204,15 +199,13 @@ void ArcAppQueueRestoreHandler::OnAppConnectionReady() {
 
   if (!stop_restore_timer_) {
     stop_restore_timer_ = std::make_unique<base::OneShotTimer>();
-    stop_restore_timer_->Start(
-        FROM_HERE, kStopRestoreDelay,
-        base::BindOnce(&ArcAppQueueRestoreHandler::StopRestore,
-                       weak_ptr_factory_.GetWeakPtr()));
+    stop_restore_timer_->Start(FROM_HERE, kStopRestoreDelay, this,
+                               &ArcAppQueueRestoreHandler::StopRestore);
   }
 }
 
 void ArcAppQueueRestoreHandler::OnShelfReady() {
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&ArcAppQueueRestoreHandler::PrepareLaunchApps,
                                 weak_ptr_factory_.GetWeakPtr()));
 }
@@ -266,9 +259,8 @@ bool ArcAppQueueRestoreHandler::IsAppPendingRestore(
 }
 
 void ArcAppQueueRestoreHandler::OnAppUpdate(const apps::AppUpdate& update) {
-  if (!update.ReadinessChanged() || update.AppType() != apps::AppType::kArc) {
+  if (!update.ReadinessChanged() || update.AppType() != apps::AppType::kArc)
     return;
-  }
 
   if (!apps_util::IsInstalled(update.Readiness())) {
     RemoveWindowsForApp(update.AppId());
@@ -287,7 +279,7 @@ void ArcAppQueueRestoreHandler::OnAppUpdate(const apps::AppUpdate& update) {
 
 void ArcAppQueueRestoreHandler::OnAppRegistryCacheWillBeDestroyed(
     apps::AppRegistryCache* cache) {
-  apps::AppRegistryCache::Observer::Observe(nullptr);
+  app_registry_cache_observer_.Reset();
 }
 
 void ArcAppQueueRestoreHandler::OnWindowActivated(
@@ -317,8 +309,9 @@ void ArcAppQueueRestoreHandler::OnWindowInitialized(aura::Window* window) {
   // is a top level views widget. Tooltips, menus, and other kinds of transient
   // windows that can't activate are filtered out.
   if (window->GetType() != aura::client::WINDOW_TYPE_NORMAL ||
-      !window->delegate())
+      !window->delegate()) {
     return;
+  }
   views::Widget* widget = views::Widget::GetWidgetForNativeWindow(window);
   if (!widget || !widget->is_top_level() ||
       !arc::GetWindowSessionId(window).has_value()) {
@@ -461,10 +454,6 @@ void ArcAppQueueRestoreHandler::PrepareAppLaunching(const std::string& app_id) {
           window_handler_->OnAppStatesUpdate(app_id, app_info->ready,
                                              app_info->need_fixup);
       }
-    } else {
-      // Only record bounds state when no ghost window launch.
-      RecordLaunchBoundsState(app_restore_data->bounds_in_root.has_value(),
-                              app_restore_data->current_bounds.has_value());
     }
 #endif
     RecordArcGhostWindowLaunch(launch_ghost_window);
@@ -496,7 +485,7 @@ void ArcAppQueueRestoreHandler::PrepareAppLaunching(const std::string& app_id) {
       window_info->window_id = arc_session_id;
       chrome_controller->GetShelfSpinnerController()->AddSpinnerToShelf(
           app_id, std::make_unique<ArcShelfSpinnerItemController>(
-                      app_id, app_restore_data->event_flag.value(),
+                      app_id, nullptr, app_restore_data->event_flag.value(),
                       arc::UserInteractionType::APP_STARTED_FROM_FULL_RESTORE,
                       apps::MakeArcWindowInfo(std::move(window_info))));
     }
@@ -505,7 +494,7 @@ void ArcAppQueueRestoreHandler::PrepareAppLaunching(const std::string& app_id) {
 
 void ArcAppQueueRestoreHandler::OnMemoryPressure(
     ResourcedClient::PressureLevel level,
-    uint64_t reclaim_target_kb) {
+    memory_pressure::ReclaimTarget) {
   pressure_level_ = level;
 }
 
@@ -574,13 +563,19 @@ void ArcAppQueueRestoreHandler::MaybeLaunchApp() {
     return;
   }
 
-  for (auto it = pending_windows_.begin(); it != pending_windows_.end(); ++it) {
-    if (IsAppReady(it->app_id)) {
-      LaunchAppWindow(it->app_id, it->window_id);
-      pending_windows_.erase(it);
-      MaybeReStartTimer(kAppLaunchDelay);
-      return;
-    }
+  const auto find_ready_window = [this](const std::list<WindowInfo>& l) {
+    return std::find_if(l.begin(), l.end(), [this](const WindowInfo& info) {
+      return IsAppReady(info.app_id);
+    });
+  };
+
+  if (const auto it = find_ready_window(pending_windows_);
+      it != pending_windows_.end()) {
+    const WindowInfo info = *it;
+    LaunchAppWindow(info.app_id, info.window_id);
+    MaybeReStartTimer(kAppLaunchDelay);
+    std::erase(pending_windows_, info);
+    return;
   }
 
   if (!windows_.empty()) {
@@ -603,14 +598,12 @@ void ArcAppQueueRestoreHandler::MaybeLaunchApp() {
     return;
   }
 
-  for (auto it = no_stack_windows_.begin(); it != no_stack_windows_.end();
-       ++it) {
-    if (IsAppReady(it->app_id)) {
-      LaunchAppWindow(it->app_id, it->window_id);
-      no_stack_windows_.erase(it);
-      MaybeReStartTimer(kAppLaunchDelay);
-      return;
-    }
+  if (auto it = find_ready_window(no_stack_windows_);
+      it != no_stack_windows_.end()) {
+    const WindowInfo info = *it;
+    LaunchAppWindow(info.app_id, info.window_id);
+    MaybeReStartTimer(kAppLaunchDelay);
+    std::erase(no_stack_windows_, info);
   }
 }
 
@@ -658,28 +651,13 @@ void ArcAppQueueRestoreHandler::LaunchAppWindow(const std::string& app_id,
   }
 
   if (app_restore_data->intent) {
-    if (base::FeatureList::IsEnabled(apps::kAppServiceLaunchWithoutMojom)) {
-      proxy->LaunchAppWithIntent(app_id, app_restore_data->event_flag.value(),
-                                 app_restore_data->intent->Clone(),
-                                 apps::LaunchSource::kFromFullRestore,
-                                 std::move(window_info), base::DoNothing());
-    } else {
-      proxy->LaunchAppWithIntent(
-          app_id, app_restore_data->event_flag.value(),
-          apps::ConvertIntentToMojomIntent(app_restore_data->intent),
-          apps::mojom::LaunchSource::kFromFullRestore,
-          ConvertWindowInfoToMojomWindowInfo(window_info), {});
-    }
+    proxy->LaunchAppWithIntent(app_id, app_restore_data->event_flag.value(),
+                               app_restore_data->intent->Clone(),
+                               apps::LaunchSource::kFromFullRestore,
+                               std::move(window_info), base::DoNothing());
   } else {
-    if (base::FeatureList::IsEnabled(apps::kAppServiceLaunchWithoutMojom)) {
-      proxy->Launch(app_id, app_restore_data->event_flag.value(),
-                    apps::LaunchSource::kFromFullRestore,
-                    std::move(window_info));
-    } else {
-      proxy->Launch(app_id, app_restore_data->event_flag.value(),
-                    apps::mojom::LaunchSource::kFromFullRestore,
-                    ConvertWindowInfoToMojomWindowInfo(window_info));
-    }
+    proxy->Launch(app_id, app_restore_data->event_flag.value(),
+                  apps::LaunchSource::kFromFullRestore, std::move(window_info));
   }
 
   if (!HasRestoreData())
@@ -761,10 +739,8 @@ void ArcAppQueueRestoreHandler::MaybeReStartTimer(
 
   current_delay_ = delay;
 
-  app_launch_timer_->Start(
-      FROM_HERE, current_delay_,
-      base::BindRepeating(&ArcAppQueueRestoreHandler::MaybeLaunchApp,
-                          weak_ptr_factory_.GetWeakPtr()));
+  app_launch_timer_->Start(FROM_HERE, current_delay_, this,
+                           &ArcAppQueueRestoreHandler::MaybeLaunchApp);
 }
 
 void ArcAppQueueRestoreHandler::StopRestore() {
@@ -797,10 +773,9 @@ int ArcAppQueueRestoreHandler::GetCpuUsageRate() {
 }
 
 void ArcAppQueueRestoreHandler::StartCpuUsageCount() {
-  cpu_tick_count_timer_.Start(
-      FROM_HERE, base::Seconds(kCpuUsageRefreshIntervalInSeconds),
-      base::BindRepeating(&ArcAppQueueRestoreHandler::UpdateCpuUsage,
-                          weak_ptr_factory_.GetWeakPtr()));
+  cpu_tick_count_timer_.Start(FROM_HERE,
+                              base::Seconds(kCpuUsageRefreshIntervalInSeconds),
+                              this, &ArcAppQueueRestoreHandler::UpdateCpuUsage);
 }
 
 void ArcAppQueueRestoreHandler::StopCpuUsageCount() {
@@ -851,36 +826,6 @@ void ArcAppQueueRestoreHandler::RecordArcGhostWindowLaunch(
     bool is_arc_ghost_window) {
   base::UmaHistogramBoolean(kArcGhostWindowLaunchHistogram,
                             is_arc_ghost_window);
-
-  if (!is_arc_ghost_window && !exo::WMHelper::HasInstance()) {
-    base::UmaHistogramEnumeration(kNoGhostWindowReasonHistogram,
-                                  NoGhostWindowReason::kNoExoHelper);
-  }
-}
-
-void ArcAppQueueRestoreHandler::RecordLaunchBoundsState(
-    bool has_root_bounds,
-    bool has_screen_bounds) {
-  bool is_from_crash = ExitTypeService::GetLastSessionExitType(
-                           handler_->profile()) == ExitType::kCrashed;
-  if (!has_root_bounds) {
-    base::UmaHistogramEnumeration(
-        kNoGhostWindowReasonHistogram,
-        is_from_crash ? NoGhostWindowReason::kNoRootBoundsFromCrash
-                      : NoGhostWindowReason::kNoRootBounds);
-  }
-  if (!has_screen_bounds) {
-    base::UmaHistogramEnumeration(
-        kNoGhostWindowReasonHistogram,
-        is_from_crash ? NoGhostWindowReason::kNoScreenBoundsFromCrash
-                      : NoGhostWindowReason::kNoScreenBounds);
-  }
-  if (!window_handler_) {
-    base::UmaHistogramEnumeration(kNoGhostWindowReasonHistogram,
-                                  is_from_crash
-                                      ? NoGhostWindowReason::kNoHandlerFromCrash
-                                      : NoGhostWindowReason::kNoHandler);
-  }
 }
 
 void ArcAppQueueRestoreHandler::RecordRestoreResult() {
@@ -892,23 +837,25 @@ void ArcAppQueueRestoreHandler::RecordRestoreResult() {
 
   ArcRestoreState restore_state = ArcRestoreState::kFailedWithUnknown;
   if (isFinished) {
-    if (was_cpu_usage_limited_ && was_memory_pressured_)
+    if (was_cpu_usage_limited_ && was_memory_pressured_) {
       restore_state =
           ArcRestoreState::kSuccessWithMemoryPressureAndCPUUsageRateLimiting;
-    else if (was_cpu_usage_limited_)
+    } else if (was_cpu_usage_limited_) {
       restore_state = ArcRestoreState::kSuccessWithCPUUsageRateLimiting;
-    else if (was_memory_pressured_)
+    } else if (was_memory_pressured_) {
       restore_state = ArcRestoreState::kSuccessWithMemoryPressure;
-    else
+    } else {
       restore_state = ArcRestoreState::kSuccess;
+    }
   } else {
-    if (was_cpu_usage_limited_ && was_memory_pressured_)
+    if (was_cpu_usage_limited_ && was_memory_pressured_) {
       restore_state =
           ArcRestoreState::kFailedWithMemoryPressureAndCPUUsageRateLimiting;
-    else if (was_cpu_usage_limited_)
+    } else if (was_cpu_usage_limited_) {
       restore_state = ArcRestoreState::kFailedWithCPUUsageRateLimiting;
-    else if (was_memory_pressured_)
+    } else if (was_memory_pressured_) {
       restore_state = ArcRestoreState::kFailedWithMemoryPressure;
+    }
     // For other cases, mark the failed state as "unknown".
   }
 
@@ -922,7 +869,7 @@ void ArcAppQueueRestoreHandler::RecordRestoreResult() {
 #endif
 }
 
-ash::SchedulerConfigurationManager*
+SchedulerConfigurationManager*
 ArcAppQueueRestoreHandler::GetSchedulerConfigurationManager() {
   if (!g_browser_process || !g_browser_process->platform_part())
     return nullptr;

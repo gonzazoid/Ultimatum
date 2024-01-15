@@ -8,7 +8,7 @@
 #include <utility>
 
 #include "ash/constants/ash_features.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/system/sys_info.h"
 #include "chrome/browser/ash/crostini/crostini_upgrader.h"
@@ -27,7 +27,7 @@
 #include "ui/base/text/bytes_formatting.h"
 #include "ui/base/webui/web_ui_util.h"
 #include "ui/chromeos/devicetype_utils.h"
-#include "ui/resources/grit/webui_generated_resources.h"
+#include "ui/resources/grit/webui_resources.h"
 #include "ui/strings/grit/ui_strings.h"
 #include "ui/web_dialogs/web_dialog_ui.h"
 #include "ui/webui/mojo_web_ui_controller.h"
@@ -88,8 +88,9 @@ void AddStringResources(content::WebUIDataSource* source) {
 
 CrostiniUpgraderUI::CrostiniUpgraderUI(content::WebUI* web_ui)
     : ui::MojoWebDialogUI{web_ui} {
-  content::WebUIDataSource* source =
-      content::WebUIDataSource::Create(chrome::kChromeUICrostiniUpgraderHost);
+  content::WebUIDataSource* source = content::WebUIDataSource::CreateAndAdd(
+      Profile::FromWebUI(web_ui), chrome::kChromeUICrostiniUpgraderHost);
+  webui::EnableTrustedTypesCSP(source);
   webui::SetJSModuleDefaults(source);
   AddStringResources(source);
 
@@ -100,13 +101,13 @@ CrostiniUpgraderUI::CrostiniUpgraderUI(content::WebUI* web_ui)
   source->AddResourcePath("images/error_illustration.png",
                           IDR_PLUGIN_VM_INSTALLER_ERROR);
   source->AddResourcePath("app.js", IDR_CROSTINI_UPGRADER_APP_JS);
+  source->AddResourcePath("app.html.js", IDR_CROSTINI_UPGRADER_APP_HTML_JS);
   source->AddResourcePath("browser_proxy.js",
                           IDR_CROSTINI_UPGRADER_BROWSER_PROXY_JS);
   source->AddResourcePath("crostini_upgrader.mojom-lite.js",
                           IDR_CROSTINI_UPGRADER_MOJO_LITE_JS);
   source->AddResourcePath("images/crostini_icon.svg", IDR_CROSTINI_ICON);
   source->SetDefaultResource(IDR_CROSTINI_UPGRADER_INDEX_HTML);
-  content::WebUIDataSource::Add(Profile::FromWebUI(web_ui), source);
 }
 
 CrostiniUpgraderUI::~CrostiniUpgraderUI() = default;

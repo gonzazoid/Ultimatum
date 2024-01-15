@@ -12,9 +12,11 @@
 
 #include <stdint.h>
 
+#include <compare>
 #include <limits>
 #include <type_traits>
 
+#include "base/types/variant_util.h"
 #include "base/unguessable_token.h"
 #include "third_party/abseil-cpp/absl/types/variant.h"
 #include "third_party/blink/public/common/tokens/multi_token_internal.h"
@@ -94,52 +96,31 @@ class MultiToken {
   }
 
   // Comparison operators
-  friend bool operator==(const MultiToken& lhs, const MultiToken& rhs) {
+  constexpr friend std::weak_ordering operator<=>(const MultiToken& lhs,
+                                                  const MultiToken& rhs) {
+    // absl::variant doesn't define <=>.
+    if (lhs.storage_ < rhs.storage_) {
+      return std::weak_ordering::less;
+    }
+    if (lhs.storage_ == rhs.storage_) {
+      return std::weak_ordering::equivalent;
+    }
+    return std::weak_ordering::greater;
+  }
+
+  constexpr friend bool operator==(const MultiToken& lhs,
+                                   const MultiToken& rhs) {
     return lhs.storage_ == rhs.storage_;
   }
 
-  friend bool operator!=(const MultiToken& lhs, const MultiToken& rhs) {
-    return !(lhs == rhs);
+  template <typename T, EnableIfIsSupportedToken<T> = 0>
+  friend auto operator<=>(const MultiToken& lhs, const T& rhs) {
+    return lhs <=> MultiToken(rhs);
   }
 
   template <typename T, EnableIfIsSupportedToken<T> = 0>
   friend bool operator==(const MultiToken& lhs, const T& rhs) {
-    return absl::holds_alternative<T>(lhs.storage_) &&
-           absl::get<T>(lhs.storage_) == rhs;
-  }
-
-  template <typename T, EnableIfIsSupportedToken<T> = 0>
-  friend bool operator==(const T& lhs, const MultiToken& rhs) {
-    return rhs == lhs;
-  }
-
-  template <typename T, EnableIfIsSupportedToken<T> = 0>
-  friend bool operator!=(const MultiToken& lhs, const T& rhs) {
-    return !(lhs == rhs);
-  }
-
-  template <typename T, EnableIfIsSupportedToken<T> = 0>
-  friend bool operator!=(const T& lhs, const MultiToken& rhs) {
-    return !(lhs == rhs);
-  }
-
-  // Unlike equality comparisons, ordering comparisons typically do not compare
-  // a MultiToken and a sub type from `Tokens...`, so do not bother with the
-  // extra overloads.
-  friend bool operator<(const MultiToken& lhs, const MultiToken& rhs) {
-    return lhs.storage_ < rhs.storage_;
-  }
-
-  friend bool operator<=(const MultiToken& lhs, const MultiToken& rhs) {
-    return !(lhs > rhs);
-  }
-
-  friend bool operator>(const MultiToken& lhs, const MultiToken& rhs) {
-    return rhs < lhs;
-  }
-
-  friend bool operator>=(const MultiToken& lhs, const MultiToken& rhs) {
-    return !(lhs < rhs);
+    return lhs == MultiToken(rhs);
   }
 
   // Hash functor for use in unordered containers.
@@ -166,19 +147,13 @@ class MultiToken {
   // currently held.
   template <typename T, EnableIfIsSupportedToken<T> = 0>
   static constexpr Tag IndexOf() {
-    return static_cast<Tag>(
-        absl::variant<IndexOfHelper<Tokens>...>(IndexOfHelper<T>()).index());
+    return static_cast<Tag>(base::VariantIndexOfType<Storage, T>());
   }
 
   // Equivalent to `value().ToString()`.
   std::string ToString() const;
 
  private:
-  // Helper struct for IndexOf(); a `base::TokenType` is never usable as a
-  // literal type but an IndexOfHelper<base::TokenType> is.
-  template <typename T>
-  struct IndexOfHelper {};
-
   Storage storage_;
 };
 

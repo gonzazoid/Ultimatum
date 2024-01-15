@@ -3,25 +3,30 @@
 // found in the LICENSE file.
 
 // Include test fixture.
-GEN_INCLUDE([
-  '//chrome/browser/resources/chromeos/accessibility/chromevox/testing/chromevox_next_e2e_test_base.js',
-]);
+GEN_INCLUDE(['../testing/chromevox_e2e_test_base.js']);
 
 /**
  * Test fixture for Live Regions.
  */
-ChromeVoxLiveRegionsTest = class extends ChromeVoxNextE2ETest {
+ChromeVoxLiveRegionsTest = class extends ChromeVoxE2ETest {
   async setUpDeferred() {
     await super.setUpDeferred();
 
-    // Alphabetical based on file path.
-    await importModule(
-        'ChromeVoxState', '/chromevox/background/chromevox_state.js');
-    await importModule('LiveRegions', '/chromevox/background/live_regions.js');
-    await importModule('Output', '/chromevox/background/output/output.js');
-    await importModule('QueueMode', '/chromevox/common/tts_interface.js');
+    await Promise.all([
+      // Alphabetical based on file path.
+      importModule(
+          'ChromeVoxState', '/chromevox/background/chromevox_state.js'),
+      importModule(
+          'DesktopAutomationInterface',
+          '/chromevox/background/event/desktop_automation_interface.js'),
+      importModule('LiveRegions', '/chromevox/background/live_regions.js'),
+      importModule('Output', '/chromevox/background/output/output.js'),
+      importModule('QueueMode', '/chromevox/common/tts_types.js'),
+    ]);
 
-    window.TreeChangeType = chrome.automation.TreeChangeType;
+    globalThis.EventType = chrome.automation.EventType;
+    globalThis.RoleType = chrome.automation.RoleType;
+    globalThis.TreeChangeType = chrome.automation.TreeChangeType;
   }
 
   /**
@@ -172,7 +177,7 @@ AX_TEST_F('ChromeVoxLiveRegionsTest', 'LiveRegionThenFocus', async function() {
     }
   };
   const go = rootNode.find({role: RoleType.BUTTON});
-  mockFeedback.call(this.simulateUserInteraction.bind(this))
+  mockFeedback.call(this.simulateUserInteraction)
       .call(go.doDefault.bind(go))
       .expectSpeech(focusOrLive)
       .expectSpeech(focusOrLive);
@@ -195,7 +200,7 @@ AX_TEST_F('ChromeVoxLiveRegionsTest', 'FocusThenLiveRegion', async function() {
       </script>
     `);
   const go = rootNode.find({role: RoleType.BUTTON});
-  mockFeedback.call(this.simulateUserInteraction.bind(this))
+  mockFeedback.call(this.simulateUserInteraction)
       .call(go.doDefault.bind(go))
       .expectSpeech('Focus')
       .expectSpeech(candidate => {
@@ -398,5 +403,42 @@ AX_TEST_F(
           .expectSpeech('hello')
           .call(button.doDefault.bind(button))
           .expectSpeech('there');
+      await mockFeedback.replay();
+    });
+
+AX_TEST_F(
+    'ChromeVoxLiveRegionsTest', 'AnnounceDesktopLiveRegionChanged',
+    async function() {
+      const mockFeedback = this.createMockFeedback();
+      await this.runWithLoadedTree(``);
+
+      const fakeEvent = containerLiveStatus => {
+        return {
+          target: {
+            containerLiveStatus,
+            name: containerLiveStatus,
+            root: this.desktop_,
+            children: [],
+            standardActions: [],
+            htmlAttributes: {},
+            state: {},
+            unclippedLocation: {},
+            addEventListener() {},
+            makeVisible() {},
+            removeEventListener() {},
+            setAccessibilityFocus() {},
+          },
+          type: EventType.LIVE_REGION_CHANGED,
+        };
+      };
+
+      const onLiveRegionChanged = status => () =>
+          DesktopAutomationInterface.instance.onLiveRegionChanged_(
+              fakeEvent(status));
+
+      mockFeedback.call(onLiveRegionChanged('assertive'))
+          .expectSpeechWithQueueMode('assertive', QueueMode.CATEGORY_FLUSH)
+          .call(onLiveRegionChanged('polite'))
+          .expectSpeechWithQueueMode('polite', QueueMode.QUEUE);
       await mockFeedback.replay();
     });

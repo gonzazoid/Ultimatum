@@ -49,10 +49,6 @@ template("nacl_toolchain") {
       # We do not support component builds with the NaCl toolchains.
       is_component_build = false
 
-      # We do not replace the allocator when using NaCl toolchains.
-      use_allocator_shim = false
-      use_partition_alloc_as_malloc = false
-
       # We do not support clang profiling in the NaCl toolchains.
       use_clang_profiling = false
       use_clang_coverage = false
@@ -60,14 +56,26 @@ template("nacl_toolchain") {
 
       if (use_remoteexec) {
         if (is_win) {
-          rbe_cc_cfg_file = "${rbe_cfg_dir}/nacl/rewrapper_windows.cfg"
+          rbe_cc_cfg_file = rebase_path(rbe_cfg_dir, root_build_dir) +
+                            "/nacl/rewrapper_windows.cfg"
         } else if (is_mac) {
-          rbe_cc_cfg_file = "${rbe_cfg_dir}/nacl/rewrapper_mac.cfg"
+          rbe_cc_cfg_file = rebase_path(rbe_cfg_dir, root_build_dir) +
+                            "/nacl/rewrapper_mac.cfg"
         } else {
           # TODO(ukai): non linux?
-          rbe_cc_cfg_file = "${rbe_cfg_dir}/nacl/rewrapper_linux.cfg"
+          rbe_cc_cfg_file = rebase_path(rbe_cfg_dir, root_build_dir) +
+                            "/nacl/rewrapper_linux.cfg"
         }
       }
+
+      if (use_remoteexec_links) {
+        rbe_link_cfg_file = rebase_path(rbe_cfg_dir, root_build_dir) +
+                            "/nacl/rewrapper_linux_link.cfg"
+      }
+
+      # TODO(b/282032209): Re-enable remote nacl links once mismatches due to
+      # linking with absolute paths has been fixed.
+      use_remoteexec_links = false
     }
   }
 }

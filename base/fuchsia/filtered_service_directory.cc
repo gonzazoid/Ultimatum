@@ -5,10 +5,12 @@
 #include "base/fuchsia/filtered_service_directory.h"
 
 #include <lib/async/default.h>
+#include <lib/vfs/cpp/pseudo_dir.h>
+#include <lib/vfs/cpp/service.h>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/fuchsia/fuchsia_logging.h"
+#include "base/functional/bind.h"
 #include "base/strings/string_piece.h"
 
 namespace base {

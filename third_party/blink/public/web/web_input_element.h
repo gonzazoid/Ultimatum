@@ -66,21 +66,11 @@ class BLINK_EXPORT WebInputElement final : public WebFormControlElement {
   bool IsCheckbox() const;
   bool IsPasswordFieldForAutofill() const;
   void SetHasBeenPasswordField();
-  // This has different behavior from 'maxLength' IDL attribute, it returns
-  // defaultMaxLength() when no valid has been set, whereas 'maxLength' IDL
-  // attribute returns -1.
-  int MaxLength() const;
   void SetActivatedSubmit(bool);
   int size() const;
   void SetChecked(bool,
                   bool send_events = false,
                   WebAutofillState = WebAutofillState::kNotFilled);
-  // Sets the value inside the text field without being sanitized. Can't be
-  // used if a renderer doesn't exist or on a non text field type. Caret will
-  // be moved to the end.
-  // TODO(crbug.com/777850): Remove all references to SetEditingValue, as it's
-  // not used anymore.
-  void SetEditingValue(const WebString&);
   bool IsValidValue(const WebString&) const;
   bool IsChecked() const;
   bool IsMultiple() const;
@@ -91,14 +81,17 @@ class BLINK_EXPORT WebInputElement final : public WebFormControlElement {
   // Return the localized value for this input type.
   WebString LocalizeValue(const WebString&) const;
 
-  // Exposes the default value of the maxLength attribute.
-  static int DefaultMaxLength();
-
   // If true, forces the text of the element to be visible.
   void SetShouldRevealPassword(bool value);
 
   // Returns true if the text of the element should be visible.
   bool ShouldRevealPassword() const;
+
+  // If true, forces "Strong Password" label to be visible in the field.
+  void SetShouldShowStrongPasswordLabel(bool value);
+
+  // Returns whether "Strong Password" label should be visible in the field.
+  bool ShouldShowStrongPasswordLabel() const;
 
 #if BUILDFLAG(IS_ANDROID)
   // Returns whether this is the last element within its form.

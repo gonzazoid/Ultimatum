@@ -6,7 +6,6 @@
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_GEOMETRY_CALCULATION_EXPRESSION_NODE_H_
 
 #include "base/check_op.h"
-#include "third_party/blink/renderer/platform/geometry/anchor_query_enums.h"
 #include "third_party/blink/renderer/platform/geometry/length.h"
 #include "third_party/blink/renderer/platform/wtf/casting.h"
 #include "third_party/blink/renderer/platform/wtf/ref_counted.h"
@@ -22,6 +21,16 @@ enum class CalculationOperator {
   kMin,
   kMax,
   kClamp,
+  kRoundNearest,
+  kRoundUp,
+  kRoundDown,
+  kRoundToZero,
+  kMod,
+  kRem,
+  kHypot,
+  kAbs,
+  kSign,
+  kProgress,
   kInvalid
 };
 
@@ -33,14 +42,18 @@ class PLATFORM_EXPORT CalculationExpressionNode
  public:
   virtual float Evaluate(float max_value,
                          const Length::AnchorEvaluator*) const = 0;
-  virtual bool operator==(const CalculationExpressionNode& other) const = 0;
+  bool operator==(const CalculationExpressionNode& other) const {
+    return Equals(other);
+  }
   bool operator!=(const CalculationExpressionNode& other) const {
     return !operator==(other);
   }
 
   bool HasAnchorQueries() const { return has_anchor_queries_; }
+  bool HasAutoAnchorPositioning() const { return has_auto_anchor_positioning_; }
 
   virtual bool IsNumber() const { return false; }
+  virtual bool IsIdentifier() const { return false; }
   virtual bool IsPixelsAndPercent() const { return false; }
   virtual bool IsOperation() const { return false; }
   virtual bool IsAnchorQuery() const { return false; }
@@ -51,7 +64,7 @@ class PLATFORM_EXPORT CalculationExpressionNode
   virtual ~CalculationExpressionNode() = default;
 
 #if DCHECK_IS_ON()
-  enum class ResultType { kInvalid, kNumber, kPixelsAndPercent };
+  enum class ResultType { kInvalid, kNumber, kPixelsAndPercent, kIdent };
 
   virtual ResultType ResolvedResultType() const = 0;
 
@@ -60,7 +73,10 @@ class PLATFORM_EXPORT CalculationExpressionNode
 #endif
 
  protected:
+  virtual bool Equals(const CalculationExpressionNode& other) const = 0;
+
   bool has_anchor_queries_ = false;
+  bool has_auto_anchor_positioning_ = false;
 };
 
 class PLATFORM_EXPORT CalculationExpressionNumberNode final
@@ -76,7 +92,7 @@ class PLATFORM_EXPORT CalculationExpressionNumberNode final
 
   // Implement |CalculationExpressionNode|:
   float Evaluate(float max_value, const Length::AnchorEvaluator*) const final;
-  bool operator==(const CalculationExpressionNode& other) const final;
+  bool Equals(const CalculationExpressionNode& other) const final;
   scoped_refptr<const CalculationExpressionNode> Zoom(
       double factor) const final;
   bool IsNumber() const final { return true; }
@@ -97,6 +113,48 @@ struct DowncastTraits<CalculationExpressionNumberNode> {
   }
 };
 
+class PLATFORM_EXPORT CalculationExpressionIdentifierNode final
+    : public CalculationExpressionNode {
+ public:
+  explicit CalculationExpressionIdentifierNode(AtomicString identifier)
+      : identifier_(std::move(identifier)) {
+#if DCHECK_IS_ON()
+    result_type_ = ResultType::kIdent;
+#endif
+  }
+
+  const AtomicString& Value() const { return identifier_; }
+
+  // Implement |CalculationExpressionNode|:
+  float Evaluate(float max_value, const Length::AnchorEvaluator*) const final {
+    return 0.0f;
+  }
+  bool Equals(const CalculationExpressionNode& other) const final {
+    return other.IsIdentifier() &&
+           DynamicTo<CalculationExpressionIdentifierNode>(other)->Value() ==
+               Value();
+  }
+  scoped_refptr<const CalculationExpressionNode> Zoom(
+      double factor) const final {
+    return this;
+  }
+  bool IsIdentifier() const final { return true; }
+
+#if DCHECK_IS_ON()
+  ResultType ResolvedResultType() const final { return ResultType::kIdent; }
+#endif
+
+ private:
+  AtomicString identifier_;
+};
+
+template <>
+struct DowncastTraits<CalculationExpressionIdentifierNode> {
+  static bool AllowFrom(const CalculationExpressionNode& node) {
+    return node.IsIdentifier();
+  }
+};
+
 class PLATFORM_EXPORT CalculationExpressionPixelsAndPercentNode final
     : public CalculationExpressionNode {
  public:
@@ -110,10 +168,12 @@ class PLATFORM_EXPORT CalculationExpressionPixelsAndPercentNode final
   float Pixels() const { return value_.pixels; }
   float Percent() const { return value_.percent; }
   PixelsAndPercent GetPixelsAndPercent() const { return value_; }
+  bool HasExplicitPixels() const { return value_.has_explicit_pixels; }
+  bool HasExplicitPercent() const { return value_.has_explicit_percent; }
 
   // Implement |CalculationExpressionNode|:
   float Evaluate(float max_value, const Length::AnchorEvaluator*) const final;
-  bool operator==(const CalculationExpressionNode& other) const final;
+  bool Equals(const CalculationExpressionNode& other) const final;
   scoped_refptr<const CalculationExpressionNode> Zoom(
       double factor) const final;
   bool IsPixelsAndPercent() const final { return true; }
@@ -151,7 +211,7 @@ class PLATFORM_EXPORT CalculationExpressionOperationNode final
 
   // Implement |CalculationExpressionNode|:
   float Evaluate(float max_value, const Length::AnchorEvaluator*) const final;
-  bool operator==(const CalculationExpressionNode& other) const final;
+  bool Equals(const CalculationExpressionNode& other) const final;
   scoped_refptr<const CalculationExpressionNode> Zoom(
       double factor) const final;
   bool IsOperation() const final { return true; }
@@ -163,6 +223,7 @@ class PLATFORM_EXPORT CalculationExpressionOperationNode final
 
  private:
   bool ComputeHasAnchorQueries() const;
+  bool ComputeHasAutoAnchorPositioning() const;
 
   Children children_;
   CalculationOperator operator_;
@@ -172,86 +233,6 @@ template <>
 struct DowncastTraits<CalculationExpressionOperationNode> {
   static bool AllowFrom(const CalculationExpressionNode& node) {
     return node.IsOperation();
-  }
-};
-
-class PLATFORM_EXPORT CalculationExpressionAnchorQueryNode final
-    : public CalculationExpressionNode {
- public:
-  static scoped_refptr<const CalculationExpressionAnchorQueryNode> CreateAnchor(
-      const AtomicString& name,
-      AnchorValue side,
-      const Length& fallback);
-  static scoped_refptr<const CalculationExpressionAnchorQueryNode>
-  CreateAnchorPercentage(const AtomicString& name,
-                         float percentage,
-                         const Length& fallback);
-  static scoped_refptr<const CalculationExpressionAnchorQueryNode>
-  CreateAnchorSize(const AtomicString& name,
-                   AnchorSizeValue size,
-                   const Length& fallback);
-
-  AnchorQueryType Type() const { return type_; }
-  const AtomicString& AnchorName() const { return anchor_name_; }
-  AnchorValue AnchorSide() const {
-    DCHECK_EQ(type_, AnchorQueryType::kAnchor);
-    return value_.anchor_side;
-  }
-  float AnchorSidePercentage() const {
-    DCHECK_EQ(type_, AnchorQueryType::kAnchor);
-    DCHECK_EQ(AnchorSide(), AnchorValue::kPercentage);
-    return side_percentage_;
-  }
-  AnchorSizeValue AnchorSize() const {
-    DCHECK_EQ(type_, AnchorQueryType::kAnchorSize);
-    return value_.anchor_size;
-  }
-  const Length& GetFallback() const { return fallback_; }
-
-  // Implement |CalculationExpressionNode|:
-  float Evaluate(float max_value, const Length::AnchorEvaluator*) const final;
-  bool operator==(const CalculationExpressionNode& other) const final;
-  scoped_refptr<const CalculationExpressionNode> Zoom(
-      double factor) const final;
-  bool IsAnchorQuery() const final { return true; }
-  ~CalculationExpressionAnchorQueryNode() final = default;
-
-#if DCHECK_IS_ON()
-  ResultType ResolvedResultType() const final {
-    return ResultType::kPixelsAndPercent;
-  }
-#endif
-
-  union AnchorQueryValue {
-    AnchorValue anchor_side;
-    AnchorSizeValue anchor_size;
-  };
-
-  CalculationExpressionAnchorQueryNode(AnchorQueryType type,
-                                       const AtomicString& anchor_name,
-                                       AnchorQueryValue value,
-                                       float side_percentage,
-                                       const Length& fallback)
-      : type_(type),
-        anchor_name_(anchor_name),
-        value_(value),
-        side_percentage_(side_percentage),
-        fallback_(fallback) {
-    has_anchor_queries_ = true;
-  }
-
- private:
-  AnchorQueryType type_;
-  AtomicString anchor_name_;
-  AnchorQueryValue value_;
-  float side_percentage_ = 0;  // For AnchorSideValue::kPercentage only
-  Length fallback_;
-};
-
-template <>
-struct DowncastTraits<CalculationExpressionAnchorQueryNode> {
-  static bool AllowFrom(const CalculationExpressionNode& node) {
-    return node.IsAnchorQuery();
   }
 };
 

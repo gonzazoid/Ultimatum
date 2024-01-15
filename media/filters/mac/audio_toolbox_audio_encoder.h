@@ -12,6 +12,8 @@
 #include "media/base/audio_bus.h"
 #include "media/base/audio_encoder.h"
 #include "media/base/media_export.h"
+#include "media/formats/mp4/aac.h"
+#include "media/media_buildflags.h"
 
 namespace media {
 class AudioTimestampHelper;
@@ -41,7 +43,9 @@ class MEDIA_EXPORT AudioToolboxAudioEncoder : public AudioEncoder {
   bool CreateEncoder(const AudioEncoderConfig& config,
                      const AudioStreamBasicDescription& output_format);
 
-  void DoEncode(AudioBus* data);
+  void DrainFifoOutput();
+
+  void DoEncode(const AudioBus* data);
 
   // "Converter" for turning raw audio into encoded samples.
   AudioConverterRef encoder_ = nullptr;
@@ -63,6 +67,10 @@ class MEDIA_EXPORT AudioToolboxAudioEncoder : public AudioEncoder {
   std::unique_ptr<AudioTimestampHelper> timestamp_helper_;
 
   std::vector<uint8_t> codec_desc_;
+  std::vector<uint8_t> temp_output_buf_;
+#if BUILDFLAG(USE_PROPRIETARY_CODECS)
+  mp4::AAC aac_config_parser_;
+#endif  // BUILDFLAG(USE_PROPRIETARY_CODECS)
 
   // Ensures the data sent to Encode() matches the encoder's input format.
   std::unique_ptr<ConvertingAudioFifo> fifo_;

@@ -21,14 +21,15 @@
 #include "chrome/browser/flag_descriptions.h"
 #include "chrome/browser/lifetime/application_lifetime.h"
 #include "chrome/browser/ui/browser.h"
+#include "chrome/browser/ui/toolbar/chrome_labs_model.h"
 #include "chrome/browser/ui/toolbar/chrome_labs_prefs.h"
+#include "chrome/browser/ui/toolbar/chrome_labs_utils.h"
 #include "chrome/browser/ui/views/toolbar/chrome_labs_bubble_view.h"
-#include "chrome/browser/ui/views/toolbar/chrome_labs_bubble_view_model.h"
 #include "chrome/browser/ui/views/toolbar/chrome_labs_item_view.h"
-#include "chrome/browser/ui/views/toolbar/chrome_labs_utils.h"
 #include "chrome/common/buildflags.h"
 #include "components/flags_ui/feature_entry.h"
 #include "components/flags_ui/flags_state.h"
+#include "components/flags_ui/flags_storage.h"
 #include "components/prefs/scoped_user_pref_update.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
@@ -53,7 +54,11 @@ enum class ChromeLabsSelectedLab {
   // kLensRegionSearchSelected = 5,
   kWebUITabStripSelected = 6,
   // kTabSearchMediaTabsSelected = 7,
-  kMaxValue = kWebUITabStripSelected,
+  kChromeRefresh2023Selected = 8,
+  kTabGroupsSaveSelected = 9,
+  kChromeWebuiRefresh2023Selected = 10,
+  kCustomizeChromeSidePanelSelected = 11,
+  kMaxValue = kCustomizeChromeSidePanelSelected,
 };
 
 void EmitToHistogram(const std::u16string& selected_lab_state,
@@ -75,6 +80,18 @@ void EmitToHistogram(const std::u16string& selected_lab_state,
   };
 
   const auto get_enum = [](const std::string& internal_name) {
+    if (internal_name == flag_descriptions::kTabGroupsSaveId) {
+      return ChromeLabsSelectedLab::kTabGroupsSaveSelected;
+    }
+    if (internal_name == flag_descriptions::kCustomizeChromeSidePanelId) {
+      return ChromeLabsSelectedLab::kCustomizeChromeSidePanelSelected;
+    }
+    if (internal_name == flag_descriptions::kChromeRefresh2023Id) {
+      return ChromeLabsSelectedLab::kChromeRefresh2023Selected;
+    }
+    if (internal_name == flag_descriptions::kChromeWebuiRefresh2023Id) {
+      return ChromeLabsSelectedLab::kChromeWebuiRefresh2023Selected;
+    }
     if (internal_name == flag_descriptions::kScrollableTabStripFlagId)
       return ChromeLabsSelectedLab::kTabScrollingSelected;
 #if BUILDFLAG(ENABLE_WEBUI_TAB_STRIP) && \
@@ -100,7 +117,7 @@ uint32_t GetCurrentDay() {
 }  // namespace
 
 ChromeLabsViewController::ChromeLabsViewController(
-    const ChromeLabsBubbleViewModel* model,
+    const ChromeLabsModel* model,
     ChromeLabsBubbleView* chrome_labs_bubble_view,
     Browser* browser,
     flags_ui::FlagsState* flags_state,
@@ -209,7 +226,7 @@ bool ChromeLabsViewController::ShouldLabShowNewBadge(Profile* profile,
 #endif
 
   base::Value::Dict& new_badge_prefs = update.Get();
-  absl::optional<int> start_day = new_badge_prefs.FindInt(lab.internal_name);
+  std::optional<int> start_day = new_badge_prefs.FindInt(lab.internal_name);
   DCHECK(start_day);
   uint32_t current_day = GetCurrentDay();
   if (*start_day == chrome_labs_prefs::kChromeLabsNewExperimentPrefValue) {

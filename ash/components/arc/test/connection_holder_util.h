@@ -8,7 +8,8 @@
 #include <utility>
 
 #include "ash/components/arc/session/connection_holder.h"
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 
 namespace arc {
@@ -38,7 +39,8 @@ class ReadinessObserver
     std::move(closure_).Run();
   }
 
-  ConnectionHolder<InstanceType, HostType>* const holder_;  // Owned by caller
+  const raw_ptr<ConnectionHolder<InstanceType, HostType>>
+      holder_;  // Owned by caller
   base::OnceClosure closure_;
 };
 

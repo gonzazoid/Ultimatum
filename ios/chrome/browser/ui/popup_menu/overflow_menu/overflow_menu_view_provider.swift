@@ -13,12 +13,12 @@ import UIKit
     withModel model: OverflowMenuModel,
     uiConfiguration: OverflowMenuUIConfiguration,
     metricsHandler: PopupMenuMetricsHandler,
-    carouselMetricsDelegate: PopupMenuCarouselMetricsDelegate
+    customizationEventHandler: MenuCustomizationEventHandler?
   ) -> UIViewController {
     return OverflowMenuHostingController(
-      rootView: OverflowMenuView(
+      rootView: OverflowMenuContainerView(
         model: model, uiConfiguration: uiConfiguration, metricsHandler: metricsHandler,
-        carouselMetricsDelegate: carouselMetricsDelegate),
+        customizationEventHandler: customizationEventHandler),
       uiConfiguration: uiConfiguration)
   }
 }

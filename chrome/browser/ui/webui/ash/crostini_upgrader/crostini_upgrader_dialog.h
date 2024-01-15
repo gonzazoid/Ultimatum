@@ -5,6 +5,7 @@
 #ifndef CHROME_BROWSER_UI_WEBUI_ASH_CROSTINI_UPGRADER_CROSTINI_UPGRADER_DIALOG_H_
 #define CHROME_BROWSER_UI_WEBUI_ASH_CROSTINI_UPGRADER_CROSTINI_UPGRADER_DIALOG_H_
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/ash/crostini/crostini_simple_types.h"
 #include "chrome/browser/ui/webui/ash/system_web_dialog_delegate.h"
@@ -53,17 +54,12 @@ class CrostiniUpgraderDialog : public SystemWebDialogDelegate {
   void OnWebContentsFinishedLoad() override;
 
   base::WeakPtr<CrostiniUpgraderUI> upgrader_ui_ = nullptr;  // Not owned.
-  Profile* profile_;                                         // Not owned
+  raw_ptr<Profile> profile_;                                 // Not owned
   const bool only_run_launch_closure_on_restart_;
   base::OnceClosure launch_closure_;
   base::OnceClosure deletion_closure_for_testing_;
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when the migration is finished.
-namespace chromeos {
-using ::ash::CrostiniUpgraderDialog;
-}
 
 #endif  // CHROME_BROWSER_UI_WEBUI_ASH_CROSTINI_UPGRADER_CROSTINI_UPGRADER_DIALOG_H_

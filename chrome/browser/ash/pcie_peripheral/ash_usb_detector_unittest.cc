@@ -6,23 +6,23 @@
 
 #include <memory>
 
-#include "ash/components/fwupd/firmware_update_manager.h"
-#include "ash/components/peripheral_notification/peripheral_notification_manager.h"
 #include "base/timer/mock_timer.h"
 #include "base/timer/timer.h"
 #include "chrome/test/base/browser_with_test_window_test.h"
 #include "chromeos/ash/components/dbus/pciguard/pciguard_client.h"
-#include "chromeos/ash/components/dbus/typecd/typecd_client.h"
+#include "chromeos/ash/components/peripheral_notification/peripheral_notification_manager.h"
 #include "services/device/public/cpp/test/fake_usb_device_manager.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
+namespace ash {
+
 namespace {
+
 // USB device product name.
 const char* kProductName_1 = "Google Product A";
 const char* kManufacturerName = "Google";
-}  // namespace
 
-namespace ash {
+}  // namespace
 
 class AshUsbDetectorTest : public BrowserWithTestWindowTest {
  public:
@@ -43,7 +43,6 @@ class AshUsbDetectorTest : public BrowserWithTestWindowTest {
     AshUsbDetector::Get()->SetDeviceManagerForTesting(
         std::move(device_manager));
 
-    TypecdClient::InitializeFake();
     PciguardClient::InitializeFake();
     PeripheralNotificationManager::Initialize(
         /*is_guest_session=*/false,
@@ -51,11 +50,10 @@ class AshUsbDetectorTest : public BrowserWithTestWindowTest {
   }
 
   void TearDown() override {
-    BrowserWithTestWindowTest::TearDown();
     ash_usb_detector_.reset();
     PeripheralNotificationManager::Shutdown();
     PciguardClient::Shutdown();
-    TypecdClient::Shutdown();
+    BrowserWithTestWindowTest::TearDown();
   }
 
   void ConnectToDeviceManager() {
@@ -172,4 +170,5 @@ TEST_F(AshUsbDetectorTest, RepeatRequestUpdatesWithInterrupts) {
   base::RunLoop().RunUntilIdle();
   EXPECT_EQ(5, GetNumRequestForUpdates());
 }
+
 }  // namespace ash

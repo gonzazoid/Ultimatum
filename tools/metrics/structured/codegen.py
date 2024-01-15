@@ -62,7 +62,9 @@ class FileInfo:
   def __init__(self, dirname, basename):
     self.dirname = dirname
     self.basename = basename
+    self.rootname = os.path.splitext(self.basename)[0]
     self.filepath = os.path.join(dirname, basename)
+
 
     # This takes the last three components of the filepath for use in the
     # header guard, ie. METRICS_STRUCTURED_STRUCTURED_EVENTS_H_
@@ -109,27 +111,34 @@ class ProjectInfo:
           self.event_type = 'RAW_STRING'
           break
 
+    # Check if event is part of an event sequence. Note that this goes after the
+    # raw string check since the type has higher priority.
+    if project.is_event_sequence_project:
+      self.is_event_sequence = 'true'
+      self.event_type = 'SEQUENCE'
+    else:
+      self.is_event_sequence = 'false'
+
     self.key_rotation_period = project.key_rotation_period
 
-  def build_event_map(self) -> str:
-    event_infos = (EventInfo(event, self) for event in self.events)
+  def build_validator_code(self) -> str:
+    event_infos = list(EventInfo(event, self) for event in self.events)
 
     # Generate map entries.
-    validator_map_str = ',\n  '.join(
-        '{{"{}", &{}}}'.format(event_info.name, event_info.validator_snake_name)
+    validator_map_str = ';\n  '.join(
+        'event_validators_.emplace("{}", std::make_unique<{}>())'.format(
+            event_info.name, event_info.validator_name)
         for event_info in event_infos)
-    return validator_tmpl.IMPL_PROJECT_EVENT_MAP_TEMPLATE.format(
-        project=self, event_validator_map=validator_map_str)
 
-  def build_event_validators(self) -> str:
-    event_infos = (EventInfo(event, self) for event in self.events)
-    return '\n'.join(event.build_validator_init() for event in event_infos)
+    event_name_map_str = ';\n  '.join(
+        'event_name_map_.emplace(UINT64_C({}), "{}")'.format(
+            event_info.name_hash, event_info.name)
+        for event_info in event_infos)
 
-  def build_project_init(self) -> str:
-    return 'static {} {};'.format(self.validator, self.validator_snake_name)
-
-  def build_validator_code(self) -> str:
-    return validator_tmpl.IMPL_PROJECT_VALIDATOR_TEMPLATE.format(project=self)
+    return validator_tmpl.IMPL_PROJECT_VALIDATOR_TEMPLATE.format(
+        project=self,
+        event_validator_map=validator_map_str,
+        event_name_map=event_name_map_str)
 
 
 class EventInfo:
@@ -141,6 +150,8 @@ class EventInfo:
     self.validator_name = '{}EventValidator'.format(self.name)
     self.validator_snake_name = Util.camel_to_snake(self.validator_name)
     self.project_name = project_info.name
+    self.is_event_sequence = project_info.is_event_sequence
+    self.force_record = str(event.force_record).lower()
     self.metrics = event.metrics
 
   def build_metric_hash_map(self) -> str:
@@ -150,13 +161,19 @@ class EventInfo:
             metric_info.name, metric_info.type_enum, metric_info.hash)
         for metric_info in metric_infos)
 
-  def build_validator_init(self) -> str:
-    return ('static {} {};').format(self.validator_name,
-                                    self.validator_snake_name)
+  def build_metric_name_map(self) -> str:
+    metric_infos = (MetricInfo(metric) for metric in self.metrics)
+    return ',\n  '.join(
+        '{{ UINT64_C({}), "{}" }}'.format(metric_info.hash, metric_info.name)
+        for metric_info in metric_infos)
 
   def build_validator_code(self) -> str:
+    # metric_hash_map = "  return std::nullopt;" if len(
+    #     self.metrics) == 0 else self.build_metric_hash_map()
     return validator_tmpl.IMPL_EVENT_VALIDATOR_TEMPLATE.format(
-        event=self, metric_hash_map=self.build_metric_hash_map())
+        event=self,
+        metric_hash_map=self.build_metric_hash_map(),
+        metrics_name_map=self.build_metric_name_map())
 
 
 class MetricInfo:
@@ -242,8 +259,7 @@ class Template:
 class ValidatorHeaderTemplate:
   """Template for generating header validator code from structured.xml."""
 
-  def __init__(self, model, dirname, basename):
-    self.model = model
+  def __init__(self, dirname, basename):
     self.dirname = dirname
     self.basename = basename
 
@@ -266,18 +282,17 @@ class ValidatorImplTemplate:
   should not be exposed. The generated code will be in the following order:
 
     1) EventValidator class implementation.
-    2) EventValidator static initialization.
-    3) Project map initialization mapping event name to corresponding
+    2) Project map initialization mapping event name to corresponding
     EventValidator.
-    4) Project class implementation.
-    5) Project validator static initialization.
-    6) Map initialization mapping project name to ProjectValidator.
+    3) Project class implementation.
+    4) Map initialization mapping project name to ProjectValidator.
   """
 
-  def __init__(self, model, dirname, basename):
-    self.model = model
+  def __init__(self, structured_model, dirname, basename):
+    self.structured_model = structured_model
     self.dirname = dirname
     self.basename = basename
+    self.projects = self.structured_model.projects
 
   def write_file(self) -> None:
     file_info = FileInfo(self.dirname, self.basename)
@@ -286,43 +301,38 @@ class ValidatorImplTemplate:
 
   def _stamp_file(self, file_info) -> str:
     event_code = []
-    event_validators = []
     project_event_maps = []
     project_code = []
-    project_validators = []
 
-    for project in self.model.projects:
+    for project in self.projects:
       project_info = ProjectInfo(project)
       event_infos = (EventInfo(event, project_info) for event in project.events)
       project_event_code = '\n'.join(event_info.build_validator_code()
                                      for event_info in event_infos)
 
       event_code.append(project_event_code)
-      event_validators.append(project_info.build_event_validators())
-      project_event_maps.append(project_info.build_event_map())
       project_code.append(project_info.build_validator_code())
-      project_validators.append(project_info.build_project_init())
 
     # Turn all lists into strings.
     events_code_str = ''.join(event_code)
-    event_validators_str = '\n'.join(event_validators)
     project_event_maps_str = '\n'.join(project_event_maps)
     project_code_str = ''.join(project_code)
-    project_validators_str = '\n'.join(project_validators)
 
     return validator_tmpl.IMPL_FILE_TEMPLATE.format(
         file=file_info,
         projects_code=project_code_str,
         event_code=events_code_str,
-        event_validators=event_validators_str,
         project_event_maps=project_event_maps_str,
-        project_validators=project_validators_str,
-        project_map=self._build_project_map())
+        project_map=self._build_project_map(),
+        name_map=self._build_name_map())
 
   def _build_project_map(self) -> str:
-    project_infos = (ProjectInfo(project) for project in self.model.projects)
-    project_map = ',\n  '.join(
-        '{{"{}", &{}}}'.format(project.name, project.validator_snake_name)
-        for project in project_infos)
-    return validator_tmpl.IMPL_PROJECT_MAP_TEMPLATE.format(
-        project_map=project_map)
+    project_infos = (ProjectInfo(project) for project in self.projects)
+    return ';\n  '.join(
+        'validators_.emplace("{}", std::make_unique<{}>())'.format(
+            project.name, project.validator) for project in project_infos)
+
+  def _build_name_map(self):
+    project_infos = (ProjectInfo(project) for project in self.projects)
+    return ';\n  '.join('project_name_map_.emplace(UINT64_C({}), "{}")'.format(
+        project.name_hash, project.name) for project in project_infos)

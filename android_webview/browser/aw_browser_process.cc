@@ -15,9 +15,13 @@
 #include "base/android/jni_string.h"
 #include "base/base_paths_posix.h"
 #include "base/path_service.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "components/component_updater/android/component_loader_policy.h"
 #include "components/crash/core/common/crash_key.h"
+#include "components/embedder_support/origin_trials/origin_trials_settings_storage.h"
+#include "components/safe_browsing/core/common/features.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/process_visibility_util.h"
@@ -61,7 +65,10 @@ AwBrowserProcess::AwBrowserProcess(
           &AwBrowserProcess::OnLoseForeground, base::Unretained(this)));
 
   app_link_manager_ =
-      absl::make_unique<EnterpriseAuthenticationAppLinkManager>(local_state());
+      std::make_unique<EnterpriseAuthenticationAppLinkManager>(local_state());
+
+  origin_trials_settings_storage_ =
+      std::make_unique<embedder_support::OriginTrialsSettingsStorage>();
 }
 
 AwBrowserProcess::~AwBrowserProcess() {
@@ -145,7 +152,10 @@ void AwBrowserProcess::CreateSafeBrowsingAllowlistManager() {
 
 safe_browsing::RemoteSafeBrowsingDatabaseManager*
 AwBrowserProcess::GetSafeBrowsingDBManager() {
-  DCHECK_CURRENTLY_ON(BrowserThread::IO);
+  DCHECK_CURRENTLY_ON(
+      base::FeatureList::IsEnabled(safe_browsing::kSafeBrowsingOnUIThread)
+          ? content::BrowserThread::UI
+          : content::BrowserThread::IO);
 
   if (!safe_browsing_db_manager_) {
     safe_browsing_db_manager_ =
@@ -155,8 +165,8 @@ AwBrowserProcess::GetSafeBrowsingDBManager() {
   if (!safe_browsing_db_manager_started_) {
     // V4ProtocolConfig is not used. Just create one with empty values..
     safe_browsing::V4ProtocolConfig config("", false, "", "");
-    safe_browsing_db_manager_->StartOnIOThread(
-        GetSafeBrowsingUIManager()->GetURLLoaderFactoryOnIOThread(), config);
+    safe_browsing_db_manager_->StartOnSBThread(
+        GetSafeBrowsingUIManager()->GetURLLoaderFactoryOnSBThread(), config);
     safe_browsing_db_manager_started_ = true;
   }
 
@@ -225,6 +235,11 @@ AwBrowserProcess::GetEnterpriseAuthenticationAppLinkManager() {
   return app_link_manager_.get();
 }
 
+embedder_support::OriginTrialsSettingsStorage*
+AwBrowserProcess::GetOriginTrialsSettingsStorage() {
+  return origin_trials_settings_storage_.get();
+}
+
 // static
 void AwBrowserProcess::TriggerMinidumpUploading() {
   Java_AwBrowserProcess_triggerMinidumpUploading(
@@ -242,7 +257,7 @@ static void JNI_AwBrowserProcess_SetProcessNameCrashKey(
     const base::android::JavaParamRef<jstring>& processName) {
   static ::crash_reporter::CrashKeyString<64> crash_key(
       crash_keys::kAppProcessName);
-  crash_key.Set(ConvertJavaStringToUTF8(env, processName));
+  crash_key.Set(base::android::ConvertJavaStringToUTF8(env, processName));
 }
 
 static base::android::ScopedJavaLocalRef<jobjectArray>

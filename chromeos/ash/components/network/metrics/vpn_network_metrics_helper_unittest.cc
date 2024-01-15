@@ -7,7 +7,8 @@
 #include <memory>
 #include <utility>
 
-#include "base/callback.h"
+#include "base/debug/debugging_buildflags.h"
+#include "base/functional/callback.h"
 #include "base/run_loop.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/task_environment.h"
@@ -51,29 +52,26 @@ void ErrorCallback(const std::string& error_name) {
 // Helper function to create a VPN network using NetworkConfigurationHandler.
 void CreateTestShillConfiguration(const std::string& vpn_provider_type,
                                   bool is_managed) {
-  base::Value properties(base::Value::Type::DICTIONARY);
+  base::Value::Dict properties;
 
-  properties.SetKey(shill::kGuidProperty, base::Value("vpn_guid"));
-  properties.SetKey(shill::kTypeProperty, base::Value(shill::kTypeVPN));
-  properties.SetKey(shill::kStateProperty, base::Value(shill::kStateIdle));
-  properties.SetKey(shill::kProviderHostProperty, base::Value("vpn_host"));
-  properties.SetKey(shill::kProviderTypeProperty,
-                    base::Value(vpn_provider_type));
-  properties.SetKey(shill::kProfileProperty,
-                    base::Value(NetworkProfileHandler::GetSharedProfilePath()));
+  properties.Set(shill::kGuidProperty, "vpn_guid");
+  properties.Set(shill::kTypeProperty, shill::kTypeVPN);
+  properties.Set(shill::kStateProperty, shill::kStateIdle);
+  properties.Set(shill::kProviderHostProperty, "vpn_host");
+  properties.Set(shill::kProviderTypeProperty, vpn_provider_type);
+  properties.Set(shill::kProfileProperty,
+                 NetworkProfileHandler::GetSharedProfilePath());
 
   if (is_managed) {
-    properties.SetKey(shill::kONCSourceProperty,
-                      base::Value(shill::kONCSourceDevicePolicy));
+    properties.Set(shill::kONCSourceProperty, shill::kONCSourceDevicePolicy);
     std::unique_ptr<NetworkUIData> ui_data = NetworkUIData::CreateFromONC(
         ::onc::ONCSource::ONC_SOURCE_DEVICE_POLICY);
-    properties.SetKey(shill::kUIDataProperty,
-                      base::Value(ui_data->GetAsJson()));
+    properties.Set(shill::kUIDataProperty, ui_data->GetAsJson());
   }
 
   NetworkHandler::Get()
       ->network_configuration_handler()
-      ->CreateShillConfiguration(properties, base::DoNothing(),
+      ->CreateShillConfiguration(std::move(properties), base::DoNothing(),
                                  base::BindOnce(&ErrorCallback));
   base::RunLoop().RunUntilIdle();
 }
@@ -149,7 +147,7 @@ TEST_F(VpnNetworkMetricsHelperTest, LogVpnVPNConfigurationSource) {
 // Emitting a metric for an unknown VPN provider will always cause a NOTREACHED
 // to be hit. This can cause a CHECK to fail, depending on the build flags. We
 // catch any failing CHECK below by asserting that we will crash when emitting.
-#if !BUILDFLAG(ENABLE_LOG_ERROR_NOT_REACHED)
+#if DCHECK_IS_ON() && !BUILDFLAG(DCHECK_IS_CONFIGURABLE)
     if (it.first == kTestUnknownVpn) {
       ASSERT_DEATH(
           {
@@ -167,7 +165,7 @@ TEST_F(VpnNetworkMetricsHelperTest, LogVpnVPNConfigurationSource) {
                                       /*policy_count=*/0);
       continue;
     }
-#endif  // !BUILDFLAG(ENABLE_LOG_ERROR_NOT_REACHED)
+#endif  // DCHECK_IS_ON() && !BUILDFLAG(DCHECK_IS_CONFIGURABLE)
 
     CreateTestShillConfiguration(it.first, /*is_managed=*/false);
     ExpectConfigurationSourceCounts(it.second, /*manual_count=*/1,

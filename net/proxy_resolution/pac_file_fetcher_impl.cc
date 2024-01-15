@@ -4,8 +4,8 @@
 
 #include "net/proxy_resolution/pac_file_fetcher_impl.h"
 
-#include "base/bind.h"
 #include "base/compiler_specific.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
@@ -14,7 +14,6 @@
 #include "base/strings/string_piece.h"
 #include "base/strings/string_util.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "net/base/data_url.h"
 #include "net/base/io_buffer.h"
 #include "net/base/load_flags.h"
@@ -82,7 +81,7 @@ void ConvertResponseToUTF16(const std::string& charset,
     // Guess the charset by looking at the BOM.
     base::StringPiece bytes_str(bytes);
     for (const auto& bom : kBomMappings) {
-      if (base::StartsWith(bytes_str, bom.prefix)) {
+      if (bytes_str.starts_with(bom.prefix)) {
         return ConvertResponseToUTF16(
             bom.charset,
             // Strip the BOM in the converted response.
@@ -199,7 +198,7 @@ int PacFileFetcherImpl::Fetch(
   // Post a task to timeout this request if it takes too long.
   cur_request_id_ = ++next_id_;
 
-  base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE,
       base::BindOnce(&PacFileFetcherImpl::OnTimeout, weak_factory_.GetWeakPtr(),
                      cur_request_id_),
@@ -317,7 +316,7 @@ void PacFileFetcherImpl::OnReadCompleted(URLRequest* request, int num_bytes) {
 
 PacFileFetcherImpl::PacFileFetcherImpl(URLRequestContext* url_request_context)
     : url_request_context_(url_request_context),
-      buf_(base::MakeRefCounted<IOBuffer>(kBufSize)),
+      buf_(base::MakeRefCounted<IOBufferWithSize>(kBufSize)),
       max_response_bytes_(kDefaultMaxResponseBytes),
       max_duration_(kDefaultMaxDuration) {
   DCHECK(url_request_context);
@@ -376,8 +375,6 @@ void PacFileFetcherImpl::FetchCompleted() {
     // Calculate duration of time for PAC file fetch to complete.
     DCHECK(!fetch_start_time_.is_null());
     DCHECK(!fetch_time_to_first_byte_.is_null());
-    UMA_HISTOGRAM_MEDIUM_TIMES("Net.ProxyScriptFetcher.SuccessDuration",
-                               base::TimeTicks::Now() - fetch_start_time_);
     UMA_HISTOGRAM_MEDIUM_TIMES("Net.ProxyScriptFetcher.FirstByteDuration",
                                fetch_time_to_first_byte_ - fetch_start_time_);
 

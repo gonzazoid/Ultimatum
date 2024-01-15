@@ -8,6 +8,7 @@
 #include <utility>
 
 #include "base/command_line.h"
+#include "base/feature_list.h"
 #include "base/logging.h"
 #include "base/memory/raw_ptr.h"
 #include "base/observer_list.h"
@@ -21,6 +22,8 @@
 #include "chrome/browser/ui/views/side_panel/side_panel_coordinator.h"
 #include "chrome/common/chrome_switches.h"
 #include "chrome/grit/generated_resources.h"
+#include "components/lens/buildflags.h"
+#include "components/lens/lens_features.h"
 #include "components/renderer_context_menu/views/toolkit_delegate_views.h"
 #include "content/public/browser/render_view_host.h"
 #include "content/public/browser/render_widget_host.h"
@@ -204,10 +207,24 @@ bool RenderViewContextMenuViews::GetAcceleratorForCommandId(
       *accel = ui::Accelerator(ui::VKEY_R, ui::EF_CONTROL_DOWN);
       return true;
 
-    case IDC_CONTENT_CONTEXT_SAVEAVAS:
+    case IDC_CONTENT_CONTEXT_SAVEPLUGINAS:
     case IDC_SAVE_PAGE:
       *accel = ui::Accelerator(ui::VKEY_S, ui::EF_CONTROL_DOWN);
       return true;
+
+#if BUILDFLAG(ENABLE_LENS_DESKTOP_GOOGLE_BRANDED_FEATURES)
+    case IDC_CONTENT_CONTEXT_LENS_REGION_SEARCH:
+    case IDC_CONTENT_CONTEXT_WEB_REGION_SEARCH:
+      if (base::FeatureList::IsEnabled(
+              lens::features::kEnableRegionSearchKeyboardShortcut)) {
+        // TODO(nguyenbryan): This is a temporary hotkey; update when finalized.
+        *accel = ui::Accelerator(ui::VKEY_E,
+                                 ui::EF_SHIFT_DOWN | ui::EF_CONTROL_DOWN);
+        return true;
+      } else {
+        return false;
+      }
+#endif  // BUILDFLAG(ENABLE_LENS_DESKTOP_GOOGLE_BRANDED_FEATURES)
 
     case IDC_CONTENT_CONTEXT_EXIT_FULLSCREEN: {
       // Esc only works in HTML5 (site-triggered) fullscreen.
@@ -250,7 +267,7 @@ bool RenderViewContextMenuViews::GetAcceleratorForCommandId(
       *accel = ui::Accelerator(ui::VKEY_SPACE,
                                ui::EF_COMMAND_DOWN | ui::EF_CONTROL_DOWN);
       return true;
-#elif BUILDFLAG(IS_CHROMEOS_ASH)
+#elif BUILDFLAG(IS_CHROMEOS)
       *accel = ui::Accelerator(ui::VKEY_SPACE,
                                ui::EF_SHIFT_DOWN | ui::EF_COMMAND_DOWN);
       return true;
@@ -265,8 +282,7 @@ bool RenderViewContextMenuViews::GetAcceleratorForCommandId(
 #elif BUILDFLAG(IS_CHROMEOS_LACROS)
       return false;
 #else
-      NOTREACHED();
-      return false;
+      NOTREACHED_NORETURN();
 #endif
     default:
       return false;
@@ -278,8 +294,7 @@ void RenderViewContextMenuViews::ExecuteCommand(int command_id,
   switch (command_id) {
     case IDC_WRITING_DIRECTION_DEFAULT:
       // WebKit's current behavior is for this menu item to always be disabled.
-      NOTREACHED();
-      break;
+      NOTREACHED_NORETURN();
 
     case IDC_WRITING_DIRECTION_RTL:
     case IDC_WRITING_DIRECTION_LTR: {
@@ -361,13 +376,6 @@ void RenderViewContextMenuViews::AppendPlatformEditableItems() {
       &bidi_submenu_model_);
 }
 
-void RenderViewContextMenuViews::ExecOpenInReadAnything() {
-  Browser* browser = GetBrowser();
-  BrowserView* browser_view = BrowserView::GetBrowserViewForBrowser(browser);
-  browser_view->side_panel_coordinator()->Show(
-      SidePanelEntry::Id::kReadAnything);
-}
-
 void RenderViewContextMenuViews::Show() {
   if (base::CommandLine::ForCurrentProcess()->HasSwitch(switches::kKioskMode))
     return;
@@ -393,7 +401,7 @@ void RenderViewContextMenuViews::Show() {
   }
   // Enable recursive tasks on the message loop so we can get updates while
   // the context menu is being displayed.
-  base::CurrentThread::ScopedNestableTaskAllower allow;
+  base::CurrentThread::ScopedAllowApplicationTasksInNativeNestedLoop allow;
   RunMenuAt(top_level_widget, screen_point, params().source_type);
 
   auto* submenu_view = static_cast<ToolkitDelegateViews*>(toolkit_delegate())

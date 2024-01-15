@@ -9,8 +9,9 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/containers/circular_deque.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/observer_list.h"
 #include "chromeos/ash/components/dbus/session_manager/session_manager_client.h"
@@ -51,13 +52,15 @@ class SessionManagerOperation;
 class DeviceSettingsService : public SessionManagerClient::Observer {
  public:
   // Indicates ownership status of the device (listed in upgrade order).
-  enum OwnershipStatus {
-    OWNERSHIP_UNKNOWN = 0,
+  enum class OwnershipStatus {
+    // These values are persisted to logs. Entries should not be renumbered and
+    // numeric values should never be reused.
+    kOwnershipUnknown = 0,
     // Not yet owned.
-    OWNERSHIP_NONE,
-    // Either consumer ownership, cloud management or Active Directory
-    // management.
-    OWNERSHIP_TAKEN
+    kOwnershipNone = 1,
+    // Either consumer ownership or cloud management.
+    kOwnershipTaken = 2,
+    kMaxValue = kOwnershipTaken
   };
 
   using OwnershipStatusCallback = base::OnceCallback<void(OwnershipStatus)>;
@@ -129,13 +132,6 @@ class DeviceSettingsService : public SessionManagerClient::Observer {
     return policy_data_.get();
   }
 
-  // Asynchronously return policy data. If Chrome doesn't have any policy data
-  // yet, it will enqueue a new policy load. The callback will be called on
-  // success or if policy loaded successfully, but it it was empty (i.e.
-  // STORE_NO_POLICY). If failed to load, the callback is expected to be called
-  // some time later on the next successful load (requested by something else).
-  void GetPolicyDataAsync(PolicyDataCallback callback);
-
   const enterprise_management::PolicyFetchResponse* policy_fetch_response()
       const {
     return policy_fetch_response_.get();
@@ -194,7 +190,7 @@ class DeviceSettingsService : public SessionManagerClient::Observer {
 
   // Determines the ownership status and reports the result to |callback|. This
   // is guaranteed to never return OWNERSHIP_UNKNOWN.
-  void GetOwnershipStatusAsync(OwnershipStatusCallback callback);
+  virtual void GetOwnershipStatusAsync(OwnershipStatusCallback callback);
 
   // Checks whether we have the private owner key.
   //
@@ -231,6 +227,9 @@ class DeviceSettingsService : public SessionManagerClient::Observer {
     return will_establish_consumer_ownership_;
   }
 
+  // Returns if the device is managed according to the device settings.
+  bool IsDeviceManaged() const;
+
   // Adds an observer.
   void AddObserver(Observer* observer);
   // Removes an observer.
@@ -239,6 +238,7 @@ class DeviceSettingsService : public SessionManagerClient::Observer {
   // SessionManagerClient::Observer:
   void OwnerKeySet(bool success) override;
   void PropertyChangeComplete(bool success) override;
+  void SessionStopping() override;
 
  private:
   friend class OwnerSettingsServiceAsh;
@@ -281,22 +281,19 @@ class DeviceSettingsService : public SessionManagerClient::Observer {
   // Processes pending callbacks from GetOwnershipStatusAsync().
   void RunPendingOwnershipStatusCallbacks();
 
-  // Processes pending callbacks from GetPolicyDataAsync().
-  void RunPendingPolicyDataCallbacks();
-
-  SessionManagerClient* session_manager_client_ = nullptr;
+  raw_ptr<SessionManagerClient> session_manager_client_ = nullptr;
   scoped_refptr<ownership::OwnerKeyUtil> owner_key_util_;
 
   Status store_status_ = STORE_SUCCESS;
 
   std::vector<OwnershipStatusCallback> pending_ownership_status_callbacks_;
-  std::vector<PolicyDataCallback> pending_policy_data_callbacks_;
 
   std::string username_;
   scoped_refptr<ownership::PublicKey> public_key_;
   base::WeakPtr<ownership::OwnerSettingsService> owner_settings_service_;
   // Ownership status before the current session manager operation.
-  OwnershipStatus previous_ownership_status_ = OWNERSHIP_UNKNOWN;
+  OwnershipStatus previous_ownership_status_ =
+      OwnershipStatus::kOwnershipUnknown;
 
   std::unique_ptr<enterprise_management::PolicyFetchResponse>
       policy_fetch_response_;
@@ -316,11 +313,16 @@ class DeviceSettingsService : public SessionManagerClient::Observer {
   // Whether the device will be establishing consumer ownership.
   bool will_establish_consumer_ownership_ = false;
 
+  // Whether we received the signal that the session is stopping.
+  bool session_stopping_ = false;
+
   std::unique_ptr<policy::off_hours::DeviceOffHoursController>
       device_off_hours_controller_;
 
   base::WeakPtrFactory<DeviceSettingsService> weak_factory_{this};
 };
+
+std::ostream& operator<<(std::ostream&, DeviceSettingsService::OwnershipStatus);
 
 // Helper class for tests. Initializes the DeviceSettingsService singleton on
 // construction and tears it down again on destruction.
@@ -337,16 +339,5 @@ class ScopedTestDeviceSettingsService {
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when Chrome OS code migration is
-// done.
-namespace chromeos {
-using ::ash::DeviceSettingsService;
-}  // namespace chromeos
-
-// TODO(https://crbug.com/1164001): remove once the migration is finished.
-namespace ash {
-using ::chromeos::DeviceSettingsService;
-}
 
 #endif  // CHROME_BROWSER_ASH_SETTINGS_DEVICE_SETTINGS_SERVICE_H_

@@ -6,7 +6,7 @@
 
 #include <array>
 
-#include "ash/accessibility/accessibility_controller_impl.h"
+#include "ash/accessibility/accessibility_controller.h"
 #include "ash/accessibility/accessibility_observer.h"
 #include "ash/resources/vector_icons/vector_icons.h"
 #include "ash/shell.h"
@@ -14,6 +14,7 @@
 #include "ash/wm/desks/templates/saved_desk_util.h"
 #include "base/check.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/gfx/vector_icon_types.h"
 #include "ui/views/widget/widget.h"
 #include "ui/views/widget/widget_delegate.h"
@@ -31,6 +32,11 @@ enum class TooltipStatus {
   kUnsupportedWindow,
   kIncognitoAndUnsupportedWindow,
   kNumberOfTooltipStatus,
+};
+
+struct SaveDeskButtonStatus {
+  bool enabled;
+  int tooltip_id;
 };
 
 constexpr std::array<int,
@@ -63,7 +69,7 @@ int GetTooltipID(SavedDeskSaveDeskButton::Type button_type,
   }
 }
 
-std::pair<bool, int> GetEnableStateAndTooltipIDForButtonType(
+SaveDeskButtonStatus GetEnableStateAndTooltipIDForButtonType(
     SavedDeskSaveDeskButton::Type type,
     int current_entry_count,
     int max_entry_count,
@@ -72,34 +78,34 @@ std::pair<bool, int> GetEnableStateAndTooltipIDForButtonType(
     int window_count) {
   // Disable if we already have the max supported saved desks.
   if (current_entry_count >= max_entry_count) {
-    return {/*enabled=*/false,
-            /*tooltip_ID=*/GetTooltipID(type, TooltipStatus::kReachMax)};
+    return {.enabled = false,
+            .tooltip_id = GetTooltipID(type, TooltipStatus::kReachMax)};
   }
 
   // Enable if there are any supported window.
   if (incognito_window_count + unsupported_window_count != window_count) {
-    return {/*enabled=*/true,
-            /*tooltip_ID=*/GetTooltipID(type, TooltipStatus::kOk)};
+    return {.enabled = true,
+            .tooltip_id = GetTooltipID(type, TooltipStatus::kOk)};
   }
 
   // Disable if there are incognito windows and unsupported Linux Apps but no
   // supported windows.
   if (incognito_window_count && unsupported_window_count) {
-    return {/*enabled=*/false,
-            /*tooltip_ID=*/GetTooltipID(
+    return {.enabled = false,
+            .tooltip_id = GetTooltipID(
                 type, TooltipStatus::kIncognitoAndUnsupportedWindow)};
   }
 
   // Disable if there are incognito windows but no supported windows.
   if (incognito_window_count) {
-    return {/*enabled=*/false,
-            /*tooltip_ID=*/GetTooltipID(type, TooltipStatus::kIncognitoWindow)};
+    return {.enabled = false,
+            .tooltip_id = GetTooltipID(type, TooltipStatus::kIncognitoWindow)};
   }
 
   // Disable if there are unsupported Linux Apps but no supported windows.
   DCHECK(unsupported_window_count);
-  return {/*enabled=*/false,
-          /*tooltip_ID=*/GetTooltipID(type, TooltipStatus::kUnsupportedWindow)};
+  return {.enabled = false,
+          .tooltip_id = GetTooltipID(type, TooltipStatus::kUnsupportedWindow)};
 }
 
 }  // namespace
@@ -131,7 +137,7 @@ class SavedDeskSaveDeskButtonContainer::
  private:
   base::RepeatingClosure accessibility_state_changed_callback_;
 
-  base::ScopedObservation<AccessibilityControllerImpl, AccessibilityObserver>
+  base::ScopedObservation<AccessibilityController, AccessibilityObserver>
       observation_{this};
 };
 
@@ -153,7 +159,7 @@ SavedDeskSaveDeskButtonContainer::SavedDeskSaveDeskButtonContainer(
             &kSaveDeskAsTemplateIcon));
   }
 
-  if (saved_desk_util::IsDeskSaveAndRecallEnabled()) {
+  if (saved_desk_util::IsSavedDesksEnabled()) {
     save_desk_for_later_button_ =
         AddChildView(std::make_unique<SavedDeskSaveDeskButton>(
             save_for_later_callback,
@@ -182,13 +188,11 @@ void SavedDeskSaveDeskButtonContainer::UpdateButtonEnableStateAndTooltip(
   SavedDeskSaveDeskButton* button = GetButtonFromType(type);
   if (!button)
     return;
-  std::pair<bool, int> enable_state_and_tooltip_ID =
-      GetEnableStateAndTooltipIDForButtonType(
-          type, current_entry_count, max_entry_count, incognito_window_count,
-          unsupported_window_count, window_count);
-  button->SetEnabled(enable_state_and_tooltip_ID.first);
-  button->SetTooltipText(
-      l10n_util::GetStringUTF16(enable_state_and_tooltip_ID.second));
+  SaveDeskButtonStatus button_status = GetEnableStateAndTooltipIDForButtonType(
+      type, current_entry_count, max_entry_count, incognito_window_count,
+      unsupported_window_count, window_count);
+  button->SetEnabled(button_status.enabled);
+  button->SetTooltipText(l10n_util::GetStringUTF16(button_status.tooltip_id));
 }
 
 void SavedDeskSaveDeskButtonContainer::
@@ -208,5 +212,8 @@ SavedDeskSaveDeskButton* SavedDeskSaveDeskButtonContainer::GetButtonFromType(
       return save_desk_for_later_button_;
   }
 }
+
+BEGIN_METADATA(SavedDeskSaveDeskButtonContainer, views::BoxLayoutView)
+END_METADATA
 
 }  // namespace ash

@@ -5,6 +5,7 @@
 #ifndef CHROME_BROWSER_ASH_POLICY_REPORTING_INSTALL_EVENT_LOG_UPLOADER_BASE_H_
 #define CHROME_BROWSER_ASH_POLICY_REPORTING_INSTALL_EVENT_LOG_UPLOADER_BASE_H_
 
+#include "base/memory/raw_ptr.h"
 #include "components/policy/core/common/cloud/cloud_policy_client.h"
 
 class Profile;
@@ -70,11 +71,10 @@ class InstallEventLogUploaderBase : public CloudPolicyClient::Observer {
   // a callback.
   virtual void StartSerialization() = 0;
 
-  // Notification by the client that the most recent log upload has succeeded if
-  // |success| is |true| or retries have been exhausted if |success| is |false|.
+  // |result| contains the result of the most recent log upload.
   // Forwards success to the delegate and schedules a retry with exponential
   // backoff in case of failure.
-  void OnUploadDone(bool success);
+  void OnUploadDone(CloudPolicyClient::Result result);
 
   // Notifies delegate on success of upload.
   virtual void OnUploadSuccess() = 0;
@@ -83,10 +83,10 @@ class InstallEventLogUploaderBase : public CloudPolicyClient::Observer {
   virtual void PostTaskForStartSerialization() = 0;
 
   // The client used to upload logs to the server.
-  CloudPolicyClient* client_ = nullptr;
+  raw_ptr<CloudPolicyClient> client_ = nullptr;
 
   // Profile used to fetch the context attributes for report request.
-  Profile* profile_ = nullptr;
+  raw_ptr<Profile> profile_ = nullptr;
 
   // |true| if log upload has been requested and not completed yet.
   bool upload_requested_ = false;

@@ -17,32 +17,26 @@ namespace content {
 
 class TracingUITest : public testing::Test {
  public:
-  TracingUITest() {}
+  TracingUITest() = default;
 };
 
 std::string GetConfig() {
-  base::Value dict(base::Value::Type::DICTIONARY);
-  base::Value filter1(base::trace_event::MemoryDumpManager::kTraceCategory);
-  base::Value filter2("filter2");
-  base::Value included(base::Value::Type::LIST);
-  included.Append(std::move(filter1));
-  base::Value excluded(base::Value::Type::LIST);
-  excluded.Append(std::move(filter2));
-
-  dict.SetKey("included_categories", std::move(included));
-  dict.SetKey("excluded_categories", std::move(excluded));
-  dict.SetStringKey("record_mode", "record-continuously");
-  dict.SetBoolKey("enable_systrace", true);
-  dict.SetStringKey("stream_format", "protobuf");
-
-  base::Value memory_config(base::Value::Type::DICTIONARY);
-  base::Value trigger(base::Value::Type::DICTIONARY);
-  trigger.SetStringKey("mode", "detailed");
-  trigger.SetIntKey("periodic_interval_ms", 10000);
-  base::Value triggers(base::Value::Type::LIST);
-  triggers.Append(std::move(trigger));
-  memory_config.SetKey("triggers", std::move(triggers));
-  dict.SetKey("memory_dump_config", std::move(memory_config));
+  auto dict =
+      base::Value::Dict()
+          .Set("included_categories",
+               base::Value::List().Append(base::Value(
+                   base::trace_event::MemoryDumpManager::kTraceCategory)))
+          .Set("excluded_categories",
+               base::Value::List().Append(base::Value("filter2")))
+          .Set("record_mode", "record-continuously")
+          .Set("enable_systrace", true)
+          .Set("stream_format", "protobuf")
+          .Set("memory_dump_config",
+               base::Value::Dict().Set(
+                   "triggers", base::Value::List().Append(
+                                   base::Value::Dict()
+                                       .Set("mode", "detailed")
+                                       .Set("periodic_interval_ms", 10000))));
 
   std::string results;
   if (!base::JSONWriter::Write(dict, &results))
@@ -69,7 +63,7 @@ TEST_F(TracingUITest, ConfigParsing) {
   EXPECT_EQ(config.memory_dump_config().triggers[0].min_time_between_dumps_ms,
             10000u);
   EXPECT_EQ(config.memory_dump_config().triggers[0].level_of_detail,
-            base::trace_event::MemoryDumpLevelOfDetail::DETAILED);
+            base::trace_event::MemoryDumpLevelOfDetail::kDetailed);
 }
 
 }  // namespace content

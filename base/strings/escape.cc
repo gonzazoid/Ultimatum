@@ -9,6 +9,7 @@
 #include "base/check_op.h"
 #include "base/feature_list.h"
 #include "base/features.h"
+#include "base/strings/string_number_conversions.h"
 #include "base/strings/string_piece.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversion_utils.h"
@@ -18,13 +19,6 @@
 namespace base {
 
 namespace {
-
-const char kHexString[] = "0123456789ABCDEF";
-inline char IntToHex(int i) {
-  DCHECK_GE(i, 0) << i << " not a hex value";
-  DCHECK_LE(i, 15) << i << " not a hex value";
-  return kHexString[i];
-}
 
 // A fast bit-vector map for ascii characters.
 //
@@ -58,8 +52,7 @@ std::string Escape(StringPiece text,
       escaped.push_back('%');
     } else if (charmap.Contains(c)) {
       escaped.push_back('%');
-      escaped.push_back(IntToHex(c >> 4));
-      escaped.push_back(IntToHex(c & 0xf));
+      AppendHexEncodedByte(c, escaped);
     } else {
       escaped.push_back(static_cast<char>(c));
     }
@@ -443,8 +436,7 @@ std::string UnescapeURLWithAdjustmentsImpl(
     if (!ShouldUnescapeCodePoint(rules, code_point)) {
       // If it's a valid UTF-8 character, but not safe to unescape, copy all
       // bytes directly.
-      result.append(escaped_text.begin() + i,
-                    escaped_text.begin() + i + 3 * unescaped.length());
+      result.append(escaped_text.substr(i, 3 * unescaped.length()));
       i += unescaped.length() * 3;
       continue;
     }
@@ -543,9 +535,20 @@ std::string UnescapeBinaryURLComponent(StringPiece escaped_text,
   DCHECK(!(rules &
            ~(UnescapeRule::NORMAL | UnescapeRule::REPLACE_PLUS_WITH_SPACE)));
 
+  // It is not possible to read the feature state when this function is invoked
+  // before FeatureList initialization. In that case, fallback to the feature's
+  // default state.
+  //
+  // TODO(crbug.com/1321924): Cleanup this feature.
+  const bool optimize_data_urls_feature_is_enabled =
+      base::FeatureList::GetInstance()
+          ? base::FeatureList::IsEnabled(features::kOptimizeDataUrls)
+          : features::kOptimizeDataUrls.default_state ==
+                base::FEATURE_ENABLED_BY_DEFAULT;
+
   // If there are no '%' characters in the string, there will be nothing to
   // unescape, so we can take the fast path.
-  if (base::FeatureList::IsEnabled(features::kOptimizeDataUrls) &&
+  if (optimize_data_urls_feature_is_enabled &&
       escaped_text.find('%') == StringPiece::npos) {
     std::string unescaped_text(escaped_text);
     if (rules & UnescapeRule::REPLACE_PLUS_WITH_SPACE)

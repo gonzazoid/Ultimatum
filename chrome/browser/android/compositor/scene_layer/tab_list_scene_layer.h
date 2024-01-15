@@ -5,13 +5,11 @@
 #ifndef CHROME_BROWSER_ANDROID_COMPOSITOR_SCENE_LAYER_TAB_LIST_SCENE_LAYER_H_
 #define CHROME_BROWSER_ANDROID_COMPOSITOR_SCENE_LAYER_TAB_LIST_SCENE_LAYER_H_
 
-#include <map>
-#include <memory>
-#include <set>
-
+#include "base/containers/flat_map.h"
+#include "base/containers/flat_set.h"
 #include "base/memory/raw_ptr.h"
-#include "cc/layers/layer.h"
-#include "cc/layers/ui_resource_layer.h"
+#include "cc/slim/layer.h"
+#include "cc/slim/ui_resource_layer.h"
 #include "chrome/browser/android/compositor/layer/layer.h"
 #include "chrome/browser/android/compositor/tab_content_manager.h"
 #include "chrome/browser/ui/android/layouts/scene_layer.h"
@@ -52,8 +50,6 @@ class TabListSceneLayer : public SceneLayer {
   void PutTabLayer(JNIEnv* env,
                    const base::android::JavaParamRef<jobject>& jobj,
                    jint id,
-                   const base::android::JavaRef<jintArray>& tab_ids_list,
-                   jboolean use_tab_ids_list,
                    jint toolbar_resource_id,
                    jint shadow_resource_id,
                    jint contour_resource_id,
@@ -68,8 +64,6 @@ class TabListSceneLayer : public SceneLayer {
                    jfloat height,
                    jfloat content_width,
                    jfloat visible_content_height,
-                   jfloat shadow_x,
-                   jfloat shadow_y,
                    jfloat shadow_width,
                    jfloat shadow_height,
                    jfloat alpha,
@@ -80,18 +74,13 @@ class TabListSceneLayer : public SceneLayer {
                    jfloat static_to_view_blend,
                    jfloat border_scale,
                    jfloat saturation,
-                   jfloat brightness,
                    jboolean show_toolbar,
                    jint default_theme_color,
                    jint toolbar_background_color,
                    jboolean anonymize_toolbar,
                    jint toolbar_textbox_resource_id,
                    jint toolbar_textbox_background_color,
-                   jfloat toolbar_alpha,
-                   jfloat toolbar_y_offset,
-                   jfloat content_offset,
-                   jfloat side_border_scale,
-                   jboolean inset_border);
+                   jfloat content_offset);
 
   void PutBackgroundLayer(JNIEnv* env,
                           const base::android::JavaParamRef<jobject>& jobj,
@@ -110,18 +99,18 @@ class TabListSceneLayer : public SceneLayer {
   SkColor GetBackgroundColor() override;
 
  private:
-  typedef std::map<int, scoped_refptr<TabLayer>> TabMap;
+  typedef base::flat_map<int, scoped_refptr<TabLayer>> TabMap;
   TabMap tab_map_;
-  std::set<int> visible_tabs_this_frame_;
+  base::flat_set<int> visible_tabs_this_frame_;
 
-  scoped_refptr<cc::UIResourceLayer> background_layer_;
+  scoped_refptr<cc::slim::UIResourceLayer> background_layer_;
 
   bool content_obscures_self_;
   raw_ptr<ui::ResourceManager> resource_manager_;
   raw_ptr<TabContentManager> tab_content_manager_;
   SkColor background_color_;
 
-  scoped_refptr<cc::Layer> own_tree_;
+  scoped_refptr<cc::slim::Layer> own_tree_;
 };
 
 }  // namespace android

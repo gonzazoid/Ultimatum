@@ -7,15 +7,11 @@
 #import <ostream>
 
 #import "base/notreached.h"
-#import "ios/chrome/browser/crash_report/crash_loop_detection_util.h"
+#import "ios/chrome/browser/crash_report/model/crash_loop_detection_util.h"
 #import "ios/chrome/browser/ui/safe_mode/safe_mode_view_controller.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 namespace {
-const int kStartupCrashLoopThreshold = 2;
+const int kStartupCrashLoopThreshold = 3;
 }
 
 @interface SafeModeCoordinator ()<SafeModeViewControllerDelegate>

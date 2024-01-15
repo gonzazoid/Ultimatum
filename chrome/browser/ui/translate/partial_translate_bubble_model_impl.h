@@ -7,8 +7,14 @@
 
 #include "base/observer_list.h"
 #include "chrome/browser/ui/translate/partial_translate_bubble_model.h"
-#include "components/translate/content/browser/partial_translate_manager.h"
-#include "components/translate/core/browser/translate_ui_delegate.h"
+
+class PartialTranslateManager;
+struct PartialTranslateRequest;
+struct PartialTranslateResponse;
+
+namespace translate {
+class TranslateUILanguagesManager;
+}
 
 // These values are persisted to logs. Entries should not be renumbered and
 // numeric values should never be reused.
@@ -26,7 +32,8 @@ class PartialTranslateBubbleModelImpl : public PartialTranslateBubbleModel {
       const std::u16string& source_text,
       const std::u16string& target_text,
       std::unique_ptr<PartialTranslateManager> partial_translate_manager,
-      std::unique_ptr<translate::TranslateUIDelegate> ui_delegate);
+      std::unique_ptr<translate::TranslateUILanguagesManager>
+          translate_ui_languages_manager);
 
   PartialTranslateBubbleModelImpl(const PartialTranslateBubbleModelImpl&) =
       delete;
@@ -89,6 +96,10 @@ class PartialTranslateBubbleModelImpl : public PartialTranslateBubbleModel {
   // performed.
   std::u16string target_text_;
 
+  // Whether or not the model has completed a successful Partial Translate
+  // request. This is always false on initialization.
+  bool initial_request_completed_ = false;
+
   // Time when the PartialTranslateManager is directed to start a translation.
   // This is used to know the response time of a Partial Translate request.
   base::TimeTicks translate_request_started_time_;
@@ -101,7 +112,7 @@ class PartialTranslateBubbleModelImpl : public PartialTranslateBubbleModel {
   std::unique_ptr<PartialTranslateManager> partial_translate_manager_;
 
   // Used to track the source and target languages.
-  std::unique_ptr<translate::TranslateUIDelegate> ui_delegate_;
+  std::unique_ptr<translate::TranslateUILanguagesManager> ui_languages_manager_;
 
   // A list of clients to notify of partial translate status changes.
   base::ObserverList<PartialTranslateBubbleModel::Observer> observers_;

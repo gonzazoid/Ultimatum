@@ -14,15 +14,15 @@
 * [Ownership](bestpractices/ownership.md): How to manage Views object lifetimes.
 
 # Chrome UI
-
-* [Views](/docs/ui/views/overview.md)
-* [Product Excellence](/docs/ui/product_excellence/index.md)
-* [UI Debugging](/docs/ui/learn/ui_debugging.md)
-* [UI Devtools](/docs/ui/ui_devtools/index.md)
+* [Activation and Focus](activation_and_focus.md)
+* [Animation Builder](/docs/ui/animation_builder/animation_builder.md)
+* [Glossary](glossary.md)
 * [Input Event Routing](/docs/ui/input_event/index.md)
-* [Activation and Focus](/docs/ui/learn/activation_and_focus.md)
 * [Metadata and Properties](/docs/ui/views/metadata_properties.md)
-* [Layer Animation Builder](/docs/ui/animation_builder/animation_builder.md)
+* [Product Excellence](/docs/ui/product_excellence/index.md)
+* [UI Debugging](ui_debugging.md)
+* [UI Devtools](/docs/ui/ui_devtools/index.md)
+* [Views](/docs/ui/views/overview.md)
 
 # Archival Documentation on Chrome UI.
 
@@ -31,5 +31,5 @@
 
 # Processes
 
-* [Frontline Triage Procedures](frontline_triage.md)
+* [Frontline Triage Procedures](/docs/ui/frontline_triage.md)
 

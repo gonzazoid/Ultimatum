@@ -15,7 +15,7 @@
 #include <utility>
 
 #include "base/containers/contains.h"
-#include "base/cxx17_backports.h"
+#include "base/memory/raw_ptr.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/no_destructor.h"
 #include "base/system/sys_info.h"
@@ -99,13 +99,7 @@ gfx::Rect SafeIntersectRects(const gfx::Rect& one, const gfx::Rect& two) {
 }  // namespace
 
 PictureLayerImpl::PictureLayerImpl(LayerTreeImpl* tree_impl, int id)
-    : LayerImpl(tree_impl, id, /*will_always_push_properties=*/true),
-      is_backdrop_filter_mask_(false),
-      was_screen_space_transform_animating_(false),
-      only_used_low_res_last_append_quads_(false),
-      nearest_neighbor_(false),
-      raster_source_size_changed_(false),
-      directly_composited_image_default_raster_scale_changed_(false) {
+    : LayerImpl(tree_impl, id, /*will_always_push_properties=*/true) {
   layer_tree_impl()->RegisterPictureLayerImpl(this);
 }
 
@@ -336,7 +330,7 @@ void PictureLayerImpl::AppendQuads(viz::CompositorRenderPass* render_pass,
     auto* quad = render_pass->CreateAndAppendDrawQuad<viz::PictureDrawQuad>();
     quad->SetNew(shared_quad_state, geometry_rect, visible_geometry_rect,
                  needs_blending, texture_rect, texture_size, nearest_neighbor_,
-                 viz::RGBA_8888, quad_content_rect, max_contents_scale,
+                 quad_content_rect, max_contents_scale,
                  std::move(image_animation_map),
                  raster_source_->GetDisplayItemList());
     ValidateQuadResources(quad);
@@ -458,6 +452,9 @@ void PictureLayerImpl::AppendQuads(viz::CompositorRenderPass* render_pass,
     bool has_draw_quad = false;
     if (*iter && iter->draw_info().IsReadyToDraw()) {
       const TileDrawInfo& draw_info = iter->draw_info();
+      // Mark the tile used for raster. This is used to reclaim old prepaint
+      // tiles in TileManager.
+      iter->mark_used();
 
       switch (draw_info.mode()) {
         case TileDrawInfo::RESOURCE_MODE: {
@@ -466,11 +463,11 @@ void PictureLayerImpl::AppendQuads(viz::CompositorRenderPass* render_pass,
           // The raster_contents_scale_ is the best scale that the layer is
           // trying to produce, even though it may not be ideal. Since that's
           // the best the layer can promise in the future, consider those as
-          // complete. But if a tile is ideal scale, we don't want to consider
-          // it incomplete and trying to replace it with a tile at a worse
-          // scale.
+          // complete. Also consider a tile complete if it is ideal scale or
+          // better. Note that PLTS::CoverageIterator prefers the _smallest_
+          // scale that is >= ideal, which may be < raster_contents_scale_.
           if (iter->contents_scale_key() != raster_contents_scale_key() &&
-              iter->contents_scale_key() != ideal_contents_scale_key() &&
+              iter->contents_scale_key() < ideal_contents_scale_key() &&
               geometry_rect.Intersects(scaled_viewport_for_tile_priority)) {
             append_quads_data->num_incomplete_tiles++;
           }
@@ -684,7 +681,7 @@ void PictureLayerImpl::UpdateViewportRectForTilePriorityInContentSpace() {
   if (visible_rect_in_content_space.IsEmpty() ||
       layer_tree_impl()->GetDeviceViewport() !=
           viewport_rect_for_tile_priority) {
-    gfx::Transform view_to_layer(gfx::Transform::kSkipInitialization);
+    gfx::Transform view_to_layer;
     if (ScreenSpaceTransform().GetInverse(&view_to_layer)) {
       // Transform from view space to content space.
       visible_rect_in_content_space = MathUtil::ProjectEnclosingClippedRect(
@@ -859,41 +856,49 @@ LCDTextDisallowedReason PictureLayerImpl::ComputeLCDTextDisallowedReason(
     return LCDTextDisallowedReason::kNoText;
   }
 
-  if (layer_tree_impl()->settings().layers_always_allowed_lcd_text)
+  if (layer_tree_impl()->settings().layers_always_allowed_lcd_text) {
     return LCDTextDisallowedReason::kNone;
-  if (!layer_tree_impl()->settings().can_use_lcd_text)
+  }
+  if (!layer_tree_impl()->settings().can_use_lcd_text) {
     return LCDTextDisallowedReason::kSetting;
-  if (!contents_opaque_for_text()) {
-    if (!background_color().isOpaque())
-      return LCDTextDisallowedReason::kBackgroundColorNotOpaque;
-    return LCDTextDisallowedReason::kContentsNotOpaque;
+  }
+
+  TransformNode* transform_node =
+      GetTransformTree().Node(transform_tree_index());
+  if (transform_node->node_or_ancestors_will_change_transform) {
+    return LCDTextDisallowedReason::kWillChangeTransform;
+  }
+
+  if (screen_space_transform_is_animating()) {
+    return LCDTextDisallowedReason::kTransformAnimation;
+  }
+
+  EffectNode* effect_node = GetEffectTree().Node(effect_tree_index());
+  if (effect_node->node_or_ancestor_has_filters ||
+      effect_node->affected_by_backdrop_filter) {
+    return LCDTextDisallowedReason::kPixelOrColorEffect;
   }
 
   // If raster translation aligns pixels, we can ignore fractional layer offset
   // and transform for LCD text.
   if (!raster_translation_aligns_pixels) {
     if (static_cast<int>(offset_to_transform_parent().x()) !=
-        offset_to_transform_parent().x())
+        offset_to_transform_parent().x()) {
       return LCDTextDisallowedReason::kNonIntegralXOffset;
+    }
     if (static_cast<int>(offset_to_transform_parent().y()) !=
-        offset_to_transform_parent().y())
+        offset_to_transform_parent().y()) {
       return LCDTextDisallowedReason::kNonIntegralYOffset;
+    }
     return LCDTextDisallowedReason::kNonIntegralTranslation;
   }
 
-  TransformNode* transform_node =
-      GetTransformTree().Node(transform_tree_index());
-  if (transform_node->node_or_ancestors_will_change_transform)
-    return LCDTextDisallowedReason::kWillChangeTransform;
-
-  if (screen_space_transform_is_animating())
-    return LCDTextDisallowedReason::kTransformAnimation;
-
-  EffectNode* effect_node = GetEffectTree().Node(effect_tree_index());
-  if (effect_node->node_or_ancestor_has_filters ||
-      effect_node->affected_by_backdrop_filter)
-    return LCDTextDisallowedReason::kPixelOrColorEffect;
-
+  if (!contents_opaque_for_text()) {
+    if (!background_color().isOpaque()) {
+      return LCDTextDisallowedReason::kBackgroundColorNotOpaque;
+    }
+    return LCDTextDisallowedReason::kContentsNotOpaque;
+  }
   return LCDTextDisallowedReason::kNone;
 }
 
@@ -1047,7 +1052,7 @@ bool PictureLayerImpl::ShouldAnimate(PaintImage::Id paint_image_id) const {
   const auto& rects = raster_source_->GetDisplayItemList()
                           ->discardable_image_map()
                           .GetRectsForImage(paint_image_id);
-  for (const auto& r : rects.container()) {
+  for (const auto& r : rects) {
     if (r.Intersects(visible_layer_rect()))
       return true;
   }
@@ -1181,7 +1186,7 @@ float PictureLayerImpl::CalculateDirectlyCompositedImageRasterScale() const {
   float min_scale = MinimumContentsScale();
 
   float clamped_ideal_source_scale =
-      base::clamp(ideal_source_scale_key(), min_scale, max_scale);
+      std::clamp(ideal_source_scale_key(), min_scale, max_scale);
   // Use clamped_ideal_source_scale if adjusted_raster_scale is too far away.
   constexpr float kFarAwayFactor = 32.f;
   if (adjusted_raster_scale < clamped_ideal_source_scale / kFarAwayFactor) {
@@ -1203,7 +1208,7 @@ float PictureLayerImpl::CalculateDirectlyCompositedImageRasterScale() const {
   }
 
   adjusted_raster_scale =
-      base::clamp(adjusted_raster_scale, min_scale, max_scale);
+      std::clamp(adjusted_raster_scale, min_scale, max_scale);
   return adjusted_raster_scale;
 }
 
@@ -1229,6 +1234,25 @@ void PictureLayerImpl::RemoveAllTilings() {
 
 bool PictureLayerImpl::CanRecreateHighResTilingForLCDTextAndRasterTransform(
     const PictureLayerTiling& high_res) const {
+  // Prefer re-rasterization for a change in LCD status from the following
+  // reasons since visual artifacts of LCD text on non-opaque background are
+  // very noticeable. This state also only changes during a commit and is likely
+  // to be discrete as opposed to every frame of the animation.
+  if (high_res.can_use_lcd_text() &&
+      (lcd_text_disallowed_reason_ ==
+           LCDTextDisallowedReason::kBackgroundColorNotOpaque ||
+       lcd_text_disallowed_reason_ ==
+           LCDTextDisallowedReason::kContentsNotOpaque)) {
+    // LCD text state changes require a commit and the existing tiling is
+    // invalidated before scheduling rasterization work for the new pending
+    // tree. So it shouldn't be possible for the new pending tree to be ready to
+    // activate before we have invalidated the existing high rest tiling. This
+    // is important to avoid activating a tree with missing tiles which can
+    // cause flickering.
+    DCHECK(!layer_tree_impl()->IsSyncTree() ||
+           !layer_tree_impl()->IsReadyToActivate());
+    return true;
+  }
   // We can recreate the tiling if we would invalidate all of its tiles.
   if (high_res.may_contain_low_resolution_tiles())
     return true;
@@ -1383,9 +1407,7 @@ bool PictureLayerImpl::ShouldAdjustRasterScale() const {
       float maximum_animation_scale =
           layer_tree_impl()->property_trees()->MaximumAnimationToScreenScale(
               transform_tree_index());
-      if (!base::FeatureList::IsEnabled(
-              features::kAvoidRasterDuringElasticOverscroll) ||
-          (maximum_animation_scale != raster_contents_scale_.x() ||
+      if ((maximum_animation_scale != raster_contents_scale_.x() ||
            maximum_animation_scale != raster_contents_scale_.y())) {
         return true;
       }
@@ -1651,7 +1673,8 @@ void PictureLayerImpl::AdjustRasterScaleForTransformAnimation(
 }
 
 void PictureLayerImpl::CleanUpTilingsOnActiveLayer(
-    const std::vector<PictureLayerTiling*>& used_tilings) {
+    const std::vector<raw_ptr<PictureLayerTiling, VectorExperimental>>&
+        used_tilings) {
   DCHECK(layer_tree_impl()->IsActiveTree());
   if (tilings_->num_tilings() == 0)
     return;
@@ -1682,11 +1705,19 @@ float PictureLayerImpl::MinimumRasterContentsScaleForWillChangeTransform()
   DCHECK(AffectedByWillChangeTransformHint());
   float native_scale = ideal_device_scale_ * ideal_page_scale_;
   float ideal_scale = ideal_contents_scale_key();
-  // Clamp will-change: transform layers to be at least the native scale,
-  // unless the scale is too small to avoid too many tiles using too much tile
-  // memory.
+  // We want to use the same raster scale as much as possible during the
+  // lifetime of a will-change:transform layer to avoid rerasterization.
+  // Normally, we clamp the raster scale to be at least the native scale, to
+  // make most HTML contents not too blurry (e.g. at least the texts are
+  // legible) if the ideal scale increases above the native scale in the future.
   if (ideal_scale < native_scale * kMinScaleRatioForWillChangeTransform) {
-    // Don't let the scale too small compared to the ideal scale.
+    // However, if the native scale is too big compared to the ideal scale,
+    // we want to use a smaller scale to avoid too many tiles using too much
+    // memory. This is mainly to avoid problems in SVG apps that use large
+    // integer geometries in elements under a very small overall scale to avoid
+    // floating-point errors in geometries. The return value is smaller than
+    // ideal_scale to reduce rerasterizations when the ideal scale changes to
+    // be even smaller in the future.
     return ideal_scale * kMinScaleRatioForWillChangeTransform;
   }
   return native_scale;
@@ -2017,8 +2048,9 @@ PictureLayerImpl::InvalidateRegionForImages(
     const auto& rects = raster_source_->GetDisplayItemList()
                             ->discardable_image_map()
                             .GetRectsForImage(image_id);
-    for (const auto& r : rects.container())
+    for (const auto& r : rects) {
       image_invalidation.Union(r);
+    }
   }
   Region invalidation;
   image_invalidation.Swap(&invalidation);
@@ -2039,8 +2071,8 @@ PictureLayerImpl::InvalidateRegionForImages(
 
 void PictureLayerImpl::SetPaintWorkletRecord(
     scoped_refptr<const PaintWorkletInput> input,
-    sk_sp<PaintRecord> record) {
-  DCHECK(paint_worklet_records_.find(input) != paint_worklet_records_.end());
+    PaintRecord record) {
+  DCHECK(base::Contains(paint_worklet_records_, input));
   paint_worklet_records_[input].second = std::move(record);
 }
 
@@ -2090,6 +2122,9 @@ void PictureLayerImpl::SetPaintWorkletInputs(
     // Attempt to re-use an existing PaintRecord if possible.
     new_records[input] = std::make_pair(
         paint_image_id, std::move(paint_worklet_records_[input].second));
+    // The move constructor of std::optional does not clear the source to
+    // nullopt.
+    paint_worklet_records_[input].second = std::nullopt;
   }
   paint_worklet_records_.swap(new_records);
 
@@ -2111,15 +2146,19 @@ void PictureLayerImpl::SetPaintWorkletInputs(
 }
 
 void PictureLayerImpl::InvalidatePaintWorklets(
-    const PaintWorkletInput::PropertyKey& key) {
+    const PaintWorkletInput::PropertyKey& key,
+    const PaintWorkletInput::PropertyValue& prev,
+    const PaintWorkletInput::PropertyValue& next) {
   for (auto& entry : paint_worklet_records_) {
     const std::vector<PaintWorkletInput::PropertyKey>& prop_ids =
         entry.first->GetPropertyKeys();
     // If the PaintWorklet depends on the property whose value was changed by
     // the animation system, then invalidate its associated PaintRecord so that
     // we can repaint the PaintWorklet during impl side invalidation.
-    if (base::Contains(prop_ids, key))
-      entry.second.second = nullptr;
+    if (base::Contains(prop_ids, key) &&
+        entry.first->ValueChangeShouldCauseRepaint(prev, next)) {
+      entry.second.second = absl::nullopt;
+    }
   }
 }
 

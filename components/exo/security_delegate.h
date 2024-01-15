@@ -14,31 +14,36 @@ class Window;
 
 namespace exo {
 
-// Defines the set of actions/associations which are needed to implement a
-// per-product Exo server. Product here refrs to things like "Crostini", "ArcVM"
-// and "Lacross", and distinguishes from wayland's notion of a client. Each
-// product may have multiple clients associated with it.
+// Each wayland server managed by exo, including the default server, will have a
+// single delegate associated with it to control security-sensitive features of
+// the server, e.g.:
+//  - Availability of privileged APIs used by trusted clients only.
+//  - Handling of certain mechanisms differently for different products (arc,
+//    crostini, etc)
+// This allows exo to make strong guarantees about the relationship between the
+// wl clients and the SecurityDelegate the server owns.
 //
-// TODO(b/200896773): Flesh this class out once we're clear on what things
-// should be secure.
+// See go/secure-exo-ids and go/securer-exo-ids for more details.
 class SecurityDelegate {
  public:
+  // See |CanSetBounds()|.
+  enum SetBoundsPolicy {
+    // By default, clients may not set window bounds. Requests are ignored.
+    IGNORE,
+
+    // Clients may set bounds, but Exo may DCHECK on requests for windows with
+    // server-side decoration.
+    DCHECK_IF_DECORATED,
+
+    // Clients may set bounds for any window. Exo will expand the requested
+    // bounds to account for server-side decorations, if any.
+    ADJUST_IF_DECORATED,
+  };
+
   // Get a SecurityDelegate instance with all of the defaults.
   static std::unique_ptr<SecurityDelegate> GetDefaultSecurityDelegate();
 
   virtual ~SecurityDelegate();
-
-  // The path of the wayland server will be determined (partially) by its
-  // security context. This process is documented in go/secure-exo-ids. All
-  // sockets for the same security context will be placed in a single directory,
-  // on ChromeOS that directory is "/run/wayland/<context>/". The intention is
-  // that systems that need access to the wayland socket will mount their
-  // security context's directory into their mount namespace, and not others'.
-  //
-  // The empty string refers to "no security context", only the default wayland
-  // server may use it, and it is an error to spawn a non-default server without
-  // a security context.
-  virtual std::string GetSecurityContext() const = 0;
 
   // "Self-activation" is a security sensitive windowing operation that is a
   // common paradigm in X11. The need to self-activate is controlled
@@ -51,6 +56,14 @@ class SecurityDelegate {
   // can lock the location of the pointer and disable movement, or return false
   // to reject the pointer lock request.
   virtual bool CanLockPointer(aura::Window* window) const;
+
+  // Whether clients may set their own windows' bounds is a security-relevant
+  // policy decision.
+  //
+  // If server-side decoration is used, clients normally should not set their
+  // own window bounds, as they may not be able to compute them correctly
+  // (accounting for the size of the window decorations).
+  virtual SetBoundsPolicy CanSetBounds(aura::Window* window) const;
 };
 
 }  // namespace exo

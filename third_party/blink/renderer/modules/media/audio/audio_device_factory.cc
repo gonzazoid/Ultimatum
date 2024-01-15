@@ -6,8 +6,8 @@
 
 #include <algorithm>
 
-#include "base/bind.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/no_destructor.h"
 #include "base/notreached.h"
@@ -99,24 +99,24 @@ AudioDeviceFactory::~AudioDeviceFactory() {
 }
 
 // static
-media::AudioLatency::LatencyType AudioDeviceFactory::GetSourceLatencyType(
+media::AudioLatency::Type AudioDeviceFactory::GetSourceLatencyType(
     blink::WebAudioDeviceSourceType source) {
   switch (source) {
     case blink::WebAudioDeviceSourceType::kWebAudioInteractive:
-      return media::AudioLatency::LATENCY_INTERACTIVE;
+      return media::AudioLatency::Type::kInteractive;
     case blink::WebAudioDeviceSourceType::kNone:
     case blink::WebAudioDeviceSourceType::kWebRtc:
     case blink::WebAudioDeviceSourceType::kNonRtcAudioTrack:
     case blink::WebAudioDeviceSourceType::kWebAudioBalanced:
-      return media::AudioLatency::LATENCY_RTC;
+      return media::AudioLatency::Type::kRtc;
     case blink::WebAudioDeviceSourceType::kMediaElement:
     case blink::WebAudioDeviceSourceType::kWebAudioPlayback:
-      return media::AudioLatency::LATENCY_PLAYBACK;
+      return media::AudioLatency::Type::kPlayback;
     case blink::WebAudioDeviceSourceType::kWebAudioExact:
-      return media::AudioLatency::LATENCY_EXACT_MS;
+      return media::AudioLatency::Type::kExactMS;
   }
   NOTREACHED();
-  return media::AudioLatency::LATENCY_INTERACTIVE;
+  return media::AudioLatency::Type::kUnknown;
 }
 
 scoped_refptr<media::AudioRendererSink>
@@ -127,8 +127,6 @@ AudioDeviceFactory::NewAudioRendererSink(
   if (IsMixable(source_type))
     return NewMixableSink(source_type, frame_token, params);
 
-  UMA_HISTOGRAM_BOOLEAN("Media.Audio.Render.SinkCache.UsedForSinkCreation",
-                        false);
   return NewFinalAudioRendererSink(frame_token, params,
                                    GetDefaultAuthTimeout());
 }
@@ -161,23 +159,30 @@ AudioDeviceFactory::NewAudioCapturerSource(
 
 media::OutputDeviceInfo AudioDeviceFactory::GetOutputDeviceInfo(
     const blink::LocalFrameToken& frame_token,
-    const media::AudioSinkParameters& params) {
+    const std::string& device_id) {
   DCHECK(IsMainThread()) << __func__ << "() is called on a wrong thread.";
   constexpr base::TimeDelta kDeleteTimeout = base::Milliseconds(5000);
 
   if (!sink_cache_) {
+    auto create_sink_cb = [](AudioDeviceFactory* factory,
+                             const LocalFrameToken& frame_token,
+                             const std::string& device_id) {
+      return factory->NewAudioRendererSink(
+          blink::WebAudioDeviceSourceType::kNone, frame_token,
+          media::AudioSinkParameters(base::UnguessableToken(), device_id));
+    };
+
+    // Do we actually need a separate thread pool just for deleting audio sinks?
     sink_cache_ = std::make_unique<AudioRendererSinkCache>(
         base::ThreadPool::CreateSequencedTaskRunner(
             {base::TaskPriority::BEST_EFFORT,
              base::TaskShutdownBehavior::CONTINUE_ON_SHUTDOWN,
              base::MayBlock()}),
-        base::BindRepeating(&AudioDeviceFactory::NewAudioRendererSink,
-                            base::Unretained(this),
-                            blink::WebAudioDeviceSourceType::kNone),
+        base::BindRepeating(std::move(create_sink_cb), base::Unretained(this)),
         kDeleteTimeout);
   }
-  return sink_cache_->GetSinkInfo(frame_token, params.session_id,
-                                  params.device_id);
+
+  return sink_cache_->GetSinkInfo(frame_token, device_id);
 }
 
 scoped_refptr<media::AudioRendererSink>

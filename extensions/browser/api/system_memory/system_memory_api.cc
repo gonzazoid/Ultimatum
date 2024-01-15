@@ -4,18 +4,12 @@
 
 #include "extensions/browser/api/system_memory/system_memory_api.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "extensions/browser/api/system_memory/memory_info_provider.h"
 
 namespace extensions {
 
 using api::system_memory::MemoryInfo;
-
-SystemMemoryGetInfoFunction::SystemMemoryGetInfoFunction() {
-}
-
-SystemMemoryGetInfoFunction::~SystemMemoryGetInfoFunction() {
-}
 
 ExtensionFunction::ResponseAction SystemMemoryGetInfoFunction::Run() {
   MemoryInfoProvider::Get()->StartQueryInfo(base::BindOnce(
@@ -26,8 +20,7 @@ ExtensionFunction::ResponseAction SystemMemoryGetInfoFunction::Run() {
 
 void SystemMemoryGetInfoFunction::OnGetMemoryInfoCompleted(bool success) {
   if (success) {
-    Respond(OneArgument(
-        base::Value(MemoryInfoProvider::Get()->memory_info().ToValue())));
+    Respond(WithArguments(MemoryInfoProvider::Get()->memory_info().ToValue()));
   } else {
     Respond(Error("Error occurred when querying memory information."));
   }

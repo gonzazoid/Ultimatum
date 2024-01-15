@@ -40,30 +40,13 @@ namespace blink {
 
 class CharacterIteratorTest : public EditingTestBase {};
 
-class ParameterizedCharacterIteratorTest
-    : public testing::WithParamInterface<bool>,
-      private ScopedLayoutNGForTest,
-      public CharacterIteratorTest {
- public:
-  ParameterizedCharacterIteratorTest() : ScopedLayoutNGForTest(GetParam()) {}
-
- protected:
-  bool LayoutNGEnabled() const {
-    return RuntimeEnabledFeatures::LayoutNGEnabled();
-  }
-};
-
-INSTANTIATE_TEST_SUITE_P(All,
-                         ParameterizedCharacterIteratorTest,
-                         testing::Bool());
-
-TEST_P(ParameterizedCharacterIteratorTest, SubrangeWithReplacedElements) {
+TEST_F(CharacterIteratorTest, SubrangeWithReplacedElements) {
   static const char* body_content =
       "<div id='div' contenteditable='true'>1<img src='foo.png'>345</div>";
   SetBodyContent(body_content);
   UpdateAllLifecyclePhasesForTest();
 
-  Node* div_node = GetDocument().getElementById("div");
+  Node* div_node = GetDocument().getElementById(AtomicString("div"));
   auto* entire_range =
       MakeGarbageCollected<Range>(GetDocument(), div_node, 0, div_node, 3);
 
@@ -74,13 +57,14 @@ TEST_P(ParameterizedCharacterIteratorTest, SubrangeWithReplacedElements) {
   EXPECT_EQ(Position(text_node, 3), result.EndPosition());
 }
 
-TEST_P(ParameterizedCharacterIteratorTest, CollapsedSubrange) {
+TEST_F(CharacterIteratorTest, CollapsedSubrange) {
   static const char* body_content =
       "<div id='div' contenteditable='true'>hello</div>";
   SetBodyContent(body_content);
   UpdateAllLifecyclePhasesForTest();
 
-  Node* text_node = GetDocument().getElementById("div")->lastChild();
+  Node* text_node =
+      GetDocument().getElementById(AtomicString("div"))->lastChild();
   auto* entire_range =
       MakeGarbageCollected<Range>(GetDocument(), text_node, 1, text_node, 4);
   EXPECT_EQ(1u, entire_range->startOffset());
@@ -92,7 +76,7 @@ TEST_P(ParameterizedCharacterIteratorTest, CollapsedSubrange) {
   EXPECT_EQ(Position(text_node, 3), result.EndPosition());
 }
 
-TEST_P(ParameterizedCharacterIteratorTest, GetPositionWithBlock) {
+TEST_F(CharacterIteratorTest, GetPositionWithBlock) {
   SetBodyContent("a<div>b</div>c");
 
   const Element& body = *GetDocument().body();
@@ -146,15 +130,15 @@ TEST_P(ParameterizedCharacterIteratorTest, GetPositionWithBlock) {
   EXPECT_TRUE(it.AtEnd());
 }
 
-TEST_P(ParameterizedCharacterIteratorTest, GetPositionWithBlocks) {
+TEST_F(CharacterIteratorTest, GetPositionWithBlocks) {
   SetBodyContent("<p id=a>b</p><p id=c>d</p>");
 
   const Element& body = *GetDocument().body();
   CharacterIterator it(EphemeralRange::RangeOfContents(body));
 
-  const Node& element_p_a = *GetDocument().getElementById("a");
+  const Node& element_p_a = *GetDocument().getElementById(AtomicString("a"));
   const Node& text_b = *element_p_a.firstChild();
-  const Node& element_p_c = *GetDocument().getElementById("c");
+  const Node& element_p_c = *GetDocument().getElementById(AtomicString("c"));
   const Node& text_d = *element_p_c.firstChild();
 
   EXPECT_EQ(Position(text_b, 0), it.GetPositionBefore());
@@ -193,14 +177,14 @@ TEST_P(ParameterizedCharacterIteratorTest, GetPositionWithBlocks) {
   EXPECT_TRUE(it.AtEnd());
 }
 
-TEST_P(ParameterizedCharacterIteratorTest, GetPositionWithBR) {
+TEST_F(CharacterIteratorTest, GetPositionWithBR) {
   SetBodyContent("a<br>b");
 
   const Element& body = *GetDocument().body();
   CharacterIterator it(EphemeralRange::RangeOfContents(body));
 
   const Node& text_a = *body.firstChild();
-  const Node& br = *GetDocument().QuerySelector("br");
+  const Node& br = *GetDocument().QuerySelector(AtomicString("br"));
   const Node& text_b = *body.lastChild();
 
   EXPECT_EQ(Position(text_a, 0), it.GetPositionBefore());
@@ -232,8 +216,7 @@ TEST_P(ParameterizedCharacterIteratorTest, GetPositionWithBR) {
   EXPECT_TRUE(it.AtEnd());
 }
 
-TEST_P(ParameterizedCharacterIteratorTest,
-       GetPositionWithCollapsedWhitespaces) {
+TEST_F(CharacterIteratorTest, GetPositionWithCollapsedWhitespaces) {
   SetBodyContent("a <div> b </div> c");
 
   const Element& body = *GetDocument().body();
@@ -287,7 +270,7 @@ TEST_P(ParameterizedCharacterIteratorTest,
   EXPECT_TRUE(it.AtEnd());
 }
 
-TEST_P(ParameterizedCharacterIteratorTest, GetPositionWithEmitChar16Before) {
+TEST_F(CharacterIteratorTest, GetPositionWithEmitChar16Before) {
   InsertStyleElement("b { white-space: pre; }");
   SetBodyContent("a   <b> c</b>");
 

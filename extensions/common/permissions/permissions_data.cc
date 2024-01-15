@@ -379,11 +379,6 @@ bool PermissionsData::HasHostPermission(const GURL& url) const {
          !IsPolicyBlockedHostUnsafe(url);
 }
 
-bool PermissionsData::HasEffectiveAccessToAllHosts() const {
-  base::AutoLock auto_lock(runtime_lock_);
-  return active_permissions_unsafe_->HasEffectiveAccessToAllHosts();
-}
-
 PermissionMessages PermissionsData::GetPermissionMessages() const {
   base::AutoLock auto_lock(runtime_lock_);
   return PermissionMessageProvider::Get()->GetPermissionMessages(
@@ -517,6 +512,7 @@ bool PermissionsData::CanCaptureVisiblePage(
     if (!has_page_capture) {
       if (error)
         *error = manifest_errors::kPageCaptureNeeded;
+      return false;
     }
 
     // If the URL is a typical web URL, the pageCapture permission is

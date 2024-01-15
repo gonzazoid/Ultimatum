@@ -4,8 +4,10 @@
 
 #include "third_party/blink/renderer/modules/peerconnection/rtc_encoded_audio_underlying_sink.h"
 
+#include "base/feature_list.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_rtc_encoded_audio_frame.h"
 #include "third_party/blink/renderer/core/dom/dom_exception.h"
+#include "third_party/blink/renderer/core/typed_arrays/dom_array_buffer.h"
 #include "third_party/blink/renderer/modules/peerconnection/rtc_encoded_audio_frame.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
 #include "third_party/blink/renderer/platform/peerconnection/rtc_encoded_audio_stream_transformer.h"
@@ -13,13 +15,16 @@
 
 namespace blink {
 
+// Killswitch base feature
+BASE_FEATURE(kRTCEncodedAudioFrameLimitSize,
+             "RTCEncodedAudioFrameLimitSize",
+             base::FEATURE_ENABLED_BY_DEFAULT);
+
 RTCEncodedAudioUnderlyingSink::RTCEncodedAudioUnderlyingSink(
     ScriptState* script_state,
     scoped_refptr<blink::RTCEncodedAudioStreamTransformer::Broker>
-        transformer_broker,
-    webrtc::TransformableFrameInterface::Direction expected_direction)
-    : transformer_broker_(std::move(transformer_broker)),
-      expected_direction_(expected_direction) {
+        transformer_broker)
+    : transformer_broker_(std::move(transformer_broker)) {
   DCHECK(transformer_broker_);
 }
 
@@ -37,9 +42,8 @@ ScriptPromise RTCEncodedAudioUnderlyingSink::write(
     WritableStreamDefaultController* controller,
     ExceptionState& exception_state) {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-  RTCEncodedAudioFrame* encoded_frame =
-      V8RTCEncodedAudioFrame::ToImplWithTypeCheck(script_state->GetIsolate(),
-                                                  chunk.V8Value());
+  RTCEncodedAudioFrame* encoded_frame = V8RTCEncodedAudioFrame::ToWrappable(
+      script_state->GetIsolate(), chunk.V8Value());
   if (!encoded_frame) {
     exception_state.ThrowTypeError("Invalid frame");
     return ScriptPromise();
@@ -51,16 +55,17 @@ ScriptPromise RTCEncodedAudioUnderlyingSink::write(
     return ScriptPromise();
   }
 
+  if (base::FeatureList::IsEnabled(kRTCEncodedAudioFrameLimitSize) &&
+      encoded_frame->IsDataTooLarge()) {
+    exception_state.ThrowDOMException(DOMExceptionCode::kOperationError,
+                                      "Frame too large");
+    return ScriptPromise();
+  }
+
   auto webrtc_frame = encoded_frame->PassWebRtcFrame();
   if (!webrtc_frame) {
     exception_state.ThrowDOMException(DOMExceptionCode::kOperationError,
                                       "Empty frame");
-    return ScriptPromise();
-  }
-
-  if (webrtc_frame->GetDirection() != expected_direction_) {
-    exception_state.ThrowDOMException(DOMExceptionCode::kOperationError,
-                                      "Invalid frame");
     return ScriptPromise();
   }
 

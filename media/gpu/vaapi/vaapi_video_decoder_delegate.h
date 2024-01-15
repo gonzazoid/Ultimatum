@@ -10,8 +10,8 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
@@ -149,14 +149,14 @@ class VaapiVideoDecoderDelegate {
   ProtectedSessionUpdateCB on_protected_session_update_cb_;
   EncryptionScheme encryption_scheme_;
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-  chromeos::ChromeOsCdmContext* chromeos_cdm_context_{nullptr};  // Not owned.
+  // Not owned.
+  raw_ptr<chromeos::ChromeOsCdmContext> chromeos_cdm_context_ = nullptr;
   EncryptionScheme last_used_encryption_scheme_{EncryptionScheme::kUnencrypted};
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
   ProtectedSessionState protected_session_state_;
   std::unique_ptr<DecryptConfig> decrypt_config_;
   std::vector<uint8_t> hw_identifier_;
   std::map<std::string, std::vector<uint8_t>> hw_key_data_map_;
-  base::TimeTicks last_key_retrieval_time_;
 
   // This will only be true on AMD platforms where we support encrypted content
   // and the content is encrypted.

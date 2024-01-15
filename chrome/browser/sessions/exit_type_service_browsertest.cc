@@ -204,8 +204,16 @@ IN_PROC_BROWSER_TEST_F(ExitTypeServiceTest, PRE_CloseCrashBubbleEnablesSaving) {
       ->SetWaitingForUserToAckCrashForTest(true);
 }
 
+// TODO(crbug.com/1473975): Re-enable test that flakily times out
+#if BUILDFLAG(IS_CHROMEOS)
+#define MAYBE_CloseCrashBubbleEnablesSaving \
+  DISABLED_CloseCrashBubbleEnablesSaving
+#else
+#define MAYBE_CloseCrashBubbleEnablesSaving CloseCrashBubbleEnablesSaving
+#endif
 // Closes the crash bubble, which should enable saving.
-IN_PROC_BROWSER_TEST_F(ExitTypeServiceTest, CloseCrashBubbleEnablesSaving) {
+IN_PROC_BROWSER_TEST_F(ExitTypeServiceTest,
+                       MAYBE_CloseCrashBubbleEnablesSaving) {
   ASSERT_EQ(ExitType::kCrashed, GetLastSessionExitType());
   EXPECT_FALSE(IsSessionServiceSavingEnabled());
 

@@ -4,14 +4,14 @@
 
 #include <algorithm>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
-#include "base/guid.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/test_simple_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/uuid.h"
 #include "components/download/internal/background_service/driver_entry.h"
 #include "components/download/internal/background_service/entry.h"
 #include "components/download/internal/background_service/file_monitor_impl.h"
@@ -28,7 +28,7 @@ class FileMonitorTest : public testing::Test {
  public:
   FileMonitorTest()
       : task_runner_(new base::TestSimpleTaskRunner),
-        handle_(task_runner_),
+        current_default_handle_(task_runner_),
         completion_callback_called_(false) {}
 
   FileMonitorTest(const FileMonitorTest&) = delete;
@@ -52,7 +52,7 @@ class FileMonitorTest : public testing::Test {
 
   base::ScopedTempDir scoped_temp_dir_;
   scoped_refptr<base::TestSimpleTaskRunner> task_runner_;
-  base::ThreadTaskRunnerHandle handle_;
+  base::SingleThreadTaskRunner::CurrentDefaultHandle current_default_handle_;
   base::FilePath download_dir_;
   bool completion_callback_called_;
   std::unique_ptr<FileMonitor> monitor_;
@@ -74,10 +74,12 @@ void FileMonitorTest::HardRecoveryResponse(bool result) {
 }
 
 TEST_F(FileMonitorTest, TestDeleteUnknownFiles) {
-  Entry entry1 = test::BuildEntry(DownloadClient::TEST, base::GenerateGUID());
+  Entry entry1 = test::BuildEntry(
+      DownloadClient::TEST, base::Uuid::GenerateRandomV4().AsLowercaseString());
   entry1.target_file_path = CreateTemporaryFile(entry1.guid);
 
-  Entry entry2 = test::BuildEntry(DownloadClient::TEST, base::GenerateGUID());
+  Entry entry2 = test::BuildEntry(
+      DownloadClient::TEST, base::Uuid::GenerateRandomV4().AsLowercaseString());
   entry2.target_file_path = CreateTemporaryFile(entry2.guid);
 
   DriverEntry driver_entry1;
@@ -85,7 +87,7 @@ TEST_F(FileMonitorTest, TestDeleteUnknownFiles) {
   driver_entry1.current_file_path = entry1.target_file_path;
 
   DriverEntry driver_entry2;
-  driver_entry2.guid = base::GenerateGUID();
+  driver_entry2.guid = base::Uuid::GenerateRandomV4().AsLowercaseString();
   driver_entry2.current_file_path = CreateTemporaryFile(driver_entry2.guid);
 
   base::FilePath temp_file1 = CreateTemporaryFile("temp1");
@@ -130,11 +132,13 @@ TEST_F(FileMonitorTest, TestDeleteUnknownFiles) {
 }
 
 TEST_F(FileMonitorTest, TestCleanupFilesForCompletedEntries) {
-  Entry entry1 = test::BuildEntry(DownloadClient::TEST, base::GenerateGUID());
+  Entry entry1 = test::BuildEntry(
+      DownloadClient::TEST, base::Uuid::GenerateRandomV4().AsLowercaseString());
   EXPECT_TRUE(
       base::CreateTemporaryFileInDir(download_dir_, &entry1.target_file_path));
 
-  Entry entry2 = test::BuildEntry(DownloadClient::TEST, base::GenerateGUID());
+  Entry entry2 = test::BuildEntry(
+      DownloadClient::TEST, base::Uuid::GenerateRandomV4().AsLowercaseString());
   EXPECT_TRUE(
       base::CreateTemporaryFileInDir(download_dir_, &entry2.target_file_path));
 

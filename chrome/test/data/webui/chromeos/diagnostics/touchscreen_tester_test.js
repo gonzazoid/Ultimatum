@@ -2,18 +2,21 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import 'chrome://webui-test/chromeos/mojo_webui_test_support.js';
+
 import {DialogType, SCREEN_MAX_LENGTH, TouchEventType} from 'chrome://diagnostics/touchscreen_tester.js';
+import {assertDeepEquals, assertEquals, assertTrue} from 'chrome://webui-test/chromeos/chai_assert.js';
 import {flushTasks} from 'chrome://webui-test/polymer_test_util.js';
 
-import {assertDeepEquals, assertEquals, assertTrue} from '../../chai_assert.js';
-import {MockController} from '../../mock_controller.js';
+import {MockController} from '../mock_controller.m.js';
+import {eventToPromise} from '../test_util.js';
 
-export function touchscreenTesterTestSuite() {
+suite('touchscreenTesterTestSuite', function() {
   /** @type {?TouchscreenTesterElement} */
   let touchscreenTesterElement = null;
 
   setup(() => {
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes.emptyHTML;
   });
 
   teardown(() => {
@@ -244,9 +247,11 @@ export function touchscreenTesterTestSuite() {
             touch.identifier, expectedTouchPt, touch.force);
       }
 
-      const touchEvent = new TouchEvent(eventType, {changedTouches: [touch]});
-      canvas.dispatchEvent(touchEvent);
+      const touchEvent = eventToPromise(eventType, canvas);
+      canvas.dispatchEvent(
+          new TouchEvent(eventType, {changedTouches: [touch]}));
+      await touchEvent;
       mockController.verifyMocks();
     }
   });
-}
+});

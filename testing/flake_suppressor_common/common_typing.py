@@ -3,10 +3,13 @@
 # found in the LICENSE file.
 """Module for shared/commonly used type hinting."""
 
-from typing import Any, Dict, List, Tuple
+import datetime
+from enum import Enum
+from typing import Any, Dict, List, Tuple, NamedTuple
 
 TagTupleType = Tuple[str, ...]
-
+# TODO(crbug.com/1358735): Remove this and update both GPU and Web test
+# suppressor with status support.
 # Sample:
 # {
 #   'test_suite': {
@@ -19,6 +22,28 @@ TagsToUrlsType = Dict[TagTupleType, List[str]]
 TestToTagsType = Dict[str, TagsToUrlsType]
 AggregatedResultsType = Dict[str, TestToTagsType]
 
+# Sample of AggregatedStatusResultsType:
+# {
+#   'test_suite': {
+#     'test_name': {
+#       ('typ', 'tags', 'as', 'tuple'):
+#       [ (status, url, date, is_slow, typ_expectations),
+#         (status, url, date, is_slow, typ_expectations) ],
+#     },
+#   },
+# }
+class ResultTupleType(NamedTuple):
+  status: str
+  build_url: str
+  date: datetime.date
+  is_slow: bool
+  typ_expectations: List[str]
+
+
+TagsToResultType = Dict[TagTupleType, List[ResultTupleType]]
+TestStatusToTagsType = Dict[str, TagsToResultType]
+AggregatedStatusResultsType = Dict[str, TestStatusToTagsType]
+
 # Sample:
 # {
 #   typ_tags (tuple): {
@@ -30,3 +55,9 @@ ResultCountType = Dict[TagTupleType, TestToResultCountType]
 
 SingleQueryResultType = Dict[str, Any]
 QueryJsonType = List[SingleQueryResultType]
+
+
+class ResultStatus(str, Enum):
+  ABORT = "ABORT"
+  CRASH = "CRASH"
+  FAIL = "FAIL"

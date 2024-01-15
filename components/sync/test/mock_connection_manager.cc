@@ -8,9 +8,9 @@
 #include <utility>
 
 #include "base/containers/contains.h"
-#include "base/guid.h"
 #include "base/location.h"
 #include "base/strings/stringprintf.h"
+#include "base/uuid.h"
 #include "components/sync/engine/syncer_proto_util.h"
 #include "components/sync/protocol/bookmark_specifics.pb.h"
 #include "components/sync/protocol/client_commands.pb.h"
@@ -35,20 +35,7 @@ namespace syncer {
 static char kValidAccessToken[] = "AccessToken";
 static char kCacheGuid[] = "kqyg7097kro6GSUod+GSg==";
 
-MockConnectionManager::MockConnectionManager()
-    : server_reachable_(true),
-      conflict_all_commits_(false),
-      conflict_n_commits_(0),
-      next_new_id_(10000),
-      store_birthday_("Store BDay!"),
-      store_birthday_sent_(false),
-      client_stuck_(false),
-      countdown_to_postbuffer_fail_(0),
-      mid_commit_observer_(nullptr),
-      throttling_(false),
-      partial_failure_(false),
-      fail_non_periodic_get_updates_(false),
-      num_get_updates_requests_(0) {
+MockConnectionManager::MockConnectionManager() {
   SetNewTimestamp(0);
   SetAccessToken(kValidAccessToken);
 }
@@ -68,30 +55,18 @@ void MockConnectionManager::SetMidCommitObserver(
 
 HttpResponse MockConnectionManager::PostBuffer(const std::string& buffer_in,
                                                const std::string& access_token,
-                                               bool allow_batching,
                                                std::string* buffer_out) {
   ClientToServerMessage post;
-  if (!post.ParseFromString(buffer_in)) {
+  if (!post.ParseFromString(buffer_in) || !post.has_protocol_version() ||
+      !post.has_api_key() || !post.has_bag_of_chips()) {
     ADD_FAILURE();
-    // Note: Here and below, ForIoError() is chosen somewhat arbitrarily, since
+    // Note: Here and below, ForNetError() is chosen somewhat arbitrarily, since
     // HttpResponse doesn't have any better-fitting type of error.
-    return HttpResponse::ForIoError();
-  }
-  if (!post.has_protocol_version()) {
-    ADD_FAILURE();
-    return HttpResponse::ForIoError();
-  }
-  if (!post.has_api_key()) {
-    ADD_FAILURE();
-    return HttpResponse::ForIoError();
-  }
-  if (!post.has_bag_of_chips()) {
-    ADD_FAILURE();
-    return HttpResponse::ForIoError();
+    return HttpResponse::ForNetError(net::ERR_FAILED);
   }
 
   requests_.push_back(post);
-  client_stuck_ = post.sync_problem_detected();
+
   sync_pb::ClientToServerResponse client_to_server_response;
   client_to_server_response.Clear();
 
@@ -124,7 +99,7 @@ HttpResponse MockConnectionManager::PostBuffer(const std::string& buffer_in,
     client_to_server_response.set_error_message("Merry Unbirthday!");
     client_to_server_response.SerializeToString(buffer_out);
     store_birthday_sent_ = true;
-    return HttpResponse::ForSuccess();
+    return HttpResponse::ForSuccessForTest();
   }
   EXPECT_TRUE(!store_birthday_sent_ || post.has_store_birthday() ||
               post.message_contents() ==
@@ -133,21 +108,21 @@ HttpResponse MockConnectionManager::PostBuffer(const std::string& buffer_in,
 
   if (post.message_contents() == ClientToServerMessage::COMMIT) {
     if (!ProcessCommit(&post, &client_to_server_response)) {
-      return HttpResponse::ForIoError();
+      return HttpResponse::ForNetError(net::ERR_FAILED);
     }
 
   } else if (post.message_contents() == ClientToServerMessage::GET_UPDATES) {
     if (!ProcessGetUpdates(&post, &client_to_server_response)) {
-      return HttpResponse::ForIoError();
+      return HttpResponse::ForNetError(net::ERR_FAILED);
     }
   } else if (post.message_contents() ==
              ClientToServerMessage::CLEAR_SERVER_DATA) {
     if (!ProcessClearServerData(&post, &client_to_server_response)) {
-      return HttpResponse::ForIoError();
+      return HttpResponse::ForNetError(net::ERR_FAILED);
     }
   } else {
     EXPECT_TRUE(false) << "Unknown/unsupported ClientToServerMessage";
-    return HttpResponse::ForIoError();
+    return HttpResponse::ForNetError(net::ERR_FAILED);
   }
 
   {
@@ -184,7 +159,7 @@ HttpResponse MockConnectionManager::PostBuffer(const std::string& buffer_in,
     mid_commit_observer_->Observe();
   }
 
-  return HttpResponse::ForSuccess();
+  return HttpResponse::ForSuccessForTest();
 }
 
 sync_pb::GetUpdatesResponse* MockConnectionManager::GetUpdateResponse() {
@@ -258,7 +233,7 @@ sync_pb::SyncEntity* MockConnectionManager::SetNigori(
   sync_pb::SyncEntity* ent = GetUpdateResponse()->add_entries();
   ent->set_id_string(id);
   ent->set_parent_id_string("0");
-  ent->set_server_defined_unique_tag(ModelTypeToRootTag(NIGORI));
+  ent->set_server_defined_unique_tag(ModelTypeToProtocolRootTag(NIGORI));
   ent->set_name("Nigori");
   ent->set_non_unique_name("Nigori");
   ent->set_version(version);
@@ -278,7 +253,7 @@ sync_pb::SyncEntity* MockConnectionManager::AddUpdatePref(
   sync_pb::SyncEntity* ent =
       AddUpdateMeta(id, parent_id, " ", version, sync_ts);
 
-  ent->set_client_defined_unique_tag(client_tag);
+  ent->set_client_tag_hash(client_tag);
 
   sync_pb::EntitySpecifics specifics;
   AddDefaultFieldValue(PREFERENCES, &specifics);
@@ -428,7 +403,7 @@ void MockConnectionManager::SetLastUpdateServerTag(const string& tag) {
 }
 
 void MockConnectionManager::SetLastUpdateClientTag(const string& tag) {
-  GetMutableLastUpdate()->set_client_defined_unique_tag(tag);
+  GetMutableLastUpdate()->set_client_tag_hash(tag);
 }
 
 void MockConnectionManager::SetNewTimestamp(int ts) {
@@ -563,7 +538,7 @@ bool MockConnectionManager::ProcessCommit(
       // For commit-only types, fake having received a random ID, simply to
       // reuse the validation logic later below.
       if (CommitOnlyTypes().Has(model_type)) {
-        id_string = base::GenerateGUID();
+        id_string = base::Uuid::GenerateRandomV4().AsLowercaseString();
       } else {
         ADD_FAILURE() << " for specifics type "
                       << ModelTypeToDebugString(model_type);
@@ -695,7 +670,7 @@ void MockConnectionManager::SetServerNotReachable() {
 
 void MockConnectionManager::UpdateConnectionStatus() {
   SetServerResponse(server_reachable_
-                        ? HttpResponse::ForSuccess()
+                        ? HttpResponse::ForSuccessForTest()
                         : HttpResponse::ForNetError(net::ERR_FAILED));
 }
 

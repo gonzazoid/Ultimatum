@@ -11,10 +11,12 @@
 #include "base/metrics/histogram_macros.h"
 #include "base/notreached.h"
 #include "base/strings/strcat.h"
-#include "base/strings/string_piece_forward.h"
+#include "base/strings/string_piece.h"
 #include "base/time/time.h"
 #include "services/metrics/public/cpp/ukm_entry_builder.h"
 #include "services/metrics/public/cpp/ukm_recorder.h"
+#include "ui/latency/jank_tracker_for_experiments_buildflags.h"
+#include "ui/latency/janky_duration_tracker.h"
 
 // Impose some restrictions for tests etc, but also be lenient since some of the
 // data come from untrusted sources.
@@ -125,6 +127,9 @@ void EmitScrollUpdateTime(base::TimeDelta dur, bool janky) {
       "Event.Jank.ScrollUpdate.TotalJankyAndNonJankyDuration2",
       base::HistogramBase::kUmaTargetedHistogramFlag);
   histogram->AddCount(janky ? kJanky : kNonJanky, count);
+#if BUILDFLAG(JANK_TRACKER_FOR_EXPERIMENTS)
+  AdvanceJankyDurationForBenchmarking(janky, count);
+#endif
 }
 
 }  // namespace
@@ -403,30 +408,11 @@ void LatencyTracker::ComputeEndToEndLatencyHistograms(
     ScrollType scroll_type =
         IsInertialScroll(latency) ? ScrollType::kInertial : ScrollType::kBegin;
 
-    // This UMA metric tracks the performance of overall scrolling as a high
-    // level metric.
-    UMA_HISTOGRAM_INPUT_LATENCY_5_SECONDS_MAX_MICROSECONDS(
-        "Event.Latency.ScrollBegin.TimeToScrollUpdateSwapBegin2",
-        ComputeLatency(original_timestamp, gpu_swap_begin_timestamp));
-
-    // This UMA metric tracks the time between the final frame swap for the
-    // first scroll event in a sequence and the original timestamp of that
-    // scroll event's underlying touch/wheel event.
-    UMA_HISTOGRAM_INPUT_LATENCY_5_SECONDS_MAX_MICROSECONDS_GROUP(
-        "TimeToScrollUpdateSwapBegin4", scroll_type, input_modality,
-        ComputeLatency(original_timestamp, gpu_swap_begin_timestamp));
-
-    // Report the latency metric separately for the scrolls that caused the
-    // top-controls to scroll and the ones that didn't.
-    if (top_controls_visible_height_changed) {
+    if (scroll_type == ScrollType::kBegin &&
+        input_modality == ScrollInputModality::kWheel) {
+      // scroll event's underlying touch/wheel event.
       UMA_HISTOGRAM_INPUT_LATENCY_5_SECONDS_MAX_MICROSECONDS_GROUP(
-          "TimeToScrollUpdateSwapBegin4.TopControlsMoved", scroll_type,
-          input_modality,
-          ComputeLatency(original_timestamp, gpu_swap_begin_timestamp));
-    } else {
-      UMA_HISTOGRAM_INPUT_LATENCY_5_SECONDS_MAX_MICROSECONDS_GROUP(
-          "TimeToScrollUpdateSwapBegin4.NoTopControlsMoved", scroll_type,
-          input_modality,
+          "TimeToScrollUpdateSwapBegin4", scroll_type, input_modality,
           ComputeLatency(original_timestamp, gpu_swap_begin_timestamp));
     }
 
@@ -453,12 +439,15 @@ void LatencyTracker::ComputeEndToEndLatencyHistograms(
         "Event.Latency.ScrollUpdate.TimeToScrollUpdateSwapBegin2",
         ComputeLatency(original_timestamp, gpu_swap_begin_timestamp));
 
-    // This UMA metric tracks the time from when the original touch/wheel event
-    // is created to when the scroll gesture results in final frame swap.
-    // First scroll events are excluded from this metric.
-    UMA_HISTOGRAM_INPUT_LATENCY_5_SECONDS_MAX_MICROSECONDS_GROUP(
-        "TimeToScrollUpdateSwapBegin4", scroll_type, input_modality,
-        ComputeLatency(original_timestamp, gpu_swap_begin_timestamp));
+    if (scroll_type == ScrollType::kBegin &&
+        input_modality == ScrollInputModality::kWheel) {
+      // This UMA metric tracks the time from when the original touch/wheel
+      // event is created to when the scroll gesture results in final frame
+      // swap. First scroll events are excluded from this metric.
+      UMA_HISTOGRAM_INPUT_LATENCY_5_SECONDS_MAX_MICROSECONDS_GROUP(
+          "TimeToScrollUpdateSwapBegin4", scroll_type, input_modality,
+          ComputeLatency(original_timestamp, gpu_swap_begin_timestamp));
+    }
 
     // Also report the latency metric separately for the scrolls that caused the
     // top-controls to scroll and the ones that didn't.
@@ -484,10 +473,6 @@ void LatencyTracker::ComputeEndToEndLatencyHistograms(
       UMA_HISTOGRAM_INPUT_LATENCY_HIGH_RESOLUTION_MICROSECONDS(
           "Event.Latency.EndToEnd.KeyPress",
           ComputeLatency(original_timestamp, gpu_swap_begin_timestamp));
-    } else if (latency.source_event_type() == SourceEventType::MOUSE) {
-      UMA_HISTOGRAM_INPUT_LATENCY_HIGH_RESOLUTION_MICROSECONDS(
-          "Event.Latency.EndToEnd.Mouse",
-          ComputeLatency(original_timestamp, gpu_swap_begin_timestamp));
     } else if (latency.source_event_type() == SourceEventType::TOUCHPAD) {
       UMA_HISTOGRAM_INPUT_LATENCY_CUSTOM_1_SECOND_MAX_MICROSECONDS(
           "Event.Latency.EndToEnd.TouchpadPinch2",
@@ -505,6 +490,13 @@ void LatencyTracker::EmitLatencyHistograms(
     ScrollInputModality input_modality) {
   DCHECK(!IsInertialScroll(latency) || scroll_type == ScrollType::kInertial);
 
+  // Inertial and scrollbar scrolls are excluded from Ukm metrics.
+  if (!((input_modality == ScrollInputModality::kTouch &&
+         !IsInertialScroll(latency)) ||
+        input_modality == ScrollInputModality::kWheel)) {
+    return;
+  }
+
   base::TimeTicks rendering_scheduled_timestamp;
   bool rendering_scheduled_on_main = latency.FindLatency(
       ui::INPUT_EVENT_LATENCY_RENDERING_SCHEDULED_MAIN_COMPONENT,
@@ -516,10 +508,6 @@ void LatencyTracker::EmitLatencyHistograms(
     DCHECK_AND_RETURN_ON_FAIL(found_component);
   }
 
-  // Inertial and scrollbar scrolls are excluded from Ukm metrics.
-  if ((input_modality == ScrollInputModality::kTouch &&
-       !IsInertialScroll(latency)) ||
-      input_modality == ScrollInputModality::kWheel) {
     InputMetricEvent input_metric_event;
     if (scroll_type == ScrollType::kBegin) {
       input_metric_event = input_modality == ScrollInputModality::kTouch
@@ -535,61 +523,6 @@ void LatencyTracker::EmitLatencyHistograms(
         input_metric_event, original_timestamp, gpu_swap_begin_timestamp,
         rendering_scheduled_timestamp, rendering_scheduled_on_main,
         latency.ukm_source_id());
-  }
-
-  if (rendering_scheduled_on_main) {
-    UMA_HISTOGRAM_SCROLL_LATENCY_LONG_2_GROUP(
-        "TimeToHandled2_Main", scroll_type, input_modality,
-        ComputeLatency(original_timestamp, rendering_scheduled_timestamp));
-  } else {
-    UMA_HISTOGRAM_SCROLL_LATENCY_LONG_2_GROUP(
-        "TimeToHandled2_Impl", scroll_type, input_modality,
-        ComputeLatency(original_timestamp, rendering_scheduled_timestamp));
-  }
-
-  base::TimeTicks renderer_swap_timestamp;
-  bool found_renderer_swap_component =
-      latency.FindLatency(ui::INPUT_EVENT_LATENCY_RENDERER_SWAP_COMPONENT,
-                          &renderer_swap_timestamp);
-
-  base::TimeTicks browser_received_swap_timestamp;
-  bool found_received_frame_component =
-      latency.FindLatency(ui::DISPLAY_COMPOSITOR_RECEIVED_FRAME_COMPONENT,
-                          &browser_received_swap_timestamp);
-  DCHECK_AND_RETURN_ON_FAIL(found_received_frame_component);
-
-  // If we're committing to the active tree, there will never be a renderer
-  // swap. In this case, don't record the two histogram values for the periods
-  // surrounding the renderer swap. We could assign the total time to one or the
-  // other of them, but that would likely skew statistics.
-  if (found_renderer_swap_component) {
-    if (rendering_scheduled_on_main) {
-      UMA_HISTOGRAM_SCROLL_LATENCY_LONG_2_GROUP(
-          "HandledToRendererSwap2_Main", scroll_type, input_modality,
-          ComputeLatency(rendering_scheduled_timestamp,
-                         renderer_swap_timestamp));
-
-    } else {
-      UMA_HISTOGRAM_SCROLL_LATENCY_LONG_2_GROUP(
-          "HandledToRendererSwap2_Impl", scroll_type, input_modality,
-          ComputeLatency(rendering_scheduled_timestamp,
-                         renderer_swap_timestamp));
-    }
-
-    UMA_HISTOGRAM_SCROLL_LATENCY_SHORT_2_GROUP(
-        "RendererSwapToBrowserNotified2", scroll_type, input_modality,
-        ComputeLatency(renderer_swap_timestamp,
-                       browser_received_swap_timestamp));
-  }
-
-  UMA_HISTOGRAM_SCROLL_LATENCY_LONG_2_GROUP(
-      "BrowserNotifiedToBeforeGpuSwap2", scroll_type, input_modality,
-      ComputeLatency(browser_received_swap_timestamp,
-                     gpu_swap_begin_timestamp));
-
-  UMA_HISTOGRAM_SCROLL_LATENCY_SHORT_2_GROUP(
-      "GpuSwap2", scroll_type, input_modality,
-      ComputeLatency(gpu_swap_begin_timestamp, gpu_swap_end_timestamp));
 }
 
 }  // namespace ui

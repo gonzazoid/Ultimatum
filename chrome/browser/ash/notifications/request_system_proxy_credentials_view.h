@@ -8,7 +8,8 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/base/ui_base_types.h"
 #include "ui/views/view.h"
@@ -62,9 +63,9 @@ class RequestSystemProxyCredentialsView final
 
   const std::u16string window_title_;
 
-  views::Textfield* username_textfield_ = nullptr;
-  views::Textfield* password_textfield_ = nullptr;
-  views::Label* error_label_ = nullptr;
+  raw_ptr<views::Textfield> username_textfield_ = nullptr;
+  raw_ptr<views::Textfield> password_textfield_ = nullptr;
+  raw_ptr<views::Label> error_label_ = nullptr;
 
   const std::string proxy_server_;
   const bool show_error_label_;

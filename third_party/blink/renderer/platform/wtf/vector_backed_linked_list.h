@@ -60,9 +60,9 @@ class VectorBackedLinkedListNode {
   VectorBackedLinkedListNode& operator=(VectorBackedLinkedListNode&& other) =
       default;
 
-  template <typename VisitorDispathcer, typename A = Allocator>
-  std::enable_if_t<A::kIsGarbageCollected> Trace(
-      VisitorDispathcer visitor) const {
+  void Trace(auto visitor) const
+    requires Allocator::kIsGarbageCollected
+  {
     if (!WTF::IsWeak<ValueType>::value) {
       visitor->Trace(value_);
     }
@@ -251,9 +251,9 @@ class VectorBackedLinkedList {
     size_ = 0;
   }
 
-  template <typename VisitorDispatcher, typename A = Allocator>
-  std::enable_if_t<A::kIsGarbageCollected> Trace(
-      VisitorDispatcher visitor) const {
+  void Trace(auto visitor) const
+    requires Allocator::kIsGarbageCollected
+  {
     nodes_.Trace(visitor);
     if (WTF::IsWeak<ValueType>::value) {
       visitor->template RegisterWeakCallbackMethod<
@@ -306,8 +306,9 @@ class VectorBackedLinkedList {
   void Unlink(const Node&);
 
   template <typename A = Allocator>
-  std::enable_if_t<A::kIsGarbageCollected> ProcessCustomWeakness(
-      const typename A::LivenessBroker& broker) {
+  void ProcessCustomWeakness(const typename A::LivenessBroker& broker)
+    requires A::kIsGarbageCollected
+  {
     auto it = begin();
     while (it != end()) {
       if (!broker.IsHeapObjectAlive(it->Get())) {
@@ -328,7 +329,7 @@ class VectorBackedLinkedList {
   wtf_size_t free_head_index_ = anchor_index_;
   wtf_size_t size_ = 0;
 
-  template <typename T, typename U, typename V, typename W>
+  template <typename T, typename U, typename V>
   friend class LinkedHashSet;
   FRIEND_TEST_ALL_PREFIXES(VectorBackedLinkedListTest, Insert);
   FRIEND_TEST_ALL_PREFIXES(VectorBackedLinkedListTest, PushFront);

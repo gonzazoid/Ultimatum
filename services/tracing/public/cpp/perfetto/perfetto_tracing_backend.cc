@@ -4,11 +4,13 @@
 
 #include "services/tracing/public/cpp/perfetto/perfetto_tracing_backend.h"
 
+#include "base/auto_reset.h"
 #include "base/containers/flat_map.h"
 #include "base/containers/flat_set.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/tracing/tracing_tls.h"
 #include "build/build_config.h"
 #include "mojo/public/cpp/bindings/receiver.h"
@@ -29,6 +31,8 @@
 #include "third_party/perfetto/include/perfetto/ext/tracing/core/trace_writer.h"
 #include "third_party/perfetto/include/perfetto/ext/tracing/core/tracing_service.h"
 #include "third_party/perfetto/include/perfetto/tracing/core/trace_config.h"
+
+using ShmemMode = perfetto::SharedMemoryArbiter::ShmemMode;
 
 namespace tracing {
 namespace {
@@ -127,9 +131,9 @@ class ProducerEndpoint : public perfetto::ProducerEndpoint,
     // We need to make sure the CommitData IPC is sent off without triggering
     // any trace events, as that could stall waiting for SMB chunks to be freed
     // up which requires the tracing service to receive the IPC.
-    if (!base::tracing::GetThreadIsInTraceEventTLS()->Get()) {
-      base::tracing::AutoThreadLocalBoolean thread_is_in_trace_event(
-          base::tracing::GetThreadIsInTraceEventTLS());
+    if (!*base::tracing::GetThreadIsInTraceEvent()) {
+      const base::AutoReset<bool> resetter(
+          base::tracing::GetThreadIsInTraceEvent(), true);
       producer_host_->CommitData(commit, std::move(commit_callback));
       return;
     }
@@ -238,7 +242,7 @@ class ProducerEndpoint : public perfetto::ProducerEndpoint,
              const std::vector<uint64_t>& data_source_ids) override {
     DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
     producer_->Flush(flush_request_id, data_source_ids.data(),
-                     data_source_ids.size());
+                     data_source_ids.size(), perfetto::FlushFlags(0));
   }
 
   void ClearIncrementalState() override {
@@ -255,15 +259,9 @@ class ProducerEndpoint : public perfetto::ProducerEndpoint,
     DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
     DCHECK(!shared_memory_ == !shared_memory_arbiter_);
-    if (shared_memory_arbiter_) {
-      shared_memory_arbiter_->BindToProducerEndpoint(this,
-                                                     producer_task_runner);
-    } else {
+    if (!shared_memory_) {
       shared_memory_ =
           std::make_unique<ChromeBaseSharedMemory>(shmem_size_bytes_);
-      shared_memory_arbiter_ = perfetto::SharedMemoryArbiter::CreateInstance(
-          shared_memory_.get(), shmem_page_size_bytes_, this,
-          producer_task_runner);
     }
 
     mojo::PendingRemote<mojom::ProducerClient> client_remote;
@@ -281,6 +279,22 @@ class ProducerEndpoint : public perfetto::ProducerEndpoint,
     receiver_->set_disconnect_handler(base::BindOnce(
         [](ProducerEndpoint* endpoint) { endpoint->receiver_->reset(); },
         base::Unretained(this)));
+
+    // The shared memory arbiter can call producer host methods if it has
+    // uncommitted requests at this moment. So bind it to the producer only
+    // after it has been connected to the host.
+    if (shared_memory_arbiter_) {
+      shared_memory_arbiter_->BindToProducerEndpoint(this,
+                                                     producer_task_runner);
+    } else {
+      shared_memory_arbiter_ = perfetto::SharedMemoryArbiter::CreateInstance(
+          shared_memory_.get(), shmem_page_size_bytes_, ShmemMode::kDefault,
+          this, producer_task_runner);
+    }
+
+    // This backend connects to the custom mojo-based tracing service, which
+    // always supports direct SMB patching.
+    shared_memory_arbiter_->SetDirectSMBPatchingSupportedByService();
 
     producer_->OnConnect();
   }
@@ -495,6 +509,12 @@ class ConsumerEndpoint : public perfetto::ConsumerEndpoint,
     NOTREACHED();
   }
 
+  void CloneSession(perfetto::TracingSessionID) override {
+    DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+    // Not implemented yet.
+    NOTREACHED();
+  }
+
   // tracing::mojom::TracingSessionClient implementation:
   void OnTracingEnabled() override {
     DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
@@ -621,11 +641,10 @@ PerfettoTracingBackend::ConnectConsumer(const ConnectConsumerArgs& args) {
   }
   auto consumer_endpoint =
       std::make_unique<ConsumerEndpoint>(args.consumer, args.task_runner);
-  consumer_endpoint_ = consumer_endpoint->GetWeakPtr();
   consumer_connection_task_runner_->PostTask(
       FROM_HERE,
       base::BindOnce(&PerfettoTracingBackend::CreateConsumerConnection,
-                     base::Unretained(this)));
+                     base::Unretained(this), consumer_endpoint->GetWeakPtr()));
   return consumer_endpoint;
 }
 
@@ -645,7 +664,7 @@ PerfettoTracingBackend::ConnectProducer(const ConnectProducerArgs& args) {
   if (args.use_producer_provided_smb) {
     shm = std::make_unique<ChromeBaseSharedMemory>(shmem_size_hint);
     arbiter = perfetto::SharedMemoryArbiter::CreateUnboundInstance(
-        shm.get(), shmem_page_size_hint);
+        shm.get(), shmem_page_size_hint, ShmemMode::kDefault);
   }
 #endif  // BUILDFLAG(USE_PERFETTO_CLIENT_LIBRARY)
 
@@ -705,17 +724,23 @@ void PerfettoTracingBackend::BindProducerConnectionIfNecessary() {
   }
 }
 
-void PerfettoTracingBackend::CreateConsumerConnection() {
+void PerfettoTracingBackend::CreateConsumerConnection(
+    base::WeakPtr<ConsumerEndpoint> consumer_endpoint) {
   DCHECK(consumer_connection_task_runner_->RunsTasksInCurrentSequence());
-  consumer_host_remote_.reset();
+  auto consumer_host_remote =
+      std::make_unique<mojo::PendingRemote<mojom::ConsumerHost>>();
   auto& tracing_service = consumer_connection_factory_();
   tracing_service.BindConsumerHost(
-      consumer_host_remote_.InitWithNewPipeAndPassReceiver());
-  muxer_task_runner_->PostTask([this] {
-    if (!consumer_endpoint_)
-      return;
-    consumer_endpoint_->BindConnection(std::move(consumer_host_remote_));
-  });
+      consumer_host_remote->InitWithNewPipeAndPassReceiver());
+  muxer_task_runner_->PostTask(
+      [consumer_endpoint, raw_ptr = consumer_host_remote.release()] {
+        std::unique_ptr<mojo::PendingRemote<mojom::ConsumerHost>>
+            consumer_host_remote(raw_ptr);
+        if (!consumer_endpoint) {
+          return;
+        }
+        consumer_endpoint->BindConnection(std::move(*consumer_host_remote));
+      });
 }
 
 }  // namespace tracing

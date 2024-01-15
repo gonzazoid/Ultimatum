@@ -6,9 +6,11 @@
 #define CHROME_BROWSER_ASH_LOGIN_UI_MOCK_SIGNIN_UI_H_
 
 #include <memory>
+
 #include "chrome/browser/ash/login/ui/signin_ui.h"
 #include "chromeos/ash/components/login/auth/public/user_context.h"
 #include "components/login/base_screen_handler_utils.h"
+#include "components/prefs/pref_service.h"
 #include "testing/gmock/include/gmock/gmock.h"
 
 namespace ash {
@@ -21,15 +23,18 @@ class MockSigninUI : public SigninUI {
   MockSigninUI& operator=(const SigninUI&) = delete;
 
   MOCK_METHOD(void, StartUserOnboarding, (), (override));
-  MOCK_METHOD(void, ResumeUserOnboarding, (OobeScreenId), (override));
+  MOCK_METHOD(void,
+              ResumeUserOnboarding,
+              (const PrefService&, OobeScreenId),
+              (override));
   MOCK_METHOD(void, StartManagementTransition, (), (override));
   MOCK_METHOD(void, ShowTosForExistingUser, (), (override));
   MOCK_METHOD(void, ShowNewTermsForFlexUsers, (), (override));
   MOCK_METHOD(void,
               StartEncryptionMigration,
-              (const UserContext&,
+              (std::unique_ptr<UserContext>,
                EncryptionMigrationMode,
-               base::OnceCallback<void(const UserContext&)>),
+               base::OnceCallback<void(std::unique_ptr<UserContext>)>),
               (override));
   MOCK_METHOD(void,
               SetAuthSessionForOnboarding,
@@ -37,10 +42,13 @@ class MockSigninUI : public SigninUI {
               (override));
   MOCK_METHOD(void, ClearOnboardingAuthSession, (), (override));
   MOCK_METHOD(void,
-              ShowPasswordChangedDialog,
-              (const AccountId&, bool),
+              UseAlternativeAuthentication,
+              (std::unique_ptr<UserContext> user_context, bool),
               (override));
-  MOCK_METHOD(void, StartCryptohomeRecovery, (const AccountId&), (override));
+  MOCK_METHOD(void,
+              RunLocalAuthentication,
+              (std::unique_ptr<UserContext> user_context),
+              (override));
   MOCK_METHOD(void,
               ShowSigninError,
               (SigninError, const std::string&),
@@ -53,11 +61,5 @@ class MockSigninUI : public SigninUI {
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove after the //chrome/browser/chromeos
-// source migration is finished.
-namespace chromeos {
-using ::ash::MockSigninUI;
-}
 
 #endif  // CHROME_BROWSER_ASH_LOGIN_UI_MOCK_SIGNIN_UI_H_

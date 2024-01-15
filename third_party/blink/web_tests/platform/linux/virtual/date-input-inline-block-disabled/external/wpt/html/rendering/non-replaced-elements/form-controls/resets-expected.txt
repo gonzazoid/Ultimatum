@@ -1,0 +1,14 @@
+This is a testharness.js-based test.
+Found 5 FAIL, 0 TIMEOUT, 0 NOTRUN.
+[FAIL] <input type="date"> - display
+  assert_equals: expected "inline-block" but got "inline-flex"
+[FAIL] <input type="month"> - display
+  assert_equals: expected "inline-block" but got "inline-flex"
+[FAIL] <input type="week"> - display
+  assert_equals: expected "inline-block" but got "inline-flex"
+[FAIL] <input type="time"> - display
+  assert_equals: expected "inline-block" but got "inline-flex"
+[FAIL] <input type="datetime-local"> - display
+  assert_equals: expected "inline-block" but got "inline-flex"
+Harness: the test ran to completion.
+

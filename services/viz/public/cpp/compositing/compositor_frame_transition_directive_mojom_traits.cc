@@ -13,7 +13,7 @@
 #include "mojo/public/cpp/base/time_mojom_traits.h"
 #include "mojo/public/cpp/base/unguessable_token_mojom_traits.h"
 #include "services/viz/public/cpp/compositing/compositor_render_pass_id_mojom_traits.h"
-#include "services/viz/public/cpp/compositing/shared_element_resource_id_mojom_traits.h"
+#include "services/viz/public/cpp/compositing/view_transition_element_resource_id_mojom_traits.h"
 #include "services/viz/public/mojom/compositing/compositor_frame_transition_directive.mojom-shared.h"
 
 namespace mojo {
@@ -63,7 +63,8 @@ bool StructTraits<
              data,
          viz::CompositorFrameTransitionDirective::SharedElement* out) {
   return data.ReadRenderPassId(&out->render_pass_id) &&
-         data.ReadSharedElementResourceId(&out->shared_element_resource_id);
+         data.ReadViewTransitionElementResourceId(
+             &out->view_transition_element_resource_id);
 }
 
 // static
@@ -82,9 +83,28 @@ bool StructTraits<viz::mojom::CompositorFrameTransitionDirectiveDataView,
     return false;
   }
 
-  *out = viz::CompositorFrameTransitionDirective(
-      navigation_id ? *navigation_id : viz::NavigationID::Null(), sequence_id,
-      type, std::move(shared_elements));
+  // The renderer should never create a directive other than save with shared
+  // elements.
+  if (type != viz::CompositorFrameTransitionDirective::Type::kSave &&
+      !shared_elements.empty()) {
+    return false;
+  }
+
+  auto navigation_id_parsed = navigation_id.value_or(viz::NavigationID::Null());
+  switch (type) {
+    case viz::CompositorFrameTransitionDirective::Type::kSave:
+      *out = viz::CompositorFrameTransitionDirective::CreateSave(
+          navigation_id_parsed, sequence_id, std::move(shared_elements));
+      break;
+    case viz::CompositorFrameTransitionDirective::Type::kAnimateRenderer:
+      *out = viz::CompositorFrameTransitionDirective::CreateAnimate(
+          navigation_id_parsed, sequence_id);
+      break;
+    case viz::CompositorFrameTransitionDirective::Type::kRelease:
+      *out = viz::CompositorFrameTransitionDirective::CreateRelease(
+          navigation_id_parsed, sequence_id);
+  }
+
   return true;
 }
 

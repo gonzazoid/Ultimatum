@@ -26,6 +26,7 @@
 #include "components/spellcheck/browser/pref_names.h"
 #include "components/spellcheck/common/spellcheck_features.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace policy {
 
@@ -104,28 +105,23 @@ class SpellcheckLanguagePolicyHandlersTest
 
 TEST_P(SpellcheckLanguagePolicyHandlersTest, ApplyPolicySettings) {
 #if BUILDFLAG(IS_WIN) && BUILDFLAG(USE_BROWSER_SPELLCHECKER)
-  base::test::ScopedFeatureList feature_list;
-  if (GetParam().windows_spellchecker_enabled) {
-    if (!spellcheck::WindowsVersionSupportsSpellchecker())
-      return;
-
-    // Force Windows native spellchecking to be enabled.
-    feature_list.InitAndEnableFeature(spellcheck::kWinUseBrowserSpellChecker);
-  } else {
+  absl::optional<spellcheck::ScopedDisableBrowserSpellCheckerForTesting>
+      disable_browser_spell_checker;
+  if (!GetParam().windows_spellchecker_enabled) {
     // Hunspell-only spellcheck languages will be used.
-    feature_list.InitAndDisableFeature(spellcheck::kWinUseBrowserSpellChecker);
+    disable_browser_spell_checker.emplace();
   }
 #endif  // BUILDFLAG(IS_WIN) && BUILDFLAG(USE_BROWSER_SPELLCHECKER)
 
   PrefValueMap prefs;
   policy::PolicyMap policy;
 
-  base::Value blocked_languages_list(base::Value::Type::LIST);
+  base::Value::List blocked_languages_list;
   for (const auto& blocked_language : GetParam().blocked_languages) {
     blocked_languages_list.Append(std::move(blocked_language));
   }
 
-  base::Value forced_languages_list(base::Value::Type::LIST);
+  base::Value::List forced_languages_list;
   for (const auto& forced_language : GetParam().forced_languages) {
     forced_languages_list.Append(std::move(forced_language));
   }
@@ -133,12 +129,12 @@ TEST_P(SpellcheckLanguagePolicyHandlersTest, ApplyPolicySettings) {
   policy.Set(policy::key::kSpellcheckLanguageBlocklist,
              policy::POLICY_LEVEL_MANDATORY, policy::POLICY_SCOPE_USER,
              policy::POLICY_SOURCE_ENTERPRISE_DEFAULT,
-             std::move(blocked_languages_list), nullptr);
+             base::Value(std::move(blocked_languages_list)), nullptr);
 
   policy.Set(policy::key::kSpellcheckLanguage, policy::POLICY_LEVEL_MANDATORY,
              policy::POLICY_SCOPE_USER,
              policy::POLICY_SOURCE_ENTERPRISE_DEFAULT,
-             std::move(forced_languages_list), nullptr);
+             base::Value(std::move(forced_languages_list)), nullptr);
 
   policy.Set(policy::key::kSpellcheckEnabled, policy::POLICY_LEVEL_MANDATORY,
              policy::POLICY_SCOPE_USER,

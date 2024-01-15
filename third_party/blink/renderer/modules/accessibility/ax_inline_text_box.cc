@@ -39,10 +39,10 @@
 #include "third_party/blink/renderer/core/editing/markers/document_marker_controller.h"
 #include "third_party/blink/renderer/core/editing/position.h"
 #include "third_party/blink/renderer/core/highlight/highlight.h"
-#include "third_party/blink/renderer/core/layout/api/line_layout_api_shim.h"
+#include "third_party/blink/renderer/core/layout/inline/abstract_inline_text_box.h"
+#include "third_party/blink/renderer/core/layout/inline/inline_node.h"
+#include "third_party/blink/renderer/core/layout/inline/offset_mapping.h"
 #include "third_party/blink/renderer/core/layout/layout_text.h"
-#include "third_party/blink/renderer/core/layout/ng/inline/ng_inline_node.h"
-#include "third_party/blink/renderer/core/layout/ng/inline/ng_offset_mapping.h"
 #include "third_party/blink/renderer/modules/accessibility/ax_object_cache_impl.h"
 #include "third_party/blink/renderer/modules/accessibility/ax_position.h"
 #include "third_party/blink/renderer/modules/accessibility/ax_range.h"
@@ -52,10 +52,14 @@
 
 namespace blink {
 
-AXInlineTextBox::AXInlineTextBox(
-    scoped_refptr<AbstractInlineTextBox> inline_text_box,
-    AXObjectCacheImpl& ax_object_cache)
-    : AXObject(ax_object_cache), inline_text_box_(std::move(inline_text_box)) {}
+AXInlineTextBox::AXInlineTextBox(AbstractInlineTextBox* inline_text_box,
+                                 AXObjectCacheImpl& ax_object_cache)
+    : AXObject(ax_object_cache), inline_text_box_(inline_text_box) {}
+
+void AXInlineTextBox::Trace(Visitor* visitor) const {
+  visitor->Trace(inline_text_box_);
+  AXObject::Trace(visitor);
+}
 
 void AXInlineTextBox::GetRelativeBounds(AXObject** out_container,
                                         gfx::RectF& out_bounds_in_container,
@@ -202,7 +206,11 @@ Node* AXInlineTextBox::GetNode() const {
 }
 
 Document* AXInlineTextBox::GetDocument() const {
-  return ParentObject() ? ParentObject()->GetDocument() : nullptr;
+  return CachedParentObject() ? CachedParentObject()->GetDocument() : nullptr;
+}
+
+AbstractInlineTextBox* AXInlineTextBox::GetInlineTextBox() const {
+  return inline_text_box_.Get();
 }
 
 AXObject* AXInlineTextBox::NextOnLine() const {
@@ -212,11 +220,9 @@ AXObject* AXInlineTextBox::NextOnLine() const {
   if (inline_text_box_->IsLast())
     return ParentObject()->NextOnLine();
 
-  scoped_refptr<AbstractInlineTextBox> next_on_line =
-      inline_text_box_->NextOnLine();
-  if (next_on_line)
-    return AXObjectCache().GetOrCreate(next_on_line.get(), nullptr);
-
+  if (AbstractInlineTextBox* next_on_line = inline_text_box_->NextOnLine()) {
+    return AXObjectCache().Get(next_on_line);
+  }
   return nullptr;
 }
 
@@ -227,10 +233,9 @@ AXObject* AXInlineTextBox::PreviousOnLine() const {
   if (inline_text_box_->IsFirst())
     return ParentObject()->PreviousOnLine();
 
-  scoped_refptr<AbstractInlineTextBox> previous_on_line =
-      inline_text_box_->PreviousOnLine();
+  AbstractInlineTextBox* previous_on_line = inline_text_box_->PreviousOnLine();
   if (previous_on_line)
-    return AXObjectCache().GetOrCreate(previous_on_line.get(), nullptr);
+    return AXObjectCache().Get(previous_on_line);
 
   return nullptr;
 }
@@ -371,13 +376,17 @@ void AXInlineTextBox::SerializeMarkerAttributes(
 }
 
 void AXInlineTextBox::Init(AXObject* parent) {
+  CHECK(!AXObjectCache().IsFrozen());
   role_ = ax::mojom::blink::Role::kInlineTextBox;
   DCHECK(parent);
   DCHECK(ui::CanHaveInlineTextBoxChildren(parent->RoleValue()))
       << "Unexpected parent of inline text box: " << parent->RoleValue();
   DCHECK(parent->CanHaveChildren())
       << "Parent cannot have children: " << parent->ToString(true, true);
-  SetParent(parent);
+  // Don't call SetParent(), which calls SetAncestorsHaveDirtyDescendants(),
+  // because once inline textboxes are loaded for the parent text, it's never
+  // necessary to again recompute this part of the tree.
+  parent_ = parent;
   UpdateCachedAttributeValuesIfNeeded(false);
 }
 

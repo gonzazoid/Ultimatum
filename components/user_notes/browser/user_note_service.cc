@@ -4,9 +4,10 @@
 
 #include "components/user_notes/browser/user_note_service.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/notreached.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/trace_event/typed_macros.h"
 #include "components/user_notes/browser/frame_user_note_changes.h"
 #include "components/user_notes/browser/user_note_manager.h"
 #include "components/user_notes/browser/user_note_utils.h"
@@ -66,6 +67,9 @@ void UserNoteService::OnFrameNavigated(content::RenderFrameHost* rfh) {
   if (rfh->GetPage().GetMainDocument().IsErrorDocument()) {
     return;
   }
+
+  TRACE_EVENT("browser", "UserNoteService::OnFrameNavigated", "URL",
+              rfh->GetLastCommittedURL());
 
   DCHECK(UserNoteManager::GetForPage(rfh->GetPage()));
 
@@ -129,10 +133,11 @@ void UserNoteService::OnNoteInstanceRemovedFromPage(
 
 void UserNoteService::OnAddNoteRequested(content::RenderFrameHost* frame,
                                          bool has_selected_text) {
-  DCHECK(IsUserNotesEnabled());
-  DCHECK(frame);
+  CHECK(IsUserNotesEnabled());
+  CHECK(frame);
+  CHECK(!frame->GetParentOrOuterDocument());
   UserNoteManager* manager = UserNoteManager::GetForPage(frame->GetPage());
-  DCHECK(manager);
+  CHECK(manager);
 
   // TODO(crbug.com/1313967): `has_selected_text` is used to determine whether
   // or not to create a page-level note. This will need to be reassessed when
@@ -203,11 +208,7 @@ void UserNoteService::OnAddNoteRequested(content::RenderFrameHost* frame,
 
 void UserNoteService::OnWebHighlightFocused(const base::UnguessableToken& id,
                                             content::RenderFrameHost* rfh) {
-  DCHECK(IsUserNotesEnabled());
-  DCHECK(rfh);
-  UserNotesUI* ui = delegate_->GetUICoordinatorForFrame(rfh);
-  DCHECK(ui);
-  ui->FocusNote(id);
+  // TODO(crbug.com/1408767): Remove this during notes backend cleanup.
 }
 
 void UserNoteService::OnNoteSelected(const base::UnguessableToken& id,
@@ -362,9 +363,8 @@ void UserNoteService::InitializeNewNoteForCreation(
         // UX for this note. The UI layer will eventually call either
         // `OnNoteCreationDone` or `OnNoteCreationCancelled`, in which the
         // partial note will be finalized or deleted, respectively.
-        if (UserNotesUI* ui =
-                service->delegate_->GetUICoordinatorForFrame(frame)) {
-          ui->StartNoteCreation(&instance);
+        if (service->delegate_->GetUICoordinatorForFrame(frame)) {
+          // TODO(crbug.com/1408767): Remove this during notes backend cleanup.
         }
       },
       // SafeRef is safe for the service since it owns the manager which owns
@@ -398,6 +398,7 @@ void UserNoteService::InitializeNewNoteForCreation(
 void UserNoteService::OnNoteMetadataFetchedForNavigation(
     const std::vector<content::WeakDocumentPtr>& all_frames,
     UserNoteMetadataSnapshot metadata_snapshot) {
+  TRACE_EVENT("browser", "UserNoteService::OnNoteMetadataFetchedForNavigation");
   DCHECK(all_frames.size() == 1u);
 
   content::RenderFrameHost* rfh = all_frames[0].AsRenderFrameHostIfValid();
@@ -407,9 +408,16 @@ void UserNoteService::OnNoteMetadataFetchedForNavigation(
     return;
   }
 
+  TRACE_EVENT_INSTANT("browser", "Valid Frame", "URL",
+                      rfh->GetLastCommittedURL(), "Active",
+                      delegate_->IsFrameInActiveTab(rfh), "HasNoteMetadata",
+                      !metadata_snapshot.IsEmpty());
+
   if (delegate_->IsFrameInActiveTab(rfh)) {
     UserNotesUI* ui = delegate_->GetUICoordinatorForFrame(rfh);
-    DCHECK(ui);
+    if (!ui) {
+      return;
+    }
 
     // TODO(crbug.com/1313967): For now, always invalidate the UI if the tab is
     // in the foreground. This is to fix edge cases around back/forward
@@ -422,14 +430,15 @@ void UserNoteService::OnNoteMetadataFetchedForNavigation(
     // but there's no way to know whether the notes changed until further down
     // the callback stack. Since InvalidateIfVisible() is cheap enough, always
     // calling it here is considered an acceptable fix for now.
-    ui->InvalidateIfVisible();
+    TRACE_EVENT_INSTANT("browser", "Invalidate UI");
+    // TODO(crbug.com/1408767): Remove this during notes backend cleanup.
 
     if (!metadata_snapshot.IsEmpty()) {
       // TODO(crbug.com/1313967): For now, automatically activate User Notes UI
       // when the user navigates to a page with notes. Before launch though,
       // this should be changed to a popup / notification that the user must
       // interact with to launch the notes UI.
-      ui->Show();
+      // TODO(crbug.com/1408767): Remove this during notes backend cleanup.
     }
   }
 
@@ -471,6 +480,8 @@ void UserNoteService::OnNoteModelsFetched(
     const IdSet& new_notes,
     std::vector<std::unique_ptr<FrameUserNoteChanges>> note_changes,
     std::vector<std::unique_ptr<UserNote>> notes) {
+  TRACE_EVENT("browser", "UserNoteService::OnNoteModelsFetched", "num_notes",
+              notes.size());
   // Update the model map with the new models.
   for (std::unique_ptr<UserNote>& note : notes) {
     base::UnguessableToken id = note->id();
@@ -516,6 +527,7 @@ void UserNoteService::OnNoteModelsFetched(
 }
 
 void UserNoteService::OnFrameChangesApplied(base::UnguessableToken change_id) {
+  TRACE_EVENT("browser", "UserNoteService::OnFrameChangesApplied");
   const auto& changes_it = note_changes_in_progress_.find(change_id);
   DCHECK(changes_it != note_changes_in_progress_.end());
 
@@ -528,7 +540,8 @@ void UserNoteService::OnFrameChangesApplied(base::UnguessableToken change_id) {
     // the UI to reload the notes it's displaying.
     UserNotesUI* ui = delegate_->GetUICoordinatorForFrame(rfh);
     DCHECK(ui);
-    ui->InvalidateIfVisible();
+    TRACE_EVENT_INSTANT("browser", "Invalidate UI");
+    // TODO(crbug.com/1408767): Remove this during notes backend cleanup.
   } else if (!rfh) {
     // The frame for these changes was deleted or navigated away; the frame was
     // removed before new note instances were added. Normally the model will be

@@ -13,11 +13,11 @@
 #include <utility>
 
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/timer/timer.h"
 #include "net/base/net_export.h"
-#include "net/base/proxy_server.h"
+#include "net/base/proxy_chain.h"
 #include "net/log/net_log_with_source.h"
 #include "net/socket/client_socket_pool.h"
 #include "net/socket/connect_job.h"
@@ -29,13 +29,20 @@ namespace net {
 struct CommonConnectJobParams;
 struct NetworkTrafficAnnotationTag;
 
+// Identifier for a ClientSocketHandle to scope the lifetime of references.
+// ClientSocketHandleID are derived from ClientSocketHandle*, used in
+// comparison only, and are never dereferenced. We use an std::uintptr_t here to
+// match the size of a pointer, and to prevent dereferencing. Also, our
+// tooling complains about dangling pointers if we pass around a raw ptr.
+using ClientSocketHandleID = std::uintptr_t;
+
 class NET_EXPORT_PRIVATE WebSocketTransportClientSocketPool
     : public ClientSocketPool {
  public:
   WebSocketTransportClientSocketPool(
       int max_sockets,
       int max_sockets_per_group,
-      const ProxyServer& proxy_server,
+      const ProxyChain& proxy_chain,
       const CommonConnectJobParams* common_connect_job_params);
 
   WebSocketTransportClientSocketPool(
@@ -183,7 +190,8 @@ class NET_EXPORT_PRIVATE WebSocketTransportClientSocketPool
   void InvokeUserCallbackLater(ClientSocketHandle* handle,
                                CompletionOnceCallback callback,
                                int rv);
-  void InvokeUserCallback(ClientSocketHandle* handle,
+  void InvokeUserCallback(ClientSocketHandleID handle_id,
+                          base::WeakPtr<ClientSocketHandle> weak_handle,
                           CompletionOnceCallback callback,
                           int rv);
   bool ReachedMaxSocketsLimit() const;
@@ -198,8 +206,8 @@ class NET_EXPORT_PRIVATE WebSocketTransportClientSocketPool
   void ActivateStalledRequest();
   bool DeleteStalledRequest(ClientSocketHandle* handle);
 
-  const ProxyServer proxy_server_;
-  std::set<const ClientSocketHandle*> pending_callbacks_;
+  const ProxyChain proxy_chain_;
+  std::set<ClientSocketHandleID> pending_callbacks_;
   PendingConnectsMap pending_connects_;
   StalledRequestQueue stalled_request_queue_;
   StalledRequestMap stalled_request_map_;

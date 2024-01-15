@@ -26,8 +26,7 @@ namespace extensions {
 // onPasswordExceptionsListChanged events of changes.
 class PasswordsPrivateEventRouter : public KeyedService {
  public:
-  static PasswordsPrivateEventRouter* Create(
-      content::BrowserContext* browser_context);
+  explicit PasswordsPrivateEventRouter(content::BrowserContext* context);
 
   PasswordsPrivateEventRouter(const PasswordsPrivateEventRouter&) = delete;
   PasswordsPrivateEventRouter& operator=(const PasswordsPrivateEventRouter&) =
@@ -45,18 +44,15 @@ class PasswordsPrivateEventRouter : public KeyedService {
   void OnPasswordExceptionsListChanged(
       const std::vector<api::passwords_private::ExceptionEntry>& exceptions);
 
-  // Notifies listeners after fetching a plain-text password.
-  // |id| the id for the password entry being shown.
-  // |plaintext_password| The human-readable password.
-  void OnPlaintextPasswordFetched(int id,
-                                  const std::string& plaintext_password);
-
   // Notifies listeners after the passwords have been written to the export
   // destination.
+  // |file_path| In case of successful export, this will describe the path
+  // to the written file.
   // |folder_name| In case of failure to export, this will describe destination
   // we tried to write on.
   void OnPasswordsExportProgress(
       api::passwords_private::ExportProgressStatus status,
+      const std::string& file_path,
       const std::string& folder_name);
 
   // Notifies listeners about a (possible) change to the opt-in state for the
@@ -75,9 +71,6 @@ class PasswordsPrivateEventRouter : public KeyedService {
 
   // Notifies listeners about the timeout for password manager access.
   void OnPasswordManagerAuthTimeout();
-
- protected:
-  explicit PasswordsPrivateEventRouter(content::BrowserContext* context);
 
  private:
   void SendSavedPasswordListToListeners();

@@ -10,7 +10,7 @@
 #include "base/android/jni_android.h"
 #include "base/android/jni_array.h"
 #include "base/android/jni_string.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/strings/utf_string_conversions.h"
 #include "components/media_router/browser/android/jni_headers/BrowserMediaRouterDialogController_jni.h"
 #include "components/media_router/browser/android/media_router_android.h"
@@ -71,7 +71,7 @@ void MediaRouterDialogControllerAndroid::OnSinkSelected(
       presentation_request.frame_origin, initiator(),
       base::BindOnce(&StartPresentationContext::HandleRouteResponse,
                      std::move(start_presentation_context)),
-      base::TimeDelta(), browser_context->IsOffTheRecord());
+      base::TimeDelta());
   MediaRouterMetrics::RecordMediaRouterAndroidDialogAction(
       MediaRouterAndroidDialogAction::kStartRoute);
 }

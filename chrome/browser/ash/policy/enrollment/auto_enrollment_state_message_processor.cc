@@ -5,12 +5,15 @@
 #include "chrome/browser/ash/policy/enrollment/auto_enrollment_state_message_processor.h"
 
 #include <memory>
+#include <optional>
 #include <string>
 
+#include "ash/constants/ash_features.h"
 #include "base/logging.h"
+#include "base/strings/strcat.h"
+#include "base/strings/string_number_conversions.h"
 #include "chrome/browser/ash/policy/server_backed_state/server_backed_device_state.h"
 #include "components/policy/proto/device_management_backend.pb.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 // TODO(crbug.com/1271134): Logging as "WARNING" throughout the file to make
 // sure it's preserved in the logs.
@@ -39,6 +42,24 @@ std::string ConvertRestoreMode(
   }
 }
 
+// Converts a enterprise_management::LicenseType_LicenseTypeEnum
+// for AutoEnrollment to it corresponding string.
+std::string ConvertAutoEnrollmentLicenseType(
+    ::enterprise_management::LicenseType_LicenseTypeEnum license_type) {
+  switch (license_type) {
+    case em::LicenseType::UNDEFINED:
+      return std::string();
+    case em::LicenseType::CDM_PERPETUAL:
+      return kDeviceStateLicenseTypeEnterprise;
+    case em::LicenseType::CDM_ANNUAL:
+      return kDeviceStateLicenseTypeEnterprise;
+    case em::LicenseType::KIOSK:
+      return kDeviceStateLicenseTypeTerminal;
+    case em::LicenseType::CDM_PACKAGED:
+      return kDeviceStateLicenseTypeEnterprise;
+  }
+}
+
 // Converts an initial enrollment mode enum value from the DM protocol for
 // initial enrollment into the corresponding prefs string constant.
 std::string ConvertInitialEnrollmentMode(
@@ -56,6 +77,24 @@ std::string ConvertInitialEnrollmentMode(
     case em::DeviceInitialEnrollmentStateResponse::
         INITIAL_ENROLLMENT_MODE_DISABLED:
       return kDeviceStateModeDisabled;
+  }
+}
+
+// Converts an assigned upgrade type enum value from the DM protocol for
+// initial enrollment into the corresponding prefs string constant.
+std::string ConvertAssignedUpgradeType(
+    em::DeviceInitialEnrollmentStateResponse::AssignedUpgradeType
+        assigned_upgrade_type) {
+  switch (assigned_upgrade_type) {
+    case em::DeviceInitialEnrollmentStateResponse::
+        ASSIGNED_UPGRADE_TYPE_UNSPECIFIED:
+      return std::string();
+    case em::DeviceInitialEnrollmentStateResponse::
+        ASSIGNED_UPGRADE_TYPE_CHROME_ENTERPRISE:
+      return kDeviceStateAssignedUpgradeTypeChromeEnterprise;
+    case em::DeviceInitialEnrollmentStateResponse::
+        ASSIGNED_UPGRADE_TYPE_KIOSK_AND_SIGNAGE:
+      return kDeviceStateAssignedUpgradeTypeKiosk;
   }
 }
 
@@ -100,18 +139,18 @@ class InitialEnrollmentStateMessageProcessor
     inner_request->set_serial_number(device_serial_number_);
   }
 
-  absl::optional<ParsedResponse> ParseResponse(
+  std::optional<ParsedResponse> ParseResponse(
       const em::DeviceManagementResponse& response) override {
     if (!response.has_device_initial_enrollment_state_response()) {
       LOG(ERROR) << "Server failed to provide initial enrollment response.";
-      return absl::nullopt;
+      return std::nullopt;
     }
 
     return ParseInitialEnrollmentStateResponse(
         response.device_initial_enrollment_state_response());
   }
 
-  static absl::optional<ParsedResponse> ParseInitialEnrollmentStateResponse(
+  static std::optional<ParsedResponse> ParseInitialEnrollmentStateResponse(
       const em::DeviceInitialEnrollmentStateResponse& state_response) {
     ParsedResponse parsed_response;
 
@@ -136,6 +175,11 @@ class InitialEnrollmentStateMessageProcessor
           ConvertLicenseType(state_response.license_packaging_sku());
     }
 
+    if (state_response.has_assigned_upgrade_type()) {
+      parsed_response.assigned_upgrade_type =
+          ConvertAssignedUpgradeType(state_response.assigned_upgrade_type());
+    }
+
     if (state_response.has_disabled_state()) {
       parsed_response.disabled_message =
           state_response.disabled_state().message();
@@ -143,10 +187,22 @@ class InitialEnrollmentStateMessageProcessor
 
     LOG(WARNING) << "Received initial_enrollment_mode="
                  << state_response.initial_enrollment_mode() << " ("
-                 << parsed_response.restore_mode << "). "
-                 << (state_response.is_license_packaged_with_device()
+                 << parsed_response.restore_mode << "). ";
+
+    LOG(WARNING) << (state_response.is_license_packaged_with_device()
                          ? "Device has a packaged license for management."
-                         : "No packaged license.");
+                         : "No packaged license. ");
+
+    LOG(WARNING) << (state_response.has_assigned_upgrade_type()
+                         ? base::StrCat(
+                               {"Assigned upgrade type=",
+                                base::NumberToString(
+                                    state_response.assigned_upgrade_type()),
+                                " (",
+                                parsed_response.assigned_upgrade_type.value_or(
+                                    std::string()),
+                                ")."})
+                         : "No assigned upgrade type.");
 
     return parsed_response;
   }
@@ -176,11 +232,11 @@ class FREStateMessageProcessor : public AutoEnrollmentStateMessageProcessor {
         ->set_server_backed_state_key(server_backed_state_key_);
   }
 
-  absl::optional<ParsedResponse> ParseResponse(
+  std::optional<ParsedResponse> ParseResponse(
       const em::DeviceManagementResponse& response) override {
     if (!response.has_device_state_retrieval_response()) {
       LOG(ERROR) << "Server failed to provide auto-enrollment response.";
-      return absl::nullopt;
+      return std::nullopt;
     }
 
     const em::DeviceStateRetrievalResponse& state_response =
@@ -211,7 +267,14 @@ class FREStateMessageProcessor : public AutoEnrollmentStateMessageProcessor {
 
       // Package license is not available during the re-enrollment
       parsed_response.is_license_packaged_with_device.reset();
-      parsed_response.license_type.reset();
+
+      if (ash::features::IsAutoEnrollmentKioskInOobeEnabled() &&
+          state_response.has_license_type()) {
+        parsed_response.license_type = ConvertAutoEnrollmentLicenseType(
+            state_response.license_type().license_type());
+      } else {
+        parsed_response.license_type.reset();
+      }
 
       LOG(WARNING) << "Received restore_mode=" << restore_mode << " ("
                    << parsed_response.restore_mode << ").";

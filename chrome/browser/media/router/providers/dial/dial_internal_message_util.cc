@@ -167,20 +167,18 @@ CustomDialLaunchMessageBody CustomDialLaunchMessageBody::From(
   if (!body || !body->is_dict())
     return CustomDialLaunchMessageBody();
 
-  const base::Value* do_launch_value =
-      body->FindKeyOfType("doLaunch", base::Value::Type::BOOLEAN);
-  if (!do_launch_value)
+  const absl::optional<bool> do_launch = body->GetDict().FindBool("doLaunch");
+  if (!do_launch) {
     return CustomDialLaunchMessageBody();
-
-  bool do_launch = do_launch_value->GetBool();
+  }
 
   absl::optional<std::string> launch_parameter;
-  const base::Value* launch_parameter_value =
-      body->FindKeyOfType("launchParameter", base::Value::Type::STRING);
+  const std::string* launch_parameter_value =
+      body->GetDict().FindString("launchParameter");
   if (launch_parameter_value)
-    launch_parameter = launch_parameter_value->GetString();
+    launch_parameter = *launch_parameter_value;
 
-  return CustomDialLaunchMessageBody(do_launch, launch_parameter);
+  return CustomDialLaunchMessageBody(*do_launch, launch_parameter);
 }
 
 CustomDialLaunchMessageBody::CustomDialLaunchMessageBody() = default;
@@ -206,9 +204,8 @@ bool DialInternalMessageUtil::IsStopSessionMessage(
   if (!body || !body->is_dict())
     return false;
 
-  const base::Value* request_type =
-      body->FindKeyOfType("type", base::Value::Type::STRING);
-  return request_type && request_type->GetString() == "STOP";
+  const std::string* request_type = body->GetDict().FindString("type");
+  return request_type && *request_type == "STOP";
 }
 
 mojom::RouteMessagePtr DialInternalMessageUtil::CreateNewSessionMessage(
@@ -297,7 +294,7 @@ base::Value::Dict DialInternalMessageUtil::CreateReceiver(
 
   receiver.Set("friendlyName",
                base::Value(base::EscapeForHTML(sink.sink().name())));
-  receiver.Set("capabilities", base::ListValue());
+  receiver.Set("capabilities", base::Value::List());
 
   receiver.Set("volume", base::Value());
   receiver.Set("isActiveInput", base::Value());
@@ -326,11 +323,11 @@ base::Value::Dict DialInternalMessageUtil::CreateNewSessionBody(
   message_body.Set("appId", base::Value(""));
   message_body.Set("displayName", base::Value(app_name));
   message_body.Set("statusText", base::Value(""));
-  message_body.Set("appImages", base::ListValue());
+  message_body.Set("appImages", base::Value::List());
   message_body.Set("receiver", CreateReceiver(sink));
-  message_body.Set("senderApps", base::ListValue());
-  message_body.Set("namespaces", base::ListValue());
-  message_body.Set("media", base::ListValue());
+  message_body.Set("senderApps", base::Value::List());
+  message_body.Set("namespaces", base::Value::List());
+  message_body.Set("media", base::Value::List());
   message_body.Set("status", base::Value("connected"));
   message_body.Set("transportId", base::Value(""));
   return message_body;

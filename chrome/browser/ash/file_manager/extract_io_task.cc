@@ -4,6 +4,8 @@
 
 #include "chrome/browser/ash/file_manager/extract_io_task.h"
 
+#include <grp.h>
+#include <optional>
 #include <utility>
 
 #include "base/check_op.h"
@@ -11,13 +13,17 @@
 #include "base/files/file_util.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/strcat.h"
+#include "base/system/sys_info.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "base/threading/platform_thread.h"
+#include "base/time/time.h"
 #include "chrome/browser/ash/file_manager/fileapi_util.h"
 #include "chrome/browser/ash/file_manager/filesystem_api_util.h"
 #include "chrome/browser/ash/file_manager/path_util.h"
-#include "chrome/browser/chromeos/fileapi/file_system_backend.h"
+#include "chrome/browser/ash/fileapi/file_system_backend.h"
 #include "chrome/browser/platform_util.h"
+#include "components/file_access/scoped_file_access.h"
 #include "components/services/unzip/content/unzip_service.h"
 #include "components/services/unzip/public/mojom/unzipper.mojom.h"
 #include "content/public/browser/browser_thread.h"
@@ -46,7 +52,7 @@ ExtractIOTask::ExtractIOTask(
       file_system_context_(std::move(file_system_context)) {
   progress_.type = OperationType::kExtract;
   progress_.state = State::kQueued;
-  progress_.destination_folder = parent_folder_;
+  progress_.SetDestinationFolder(parent_folder_, profile);
   progress_.bytes_transferred = 0;
   progress_.total_bytes = 0;
   // Store all the ZIP files in the selection so we have
@@ -54,8 +60,8 @@ ExtractIOTask::ExtractIOTask(
   for (const storage::FileSystemURL& source_url : source_urls_) {
     const base::FilePath source_path = source_url.path();
     if (source_path.MatchesExtension(".zip") &&
-        chromeos::FileSystemBackend::CanHandleURL(source_url)) {
-      progress_.sources.emplace_back(source_url, absl::nullopt);
+        ash::FileSystemBackend::CanHandleURL(source_url)) {
+      progress_.sources.emplace_back(source_url, std::nullopt);
     }
   }
   sizingCount_ = extractCount_ = progress_.sources.size();
@@ -66,15 +72,16 @@ ExtractIOTask::~ExtractIOTask() {
 }
 
 void ExtractIOTask::ZipListenerCallback(uint64_t bytes) {
-  progress_.bytes_transferred += bytes;
-  speedometer_.Update(progress_.bytes_transferred);
-  const double remaining_seconds = speedometer_.GetRemainingSeconds();
+  if (speedometer_.Update(progress_.bytes_transferred += bytes)) {
+    const base::TimeDelta remaining_time = speedometer_.GetRemainingTime();
 
-  // Speedometer can produce infinite result which can't be serialized to JSON
-  // when sending the status via private API.
-  if (std::isfinite(remaining_seconds)) {
-    progress_.remaining_seconds = remaining_seconds;
+    // Speedometer can produce infinite result which can't be serialized to JSON
+    // when sending the status via private API.
+    if (!remaining_time.is_inf()) {
+      progress_.remaining_seconds = remaining_time.InSecondsF();
+    }
   }
+
   progress_callback_.Run(progress_);
 }
 
@@ -103,19 +110,35 @@ void ExtractIOTask::FinishedExtraction(base::FilePath directory, bool success) {
   }
 }
 
+std::optional<gid_t> GetDirectoriesOwnerGid() {
+  struct group grp, *result = nullptr;
+  std::vector<char> buffer(16384);
+  getgrnam_r("chronos-access", &grp, buffer.data(), buffer.size(), &result);
+  if (!result) {
+    return std::nullopt;
+  }
+  return grp.gr_gid;
+}
+
 // Recursively walk directory and set 'u+rwx,g+x,o+x'.
 bool SetDirectoryPermissions(base::FilePath directory, bool success) {
   // Always set permissions in case of error mid-extract.
   base::FileEnumerator traversal(directory, true,
                                  base::FileEnumerator::DIRECTORIES);
+  const std::optional<gid_t> owner_gid = GetDirectoriesOwnerGid();
   for (base::FilePath current = traversal.Next(); !current.empty();
        current = traversal.Next()) {
     base::SetPosixFilePermissions(current,
                                   base::FILE_PERMISSION_READ_BY_USER |
                                       base::FILE_PERMISSION_WRITE_BY_USER |
                                       base::FILE_PERMISSION_EXECUTE_BY_USER |
+                                      base::FILE_PERMISSION_READ_BY_GROUP |
                                       base::FILE_PERMISSION_EXECUTE_BY_GROUP |
                                       base::FILE_PERMISSION_EXECUTE_BY_OTHERS);
+    // Might not exist in tests.
+    if (owner_gid.has_value()) {
+      HANDLE_EINTR(chown(current.value().c_str(), -1, owner_gid.value()));
+    }
   }
   return success;
 }
@@ -161,8 +184,15 @@ bool CreateExtractionDirectory(const base::FilePath& destination_directory) {
         destination_directory, base::FILE_PERMISSION_READ_BY_USER |
                                    base::FILE_PERMISSION_WRITE_BY_USER |
                                    base::FILE_PERMISSION_EXECUTE_BY_USER |
+                                   base::FILE_PERMISSION_READ_BY_GROUP |
                                    base::FILE_PERMISSION_EXECUTE_BY_GROUP |
                                    base::FILE_PERMISSION_EXECUTE_BY_OTHERS);
+    // Might not exist in tests.
+    const std::optional<gid_t> owner_gid = GetDirectoriesOwnerGid();
+    if (created_ok && owner_gid.has_value()) {
+      created_ok = (HANDLE_EINTR(chown(destination_directory.value().c_str(),
+                                       -1, owner_gid.value())) == 0);
+    }
   }
   return created_ok;
 }
@@ -175,6 +205,8 @@ void ExtractIOTask::ExtractArchive(
   if (!destination_result.has_value()) {
     ZipExtractCallback(base::FilePath(), false);
   } else {
+    progress_.outputs.emplace_back(destination_result.value(), std::nullopt,
+                                   progress_.sources[index].url);
     const base::FilePath destination_directory =
         destination_result.value().path();
     base::ThreadPool::PostTaskAndReplyWithResult(
@@ -200,16 +232,16 @@ void ExtractIOTask::ExtractAllSources() {
 void ExtractIOTask::GotFreeDiskSpace(int64_t free_space) {
   auto* drive_integration_service =
       drive::util::GetIntegrationServiceByProfile(profile_);
-  if (progress_.destination_folder.filesystem_id() ==
+  if (progress_.GetDestinationFolder().filesystem_id() ==
           util::GetDownloadsMountPointName(profile_) ||
       (drive_integration_service &&
        drive_integration_service->GetMountPointPath().IsParent(
-           progress_.destination_folder.path()))) {
+           progress_.GetDestinationFolder().path()))) {
     free_space -= cryptohome::kMinFreeSpaceInBytes;
   }
 
   if (progress_.total_bytes > free_space) {
-    progress_.outputs.emplace_back(progress_.destination_folder,
+    progress_.outputs.emplace_back(progress_.GetDestinationFolder(),
                                    base::File::FILE_ERROR_NO_SPACE);
     progress_.state = State::kError;
     RecordUmaExtractStatus(ExtractStatus::kInsufficientDiskSpace);
@@ -242,7 +274,7 @@ void ExtractIOTask::ZipInfoCallback(unzip::mojom::InfoPtr info) {
   if (--sizingCount_ == 0) {
     // After getting the size of all the ZIPs, check if we have
     // enough available disk space, and if so, extract them.
-    if (util::IsNonNativeFileSystemType(parent_folder_.type())) {
+    if (!parent_folder_.TypeImpliesPathIsReal()) {
       // Destination is a virtual filesystem, so skip the size check.
       ExtractAllSources();
     } else {
@@ -264,11 +296,27 @@ void ExtractIOTask::GetExtractedSize(base::FilePath source_file) {
 
 void ExtractIOTask::CheckSizeThenExtract() {
   for (const EntryStatus& source : progress_.sources) {
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(&ExtractIOTask::GetExtractedSize,
                        weak_ptr_factory_.GetWeakPtr(), source.url.path()));
   }
+}
+
+void ExtractIOTask::GotScopedFileAccess(
+    file_access::ScopedFileAccess file_access) {
+  file_access_ = std::move(file_access);
+  CheckSizeThenExtract();
+}
+
+void ExtractIOTask::GetScopedFileAccess() {
+  std::vector<base::FilePath> zip_files;
+  for (const EntryStatus& source : progress_.sources) {
+    zip_files.push_back(source.url.path());
+  }
+  file_access::RequestFilesAccessForSystem(
+      {zip_files}, base::BindOnce(&ExtractIOTask::GotScopedFileAccess,
+                                  weak_ptr_factory_.GetWeakPtr()));
 }
 
 void ExtractIOTask::Execute(IOTask::ProgressCallback progress_callback,
@@ -281,13 +329,13 @@ void ExtractIOTask::Execute(IOTask::ProgressCallback progress_callback,
   progress_callback_.Run(progress_);
   // If the backend can't handle the folder to unpack into or
   // there are no files to extract, finish the operation with an error.
-  if (!chromeos::FileSystemBackend::CanHandleURL(parent_folder_) ||
+  if (!ash::FileSystemBackend::CanHandleURL(parent_folder_) ||
       sizingCount_ == 0) {
     progress_.state = State::kError;
     RecordUmaExtractStatus(ExtractStatus::kUnknownError);
     Complete();
   } else {
-    CheckSizeThenExtract();
+    GetScopedFileAccess();
   }
 }
 
@@ -309,7 +357,7 @@ void ExtractIOTask::Cancel() {
 // Calls the completion callback for the task. |progress_| should not be
 // accessed after calling this.
 void ExtractIOTask::Complete() {
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(std::move(complete_callback_), std::move(progress_)));
 }

@@ -5,20 +5,19 @@
 #ifndef IOS_WEB_PUBLIC_NAVIGATION_NAVIGATION_MANAGER_H_
 #define IOS_WEB_PUBLIC_NAVIGATION_NAVIGATION_MANAGER_H_
 
+#import <Foundation/Foundation.h>
+
 #include <stddef.h>
 
 #include <memory>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "ios/web/common/user_agent.h"
 #include "ios/web/public/navigation/browser_url_rewriter.h"
 #include "ios/web/public/navigation/https_upgrade_type.h"
 #include "ios/web/public/navigation/referrer.h"
 #include "ios/web/public/navigation/reload_type.h"
 #include "ui/base/page_transition_types.h"
-
-@class NSDictionary;
-@class NSData;
 
 namespace web {
 
@@ -47,22 +46,22 @@ class NavigationManager {
     Referrer referrer;
 
     // The transition type for the load. Defaults to PAGE_TRANSITION_LINK.
-    ui::PageTransition transition_type;
+    ui::PageTransition transition_type = ui::PAGE_TRANSITION_LINK;
 
     // True for renderer-initiated navigations. This is
     // important for tracking whether to display pending URLs.
-    bool is_renderer_initiated;
+    bool is_renderer_initiated = false;
 
     // Any extra HTTP headers to add to the load.
-    NSDictionary* extra_headers;
+    NSDictionary<NSString*, NSString*>* extra_headers = nil;
 
     // Any post data to send with the load. When setting this, you should
     // generally set a Content-Type header as well.
-    NSData* post_data;
+    NSData* post_data = nil;
 
     // Indicates the type of the HTTPS upgrade applied on the navigation, if
     // any.
-    HttpsUpgradeType https_upgrade_type;
+    HttpsUpgradeType https_upgrade_type = HttpsUpgradeType::kNone;
 
     // Create a new WebLoadParams with the given URL and defaults for all other
     // parameters.

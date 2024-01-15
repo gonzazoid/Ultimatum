@@ -9,12 +9,9 @@
 #import "ios/chrome/common/credential_provider/credential_store.h"
 #import "ios/chrome/credential_provider_extension/ui/credential_list_consumer.h"
 #import "ios/chrome/credential_provider_extension/ui/credential_list_ui_handler.h"
+#import "ios/chrome/credential_provider_extension/ui/credential_response_handler.h"
 #import "ios/chrome/credential_provider_extension/ui/feature_flags.h"
 #import "ios/chrome/credential_provider_extension/ui/ui_util.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 @interface CredentialListMediator () <CredentialListHandler>
 
@@ -31,14 +28,15 @@
 @property(nonatomic, strong)
     NSArray<ASCredentialServiceIdentifier*>* serviceIdentifiers;
 
-// The extension context in which the credential list was started.
-@property(nonatomic, weak) ASCredentialProviderExtensionContext* context;
-
 // List of suggested credentials.
 @property(nonatomic, copy) NSArray<id<Credential>>* suggestedCredentials;
 
 // List of all credentials.
 @property(nonatomic, copy) NSArray<id<Credential>>* allCredentials;
+
+// The response handler for any credential actions.
+@property(nonatomic, weak) id<CredentialResponseHandler>
+    credentialResponseHandler;
 
 @end
 
@@ -47,9 +45,10 @@
 - (instancetype)initWithConsumer:(id<CredentialListConsumer>)consumer
                        UIHandler:(id<CredentialListUIHandler>)UIHandler
                  credentialStore:(id<CredentialStore>)credentialStore
-                         context:(ASCredentialProviderExtensionContext*)context
               serviceIdentifiers:
-                  (NSArray<ASCredentialServiceIdentifier*>*)serviceIdentifiers {
+                  (NSArray<ASCredentialServiceIdentifier*>*)serviceIdentifiers
+       credentialResponseHandler:
+           (id<CredentialResponseHandler>)credentialResponseHandler {
   self = [super init];
   if (self) {
     _serviceIdentifiers = serviceIdentifiers ?: @[];
@@ -57,7 +56,7 @@
     _consumer = consumer;
     _consumer.delegate = self;
     _credentialStore = credentialStore;
-    _context = context;
+    _credentialResponseHandler = credentialResponseHandler;
   }
   return self;
 }
@@ -115,11 +114,8 @@
 #pragma mark - CredentialListHandler
 
 - (void)navigationCancelButtonWasPressed:(UIButton*)button {
-  NSError* error =
-      [[NSError alloc] initWithDomain:ASExtensionErrorDomain
-                                 code:ASExtensionErrorCodeUserCanceled
-                             userInfo:nil];
-  [self.context cancelRequestWithError:error];
+  [self.credentialResponseHandler
+      userCancelledRequestWithErrorCode:ASExtensionErrorCodeUserCanceled];
 }
 
 - (void)userSelectedCredential:(id<Credential>)credential {

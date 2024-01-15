@@ -8,7 +8,6 @@
 #include <memory>
 
 #include "base/memory/raw_ptr.h"
-#include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
 #include "components/commerce/core/shopping_service.h"
 #include "components/commerce/core/web_wrapper.h"
@@ -36,6 +35,8 @@ class CommerceTabHelper : public web::WebStateObserver,
   // web::WebStateObserver implementation
   void DidFinishNavigation(web::WebState* web_state,
                            web::NavigationContext* navigation_context) override;
+
+  void DidStopLoading(web::WebState* web_state) override;
 
   void PageLoaded(
       web::WebState* web_state,

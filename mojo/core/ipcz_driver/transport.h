@@ -15,6 +15,7 @@
 #include "base/process/process.h"
 #include "base/synchronization/lock.h"
 #include "base/task/single_thread_task_runner.h"
+#include "build/build_config.h"
 #include "mojo/core/channel.h"
 #include "mojo/core/ipcz_driver/object.h"
 #include "mojo/core/system_impl_export.h"
@@ -40,15 +41,17 @@ class MOJO_SYSTEM_IMPL_EXPORT Transport : public Object<Transport>,
     EndpointType destination;
   };
   Transport(EndpointTypes endpoint_types,
-            Channel::Endpoint endpoint,
-            base::Process remote_process);
+            PlatformChannelEndpoint endpoint,
+            base::Process remote_process,
+            bool is_remote_process_untrusted = false);
 
   // Static helper that is slightly more readable due to better type deduction
   // than MakeRefCounted<T>.
   static scoped_refptr<Transport> Create(
       EndpointTypes endpoint_types,
-      Channel::Endpoint endpoint,
-      base::Process remote_process = base::Process());
+      PlatformChannelEndpoint endpoint,
+      base::Process remote_process = base::Process(),
+      bool is_remote_process_untrusted = false);
 
   static std::pair<scoped_refptr<Transport>, scoped_refptr<Transport>>
   CreatePair(EndpointType first_type, EndpointType second_type);
@@ -86,11 +89,16 @@ class MOJO_SYSTEM_IMPL_EXPORT Transport : public Object<Transport>,
     error_handler_context_ = context;
   }
 
+  // Overrides the IO task runner used to monitor this transport for IO. Unless
+  // this is called, all Transports use the global IO task runner by default.
+  void OverrideIOTaskRunner(
+      scoped_refptr<base::SingleThreadTaskRunner> task_runner);
+
   // Takes ownership of the Transport's underlying channel endpoint, effectively
   // invalidating the transport. May only be called on a Transport which has not
   // yet been activated, and only when the channel endpoint is not a server.
   PlatformChannelEndpoint TakeEndpoint() {
-    return std::move(absl::get<PlatformChannelEndpoint>(inactive_endpoint_));
+    return std::move(inactive_endpoint_);
   }
 
   // Handles reports of bad activity from ipcz, resulting from parcel rejection
@@ -165,7 +173,6 @@ class MOJO_SYSTEM_IMPL_EXPORT Transport : public Object<Transport>,
 
   ~Transport() override;
 
-  bool IsEndpointValid() const;
   bool CanTransmitHandles() const;
 
   // Indicates whether this transport should serialize its remote process handle
@@ -195,11 +202,18 @@ class MOJO_SYSTEM_IMPL_EXPORT Transport : public Object<Transport>,
   // meaningless on platforms other than Windows.
   bool is_trusted_by_peer_ = false;
 
+#if BUILDFLAG(IS_WIN)
+  // Indicates whether the remote process is "untrusted" in Mojo parlance,
+  // meaning this Transport restricts what kinds of objects can be transferred
+  // from this end (Windows only.)
+  bool is_remote_process_untrusted_;
+#endif
+
   // The channel endpoint which will be used by this Transport to construct and
   // start its underlying Channel instance once activated. Not guarded by a lock
   // since it must not accessed beyond activation, where thread safety becomes a
   // factor.
-  Channel::Endpoint inactive_endpoint_;
+  PlatformChannelEndpoint inactive_endpoint_;
 
   base::Lock lock_;
   scoped_refptr<Channel> channel_ GUARDED_BY(lock_);
@@ -217,6 +231,10 @@ class MOJO_SYSTEM_IMPL_EXPORT Transport : public Object<Transport>,
   // TODO(https://crbug.com/1299283): Refactor Channel so that this is
   // unnecessary, once the non-ipcz Mojo implementation is phased out.
   scoped_refptr<Transport> self_reference_for_channel_ GUARDED_BY(lock_);
+
+  // The IO task runner used by this Transport to watch for incoming I/O events.
+  scoped_refptr<base::SingleThreadTaskRunner> io_task_runner_{
+      GetIOTaskRunner()};
 
   // These fields are not guarded by locks, since they're only set prior to
   // activation and remain constant throughout the remainder of this object's

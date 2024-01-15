@@ -11,6 +11,7 @@ export enum ExpertOption {
   ENABLE_FPS_PICKER_FOR_BUILTIN = 'enable-fps-picker-for-builtin',
   ENABLE_FULL_SIZED_VIDEO_SNAPSHOT = 'enable-full-sized-video-snapshot',
   ENABLE_MULTISTREAM_RECORDING = 'enable-multistream-recording',
+  ENABLE_MULTISTREAM_RECORDING_CHROME = 'enable-multistream-recording-chrome',
   ENABLE_PTZ_FOR_BUILTIN = 'enable-ptz-for-builtin',
   EXPERT = 'expert',
   PRINT_PERFORMANCE_LOGS = 'print-performance-logs',
@@ -41,7 +42,7 @@ export function toggleExpertMode(): void {
 
 
 /**
- * Get state value for expert mode and exert options.
+ * Get state value for expert mode and expert options.
  *
  * @param option Option state to be checked.
  */

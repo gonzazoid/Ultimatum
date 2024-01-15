@@ -36,16 +36,15 @@
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/json/json_reader.h"
 #include "base/json/json_string_value_serializer.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
-#include "base/task/task_runner_util.h"
 #include "chrome/browser/extensions/activity_log/activity_log_task_runner.h"
 #include "chrome/common/chrome_constants.h"
 #include "sql/statement.h"
@@ -355,8 +354,8 @@ bool CountingPolicy::FlushDatabase(sql::Database* db) {
     // incremented.
     sql::Statement locate_statement(db->GetCachedStatement(
         sql::StatementID(SQL_FROM_HERE), locate_str.c_str()));
-    locate_statement.BindInt64(0, day_start.ToInternalValue());
-    locate_statement.BindInt64(1, next_day.ToInternalValue());
+    locate_statement.BindTime(0, day_start);
+    locate_statement.BindTime(1, next_day);
     for (size_t j = 0; j < matched_values.size(); j++) {
       // A call to BindNull when matched_values contains -1 is likely not
       // necessary as parameters default to null before they are explicitly
@@ -375,7 +374,7 @@ bool CountingPolicy::FlushDatabase(sql::Database* db) {
       sql::Statement update_statement(db->GetCachedStatement(
           sql::StatementID(SQL_FROM_HERE), update_str.c_str()));
       update_statement.BindInt(0, count);
-      update_statement.BindInt64(1, action->time().ToInternalValue());
+      update_statement.BindTime(1, action->time());
       update_statement.BindInt64(2, rowid);
       if (!update_statement.Run())
         return false;
@@ -384,7 +383,7 @@ bool CountingPolicy::FlushDatabase(sql::Database* db) {
       sql::Statement insert_statement(db->GetCachedStatement(
           sql::StatementID(SQL_FROM_HERE), insert_str.c_str()));
       insert_statement.BindInt(0, count);
-      insert_statement.BindInt64(1, action->time().ToInternalValue());
+      insert_statement.BindTime(1, action->time());
       for (size_t j = 0; j < matched_values.size(); j++) {
         if (matched_values[j] == -1)
           insert_statement.BindNull(j + 2);
@@ -485,8 +484,7 @@ std::unique_ptr<Action::ActionVector> CountingPolicy::DoReadFilteredData(
   // Execute the query and get results.
   while (query.is_valid() && query.Step()) {
     auto action = base::MakeRefCounted<Action>(
-        query.ColumnString(0),
-        base::Time::FromInternalValue(query.ColumnInt64(1)),
+        query.ColumnString(0), query.ColumnTime(1),
         static_cast<Action::ActionType>(query.ColumnInt(2)),
         query.ColumnString(3), query.ColumnInt64(10));
 
@@ -714,8 +712,8 @@ void CountingPolicy::ReadFilteredData(
     const std::string& arg_url,
     const int days_ago,
     base::OnceCallback<void(std::unique_ptr<Action::ActionVector>)> callback) {
-  base::PostTaskAndReplyWithResult(
-      GetActivityLogTaskRunner().get(), FROM_HERE,
+  GetActivityLogTaskRunner()->PostTaskAndReplyWithResult(
+      FROM_HERE,
       base::BindOnce(&CountingPolicy::DoReadFilteredData,
                      base::Unretained(this), extension_id, type, api_name,
                      page_url, arg_url, days_ago),
@@ -753,7 +751,7 @@ bool CountingPolicy::CleanOlderThan(sql::Database* db,
       "DELETE FROM " + std::string(kTableName) + " WHERE time < ?";
   sql::Statement cleaner(db->GetCachedStatement(sql::StatementID(SQL_FROM_HERE),
                                                 clean_statement.c_str()));
-  cleaner.BindInt64(0, cutoff.ToInternalValue());
+  cleaner.BindTime(0, cutoff);
   if (!cleaner.Run())
     return false;
   return CleanStringTables(db);

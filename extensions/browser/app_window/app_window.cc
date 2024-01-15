@@ -12,12 +12,11 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/values.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
@@ -42,11 +41,9 @@
 #include "extensions/browser/extension_system.h"
 #include "extensions/browser/extension_web_contents_observer.h"
 #include "extensions/browser/extensions_browser_client.h"
-#include "extensions/browser/notification_types.h"
 #include "extensions/browser/process_manager.h"
 #include "extensions/browser/suggest_permission_util.h"
 #include "extensions/browser/view_type_utils.h"
-#include "extensions/common/draggable_region.h"
 #include "extensions/common/extension.h"
 #include "extensions/common/extension_messages.h"
 #include "extensions/common/manifest_handlers/icons_handler.h"
@@ -80,33 +77,33 @@ const int kDefaultHeight = 384;
 
 void SetConstraintProperty(const std::string& name,
                            int value,
-                           base::Value* bounds_properties) {
-  DCHECK(bounds_properties->is_dict());
+                           base::Value::Dict* bounds_properties) {
+  DCHECK(bounds_properties);
   if (value != SizeConstraints::kUnboundedSize)
-    bounds_properties->SetIntKey(name, value);
+    bounds_properties->Set(name, value);
   else
-    bounds_properties->SetKey(name, base::Value());
+    bounds_properties->Set(name, base::Value());
 }
 
 void SetBoundsProperties(const gfx::Rect& bounds,
                          const gfx::Size& min_size,
                          const gfx::Size& max_size,
                          const std::string& bounds_name,
-                         base::Value* window_properties) {
-  DCHECK(window_properties->is_dict());
-  base::Value bounds_properties(base::Value::Type::DICTIONARY);
+                         base::Value::Dict* window_properties) {
+  DCHECK(window_properties);
+  base::Value::Dict bounds_properties;
 
-  bounds_properties.SetIntKey("left", bounds.x());
-  bounds_properties.SetIntKey("top", bounds.y());
-  bounds_properties.SetIntKey("width", bounds.width());
-  bounds_properties.SetIntKey("height", bounds.height());
+  bounds_properties.Set("left", bounds.x());
+  bounds_properties.Set("top", bounds.y());
+  bounds_properties.Set("width", bounds.width());
+  bounds_properties.Set("height", bounds.height());
 
   SetConstraintProperty("minWidth", min_size.width(), &bounds_properties);
   SetConstraintProperty("minHeight", min_size.height(), &bounds_properties);
   SetConstraintProperty("maxWidth", max_size.width(), &bounds_properties);
   SetConstraintProperty("maxHeight", max_size.height(), &bounds_properties);
 
-  window_properties->SetKey(bounds_name, std::move(bounds_properties));
+  window_properties->Set(bounds_name, std::move(bounds_properties));
 }
 
 // Combines the constraints of the content and window, and returns constraints
@@ -152,7 +149,7 @@ const int AppWindow::BoundsSpecification::kUnspecifiedPosition = INT_MIN;
 AppWindow::BoundsSpecification::BoundsSpecification()
     : bounds(kUnspecifiedPosition, kUnspecifiedPosition, 0, 0) {}
 
-AppWindow::BoundsSpecification::~BoundsSpecification() {}
+AppWindow::BoundsSpecification::~BoundsSpecification() = default;
 
 void AppWindow::BoundsSpecification::ResetBounds() {
   bounds.SetRect(kUnspecifiedPosition, kUnspecifiedPosition, 0, 0);
@@ -180,7 +177,7 @@ AppWindow::CreateParams::CreateParams()
 
 AppWindow::CreateParams::CreateParams(const CreateParams& other) = default;
 
-AppWindow::CreateParams::~CreateParams() {}
+AppWindow::CreateParams::~CreateParams() = default;
 
 gfx::Rect AppWindow::CreateParams::GetInitialWindowBounds(
     const gfx::Insets& frame_insets) const {
@@ -346,7 +343,7 @@ void AppWindow::RequestMediaAccessPermission(
 
 bool AppWindow::CheckMediaAccessPermission(
     content::RenderFrameHost* render_frame_host,
-    const GURL& security_origin,
+    const url::Origin& security_origin,
     blink::mojom::MediaStreamType type) {
   DCHECK_EQ(web_contents(),
             content::WebContents::FromRenderFrameHost(render_frame_host)
@@ -447,16 +444,6 @@ bool AppWindow::ShouldShowStaleContentOnEviction(content::WebContents* source) {
 #else
   return false;
 #endif  // BUILDFLAG(IS_CHROMEOS)
-}
-
-bool AppWindow::OnMessageReceived(const IPC::Message& message,
-                                  content::RenderFrameHost* render_frame_host) {
-  bool handled = true;
-  IPC_BEGIN_MESSAGE_MAP(AppWindow, message)
-    IPC_MESSAGE_HANDLER(ExtensionHostMsg_AppWindowReady, OnAppWindowReady)
-    IPC_MESSAGE_UNHANDLED(handled = false)
-  IPC_END_MESSAGE_MAP()
-  return handled;
 }
 
 void AppWindow::RenderFrameCreated(content::RenderFrameHost* frame_host) {
@@ -598,8 +585,12 @@ void AppWindow::UpdateShape(std::unique_ptr<ShapeRects> rects) {
 }
 
 void AppWindow::UpdateDraggableRegions(
-    const std::vector<DraggableRegion>& regions) {
+    const std::vector<mojom::DraggableRegionPtr>& regions) {
   native_app_window_->UpdateDraggableRegions(regions);
+
+  if (on_update_draggable_regions_callback_for_testing_) {
+    std::move(on_update_draggable_regions_callback_for_testing_).Run();
+  }
 }
 
 void AppWindow::UpdateAppIcon(const gfx::Image& image) {
@@ -747,17 +738,15 @@ void AppWindow::RestoreAlwaysOnTop() {
     UpdateNativeAlwaysOnTop();
 }
 
-void AppWindow::GetSerializedState(base::Value* properties) const {
+void AppWindow::GetSerializedState(base::Value::Dict* properties) const {
   DCHECK(properties);
-  DCHECK(properties->is_dict());
 
-  properties->SetBoolKey("fullscreen",
-                         native_app_window_->IsFullscreenOrPending());
-  properties->SetBoolKey("minimized", native_app_window_->IsMinimized());
-  properties->SetBoolKey("maximized", native_app_window_->IsMaximized());
-  properties->SetBoolKey("alwaysOnTop", IsAlwaysOnTop());
-  properties->SetBoolKey("hasFrameColor", native_app_window_->HasFrameColor());
-  properties->SetBoolKey(
+  properties->Set("fullscreen", native_app_window_->IsFullscreenOrPending());
+  properties->Set("minimized", native_app_window_->IsMinimized());
+  properties->Set("maximized", native_app_window_->IsMaximized());
+  properties->Set("alwaysOnTop", IsAlwaysOnTop());
+  properties->Set("hasFrameColor", native_app_window_->HasFrameColor());
+  properties->Set(
       "alphaEnabled",
       requested_alpha_enabled_ && native_app_window_->CanHaveAlphaEnabled());
 
@@ -765,12 +754,12 @@ void AppWindow::GetSerializedState(base::Value* properties) const {
   // removed to
   // make the values easier to check.
   SkColor transparent_white = ~SK_ColorBLACK;
-  properties->SetIntKey(
-      "activeFrameColor",
-      native_app_window_->ActiveFrameColor() & transparent_white);
-  properties->SetIntKey(
-      "inactiveFrameColor",
-      native_app_window_->InactiveFrameColor() & transparent_white);
+  properties->Set("activeFrameColor",
+                  static_cast<int>(native_app_window_->ActiveFrameColor() &
+                                   transparent_white));
+  properties->Set("inactiveFrameColor",
+                  static_cast<int>(native_app_window_->InactiveFrameColor() &
+                                   transparent_white));
 
   gfx::Rect content_bounds = GetClientBounds();
   gfx::Size content_min_size = native_app_window_->GetContentMinimumSize();
@@ -916,7 +905,7 @@ void AppWindow::ExitFullscreenModeForTab(content::WebContents* source) {
   ToggleFullscreenModeForTab(source, false);
 }
 
-void AppWindow::OnAppWindowReady() {
+void AppWindow::AppWindowReady() {
   window_ready_ = true;
 
   if (app_icon_url_.is_valid())
@@ -1069,14 +1058,13 @@ AppWindow::CreateParams AppWindow::LoadDefaults(CreateParams params) const {
 
 // static
 SkRegion* AppWindow::RawDraggableRegionsToSkRegion(
-    const std::vector<DraggableRegion>& regions) {
+    const std::vector<mojom::DraggableRegionPtr>& regions) {
   SkRegion* sk_region = new SkRegion;
-  for (auto iter = regions.cbegin(); iter != regions.cend(); ++iter) {
-    const DraggableRegion& region = *iter;
+  for (const auto& region : regions) {
     sk_region->op(
-        SkIRect::MakeLTRB(region.bounds.x(), region.bounds.y(),
-                          region.bounds.right(), region.bounds.bottom()),
-        region.draggable ? SkRegion::kUnion_Op : SkRegion::kDifference_Op);
+        SkIRect::MakeLTRB(region->bounds.x(), region->bounds.y(),
+                          region->bounds.right(), region->bounds.bottom()),
+        region->draggable ? SkRegion::kUnion_Op : SkRegion::kDifference_Op);
   }
   return sk_region;
 }

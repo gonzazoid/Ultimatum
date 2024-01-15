@@ -4,7 +4,8 @@
 
 #include "storage/browser/blob/mojo_blob_reader.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/trace_event/trace_event.h"
 #include "net/base/io_buffer.h"
 #include "services/network/public/cpp/net_adapters.h"
@@ -34,14 +35,15 @@ MojoBlobReader::MojoBlobReader(
       response_body_stream_(std::move(response_body_stream)),
       writable_handle_watcher_(FROM_HERE,
                                mojo::SimpleWatcher::ArmingPolicy::MANUAL,
-                               base::SequencedTaskRunnerHandle::Get()),
-      peer_closed_handle_watcher_(FROM_HERE,
-                                  mojo::SimpleWatcher::ArmingPolicy::MANUAL,
-                                  base::SequencedTaskRunnerHandle::Get()) {
+                               base::SequencedTaskRunner::GetCurrentDefault()),
+      peer_closed_handle_watcher_(
+          FROM_HERE,
+          mojo::SimpleWatcher::ArmingPolicy::MANUAL,
+          base::SequencedTaskRunner::GetCurrentDefault()) {
   TRACE_EVENT_NESTABLE_ASYNC_BEGIN1("Blob", "BlobReader", TRACE_ID_LOCAL(this),
                                     "uuid", handle->uuid());
   DCHECK(delegate_);
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&MojoBlobReader::Start, weak_factory_.GetWeakPtr()));
 }
@@ -204,30 +206,31 @@ void MojoBlobReader::ReadMore() {
   DCHECK(!pending_write_.get());
   DCHECK(response_body_stream_);
 
-  uint32_t num_bytes = 0;
   // TODO: we should use the abstractions in MojoAsyncResourceHandler.
   MojoResult result = network::NetToMojoPendingBuffer::BeginWrite(
-      &response_body_stream_, &pending_write_, &num_bytes);
-  if (result == MOJO_RESULT_SHOULD_WAIT) {
-    // The pipe is full. We need to wait for it to have more space.
-    writable_handle_watcher_.ArmOrNotify();
-    return;
-  } else if (result != MOJO_RESULT_OK) {
-    // The response body stream is in a bad state. Bail.
-    writable_handle_watcher_.Cancel();
-    response_body_stream_.reset();
-    NotifyCompletedAndDeleteIfNeeded(net::ERR_UNEXPECTED);
-    return;
+      &response_body_stream_, &pending_write_);
+  switch (result) {
+    case MOJO_RESULT_OK:
+      break;
+    case MOJO_RESULT_SHOULD_WAIT:
+      // The pipe is full. We need to wait for it to have more space.
+      writable_handle_watcher_.ArmOrNotify();
+      return;
+    default:
+      // The response body stream is in a bad state. Bail.
+      writable_handle_watcher_.Cancel();
+      response_body_stream_.reset();
+      NotifyCompletedAndDeleteIfNeeded(net::ERR_UNEXPECTED);
+      return;
   }
-
+  uint32_t num_bytes = pending_write_->size();
   num_bytes = std::min(num_bytes, blink::BlobUtils::GetDataPipeChunkSize());
 
   TRACE_EVENT_NESTABLE_ASYNC_BEGIN0("Blob", "BlobReader::ReadMore",
                                     TRACE_ID_LOCAL(this));
   CHECK_GT(static_cast<uint32_t>(std::numeric_limits<int>::max()), num_bytes);
   DCHECK(pending_write_);
-  auto buf =
-      base::MakeRefCounted<network::NetToMojoIOBuffer>(pending_write_.get());
+  auto buf = base::MakeRefCounted<network::NetToMojoIOBuffer>(pending_write_);
   int bytes_read = 0;
   BlobReader::Status read_status = blob_reader_->Read(
       buf.get(), static_cast<int>(num_bytes), &bytes_read,
@@ -272,7 +275,7 @@ void MojoBlobReader::DidRead(bool completed_synchronously, int num_bytes) {
     return;
   }
   if (completed_synchronously) {
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(&MojoBlobReader::ReadMore, weak_factory_.GetWeakPtr()));
   } else {

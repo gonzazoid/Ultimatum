@@ -6,7 +6,6 @@
 #define COMPONENTS_SYNC_TEST_MOCK_UPDATE_HANDLER_H_
 
 #include <memory>
-#include <vector>
 
 #include "base/compiler_specific.h"
 #include "components/sync/base/model_type.h"
@@ -30,10 +29,10 @@ class MockUpdateHandler : public UpdateHandler {
       const sync_pb::DataTypeContext& mutated_context,
       const SyncEntityList& applicable_updates,
       StatusController* status) override;
-  void ApplyUpdates(StatusController* status) override;
+  void ApplyUpdates(StatusController* status, bool cycle_done) override;
   void RecordRemoteInvalidation(
       std::unique_ptr<SyncInvalidation> incoming) override;
-  void PrepareGetUpdates(sync_pb::GetUpdateTriggers* msg) override;
+  void CollectPendingInvalidations(sync_pb::GetUpdateTriggers* msg) override;
   bool HasPendingInvalidations() const override;
 
   // Returns the number of times ApplyUpdates() was invoked.

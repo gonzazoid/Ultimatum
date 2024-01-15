@@ -185,7 +185,7 @@
       <message name="IDS_MENU_ADD_TO_HOMESCREEN" desc="Menu item for adding a shortcut to the Home screen (default title). [CHAR_LIMIT=27]">
         Add to Home screen
       </message>
-      <message name="IDS_MENU_ADD_TO_HOMESCREEN_INSTALL" desc="Menu item for adding a shortcut to the Home screen. [CHAR_LIMIT=27]">
+      <message name="IDS_MENU_INSTALL_WEBAPP" desc="Menu item for adding a shortcut to the Home screen. [CHAR_LIMIT=27]">
         Install app
       </message>
       <message name="IDS_ADDED_TO_HOMESCREEN" desc="Text in a toast indicating that the website with the specified name was added to the user's Home screen.">
@@ -205,6 +205,39 @@
       </message>
       <message name="IDS_WEBAPK_INSTALL_FAILED" desc="Indicates that a WebAPK has not been added to Home screen.">
         Failed to install
+      </message>
+
+      <!-- PWA Restore Bottom Sheet UI -->
+      <message name="IDS_PWA_RESTORE_BUTTON_PEEKING" desc="The button label when the PWA Restore BottomSheet UI is in peeking state.">
+         Review web apps
+      </message>
+      <message name="IDS_PWA_RESTORE_DESCRIPTION_PEEKING" desc="The sheet description when the PWA Restore BottomSheet UI is in peeking state.">
+         Restore web apps you have recently used on devices connected to this account
+      </message>
+      <message name="IDS_PWA_RESTORE_TITLE_PEEKING" desc="The sheet title when the PWA Restore BottomSheet UI is in peeking state.">
+         Restore your web apps
+      </message>
+      <message name="IDS_PWA_RESTORE_RECENT_APPS_LIST" desc="The label for the recent list.">
+         Web apps used in the last month
+      </message>
+      <message name="IDS_PWA_RESTORE_OLDER_APPS_LIST" desc="The label for the list of older apps.">
+         Older
+      </message>
+      <message name="IDS_PWA_RESTORE_BUTTON_DESELECT" desc="The label for the 'Deselect All' button.">
+         Deselect all
+      </message>
+      <message name="IDS_PWA_RESTORE_BUTTON_EXPANDED" desc="The button label when the PWA Restore BottomSheet UI is in expanded state.">
+         Restore web apps
+      </message>
+      <message name="IDS_PWA_RESTORE_DESCRIPTION_EXPANDED" desc="The sheet description when the PWA Restore BottomSheet UI is in expanded state.">
+         Choose web apps to restore on this device. Apps shown here are based on your Chrome history.
+      </message>
+      <message name="IDS_PWA_RESTORE_TITLE_EXPANDED" desc="The sheet title when the PWA Restore BottomSheet UI is in expanded state.">
+         Review web apps
+      </message>
+
+      <message name="IDS_PWA_RESTORE_BOTTOM_SHEET_ACCESSIBILITY" desc="The content description for the bottom sheet install UI.">
+         Review which web apps to restore
       </message>
     </messages>
   </release>

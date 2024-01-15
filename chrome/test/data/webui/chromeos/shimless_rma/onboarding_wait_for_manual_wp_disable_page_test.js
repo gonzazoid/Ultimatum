@@ -2,14 +2,14 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {PromiseResolver} from 'chrome://resources/js/promise_resolver.js';
+import {PromiseResolver} from 'chrome://resources/ash/common/promise_resolver.js';
 import {fakeRsuChallengeQrCode} from 'chrome://shimless-rma/fake_data.js';
 import {FakeShimlessRmaService} from 'chrome://shimless-rma/fake_shimless_rma_service.js';
 import {setShimlessRmaServiceForTesting} from 'chrome://shimless-rma/mojo_interface_provider.js';
 import {OnboardingWaitForManualWpDisablePage} from 'chrome://shimless-rma/onboarding_wait_for_manual_wp_disable_page.js';
+import {ShimlessRma} from 'chrome://shimless-rma/shimless_rma.js';
+import {assertDeepEquals, assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chromeos/chai_assert.js';
 import {flushTasks} from 'chrome://webui-test/polymer_test_util.js';
-
-import {assertDeepEquals, assertEquals, assertFalse, assertTrue} from '../../chai_assert.js';
 
 /**
  * It is not possible to suppress visibility inline so this helper
@@ -20,7 +20,7 @@ function suppressedComponentCanvasSize_(component) {
   return component.canvasSize_;
 }
 
-export function onboardingWaitForManualWpDisablePageTest() {
+suite('onboardingWaitForManualWpDisablePageTest', function() {
   /** @type {?OnboardingWaitForManualWpDisablePage} */
   let component = null;
 
@@ -28,7 +28,7 @@ export function onboardingWaitForManualWpDisablePageTest() {
   let service = null;
 
   setup(() => {
-    document.body.innerHTML = '';
+    document.body.innerHTML = trustedTypes.emptyHTML;
     service = new FakeShimlessRmaService();
     setShimlessRmaServiceForTesting(service);
   });
@@ -43,9 +43,6 @@ export function onboardingWaitForManualWpDisablePageTest() {
    * @return {!Promise}
    */
   function initializeWaitForManualWpDisablePage() {
-    service.setGetWriteProtectManuallyDisabledInstructionsResult(
-        'g.co/help', fakeRsuChallengeQrCode);
-
     assertFalse(!!component);
 
     component = /** @type {!OnboardingWaitForManualWpDisablePage} */ (
@@ -62,4 +59,4 @@ export function onboardingWaitForManualWpDisablePageTest() {
         component.shadowRoot.querySelector('#manuallyDisableHwwpInstructions');
     assertFalse(manualDisableComponent.hidden);
   });
-}
+});

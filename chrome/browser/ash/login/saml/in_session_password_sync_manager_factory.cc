@@ -4,13 +4,10 @@
 
 #include "chrome/browser/ash/login/saml/in_session_password_sync_manager_factory.h"
 
-#include "ash/constants/ash_features.h"
 #include "chrome/browser/ash/login/saml/in_session_password_sync_manager.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/profiles/profile.h"
 #include "components/keyed_service/core/keyed_service.h"
-#include "components/user_manager/user.h"
-#include "components/user_manager/user_manager.h"
 #include "content/public/browser/browser_context.h"
 
 namespace ash {
@@ -18,7 +15,8 @@ namespace ash {
 // static
 InSessionPasswordSyncManagerFactory*
 InSessionPasswordSyncManagerFactory::GetInstance() {
-  return base::Singleton<InSessionPasswordSyncManagerFactory>::get();
+  static base::NoDestructor<InSessionPasswordSyncManagerFactory> instance;
+  return instance.get();
 }
 
 // static
@@ -29,12 +27,20 @@ InSessionPasswordSyncManagerFactory::GetForProfile(Profile* profile) {
 }
 
 InSessionPasswordSyncManagerFactory::InSessionPasswordSyncManagerFactory()
-    : ProfileKeyedServiceFactory("InSessionPasswordSyncManager") {}
+    : ProfileKeyedServiceFactory(
+          "InSessionPasswordSyncManager",
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOriginalOnly)
+              .Build()) {}
 
 InSessionPasswordSyncManagerFactory::~InSessionPasswordSyncManagerFactory() =
     default;
 
-KeyedService* InSessionPasswordSyncManagerFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+InSessionPasswordSyncManagerFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
   Profile* profile = static_cast<Profile*>(context);
 
@@ -42,7 +48,7 @@ KeyedService* InSessionPasswordSyncManagerFactory::BuildServiceInstanceFor(
   if (!ProfileHelper::IsPrimaryProfile(profile)) {
     return nullptr;
   }
-  return new InSessionPasswordSyncManager(profile);
+  return std::make_unique<InSessionPasswordSyncManager>(profile);
 }
 
 }  // namespace ash

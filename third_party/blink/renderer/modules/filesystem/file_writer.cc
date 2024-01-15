@@ -48,7 +48,8 @@ static constexpr uint64_t kMaxTruncateLength =
     std::numeric_limits<uint64_t>::max();
 
 FileWriter::FileWriter(ExecutionContext* context)
-    : ExecutionContextLifecycleObserver(context),
+    : ActiveScriptWrappable<FileWriter>({}),
+      ExecutionContextLifecycleObserver(context),
       ready_state_(kInit),
       operation_in_progress_(kOperationNone),
       queued_operation_(kOperationNone),
@@ -230,12 +231,10 @@ void FileWriter::DoTruncate(const KURL& path, int64_t offset) {
           WTF::BindOnce(&FileWriter::DidFinish, WrapWeakPersistent(this)));
 }
 
-void FileWriter::DoWrite(const KURL& path,
-                         const String& blob_id,
-                         int64_t offset) {
+void FileWriter::DoWrite(const KURL& path, const Blob& blob, int64_t offset) {
   FileSystemDispatcher::From(GetExecutionContext())
       .Write(
-          path, blob_id, offset, &request_id_,
+          path, blob, offset, &request_id_,
           WTF::BindRepeating(&FileWriter::DidWrite, WrapWeakPersistent(this)),
           WTF::BindOnce(&FileWriter::DidFinish, WrapWeakPersistent(this)));
 }
@@ -262,7 +261,7 @@ void FileWriter::DoOperation(Operation operation) {
       DCHECK_EQ(kMaxTruncateLength, truncate_length_);
       DCHECK(blob_being_written_.Get());
       DCHECK_EQ(kWriting, ready_state_);
-      Write(position(), blob_being_written_->Uuid());
+      Write(position(), *blob_being_written_);
       break;
     case kOperationTruncate:
       DCHECK_EQ(kOperationNone, operation_in_progress_);
@@ -338,7 +337,7 @@ void FileWriter::Dispose() {
 void FileWriter::Trace(Visitor* visitor) const {
   visitor->Trace(error_);
   visitor->Trace(blob_being_written_);
-  EventTargetWithInlineData::Trace(visitor);
+  EventTarget::Trace(visitor);
   FileWriterBase::Trace(visitor);
   ExecutionContextLifecycleObserver::Trace(visitor);
 }

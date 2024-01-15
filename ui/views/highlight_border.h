@@ -23,6 +23,12 @@ class VIEWS_EXPORT HighlightBorder : public views::Border {
  public:
   // TODO(crbug/1319944): Change these type names to something more descriptive.
   enum class Type {
+    // The highlight border for the UI without a shadow.
+    kHighlightBorderNoShadow,
+    // The highlight border for the UI with a shadow.
+    kHighlightBorderOnShadow,
+    // TODO(b/271009119): Clean up these old types after MaterialNext is fully
+    // launched.
     // A higher contrast highlight border than the `kHighlightBorder2` used
     // for floating components that do not have a shield below.
     kHighlightBorder1,
@@ -62,8 +68,7 @@ class VIEWS_EXPORT HighlightBorder : public views::Border {
                                   SkColor border_color,
                                   const gfx::Rect& bounds,
                                   const gfx::RoundedCornersF& corner_radii,
-                                  Type type,
-                                  bool use_light_colors);
+                                  Type type);
 
   // Paints the highlight border onto `canvas` for the specified `view`. The
   // color of the border will be determined using `view`'s color provider. Note
@@ -73,27 +78,22 @@ class VIEWS_EXPORT HighlightBorder : public views::Border {
                                   const views::View& view,
                                   const gfx::Rect& bounds,
                                   const gfx::RoundedCornersF& corner_radii,
-                                  Type type,
-                                  bool use_light_colors);
+                                  Type type);
 
   // Returns the inner highlight color used to paint highlight border.
   static SkColor GetHighlightColor(const views::View& view,
-                                   HighlightBorder::Type type,
-                                   bool use_light_colors);
+                                   HighlightBorder::Type type);
 
   // Returns the outer border color used to paint highlight border.
   static SkColor GetBorderColor(const views::View& view,
-                                HighlightBorder::Type type,
-                                bool use_light_colors);
+                                HighlightBorder::Type type);
 
   HighlightBorder(int corner_radius,
                   Type type,
-                  bool use_light_colors,
                   InsetsType insets_type = InsetsType::kNoInsets);
 
   HighlightBorder(const gfx::RoundedCornersF& rounded_corners,
                   Type type,
-                  bool use_light_colors,
                   InsetsType insets_type = InsetsType::kNoInsets);
 
   HighlightBorder(const HighlightBorder&) = delete;
@@ -103,6 +103,7 @@ class VIEWS_EXPORT HighlightBorder : public views::Border {
 
   // views::Border:
   void Paint(const views::View& view, gfx::Canvas* canvas) override;
+  void OnViewThemeChanged(views::View* view) override;
   gfx::Insets GetInsets() const override;
   gfx::Size GetMinimumSize() const override;
 
@@ -111,10 +112,6 @@ class VIEWS_EXPORT HighlightBorder : public views::Border {
   const gfx::RoundedCornersF rounded_corners_;
 
   const Type type_;
-
-  // True if the border should use light colors when the D/L mode feature is
-  // not enabled.
-  const bool use_light_colors_;
 
   // Used by `GetInsets()` to calculate the insets.
   const InsetsType insets_type_;

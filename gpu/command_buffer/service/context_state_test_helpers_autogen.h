@@ -57,11 +57,6 @@ void ContextStateTestHelpers::SetupInitStateExpectations(
   EXPECT_CALL(*gl, ColorMask(true, true, true, true))
       .Times(1)
       .RetiresOnSaturation();
-  if (feature_info->feature_flags().chromium_framebuffer_mixed_samples) {
-    EXPECT_CALL(*gl, CoverageModulationNV(GL_NONE))
-        .Times(1)
-        .RetiresOnSaturation();
-  }
   EXPECT_CALL(*gl, CullFace(GL_BACK)).Times(1).RetiresOnSaturation();
   EXPECT_CALL(*gl, DepthFunc(GL_LESS)).Times(1).RetiresOnSaturation();
   EXPECT_CALL(*gl, DepthMask(true)).Times(1).RetiresOnSaturation();
@@ -74,11 +69,6 @@ void ContextStateTestHelpers::SetupInitStateExpectations(
   }
   if (feature_info->feature_flags().oes_standard_derivatives) {
     EXPECT_CALL(*gl, Hint(GL_FRAGMENT_SHADER_DERIVATIVE_HINT_OES, GL_DONT_CARE))
-        .Times(1)
-        .RetiresOnSaturation();
-  }
-  if (feature_info->feature_flags().chromium_texture_filtering_hint) {
-    EXPECT_CALL(*gl, Hint(GL_TEXTURE_FILTERING_HINT_CHROMIUM, GL_NICEST))
         .Times(1)
         .RetiresOnSaturation();
   }

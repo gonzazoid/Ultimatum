@@ -5,6 +5,7 @@
 #include "puffin/src/puffin_stream.h"
 
 #include <algorithm>
+#include <cstring>
 #include <memory>
 #include <string>
 #include <utility>
@@ -60,14 +61,18 @@ UniqueStreamPtr PuffinStream::CreateForPuff(UniqueStreamPtr stream,
                                             const vector<BitExtent>& deflates,
                                             const vector<ByteExtent>& puffs,
                                             size_t max_cache_size) {
-  TEST_AND_RETURN_VALUE(CheckArgsIntegrity(puff_size, deflates, puffs),
-                        nullptr);
-  TEST_AND_RETURN_VALUE(stream->Seek(0), nullptr);
+  if (!CheckArgsIntegrity(puff_size, deflates, puffs) || !stream->Seek(0)) {
+    stream->Close();
+    return nullptr;
+  }
 
   UniqueStreamPtr puffin_stream(new PuffinStream(std::move(stream), puffer,
                                                  nullptr, puff_size, deflates,
                                                  puffs, max_cache_size));
-  TEST_AND_RETURN_VALUE(puffin_stream->Seek(0), nullptr);
+  if (!puffin_stream->Seek(0)) {
+    puffin_stream->Close();
+    return nullptr;
+  }
   return puffin_stream;
 }
 
@@ -76,13 +81,17 @@ UniqueStreamPtr PuffinStream::CreateForHuff(UniqueStreamPtr stream,
                                             uint64_t puff_size,
                                             const vector<BitExtent>& deflates,
                                             const vector<ByteExtent>& puffs) {
-  TEST_AND_RETURN_VALUE(CheckArgsIntegrity(puff_size, deflates, puffs),
-                        nullptr);
-  TEST_AND_RETURN_VALUE(stream->Seek(0), nullptr);
+  if (!CheckArgsIntegrity(puff_size, deflates, puffs) || !stream->Seek(0)) {
+    stream->Close();
+    return nullptr;
+  }
 
   UniqueStreamPtr puffin_stream(new PuffinStream(
       std::move(stream), nullptr, huffer, puff_size, deflates, puffs, 0));
-  TEST_AND_RETURN_VALUE(puffin_stream->Seek(0), nullptr);
+  if (!puffin_stream->Seek(0)) {
+    puffin_stream->Close();
+    return nullptr;
+  }
   return puffin_stream;
 }
 

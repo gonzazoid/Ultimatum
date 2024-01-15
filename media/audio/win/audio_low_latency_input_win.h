@@ -80,7 +80,9 @@
 #include "media/audio/agc_audio_stream.h"
 #include "media/audio/system_glitch_reporter.h"
 #include "media/audio/win/audio_manager_win.h"
+#include "media/base/amplitude_peak_detector.h"
 #include "media/base/audio_converter.h"
+#include "media/base/audio_glitch_info.h"
 #include "media/base/audio_parameters.h"
 #include "media/base/media_export.h"
 
@@ -200,7 +202,9 @@ class MEDIA_EXPORT WASAPIAudioInputStream
   void MaybeReportFormatRelatedInitError(HRESULT hr) const;
 
   // AudioConverter::InputCallback implementation.
-  double ProvideInput(AudioBus* audio_bus, uint32_t frames_delayed) override;
+  double ProvideInput(AudioBus* audio_bus,
+                      uint32_t frames_delayed,
+                      const AudioGlitchInfo& glitch_info) override;
 
   // Reports glitch stats and resets associated variables.
   void ReportAndResetGlitchStats();
@@ -211,6 +215,11 @@ class MEDIA_EXPORT WASAPIAudioInputStream
   // Used to aggregate and report glitch metrics to UMA (periodically) and to
   // text logs (when a stream ends).
   SystemGlitchReporter glitch_reporter_;
+
+  // Accumulates glitch info to be passed on to OnData().
+  media::AudioGlitchInfo::Accumulator glitch_accumulator_;
+
+  AmplitudePeakDetector peak_detector_;
 
   // Used to track and log data discontinuity warnings from
   // IAudioCaptureClient::GetBuffer.
@@ -352,12 +361,11 @@ class MEDIA_EXPORT WASAPIAudioInputStream
   // raw (minimal) audio processing mode. Will be empty in most cases.
   std::vector<ABI::Windows::Media::Effects::AudioEffectType> raw_effect_types_;
 
-  // Will be enabled if "--use-fake-audio-capture-timestamps" has been added to
-  // the command line. This mode can be used in situations where the default
-  // capture timestamps are known to be invalid (e.g. for virtual devices) and
-  // must be emulated with local timeticks to ensure a monotonic timestamp
-  // sequence. See crbug.com/1315231 for more details.
-  bool use_fake_audio_capture_timestamps_ = false;
+  // Set to true if the absolute difference between a QPC timestamp converted
+  // into a TimeTick value and a default base::TimeTicks::Now() is larger than
+  // 500 msec. A true return value should trigger usage of "fake" audio
+  // timestamps instead of default which are QPC based.
+  absl::optional<bool> use_fake_audio_capture_timestamps_;
 
   SEQUENCE_CHECKER(sequence_checker_);
 };

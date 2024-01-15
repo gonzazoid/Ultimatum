@@ -6,15 +6,16 @@ package org.chromium.chrome.browser.feedback;
 
 import androidx.annotation.VisibleForTesting;
 
+import org.jni_zero.CalledByNative;
+import org.jni_zero.JNINamespace;
+import org.jni_zero.NativeMethods;
+
 import org.chromium.base.Log;
 import org.chromium.base.ThreadUtils;
-import org.chromium.base.annotations.CalledByNative;
-import org.chromium.base.annotations.JNINamespace;
-import org.chromium.base.annotations.NativeMethods;
 import org.chromium.base.task.AsyncTask;
 import org.chromium.base.task.PostTask;
+import org.chromium.base.task.TaskTraits;
 import org.chromium.chrome.browser.profiles.Profile;
-import org.chromium.content_public.browser.UiThreadTaskTraits;
 import org.chromium.net.ChromiumNetworkAdapter;
 import org.chromium.net.NetworkTrafficAnnotationTag;
 
@@ -25,9 +26,7 @@ import java.net.ProtocolException;
 import java.net.SocketTimeoutException;
 import java.net.URL;
 
-/**
- * A utility class for checking if the device is currently connected to the Internet.
- */
+/** A utility class for checking if the device is currently connected to the Internet. */
 @JNINamespace("chrome::android")
 public final class ConnectivityChecker {
     private static final String TAG = "feedback";
@@ -40,17 +39,49 @@ public final class ConnectivityChecker {
     private static String sHttpNoContentUrl = DEFAULT_HTTP_NO_CONTENT_URL;
     private static String sHttpsNoContentUrl = DEFAULT_HTTPS_NO_CONTENT_URL;
 
-    /**
-     * A callback for whether the device is currently connected to the Internet.
-     */
+    private static final NetworkTrafficAnnotationTag TRAFFIC_ANNOTATION =
+            NetworkTrafficAnnotationTag.createComplete(
+                    "android_feedback_connectivity_checker",
+                    "semantics {"
+                            + "  sender: 'Feedback Connectivity Checker'"
+                            + "  description:"
+                            + "    'When sending user initiated feedback about Chrome to '"
+                            + "    'Google, this request checks the user\\'s connectivity. It '"
+                            + "    'does this by attempting to connect to Google servers and '"
+                            + "    'records whether the browser was able to directly connect '"
+                            + "    'the servers or not. A redirected request is not considered '"
+                            + "    'a success.'"
+                            + "  trigger: 'User triggers the application feedback flow.'"
+                            + "  data: 'No additional data.'"
+                            + "  destination: GOOGLE_OWNED_SERVICE"
+                            + "  internal {"
+                            + "    contacts {"
+                            + "      email: 'clank-dev@google.com'"
+                            + "    }"
+                            + "    contacts {"
+                            + "      email: 'nyquist@chromium.org'"
+                            + "    }"
+                            + "  }"
+                            + "  user_data {"
+                            + "    type: NONE"
+                            + "  }"
+                            + "  last_reviewed: '2023-01-13'"
+                            + "}"
+                            + "policy {"
+                            + "  cookies_allowed: NO"
+                            + "  setting: 'This feature can not be disabled.'"
+                            + "  policy_exception_justification:"
+                            + "    'A policy for this is not considered necessary as this '"
+                            + "    'request is manually initiated by the user and does '"
+                            + "    'not contain any additional data.'"
+                            + "}");
+
+    /** A callback for whether the device is currently connected to the Internet. */
     public interface ConnectivityCheckerCallback {
-        /**
-         * Called when the result of the connectivity check is ready.
-         */
+        /** Called when the result of the connectivity check is ready. */
         void onResult(int result);
     }
 
-    @VisibleForTesting
     static void overrideUrlsForTest(String httpUrl, String httpsUrl) {
         ThreadUtils.assertOnUiThread();
         sHttpNoContentUrl = httpUrl;
@@ -58,12 +89,14 @@ public final class ConnectivityChecker {
     }
 
     private static void postResult(final ConnectivityCheckerCallback callback, final int result) {
-        PostTask.postTask(UiThreadTaskTraits.DEFAULT, new Runnable() {
-            @Override
-            public void run() {
-                callback.onResult(result);
-            }
-        });
+        PostTask.postTask(
+                TaskTraits.UI_DEFAULT,
+                new Runnable() {
+                    @Override
+                    public void run() {
+                        callback.onResult(result);
+                    }
+                });
     }
 
     /**
@@ -106,8 +139,8 @@ public final class ConnectivityChecker {
             protected Integer doInBackground() {
                 try {
                     HttpURLConnection conn =
-                            (HttpURLConnection) ChromiumNetworkAdapter.openConnection(
-                                    url, NetworkTrafficAnnotationTag.MISSING_TRAFFIC_ANNOTATION);
+                            (HttpURLConnection)
+                                    ChromiumNetworkAdapter.openConnection(url, TRAFFIC_ANNOTATION);
                     conn.setInstanceFollowRedirects(false);
                     conn.setRequestMethod("GET");
                     conn.setDoInput(false);
@@ -135,8 +168,7 @@ public final class ConnectivityChecker {
             protected void onPostExecute(Integer result) {
                 callback.onResult(result);
             }
-        }
-                .executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
+        }.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
     }
 
     /**
@@ -155,8 +187,11 @@ public final class ConnectivityChecker {
      * @param timeoutMs number of milliseconds to wait before giving up waiting for a connection.
      * @param callback the callback which will get the result.
      */
-    public static void checkConnectivityChromeNetworkStack(Profile profile, boolean useHttps,
-            int timeoutMs, ConnectivityCheckerCallback callback) {
+    public static void checkConnectivityChromeNetworkStack(
+            Profile profile,
+            boolean useHttps,
+            int timeoutMs,
+            ConnectivityCheckerCallback callback) {
         String url = useHttps ? sHttpsNoContentUrl : sHttpNoContentUrl;
         checkConnectivityChromeNetworkStack(profile, url, timeoutMs, callback);
     }
@@ -165,7 +200,9 @@ public final class ConnectivityChecker {
     static void checkConnectivityChromeNetworkStack(
             Profile profile, String url, long timeoutMs, ConnectivityCheckerCallback callback) {
         ThreadUtils.assertOnUiThread();
-        ConnectivityCheckerJni.get().checkConnectivity(profile, url, timeoutMs, callback);
+        ConnectivityCheckerJni.get()
+                .checkConnectivity(
+                        profile, url, timeoutMs, callback, TRAFFIC_ANNOTATION.getHashCode());
     }
 
     @CalledByNative
@@ -178,7 +215,12 @@ public final class ConnectivityChecker {
     @NativeMethods
     interface Natives {
         void checkConnectivity(
-                Profile profile, String url, long timeoutMs, ConnectivityCheckerCallback callback);
+                Profile profile,
+                String url,
+                long timeoutMs,
+                ConnectivityCheckerCallback callback,
+                int annotationHashCode);
+
         boolean isUrlValid(String url);
     }
 }

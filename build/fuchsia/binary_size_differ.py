@@ -6,23 +6,11 @@
 '''Implements Chrome-Fuchsia package binary size differ.'''
 
 import argparse
-import collections
-import copy
 import json
-import logging
-import math
 import os
-import re
-import shutil
-import subprocess
 import sys
-import tempfile
-import time
 import traceback
-import uuid
 
-from common import GetHostToolPathFromPlatform, GetHostArchFromPlatform
-from common import SDK_ROOT, DIR_SOURCE_ROOT
 from binary_sizes import ReadPackageSizesJson
 from binary_sizes import PACKAGES_SIZES_FILE
 
@@ -72,6 +60,8 @@ def ComputePackageDiffs(before_sizes_file, after_sizes_file, author=None):
                    ' {} bytes).<br>').format(
                        package_name, growth['compressed'][package_name],
                        growth['uncompressed'][package_name]))
+      summary += ('Note that this bot compares growth against trunk, and is '
+                  'not aware of CL chaining.<br>')
 
   # Allow rollers to pass even with size increases. See crbug.com/1355914.
   if author and '-autoroll' in author and status_code == SIZE_FAILURE:

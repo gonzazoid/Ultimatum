@@ -3,12 +3,7 @@
         /* Larger cr-input margin (by reserving space for error display). */
         --cr-input-error-display: block;
         margin-bottom: 0;
-        width: var(--settings-input-max-width);
-      }
-
-      /* Override the padding-top (the space is set by save-to-this-device). */
-      div[slot='button-container'] {
-        padding-top: 0;
+        width: var(--cr-default-input-max-width);
       }
 
       .md-select + .md-select {
@@ -19,11 +14,19 @@
         width: 70px;
       }
 
+      #cvcInput {
+        width: 132px;
+      }
+
+      #cvcImage {
+        margin-inline-start: 10px;
+      }
+
       #saved-to-this-device-only-label {
         /* Overall space between input fields, including space between
            nicknameInput and saved-to-this-device text, between
            saved-to-this-device text and button. */
-        margin-bottom: 26px;
+        margin-bottom: 10px;
         margin-top: 0;
       }
 
@@ -33,7 +36,7 @@
 
       /* For nickname input, cr-input-width is the same as other input fields */
       #nicknameInput {
-        --cr-input-width: var(--settings-input-max-width);
+        --cr-input-width: var(--cr-default-input-max-width);
         width: fit-content;
       }
 
@@ -102,7 +105,20 @@
           </template>
         </select>
         <div id="expiredError">$i18n{creditCardExpired}</div>
-        <!-- Place cardholder name field and nickname field after expiration.-->
+        <template is="dom-if"
+            if="[[checkIfCvcStorageIsAvailable_(
+                  prefs.autofill.payment_cvc_storage.value,
+                  cvcStorageAvailable_)]]">
+          <cr-input id="cvcInput" label="$i18n{creditCardCvcInputTitle}"
+              placeholder="$i18n{creditCardCvcInputPlaceholder}"
+              value="{{cvc_}}">
+            <img slot="suffix" id="cvcImage"
+                src="[[getCvcImageSource_(cardNumber_)]]"
+                title="[[getCvcImageTooltip_(cardNumber_)]]">
+            </img>
+          </cr-input>
+        </template>
+        <!-- Place cardholder name field and nickname field after CVC input.-->
         <cr-input id="nameInput" label="$i18n{creditCardName}"
             value="{{name_}}" spellcheck="false">
         </cr-input>
@@ -111,7 +127,7 @@
             on-input="validateNickname_"
             invalid="[[nicknameInvalid_]]"
             error-message="$i18n{creditCardNicknameInvalid}">
-            <div id="charCount" slot="suffix">
+            <div id="charCount" slot="suffix" aria-hidden="true">
               [[computeNicknameCharCount_(nickname_)]]/25
             </div>
         </cr-input>
@@ -121,9 +137,9 @@
       </div>
       <div slot="button-container">
         <cr-button id="cancelButton" class="cancel-button"
-            on-click="onCancelButtonTap_">$i18n{cancel}</cr-button>
+            on-click="onCancelButtonClick_">$i18n{cancel}</cr-button>
         <cr-button id="saveButton" class="action-button"
-            on-click="onSaveButtonTap_"
+            on-click="onSaveButtonClick_"
             disabled="[[!saveEnabled_(nicknameInvalid_,
                 expired_, name_, cardNumber_, nickname_)]]">
           $i18n{save}

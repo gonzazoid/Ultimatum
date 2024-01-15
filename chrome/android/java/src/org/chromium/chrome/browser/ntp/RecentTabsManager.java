@@ -6,20 +6,20 @@ package org.chromium.chrome.browser.ntp;
 
 import android.content.Context;
 
-import androidx.annotation.VisibleForTesting;
-
+import org.chromium.base.ResettersForTesting;
 import org.chromium.base.metrics.RecordHistogram;
 import org.chromium.base.metrics.RecordUserAction;
 import org.chromium.chrome.browser.invalidation.SessionsInvalidationManager;
-import org.chromium.chrome.browser.ntp.ForeignSessionHelper.ForeignSession;
-import org.chromium.chrome.browser.ntp.ForeignSessionHelper.ForeignSessionTab;
 import org.chromium.chrome.browser.profiles.Profile;
+import org.chromium.chrome.browser.recent_tabs.ForeignSessionHelper;
+import org.chromium.chrome.browser.recent_tabs.ForeignSessionHelper.ForeignSession;
+import org.chromium.chrome.browser.recent_tabs.ForeignSessionHelper.ForeignSessionTab;
 import org.chromium.chrome.browser.signin.SyncConsentActivityLauncherImpl;
 import org.chromium.chrome.browser.signin.services.IdentityServicesProvider;
 import org.chromium.chrome.browser.signin.services.ProfileDataCache;
 import org.chromium.chrome.browser.signin.services.SigninManager;
 import org.chromium.chrome.browser.signin.services.SigninManager.SignInStateObserver;
-import org.chromium.chrome.browser.sync.SyncService;
+import org.chromium.chrome.browser.sync.SyncServiceFactory;
 import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.chrome.browser.tabmodel.TabModel;
 import org.chromium.chrome.browser.tabmodel.TabModelSelector;
@@ -32,24 +32,22 @@ import org.chromium.components.signin.AccountManagerFacadeProvider;
 import org.chromium.components.signin.AccountsChangeObserver;
 import org.chromium.components.signin.identitymanager.ConsentLevel;
 import org.chromium.components.signin.metrics.SigninAccessPoint;
+import org.chromium.components.sync.SyncService;
 import org.chromium.url.GURL;
 
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * Provides the domain logic and data for RecentTabsPage and RecentTabsRowAdapter.
- */
-public class RecentTabsManager implements SyncService.SyncStateChangedListener, SignInStateObserver,
-                                          ProfileDataCache.Observer, AccountsChangeObserver {
-    /**
-     * Implement this to receive updates when the page contents change.
-     */
+/** Provides the domain logic and data for RecentTabsPage and RecentTabsRowAdapter. */
+public class RecentTabsManager
+        implements SyncService.SyncStateChangedListener,
+                SignInStateObserver,
+                ProfileDataCache.Observer,
+                AccountsChangeObserver {
+    /** Implement this to receive updates when the page contents change. */
     interface UpdatedCallback {
-        /**
-         * Called when the list of recently closed tabs or foreign sessions changes.
-         */
+        /** Called when the list of recently closed tabs or foreign sessions changes. */
         void onUpdated();
     }
 
@@ -84,6 +82,7 @@ public class RecentTabsManager implements SyncService.SyncStateChangedListener, 
      * used to de-duplicate as update would otherwise result in incorrect metrics.
      */
     private final Map<Integer, Boolean> mTabSessionIdsRestored = new HashMap<>();
+
     private final Map<Integer, Boolean> mGroupSessionIdsRestored = new HashMap<>();
     private final Map<Integer, Boolean> mBulkSessionIdsRestored = new HashMap<>();
 
@@ -96,8 +95,12 @@ public class RecentTabsManager implements SyncService.SyncStateChangedListener, 
      * @param context the Android context this manager will work in.
      * @param showHistoryManager Runnable showing history manager UI.
      */
-    public RecentTabsManager(Tab tab, TabModelSelector tabModelSelector, Profile profile,
-            Context context, Runnable showHistoryManager) {
+    public RecentTabsManager(
+            Tab tab,
+            TabModelSelector tabModelSelector,
+            Profile profile,
+            Context context,
+            Runnable showHistoryManager) {
         mProfile = profile;
         mActiveTab = tab;
         mTabModelSelector = tabModelSelector;
@@ -105,15 +108,19 @@ public class RecentTabsManager implements SyncService.SyncStateChangedListener, 
         mForeignSessionHelper = new ForeignSessionHelper(profile);
         mPrefs = new RecentTabsPagePrefs(profile);
         mFaviconHelper = new FaviconHelper();
-        mRecentlyClosedTabManager = sRecentlyClosedTabManagerForTests != null
-                ? sRecentlyClosedTabManagerForTests
-                : new RecentlyClosedBridge(profile, tabModelSelector);
+        mRecentlyClosedTabManager =
+                sRecentlyClosedTabManagerForTests != null
+                        ? sRecentlyClosedTabManagerForTests
+                        : new RecentlyClosedBridge(profile, tabModelSelector);
         mSignInManager = IdentityServicesProvider.get().getSigninManager(mProfile);
 
         mProfileDataCache = ProfileDataCache.createWithDefaultImageSizeAndNoBadge(context);
-        mSyncPromoController = new SyncPromoController(
-                SigninAccessPoint.RECENT_TABS, SyncConsentActivityLauncherImpl.get());
-        mSyncService = SyncService.get();
+        mSyncPromoController =
+                new SyncPromoController(
+                        mProfile,
+                        SigninAccessPoint.RECENT_TABS,
+                        SyncConsentActivityLauncherImpl.get());
+        mSyncService = SyncServiceFactory.getForProfile(mProfile);
 
         mRecentlyClosedTabManager.setEntriesUpdatedRunnable(this::updateRecentlyClosedEntries);
         updateRecentlyClosedEntries();
@@ -234,10 +241,11 @@ public class RecentTabsManager implements SyncService.SyncStateChangedListener, 
      * @param tab The tab to open.
      * @param windowDisposition The WindowOpenDisposition flag.
      */
-    public void openForeignSessionTab(ForeignSession session, ForeignSessionTab tab,
-            int windowDisposition) {
+    public void openForeignSessionTab(
+            ForeignSession session, ForeignSessionTab tab, int windowDisposition) {
         if (mIsDestroyed) return;
         RecordUserAction.record("MobileRecentTabManagerTabFromOtherDeviceOpened");
+        RecordUserAction.record("MobileCrossDeviceTabOpenedOrSent");
         mForeignSessionHelper.openForeignSessionTab(mActiveTab, session, tab, windowDisposition);
     }
 
@@ -265,7 +273,7 @@ public class RecentTabsManager implements SyncService.SyncStateChangedListener, 
         if (mIsDestroyed) return;
 
         assert !(entry instanceof RecentlyClosedTab)
-            : "Opening a RecentlyClosedTab should use openRecentlyClosedTab().";
+                : "Opening a RecentlyClosedTab should use openRecentlyClosedTab().";
 
         if (entry instanceof RecentlyClosedGroup) {
             mGroupSessionIdsRestored.put(entry.getSessionId(), true);
@@ -277,9 +285,7 @@ public class RecentTabsManager implements SyncService.SyncStateChangedListener, 
         mRecentlyClosedTabManager.openRecentlyClosedEntry(getTabModel(), entry);
     }
 
-    /**
-     * Opens the history page.
-     */
+    /** Opens the history page. */
     public void openHistoryPage() {
         if (mIsDestroyed) return;
         mShowHistoryManager.run();
@@ -382,9 +388,7 @@ public class RecentTabsManager implements SyncService.SyncStateChangedListener, 
         mForeignSessionHelper.deleteForeignSession(session);
     }
 
-    /**
-     * Clears the list of recently closed tabs.
-     */
+    /** Clears the list of recently closed tabs. */
     public void clearRecentlyClosedEntries() {
         if (mIsDestroyed) return;
         RecordUserAction.record("MobileRecentTabManagerRecentTabsCleared");
@@ -427,9 +431,14 @@ public class RecentTabsManager implements SyncService.SyncStateChangedListener, 
             return SyncPromoState.PROMO_FOR_SIGNED_OUT_STATE;
         }
 
-        if (mSyncService.isSyncRequested() && !mForeignSessions.isEmpty()) {
+        if (!mForeignSessions.isEmpty()) {
             return SyncPromoState.NO_PROMO;
         }
+
+        // TODO(crbug.com/1341324): PROMO_FOR_SYNC_TURNED_OFF_STATE should only
+        // be returned if mSyncService.getSelectedTypes().isEmpty(). Otherwise,
+        // LegacySyncPromoView incorrectly displays a promo with string
+        // R.string.ntp_recent_tabs_sync_promo_instructions.
         return SyncPromoState.PROMO_FOR_SYNC_TURNED_OFF_STATE;
     }
 
@@ -439,18 +448,16 @@ public class RecentTabsManager implements SyncService.SyncStateChangedListener, 
 
         final boolean hasSyncPromoStateChangedtoShown =
                 (mPromoState == SyncPromoState.NO_PROMO
-                        || mPromoState == SyncPromoState.PROMO_FOR_SYNC_TURNED_OFF_STATE)
-                && (newState == SyncPromoState.PROMO_FOR_SIGNED_IN_STATE
-                        || newState == SyncPromoState.PROMO_FOR_SIGNED_OUT_STATE);
+                                || mPromoState == SyncPromoState.PROMO_FOR_SYNC_TURNED_OFF_STATE)
+                        && (newState == SyncPromoState.PROMO_FOR_SIGNED_IN_STATE
+                                || newState == SyncPromoState.PROMO_FOR_SIGNED_OUT_STATE);
         if (hasSyncPromoStateChangedtoShown) {
             mSyncPromoController.increasePromoShowCount();
         }
         mPromoState = newState;
     }
 
-    /**
-     * Sets up the sync promo view.
-     */
+    /** Sets up the sync promo view. */
     void setUpSyncPromoView(PersonalizedSigninPromoView view) {
         mSyncPromoController.setUpSyncPromoView(mProfileDataCache, view, null);
     }
@@ -468,7 +475,7 @@ public class RecentTabsManager implements SyncService.SyncStateChangedListener, 
 
     // AccountsChangeObserver implementation.
     @Override
-    public void onAccountsChanged() {
+    public void onCoreAccountInfosChanged() {
         update();
     }
 
@@ -509,8 +516,8 @@ public class RecentTabsManager implements SyncService.SyncStateChangedListener, 
         return mTabModel;
     }
 
-    @VisibleForTesting
     public static void setRecentlyClosedTabManagerForTests(RecentlyClosedTabManager manager) {
         sRecentlyClosedTabManagerForTests = manager;
+        ResettersForTesting.register(() -> sRecentlyClosedTabManagerForTests = null);
     }
 }

@@ -7,10 +7,12 @@
 
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "ui/ozone/platform/drm/gpu/drm_overlay_manager.h"
 
 namespace ui {
+
 class DrmThreadProxy;
 
 // DrmOverlayManager implementation that runs in the GPU process. PostTasks
@@ -46,7 +48,7 @@ class DrmOverlayManagerGpu : public DrmOverlayManager {
       const std::vector<OverlaySurfaceCandidate>& candidates,
       const std::vector<OverlayStatus>& status);
 
-  DrmThreadProxy* const drm_thread_proxy_;
+  const raw_ptr<DrmThreadProxy> drm_thread_proxy_;
 
   bool has_set_displays_configured_callback_ = false;
 
