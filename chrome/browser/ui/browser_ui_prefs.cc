@@ -72,8 +72,8 @@ void RegisterBrowserUserPrefs(user_prefs::PrefRegistrySyncable* registry) {
                                 GetHomeButtonAndHomePageIsNewTabPageFlags());
 
   registry->RegisterBooleanPref(prefs::kHashNetOn, true);
-  registry->RegisterStringPref(prefs::kHashNetAgentsList, "");
-  registry->RegisterStringPref(prefs::kHashNetPrivateKey, "");
+  registry->RegisterStringPref(prefs::kHashNetAgentsList, std::string());
+  registry->RegisterStringPref(prefs::kHashNetPrivateKey, std::string());
 
   registry->RegisterInt64Pref(prefs::kDefaultBrowserLastDeclined, 0);
   bool reset_check_default = false;

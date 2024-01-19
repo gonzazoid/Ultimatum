@@ -1350,6 +1350,7 @@ void URLRequest::SetAgentFailed() {
 
 void URLRequest::SetLastBreath() {
   last_breath_ = true;
+}
 
 void URLRequest::SetIsSharedDictionaryReadAllowedCallback(
     base::RepeatingCallback<bool()> callback) {

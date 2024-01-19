@@ -437,34 +437,28 @@ void ProfileNetworkContextService::UpdateAcceptLanguage() {
 }
 
 void ProfileNetworkContextService::UpdateHashNetOn() {
-  profile_->ForEachStoragePartition(base::BindRepeating(
-      [](const bool hash_net_on,
-         content::StoragePartition* storage_partition) {
+  const bool hash_net_on = pref_hash_net_on_.GetValue();
+  profile_->ForEachLoadedStoragePartition(
+      [&](content::StoragePartition* storage_partition) {
         storage_partition->GetNetworkContext()->SetHashNetOn(hash_net_on);
-      },
-      pref_hash_net_on_.GetValue()));
+      });
 }
 
 void ProfileNetworkContextService::UpdateHashNetAgentsList() {
-  profile_->ForEachStoragePartition(base::BindRepeating(
-      [](const std::string& agents_list,
-         content::StoragePartition* storage_partition) {
-        storage_partition->GetNetworkContext()->SetHashNetAgentsList(
-            agents_list);
-      },
-      pref_hash_net_agents_list_.GetValue()));
-  // g_browser_process->system_network_context_manager()->GetContext()->SetHashNetAgentsList(pref_hash_net_agents_list_.GetValue());
+  const std::string agents_list = pref_hash_net_agents_list_.GetValue();
+  profile_->ForEachLoadedStoragePartition(
+      [&](content::StoragePartition* storage_partition) {
+        storage_partition->GetNetworkContext()->SetHashNetAgentsList(agents_list);
+      });
 }
 
 void ProfileNetworkContextService::UpdateHashNetPrivateKey() {
-  profile_->ForEachStoragePartition(base::BindRepeating(
-      [](const std::string& private_key,
-         content::StoragePartition* storage_partition) {
-        storage_partition->GetNetworkContext()->SetHashNetPrivateKey(
-            private_key);
-      },
-      pref_hash_net_private_key_.GetValue()));
-  g_browser_process->system_network_context_manager()->GetContext()->SetHashNetPrivateKey(pref_hash_net_private_key_.GetValue());
+  const std::string& private_key = pref_hash_net_private_key_.GetValue();
+  profile_->ForEachLoadedStoragePartition(
+      [&](content::StoragePartition* storage_partition) {
+        storage_partition->GetNetworkContext()->SetHashNetPrivateKey(private_key);
+      });
+  // g_browser_process->system_network_context_manager()->GetContext()->SetHashNetPrivateKey(pref_hash_net_private_key_.GetValue());
 }
 
 void ProfileNetworkContextService::OnThirdPartyCookieBlockingChanged(

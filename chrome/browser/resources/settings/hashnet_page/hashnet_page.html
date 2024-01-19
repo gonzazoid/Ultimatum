@@ -4,23 +4,23 @@
     label="#Net on/off"
     pref="{{prefs.settings.hashnet.on}}">
   </settings-toggle-button>
-  <settings-textarea id="input" value="{{privateKey}}" rows=4 autogrow="true"
+  <cr-textarea id="input" value="{{privateKey}}" rows=4 autogrow="true"
       placeholder="$i18n{secureDnsCustomPlaceholder}" invalid="[[showError_]]"
       first-footer="[[errorText_]]" maxlength="102400" spellcheck="false"
       on-keypress="onKeyPress_" on-input="onInput_"
       on-blur="validate" on-change="validate">
-  </settings-textarea>
+  </cr-textarea>
   <cr-button id="saveButton" role="button" on-click="onSavePrivateKeyButtonClick_"
       class$="[[computeBackButtonClass_(privacyGuideStep_)]]">
     save new private key
   </cr-button>
   <!-- Max length of 100 KB to prevent browser from freezing. -->
-  <settings-textarea id="input" value="{{value}}" rows=16 autogrow="true"
+  <cr-textarea id="input" value="{{value}}" rows=16 autogrow="true"
       placeholder="$i18n{secureDnsCustomPlaceholder}" invalid="[[showError_]]"
       first-footer="[[errorText_]]" maxlength="102400" spellcheck="false"
       on-keypress="onKeyPress_" on-input="onInput_"
       on-blur="validate" on-change="validate">
-  </settings-textarea>
+  </cr-textarea>
   <cr-button id="saveButton" role="button" on-click="onSaveButtonClick_"
       class$="[[computeBackButtonClass_(privacyGuideStep_)]]">
     save new agent's list

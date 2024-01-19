@@ -1301,7 +1301,7 @@ inline constexpr char kUsedPolicyCertificates[] =
     "policy.used_policy_certificates";
 #endif  // BUILDFLAG(IS_CHROMEOS)
 
-inline constexpr char kHashNetOn[] = "settings.hashnet.agents_list";
+inline constexpr char kHashNetOn[] = "settings.hashnet.on";
 inline constexpr char kHashNetAgentsList[] = "settings.hashnet.agents_list";
 inline constexpr char kHashNetPrivateKey[] = "settings.hashnet.private_key";
 

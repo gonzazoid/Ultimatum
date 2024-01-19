@@ -69,7 +69,6 @@
 #include "net/url_request/url_request_context.h"
 #include "net/url_request/url_request_context_getter.h"
 #include "net/url_request/hash_net_utils.h"
-#include "services/network/cache_transparency_settings.h"
 #include "services/network/ad_heuristic_cookie_overrides.h"
 #include "services/network/attribution/attribution_request_helper.h"
 #include "services/network/chunked_data_pipe_upload_data_stream.h"
@@ -1903,14 +1902,14 @@ void URLLoader::ReadMoreHashNetHelper() {
   paused_reading_body_ = true;
   // TODO get this from mojo settings/preferences
   size_t io_chunk_length = 64 * 1024;
-  scoped_refptr<net::IOBuffer> buf = base::MakeRefCounted<net::IOBuffer>(io_chunk_length);
+  scoped_refptr<net::IOBuffer> buf = base::MakeRefCounted<net::IOBufferWithSize>(io_chunk_length);
   int bytes_read = url_request_->Read(buf.get(), io_chunk_length);
 
   response_acc_.push_back(std::pair<scoped_refptr<net::IOBuffer>, int>(std::move(buf), bytes_read));
   if (bytes_read == net::ERR_IO_PENDING) return;
 
   if (bytes_read != 0) {
-    DidRead(bytes_read, true);
+    DidRead(bytes_read, true, false);
     return;
   }
 
@@ -2100,7 +2099,7 @@ void URLLoader::ReadMore() {
     if (current_chunk_ == response_acc_.size()) {
       if(url_request_->IsHashNetRequest()) {
         splash_response_ = false;
-        DidRead(0, true);
+        DidRead(0, true, false);
         return;
       }
     }
@@ -2121,7 +2120,7 @@ void URLLoader::ReadMore() {
       current_offset_ = 0;
       current_chunk_++;
     }
-    DidRead(we_are_going_to_send_bytes_length, true);
+    DidRead(we_are_going_to_send_bytes_length, true, false);
     return;
   }
 
@@ -2148,7 +2147,7 @@ void URLLoader::DidRead(int num_bytes,
 
   if (gather_response_) {
     if (completed_synchronously) {
-      base::ThreadTaskRunnerHandle::Get()->PostTask(
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(&URLLoader::ReadMore, weak_ptr_factory_.GetWeakPtr()));
     } else {

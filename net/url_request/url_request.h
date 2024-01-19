@@ -845,9 +845,6 @@ class NET_EXPORT URLRequest : public base::SupportsUserData {
 
   base::WeakPtr<URLRequest> GetWeakPtr();
 
-  bool HasPartitionedCookie() { return has_partitioned_cookie_; }
-  void SetHasPartitionedCookie() { has_partitioned_cookie_ = true; }
-
   bool IsHashNetRequest() const;
   bool IsHashNetHashRequest() const;
   bool IsHashNetSignedRequest() const;

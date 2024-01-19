@@ -99,7 +99,7 @@ EC_POINT* LoadPublicKey(const std::vector<uint8_t>& public_key, int nid) {
 }
 
 std::string DerivePublicKeyFromPrivate(const std::string& private_key) {
-
+  if (private_key == "") return "";
   std::string sign_func;
   std::string sign_hash_func;
   std::string private_key_hex;
@@ -220,7 +220,7 @@ bool ValidateNonce(
   const base::Value* message,
   std::string& nonce
   ) {
-  const std::string* nonce_ = message->FindStringKey("nonce");
+  const std::string* nonce_ = message->GetIfDict()->FindString("nonce");
   if (nonce_ == nullptr || nonce_->empty()) return false;
   if (nonce_->find_first_not_of("0123456789") != std::string::npos) return false;
   nonce = *nonce_;
@@ -231,7 +231,7 @@ bool ValidateLabel(
   const base::Value* message,
   std::string& label
   ) {
-  const std::string* label_ = message->FindStringKey("label");
+  const std::string* label_ = message->GetIfDict()->FindString("label");
   if (label_ == nullptr || label_->empty()) return false;
   label = *label_;
   return true;
@@ -242,7 +242,7 @@ bool ValidateHash(
   std::string& hash_func,
   std::string& hash_value
   ) {
-  const std::string* hash = message->FindStringKey("hash");
+  const std::string* hash = message->GetIfDict()->FindString("hash");
   if (hash == nullptr || hash->empty()) return false;
   SplitHash(*hash, hash_func, hash_value);
   if (hash_func.empty() || hash_value.empty()) return false;
@@ -264,7 +264,8 @@ bool ValidateSignedMessage(
   std::string& related
   ) {
   if (!message->is_dict()) return false;
-  const std::string* public_key_ = message->FindStringKey("publicKey");
+  auto* dict = message->GetIfDict();
+  const std::string* public_key_ = dict->FindString("publicKey");
   if (public_key_ == nullptr || public_key_->empty()) return false;
   public_key = *public_key_;
 
@@ -277,12 +278,12 @@ bool ValidateSignedMessage(
   if (!ValidateNonce(message, nonce)) return false;
   if (!ValidateHash(message, hash_func, hash_value)) return false;
 
-  const std::string* sig_ = message->FindStringKey("signature");
+  const std::string* sig_ = dict->FindString("signature");
   if (sig_ == nullptr || sig_->empty()) return false;
   if (sig_->find_first_not_of("0123456789abcdef") != std::string::npos) return false;
   sig = *sig_;
 
-  const std::string* related_ = message->FindStringKey("relatedTo");
+  const std::string* related_ = dict->FindString("relatedTo");
   if (related_ != nullptr && !related_->empty()) related = *related_;
 
   return true;
@@ -290,7 +291,7 @@ bool ValidateSignedMessage(
 
 bool IsEditableMessage(const base::Value& message, const std::string& public_key) {
   if (!message.is_dict()) return false;
-  const std::string* public_key_from_message = message.FindStringKey("publicKey");
+  const std::string* public_key_from_message = message.GetIfDict()->FindString("publicKey");
   if (public_key_from_message == nullptr) return false;
   return *public_key_from_message == public_key;
 }
@@ -331,7 +332,8 @@ bool SignMessage(const std::vector<uint8_t>& bytes, const std::string& private_k
   if (public_key.empty()) return false;
   root->GetIfDict()->Set("publicKey", public_key);
 
-  const std::string* related_to = root->FindStringKey("relatedTo");
+  auto* dict = root->GetIfDict();
+  const std::string* related_to = dict->FindString("relatedTo");
   if (related_to != nullptr && related_to->empty()) return false;
   std::string message_to_sign = BuildMessageToSign(hash_func, hash_value, nonce, label, related_to);
 
