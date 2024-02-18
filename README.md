@@ -50,7 +50,7 @@ In general, this is enough to get an idea of what this fork is and does; as more
 
 #### get started as a web master
 
-coming soon, look for #Net utils and badger's layer code.
+coming soon, have a look at #Net utils and badger's layer code.
 
 #### related resources
 
