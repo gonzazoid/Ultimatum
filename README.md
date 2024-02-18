@@ -43,3 +43,5 @@ The browser treats ``signed://`` requests a little differently than ``hash://`` 
 In addition to ``hash://`` and ``signed://`` requests, there is also support for the ``related://`` scheme. Each signed message has an optional ``relatedTo`` field,  which can be any non-empty string, including url/urn. The ``related://`` request requests all signed messages with the ``relatedTo`` field having a specified value. The comment system is built on this, but this is not the only application of the scheme. Processing ``related://`` responses is not much different from processing ``signed://`` responses - the list of agents is also traversed to the end, messages are also checked for validity. But unlike ``hash://`` and ``signed://`` requests, a ``related://`` request cannot participate in navigation, it is only supported in fetch, moreover, a ``related://`` request can only be executed using the get method.
 
 In general, this is enough to get an idea of what this fork is and does; as more detailed and more accurate documentation is ready, I will post links here.
+
+[get compiled binary (macOS only) and start serfing](/docs/hash-net/get-started-for-users.md)
