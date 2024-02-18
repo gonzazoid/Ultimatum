@@ -24,7 +24,7 @@ At the moment, only one node is up at the address 172.86.96.172, so the agent UR
 
 Add this line to the list of agents in settings and save.
 
-If you suddenly decide to launch your agent (here is the repo https://github.com/gonzazoid/hashnet-agent), then change address in the line and simply add it to the list (line break is the separator).
+If you suddenly decide to launch your own agent (here is the repo https://github.com/gonzazoid/hashnet-agent), then change address in the line above and just add it to the list (line break is the separator).
 
 This completes the #Net chromium setup, you can start surfing now. Just enter some #Net address in the address bar, for example:
 
