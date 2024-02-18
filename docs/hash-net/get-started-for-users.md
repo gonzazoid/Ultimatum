@@ -1,6 +1,7 @@
 #### Download
 
 You can download the compiled binary (for now only for macOS) here http://172.86.96.172/downloads/hash-net.dmg 
+
 sha256 checksum f918c432e7535780de2c610a52bbbd7b0b0b421be357db91f70fa6bb7e63c4e5
 
 Instructions for assembling from source will be posted later.
@@ -15,7 +16,7 @@ The supported hash functions are ``sha1`` (because of torrents and git), ``sha25
 
 The private key value itself can be generated here https://kjur.github.io/jsrsasign/sample/sample-ecdsa.html
 
-After that, enter the key value into the settings and save.
+After that, enter the key value into the settings (#Net tab, you'll see it) and save.
 
 Now you need to add a list of active #Net agents.
 
