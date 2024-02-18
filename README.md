@@ -56,6 +56,6 @@ coming soon, have a look at #Net utils and badger's layer code.
 
 - [#Net agent](https://github.com/gonzazoid/hashnet-agent) reference backend implementation
 - [#Net utils](https://github.com/gonzazoid/hashnet-utils) helps to prepare sites and upload them to #Net
-- [badger's lair](https://github.com/gonzazoid/badgers-lair) just example how #Net site can looks like (with comments, emoji and everything) Available on #Net by address signed://secp256r1.sha256/03f702c0dd795a16a33feb25c9c09ba4885a08e24b8c6c1bd2c1201a0304f922fd/index.html
+- [badger's lair](https://github.com/gonzazoid/badgers-lair) just example how #Net site can looks like (with comments, emoji and everything) Available on #Net by address ``signed://secp256r1.sha256/03f702c0dd795a16a33feb25c9c09ba4885a08e24b8c6c1bd2c1201a0304f922fd/index.html``
 - [hashnet-client](https://github.com/gonzazoid/hashnet-client) Collection of functions making #Net interactions easier (quite raw yet, sorry)
 
