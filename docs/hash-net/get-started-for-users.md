@@ -1,6 +1,6 @@
 #### Download
 
-You can download the compiled binary (for now only for macOS) here http://172.86.96.172/downloads/hash-net.dmg 
+You can download the compiled binary (for now only for macOS) here http://172.86.96.172/downloads/hash-net.dmg (it's http link, not https, so chrome can block downloading, just do right click on the link and select Save Link As)
 
 sha256 checksum f918c432e7535780de2c610a52bbbd7b0b0b421be357db91f70fa6bb7e63c4e5
 
