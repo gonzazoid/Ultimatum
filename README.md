@@ -44,19 +44,18 @@ In addition to ``hash://`` and ``signed://`` requests, there is also support for
 
 In general, this is enough to get an idea of what this fork is and does; as more detailed and more accurate documentation is ready, I will post links here.
 
-#### get started as user
+#### get started as a user
 
 [get compiled binary (macOS only) and start serfing](/docs/hash-net/get-started-for-users.md)
 
-#### get started as web master
+#### get started as a web master
 
 coming soon, look for #Net utils and badger's layer code.
 
-#### related resourses
+#### related resources
 
 - [#Net agent](https://github.com/gonzazoid/hashnet-agent) reference backend implementation
 - [#Net utils](https://github.com/gonzazoid/hashnet-utils) helps to prepare sites and upload them to #Net
 - [badger's lair](https://github.com/gonzazoid/badgers-lair) just example how #Net site can looks like (with comments, emoji and everything) Available on #Net by address signed://secp256r1.sha256/03f702c0dd795a16a33feb25c9c09ba4885a08e24b8c6c1bd2c1201a0304f922fd/index.html
 - [hashnet-client](https://github.com/gonzazoid/hashnet-client) Collection of functions making #Net interactions easier (quite raw yet, sorry)
 
-- 
