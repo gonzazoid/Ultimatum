@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors
+// Copyright 2024 gonzazoid
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,14 +23,11 @@ import {WebUiListenerMixin} from 'chrome://resources/cr_elements/web_ui_listener
 import {sanitizeInnerHtml} from 'chrome://resources/js/parse_html_subset.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
-// import {loadTimeData} from '../i18n_setup.js';
 import {RelaunchMixin, RestartType} from '../relaunch_mixin.js';
 import {PrefsMixin} from 'chrome://resources/cr_components/settings_prefs/prefs_mixin.js';
 import {CrSettingsPrefs} from 'chrome://resources/cr_components/settings_prefs/prefs_types.js';
 
 import {getTemplate} from './hashnet_page.html.js';
-// import {PromoteUpdaterStatus} from './about_page_browser_proxy.js';
-
 
 const HashNetPageElementBase =
     RelaunchMixin(WebUiListenerMixin(PrefsMixin(I18nMixin(PolymerElement))));
@@ -54,13 +51,24 @@ export class HashNetPageElement extends HashNetPageElementBase {
         type: Boolean,
         value: false,
       },
-      value: String,
+
+      agentsList: String,
+      oldAgentsList: String,
+      agentsListChanged: String,
+
       privateKey: String,
+      oldPrivateKey: String,
+      privateKeyChangedAndValid: Boolean,
     };
   }
 
-  value: string;
+  agentsList: string;
+  agentsListChanged: boolean;
+  oldAgentsList: string;
+
   privateKey: string;
+  privateKeyChangedAndValid: boolean;
+  oldPrivateKey: String;
 
   override ready() {
     super.ready();
@@ -68,18 +76,77 @@ export class HashNetPageElement extends HashNetPageElementBase {
     CrSettingsPrefs.initialized.then(() => {
       const agentsList = this.getPref('settings.hashnet.agents_list').value;
       const privateKey = this.getPref('settings.hashnet.private_key').value;
-      console.log("SETTINGS!!!", agentsList, privateKey);
-      this.value = agentsList;
+
+      this.agentsList = agentsList;
+      this.oldAgentsList = agentsList;
+      this.agentsListChanged = false;
+
       this.privateKey = privateKey;
+      this.oldPrivateKey = privateKey;
+      this.privateKeyChangedAndValid = false;
     });
   }
 
-  private onSaveButtonClick_() {
-    this.setPrefValue('settings.hashnet.agents_list', this.value);
+  private privateKeyIsValid() {
+    const supportedSignFunctions = [
+      "secp256r1",
+    ];
+    const keyLengths = {
+      secp256r1: 64,
+    } as { [key: string]: number };
+
+    const supportedHashFunctions = [
+      "sha1",
+      "sha256",
+      "sha512",
+    ];
+
+    if (this.privateKey === "") return true;
+    const tokens = this.privateKey.split(":");
+    if (tokens.length !== 2) return false;
+    const [signFormula, keyValue] = tokens;
+    const formulaTokens = signFormula.split(".");
+    if (formulaTokens.length !==2) return false;
+    const [signFunction, hashFunction] = formulaTokens;
+
+    if (!supportedSignFunctions.includes(signFunction)) return false;
+    if (!supportedHashFunctions.includes(hashFunction)) return false;
+
+    if (keyValue.length !== keyLengths[signFunction]) return false;
+    const isHex = /^[0-9a-f]+$/g;
+    if (!isHex.test(tokens[1])) return false;
+
+    return true;
+  }
+
+  private onPrivateKeyInput_() {
+    if (this.oldPrivateKey !== this.privateKey) {
+      if (this.privateKeyIsValid()) {
+        this.privateKeyChangedAndValid = true;
+      }
+      return;
+    }
+    this.privateKeyChangedAndValid = false;
   }
 
   private onSavePrivateKeyButtonClick_() {
     this.setPrefValue('settings.hashnet.private_key', this.privateKey);
+    this.oldPrivateKey = this.privateKey;
+    this.privateKeyChangedAndValid = false;
+  }
+
+  private onAgentsListInput_() {
+    if (this.agentsList !== this.oldAgentsList) {
+      this.agentsListChanged = true;
+    } else {
+      this.agentsListChanged = false;
+    }
+  }
+
+  private onSaveAgentsListButtonClick_() {
+    this.setPrefValue('settings.hashnet.agents_list', this.agentsList);
+    this.oldAgentsList = this.agentsList;
+    this.agentsListChanged = false;
   }
 }
 
